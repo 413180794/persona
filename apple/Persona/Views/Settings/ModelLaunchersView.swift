@@ -243,7 +243,12 @@ struct LauncherRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: Theme.Space.sm) {
-                Text(launcher.name).font(Theme.Font.heading.monospaced()).lineLimit(1)
+                // A display name (「智谱 GLM」, docs/launchers.md「内置预设」) is a name, not an id; without one, the id as before.
+                if launcher.title != launcher.name {
+                    Text(launcher.title).font(Theme.Font.heading).lineLimit(1)
+                } else {
+                    Text(launcher.name).font(Theme.Font.heading.monospaced()).lineLimit(1)
+                }
                 if launcher.managed { Chip(text: "Persona", look: .tint(Theme.accent)) }
             }
             HStack(spacing: Theme.Space.sm) {

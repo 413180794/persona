@@ -13962,12 +13962,69 @@ def ready_state(handler, probe=False):
     return readiness_mock.readiness(sc, m, ready_lang(handler), launcher, READY["dismissed"], result)
 
 
+def _builtin_preset_route(handler, p, body):
+    """A built-in preset's key test and add (docs/launchers.md「内置预设」): the test in the hub's words (a key with
+    "bad" 401, "forbid" 403, "nopath" 404, "busy" 429, "slow" the timeout, "region" Anthropic's region block); the add
+    with the name made up from the preset (-2, -3 when taken), its display name, and `assign` put only on the uses
+    not in MOCK_ASSIGN_KEPT (purpose:reason,…, e.g. agent.new:customized). False for what is not a built-in preset."""
+    try:
+        b = json.loads(body or b"{}") or {}
+    except ValueError:
+        return False
+    lang = ready_lang(handler)
+    pr = next((x for x in readiness_mock.builtin_presets(lang) if x["id"] == b.get("preset")), None)
+    if pr is None:
+        return False
+    if p == "/api/v1/launchers/test":
+        PROVIDER_LOG["test"].append(_provider_redacted(b))
+        key, model = b.get("api_key") or "", b.get("model") or pr.get("model", "")
+        for word, status in (("bad", "status_401"), ("forbid", "status_403"), ("nopath", "status_404"), ("busy", "status_429")):
+            if word in key:
+                handler.send_json({"ok": False, "ms": 233, "model": model, "error": readiness_mock.t(lang, "assistant-models_probe." + status)})
+                return True
+        if "slow" in key:
+            handler.send_json({"ok": False, "ms": 30000, "model": model, "error": readiness_mock.t(lang, "assistant-models_probe.timeout", seconds=30)})
+            return True
+        if "region" in key:
+            msg, code = readiness_mock.region_blocked(lang)
+            handler.send_json({"ok": False, "ms": 180, "model": model, "error": msg, "code": code})
+            return True
+        handler.send_json({"ok": True, "ms": 412, "model": model})
+        return True
+    PROVIDER_LOG["post"] = _provider_redacted(b)
+    name, n = (b.get("name") or "").strip(), 1
+    if not name:
+        slug = re.sub(r"[^A-Za-z0-9_-]", "-", pr["id"].split("/", 1)[1])
+        name = slug
+        while any(l["name"] == name for l in LAUNCHERS):
+            n += 1
+            name = "%s-%d" % (slug, n)
+    if any(l["name"] == name for l in LAUNCHERS):
+        handler.send_json({"error": "已经有叫 %s 的启动器了" % name}, 409)
+        return True
+    display = (b.get("display_name") or "").strip() or (pr.get("display_name", "") + ("" if n == 1 else " %d" % n))
+    l = {"name": name, "display_name": display, "source": "jarvis", "kind": "launcher", "api": "messages", "base_url": pr["base_url"],
+         "auth": pr.get("auth", "api_key"), "model": b.get("model") or pr.get("model", ""), "has_key": bool(b.get("api_key")),
+         "origin": "preset:" + pr["id"]}
+    LAUNCHERS.insert(0, l)
+    out = {"launcher": l}
+    if b.get("assign") is not None:
+        kept = dict(x.split(":", 1) for x in os.environ.get("MOCK_ASSIGN_KEPT", "").split(",") if ":" in x)
+        out["assigned"] = [x for x in b["assign"] if x not in kept]
+        out["kept"] = [{"purpose": x, "reason": kept[x]} for x in b["assign"] if x in kept]
+    handler.send_json(out)
+    return True
+
+
 if READINESS or BUILTIN_PRESETS:
     def _readiness_route(handler, p, body):
         method = handler.command
         if p == "/api/v1/launchers/presets" and method == "GET":
             handler.send_json({"presets": readiness_mock.merge_presets(readiness_mock.builtin_presets(ready_lang(handler)), LAUNCHER_PRESETS)})
             return True
+        if p in ("/api/v1/launchers", "/api/v1/launchers/test") and method == "POST":
+            if _builtin_preset_route(handler, p, body):
+                return True
         if not READINESS:
             return False
         lang = ready_lang(handler)

@@ -121,6 +121,13 @@ SCOPES = [
 ALLOW = {
     ("web/login", "master_placeholder"): "登录页「高级」里用 hub 的总钥匙登录（Login.tsx 的 advanced Disclosure），只有自己装 hub 的人用",
     ("web/settings-providerwizard", "auth_bearer_hint"): "选了「自定义」才出现的网关表单（connect 步），说的是网关认的环境变量名；内置厂商只粘 Key，不经过这一步",
+    ("apple/provider-wizard", "网关只认 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN）时选 Bearer。Key 加密存在 hub，不会返回到客户端。"):
+        "选了「自定义兼容网关」才出现的网关表单（connect 步），说的是网关认的环境变量名；内置厂商只粘 Key，不经过这一步（#4197）",
+    ("apple/provider-wizard", "从 ~/.zshrc 导入"): "向导第一步的「高级」里（#4197）；老 hub 的向导保持原样",
+    ("apple/provider-wizard", "读这台电脑的 ~/.zshrc，找出形如 alias x=\\\"K=V … claude\\\" 的行，按网关和 Key 合成供应商。Key 只在 hub 里转手，加密保存。"):
+        "「高级」里的从 ~/.zshrc 导入（#4197），给已经有 alias 的研发用户",
+    ("apple/provider-wizard", "在「设置 › 电脑」里重新部署这台电脑的 personad 后再试。"): "「高级」里的从 ~/.zshrc 导入（#4197）出错时",
+    ("apple/provider-wizard", "这台电脑的 ~/.zshrc 里没有调用 claude 的 alias。"): "「高级」里的从 ~/.zshrc 导入（#4197）",
 }
 
 # (scope, key) → who is fixing it (the issue or the design's work item). Each must still be wrong somewhere.
@@ -128,13 +135,6 @@ PENDING = {
     ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair`，拷贝它打印的链接"): "#4195（首屏，命令收进「其他方式」）",
     ("apple/welcome", "在 hub 所在的机器上运行 `personad hub pair` 显示二维码"): "#4195（首屏，命令收进「其他方式」）",
     ("apple/welcome", "你的每台电脑，herdr 里的同一个会话"): "#4195（首屏）",
-    ("apple/provider-wizard", "网关只认 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN）时选 Bearer。Key 加密存在 hub，不会返回到客户端。"):
-        "#4197（向导先选厂商，这一句只留在「自定义」里后移到 ALLOW）",
-    ("apple/provider-wizard", "从 ~/.zshrc 导入"): "#4197（导入挪进「高级」后移到 ALLOW）",
-    ("apple/provider-wizard", "读这台电脑的 ~/.zshrc，找出形如 alias x=\\\"K=V … claude\\\" 的行，按网关和 Key 合成供应商。Key 只在 hub 里转手，加密保存。"):
-        "#4197（导入挪进「高级」后移到 ALLOW）",
-    ("apple/provider-wizard", "在「设置 › 电脑」里重新部署这台电脑的 personad 后再试。"): "#4197（导入挪进「高级」后移到 ALLOW）",
-    ("apple/provider-wizard", "这台电脑的 ~/.zshrc 里没有调用 claude 的 alias。"): "#4197（导入挪进「高级」后移到 ALLOW）",
 }
 
 ANDROID_DIRS = {"zh-Hans": "values-zh", "en": "values", "ja": "values-ja"}

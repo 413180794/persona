@@ -18,11 +18,39 @@ enum LauncherName {
 
 /// Settings › Model Providers › Add / Edit (#2455, after cindy's AddProviderWizard): Choose Provider → Connect (name, address, auth, key;
 /// Test Connection, Get Model List) → Choose Models (context window, thinking levels, the default), with the rest under Advanced.
+///
+/// A hub with `builtin_presets` (docs/onboarding.md 4.3「三条路」, 5.4, #4197) starts from the providers it offers
+/// instead: pick one → paste the key (tested by itself) → what now runs on it (`assign`, `assigned` / `kept`); a
+/// compatible gateway typed by hand is the last of the list and goes the three steps above. Beside it, "I already use
+/// Claude Code" tries the main conversation once (readiness `?probe=1`) and "Where to get a model" lists where to get a
+/// key. An older hub gets the wizard as it was, Anthropic official included.
 @Observable final class ProviderWizardModel {
     struct Deps {
         var api: () -> APIClient?
-        static var live: Deps { .init(api: { AppModel.shared.api }) }
+        /// The hub's `features` (hello / health).
+        var features: () -> Set<String> = { [] }
+        /// The main conversation's readiness as last read (nil: an older hub, or not read yet).
+        var readiness: () -> AssistantReadiness? = { nil }
+        /// A readiness read here (the one-message try) for the rest of the app.
+        var landReadiness: (AssistantReadiness) -> Void = { _ in }
+        @MainActor static var live: Deps {
+            .init(api: { AppModel.shared.api }, features: { AppModel.shared.hubFeatures },
+                  readiness: { AppModel.shared.readiness.current }, landReadiness: { AppModel.shared.readiness.land($0) })
+        }
     }
+
+    /// The main conversation already runs on a Claude Code that answers (docs/onboarding.md 4.3 B.3): its computer,
+    /// Claude Code and model all check out (a launcher that runs Codex or a runtime skips the Claude Code step, so it
+    /// is not this). The "use it for the main conversation and new agents" toggle then starts off, so a working default is not swapped out quietly.
+    static func claudeCodeWorks(_ r: AssistantReadiness?) -> Bool {
+        guard let r, r.claudeWorks else { return false }
+        return r.step("claude")?.state == "ok"
+    }
+
+    /// The hub's feature for built-in presets, a name it makes up, `display_name` and `assign` (docs/launchers.md「内置预设」).
+    static let presetsFeature = "builtin_presets"
+    /// The uses a provider added in the wizard takes over while they are still at their default (docs/onboarding.md 5.4).
+    static let assignPurposes = ["assistant", "agent.new"]
 
     enum Kind: String, CaseIterable, Hashable {
         /// api.anthropic.com with an x-api-key.
@@ -76,6 +104,60 @@ enum LauncherName {
     private(set) var saving = false
     private(set) var error: String?
     @ObservationIgnored private let deps: Deps
+
+    // MARK: Presets (a hub with builtin_presets)
+
+    /// The hub's providers (built-in, then the extensions'), in its order.
+    private(set) var presets: [LauncherPreset] = []
+    private(set) var presetsLoaded = false
+    private(set) var presetsError: String?
+    /// The picked preset; picking another starts its key, name and model over.
+    var presetID: String? {
+        didSet {
+            guard presetID != oldValue else { return }
+            presetKey = ""
+            presetName = ""
+            presetDisplayName = ""
+            presetModel = preset?.defaultModel ?? ""
+            keyTest = nil
+            keyTask?.cancel()
+        }
+    }
+    var presetKey = ""
+    /// Empty: the hub names it after the provider.
+    var presetName = ""
+    /// Empty: the hub uses the preset's (「智谱 GLM」); any language.
+    var presetDisplayName = ""
+    /// One of the preset's models (its default when none was picked).
+    var presetModel = ""
+    private(set) var keyTesting = false
+    private(set) var keyTest: LauncherProbeResult?
+    @ObservationIgnored private var keyTask: Task<Void, Never>?
+    /// nil: not touched, so it follows the readiness.
+    var assignChoice: Bool?
+    /// What saving a preset came to; set, the wizard shows its last screen.
+    private(set) var added: LauncherAdded?
+    /// Whether `assign` went with the save.
+    private(set) var addedAsked = false
+
+    /// "I already use Claude Code": the main conversation's one-word try.
+    private(set) var claudeTrying = false
+    private(set) var claudeTry: ClaudeTry?
+
+    /// The new flow: the hub offers built-in presets and takes `assign` (an older hub keeps the wizard as it was).
+    var presetsFlow: Bool { isNew && deps.features().contains(Self.presetsFeature) }
+    var preset: LauncherPreset? { presets.first { $0.id == presetID } }
+    /// "Where to get a model": the built-in providers that say where to sign up.
+    var signupPresets: [LauncherPreset] { presets.filter { $0.isBuiltin && $0.signup != nil } }
+    var presetNameProblem: String? { LauncherName.problem(presetName) }
+    private var trimmedKey: String { presetKey.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// A key long enough to be worth testing on its own: a test costs a request, so not on every keystroke.
+    var keyTestable: Bool { (preset?.testable ?? false) && trimmedKey.count >= 8 }
+    /// The assign toggle: on unless the main conversation already runs on a Claude Code that answers.
+    var assign: Bool { assignChoice ?? !Self.claudeCodeWorks(deps.readiness()) }
+    var canSavePreset: Bool {
+        preset != nil && !trimmedKey.isEmpty && presetNameProblem == nil && !keyTesting && !saving
+    }
 
     init(existing: LauncherView? = nil, deps: Deps = .live) {
         self.existing = existing
@@ -234,4 +316,158 @@ enum LauncherName {
     }
 
     private static func number(_ n: Int?) -> String { n.map { $0 > 0 ? String($0) : "" } ?? "" }
+
+    // MARK: Presets
+
+    func loadPresets() async {
+        guard presetsFlow, let api = deps.api() else { presetsLoaded = true; return }
+        presetsLoaded = false
+        do {
+            presets = try await api.launcherPresets()
+            presetsError = nil
+        } catch {
+            presetsError = error.shown ?? error.localizedDescription
+        }
+        presetsLoaded = true
+    }
+
+    /// What the key test sends for a preset: the key, how the gateway takes it and the preset; the model only when another than
+    /// the default was picked (the hub fills in the address and its default model).
+    var keyProbe: LauncherProbe? {
+        guard let p = preset else { return nil }
+        let m = presetModel.trimmingCharacters(in: .whitespaces)
+        return LauncherProbe(name: nil, baseURL: nil, auth: p.auth ?? "api_key", apiKey: trimmedKey, headers: nil,
+                             model: m.isEmpty || m == p.defaultModel ? nil : m, preset: p.id)
+    }
+
+    /// The key or the model changed: the key is tested once it stays the same a moment.
+    func keyChanged(after delay: Duration = .milliseconds(700)) {
+        keyTask?.cancel()
+        keyTest = nil
+        guard keyTestable else { return }
+        keyTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await self?.testKey()
+        }
+    }
+
+    /// Tests the preset's key: one tiny request through the gateway. The hub's words when it fails.
+    func testKey() async {
+        guard keyTestable, let probe = keyProbe, let api = deps.api() else { return }
+        keyTesting = true
+        defer { keyTesting = false }
+        let result: LauncherProbeResult
+        do {
+            result = try await api.testLauncher(probe)
+        } catch {
+            result = LauncherProbeResult(ok: false, error: error.shown ?? error.localizedDescription)
+        }
+        // A key typed over while it ran is tested again; this answer is not about it.
+        if probe == keyProbe { keyTest = result }
+    }
+
+    /// What Save sends for a preset: the key and the preset, the name and the display name as typed (empty: the hub
+    /// makes them up), the model only when another than the default was picked, `assign` when on.
+    var presetInput: LauncherInput? {
+        guard let p = preset else { return nil }
+        let m = presetModel.trimmingCharacters(in: .whitespaces)
+        return LauncherInput(name: presetName.trimmingCharacters(in: .whitespaces), baseURL: "", model: m == p.defaultModel ? "" : m,
+                             smallModel: "", subagentModel: "", customModel: "", customModelName: "", customModelDescription: "",
+                             args: [], apiKey: trimmedKey, preset: p.id,
+                             displayName: presetDisplayName.trimmingCharacters(in: .whitespaces),
+                             assign: assign ? Self.assignPurposes : nil)
+    }
+
+    /// Adds the preset's provider; false (with `error`) when the hub refused it.
+    func savePreset() async -> Bool {
+        guard canSavePreset, let input = presetInput, let api = deps.api() else { return false }
+        saving = true
+        defer { saving = false }
+        do {
+            added = try await api.addLauncher(input)
+            addedAsked = input.assign != nil
+            error = nil
+            return true
+        } catch {
+            self.error = error.shown ?? error.localizedDescription
+            return false
+        }
+    }
+
+    /// The provider's name on the last screen: what the hub called it, else what was typed or the preset's.
+    var addedTitle: String {
+        if let l = added?.launcher { return l.title }
+        let typed = presetDisplayName.trimmingCharacters(in: .whitespaces)
+        if !typed.isEmpty { return typed }
+        let n = presetName.trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? preset?.title ?? "" : n
+    }
+
+    var addedSummary: AssignSummary { AssignSummary(added ?? LauncherAdded(), asked: addedAsked) }
+
+    // MARK: I already use Claude Code
+
+    /// Tries the main conversation once (GET /api/v1/assistant/readiness?probe=1: it costs a request); the answer is
+    /// the app's readiness from now on too.
+    func tryClaude() async {
+        guard !claudeTrying, let api = deps.api() else { return }
+        claudeTrying = true
+        defer { claudeTrying = false }
+        do {
+            let r = try await api.assistantReadiness(probe: true)
+            deps.landReadiness(r)
+            claudeTry = .answered(r)
+        } catch let e as APIError where e.status == 404 {
+            claudeTry = .unsupported
+        } catch {
+            claudeTry = .failed(error.shown ?? error.localizedDescription)
+        }
+    }
+}
+
+/// "I already use Claude Code"'s answer: the readiness with its probe, its computer and the step in the way.
+enum ClaudeTry: Equatable {
+    case answered(AssistantReadiness)
+    /// An older hub without the readiness (404).
+    case unsupported
+    /// The request itself failed (the hub's words).
+    case failed(String)
+
+    var ok: Bool { if case .answered(let r) = self { r.probe?.ok == true } else { false } }
+}
+
+/// The last screen's words: which uses now run on the new provider, and which were kept and why.
+struct AssignSummary: Equatable {
+    var assigned = ""
+    var kept: [String] = []
+
+    init(_ r: LauncherAdded, asked: Bool) {
+        // An older hub (or no assign) says nothing of it: the screen sends the user to Model Settings instead.
+        guard asked, let a = r.assigned else { return }
+        if Set(a) == Set(ProviderWizardModel.assignPurposes) {
+            assigned = String(localized: "主对话和新开的 Agent 现在用它。")
+        } else if !a.isEmpty {
+            assigned = String(localized: "\(ListFormatter.localizedString(byJoining: a.map(Self.purpose))) 现在用它。")
+        }
+        kept = (r.kept ?? []).map { Self.kept($0) }
+    }
+
+    static func purpose(_ id: String) -> String {
+        switch id {
+        case "assistant": String(localized: "主对话")
+        case "agent.new": String(localized: "新开的 Agent")
+        default: id
+        }
+    }
+
+    static func kept(_ k: LauncherAdded.Kept) -> String {
+        let p = purpose(k.purpose)
+        return switch k.reason {
+        case "customized": String(localized: "\(p)没换：你改过，保留你的选择。")
+        case "incompatible": String(localized: "\(p)没换：它用不了这个供应商。")
+        case "failed": String(localized: "\(p)没换成：可以在「模型配置」里手动选。")
+        default: String(localized: "\(p)没换。")
+        }
+    }
 }

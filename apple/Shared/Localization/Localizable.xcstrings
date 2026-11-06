@@ -105602,6 +105602,1084 @@
           }
         }
       }
+    },
+    "地址、接入方式和模型都已经填好；加好以后和自己填写的一样可以编辑。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地址、接入方式和模型都已经填好；加好以后和自己填写的一样可以编辑。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address, connection type and models are already filled in; once added, you can edit it like one you set up yourself."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アドレス、接続方式、モデルは入力済みです。追加後は自分で設定したものと同じように編集できます。"
+          }
+        }
+      }
+    },
+    "主对话和新开的 Agent 现在用它。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主对话和新开的 Agent 现在用它。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The main conversation and new agents now use it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メイン会話と新しく開く Agent がこれを使います。"
+          }
+        }
+      }
+    },
+    "%@ 现在用它。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 现在用它。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ now uses it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ がこれを使います。"
+          }
+        }
+      }
+    },
+    "新开的 Agent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新开的 Agent"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New agents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しく開く Agent"
+          }
+        }
+      }
+    },
+    "%@没换：你改过，保留你的选择。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@没换：你改过，保留你的选择。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unchanged: you had changed it, so your choice stays."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ は変更なし：設定済みのため、あなたの選択を残しました。"
+          }
+        }
+      }
+    },
+    "%@没换：它用不了这个供应商。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@没换：它用不了这个供应商。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unchanged: it can't use this provider."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ は変更なし：このプロバイダーは使えません。"
+          }
+        }
+      }
+    },
+    "%@没换成：可以在「模型配置」里手动选。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@没换成：可以在「模型配置」里手动选。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wasn't switched: you can pick it yourself in Model Settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ は切り替えられませんでした：「モデル設定」で手動で選べます。"
+          }
+        }
+      }
+    },
+    "%@没换。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@没换。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unchanged."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ は変更なし。"
+          }
+        }
+      }
+    },
+    "自定义兼容网关": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义兼容网关"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom compatible gateway"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カスタム互換ゲートウェイ"
+          }
+        }
+      }
+    },
+    "中转站、公司网关或其他兼容 Anthropic 接口的服务，自己填地址和鉴权方式": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中转站、公司网关或其他兼容 Anthropic 接口的服务，自己填地址和鉴权方式"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A relay, a company gateway or any Anthropic-compatible service; you enter the address and auth yourself"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中継サービス、社内ゲートウェイなど Anthropic 互換のサービス。アドレスと認証方式は自分で入力します"
+          }
+        }
+      }
+    },
+    "选择供应商": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择供应商"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a provider"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロバイダーを選ぶ"
+          }
+        }
+      }
+    },
+    "读不到 hub 提供的供应商：%@。可以先用自定义兼容网关。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读不到 hub 提供的供应商：%@。可以先用自定义兼容网关。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read the hub's providers: %@. You can use a custom compatible gateway for now."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub のプロバイダーを読み込めません：%@。まずはカスタム互換ゲートウェイを使えます。"
+          }
+        }
+      }
+    },
+    "选一家，粘贴它的 API Key 就能用；地址和模型都已经填好。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选一家，粘贴它的 API Key 就能用；地址和模型都已经填好。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick one and paste its API key; the address and models are already filled in."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 つ選んで API キーを貼り付けるだけ。アドレスとモデルは入力済みです。"
+          }
+        }
+      }
+    },
+    "我已经在用 Claude Code": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已经在用 Claude Code"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I already use Claude Code"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "もう Claude Code を使っている"
+          }
+        }
+      }
+    },
+    "不用加供应商，试一句看主对话能不能用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不用加供应商，试一句看主对话能不能用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No provider needed: try one message to see if the main conversation works"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロバイダーは不要。1 通試してメイン会話が使えるか確認します"
+          }
+        }
+      }
+    },
+    "去哪弄一个模型": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去哪弄一个模型"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where to get a model"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルの入手先"
+          }
+        }
+      }
+    },
+    "还没有 API Key：看看各家在哪开通": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有 API Key：看看各家在哪开通"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No API key yet: see where each provider signs you up"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API キーがまだない：各社の申し込み先を見る"
+          }
+        }
+      }
+    },
+    "还没有电脑：先添加一台电脑，再从它导入": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有电脑：先添加一台电脑，再从它导入"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No computer yet: add one first, then import from it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータがまだありません：先に追加してから読み込みます"
+          }
+        }
+      }
+    },
+    "由扩展「%@」提供": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由扩展「%@」提供"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provided by the extension “%@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能「%@」が提供"
+          }
+        }
+      }
+    },
+    "粘贴 API Key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴 API Key"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste the API key"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API キーを貼り付け"
+          }
+        }
+      }
+    },
+    "Key 从哪拿": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key 从哪拿"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where to get a key"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーの入手先"
+          }
+        }
+      }
+    },
+    "粘贴 Key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴 Key"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste the key"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーを貼り付け"
+          }
+        }
+      }
+    },
+    "测试": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テスト"
+          }
+        }
+      }
+    },
+    "粘贴后会自动测试一次：发一条很短的请求，可能产生少量费用。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴后会自动测试一次：发一条很短的请求，可能产生少量费用。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once pasted, it's tested once: a very short request that may cost a little."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "貼り付けると 1 回自動でテストします：ごく短いリクエストで、少額の費用がかかる場合があります。"
+          }
+        }
+      }
+    },
+    "主对话和新开的 Agent 都用它": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主对话和新开的 Agent 都用它"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use it for the main conversation and new agents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メイン会話と新しい Agent で使う"
+          }
+        }
+      }
+    },
+    "只改还没人设置过的；你选过的模型不会动。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只改还没人设置过的；你选过的模型不会动。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only changes what nobody has set; models you picked stay."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ誰も設定していないものだけ変更し、選んだモデルはそのままです。"
+          }
+        }
+      }
+    },
+    "更多选项": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多选项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More options"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その他のオプション"
+          }
+        }
+      }
+    },
+    "名字、默认模型": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名字、默认模型"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name, default model"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前、デフォルトモデル"
+          }
+        }
+      }
+    },
+    "Responses 协议的 Key 没法在这里测试，保存后直接用就行。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responses 协议的 Key 没法在这里测试，保存后直接用就行。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Responses API key can't be tested here; save it and use it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responses プロトコルのキーはここではテストできません。保存してそのまま使えます。"
+          }
+        }
+      }
+    },
+    "正在测试这个 Key…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在测试这个 Key…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testing this key…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このキーをテスト中…"
+          }
+        }
+      }
+    },
+    "重新测试": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新测试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再テスト"
+          }
+        }
+      }
+    },
+    "粘贴 Key 后自动测试": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴 Key 后自动测试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tested automatically once you paste a key"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーを貼り付けると自動でテストします"
+          }
+        }
+      }
+    },
+    "停下来就开始测试…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停下来就开始测试…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testing once you stop typing…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "入力が止まるとテストします…"
+          }
+        }
+      }
+    },
+    "名字（留空自动起名）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名字（留空自动起名）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name (leave empty for an automatic one)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前（空欄なら自動で付けます）"
+          }
+        }
+      }
+    },
+    "显示名，留空用「%@」": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示名，留空用「%@」"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display name; empty uses “%@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示名（空欄なら「%@」）"
+          }
+        }
+      }
+    },
+    "%@ 接好了": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 接好了"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is connected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ を接続しました"
+          }
+        }
+      }
+    },
+    "要让主对话或 Agent 用它，到「模型配置」里选。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要让主对话或 Agent 用它，到「模型配置」里选。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To use it for the main conversation or agents, pick it in Model Settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メイン会話や Agent で使うには「モデル設定」で選んでください。"
+          }
+        }
+      }
+    },
+    "主对话默认用你电脑上的 Claude Code，不用另加供应商。试一句会真的发一个很小的请求，可能产生少量费用。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主对话默认用你电脑上的 Claude Code，不用另加供应商。试一句会真的发一个很小的请求，可能产生少量费用。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The main conversation uses the Claude Code on your computer by default; no provider needed. Trying sends a real, very small request that may cost a little."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メイン会話は標準でコンピュータ上の Claude Code を使うので、プロバイダーの追加は不要です。試すと実際にごく小さなリクエストを送り、少額の費用がかかる場合があります。"
+          }
+        }
+      }
+    },
+    "没登录或者用不了时，也可以选一家供应商，粘贴它的 API Key。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没登录或者用不了时，也可以选一家供应商，粘贴它的 API Key。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If it isn't signed in or doesn't work, you can pick a provider and paste its API key."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログインしていない、または使えない場合は、プロバイダーを選んで API キーを貼り付けることもできます。"
+          }
+        }
+      }
+    },
+    "%@ 上的 Claude Code 能用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 上的 Claude Code 能用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code on %@ works"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ の Claude Code は使えます"
+          }
+        }
+      }
+    },
+    "Claude Code 能用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code 能用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code works"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code は使えます"
+          }
+        }
+      }
+    },
+    "回复「%@」": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回复「%@」"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replied “%@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」と返信"
+          }
+        }
+      }
+    },
+    "现在试不了": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在试不了"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't try right now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今は試せません"
+          }
+        }
+      }
+    },
+    "主对话还没有能用的电脑。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主对话还没有能用的电脑。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The main conversation has no computer it can use yet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メイン会話が使えるコンピュータがまだありません。"
+          }
+        }
+      }
+    },
+    "这里还试不了": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里还试不了"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't try it here yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここではまだ試せません"
+          }
+        }
+      }
+    },
+    "直接在主对话里发一句试试。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接在主对话里发一句试试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send a message in the main conversation to try it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メイン会話で 1 通送って試してください。"
+          }
+        }
+      }
+    },
+    "去开通": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去开通"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign up"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "申し込む"
+          }
+        }
+      }
+    },
+    "在厂商的网站上开通并拿到 API Key，回来就能粘贴。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在厂商的网站上开通并拿到 API Key，回来就能粘贴。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign up on the provider's site and get an API key, then come back and paste it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロバイダーのサイトで申し込んで API キーを取得し、戻って貼り付けてください。"
+          }
+        }
+      }
+    },
+    "还没有电脑。先添加一台电脑，再从它导入。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有电脑。先添加一台电脑，再从它导入。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No computer yet. Add one first, then import from it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータがまだありません。先に追加してから読み込んでください。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

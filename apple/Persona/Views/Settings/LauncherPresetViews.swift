@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Add Provider › From Extension (docs/extensions.md「模型供应商」): the providers the hub's plugins offer, then only the name, the
-/// key and maybe another of the provider's models; the address and the kind come from the plugin.
+/// Add Provider › From Extension (docs/extensions.md「模型供应商」): the providers the hub's plugins offer (and its built-in
+/// ones, by their display name), then only the name, the key and maybe another of the provider's models; the address and
+/// the kind come from the preset.
 struct LauncherPresetSections: View {
     @Bindable var model: LauncherPresetModel
 
@@ -12,7 +13,12 @@ struct LauncherPresetSections: View {
             Text("供应商")
         } footer: {
             if let p = model.selected {
-                Text("地址、接入方式和模型由扩展「\(p.plugin)」提供；加好以后和自己填写的一样可以编辑。")
+                // A built-in one is the hub's own, not an extension called "builtin" (#3621).
+                if p.isBuiltin {
+                    Text("地址、接入方式和模型都已经填好；加好以后和自己填写的一样可以编辑。")
+                } else {
+                    Text("地址、接入方式和模型由扩展「\(p.plugin)」提供；加好以后和自己填写的一样可以编辑。")
+                }
             }
         }
         Section {
@@ -65,7 +71,7 @@ struct LauncherPresetSections: View {
         return Button { model.selectedID = p.id } label: {
             HStack(spacing: Theme.Space.m) {
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(p.name).font(Theme.Font.body).foregroundStyle(.primary).lineLimit(1)
+                    Text(p.title).font(Theme.Font.body).foregroundStyle(.primary).lineLimit(1)
                     if let d = p.description, !d.isEmpty {
                         Text(d).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
                     }

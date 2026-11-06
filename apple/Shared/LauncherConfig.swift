@@ -41,7 +41,11 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var effort: String?
     /// Where a managed provider came from: "" by hand, "zshrc:<alias>@<machine>" imported, "preset:<id>".
     var origin: String?
+    /// The name shown (any language, 「智谱 GLM」); `name` stays the id it is launched by. Older hubs leave it out.
+    var displayName: String?
     var id: String { name }
+    /// What a person reads: the display name, else the name.
+    var title: String { displayName.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? name }
     var managed: Bool { source == "jarvis" }
 
     enum CodingKeys: String, CodingKey {
@@ -51,7 +55,7 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
         case opusModel = "opus_model", sonnetModel = "sonnet_model", haikuModel = "haiku_model", fableModel = "fable_model"
         case subagentForce = "subagent_force", hasHeaders = "has_headers", noProxy = "no_proxy", timeoutMS = "timeout_ms"
-        case compactWindow = "compact_window", maxContext = "max_context"
+        case compactWindow = "compact_window", maxContext = "max_context", displayName = "display_name"
     }
 
     var bearerAuth: Bool { auth == "bearer" }
@@ -170,8 +174,14 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     var compactWindow: Int? = nil
     var maxContext: Int? = nil
     var effort: String? = nil
+    /// The name shown, any language (a hub with `builtin_presets`); "" with a preset and no `name` takes the preset's.
+    var displayName: String? = nil
+    /// The uses to put on the new provider while they are still at their default (`assistant`, `agent.new`;
+    /// POST only, a hub with `builtin_presets`): the answer says which were and which were kept.
+    var assign: [String]? = nil
     enum CodingKeys: String, CodingKey {
-        case name, model, args, kind, api, preset, auth, models, headers, proxy, effort
+        case name, model, args, kind, api, preset, auth, models, headers, proxy, effort, assign
+        case displayName = "display_name"
         case baseURL = "base_url", smallModel = "small_model", apiKey = "api_key"
         case subagentModel = "subagent_model", customModel = "custom_model"
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
@@ -190,8 +200,10 @@ nonisolated struct LauncherProbe: Encodable, Hashable, Sendable {
     var apiKey: String?
     var headers: String?
     var model: String?
+    /// A preset's id: the hub fills in the address and, with no `model`, the preset's default model.
+    var preset: String? = nil
     enum CodingKeys: String, CodingKey {
-        case name, auth, headers, model
+        case name, auth, headers, model, preset
         case baseURL = "base_url", apiKey = "api_key"
     }
 }
@@ -202,6 +214,21 @@ nonisolated struct LauncherProbeResult: Decodable, Hashable, Sendable {
     var ms: Int?
     var model: String?
     var error: String?
+    /// What the hub recognised (`region_blocked`); the text is `error` either way.
+    var code: String? = nil
+}
+
+/// POST /api/v1/launchers' answer (docs/protocol.md「模型供应商与用途配置」): the provider as saved and, when `assign`
+/// was sent, which uses now run on it and which were kept, with why (`customized` / `incompatible` / `failed`).
+/// Older hubs answer `{"ok":true}` or `{"launcher":…}` alone.
+nonisolated struct LauncherAdded: Decodable, Hashable, Sendable {
+    nonisolated struct Kept: Decodable, Hashable, Sendable {
+        var purpose: String
+        var reason: String
+    }
+    var launcher: LauncherView?
+    var assigned: [String]?
+    var kept: [Kept]?
 }
 
 /// Get Model List's answer: the gateway's /v1/models, filled in from the hub's catalog.
@@ -268,8 +295,9 @@ nonisolated struct LauncherDefault: Codable, Hashable, Sendable {
     }
 }
 
-/// A model provider a plugin offers (GET /api/v1/launchers/presets, docs/extensions.md「模型供应商」): a launcher added from
-/// it takes the address, kind and models from here; the user fills in only the name and the key.
+/// A model provider the hub offers (GET /api/v1/launchers/presets, docs/extensions.md「模型供应商」, docs/launchers.md
+/// 「内置预设」): its built-in ones (`plugin` "builtin") and the plugins'. A launcher added from it takes the address, kind
+/// and models from here; the user fills in only the key (and, on an older hub, the name).
 nonisolated struct LauncherPreset: Decodable, Hashable, Sendable, Identifiable {
     nonisolated struct Model: Decodable, Hashable, Sendable, Identifiable {
         var id: String
@@ -292,11 +320,34 @@ nonisolated struct LauncherPreset: Decodable, Hashable, Sendable, Identifiable {
     var keyHint: String?
     /// Why the plugin's own list of models could not be had (the declared ones are still there).
     var modelsError: String?
+    /// How the gateway takes the key, `api_key` or `bearer` (built-in presets).
+    var auth: String?
+    /// Where to open an account or get a key (built-in presets).
+    var signupURL: String?
+    /// The name in the request's language (「智谱 GLM」); `name` stays the plain one (built-in presets).
+    var displayName: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, plugin, name, description, kind, api, model, models
+        case id, plugin, name, description, kind, api, model, models, auth
         case baseURL = "base_url", smallModel = "small_model", keyHint = "key_hint", modelsError = "models_error"
+        case signupURL = "signup_url", displayName = "display_name"
     }
+
+    /// The hub's built-in presets' plugin.
+    static let builtinPlugin = "builtin"
+    var isBuiltin: Bool { plugin == Self.builtinPlugin }
+    /// What it is called: the display name, else the name.
+    var title: String { displayName.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? name }
+    /// 「Key 从哪拿」's page: the signup URL when it is a web address.
+    var signup: URL? {
+        guard let s = signupURL?.trimmingCharacters(in: .whitespaces), let u = URL(string: s),
+              let scheme = u.scheme?.lowercased(), scheme == "https" || scheme == "http", u.host() != nil else { return nil }
+        return u
+    }
+    /// The hub's key test speaks the Messages protocol only: a Responses API cannot be tested.
+    var testable: Bool { !(kind == "api" && api == "responses") }
+    /// The host it talks to, "" when the address does not parse.
+    var host: String { URL(string: baseURL)?.host() ?? "" }
 
     /// The model a launcher gets when none is picked: the declared default, else the first listed.
     var defaultModel: String { model?.isEmpty == false ? model! : models?.first?.id ?? "" }
@@ -328,6 +379,10 @@ extension APIClient {
     }
     func saveLauncher(_ input: LauncherInput, isNew: Bool) async throws {
         _ = try await request(isNew ? "POST" : "PUT", isNew ? "/api/v1/launchers" : "/api/v1/launchers/\(input.name)", body: input)
+    }
+    /// Adds a provider and reads what came of it (`assigned` / `kept` when `assign` was sent).
+    func addLauncher(_ input: LauncherInput) async throws -> LauncherAdded {
+        try JSON.decoder.decode(LauncherAdded.self, from: await request("POST", "/api/v1/launchers", body: input))
     }
     /// A launcher added in Persona is deleted; a ~/.zshrc one is hidden in Persona (the file is not touched).
     /// The providers plugins offer; none from a hub without the plugin base (it answers 404).

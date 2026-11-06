@@ -268,6 +268,10 @@ iOS 的添加电脑（`AddComputerTests`，#4196）：`python3 scripts/mock/mock
 `TEST_RUNNER_JARVIS_ADD_HUB=http://127.0.0.1:<端口> TEST_RUNNER_JARVIS_ADD_CONTROL=http://127.0.0.1:<控制端口>`，测试自己按需切 `MOCK_READINESS=zero` / `MOCK_ADD_COMPUTER=seed`、
 `MOCK_PAIR_SECONDS`：零电脑 → 添加 → 等待 → 确认 → 在线、Linux 的那一行和过期重出、待确认和 `error_code` 在列表里、拒绝后消失、Agents 零电脑；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存浅色、深色截图。
 
+内置预设的向导（`ProviderPresetWizardTests`，#4197）：有场景或 `MOCK_BUILTIN_PRESETS=1` 时，带内置预设 `preset` 的「测试」按 Key 里的词回 hub 的原话（`bad` 401、`forbid` 403、`nopath` 404、`busy` 429、`slow` 超时、`region` 地区拦截），
+带 `preset` 的新增按 hub 的规则起名（`deepseek`、重名 `-2`）和显示名，带 `assign` 时回 `assigned` / `kept`：`MOCK_ASSIGN_KEPT=assistant:customized,…` 让列出的用途按给的原因留着。
+同上起 `mock_scenarios.py`，`TEST_RUNNER_JARVIS_PRESET_HUB=…` `TEST_RUNNER_JARVIS_PRESET_CONTROL=…`：A 我已经在用 Claude Code（`full` 试一句成功、`not_logged_in` 失败）、B 只有 Key（401 → 换 Key → 测试通过 → 保存，主对话 `kept`）、C 去哪弄一个模型（去开通 → 链接卡片 → 关掉后到粘 Key）和零电脑时「高级」里的导入禁用；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存截图。
+
 不会漂移：`server/internal/assistant/readiness_scenarios_test.go` 在假 hub 上搭出同样的场景，把真代码回的就绪度（三种语言）和开对话的拒绝存进
 `testdata/readiness_scenarios/<场景>.json`；`scripts/mock/test_readiness_mock.py` 起 mock 逐个比对。改了就绪度或文案：`UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`，
 看 diff，再让 `scripts/mock/readiness_mock.py` 跟上。

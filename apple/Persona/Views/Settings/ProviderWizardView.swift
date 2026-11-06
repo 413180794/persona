@@ -10,6 +10,14 @@ enum ProviderWizardStep: String, Hashable, Identifiable {
     case models
     /// Import from ~/.zshrc.
     case importZshrc = "import"
+    /// A preset's key (a hub with built-in presets).
+    case key
+    /// What adding a preset came to.
+    case done
+    /// "I already use Claude Code": try the main conversation once.
+    case claude
+    /// "Where to get a model": where each built-in provider gives out keys.
+    case getModel = "get"
 
     var id: Self { self }
 }
@@ -17,6 +25,10 @@ enum ProviderWizardStep: String, Hashable, Identifiable {
 /// Settings › Model Providers' sheet to add or change a provider (#2455, after cindy): three steps in one form, the way back in
 /// the bar's leading button (a Mac sheet does not push, #1170), and Import from ~/.zshrc as a step of its own. Other Connection Types
 /// (Direct API, a plugin's provider) is the form it had before (`LauncherEditor`).
+///
+/// On a hub with built-in presets (#4197, docs/onboarding.md 4.3「三条路」) the first step lists them: a preset goes
+/// Paste Key → Done, the custom compatible gateway the three steps; "I already use Claude Code" and "Where to get a
+/// model" sit beside them, and the import / other connection types under Advanced.
 struct ProviderWizard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -31,6 +43,16 @@ struct ProviderWizard: View {
     @State private var expanded: String?
     @State private var newModel = ""
     @State private var showAdvanced = false
+    /// The first step's Advanced (import, other ways), open.
+    @State private var showPickAdvanced = false
+    /// The preset's More Options (name, display name, model), open.
+    @State private var showPresetMore = false
+    /// Where Back goes from the key step: the list, or "Where to get a model" it came from.
+    @State private var keyFrom: ProviderWizardStep = .pick
+    /// A signup page open in the app (「Key 从哪拿」, 「去开通」).
+    @State private var link: LinkTarget?
+    /// The preset whose Sign Up page is open: once it closes, its key is next.
+    @State private var signingUp: String?
 
     init(existing: LauncherView? = nil, start: ProviderWizardStep? = nil, saved: @escaping () async -> Void = {},
          wizard: ProviderWizardModel? = nil, imports: LauncherImportModel? = nil) {
@@ -53,17 +75,37 @@ struct ProviderWizard: View {
                     case .connect: connectSections
                     case .models: modelSections
                     case .importZshrc: LauncherImportSections(imports: imports, machines: importMachines)
+                    case .key: keySections
+                    case .done: doneSections
+                    case .claude: claudeSections
+                    case .getModel: getModelSections
                     }
+                }
+                .pluginLinks($link)
+                .onChange(of: link) { _, now in
+                    // Back from a Sign Up page: its key is next.
+                    guard now == nil, let id = signingUp else { return }
+                    signingUp = nil
+                    pickPreset(id, from: .getModel)
                 }
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
                 // Cancel on the first step (a Mac asks first once something is typed); Back after it.
-                .sheetCancel(unsaved: !wizard.name.isEmpty || !wizard.apiKey.isEmpty, when: step == start) { dismiss() }
+                .sheetCancel(unsaved: !wizard.name.isEmpty || !wizard.apiKey.isEmpty || !wizard.presetKey.isEmpty,
+                             when: step == start) { dismiss() }
                 .animation(Theme.Motion.standard, value: step)
-                #if DEBUG
-                .task { await debugFill() }
-                #endif
+                // Again once the hub's features are in (a sheet opened while connecting starts without them).
+                .task(id: wizard.presetsFlow) {
+                    // The toggle's default reads the readiness: ask for a fresh one alongside the presets.
+                    if wizard.presetsFlow, model.hubFeatures.contains(AssistantReadiness.feature) {
+                        Task { await model.readiness.refresh(api: model.api) }
+                    }
+                    await wizard.loadPresets()
+                    #if DEBUG
+                    await debugFill()
+                    #endif
+                }
             }
             #if os(macOS)
             .macSheet()
@@ -78,7 +120,7 @@ struct ProviderWizard: View {
         }
     }
 
-    /// 「第 2 步，共 3 步 · 连接」 over each step of the wizard (not the import).
+    /// 「第 2 步，共 3 步 · 连接」 over each step of the wizard (not the import, not the two side paths).
     private func stepHeader(_ n: Int, _ what: String) -> some View {
         Text(wizard.isNew ? String(localized: "第 \(n) 步，共 3 步 · \(what)") : what)
             .accessibilityIdentifier("wizard.step")
@@ -87,7 +129,7 @@ struct ProviderWizard: View {
     // MARK: Bar
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        if step != start {
+        if step != start && step != .done {
             ToolbarItem(placement: .cancellationAction) {
                 Button("上一步") { back() }.lineLimit(1).accessibilityIdentifier("wizard.back")
             }
@@ -105,6 +147,19 @@ struct ProviderWizard: View {
                 }
                 .disabled(!wizard.canSave)
                 .accessibilityIdentifier("wizard.save")
+            case .key:
+                Button { Task { await savePreset() } } label: {
+                    if wizard.saving { ProgressView() } else { Text("保存").lineLimit(1) }
+                }
+                .disabled(!wizard.canSavePreset)
+                .accessibilityIdentifier("wizard.save")
+            case .done:
+                Button("完成") { dismiss() }.lineLimit(1).accessibilityIdentifier("wizard.done")
+            case .claude:
+                if wizard.claudeTry?.ok == true {
+                    Button("完成") { dismiss() }.lineLimit(1).accessibilityIdentifier("wizard.done")
+                }
+            case .getModel: EmptyView()
             case .importZshrc:
                 switch imports.phase {
                 case .preview, .importing:
@@ -122,6 +177,7 @@ struct ProviderWizard: View {
         switch step {
         case .models: step = .connect
         case .importZshrc where imports.phase == .preview: imports.restart()
+        case .key: step = keyFrom
         default: step = .pick
         }
     }
@@ -136,6 +192,18 @@ struct ProviderWizard: View {
         if await finished(wizard.save()) { dismiss() }
     }
 
+    /// Saves the preset's provider; its last screen says what now runs on it.
+    private func savePreset() async {
+        if await finished(wizard.savePreset()) { step = .done }
+    }
+
+    private func pickPreset(_ id: String, from: ProviderWizardStep) {
+        if wizard.presetID != id { showPresetMore = false }
+        wizard.presetID = id
+        keyFrom = from
+        step = .key
+    }
+
     private func runImport() async {
         await imports.runImport()
         _ = await finished(imports.phase == .done)
@@ -145,6 +213,7 @@ struct ProviderWizard: View {
     private func finished(_ ok: Bool) async -> Bool {
         guard ok else { Haptics.error(); return false }
         model.launchersChanged()
+        model.readinessChanged()
         Haptics.success()
         await saved()
         return true
@@ -153,6 +222,11 @@ struct ProviderWizard: View {
     // MARK: 1 Choose Provider
 
     @ViewBuilder private var pickSections: some View {
+        if wizard.presetsFlow { presetPickSections } else { legacyPickSections }
+    }
+
+    /// An older hub's first step, as it was: Anthropic official (written into the app), a gateway, the import, other ways.
+    @ViewBuilder private var legacyPickSections: some View {
         Section {
             pickRow(title: String(localized: "Anthropic 官方"), detail: String(localized: "api.anthropic.com，用 Anthropic Console 的 API Key"), id: "wizard.kind.anthropic") {
                 BrandMark(Theme.Brand.claude, side: Theme.Size.icon)
@@ -179,13 +253,282 @@ struct ProviderWizard: View {
         }
     }
 
-    private func pickRow(title: String, detail: String, id: String, @ViewBuilder icon: () -> some View,
+    /// No computer yet: nothing to read a ~/.zshrc on (the import would wait for one forever).
+    private var noComputer: Bool { model.hubMachines.isEmpty }
+
+    /// A hub with built-in presets: its providers in its order, the gateway typed by hand last; the two side paths;
+    /// the import and the other ways under Advanced.
+    @ViewBuilder private var presetPickSections: some View {
+        Section {
+            if !wizard.presetsLoaded {
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.l)
+            }
+            ForEach(wizard.presets) { p in
+                pickRow(title: p.title, detail: presetDetail(p), id: "wizard.preset.\(p.id)",
+                        badge: p.isBuiltin ? nil : String(localized: "扩展")) {
+                    Image(systemName: p.isBuiltin ? Theme.Icon.ai : Theme.Icon.plugins).foregroundStyle(Theme.accent)
+                } action: { pickPreset(p.id, from: .pick) }
+            }
+            pickRow(title: String(localized: "自定义兼容网关"), detail: String(localized: "中转站、公司网关或其他兼容 Anthropic 接口的服务，自己填地址和鉴权方式"),
+                    id: "wizard.kind.custom") {
+                Image(systemName: Theme.Icon.server).foregroundStyle(Theme.accent)
+            } action: {
+                wizard.kind = .custom
+                step = .connect
+            }
+        } header: { stepHeader(1, String(localized: "选择供应商")) } footer: {
+            if let e = wizard.presetsError {
+                Text("读不到 hub 提供的供应商：\(e)。可以先用自定义兼容网关。").foregroundStyle(Theme.cautionText)
+            } else {
+                Text("选一家，粘贴它的 API Key 就能用；地址和模型都已经填好。")
+            }
+        }
+        Section {
+            pickRow(title: String(localized: "我已经在用 Claude Code"), detail: String(localized: "不用加供应商，试一句看主对话能不能用"), id: "wizard.path.claude") {
+                BrandMark(Theme.Brand.claude, side: Theme.Size.icon)
+            } action: { step = .claude }
+            pickRow(title: String(localized: "去哪弄一个模型"), detail: String(localized: "还没有 API Key：看看各家在哪开通"), id: "wizard.path.get") {
+                Image(systemName: Theme.Icon.help).foregroundStyle(Theme.accent)
+            } action: { step = .getModel }
+            .disabled(wizard.signupPresets.isEmpty)
+        }
+        Section {
+            DisclosureGroup(isExpanded: $showPickAdvanced) {
+                pickRow(title: String(localized: "从 ~/.zshrc 导入"),
+                        detail: noComputer ? String(localized: "还没有电脑：先添加一台电脑，再从它导入") : String(localized: "把一台电脑上调用 claude 的 alias 变成供应商"),
+                        id: "wizard.kind.import") {
+                    Image(systemName: Theme.Icon.terminal).foregroundStyle(noComputer ? Color.secondary : Theme.accent)
+                } action: { step = .importZshrc }
+                .disabled(noComputer)
+                pickRow(title: String(localized: "其他接入方式"), detail: String(localized: "直接 API（Messages / Responses）、扩展提供的供应商"), id: "wizard.kind.other") {
+                    Image(systemName: Theme.Icon.options).foregroundStyle(.secondary)
+                } action: { other = true }
+            } label: { Text("高级").lineLimit(1) }
+            .accessibilityIdentifier("wizard.pick.advanced")
+        }
+    }
+
+    /// A built-in provider says who it is for; an extension's says its kind and host.
+    private func presetDetail(_ p: LauncherPreset) -> String {
+        if p.isBuiltin { return p.description.flatMap { $0.isEmpty ? nil : $0 } ?? p.host }
+        return [p.description, LauncherPresetText.subtitle(p)].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: "\n")
+    }
+
+    // MARK: 2 Paste Key
+
+    @ViewBuilder private var keySections: some View {
+        @Bindable var wizard = wizard
+        if let p = wizard.preset {
+            Section {
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: p.isBuiltin ? Theme.Icon.ai : Theme.Icon.plugins).foregroundStyle(Theme.accent)
+                        .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Text(p.title).font(Theme.Font.heading).lineLimit(1)
+                        Text(p.isBuiltin ? p.host : String(localized: "由扩展「\(p.plugin)」提供"))
+                            .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                SecretField(String(localized: "粘贴 API Key"), filled: String(localized: "已填写"), text: $wizard.presetKey, identifier: "wizard.preset.key")
+                    .onChange(of: wizard.presetKey) { wizard.keyChanged() }
+                if let url = p.signup {
+                    Button { link = LinkTarget(url: url) } label: {
+                        Label("Key 从哪拿", systemImage: Theme.Icon.open).lineLimit(1)
+                    }
+                    .accessibilityIdentifier("wizard.preset.signup")
+                }
+            } header: { stepHeader(2, String(localized: "粘贴 Key")) } footer: {
+                Text([p.keyHint, String(localized: "Key 加密存在 hub，不会返回到客户端。")].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: "\n"))
+            }
+            Section {
+                keyTestRow(p)
+            } header: { Text("测试") } footer: {
+                if p.testable { Text("粘贴后会自动测试一次：发一条很短的请求，可能产生少量费用。") }
+            }
+            Section {
+                Toggle(isOn: Binding(get: { wizard.assign }, set: { wizard.assignChoice = $0 })) {
+                    Text("主对话和新开的 Agent 都用它").lineLimit(2)
+                }
+                .accessibilityIdentifier("wizard.assign")
+            } footer: { Text("只改还没人设置过的；你选过的模型不会动。") }
+            Section {
+                DisclosureGroup(isExpanded: $showPresetMore) { presetMoreFields(p) } label: {
+                    HStack {
+                        Text("更多选项").lineLimit(1)
+                        Spacer()
+                        if !showPresetMore { Text("名字、默认模型").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
+                    }
+                }
+                .accessibilityIdentifier("wizard.preset.more")
+            }
+            if let e = wizard.error {
+                Section { LoadProblem(text: e) }
+            }
+        }
+    }
+
+    @ViewBuilder private func keyTestRow(_ p: LauncherPreset) -> some View {
+        if !p.testable {
+            Text("Responses 协议的 Key 没法在这里测试，保存后直接用就行。").font(Theme.Font.label).foregroundStyle(.secondary)
+        } else if wizard.keyTesting {
+            HStack(spacing: Theme.Space.s) {
+                ProgressView()
+                Text("正在测试这个 Key…").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            }
+        } else if let t = wizard.keyTest {
+            ProbeResultRow(result: t)
+            if !t.ok {
+                Button { Task { await wizard.testKey() } } label: {
+                    Label("重新测试", systemImage: Theme.Icon.reload).lineLimit(1)
+                }
+                .accessibilityIdentifier("wizard.preset.retest")
+            }
+        } else {
+            Text(wizard.presetKey.isEmpty ? String(localized: "粘贴 Key 后自动测试") : String(localized: "停下来就开始测试…"))
+                .font(Theme.Font.label).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private func presetMoreFields(_ p: LauncherPreset) -> some View {
+        @Bindable var wizard = wizard
+        TextField("名字（留空自动起名）", text: $wizard.presetName)
+            .font(Theme.Font.body.monospaced())
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+            .accessibilityIdentifier("wizard.preset.name")
+        if let problem = wizard.presetNameProblem {
+            Text(problem).font(Theme.Font.label).foregroundStyle(Theme.danger)
+        }
+        TextField(String(localized: "显示名，留空用「\(p.title)」"), text: $wizard.presetDisplayName)
+            .accessibilityIdentifier("wizard.preset.displayName")
+        if p.choices.isEmpty {
+            TextField("默认模型", text: $wizard.presetModel).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .onChange(of: wizard.presetModel) { wizard.keyChanged() }
+        } else {
+            Picker("默认模型", selection: $wizard.presetModel) {
+                ForEach(p.choices) { m in Text(m.label).tag(m.id) }
+            }
+            .lineLimit(1)
+            .onChange(of: wizard.presetModel) { wizard.keyChanged() }
+        }
+    }
+
+    // MARK: 3 Done
+
+    @ViewBuilder private var doneSections: some View {
+        let summary = wizard.addedSummary
+        Section {
+            VStack(spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.successFilled).font(Theme.Font.display).foregroundStyle(Theme.positive)
+                Text("\(wizard.addedTitle) 接好了").font(Theme.Font.title).multilineTextAlignment(.center)
+                if !summary.assigned.isEmpty {
+                    Text(summary.assigned).font(Theme.Font.body).multilineTextAlignment(.center)
+                }
+                ForEach(summary.kept, id: \.self) { k in
+                    Text(k).font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }
+                if summary.assigned.isEmpty {
+                    Text("要让主对话或 Agent 用它，到「模型配置」里选。").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Theme.Space.l)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("wizard.doneResult")
+        } header: { stepHeader(3, String(localized: "完成")) }
+    }
+
+    // MARK: I already use Claude Code
+
+    @ViewBuilder private var claudeSections: some View {
+        Section {
+            Button { Task { await wizard.tryClaude() } } label: {
+                HStack {
+                    Label(wizard.claudeTry == nil ? "试一句" : "再试一次", systemImage: Theme.Icon.tryOut).lineLimit(1)
+                    if wizard.claudeTrying { Spacer(); ProgressView() }
+                }
+            }
+            .disabled(wizard.claudeTrying)
+            .accessibilityIdentifier("wizard.claude.try")
+            if let t = wizard.claudeTry { claudeTryRow(t) }
+        } header: { Text("我已经在用 Claude Code") } footer: {
+            Text("主对话默认用你电脑上的 Claude Code，不用另加供应商。试一句会真的发一个很小的请求，可能产生少量费用。")
+        }
+        if wizard.claudeTry != nil && wizard.claudeTry?.ok != true {
+            Section {
+                Button { step = .pick } label: { Text("改用 API Key").lineLimit(1) }
+                    .accessibilityIdentifier("wizard.claude.useKey")
+            } footer: { Text("没登录或者用不了时，也可以选一家供应商，粘贴它的 API Key。") }
+        }
+    }
+
+    @ViewBuilder private func claudeTryRow(_ t: ClaudeTry) -> some View {
+        switch t {
+        case .answered(let r):
+            if let p = r.probe {
+                let machine = r.machine.flatMap { $0.name.isEmpty ? nil : $0.name }
+                let ok = p.ok == true
+                ClaudeTryResult(ok: ok,
+                                title: ok ? (machine.map { String(localized: "\($0) 上的 Claude Code 能用") } ?? String(localized: "Claude Code 能用"))
+                                            : String(localized: "试了一句，没成功"),
+                                detail: ok ? [p.model, p.answer.map { String(localized: "回复「\($0)」") }, p.millis.map { LauncherCheckRow.seconds($0) }]
+                                                .compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
+                                             : (p.error ?? ""))
+            } else {
+                // The computer is not ready: no try ran; the step in the way says why.
+                let step = r.steps.first { $0.state != "ok" && $0.state != "skipped" && $0.title?.isEmpty == false }
+                ClaudeTryResult(ok: false, title: step?.title ?? String(localized: "现在试不了"),
+                                detail: step?.detail ?? String(localized: "主对话还没有能用的电脑。"))
+            }
+        case .unsupported:
+            ClaudeTryResult(ok: false, title: String(localized: "这里还试不了"), detail: String(localized: "直接在主对话里发一句试试。"))
+        case .failed(let e):
+            ClaudeTryResult(ok: false, title: String(localized: "试了一句，没成功"), detail: e)
+        }
+    }
+
+    // MARK: Where to get a model
+
+    @ViewBuilder private var getModelSections: some View {
+        Section {
+            ForEach(wizard.signupPresets) { p in
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: Theme.Icon.ai).foregroundStyle(Theme.accent)
+                        .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Text(p.title).font(Theme.Font.heading).lineLimit(1)
+                        if let d = p.description, !d.isEmpty {
+                            Text(d).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
+                        }
+                    }
+                    Spacer(minLength: Theme.Space.s)
+                    Button("去开通") {
+                        guard let url = p.signup else { return }
+                        signingUp = p.id
+                        link = LinkTarget(url: url)
+                    }
+                    .lineLimit(1)
+                    .themedButton()
+                    .accessibilityIdentifier("wizard.get.\(p.id)")
+                }
+                .padding(.vertical, Theme.Space.xxs)
+            }
+        } header: { Text("去哪弄一个模型") } footer: {
+            Text("在厂商的网站上开通并拿到 API Key，回来就能粘贴。")
+        }
+    }
+
+    private func pickRow(title: String, detail: String, id: String, badge: String? = nil, @ViewBuilder icon: () -> some View,
                          action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: Theme.Space.m) {
                 icon().scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(title).font(Theme.Font.heading).foregroundStyle(.primary).lineLimit(1)
+                    HStack(spacing: Theme.Space.sm) {
+                        Text(title).font(Theme.Font.heading).foregroundStyle(.primary).lineLimit(1)
+                        if let badge { Chip(text: badge) }
+                    }
                     Text(detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                 }
                 Spacer(minLength: Theme.Space.s)
@@ -409,10 +752,23 @@ struct ProviderWizard: View {
     }
 
     #if DEBUG
-    /// `-openProviderWizard connect|models` fills the form in with made-up values (screenshots).
+    /// `-openProviderWizard connect|models` fills the form in with made-up values (screenshots); `key` / `done` take the
+    /// first built-in preset (`-wizardPreset <id>` another) with a made-up key (`-wizardKey <key>`: the mock hub
+    /// refuses one with "bad" in it), `done` saves it; `claude` tries the main conversation.
     private func debugFill() async {
-        guard let want = UserDefaults.standard.string(forKey: "openProviderWizard"), wizard.isNew, wizard.name.isEmpty,
-              want == "connect" || want == "models" else { return }
+        guard let want = UserDefaults.standard.string(forKey: "openProviderWizard"), wizard.isNew, wizard.name.isEmpty else { return }
+        if want == "claude" { await wizard.tryClaude(); return }
+        if want == "key" || want == "done" {
+            let d = UserDefaults.standard
+            guard let p = wizard.presets.first(where: { $0.id == d.string(forKey: "wizardPreset") }) ?? wizard.presets.first(where: \.isBuiltin)
+            else { return }
+            pickPreset(p.id, from: .pick)
+            wizard.presetKey = d.string(forKey: "wizardKey") ?? "sk-demo-0123456789"
+            await wizard.testKey()
+            if want == "done" { await savePreset() }
+            return
+        }
+        guard want == "connect" || want == "models" else { return }
         wizard.kind = .custom
         wizard.name = "demo_gateway"
         wizard.baseURL = "https://gateway.example.com"
@@ -484,6 +840,31 @@ struct ProbeResultRow: View {
     }
 }
 
+/// "I already use Claude Code"'s answer: ✓ the computer's Claude Code answered (the model, its words, how long), ✗ why not.
+struct ClaudeTryResult: View {
+    var ok: Bool
+    var title: String
+    var detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
+            Image(systemName: ok ? Theme.Icon.successFilled : Theme.Icon.errorFilled)
+                .foregroundStyle(ok ? Theme.positive : Theme.danger)
+                .scaledFrame(width: Theme.Size.iconS)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(title).font(Theme.Font.heading).lineLimit(2)
+                if !detail.isEmpty {
+                    Text(detail).font(ok ? Theme.Font.label : Theme.Font.code).foregroundStyle(ok ? Color.secondary : Theme.danger)
+                        .lineLimit(6).textSelection(.enabled)
+                }
+            }
+        }
+        .padding(.vertical, Theme.Space.xxs)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("wizard.claude.result")
+    }
+}
+
 /// Import from ~/.zshrc's sections: the machine, what was found (to tick), and what came of it.
 struct LauncherImportSections: View {
     var imports: LauncherImportModel
@@ -499,6 +880,10 @@ struct LauncherImportSections: View {
 
     @ViewBuilder private var machineSection: some View {
         Section {
+            if machines.isEmpty {
+                Text("还没有电脑。先添加一台电脑，再从它导入。").font(Theme.Font.label).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("import.noComputer")
+            }
             ForEach(machines) { m in
                 Button {
                     imports.machine = m.id

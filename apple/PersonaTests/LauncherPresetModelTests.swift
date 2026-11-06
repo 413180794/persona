@@ -37,6 +37,22 @@ struct LauncherPresetModelTests {
         #expect(LauncherPresetText.subtitle(m.selected!) == "直接 API · api.example.com")
     }
 
+    @Test func builtInPresetsDecodeTheirNewFieldsAndExtensionsLackThem() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/launchers/presets", json: #"""
+        {"presets":[{"id":"builtin/deepseek","plugin":"builtin","name":"DeepSeek","display_name":"深度求索","kind":"launcher",
+          "base_url":"https://api.example.com/anthropic","auth":"api_key","model":"ds-chat","signup_url":"https://platform.example.com/keys"}]}
+        """#)
+        let m = make(hub)
+        await m.load()
+        let p = try #require(m.selected)
+        #expect(p.isBuiltin && p.title == "深度求索" && p.auth == "api_key" && p.signup?.host() == "platform.example.com")
+        hub.on("GET", "/api/v1/launchers/presets", json: Self.presets)
+        await m.load()
+        let ext = try #require(m.presets.first)
+        #expect(!ext.isBuiltin && ext.title == "示例网关 · 团队" && ext.displayName == nil && ext.signupURL == nil && ext.auth == nil)
+    }
+
     @Test func anOlderHubHasNoPresets() async {
         let hub = FakeHub() // no route: 404, like a hub from before the plugin base
         let m = make(hub)
