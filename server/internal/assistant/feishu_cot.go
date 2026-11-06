@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -298,21 +299,60 @@ func hasProcess(items []proto.Item) bool {
 	return false
 }
 
-// processPanel is the fallback card's folded process: a line for each tool call.
+// Folded panel limits: newest calls shown, per-line rune cap (escape entities kept whole), own JSON byte budget.
+const (
+	processPanelStepsMost = 40
+	processPanelLineRunes = 120
+	processPanelMaxBytes  = 4000
+)
+
+// processPanel is the fallback card's folded process, self-bounded for the quiet end card outside answerCards
+// (its foot/note are short).
 func processPanel(l i18n.Lang, c *feishubot.Card, steps []string) {
-	if len(steps) == 0 {
+	addProcessPanel(l, c, steps, fitPanelSteps(l, steps, min(processPanelStepsMost, len(steps)), processPanelMaxBytes))
+}
+
+// fitPanelSteps halves from start until the panel's JSON inside an empty card envelope is at most maxBytes.
+func fitPanelSteps(l i18n.Lang, steps []string, start, maxBytes int) int {
+	empty := len(feishubot.NewCard("", "", "").JSON())
+	for n := start; n > 0; n /= 2 {
+		probe := feishubot.NewCard("", "", "")
+		addProcessPanel(l, probe, steps, n)
+		if len(probe.JSON())-empty <= maxBytes {
+			return n
+		}
+	}
+	return 0
+}
+
+// addProcessPanel shows the last maxSteps clipped lines; title counts all steps, a line notes hidden earlier ones.
+func addProcessPanel(l i18n.Lang, c *feishubot.Card, steps []string, maxSteps int) {
+	if maxSteps <= 0 || len(steps) == 0 {
 		return
 	}
-	shown := steps
+	maxSteps = min(maxSteps, len(steps))
 	var b strings.Builder
-	if n := len(shown); n > 40 {
-		b.WriteString(i18n.T(l, "assistant-feishu.earlier_steps", i18n.Args{"count": n - 40}))
-		shown = shown[n-40:]
+	if hidden := len(steps) - maxSteps; hidden > 0 {
+		b.WriteString(i18n.T(l, "assistant-feishu.earlier_steps", i18n.Args{"count": hidden}))
 	}
-	for _, st := range shown {
-		b.WriteString("- " + st + "\n")
+	for _, st := range steps[len(steps)-maxSteps:] {
+		b.WriteString("- " + clipPanelLine(st, processPanelLineRunes) + "\n")
 	}
 	c.Collapsible(i18n.T(l, "assistant-feishu.cot_tools", i18n.Args{"count": len(steps)}), strings.TrimSpace(b.String()))
+}
+
+// panelEntityStart matches a dangling entity prefix the card escapers emit ("&#124;"-style number or "&sim") at
+// the cut; a literal '&' before other text stays.
+var panelEntityStart = regexp.MustCompile(`&(?:#[0-9]{0,5}|s(?:i(?:m)?)?)?$`)
+
+// clipPanelLine cuts an already card-escaped line to n runes plus an ellipsis, never splitting an escape entity;
+// a literal '&' stays.
+func clipPanelLine(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return panelEntityStart.ReplaceAllString(string(r[:n]), "") + "…"
 }
 
 // runSteps is a copy of the tool-call lines the run saw.

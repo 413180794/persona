@@ -188,6 +188,16 @@ test('a new session: an agent of the launcher\'s provider, with the form\'s choi
   await assert.rejects(call(node, 'session.start', { cwd: '/tmp', prompt: 'x', launcher: 'grok' }), /Paseo 没能新建：Provider unavailable/)
 })
 
+test("完成未看 follows Paseo: seen there, seen here; a new turn to look at, unread again", async (t) => {
+  const { fake, a, rows } = await setup(t)
+  const status = () => rows().find((r) => r.session_id === SID)?.status
+  assert.equal(status(), 'done', 'a Paseo without the flag: done after a turn')
+  fake.update(a.claude.id, { requiresAttention: false, attentionReason: null })
+  await until('seen in Paseo', () => status() === 'idle')
+  fake.update(a.claude.id, { requiresAttention: true, attentionReason: 'finished' })
+  await until('a turn to look at', () => status() === 'done')
+})
+
 test('continuing a Claude session: the agent Paseo has, else Paseo imports it under the same id', async (t) => {
   const { fake, node, a } = await setup(t)
   const mine = await call(node, 'session.start', { cwd: '/tmp', resume: SID, open_elsewhere: true })

@@ -43,10 +43,13 @@
   | --- | --- |
   | 有待处理的请求（授权、提问、计划） | 需要你 |
   | `running`、`initializing` | 工作中 |
-  | `idle`：跑过一轮 | 完成 |
+  | `idle` / `error`，Paseo 标着要你看（`requiresAttention`：跑完、出错还没在 Paseo 里看） | 完成未看（Persona 里看过就是已看）；出错的最后一句是出错原因 |
+  | `idle` / `error`，在 Paseo 里看过了 | 已看 |
+  | 老版本 Paseo（没有 `requiresAttention`）：`idle` 跑过一轮、`error` | 完成未看 / 已看由 Persona 自己记 |
   | `idle`：还没跑过 | 空闲 |
-  | `error` | 完成，最后一句是出错原因 |
   | `closed`：没在运行，进程退了 | 未运行（发消息时 Paseo 重新载入它） |
+
+  已读跟 herdr 一样是单向的（#2831）：在 Paseo 里看过，Persona 里就是已看；在 Persona 里看过由 hub 自己记，不回写 Paseo。
 
 - **空间和槽位**（#2784、#2802）：和 Paseo 的侧边栏一样分两层。
   - **空间是 Paseo 的项目**：同一个仓库的主检出和它的各个 worktree 在 App 里是一组，名字是项目名。

@@ -130,7 +130,12 @@ export function transcriptOf(agent, roots = {}) {
   return typeof id === 'string' && CLAUDE_ID.test(id) ? id : undefined
 }
 
-/** A session row's status for an agent: needing you while a request waits, working, done, or 未运行 when closed. */
+/**
+ * A session row's status for an agent: needing you while a request waits, working, 未运行 when closed. Stopped (idle,
+ * or a turn that failed): done while Paseo says it waits for you to look at it (requiresAttention, cleared once you
+ * open it in Paseo), idle — seen — once it does not (#2831), as herdr's done / idle carry herdr's own seen state.
+ * A Paseo without that flag: done once it has run a turn.
+ */
 export function rowStatus(agent) {
   if ((agent?.pendingPermissions?.length ?? 0) > 0) return 'blocked'
   switch (agent?.status) {
@@ -139,11 +144,9 @@ export function rowStatus(agent) {
       return 'working'
     case 'closed':
       return 'offline'
-    case 'error':
-      return 'done'
-    default:
-      return agent?.lastUserMessageAt ? 'done' : 'idle'
   }
+  if (typeof agent?.requiresAttention === 'boolean') return agent.requiresAttention ? 'done' : 'idle'
+  return agent?.status === 'error' || agent?.lastUserMessageAt ? 'done' : 'idle'
 }
 
 // ---- spaces ----

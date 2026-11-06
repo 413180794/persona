@@ -58,3 +58,41 @@ func TestAnswerCards(t *testing.T) {
 		t.Fatalf("steps nil: tags %v", tags)
 	}
 }
+
+// The panel is outside RenderAnswer's body byte budget: on a packed first card it shrinks until measured card.JSON() fits, oldest hidden first.
+func TestAnswerCardsPanelBudget(t *testing.T) {
+	// '<' expands to "&#60;" in card Markdown, packing the first card's answer near its byte budget.
+	packed := "# H\n" + strings.Repeat("<", 2400) + strings.Repeat("字", 3600)
+	t.Run("pathological on packed card", func(t *testing.T) {
+		cards := answerCards(i18n.ZhHans, packed, false, pathologicalSteps(40), "FOOT-MARK")
+		for i, ac := range cards {
+			if n := len(ac.card.JSON()); n > answerCardMaxBytes {
+				t.Fatalf("card %d is %d JSON bytes, want <= %d", i, n, answerCardMaxBytes)
+			}
+		}
+		tags, js := cardTags(t, cards[0])
+		if len(tags) == 0 || tags[0] != "collapsible_panel" {
+			t.Fatalf("panel missing or not first: %v", tags)
+		}
+		for _, want := range []string{"…前面还有 20 步", "运行20", "运行39", "FOOT-MARK"} {
+			if !strings.Contains(js, want) {
+				t.Fatalf("missing %q in %s", want, js)
+			}
+		}
+		if strings.Contains(js, "运行19") {
+			t.Fatalf("an oldest step was kept: %s", js)
+		}
+	})
+	t.Run("empty steps no panel", func(t *testing.T) {
+		js := answerCards(i18n.ZhHans, packed, false, []string{}, "FOOT-MARK")[0].card.JSON()
+		if len(js) > answerCardMaxBytes || strings.Contains(js, "collapsible_panel") {
+			t.Fatalf("empty steps rendered a panel or card over budget: %d bytes", len(js))
+		}
+	})
+	t.Run("short line unchanged", func(t *testing.T) {
+		js := answerCards(i18n.ZhHans, "正文内容", false, []string{"STEP-PLAIN-MARK `ls`"}, "FOOT-MARK")[0].card.JSON()
+		if !strings.Contains(js, "- STEP-PLAIN-MARK `ls`") || len(js) > answerCardMaxBytes {
+			t.Fatalf("short panel changed or card over budget: %s", js)
+		}
+	})
+}

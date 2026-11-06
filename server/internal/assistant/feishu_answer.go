@@ -8,15 +8,19 @@ import (
 // botAnswerCards is how many cards one answer takes at most; the rest is in the app.
 const botAnswerCards = 5
 
+// answerCardMaxBytes bounds one complete answer card's JSON: Feishu refuses cards past ~30 KB; keep 2 KB margin.
+const answerCardMaxBytes = 28000
+
 // botAnswerCard is one card of an answer and what is sent instead when Feishu refuses it.
 type botAnswerCard struct {
 	card     *feishubot.Card
 	fallback string
 }
 
-// answerCards lays out a final answer as the bot's cards (feishubot.RenderAnswer: header, sections, tables, link
-// buttons, status tag): the process panel on the first when steps is not nil, foot under the last, and a note when
-// it was cut short. None for quiet.
+// answerCards lays out a final answer as the bot's cards (RenderAnswer: header, sections, tables, links, tag):
+// process panel on the first when steps is not nil, foot under the last, a note when cut short. The panel is
+// outside RenderAnswer's body budget: the first card is measured whole, panel steps halved to fit, dropped at
+// zero (endHeader added at send fits the 2 KB margin). None for quiet.
 func answerCards(l i18n.Lang, answer string, quiet bool, steps []string, foot string) []botAnswerCard {
 	if quiet {
 		return nil
@@ -24,16 +28,28 @@ func answerCards(l i18n.Lang, answer string, quiet bool, steps []string, foot st
 	a := feishubot.RenderAnswer(answer, botAnswerPiece, botAnswerCards)
 	out := make([]botAnswerCard, len(a.Parts))
 	for i, p := range a.Parts {
-		c := p.Card(answer)
-		if i == 0 && steps != nil {
-			processPanel(l, c, steps)
-		}
-		p.Fill(c)
-		if i == len(a.Parts)-1 {
-			if a.Clipped {
-				c.Note(i18n.T(l, "assistant-feishu_cards.only_beginning"))
+		build := func(panelSteps int) *feishubot.Card {
+			c := p.Card(answer)
+			if i == 0 && steps != nil {
+				addProcessPanel(l, c, steps, panelSteps)
 			}
-			c.Note(foot)
+			p.Fill(c)
+			if i == len(a.Parts)-1 {
+				if a.Clipped {
+					c.Note(i18n.T(l, "assistant-feishu_cards.only_beginning"))
+				}
+				c.Note(foot)
+			}
+			return c
+		}
+		c := build(0)
+		if i == 0 && steps != nil {
+			for n := min(processPanelStepsMost, len(steps)); n > 0; n /= 2 {
+				if tried := build(n); len(tried.JSON()) <= answerCardMaxBytes {
+					c = tried
+					break
+				}
+			}
 		}
 		out[i] = botAnswerCard{card: c, fallback: p.Text}
 	}

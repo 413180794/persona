@@ -55,6 +55,15 @@ test('status: needing you while a request waits; working; done after a turn; 未
   assert.equal(rowStatus({ status: 'idle', lastUserMessageAt: null }), 'idle')
   assert.equal(rowStatus({ status: 'closed' }), 'offline')
   assert.equal(rowStatus({ status: 'error' }), 'done')
+  // Paseo's own seen state (#2831): waiting for you to look at it, or already seen in Paseo.
+  const ran = '2026-01-01T00:00:00Z'
+  assert.equal(rowStatus({ status: 'idle', lastUserMessageAt: ran, requiresAttention: true, attentionReason: 'finished' }), 'done')
+  assert.equal(rowStatus({ status: 'idle', lastUserMessageAt: ran, requiresAttention: false }), 'idle', 'seen in Paseo')
+  assert.equal(rowStatus({ status: 'error', requiresAttention: false }), 'idle')
+  assert.equal(rowStatus({ status: 'error', requiresAttention: true, attentionReason: 'error' }), 'done')
+  assert.equal(rowStatus({ status: 'running', requiresAttention: true }), 'working', 'running first')
+  assert.equal(rowStatus({ status: 'closed', requiresAttention: true }), 'offline')
+  assert.equal(rowStatus({ status: 'idle', requiresAttention: true, pendingPermissions: [{ id: 'p' }] }), 'blocked')
 })
 
 test('a row: its space, the agent the apps know, model, modes and transcript', () => {
