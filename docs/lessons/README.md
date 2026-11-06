@@ -25,4 +25,4 @@ The most common, cross-module ones also get one line in `CLAUDE.md` ("Most commo
 | `model-display.md` | Changing friendly names in the composer / model picker: explicit aliases first, raw IDs, requests and config unchanged, detail rows and search |
 | `web.md` | Changing the web UI: React events, popup menus, narrow layouts, browser interaction regressions, xterm, adding npm dependencies, Playwright verification, expand / collapse animation and scroll anchoring, global styles and Tailwind layers; file / Git panel keys for workspaces without a session |
 | `delivery.md` | Handing work to Agents, changing how tasks are judged done and delivered: why most of a day's work stops at a PR / off by default / not deployed, done criteria, batching, chasing blockers, infrastructure and real environments |
-| `testing.md` | Running UI tests, screenshots, measuring frame rate / jitter; odd simulator and XCUITest behavior; starting sshd for tests |
+| `testing.md` | Running UI tests, screenshots, measuring frame rate / jitter; odd simulator and XCUITest behavior; starting sshd for tests; Mac-only script tests and bash 3.2 exit codes |

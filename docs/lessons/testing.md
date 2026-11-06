@@ -593,3 +593,9 @@ On a Linux development machine without the Android SDK or Xcode, pure-logic clie
 - **Swift**: Foundation-only files (such as `AgentRepoTree.swift`) build with the swift.org Linux toolchain (the Debian 12 package also works on related distributions) inside a temporary SwiftPM package running Swift Testing.
   Copy the needed types verbatim from `Models.swift` and write minimal stand-ins for the rest; match the App's settings: Swift 6, `defaultIsolation(MainActor.self)`, plus the `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` upcoming features (`SWIFT_APPROACHABLE_CONCURRENCY`).
   This catches syntax, type and isolation errors and really runs the tests, but it is not an Xcode build: say "not compiled with Xcode" in the PR; Xcode 26.0 is not verified either.
+
+## macOS bash 3.2 can report an executable failure as exit 1 under `set -e` (#4467)
+
+The Mac-only `test_hub_restart_mac.py` fixture used an empty, non-executable `jarvisd` file. After blue-green switching was added, `hub-systemd.sh` executed it before restarting launchd. With `set -e`, macOS bash 3.2 returned 1 for `"$f" … || rc=$?`, which the script interpreted as a failed switch, rather than 126 for an executable failure. Bash 5 returned 126.
+
+Use an executable fixture that logs calls and returns the documented result: 0 for a successful switch, 3 for no edge to switch. Assert that success avoids launchd and that the no-edge case restarts only the hub agent, skipping node agents. Run this Mac-only suite on macOS; Linux CI skips it: `cd scripts/test && python3 -B -m unittest -v test_hub_restart_mac`.

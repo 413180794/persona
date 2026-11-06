@@ -1,4 +1,6 @@
-"""hub-systemd.sh on a Mac hub: no systemd, so it restarts the launchd agent that already runs <root>/bin/jarvisd hub."""
+"""hub-systemd.sh on a Mac hub: no systemd. It first asks the new binary to switch the running hub's edge over
+(blue-green, docs/hub-restart.md "Blue-green switching"); with no edge to switch on, it restarts the launchd agent that already runs
+<root>/bin/jarvisd hub."""
 import os
 from pathlib import Path
 import plistlib
@@ -11,11 +13,26 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'scripts/deploy/hub-systemd.sh'
 
 
+def agents(home: Path) -> dict:
+    """A node's agent and the hub's, both naming the legacy ~/.jarvis path. The node's sorts first, so the script
+    reads it before the hub's and has to pass it over (it runs the same jarvisd, as node, not hub)."""
+    return {
+        'a.node': {'Label': 'a.node', 'ProgramArguments': [str(home / '.jarvis/bin/jarvisd'), 'node']},
+        'my.hub': {'Label': 'my.hub', 'ProgramArguments': [str(home / '.jarvis/bin/jarvisd'), 'hub']},
+    }
+
+
 @unittest.skipUnless(platform.system() == 'Darwin', 'the launchd branch runs only on macOS')
 class HubRestartOnMac(unittest.TestCase):
-    def run_script(self, home: Path, agents: dict) -> subprocess.CompletedProcess:
+    def jarvisd(self, home: Path, rc: int):
+        """The new binary: each call is logged, and `hub switch` exits rc (3: no edge here, 0: switched)."""
+        p = home / '.persona/bin/jarvisd'
+        p.write_text(f'#!/bin/sh\necho "jarvisd $*" >> "$HOME/calls"\nexit {rc}\n')
+        p.chmod(0o755)
+
+    def run_script(self, home: Path, jobs: dict) -> subprocess.CompletedProcess:
         (home / 'Library/LaunchAgents').mkdir(parents=True)
-        for name, job in agents.items():
+        for name, job in jobs.items():
             with open(home / 'Library/LaunchAgents' / f'{name}.plist', 'wb') as f:
                 plistlib.dump(job, f)
         fake = home / 'fakebin'
@@ -30,15 +47,24 @@ class HubRestartOnMac(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             home = Path(d)
             (home / '.persona/bin').mkdir(parents=True)
-            (home / '.persona/bin/jarvisd').write_text('')
+            self.jarvisd(home, 3)  # no edge to switch on
             os.symlink(home / '.persona', home / '.jarvis')  # the agent may name the legacy path
-            r = self.run_script(home, {
-                'other.node': {'Label': 'other.node', 'ProgramArguments': [str(home / '.jarvis/bin/jarvisd'), 'node']},
-                'my.hub': {'Label': 'my.hub', 'ProgramArguments': [str(home / '.jarvis/bin/jarvisd'), 'hub']},
-            })
+            r = self.run_script(home, agents(home))
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn('restarted launchd agent my.hub', r.stdout)
-            self.assertEqual((home / 'calls').read_text().strip(), f'launchctl kickstart -k gui/{os.getuid()}/my.hub')
+            self.assertEqual((home / 'calls').read_text().splitlines(), [
+                'jarvisd hub switch --timeout 8m', f'launchctl kickstart -k gui/{os.getuid()}/my.hub'])
+
+    def test_switches_the_edge_instead_of_restarting(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            (home / '.persona/bin').mkdir(parents=True)
+            self.jarvisd(home, 0)  # the running edge switched to the new binary
+            os.symlink(home / '.persona', home / '.jarvis')
+            r = self.run_script(home, agents(home))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn('switched to the new binary', r.stdout)
+            self.assertEqual((home / 'calls').read_text().splitlines(), ['jarvisd hub switch --timeout 8m'])
 
     def test_no_agent_is_an_error_not_a_silent_success(self):
         with tempfile.TemporaryDirectory() as d:
