@@ -311,19 +311,17 @@ func TestHerdrStartFailsWhenTheTabCannotBeMade(t *testing.T) {
 	assertTrace(t, trace, []string{call("tab.create", map[string]any{"workspace_id": "w9", "cwd": home, "label": "agent-1", "focus": false})})
 }
 
-// withStartWaits shortens how long a start waits for the shell to run claude, then for claude's input box.
-func withStartWaits(t *testing.T, start, ready time.Duration) {
-	t.Helper()
-	oldStart, oldReady := claudeStartWait, claudeReadyWait
-	claudeStartWait, claudeReadyWait = start, ready
-	t.Cleanup(func() { claudeStartWait, claudeReadyWait = oldStart, oldReady })
+// withStartWaits shortens how long n's starts wait for the shell to run claude, then for claude's input box. Set on n
+// before its first start, not on package variables: a start another test left running still reads its own node's.
+func withStartWaits(n *Node, start, ready time.Duration) {
+	n.claudeStart, n.claudeReady = start, ready
 }
 
 // A busy machine's shell takes longer than claude's whole ready wait to run claude (#1396: ~/.zshrc took 54 s with a
 // dozen agents working): the wait for the input box starts once claude runs, so the start still succeeds.
 func TestHerdrStartWaitsForASlowShell(t *testing.T) {
-	withStartWaits(t, 20*time.Second, 1500*time.Millisecond)
 	n, f, home := herdrNode(t)
+	withStartWaits(n, 20*time.Second, 1500*time.Millisecond)
 	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	var mu sync.Mutex
@@ -353,8 +351,8 @@ func TestHerdrStartWaitsForASlowShell(t *testing.T) {
 // A shell that never runs claude fails the start after claudeStartWait, saying so, and closes the tab it made: a
 // claude that came up later would sit there unbound, and a retry opens a new one.
 func TestHerdrStartThatNeverRunsClaudeClosesItsTab(t *testing.T) {
-	withStartWaits(t, 1500*time.Millisecond, time.Minute)
 	n, f, home := herdrNode(t)
+	withStartWaits(n, 1500*time.Millisecond, time.Minute)
 	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	f.reply("agent.get", map[string]any{"agent": map[string]any{"agent": "", "agent_status": "unknown", "pane_id": "w1:p2"}})
@@ -371,8 +369,8 @@ func TestHerdrStartThatNeverRunsClaudeClosesItsTab(t *testing.T) {
 
 // Claude runs but never shows its input box: the start fails claudeReadyWait after claude came up.
 func TestHerdrStartThatNeverGetsReady(t *testing.T) {
-	withStartWaits(t, time.Minute, 1500*time.Millisecond)
 	n, f, home := herdrNode(t)
+	withStartWaits(n, time.Minute, 1500*time.Millisecond)
 	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	startHerdr(f, "w1:p2", proto.StatusWorking)

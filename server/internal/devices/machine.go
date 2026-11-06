@@ -94,6 +94,7 @@ type Machine struct {
 	flaps                      int
 	timings                    tailcatTimings
 	deployRetry                time.Duration // how long a node update waits before asking a busy node again (tests: shorter)
+	reconnectGrace             time.Duration // shown as it was this long after its node disconnected (warm.go; tests: shorter)
 	engineMu                   sync.Mutex
 	link                       *mgrLink      // kind link: the link Persona Link keeps open, nil while there is none
 	linkDown                   error         // why the last link went away
@@ -134,7 +135,8 @@ type Machine struct {
 
 func newMachine(d *Devices, cfg MachineConfig) *Machine {
 	m := &Machine{cfg: cfg, d: d, watched: map[string]bool{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1),
-		timings: defaultTailcatTimings, deployRetry: 2 * time.Second, linkUp: make(chan struct{}, 1), first: make(chan struct{})}
+		timings: defaultTailcatTimings, deployRetry: 2 * time.Second, reconnectGrace: reconnectGrace,
+		linkUp: make(chan struct{}, 1), first: make(chan struct{})}
 	if dial := d.opts.DialNode; dial != nil {
 		m.dialNode = dial(cfg.ID)
 	}
@@ -275,7 +277,7 @@ func (m *Machine) open(ctx context.Context, via string) (*nodePipe, error) {
 		if err != nil {
 			return nil, err
 		}
-		ac := &activityConn{Conn: c}
+		ac := &activityConn{Conn: c, now: m.timings.now}
 		ac.touch()
 		return &nodePipe{r: ac, w: ac, lastErr: func() string { return "" }, close: func() { _ = c.Close() }, activity: ac}, nil
 	}

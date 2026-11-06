@@ -34,9 +34,12 @@ const (
 // tailcatTimings are a machine's (tests shorten them).
 type tailcatTimings struct {
 	directRetry, directProbeEvery, checkEvery time.Duration
+	// now is the clock a connection's activity is told by (nil: time.Now); a test sets its own so how long a
+	// connection was idle does not depend on how fast the machine running it is.
+	now func() time.Time
 }
 
-var defaultTailcatTimings = tailcatTimings{directRetry, directProbeEvery, tailcatCheckEvery}
+var defaultTailcatTimings = tailcatTimings{directRetry: directRetry, directProbeEvery: directProbeEvery, checkEvery: tailcatCheckEvery}
 
 // probeEvery is how long to wait before checking ssh again, longer after each failed switch back.
 func (m *Machine) probeEvery() time.Duration {
@@ -203,14 +206,22 @@ func (m *Machine) ping(ctx context.Context, peer *rpc.Peer) bool {
 // out (writes are split so a big one on a slow link shows progress while it lasts).
 type activityConn struct {
 	net.Conn
-	last atomic.Int64 // unix nanoseconds
+	now  func() time.Time // nil: time.Now
+	last atomic.Int64     // unix nanoseconds
 }
 
 const activityChunk = 32 << 10
 
-func (c *activityConn) touch() { c.last.Store(time.Now().UnixNano()) }
+func (c *activityConn) clock() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
+}
 
-func (c *activityConn) idle() time.Duration { return time.Since(time.Unix(0, c.last.Load())) }
+func (c *activityConn) touch() { c.last.Store(c.clock().UnixNano()) }
+
+func (c *activityConn) idle() time.Duration { return c.clock().Sub(time.Unix(0, c.last.Load())) }
 
 func (c *activityConn) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)

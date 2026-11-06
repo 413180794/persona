@@ -173,7 +173,7 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	// rewrite r.session (under the log's lock) before this goroutine would get to it.
 	s := r.session
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), startWait())
+		ctx, cancel := context.WithTimeout(context.Background(), n.startWait())
 		defer cancel()
 		_, err := n.start(ctx, cwd, launcher, prompt, "", workspaceID, mode, effort, tabName, id, "", execution)
 		if err != nil {

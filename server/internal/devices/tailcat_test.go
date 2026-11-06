@@ -283,11 +283,20 @@ func TestStuckWriteStillEndsTheConnection(t *testing.T) {
 }
 
 // A connection busy sending (a big page over a slow relay) is alive even if a ping's answer is stuck behind it.
+//
+// The connection's idle time runs on the test's clock: it moves half a check between two requests from the node, so
+// at every check the connection moved bytes less than a check ago however late the machine runs the watcher. Without
+// those requests the clock would reach a whole check after two steps and the watcher would ping.
 func TestBusyConnectionIsKept(t *testing.T) {
 	h := newTestDevices(t)
-	m := tailcatMachine(h, time.Hour, time.Hour, 100*time.Millisecond)
+	const check = 100 * time.Millisecond
+	m := tailcatMachine(h, time.Hour, time.Hour, check)
 	m.cfg.Kind = "tailcat"
-	var dials atomic.Int32
+	var clock atomic.Int64 // unix nanoseconds, moved only below
+	clock.Store(time.Now().UnixNano())
+	m.timings.now = func() time.Time { return time.Unix(0, clock.Load()) }
+	var dials, pings atomic.Int32
+	nodes := make(chan *rpc.Peer, 1)
 	m.dialTailcat = func(ctx context.Context) (net.Conn, error) {
 		dials.Add(1)
 		hubSide, nodeSide := net.Pipe()
@@ -296,22 +305,43 @@ func TestBusyConnectionIsKept(t *testing.T) {
 			if method == "node.info" {
 				return map[string]any{}, nil
 			}
+			if method == "ping" {
+				pings.Add(1)
+			}
 			<-ctx.Done() // never answers a ping
 			return nil, ctx.Err()
 		}
 		go func() { _ = p.Serve(context.Background(), nodeSide); nodeSide.Close() }()
-		go func() { // keeps sending, as a long transfer does
-			for {
-				if err := p.Notify("session.delta", map[string]any{}); err != nil {
-					return
-				}
-				time.Sleep(20 * time.Millisecond)
-			}
-		}()
+		select {
+		case nodes <- p:
+		default:
+		}
 		return hubSide, nil
 	}
 	runMachine(t, m)
-	time.Sleep(1500 * time.Millisecond)
+	var node *rpc.Peer
+	select {
+	case node = <-nodes:
+	case <-time.After(10 * time.Second):
+		t.Fatal("never dialed")
+	}
+	eventually(t, 10*time.Second, "online over tailcat", func() bool { return m.snapshot().Online })
+
+	// Busy: the node keeps asking the hub, as a long transfer keeps moving bytes. The answer coming back means the
+	// hub read the request, so the connection noted it at the clock's time before the clock moves again.
+	for i := 0; i < 15; i++ {
+		clock.Add(int64(check / 2))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := node.Call(ctx, "state.load", map[string]any{}, nil)
+		cancel()
+		if err != nil {
+			t.Fatalf("request %d from the node: %v", i, err)
+		}
+		time.Sleep(check / 2) // real time, so the watcher's checks run meanwhile
+	}
+	if n := pings.Load(); n != 0 {
+		t.Fatalf("a busy connection was pinged %d times", n)
+	}
 	if n := dials.Load(); n != 1 {
 		t.Fatalf("a busy connection was dropped (%d dials)", n)
 	}

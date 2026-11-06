@@ -11,11 +11,9 @@ import (
 // A node that drops and comes straight back (a resident node restarting on a new binary) is not news: the machine
 // shows online meanwhile and nothing goes to the apps; one that stays away shows offline once the grace is over.
 func TestNodeReconnectGrace(t *testing.T) {
-	old := reconnectGrace
-	reconnectGrace = 150 * time.Millisecond
-	defer func() { reconnectGrace = old }()
 	h := newTestDevices(t)
 	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
+	m.reconnectGrace = 150 * time.Millisecond // this machine's own: no package var for another test's run to read
 	h.addEntry(m)
 	go h.reportLoop(h.ctx)
 	m.online = true
@@ -49,7 +47,7 @@ func TestNodeReconnectGrace(t *testing.T) {
 	if n, _ := machinesSent(); n != 0 {
 		t.Fatalf("the apps were told about a disconnect within the grace (%d)", n)
 	}
-	time.Sleep(3 * reconnectGrace)
+	time.Sleep(3 * m.reconnectGrace)
 	if m.snapshot().Online || m.sessionList()[0].Status != proto.StatusUnknown {
 		t.Fatal("still online after the grace")
 	}

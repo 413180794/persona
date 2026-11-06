@@ -267,11 +267,27 @@ func (n *Node) workspaceFor(ctx context.Context, launch host.Launcher, cwd strin
 
 // claudeStartWait is how long a new tab's shell may take to run claude: on a machine busy with a dozen agents,
 // loading ~/.zshrc took most of a minute (#1396). claudeReadyWait is how long claude then has to show its input box.
-// Tests shorten both.
-var claudeStartWait, claudeReadyWait = 3 * time.Minute, time.Minute
+// A node's claudeStart and claudeReady replace them when set (tests shorten both): fields, not package variables a
+// test reassigns, since a start's goroutine reads them after the request that began it has returned (#4800).
+const claudeStartWait, claudeReadyWait = 3 * time.Minute, time.Minute
+
+// claudeWaits is how long this node's starts wait for the shell to run claude, then for claude's input box.
+func (n *Node) claudeWaits() (start, ready time.Duration) {
+	start, ready = claudeStartWait, claudeReadyWait
+	if n.claudeStart > 0 {
+		start = n.claudeStart
+	}
+	if n.claudeReady > 0 {
+		ready = n.claudeReady
+	}
+	return start, ready
+}
 
 // startWait bounds a whole start: the shell, claude, and the first message after.
-func startWait() time.Duration { return claudeStartWait + claudeReadyWait + 30*time.Second }
+func (n *Node) startWait() time.Duration {
+	start, ready := n.claudeWaits()
+	return start + ready + 30*time.Second
+}
 
 // waitReady polls until claude's input box is on screen, accepting the folder-trust dialog on the way.
 // herdr reports the trust dialog as idle, so the screen is the source of truth. The wait for the input box starts
@@ -279,14 +295,15 @@ func startWait() time.Duration { return claudeStartWait + claudeReadyWait + 30*t
 // the input box on screen and herdr knowing no agent there (agent_not_found, or none named) says so: herdr does not
 // know that program as Claude (#3454).
 func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) {
-	deadline := time.Now().Add(claudeStartWait)
+	startWait, readyWait := n.claudeWaits()
+	deadline := time.Now().Add(startWait)
 	running := false
 	h, _, _ := n.paneHost(pane)
 	_, onHerdr := h.(*herdrHost)
 	started := func() {
 		if !running {
 			running = true
-			deadline = time.Now().Add(claudeReadyWait)
+			deadline = time.Now().Add(readyWait)
 		}
 	}
 	readyStreak := 0
@@ -342,16 +359,16 @@ func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) 
 		readyStreak = 0
 	}
 	if unrecognised {
-		wait := claudeStartWait
+		wait := startWait
 		if running { // the trust dialog was answered: the wait after it
-			wait = claudeReadyWait
+			wait = readyWait
 		}
 		return nil, n.unrecognisedClaude(ctx, pane, wait)
 	}
 	if !running {
-		return nil, fmt.Errorf("claude did not start within %s: the tab's shell had not run it yet (is the machine busy?)", claudeStartWait)
+		return nil, fmt.Errorf("claude did not start within %s: the tab's shell had not run it yet (is the machine busy?)", startWait)
 	}
-	return nil, fmt.Errorf("claude did not become ready within %s of starting", claudeReadyWait)
+	return nil, fmt.Errorf("claude did not become ready within %s of starting", readyWait)
 }
 
 // unrecognisedClaude is why a start in a herdr pane failed whose claude showed its input box while herdr never

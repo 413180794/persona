@@ -103,8 +103,8 @@ func connectedMachine(t *testing.T, d *Devices, id string, n *testNode) *Machine
 }
 
 // runMachine runs m until the test ends (or the returned cancel) and waits for run to return in t.Cleanup: a run left
-// behind would still read package vars (reconnectGrace) that a later test swaps. A run that does not end fails the
-// test rather than hanging the package.
+// behind would still read package vars that a later test swaps. A run that does not end fails the test rather than
+// hanging the package.
 func runMachine(t *testing.T, m *Machine) context.CancelFunc {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())

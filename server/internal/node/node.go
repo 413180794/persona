@@ -44,6 +44,10 @@ type Node struct {
 	sockMu sync.Mutex
 	sock   os.FileInfo
 
+	// claudeStart, claudeReady: when set, how long a start waits for the shell to run claude, then for claude's
+	// input box, in place of claudeStartWait and claudeReadyWait (tests; control.go).
+	claudeStart, claudeReady time.Duration
+
 	// doctorAt replaces the places node.doctor looks at (tests; doctor_rpc.go).
 	doctorAt func() DoctorOptions
 

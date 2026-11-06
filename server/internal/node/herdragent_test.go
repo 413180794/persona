@@ -125,13 +125,13 @@ func TestHerdrAgentLeftOutOfAShellThatCannotTakeIt(t *testing.T) {
 // what herdr sees in front of the pane, not that the shell never ran claude (#3454). herdr's own answer for a pane
 // where it detects no agent is agent_not_found; an agent with no name says the same.
 func TestHerdrStartSaysWhenHerdrDoesNotRecogniseClaude(t *testing.T) {
-	withStartWaits(t, 1500*time.Millisecond, time.Minute)
 	for name, answer := range map[string]any{
 		"agent_not_found": herdrFail{Code: "agent_not_found", Message: "agent target w1:p2 not found"},
 		"no name":         map[string]any{"agent": map[string]any{"agent": "", "agent_status": "unknown", "pane_id": "w1:p2"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			n, f, home := herdrNode(t)
+			withStartWaits(n, 1500*time.Millisecond, time.Minute)
 			f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
 			f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 			f.reply("agent.get", answer)
@@ -156,8 +156,8 @@ func TestHerdrStartSaysWhenHerdrDoesNotRecogniseClaude(t *testing.T) {
 
 // The same after the folder-trust dialog was answered: claude ran, so the message names the wait after it.
 func TestHerdrStartPastTheTrustDialogSaysWhenHerdrDoesNotRecogniseClaude(t *testing.T) {
-	withStartWaits(t, time.Minute, 1500*time.Millisecond)
 	n, f, home := herdrNode(t)
+	withStartWaits(n, time.Minute, 1500*time.Millisecond)
 	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	f.reply("agent.get", herdrFail{Code: "agent_not_found", Message: "agent target w1:p2 not found"})
@@ -182,8 +182,8 @@ func (h *screenHost) Read(context.Context, host.PaneRef, host.ReadOpts) (string,
 // Another engine's pane with Claude's input box up and no claude reported: the wait ends as before, without herdr's
 // message, since neither herdr nor HERDR_AGENT has a part there.
 func TestUnrecognisedClaudeIsSaidOnlyOfHerdr(t *testing.T) {
-	withStartWaits(t, time.Second, time.Minute)
 	n := &Node{hosts: host.NewRegistry(&screenHost{bareHost: bareHost{kind: host.Orca}, screen: screenFixture(t, "claude-2.1.312-empty-162.txt")})}
+	withStartWaits(n, time.Second, time.Minute)
 	_, err := n.waitReady(context.Background(), "orca:t1:l1")
 	if err == nil || !strings.Contains(err.Error(), "the tab's shell had not run it yet") || strings.Contains(err.Error(), "herdr") {
 		t.Fatalf("wait: %v", err)

@@ -15,8 +15,9 @@ import (
 // before the manager takes it, to show the machines until the manager reports (hub/devices_link.go).
 
 // reconnectGrace: a running hub shows a machine whose node just disconnected as it was this long, while it reconnects
-// (a resident node restarting on a new binary takes about 2 s); a variable for tests.
-var reconnectGrace = 5 * time.Second
+// (a resident node restarting on a new binary takes about 2 s). Each machine copies it (Machine.reconnectGrace), so a
+// test shortens it on its own machine instead of swapping a package var under another test's goroutines.
+const reconnectGrace = 5 * time.Second
 
 const (
 	warmKey   = "hub.warm_machines"
