@@ -126,6 +126,7 @@ type fakeHub struct {
 	queried map[string]string // the session id the node asked about, by method
 	context map[string]any    // assistant.context's answer; nil: just a snapshot
 	acks    []json.RawMessage // assistant.context calls that acked view errors
+	mcp     []map[string]any  // the mcp.tools / mcp.call params relayed ("method" says which)
 }
 
 func (h *fakeHub) interactions() []proto.Interaction {
@@ -176,6 +177,17 @@ func withFakeHub(t *testing.T, n *Node) *fakeHub {
 				return nil, fmt.Errorf("unknown method %s", method)
 			}
 			return fh.model, nil
+		case "mcp.tools", "mcp.call":
+			var p map[string]any
+			_ = json.Unmarshal(params, &p)
+			p["method"] = method
+			fh.mu.Lock()
+			fh.mcp = append(fh.mcp, p)
+			fh.mu.Unlock()
+			if method == "mcp.tools" {
+				return map[string]any{"tools": []proto.Tool{}}, nil
+			}
+			return proto.TextResult("ok", false), nil
 		case "interaction.create":
 			var p struct {
 				Interaction proto.Interaction `json:"interaction"`

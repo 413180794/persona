@@ -102,4 +102,4 @@
 
 （想在飞书里随时和 Persona 主对话聊、在飞书里点卡片回答提问：那是飞书机器人，`docs/bots.md`。）
 
-- 别人发的 `/agent`（替别人答）：一律不认。替别人回答走访客对话（`docs/assistant.md`「访客对话」，#5195）：飞书扩展的「别人 @我 时 AI 代答」默认关，在扩展设置里打开，只用 `lark_agent_reply`。
+- Someone else's `/agent` (answering for others) is never taken. Answering others goes through guest conversations instead (`docs/assistant.md` ("Guest conversations"), #5195): a Lark extension's auto replies, off by default and turned on in its settings, with only `lark_agent_reply`.

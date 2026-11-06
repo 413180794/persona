@@ -44,6 +44,7 @@ type sockRequest struct {
 	Args      json.RawMessage `json:"args,omitempty"`
 	SessionID string          `json:"session_id,omitempty"`
 	Assistant bool            `json:"assistant,omitempty"` // the caller is the assistant's MCP server
+	Guest     bool            `json:"guest,omitempty"`     // a guest conversation's MCP server (assistant_guest.go)
 	// Attempt is the hook process's own id, the same on each reconnect; Resume marks those reconnects.
 	Attempt string `json:"attempt,omitempty"`
 	Resume  bool   `json:"resume,omitempty"`
@@ -186,7 +187,9 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		var res struct {
 			Tools []proto.Tool `json:"tools"`
 		}
-		if err := n.peer.Call(ctx, "mcp.tools", map[string]any{"assistant": req.Assistant, "session_id": req.SessionID}, &res); err != nil {
+		// A guest's (its MCP server says so, or this node knows it is one): the hub gives it only its own tools.
+		guest := req.Guest || n.guestOf(req.SessionID) != nil
+		if err := n.peer.Call(ctx, "mcp.tools", map[string]any{"assistant": req.Assistant, "session_id": req.SessionID, "guest": guest}, &res); err != nil {
 			resp = map[string]any{"tools": []proto.Tool{}, "error": err.Error()}
 		} else {
 			resp = res
@@ -202,7 +205,7 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 			sid = n.paneCaller(req.Pane)
 		}
 		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": sid,
-			"assistant": req.Assistant}, &res); err != nil {
+			"assistant": req.Assistant, "guest": req.Guest || n.guestOf(sid) != nil}, &res); err != nil {
 			res = proto.TextResult("Persona hub error: "+err.Error(), true)
 		}
 		resp = res

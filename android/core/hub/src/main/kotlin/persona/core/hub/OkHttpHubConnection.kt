@@ -623,7 +623,8 @@ class OkHttpHubConnection(
                         continue
                     }
                     if (raw != null && phoneMessageHandler?.invoke(raw) == true) continue
-                    val event = ServerEvent.decode(signal.value) ?: continue
+                    // Decoded from the tree parsed above: frames (a backlog of items is large) are read from text once.
+                    val event = raw?.let(ServerEvent::decode) ?: continue
                     when (event) {
                         is Hello -> {
                             if (owner.hubId != null && event.hubId != owner.hubId) {

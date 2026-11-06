@@ -31,7 +31,10 @@ class WireFixturesTest(private val name: String, private val fixture: JsonObject
     @Test fun decodesSharedSampleAndChecksEveryDocumentedField() {
         val input = fixture.getValue("input")
         val decoded = when (val decoder = fixture.getValue("decoder").jsonPrimitive.content) {
-            "event", "compat_event" -> ServerEvent.decode(input.toString())?.let { projection.encodeToJsonElement(it) }
+            "event", "compat_event" -> ServerEvent.decode(input.toString()).also {
+                // The socket decodes the frame it already parsed; both ways must read the same event.
+                assertEquals(it, ServerEvent.decode(input))
+            }?.let { projection.encodeToJsonElement(it) }
             "sessions" -> model<SessionsResponse>(input)
             "machines" -> model<MachinesResponse>(input)
             "interactions" -> model<InteractionsResponse>(input)

@@ -539,19 +539,19 @@ App 的 `PUT /api/v1/assistant/tasks/{id}` 请求体里没有 `push` 时保留�
   App 给它改标题返回 400「主对话没有标题可以改」（`conversation_rename` 本来就拒绝）。各端顶栏在主对话上显示形象：iOS / Mac / 安卓是形象名（默认「Persona」），网页是「Persona」。
 - App：抽屉的对话行里 `MMDD | 类型 | ` 用次要色、主题用主色，窄的时候从主题末尾截断（`ConversationTitle`）；别的标题照旧。
 
-## 访客对话（2026-11-06，#5195）
+## Guest conversations (2026-11-06, #5195)
 
-扩展替用户回答**别人**时（飞书扩展的「别人 @我 时 AI 代答」）开的对话：别人写的消息进到对话里，回答又以用户的身份发出去，所以它不能有助手的任何本事。
-普通的扩展对话就是助手对话（助手目录、CLAUDE.md 和记忆、`mcp__jarvis` 全部预先放行，`agent_start` / `agent_send` 只在健康空间问手机），挡别人消息里的指令只能靠提示词，所以单独做了这一种。
+A conversation an extension opens to answer **someone else** for the user (for example a Lark extension's opt-in auto replies to @-mentions). Someone else's message goes into it and its answer goes out as the user, so it must have none of the assistant's powers.
+An ordinary extension conversation is an assistant conversation (the assistant directory, its CLAUDE.md and memory, every `mcp__jarvis` tool allowed up front, `agent_start` / `agent_send` asking the phone only in the health space), where only the prompt stands between the message and those tools; hence this kind.
 
-- **怎么开**：`POST /api/v1/assistant/conversations` 带 `guest: {"tools": ["lark_agent_reply"]}`。`tools` 是 1–8 个**连接器**的工具（扩展的；助手自己的、手机的、Cua 和 ego 的都不行，400），不能和 `main`、`space` 一起用；`report_tasks` 忽略（它派不出任务）。
-  不带 `guest` 的对话和以前完全一样。扩展先 `GET /api/v1/assistant/capabilities`（`{"guest_conversations": true}`）确认 hub 认识它：老 hub 不认识 `guest` 会把它当普通对话开，所以 404 时扩展就不开。
-- **目录**：hub 经 node 的 `assistant.guest_prepare` 在 `.jarvis/guest` 写一份只有访客说明的 CLAUDE.md / AGENTS.md（`prompts/assistant/guest_claude_md.md`），不碰助手的连接器、命令行和 skill；node 不认识这个方法（版本太旧）就回 400，不开。
-- **node**（`node/assistant_guest.go`）：只在 Claude Code 的命令行上跑（Codex、Agent SDK、DSH 等运行时都拒绝：它们的内置工具关不掉），不用预热的进程；
-  每次起进程（新开、恢复、压缩、换模型）都是 `--tools ""`（没有任何内置工具）、`--strict-mcp-config`（只有 Persona 自己的 MCP 服务，不挂用户的和扩展的）、`--allowedTools` 只写它的工具。
-  访客标记和工具存在会话状态（`sessionState.Guest`）里，分支跟着走；后面的消息换启动器、运行时都不理，照它开的时候的跑。不带实时快照，也不给闸门代理的地址。
-- **hub**（`assistant/guest.go`，settings `assistant.guests`，留 30 天）：`mcp.tools` 只列它的工具，`mcp.call` 只放行它的工具；`assistant.context` 给它空快照；`SendParams` 去掉消息里挑的启动器、模型、运行时和权限模式。
-  读不到这份记录时它的调用一律拒绝；node 的 MCP 服务也带着 `guest: true`，hub 不认识的「访客」什么工具都没有。
+- **Starting one**: `POST /api/v1/assistant/conversations` with `guest: {"tools": ["lark_agent_reply"]}`. `tools` are 1–8 **connector** tools (an extension's; the assistant's own, the phone's, Cua's and ego's are refused with 400). It can't be combined with `main` or `space`, and `report_tasks` is ignored (it hands nothing out).
+  Conversations without `guest` are exactly as before. An extension first asks `GET /api/v1/assistant/capabilities` (`{"guest_conversations": true}`): an older hub would ignore `guest` and start an ordinary conversation, so on 404 the extension starts none.
+- **Directory**: the hub has the node's `assistant.guest_prepare` write `.jarvis/guest` with only a guest CLAUDE.md / AGENTS.md (`prompts/assistant/guest_claude_md.md`), leaving the assistant's connectors, CLIs and skills alone. A node that doesn't know the method (too old) gets a 400 and nothing starts.
+- **Node** (`node/assistant_guest.go`): Claude Code CLI only (Codex, the Agent SDK and agent runtimes such as DSH are refused: their built-in tools can't be taken away), never the warm spare process.
+  Every process it runs in (start, resume, compaction, model switch) has `--tools ""` (no built-in tools), `--strict-mcp-config` (only Persona's own MCP server, none of the user's or the extensions'), and `--allowedTools` naming only its tools.
+  The guest flag and tools live in its session state (`sessionState.Guest`) and follow a fork; a later message naming another launcher or runtime is ignored and it runs on what it started on. It gets no live snapshot and no gate proxy addresses. The node relays its MCP calls with `guest: true`.
+- **Hub** (`assistant/guest.go`, setting `assistant.guests`, kept 30 days): `mcp.tools` lists and `mcp.call` runs only its tools; `assistant.context` gives it an empty snapshot; `SendParams` drops a launcher, model, runtime or permission mode picked for a message.
+  While the record can't be read, every tool call is refused (the user's own conversations keep their snapshot and picks: the node enforces those for a guest itself), and a conversation the node calls a guest but the hub doesn't know gets no tools.
 
 ## 对话的来源（#3264，2026-11-06）
 

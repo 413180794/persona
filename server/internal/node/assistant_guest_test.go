@@ -1,9 +1,11 @@
 package node
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -180,6 +182,42 @@ func TestGuestPrepareAndTools(t *testing.T) {
 	} {
 		if err := checkGuestTools(c.tools); (err == nil) != c.ok {
 			t.Errorf("%q: err %v, want ok %v", c.tools, err, c.ok)
+		}
+	}
+}
+
+// The node relays its MCP server's calls with the guest's word for it: what the server says, or what the node knows of
+// the conversation (a guest's process started before the server said so is one all the same).
+func TestGuestRelayTellsTheHub(t *testing.T) {
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	n.state.put("guest-1", sessionState{Launcher: "claude", Guest: []string{"lark_agent_reply"}})
+	relay := func(req map[string]any) {
+		t.Helper()
+		a, b := net.Pipe()
+		go n.serveSock(context.Background(), a)
+		line, _ := json.Marshal(req)
+		if _, err := b.Write(append(line, '\n')); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := bufio.NewReader(b).ReadBytes('\n'); err != nil {
+			t.Fatal(err)
+		}
+		_ = b.Close()
+	}
+	relay(map[string]any{"kind": "mcp.tools", "assistant": true, "session_id": "guest-1"})
+	relay(map[string]any{"kind": "mcp.call", "assistant": true, "session_id": "guest-1", "name": "lark_agent_reply"})
+	relay(map[string]any{"kind": "mcp.tools", "assistant": true, "session_id": "other", "guest": true})
+	relay(map[string]any{"kind": "mcp.call", "assistant": true, "session_id": "ordinary", "name": "kb_search"})
+	fh.mu.Lock()
+	defer fh.mu.Unlock()
+	want := []bool{true, true, true, false}
+	if len(fh.mcp) != len(want) {
+		t.Fatalf("relayed %v", fh.mcp)
+	}
+	for i, p := range fh.mcp {
+		if got, _ := p["guest"].(bool); got != want[i] {
+			t.Errorf("%v: guest %v, want %v", p, got, want[i])
 		}
 	}
 }

@@ -20,6 +20,11 @@ sealed interface ServerEvent {
         fun decode(text: String): ServerEvent? = runCatching {
             JsonCodec.decodeFromString<ServerEvent>(text).takeUnless { it === UnknownEvent }
         }.getOrNull()
+
+        /** The same as [decode] for a frame already parsed, so a socket frame is read from text once. */
+        fun decode(element: JsonElement): ServerEvent? = runCatching {
+            JsonCodec.decodeFromJsonElement<ServerEvent>(element).takeUnless { it === UnknownEvent }
+        }.getOrNull()
     }
 }
 

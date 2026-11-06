@@ -44,7 +44,7 @@ func RenderAssistantHealthClaudeMD(d AssistantHealthClaudeMD) string {
 	return render("assistant/health_claude_md", d)
 }
 
-// AssistantGuestClaudeMD is a guest conversation's CLAUDE.md (docs/assistant.md「访客对话」).
+// AssistantGuestClaudeMD is a guest conversation's CLAUDE.md (docs/assistant.md ("Guest conversations")).
 type AssistantGuestClaudeMD struct {
 	Owner    string // "" is 用户
 	Language string

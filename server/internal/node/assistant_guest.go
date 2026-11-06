@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Guest conversations (the hub's assistant/guest.go, docs/assistant.md「访客对话」): an assistant conversation that
+// Guest conversations (the hub's assistant/guest.go, docs/assistant.md ("Guest conversations")): an assistant conversation that
 // answers someone else for the user. It is started on Claude Code only (no other agent, runtime or the Agent SDK,
 // whose built-in tools could not be taken away), never in the warm spare, and every process it runs in (a resume,
 // a compaction, a model switch) has no built-in tools (--tools ""), only Persona's MCP server (--strict-mcp-config:

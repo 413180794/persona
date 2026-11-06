@@ -28,7 +28,9 @@ func (e *guestExt) CallTool(_ context.Context, _, _, name string, _ json.RawMess
 	return proto.ToolResult{}, false
 }
 
-func (e *guestExt) ConnectorTool(name string) bool { return name == "lark_chats" || name == "lark_agent_reply" }
+func (e *guestExt) ConnectorTool(name string) bool {
+	return name == "lark_chats" || name == "lark_agent_reply"
+}
 
 func (e *guestExt) AssistantSummary(context.Context, string, string) (string, bool) { return "", false }
 
