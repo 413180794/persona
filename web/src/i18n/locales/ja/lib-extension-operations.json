@@ -19,5 +19,9 @@
   "uninstalled": "アンインストールしました",
   "failed_at": "「{step}」で止まりました",
   "canceled": "キャンセルしました",
-  "starting": "準備中…"
+  "starting": "準備中…",
+  "step_tools": "コマンドラインをインストール",
+  "tools_count": "{done} / {total} 個",
+  "tool_reused": "このマシンにあるものを使用",
+  "tools_failed": "コマンドラインプログラムをインストールできませんでした：{error}"
 }

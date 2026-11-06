@@ -46,7 +46,7 @@ export function handleUnauthorized(fn: () => void) {
 export const CLIENT_PLATFORM = "web";
 export const CLIENT_VERSION = "1";
 /** What this page can render beyond the basics (client_hello `features`). */
-export const CLIENT_FEATURES = ["elicitation", "extension_operations"];
+export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth"];
 
 export async function api<T>(path: string, init: RequestInit & { json?: unknown; token?: string } = {}): Promise<T> {
   const headers = new Headers(init.headers);

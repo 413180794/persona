@@ -19,5 +19,9 @@
   "uninstalled": "Uninstalled",
   "failed_at": "Stopped at “{step}”",
   "canceled": "Canceled",
-  "starting": "Getting ready…"
+  "starting": "Getting ready…",
+  "step_tools": "Install command-line tools",
+  "tools_count": "{done} of {total}",
+  "tool_reused": "Uses this machine's copy",
+  "tools_failed": "Command-line tools not installed: {error}"
 }

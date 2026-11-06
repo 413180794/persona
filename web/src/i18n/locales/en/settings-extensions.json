@@ -94,5 +94,6 @@
   "secret_hint": "Stored on the hub and given only to this extension.",
   "sandbox_title": "Isolation",
   "sandbox_footer": "The sandbox only isolates installed extensions the hub runs; the state above is what actually applies. Change it only on the hub machine or in the admin page.",
-  "sandbox_last_denied": "Last denied: {target}"
+  "sandbox_last_denied": "Last denied: {target}",
+  "tool_title": "Command-line tools"
 }

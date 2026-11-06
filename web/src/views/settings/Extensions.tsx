@@ -22,6 +22,8 @@ import { ChannelLink } from "./Channels";
 import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./ExtensionMarket";
 import { ExtensionUI } from "./ExtensionView";
 import { ExtensionConnectorInbox } from "./HubConnector";
+import { getAuth, listAuthNote, onAuthChange, shownPages, signInAsked, takeSignIn, toolText, withAuth, type ExtensionAuth } from "../../lib/extension-auth";
+import { AuthGroup } from "./ExtensionAuth";
 import { dependencyText, dependentError, type Contribution, type Dependent } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 import { formatList, t } from "../../i18n";
@@ -116,6 +118,8 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+  // a sign-in that changed (signed in, out, expired) shows at once
+  useEffect(() => onAuthChange((id, auth) => setExtensions((cur) => cur?.map((x) => withAuth(x, id, auth)) ?? cur)), []);
 
   return (
     <>
@@ -179,6 +183,7 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
             <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] text-ink-2">
               <StateDot extension={p} />
               {extensionState(p)}
+              {listAuthNote(p.auth)}
               {p.upgrade?.state === "needs_permission" && t("settings-extensions.upgrade_pending")}
             </span>
             <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
@@ -286,6 +291,14 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       .finally(() => setLoading(false));
   };
   useEffect(load, [id]);
+  // its sign-in as the hub pushes it; an install whose next step is signing in opens the dialog once
+  useEffect(() => onAuthChange((x, auth) => setDetail((cur) => (cur ? withAuth(cur, x, auth) : cur))), []);
+  const [startSignIn] = useState(() => signInAsked(id));
+  useEffect(() => void takeSignIn(id), [id]);
+  const authChanged = (a?: ExtensionAuth) => {
+    if (a) setDetail((cur) => (cur ? { ...cur, auth: a } : cur));
+    else void getAuth(id).then((v) => setDetail((cur) => (cur ? { ...cur, auth: v } : cur)), () => {});
+  };
 
   const problems = useMemo(() => numberProblems(typed), [typed]);
   const dirty = !!detail && (isDirty(draft, detail.config) || Object.keys(problems).length > 0);
@@ -439,6 +452,8 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       </section>
 
       {/* a way of talking to Persona: binding it, its switch and where its messages go are on the channel's page */}
+      {p?.auth && <AuthGroup id={p.id} auth={p.auth} enabled={p.enabled ?? true} start={startSignIn} onChange={authChanged} />}
+
       {p && onChannel && channelOf(p) && <ChannelLink id={channelOf(p)!} onOpen={onChannel} />}
 
       {p && (
@@ -462,9 +477,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
 
           {p.auto_upgrade !== undefined && <UpgradeGroup p={p} busy={toggling} onToggle={(on) => void toggleAutoUpgrade(on)} onUpgrade={onUpgrade} />}
 
-          {!!p.ui?.length && (
+          {shownPages(p.ui, p.auth).length > 0 && (
             <Group title={t("settings-extensions.pages_title")} footer={t("settings-extensions.pages_footer")}>
-              {p.ui.map((u) => (
+              {shownPages(p.ui, p.auth).map((u) => (
                 <Row
                   key={u.id}
                   label={
@@ -653,6 +668,21 @@ function About({ d }: { d: HubExtensionDetail }) {
         </Row>
       )}
       {d.publisher && <Row label={t("settings-extensions.publisher")}>{d.publisher}</Row>}
+      {(d.tools ?? []).map((x) => (
+        <Row
+          key={x.name}
+          label={
+            <span className="flex min-w-0 items-center gap-2">
+              <Icon name="terminal" size={13} className="shrink-0 text-ink-3" />
+              <span className="truncate">{x.title || x.name}</span>
+              {x.title && x.title !== x.name && <span className="shrink-0 font-mono text-[11.5px] text-ink-3">{x.name}</span>}
+            </span>
+          }
+          hint={t("settings-extensions.tool_title")}
+        >
+          {toolText(x)}
+        </Row>
+      ))}
       {home && (
         <a href={home} target="_blank" rel="noreferrer noopener" className="flex items-center gap-3 px-4 py-2.5 whitespace-nowrap transition-colors hover:bg-hover">
           <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-extensions.homepage")}</span>

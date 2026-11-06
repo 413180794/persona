@@ -94,5 +94,6 @@
   "secret_hint": "ハブに保存され、この拡張機能にだけ渡されます。",
   "sandbox_title": "実行の分離",
   "sandbox_footer": "サンドボックスが分離するのは、ハブが実行するインストール済みの拡張機能だけです。有効かどうかは上の実際の状態に従います。変更はハブのマシンか管理画面でのみ行えます。",
-  "sandbox_last_denied": "最後の拒否：{target}"
+  "sandbox_last_denied": "最後の拒否：{target}",
+  "tool_title": "コマンドラインプログラム"
 }

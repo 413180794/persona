@@ -16,7 +16,8 @@ import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast, useNow }
 import { Icon } from "../../ui/icons";
 import { dependentError, dependencyText, previewBlocked, type Dependent, type PackMember } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
-import { agreeTo, cancelOperation, forget, getOperation, isActive, operationsOn, retryOperation, startFromMarket } from "../../lib/extension-operations";
+import { agreeTo, cancelOperation, forget, getOperation, isActive, operationsOn, retryOperation, startFromMarket, wantsSignIn } from "../../lib/extension-operations";
+import { askSignIn } from "../../lib/extension-auth";
 import { useStore } from "../../lib/store";
 import { OperationSteps, useOperation } from "./ExtensionOperation";
 
@@ -250,6 +251,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
       if (op.kind === "uninstall") load();
       else {
         toast(op.kind === "upgrade" ? t("settings-extensionmarket.upgraded", { name: op.name ?? op.extension, version: op.version ?? "" }) : t("settings-extensionmarket.installed", { name: op.name ?? op.extension }), "ok");
+        if (wantsSignIn(op)) askSignIn(op.extension); // its detail opens its sign-in
         onInstalled(op.extension);
       }
     }
@@ -949,6 +951,8 @@ function permissionIcon(key: string) {
       return "terminal";
     case "node_files":
       return "folder";
+    case "tools":
+      return "download";
     default:
       return "info";
   }

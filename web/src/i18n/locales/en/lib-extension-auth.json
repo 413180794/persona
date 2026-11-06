@@ -1,0 +1,14 @@
+{
+  "signed_out": "Not signed in",
+  "pending": "Waiting for confirmation",
+  "signed_in": "Signed in",
+  "signed_in_as": "Signed in: {account}",
+  "expired": "Expired",
+  "error": "Something went wrong",
+  "error_because": "Error: {message}",
+  "unknown": "The extension isn't running",
+  "sign_in": "Sign in",
+  "sign_in_again": "Sign in again",
+  "list_signed_out": " · Not signed in",
+  "tool_reused": "{version} · Already on the machine"
+}

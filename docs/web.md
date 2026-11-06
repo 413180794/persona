@@ -420,6 +420,11 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   已设置的可以清除（再点一次确认）；贡献了 `channel` 的扩展在头部下面有一行「在 设置 › 渠道 里设置 X」（复用 `ChannelLink`，hub 有渠道且有这个渠道时才有）；
   「提供」之后是「运行隔离」（hub 给了 `sandbox` 才有，照 Android：沙箱正在生效 / 已要求但未生效 / 未启用、原因、经出网代理放行和拒绝的次数、最近拒绝，只看不改，#2968）；「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
   装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad extension`）；hub 有扩展市场（列表回 `markets: true`）时也能从市场装（下面）。截图用 `MOCK_PLUGINS=1` 的假 hub。
+  **登录和命令行**（#4508，`settings/ExtensionAuth.tsx`，逻辑 `lib/extension-auth.ts`，协议见 #4507）：扩展有 `auth` 时状态下面一节「登录」（未登录 / 等待确认 / 已登录：账号 / 已过期 / 出错：原因，`unknown` 写「扩展没在运行」），
+  按钮「登录」（登过的写「重新登录」）和已登录时的「退出登录」；登录在弹窗里按 `POST …/-/auth/step` 分步走：填字段、`device_code`（只认 https 的链接新标签页打开、可复制的验证码、链接的二维码）、`qr`（二维码，能「保存二维码」），
+  这两种每隔 `interval` 秒带同一个 `step`、不带值再问，直到回来别的步骤或 `done`；收到 `extension_auth` 就地更新详情和列表（列表里没登录的状态后加「· 未登录」）。`auth.page`（给旧客户端的登录页）不列在「页面」里。
+  「关于」列出这一版用的命令行和版本（复用的标「机器上已有」）。安装进度多一步「安装命令行」，每个程序一行（复用的写「用这台机器上的」），正在下的那个带进度条，`tools_failed` 写「命令行程序没装上：…」；
+  装完 `next: "auth"` 时进扩展详情并直接打开登录。
   **新老接口**（#1845，`lib/extension-api.ts`，[extensions.md](extensions.md)「命名和兼容」）：hello 的 features 有 `extensions` 时问 `/api/v1/extensions/…`（字段 `extensions` / `extension` / `extension_name`），
   没有（老 hub，或 hello 之前）问 `/api/v1/plugins/…`（`plugins` / `plugin` / `plugin_name`），两套字段都读；市场预览 `{market, extension, plugin}` 两个键都带。
   事件收 `extension_ui`；hub 有新接口时它也会发一份老的 `plugin_ui` 给老 App，网页只在老 hub 上读 `plugin_ui`。市场的签名状态（#1848 的 `signature`）写在市场那一行（「签名已验证」「未签名」……）。

@@ -19,5 +19,9 @@
   "uninstalled": "已卸载",
   "failed_at": "卡在「{step}」",
   "canceled": "已取消",
-  "starting": "准备中…"
+  "starting": "准备中…",
+  "step_tools": "安装命令行",
+  "tools_count": "{done} / {total} 个",
+  "tool_reused": "用这台机器上的",
+  "tools_failed": "命令行程序没装上：{error}"
 }

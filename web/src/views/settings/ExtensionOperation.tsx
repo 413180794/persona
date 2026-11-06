@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 import {
-  latestFor, opLine, operations, shownSteps, stepDetail, stepFraction, stepLabel, stepsDone, watchOperations,
-  type ExtensionOperation, type ExtensionOpStep,
+  latestFor, opError, opLine, operations, shownSteps, stepDetail, stepFraction, stepLabel, stepsDone, toolLines, watchOperations,
+  type ExtensionOperation, type ExtensionOpStep, type ToolLine,
 } from "../../lib/extension-operations";
 import { Button, cx, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -21,7 +21,7 @@ export function useOperation(id: string, market?: string): ExtensionOperation | 
   return op;
 }
 
-function StepMark({ s }: { s: ExtensionOpStep }) {
+function StepMark({ s }: { s: { state: string } }) {
   switch (s.state) {
     case "running":
       return <Spinner size={13} />;
@@ -32,6 +32,37 @@ function StepMark({ s }: { s: ExtensionOpStep }) {
     default:
       return <span aria-hidden className="size-[7px] rounded-full bg-line-strong" />;
   }
+}
+
+function Bar({ fraction, label }: { fraction: number; label: string }) {
+  return (
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(fraction * 100)}
+      className="ml-6.5 h-1 overflow-hidden rounded-full bg-inset"
+    >
+      <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${Math.max(2, fraction * 100)}%` }} />
+    </div>
+  );
+}
+
+/** A program of the tools step, under the step: its mark, its name, the machine's copy or its bytes, and its bar. */
+function ToolRow({ l }: { l: ToolLine }) {
+  return (
+    <li className="flex flex-col gap-1 py-0.5">
+      <div className="flex min-w-0 items-center gap-2.5 pl-6.5">
+        <span className="flex size-3.5 shrink-0 items-center justify-center">
+          <StepMark s={l} />
+        </span>
+        <span className={cx("min-w-0 flex-1 truncate font-mono text-[12px]", l.state === "pending" ? "text-ink-3" : l.state === "failed" ? "text-red" : "text-ink-2")}>{l.name}</span>
+        {l.detail && <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{l.detail}</span>}
+      </div>
+      {l.fraction !== undefined && <div className="pl-6"><Bar fraction={l.fraction} label={l.name} /></div>}
+    </li>
+  );
 }
 
 function StepRow({ s, kind }: { s: ExtensionOpStep; kind: ExtensionOperation["kind"] }) {
@@ -48,17 +79,13 @@ function StepRow({ s, kind }: { s: ExtensionOpStep; kind: ExtensionOperation["ki
         </span>
         {detail && <span className="shrink-0 font-mono text-[11px] text-ink-3 tabular-nums">{detail}</span>}
       </div>
-      {fraction !== undefined && (
-        <div
-          role="progressbar"
-          aria-label={stepLabel(s.id, kind)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(fraction * 100)}
-          className="ml-6.5 h-1 overflow-hidden rounded-full bg-inset"
-        >
-          <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${Math.max(2, fraction * 100)}%` }} />
-        </div>
+      {fraction !== undefined && <Bar fraction={fraction} label={stepLabel(s.id, kind)} />}
+      {s.id === "tools" && !!s.tools?.length && (
+        <ul className="flex flex-col">
+          {toolLines(s).map((l) => (
+            <ToolRow key={l.name} l={l} />
+          ))}
+        </ul>
       )}
       {s.state === "running" && fraction === undefined && s.id === "download" && (
         <div aria-hidden className="ml-6.5 h-1 overflow-hidden rounded-full bg-inset">
@@ -107,7 +134,7 @@ export function OperationSteps({ op, onRetry, onCancel, onReview, onDismiss }: {
           <StepRow key={s.id} s={s} kind={op.kind} />
         ))}
       </ol>
-      {failed && op.error && <p className="mt-1.5 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">{t("settings-extensionmarket.op_error", { error: op.error })}</p>}
+      {failed && op.error && <p className="mt-1.5 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">{opError(op)}</p>}
       {nodeErrors.length > 0 && (
         <ul className="mt-1.5 flex flex-col gap-1">
           {nodeErrors.map(([machine, error]) => (

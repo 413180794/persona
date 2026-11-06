@@ -14,13 +14,19 @@ export const OPERATIONS_FEATURE = "extension_operations";
 
 export type OpStepState = "pending" | "running" | "done" | "failed" | "skipped";
 
+/** One command-line program of the tools step (#4507): reused is the machine's own copy. */
+export type OpTool = { name: string; state: "pending" | "running" | "done" | "failed" | (string & {}); reused?: boolean };
+
 export type ExtensionOpStep = {
   id: string;
   state: OpStepState;
+  /** The download's bytes; for the tools step, of the one program downloading. */
   bytes?: number;
   total?: number;
   cached?: boolean;
   machines?: { done: number; total: number; errors?: Record<string, string> };
+  /** The tools step's programs, in the order they install. */
+  tools?: OpTool[];
   started_at?: string;
   ended_at?: string;
 };
@@ -42,6 +48,8 @@ export type ExtensionOperation = {
   error_code?: string;
   preview_id?: string;
   retryable: boolean;
+  /** "auth" when it succeeded and the extension still has to be signed in to: the page opens its sign-in. */
+  next?: string;
   started_at: string;
   updated_at: string;
   ended_at?: string;
@@ -156,6 +164,7 @@ const STEP_KEYS: Record<string, string> = {
   unpack: "unpack",
   check: "check",
   consent: "consent",
+  tools: "tools",
   install: "install",
   start: "start",
   nodes: "nodes",
@@ -178,9 +187,41 @@ export function stepDetail(s: ExtensionOpStep): string {
     if (s.bytes) return bytes(s.bytes);
     return "";
   }
+  if (s.id === "tools" && s.tools?.length) {
+    return t("lib-extension-operations.tools_count", { done: s.tools.filter((x) => x.state === "done").length, total: s.tools.length });
+  }
   if (s.machines && s.machines.total > 0) return t("lib-extension-operations.machines", { done: s.machines.done, total: s.machines.total });
   return "";
 }
+
+/** One program of the tools step as the page draws it: its state, what it says beside its name, its download's fraction. */
+export type ToolLine = { name: string; state: OpTool["state"]; detail: string; fraction?: number };
+
+/**
+ * The tools step's programs, one line each: a reused one says it is the machine's own; the one downloading has its
+ * bytes and (its size known) a fraction.
+ */
+export function toolLines(s: ExtensionOpStep): ToolLine[] {
+  return (s.tools ?? []).map((x) => {
+    const downloading = x.state === "running" && s.state === "running";
+    let detail = "";
+    if (x.reused) detail = t("lib-extension-operations.tool_reused");
+    else if (downloading && s.total) detail = t("lib-extension-operations.bytes_of", { done: bytes(s.bytes ?? 0), total: bytes(s.total) });
+    else if (downloading && s.bytes) detail = bytes(s.bytes);
+    const fraction = downloading && !x.reused && s.total ? Math.min(1, (s.bytes ?? 0) / s.total) : undefined;
+    return { name: x.name, state: x.state, detail, fraction };
+  });
+}
+
+/** Why a failed operation stopped, in words: the hub's error, led by what its code means when the page knows it. */
+export function opError(o: ExtensionOperation): string {
+  if (!o.error) return "";
+  if (o.error_code === "tools_failed") return t("lib-extension-operations.tools_failed", { error: o.error });
+  return t("settings-extensionmarket.op_error", { error: o.error });
+}
+
+/** An operation that ended well and leaves the extension to be signed in to (its next step is the sign-in). */
+export const wantsSignIn = (o?: ExtensionOperation) => o?.state === "succeeded" && o.next === "auth";
 
 /** A download's fraction (0–1), undefined when its size is not known or it is not downloading. */
 export function stepFraction(s: ExtensionOpStep): number | undefined {

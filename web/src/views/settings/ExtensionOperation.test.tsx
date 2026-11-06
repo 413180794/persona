@@ -47,4 +47,26 @@ describe("OperationSteps", () => {
     expect(html).toContain("重试");
     expect(renderToStaticMarkup(<OperationSteps op={{ ...failed, retryable: false }} onRetry={async () => {}} />)).not.toContain("重试");
   });
+
+  it("lists the tools step's programs, the machine's own and the one downloading with its bar (#4507)", () => {
+    const op: ExtensionOperation = {
+      ...base,
+      step: "tools",
+      steps: [
+        { id: "download", state: "done", bytes: 1 << 20 },
+        { id: "tools", state: "running", bytes: 3 << 20, total: 12 << 20, tools: [{ name: "node", state: "done", reused: true }, { name: "example-cli", state: "running" }] },
+        { id: "install", state: "pending" },
+      ],
+    };
+    const html = renderToStaticMarkup(<OperationSteps op={op} />);
+    expect(html).toContain("安装命令行");
+    expect(html).toContain("node");
+    expect(html).toContain("用这台机器上的");
+    expect(html).toContain("example-cli");
+    expect(html).toContain('aria-label="example-cli"');
+    expect(html).toContain('aria-valuenow="25"');
+    const failed = renderToStaticMarkup(<OperationSteps op={{ ...op, state: "failed", step: "tools", error: "example-cli：校验不对", error_code: "tools_failed" }} />);
+    expect(failed).toContain("命令行程序没装上：example-cli：校验不对");
+  });
 });
+

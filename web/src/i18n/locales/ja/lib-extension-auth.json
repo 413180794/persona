@@ -1,0 +1,14 @@
+{
+  "signed_out": "未ログイン",
+  "pending": "確認待ち",
+  "signed_in": "ログイン済み",
+  "signed_in_as": "ログイン済み：{account}",
+  "expired": "期限切れ",
+  "error": "エラー",
+  "error_because": "エラー：{message}",
+  "unknown": "拡張機能が実行されていません",
+  "sign_in": "ログイン",
+  "sign_in_again": "再ログイン",
+  "list_signed_out": " · 未ログイン",
+  "tool_reused": "{version} · マシンに既存"
+}

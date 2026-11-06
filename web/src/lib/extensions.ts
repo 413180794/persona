@@ -8,6 +8,7 @@ import { extRoot, listOf } from "./extension-api";
 import { refreshExtensionPlaces } from "./extension-slots";
 import { EXTENSIONS_CHANGED } from "./extension-prompts";
 import type { Contribution, DependencyState, PackMember } from "./extension-model";
+import type { ExtensionAuth, ExtensionTool } from "./extension-auth";
 import { t } from "../i18n";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
@@ -40,6 +41,10 @@ export interface HubExtension {
   nodes?: ExtensionNodeState[];
   /** An installed extension's sandbox and its connections through the hub's egress proxy (hub extension_sandbox.go). */
   sandbox?: ExtensionSandbox;
+  /** An extension one signs in to (hub extension_auth, #4507): its state as the hub last knew it. */
+  auth?: ExtensionAuth;
+  /** The command-line programs this version uses. */
+  tools?: ExtensionTool[];
 }
 
 /** Whether an installed extension runs isolated, and what it reached through the egress proxy (Android ExtensionSandbox). */
