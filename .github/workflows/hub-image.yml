@@ -77,7 +77,12 @@ jobs:
             IMAGE=${{ steps.version.outputs.image }}
             ${{ github.event_name == 'pull_request' && 'NODE_PLATFORMS=linux/amd64' || '' }}
           cache-from: type=gha,scope=hub
-          cache-to: type=gha,scope=hub,mode=max,timeout=2m,ignore-error=true
+          # Pull requests read the cache but do not write it (docs/lessons/workflow.md「Rootless Docker CI fixtures」): a PR's cache is
+          # only readable by that PR, mode=max is ~1.5 GB and its upload took 816 s of the job (timeout= did not bound
+          # it), and mode=min keeps only the final stage, so a server change rebuilt as slowly as with no cache.
+          # Only a run on master writes a cache every PR can read; nothing triggers one automatically (tag runs write
+          # to the tag's ref, which PRs cannot read), so dispatch this workflow on master to warm PR builds.
+          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,scope=hub,mode=max,timeout=2m,ignore-error=true' || '' }}
 
       - name: Prepare isolated Compose fixture
         shell: bash

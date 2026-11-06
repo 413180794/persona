@@ -44,6 +44,9 @@ import { MachineDeploy } from "./MachineDeploy";
 import { BrowserSection } from "./BrowserSection";
 import { ComputerSection } from "./ComputerSection";
 import { EngineSection } from "./EngineSection";
+import { openEngineSection } from "./engine-anchor";
+import { BotmuxSwitch } from "./BotmuxSwitch";
+import { currentEngine, engineName } from "../../lib/engines";
 import { NodeHealth } from "./NodeHealth";
 import { MachineExtensionSections } from "../extensions/ExtensionSlots";
 import { t } from "../../i18n";
@@ -204,6 +207,18 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
                   {hub}
                 </span>
               )}
+              {/* its engine and botmux, one click away (#2842): the engine opens 引擎 below, botmux flips */}
+              <button
+                type="button"
+                data-testid="engine-pill"
+                title={t("machines-machinedetail.engine_pill_hint")}
+                onClick={() => openEngineSection()}
+                className="touch-hit inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full bg-inset px-1.5 text-[11px] font-medium text-ink-2 shadow-hairline transition-colors hover:bg-hover"
+              >
+                <Icon name="terminal" size={11} />
+                {engineName(currentEngine(m), m)}
+              </button>
+              <BotmuxSwitch key={m.id} machineID={m.id} />
             </div>
             <p className="mt-0.5 truncate text-[12px] text-ink-3" title={systemLine(system, m)}>
               {systemLine(system, m)}

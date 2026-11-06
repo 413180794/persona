@@ -261,7 +261,7 @@ The Unix socket and its immediate parent directory must belong to the current us
   aliases / functions in `~/.zshrc` and Persona-managed launchers keep their own settings. This directory is also added automatically to the session-search directories above. The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
 - `machines[].botmux` (optional): false means this computer's node neither lists botmux sessions nor runs botmux (no `botmux observe`, `botmux dashboard current`);
   omitted means the old behavior, listing sessions if botmux is installed (`docs/engines.md` ("botmux")). The node must also be this version; manual hub.json edits require a hub restart and take effect on reconnect.
-  It is now only a default: "Also Show botmux Sessions" under "Engine" in machine details is stored per machine in settings (`botmux/<machine id>`) and wins once set (#2575).
+  It is now only a default: "Also Show botmux Sessions" in machine details (the web in the page header, iOS under "Engine") is stored per machine in settings (`botmux/<machine id>`) and wins once set (#2575).
 - `machines[].herdr_autostart` (optional): false means this computer's node does not start herdr's server itself when herdr is not running; omitted means on
   (`docs/engines.md` ("When herdr is not running")). **Only a default**: once the user chooses per machine under **Settings › Machines › Engine**, that choice wins
   (stored in the hub's settings, `herdr_autostart/<machine id>`); later edits here do not affect machines already configured.

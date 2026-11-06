@@ -54,5 +54,6 @@
   "per_core": "Per core",
   "busiest": "Busiest {value}",
   "core_title": "Core {n}: {value}",
-  "open_space": "Open space \"{name}\""
+  "open_space": "Open space \"{name}\"",
+  "engine_pill_hint": "This computer's engine: click to change it under Engine below"
 }

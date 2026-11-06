@@ -1,5 +1,7 @@
 {
   "label": "botmux のセッションも表示",
   "footer": "このコンピューターに botmux がある場合、選んだエンジンのセッションと一緒に botmux のセッションを表示します。オフにすると表示せず、botmux も実行しません。",
-  "save_failed": "保存できませんでした：{error}"
+  "save_failed": "保存できませんでした：{error}",
+  "on": "オン",
+  "off": "オフ"
 }

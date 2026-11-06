@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// "Also show botmux sessions" (#2575): shows the hub's value, a flip PUTs it, a failed save flips back, and an older hub
+// "Also show botmux sessions" in a machine page's header (#2575, #2842): shows the hub's value, a flip PUTs it, a failed save flips back, and an older hub
 // without the route shows no switch.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -38,7 +38,7 @@ const flush = async () => {
   // Response.text() resolves after a macrotask
   for (let i = 0; i < 5; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 };
-const sw = () => host.querySelector<HTMLButtonElement>('[data-testid="botmux-switch"] button[role="switch"]');
+const sw = () => host.querySelector<HTMLButtonElement>('button[data-testid="botmux-switch"][role="switch"]');
 
 beforeEach(() => {
   on = true;
@@ -62,10 +62,15 @@ describe("BotmuxSwitch", () => {
     act(() => root.render(<BotmuxSwitch machineID="mac" />));
     await flush();
     expect(sw()?.getAttribute("aria-checked")).toBe("true");
+    expect(sw()?.textContent).toContain("botmux");
+    expect(sw()?.textContent).toContain("开");
+    // what it does, for a screen reader too (the hover title is not read out)
+    expect(document.getElementById(sw()!.getAttribute("aria-describedby")!)?.textContent).toContain("botmux");
     act(() => sw()!.click());
     await flush();
     expect(puts).toEqual([{ on: false }]);
     expect(sw()?.getAttribute("aria-checked")).toBe("false");
+    expect(sw()?.textContent).toContain("关");
   });
 
   it("flips back when the save fails", async () => {

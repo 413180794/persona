@@ -102,10 +102,35 @@ mapped data-directory owner and checks the JSON owner and mode inside the
 container. Keep the existing direct-host checks for rootful executors. Never
 set PUID to zero or weaken the JSON mode check to make a runner pass.
 
-Cache upload is an optimization, not a smoke-test prerequisite. Bound remote
-cache exports and tolerate their upload errors so a slow cache service cannot
-consume the job's test budget. Build, image-load, and smoke failures remain
-fatal; do not use step-level continue-on-error for this.
+Cache upload is an optimization, not a smoke-test prerequisite. Tolerate cache
+upload errors (`ignore-error=true`) so a broken cache service cannot fail the
+smoke. Build, image-load, and smoke failures remain fatal; do not use
+step-level continue-on-error for this.
+
+`timeout=` on a `type=gha` cache export does not bound a slow upload: with
+`timeout=2m` a PR's smoke still spent 816 s of a 1037 s Build step in
+"sending cache export" (#2674). Pull requests therefore only read the cache
+(`cache-from`) and never write it; non-PR runs keep `mode=max`. Why not just
+`mode=min` on PRs, measured locally with the docker-container driver and a
+`type=local` cache (amd64, same Dockerfile):
+
+| | mode=max | mode=min |
+| --- | --- | --- |
+| cache size | 1.6 GB, 39 blobs | 116 MB, 11 blobs |
+| preparing the export | 165 s | 0 s |
+| rebuild, nothing changed | 11 s | 16 s |
+| rebuild after a one-line `server/` change | 242 s | 735 s (cold builds here took 615–792 s) |
+
+`mode=min` keeps only the final stage's layers, so the `web` / `build` stages
+(`npm ci`, `go mod download`, compiling) start over for any source change. A
+PR's cache is also only readable by that PR, and the repository was already
+over the 10 GB Actions cache limit (282 entries, all from PR refs), so PR
+exports mostly evicted each other. A cache every PR can read comes only from a
+run on master, and nothing starts one automatically: tag pushes write to the
+tag's ref, which PRs cannot read. Without a recent `workflow_dispatch` run on
+master, PR builds are cold; dispatch one on master after a large dependency or
+Dockerfile change if PR build time matters. Re-runs of the same PR also no
+longer reuse that PR's previous build.
 
 Capture short `docker compose exec` output before checking it with `grep -q`.
 An early-closing grep can make Docker's output forwarding fail with exit 255

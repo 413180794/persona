@@ -54,5 +54,6 @@
   "per_core": "コアごと",
   "busiest": "最大{value}",
   "core_title": "コア{n}：{value}",
-  "open_space": "スペース「{name}」を開く"
+  "open_space": "スペース「{name}」を開く",
+  "engine_pill_hint": "このコンピューターのエンジン。クリックすると下の「エンジン」で変更できます"
 }
