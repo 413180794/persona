@@ -136,7 +136,7 @@ Benefits: clear ownership; assistant crashes / hangs don't bring down hub, and v
 
 **Extensions, connectors, and bots also belong to the assistant process** (2026-11-05, [extensions.md](extensions.md) ("Responsibilities")): `internal/extmgr` runs extensions, connectors, mail, Lark and WeChat bots in-process;
 `assistant/extensions.go` hands over hub `extensions.*` calls / events. Assistant `app.call` to `inbox`, `feishu`, `channels`, `connectors`, `plugins` (Inbox / knowledge sources, channel transport, connector CLIs and extension skills) is answered directly in-process, not via hub;
-`inbox.changed`, `kb.changed`, `kb.forgotten` destined for hub first go there for extension subscriptions. Its hub needs (cards, push, model-config queries) use `app.call` app `hub`. Channel messages described above as "hub forwards to assistant" (`channels.receive`, `feishu.message`, `feishu.card_action`) and Inbox `inbox.collected` now arrive from it in-process, with unchanged methods / parameters.
+`inbox.changed`, `kb.changed`, `kb.forgotten`, `todo.changed`, `todo.decision` destined for hub first go there for extension subscriptions. Its hub needs (cards, push, model-config queries) use `app.call` app `hub`. Channel messages described above as "hub forwards to assistant" (`channels.receive`, `feishu.message`, `feishu.card_action`) and Inbox `inbox.collected` now arrive from it in-process, with unchanged methods / parameters.
 
 **Still in hub** (move later):
 

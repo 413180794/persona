@@ -1836,8 +1836,25 @@ Extensions contribute `events` to subscribe to things happening on the hub. Thes
 | `inbox.changed` | `id`, `source`, `kind`, `title`: new or updated Inbox item (if more than 50 items are stored at once, only the first 50 are sent) |
 | `agent.needs_you` | `machine_id`, `machine`, `session_id`, `interaction_id`, `kind`, `summary`: an Agent is waiting for your answer or approval |
 | `agent.finished` | `machine_id`, `machine`, `session_id`, `title`: an Agent finished |
+| `todo.changed` | `id`, `title`, `thread?`, `done?`, `what`: a to-do was created, deleted, or its title, whether it is done, or the thread it is bound to changed (needs `todos.read`, see below) |
+| `todo.decision` | `id`, `title`, `thread?`, `decision`: a decision was written on a to-do (needs `todos.read`, see below) |
 
 SDK programs receive them in `Namespaces["event"]` (method name is the event name).
+
+### To-do events (#5279)
+
+`todo.changed` and `todo.decision` let a connector extension follow the to-dos, for instance to post into a chat thread it owns, in the user's name rather than the bot's. Schema: `schema/extension/todos.schema.json` (`wire.TodoChangedEvent`, `wire.TodoDecisionEvent`).
+
+```json
+{"permissions":{"hub":["todos.read"]},"activation_events":["on_startup"],
+ "contributes":{"events":[{"id":"todos","subscribe":["todo.changed","todo.decision"]}]}}
+```
+
+- **Who is told**: an extension that is enabled, has that contribution on, has its program running, subscribed to the topic **and** was granted `todos.read` (or the legacy full access). Subscribing without the scope is told nothing; `todos.write` alone, or another scope, is not enough. (The user agrees to a manifest's permissions as a whole at install; the grant is what is checked, not the declaration.) Declaring `todos.read` lets the extension read the to-dos and their decisions (`GET /api/v1/todos`, `GET /api/v1/todos/{id}/decisions`) anyway, which is why these events carry the titles and decision text.
+- **`todo.changed {id, title, thread?, done?, what}`**: sent when a to-do is created (`what: "created"`), deleted (`"deleted"`; `title` and `thread` are the last it had), or its title, whether it is done (including a task that failed to start), or its bound thread (bound, rebound, retitled, unbound) changed (`"updated"`). Changes to one to-do (or several) within about a second are told once, as each to-do is at the end of that second; a to-do that is back as it was is not told. Notes, agents, spaces, stage, delivery and decisions changing do not send it. `thread` is `{channel, chat_id, thread_id, title}`, as in `PUT /api/v1/todos/{id}/thread`, and left out when the to-do has none; `done` is `true` while the to-do is done (closed, or its task failed to start) and left out otherwise. To know more, read the to-do again.
+- **`todo.decision {id, title, thread?, decision}`**: sent once for every decision written, at once (not merged). `decision` is `{id, question, choice, reason?, source, supersedes_id?}`; `source` is `manual`, `card`, `outcome`, `agent` or `thread`. A decision that comes from the to-do's own chat thread (`thread`) **is** sent: the extension may forward it elsewhere. One that posts decisions into the thread should skip `source: "thread"` itself, or it echoes the user's reply back (the built-in bot posts do the same). Marking an old decision superseded does not send anything.
+- **No order between the two events**: `todo.decision` and `todo.changed` are separate events, and the extension's handlers may run at once, so a decision can be heard before the `todo.changed` that came earlier (and the reverse). Use each event's own fields, and read the to-do when the order matters.
+- They go through a queue of their own (512; the knowledge base's is another), in which a `todo.changed` for a to-do that has one waiting is merged into it (a backlog is at most one a to-do: a to-do created and deleted before the extension was told is none, one created and then changed stays `created`, with the latest state). Past the limit the oldest is dropped and the log says so. Like `kb.changed` they are not stored for redelivery, and a restarted extension reads the to-dos again first.
 
 ## Error reports
 

@@ -231,6 +231,17 @@ var (
 		"inbox.changed":   permissionText(i18n.Default, "event_inbox_changed"),
 		"agent.needs_you": permissionText(i18n.Default, "event_agent_needs_you"),
 		"agent.finished":  permissionText(i18n.Default, "event_agent_finished"),
+		"todo.changed":    permissionText(i18n.Default, "event_todo_changed"),
+		"todo.decision":   permissionText(i18n.Default, "event_todo_decision"),
+	}
+
+	// EventScopes are the hub scopes an event needs besides the subscription: only an extension granted the scope
+	// (or the legacy full-hub grant) is told. A topic not listed needs none.
+	EventScopes = map[string]string{
+		"kb.changed":    ScopeKBRead,
+		"kb.forgotten":  ScopeKBRead,
+		"todo.changed":  ScopeTodosRead,
+		"todo.decision": ScopeTodosRead,
 	}
 )
 

@@ -101,9 +101,9 @@ func TestKBEventsRejectInvalidPayloads(t *testing.T) {
 		h.AssistantSaid(assistantwire.EventKBChanged, json.RawMessage(raw))
 	}
 	h.AssistantSaid(assistantwire.EventKBForgotten, json.RawMessage(`{}`))
-	h.extensions.kbEvents.mu.Lock()
-	defer h.extensions.kbEvents.mu.Unlock()
-	if h.extensions.kbEvents.running || len(h.extensions.kbEvents.pending) > 0 {
+	h.extensions.events.mu.Lock()
+	defer h.extensions.events.mu.Unlock()
+	if h.extensions.events.running || len(h.extensions.events.pending) > 0 {
 		t.Fatal("invalid event queued")
 	}
 }

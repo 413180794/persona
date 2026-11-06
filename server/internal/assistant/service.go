@@ -97,6 +97,7 @@ type Service struct {
 	chans      channelsBook      // channels.go
 	fbot       feishuBook        // feishu.go
 	tposts     threadPoster      // feishu_thread_posts.go: what a todo tells its chat thread
+	tevents    todoEvents        // todo_events.go: what the extensions are told of the todos
 	kb         kbState           // kb.go
 	inbox      inboxBook         // inbox.go
 	board      boardBook         // workspace_board.go: the workspace board

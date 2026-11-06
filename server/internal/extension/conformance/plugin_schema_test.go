@@ -1,6 +1,6 @@
 package conformance_test
 
-// The plugin protocol's schemas (schema/extension/connector.schema.json, channel.schema.json, kb.schema.json) describe what the server's
+// The plugin protocol's schemas (schema/extension/connector.schema.json, channel.schema.json, kb.schema.json, todos.schema.json) describe what the server's
 // own code sends and reads: every call and event they list is held to the Go types the hub and connector/serve put on
 // the wire, field by field, and every connector method the server knows is in them. The schema is what an extension
 // is written from; this keeps it from drifting from the code.
@@ -102,6 +102,9 @@ var goTypes = map[string]any{
 	"KBOwner":          assistantwire.KBOwner{},
 	"KBChangedEvent":   assistantwire.KBChanged{},
 	"KBForgottenEvent": assistantwire.KBForgottenEvent{},
+
+	"TodoChangedEvent":  assistantwire.TodoChangedEvent{},
+	"TodoDecisionEvent": assistantwire.TodoDecisionEvent{},
 }
 
 // The calls of the server the schemas must list: the connector methods connector/serve answers and calls (the bare
@@ -126,6 +129,9 @@ var kbCalls = []string{assistantwire.MethodKBList, assistantwire.MethodKBGet, as
 	assistantwire.MethodKBSearch, assistantwire.MethodKBUpdate, assistantwire.MethodKBOwner,
 	"event." + assistantwire.EventKBChanged, "event." + assistantwire.EventKBForgotten}
 
+// The to-do events the hub tells the extensions granted todos.read (todos.schema.json).
+var todoCalls = []string{"event." + assistantwire.EventTodoChanged, "event." + assistantwire.EventTodoDecision}
+
 func TestPluginSchemasListTheServersCalls(t *testing.T) {
 	var want []string
 	for _, m := range serverCalls {
@@ -135,6 +141,7 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 		want = append(want, channel.InPlugin(m))
 	}
 	want = append(want, kbCalls...)
+	want = append(want, todoCalls...)
 	want = append(want, sentCalls...)
 	for _, name := range want {
 		if _, ok := wire.Calls[name]; !ok {
@@ -143,7 +150,7 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 	}
 	for name := range wire.Calls {
 		if (strings.HasPrefix(name, serve.Namespace+".") || strings.HasPrefix(name, channel.Namespace+".") ||
-			strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.") || strings.HasPrefix(name, "sent.")) &&
+			strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.") || strings.HasPrefix(name, "event.todo.") || strings.HasPrefix(name, "sent.")) &&
 			!slices.Contains(want, name) {
 			t.Errorf("%s: schema/extension lists it, the server has no such call", name)
 		}
@@ -392,3 +399,24 @@ func jsonFields(g reflect.Type, out map[string]goField) {
 
 func asString(v any) string { s, _ := v.(string); return s }
 func asSlice(v any) []any   { s, _ := v.([]any); return s }
+
+// The manifest schema's events.subscribe enum is the events the hub has (extension.EventTopics): an event added to one
+// and not the other makes a manifest that the server accepts fail the schema, or the reverse.
+func TestManifestSchemaListsEveryEventTopic(t *testing.T) {
+	s := loadSchemas(t)
+	def := s.def(t, "EventsItem")
+	items := def["properties"].(map[string]any)["subscribe"].(map[string]any)["items"].(map[string]any)
+	var got []string
+	for _, v := range asSlice(items["enum"]) {
+		got = append(got, v.(string))
+	}
+	var want []string
+	for topic := range extension.EventTopics {
+		want = append(want, topic)
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("manifest.schema.json EventsItem.subscribe enum %v, extension.EventTopics %v", got, want)
+	}
+}

@@ -77,6 +77,8 @@
   "event_inbox_changed": "收件箱里有新的或更新了的条目（来源、种类、标题）",
   "event_agent_needs_you": "有 Agent 在等你回答或批准（哪台电脑、哪个会话、问的什么）",
   "event_agent_finished": "有 Agent 做完了（哪台电脑、哪个会话、标题）",
+  "event_todo_changed": "待办新建、改动或删除（标题、绑定的话题；需要「看待办」权限）",
+  "event_todo_decision": "待办上记了一条决定（问题、选择、来源；需要「看待办」权限）",
   "error_reports_title": "接收错误和崩溃报告",
   "error_reports_detail": "hub 和你各台设备上的错误和崩溃，先脱敏：不含消息正文、token、用户名、机器名和 IP 地址；发到哪里由它决定（比如错误追踪服务）",
   "auth_relay_title": "替你的 Agent 完成授权链接",

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,6 +28,8 @@ import (
 func serveUIExtensionForTest() {
 	var hub *pserve.Hub
 	var finished atomic.Int32
+	var seenMu sync.Mutex
+	var todoSeen string // the todo events as told (events may come at the same time): "<todo.changed {…}><todo.decision {…}>"
 	ui := func(ctx context.Context, method string, params json.RawMessage) (any, error) {
 		var p struct {
 			Contribution string            `json:"contribution"`
@@ -129,10 +132,17 @@ func serveUIExtensionForTest() {
 		case p.Contribution == "broken":
 			return map[string]any{"sections": []any{map[string]any{"items": []any{map[string]any{"type": "link", "title": "x", "url": "http://example.com"}}}}}, nil
 		}
-		return map[string]any{"title": "示例", "state": "page=1", "sections": []any{map[string]any{"title": "概况", "items": []any{
+		items := []any{
 			map[string]any{"type": "metric", "label": "完成的 Agent", "value": fmt.Sprint(finished.Load()), "tone": "positive"},
 			map[string]any{"type": "field", "name": "note", "label": "备注", "kind": "text"},
-			map[string]any{"type": "button", "title": "保存", "action": map[string]any{"id": "save", "submit": true}}}}}}, nil
+			map[string]any{"type": "button", "title": "保存", "action": map[string]any{"id": "save", "submit": true}}}
+		seenMu.Lock()
+		seen := todoSeen
+		seenMu.Unlock()
+		if seen != "" {
+			items = append(items, map[string]any{"type": "text", "text": seen})
+		}
+		return map[string]any{"title": "示例", "state": "page=1", "sections": []any{map[string]any{"title": "概况", "items": items}}}, nil
 	}
 	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "example-ui", Version: cmp.Or(os.Getenv("EXAMPLE_UI_VERSION"), "1.0.0"),
 		Init: func(_ context.Context, _ extension.InitializeParams, h *pserve.Hub) (map[string]any, error) {
@@ -146,9 +156,14 @@ func serveUIExtensionForTest() {
 				}
 				return ui(ctx, method, params)
 			},
-			"event": func(_ context.Context, method string, _ json.RawMessage) (any, error) {
-				if method == "agent.finished" || method == "kb.changed" || method == "kb.forgotten" {
+			"event": func(_ context.Context, method string, params json.RawMessage) (any, error) {
+				if method == "agent.finished" || method == "kb.changed" || method == "kb.forgotten" || method == "todo.changed" || method == "todo.decision" {
 					finished.Add(1)
+				}
+				if method == "todo.changed" || method == "todo.decision" {
+					seenMu.Lock()
+					todoSeen += "<" + method + " " + string(params) + ">"
+					seenMu.Unlock()
 				}
 				return nil, nil
 			}}})

@@ -169,6 +169,9 @@ func (s *Service) threadOf(id string) *TodoThread {
 // which). Every writer of decisions goes through it, so a new source cannot forget the topic.
 func (s *Service) insertDecision(ctx context.Context, st todoStore, row db.TodoDecisionRow) (bool, error) {
 	ok, err := st.InsertTodoDecision(ctx, row)
+	if err == nil && ok {
+		s.todoDecisionEvent(row)
+	}
 	if err == nil && ok && postable(row) {
 		s.threadPost(row.TodoID, threadEvent{kind: threadDecision, text: decisionLine(row)})
 	}

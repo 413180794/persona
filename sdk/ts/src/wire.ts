@@ -4300,6 +4300,60 @@ export interface KBForgottenEvent {
 }
 
 /**
+ * The chat thread a to-do is bound to: the channel it lives on (feishu…), the chat and the thread in it, and the
+ * title shown for it.
+ */
+export interface TodoEventThread {
+  channel: string;
+  chat_id: string;
+  thread_id: string;
+  title: string;
+}
+
+/**
+ * event.todo.changed: a to-do was created or deleted, or its title, whether it is done (or failed to start), or the
+ * thread it is bound to changed. Changes within about a second of each other are told once, as the to-do is at the
+ * end of them. title, thread and done are as after the change (the last ones for a deleted to-do); thread is left out
+ * when the to-do has none, done unless the to-do is done (closed, or its task failed to start). Notes, agents and
+ * decisions changing do not send it (decisions have event.todo.decision). Read the to-do again if it matters.
+ */
+export interface TodoChangedEvent {
+  id: string;
+  title: string;
+  thread?: TodoEventThread;
+  done?: boolean;
+  what: string;
+}
+
+/**
+ * A decision on a to-do: what was asked and chosen (reason and supersedes_id left out when empty), and where it came
+ * from: manual (written in the to-do), card (the user answered an Agent's question card), outcome (pulled out of an
+ * Agent's finished work, not made by the user), agent (an Agent noted it), thread (the user's reply in the to-do's
+ * chat thread).
+ */
+export interface TodoEventDecision {
+  id: string;
+  question: string;
+  choice: string;
+  reason?: string;
+  source: string;
+  supersedes_id?: string;
+}
+
+/**
+ * event.todo.decision: a decision was written on a to-do, whatever its source (a decision from the to-do's own thread
+ * has source thread: an extension that posts decisions into that thread should skip it). Sent once for each decision
+ * written, not for one marked superseded later. title and thread are the to-do's now; thread is left out when it has
+ * none.
+ */
+export interface TodoDecisionEvent {
+  id: string;
+  title: string;
+  thread?: TodoEventThread;
+  decision: TodoEventDecision;
+}
+
+/**
  * Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
  * range.
  */
@@ -4565,4 +4619,6 @@ export const CALLS: Record<string, Call> = {
   "kb.owner": { from: "program", params: "KBOwnerParams", result: "KBOwner" },
   "event.kb.changed": { from: "hub", params: "KBChangedEvent", event: true },
   "event.kb.forgotten": { from: "hub", params: "KBForgottenEvent", event: true },
+  "event.todo.changed": { from: "hub", params: "TodoChangedEvent", event: true },
+  "event.todo.decision": { from: "hub", params: "TodoDecisionEvent", event: true },
 };

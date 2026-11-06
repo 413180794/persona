@@ -366,6 +366,13 @@ The line is "New decision: …", "3 new decisions: …", "An agent finished a tu
 - **Nothing for a to-do with no thread**, none for one unbound while the line waited. Not sent: the log says why.
 - **Private chat as before**: the reports and pushes (`reports`, `feishuAgentDone`, the cards) go out as ever; a bound to-do's topic is told in addition. Whether a bound to-do should be told in the topic only is left for later.
 
+### Telling the extensions
+
+(#5279, step 5.) The extensions are told of the to-dos too, through two events (`todo.changed`, `todo.decision`; [extensions.md](extensions.md) "To-do events"): the ones that subscribed and were granted `todos.read` (the read scope that already lets them call `GET /api/v1/todos`), so a connector extension can post into a thread it owns as the user. Nothing needs a binding: they go for every to-do. `assistant/todo_events.go`.
+
+- **`todo.decision`** is sent from `insertDecision`, the one place every decision is written through, so every source is told (the thread's own too, with `source: "thread"`).
+- **`todo.changed`** is not hung on the writers. Whenever the to-dos change (`todosChanged`, what tells the apps) a timer of one second starts; at its end the to-dos are compared with what the extensions were last told of (title, done or failed to start, bound thread), and a to-do created, deleted or different is told once. A new way to change a to-do cannot forget it, and several changes inside the second are one event. The baseline is taken when the to-dos are loaded, so nothing is told of the ones found there.
+
 ### Opening a to-do from a topic
 
 (#5279, step 5.) In a registered group chat, a new topic opens a to-do by itself and hands it to the main conversation: the same as a bot that auto-starts a session on a new topic, but the session is the to-do (`assistant/feishu_thread_open.go`). The hub's gate and registration decide which groups get this far; the assistant opens only for the owner's own messages (see "Replies in the thread").

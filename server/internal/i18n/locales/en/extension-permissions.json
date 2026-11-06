@@ -77,6 +77,8 @@
   "event_inbox_changed": "Inbox items were added or updated (source, kind, title)",
   "event_agent_needs_you": "An agent is waiting for your answer or approval (computer, session, question)",
   "event_agent_finished": "An agent finished (computer, session, title)",
+  "event_todo_changed": "A to-do was created, changed or deleted (title, chat thread; requires to-do read access)",
+  "event_todo_decision": "A decision was recorded on a to-do (question, choice, source; requires to-do read access)",
   "error_reports_title": "Receive error and crash reports",
   "error_reports_detail": "Errors and crashes of the hub and your devices, scrubbed first: no message text, tokens, user names, machine names or IP addresses. It decides where they go (for example an error tracker)",
   "auth_relay_title": "Complete sign-in links for your Agents",

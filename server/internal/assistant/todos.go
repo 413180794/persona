@@ -200,6 +200,7 @@ func (s *Service) loadTodosLocked(ctx context.Context) error {
 			b.spacesByKey = make(map[string]string)
 		}
 		b.loaded = true
+		s.todoMarksBaseline(b.todos)
 		return nil
 	}
 
@@ -304,6 +305,7 @@ func (s *Service) loadTodosLocked(ctx context.Context) error {
 	b.activeBySession = active
 	b.spacesByKey = spaces
 	b.loaded = true
+	s.todoMarksBaseline(b.todos)
 	return nil
 }
 
@@ -317,6 +319,7 @@ func (s *Service) todosLoaded() bool {
 // todosChanged tells the apps to read the todos again ({"type":"todos"}).
 func (s *Service) todosChanged(ctx context.Context) {
 	s.event(ctx, map[string]any{"type": "todos"})
+	s.todoChangedSoon()
 }
 
 // linksChanged: which todo an agent works for changed (or a todo's title, or whether it is done): the hub is told
