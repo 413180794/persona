@@ -489,7 +489,7 @@ func (h *Manager) settle(ctx context.Context, op *extOp, p *extension.Extension,
 		return
 	}
 	h.opStep(op, extension.StepStart, extension.StepDone)
-	if cur := ps.reg.Get(id); cur != nil && cur.Manifest.NodeProgram() != nil {
+	if cur := ps.reg.Snapshot(id); cur != nil && cur.Manifest.NodeProgram() != nil {
 		h.syncNodesFor(ctx, op, cur)
 	}
 	if h.needsSignIn(ctx, id) {
