@@ -4,11 +4,11 @@ import Foundation
 
 /// Why CarPlay will not open the microphone prompt on the phone (in a pocket while driving).
 nonisolated enum CarPlayMicGate {
-    static let undecided = "先在手机上的 Persona 里用一次听写或录音，允许使用麦克风"
-    static let denied = "没有麦克风权限，到 设置 › Persona 打开"
-    static let noHub = "还没配对 hub，先在手机上打开 Persona"
-    static let noMain = "先在手机上打开 Persona，等主对话建好再聊"
-    static let noExtension = "hub 上还没有在运行的语音扩展，先在 hub 配好双工语音入口"
+    static let undecided = String(localized: "先在手机上的 Persona 里用一次听写或录音，允许使用麦克风")
+    static let denied = String(localized: "没有麦克风权限，到 设置 › Persona 打开")
+    static let noHub = String(localized: "还没配对 hub，先在手机上打开 Persona")
+    static let noMain = String(localized: "先在手机上打开 Persona，等主对话建好再聊")
+    static let noExtension = String(localized: "hub 上还没有在运行的语音扩展，先在 hub 配好双工语音入口")
 
     /// Why a call cannot start, or nil when it can. Undetermined ends it too: nobody can answer the phone's prompt from the car.
     static func blockReason() -> String? {

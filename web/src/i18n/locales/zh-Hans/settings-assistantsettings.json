@@ -1,4 +1,5 @@
 {
+  "retry": "重试",
   "save_failed": "没改成：{error}",
   "subtitle": "你的私人助手",
   "subtitle_on": "你的私人助手 · 运行在 {machine}",

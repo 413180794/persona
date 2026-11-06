@@ -83,11 +83,13 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
     }
   };
 
-  useEffect(() => {
+  const load = () => {
+    setError("");
     api<AssistantState>("/assistant").then(setInfo, (e) => setError(errorText(e)));
     api<{ tasks: Task[] }>("/assistant/tasks").then((r) => setTasks(r.tasks ?? []), () => setTasks([]));
     void loadMemory();
-  }, []);
+  };
+  useEffect(load, []);
 
   const machine = machines.find((m) => m.id === info?.machine_id);
   const machineName = machine?.name || info?.machine_id || "";
@@ -115,7 +117,10 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
         </div>
         {machine && <Pill tone={machine.online ? "green" : undefined}>{machine.online ? t("settings-assistantsettings.online") : t("settings-assistantsettings.offline")}</Pill>}
       </div>}
-      {error && <p role="alert" className="mb-4 text-[13px] text-red">{error}</p>}
+      {error && <div className="mb-4 flex items-center gap-3">
+        <p role="alert" className="min-w-0 flex-1 text-[13px] break-words text-red">{error}</p>
+        <Button icon="retry" onClick={load}>{t("settings-assistantsettings.retry")}</Button>
+      </div>}
 
       <Group title={t("settings-assistantsettings.proactive_title")} footer={t("settings-assistantsettings.proactive_footer")}>
         <Row

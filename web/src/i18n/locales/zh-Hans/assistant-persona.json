@@ -1,4 +1,5 @@
 {
+  "retry": "重试",
   "hub_unsupported": "这个 hub 还不能放形象：更新 hub 后再看",
   "load_failed": "没取到形象列表：{error}",
   "no_colors": "没带配色",

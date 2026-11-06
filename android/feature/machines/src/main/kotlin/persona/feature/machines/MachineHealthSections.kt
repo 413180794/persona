@@ -296,7 +296,8 @@ internal fun LazyListScope.usageWindows(accounts: List<UsageAccount>, now: Insta
     val live = orderedAccounts(liveAccounts(accounts, now))
     if (live.isEmpty()) return
     item("usage-title") { JSectionHeader(stringResource(R.string.machines_usage_title)) }
-    itemsIndexed(live, key = { _, it -> "usage-${it.id}" }, contentType = { _, _ -> "usage" }) { _, account ->
+    // The hub's ids can repeat (two accounts without a reset time, #5304), so the position keeps the keys apart.
+    itemsIndexed(live, key = { index, it -> "usage-$index-${it.id}" }, contentType = { _, _ -> "usage" }) { _, account ->
         JCard(Modifier.padding(bottom = Tokens.Space.m)) { UsageAccountCard(account, now) }
     }
 }

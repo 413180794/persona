@@ -1,4 +1,5 @@
 {
+  "retry": "Retry",
   "hub_unsupported": "This hub doesn't support avatars yet. Update the hub and check again.",
   "load_failed": "Couldn't load avatars: {error}",
   "no_colors": "No colors",

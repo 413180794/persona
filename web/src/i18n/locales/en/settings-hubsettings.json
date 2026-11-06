@@ -1,4 +1,5 @@
 {
+  "retry": "Retry",
   "check_failed": "Couldn't check: {error}",
   "start_failed": "Couldn't start the update: {error}",
   "save_failed": "Couldn't save: {error}",

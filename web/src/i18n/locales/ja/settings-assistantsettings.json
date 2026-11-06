@@ -1,4 +1,5 @@
 {
+  "retry": "再試行",
   "save_failed": "変更できませんでした：{error}",
   "subtitle": "あなた専用のアシスタント",
   "subtitle_on": "あなた専用のアシスタント · {machine} で実行中",

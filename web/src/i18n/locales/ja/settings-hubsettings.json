@@ -1,4 +1,5 @@
 {
+  "retry": "再試行",
   "check_failed": "確認できませんでした：{error}",
   "start_failed": "アップデートを開始できませんでした：{error}",
   "save_failed": "保存できませんでした：{error}",

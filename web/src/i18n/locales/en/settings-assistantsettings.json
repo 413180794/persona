@@ -1,4 +1,5 @@
 {
+  "retry": "Retry",
   "save_failed": "Couldn't save: {error}",
   "subtitle": "Your personal assistant",
   "subtitle_on": "Your personal assistant · Runs on {machine}",

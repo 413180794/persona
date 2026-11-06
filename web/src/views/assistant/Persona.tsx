@@ -12,7 +12,7 @@ import {
 } from "../../lib/persona";
 import { isResumed } from "../../lib/reconnect";
 import { onHubEvent } from "../../lib/store";
-import { cx } from "../../ui/atoms";
+import { Button, cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MochiFace } from "./MochiFace";
 import { useReducedMotion } from "./face-motion";
@@ -372,9 +372,12 @@ export function PersonaPicker({ onExtensions }: { onExtensions?: () => void } = 
   const s = usePersonaStore();
   const current = usePersona();
   const lang = currentLanguage();
-  useEffect(() => {
-    void refreshPersonas();
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
+  const load = () => {
+    setRefreshing(true);
+    void refreshPersonas().finally(() => setRefreshing(false));
+  };
+  useEffect(load, []);
   const sub = (text: string) => <span className="max-w-full truncate text-[11px] whitespace-nowrap text-ink-3">{text}</span>;
   const builtins: { id: string; title: string; sub: string }[] = [
     { id: BUILTIN_PERSONA, title: t("assistant-persona.mochi"), sub: t("assistant-persona.default_avatar") },
@@ -434,7 +437,10 @@ export function PersonaPicker({ onExtensions }: { onExtensions?: () => void } = 
         ))}
       </div>
       {missing && <p className="px-1 text-[11.5px] text-ink-3">{t("assistant-persona.missing")}</p>}
-      {s.error && <p role="alert" className="px-1 text-[11.5px] text-orange">{s.error}</p>}
+      {s.error && <div className="flex items-center gap-3 px-1">
+        <p role="alert" className="min-w-0 flex-1 text-[11.5px] break-words text-orange">{s.error}</p>
+        <Button icon="retry" onClick={load} busy={refreshing}>{t("assistant-persona.retry")}</Button>
+      </div>}
       {s.loaded && !s.error && !s.list.length && <NoOtherLooks onExtensions={onExtensions} />}
     </div>
   );

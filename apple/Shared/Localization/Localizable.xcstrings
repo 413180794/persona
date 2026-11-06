@@ -9707,6 +9707,28 @@
         }
       }
     },
+    "Persona 不在屏幕上时不听。回到 Persona 会接着聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona doesn't listen when it's not on screen. Go back to Persona to keep talking"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaが画面にないときは聞きません。Personaに戻ると続けて話せます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 不在屏幕上时不听。回到 Persona 会接着聊"
+          }
+        }
+      }
+    },
     "Persona 会把你的偏好、纠正过它的地方记在这里。": {
       "localizations": {
         "en": {
@@ -9879,6 +9901,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "Persona 和飞书里驱动的 Agent 要你回答、批准时，在飞书里发卡片，点一下就行"
+          }
+        }
+      }
+    },
+    "Persona 在处理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona is working on it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaが処理しています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 在处理"
+          }
+        }
+      }
+    },
+    "Persona 在说": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona is speaking"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaが話しています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 在说"
+          }
+        }
+      }
+    },
+    "Persona 在说，可以随时插话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona is speaking. Cut in anytime"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaが話しています。いつでも割り込めます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 在说，可以随时插话"
           }
         }
       }
@@ -12137,6 +12225,28 @@
         }
       }
     },
+    "hub 上还没有在运行的语音扩展，先在 hub 配好双工语音入口": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No voice extension is running on the hub yet. Set up the duplex voice entry on the hub first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブで動作中の音声拡張機能がまだありません。先にハブで双方向音声の入口を設定してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 上还没有在运行的语音扩展，先在 hub 配好双工语音入口"
+          }
+        }
+      }
+    },
     "hub 不再认这台 Mac 的凭据：它可能在「设置 › 设备」里被撤销了，或者上次配对没有完成。重新粘贴配对链接就能恢复。": {
       "localizations": {
         "en": {
@@ -12485,6 +12595,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "hub 所在的机器"
+          }
+        }
+      }
+    },
+    "hub 拒绝了连接（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub refused the connection (%lld)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブが接続を拒否しました（%lld）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 拒绝了连接（%lld）"
           }
         }
       }
@@ -23334,6 +23466,72 @@
         }
       }
     },
+    "先在手机上打开 Persona，等主对话建好再聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Persona on the phone first and wait for the main chat to be set up"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まずiPhoneでPersonaを開き、メインチャットの準備ができてから話してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先在手机上打开 Persona，等主对话建好再聊"
+          }
+        }
+      }
+    },
+    "先在手机上的 Persona 里用一次听写或录音，允许使用麦克风": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First dictate or record once in Persona on the phone and allow the microphone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まずiPhoneのPersonaで音声入力か録音を一度使い、マイクを許可してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先在手机上的 Persona 里用一次听写或录音，允许使用麦克风"
+          }
+        }
+      }
+    },
+    "先在车里的屏幕上打开 Persona，就能接着聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Persona on the car's screen first to keep talking"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まず車の画面でPersonaを開くと、続けて話せます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先在车里的屏幕上打开 Persona，就能接着聊"
+          }
+        }
+      }
+    },
     "先在那台电脑上装好 Persona Link，再打开终端，粘贴下面这一行，回车。": {
       "localizations": {
         "en": {
@@ -31728,6 +31926,28 @@
         }
       }
     },
+    "在车里和 Persona 语音长聊需要 iOS 26.4 或更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long voice chats with Persona in the car need iOS 26.4 or later"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "車でPersonaと長く音声で話すにはiOS 26.4以降が必要です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在车里和 Persona 语音长聊需要 iOS 26.4 或更新"
+          }
+        }
+      }
+    },
     "在这个文件夹里打开 PowerShell，粘贴下面这一行，回车。": {
       "localizations": {
         "en": {
@@ -32055,6 +32275,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "官方扩展"
+          }
+        }
+      }
+    },
+    "已切换到别的语音对话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switched to another voice chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "別の音声チャットに切り替えました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已切换到别的语音对话"
           }
         }
       }
@@ -38727,6 +38969,28 @@
         }
       }
     },
+    "在 CarPlay 上开始和 Persona 连续、免提的语音对话：你说，它答，你随时可以插话。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a continuous, hands-free voice chat with Persona on CarPlay: you talk, it answers, and you can cut in anytime."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CarPlayでPersonaとハンズフリーで続けて音声チャットを始めます。話すと答え、いつでも割り込めます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 CarPlay 上开始和 Persona 连续、免提的语音对话：你说，它答，你随时可以插话。"
+          }
+        }
+      }
+    },
     "在 GitHub 打开": {
       "localizations": {
         "en": {
@@ -40906,6 +41170,28 @@
         }
       }
     },
+    "处理中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "処理中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "处理中"
+          }
+        }
+      }
+    },
     "处理器": {
       "localizations": {
         "en": {
@@ -41535,6 +41821,28 @@
         }
       }
     },
+    "好久没说话，对话已停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No one spoke for a while, so the chat stopped"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "しばらく話がなかったため、チャットを停止しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好久没说话，对话已停"
+          }
+        }
+      }
+    },
     "好的，先跑一下测试：": {
       "comment": "Sample terminal output in the terminal settings preview",
       "localizations": {
@@ -41554,6 +41862,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "好的，先跑一下测试："
+          }
+        }
+      }
+    },
+    "好，在 CarPlay 上接着聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK, let's keep talking on CarPlay"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "はい、CarPlayで続けましょう"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好，在 CarPlay 上接着聊"
           }
         }
       }
@@ -48425,6 +48755,50 @@
         }
       }
     },
+    "已结束。轻点「继续」再聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ended. Tap Continue to talk again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "終了しました。「続ける」をタップすると、また話せます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已结束。轻点「继续」再聊"
+          }
+        }
+      }
+    },
+    "已结束后台": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ended in the background"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バックグラウンドで終了しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已结束后台"
+          }
+        }
+      }
+    },
     "已编辑": {
       "localizations": {
         "en": {
@@ -53167,6 +53541,50 @@
         }
       }
     },
+    "我在听": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞いています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我在听"
+          }
+        }
+      }
+    },
+    "我在听，直接说": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening, go ahead"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞いています。どうぞ話してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我在听，直接说"
+          }
+        }
+      }
+    },
     "我在电脑上操作完了，你继续吧。": {
       "localizations": {
         "en": {
@@ -53934,6 +54352,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "打不开这篇文档"
+          }
+        }
+      }
+    },
+    "打不开麦克风，对话已停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't open the microphone, so the chat stopped"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクを開けないため、チャットを停止しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打不开麦克风，对话已停"
           }
         }
       }
@@ -55101,6 +55541,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开飞书机器人"
+          }
+        }
+      }
+    },
+    "打断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrupt"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "割り込む"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打断"
           }
         }
       }
@@ -68156,6 +68618,28 @@
         }
       }
     },
+    "来电或别的 App 占用了音频，对话已停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A call or another app took the audio, so the chat stopped"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着信または別のアプリがオーディオを使用したため、チャットを停止しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来电或别的 App 占用了音频，对话已停"
+          }
+        }
+      }
+    },
     "来自 %@": {
       "localizations": {
         "en": {
@@ -71990,6 +72474,28 @@
         }
       }
     },
+    "正在连接 Persona": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting to Persona"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaに接続中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在连接 Persona"
+          }
+        }
+      }
+    },
     "正在连接…": {
       "localizations": {
         "en": {
@@ -75335,6 +75841,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有麦克风或语音识别的权限，可以到 设置 › Persona 打开"
+          }
+        }
+      }
+    },
+    "没有麦克风权限，到 设置 › Persona 打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No microphone access. Turn it on in Settings › Persona"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクへのアクセス権がありません。設定 › Personaでオンにしてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有麦克风权限，到 设置 › Persona 打开"
           }
         }
       }
@@ -86663,6 +87191,28 @@
         }
       }
     },
+    "聊天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャット"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊天"
+          }
+        }
+      }
+    },
     "聊天记录": {
       "localizations": {
         "en": {
@@ -86703,6 +87253,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "聊天记录 · %@"
+          }
+        }
+      }
+    },
+    "聊聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "talk"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊聊"
           }
         }
       }
@@ -90566,6 +91138,28 @@
     "语音光球": {
       "shouldTranslate": false
     },
+    "语音出错，对话已停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice error, so the chat stopped"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声エラーのため、チャットを停止しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音出错，对话已停"
+          }
+        }
+      }
+    },
     "语音对话": {
       "localizations": {
         "en": {
@@ -90584,6 +91178,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "语音对话"
+          }
+        }
+      }
+    },
+    "语音扩展协议不匹配，请升级 hub 的语音扩展": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The voice extension's protocol doesn't match. Upgrade the voice extension on the hub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声拡張機能のプロトコルが一致しません。ハブの音声拡張機能をアップグレードしてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音扩展协议不匹配，请升级 hub 的语音扩展"
           }
         }
       }
@@ -90650,6 +91266,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。"
+          }
+        }
+      }
+    },
+    "说「跟 Persona 聊聊」再聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say “Talk to Persona” to talk again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「Personaと話す」と言うと、また話せます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说「跟 Persona 聊聊」再聊"
           }
         }
       }
@@ -92744,6 +93382,28 @@
         }
       }
     },
+    "跟 Persona 聊聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Talk to Persona"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaと話す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟 Persona 聊聊"
+          }
+        }
+      }
+    },
     "跟着分支名走；改过之后不再跟，清空后恢复": {
       "localizations": {
         "en": {
@@ -93246,6 +93906,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "软糖，颜色随主题色"
+          }
+        }
+      }
+    },
+    "轻点「继续」再聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap Continue to talk again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「続ける」をタップすると、また話せます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻点「继续」再聊"
           }
         }
       }
@@ -95413,6 +96095,28 @@
         }
       }
     },
+    "还没配对 hub，先在手机上打开 Persona": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not paired with a hub yet. Open Persona on the phone first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだハブとペアリングしていません。まずiPhoneでPersonaを開いてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没配对 hub，先在手机上打开 Persona"
+          }
+        }
+      }
+    },
     "还没配对。先打开 Persona 扫 `personad hub pair` 的二维码。": {
       "localizations": {
         "en": {
@@ -96799,6 +97503,28 @@
         }
       }
     },
+    "这个语音模型现在不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This voice model isn't available right now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この音声モデルは現在利用できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个语音模型现在不可用"
+          }
+        }
+      }
+    },
     "这个链接已经过期，那台电脑还没连上来。": {
       "localizations": {
         "en": {
@@ -97455,6 +98181,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这是给 Persona Link 的配对链接，先装 Persona Link"
+          }
+        }
+      }
+    },
+    "连上 CarPlay 后打开 Persona 就能一直聊。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect to CarPlay and open Persona to keep talking."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CarPlayに接続してPersonaを開くと、ずっと話せます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连上 CarPlay 后打开 Persona 就能一直聊。"
           }
         }
       }
@@ -99590,6 +100338,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "连不上 hub，刚才的操作没有生效"
+          }
+        }
+      }
+    },
+    "连不上 hub，对话已停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach the hub, so the chat stopped"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブに接続できないため、チャットを停止しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上 hub，对话已停"
           }
         }
       }
@@ -104504,6 +105274,28 @@
         }
       }
     },
+    "音频服务重置，对话已停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The audio service reset, so the chat stopped"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オーディオサービスがリセットされたため、チャットを停止しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频服务重置，对话已停"
+          }
+        }
+      }
+    },
     "页面": {
       "localizations": {
         "en": {
@@ -106098,6 +106890,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "麦克风正在使用，请先结束录音或听写"
+          }
+        }
+      }
+    },
+    "麦克风正在录音或听写，先结束它再聊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The microphone is recording or dictating. Stop that first, then talk"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクは録音または音声入力中です。先に終えてから話してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "麦克风正在录音或听写，先结束它再聊"
           }
         }
       }

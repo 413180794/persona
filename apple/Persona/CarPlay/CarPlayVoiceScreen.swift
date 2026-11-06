@@ -48,9 +48,9 @@ nonisolated enum CarPlayTalk: Equatable, Sendable {
     /// What Siri says back.
     var sentence: String {
         switch self {
-        case .start: "好，在 CarPlay 上接着聊"
-        case .notConnected: "连上 CarPlay 后打开 Persona 就能一直聊。"
-        case .notOnScreen: "先在车里的屏幕上打开 Persona，就能接着聊"
+        case .start: String(localized: "好，在 CarPlay 上接着聊")
+        case .notConnected: String(localized: "连上 CarPlay 后打开 Persona 就能一直聊。")
+        case .notOnScreen: String(localized: "先在车里的屏幕上打开 Persona，就能接着聊")
         }
     }
 }
@@ -69,7 +69,7 @@ nonisolated enum CarPlayTalk: Equatable, Sendable {
 /// Pure (no CarPlay import), so it is testable on any platform.
 nonisolated enum CarPlayVoiceScreen {
     /// The ended state's second line when the template shows no buttons (no "Continue" to tap): Siri starts it again.
-    static let resumeBySiri = "说「跟 Persona 聊聊」再聊"
+    static let resumeBySiri = String(localized: "说「跟 Persona 聊聊」再聊")
 
     /// The template's states. `endedReason` is the sentence shown in the ended state; an empty or missing one falls back
     /// to the default. `buttonsShown` is false where the template cannot show buttons; the ended state then points at Siri.
@@ -85,16 +85,16 @@ nonisolated enum CarPlayVoiceScreen {
 
     private static func baseStates(endedReason: String?, buttonsShown: Bool) -> [CarPlayVoiceStateSpec] {
         let reason = endedReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let endedHeadline = reason.isEmpty ? "已结束" : reason
-        let endedHint = buttonsShown ? "轻点「继续」再聊" : resumeBySiri
+        let endedHeadline = reason.isEmpty ? String(localized: "已结束") : reason
+        let endedHint = buttonsShown ? String(localized: "轻点「继续」再聊") : resumeBySiri
         return [
-            CarPlayVoiceStateSpec(id: "connecting", titles: ["正在连接 Persona", "连接中"], icon: Theme.Icon.voiceConnecting,
+            CarPlayVoiceStateSpec(id: "connecting", titles: [String(localized: "正在连接 Persona"), String(localized: "连接中")], icon: Theme.Icon.voiceConnecting,
                                   repeats: true, buttons: [.end]),
-            CarPlayVoiceStateSpec(id: "listening", titles: ["我在听，直接说", "我在听"], icon: Theme.Icon.voiceListening,
+            CarPlayVoiceStateSpec(id: "listening", titles: [String(localized: "我在听，直接说"), String(localized: "我在听")], icon: Theme.Icon.voiceListening,
                                   repeats: true, buttons: [.end]),
-            CarPlayVoiceStateSpec(id: "speaking", titles: ["Persona 在说，可以随时插话", "Persona 在说"],
+            CarPlayVoiceStateSpec(id: "speaking", titles: [String(localized: "Persona 在说，可以随时插话"), String(localized: "Persona 在说")],
                                   icon: Theme.Icon.voiceSpeaking, repeats: true, buttons: [.interrupt, .end]),
-            CarPlayVoiceStateSpec(id: "working", titles: ["Persona 在处理", "处理中"], icon: Theme.Icon.voiceWorking,
+            CarPlayVoiceStateSpec(id: "working", titles: [String(localized: "Persona 在处理"), String(localized: "处理中")], icon: Theme.Icon.voiceWorking,
                                   repeats: true, buttons: [.end]),
             CarPlayVoiceStateSpec(id: "ended", titles: [endedHeadline, endedHint], icon: Theme.Icon.voiceEnded,
                                   repeats: false, buttons: [.resume]),
@@ -136,26 +136,26 @@ nonisolated enum CarPlayVoiceScreen {
     /// The ended state's headline for a `VoiceEnd` (I3 words live on the phone page; CarPlay needs a short line).
     static func endedHeadline(for end: VoiceEnd) -> String {
         switch end {
-        case .user: "已结束。轻点「继续」再聊"
-        case .left: "Persona 不在屏幕上时不听。回到 Persona 会接着聊"
-        case .background: "已结束后台"
-        case .replaced: "已切换到别的语音对话"
-        case .interrupted: "来电或别的 App 占用了音频，对话已停"
-        case .microphoneTaken: "麦克风正在录音或听写，先结束它再聊"
-        case .microphoneBusy: "麦克风正在录音或听写，先结束它再聊"
+        case .user: String(localized: "已结束。轻点「继续」再聊")
+        case .left: String(localized: "Persona 不在屏幕上时不听。回到 Persona 会接着聊")
+        case .background: String(localized: "已结束后台")
+        case .replaced: String(localized: "已切换到别的语音对话")
+        case .interrupted: String(localized: "来电或别的 App 占用了音频，对话已停")
+        case .microphoneTaken: String(localized: "麦克风正在录音或听写，先结束它再聊")
+        case .microphoneBusy: String(localized: "麦克风正在录音或听写，先结束它再聊")
         case .permissionDenied: CarPlayMicGate.denied
-        case .audioFailed: "打不开麦克风，对话已停"
-        case .audioReset: "音频服务重置，对话已停"
-        case .idle: "好久没说话，对话已停"
-        case .lost: "连不上 hub，对话已停"
-        case .rejected(let status): "hub 拒绝了连接（\(status)）"
-        case .incompatible: "语音扩展协议不匹配，请升级 hub 的语音扩展"
+        case .audioFailed: String(localized: "打不开麦克风，对话已停")
+        case .audioReset: String(localized: "音频服务重置，对话已停")
+        case .idle: String(localized: "好久没说话，对话已停")
+        case .lost: String(localized: "连不上 hub，对话已停")
+        case .rejected(let status): String(localized: "hub 拒绝了连接（\(status)）")
+        case .incompatible: String(localized: "语音扩展协议不匹配，请升级 hub 的语音扩展")
         case .modelUnavailable(let why):
-            why.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "这个语音模型现在不可用" : why
+            why.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "这个语音模型现在不可用") : why
         case .noHub: CarPlayMicGate.noHub
         case .failed(_, let message):
             message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "语音出错，对话已停"
+                ? String(localized: "语音出错，对话已停")
                 : message.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
@@ -164,9 +164,9 @@ nonisolated enum CarPlayVoiceScreen {
     /// The button's label on the voice screen.
     static func title(_ button: CarPlayVoiceButton) -> String {
         switch button {
-        case .end: "结束"
-        case .interrupt: "打断"
-        case .resume: "继续"
+        case .end: String(localized: "结束")
+        case .interrupt: String(localized: "打断")
+        case .resume: String(localized: "继续")
         }
     }
 

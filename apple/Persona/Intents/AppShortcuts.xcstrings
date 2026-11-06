@@ -309,6 +309,28 @@
         }
       }
     },
+    "Chat with ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat with ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}とチャットして"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat with ${applicationName}"
+          }
+        }
+      }
+    },
     "Check ${applicationName} agents" : {
       "localizations" : {
         "en" : {
@@ -393,6 +415,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Send a task to ${agent} with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Talk to ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Talk to ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}と話して"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Talk to ${applicationName}"
+          }
+        }
+      }
+    },
+    "和 ${applicationName} 聊天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a chat with ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}とチャット"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和 ${applicationName} 聊天"
           }
         }
       }
@@ -569,6 +635,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "让 ${applicationName} 的 ${agent} 去做"
+          }
+        }
+      }
+    },
+    "跟 ${applicationName} 聊聊" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Have a chat with ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}とおしゃべり"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟 ${applicationName} 聊聊"
           }
         }
       }

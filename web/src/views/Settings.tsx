@@ -422,16 +422,20 @@ function Models() {
   const machines = useStore((s) => s.machines);
   const [list, setList] = useState<LauncherView[] | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   // `?add=1` opens the wizard, `?launcher=<name>` one provider: where "Connect a model" / "Change the key" lead (lib/readiness.ts)
   const [open, setOpen] = useState<string | null>(() => new URLSearchParams(location.search).get("launcher"));
   const [editing, setEditing] = useState<LauncherView | "new" | null>(() => (new URLSearchParams(location.search).get("add") === "1" ? "new" : null));
   const [importing, setImporting] = useState(false);
 
-  const load = () =>
-    api<{ launchers: LauncherView[] }>("/launchers")
+  const load = () => {
+    setLoading(true);
+    return api<{ launchers: LauncherView[] }>("/launchers")
       .then((r) => (setList(r.launchers ?? []), setError("")))
-      .catch((e) => setError(errorText(e)));
+      .catch((e) => setError(errorText(e)))
+      .finally(() => setLoading(false));
+  };
   useEffect(() => void load(), []);
 
   const name = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
@@ -477,7 +481,10 @@ function Models() {
         </Button>
       </div>
       {!list && !error && <Loading />}
-      {error && <p className="text-[13px] text-red">{error}</p>}
+      {error && <div className="mb-4 flex items-center gap-3">
+        <p role="alert" className="min-w-0 flex-1 text-[13px] break-words text-red">{error}</p>
+        <Button icon="retry" onClick={() => void load()} busy={loading}>{t("settings.retry")}</Button>
+      </div>}
       {list && query && shown.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">{t("settings.no_matching_providers", { query })}</p>}
       {list && (!query || managed.length > 0) && (
         <Group title={t("settings.managed_title", { count: managed.length })} footer={managed.length ? t("settings.managed_footer") : undefined}>
@@ -796,12 +803,16 @@ function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
 function Devices() {
   const [data, setData] = useState<{ tokens: DeviceToken[]; current?: string } | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
-  const load = () =>
-    api<{ tokens: DeviceToken[]; current?: string }>("/auth/tokens")
+  const load = () => {
+    setLoading(true);
+    return api<{ tokens: DeviceToken[]; current?: string }>("/auth/tokens")
       .then((r) => (setData({ tokens: r.tokens ?? [], current: r.current }), setError("")))
-      .catch((e) => setError(errorText(e)));
+      .catch((e) => setError(errorText(e)))
+      .finally(() => setLoading(false));
+  };
   useEffect(() => void load(), []);
 
   const revoke = async (id: string) => {
@@ -853,7 +864,10 @@ function Devices() {
   return (
     <>
       {!data && !error && <Loading />}
-      {error && <p className="text-[13px] text-red">{error}</p>}
+      {error && <div className="mb-4 flex items-center gap-3">
+        <p role="alert" className="min-w-0 flex-1 text-[13px] break-words text-red">{error}</p>
+        <Button icon="retry" onClick={() => void load()} busy={loading}>{t("settings.retry")}</Button>
+      </div>}
       {data && (
         <Group
           title={t("settings.devices_title", { count: active.length })}

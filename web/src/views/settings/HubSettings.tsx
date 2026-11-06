@@ -33,25 +33,28 @@ export function HubSettings() {
     if (finished) hubUpdateHistory().then(setHistory, () => {});
   }, []);
 
+  const load = useCallback(() => {
+    setError("");
+    return hubUpdate()
+      .then((s) => {
+        apply(s);
+        setError("");
+        hubUpdateHistory().then(setHistory, () => {});
+      })
+      .catch((e) => (e instanceof ApiError && e.status === 404 ? setUnsupported(true) : setError(errorText(e))));
+  }, [apply]);
+
   useEffect(() => {
-    const read = () =>
-      hubUpdate()
-        .then((s) => {
-          apply(s);
-          setError("");
-          hubUpdateHistory().then(setHistory, () => {});
-        })
-        .catch((e) => (e instanceof ApiError && e.status === 404 ? setUnsupported(true) : setError(errorText(e))));
-    void read();
+    void load();
     const off = onHubEvent("hub_update", (m) => m.update && apply(m.update as HubUpdateStatus));
     // a reconnect the hub could not resume (a restart into the new version, often): the hub_update pushes missed
     // meanwhile (confirming, updated, rolled back) are not replayed (#4954)
-    const offHello = onHubEvent("hello", (m) => !isResumed(m) && void read());
+    const offHello = onHubEvent("hello", (m) => !isResumed(m) && void load());
     return () => {
       off();
       offHello();
     };
-  }, [apply]);
+  }, [apply, load]);
 
   const check = async () => {
     setChecking(true);
@@ -93,7 +96,10 @@ export function HubSettings() {
   }
   if (!status) {
     return error ? (
-      <p role="alert" className="px-1 text-[13px] text-red">{t("settings-hubsettings.version_error", { error })}</p>
+      <div className="flex items-center gap-3 px-1">
+        <p role="alert" className="min-w-0 flex-1 text-[13px] break-words text-red">{t("settings-hubsettings.version_error", { error })}</p>
+        <Button icon="retry" onClick={() => void load()}>{t("settings-hubsettings.retry")}</Button>
+      </div>
     ) : (
       <Loading />
     );

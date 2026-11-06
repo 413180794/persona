@@ -1,4 +1,5 @@
 {
+  "retry": "重试",
   "check_failed": "检查失败：{error}",
   "start_failed": "没能开始更新：{error}",
   "save_failed": "保存失败：{error}",

@@ -411,6 +411,8 @@ use it only on the intranet / VPN, and put an HTTPS reverse proxy in front befor
   ![Personal Agents in the web sidebar: grouped by source, with avatars, unread counts, search, and filters](screenshots/web-personal-agents.png)
 
 - **Settings** (`/settings`, opened from the sidebar or top-left menu, `src/views/Settings.tsx`): categories are shown according to the hub's capabilities, using the same endpoints as the App's settings. Channels is its own category immediately before Connectors (#2196); Settings has no "Meet Persona" entry, and the profile page is still opened from the chat menu.
+  Failed reads in Devices, Model providers, hub, Assistant, and General's avatar picker show a **Retry** button beside the error (#4493). While loading, the button is disabled or replaced by a loading state; success clears the error without switching categories or reloading the page.
+  Hub retries only reload version status and update history; they do not check for or install updates. Assistant retries reload its state, scheduled tasks, and memory. The avatar picker uses the shared `refreshPersonas` function, which deduplicates concurrent reads.
   General contains appearance (Match system / Light / Dark, theme color, text size; see "Theme color and text size" below), avatar, where the Persona assistant runs (models are on the Model configuration tab, #1291), and this browser (hub address, hub name, linked hubs, disconnect).
   Assistant (`settings/AssistantSettings.tsx`): On its own (opens scheduled tasks), About me (`PUT /assistant {notes}`, saved on Save or leaving),
   Memory (`/assistant/memory`: titles first use the Chinese titles from the MEMORY.md index; view / edit the whole file / delete, with a read-only index), Skills (`GET /skills`, skills on the computer running the assistant, read-only, `settings/Skills.tsx`), and Runs on (read-only; no model entry, models are under Model configuration › Main chat).
@@ -1188,24 +1190,7 @@ Compared item by item with iOS as the reference and Android for comparison. #297
 | --- | --- | --- | --- |
 | Machine list (cards, charts, reconnect, redeploy) | Yes | — | Cards open the machine page |
 | Machine details (Agents, 1 / 6 / 24 hour charts, system info, launchers) | Yes | #297 | |
-| "Computer use" in machine details (toggle, install Cua Driver, permissions, Screen Sharing, VNC) | Yes | #1326 | "VNC" opens the web `/screen/<machine>` in a new tab (an in-App WebView on iOS) |
-| "Browser (ego lite)" in machine details (toggle, install, first-time setup guide, readiness, browser sign-in) | Yes | #2979 | Same as above; "VNC" opens in a new tab |
-| Empty state of the machine list, refresh failure notice | Yes | #2979 | Also shown when data already exists, saying it is showing the previous data |
-| Load charts, per-core bar chart on Linux | Yes | #433 | |
-| Subscription usage (Codex / Claude 5-hour and weekly windows, pace hints) | Yes | #2432 | Two thin bars at the bottom of the sidebar that open a popover; on the machines page on iOS, at the bottom of the section column on Mac (#2889); Android lists all accounts and windows at the top of the machine monitoring page (#3038) |
-| "Engine" in machine details (engines the node detected, versions and descriptions, selectable even offline, retry on save failure) | Yes | #2071 | Chosen directly on the machine page, rather than on a separate page as on iOS |
-| Orca launcher, creating an Agent in Orca | No | — | #254 (server side in #924 / #929) |
-| Appearance: Match system / Light / Dark | Yes | — | |
-| Theme color (Default, Match avatar, system blue / coral orange / lavender / teal / Lark blue), text size (Small / Standard / Large) | Yes | #2980 | Settings › General › Appearance; only changes the accent and your own bubble, and "Match interface style" is the same as "Default"; text size only scales text, not icons or spacing; on Mac, ⌘+ / ⌘- use the browser's own zoom |
-| Interface style, layout | N/A | — | The web has only Beautiful UI; new styles become new options per CLAUDE.md |
-| Avatar | Yes | #433 | Settings › General, profile page |
-| Model providers, model configuration | Yes | — | |
-| Model provider "Usage" | Yes | #1326 | In the provider dialog, above "Availability" |
-| Assistant (proactive work, About me, memory, where it runs) | Yes | #297 | Changing the assistant's machine is not done (iOS can't change it either) |
-| Claude Code settings, Codex settings | Yes | #297 | |
-| Connectors: mail | Yes | #297, #2968 | Gmail and Outlook can only be added on the phone (the sign-in callback is a custom scheme only the App can receive); Outlook''t saved; topic groups can't send in this mode (same as iOS) |
-| Connectors: Lark bot (status, credentials, pairing, what it can do) | Yes | #1325 | Settings › Connectors, opens as a dialog; copying the pairing code uses the clipboard (falls back to execCommand over http) |
-| hub version and updates (check, update, update now, auto-update, history, Docker commands) | Yes | #1325, #2897 | Settings › hub; the hub notice row below the filter bar in the sidebar's Agents block (`views/agents/HubNoticeRow.tsx`, chosen by `hubNotice` in `lib/hub-update.ts`); the two App / hub version compatibility notices don't apply to the web (the hub hosts the web app itself) |
+| "Computer use" in machine details (toggle, install Cua Driver, permissions, Screen Sharing, VNC) | Yes | #1326 | "VNC" opens the web `/screen/<machine>``views/agents/HubNoticeRow.tsx`, chosen by `hubNotice` in `lib/hub-update.ts`); the two App / hub version compatibility notices don't apply to the web (the hub hosts the web app itself) |
 | Assistant Skills | Yes | #1325 | Settings › Assistant, read-only (same as iOS) |
 | Connectors: GitHub (sign-in source, device code sign-in, permissions, Inbox options) | Yes | #1324 | |
 | Connectors: Telegram, connectors provided by extensions (toggle, step-by-step sign-in, into knowledge base / into Inbox, sign out, delete) | Yes | #1324, #1425 | Brand, footer, and "Reply in X" are looked up by connector id in a table in `lib/connectors.ts`; extension connectors not in the table use a generic icon and generic copy (with their own name); WeChat's brand image is not decided yet, so it uses the generic icon for now |
