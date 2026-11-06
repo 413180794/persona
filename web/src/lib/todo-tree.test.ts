@@ -23,7 +23,8 @@ describe("项目 › 待办 › Agent 三层树 (#2526)", () => {
     const tree = buildTodoTree(all, machines, todos, noMutes, NOW);
     expect(tree.projects.map((p) => [p.name, p.state, p.todos.map((t) => t.todoId)])).toEqual([
       ["botmux", "needs_you", ["t3"]],
-      ["persona", "working", ["t2", "t1"]],
+      // in sortTodos's order: 在做 (t1) before 做完了 (t2), the task board's (#4896)
+      ["persona", "working", ["t1", "t2"]],
     ]);
     expect(tree.loose.at(-1)?.projects.map((p) => [p.name, p.agents.map((a) => a.session.session_id)])).toEqual([["persona", ["loose"]]]);
   });

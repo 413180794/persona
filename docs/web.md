@@ -550,7 +550,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 每天第一行上面一行日期，`phone_reminders_create` / `phone_calendar_create_event` 的结果画成「已加提醒 / 已加到日历」，网页上没有撤销，写「在 iPhone 上」）；
 卡片在 `views/assistant/Tasks.tsx`：计划卡、任务卡（不是今天的折成一行）、答过的问题、回执、直接对任务说的话、「今天」卡片（主对话每天第一次打开时
 `POST …/today`，「准备」「过一遍」替你对 Persona 说一句）、消息卡（发送走收件箱的回复）。输入框上方：任务的 Agent 最早的那个提问（「还有 N 件」）、
-任务坞、路由标签（任务卡上点「说一句」，下一条直接发给那个 Agent）。计划卡和 iOS 一样是「开始 / 改一下 / 不开」：「改一下」弹窗改每个任务的标题、电脑、目录、模型、权限和第一条消息，点「开始」带着这些改动开（`POST /task-plans/{id}/start` 的 `tasks`，`views/assistant/PlanEdit.tsx`）。任务坞和 iOS 一样（#1275）：最左边是只有文字的「全部 N」（打开这个对话的任务板：等你 / 在做 / 做完了 / 停着 / 已完成 / 没开起来，`lib/task-board.ts`；今天卡片的「全部」也开它，#2975），
+任务坞、路由标签（任务卡上点「说一句」，下一条直接发给那个 Agent）。计划卡和 iOS 一样是「开始 / 改一下 / 不开」：「改一下」弹窗改每个任务的标题、电脑、目录、模型、权限和第一条消息，点「开始」带着这些改动开（`POST /task-plans/{id}/start` 的 `tasks`，`views/assistant/PlanEdit.tsx`）。任务坞和 iOS 一样（#1275）：最左边是只有文字的「全部 N」（打开这个对话的任务板：等你 / 待验收 / 没开起来 / 在做 / 做完了 / 停着 / 已完成，要你动手的排前面；督办任务待验收（`supervision.state = pending_review`）且没在跑、没在问的单独一组，不混进停着；`/todos` 的排序同一个顺序，#4896；`lib/task-board.ts`；今天卡片的「全部」也开它，#2975），
 不跟着滚动，胶囊在它右边单独横向滚动；主对话的坞在任务后面带上手动开的、在做 / 等你的 Agent（`lib/todos.ts` 的 `dockAgents`，规则见
 [unified-entry.md](unified-entry.md)「主对话的任务坞里的手动 Agent」），「全部 N」算上它们。任务详情在侧边面板（`kind: "task"`，`TaskPanel` 里就是那个 Agent 的对话；
 手动 Agent 的胶囊打开 `kind: "agent"`，`AgentPanel`），换页不关。截图用 `MOCK_TASKS_DOCK=pair`（一个任务 + 一个手动 Agent）/ `many`（九个）。开发时 `?task=<待办 id>` 直接打开某个任务的面板；`MOCK_TASKS=1` 的 mock 有整套假数据。

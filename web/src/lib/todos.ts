@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import type { Supervision } from "./supervision";
+import { reviewState, type Supervision } from "./supervision";
 import { api, ApiError, enc } from "./api";
 import { contextBody } from "./context-body";
 import { parseAPIError, retryable } from "./api-errors";
@@ -78,16 +78,29 @@ export function heldDelivery(todo: Todo): TodoDelivery | null {
 
 export type TodoStatus = "done" | "needs_you" | "interrupted" | "unread" | "working" | "follow_up" | "not_started" | "failed";
 
+/** Where a status sorts, as the task board orders its sections (lib/task-board.ts): what the user must act on first —
+ *  等你, 待验收 (rank 2, see todoRank), 没开起来 — then 在做, 做完了, 停着, 已完成 (#4896). */
 export const TODO_STATUS_RANK: Record<TodoStatus, number> = {
   needs_you: 0,
   interrupted: 1,
-  unread: 2,
-  working: 3,
-  follow_up: 4,
+  failed: 3,
+  working: 4,
   not_started: 5,
-  done: 6,
-  failed: 7,
+  unread: 6,
+  follow_up: 7,
+  done: 8,
 };
+
+/** A supervised task whose work was judged finished and waits for the user to accept it (#3124): nothing of it runs or
+ *  asks, so it is the user's to review rather than just stopped or finished-unseen (#4896). */
+export function awaitsReview(todo: Todo, status: TodoStatus): boolean {
+  return reviewState(todo) === "pending_review" && (status === "follow_up" || status === "unread" || status === "not_started");
+}
+
+/** A task's place in the order: its status's rank, 待验收 right after 等你. */
+export function todoRank(todo: Todo, status: TodoStatus): number {
+  return awaitsReview(todo, status) ? 2 : TODO_STATUS_RANK[status];
+}
 
 export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" | "green" | "amber" | "idle" | "off" }> = {
   done: { label: t("lib-todos.status_done"), tone: "off" },
@@ -193,21 +206,14 @@ export function interruption(s?: Session): { reason: string; canContinue: boolea
 }
 
 /**
- * 待办列表排序：
- * - 未完成在上面，按状态优先级排（等你 > 待查看 > 进行中 > 待跟进 > 未开始）
- * - 同状态按创建时间排（新的在前）
- * - 已完成在底部
+ * The todo list's order, the task board's (#4896): by todoRank — 等你, 断了, 待验收, 没开起来, 在做, 未开始, 做完了,
+ * 停着, 已完成 — then newest first. A task that did not start has done_at too, but it is the user's to retry or remove,
+ * so it does not sink with the done ones.
  */
 export function sortTodos(todos: Todo[], lookup?: SessionLookup): Todo[] {
   return [...todos].sort((a, b) => {
-    const aDone = Boolean(a.done_at);
-    const bDone = Boolean(b.done_at);
-    if (aDone !== bDone) return aDone ? 1 : -1;
-
-    const aStat = todoStatus(a, lookup);
-    const bStat = todoStatus(b, lookup);
-    const rA = TODO_STATUS_RANK[aStat];
-    const rB = TODO_STATUS_RANK[bStat];
+    const rA = todoRank(a, todoStatus(a, lookup));
+    const rB = todoRank(b, todoStatus(b, lookup));
     if (rA !== rB) return rA - rB;
 
     const tA = a.created_at ? Date.parse(a.created_at) || 0 : 0;

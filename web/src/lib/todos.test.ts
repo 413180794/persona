@@ -25,6 +25,7 @@ import {
   type TodoSpace,
 } from "./todos";
 import type { AgentMutes } from "./agent-groups";
+import { BOARD_ORDER, boardSectionOf } from "./task-board";
 
 const machines: Machine[] = [
   { id: "mac-1", name: "MacBook", online: true },
@@ -173,9 +174,10 @@ describe("Agent 没开起来的任务 (#1077 / #1142)", () => {
     expect(todoStatus({ ...failed, start_error: undefined })).toBe("done");
   });
 
-  it("排在已完成的待办里（底部）", () => {
+  it("排在在做的前面，不跟已完成一起沉底（#4896）", () => {
     const open: Todo = { id: "t1", title: "在做", created_at: "2026-11-04T09:00:00Z", updated_at: "2026-11-04T09:00:00Z", agents: [] };
-    expect(sortTodos([failed, open]).map((t) => t.id)).toEqual(["t1", "t9"]);
+    const done: Todo = { ...open, id: "t2", done_at: "2026-11-04T09:30:00Z" };
+    expect(sortTodos([done, open, failed]).map((t) => t.id)).toEqual(["t9", "t1", "t2"]);
   });
 
   it("没在运行的才能移除", () => {
@@ -190,7 +192,7 @@ describe("Agent 没开起来的任务 (#1077 / #1142)", () => {
 });
 
 describe("待办列表排序 (sortTodos)", () => {
-  it("未完成在上方，按状态顺序：等你 > 待查看 > 进行中 > 待跟进 > 未开始；已完成在底部", () => {
+  it("按任务板的顺序：等你 > 进行中 > 未开始 > 待查看 > 待跟进 > 已完成（#4896）", () => {
     const sNeeds = mockSession("mac-1", "s-needs", "needs_you");
     const sUnread = mockSession("mac-1", "s-unread", "unread");
     const sWorking = mockSession("mac-1", "s-work", "working");
@@ -209,12 +211,43 @@ describe("待办列表排序 (sortTodos)", () => {
     const sorted = sortTodos(todos, lookup);
     expect(sorted.map((t) => t.id)).toEqual([
       "needs-1",
-      "unread-1",
       "work-1",
-      "idle-1",
       "empty-1",
+      "unread-1",
+      "idle-1",
       "done-1",
     ]);
+  });
+
+  it("每种状态都排在任务板上它那一组的位置，待验收紧跟等你（#4896）", () => {
+    const lookup = makeSessionLookup([
+      mockSession("mac-1", "s-needs", "needs_you"),
+      mockSession("mac-1", "s-cut", "idle", { turn_error: "API Error: 529 overloaded" }),
+      mockSession("mac-1", "s-work", "working"),
+      mockSession("mac-1", "s-unread", "unread"),
+      mockSession("mac-1", "s-idle", "idle"),
+    ]);
+    const on = (sid: string) => [{ machine_id: "mac-1", session_id: sid, linked_at: "" }];
+    const at = "2026-11-06T10:00:00Z";
+    const review = { supervisor: "main", state: "pending_review" as const };
+    const todos: Todo[] = [
+      { id: "done", title: "", created_at: at, updated_at: "", done_at: at },
+      { id: "stopped", title: "", created_at: at, updated_at: "", agents: on("s-idle") },
+      { id: "unread", title: "", created_at: at, updated_at: "", agents: on("s-unread") },
+      { id: "not-started", title: "", created_at: at, updated_at: "", agents: [] },
+      { id: "working", title: "", created_at: at, updated_at: "", agents: on("s-work") },
+      { id: "failed", title: "", created_at: at, updated_at: "", done_at: at, start_error: "spawn failed" },
+      { id: "review-unread", title: "", created_at: at, updated_at: "", agents: on("s-unread"), supervision: review },
+      { id: "review-stopped", title: "", created_at: at, updated_at: "", agents: on("s-idle"), supervision: review },
+      { id: "interrupted", title: "", created_at: at, updated_at: "", agents: on("s-cut") },
+      { id: "needs", title: "", created_at: at, updated_at: "", agents: on("s-needs") },
+    ];
+    const sorted = sortTodos(todos, lookup);
+    expect(sorted.map((t) => t.id)).toEqual(["needs", "interrupted", "review-stopped", "review-unread", "failed", "working", "not-started", "unread", "stopped", "done"]);
+    // the same order as the board's sections
+    const sections = sorted.map((t) => BOARD_ORDER.indexOf(boardSectionOf({ todo: t, status: todoStatus(t, lookup) })));
+    expect(sections).toEqual([...sections].sort((a, b) => a - b));
+    expect(new Set(sections).size).toBe(BOARD_ORDER.length);
   });
 
   it("同状态下按创建时间倒序排（新的在前）", () => {

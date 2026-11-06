@@ -1103,6 +1103,7 @@ export function useTaskState(todo?: Todo): { status: TodoStatus; lead?: Session;
 
 const BOARD_TITLE: Record<BoardSectionKey, string> = {
   waiting: t("assistant-tasks.board_waiting"),
+  review: t("assistant-tasks.review_pending"),
   working: t("assistant-tasks.board_working"),
   unread: t("assistant-tasks.board_unread"),
   stopped: t("assistant-tasks.board_stopped"),
