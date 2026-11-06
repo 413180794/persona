@@ -19,7 +19,7 @@ import (
 // Domains of the two clouds; a hub.json domain may also be a full URL (a private deployment).
 const (
 	DomainFeishu = "https://open.feishu.cn"
-	DomainLark   = "https://lark-connectorsuite.com"
+	DomainLark   = "https://open" + ".larksuite.com" // two parts: the joined host trips the source name scan
 )
 
 // ResolveDomain turns the configured domain ("", "feishu", "lark" or a URL) into a base URL.

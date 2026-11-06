@@ -271,7 +271,7 @@ struct PersonaTests {
         #expect(!FileManager.default.fileExists(atPath: root.appending(path: "doudou/r1").path(percentEncoded: false)))
     }
 
-    /// With no hub, a package not on the phone cannot be chosen, and 设置 says why instead of doing nothing.
+    /// With no hub, a package not on the phone cannot be chosen, and Settings says why instead of doing nothing.
     @Test func choosingOfflineSaysWhy() async throws {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))

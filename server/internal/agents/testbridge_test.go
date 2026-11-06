@@ -25,7 +25,10 @@ type apiError struct{ Status int }
 
 func (e *apiError) Error() string { return http.StatusText(e.Status) }
 
-// BridgeAPI is the part of *Client the removedbridge source uses.
+// testSource is the source name the test bridge registers under.
+const testSource = "lark-bridge"
+
+// BridgeAPI is the part of *Client the Lark plugin's source uses.
 type BridgeAPI interface {
 	AgentBridgeStatus(ctx context.Context) (*AgentBridgeState, error)
 	AgentBridgeFeed(ctx context.Context) (*AgentFeed, error)
@@ -42,9 +45,9 @@ type BridgeAPI interface {
 // sees all sessions; other selectors are rejected), so querying more accounts would only repeat it.
 type testBridge struct{ API BridgeAPI }
 
-func (b testBridge) Name() string { return OLKBridge }
+func (b testBridge) Name() string { return testSource }
 
-func wrap(s AgentSession) Session { return Wrap(OLKBridge, s, "") }
+func wrap(s AgentSession) Session { return Wrap(testSource, s, "") }
 
 // missingBridge is the Lark gateway answering 404 for the bridge's own routes: a build from before agent-bridge existed.
 func missingBridge(err error) bool {
@@ -55,12 +58,12 @@ func missingBridge(err error) bool {
 func (b testBridge) Status(ctx context.Context) (Status, error) {
 	st, err := b.API.AgentBridgeStatus(ctx)
 	if missingBridge(err) {
-		return Status{Source: OLKBridge, Setup: SetupMissing}, nil
+		return Status{Source: testSource, Setup: SetupMissing}, nil
 	}
 	if err != nil {
-		return Status{Source: OLKBridge, Error: err.Error()}, err
+		return Status{Source: testSource, Error: err.Error()}, err
 	}
-	out := Status{Source: OLKBridge, Enabled: st.Enabled, Providers: st.Providers, Accounts: st.Accounts}
+	out := Status{Source: testSource, Enabled: st.Enabled, Providers: st.Providers, Accounts: st.Accounts}
 	switch {
 	case !st.Enabled:
 		out.Setup = SetupDisabled
@@ -114,7 +117,7 @@ func (b testBridge) Search(ctx context.Context, q string) ([]SearchHit, error) {
 	}
 	out := make([]SearchHit, len(hits))
 	for i, h := range hits {
-		out[i] = SearchHit{ID: OLKBridge + ":" + h.SessionKey, Source: OLKBridge, AgentSearchHit: h}
+		out[i] = SearchHit{ID: testSource + ":" + h.SessionKey, Source: testSource, AgentSearchHit: h}
 	}
 	return out, nil
 }

@@ -13,8 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/agents"
-
 	"github.com/nwverse/persona/server/internal/extension"
 	pserve "github.com/nwverse/persona/server/internal/extension/serve"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -39,7 +37,7 @@ func serveAgentSourceExtensionForTest() {
 				ClientID     string `json:"client_id"`
 			}
 			_ = json.Unmarshal(params, &p)
-			if p.Contribution != "examplebot" && p.Contribution != agents.OLKBridge {
+			if p.Contribution != "examplebot" {
 				return nil, &rpc.Error{Code: extension.CodeNoContribution, Message: "no source " + p.Contribution}
 			}
 			if p.SessionKey != "" && p.SessionKey != "room/1" {
@@ -154,61 +152,4 @@ func TestExtensionAgentSource(t *testing.T) {
 	if code, _ := call(t, mux, "GET", path+"/messages", master, ""); code != 404 {
 		t.Fatal("a turned-off plugin's session:", code)
 	}
-}
-
-// ownBridge stands for a source the hub registered itself under a migratable name.
-type ownBridge struct{}
-
-func (ownBridge) Name() string { return agents.OLKBridge }
-func (ownBridge) Status(context.Context) (agents.Status, error) {
-	return agents.Status{Source: agents.OLKBridge, Enabled: true, Setup: "hub"}, nil
-}
-func (ownBridge) Sessions(context.Context) ([]agents.Session, error)         { return nil, nil }
-func (ownBridge) Search(context.Context, string) ([]agents.SearchHit, error) { return nil, nil }
-func (ownBridge) Messages(context.Context, string, string, int) (*agents.MessagePage, error) {
-	return &agents.MessagePage{}, nil
-}
-func (ownBridge) Send(context.Context, string, string, string) (json.RawMessage, error) {
-	return nil, nil
-}
-func (ownBridge) DeleteMessage(context.Context, string, string) error { return nil }
-func (ownBridge) MarkRead(context.Context, string) error              { return nil }
-
-// A plugin's removedbridge takes the hub's own over while it runs (same session ids); turned off, the hub's is back.
-func TestExtensionTakesOverOLKBridge(t *testing.T) {
-	h, _ := extensionTestHub(t)
-	h.initAgents()
-	h.agents.Add(ownBridge{})
-	mux := h.routes()
-	master := h.cfg.Token
-	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", master, `{"source": "dir:`+agentSourcePackage(t, "example-agents", agents.OLKBridge)+`"}`)
-	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", master,
-		fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
-		t.Fatalf("%d %v", code, out)
-	}
-	setup := func() string {
-		_, out := call(t, mux, "GET", "/api/v1/agents", master, "")
-		srcs, _ := out["sources"].([]any)
-		if len(srcs) != 1 {
-			return fmt.Sprint(len(srcs), " sources")
-		}
-		m := srcs[0].(map[string]any)
-		if m["source"] != agents.OLKBridge {
-			return fmt.Sprint(m["source"])
-		}
-		s, _ := m["setup"].(string)
-		if acc, _ := m["accounts"].([]any); s == "" && len(acc) != 1 {
-			return "not answering yet"
-		}
-		return "setup=" + s
-	}
-	var last string
-	waitLong(t, "the plugin's removedbridge", func() bool { last = setup(); return last == "setup=" })
-	_ = last
-	_, out := call(t, mux, "GET", "/api/v1/agents/sessions", master, "")
-	if list, _ := out["sessions"].([]any); len(list) != 1 || list[0].(map[string]any)["id"] != "removedbridge:room/1" {
-		t.Fatalf("the plugin's sessions under removedbridge: %v", out)
-	}
-	call(t, mux, "PUT", "/api/v1/plugins/example-agents/-/enabled", master, `{"enabled": false}`)
-	waitLong(t, "the hub's own back", func() bool { return setup() == "setup=hub" })
 }

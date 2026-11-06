@@ -8,7 +8,7 @@ vi.mock("react", async (orig) => ({
   useSyncExternalStore: (_sub: unknown, get: () => unknown) => get(),
 }));
 
-const session = (id: string, unread: number): AgentSession => ({ id, source: "removedbridge", sessionKey: id, provider: "p", title: id, canSend: true, unreadCount: unread, rankTimeMs: 1 });
+const session = (id: string, unread: number): AgentSession => ({ id, source: "lark-bridge", sessionKey: id, provider: "p", title: id, canSend: true, unreadCount: unread, rankTimeMs: 1 });
 
 type Answer = (sessions: AgentSession[]) => void;
 let answers: Answer[] = [];

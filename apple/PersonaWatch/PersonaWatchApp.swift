@@ -599,7 +599,7 @@ struct WatchInteractionView: View {
         .disabled(!model.canAnswer(interaction))
     }
 
-    /// 提交 was tapped with a question left: say so under the button until every question has a pick.
+    /// Submit was tapped with a question left: say so under the button until every question has a pick.
     @State private var triedEarly = false
 
     /// The phone's rule (`QuestionForm.answer`, without its free text): the picked labels in the options' order, nil

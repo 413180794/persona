@@ -1162,7 +1162,7 @@ The same applies to sending the AI twin's draft from the Inbox: tapping Send clo
 | File | Lark gateway counterpart | Content |
 | --- | --- | --- |
 | `LarkModels.swift` | contracts `MessageView` / `MessagePart` | Wire types, API |
-| `LarkMedia.swift` | `removedimage` / `image-viewer` / `message-video` / `chat-file-preview` | Authenticated media loading (memory + disk cache, ImageIO downsampling), emoji directory, full-screen gallery, player, Quick Look |
+| `LarkMedia.swift` | `LarkRemoteImage` / `image-viewer` / `message-video` / `chat-file-preview` | Authenticated media loading (memory + disk cache, ImageIO downsampling), emoji directory, full-screen gallery, player, Quick Look |
 | `LarkInline.swift` | `card-style.ts` / `card-markdown-text.ts` | Lark palette, inline runs (bold / italic / strikethrough / inline code / links / dashed terminology underline / embedded emoji images), flow layout |
 | `LarkMessageContent.swift` | `index.tsx` `renderPart` / `rich-blocks.ts` | Rich-text block tree (paragraphs, ordered / unordered lists, quotes, headings), images, stickers, file cards, video, voice, code blocks (lightweight highlighting), system messages |
 | `LarkCard.swift` | `card-renderer.tsx` | Card elements: header theme colors, markdown, column_set (weighted / fixed / auto column widths + bisect / trisect / stretch narrow-screen reflow), table, list, collapsible_panel, note, text_tag, icon, buttons (links / callbacks), select / input / picker (read-only), overflow, img, chart (Swift Charts)… |

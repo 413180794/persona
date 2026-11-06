@@ -1655,8 +1655,7 @@ Each `agent_sources` entry is a personal Agent source on the Agents page (the hu
 the endpoints remain `/api/v1/agents*` (`docs/protocol.md` ("Personal Agents")), session ids are `<contribution id>:<sessionKey>`, grouped and named by `provider`.
 Used to connect directly to a personal Agent service (e.g. one with real-time push, avoiding the once-a-minute polling used by the Lark gateway).
 
-- **id**: cannot duplicate another extension's. `removedbridge` was the name of the hub's own Lark gateway agent-bridge source, now provided by the Lark plugin and not reserved by the hub (`agents.MigratableSources`, #1497, #1520):
-  using this id keeps session ids unchanged (`removedbridge:<sessionKey>`), preserving app sessions, unread state and cache. The source appears on the Agents page when the extension is enabled and running, and is removed first on disable, uninstall or upgrade
+- **id**: cannot duplicate another extension's. Session ids are `<id>:<sessionKey>`, so keeping the id across upgrades preserves app sessions, unread state and cache. The source appears on the Agents page when the extension is enabled and running, and is removed first on disable, uninstall or upgrade
   (the app refetches on `{"type":"agents"}`). If the process crashes, times out or fails to start, the source remains: `status` carries an error and listing all sessions or searching skips it (other sources work as usual);
   an error is returned only when querying it alone.
 - **Hub calls the extension** (`agentsrc.<method>`, parameters include `contribution`; fields in `server/internal/agents/wire.go`):

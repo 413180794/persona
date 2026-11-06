@@ -30,7 +30,7 @@ struct MarketTokenHintTests {
         #expect(try market(spec: "github:example/market", token: false).official == nil) // a hub before #2351
     }
 
-    /// 去 GitHub 生成 opens GitHub's fine-grained token page filled in, inside GitHub's limits, asking no permission.
+    /// The "generate on GitHub" button opens GitHub's fine-grained token page filled in, inside GitHub's limits, asking no permission.
     @Test func tokenPageIsFilledIn() throws {
         let c = try #require(URLComponents(url: ExtensionMarketText.gitHubTokenURL, resolvingAgainstBaseURL: false))
         #expect(c.host == "github.com" && c.path == "/settings/personal-access-tokens/new")

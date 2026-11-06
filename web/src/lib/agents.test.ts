@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { addSection, agentPath, arrangeSessions, assignSection, blockView, emptyPrefs, groupSessions, isDefaultView, mergeMessages, normalizePrefs, pendingOutgoing, removeSection, resetView, setView, setupHints, toggleProvider, togglePin, totalUnread, viewOf, type AgentMessage, type AgentSession, type Outgoing } from "./agents";
 
-const s = (id: string, provider: string, rank: number, unread = 0, title = id): AgentSession => ({ id, source: "removedbridge", sessionKey: id, provider, title, canSend: true, unreadCount: unread, rankTimeMs: rank });
+const s = (id: string, provider: string, rank: number, unread = 0, title = id): AgentSession => ({ id, source: "lark-bridge", sessionKey: id, provider, title, canSend: true, unreadCount: unread, rankTimeMs: rank });
 const m = (id: string, pos: number, role = "assistant", text = id, t = pos * 1000): AgentMessage => ({ externalId: id, role, blocks: [{ type: "text", text }], createTimeMs: t, position: pos });
 
 describe("agentPath", () => {
   it("encodes the whole id, '/' and ':' included", () => {
-    expect(agentPath("removedbridge:agent:grok_bot:a1:u-1/")).toBe("/agents/sessions/removedbridge%3Aagent%3Agrok_bot%3Aa1%3Au-1%2F");
+    expect(agentPath("lark-bridge:agent:grok_bot:a1:u-1/")).toBe("/agents/sessions/lark-bridge%3Aagent%3Agrok_bot%3Aa1%3Au-1%2F");
   });
 });
 

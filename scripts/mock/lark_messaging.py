@@ -431,7 +431,7 @@ class _Lark:
             return status, {}
 
 
-_CODES = {"lark_not_logged_in": "not_signed_in", "lark_account_changed": "account_changed", "OLK_VAULT_LOCKED": "input_required"}
+_CODES = {"lark_not_logged_in": "not_signed_in", "lark_account_changed": "account_changed", "VAULT_LOCKED": "input_required"}
 
 
 def _error(handler, status, body):

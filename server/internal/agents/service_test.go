@@ -74,7 +74,7 @@ func (k *memKV) PutSetting(_ context.Context, key string, v any) error {
 }
 
 const key = "agent:grok_bot:a:8f79/"
-const id = "removedbridge:" + key
+const id = "lark-bridge:" + key
 
 func newSvc(f *fakeBridge, kv KV) (*Service, *[][]string) {
 	var changes [][]string
@@ -143,11 +143,11 @@ func TestSendRefusals(t *testing.T) {
 		want          int
 	}{
 		{id, "", "hi", http.StatusConflict}, // canSend=false
-		{"removedbridge:ok", "", strings.Repeat("a", 20001), http.StatusRequestEntityTooLarge},
-		{"removedbridge:ok", "", strings.Repeat("😀", 10001), http.StatusRequestEntityTooLarge}, // 20002 UTF-16 units
-		{"removedbridge:ok", "", "  ", http.StatusBadRequest},
-		{"removedbridge:ok", "nope", "hi", http.StatusBadRequest},
-		{"removedbridge:missing", "", "hi", http.StatusNotFound},
+		{"lark-bridge:ok", "", strings.Repeat("a", 20001), http.StatusRequestEntityTooLarge},
+		{"lark-bridge:ok", "", strings.Repeat("😀", 10001), http.StatusRequestEntityTooLarge}, // 20002 UTF-16 units
+		{"lark-bridge:ok", "", "  ", http.StatusBadRequest},
+		{"lark-bridge:ok", "nope", "hi", http.StatusBadRequest},
+		{"lark-bridge:missing", "", "hi", http.StatusNotFound},
 		{"other:ok", "", "hi", http.StatusNotFound},
 		{"bad", "", "hi", http.StatusBadRequest},
 	}
@@ -159,7 +159,7 @@ func TestSendRefusals(t *testing.T) {
 	if len(f.sends) != 0 {
 		t.Fatalf("source called %d times", len(f.sends))
 	}
-	if _, err := s.Send(ctx, "removedbridge:ok", "", strings.Repeat("a", 20000), ""); err != nil {
+	if _, err := s.Send(ctx, "lark-bridge:ok", "", strings.Repeat("a", 20000), ""); err != nil {
 		t.Fatalf("20000 chars refused: %v", err)
 	}
 	cid := f.sends[0]
@@ -186,7 +186,7 @@ func TestPollReportsChangedSessionsOnly(t *testing.T) {
 	f.sessions[1].UnreadCount = 3
 	f.sessions = append(f.sessions, AgentSession{SessionKey: "c"})
 	s.PollOnce(ctx)
-	if len(*changes) != 1 || strings.Join((*changes)[0], ",") != "removedbridge:b,removedbridge:c" {
+	if len(*changes) != 1 || strings.Join((*changes)[0], ",") != "lark-bridge:b,lark-bridge:c" {
 		t.Fatalf("changes %v", *changes)
 	}
 }
@@ -203,7 +203,7 @@ func TestCacheInvalidatedByUpdate(t *testing.T) {
 	if f.listN != 1 {
 		t.Fatalf("listed %d times, want cached", f.listN)
 	}
-	s.Updated(OLKBridge, []string{key})
+	s.Updated("lark-bridge", []string{key})
 	if _, _ = s.Sessions(ctx, "", ""); f.listN != 2 {
 		t.Fatalf("not refreshed after update (%d)", f.listN)
 	}

@@ -42,7 +42,7 @@ struct ShellStateTests {
         #expect(model.selectedTab == .chats)
     }
 
-    /// A tap on a push or a Live Activity row while the 设置 sheet is up: the sheet goes and the chat shows (#3818).
+    /// A tap on a push or a Live Activity row while the Settings sheet is up: the sheet goes and the chat shows (#3818).
     @Test func openingASessionClosesTheSettingsSheet() {
         let model = AppModel()
         model.selectedTab = .assistant

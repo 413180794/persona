@@ -1,5 +1,5 @@
 // Package agents is Persona' single view of the agents it can reach. The hub has no Source of its own: every one is
-// a running plugin's agent_sources contribution (extmgr/extension_agents.go), e.g. the Feishu plugin's "removedbridge".
+// a running plugin's agent_sources contribution (extmgr/extension_agents.go), such as the Lark plugin's.
 // A session's public id is "<source>:<sessionKey>" (the Lark gateway's own keys already start with "agent:").
 package agents
 
@@ -80,4 +80,9 @@ func SplitID(id string) (source, key string, err error) {
 		return "", "", ErrBadID
 	}
 	return source, key, nil
+}
+
+// Wrap is a session of source as the apps see it: its id <source>:<sessionKey>, and its avatar when there is one.
+func Wrap(source string, s AgentSession, avatarURL string) Session {
+	return withAvatar(Session{ID: source + ":" + s.SessionKey, Source: source, AgentSession: s}, avatarURL)
 }

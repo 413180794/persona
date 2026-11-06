@@ -11200,7 +11200,7 @@ class H(BaseHTTPRequestHandler):
             if unavailable == "gateway":
                 return self.send_json({"code": "lark_gateway_upgrade_required", "error": "升级飞书网关后可使用加密消息。请在 Hub 连接的飞书网关中检查更新，升级后重新检查即可继续。"}, 426)
             if unavailable == "authorization":
-                return self.send_json({"code": "OLK_VAULT_NATIVE_NOT_AUTHORIZED", "error": "尚未开启手机加密。请在 Hub 和飞书网关的部署配置中开启原生加密授权，再重新检查。"}, 403)
+                return self.send_json({"code": "VAULT_NATIVE_NOT_AUTHORIZED", "error": "尚未开启手机加密。请在 Hub 和飞书网关的部署配置中开启原生加密授权，再重新检查。"}, 403)
             return self.send_json({"accountId": "123", "configured": True, "locked": LARK_NATIVE_OLK["locked"], "unifiedPassword": False})
         if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
             return self.send_json(LARK_PIN_FIXTURE)
@@ -11975,14 +11975,14 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             if p == "/api/v1/lark/encryption/unlock":
                 if body.get("password") != "synthetic-password":
-                    return self.send_json({"error": "密码不正确，请重试", "code": "OLK_VAULT_INVALID_PASSWORD"}, 401)
+                    return self.send_json({"error": "密码不正确，请重试", "code": "VAULT_INVALID_PASSWORD"}, 401)
                 LARK_NATIVE_OLK["locked"] = False
                 return self.send_json({"accountId": "123", "configured": True, "locked": False, "unifiedPassword": False})
             if p.endswith("/encryption/covers"):
                 return self.send_json({"lines": ["下周再聊", "午饭后再确认", "我看看"]})
             if p.endswith("/encryption/prepare"):
                 if LARK_NATIVE_OLK["locked"]:
-                    return self.send_json({"error": "请先解锁密钥库", "code": "OLK_VAULT_LOCKED"}, 409)
+                    return self.send_json({"error": "请先解锁密钥库", "code": "VAULT_LOCKED"}, 409)
                 key = body["cover"] + "".join(chr(0xe0100 + b - 16) for b in ("OLK3." + str(len(LARK_NATIVE_OLK["prepared"]))).encode())
                 LARK_NATIVE_OLK["prepared"][key] = body
                 return self.send_json({"accountId": "123", "feedId": p.split("/")[5], "messages": [{"text": key}]})

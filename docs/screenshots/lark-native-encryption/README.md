@@ -4,14 +4,14 @@
 
 | Scenario | Light | Dark |
 | --- | --- | --- |
-| Normal message input area | [View](light/native-removedordinary.png) | [View](dark/native-removedordinary.png) |
-| Pick a previous public text | [View](light/native-removedcovers.png) | [View](dark/native-removedcovers.png) |
-| Unlock on the phone | [View](light/native-removedunlock.png) | [View](dark/native-removedunlock.png) |
-| Encrypted message echoed after sending | [View](light/native-removedsent.png) | [View](dark/native-removedsent.png) |
-| Retry after failure | [View](light/native-removedretry.png) | [View](dark/native-removedretry.png) |
-| Inbox protects the encrypted draft | [View](light/native-removedinbox-protected.png) | [View](dark/native-removedinbox-protected.png) |
-| Draft restored on returning to Messages | [View](light/native-removeddraft-restored.png) | [View](dark/native-removeddraft-restored.png) |
-| Plain Inbox after clearing | [View](light/native-removedinbox-unchanged.png) | [View](dark/native-removedinbox-unchanged.png) |
+| Normal message input area | [View](light/native-encryption-ordinary.png) | [View](dark/native-encryption-ordinary.png) |
+| Pick a previous public text | [View](light/native-encryption-covers.png) | [View](dark/native-encryption-covers.png) |
+| Unlock on the phone | [View](light/native-encryption-unlock.png) | [View](dark/native-encryption-unlock.png) |
+| Encrypted message echoed after sending | [View](light/native-encryption-sent.png) | [View](dark/native-encryption-sent.png) |
+| Retry after failure | [View](light/native-encryption-retry.png) | [View](dark/native-encryption-retry.png) |
+| Inbox protects the encrypted draft | [View](light/native-encryption-inbox-protected.png) | [View](dark/native-encryption-inbox-protected.png) |
+| Draft restored on returning to Messages | [View](light/native-encryption-draft-restored.png) | [View](dark/native-encryption-draft-restored.png) |
+| Plain Inbox after clearing | [View](light/native-encryption-inbox-unchanged.png) | [View](dark/native-encryption-inbox-unchanged.png) |
 
 The 3 flows in `LarkNativeEncryptionFlowTests` passed once in light and once in dark mode. An earlier run of the same flows also passed, but the visual check then found text showing through the mode bar background; after the fix the flows were rerun in full and the screenshots here updated. A wrong password stays on the unlock page and the right one continues the send. A retry after an explicit rejection reuses the original ciphertext. Switching to the Inbox cannot send the encrypted draft as a normal message; the draft is still there after returning to Messages and after a restart; once the draft is cleared, the plain Inbox no longer shows the new mode bar.
 

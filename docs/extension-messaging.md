@@ -266,8 +266,8 @@ The App draws it natively, with tapping comments and commenting on selected text
 | Card element tree (`LarkCard`), summary cards (merged forwards, shares) | `card` (converted to a View), `forward`, `share` |
 | Anti-recall and edit-history switches | The extension decides by these switches whether to provide the `recalled` body and `edit_history`; the switch page is `settings_ui` |
 | Brave Climb | Composer mode `brave_climb`; on read, the extension decodes and adds the decoration "Brave Climb · decoded" |
-| Encryption (OLK) | Composer mode `sealed` (`prepare`: pick the display text, unlock); on read, the extension decrypts (when the keystore is unlocked), marks it `private` and decorates it "Encrypted message"; if it can't decrypt, it provides the display text |
-| `lark_not_logged_in`, `lark_account_changed`, `OLK_VAULT_LOCKED` | `not_signed_in`, `account_changed`, `input_required` (with an unlock View) |
+| Encryption | Composer mode `sealed` (`prepare`: pick the display text, unlock); on read, the extension decrypts (when the keystore is unlocked), marks it `private` and decorates it "Encrypted message"; if it can't decrypt, it provides the display text |
+| `lark_not_logged_in`, `lark_account_changed`, `VAULT_LOCKED` | `not_signed_in`, `account_changed`, `input_required` (with an unlock View) |
 | Documents (`/raw/documents/*`) | `GET documents` (converted to `Document` by the extension) |
 | Moments | `posts` |
 | WS `{type: "lark", feed_ids, ol_account}` | `messaging.changed` |

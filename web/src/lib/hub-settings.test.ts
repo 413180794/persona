@@ -11,7 +11,7 @@ describe("feishu bot", () => {
   it("maps the resolved domain to the picker", () => {
     expect(domainChoice("https://open.feishu.cn")).toBe("feishu");
     expect(domainChoice("")).toBe("feishu");
-    expect(domainChoice("https://lark-connectorsuite.com")).toBe("lark");
+    expect(domainChoice("https://larksuite.com")).toBe("lark");
     expect(domainChoice("https://open.example.com")).toBe("https://open.example.com");
   });
 

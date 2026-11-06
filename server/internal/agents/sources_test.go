@@ -56,10 +56,10 @@ func TestAddAndRemoveSources(t *testing.T) {
 	if !s.Add(plug) {
 		t.Fatal("a new source is added")
 	}
-	if s.Add(&memSource{name: OLKBridge}) || s.Add(&memSource{name: "grokbot"}) {
+	if s.Add(&memSource{name: testSource}) || s.Add(&memSource{name: "grokbot"}) {
 		t.Fatal("a name that is taken is refused")
 	}
-	if st := s.Statuses(ctx); len(st) != 2 || st[0].Source != OLKBridge || st[1].Source != "grokbot" {
+	if st := s.Statuses(ctx); len(st) != 2 || st[0].Source != testSource || st[1].Source != "grokbot" {
 		t.Fatalf("statuses %+v", st)
 	}
 	list, err := s.Sessions(ctx, "", "grok_bot")
@@ -78,7 +78,7 @@ func TestAddAndRemoveSources(t *testing.T) {
 	if len(*changes) != n+1 {
 		t.Fatal("the apps are told when a source goes")
 	}
-	if list, _ := s.Sessions(ctx, "", ""); len(list) != 1 || list[0].Source != OLKBridge {
+	if list, _ := s.Sessions(ctx, "", ""); len(list) != 1 || list[0].Source != testSource {
 		t.Fatalf("after remove %+v", list)
 	}
 	if _, ok := s.cache.getSessions("grokbot"); ok {
@@ -104,7 +104,7 @@ func TestFailingSourceDoesNotHideOthers(t *testing.T) {
 	ctx := context.Background()
 	down := errors.New("plugin not running")
 	s.Add(&memSource{name: "broken", fail: down})
-	if list, err := s.Sessions(ctx, "", ""); err != nil || len(list) != 1 || list[0].Source != OLKBridge {
+	if list, err := s.Sessions(ctx, "", ""); err != nil || len(list) != 1 || list[0].Source != testSource {
 		t.Fatalf("the others' sessions: %+v %v", list, err)
 	}
 	if _, err := s.Search(ctx, "", "x"); err != nil {
@@ -113,7 +113,7 @@ func TestFailingSourceDoesNotHideOthers(t *testing.T) {
 	if _, err := s.Sessions(ctx, "broken", ""); !errors.Is(err, down) {
 		t.Fatalf("asked by name: %v", err)
 	}
-	s.Remove(OLKBridge)
+	s.Remove(testSource)
 	if _, err := s.Sessions(ctx, "", ""); !errors.Is(err, down) {
 		t.Fatalf("the only source: %v", err)
 	}

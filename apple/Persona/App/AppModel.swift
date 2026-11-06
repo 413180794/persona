@@ -879,11 +879,11 @@ final class AppModel {
     func open(_ key: SessionKey, latestAnswer: Bool = false) {
         if latestAnswer { latestAnswerFor = key }
         if session(key)?.assistant == true {
-            // A conversation of another group's Persona: that group's Persona. Also off the shell's 设置 sheet and back
+            // A conversation of another group's Persona: that group's Persona. Also off the shell's Settings sheet and back
             // at the conversation from a page pushed on it, even when it is the one already open (#3818).
             openAssistantConversation(key)
         } else {
-            shellSettings = false // the shell's 设置 sheet would cover the chat (#3818)
+            shellSettings = false // the shell's Settings sheet would cover the chat (#3818)
             selectedTab = .chats
             openChat = key
         }

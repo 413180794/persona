@@ -167,7 +167,6 @@ func (ps *extensions) addAgentSources(id string, m *extension.Manifest, hp *hubE
 		return
 	}
 	for _, item := range m.AgentSources() {
-		ps.yieldOwnAgentSource(item.ID)
 		if ps.h.agents.Add(&extensionAgentSource{item: item, proc: hp.proc}) {
 			ps.mu.Lock()
 			hp.agentSources = append(hp.agentSources, item.ID)
@@ -190,37 +189,6 @@ func (ps *extensions) removeAgentSources(hp *hubExtension) {
 	ps.mu.Unlock()
 	for _, id := range ids {
 		ps.h.agents.Remove(id)
-		ps.restoreOwnAgentSource(id)
-	}
-}
-
-// yieldOwnAgentSource takes a non-plugin source of a migratable id (agents.MigratableSources) out for a plugin's of the
-// same id, keeping the session ids. The hub registers no source of its own today, so this finds nothing to yield.
-func (ps *extensions) yieldOwnAgentSource(id string) {
-	if !slices.Contains(agents.MigratableSources, id) {
-		return
-	}
-	own := ps.h.agents.Get(id)
-	if own == nil {
-		return
-	}
-	if _, isExtension := own.(*extensionAgentSource); isExtension {
-		return
-	}
-	ps.h.migrated.Store("agentsrc:"+id, own)
-	ps.h.agents.Remove(id)
-	ps.logf("agent source %s: a plugin takes it over", id)
-}
-
-// restoreOwnAgentSource puts a source yieldOwnAgentSource took out back once the plugin's is gone.
-func (ps *extensions) restoreOwnAgentSource(id string) {
-	v, ok := ps.h.migrated.LoadAndDelete("agentsrc:" + id)
-	if !ok || ps.h.agents.Get(id) != nil {
-		return
-	}
-	if ps.h.agents.Add(v.(agents.Source)) {
-		ps.h.agentsChanged([]string{})
-		ps.logf("agent source %s: back to the hub's own", id)
 	}
 }
 
