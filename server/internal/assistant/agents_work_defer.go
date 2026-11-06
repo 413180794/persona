@@ -42,9 +42,8 @@ func legacyDeferredWorkLabel(label string) bool {
 	default:
 		return false
 	}
-	// i18n-ignore: compatibility with persisted model-generated option labels
 	switch strings.TrimSpace(parts[1]) {
-	case "稍后再处理", "稍后再验收", "稍后再决定", "稍后再确认", "稍后再回复", "稍后再讨论", "稍后再继续", "稍后再说", "以后再说":
+	case "稍后再处理", "稍后再验收", "稍后再决定", "稍后再确认", "稍后再回复", "稍后再讨论", "稍后再继续", "稍后再说", "以后再说": // i18n-ignore: compatibility with persisted model-generated option labels
 		return true
 	default:
 		return false
