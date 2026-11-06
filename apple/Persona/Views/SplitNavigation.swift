@@ -75,7 +75,10 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
             .modifier(SidebarTopFill(shown: columns != .detailOnly))
             // On the whole split, not the detail stack: its pages are built from the destinations the sidebar
             // registered, in the sidebar's environment.
-            .environment(\.splitDetail, SplitDetail(isFirstPage: path.count <= 1))
+            .environment(\.splitDetail, SplitDetail(isFirstPage: path.count <= 1, listHidden: columns == .detailOnly))
+            .environment(\.splitShowList, SplitShowList { [columns = $columns] in
+                withAnimation(Theme.Motion.layout) { columns.wrappedValue = SplitColumns.shown }
+            })
             #endif
         } else {
             NavigationStack(path: $path) {
@@ -151,6 +154,9 @@ struct SidebarTopFill: ViewModifier {
 struct SplitDetail: Equatable {
     /// The page is the first one the list opened: there is nothing to go back to (the list is beside it).
     var isFirstPage: Bool
+    /// The list column is closed (iOS: its button in the list's toolbar closed it). A first page with its own header
+    /// (an Agents chat) has no system button to bring it back: its back does (`splitShowList`).
+    var listHidden = false
     /// The page is a window of its own (the Mac's chat window), not a split's detail column: the window's title bar has
     /// its title.
     var ownWindow = false
@@ -161,6 +167,13 @@ extension EnvironmentValues {
     /// Pushes a page by value onto the stack the view is in (an extension's `push`, docs/extensions.md「页面跳转」): its
     /// destination is registered with the list's.
     @Entry var splitPush: SplitPush?
+    /// Opens the list column of the split the page is in again (iOS); nil in a single stack.
+    @Entry var splitShowList: SplitShowList?
+}
+
+/// Brings a `SplitNavigation`'s list column back.
+struct SplitShowList {
+    var show: () -> Void
 }
 
 /// Appends a value to a `SplitNavigation`'s path.
@@ -193,6 +206,8 @@ private struct SplitDetailPage: ViewModifier {
 
 /// The detail column before anything is open: a quiet hint.
 struct SplitPlaceholder: View {
+    @Environment(\.splitDetail) private var split
+    @Environment(\.splitShowList) private var showList
     var symbol: String
     var title: String
     var message: String
@@ -202,6 +217,12 @@ struct SplitPlaceholder: View {
             Label(title, systemImage: symbol)
         } description: {
             Text(message)
+        } actions: {
+            // The list closed with nothing open: this page hides its bar, where the system's button to open the list
+            // would be, so it filled the screen with no way back to the list.
+            if split?.listHidden == true, let showList {
+                Button { showList.show() } label: { Text("Show List").lineLimit(1) }.themedButton()
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.pageBackground)

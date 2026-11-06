@@ -133,6 +133,7 @@ struct ChatView: View {
     @Environment(\.hostedChat) private var host
     /// In the detail column of a split (iPhone Duo open): the list is beside the chat, the tab bar stays.
     @Environment(\.splitDetail) private var split
+    @Environment(\.splitShowList) private var showList
     /// The Persona conversation in the shell (docs/ios.md「新外壳」).
     @Environment(\.shellChat) private var shellChat
     @Environment(\.shell) private var shell
@@ -2882,26 +2883,25 @@ struct ChatView: View {
     }
 
     /// The first page of a split's detail column, on the chat: nothing to go back to (the list is beside it).
-    private var hidesBack: Bool { host == nil && split?.isFirstPage == true && pane == .chat }
+    private var hidesBack: Bool { host == nil && split?.isFirstPage == true && split?.listHidden != true && pane == .chat }
+    /// The split's first page with its list column closed: ‹ brings the list back. There is nothing to go back to, and
+    /// with this page's own header no system button to open the list (iPhone Duo open, iPad).
+    private var backShowsList: Bool { host == nil && split?.isFirstPage == true && split?.listHidden == true && pane == .chat }
 
     /// The header's leading button: back to the chat from files / Git; on the chat ‹, or a hosting page's ✕ / ‹.
     private var backSymbol: String { pane == .git || pane == .files ? Theme.Icon.back : host?.leaveSymbol ?? Theme.Icon.back }
     private var backLabel: String { pane == .git || pane == .files ? String(localized: "Back [Task Sheets 572cf4]") : host?.leaveLabel ?? String(localized: "Back [Task Sheets 572cf4]") }
 
     /// The open header's ‹. Inside the row's glass container `noBackWhen` does not hide it: the container draws the
-    /// button's glass and symbol itself, so a disabled ‹ that did nothing showed on every chat on the Mac, where the
-    /// chat is usually the split's first page (#1337). There the hidden one is an empty spot of its size, which keeps the
-    /// title centered; the phone keeps its `noBackWhen`.
+    /// button's glass and symbol itself, so a disabled ‹ that did nothing showed on every chat that is a split's first
+    /// page: on the Mac (#1337), and on iPad / iPhone Duo open beside the list. The hidden one is an empty spot of its
+    /// size, which keeps the title centered.
     @ViewBuilder private var headerBack: some View {
-        #if os(macOS)
         if hidesBack {
             Color.clear.dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
         } else {
             headerBackButton
         }
-        #else
-        headerBackButton.noBackWhen(hidesBack)
-        #endif
     }
 
     private var headerBackButton: some View {
@@ -2931,7 +2931,8 @@ struct ChatView: View {
         #if os(macOS)
         if pane == .git || pane == .files { withAnimation(Theme.Motion.standard) { pane = .chat } } else if let host { host.leave() } else { dismissChat() }
         #else
-        if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else if let host { host.leave() } else { dismissChat() }
+        if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else if let host { host.leave() }
+        else if backShowsList, let showList { showList.show() } else { dismissChat() }
         #endif
     }
 
