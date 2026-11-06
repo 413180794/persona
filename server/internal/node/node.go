@@ -881,9 +881,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		return n.gitOp(ctx, dir, p.Op)
 	case "worktree.prepare": // "New worktree…": what the dialog starts from (worktree.go)
-		return n.worktreePrepare(ctx, p.Kind, p.WorkspaceID)
+		return n.worktreePrepare(ctx, p.Kind, p.WorkspaceID, p.Cwd)
 	case "worktree.create": // a Git worktree of a workspace's repository, opened as a workspace (worktree.go)
-		return n.worktreeCreate(ctx, p.Kind, p.WorkspaceID, p.Branch, p.Path)
+		return n.worktreeCreate(ctx, p.Kind, p.WorkspaceID, p.Cwd, p.Branch, p.Path)
 	case "tabs.close":
 		return ok(n.closeTab(ctx, p.Kind, p.TabID))
 	case "tabs.rename":

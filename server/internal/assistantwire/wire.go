@@ -80,7 +80,11 @@ const (
 	DeviceSessionRename = "session.rename" // {session_id, title} → {ok}
 	DeviceAssistantSend = "assistant.send" // {session_id, text, resume_only?, permission_mode?, …model} → {session_id}
 	DeviceSessionSend   = "session.send"   // {session_id, text} → {}
-	DeviceSessionStart  = "session.start"  // {cwd, prompt, launcher?, model?, permission_mode?, tab_name?} → {session}
+	DeviceSessionStart  = "session.start"  // {cwd, prompt, launcher?, model?, permission_mode?, tab_name?, workspace_id?} → {session}
+	// DeviceWorktreePrepare / DeviceWorktreeCreate: "New worktree…" (docs/terminal.md), the workspace named by a directory
+	// in it: {cwd} → WorktreePrepare; {cwd, branch, path} → WorktreeCreateResult.
+	DeviceWorktreePrepare = "worktree.prepare"
+	DeviceWorktreeCreate  = "worktree.create"
 
 	// The hub's.
 	// DeviceDevicesList (on DeviceAll): {} → {devices: [Device], phone_online}, the user's machines.

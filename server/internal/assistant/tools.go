@@ -214,6 +214,9 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			Cwd      string `json:"cwd"`
 			Prompt   string `json:"prompt"`
 			Launcher string `json:"launcher"`
+			Worktree struct {
+				Branch string `json:"branch"`
+			} `json:"worktree"`
 		}
 		_ = json.Unmarshal(args, &a)
 		am, ok := s.machineByName(ctx, a.Machine)
@@ -221,7 +224,12 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			return "", fmt.Errorf("unknown machine %q (machines: %s)", a.Machine, s.machineIDs(ctx))
 		}
 		a.Cwd = proto.ExpandHome(a.Cwd, am.Home)
-		if ok, err := s.confirmOutbound(ctx, machine, self, name, am.Name+" · "+a.Cwd+"\n\n"+a.Prompt, args); err != nil {
+		branch := strings.TrimSpace(a.Worktree.Branch)
+		where := am.Name + " · " + a.Cwd
+		if branch != "" {
+			where += " · 新 worktree：" + branch
+		}
+		if ok, err := s.confirmOutbound(ctx, machine, self, name, where+"\n\n"+a.Prompt, args); err != nil {
 			return "", err
 		} else if !ok {
 			return "The user declined on the phone: no agent was started.", nil
@@ -250,6 +258,15 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		}
 		if note != "" {
 			note = " Note: " + note + "."
+		}
+		if branch != "" { // the machine's engine makes the worktree (herdr's or Orca's own), the agent starts in it
+			wt, err := s.newWorktree(sctx, am.ID, a.Cwd, branch)
+			if err != nil {
+				return "", fmt.Errorf("the worktree on branch %s was not made, no agent was started: %w", branch, err)
+			}
+			a.Cwd = wt.Path
+			params["cwd"], params["workspace_id"] = wt.Path, wt.WorkspaceID
+			note = fmt.Sprintf(" It runs in a new worktree on branch %s.", wt.Branch) + note
 		}
 		// Remember the sessions already there, so an unanswered start can adopt only the session it created:
 		// UpdatedAt is last sign of life, so a cwd match alone could be another agent already busy there. The

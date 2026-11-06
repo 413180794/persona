@@ -121,7 +121,7 @@ struct NewChatView: View {
                         }
                         .padding(.vertical, Theme.Space.xs)
                     }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowInsets(EdgeInsets(top: Theme.Space.s, leading: Theme.Space.page, bottom: Theme.Space.s, trailing: Theme.Space.page))
                 } header: { Text("Machines") }
 
                 Section {
@@ -627,12 +627,12 @@ struct DirectoryBrowser: View {
 
                 Section {
                     if let parent = list.parent, !parent.isEmpty {
-                        Button { Task { await load(parent) } } label: { Label("Parent Folder", systemImage: "arrow.turn.left.up") }
+                        Button { Task { await load(parent) } } label: { Label("Parent Folder", systemImage: Theme.Icon.parentFolder) }
                     }
                     ForEach(list.entries) { e in
                         Button { Task { await load(e.path) } } label: {
                             HStack {
-                                Image(systemName: e.isGit ? "folder.badge.gearshape" : Theme.Icon.folder).foregroundStyle(e.isGit ? Theme.accent : .secondary)
+                                Image(systemName: e.isGit ? Theme.Icon.gitRepository : Theme.Icon.folder).foregroundStyle(e.isGit ? Theme.accent : .secondary)
                                 Text(e.name).foregroundStyle(.primary)
                                 Spacer()
                                 if e.isGit { Chip(text: "git") }

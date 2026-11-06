@@ -37,30 +37,37 @@ type worktreeRepo struct {
 	root, name, branch string
 }
 
-// repoOfWorkspace finds the repository of a workspace the host lists, and the host that makes its worktrees.
-func (n *Node) repoOfWorkspace(ctx context.Context, kind, workspace string) (host.Host, worktreeRepo, error) {
+// repoOfWorkspace finds the repository of a workspace the host lists, and the host that makes its worktrees. Without
+// a workspace, cwd names it: the host's space holding that directory, the deepest one (the assistant knows directories,
+// not space ids). It returns the workspace it used.
+func (n *Node) repoOfWorkspace(ctx context.Context, kind, workspace, cwd string) (host.Host, string, worktreeRepo, error) {
 	var repo worktreeRepo
-	if workspace == "" {
-		return nil, repo, errors.New("workspace_id is required")
+	if workspace == "" && cwd == "" {
+		return nil, "", repo, errors.New("workspace_id is required")
 	}
 	h, err := n.hostOfKind(kind)
 	if err != nil {
-		return nil, repo, err
+		return nil, "", repo, err
 	}
 	if !canWorktree(h) {
-		return nil, repo, unsupported(h)
+		return nil, "", repo, unsupported(h)
+	}
+	if workspace == "" {
+		if workspace, err = spaceHolding(ctx, h, proto.ExpandHome(cwd, n.home)); err != nil {
+			return nil, "", repo, err
+		}
 	}
 	dir, err := n.gitDirOf(ctx, "", workspace, kind)
 	if err != nil {
-		return nil, repo, err
+		return nil, "", repo, err
 	}
 	dir, err = n.gitDir(dir)
 	if err != nil {
-		return nil, repo, errors.New("不知道这个工作区的目录")
+		return nil, "", repo, errors.New("不知道这个工作区的目录")
 	}
 	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil || strings.TrimSpace(root) == "" {
-		return nil, repo, errors.New("这个工作区不在 Git 仓库里")
+		return nil, "", repo, errors.New("这个工作区不在 Git 仓库里")
 	}
 	repo.root = strings.TrimSpace(root)
 	// "" on a detached HEAD
@@ -81,7 +88,30 @@ func (n *Node) repoOfWorkspace(ctx context.Context, kind, workspace string) (hos
 			repo.name = strings.TrimSuffix(filepath.Base(c), ".git") // a bare repository
 		}
 	}
-	return h, repo, nil
+	return h, workspace, repo, nil
+}
+
+// spaceHolding is the host's space whose directory is dir or holds it, the deepest such space.
+func spaceHolding(ctx context.Context, h host.Host, dir string) (string, error) {
+	l, ok := h.(host.Launcher)
+	if !ok {
+		return "", unsupported(h)
+	}
+	spaces, err := l.Spaces(ctx)
+	if err != nil {
+		return "", err
+	}
+	d := realPath(filepath.Clean(dir))
+	best, depth := "", -1
+	for _, s := range spaces {
+		if c := realPath(filepath.Clean(s.Cwd)); s.Cwd != "" && within(d, c) && len(c) > depth {
+			best, depth = s.ID, len(c)
+		}
+	}
+	if best == "" {
+		return "", fmt.Errorf("%s 不在这台电脑的任何工作区里", dir)
+	}
+	return best, nil
 }
 
 // worktreesDir is where the host puts the checkouts of a repository: `<its worktrees directory>/<repo>`.
@@ -95,8 +125,8 @@ func (n *Node) worktreesDir(h host.Host, repo string) string {
 
 // worktreePrepare is what the dialog starts from: the repository, the branch the workspace is on, and the directory
 // checkouts of this repository go under.
-func (n *Node) worktreePrepare(ctx context.Context, kind, workspace string) (proto.WorktreePrepare, error) {
-	h, repo, err := n.repoOfWorkspace(ctx, kind, workspace)
+func (n *Node) worktreePrepare(ctx context.Context, kind, workspace, cwd string) (proto.WorktreePrepare, error) {
+	h, _, repo, err := n.repoOfWorkspace(ctx, kind, workspace, cwd)
 	if err != nil {
 		return proto.WorktreePrepare{}, err
 	}
@@ -156,10 +186,10 @@ func within(p, dir string) bool {
 }
 
 // worktreeCreate makes the checkout and opens it as a workspace of the host.
-func (n *Node) worktreeCreate(ctx context.Context, kind, workspace, branch, path string) (proto.WorktreeCreateResult, error) {
+func (n *Node) worktreeCreate(ctx context.Context, kind, workspace, cwd, branch, path string) (proto.WorktreeCreateResult, error) {
 	var res proto.WorktreeCreateResult
 	branch = strings.TrimSpace(branch)
-	h, repo, err := n.repoOfWorkspace(ctx, kind, workspace)
+	h, workspace, repo, err := n.repoOfWorkspace(ctx, kind, workspace, cwd)
 	if err != nil {
 		return res, err
 	}

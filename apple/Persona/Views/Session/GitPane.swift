@@ -342,7 +342,13 @@ struct GitDiffSheet: View {
                 } else if let diff {
                     DiffText(diff: diff.diff, truncated: diff.truncated)
                 } else if let error {
-                    ContentUnavailableView("Can't Read Changes", systemImage: Theme.Icon.error, description: Text(error))
+                    ContentUnavailableView {
+                        Label("Can't Read Changes", systemImage: Theme.Icon.error)
+                    } description: {
+                        Text(error)
+                    } actions: {
+                        Button("Retry [Components b8784c]") { Task { await load() } }.lineLimit(1).themedButton()
+                    }
                 } else {
                     ProgressView().frame(maxHeight: .infinity)
                 }
@@ -359,15 +365,25 @@ struct GitDiffSheet: View {
                     } label: { Image(systemName: Theme.Icon.more) }
                 }
             }
-            .task(id: target) {
-                diff = nil
-                do {
-                    diff = try await model.api(group)?.gitDiff(machine: machineID, cwd: cwd, path: target.file.path, staged: target.staged)
-                } catch { self.error = error.shown }
-            }
+            .task(id: target) { await load() }
             #if os(macOS)
             .macLargeSheet(bars: true)
             #endif
+        }
+    }
+
+    /// Reads the diff of the half shown. A sheet has nothing else that loads it again: a timeout, no network or no hub
+    /// is said with Retry too, not left as a spinner (#4170); a cancelled load (the other half picked) says nothing.
+    private func load() async {
+        let t = target
+        diff = nil
+        error = nil
+        guard let api = model.api(group) else { error = String(localized: "Not connected to the hub [App Model 93d955]"); return }
+        do {
+            let d = try await api.gitDiff(machine: machineID, cwd: cwd, path: t.file.path, staged: t.staged)
+            if t == target { diff = d }
+        } catch {
+            if t == target, !error.isCancellation { self.error = error.shown ?? error.localizedDescription }
         }
     }
 }
@@ -431,6 +447,7 @@ struct GitCommitSheet: View {
                     }
                 } else if let error {
                     Text(error).foregroundStyle(Theme.danger)
+                    Button("Retry [Components b8784c]") { Task { await load() } }.lineLimit(1)
                 } else {
                     HStack { Spacer(); ProgressView(); Spacer() }
                 }
@@ -440,14 +457,19 @@ struct GitCommitSheet: View {
             .navigationTitle(commit.short)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
-            .task {
-                do { show = try await model.api(group)?.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
-                catch { self.error = error.shown }
-            }
+            .task { await load() }
             #if os(macOS)
             .macLargeSheet(bars: true)
             #endif
         }
+    }
+
+    /// Reads the commit's files and diff; a failure of any kind but a cancellation is said, with Retry (#4170).
+    private func load() async {
+        error = nil
+        guard let api = model.api(group) else { error = String(localized: "Not connected to the hub [App Model 93d955]"); return }
+        do { show = try await api.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
+        catch { if !error.isCancellation { self.error = error.shown ?? error.localizedDescription } }
     }
 }
 

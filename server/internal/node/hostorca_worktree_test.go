@@ -199,6 +199,37 @@ func TestOrcaWorktreeFromADetachedHead(t *testing.T) {
 	}
 }
 
+// The assistant names the workspace by a directory in it (no space id): the deepest Orca worktree holding it is the
+// source, and a directory outside every worktree is refused before Orca is asked.
+func TestOrcaWorktreeByDirectory(t *testing.T) {
+	w := orcaWorktreeNode(t)
+	child := filepath.Join(w.dir, "other")
+	runPullGit(t, w.repo, "worktree", "add", "-b", "other", "--", child)
+	childID := "repo1::" + child
+	w.o.SetWorktrees(orcarttest.Worktree(w.src, w.repo, "refs/heads/dev"), orcarttest.Worktree(childID, child, "refs/heads/other"))
+	sub := mkdir(t, filepath.Join(child, "pkg"))
+	prep, err := request(t, w.n, "worktree.prepare", map[string]any{"cwd": sub})
+	if err != nil || prep["branch"] != "other" {
+		t.Fatalf("prepare = %v, %v", prep, err)
+	}
+	if _, err := request(t, w.n, "worktree.create", map[string]any{"cwd": sub, "branch": "feat-c",
+		"path": filepath.Join(w.dir, "feat-c")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.o.Params("worktree.create"); len(got) != 1 || got[0]["parentWorktree"] != "id:"+childID ||
+		got[0]["baseBranch"] != "other" {
+		t.Errorf("worktree.create params %v", got)
+	}
+	outside := mkdir(t, filepath.Join(w.home, "notes"))
+	if _, err := request(t, w.n, "worktree.create", map[string]any{"cwd": outside, "branch": "feat-d",
+		"path": filepath.Join(w.dir, "feat-d")}); err == nil || !strings.Contains(err.Error(), "不在") {
+		t.Errorf("a directory outside every workspace: err = %v", err)
+	}
+	if n := w.o.Count("worktree.create"); n != 1 {
+		t.Errorf("Orca was asked %d times", n)
+	}
+}
+
 // A workspace Orca does not list (or another machine's) is not Orca's to branch from.
 func TestOrcaWorktreeUnknownWorkspace(t *testing.T) {
 	w := orcaWorktreeNode(t)

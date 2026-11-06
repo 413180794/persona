@@ -32,6 +32,9 @@ final class FilePresence {
     /// Whom to ask about each scope: its group's hub.
     @ObservationIgnored private var clients: [FileScope: APIClient] = [:]
     @ObservationIgnored private var flushing: Task<Void, Never>?
+    /// How many times each group's socket connected: a question that fails after a reconnect it started before is
+    /// not remembered (the hub is back).
+    @ObservationIgnored private var connects: [String: Int] = [:]
 
     /// How long an answer holds: a file that is there stays linked a while; a missing one may be written soon (the
     /// agent says it will), so it is asked again sooner; no answer at all, sooner still.
@@ -87,13 +90,25 @@ final class FilePresence {
             let list = Array(paths)
             for start in stride(from: 0, to: list.count, by: 50) {
                 let chunk = Array(list[start..<min(list.count, start + 50)])
+                let connect = connects[scope.machine.group, default: 0]
                 let answers = try? await api.stat(machine: scope.machine.id, paths: chunk, cwd: scope.cwd)
+                // Failed across a reconnect: nothing is remembered, so the paths are asked again as their rows appear.
+                if answers == nil, connects[scope.machine.group, default: 0] != connect { continue }
                 let now = Date.now
                 for p in chunk {
                     known[Key(scope: scope, path: p)] = Entry(kind: answers?[p] ?? (answers == nil ? nil : .missing), at: now)
                 }
             }
         }
+    }
+
+    /// A group's socket connected (again): the hub is back, so paths with no answer are asked again as their rows
+    /// appear instead of staying plain text for up to `lifetime(nil)`.
+    func reconnected(group: String) {
+        connects[group, default: 0] += 1
+        // Only assigned when something goes: `known` is observed, and every chat row reads it.
+        let kept = known.filter { $0.key.scope.machine.group != group || $0.value.kind != nil }
+        if kept.count != known.count { known = kept }
     }
 
     #if DEBUG

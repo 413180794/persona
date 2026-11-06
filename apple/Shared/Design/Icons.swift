@@ -272,6 +272,10 @@ extension Theme {
         /// and the web mark it).
         static let home = "house"
         static let folderFilled = "folder.fill"
+        /// Up one folder (the new chat's directory browser, 上一级).
+        static let parentFolder = "arrow.turn.left.up"
+        /// A folder that is a git repository (the new chat's directory browser).
+        static let gitRepository = "folder.badge.gearshape"
         static let photo = "photo"
         static let photos = "photo.on.rectangle"
         static let camera = "camera"

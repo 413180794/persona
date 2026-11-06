@@ -68,6 +68,8 @@ type fakeHub struct {
 	agents       int
 	offline      map[string]bool
 	failStart    error
+	worktrees    []map[string]any // worktree.prepare / worktree.create params, {"method": …} added
+	failWorktree error            // worktree.create's answer when set
 	slowStart    bool   // session.start blocks until the call's context ends, then answers with its error (a node that builds the session before answering late)
 	judged       int    // the done judge's calls to the model
 	judge        string // what they answer ("": an error)
@@ -258,6 +260,16 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 		}
 		f.guestPrepared = append(f.guestPrepared, a)
 		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/guest"})
+	case DeviceWorktreePrepare, DeviceWorktreeCreate: // the machine's engine: checkouts under /wt/<repo>
+		a["method"] = p.Method
+		f.worktrees = append(f.worktrees, a)
+		if p.Method == DeviceWorktreePrepare {
+			return json.Marshal(proto.WorktreePrepare{Root: "/code/app", RepoName: "app", Branch: "main", Path: "/wt/app"})
+		}
+		if f.failWorktree != nil {
+			return nil, f.failWorktree
+		}
+		return json.Marshal(proto.WorktreeCreateResult{WorkspaceID: "ws-new", Path: a["path"].(string), Branch: a["branch"].(string)})
 	case DeviceSessionStart:
 		if f.offline[p.Device] {
 			return nil, fmt.Errorf("%s: %w", p.Device, apierr.ErrOffline)

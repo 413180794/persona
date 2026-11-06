@@ -66,6 +66,7 @@ final class CompareModel {
 
     func load() async {
         loading = true
+        error = nil
         defer { loading = false }
         guard let api else {
             error = String(localized: "Not connected to the hub [App Model 93d955]")
@@ -87,7 +88,8 @@ final class CompareModel {
                 return TextCompare.compare(ou, nu)
             }.value
         } catch {
-            self.error = error.shown
+            // A timeout or no network is said too: left unsaid, the page was blank with both buttons grey (#4170).
+            if !error.isCancellation { self.error = error.shown ?? error.localizedDescription }
         }
     }
 
@@ -116,7 +118,8 @@ struct CompareView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Compare These Versions"), message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Compare These Versions"), message: error,
+                               action: (title: String(localized: "Retry [Components b8784c]"), run: { Task { await model.load() } }))
             } else if model.loading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.kind == .image {

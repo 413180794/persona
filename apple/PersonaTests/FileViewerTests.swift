@@ -144,4 +144,27 @@ struct FileViewerTests {
         #expect(presence.remembered("~/a.go", in: scope)?.kind == nil) // asked again in a minute
         #expect(FilePresence.lifetime(nil) < FilePresence.lifetime(.missing))
     }
+
+    @Test func noAnswerIsAskedAgainAfterItsGroupReconnects() async throws {
+        let hub = FakeHub() // no stat route: every lookup fails
+        let presence = FilePresence()
+        let scope = FileScope(machine: MachineRef(id: "mac"), cwd: "")
+        let path = "/api/v1/machines/mac/stat"
+        presence.ask(["~/a.go"], in: scope, api: hub.client)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(hub.sent("GET", path).count == 1)
+
+        // Another group's reconnect keeps the failure: nothing is sent.
+        presence.reconnected(group: "other")
+        presence.ask(["~/a.go"], in: scope, api: hub.client)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(hub.sent("GET", path).count == 1)
+
+        // This group's reconnect drops it: the path is looked up again.
+        presence.reconnected(group: scope.machine.group)
+        #expect(presence.remembered("~/a.go", in: scope) == nil)
+        presence.ask(["~/a.go"], in: scope, api: hub.client)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(hub.sent("GET", path).count == 2)
+    }
 }

@@ -1211,6 +1211,8 @@ final class AppModel {
         fsLive.reconnected(group: group)
         // Ports whose question failed while the hub was unreachable are asked again (#4302).
         portPresence.reconnected(group: group)
+        // Paths whose lookup failed while the hub was unreachable are looked up again (#4352).
+        filePresence.reconnected(group: group)
         let mine = subscribed.filter { $0.group == group }
         // Updating… until the open chats' backlog and the pending interactions are in (ConnectionStatus); nothing when
         // resumed (an empty catch-up only lets the outbox go).
