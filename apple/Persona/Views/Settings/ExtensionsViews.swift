@@ -187,7 +187,7 @@ struct ExtensionDetailView: View {
                 }
                 if d.readOnly {
                     Section {
-                        Text("This extension is set in hub.json; change its switch and settings on the hub machine.").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text("This extension is set in its manager's manager.json; change its switch and settings there, then restart the manager.").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 } else {
                     Section {

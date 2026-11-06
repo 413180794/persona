@@ -50,7 +50,7 @@ describe("扩展的文字", () => {
   });
   it("puts the state, version and source on one line", () => {
     expect(stateLine(extension("running", { version: "1.2.0", source: "installed" }))).toBe("启动 · 1.2.0 · 已安装");
-    expect(stateLine(extension("running", { source: "hub.json" }))).toBe("启动 · hub.json");
+    expect(stateLine(extension("running", { source: "hub.json" }))).toBe("启动 · manager.json");
     expect(sourceText("other")).toBeUndefined();
   });
   it("marks required fields without a default, and shows the default as a placeholder", () => {

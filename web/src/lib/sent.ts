@@ -1,6 +1,6 @@
 // Settings › Sent as you (#5278, docs/connectors.md "Sent as the user", docs/protocol.md "Connector API"): the ledger of what
 // Persona wrote in the user's name through the connectors, as GET /api/v1/connectors/sent gives it, newest first.
-// iOS / Mac / Android are separate pages.
+// iOS and the Mac have their own page (apple/Persona/Views/Settings/SentView.swift); Android has none yet.
 //
 // The pure parts (the wire shapes, where a send went, how it was let through, who asked, paging and refreshing the
 // list, the failures in plain words) are plain functions for the tests; the page is settings/SentSettings.tsx.

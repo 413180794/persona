@@ -245,7 +245,7 @@ struct ChannelDetailView: View {
             }
         } footer: {
             if let c = page.channel, c.readOnly, !c.isApp {
-                Text("This channel is set up elsewhere (hub.json or its own page); this page only shows its status.")
+                Text("This channel is set up elsewhere (manager.json or its own page); this page only shows its status.")
             }
         }
     }

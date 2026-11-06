@@ -32,7 +32,7 @@
   "disable_failed": "オフにできませんでした",
   "last_event": "最終受信",
   "credentials": "アプリの認証情報",
-  "credentials_from_config": "現在は hub.json の認証情報を使っています。ここで保存すると、こちらに切り替わります。",
+  "credentials_from_config": "現在は manager.json の認証情報を使っています。ここで保存すると、こちらに切り替わります。",
   "credentials_secret_note": "App Secret はハブに暗号化して保存され、再表示されません。",
   "required": "必須",
   "secret_saved": "保存済み。空欄のままで変更なし",

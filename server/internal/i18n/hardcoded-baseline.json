@@ -75,7 +75,7 @@
   "internal/extension/nodepkg.go": 2,
   "internal/extension/package_fingerprint.go": 2,
   "internal/extension/plan.go": 42,
-  "internal/extension/registry.go": 27,
+  "internal/extension/registry.go": 23,
   "internal/extension/source.go": 22,
   "internal/extension/toolinstall.go": 15,
   "internal/extmgr/bots_chat.go": 1,

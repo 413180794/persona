@@ -350,6 +350,8 @@ extension Theme {
         static let managers = "person.2.circle"
         /// Make a manager the default one (the one Siri, shortcuts and the assistant page go to).
         static let makeDefault = "star.circle"
+        /// What Persona sent in the user's name through the connectors (Settings › Sent as You, docs/connectors.md "Sent as the user").
+        static let sentAsYou = "paperplane.circle"
         /// A hub reached through an SSH tunnel (Settings › hub › SSH Tunnel, docs/network.md「经 SSH 隧道连 hub」).
         static let sshTunnel = "network.badge.shield.half.filled"
         /// A hub reached through the app's own in-app tunnel (docs/network.md「经 App 内隧道连 hub」).
@@ -469,7 +471,17 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video''s, the sidebar's).
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
+        /// Send someone a message.
+        static let message = "bubble.left.fill"
+        static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
+        static let locked = "lock"
+        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
+        static let memory = "brain"
+        /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

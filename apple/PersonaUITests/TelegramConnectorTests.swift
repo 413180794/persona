@@ -30,11 +30,11 @@ final class TelegramConnectorTests: XCTestCase {
         shot(app, "settings")
         row.tap()
 
-        // Off: its switch, not 「登录在 hub 一侧设置」 (the hub does not know yet that it signs in here).
+        // Off: its switch, not 「登录在管理者的配置里设置」 (the hub does not know yet that it signs in here).
         let toggle = app.switches["connector.enabled"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 15), "no switch while off:\n\(app.debugDescription)")
         XCTAssertEqual(toggle.value as? String, "0")
-        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "hub.json")).firstMatch.exists, "says hub.json while off")
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "manager.json")).firstMatch.exists, "says manager.json while off")
         shot(app, "off")
         // The switch itself, at the row's right end (the row's middle is its label).
         (toggle.switches.firstMatch.exists ? toggle.switches.firstMatch : toggle).coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()

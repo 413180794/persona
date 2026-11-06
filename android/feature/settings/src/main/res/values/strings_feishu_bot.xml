@@ -6,7 +6,7 @@
     <string name="settings_feishu_bot_enable">Turn on Lark bot</string>
     <string name="settings_feishu_bot_last_event">Last received</string>
     <string name="settings_feishu_bot_credentials">App credentials</string>
-    <string name="settings_feishu_bot_credentials_from_config">The credentials in hub.json are in use; saving here switches to these.</string>
+    <string name="settings_feishu_bot_credentials_from_config">The credentials in manager.json are in use; saving here switches to these.</string>
     <string name="settings_feishu_bot_credentials_secret_note">The App Secret is stored encrypted on the hub and won\'t be shown again.</string>
     <string name="settings_feishu_bot_required">Required</string>
     <string name="settings_feishu_bot_secret_saved">Saved; leave empty to keep</string>

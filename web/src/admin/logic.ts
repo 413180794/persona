@@ -356,7 +356,7 @@ export function extensionRunNote(p: Pick<AdminExtension, "status">): string {
 }
 
 export function extensionSourceLabel(source?: string): string {
-  return ({ builtin: t("admin-logic.source_builtin"), "hub.json": "hub.json", installed: t("admin-logic.source_installed") } as Record<string, string>)[source ?? ""] ?? source ?? "";
+  return ({ builtin: t("admin-logic.source_builtin"), "hub.json": "manager.json", installed: t("admin-logic.source_installed") } as Record<string, string>)[source ?? ""] ?? source ?? "";
 }
 
 export function pointLabel(point: string): string {

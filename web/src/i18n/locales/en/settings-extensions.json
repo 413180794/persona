@@ -1,6 +1,6 @@
 {
   "redraw": "Redraw",
-  "intro": "Extensions add capabilities to Persona, like new connectors and voice chat. Built-in ones, ones in hub.json and ones installed on the hub machine are all listed here.",
+  "intro": "Extensions add capabilities to Persona, like new connectors and voice chat. Built-in ones, ones in manager.json and ones installed on the hub machine are all listed here.",
   "title": "Extensions",
   "refresh": "Refresh extensions",
   "list_footer": "Extensions are installed, upgraded and removed in the hub's admin page (/admin) or on the hub machine (personad extension). Here you can turn them on or off, change settings and enter secrets.",
@@ -39,7 +39,7 @@
   "unavailable": "Unavailable",
   "detail_error": "Couldn't load this extension: {error}",
   "switch_and_settings": "Switch and settings",
-  "read_only": "This extension is set in hub.json. Turn it on or off and change its settings on the hub machine (hub.json or the admin page), then restart the hub.",
+  "read_only": "This extension is set in its manager's manager.json. Turn it on or off and change its settings there or in the admin page, then restart the manager.",
   "enable_footer": "When turned off, it stops running and the connectors and other things it provides turn off too. Its settings and secrets are kept.",
   "enable": "Enabled",
   "pages_title": "Pages",

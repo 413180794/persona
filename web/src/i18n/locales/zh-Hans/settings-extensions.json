@@ -1,6 +1,6 @@
 {
   "redraw": "重新画",
-  "intro": "扩展给 Persona 加上新的连接器、语音对话等能力：hub 自带的、写在 hub.json 里的和装在 hub 机器上的都列在这里。",
+  "intro": "扩展给 Persona 加上新的连接器、语音对话等能力：hub 自带的、写在 manager.json 里的和装在 hub 机器上的都列在这里。",
   "title": "扩展",
   "refresh": "刷新扩展",
   "list_footer": "扩展在 hub 的管理界面（/admin）或 hub 所在的机器上（personad extension）安装、升级和卸载，这里可以开关、改设置、填密钥。",
@@ -39,7 +39,7 @@
   "unavailable": "读不到",
   "detail_error": "读不到这个扩展：{error}",
   "switch_and_settings": "开关和设置",
-  "read_only": "这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改（hub.json 或管理界面），改完重启 hub。",
+  "read_only": "这个扩展写在它所属管理者的 manager.json 里：开关和设置去 manager.json 或管理界面改，改完重启这个管理者。",
   "enable_footer": "停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。",
   "enable": "启用",
   "pages_title": "页面",

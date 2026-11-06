@@ -717,7 +717,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	case upgrade != "" && upgrade != m.ID:
 		return fail(fmt.Errorf("这个包是 %s，不是 %s", m.ID, upgrade))
 	case upgrade != "" && (cur == nil || cur.Record.Source != SourceInstalled):
-		return fail(fmt.Errorf("没有装过扩展 %s（内置的和 hub.json 里的不能升级）", upgrade))
+		return fail(i18n.Err("extension-status.upgrade_not_installed", i18n.Args{"id": upgrade}))
 	case upgrade != "" && !NewerVersion(m.Version, cur.Record.Version):
 		return fail(fmt.Errorf("%s 不比已装的 %s 新", m.Version, cur.Record.Version))
 	}
@@ -1014,8 +1014,11 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 		unlock()
 		return r.RemoveDev(id)
 	}
+	if old.Record.Source == SourceBuiltin {
+		return i18n.Err("extension-status.builtin_disable_only", i18n.Args{"id": id})
+	}
 	if old.Record.Source != SourceInstalled {
-		return fmt.Errorf("%s 是%s的扩展，只能停用", id, map[string]string{SourceBuiltin: "内置", SourceHubJSON: " hub.json 里"}[old.Record.Source])
+		return i18n.Err("extension-status.config_disable_only", i18n.Args{"id": id})
 	}
 	var trash string
 	err = func() error {

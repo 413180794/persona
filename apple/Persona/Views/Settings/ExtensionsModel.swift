@@ -338,7 +338,7 @@ enum ExtensionText {
     static func source(_ s: String?) -> String? {
         switch s {
         case "builtin": String(localized: "Built-in")
-        case "hub.json": "hub.json"
+        case "hub.json": "manager.json"
         case "installed": String(localized: "Installed [Extension Market Views a8b6c3]")
         default: nil
         }

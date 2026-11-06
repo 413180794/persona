@@ -71,7 +71,7 @@ internal object ExtensionText {
 
     fun source(res: Resources, s: String?): String? = when (s) {
         "builtin" -> res.getString(R.string.settings_ext_source_builtin)
-        "hub.json" -> "hub.json"
+        "hub.json" -> "manager.json"
         "installed" -> res.getString(R.string.settings_ext_source_installed)
         else -> null
     }

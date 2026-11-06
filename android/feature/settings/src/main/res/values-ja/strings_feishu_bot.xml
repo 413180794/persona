@@ -6,7 +6,7 @@
     <string name="settings_feishu_bot_enable">Lark ボットをオン</string>
     <string name="settings_feishu_bot_last_event">最終受信</string>
     <string name="settings_feishu_bot_credentials">アプリの認証情報</string>
-    <string name="settings_feishu_bot_credentials_from_config">現在は hub.json の認証情報を使っています。ここで保存すると、こちらに切り替わります。</string>
+    <string name="settings_feishu_bot_credentials_from_config">現在は manager.json の認証情報を使っています。ここで保存すると、こちらに切り替わります。</string>
     <string name="settings_feishu_bot_credentials_secret_note">App Secret はハブに暗号化して保存され、再表示されません。</string>
     <string name="settings_feishu_bot_required">必須</string>
     <string name="settings_feishu_bot_secret_saved">保存済み。空欄のままで変更なし</string>

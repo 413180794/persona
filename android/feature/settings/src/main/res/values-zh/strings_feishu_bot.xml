@@ -6,7 +6,7 @@
     <string name="settings_feishu_bot_enable">打开飞书机器人</string>
     <string name="settings_feishu_bot_last_event">最近收到</string>
     <string name="settings_feishu_bot_credentials">应用凭证</string>
-    <string name="settings_feishu_bot_credentials_from_config">现在用的是 hub.json 里的凭证；在这里保存会改用这里的。</string>
+    <string name="settings_feishu_bot_credentials_from_config">现在用的是 manager.json 里的凭证；在这里保存会改用这里的。</string>
     <string name="settings_feishu_bot_credentials_secret_note">App Secret 加密存在 hub 上，不会再显示出来。</string>
     <string name="settings_feishu_bot_required">必填</string>
     <string name="settings_feishu_bot_secret_saved">已保存，留空不改</string>

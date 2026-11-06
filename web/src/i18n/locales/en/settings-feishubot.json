@@ -32,7 +32,7 @@
   "disable_failed": "Couldn't turn off",
   "last_event": "Last received",
   "credentials": "App credentials",
-  "credentials_from_config": "The credentials in hub.json are in use; saving here switches to these.",
+  "credentials_from_config": "The credentials in manager.json are in use; saving here switches to these.",
   "credentials_secret_note": "The App Secret is stored encrypted on the hub and won't be shown again.",
   "required": "Required",
   "secret_saved": "Saved; leave empty to keep",

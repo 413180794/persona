@@ -4,7 +4,7 @@
   "installed_version": "{version}インストール済み",
   "upgrade_to": "{version}に更新可能",
   "builtin": "ハブに内蔵",
-  "in_hub_json": "hub.jsonで設定",
+  "in_hub_json": "manager.jsonで設定",
   "cant_install": "インストール不可",
   "not_installed": "未インストール",
   "extensions_count_other": "拡張機能{count}個",

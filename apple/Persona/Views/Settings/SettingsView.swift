@@ -123,6 +123,20 @@ struct SettingsView: View {
 
                 ConnectorsSection()
 
+                // What Persona sent in the user's name through the connectors (#5278, docs/connectors.md "Sent as the user").
+                if !model.isDemo {
+                    Section {
+                        Group {
+                            NavigationLink(value: SettingsPage.sent) {
+                                SettingsRow(title: String(localized: "Sent as You"), symbol: Theme.Icon.sentAsYou, tint: Theme.Hue.orange)
+                            }
+                            .settingsListRow(SettingsPage.sent)
+                            .accessibilityIdentifier("settings.sent")
+                        }
+                        .bareListRow()
+                    }
+                }
+
                 // Extensions (docs/extensions.md): only with a hub that has the plugin base.
                 if model.hubFeatures.hasExtensionFeature("manager") {
                     Section {
@@ -261,6 +275,7 @@ struct SettingsView: View {
             // memoryEdit|about`, `-openStorage YES` (Storage), `-openNotificationSettings YES` (Notifications), `-openMachines YES` (Machines;
             // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (Devices), `-openHubUpdate YES` (hub),
             // `-openManagers YES` (Managers; `-openManagerPage <id>` one of them, `-showManagerCode YES` a new one's install code),
+            // `-openSentAsYou YES` (Sent as You),
             // `-openSkills YES` (Skills), `-openExtensions YES` (Extensions; `-openExtension <id>` one of them; the old `-openPlugin…` names too), `-openChannels YES`
             // (Channels; `-openChannel <id>` one of them).
             .onAppear(perform: openDebugPage)
@@ -334,6 +349,7 @@ struct SettingsView: View {
             p.append(SettingsPage.managers)
             if let id = d.string(forKey: "openManagerPage") { p.append(SettingsPage.manager(id)) }
         }
+        else if d.bool(forKey: "openSentAsYou") { p.append(SettingsPage.sent) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
         else if flag("openExtensions") || str("openExtension") != nil { // Settings › Extensions (› one (› a page of it))
             p.append(SettingsPage.plugins)
@@ -459,6 +475,8 @@ enum SettingsPage: Hashable {
     /// Settings › Managers, and one manager by its id (docs/managers.md).
     case managers
     case manager(String)
+    /// Settings › Sent as You: what Persona sent in the user's name through the connectors (docs/connectors.md "Sent as the user").
+    case sent
 
 }
 
@@ -511,6 +529,7 @@ private struct SettingsDestinations: ViewModifier {
         case .inAppTunnel(let id): HubInAppTunnelPage(hubID: id)
         case .managers: ManagersView()
         case .manager(let id): ManagerDetailView(id: id)
+        case .sent: SentView()
         case .hub: HubSettingsPage()
         case .skills: SkillsPage()
         case .plugins: ExtensionsView()

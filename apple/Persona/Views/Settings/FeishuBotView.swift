@@ -116,7 +116,7 @@ struct FeishuBotView: View {
             Text("App Credentials")
         } footer: {
             if model.status?.fromConfig == true {
-                Text("Currently using the credentials in hub.json. Saving here switches to these.")
+                Text("Currently using the credentials in manager.json. Saving here switches to these.")
             } else {
                 Text("The App Secret is stored encrypted on the hub and won't be shown again.")
             }

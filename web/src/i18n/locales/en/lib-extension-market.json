@@ -4,7 +4,7 @@
   "installed_version": "Installed {version}",
   "upgrade_to": "Upgrade to {version}",
   "builtin": "Built into the hub",
-  "in_hub_json": "Set in hub.json",
+  "in_hub_json": "Set in manager.json",
   "cant_install": "Can't install",
   "not_installed": "Not installed",
   "extensions_count_other": "{count} extensions",

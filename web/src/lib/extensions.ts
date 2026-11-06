@@ -280,7 +280,7 @@ export function extensionTone(p?: HubExtension | null): "red" | "orange" | "gree
 }
 
 export function sourceText(s?: string): string | undefined {
-  return s === "builtin" ? t("lib-extensions.source_builtin") : s === "hub.json" ? "hub.json" : s === "installed" ? t("lib-extensions.source_installed") : undefined;
+  return s === "builtin" ? t("lib-extensions.source_builtin") : s === "hub.json" ? "manager.json" : s === "installed" ? t("lib-extensions.source_installed") : undefined;
 }
 
 export function pointText(name: string): string {

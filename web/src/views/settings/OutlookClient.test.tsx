@@ -91,7 +91,7 @@ describe("Outlook 的 client ID", () => {
     fetcher.mockResolvedValueOnce(ok({ configured: true, client_id: ID, source: "config", redirect_uri: redirect }));
     act(() => root.render(<OutlookClient />));
     await flush();
-    expect(host.textContent).toContain("来自 hub.json");
+    expect(host.textContent).toContain("来自 manager.json");
     act(() => button("更换 client ID")!.click());
     expect(host.querySelector<HTMLInputElement>("input")!.value).toBe(ID);
     act(() => button("不换了")!.click());

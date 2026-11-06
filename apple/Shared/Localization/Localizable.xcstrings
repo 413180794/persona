@@ -32590,24 +32590,24 @@
       },
       "extractionState": "manual"
     },
-    "Currently using the credentials in hub.json. Saving here switches to these.": {
+    "Currently using the credentials in manager.json. Saving here switches to these.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Currently using the credentials in hub.json. Saving here switches to these."
+            "value": "Currently using the credentials in manager.json. Saving here switches to these."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "現在はhub.jsonの認証情報を使用しています。ここで保存すると、こちらに切り替わります。"
+            "value": "現在はmanager.jsonの認証情報を使用しています。ここで保存すると、こちらに切り替わります。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "现在用的是 hub.json 里的凭证；在这里保存会改用这里的。"
+            "value": "现在用的是 manager.json 里的凭证；在这里保存会改用这里的。"
           }
         }
       },
@@ -87655,24 +87655,24 @@
       },
       "extractionState": "manual"
     },
-    "Sign-in is set up on the hub (hub.json, see docs/config.md); this page only shows the status.": {
+    "Sign-in is set up in the manager's configuration (manager.json, see docs/config.md); this page only shows the status.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign-in is set up on the hub (hub.json, see docs/config.md); this page only shows the status."
+            "value": "Sign-in is set up in the manager's configuration (manager.json, see docs/config.md); this page only shows the status."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ログインはハブ側（hub.json、docs/config.mdを参照）で設定します。ここでは状態のみ表示します。"
+            "value": "ログインはマネージャーの設定（manager.json、docs/config.mdを参照）で設定します。ここでは状態のみ表示します。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。"
+            "value": "登录在管理者的配置里设置（manager.json，见 docs/config.md），这里只看状态。"
           }
         }
       },
@@ -96787,24 +96787,24 @@
       },
       "extractionState": "manual"
     },
-    "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in hub.json (docs/feishu.md).": {
+    "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/feishu.md).": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in hub.json (docs/feishu.md)."
+            "value": "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/feishu.md)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ハブはまだLarkに接続されていません。ハブのマシンでLarkゲートウェイを実行し、hub.jsonのlarkに設定してください（docs/feishu.md）。"
+            "value": "ハブはまだLarkに接続されていません。ハブのマシンでLarkゲートウェイを実行し、マネージャーのmanager.jsonのlarkに設定してください（docs/feishu.md）。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在 hub.json 的 lark 里填上它（docs/feishu.md）。"
+            "value": "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在管理者的 manager.json 的 lark 里填上它（docs/feishu.md）。"
           }
         }
       },
@@ -100431,24 +100431,24 @@
       },
       "extractionState": "manual"
     },
-    "This channel is set up elsewhere (hub.json or its own page); this page only shows its status.": {
+    "This channel is set up elsewhere (manager.json or its own page); this page only shows its status.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This channel is set up elsewhere (hub.json or its own page); this page only shows its status."
+            "value": "This channel is set up elsewhere (manager.json or its own page); this page only shows its status."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このチャネルは別の場所（hub.jsonまたは専用ページ）で設定します。ここでは状態のみ表示します。"
+            "value": "このチャネルは別の場所（manager.jsonまたは専用ページ）で設定します。ここでは状態のみ表示します。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个渠道在别处设置（hub.json 或它自己的页面），这里只看状态。"
+            "value": "这个渠道在别处设置（manager.json 或它自己的页面），这里只看状态。"
           }
         }
       },
@@ -101466,24 +101466,24 @@
       },
       "extractionState": "manual"
     },
-    "This extension is set in hub.json; change its switch and settings on the hub machine.": {
+    "This extension is set in its manager's manager.json; change its switch and settings there, then restart the manager.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This extension is set in hub.json; change its switch and settings on the hub machine."
+            "value": "This extension is set in its manager's manager.json; change its switch and settings there, then restart the manager."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この拡張機能はhub.jsonに書かれています。オン/オフや設定はハブのマシンで変更してください。"
+            "value": "この拡張機能はマネージャーのmanager.jsonに書かれています。オン/オフや設定はそこで変更し、変更後にマネージャーを再起動してください。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改。"
+            "value": "这个扩展写在它所属管理者的 manager.json 里：开关和设置去那里改，改完重启这个管理者。"
           }
         }
       },
@@ -124651,6 +124651,886 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld 天"
+          }
+        }
+      }
+    },
+    "Sent as You": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent as You"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなたの名前で送信"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以你的名义发出"
+          }
+        }
+      }
+    },
+    "What Persona sent in your name through your connectors, newest first. Select a row for the full text.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What Persona sent in your name through your connectors, newest first. Select a row for the full text."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona があなたの名前でコネクタ経由で送ったものを、新しい順に表示します。行を選ぶと全文を表示します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 通过连接器以你的名义发出的内容，新的在前。点一行看全文。"
+          }
+        }
+      }
+    },
+    "Filter by connector": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter by connector"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コネクタで絞り込む"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按连接器筛选"
+          }
+        }
+      }
+    },
+    "No sends recorded yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No sends recorded yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなたの名前での送信は、まだ記録されていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有记录到以你名义发出的内容"
+          }
+        }
+      }
+    },
+    "Recorded: what Persona sends in your name through a connector (mail, GitHub comments, Lark writes), and sends an extension reports itself.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded: what Persona sends in your name through a connector (mail, GitHub comments, Lark writes), and sends an extension reports itself."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録されるもの：Persona がコネクタ経由であなたの名前で送ったもの（メール、GitHub のコメント、Lark への書き込み）と、拡張機能が自分で報告した送信。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会记：Persona 经连接器以你的名义发出的（邮件、GitHub 评论、飞书写入），以及扩展自己报上来的发送。"
+          }
+        }
+      }
+    },
+    "Not recorded: what you send yourself in the app, writes that were refused, declined or failed, and anything lark-cli writes.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not recorded: what you send yourself in the app, writes that were refused, declined or failed, and anything lark-cli writes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録されないもの：アプリであなた自身が送ったもの、拒否・却下・失敗した書き込み、lark-cli による書き込み。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不会记：你自己在 App 里发的、被拒绝或没批准的、发送失败的，以及 lark-cli 做的写入。"
+          }
+        }
+      }
+    },
+    "Records are kept for 90 days by default.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Records are kept for 90 days by default."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録は初期設定で 90 日間保存されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录默认保留 90 天。"
+          }
+        }
+      }
+    },
+    "Nothing recorded for %@ yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing recorded for %@ yet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ の記録はまだありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 还没有记录"
+          }
+        }
+      }
+    },
+    "Show All [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show All"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示全部"
+          }
+        }
+      }
+    },
+    "This hub runs without a database, so what was sent as you isn't recorded.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This hub runs without a database, so what was sent as you isn't recorded."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このハブにはデータベースがないため、あなたの名前で送信した内容は記録されません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 hub 没有数据库，所以不记录以你的名义发出的内容。"
+          }
+        }
+      }
+    },
+    "Only a device with full access can read this list. Open Persona on one of your own devices that has it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only a device with full access can read this list. Open Persona on one of your own devices that has it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このリストを読めるのはフルアクセスのデバイスだけです。フルアクセスのあるご自身のデバイスで開いてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有拥有完整权限的设备才能看这个列表。请换一台有完整权限的自己的设备打开。"
+          }
+        }
+      }
+    },
+    "This hub's version doesn't record what was sent as you yet. Update the hub and come back.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This hub's version doesn't record what was sent as you yet. Update the hub and come back."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このハブのバージョンは、あなたの名前で送信した内容をまだ記録しません。ハブを更新してからもう一度開いてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 hub 的版本还不记录以你的名义发出的内容。升级 hub 后再来。"
+          }
+        }
+      }
+    },
+    "No text recorded": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No text recorded"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文は記録されていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有记下正文"
+          }
+        }
+      }
+    },
+    "By a rule": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By a rule"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ルールで許可"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按规则"
+          }
+        }
+      }
+    },
+    "Always allowed in this chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always allowed in this chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットでは常に許可"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本对话始终允许"
+          }
+        }
+      }
+    },
+    "Confirmed by you on a card": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmed by you on a card"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認カードであなたが許可"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在确认卡片上同意"
+          }
+        }
+      }
+    },
+    "Answered by %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answered by %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ が代理で回答"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 %@ 代答"
+          }
+        }
+      }
+    },
+    "Answered by the assistant": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answered by the assistant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アシスタントが代理で回答"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "助手代答"
+          }
+        }
+      }
+    },
+    "Sent by the extension itself": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent by the extension itself"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能が自分で送信"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展自行发送"
+          }
+        }
+      }
+    },
+    "Sent by the extension itself · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent by the extension itself · %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能が自分で送信 · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展自行发送 · %@"
+          }
+        }
+      }
+    },
+    "A gate rule allowed it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A gate rule allowed it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ゲートのルールが許可しました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一条网关规则放行了它。"
+          }
+        }
+      }
+    },
+    "You chose “Always allow” for this in the chat, so no card was shown.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You chose “Always allow” for this in the chat, so no card was shown."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットで「常に許可」を選んだため、確認カードは表示されませんでした。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在这个对话里点过「总是允许」，所以没有弹确认卡片。"
+          }
+        }
+      }
+    },
+    "You were asked on a confirmation card and allowed it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You were asked on a confirmation card and allowed it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認カードが表示され、あなたが許可しました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹出了确认卡片，你点了允许。"
+          }
+        }
+      }
+    },
+    "The card was answered by %@.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The card was answered by %@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認カードには %@ が回答しました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认卡片由 %@ 作答。"
+          }
+        }
+      }
+    },
+    "The assistant answered the card on your behalf.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The assistant answered the card on your behalf."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認カードにはアシスタントがあなたの代わりに回答しました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认卡片是助手替你答的。"
+          }
+        }
+      }
+    },
+    "The extension sent it on its own: no rule and no card.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The extension sent it on its own: no rule and no card."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能が自分で送信しました。ルールも確認カードも使っていません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展自己发的：既没有规则，也没有确认卡片。"
+          }
+        }
+      }
+    },
+    "The extension sent it on its own, allowed by its setting %@: no rule and no card.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The extension sent it on its own, allowed by its setting %@: no rule and no card."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能が自分の設定 %@ に基づいて送信しました。ルールも確認カードも使っていません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展自己发的，凭它的设置 %@ 放行：既没有规则，也没有确认卡片。"
+          }
+        }
+      }
+    },
+    "Extension-reported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension-reported"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能の自己申告"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展自述"
+          }
+        }
+      }
+    },
+    "No Chat [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットなし"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无对话"
+          }
+        }
+      }
+    },
+    "Open Chat: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Chat: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットを開く：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开对话：%@"
+          }
+        }
+      }
+    },
+    "Sent [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信日時"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送时间"
+          }
+        }
+      }
+    },
+    "Action [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Action"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动作"
+          }
+        }
+      }
+    },
+    "Allowed [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "許可方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放行方式"
+          }
+        }
+      }
+    },
+    "Card [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片"
+          }
+        }
+      }
+    },
+    "Extension [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展"
+          }
+        }
+      }
+    },
+    "Message ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message ID"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージ ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息 ID"
+          }
+        }
+      }
+    },
+    "Sent To": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent To"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信先"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发往"
+          }
+        }
+      }
+    },
+    "Text [Sent as You]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正文"
+          }
+        }
+      }
+    },
+    "Copy Text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文をコピー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制正文"
+          }
+        }
+      }
+    },
+    "The text is cut at %@ characters here. The message itself may be longer.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text is cut at %@ characters here. The message itself may be longer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここでは本文を %@ 文字で切り詰めています。実際のメッセージはもっと長い場合があります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里的正文在 %@ 个字处被截断，实际发出的可能更长。"
           }
         }
       }
