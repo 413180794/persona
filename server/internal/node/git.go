@@ -3,6 +3,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -89,9 +90,36 @@ func gitTimed(ctx context.Context, dir string, timeout time.Duration, args ...st
 		if msg == "" {
 			msg = err.Error()
 		}
-		return out.String(), fmt.Errorf("git %s: %s", args[0], msg)
+		return out.String(), fmt.Errorf("git %s: %s", gitSubcommand(args), msg)
 	}
 	return out.String(), nil
+}
+
+// gitSubcommand is the command args run (after git's own options), for errors.
+func gitSubcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "-c" || a == "-C":
+			i++ // and its value
+		case !strings.HasPrefix(a, "-"):
+			return a
+		}
+	}
+	return ""
+}
+
+// guardRepoPath refuses a path in the repository at root (relative to it, as git/status gives it) that file.read
+// would refuse: a key, a credentials folder, the data folder's secrets, iCloud Drive, through any link on the way. A
+// path that is not there is not refused for that (a deleted file's diff, an older version).
+func (n *Node) guardRepoPath(root, path string) error {
+	p := path
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(root, p)
+	}
+	if _, err := n.realPath(filepath.Clean(p)); errors.Is(err, errOffLimits) || errors.Is(err, errICloud) {
+		return err
+	}
+	return nil
 }
 
 func (n *Node) gitDir(cwd string) (string, error) {
@@ -290,13 +318,33 @@ func (n *Node) gitDiff(ctx context.Context, cwd, path string, staged bool) (map[
 		return nil, fmt.Errorf("not a git repository")
 	}
 	root = strings.TrimSpace(root)
+	// The diff of an untracked file is the whole file: the path is guarded as file.read guards it, and taken as one
+	// file, not a pattern (a "*" would diff every changed file, the guarded ones too).
+	if err := n.guardRepoPath(root, path); err != nil {
+		return nil, err
+	}
+	// A folder ("." or "code") is a pathspec for every changed file under it: each of those is guarded too.
+	names := []string{"--literal-pathspecs", "diff", "--name-only", "-z"}
+	if staged {
+		names = append(names, "--cached")
+	}
+	if o, err := git(ctx, root, append(names, "--", path)...); err == nil {
+		for _, name := range strings.Split(o, "\x00") {
+			if name == "" {
+				continue
+			}
+			if err := n.guardRepoPath(root, name); err != nil {
+				return nil, err
+			}
+		}
+	}
 	var out string
 	if staged {
-		out, err = git(ctx, root, "diff", "--cached", "--no-color", "--", path)
+		out, err = git(ctx, root, "--literal-pathspecs", "diff", "--cached", "--no-color", "--", path)
 	} else {
-		out, err = git(ctx, root, "diff", "--no-color", "--", path)
+		out, err = git(ctx, root, "--literal-pathspecs", "diff", "--no-color", "--", path)
 		if err == nil && strings.TrimSpace(out) == "" {
-			if o, _ := git(ctx, root, "ls-files", "--others", "--exclude-standard", "--", path); strings.TrimSpace(o) != "" {
+			if o, _ := git(ctx, root, "--literal-pathspecs", "ls-files", "--others", "--exclude-standard", "--", path); strings.TrimSpace(o) != "" {
 				// --no-index exits 1 when files differ; the output is still the diff.
 				out, _ = git(ctx, root, "diff", "--no-color", "--no-index", "--", "/dev/null", path)
 				err = nil

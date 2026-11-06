@@ -39,6 +39,9 @@ func (n *Node) gitBlob(ctx context.Context, p proto.GitBlobRequest) (*proto.GitB
 		return nil, fmt.Errorf("not a git repository")
 	}
 	root = strings.TrimSpace(root)
+	if err := n.guardRepoPath(root, path); err != nil { // its versions are the file's content
+		return nil, err
+	}
 	spec := p.Rev + ":" + path
 	if p.Rev == "INDEX" {
 		spec = ":" + path // stage 0
