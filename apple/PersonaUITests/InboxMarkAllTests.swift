@@ -52,7 +52,9 @@ final class InboxMarkAllTests: XCTestCase {
         more.tap()
         let cleanUp = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", entry)).firstMatch
         XCTAssertTrue(cleanUp.waitForExistence(timeout: 5), "no \(entry) in 更多:\n\(app.debugDescription)")
-        XCTAssertTrue(text("飞书 · \(feishuOpen.count) 件").exists, "the entry does not say what it covers:\n\(app.debugDescription)")
+        // The subtitle under the name is drawn, not read out; the item's spoken name says it.
+        let says = app.buttons["inbox.cleanUpAll"].firstMatch.label
+        XCTAssertTrue(says.contains("飞书 · \(feishuOpen.count) 件"), "the entry does not say what it covers: \(says)\n\(app.debugDescription)")
         sleep(1)
         shot(shotName + " menu")
         cleanUp.tap()

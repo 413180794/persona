@@ -182,6 +182,8 @@ struct InboxPage: View {
             Text(InboxBulk.scopeLine(filters: filterNames, query: query, count: scope.count))
         }
         .disabled(scope.isEmpty)
+        // A menu item's subtitle is drawn but not read out: the spoken name says what it covers and how many too.
+        .accessibilityLabel(Text("全部清理") + Text(verbatim: "，") + Text(InboxBulk.scopeLine(filters: filterNames, query: query, count: scope.count)))
         .accessibilityIdentifier("inbox.cleanUpAll")
     }
 
