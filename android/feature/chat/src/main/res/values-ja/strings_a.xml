@@ -321,6 +321,7 @@
     <string name="chat_tasks_message_blank">下書きに未入力の「%1$s」があります。修正するか削除してから送信してください</string>
     <string name="chat_tasks_send">送信</string>
     <string name="chat_tasks_later">後で</string>
+    <string name="chat_tasks_message_filed">この件は対応済みのため、返信は送信していません。</string>
     <string name="chat_tasks_dock_waiting">%1$s・要対応</string>
     <string name="chat_tasks_dock_interrupted">%1$s・中断</string>
     <string name="chat_tasks_route_chip">「%1$s」へ ×</string>

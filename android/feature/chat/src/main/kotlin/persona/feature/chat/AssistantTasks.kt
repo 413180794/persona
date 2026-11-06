@@ -580,7 +580,9 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
     var draft by remember(item.id) { mutableStateOf(item.field("draft").orEmpty()) }
     val sent = item.sent
     val done = sent != null
-    val blank = if (done) null else draftPlaceholder(draft)
+    // Dealt with elsewhere and not sent from here (#4797): nothing left to send, so no send / later and no blank warning.
+    val filed = item.filedAt != null
+    val blank = if (!item.canSend) null else draftPlaceholder(draft)
     val todo = todos.firstOrNull { it.id == item.field("todo_id") }
     JCard {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -611,7 +613,8 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
             }
             if (blank != null) Text(stringResource(R.string.chat_tasks_message_blank, blank), style = PersonaTheme.type.caption,
                 color = PersonaTheme.palette.danger.text)
-            if (!done) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            if (filed) Text(stringResource(R.string.chat_tasks_message_filed), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            else if (item.canSend) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                 JButton(stringResource(R.string.chat_tasks_send), { host.tasks.sendMessage(item, draft, host.onError) }, Modifier.weight(1f), size = JButtonSize.Medium,
                     enabled = blank == null && draft.isNotBlank(), loading = item.id in busy)
                 JButton(stringResource(R.string.chat_tasks_later), { host.tasks.putOff(itemId) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium)

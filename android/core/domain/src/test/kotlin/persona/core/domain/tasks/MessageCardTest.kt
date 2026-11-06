@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -36,6 +37,20 @@ class MessageCardTest {
         assertNull(card().sent)
         assertEquals("修好了", (card(extra = mapOf("sent_at" to "2026-11-04T10:23:00Z", "sent" to "修好了")).sent?.text).zhAny())
         assertEquals("在修了", (card(extra = mapOf("sent_at" to "2026-11-04T10:23:00Z")).sent?.text).zhAny()) // from before the record
+    }
+
+    @Test fun aCardFiledElsewhereOffersNoSend() {
+        // Without filed_at (a hub from before #4797) the card stays as it was: send offered until sent.
+        assertNull(card().filedAt)
+        assertTrue(card().canSend)
+        val filed = card(extra = mapOf("filed_at" to "2026-11-04T10:30:00Z"))
+        assertEquals("2026-11-04T10:30:00Z", filed.filedAt)
+        assertFalse(filed.canSend)
+        // A sent card never counts as filed: it shows what went out.
+        val sent = card(extra = mapOf("sent_at" to "2026-11-04T10:23:00Z", "filed_at" to "2026-11-04T10:30:00Z"))
+        assertNull(sent.filedAt)
+        assertFalse(sent.canSend)
+        assertTrue(card(extra = mapOf("filed_at" to "")).canSend)
     }
 
     @Test fun aCardSentElsewhereTakesItsNewBody() {

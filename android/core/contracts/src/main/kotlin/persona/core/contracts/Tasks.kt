@@ -78,6 +78,15 @@ data class FeedItem(
     val sent: SentReply? get() = field("sent_at")?.let { SentReply(it, field("sent")?.takeIf(String::isNotEmpty) ?: field("draft").orEmpty()) }
 
     /**
+     * `message`: the thing the card is about was dealt with elsewhere and nothing went out from this card (#4797):
+     * when the hub saw it filed. Never set on a sent card; gone again once the item is back in the inbox.
+     */
+    val filedAt: String? get() = if (sent != null) null else field("filed_at")?.takeIf(String::isNotEmpty)
+
+    /** `message`: the card still offers its draft to send (neither sent nor filed elsewhere). */
+    val canSend: Boolean get() = sent == null && filedAt == null
+
+    /**
      * `answered`: every question of the card with the user's answer in full, newlines kept (#1231). A record from
      * before it has only its line (question, answer), which stands in; empty when there is nothing to show.
      */

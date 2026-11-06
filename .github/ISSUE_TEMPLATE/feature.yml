@@ -1,0 +1,41 @@
+name: Feature request
+description: A new capability or an improvement to an existing one
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Write in any language.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who needs this, in what situation, and why the current behavior falls short.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: checkboxes
+    id: surfaces
+    attributes:
+      label: Affected surfaces
+      options:
+        - label: iOS / iPadOS
+        - label: macOS
+        - label: Android
+        - label: Web
+        - label: Hub / server
+        - label: CLI / daemon
+        - label: SDK / extensions
+        - label: Docs
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true

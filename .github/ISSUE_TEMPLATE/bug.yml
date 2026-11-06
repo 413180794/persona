@@ -1,0 +1,57 @@
+name: Bug report
+description: Something behaves differently from the docs or from what you expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in any language. Redact tokens, hub addresses, emails and chat content before pasting logs or screenshots.
+        TestFlight feedback: also add the `testflight` label (see docs/collaboration.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - iOS / iPadOS
+        - macOS
+        - Android
+        - Web
+        - Hub / server
+        - CLI / daemon
+        - SDK / extensions
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: App version, OS version and device, or the commit you run.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Redacted logs, crash stack (symbols only) or screenshots.
+      render: text

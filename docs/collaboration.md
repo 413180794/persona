@@ -112,6 +112,8 @@ EOF
 
 需求加 `enhancement`，fix 加 `bug`，文档加 `documentation`。命令最后打印 issue 链接，末尾的数字就是号。
 
+在网页上新建 issue 时可以选 `Bug report` 或 `Feature request` 表单（`.github/ISSUE_TEMPLATE/`），会自动带上 `bug` / `enhancement` 标签；字段名是英文，正文用中文写。也可以照常选空白 issue 或用上面的命令。
+
 #### TestFlight 反馈
 
 来自 TestFlight 的反馈（App Store Connect 里的崩溃报告、测试员的文字 / 截图反馈）建 issue 时要能按来源筛出来：
