@@ -3,6 +3,7 @@ package extmgr
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,6 +45,7 @@ type sandboxSettings struct {
 // extensionSandboxes is the hub's side: the choices, the proxy.
 type extensionSandboxes struct {
 	mu       sync.Mutex
+	save     sync.Mutex // one write of the settings at a time, of the newest (saveSandboxes)
 	settings sandboxSettings
 	proxy    *egress.Proxy
 	proxyErr error
@@ -244,13 +246,25 @@ func (ps *extensions) forgetSandbox(ctx context.Context, id string) {
 	if ok {
 		delete(sb.settings.On, id)
 	}
-	settings := sb.settings
 	sb.mu.Unlock()
 	if ok && ps.h != nil && ps.h.store != nil {
-		if err := ps.h.store.PutSetting(ctx, extensionSandboxKey, settings); err != nil {
+		if err := ps.saveSandboxes(ctx); err != nil {
 			ps.logf("extensions: sandbox settings: %v", err)
 		}
 	}
+}
+
+// saveSandboxes writes the owner's choices as they are now. The copy is taken after the previous write, under the
+// lock: it has every choice so far, and its map is not the one the next choice writes to while it is encoded.
+func (ps *extensions) saveSandboxes(ctx context.Context) error {
+	sb := &ps.sandboxes
+	sb.save.Lock()
+	defer sb.save.Unlock()
+	sb.mu.Lock()
+	settings := sb.settings
+	settings.On = maps.Clone(settings.On)
+	sb.mu.Unlock()
+	return ps.h.store.PutSetting(ctx, extensionSandboxKey, settings)
 }
 
 // setSandbox records the owner's choice (nil: back to the default) and restarts it.
@@ -272,9 +286,8 @@ func (ps *extensions) setSandbox(ctx context.Context, p *extension.Extension, on
 		sb.settings.On[p.Record.ID] = *on
 	}
 	sb.settings.Seeded = true
-	settings := sb.settings
 	sb.mu.Unlock()
-	if err := ps.h.store.PutSetting(ctx, extensionSandboxKey, settings); err != nil {
+	if err := ps.saveSandboxes(ctx); err != nil {
 		return err
 	}
 	st := ps.sandboxOf(ctx, p)

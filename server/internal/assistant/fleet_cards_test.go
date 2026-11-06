@@ -1233,18 +1233,39 @@ func TestCodexCardAnsweredOnThePhoneAskedAgainIsAnnounced(t *testing.T) {
 	if err := s.resolve("cxa_1", proto.Resolution{Allow: &yes}); err != nil {
 		t.Fatal(err)
 	}
-	listCodex(s, a) // the screen still shows it for a moment
-	if got := ft.pushesOf(assistantwire.NotifyInput, 2, 200*time.Millisecond); len(got) != 1 {
-		t.Fatalf("listed again at once: pushed %d times", len(got))
-	}
-	if err := s.resolve("cxa_1", proto.Resolution{Allow: &yes}); err != nil {
-		t.Fatal(err)
-	}
 	listCodex(s)
 	time.Sleep(2 * codexAskedAgain)
 	listCodex(s, a)
 	if got := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(got) != 2 {
 		t.Fatalf("asked again later: pushed %d times", len(got))
+	}
+}
+
+// An approval answered on the phone and asked again at once rings at once (#4585): the node lists it again only after
+// it saw the dialog leave the screen. A question card answered and listed again at once (its rollout lagging the
+// answer) stays quiet for codexAskedAgain.
+func TestCodexApprovalAskedAgainAtOnceIsAnnounced(t *testing.T) {
+	ft, _ := newCardFleet(t, false)
+	s := ft.s
+	a := proto.Interaction{ID: "cxa_1", SessionID: "s2", Kind: proto.IxPermission, Agent: "codex", Summary: "npm test",
+		ExpiresAt: time.Now().Add(time.Hour)}
+	q := proto.Interaction{ID: "cxq_1", SessionID: "s3", Kind: proto.IxQuestion, Agent: "codex", ExpiresAt: time.Now().Add(time.Hour),
+		Questions: []proto.Question{{Question: "Which?", Options: []proto.QuestionOption{{Label: "A"}}}}}
+	yes := true
+	listCodex(s, a, q)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(got) != 2 {
+		t.Fatalf("first: pushed %d times", len(got))
+	}
+	if err := s.resolve("cxa_1", proto.Resolution{Allow: &yes}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.resolve("cxq_1", proto.Resolution{Answers: map[string]string{"Which?": "A"}}); err != nil {
+		t.Fatal(err)
+	}
+	listCodex(s, a, q) // within a second: the approval asked again, the question's rollout lagging
+	got := ft.pushesOf(assistantwire.NotifyInput, 4, 300*time.Millisecond)
+	if len(got) != 3 {
+		t.Fatalf("pushed %d times, want the approval again and not the question", len(got))
 	}
 }
 

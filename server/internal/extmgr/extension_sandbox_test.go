@@ -489,3 +489,37 @@ func TestExtensionSandboxMissing(t *testing.T) {
 		t.Fatalf("view %+v", v)
 	}
 }
+
+// Choices set and forgotten from several goroutines at once: each saves a copy made under the lock (go test -race),
+// and the choices saved last are the ones in memory.
+func TestExtensionSandboxConcurrentChoices(t *testing.T) {
+	h, store := extensionTestHub(t)
+	ps := h.extensions
+	ctx := context.Background()
+	on := true
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Go(func() {
+			for j := range 20 {
+				id := fmt.Sprintf("x%d-%d", i, j)
+				p := &extension.Extension{Record: extension.Record{ID: id, Source: extension.SourceInstalled, Origin: "dir:/x"},
+					Manifest: &extension.Manifest{ID: id, Runtime: &extension.Runtime{}}}
+				// Not in the registry: setSandbox's restart forgets the choice again (forgetSandbox).
+				if err := ps.setSandbox(ctx, p, &on, "test"); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	var saved sandboxSettings
+	if _, err := store.Setting(ctx, extensionSandboxKey, &saved); err != nil {
+		t.Fatal(err)
+	}
+	ps.sandboxes.mu.Lock()
+	want, _ := json.Marshal(ps.sandboxes.settings)
+	ps.sandboxes.mu.Unlock()
+	if got, _ := json.Marshal(saved); string(got) != string(want) {
+		t.Fatalf("saved %s\nwant %s", got, want)
+	}
+}

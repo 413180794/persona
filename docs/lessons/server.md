@@ -553,6 +553,11 @@ Interaction queues now live in the manager (`server/internal/assistant`, moved f
 #2645 added `rpc.Peer` cancellation, calling `cancel()` on each request ctx when its handler returns. `session.watch`'s transcript loop used `WithCancel(ctx)`, so watch was canceled immediately after replying: hub subscribed and node returned ok, but no later `session.items` arrived; pages saw only `sessions_delta` and needed refresh for content—main sessions and sub-Agents alike (users noticed sub-Agents first). Unit tests stayed green because they called `n.watch(...)` directly with `context.Background()`, bypassing `rpc.Peer`.
 Work continuing after reply (watches, streams) uses `rpc.ConnContext(ctx)`. Test watches through a real `rpc.Peer` pair (`servedNode` in `node/subagent_watch_test.go`), not bypassing requests. Check other request-ctx goroutines similarly (terminal/full-interface streams already used `context.Background()`).
 
+## A struct copied by value for a settings write still shares its maps (2026-11-05, #3344)
+
+- `s := u.settings`, unlock, then `PutSetting(ctx, key, s)`: the struct is copied, but its maps and slices are still the live ones. While the encoder reads them, another goroutine writing the same map under the lock is a `-race` report, and at run time `fatal error: concurrent map read and map write` takes the hub down (`recover` cannot catch it). Take the snapshot to be written with `maps.Clone` / `slices.Clone` while holding the lock (`extensionUpgradeSettings.clone`, `saveSandboxes`, `saveMachineIDs`).
+- Writing after unlocking also leaves the order of the writes open: an older snapshot can land after a newer one, and a restart reads the old value back. Give each key a lock that only guards its write, and take the snapshot after acquiring it, so the last write always carries the newest state.
+
 ## In-place exec loses systemd sockets (2026-11-05, blue-green switching)
 
 Hub startup takes sockets from `LISTEN_FDS`, then clears the environment. `net.FileListener` duplicates fds with close-on-exec, and original fds are closed.

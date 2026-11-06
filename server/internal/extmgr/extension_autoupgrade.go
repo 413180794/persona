@@ -3,6 +3,7 @@ package extmgr
 import (
 	"context"
 	"errors"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"slices"
@@ -81,6 +82,7 @@ type extensionUpgrades struct {
 	run sync.Mutex // one look at a time
 
 	mu       sync.Mutex
+	save     sync.Mutex // one write of the settings at a time, of the newest (change)
 	loaded   bool
 	settings extensionUpgradeSettings
 	waiting  map[string]string // plugin → why it waits (the last look found it busy)
@@ -181,12 +183,24 @@ func (u *extensionUpgrades) change(ctx context.Context, f func(s *extensionUpgra
 	u.load(ctx)
 	u.mu.Lock()
 	f(&u.settings)
-	s := u.settings
 	u.mu.Unlock()
 	if u.h.store == nil {
 		return nil
 	}
+	// The copy is taken after the previous write, under the lock: it has every change so far, and its maps are not
+	// the ones the next change writes to while it is encoded.
+	u.save.Lock()
+	defer u.save.Unlock()
+	u.mu.Lock()
+	s := u.settings.clone()
+	u.mu.Unlock()
 	return u.h.store.PutSetting(ctx, extensionUpgradesKey, s)
+}
+
+func (s extensionUpgradeSettings) clone() extensionUpgradeSettings {
+	s.Off = slices.Clone(s.Off)
+	s.Skipped, s.Notified, s.Last = maps.Clone(s.Skipped), maps.Clone(s.Notified), maps.Clone(s.Last)
+	return s
 }
 
 func (s *extensionUpgradeSettings) note(id string, n ExtensionUpgradeNote) {

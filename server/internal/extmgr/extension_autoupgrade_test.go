@@ -428,3 +428,48 @@ func TestPrintUpgrades(t *testing.T) {
 		t.Fatal(b.String())
 	}
 }
+
+// Changes from several goroutines at once: each saves a copy made under the lock (go test -race), and the settings
+// saved last are the ones in memory.
+func TestExtensionUpgradesConcurrentChanges(t *testing.T) {
+	h := newTestManager(t)
+	st := newKeepStore()
+	h.store = st
+	u := &extensionUpgrades{h: h, loaded: true}
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Go(func() {
+			for j := range 50 {
+				id := fmt.Sprintf("p%d-%d", i, j%5)
+				_ = u.change(ctx, func(s *extensionUpgradeSettings) {
+					s.note(id, ExtensionUpgradeNote{Kind: upgradeFailed, To: fmt.Sprint(j)})
+					if s.Notified == nil {
+						s.Notified = map[string]string{}
+					}
+					s.Notified[id] = fmt.Sprint(j)
+					if s.Skipped == nil {
+						s.Skipped = map[string]string{}
+					}
+					s.Skipped[id] = fmt.Sprint(j)
+					if j%2 == 0 {
+						s.Off = append(s.Off, id)
+					} else {
+						s.Off = slices.DeleteFunc(s.Off, func(x string) bool { return x == id })
+					}
+				})
+			}
+		})
+	}
+	wg.Wait()
+	var saved extensionUpgradeSettings
+	if _, err := st.Setting(ctx, extensionUpgradesKey, &saved); err != nil {
+		t.Fatal(err)
+	}
+	u.mu.Lock()
+	want, _ := json.Marshal(u.settings)
+	u.mu.Unlock()
+	if got, _ := json.Marshal(saved); string(got) != string(want) {
+		t.Fatalf("saved %s\nwant %s", got, want)
+	}
+}

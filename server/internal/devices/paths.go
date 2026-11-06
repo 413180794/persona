@@ -69,6 +69,7 @@ type pathInfo = devicewire.PathInfo
 
 type fleet struct {
 	mu       sync.Mutex
+	saveIDs  sync.Mutex            // one write of "mesh.machine_ids" at a time, of the newest (saveMachineIDs)
 	saveUIDs sync.Mutex            // one write of "mesh.path_uids" at a time, of the newest (savePathUIDs)
 	derived  map[string]*Machine   // group key -> a machine only members have
 	absorbed map[*Machine]*Machine // a hub.json entry whose computer another entry has -> that one
@@ -436,13 +437,24 @@ func (d *Devices) fleetRegroup() {
 		m.wake()
 	}
 	if d.opts.Store != nil {
-		go func() {
-			sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = d.opts.Store.PutSetting(sctx, "mesh.machine_ids", ids)
-		}()
+		go d.saveMachineIDs()
 	}
 	d.changed()
+}
+
+// saveMachineIDs writes the ids given to members' computers as they are now. The copy is taken after the previous
+// write, under the lock: a write started earlier never lands after a newer one, and the map encoded is not the one
+// the next regroup writes to.
+func (d *Devices) saveMachineIDs() {
+	f := &d.fleet
+	f.saveIDs.Lock()
+	defer f.saveIDs.Unlock()
+	f.mu.Lock()
+	ids := maps.Clone(f.ids)
+	f.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = d.opts.Store.PutSetting(ctx, "mesh.machine_ids", ids)
 }
 
 func derivedHas(d map[string]*Machine, id string) bool {

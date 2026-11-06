@@ -488,3 +488,36 @@ func TestCodexDismissedApprovalKeptOverAFailedRead(t *testing.T) {
 		t.Fatalf("listed again without the dialog having gone: %q", n.cx.sent)
 	}
 }
+
+// An approval answered on the phone and asked again right after its dialog left the screen is listed at once, not
+// after codexHold (#4585): one screen read with no approval on it ends the hold. A question card keeps its hold.
+func TestCodexAnsweredApprovalAskedAgainIsListedAtOnce(t *testing.T) {
+	yes := true
+	n, f, path := codexNode(t, proto.StatusBlocked)
+	approval := screenFixture(t, "codex-0.163.0-exec-approval-120.txt")
+	f.screenSteps(cxPane, isKeys("1"), approval, cxEmpty)
+	_ = codexTUI(t, f, path)
+	id := onlyCard(t, n).ix.ID
+	if err := n.codexAnswer(context.Background(), cxID, id, proto.Resolution{Allow: &yes}); err != nil {
+		t.Fatal(err)
+	}
+	n.syncCodexCards(context.Background()) // the dialog is gone: a screen read without it
+	if n.cx.sent != "" {
+		t.Fatalf("listed with no dialog: %q", n.cx.sent)
+	}
+	f.setScreen(cxPane, approval) // Codex asks the same approval again
+	n.syncCodexCards(context.Background())
+	if n.cx.sent != id {
+		t.Fatalf("the same approval asked again: listed %q, want %q at once", n.cx.sent, id)
+	}
+
+	// Held but never seen gone (the screen not read: the session not blocked), it stays held.
+	n.cx.hold(cxID, id)
+	n.agents[cxID] = host.Agent{Agent: "codex", PaneID: cxPane, AgentStatus: proto.StatusWorking, Cwd: "/private/tmp/project"}
+	n.syncCodexCards(context.Background())
+	n.agents[cxID] = host.Agent{Agent: "codex", PaneID: cxPane, AgentStatus: proto.StatusBlocked, Cwd: "/private/tmp/project"}
+	n.syncCodexCards(context.Background())
+	if n.cx.sent != "" {
+		t.Fatalf("listed during its hold without the dialog having gone: %q", n.cx.sent)
+	}
+}

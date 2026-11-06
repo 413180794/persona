@@ -30,6 +30,8 @@ struct ChatView: View {
     #endif
     /// Hide the arrow for the first moment on entry (it would flash while the list settles at the end).
     @State private var settled = false
+    /// Bumped when a message's wait for the hub to say working runs out (`ChatAwaitingTurn.window`): drawn again then.
+    @State private var awaitTick = 0
     /// The chat's height: the workflow section's cap is a share of it (#4532).
     @State private var pageHeight: CGFloat = 0
     /// The pin is bringing a header up to show what opened under it (`ChatPin.onRising`): no ↓ for that moment.
@@ -1466,15 +1468,30 @@ struct ChatView: View {
     private var liveShown: Bool { ChatLiveText.shows(store) }
 
     /// A message of yours is the newest thing and the agent has not begun on it: no turn running yet, the session at
-    /// work or starting up.
+    /// work or starting up, or the message just sent and the hub not saying working yet (#3853).
     private func startingTurn(_ pending: [PendingMessage]) -> Bool {
         guard !pending.isEmpty, liveTurnID == nil else { return false }
-        return status.isActive || session?.starting == true
+        return status.isActive || session?.starting == true || awaiting == .sending
     }
 
     private var liveTurnID: String? {
-        guard status.isActive, case .turn(let t) = store.blocks.last else { return nil }
-        return t.id
+        guard case .turn(let t) = store.blocks.last else { return nil }
+        // Your message is in and nothing answered it yet: running already, before the hub's working comes (#3853).
+        return status.isActive || awaiting.turnID == t.id ? t.id : nil
+    }
+
+    /// The wait between a send and the hub's working (`ChatAwaitingTurn`); not for a subagent being viewed.
+    private var awaiting: ChatAwaitingTurn {
+        _ = awaitTick
+        guard viewedAgent == nil else { return .none }
+        let failed = session?.failureReason == nil ? nil : (session?.stateSince ?? .distantFuture)
+        return ChatAwaitingTurn.of(pending: store.arriving + store.pending, last: store.blocks.last, status: status,
+                                   failedSince: failed, now: .now)
+    }
+
+    /// When that wait runs out by itself, so the chat stops showing it as started then.
+    private var awaitDeadline: Date? {
+        ChatAwaitingTurn.deadline(pending: store.arriving + store.pending, last: store.blocks.last)
     }
 
     /// The wake notices' drawer. Looked up live: it follows the work while the agent is still on it. Its own property:
@@ -2180,6 +2197,11 @@ struct ChatView: View {
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
         .onChange(of: store.backlogBuilt) { _, _ in landEntry(lines) }
         .onChange(of: liveTurnID) { _, _ in contentArrived(foldChrome: false) }
+        .task(id: awaitDeadline) {
+            guard let end = awaitDeadline, end > .now else { return }
+            try? await Task.sleep(for: .seconds(end.timeIntervalSinceNow + 0.1))
+            if !Task.isCancelled { awaitTick &+= 1 }
+        }
         // Following the newest as it streams in folds the chrome too (once the user has taken the list).
         // Not while a tapped header is held in place (`ChatPin`): opening a work line loads its steps.
         .onChange(of: store.items.count) { _, _ in contentArrived(foldChrome: true) }

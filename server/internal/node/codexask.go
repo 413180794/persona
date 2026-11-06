@@ -71,6 +71,7 @@ type codexCards struct {
 	tails     map[string]*codexTail     // session id → its rollout
 	sent      string                    // the card ids last listed to the hub
 	held      map[string]time.Time      // card id → answered from the phone: not listed again until then
+	heldIn    map[string]string         // card id → the session of a held card
 	dismissed map[string]dismissedCard  // card id → handed back to the computer from the phone
 	pagerAt   map[string]time.Time      // pane → when its transcript pager was last closed to show a dialog
 	joins     map[string]codexJoinState // session id → joining it on its app-server (codex_daemon.go)
@@ -202,6 +203,7 @@ func (c *codexCards) forget(live map[string]codexAgent) {
 	for id, until := range c.held {
 		if time.Now().After(until) {
 			delete(c.held, id)
+			delete(c.heldIn, id)
 		}
 	}
 	// A card handed back stays the computer's while Codex asks it; once it has been off the list for codexHold (a
@@ -219,8 +221,9 @@ type dismissedCard struct {
 	seen    time.Time
 }
 
-// approvalGone forgets the cards handed back in a session whose screen was just read with no approval on it: the
-// dialog was answered at the computer, so the same approval asked again is a new one (#3766).
+// approvalGone forgets the approval cards handed back or answered in a session whose screen was just read with no
+// approval on it: the dialog is gone, so the same approval asked again is a new one and is listed at once (#3766,
+// #4585). An answered approval needs no hold for its rollout: codexApprove saw the dialog leave before it said done.
 func (c *codexCards) approvalGone(session string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -229,15 +232,22 @@ func (c *codexCards) approvalGone(session string) {
 			delete(c.dismissed, id)
 		}
 	}
+	for id, s := range c.heldIn {
+		if s == session && strings.HasPrefix(id, "cxa_") {
+			delete(c.held, id)
+			delete(c.heldIn, id)
+		}
+	}
 }
 
-func (c *codexCards) hold(id string) {
+func (c *codexCards) hold(session, id string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.held == nil {
-		c.held = map[string]time.Time{}
+		c.held, c.heldIn = map[string]time.Time{}, map[string]string{}
 	}
 	c.held[id] = time.Now().Add(codexHold)
+	c.heldIn[id] = session
 }
 
 func (c *codexCards) dismiss(session, id string) {
@@ -469,7 +479,7 @@ func (n *Node) codexAnswer(ctx context.Context, session, id string, r proto.Reso
 		err = n.codexOverlay(ctx, session, card, r)
 	}
 	if err == nil {
-		n.cx.hold(id)
+		n.cx.hold(session, id)
 	}
 	return err
 }

@@ -1198,11 +1198,18 @@ func (s *Service) codexPending(machine string, ix proto.Interaction) *pending {
 			// Answered from the phone, or Codex no longer asks it (prompt_changed): either way the card is over and no
 			// longer pending, so the node's next list does not count it as gone. It ended now: listed again after
 			// codexAskedAgain, it is Codex asking again and rings (#4105).
+			ended := time.Now()
+			if err == nil && ix.Kind == proto.IxPermission {
+				// An approval answered: the node saw its dialog leave the screen before it said done, and lists the
+				// same approval only once a screen read shows it again, so that listing is Codex asking again and rings
+				// at once (#4585), with no quiet minute.
+				ended = ended.Add(-codexAskedAgain)
+			}
 			s.fleet.mu.Lock()
 			if s.fleet.codexEnded == nil {
 				s.fleet.codexEnded = map[string]time.Time{}
 			}
-			s.fleet.codexEnded[ix.ID] = time.Now()
+			s.fleet.codexEnded[ix.ID] = ended
 			s.fleet.mu.Unlock()
 		}
 		if err != nil && !r.Dismiss && !changed {
