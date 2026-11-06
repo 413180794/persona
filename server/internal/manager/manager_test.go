@@ -258,6 +258,139 @@ func TestInstallSystemd(t *testing.T) {
 	}
 }
 
+// A manager whose token was refused waits for a new one in manager.json, and tries the same token again after
+// revokedRetry with none.
+func TestWaitNewToken(t *testing.T) {
+	defer func(p time.Duration) { revokedPoll = p }(revokedPoll)
+	revokedPoll = 10 * time.Millisecond
+	dir := t.TempDir()
+	c := assistant.ManagerConfig{ID: "m-0a1b2c", Hub: "http://[fd00::20]:18660", Token: "jb_old"}
+	if err := assistant.WriteManagerConfig(dir, c); err != nil {
+		t.Fatal(err)
+	}
+	if renewed, err := waitNewToken(context.Background(), dir, &c, 50*time.Millisecond); renewed || err != nil {
+		t.Fatalf("no new token: %v %v", renewed, err)
+	}
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		n := c
+		n.Token = "jb_new"
+		_ = assistant.WriteManagerConfig(dir, n)
+	}()
+	if renewed, err := waitNewToken(context.Background(), dir, &c, 5*time.Second); !renewed || err != nil {
+		t.Fatalf("new token: %v %v", renewed, err)
+	}
+}
+
+// After a refusal nothing of the manager starts again on the timer alone: every revokedRetry only the token is
+// probed, and the manager comes back when the probe is no longer refused, or when manager.json gets a new token.
+func TestAwaitRestartProbesTheTokenOnly(t *testing.T) {
+	defer func(p, r time.Duration, f func(context.Context, *assistant.ManagerConfig) error) {
+		revokedPoll, revokedRetry, probeToken = p, r, f
+	}(revokedPoll, revokedRetry, probeToken)
+	revokedPoll, revokedRetry = 5*time.Millisecond, 20*time.Millisecond
+	dir := t.TempDir()
+	c := assistant.ManagerConfig{ID: "m-0a1b2c", Hub: "http://[fd00::20]:18660", Token: "jb_old"}
+	if err := assistant.WriteManagerConfig(dir, c); err != nil {
+		t.Fatal(err)
+	}
+	var probes atomic.Int32
+	refused := atomic.Bool{}
+	refused.Store(true)
+	probeToken = func(_ context.Context, got *assistant.ManagerConfig) error {
+		probes.Add(1)
+		if got.Token != "jb_old" {
+			t.Errorf("probed %q", got.Token)
+		}
+		if refused.Load() {
+			return bus.ErrRevoked
+		}
+		return nil
+	}
+	done := make(chan error, 1)
+	var out bytes.Buffer
+	go func() { done <- awaitRestart(context.Background(), dir, &c, &out) }()
+	for deadline := time.Now().Add(10 * time.Second); probes.Load() < 3; {
+		select {
+		case err := <-done:
+			t.Fatalf("came back while the token was still refused: %v", err)
+		case <-time.After(5 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d probes in 10 s", probes.Load())
+		}
+	}
+	refused.Store(false)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("did not come back once the hub took the token again")
+	}
+
+	// A new token comes back at once, probing nothing.
+	probeToken = func(context.Context, *assistant.ManagerConfig) error { t.Error("probed"); return bus.ErrRevoked }
+	revokedRetry = time.Hour
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		n := c
+		n.Token = "jb_new"
+		_ = assistant.WriteManagerConfig(dir, n)
+	}()
+	if err := awaitRestart(context.Background(), dir, &c, &out); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A probe that gets no verdict (the hub unreachable, a proxy's 401 or 503) is never taken for yes: the manager keeps
+// waiting and tries again sooner; only a probe the hub took brings it back.
+func TestAwaitRestartHubDown(t *testing.T) {
+	defer func(p, r, a time.Duration, f func(context.Context, *assistant.ManagerConfig) error) {
+		revokedPoll, revokedRetry, probeAgain, probeToken = p, r, a, f
+	}(revokedPoll, revokedRetry, probeAgain, probeToken)
+	revokedPoll, revokedRetry, probeAgain = 5*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond
+	dir := t.TempDir()
+	c := assistant.ManagerConfig{ID: "m-0a1b2c", Hub: "http://[fd00::20]:18660", Token: "jb_old"}
+	if err := assistant.WriteManagerConfig(dir, c); err != nil {
+		t.Fatal(err)
+	}
+	var probes atomic.Int32
+	var up atomic.Bool
+	probeToken = func(context.Context, *assistant.ManagerConfig) error {
+		// From the second probe on the waits must be probeAgain's: revokedRetry is made an hour.
+		if probes.Add(1) == 1 {
+			revokedRetry = time.Hour
+		}
+		if up.Load() {
+			return nil
+		}
+		return errors.New("dial tcp: connection refused")
+	}
+	done := make(chan error, 1)
+	go func() { done <- awaitRestart(context.Background(), dir, &c, io.Discard) }()
+	for deadline := time.Now().Add(10 * time.Second); probes.Load() < 5; {
+		select {
+		case err := <-done:
+			t.Fatalf("came back while the hub was down: %v", err)
+		case <-time.After(5 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d probes in 10 s", probes.Load())
+		}
+	}
+	up.Store(true)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("did not come back once the hub took the token")
+	}
+}
+
 // A database the user gave is used as it is: no docker, and uninstall leaves it alone.
 func TestGivenDatabaseIsLeftAlone(t *testing.T) {
 	home := isolate(t)

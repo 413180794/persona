@@ -116,6 +116,7 @@ func TestEndpoint(t *testing.T) {
 // fakeHub answers the handshake (or refuses the token), counts the dials and lets a test drop the connection.
 type fakeHub struct {
 	refuse atomic.Bool
+	plain  atomic.Bool // refuse with a 401 that says nothing about the token (not CodeTokenRevoked)
 	dials  atomic.Int32
 	mu     sync.Mutex
 	conns  []*websocket.Conn
@@ -130,7 +131,13 @@ func (f *fakeHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	f.dials.Add(1)
 	if f.refuse.Load() {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		code := CodeTokenRevoked
+		if f.plain.Load() {
+			code = ""
+		}
+		_, _ = w.Write([]byte(`{"error":"invalid token","code":"` + code + `"}`))
 		return
 	}
 	ws, err := websocket.Accept(w, r, nil)
@@ -267,5 +274,18 @@ func TestClientStopsWhenRevoked(t *testing.T) {
 	}
 	if err := closeReason(websocket.CloseError{Code: CloseRefused}); errors.Is(err, ErrRevoked) || !errors.Is(err, ErrRejected) {
 		t.Fatalf("4003: %v", err)
+	}
+
+	// A 401 that does not say token_revoked is rejected, not revoked: the client keeps trying.
+	f.plain.Store(true)
+	if _, err := Dial(ctx, srv.URL, "t", nil); !errors.Is(err, ErrRejected) || errors.Is(err, ErrRevoked) {
+		t.Fatalf("plain 401: %v", err)
+	}
+	c3 := &Client{Hub: srv.URL, Token: "t", HelloMethod: "manager.hello", StopWhenRevoked: true, Backoff: 10 * time.Millisecond,
+		MaxBackoff: 20 * time.Millisecond}
+	short, stop := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer stop()
+	if err := c3.Run(short); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("plain 401 stopped the client: %v", err)
 	}
 }

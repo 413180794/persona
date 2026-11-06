@@ -191,7 +191,7 @@ func TestManagersPatchAndRevoke(t *testing.T) {
 		t.Fatalf("delete: %d", code)
 	}
 	r.closedWith(t, bus.CloseRevoked)
-	if _, ok := h.busIdentity(context.Background(), tok); ok {
+	if _, ok, _ := h.busIdentity(context.Background(), tok); ok {
 		t.Fatal("a revoked token still names its manager")
 	}
 	if code := managersDo(t, h, srv, "DELETE", "/api/v1/managers/m-abc123", nil, nil); code != 404 {

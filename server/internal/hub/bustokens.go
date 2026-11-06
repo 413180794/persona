@@ -80,15 +80,22 @@ func (h *Hub) revokeBusToken(ctx context.Context, id string) (bool, error) {
 }
 
 // busIdentity is the identity bus token tok names, if any. Looked up afresh every time: a service dials rarely, and
-// a revoked token stops at once.
-func (h *Hub) busIdentity(ctx context.Context, tok string) (db.BusIdentity, bool) {
+// a revoked token stops at once. err is the store failing (no database, or it did not answer): then nobody can say
+// whether the token is good, and the caller must not answer as if it were not.
+func (h *Hub) busIdentity(ctx context.Context, tok string) (db.BusIdentity, bool, error) {
+	if !strings.HasPrefix(tok, busTokenPrefix) {
+		return db.BusIdentity{}, false, nil
+	}
 	s := h.busStore()
-	if s == nil || !strings.HasPrefix(tok, busTokenPrefix) {
-		return db.BusIdentity{}, false
+	if s == nil {
+		return db.BusIdentity{}, false, errors.New("no database")
 	}
 	b, err := s.BusIdentityByHash(ctx, hashToken(tok))
-	if err != nil || b == nil {
-		return db.BusIdentity{}, false
+	if err != nil {
+		return db.BusIdentity{}, false, err
 	}
-	return *b, true
+	if b == nil {
+		return db.BusIdentity{}, false, nil
+	}
+	return *b, true, nil
 }

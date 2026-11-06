@@ -1800,6 +1800,7 @@ Editing the roster, creating codes and deleting require a full-permission device
 - A new connection for an identity replaces the old one **when its handshake succeeds**; the old one is closed with 4001.
 - Before the handshake and after being replaced, every call on the connection returns `stale_connection` and events sent are dropped; the hub never calls a connection that hasn't shaken hands.
 - Close codes: 4001 replaced by a new connection for the same identity, 4002 token revoked or replaced, 4003 bad handshake or timeout, 1001 hub shutting down.
+- A dial the hub refuses: 401 with code `token_revoked` for a bus token it has no identity for (revoked or replaced; the only refusal a manager takes for "revoked", like 4002); a plain 401 for a token of another shape; 503 `store_unavailable` when it can't look tokens up (its database): no verdict on the token, try again.
 
 ### Handshake
 

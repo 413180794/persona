@@ -7,6 +7,7 @@ package bus
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -47,8 +48,13 @@ const (
 const (
 	CodeWrongIdentity   = "wrong_identity"   // the handshake names another identity than the token's: the hub hangs up
 	CodeStaleConnection = "stale_connection" // no handshake on this connection yet, or a newer one replaced it
-	CodeUnknownMethod   = "unknown_method"
-	CodeInvalidParams   = "invalid_params"
+	// CodeTokenRevoked is the code of the hub's 401 to a bus token it has no identity for (revoked or replaced): the only
+	// 401 a service takes for ErrRevoked.
+	CodeTokenRevoked = "token_revoked"
+	// CodeStoreUnavailable is the code of the hub's 503 when it cannot look tokens up (its database): try again.
+	CodeStoreUnavailable = "store_unavailable"
+	CodeUnknownMethod    = "unknown_method"
+	CodeInvalidParams    = "invalid_params"
 )
 
 // Close codes besides the standard ones (1001: the hub is stopping), as on the computer link (internal/link).
@@ -63,9 +69,11 @@ const (
 // waits its longest backoff between tries.
 var ErrRejected = errors.New("the hub rejected the token")
 
-// ErrRevoked is ErrRejected for the token itself: the hub does not know it (401) or hung up because it was revoked or
-// replaced (CloseRevoked). Only a new token helps (a manager made in the app: a new install code, `personad manager
-// join`). A Client with StopWhenRevoked returns it from Run instead of trying again.
+// ErrRevoked is ErrRejected for the token itself, on the hub's explicit word only: it hung up because the token was
+// revoked or replaced (CloseRevoked), or refused the dial with 401 code CodeTokenRevoked (a bus token it has no
+// identity for). A plain 401, or a hub that cannot check tokens right now (503 CodeStoreUnavailable), is not it. Only a
+// new token helps (a manager made in the app: a new install code, `personad manager join`). A Client with
+// StopWhenRevoked returns it from Run instead of trying again.
 var ErrRevoked = fmt.Errorf("%w: it was revoked or replaced", ErrRejected)
 
 // Conn adapts a WebSocket to the io.Reader and io.Writer an rpc.Peer serves on: each line written goes out as one
@@ -168,11 +176,26 @@ func Dial(ctx context.Context, hub, token string, client *http.Client) (*websock
 	})
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
-			return nil, ErrRevoked
+			if errorCode(resp) == CodeTokenRevoked {
+				return nil, ErrRevoked
+			}
+			return nil, ErrRejected
 		}
 		return nil, err
 	}
 	return ws, nil
+}
+
+// errorCode is the "code" of a refused dial's JSON error body ("" when there is none).
+func errorCode(resp *http.Response) string {
+	if resp.Body == nil {
+		return ""
+	}
+	var e struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 1024)).Decode(&e)
+	return e.Code
 }
 
 // Endpoint is the bus's URL on the hub at base URL hub.

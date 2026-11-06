@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -106,6 +107,10 @@ type busState struct {
 	pingEvery, pingTimeout, helloTimeout time.Duration
 	// idents keeps the identities instead of h.store (tests without Postgres).
 	idents busStore
+	// storeErrLog throttles the line for a token lookup the store did not answer; storeDown is until when (UnixNano)
+	// dials are answered 503 without a lookup after one failed.
+	storeErrLog everyMinute
+	storeDown   atomic.Int64
 }
 
 // busConn is one service connection.
@@ -141,6 +146,29 @@ func (c *busConn) close(code websocket.StatusCode, reason string) {
 	c.closing.Do(func() { go func() { _ = c.ws.Close(code, reason) }() })
 }
 
+// storeDownFor is how long after a failed token lookup the bus answers 503 without another.
+var storeDownFor = 2 * time.Second
+
+// busLookupTimeout bounds a token lookup; one that runs out is the store not answering (storeDown).
+var busLookupTimeout = 5 * time.Second
+
+// everyMinute lets one thing through a minute (a log line).
+type everyMinute struct {
+	mu   sync.Mutex
+	next time.Time
+}
+
+// Allow: the minute since the last one let through is over.
+func (e *everyMinute) Allow(now time.Time) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if now.Before(e.next) {
+		return false
+	}
+	e.next = now.Add(time.Minute)
+	return true
+}
+
 // busRoutes mounts the bus beside the apps' API: its token is not a device's (auth), and a member hub does not pass
 // it on to its center (memberForward).
 func (h *Hub) busRoutes(mux *http.ServeMux) {
@@ -165,14 +193,45 @@ func (h *Hub) busCaller(w http.ResponseWriter, r *http.Request) (db.BusIdentity,
 		}
 	}
 	tok, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if ident, ok := h.busIdentity(r.Context(), tok); ok && ident.Role == bus.RoleManager { // the only role so far
+	if h.bus.storeDown.Load() > time.Now().UnixNano() {
+		// The store failed a moment ago: answered without asking it again, so the dials of an outage cost no query
+		// each (a manager retries at most once a minute; anyone else gets no more than this).
+		writeErrCode(w, http.StatusServiceUnavailable, bus.CodeStoreUnavailable, errors.New("the hub cannot check tokens right now"))
+		return db.BusIdentity{}, false
+	}
+	// The lookup is the hub's, not the client's: a client hanging up mid-lookup must not cancel it, or its "context
+	// canceled" would pass for a store error and shut the bus for everyone (storeDown). Bounded by its own timeout.
+	lookup, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), busLookupTimeout)
+	ident, ok, err := h.busIdentity(lookup, tok)
+	cancel()
+	if err != nil && r.Context().Err() != nil {
+		return db.BusIdentity{}, false // the client is gone: nobody to answer, and nothing said about the store
+	}
+	if err != nil {
+		// The store did not answer (Postgres restarting): no verdict on the token, so 503, which a service retries.
+		// A 401 here would make a standalone manager take its token for revoked and stop.
+		// Logged at most once a minute. Not an authentication failure: managers behind one address reconnecting through
+		// an outage would lock that address (the user's phone on it too) out of the apps' API. The next storeDownFor
+		// is answered without a lookup instead.
+		if h.bus.storeErrLog.Allow(time.Now()) {
+			h.logf("bus: looking the token up: %v", err)
+		}
+		h.bus.storeDown.Store(time.Now().Add(storeDownFor).UnixNano())
+		writeErrCode(w, http.StatusServiceUnavailable, bus.CodeStoreUnavailable, errors.New("the hub cannot check tokens right now"))
+		return db.BusIdentity{}, false
+	}
+	if ok && ident.Role == bus.RoleManager { // the only role so far
 		return ident, true
 	}
 	failures := 0
 	if public {
 		failures = h.devtok.failures.fail(authSourceKey(r), time.Now(), h.cfg.Security)
 	}
-	h.securityError(w, r, http.StatusUnauthorized, "", failures)
+	code := ""
+	if strings.HasPrefix(tok, busTokenPrefix) {
+		code = bus.CodeTokenRevoked // a bus token the hub has no identity for: revoked, or replaced by a new one
+	}
+	h.securityError(w, r, http.StatusUnauthorized, code, failures)
 	return db.BusIdentity{}, false
 }
 

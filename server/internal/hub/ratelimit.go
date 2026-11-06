@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/bus"
 )
 
 type authBucket struct {
@@ -143,6 +145,7 @@ func (h *Hub) securityError(w http.ResponseWriter, r *http.Request, status int, 
 		"tls_required":            "TLS is required for public requests",
 		"master_token_local_only": "the master token is restricted to local networks",
 		"rate_limited":            "too many authentication failures",
+		bus.CodeTokenRevoked:      "this token was revoked or replaced",
 	}[code]
 	if message == "" {
 		message = "invalid token"
