@@ -25,7 +25,9 @@ func answerCards(l i18n.Lang, answer string, quiet bool, steps []string, foot st
 	if quiet {
 		return nil
 	}
-	a := feishubot.RenderAnswer(answer, botAnswerPiece, botAnswerCards)
+	// Charts (persona-card) become numbers over the whole answer before it is cut into cards: cut first, a chart
+	// longer than one card would read as nothing and leave an empty card.
+	a := feishubot.RenderAnswer(feishubot.PersonaCards(answer), botAnswerPiece, botAnswerCards)
 	out := make([]botAnswerCard, len(a.Parts))
 	for i, p := range a.Parts {
 		build := func(panelSteps int) *feishubot.Card {

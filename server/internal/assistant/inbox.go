@@ -938,6 +938,9 @@ func (s *Service) collectSource(ctx context.Context, src assistantwire.InboxSour
 
 var errNoInboxItem = errors.New("no such inbox item")
 
+// errInboxItemDone is 发送 on a message card whose inbox item was filed since (sendFromCard): nothing is sent.
+var errInboxItemDone = errors.New("the inbox item was filed: nothing was sent")
+
 // errInboxNotPersisted says the item moved in memory but its row could not be written; the in-memory move was
 // rolled back, so the request can be retried.
 var errInboxNotPersisted = errors.New("the inbox item could not be saved")
@@ -1057,6 +1060,8 @@ func (s *Service) inboxRoutes() {
 		switch {
 		case errors.Is(err, errMailReplyTargetChanged):
 			apierr.WriteBody(w, http.StatusConflict, map[string]any{"code": "mail_reply_target_changed", "error": i18n.T(i18n.OfWriter(w), "assistant-inbox.mail_target_changed"), "retryable": false, "delivered": "none"})
+		case errors.Is(err, errInboxItemDone):
+			apierr.WriteBody(w, http.StatusConflict, map[string]any{"code": "inbox_item_done", "error": i18n.T(i18n.OfWriter(w), "assistant-inbox.item_done"), "retryable": false, "delivered": "none"})
 		case errors.Is(err, errNoInboxItem):
 			apierr.Write(w, http.StatusNotFound, err)
 		case replyInDoubt(err):

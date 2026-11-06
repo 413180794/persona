@@ -84,6 +84,15 @@ func (s *Service) sendFromCard(ctx context.Context, cardID, itemID string, send 
 		b.mu.Unlock()
 		return it, true, nil
 	}
+	// A card put in before its item was filed (已处理, 忽略, read elsewhere, archived) is not a way to reply to it:
+	// the reply would go out unasked and the item's mark would become 已回复. Moved back to the inbox, it sends.
+	b.mu.Lock()
+	ib := b.items[itemID]
+	filed := ib != nil && !ib.open()
+	b.mu.Unlock()
+	if filed {
+		return InboxItem{}, false, errInboxItemDone
+	}
 	it, err = send()
 	return it, false, err
 }

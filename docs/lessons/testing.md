@@ -556,3 +556,10 @@ node 跑启动器的命令用的是交互式登录 shell（`zsh -ic`），原来
 内置扩展的 `runtime.command` 是 `personad` 时，manager 用 `os.Executable()` 加清单的 `args` 起它；在 `go test` 里这就是测试二进制（`extmgr.test voice`）。
 测试二进制不认识 `voice` 这个参数，会把整个包的测试再跑一遍，套娃到超时。所以 `extmgr` 的 `TestMain` 先看 `os.Args[1]`：是 `voice` 就当 `personad voice` 跑
 （`voice.Run`）。以后再加带程序的内置扩展（不只是声明），同样要在 `TestMain` 里分派，测试里才能真的把它跑起来、经 hub 的转发调它。
+
+## Playwright 不支持的 Linux 上截网页图（2026-11-06，#3140）
+
+- 现象：Debian 11 上 `npx playwright install chromium` 报「does not support chromium on debian11-x64」，换 ubuntu20.04 的包也不行；Playwright MCP 去找 `/opt/google/chrome/chrome`，同样起不来。
+- 做法：下载 Chrome for Testing 的 `chrome-headless-shell-linux64.zip`（版本号看 `last-known-good-versions.json`），`ldd` 看缺哪些库。没有 sudo 时用 `apt-get download` 下这些库的 deb，`dpkg-deb -x` 解到自己的目录，启动时 `LD_LIBRARY_PATH` 指过去。
+  中文字体（如 Noto Sans CJK）也这样解开，写一个 `fonts.conf` 把字体目录加进去，用 `FONTCONFIG_FILE` 指给浏览器，不然中文全是方框。用现成的 `playwright-core`：`chromium.launch({ executablePath, env })`。下载的东西各放一个新目录，不放进仓库。
+- 等待：网页一直连着 WebSocket，`waitUntil: "networkidle"` 有时等不到，用 `load` 再等页面上的某段字。假 hub 用 `/?token=mock` 登录后先等侧边栏出来再跳到要拍的页面，不然拍到的是登录页。

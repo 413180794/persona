@@ -122,9 +122,9 @@
   回调里返回的新卡片也必须是 2.0。
 - 文字里的 `<` 在代码以外转成 `&#60;`（卡片会把 `<at>`、`<font>` 这类当成自己的标签吃掉）；名字、标题这类数据用 `EscapeMarkdown`。
   例外是模型写的自动链接 `<https://…>`、`<mailto:…>`（CommonMark）：卡片不认这种写法，转义后是一段点不开的文字，所以先改成 `[地址](地址)`（#4727）。地址里的 `(` `)`、主机名之后的 `[` `]` 用百分号编码，链接文字里的 `_` `*` `[` `]` 写成实体；别的协议（`javascript:` 等）、`\<`、代码里的照旧。测试 `go test ./internal/feishubot -run CardMarkdownAutolinks`。
-- 助手回答里的 `persona-card`（图表卡片，#886）飞书画不了，先写成数字再发（`feishubot/personacard.go` 的 `PersonaCards`，`CardMarkdown` 第一步调它，所以所有经 `CardMarkdown` 发的文字都这样，不只健康空间）：
+- 助手回答里的 `persona-card`（图表卡片，#886）飞书画不了，先写成数字再发（`feishubot/personacard.go` 的 `PersonaCards`，`CardMarkdown` 第一步调它，所以所有经 `CardMarkdown` 发的文字都这样，不只健康空间；机器人的回答在切成几张卡片之前先整段转换（`assistant/feishu_answer.go` 的 `answerCards`），不然比一张卡片还长的图表会被切断、读不出来，留下一张空卡片）：
   `stat` 一行（`今天步数：**8,432 步** · 比昨天 +12%`）；`line` / `bar` 标题加一条 ▁…█ 小图，下一行逐个写数字（最多最近 31 个），单位写一次；`stacked_bar` 一张两列的小表，合计在表头，超过 31 行时后面的合成一行「其他」。
-  数字的写法和各端一样（`wire.Number`），模型写的字一律 `EscapeMarkdown`；各端都画不出的卡片只留标题；`persona-view`、别的代码块、代码块里当例子的卡片不动。聊天列表的摘要里卡片只显示标题。测试 `go test ./internal/feishubot -run PersonaCards`。
+  数字的写法和各端一样（`wire.Number`），模型写的字一律 `EscapeMarkdown`；各端都画不出的卡片只留标题；`persona-view`、别的代码块、代码块里当例子的卡片不动。聊天列表的摘要里卡片只显示标题。测试 `go test ./internal/feishubot -run PersonaCards`、`go test ./internal/assistant -run TestAnswerCardsWriteChartsAsNumbersBeforeCutting`。
 - 链接按钮只用 http(s)（文档只写了 http(s) 和 AppLink，`jarvis://` 可能让整张卡片被拒），「打开网页版」打开 hub 托管的网页版对应的会话页。
 - 交互卡片的选项和 App 的卡片一致：
   - 提问：单个问题、最多 4 个选项、单选时是一排按钮 + 「直接写回答」的输入框；其余是表单（每题一个下拉框，多选的是多选下拉框，加一个输入框），一次提交。

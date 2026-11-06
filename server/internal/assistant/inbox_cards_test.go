@@ -176,8 +176,9 @@ func TestMessageCardSentBeforeTheRecord(t *testing.T) {
 		t.Fatal("the card forgot it was sent")
 	}
 
-	// Filed without a reply, or replied to before the card came: the card still offers 发送.
-	h2, _, it2 := cardHub(t)
+	// Filed without a reply, or replied to before the card came: the card does not say sent (nothing went out from
+	// it), but its 发送 sends nothing while the item stays filed (TestMessageCardOfAFiledItemSendsNothing).
+	h2, rc2, it2 := cardHub(t)
 	h2.inbox.mu.Lock()
 	it2.done(time.Now().Add(-time.Minute), "replied")
 	h2.inbox.mu.Unlock()
@@ -187,8 +188,13 @@ func TestMessageCardSentBeforeTheRecord(t *testing.T) {
 	h2.inbox.mu.Lock()
 	it2.done(time.Now(), "user")
 	h2.inbox.mu.Unlock()
-	if got := cards(t, h2, time.Time{}); len(got) != 1 || cardSentAt(got[0]) != nil {
+	got = cards(t, h2, time.Time{})
+	if len(got) != 1 || cardSentAt(got[0]) != nil {
 		t.Fatalf("filed, not replied: %+v", got)
+	}
+	body, _ := json.Marshal(map[string]string{"text": "在修了", "card": got[0].ID})
+	if code, _ := inboxCall(t, h2.routes(), "POST", "/api/v1/inbox/example:1/reply", string(body)); code != http.StatusConflict || len(rc2.got) != 0 {
+		t.Fatalf("filed, not replied: 发送 = %d, sent %+v", code, rc2.got)
 	}
 }
 
@@ -246,6 +252,44 @@ func TestMessageCardNotForAFiledItem(t *testing.T) {
 		}
 		if len(rc.got) != 0 {
 			t.Fatalf("filed by %s: sent %+v", by, rc.got)
+		}
+	}
+}
+
+// A card put in before its item was filed (已处理, 忽略, read and filed elsewhere): its 发送 sends nothing, and the
+// item stays filed as it was. Moved back to the inbox, the item is open again and the card sends.
+func TestMessageCardOfAFiledItemSendsNothing(t *testing.T) {
+	for _, by := range []string{"user", "dismissed", "read"} {
+		h, rc, it := cardHub(t)
+		mux := h.routes()
+		draft(t, h, "在修了")
+		list := cards(t, h, time.Time{})
+		if len(list) != 1 {
+			t.Fatalf("filed by %s: feed = %+v", by, list)
+		}
+		h.inbox.mu.Lock()
+		it.done(time.Now(), by)
+		h.inbox.mu.Unlock()
+		body, _ := json.Marshal(map[string]string{"text": "在修了", "card": list[0].ID})
+		code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/example:1/reply", string(body))
+		if code != http.StatusConflict || out["code"] != "inbox_item_done" || len(rc.got) != 0 {
+			t.Fatalf("filed by %s: 发送 = %d %v, sent %+v", by, code, out, rc.got)
+		}
+		h.inbox.mu.Lock()
+		doneBy, open := it.DoneBy, it.open()
+		h.inbox.mu.Unlock()
+		if open || doneBy != by {
+			t.Fatalf("filed by %s: the item is now open=%v by %q", by, open, doneBy)
+		}
+		if got := cards(t, h, time.Time{}); cardSentAt(got[0]) != nil {
+			t.Fatalf("filed by %s: the card says sent: %+v", by, got)
+		}
+
+		h.inbox.mu.Lock()
+		it.DoneAt, it.DoneBy = nil, ""
+		h.inbox.mu.Unlock()
+		if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/example:1/reply", string(body)); code != 200 || len(rc.got) != 1 {
+			t.Fatalf("filed by %s, moved back: 发送 = %d, sent %+v", by, code, rc.got)
 		}
 	}
 }

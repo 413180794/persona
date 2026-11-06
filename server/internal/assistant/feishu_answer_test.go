@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -95,4 +96,38 @@ func TestAnswerCardsPanelBudget(t *testing.T) {
 			t.Fatalf("short panel changed or card over budget: %s", js)
 		}
 	})
+}
+
+// A chart in an answer (persona-card, #3140) is written as numbers before the answer is cut into cards: one longer
+// than a card's budget does not vanish into an empty card, and one across the cut does not show its JSON.
+func TestAnswerCardsWriteChartsAsNumbersBeforeCutting(t *testing.T) {
+	var pts []string
+	for i := 1; i <= 300; i++ {
+		pts = append(pts, fmt.Sprintf(`{"label":"d%d","value":%d}`, i, 8000+i))
+	}
+	long := "```persona-card\n" + `{"type":"line","title":"近 300 天步数","unit":"步","points":[` + strings.Join(pts, ",") + `]}` + "\n```"
+	var week []string
+	for i := 1; i <= 7; i++ {
+		week = append(week, fmt.Sprintf(`{"label":"11/%d","value":%d}`, i, 8000+i))
+	}
+	across := "~~~persona-card\n" + `{"type":"line","title":"近 7 天步数","unit":"步","points":[` + strings.Join(week, ",") + `]}` + "\n~~~"
+	for _, tc := range []struct{ name, answer, want string }{
+		{"longer than a card", "最近 300 天平均每天 8,150 步。\n\n" + long + "\n\n后面的话", "近 300 天步数"},
+		{"across the cut", strings.Repeat("说", botAnswerPiece-100) + "\n\n" + across + "\n\n后面的话", "近 7 天步数"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cards := answerCards(i18n.ZhHans, tc.answer, false, nil, "FOOT")
+			var all string
+			for i, c := range cards {
+				_, js := cardTags(t, c)
+				if strings.TrimSpace(c.fallback) == "" {
+					t.Errorf("card %d of %d is empty: %s", i, len(cards), js)
+				}
+				all += js
+			}
+			if !strings.Contains(all, tc.want) || strings.Contains(all, "persona-card") || strings.Contains(all, `\"label\"`) || strings.Contains(all, `\"type\"`) {
+				t.Errorf("the chart is not written as numbers:\n%s", all)
+			}
+		})
+	}
 }

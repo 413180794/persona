@@ -133,7 +133,11 @@
 - **网页**：健康对话就是助手的对话页（`ChatView`），代码块照旧经 `ui/AssistantCard.tsx` 画成图，没有另写一套；各端画成什么样由 `schema/extension/examples/persona-card/` 的用例管着（网页是 `lib/assistant-view.test.ts`）。
 - **飞书**：卡片画不了图，代码块里的 JSON 也不是答案，机器人发出去前把每张 `persona-card` 写成一两行数字（`stat` 一行粗体数字，`line` / `bar` 一条 ▁▃█ 小图加逐个数字，`stacked_bar` 一张两列的小表），见 `docs/bots.md`「卡片」。
 
-要看效果：默认的假 hub（`python3 scripts/mock/mock_hub.py`，数字是编的）里健康空间的「这周的睡眠」「步数目标」「今天吃了什么」三个对话都带图表（截图待补）。
+要看效果：默认的假 hub（`python3 scripts/mock/mock_hub.py`，数字是编的）里健康空间的「这周的睡眠」「步数目标」「今天吃了什么」三个对话都带图表。
+
+![网页版健康对话里的折线图和大数字（浅色，「步数目标」）](screenshots/web-health-charts-light.png)
+
+![网页版健康对话里的柱状图、分段条和明细表（深色，「今天吃了什么」）](screenshots/web-health-charts-dark.png)
 
 ## 体检报告（#4546）
 
