@@ -1146,3 +1146,33 @@ func TestFeishuStuckMessageHoldsTheNextOnlySoLong(t *testing.T) {
 		t.Fatalf("went in %s", got)
 	}
 }
+
+// The Feishu bot's first message to a new conversation (/new, or no main conversation yet) goes in with
+// assistant.send: no client message id. A second one sent before it is answered is folded in by startChannelRun; the
+// one answer still holds the first message's answer (#4746).
+func TestNewConversationsFirstMessageFoldedIsAnswered(t *testing.T) {
+	f := newFakeHub().withMachine()
+	h := &pagedHub{fakeHub: f, page: 3, items: []proto.Item{
+		{ID: "u1", Seq: 1, Role: "user", Kind: proto.KindText, Text: "first"},
+		{ID: "t2", Seq: 2, Role: "assistant", Kind: proto.KindToolUse, ToolName: "Bash"},
+		{ID: "a3", Seq: 3, Role: "assistant", Kind: proto.KindText, Text: "first answer"},
+		{ID: "u4", Seq: 4, Role: "user", Kind: proto.KindText, Text: "second", ClientMsgID: "feishu-om2"},
+		{ID: "a5", Seq: 5, Role: "assistant", Kind: proto.KindText, Text: "second answer"},
+		{ID: "d6", Seq: 6, Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 5}},
+	}}
+	s := withSettings(t, f, New(Options{Hub: h, Store: func() Store { return &memStore{} }, Logf: testLogf(t)}))
+	// As feishu.go's rt.isNew path leaves it, then as its session.send path does.
+	s.startChannelRun(&channel.Run{ID: "fb_om1", Channel: channel.Feishu, ReplyTo: "om1", MachineID: "server", SessionID: "s1",
+		TargetKind: targetJarvis, Started: time.Now().UTC(), Ext: map[string]string{}})
+	s.startChannelRun(&channel.Run{ID: "fb_om2", Channel: channel.Feishu, ReplyTo: "om2", MachineID: "server", SessionID: "s1",
+		TargetKind: targetJarvis, Base: 3, MsgIDs: []string{"feishu-om2"}, Probe: "second", Started: time.Now().UTC(),
+		Ext: map[string]string{}})
+	runs := s.channelRuns(channel.Feishu)
+	if len(runs) != 1 || runs[0].ID != "fb_om2" || len(runs[0].Folded) != 1 {
+		t.Fatalf("runs %+v", runs)
+	}
+	rd, err := s.readTurn(context.Background(), &runs[0])
+	if err != nil || !rd.Found || rd.Answer != "first answer\n\nsecond answer" {
+		t.Fatalf("%+v %v", rd, err)
+	}
+}

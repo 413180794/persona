@@ -47,7 +47,9 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 	}
 	named := len(r.MsgIDs) > 0 || r.Probe != ""
 	var kept []proto.Item
-	found := !named
+	// A Head run's first message is the first thing after its base: everything from there on is kept, and its named
+	// messages must be in too before it answers.
+	found := !named || r.Head
 	after := r.Base
 	for page := 0; page < readPagesMost; page++ {
 		items, more, to, err := src.ItemsAfter(ctx, after)
@@ -74,6 +76,13 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 		}
 		if !more {
 			break
+		}
+	}
+	if r.Head && named {
+		later := *r
+		later.Head = false
+		if _, in := later.Find(kept, holds); !in {
+			return Reading{Last: after}, nil // a message folded in is not in the conversation yet
 		}
 	}
 	if named && found && !slices.ContainsFunc(kept, func(it proto.Item) bool { return it.Role == "assistant" }) {
@@ -112,9 +121,10 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 // order the conversation has them (not the order they were sent: a message that had to start the conversation first
 // comes later), each message's own answer — the words after it, up to the next of them. A part that ends without words
 // (the conversation took the next message in mid-turn and went on) has its answer in the next one. Without client
-// message ids on the items (an older node) they can't be told apart: one answer, the last words, as before.
+// message ids on the items (an older node) they can't be told apart: one answer, the last words, as before. A Head
+// run's first part is what comes before the first of its MsgIDs (the message that started the conversation).
 func RunAnswer(r *Run, items []proto.Item) ([]proto.Item, bool) {
-	if len(r.MsgIDs) < 2 {
+	if len(r.MsgIDs) < 2 && !(r.Head && len(r.MsgIDs) == 1) {
 		return Answer(items), true
 	}
 	ours := map[string]bool{}

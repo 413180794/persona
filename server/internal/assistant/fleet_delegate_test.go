@@ -377,6 +377,71 @@ func TestDelegateDoesNotAnswerTheSameQuestionTwice(t *testing.T) {
 	}
 }
 
+// The same question of an agent's coming again while the assistant still decides on the first goes to the user: the
+// assistant is asked once, the user gets one push, and the first is still answered for the user.
+func TestDelegateSameQuestionWhileDeciding(t *testing.T) {
+	release := make(chan struct{})
+	df := newDelegateFleet(t, func(p DelegateParams) (DelegateResult, error) {
+		<-release // a slow call
+		q := p.Interaction.Questions[0]
+		return DelegateResult{Answer: true, Answers: map[string]string{q.Question: q.Options[0].Label}}, nil
+	})
+	first := delegateQuestion("ix_w1")
+	firstAnswered := df.ask(first)
+	waitDelegate(t, "the first call", func() bool { return df.delegateCalls() == 1 })
+	again := delegateQuestion("ix_w2")
+	againAnswered := df.ask(again)
+	waitDelegate(t, "the push or a second call", func() bool { return df.pushedFor(again.ID) != nil || df.delegateCalls() > 1 })
+	close(release)
+	if got := df.delegateCalls(); got != 1 {
+		t.Fatalf("asked the assistant %d times", got)
+	}
+	if res := answerOf(t, firstAnswered); res.AnsweredBy != proto.AnsweredByAssistant {
+		t.Fatalf("first: %+v", res)
+	}
+	pushes := 0
+	for _, n := range df.f.pushed() {
+		if n.Interaction != nil && (n.Interaction.ID == first.ID || n.Interaction.ID == again.ID) {
+			pushes++
+		}
+	}
+	if pushes != 1 || df.pushedFor(again.ID) == nil {
+		t.Fatalf("%d pushes", pushes)
+	}
+	if err := df.s.resolve(again.ID, proto.Resolution{Answers: map[string]string{again.Questions[0].Question: "main"}}); err != nil {
+		t.Fatal(err)
+	}
+	if res := answerOf(t, againAnswered); res.AnsweredBy != "" {
+		t.Fatalf("again: %+v", res)
+	}
+}
+
+// A call that fails takes its note back: the same question again is the assistant's to answer.
+func TestDelegateFailedCallForgets(t *testing.T) {
+	fail := true
+	var mu sync.Mutex
+	df := newDelegateFleet(t, func(p DelegateParams) (DelegateResult, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if fail {
+			fail = false
+			return DelegateResult{}, context.DeadlineExceeded
+		}
+		q := p.Interaction.Questions[0]
+		return DelegateResult{Answer: true, Answers: map[string]string{q.Question: q.Options[0].Label}}, nil
+	})
+	first := delegateQuestion("ix_f1")
+	firstAnswered := df.ask(first)
+	waitDelegate(t, "the push", func() bool { return df.pushedFor(first.ID) != nil })
+	if res := answerOf(t, df.ask(delegateQuestion("ix_f2"))); res.AnsweredBy != proto.AnsweredByAssistant {
+		t.Fatalf("after a failed call: %+v", res)
+	}
+	if err := df.s.resolve(first.ID, proto.Resolution{Answers: map[string]string{first.Questions[0].Question: "main"}}); err != nil {
+		t.Fatal(err)
+	}
+	answerOf(t, firstAnswered)
+}
+
 func TestSameAsk(t *testing.T) {
 	for _, c := range []struct {
 		a, b string

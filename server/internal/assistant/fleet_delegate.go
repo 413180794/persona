@@ -25,21 +25,24 @@ import (
 // the user is asked as before: a question never waits on it. Permissions, plans, terminal dialogs and forms are never
 // delegated.
 
-// delegable: ix is a question the assistant decides on first.
-func (s *Service) delegable(ix proto.Interaction) bool {
+// delegable: ix is a question the assistant decides on first. When it is, ix is noted as being answered by the
+// assistant at once (claimDelegate), so the same question of the same agent coming while it decides goes to the user;
+// forget takes the note back when no answer goes. forget is nil when ix is not delegable.
+func (s *Service) delegable(ix proto.Interaction) (forget func()) {
 	if ix.Kind != proto.IxQuestion || len(ix.Questions) == 0 || len(ix.Fields) > 0 || ix.ToolName == "ask_user" || !asksForInput(ix) {
-		return false
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if !s.hello(ctx).Agents.Delegate.On() {
-		return false
+		return nil
 	}
-	if s.delegatedBefore(ctx, ix) {
+	forget, ok := s.claimDelegate(ctx, ix)
+	if !ok {
 		s.workEvent(ix.MachineID, ix.SessionID, "delegate_repeat", map[string]any{"questions": len(ix.Questions)})
-		return false
+		return nil
 	}
-	return true
+	return forget
 }
 
 // asksForInput: ix really asks something. An agent's own question (AskUserQuestion, a Codex request) waits for input
@@ -68,10 +71,12 @@ func asksForInput(ix proto.Interaction) bool {
 	return false
 }
 
-// delegatedAsk is a question the assistant answered for the user: its text as delegateText has it, and when.
+// delegatedAsk is a question the assistant answered (or is deciding on) for the user: its text as delegateText has it,
+// when, and the interaction it was (empty for one read back from the events).
 type delegatedAsk struct {
 	text string
 	at   time.Time
+	id   string
 }
 
 // delegateRepeatFor is how long an answer the assistant gave keeps it from answering the same question of the same
@@ -118,35 +123,27 @@ func sameAsk(a, b string) bool {
 	return na+nb > 0 && float64(2*both)/float64(na+nb) >= 0.8
 }
 
-// delegatedBefore: the assistant answered the same question of ix's agent within delegateRepeatFor. It does not
-// answer it again: the agent asking once more means the answer did not settle it, and the user should see it.
-func (s *Service) delegatedBefore(ctx context.Context, ix proto.Interaction) bool {
+// claimDelegate: unless the assistant answered (or is deciding on) the same question of ix's agent within
+// delegateRepeatFor, notes ix as the assistant's, in the same lock as the check, so two of the same question never both
+// go to it. It does not answer one again: the agent asking once more means the answer did not settle it, and the user
+// should see it. forget takes the note back.
+func (s *Service) claimDelegate(ctx context.Context, ix proto.Interaction) (forget func(), ok bool) {
 	s.loadDelegated(ctx)
 	text := delegateText(ix)
 	if text == "" {
-		return false
-	}
-	cutoff := time.Now().Add(-delegateRepeatFor)
-	s.work.mu.Lock()
-	defer s.work.mu.Unlock()
-	for _, d := range s.work.delegated[[2]string{ix.MachineID, ix.SessionID}] {
-		if d.at.After(cutoff) && sameAsk(d.text, text) {
-			return true
-		}
-	}
-	return false
-}
-
-// noteDelegated notes, in memory, that the assistant is answering ix, so delegatedBefore sees it from now on; forget
-// takes the note back when the answer did not go.
-func (s *Service) noteDelegated(ix proto.Interaction) (forget func()) {
-	text := delegateText(ix)
-	if text == "" {
-		return func() {}
+		return func() {}, true
 	}
 	k := [2]string{ix.MachineID, ix.SessionID}
-	d := delegatedAsk{text: text, at: time.Now()}
-	s.addDelegated(k, d)
+	d := delegatedAsk{text: text, at: time.Now(), id: ix.ID}
+	cutoff := d.at.Add(-delegateRepeatFor)
+	s.work.mu.Lock()
+	defer s.work.mu.Unlock()
+	for _, o := range s.work.delegated[k] {
+		if o.at.After(cutoff) && sameAsk(o.text, text) {
+			return nil, false
+		}
+	}
+	s.addDelegatedLocked(k, d)
 	return func() {
 		s.work.mu.Lock()
 		defer s.work.mu.Unlock()
@@ -157,10 +154,10 @@ func (s *Service) noteDelegated(ix proto.Interaction) (forget func()) {
 				return
 			}
 		}
-	}
+	}, true
 }
 
-// rememberDelegated keeps the answer the assistant gave for ix (noteDelegated's) in the events, so a restart keeps it.
+// rememberDelegated keeps the answer the assistant gave for ix (claimDelegate's) in the events, so a restart keeps it.
 func (s *Service) rememberDelegated(ix proto.Interaction) {
 	if text := delegateText(ix); text != "" {
 		s.workEvent(ix.MachineID, ix.SessionID, "delegated", map[string]any{"text": text})
@@ -168,9 +165,14 @@ func (s *Service) rememberDelegated(ix proto.Interaction) {
 }
 
 func (s *Service) addDelegated(k [2]string, d delegatedAsk) {
-	cutoff := time.Now().Add(-delegateRepeatFor)
 	s.work.mu.Lock()
 	defer s.work.mu.Unlock()
+	s.addDelegatedLocked(k, d)
+}
+
+// addDelegatedLocked is addDelegated with s.work.mu held.
+func (s *Service) addDelegatedLocked(k [2]string, d delegatedAsk) {
+	cutoff := time.Now().Add(-delegateRepeatFor)
 	if s.work.delegated == nil {
 		s.work.delegated = map[[2]string][]delegatedAsk{}
 	}
@@ -211,8 +213,8 @@ func (s *Service) loadDelegated(ctx context.Context) {
 	}
 }
 
-// delegate shows ix as delegating and has the assistant decide on it, in the background.
-func (s *Service) delegate(ix proto.Interaction) {
+// delegate shows ix as delegating and has the assistant decide on it, in the background; forget is delegable's.
+func (s *Service) delegate(ix proto.Interaction, forget func()) {
 	s.fleet.mu.Lock()
 	if p := s.fleet.interactions[ix.ID]; p != nil {
 		p.ix.Delegating = true
@@ -221,12 +223,18 @@ func (s *Service) delegate(ix proto.Interaction) {
 	shown := ix
 	shown.Delegating = true
 	s.show(shown)
-	go s.delegateNow(ix)
+	go s.delegateNow(ix, forget)
 }
 
 // delegateNow waits for the assistant's call on ix (agents.delegate's timeout at most), then answers it or tells the
-// user. A call that comes too late is dropped.
-func (s *Service) delegateNow(ix proto.Interaction) {
+// user. A call that comes too late is dropped. forget takes back delegable's note unless the answer went.
+func (s *Service) delegateNow(ix proto.Interaction, forget func()) {
+	answered := false
+	defer func() {
+		if !answered {
+			forget()
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	timeout := s.hello(ctx).Agents.Delegate.Timeout()
 	cancel()
@@ -251,13 +259,11 @@ func (s *Service) delegateNow(ix proto.Interaction) {
 	case d.err != nil:
 		s.logf("delegate %s: %v; asking the user", ix.ID, d.err)
 	case d.res.Answer:
-		// Noted before the answer goes: the agent has it at once and may ask the same again before this goes on.
-		forget := s.noteDelegated(ix)
+		// Noted since delegable: the agent has the answer at once and may ask the same again before this goes on.
 		ok, err := s.answerQuestion(ix.MachineID, ix.SessionID, ix.ID, d.res.Answers, d.res.Reason)
 		if ok {
+			answered = true
 			s.rememberDelegated(ix)
-		} else {
-			forget()
 		}
 		if ok || err == nil {
 			return // answered, or no longer pending (the user answered it meanwhile)

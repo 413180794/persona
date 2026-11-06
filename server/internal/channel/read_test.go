@@ -229,3 +229,47 @@ func TestReadTurnStoppedBeforeWords(t *testing.T) {
 		t.Fatalf("a plain notice is not a stop: %+v", rd)
 	}
 }
+
+// A message that started the conversation has no client message id (node assistant.send ties none to it); one sent
+// before it was answered is folded in with its own. The folded run still answers the first: from the conversation's
+// start, each message's own answer (#4746).
+func TestReadTurnFoldsTheConversationsFirstMessage(t *testing.T) {
+	first := &Run{Started: t0} // started the conversation: no id, no probe, base 0
+	second := &Run{Base: 3, MsgIDs: []string{"feishu-2"}, Probe: "second", Started: t0.Add(5e9)}
+	second.Fold(first)
+	duration := proto.Item{Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 5}}
+	src := &pagedSource{page: 2, items: numbered(userSays("", "first"), toolUse, toolResult, agentSays("first answer"),
+		userSays("feishu-2", "second"), agentSays("second answer"), duration)}
+	rd, err := ReadTurn(context.Background(), src, second)
+	if err != nil || !rd.Found || rd.Answer != "first answer\n\nsecond answer" {
+		t.Fatalf("%+v %v", rd, err)
+	}
+	if src.after[0] != 0 {
+		t.Fatalf("read from %d, not the conversation's start", src.after[0])
+	}
+	// The second message not in yet: wait for it, not answer the first alone.
+	src = &pagedSource{page: 10, items: numbered(userSays("", "first"), agentSays("first answer"))}
+	if rd, err := ReadTurn(context.Background(), src, second); err != nil || rd.Found {
+		t.Fatalf("answered before the second message was in: %+v %v", rd, err)
+	}
+	// An older node (no ids on the items): the last words, as before.
+	if got, all := RunAnswer(second, []proto.Item{userSays("", "first"), agentSays("first answer"), userSays("", "second"),
+		agentSays("second answer")}); !all || texts(got) != "second answer" {
+		t.Fatalf("older node: %q %v", texts(got), all)
+	}
+	// A held run names no message either, but it was answered already: folding it in does not add a part.
+	held := &Run{Held: true, Started: t0}
+	next := &Run{Base: 3, MsgIDs: []string{"feishu-3"}, Started: t0.Add(5e9)}
+	next.Fold(held)
+	if next.Head {
+		t.Fatal("a held run folded in as an unanswered message")
+	}
+	// Asked again: the run now waits on the ask-again message alone, from its new base; the conversation's first
+	// message is not a part of it any more.
+	again := &Run{Base: 3, MsgIDs: []string{"feishu-2"}, Started: t0.Add(5e9)}
+	again.Fold(&Run{Started: t0})
+	again.AskAgain(4, "feishu-2-again", "", t0.Add(6e9))
+	if again.Head {
+		t.Fatal("asked again, still reading from the conversation's start")
+	}
+}

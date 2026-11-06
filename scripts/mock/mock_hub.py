@@ -13542,6 +13542,21 @@ if EXT_AUTH:
 MOCK_HELP.append("MOCK_EXTENSION_AUTH=1|device|installed|device-installed  （配合 MOCK_PLUGINS、MOCK_EXTENSION_OPS）扩展市场里的「Example 查询」装两个命令行程序（安装步骤多一步「安装命令行」）并要登录：装完 next=auth，登录是扫码（device：验证码和链接），第 3 次轮询登录成功（MOCK_EXTENSION_AUTH_POLLS）；installed：已经装好、未登录；MOCK_EXTENSION_AUTH_OLD=1 不说 extension_auth（旧 hub，#4507）")
 
 
+# MOCK_relay-history=<fixture> (with MOCK_PLUGINS=1): quota-relay-history's sidebar page 「relay-history 账号」 as a nav_page, drawn from
+# the extension's exported Views (apple/PersonaTests/Fixtures/relay-history-accounts-view.json, made-up accounts, #4576).
+if os.environ.get("MOCK_relay-history") and PLUGINS_MODE:
+    from relay-history_accounts import relay-historyAccountsMock
+    _relay-history_accounts = relay-historyAccountsMock(os.environ["MOCK_relay-history"], os.environ.get("MOCK_relay-history_START", ""))
+    _plugins_route_without_relay-history = plugins_route
+
+    def plugins_route(handler, p, body):
+        if _relay-history_accounts.route(handler, p, body): return True
+        return _plugins_route_without_relay-history(_relay-history_accounts.wrap(handler, p), p, body)
+
+
+MOCK_HELP.append("MOCK_relay-history=<fixture.json>  （配合 MOCK_PLUGINS=1）侧边栏多一个扩展页「relay-history 账号」，内容是 quota-relay-history 导出的 View（apple/PersonaTests/Fixtures/relay-history-accounts-view.json，假数据）：默认、选 Kiro、搜索、点一个账号进详情；MOCK_relay-history_START=kiro|detail 让第一次打开就是选了 Kiro / 一个账号的详情，截图不用点（#4576）")
+
+
 # ---------- area: adding a computer from a signed-in device (#287, docs/onboarding.md 4.2, 5.3) ----------
 # MOCK_ADD_COMPUTER=1: the hub says machines_add and machine_trust. POST /api/v1/auth/pair-codes {"add": {name, os}} adds a
 # pending kind-link computer (never connected), {"machine": id} gives one a new code; MOCK_ADD_COMPUTER_JOIN seconds later

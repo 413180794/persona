@@ -297,6 +297,35 @@ test('approvals of configured tools go to the phone when it drives the session; 
   assert.equal(a.ui.confirms.length, 1)
 })
 
+test('without a dialog (pi -p) an approval goes to the phone even when the phone does not drive the session', async (t) => {
+  const { n, host } = await setup(t, { approve: ['bash'] }) // answerFirst auto: the local dialog first
+  const a = piSession('s-noui')
+  a.ctx.hasUI = false
+  host.register(a.pi)
+  await a.fire('session_start')
+  await n.ready
+  await until('listed', () => n.last('runtime.sessions'))
+  n.resolve = () => ({ allow: true })
+  assert.equal(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c1', input: { command: 'make' } }), undefined)
+  assert.equal(n.asked.length, 1)
+  assert.equal(n.asked[0].summary, 'make')
+  n.resolve = () => ({ allow: false, message: 'not that' })
+  assert.deepEqual(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c2', input: { command: 'ls' } }), { block: true, reason: 'not that' })
+  n.resolve = () => ({ dismiss: true }) // nobody answered there either
+  assert.deepEqual(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c3', input: { command: 'ls' } }), { block: true, reason: '没有人批准（没有界面，手机也没回答）' })
+  // With a dialog, it decides and the phone is not asked.
+  a.ctx.hasUI = true
+  a.ui.answer = true
+  assert.equal(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c4', input: { command: 'ls' } }), undefined)
+  assert.equal(n.asked.length, 3)
+  // No hub: blocked at once, not after waiting for one.
+  a.ctx.hasUI = false
+  n.setHub(false)
+  await new Promise((r) => setTimeout(r, 50))
+  assert.deepEqual(await a.fire('tool_call', { toolName: 'bash', toolCallId: 'c5', input: { command: 'ls' } }), { block: true, reason: '没有人批准（没有界面，手机也没回答）' })
+  assert.equal(n.asked.length, 3)
+})
+
 test('总是同意 on a pi card is kept in the session: later calls of that tool run unasked, others still ask', async (t) => {
   const { n, host } = await setup(t, { approve: ['bash', 'write'], answerFirst: 'phone' })
   const a = piSession('s-al')

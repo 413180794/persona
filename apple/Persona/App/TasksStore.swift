@@ -76,25 +76,31 @@ final class TasksStore {
         todoStore.reload(api: api)
     }
 
-    /// Pulls a conversation's feed (what came since the newest item it has) and the todos.
+    /// Pulls a conversation's feed (what came since the newest item it has, page after page: FeedPaging) and the todos.
     @discardableResult
     func load(_ conversation: String, refreshTodos: Bool = true, api injected: APIClient? = nil) -> Task<Void, Never>? {
         if let task = loading[conversation] { return task }
         guard let api = injected ?? AppModel.shared.api else { return nil }
         if refreshTodos { reloadTodos(api: injected) }
-        let since = feeds[conversation]?.last?.at
+        let first = feeds[conversation]?.last?.at
         let ticket = generation
         let task = Task {
             defer { if generation == ticket { loading[conversation] = nil } }
-            guard let res = try? await api.feed(conversation: conversation, since: since),
-                  !Task.isCancelled, generation == ticket else { return }
-            viewStore.receive(res.views ?? [:], conversation: conversation, group: api.group)
-            viewStore.receiveActions(res.viewActions ?? [:], conversation: conversation, group: api.group)
-            viewStore.receiveBlocks(res.viewBlocks ?? [], conversation: conversation, group: api.group)
-            let items = res.items.filter { $0.conversation == conversation }
-            for item in items { viewStore.receive(item, group: api.group) }
-            for (id, plan) in res.plans ?? [:] where plan.conversation == conversation && plans[id] != plan { plans[id] = plan }
-            merge(items, into: conversation)
+            var since = first
+            for _ in 0..<FeedPaging.maxPages {
+                guard let res = try? await api.feed(conversation: conversation, since: since),
+                      !Task.isCancelled, generation == ticket else { return }
+                // The cards' snapshot comes whole with every page: what an event missed comes back here.
+                viewStore.receive(res.views ?? [:], conversation: conversation, group: api.group)
+                viewStore.receiveActions(res.viewActions ?? [:], conversation: conversation, group: api.group)
+                viewStore.receiveBlocks(res.viewBlocks ?? [], conversation: conversation, group: api.group)
+                let items = res.items.filter { $0.conversation == conversation }
+                for item in items { viewStore.receive(item, group: api.group) }
+                for (id, plan) in res.plans ?? [:] where plan.conversation == conversation && plans[id] != plan { plans[id] = plan }
+                merge(items, into: conversation)
+                guard let next = FeedPaging.next(after: res.items, since: since) else { return }
+                since = next
+            }
         }
         loading[conversation] = task
         return task
@@ -316,5 +322,23 @@ final class TasksStore {
             }
         }
         return true
+    }
+}
+
+/// How a conversation's feed is read (#4642): the hub answers at most `pageSize` items after `since`, oldest first
+/// (tasks.go `feedPage`), so a feed longer than that comes in pages, each after the newest of the one before, as the
+/// web's `loadFeed` (#2171 / #2272) and the watch's cards read it. Without this a cold start showed only the oldest
+/// 500, and the first push after it moved `since` past the rest for good.
+nonisolated enum FeedPaging {
+    static let pageSize = 500
+    /// A bound on one load: a hub that kept answering full pages does not keep it going forever.
+    static let maxPages = 40
+
+    /// Where the next page starts after `page`, the answer to a request after `since`; nil when this was the last:
+    /// a page that is not full, or one whose newest item is no later than `since` (it would come back the same).
+    static func next(after page: [FeedItem], since: Date?) -> Date? {
+        guard page.count >= pageSize, let newest = page.map(\.at).max() else { return nil }
+        if let since, newest <= since { return nil }
+        return newest
     }
 }

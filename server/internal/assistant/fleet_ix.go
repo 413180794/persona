@@ -476,8 +476,8 @@ func cleanTitle(ix proto.Interaction) proto.Interaction {
 // announce puts a new card on the apps (through the hub), pushes it, and gives it to the channels. A question the
 // assistant may answer for the user goes to it first (fleet_delegate.go).
 func (s *Service) announce(ix proto.Interaction) {
-	if s.delegable(ix) {
-		s.delegate(ix)
+	if forget := s.delegable(ix); forget != nil {
+		s.delegate(ix, forget)
 		return
 	}
 	s.tell(ix)

@@ -31,8 +31,11 @@ type Run struct {
 	Base int `json:"base"`
 	// MsgIDs are the client_msg_ids of the messages it answers; Probe a piece of the first one's text, to find it
 	// when the node does not tie items to their send.
-	MsgIDs  []string  `json:"msg_ids,omitempty"`
-	Probe   string    `json:"probe,omitempty"`
+	MsgIDs []string `json:"msg_ids,omitempty"`
+	Probe  string   `json:"probe,omitempty"`
+	// Head: before its MsgIDs it answers a message the conversation has no id for, the first thing after Base (the
+	// message that started the conversation, folded in: node assistant.send ties no client_msg_id to it).
+	Head    bool      `json:"head,omitempty"`
 	Started time.Time `json:"started"`
 	// Seen: the conversation was seen working since (until then a quiet one may just not have started).
 	Seen bool `json:"seen,omitempty"`
@@ -61,7 +64,7 @@ func (r *Run) AskAgain(last int, msgID, probe string, now time.Time) {
 	if last > r.Base {
 		r.Base = last
 	}
-	r.MsgIDs, r.Probe, r.Seen, r.Again = []string{msgID}, probe, false, now
+	r.MsgIDs, r.Probe, r.Head, r.Seen, r.Again = []string{msgID}, probe, false, false, now
 }
 
 // Queued: the run's message is not in the conversation yet, but may still come (it waits behind another turn).
@@ -116,6 +119,12 @@ func (r *Run) Fold(o *Run) {
 	}
 	r.Folded = append(append(r.Folded, o.Folded...), Folded{ReplyTo: o.ReplyTo, Ext: o.Ext})
 	r.MsgIDs = append(slices.Clone(o.MsgIDs), r.MsgIDs...)
+	// An earlier run that names no message (it started the conversation, read from its base on) stays one of the
+	// messages answered: without this the fold names only the later one and the first answer is lost (#4746). A held
+	// run names none either, but it was answered already.
+	if o.Head || len(o.MsgIDs) == 0 && o.Probe == "" && !o.Held {
+		r.Head = true
+	}
 	if r.Probe == "" {
 		r.Probe = o.Probe
 	}
@@ -262,13 +271,13 @@ func (r *Run) Hold(last int, now time.Time) {
 	if last > r.Base {
 		r.Base = last
 	}
-	r.MsgIDs, r.Probe, r.Seen, r.Held, r.Started, r.Folded, r.Again = nil, "", false, true, now, nil, time.Time{}
+	r.MsgIDs, r.Probe, r.Head, r.Seen, r.Held, r.Started, r.Folded, r.Again = nil, "", false, false, true, now, nil, time.Time{}
 }
 
 // Find is where the run's message is in items: by its client_msg_id, else by its probe (holds says whether a user
 // item holds it, for one cut for pages); 0, true for a run that has neither (everything after Base is new).
 func (r *Run) Find(items []proto.Item, holds func(proto.Item) bool) (int, bool) {
-	if len(r.MsgIDs) == 0 && r.Probe == "" {
+	if r.Head || len(r.MsgIDs) == 0 && r.Probe == "" {
 		return 0, true
 	}
 	for i, it := range items {

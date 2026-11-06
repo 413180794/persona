@@ -391,7 +391,10 @@ export function createPiHost(deps, options = {}) {
     if (lastHost(ctx.sessionManager.getEntries()) !== host) pi.appendEntry(HOST_ENTRY, { host })
   }
 
-  /** A tool the user asked to approve (options.approve): the phone or pi's own dialog decides; without either, no. */
+  /**
+   * A tool the user asked to approve (options.approve): the phone or pi's own dialog decides, whichever goes first
+   * (answerFirst), the phone also when pi has no dialog (pi -p, JSON mode); without either, no.
+   */
   async function approval(s, e, ctx) {
     const name = e.toolName ?? e.name
     if (!approve.has(name)) return undefined
@@ -399,7 +402,8 @@ export function createPiHost(deps, options = {}) {
     if (alwaysAllowed(entries, name)) return undefined // 总是同意 on an earlier card of this session
     const input = e.input ?? e.args ?? {}
     const summary = summaryOf(name, input)
-    if (rt.phoneFirst(s.id)) {
+    /** The phone's answer: { out } when it answered (out undefined = allowed), undefined when nobody did there. */
+    const askPhone = async () => {
       const res = await rt.ask({
         id: interactionId('pi', s.id, 'permission', e.toolCallId), kind: 'permission', session_id: s.id,
         tool_name: toolName(name), tool_use_id: e.toolCallId, tool_input: toolInput(name, input), summary,
@@ -410,13 +414,23 @@ export function createPiHost(deps, options = {}) {
         if (res.always === true && typeof s.pi.appendEntry === 'function' && !alwaysAllowed(ctx.sessionManager.getEntries(), name)) {
           s.pi.appendEntry(ALLOW_ENTRY, { tool: name })
         }
-        return undefined
+        return { out: undefined }
       }
-      if (res?.allow === false) return { block: true, reason: res.message?.trim() || '用户在手机上拒绝了' }
+      if (res?.allow === false) return { out: { block: true, reason: res.message?.trim() || '用户在手机上拒绝了' } }
+      return undefined
+    }
+    const phoneFirst = rt.phoneFirst(s.id)
+    if (phoneFirst) {
+      const answered = await askPhone()
+      if (answered) return answered.out
     }
     if (ctx.hasUI) {
       const ok = await ctx.ui.confirm(`允许 ${name}？`, summary)
       return ok ? undefined : { block: true, reason: '用户拒绝了' }
+    }
+    if (!phoneFirst && rt.hubConnected) {
+      const answered = await askPhone() // no dialog here: the phone's turn
+      if (answered) return answered.out
     }
     return { block: true, reason: '没有人批准（没有界面，手机也没回答）' }
   }
