@@ -357,7 +357,7 @@ export function createOpencodeHost(deps, options = {}) {
       const toSeq = list.at(-1).seq
       const [r] = await rows('select revert from session_v2 where id = ?', id)
       if (sessions.get(id) !== s) return // deleted meanwhile (forget): nothing more of it goes out
-      const fresh = rt.watching(id) ? list.flatMap((m) => messageItems(fromRow(m), m.seq)) : []
+      const fresh = rt.watching(id) ? list.flatMap((m) => messageItems(fromRow(m), m.seq)).map(light) : [] // cut as pages are
       rt.append(id, { items: fresh, fromSeq: s.lastSeq, toSeq, history: historyOf(id, r?.revert) })
       s.lastSeq = toSeq
       s.updatedAt = now()

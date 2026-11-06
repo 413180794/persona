@@ -198,6 +198,29 @@ test('a watched session gets each finished message once, as a continuous batch; 
   assert.ok(n.all('session.delta').at(-1).text === '', 'the live text ends with the turn')
 })
 
+test('what a watched session writes is pushed cut to the page limits, as its pages are', async (t) => {
+  const d = fakeDb()
+  d.session('ses_big')
+  d.user('ses_big', 4, 'one')
+  d.assistant('ses_big', 5, 'a1')
+  const { n, host } = await setup(t, { db: d })
+  const ctx = fakeCtx()
+  host.register(ctx)
+  await n.ready
+  await n.peer.call('session.watch', { session_id: 'ses_big', since_seq: 0 })
+  ctx.emit('session.execution.started', { sessionID: 'ses_big' }) // the conversation so far is the baseline
+  await until('working', () => n.last('runtime.sessions')?.sessions.find((s) => s.session_id === 'ses_big')?.status === 'working')
+  const output = 'line of output\n'.repeat(2000) // 30 KB
+  d.message('ses_big', 8, 'assistant', { content: [{ type: 'tool', id: 'call_1', name: 'shell', state: { status: 'completed', input: { command: 'cat big.log' }, content: [{ type: 'text', text: output }] } }],
+    finish: 'tool-calls', time: { created: T0 + 8, completed: T0 + 9 } })
+  ctx.emit('session.tool.success', { sessionID: 'ses_big' })
+  const pushed = await until('pushed', () => n.all('session.items').flatMap((b) => b.items).find((i) => i.kind === 'tool_result'))
+  const paged = (await n.peer.call('session.items', { session_id: 'ses_big', limit: 2 })).items.find((i) => i.kind === 'tool_result')
+  assert.equal(pushed.full_size, Buffer.byteLength(output), 'cut, with the size of the whole')
+  assert.ok(Buffer.byteLength(pushed.text) < 5 * 1024, 'at most the 4 KB a page carries')
+  assert.deepEqual(pushed, paged, 'the push and the page say the same')
+})
+
 test('every location delivers the same events: each is handled once; the stream moves to another location when its reader goes away', async (t) => {
   const d = fakeDb()
   d.session('ses_e')

@@ -159,6 +159,24 @@ test('a watched session gets what it writes as continuous batches, its live text
   assert.deepEqual(n.all('session.items').at(-1).items.map((i) => i.text), ['two, again'])
 })
 
+test('what a watched session writes is pushed cut to the page limits, as its pages are', async (t) => {
+  const { n, host } = await setup(t)
+  const a = piSession('s-big', '/w/app', [msg('u1', null, 'user', 'one'), msg('a1', 'u1', 'assistant', 'a1')])
+  host.register(a.pi)
+  await a.fire('session_start')
+  await n.ready
+  await n.peer.call('session.watch', { session_id: 's-big', since_seq: 0 })
+  const output = 'line of output\n'.repeat(2000) // 30 KB
+  a.sm.append({ type: 'message', id: 'r1', parentId: 'a1', timestamp: new Date().toISOString(),
+    message: { role: 'toolResult', toolCallId: 'call_1', toolName: 'bash', isError: false, content: [{ type: 'text', text: output }] } })
+  await a.fire('message_end')
+  const pushed = await until('pushed', () => n.all('session.items').flatMap((b) => b.items).find((i) => i.kind === 'tool_result'))
+  const paged = (await n.peer.call('session.items', { session_id: 's-big', limit: 1 })).items.find((i) => i.kind === 'tool_result')
+  assert.equal(pushed.full_size, Buffer.byteLength(output), 'cut, with the size of the whole')
+  assert.ok(Buffer.byteLength(pushed.text) < 5 * 1024, 'at most the 4 KB a page carries')
+  assert.deepEqual(pushed, paged, 'the push and the page say the same')
+})
+
 test('an unwatched session skips item mapping, keeps branch bookkeeping, and catches up when watched', async (t) => {
   const { n, host } = await setup(t)
   const a = piSession('s-later', '/w/app', [msg('u1', null, 'user', 'one'), msg('a1', 'u1', 'assistant', 'a1')])

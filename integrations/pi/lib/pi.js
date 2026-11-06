@@ -11,7 +11,7 @@
 
 import { basename } from 'node:path'
 import { readFileSync, statSync } from 'node:fs'
-import { createRuntime, installCurrent, interactionId, page, RpcError, snippet, summaryOf, verifyPackage } from '../../runtime-sdk/index.js'
+import { createRuntime, installCurrent, interactionId, light, page, RpcError, snippet, summaryOf, verifyPackage } from '../../runtime-sdk/index.js'
 import { ALLOW_ENTRY, alwaysAllowed, branchItems, branchKey, entryItems, firstText, HOST_ENTRY, imageOf, lastHost, lastText, partialText, toolInput, toolName } from './map.js'
 
 export const RUNTIME_VERSION = '0.3.0'
@@ -295,7 +295,7 @@ export function createPiHost(deps, options = {}) {
     if (entries.length === s.pushed) return
     const branch = sm.getBranch()
     const key = branchKey(entries, branch)
-    const fresh = rt.watching(id) ? branchItems(entries, branch).filter((i) => i.seq > s.pushed) : []
+    const fresh = rt.watching(id) ? branchItems(entries, branch).filter((i) => i.seq > s.pushed).map(light) : [] // cut as pages are
     rt.append(id, { items: fresh, fromSeq: s.key === key ? s.pushed : undefined, toSeq: entries.length, history: `pi:${id}:${key}` })
     s.pushed = entries.length
     s.key = key
