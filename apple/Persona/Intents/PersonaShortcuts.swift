@@ -6,6 +6,17 @@ import AppIntents
 struct JarvisShortcuts: AppShortcutsProvider {
     nonisolated static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: TalkToPersonaIntent(),
+            phrases: [
+                "跟 \(.applicationName) 聊聊",
+                "和 \(.applicationName) 聊天",
+                "Talk to \(.applicationName)",
+                "Chat with \(.applicationName)",
+            ],
+            shortTitle: "跟 Persona 聊聊",
+            systemImageName: "waveform.badge.mic"
+        )
+        AppShortcut(
             intent: AskJarvisIntent(),
             phrases: [
                 "问 \(.applicationName)",

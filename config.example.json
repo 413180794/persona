@@ -3,6 +3,7 @@
     "bundle_id": "com.example.jarvis",
     "team_id": "ABCDE12345",
     "push_relay": "https://jarvis.example.com/relay",
+    "carplay_voice": false,
     "meta_wearables": { "enabled": false, "app_id": "", "client_token": "" }
   },
   "app_store": {

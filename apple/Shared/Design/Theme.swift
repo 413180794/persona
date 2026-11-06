@@ -435,6 +435,9 @@ nonisolated enum Theme {
         static let sidebarMax: CGFloat = 480
         /// The narrowest column of a card grid (机器's cards): two side by side in an iPad's detail column.
         static let cardColumn: CGFloat = 330
+        // CarPlay.
+        /// The image of a CarPlay voice control state: Apple's guide asks for 150 pt (CarPlay sets its own size).
+        static let carPlayVoiceImage: CGFloat = 150
         /// The file tree's column of an extension's code page beside its diffs or code (#2961).
         static let codeSideColumn: CGFloat = 300
         /// The width from which an extension's code page puts its side column beside the main one (#2961).

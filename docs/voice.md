@@ -969,6 +969,7 @@ struct VoiceDeps { var api: () -> APIClient?                 // 每次连接都�
   3. 带 `Authorization: Bearer` 的 `URLRequest`；
   4. `api.session.webSocketTask`。
 - **`PhoneVoiceAudio`**：从 #1931 的 `DuplexVoiceSession` 音频部分改出来，文件头和 PR（#3789）里注明出处。开工前在 #1951 问过作者能否这样复用，合并时作者还没答复，维护者决定先合并、在 #1951 跟进；作者有异议就回退或重写这部分。做成共用的音频引擎，CarPlay 也能直接用。
+- **#1931 已改用**：CarPlay 经 `VoiceCalls` / `VoiceConversation(surface: .carPlay)` 调用本引擎，`DuplexVoice*` 已删除（见 `docs/carplay.md`）。
   - **保留**：`.playAndRecord` / `.voiceChat` + VoiceProcessing、`AVAudioConverter`、用「代」丢掉 `clear` 之前的声音、ping、来电打断、媒体服务重置、和 `RecordingMicrophone` 互斥。
   - **改动**：
     - 申请麦克风权限；

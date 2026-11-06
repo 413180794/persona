@@ -13,6 +13,8 @@ __pycache__/
 /tmp/
 florak/
 /apple/Config.xcconfig
+# Generated when config.json app.carplay_voice is on: the app's entitlements plus the CarPlay voice one (docs/carplay.md).
+/apple/PersonaCarPlay.entitlements
 # Personal notes for coding agents working in this checkout (machines, accounts); see CLAUDE.md.
 /CLAUDE.local.md
 /apple/PersonaLink/.build/

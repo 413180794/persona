@@ -11,6 +11,7 @@ The config lives outside the repository so clean worktrees (releases) see it too
 """
 import json
 import os
+import plistlib
 import shlex
 import sys
 
@@ -103,6 +104,25 @@ def app_group(cfg: dict) -> str:
     return get(cfg, "app.app_group", "") or "group." + get(cfg, "app.bundle_id", "")
 
 
+# The app's entitlements. The CarPlay voice entitlement needs Apple's approval first (docs/carplay.md); the generated copy
+# sits in apple/, outside the Persona/ source folder, so XcodeGen does not pick it up as a resource.
+APP_ENTITLEMENTS = os.path.join("Persona", "Resources", "Persona.entitlements")
+CARPLAY_ENTITLEMENTS = "PersonaCarPlay.entitlements"
+
+
+def app_entitlements(cfg: dict) -> str:
+    # Opt-in: an App ID without the approved entitlement cannot sign it, so signing without it must keep working.
+    # Returns the path relative to apple/. Only JSON true turns it on: a string like "false" is truthy in Python.
+    if get(cfg, "app.carplay_voice", False) is not True:
+        return APP_ENTITLEMENTS
+    with open(os.path.join(ROOT, "apple", APP_ENTITLEMENTS), "rb") as f:
+        entitlements = plistlib.load(f)
+    entitlements["com.apple.developer.carplay-voice-based-conversation"] = True
+    with open(os.path.join(ROOT, "apple", CARPLAY_ENTITLEMENTS), "wb") as f:
+        plistlib.dump(entitlements, f)
+    return CARPLAY_ENTITLEMENTS
+
+
 def xcconfig(cfg: dict):
     # Generated, git-ignored: the committed project only says $(JARVIS_BUNDLE_ID).
     out = os.path.join(ROOT, "apple", "Config.xcconfig")
@@ -117,6 +137,8 @@ def xcconfig(cfg: dict):
         f.write("DEVELOPMENT_TEAM = %s\n" % get(cfg, "app.team_id", ""))
         # The push relay the app registers with (docs/push-relay.md); "//" starts a comment in xcconfig, hence $().
         f.write("JARVIS_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
+        # Which entitlements the app signs with (app_entitlements; docs/carplay.md).
+        f.write("PERSONA_APP_ENTITLEMENTS = %s\n" % app_entitlements(cfg))
         # Meta Wearables (docs/meta-glasses.md): 0 means Developer Mode (no attestation), as Meta's docs say.
         f.write("PERSONA_META_APP_ID = %s\n" % (str(get(cfg, "app.meta_wearables.app_id", "") or "") or "0"))
         f.write("PERSONA_META_CLIENT_TOKEN = %s\n" % (get(cfg, "app.meta_wearables.client_token", "") or ""))

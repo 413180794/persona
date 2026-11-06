@@ -8,6 +8,7 @@
 | Intent | 标题 | 作用 | 运行模式 |
 | --- | --- | --- | --- |
 | `AskJarvisIntent` | 问 Persona | 把问题发进助手的主对话（`GET /api/v1/assistant` 的 `main`；没有主对话时 `POST /api/v1/assistant/conversations` 带 `main:true` 新开），轮询 `items?after_seq=` 最多约 24 秒，等会话不再 working 后把 assistant 的文本读出来，并显示一张卡片（问题 + 全文）。答得慢就说「已发给 Persona，它还在想」 | 后台 |
+| `TalkToPersonaIntent` | 跟 Persona 聊聊 | 已连 CarPlay 时开始双工语音对话（`docs/carplay.md`）；没连时说明「先连上 CarPlay」，不开始 | 后台 |
 | `AgentTaskIntent` | 让 Agent 去做 | `POST /api/v1/agents/sessions/{id}/messages`，`clientId` 每次新 UUID（hub 去重 + outbox）。会话用 `PersonalAgentEntity` 选；不选时用列表里第一个 `canSend` 的 | 后台 |
 | `AgentsStatusIntent` | 个人 Agent 未读 | `GET /api/v1/agents/sessions`：几个会话共几条未读，列前三个；没有未读就报最近的三个 | 后台 |
 | `AddTodoIntent` | 新建待办 | `POST /api/v1/todos`（`{"title", "notes"?}`，见 `docs/todos.md`），建到 App 当前选中的 hub 组（`hub.group`，和待办页一致；没有这组时用第一组）。读出「已记下待办：「…」」，返回值是标题，快捷指令里可以接着用；旧 hub 没有待办接口（404）时说先更新 hub | 后台 |
@@ -38,6 +39,7 @@
 - `@AppIntent(schema: .assistant...)` 这类 Apple Intelligence 的 assistant schema：没有贴合「问一个私有助手」的 schema（现有的是 mail / photos / books 等领域），没接。
 - 点 Spotlight 里的个人 Agent 只切到 Agents tab，不直接推到那段会话（ChatsView 的导航栈还没有外部入口）。
 - 问 Persona 的回答有 24 秒上限：长任务读不出全文，去 App 主对话看。
+- 车里的长对话见 `docs/carplay.md`（Siri 只当入口，双工语音）。
 - 控件只能打开 App；在控件里直接发问需要 App Intents 的文本输入，控件不支持。
 
 ## 在手机上验证

@@ -193,6 +193,23 @@ extension Theme {
         /// Puts the keyboard away (the chat's composer, beside the mode chips).
         static let dismissKeyboard = "keyboard.chevron.compact.down"
 
+        // MARK: Voice conversation (CarPlay)
+
+        /// Connecting to Persona's voice conversation.
+        static let voiceConnecting = "antenna.radiowaves.left.and.right"
+        /// Listening: say it directly.
+        static let voiceListening = "waveform.badge.mic"
+        /// Persona is speaking; the user may cut in.
+        static let voiceSpeaking = "speaker.wave.2.fill"
+        /// Persona is working on a tool (the voice screen's 处理中).
+        static let voiceWorking = "hourglass"
+        /// The voice conversation has stopped (mic off).
+        static let voiceEnded = "mic.slash"
+        /// Start listening again after the conversation stopped.
+        static let voiceResume = "mic.circle.fill"
+        /// Cut Persona off while it speaks (the voice screen's 打断).
+        static let voiceInterruptSpeech = "hand.tap.fill"
+
         // MARK: Navigation
 
         static let disclosure = "chevron.right"
@@ -401,7 +418,17 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video''s, the sidebar's).
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
+        /// Send someone a message.
+        static let message = "bubble.left.fill"
+        static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
+        static let locked = "lock"
+        /// Feishu [removed] words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
+        static let memory = "brain"
+        /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

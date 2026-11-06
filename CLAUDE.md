@@ -311,6 +311,7 @@ Every number, color and icon in the UI comes from the design system; pages conta
 | `docs/ios-state.md` | App state and redraws: how a push reaches the screen, the cost of one push, root causes, staged fixes; standards and probes for accuracy / timeliness (`ScreenProbe`) |
 | `docs/intents.md` | Siri / Shortcuts (App Intents): ask Claude, status, approve the first pending request |
 | `docs/siri.md` | Deep Siri integration: ask Persona (the assistant's main chat), send work to a personal Agent, unread items, Control Center / Action button, Spotlight indexing |
+| `docs/carplay.md` | CarPlay long voice conversations: full-duplex in the car over the hub's voice extension via `VoiceConversation(surface: .carPlay)`, audio session and mic ownership, Apple's limits, how to turn on the entitlement (`app.carplay_voice`), simulator checks |
 | `docs/live-activity.md` | Lock Screen / Dynamic Island Live Activities (Fleet): what is shown, sharing Dynamic Island with other apps (limited width / minimal mode), ContentState, the hub's liveactivity pushes and push-to-start, simulator verification |
 | `docs/shell.md` | The new shell's state model: `ShellState` as the single source of which page is in front, synchronizing segments / bars / routes, pages not in front, acceptance standards and tests for consistency and timeliness |
 | `docs/persona.md` | Avatars: names, portraits, the top bar's dynamic state dot, packaging colors (the hub's `~/.persona/personas`), connecting color families to design tokens, the script for adding avatars (Codex image generation) |

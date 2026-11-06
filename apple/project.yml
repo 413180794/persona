@@ -98,6 +98,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
         PRODUCT_MODULE_NAME: Jarvis
         PRODUCT_NAME: Persona
+        # The entitlements the app signs with: the CarPlay voice one is added only when config.json app.carplay_voice is
+        # on (scripts/persona_config.py xcconfig writes PERSONA_APP_ENTITLEMENTS; docs/carplay.md). XcodeGen keeps a
+        # CODE_SIGN_ENTITLEMENTS the target sets itself; the default keeps an old Config.xcconfig working.
+        CODE_SIGN_ENTITLEMENTS: $(PERSONA_APP_ENTITLEMENTS:default=Persona/Resources/Persona.entitlements)
         # iPhone and iPad (2026-10-31: on iPad it ran as a phone-sized window). Wide layouts come from the size class
         # (SplitNavigation), as on an open iPhone Duo.
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -146,6 +150,14 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
                                                 UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIBackgroundModes: [remote-notification, audio]
+        # CarPlay (docs/carplay.md): the voice conversation scene. Only CarPlay is declared; the phone window stays SwiftUI's own.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationScene
+                UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         # Push relay (docs/push-relay.md): where the app registers for pushes from hubs without the app's APNs key
         # (config.json app.push_relay; empty: none), and the keychain group it shares with JarvisNotify.
         # The groups' prefix is the team, not $(AppIdentifierPrefix): that one is only set when Xcode signs, and an
@@ -172,7 +184,7 @@ targets:
         NSHealthUpdateUsageDescription: "Persona saves health data only after you approve it on your iPhone, one entry at a time, for example a weight or last night's sleep you told Claude about."
         NSPhotoLibraryUsageDescription: "Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
         NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone and only the text is saved to the knowledge base on your hub; the audio stays on your iPhone. In a voice conversation you start, your voice is streamed through your hub to the realtime speech service it is set up with, only while the conversation is open."
+        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone and only the text is saved to the knowledge base on your hub; the audio stays on your iPhone. In a voice conversation you start — on the phone or in CarPlay — your voice is streamed through your hub to the realtime speech service it is set up with, only while the conversation is open."
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # The native macOS app (docs/mac.md): the iOS app's logic and content views, compiled for macOS, inside a Mac
   # shell (Mac/): windows, sidebar, toolbar, menus, keyboard shortcuts, Settings, the menu bar. iOS-only parts are

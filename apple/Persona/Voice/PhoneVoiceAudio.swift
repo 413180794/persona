@@ -3,14 +3,13 @@ import AVFoundation
 import Foundation
 import os
 
-// The call's audio on an iPhone (docs/voice.md 6.4). Adapted from the audio half of `DuplexVoiceSession` in PR #1931
-// (CarPlay voice conversations, another contributor's work, not merged; coordination asked in #1951): the
-// play-and-record / voice-chat session with voice processing, AVAudioConverter down to the extension's PCM16, an
-// AVAudioPlayerNode at its output rate, dropping what `clear` cancels by generation, and ending on a call or a media
-// services reset. Changed for the phone: the microphone goes into a `VoiceUplink` (held until `ready`, muted as silence,
-// measured for the orb), a route change rebuilds the tap and converter instead of ending the call, voice processing
-// that will not run (the simulator) falls back to plain capture, and the player can take the app's own cues. Written as
-// one engine for every surface, so CarPlay can use it as is. Only APIs in the Xcode 26.0 SDK.
+// The call's audio on an iPhone and in CarPlay (docs/voice.md 6.4). Adapted from the audio half of the earlier
+// CarPlay `DuplexVoiceSession` in PR #1931 (coordination in #1951); #1931 now calls through `VoiceConversation`
+// with this engine. Play-and-record / voice-chat with voice processing, AVAudioConverter down to the extension's
+// PCM16, an AVAudioPlayerNode at its output rate, dropping what `clear` cancels by generation, and ending on a call
+// or a media services reset. The microphone goes into a `VoiceUplink` (held until `ready`, muted as silence, measured
+// for the orb); a route change rebuilds the tap and converter instead of ending the call; voice processing that will
+// not run (the simulator) falls back to plain capture. Only APIs in the Xcode 26.0 SDK.
 
 /// Turns the microphone's buffers into PCM16 at the extension's input rate and hands them to the uplink. The tap calls
 /// `feed` on the audio thread, one buffer at a time (the converter's one-buffer handoff is #1931's).

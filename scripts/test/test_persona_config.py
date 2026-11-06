@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import plistlib
 import subprocess
 import sys
 import tempfile
@@ -62,6 +63,36 @@ class PersonaConfigTests(unittest.TestCase):
                                    env=env, capture_output=True, text=True, timeout=10)
             self.assertEqual(shell.returncode, 0, shell.stderr)
             self.assertEqual(shell.stdout, 'http://hub.example.com|http://hub.example.com|test-private-value')
+
+    def _fake_root(self, directory: str) -> Path:
+        # A copy of the app's entitlements under a temporary ROOT, so app_entitlements never writes into the checkout.
+        root = Path(directory)
+        target = root / 'apple' / config.APP_ENTITLEMENTS
+        target.parent.mkdir(parents=True)
+        target.write_bytes((ROOT / 'apple' / config.APP_ENTITLEMENTS).read_bytes())
+        return root
+
+    def test_carplay_entitlements_only_for_json_true(self):
+        for value in (None, False, 'false', 'False', 'true', 'no', 0, 1, [], {}):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                root = self._fake_root(directory)
+                cfg = {} if value is None else {'app': {'carplay_voice': value}}
+                with patch.object(config, 'ROOT', str(root)):
+                    self.assertEqual(config.app_entitlements(cfg), config.APP_ENTITLEMENTS)
+                self.assertFalse((root / 'apple' / config.CARPLAY_ENTITLEMENTS).exists())
+
+    def test_carplay_entitlements_keep_the_app_keys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._fake_root(directory)
+            with patch.object(config, 'ROOT', str(root)):
+                self.assertEqual(config.app_entitlements({'app': {'carplay_voice': True}}), config.CARPLAY_ENTITLEMENTS)
+            with open(root / 'apple' / config.APP_ENTITLEMENTS, 'rb') as f:
+                original = plistlib.load(f)
+            with open(root / 'apple' / config.CARPLAY_ENTITLEMENTS, 'rb') as f:
+                generated = plistlib.load(f)
+            self.assertTrue(original)
+            self.assertIs(generated.pop('com.apple.developer.carplay-voice-based-conversation'), True)
+            self.assertEqual(generated, original)
 
 
 class MetaWearablesConfigTests(unittest.TestCase):
