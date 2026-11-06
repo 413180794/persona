@@ -16931,6 +16931,28 @@
         }
       }
     },
+    "不是你？撤销": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not you? Revoke"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心当たりがない？取り消す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不是你？撤销"
+          }
+        }
+      }
+    },
     "不是屏幕共享：%@": {
       "localizations": {
         "en": {
@@ -39898,6 +39920,28 @@
         }
       }
     },
+    "它不会加入。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It won't join."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参加しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它不会加入。"
+          }
+        }
+      }
+    },
     "它可以": {
       "localizations": {
         "en": {
@@ -39916,6 +39960,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "它可以"
+          }
+        }
+      }
+    },
+    "它可以开始工作了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It's ready to work."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業を始められます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它可以开始工作了。"
           }
         }
       }
@@ -44867,6 +44933,28 @@
         }
       }
     },
+    "已拒绝这台电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Computer rejected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータを拒否しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已拒绝这台电脑"
+          }
+        }
+      }
+    },
     "已拷贝": {
       "localizations": {
         "en": {
@@ -45393,6 +45481,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "已撤销"
+          }
+        }
+      }
+    },
+    "已撤销配对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing revoked"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングを取り消しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已撤销配对"
           }
         }
       }
@@ -45933,6 +46043,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "已确认"
+          }
+        }
+      }
+    },
+    "已确认这台电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Computer confirmed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータを確認しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已确认这台电脑"
           }
         }
       }
@@ -73391,6 +73523,28 @@
         }
       }
     },
+    "没能撤销": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't revoke"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取り消せませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没能撤销"
+          }
+        }
+      }
+    },
     "没能新建 worktree": {
       "localizations": {
         "en": {
@@ -73475,6 +73629,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没能画出来：%@"
+          }
+        }
+      }
+    },
+    "没能确认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't confirm"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認できませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没能确认"
           }
         }
       }
@@ -75744,6 +75920,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "点终端：点在终端里（Claude 的「Jump to bottom」、顶上的提问）"
+          }
+        }
+      }
+    },
+    "点这里打开它的详情，决定要不要移除。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to open its details and decide whether to remove it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タップして詳細を開き、削除するかどうか決めてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点这里打开它的详情，决定要不要移除。"
           }
         }
       }
@@ -94830,6 +95028,28 @@
         }
       }
     },
+    "这台电脑已经确认过了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer is already confirmed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピュータは確認済みです"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑已经确认过了"
+          }
+        }
+      }
+    },
     "这台电脑现在离线": {
       "localizations": {
         "en": {
@@ -95002,6 +95222,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台设备不支持画中画"
+          }
+        }
+      }
+    },
+    "这台设备已经撤销了，或者已经不在了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device was already revoked or is no longer there."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスはすでに取り消されたか、存在しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备已经撤销了，或者已经不在了。"
           }
         }
       }
@@ -97984,6 +98226,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "那台电脑上没有「信息」"
+          }
+        }
+      }
+    },
+    "那台设备不能再连接 hub 了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That device can no longer connect to the hub."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのデバイスはもう hub に接続できません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "那台设备不能再连接 hub 了。"
           }
         }
       }

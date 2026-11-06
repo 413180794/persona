@@ -48,7 +48,8 @@ nonisolated enum NotificationActions {
                                               textInputButtonTitle: String(localized: "发送"), textInputPlaceholder: String(localized: "接下来做什么…")),
             ],
             intentIdentifiers: [], options: [])
-        return [permission, plan, question, screen, done]
+        // Pairing receipts (#4199): 不是你？撤销, 是我的电脑 / 不是 (PairReceiptActions).
+        return Set([permission, plan, question, screen, done] + PairReceiptActions.categories)
     }
 
     /// What a button sends to the hub, or nil for a plain tap (and anything we don't know).

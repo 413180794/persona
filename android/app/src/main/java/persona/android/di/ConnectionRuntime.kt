@@ -532,12 +532,15 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         }
     }
 
-    private suspend fun removeGroupLocked(groupId: String, revoked: Boolean = false) = withContext(NonCancellable) {
+    private suspend fun removeGroupLocked(groupId: String, revoked: Boolean = false): Unit = withContext(NonCancellable) {
         val change = dataStore.change { it.removeGroup(groupId) }
         if (change.document.groups.isEmpty()) {
             // The last group: exactly what disconnecting the only pairing always did.
             cleanupLocked(revoked)
-        } else applyLocked(change.document, change.erase)
+        } else {
+            applyLocked(change.document, change.erase)
+            try { withContext(Dispatchers.IO) { clearOpenedHubFiles(app) } } catch (_: Exception) { Log.w("ConnectionRuntime", "Cannot clear opened hub files") }
+        }
     }
 
     /** The phone's hub groups for settings and the merged lists. */

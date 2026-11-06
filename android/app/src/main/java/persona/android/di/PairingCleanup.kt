@@ -30,6 +30,7 @@ internal fun clearUnversionedPairingData(app: Application, disconnect: Boolean =
         // Lark reading anchors are keyed by pairing scope but live outside the scoped directories.
         val larkReading = File(app.noBackupFilesDir, "lark-reading")
         check(!larkReading.exists() || larkReading.deleteRecursively())
+        clearOpenedHubFiles(app)
     }
     if (disconnect) {
         listOf("settings-readiness", "notification_actions", "notify_recovery", "platform-entry").forEach { name ->
@@ -37,5 +38,13 @@ internal fun clearUnversionedPairingData(app: Application, disconnect: Boolean =
         }
         check(app.getSharedPreferences("notify_recovery", Application.MODE_PRIVATE).edit()
             .putLong("last_exit", System.currentTimeMillis()).commit())
+    }
+}
+
+/** Copies of hub files opened or shared on the phone; not kept per group, so any group's disconnect drops them all. */
+internal fun clearOpenedHubFiles(app: Application) {
+    listOf("files-audio", "files-share", "shared", "files-pdf", "files-pdf-whole", "files-image", "files-video", "files-office", "files-sheet").forEach { name ->
+        val folder = File(app.cacheDir, name)
+        check(!folder.exists() || folder.deleteRecursively())
     }
 }

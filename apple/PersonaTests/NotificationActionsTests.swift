@@ -7,7 +7,8 @@ struct NotificationActionsTests {
     /// The hub names categories "INTERACTION_" + upper-cased kind (push.go); every kind must have one registered.
     @Test func categoriesMatchWhatTheHubSends() {
         let ids = Set(NotificationActions.categories.map(\.identifier))
-        #expect(ids == ["INTERACTION_PERMISSION", "INTERACTION_PLAN", "INTERACTION_QUESTION", "INTERACTION_SCREEN", "SESSION_DONE"])
+        #expect(ids == ["INTERACTION_PERMISSION", "INTERACTION_PLAN", "INTERACTION_QUESTION", "INTERACTION_SCREEN", "SESSION_DONE",
+                        "pair_receipt", "computer_joining"])
     }
 
     /// A finished turn's push takes a typed reply, unlocked first: it is an instruction to the agent (#3449).

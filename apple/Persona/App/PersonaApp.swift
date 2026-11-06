@@ -263,6 +263,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let text = (response as? UNTextInputNotificationResponse)?.userText
         let ixID = info["interaction_id"] as? String
         let extensionNotice = info["extension_notification"] != nil
+        let pair = PairPush(info) // a pairing receipt (#4199); nil from an older hub: a plain notification
+        let noteID = response.notification.request.identifier
         let event = ExtensionNotificationEvent(id: response.notification.request.identifier, info: info,
                                               category: response.notification.request.content.categoryIdentifier,
                                               actionID: action, text: text)
@@ -272,6 +274,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 if extensionNotice {
                     if let event { ExtensionNotificationDelivery.run(event, done: done) }
                     else { done() }
+                    return
+                }
+                if let pair {
+                    if let request = PairReceiptActions.request(action: action, pair) {
+                        // 撤销 / 是我的电脑 / 不是: done in the background, the result posted as a local notification.
+                        AppDelegate.inBackground("pair-receipt", done: done) { await PairReceiptActions.run(request, pair, id: noteID) }
+                        return
+                    }
+                    if action == UNNotificationDefaultActionIdentifier {
+                        let model = AppModel.shared
+                        model.openPair(PairReceiptActions.destination(pair, group: model.pushGroup(pair.userInfo)))
+                    }
+                    done()
                     return
                 }
                 // The group the push came from (docs/multi-hub.md「推送」): its hub settles the button, its session opens.

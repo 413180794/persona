@@ -260,6 +260,8 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         let text = (response as? UNTextInputNotificationResponse)?.userText
         let ixID = info["interaction_id"] as? String
         let extensionNotice = info["extension_notification"] != nil
+        let pair = PairPush(info) // a pairing receipt (#4199); nil from an older hub: a plain notification
+        let noteID = response.notification.request.identifier
         let event = ExtensionNotificationEvent(id: response.notification.request.identifier, info: info,
                                               category: response.notification.request.content.categoryIdentifier,
                                               actionID: action, text: text)
@@ -276,6 +278,21 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
                             done()
                         }
                     } else { done() }
+                    return
+                }
+                if let pair {
+                    if let request = PairReceiptActions.request(action: action, pair) {
+                        Task {
+                            await PairReceiptActions.run(request, pair, id: noteID)
+                            done()
+                        }
+                        return
+                    }
+                    if action == UNNotificationDefaultActionIdentifier {
+                        let model = AppModel.shared
+                        model.openPair(PairReceiptActions.destination(pair, group: model.pushGroup(pair.userInfo)))
+                    }
+                    done()
                     return
                 }
                 // The group the push came from (docs/multi-hub.md「推送」).

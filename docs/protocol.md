@@ -156,7 +156,9 @@ jarvis://pair?url=<兼容地址>&token=<临时 token>&hub=<hub_id>&fp=<指纹>&t
   客户端按钮：`pair_receipt` 的「不是你？撤销」在 `kind: device` 时 `DELETE /api/v1/auth/tokens/{device_id}`，`kind: computer_code` 时 `POST /api/v1/machines/{machine}/reject`
   （电脑已经确认过时 409 `not_pending`，打开机器详情）；`computer_joining` 的「是我的电脑」/「不是」调 `…/confirm` / `…/reject`。经推送中继时 `category` 和 `pair` 和其余明文一起加密
   （[push-relay.md](push-relay.md)「加密」），中继看不到；通知服务扩展解密后换上 category、把 `pair` 留在 `userInfo` 里。老 hub 没有这两个字段，客户端当普通通知显示。
-  通知上的按钮各端还没做（iOS / Mac 在 #4199 里接着做）。
+  iOS / Mac 已经注册这两个分类（`apple/Persona/App/PairReceiptActions.swift`）：按钮都要先解锁、不打开 App，结果用一条本地通知告诉你（「已撤销配对」「已确认这台电脑」，失败时说原因）；
+  按推送的 `hub_id`（或解开它的那组密钥）找到发推送的 hub 去做。点通知本身：`computer_joining` 打开「确认电脑」，`pair_receipt` 打开「设置 › 设备」。
+  手表不注册这两个分类；Android、网页还没做。
 
 ### 候选地址
 

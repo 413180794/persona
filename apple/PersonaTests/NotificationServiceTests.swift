@@ -39,6 +39,19 @@ struct NotificationServiceTests {
         #expect(shown.userInfo["interaction_id"] as? String == "ix1")
     }
 
+    /// A pairing receipt through the relay (#4199): the category puts its buttons on, `pair` stays for the buttons.
+    @Test func aPairingReceiptKeepsItsCategoryAndPair() async throws {
+        let key = try #require(PushCrypto.ensureKey())
+        let payload: [String: Any] = [
+            "aps": ["alert": ["title": "Persona", "body": "新电脑「办公室」想加入：打开 App 确认是不是你的"], "category": "computer_joining", "sound": "default"],
+            "pair": ["kind": "computer_joining", "machine": "mach_office"], "hub_id": "hub_b", "iat": Date.now.timeIntervalSince1970,
+        ]
+        let shown = await Self.deliver(try Self.relayed(payload, to: key.publicKey))
+        #expect(shown.categoryIdentifier == PairReceiptActions.joiningCategory)
+        #expect(PairPush(shown.userInfo) == PairPush(kind: .computerJoining, machine: "mach_office", hubID: "hub_b"))
+        #expect(!shown.body.contains("mach_office"))
+    }
+
     @Test func otherKeyStaysTheFallback() async throws {
         _ = PushCrypto.ensureKey()
         let shown = await Self.deliver(try Self.relayed(["aps": ["alert": ["body": "secret"]], "iat": Date.now.timeIntervalSince1970],
