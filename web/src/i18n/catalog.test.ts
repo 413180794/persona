@@ -15,6 +15,11 @@ const clientFiles = import.meta.glob<Record<string, string>>("./locales/*/_meta.
 const clients: Record<string, Record<string, string>> = Object.fromEntries(
   Object.entries(clientFiles).map(([p, c]) => [p.split("?")[0].split("/").slice(-2)[0], c]),
 );
+// The admin catalogs load while the file is collected, through the same loaders as the admin page: loading them inside
+// the test counted toward its 5 s timeout, which the full parallel suite went past (#4955).
+const admins: Record<string, Record<string, string>> = Object.fromEntries(
+  await Promise.all(LANGS.map(async (lang) => [lang, (await adminCatalog[lang]()).default] as const)),
+);
 
 const SRC = join(__dirname, "..");
 const LOCALES = join(__dirname, "locales");
@@ -34,6 +39,10 @@ function catalogs(): Record<string, Record<string, Catalog>> {
   }
   return out;
 }
+
+// Read once, while the file is collected: tests that each read every language's files again inside their own timeout
+// went past it under the full parallel suite (#4955).
+const CATALOGS = catalogs();
 
 const placeholders = (s: string) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
 
@@ -186,7 +195,7 @@ describe("languages (resource-only additions)", () => {
 });
 
 describe("catalogs", () => {
-  const all = catalogs();
+  const all = CATALOGS;
   const source = all[SOURCE_LANG];
 
   it("has the same namespaces in every language", () => {
@@ -249,10 +258,10 @@ describe("catalogs", () => {
 describe("client and admin catalogs", () => {
   const ADMIN = /^admin-/;
 
-  it("leaves the admin UI's namespaces out of the client's and puts each namespace in exactly one", async () => {
-    const all = catalogs();
+  it("leaves the admin UI's namespaces out of the client's and puts each namespace in exactly one", () => {
+    const all = CATALOGS;
     for (const lang of LANGS) {
-      const admin = (await adminCatalog[lang]()).default;
+      const admin = admins[lang];
       const client = clients[lang];
       expect(Object.keys(client).filter((k) => ADMIN.test(k)), `${lang} client`).toEqual([]);
       expect(Object.keys(admin).filter((k) => !ADMIN.test(k)), `${lang} admin`).toEqual([]);
@@ -275,7 +284,7 @@ describe("code", () => {
 
   it("only uses keys that exist", () => {
     const flat = new Set<string>();
-    for (const [ns, cat] of Object.entries(catalogs()[SOURCE_LANG])) for (const k of Object.keys(cat)) flat.add(`${ns}.${k.replace(PLURAL, "")}`);
+    for (const [ns, cat] of Object.entries(CATALOGS[SOURCE_LANG])) for (const k of Object.keys(cat)) flat.add(`${ns}.${k.replace(PLURAL, "")}`);
     const missing = [...scans].flatMap(([f, s]) => s.keys.filter((k) => !flat.has(k.key)).map((k) => `${f}:${k.line} ${k.key}`));
     expect(missing).toEqual([]);
   });
@@ -286,7 +295,7 @@ describe("code", () => {
     const literals = new Set([...scans.values()].flatMap((s) => s.literals));
     const prefixes = [...new Set([...scans.values()].flatMap((s) => s.prefixes))].filter((p) => p.includes("."));
     const unused: string[] = [];
-    for (const [ns, cat] of Object.entries(catalogs()[SOURCE_LANG])) {
+    for (const [ns, cat] of Object.entries(CATALOGS[SOURCE_LANG])) {
       for (const k of Object.keys(cat)) {
         const key = `${ns}.${k}`;
         if (literals.has(key) || literals.has(`${ns}.${k.replace(PLURAL, "")}`) || prefixes.some((p) => key.startsWith(p))) continue;
@@ -299,7 +308,7 @@ describe("code", () => {
   // interpolate() and tRich() leave a placeholder with no value as a literal `{name}` on the page
   it("passes every placeholder a key's text uses", () => {
     const want = new Map<string, string[]>();
-    for (const [ns, cat] of Object.entries(catalogs()[SOURCE_LANG])) for (const [k, ps] of shape(cat)) want.set(`${ns}.${k}`, ps);
+    for (const [ns, cat] of Object.entries(CATALOGS[SOURCE_LANG])) for (const [k, ps] of shape(cat)) want.set(`${ns}.${k}`, ps);
     const missing = [...scans].flatMap(([f, s]) =>
       s.keys.flatMap(({ line, key, vars }) => {
         if (!vars) return [];

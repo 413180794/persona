@@ -90,7 +90,11 @@ describe("splitChunks while a reply grows", () => {
 
   it("draws the same chunk by chunk as the whole text at every step", () => {
     // react-markdown puts a newline between blocks; between two chunks drawn separately there is none
-    const html = (md: string) => renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: [remarkGfm, remarkMath] }, md)).replace(/>\s+</g, "><");
+    const draw = (md: string) => renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: [remarkGfm, remarkMath] }, md)).replace(/>\s+</g, "><");
+    // A sealed chunk is the same text at every later step: drawn once, not once per step. Drawing them all again took
+    // this test past its 5 s timeout under the full parallel suite (#4955).
+    const drawn = new Map<string, string>();
+    const html = (md: string) => drawn.get(md) ?? drawn.set(md, draw(md)).get(md)!;
     for (let n = 1; n <= ANSWER.length; n += 2) {
       const md = prepared(n);
       expect(splitChunks(md).map((x) => html(x.content)).join(""), `at ${n}: ${JSON.stringify(md.slice(-40))}`).toBe(html(md));

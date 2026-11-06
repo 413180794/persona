@@ -71,6 +71,8 @@ type Catalog = Record<string, string>;
 
 let lang: Lang = SOURCE_LANG;
 let catalogs: Record<Lang, Catalog> = {};
+/** Counts initI18n calls: the language and catalogs are the last call's, not those of whichever load finishes last. */
+let initCalls = 0;
 
 /** A language's catalog module (web/i18n-catalogs.ts): its own entries, and the entries of the fallback languages
  *  (FALLBACK_LANG, SOURCE_LANG) that t() can still reach from it, keyed by language. */
@@ -97,9 +99,12 @@ const loaders = byLanguage(import.meta.glob<CatalogModule>("./locales/*/_meta.js
 export async function initI18n(forced?: Lang, ...extra: CatalogLoaders[]): Promise<Lang> {
   const requested = forced ?? preferredLanguage();
   const selected = loaders[requested] ? requested : FALLBACK_LANG;
+  const call = ++initCalls;
   // t() is synchronous, so its fallbacks must be ready before the page starts. Only the selected language's modules
   // load: each brings the en and zh-Hans entries that t() could fall back to, not those whole catalogs.
   const modules = await Promise.all([loaders, ...extra].map((l) => l[selected]()));
+  // A later call took over while this one was loading (#4955): that call's language stands, not this one's.
+  if (call !== initCalls) return lang;
   const next: Record<Lang, Catalog> = { [selected]: {} };
   for (const module of modules) {
     Object.assign(next[selected], module.default);

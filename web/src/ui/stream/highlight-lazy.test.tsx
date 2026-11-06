@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Markdown } from "../Markdown";
 import { loadHighlight } from "./highlight";
 import { lazyPlugin } from "./lazy-plugin";
+// highlight.js loaded while the file is collected, outside the test timeout: the lazy import below then finds it loaded
+// instead of loading it inside the test, which the full parallel suite took past 5 s (#4955). What is checked is when
+// Markdown asks for it, not how long the download takes.
+import "rehype-highlight";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -16,6 +16,11 @@ function sources(dir: string): string[] {
   });
 }
 
+// Read once, while the file is collected: two tests each walking and reading the whole source tree inside their 5 s
+// timeout hit it under the full parallel suite (#4955).
+const SOURCES = sources(SRC).map((file) => ({ file, lines: readFileSync(file, "utf8").split("\n") }));
+const CSS = readFileSync(join(SRC, "styles.css"), "utf8").replace(/\r\n/g, "\n");
+
 /** The body of the stylesheet's `@media (prefers-reduced-motion: reduce)` block that strips animations. */
 function stripBlock(css: string): string {
   const start = css.indexOf("@media (prefers-reduced-motion: reduce) {\n  *, *::before");
@@ -30,7 +35,7 @@ function stripBlock(css: string): string {
 
 describe("busy indicators under reduced motion", () => {
   // a Windows checkout's CRLF read as LF
-  const block = stripBlock(readFileSync(join(SRC, "styles.css"), "utf8").replace(/\r\n/g, "\n"));
+  const block = stripBlock(CSS);
 
   it("the strip still takes the other animations to 1ms × 1", () => {
     expect(block).toMatch(/\*, \*::before, \*::after \{[^}]*animation-duration: 1ms !important;[^}]*animation-iteration-count: 1 !important/);
@@ -55,8 +60,7 @@ describe("busy indicators under reduced motion", () => {
     // a looping keyframe of the busy kind, written inline or as a Tailwind utility
     const busy = /animation: ["`](?:spin|breathe|pixel-on|shimmer-text)\b|spinStyle\(\d|animate-spin|animate-pulse|animate-\[breathe_/;
     const missing: string[] = [];
-    for (const file of sources(SRC)) {
-      const lines = readFileSync(file, "utf8").split("\n");
+    for (const { file, lines } of SOURCES) {
       lines.forEach((line, i) => {
         if (!busy.test(line) || /^\s*(\/\/|\*|\/\*)/.test(line)) return;
         // the mark is on the element: this line or the few above it (a multi-line JSX tag)
@@ -71,7 +75,7 @@ describe("busy indicators under reduced motion", () => {
 // A looping CSS animation sends React's root listener an animationiteration event every cycle, and the page a style
 // recalc: spinners turn SPIN_TURNS times per cycle, at the same speed.
 describe("spinners loop rarely", () => {
-  const css = readFileSync(join(SRC, "styles.css"), "utf8").replace(/\r\n/g, "\n");
+  const css = CSS;
 
   it("the keyframes turn SPIN_TURNS times, and the one-turn spin is gone", () => {
     expect(css).toContain(`@keyframes spin-long{to{transform:rotate(${SPIN_TURNS}turn)}}`);
@@ -92,8 +96,8 @@ describe("spinners loop rarely", () => {
   it("nothing in the source loops the one-turn keyframes", () => {
     const short = /\bspin [\d.]+m?s\b|animation: spin\b(?!-)|animate-spin\b/;
     const found: string[] = [];
-    for (const file of [...sources(SRC), join(SRC, "styles.css")]) {
-      readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+    for (const { file, lines } of [...SOURCES, { file: join(SRC, "styles.css"), lines: CSS.split("\n") }]) {
+      lines.forEach((line, i) => {
         if (short.test(line) && !/^\s*(\/\/|\*|\/\*)/.test(line)) found.push(`${relative(SRC, file)}:${i + 1}`);
       });
     }
