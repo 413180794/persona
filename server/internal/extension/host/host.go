@@ -48,6 +48,7 @@ var (
 	PingTimeout   = 10 * time.Second
 	HealthFirst   = time.Second      // /health while it is starting
 	HealthEvery   = 10 * time.Second // and once it is up
+	HealthTimeout = 5 * time.Second  // for one /health answer
 	StopGrace     = 5 * time.Second  // after stdin closes, and again after SIGTERM
 	StrikesToKill = 3                // timeouts or missed pings in a row before it is restarted
 	LogLineMost   = 4 << 10
@@ -77,7 +78,7 @@ type Spec struct {
 	// RPC: it speaks the plugin protocol, on stdin / stdout when the hub runs it, else on RPCSocket.
 	RPC       bool
 	RPCSocket string
-	// HTTP: it serves HTTP on Socket (the hub's path for a program it runs: removed before each start).
+	// HTTP: it serves HTTP on Socket (the hub's path for a program it runs: removed before each start and after each run).
 	HTTP   bool
 	Socket string
 
@@ -202,10 +203,14 @@ func Start(ctx context.Context, spec Spec) *Proc {
 	return p
 }
 
-// Stop stops the plugin and waits for its program to end.
+// Stop stops the plugin and waits for its program to end. Its idle HTTP connections close too: a plugin served from
+// elsewhere outlives the Proc, and its keep-alive connections would stay open for good.
 func (p *Proc) Stop() {
 	p.cancel()
 	<-p.done
+	if p.client != nil {
+		p.client.CloseIdleConnections()
+	}
 }
 
 // Spec is what the plugin runs as.
@@ -457,6 +462,8 @@ func (p *Proc) Healthy(ctx context.Context) bool {
 	if p.client == nil {
 		return false
 	}
+	ctx, cancel := context.WithTimeout(ctx, HealthTimeout)
+	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://plugin/health", nil)
 	res, err := p.client.Do(req)
 	if err != nil {
@@ -581,6 +588,12 @@ func (p *Proc) runOnce(ctx context.Context) error {
 		p.up()
 	}
 
+	// A program the hub started that speaks only HTTP is ready once /health answers; one that never does within
+	// ReadyWithin is an error, so it is restarted with a backoff instead of staying starting for good.
+	var readyBy time.Time
+	if p.spec.Command != "" && p.spec.HTTP && !p.spec.RPC {
+		readyBy = time.Now().Add(ReadyWithin)
+	}
 	health := time.NewTicker(HealthFirst)
 	defer health.Stop()
 	ping := time.NewTicker(PingEvery)
@@ -589,7 +602,7 @@ func (p *Proc) runOnce(ctx context.Context) error {
 	if s != nil {
 		peerDone = s.peer.Done()
 	}
-	misses := 0
+	misses, healthMisses := 0, 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -617,8 +630,21 @@ func (p *Proc) runOnce(ctx context.Context) error {
 			if !wanted {
 				return nil
 			}
-			if p.spec.HTTP {
-				p.checkHealth(runCtx, health)
+			if !p.spec.HTTP {
+				continue
+			}
+			if !p.checkHealth(runCtx, health) {
+				healthMisses = 0
+			} else if healthMisses++; healthMisses >= StrikesToKill && p.spec.Command != "" && !p.spec.RPC {
+				// A hung HTTP-only program the hub runs: end the run so it is restarted. One elsewhere has
+				// nothing to restart, and a protocol one is covered by its pings.
+				return fmt.Errorf("missed %d health checks", healthMisses)
+			}
+			if !readyBy.IsZero() && time.Now().After(readyBy) {
+				if st, _ := p.Status(); st == StateStarting {
+					return fmt.Errorf("not answering /health within %s", ReadyWithin)
+				}
+				readyBy = time.Time{} // it came up; later failures are the health check's
 			}
 		case <-ping.C:
 			if s == nil {
@@ -650,12 +676,13 @@ func (p *Proc) up() {
 }
 
 // checkHealth asks /health: an HTTP-only plugin is ready once it answers. A started one stays starting until then;
-// one elsewhere is an error while it does not answer.
-func (p *Proc) checkHealth(ctx context.Context, t *time.Ticker) {
+// one elsewhere is an error while it does not answer. It reports a missed check: no answer after it was up.
+func (p *Proc) checkHealth(ctx context.Context, t *time.Ticker) (missed bool) {
 	ok := p.Healthy(ctx)
 	p.mu.Lock()
 	state := p.state
 	p.mu.Unlock()
+	missed = !ok && (state == StateRunning || state == StateError)
 	switch {
 	case ok && !p.spec.RPC && state != StateRunning:
 		p.up()
@@ -671,6 +698,7 @@ func (p *Proc) checkHealth(ctx context.Context, t *time.Ticker) {
 	case !ok && p.spec.Command == "" && state == StateStarting:
 		p.set(StateError, "not answering on "+p.spec.Socket)
 	}
+	return missed
 }
 
 // initialize sends initialize and holds the answer to the spec.
@@ -820,7 +848,10 @@ func (p *Proc) end(ch *child, peer *rpc.Peer) {
 		_ = ch.conn.Close()
 	}
 	if ch.cmd == nil || ch.cmd.Process == nil {
-		return
+		return // a plugin elsewhere owns its socket
+	}
+	if p.spec.HTTP && p.spec.Socket != "" {
+		defer p.removeSocket() // once the program is gone: a killed one leaves its socket file behind
 	}
 	pid := ch.cmd.Process.Pid
 	if ch.stdin != nil {
@@ -838,6 +869,13 @@ func (p *Proc) end(ch *child, peer *rpc.Peer) {
 	case <-time.After(StopGrace):
 		_ = osproc.StopGroup(pid, true)
 		<-ch.exited
+	}
+}
+
+// removeSocket removes the HTTP socket of a program the hub ran, so none is left on disk after its run.
+func (p *Proc) removeSocket() {
+	if err := os.Remove(p.spec.Socket); err != nil && !errors.Is(err, os.ErrNotExist) {
+		p.note("removing %s: %v", p.spec.Socket, err)
 	}
 }
 

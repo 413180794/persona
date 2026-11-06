@@ -804,10 +804,12 @@ A process only runs when "something needs it":
 | Contributes a connector | Starts while the connector is on (the connector holds it) | When the connector is switched off in settings and nothing else needs it; `on_call` does not count for such extensions |
 
 - On exit it restarts with backoff: from 2 seconds, doubling, up to 5 minutes; running for a full minute counts as recovered.
+- An HTTP-only extension the hub started whose `/health` does not answer within 30 seconds becomes `error` (reason `not answering /health within 30s`) and restarts with the same backoff, instead of staying in `starting`.
 - Status: `stopped` (not running, nothing needs it, not an error), `starting`, `running`, `error` (with a reason), `disabled`, `needs_setup`, `incompatible`.
   Clients (app, web, admin UI) show both `running` and `stopped` as **On**: to the user an extension is only on or off; an idle extension starts by itself when used,
   so there is no need to tell them apart. Whether it is running is only noted in small text in the details ("Running" / "Not running; starts when needed"). On-demand start and idle reclaim stay as they were (saves resources and battery, #1670).
 - Calls time out after 30 seconds by default (2 minutes for connectors) and return `timeout`; 3 timeouts in a row restart it. Extensions that speak the protocol are `ping`ed every 30 seconds, and restarted after 3 missed replies in a row.
+- Once up, an HTTP-only extension the hub runs gets a `/health` request every 10 seconds (each waits up to 5 seconds). If it fails, the extension is marked `error` and checked every second; after 3 failures in a row it is restarted (also when the program is still running but hung).
 - Stopping a process: close stdin first, SIGTERM the process group after 5 seconds, SIGKILL after another 5 seconds (extensions that do not speak the protocol get SIGTERM directly). Child processes end with it.
 - A problem in one extension only affects its own contributions; hub startup never waits for extensions. stderr (plus stdout for ones that do not speak the protocol) goes line by line into the hub's log, prefixed `plugin <id>:`, each line truncated to 4 KB;
   it also goes into this extension's own log ("Runtime status" below), viewable per extension in the admin UI.

@@ -111,6 +111,8 @@ type hubExtension struct {
 	socket string // its HTTP socket, when it serves HTTP
 	proxy  *httputil.ReverseProxy
 	client *http.Client
+	// proxyTransport is proxy's: closeIdle closes its idle connections.
+	proxyTransport *http.Transport
 
 	pending bool         // made before the plugins start (newPlugins): startPlugins runs it
 	proc    *host.Proc   // nil while it does not run (disabled, needs setup, incompatible, nothing to run)
@@ -539,6 +541,7 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 		if old.proc != nil {
 			old.proc.Stop()
 		}
+		old.closeIdle()
 	}
 	if ps.h != nil {
 		// Stop waits for the old start/initialize callbacks too: a token minted during shutdown must not survive.
@@ -601,6 +604,7 @@ func (hp *hubExtension) setProxy(id string) {
 		return d.DialContext(ctx, "unix", socket)
 	}
 	hp.client = &http.Client{Transport: &http.Transport{DialContext: dial}, Timeout: 5 * time.Second}
+	hp.proxyTransport = &http.Transport{DialContext: dial}
 	prefix := "/api/v1/extensions/" + id
 	hp.proxy = &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
@@ -621,7 +625,7 @@ func (hp *hubExtension) setProxy(id string) {
 			r.Out.Header.Del("Authorization")
 			r.Out.Host = "plugin"
 		},
-		Transport:     &http.Transport{DialContext: dial},
+		Transport:     hp.proxyTransport,
 		FlushInterval: -1, // stream (audio, server-sent events) as it comes
 		// The plugin says how its answers may be cached (images, emojis); the hub's no-store only when it says nothing.
 		// The caller drops the hub's own Cache-Control first (servePluginHTTP): the proxy adds headers, it does not
@@ -636,6 +640,17 @@ func (hp *hubExtension) setProxy(id string) {
 			w.Header().Set("Cache-Control", "no-store")
 			writeErr(w, http.StatusBadGateway, fmt.Errorf("plugin %s is not answering: %w", id, err))
 		},
+	}
+}
+
+// closeIdle closes the idle connections of its client and proxy once it no longer runs: their transports have no
+// idle timeout, and an extension served from elsewhere stays up, so each restart would leave them open for good.
+func (hp *hubExtension) closeIdle() {
+	if hp.client != nil {
+		hp.client.CloseIdleConnections()
+	}
+	if hp.proxyTransport != nil {
+		hp.proxyTransport.CloseIdleConnections()
 	}
 }
 

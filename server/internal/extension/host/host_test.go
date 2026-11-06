@@ -11,8 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,12 +45,35 @@ func TestMain(m *testing.M) {
 		time.Sleep(100 * time.Millisecond)
 		os.Stderr.WriteString("last words\n")
 		os.Exit(1)
+	case "httpquit": // a program that opens its socket and then dies without closing it
+		if _, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET")); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(3)
+	case "mute": // a program that runs but never listens, so /health never answers
+		time.Sleep(time.Hour)
 	case "http":
 		ln, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET"))
 		if err != nil {
 			os.Exit(1)
 		}
 		_ = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	case "hang": // answers /health twice, then hangs while the program stays alive
+		if f, err := os.OpenFile(os.Getenv("HOST_TEST_PIDS"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+			fmt.Fprintln(f, os.Getpid())
+			f.Close()
+		}
+		ln, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET"))
+		if err != nil {
+			os.Exit(1)
+		}
+		var answered atomic.Int32
+		_ = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if answered.Add(1) > 2 {
+				select {}
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
 	}
 	os.Exit(0)
 }
@@ -304,6 +329,95 @@ func TestHTTPOnly(t *testing.T) {
 	}
 }
 
+// An HTTP-only program the hub runs that stops answering /health while it stays alive is restarted after
+// StrikesToKill failed checks in a row, like a protocol one that misses its pings; it used to stay in error for good.
+func TestHTTPOnlyThatStopsAnsweringIsRestarted(t *testing.T) {
+	every, timeout := HealthEvery, HealthTimeout
+	HealthEvery, HealthTimeout = 50*time.Millisecond, 100*time.Millisecond
+	defer func() { HealthEvery, HealthTimeout = every, timeout }()
+	dir, err := os.MkdirTemp("", "hst") // a unix socket path stays short
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	o := &observed{}
+	s := spec(t, "hang")
+	sock, pids := filepath.Join(dir, "demo.sock"), filepath.Join(dir, "pids")
+	s.RPC, s.HTTP, s.Socket, s.Startup, s.Observe = false, true, sock, true, o
+	s.Env = append(s.Env, "PERSONA_PLUGIN_SOCKET="+sock, "HOST_TEST_PIDS="+pids)
+	p := Start(context.Background(), s)
+	defer p.Stop()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, runs, _ := o.snapshot(); len(runs) >= 3 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_, runs, _ := o.snapshot()
+	if len(runs) < 3 || runs[0] != RunStart || !strings.HasPrefix(runs[1], RunExit+" ") || !strings.Contains(runs[1], "health") ||
+		runs[2] != RunStart {
+		st, why := p.Status()
+		t.Fatalf("runs %q (state %s: %s)", runs, st, why)
+	}
+	b, err := os.ReadFile(pids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := strconv.Atoi(strings.Fields(string(b))[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); alive(first) && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if alive(first) {
+		t.Fatal("the hung program is still there")
+	}
+}
+
+// A started HTTP-only program that never answers /health is an error after ReadyWithin and is started again, and
+// Stop still returns. It used to stay starting for good, with no error and no restart.
+func TestHTTPNeverReadyIsAnErrorAndRestarted(t *testing.T) {
+	old := ReadyWithin
+	ReadyWithin = 300 * time.Millisecond
+	t.Cleanup(func() { ReadyWithin = old })
+	dir, err := os.MkdirTemp("", "hst") // a unix socket path stays short
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	o := &observed{}
+	s := spec(t, "mute")
+	s.RPC, s.HTTP, s.Socket, s.Startup, s.Observe = false, true, filepath.Join(dir, "demo.sock"), true, o
+	p := Start(context.Background(), s)
+	defer func() { // on its own goroutine, so that a Stop that hangs fails this test instead of the whole run
+		stopped := make(chan struct{})
+		go func() { p.Stop(); close(stopped) }()
+		select {
+		case <-stopped:
+			if st, _ := p.Status(); st != StateStopped {
+				t.Errorf("state %s after Stop", st)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("Stop did not return")
+		}
+	}()
+	want := RunExit + " not answering /health within " + ReadyWithin.String()
+	startedAgain := func() bool {
+		_, runs, _ := o.snapshot()
+		i := slices.Index(runs, want)
+		return i >= 0 && slices.Contains(runs[i:], RunStart)
+	}
+	for deadline := time.Now().Add(10 * time.Second); !startedAgain(); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			_, runs, _ := o.snapshot()
+			st, why := p.Status()
+			t.Fatalf("runs %q, state %s (%s): want %q and then a new start", runs, st, why, want)
+		}
+	}
+}
+
 // A program that ends by itself is an error and is started again, and Stop still returns (#2277). The run used to
 // take the program's exit and then wait for it a second time while ending the run, so the host hung for good.
 func TestAProgramThatQuitsIsStartedAgainAndStops(t *testing.T) {
@@ -338,6 +452,106 @@ func TestAProgramThatQuitsIsStartedAgainAndStops(t *testing.T) {
 			_, runs, _ := o.snapshot()
 			t.Fatalf("runs %q: the program's exit was not seen, or it was not started again", runs)
 		}
+	}
+}
+
+// A hub-run program's HTTP socket goes when its run ends: a program stopped by the hub (SIGTERM) leaves the file on
+// disk, and it stayed there after the extension was switched off, stopped when idle, uninstalled or the hub stopped.
+func TestSocketRemovedWhenRunEnds(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hst") // a unix socket path stays short
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	s := spec(t, "http")
+	sock := filepath.Join(dir, "demo.sock")
+	s.RPC, s.HTTP, s.Socket, s.Startup = false, true, sock, true
+	s.Env = append(s.Env, "PERSONA_PLUGIN_SOCKET="+sock)
+	p := Start(context.Background(), s)
+	waitState(t, p, StateRunning)
+	if _, err := os.Stat(sock); err != nil {
+		t.Fatalf("the socket while running: %v", err)
+	}
+	p.Stop()
+	if _, err := os.Stat(sock); !os.IsNotExist(err) {
+		t.Fatalf("the socket after Stop: %v, want it gone", err)
+	}
+}
+
+// socketAtExit says, each time a run ends in error, whether the socket was still on disk then: the run is over by
+// the time the Observer hears of it, and the next start has not removed it yet.
+type socketAtExit struct {
+	observed
+	sock string
+	mu   sync.Mutex
+	left []bool
+}
+
+func (o *socketAtExit) Run(event, detail string) {
+	o.observed.Run(event, detail)
+	if event != RunExit {
+		return
+	}
+	_, err := os.Stat(o.sock)
+	o.mu.Lock()
+	o.left = append(o.left, err == nil)
+	o.mu.Unlock()
+}
+
+// A program that dies by itself leaves its socket file; the run that saw it go removes it.
+func TestSocketRemovedWhenTheProgramExits(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hst") // a unix socket path stays short
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, "demo.sock")
+	o := &socketAtExit{sock: sock}
+	s := spec(t, "httpquit")
+	s.RPC, s.HTTP, s.Socket, s.Startup, s.Observe = false, true, sock, true, o
+	s.Env = append(s.Env, "PERSONA_PLUGIN_SOCKET="+sock)
+	p := Start(context.Background(), s)
+	exits := func() []bool {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		return slices.Clone(o.left)
+	}
+	for deadline := time.Now().Add(10 * time.Second); len(exits()) < 2; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			p.Stop()
+			_, runs, _ := o.snapshot()
+			t.Fatalf("runs %q: the program's exit was not seen twice", runs)
+		}
+	}
+	p.Stop()
+	if left := exits(); slices.Contains(left, true) {
+		t.Fatalf("socket left on disk after a run ended: %v", left)
+	}
+	if _, err := os.Stat(sock); !os.IsNotExist(err) {
+		t.Fatalf("the socket after Stop: %v, want it gone", err)
+	}
+}
+
+// The socket of a plugin the hub does not run is not the hub's: stopping it leaves the socket alone.
+func TestRemoteSocketLeftAloneOnStop(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	s := spec(t, "")
+	s.Command, s.RPC, s.HTTP, s.Socket, s.Startup = "", false, true, filepath.Join(dir, "far.sock"), true
+	hl, err := net.Listen("unix", s.Socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hl.Close()
+	go http.Serve(hl, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
+	far := Start(context.Background(), s)
+	waitState(t, far, StateRunning)
+	far.Stop()
+	if _, err := os.Stat(s.Socket); err != nil {
+		t.Fatalf("the remote socket after Stop: %v, want it kept", err)
 	}
 }
 
@@ -550,5 +764,78 @@ func TestLogLinesKeepsReadingPastALongLine(t *testing.T) {
 	defer mu.Unlock()
 	if len(logged) != 2 || logged[1] != "plugin demo: after" {
 		t.Fatalf("logged %.80q", logged)
+	}
+}
+
+// openConns counts the connections a listener accepted that are still open.
+type openConns struct {
+	net.Listener
+	mu   sync.Mutex
+	open int
+}
+
+func (l *openConns) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	l.open++
+	l.mu.Unlock()
+	return &countedConn{Conn: c, l: l}, nil
+}
+
+func (l *openConns) count() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.open
+}
+
+type countedConn struct {
+	net.Conn
+	l    *openConns
+	once sync.Once
+}
+
+func (c *countedConn) Close() error {
+	c.once.Do(func() {
+		c.l.mu.Lock()
+		c.l.open--
+		c.l.mu.Unlock()
+	})
+	return c.Conn.Close()
+}
+
+// A plugin served from elsewhere outlives its Proc: Stop must not leave the health check's keep-alive connection open.
+func TestStopClosesIdleHTTPConnections(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, "far.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := &openConns{Listener: ln}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") })}
+	go srv.Serve(cl)
+	defer srv.Close()
+
+	s := spec(t, "")
+	s.Command, s.RPC, s.HTTP, s.Socket, s.Startup = "", false, true, sock, true
+	p := Start(context.Background(), s)
+	waitState(t, p, StateRunning)
+	if n := cl.count(); n == 0 {
+		t.Fatal("no connection to the plugin after its health check")
+	}
+	p.Stop()
+	deadline := time.Now().Add(2 * time.Second)
+	for cl.count() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d connection(s) to the plugin still open after Stop", cl.count())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

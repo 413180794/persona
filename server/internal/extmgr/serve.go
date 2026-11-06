@@ -79,12 +79,14 @@ func (h *Manager) stopExtensions() {
 	var wg sync.WaitGroup
 	for _, hp := range procs {
 		if hp.proc == nil {
+			hp.closeIdle()
 			continue
 		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			hp.proc.Stop()
+			hp.closeIdle()
 		}()
 	}
 	wg.Wait()
