@@ -127,7 +127,7 @@ class ConnectShotsTest {
         override suspend fun test(url: String) = EndpointTestResult(url, true, persona.core.contracts.CoreText.plain("OK"), 40, ago(0))
     }
     private val link = "persona://pair?url=https%3A%2F%2Fhub.example.com%3A18662&token=example-token&hub=example-hub" +
-        "&fp=AB%3ACD%3AEF&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D%3A18662"
+        "&fp=${"A".repeat(43)}&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D%3A18662"
 
     private fun shots(language: String, manualLabel: Int) {
         var style by mutableStateOf(AppStyle.Glass)

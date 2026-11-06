@@ -96,6 +96,8 @@ export function Extensions() {
               {t("admin-pages-extensions.no_db_detail")}
             </Notice>
           )}
+          {/* the markets first, above the installed list (#5017) */}
+          {data.can_install && <ExtensionMarkets onChanged={reload} />}
           <Card
             title={t("admin-pages-extensions.count", { count: data.extensions.length })}
             footer={t("admin-pages-extensions.list_footer")}
@@ -110,7 +112,6 @@ export function Extensions() {
               ))
             )}
           </Card>
-          {data.can_install && <ExtensionMarkets onChanged={reload} />}
         </>
       )}
       <InstallDialog open={installing} uploadMost={data?.upload_most ?? 0} onClose={() => setInstalling(false)} onDone={reload} />

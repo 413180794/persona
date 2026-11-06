@@ -20,5 +20,6 @@
   "sig_state": "签名：{state}",
   "agree_upgrade_more": "同意新权限并升级",
   "upgrade": "升级",
-  "agree_install": "同意并安装"
+  "agree_install": "同意并安装",
+  "official_name": "官方扩展"
 }

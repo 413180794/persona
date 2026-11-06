@@ -235,6 +235,7 @@
     <string name="settings_ext_markets_header">Markets this hub reads</string>
     <string name="settings_ext_market_bad_signature">Bad signature</string>
     <string name="settings_ext_market_official">Official</string>
+    <string name="settings_ext_official_market_name">Official extensions</string>
     <string name="settings_ext_markets_footer">Removing a market keeps the extensions installed from it, but they can no longer be upgraded from here. Tokens are stored encrypted on the hub, sent only to their market, and never shown again.</string>
     <string name="settings_ext_market_reload">Read again now</string>
     <string name="settings_ext_market_reloaded">Read %1$s again</string>

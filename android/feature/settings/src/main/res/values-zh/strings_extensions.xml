@@ -228,6 +228,7 @@
     <string name="settings_ext_markets_header">这台 hub 读的市场</string>
     <string name="settings_ext_market_bad_signature">签名不对</string>
     <string name="settings_ext_market_official">官方</string>
+    <string name="settings_ext_official_market_name">官方扩展</string>
     <string name="settings_ext_markets_footer">删掉市场后，从它装的扩展留着，只是不能再从这里升级。token 加密存在 hub 上，只发给这个市场，存好后不再显示。</string>
     <string name="settings_ext_market_reload">现在重新读取</string>
     <string name="settings_ext_market_reloaded">已重新读取 %1$s</string>

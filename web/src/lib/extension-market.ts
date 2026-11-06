@@ -90,8 +90,11 @@ const M = () => `${extRoot()}/-`;
 /** A market as either kind of hub sends it: how many extensions under `extensions` (or `plugins`). */
 export const marketView = (m: Market & { plugins?: number }): Market => {
   const { plugins, ...rest } = m;
-  return { ...rest, extensions: m.extensions ?? plugins ?? 0 };
+  return { ...rest, ...(m.official ? { name: officialMarketName() } : {}), extensions: m.extensions ?? plugins ?? 0 };
 };
+
+/** The official market is 官方扩展 in the page's language (#5017), whatever its index (or an older hub) calls it. */
+export const officialMarketName = () => t("lib-extension-market.official_name");
 
 export const listMarkets = () => api<{ markets?: Market[] }>(`${M()}/markets`).then((r) => (r.markets ?? []).map(marketView));
 export const addMarket = (spec: string, token?: string) => api<Market>(`${M()}/markets`, { method: "POST", json: token ? { spec, token } : { spec } }).then(marketView);
@@ -112,11 +115,12 @@ export function catalogQuery(q?: string, market?: string, refresh?: boolean): st
 export const getCatalog = (q?: string, market?: string, refresh?: boolean) =>
   api<Catalog & { plugins?: CatalogItem[] }>(`${M()}/catalog${catalogQuery(q, market, refresh)}`).then(catalogOf);
 /** A catalog as either kind of hub sends it (the list under `extensions`, or `plugins`). */
-export const catalogOf = (c: Catalog & { plugins?: CatalogItem[] }): Catalog => ({
-  markets: (c.markets ?? []).map(marketView),
-  extensions: listOf(c),
-  ...(c.platform ? { platform: c.platform } : {}),
-});
+export const catalogOf = (c: Catalog & { plugins?: CatalogItem[] }): Catalog => {
+  const markets = (c.markets ?? []).map(marketView);
+  const official = new Set(markets.filter((m) => m.official).map((m) => m.id));
+  const extensions = listOf<CatalogItem>(c).map((it) => (official.has(it.market) ? { ...it, market_name: officialMarketName() } : it));
+  return { markets, extensions, ...(c.platform ? { platform: c.platform } : {}) };
+};
 /** Both keys: a hub from before #1844 reads `plugin`, a newer one `extension` (or `plugin`). */
 export const previewFromMarket = (market: string, extension: string) =>
   api<MarketPreview>(`${M()}/catalog/preview`, { method: "POST", json: { market, extension, plugin: extension } });

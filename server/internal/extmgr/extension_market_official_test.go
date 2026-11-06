@@ -66,7 +66,8 @@ func TestOfficialExtensionMarketIsAddedOnceAndFirst(t *testing.T) {
 	defer srv.Close()
 	h.extensions.markets.client, h.extensions.markets.githubAPI = srv.Client(), srv.URL
 	key := newMarketKey(t)
-	ix, _ := json.Marshal(map[string]any{"market_version": 1, "name": "官方扩展", "signing_key": key.text,
+	// Its index calls itself after its publisher; the apps are shown 官方扩展 all the same (#5017).
+	ix, _ := json.Marshal(map[string]any{"market_version": 1, "name": "Example 扩展", "signing_key": key.text,
 		"extensions": []any{marketEntry(t, dir, "release:v1/example-ui-1.0.0.tar.gz", pkg)}})
 	gh.files[extension.IndexFile], gh.files[extension.IndexFile+extension.SigSuffix] = ix, key.sign(ix)
 	useOfficialMarket(t, "github:example/plugins", key.text)
@@ -94,7 +95,7 @@ func TestOfficialExtensionMarketIsAddedOnceAndFirst(t *testing.T) {
 	// The catalog lists its extensions first too.
 	if code, out := call(t, h.routes(), "GET", "/api/v1/extensions/-/catalog", phone, ""); code != 200 {
 		t.Fatalf("catalog: %d %v", code, out)
-	} else if items, _ := out["extensions"].([]any); len(items) != 1 || items[0].(map[string]any)["market"] != official {
+	} else if items, _ := out["extensions"].([]any); len(items) != 1 || items[0].(map[string]any)["market"] != official || items[0].(map[string]any)["market_name"] != "官方扩展" {
 		t.Fatalf("catalog: %v", out["extensions"])
 	}
 	waitMarketsRead(t, h)

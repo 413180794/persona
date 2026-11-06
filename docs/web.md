@@ -488,7 +488,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   扩展画的时候头部不出 Pin（Pin 作用在原来的会话页上）。按钮回 `open_url: persona://inbox/<这一条>/source`（「在会话里看」）时，正文换成原来的会话页
   （飞书停在这件事的第一条），上面一行「回到<页面标题>」，扩展的页藏起来不卸载、回去原样；别的条目的、别的 `persona:` 链接不打开（`lib/extension-ui.ts` 的 `outcome` / `inboxSourceItem`）。
   截图用 `MOCK_PLUGINS=1 MOCK_INBOX_ITEM_UI=1`：飞书的条目由 `example-chat` 画（回复、在会话里看），群聊的条目扩展出错（看回退）。
-  **扩展市场**（`settings/ExtensionMarket.tsx`，逻辑 `lib/extension-market.ts`，`docs/extensions.md`「扩展市场」）：扩展列表下面「扩展市场」一组两行。
+  **扩展市场**（`settings/ExtensionMarket.tsx`，逻辑 `lib/extension-market.ts`，`docs/extensions.md`「扩展市场」）：扩展列表上面（#5017）「扩展市场」一组两行；官方市场显示「官方扩展」（`officialMarketName`）。
   「浏览扩展市场」（`&extension=-market`）：搜索（停顿 250 ms 后查 hub）、按市场筛选的 chip、重新读取全部，读不到的市场在顶上写原因；每行名字、版本、说明、市场、标签和状态（未安装 / 可升级到 x / 已装 x / hub 自带 / 装不了和原因）。
   点进是详情（`&extension=-market/<市场>/<扩展>`）：说明、标签、「它可以」、「提供」、「关于」；「安装」/「升级到 x」先 `POST …/catalog/preview`，弹出预览（权限、升级的 `旧 → 新`、权限变多时的红色提示和「新增」、剩几分钟，过期就不能点），
   「同意并安装」/「升级」/「同意新权限并升级」带着预览的 id 和摘要调 `/extensions/-/install` / `/extensions/<id>/-/upgrade`，装好跳到这个扩展的详情；从这个市场装的有「卸载」（可留数据），扩展详情里也有（`origin` 是 `market:` 的）。

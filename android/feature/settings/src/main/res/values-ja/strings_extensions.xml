@@ -228,6 +228,7 @@
     <string name="settings_ext_markets_header">このハブが読むマーケット</string>
     <string name="settings_ext_market_bad_signature">署名が不正</string>
     <string name="settings_ext_market_official">公式</string>
+    <string name="settings_ext_official_market_name">公式拡張機能</string>
     <string name="settings_ext_markets_footer">マーケットを削除しても、そこからインストールした拡張機能は残りますが、ここからはアップグレードできなくなります。トークンはハブに暗号化して保存され、そのマーケットにだけ送られます。保存後は表示されません。</string>
     <string name="settings_ext_market_reload">今すぐ再読み込み</string>
     <string name="settings_ext_market_reloaded">%1$sを再読み込みしました</string>

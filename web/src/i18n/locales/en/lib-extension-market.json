@@ -20,5 +20,6 @@
   "sig_state": "Signature: {state}",
   "agree_upgrade_more": "Allow and upgrade",
   "upgrade": "Upgrade",
-  "agree_install": "Allow and install"
+  "agree_install": "Allow and install",
+  "official_name": "Official extensions"
 }

@@ -63,7 +63,7 @@ class OnboardingCopyShotsTest {
         override suspend fun unpair() {}
     }
 
-    private val link = "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=example&hub=example-hub&fp=example-fingerprint&tls=18662"
+    private val link = "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=example&hub=example-hub&fp=${"A".repeat(43)}&tls=18662"
 
     private fun capture(name: String) {
         rule.waitForIdle()

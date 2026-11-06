@@ -12,5 +12,6 @@
   "no_package": "没有这台 hub（{platform}）能用的包",
   "bad_signature_install": "市场的签名不对，先不从它安装或升级：{err}",
   "not_in_market": "这个市场里没有扩展 {id}",
-  "token_and_token_from": "token 和 token_from 只能给一个"
+  "token_and_token_from": "token 和 token_from 只能给一个",
+  "official_name": "官方扩展"
 }

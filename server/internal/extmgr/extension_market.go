@@ -268,7 +268,7 @@ func (h *Manager) marketReadAs(ctx context.Context, id string, trust bool) (Mark
 				h.logf("extension market %s: its owner accepts it unsigned (was %s)", id, keyIDOf(rec.SigningKey))
 				rec.SigningKey = ""
 			case sig.Bad():
-				return marketView(s), i18n.Err("hub-extension_market.no_trusted_key")
+				return h.marketView(s), i18n.Err("hub-extension_market.no_trusted_key")
 			}
 		}
 		var ix *extension.MarketIndex
@@ -282,7 +282,7 @@ func (h *Manager) marketReadAs(ctx context.Context, id string, trust bool) (Mark
 		err = perr
 	}
 	s.rec = rec
-	return marketView(s), err
+	return h.marketView(s), err
 }
 
 func keyIDOf(key string) string {
@@ -351,8 +351,17 @@ func githubHost(host string) bool {
 	return host == "github.com" || strings.HasSuffix(host, ".github.com") || host == "githubusercontent.com" || strings.HasSuffix(host, ".githubusercontent.com")
 }
 
-func marketView(s *marketState) MarketView {
-	v := MarketView{ID: s.rec.ID, Spec: s.rec.Spec, Name: s.rec.Name, HasToken: s.rec.TokenSealed != "", Warnings: s.rec.Warnings,
+// marketName is what the apps show for a market: the official one is 官方扩展 in l whatever its index calls itself
+// (#5017), the others the name their index gives.
+func marketName(l i18n.Lang, rec extension.MarketRecord) string {
+	if extension.Official.Is(rec.Spec) {
+		return i18n.T(l, "hub-extension_market.official_name")
+	}
+	return rec.Name
+}
+
+func (h *Manager) marketView(s *marketState) MarketView {
+	v := MarketView{ID: s.rec.ID, Spec: s.rec.Spec, Name: marketName(h.userLang(), s.rec), HasToken: s.rec.TokenSealed != "", Warnings: s.rec.Warnings,
 		Error: s.rec.Error, FetchedAt: s.rec.FetchedAt, AddedAt: s.rec.AddedAt, Official: extension.Official.Is(s.rec.Spec),
 		Signature: MarketSignatureView{State: s.rec.Signature.State, KeyID: s.rec.Signature.KeyID}}
 	if v.Signature.State == "" { // a market read before #1848
@@ -381,7 +390,7 @@ func (h *Manager) marketViews() []MarketView {
 	slices.SortFunc(states, func(a, b *marketState) int { return marketBefore(a.rec, b.rec) })
 	out := []MarketView{}
 	for _, s := range states {
-		out = append(out, marketView(s))
+		out = append(out, h.marketView(s))
 	}
 	return out
 }
@@ -434,7 +443,7 @@ func (h *Manager) marketAdd(ctx context.Context, specText, token string) (Market
 	ms.byID[id] = s
 	ms.mu.Unlock()
 	h.logf("extension market %s added: %s (%d extensions, %s)", id, rec.Spec, len(ix.Extensions), signatureText(rec.Signature))
-	return marketView(s), nil
+	return h.marketView(s), nil
 }
 
 // marketToken is the token market id was registered with (empty when it has none).
@@ -530,7 +539,7 @@ func (h *Manager) marketSetSpec(ctx context.Context, id, specText string) (Marke
 	}
 	s.rec, s.index = rec, ix
 	h.logf("extension market %s moved: %s", id, rec.Spec)
-	return marketView(s), nil
+	return h.marketView(s), nil
 }
 
 // catalog is every market's plugins, filtered by q (in the id, name, description, publisher, tags) and market.
@@ -560,7 +569,7 @@ func (h *Manager) catalogIn(l i18n.Lang, q, market string) []CatalogItem {
 			if q != "" && !strings.Contains(strings.ToLower(strings.Join(append([]string{m.ID, m.Name, m.Description, m.Publisher}, e.Tags...), "\n")), q) {
 				continue
 			}
-			it := CatalogItem{Market: s.rec.ID, MarketName: s.rec.Name, ID: m.ID, Name: m.Name, Version: m.Version, Description: m.Description,
+			it := CatalogItem{Market: s.rec.ID, MarketName: marketName(l, s.rec), ID: m.ID, Name: m.Name, Version: m.Version, Description: m.Description,
 				Publisher: m.Publisher, Homepage: m.Homepage, Tags: append([]string{}, e.Tags...), Contributes: m.Contributions(), Permissions: extension.Explain(m)}
 			if s.rec.Signature.Bad() {
 				it.Problem = i18n.T(l, "hub-extension_market.bad_signature", i18n.Args{"err": s.rec.Error})

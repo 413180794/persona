@@ -12,5 +12,6 @@
   "no_package": "No package for this hub ({platform})",
   "bad_signature_install": "The marketplace’s signature is invalid, so nothing is installed or updated from it for now: {err}",
   "not_in_market": "This marketplace has no extension {id}",
-  "token_and_token_from": "Give either token or token_from, not both"
+  "token_and_token_from": "Give either token or token_from, not both",
+  "official_name": "Official extensions"
 }

@@ -1,17 +1,18 @@
 package persona.feature.settings
 
 import persona.core.contracts.api.PairingException
+import persona.core.contracts.api.PairingFailure
 import persona.core.contracts.api.PairingRequest
 import org.junit.Assert.*
 import org.junit.Test
 
 class SettingsCriticalPathTest {
     @Test fun pairingMetadataAndInvalidInput() {
-        val request = PairingInput.parse("jarvis://pair?url=https%3A%2F%2Fexample.com&token=example-token&hub=example-hub&fp=example-fingerprint&tls=443&alt=https%3A%2F%2Fexample.com%3A8443&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D")
+        val request = PairingInput.parse("jarvis://pair?url=https%3A%2F%2Fexample.com&token=example-token&hub=example-hub&fp=$fingerprint&tls=443&alt=https%3A%2F%2Fexample.com%3A8443&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D")
         assertEquals("https://example.com", request.url)
         assertEquals("example-token", request.token)
         assertEquals("example-hub", request.hub)
-        assertEquals("example-fingerprint", request.fp)
+        assertEquals(fingerprint, request.fp)
         assertEquals(443, request.tls)
         assertEquals(2, request.alt.size)
         assertFalse(request.toString().contains(request.token))
@@ -21,6 +22,16 @@ class SettingsCriticalPathTest {
             "jarvis://pair?url=https%3A%2F%2Fexample.com&token=example&token=duplicate",
             "jarvis://other?url=https%3A%2F%2Fexample.com&token=example",
         ).forEach { link -> assertThrows(PairingException::class.java) { PairingInput.parse(link) } }
+    }
+
+    @Test fun malformedFingerprintOrHubIdIsAnInvalidCode() {
+        // HubPairingClient.addresses rejects these with a raw IllegalArgumentException, which showed 未知错误 (#4991).
+        val base = "persona://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"
+        for (suffix in listOf("&fp=short", "&fp=${"A".repeat(42)}B", "&hub=bad%20hub", "&hub=${"h".repeat(129)}")) {
+            val error = assertThrows(PairingException::class.java) { PairingInput.parse(base + suffix) }
+            assertEquals(PairingFailure.InvalidCode, error.reason)
+        }
+        assertEquals(fingerprint, PairingInput.parse("$base&hub=example-hub&fp=$fingerprint").fp)
     }
 
     @Test fun personaPairingStillUsesTransportAndCredentialValidation() {
@@ -78,3 +89,6 @@ class SettingsCriticalPathTest {
         assertFalse(verifySha256("abc".byteInputStream(), ""))
     }
 }
+
+/** A well-formed SPKI fingerprint: 32 bytes, unpadded base64url. */
+private val fingerprint = "A".repeat(43)

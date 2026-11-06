@@ -20,5 +20,6 @@
   "sig_state": "署名：{state}",
   "agree_upgrade_more": "許可して更新",
   "upgrade": "更新",
-  "agree_install": "許可してインストール"
+  "agree_install": "許可してインストール",
+  "official_name": "公式拡張機能"
 }

@@ -8,7 +8,7 @@ import persona.core.contracts.api.PairingRequest
 
 class PairingLinksTest {
     @Test fun embeddedLinksUseTheSameParsedRequestBeforePermissionAndTlsChecks() {
-        val suffix = "pair?url=https%3A%2F%2Fhub.example.com%3A8443&token=fixture&hub=example-hub&fp=fixture-fp&tls=443" +
+        val suffix = "pair?url=https%3A%2F%2Fhub.example.com%3A8443&token=fixture&hub=example-hub&fp=${"A".repeat(43)}&tls=443" +
             "&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D%3A8443&alt=https%3A%2F%2Fbackup.example.com"
         val legacy = PairingRequest("  jarvis://$suffix  ", "outer-token").parsedPairingLink()!!
         val current = PairingRequest("  persona://$suffix  ", "outer-token").parsedPairingLink()!!
@@ -16,7 +16,7 @@ class PairingLinksTest {
         assertEquals("https://hub.example.com:8443", current.url)
         assertEquals("fixture", current.token)
         assertEquals("example-hub", current.hub)
-        assertEquals("fixture-fp", current.fp)
+        assertEquals("A".repeat(43), current.fp)
         assertEquals(443, current.tls)
         assertEquals(listOf("https://[2001:db8::1]:8443", "https://backup.example.com"), current.alt)
     }

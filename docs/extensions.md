@@ -717,6 +717,9 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
   官方市场在的时候，再手动加同一个仓库的任何写法都回「已经登记过这个市场」。
 - **签名钉死**：登记时就记下仓库 `market.pub` 里的公钥，第一次读也用它验，不靠首次信任；换 key 照「签名」的流程由 hub 的主人确认，代码里的公钥要跟着改。
 - **排序**：`markets` 和目录里官方市场排第一，其余按登记时间（排序都在 hub，三端照 hub 给的顺序显示）。网页（设置和 `/admin`）、安卓按 `official: true` 显示「官方」标记；iOS / macOS 还没显示（另开任务）。
+- **名字**（#5017）：界面上官方市场一律叫「官方扩展」（英文 Official extensions，日文 公式拡張機能），不用索引里的 `name`（写的是发布方的名字）。
+  hub 按主人的界面语言把 `markets[].name` 和目录的 `market_name` 填成它（`marketName`，`extension_market.go`），网页、安卓见到 `official: true` 再按自己的界面语言换一遍，
+  所以老 hub 上也对。只改展示，spec、索引、签名、市场 id 都不变；命令行 `personad extension market list` 也是这个名字。
 - 内网市场等用户自己的市场照旧，不动。
 
 **发布一个市场**：仓库根目录放 `persona-extensions.json`，包放进 Release 附件（或仓库里、网站上），`sha256sum` 写进索引。扩展仓库的打包脚本顺手生成索引。
@@ -1899,7 +1902,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
   展开后「运行情况」可选 1 小时 / 24 小时 / 7 天：调用、错误率、延迟 p95（附 p50 / p99）、启动 / 出错退出四个数，调用和出错（叠起来的柱子）、p95 延迟两张图，
   按方法的表（调用、错误率、p95、出错的码），出错退出的原因；「日志」能搜索（停 0.3 秒后问 hub）、实时跟随（server-sent events，读者停在底部时跟着滚）、拷贝。
   没有这些接口的老 hub（404）整块不显示。截图同上，`?dialog=details` 展开能回滚的那一行（mock 的数据在 `web/src/admin/mock-metrics.ts`）。
-- 扩展市场（#1330）：列表下面登记市场（添加、删除、重新读取、换 token）和市场的目录（搜索、按市场筛选），从目录安装 / 升级先预览、同意后走上面的安装 / 升级，见 [admin.md](admin.md)「扩展」。
+- 扩展市场（#1330）：列表上面（#5017）登记市场（添加、删除、重新读取、换 token）和市场的目录（搜索、按市场筛选），从目录安装 / 升级先预览、同意后走上面的安装 / 升级，见 [admin.md](admin.md)「扩展」。
 - 截图：`cd web && npx vite`，`/admin/extensions?mock=app&theme=dark`，`?dialog=install|upload|preview|upgrade|uninstall|details|market|market-add`（`web/src/admin/mock.ts`）。
 
 ![管理界面的扩展页（浅色）：列表、展开的「它可以」和关于](screenshots/admin-plugins-light.png)

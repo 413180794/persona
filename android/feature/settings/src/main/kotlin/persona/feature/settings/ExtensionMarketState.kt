@@ -129,6 +129,23 @@ internal data class CatalogState(
     val extensions: List<CatalogExtension> get() = catalog?.extensions.orEmpty()
 }
 
+/**
+ * The official market reads 官方扩展 in the app's language (#5017), whatever its index (or an older hub) calls it; its
+ * catalog extensions say so as their market too. Other markets keep the names their indexes give.
+ */
+internal object OfficialMarket {
+    fun named(res: Resources, m: ExtensionMarket): ExtensionMarket =
+        if (m.official) m.copy(name = res.getString(R.string.settings_ext_official_market_name)) else m
+
+    fun named(res: Resources, c: ExtensionCatalog): ExtensionCatalog {
+        val official = c.markets.filter { it.official }.mapTo(HashSet()) { it.id }
+        if (official.isEmpty()) return c
+        val name = res.getString(R.string.settings_ext_official_market_name)
+        return c.copy(markets = c.markets.map { named(res, it) },
+            extensions = c.extensions.map { if (it.market in official) it.copy(marketName = name) else it })
+    }
+}
+
 /** 扩展市场: the catalog, searched and narrowed to a market by the hub. */
 internal class CatalogModel(private val api: ExtensionMarkets, private val res: Resources) {
     private val mutable = MutableStateFlow(CatalogState())
@@ -162,7 +179,7 @@ internal class CatalogModel(private val api: ExtensionMarkets, private val res: 
         val (query, market) = state.value.let { it.query to it.market }
         mutable.update { it.copy(loading = true) }
         try {
-            val catalog = api.catalog(query, market, refresh)
+            val catalog = OfficialMarket.named(res, api.catalog(query, market, refresh))
             if (mine == generation) mutable.update {
                 // A market that went away is not a filter any more.
                 val keep = it.market?.takeIf { id -> catalog.markets.any { m -> m.id == id } }
@@ -305,7 +322,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
         if (state.value.loading) return
         mutable.update { it.copy(loading = true) }
         try {
-            val catalog = api.catalog(market = market)
+            val catalog = OfficialMarket.named(res, api.catalog(market = market))
             val extension = catalog.extensions.firstOrNull { it.market == market && it.id == id }
             mutable.update {
                 it.copy(extension = extension ?: it.extension, missing = extension == null, error = null,
@@ -414,7 +431,7 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
         if (state.value.loading) return
         mutable.update { it.copy(loading = true) }
         try {
-            val markets = api.markets()
+            val markets = api.markets().map { OfficialMarket.named(res, it) }
             mutable.update { it.copy(markets = markets, error = null) }
             // The switch is extra: a hub that cannot say leaves it out, the markets still show.
             val auto = try { api.autoUpgrades() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
@@ -453,7 +470,7 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
         if (s.isEmpty() || state.value.adding) return false
         mutable.update { it.copy(adding = true, addError = null) }
         return try {
-            val market = api.addMarket(s, token.trim().takeIf { it.isNotEmpty() })
+            val market = OfficialMarket.named(res, api.addMarket(s, token.trim().takeIf { it.isNotEmpty() }))
             mutable.update { it.copy(markets = it.markets.orEmpty().filter { m -> m.id != market.id } + market) }
             true
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -474,7 +491,8 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
     suspend fun setToken(id: String, token: String): Boolean = working(id, R.string.settings_ext_market_token_not_changed) { replace(api.setMarketToken(id, token.trim())) }
 
     private fun replace(market: ExtensionMarket) = mutable.update {
-        it.copy(markets = it.markets?.map { m -> if (m.id == market.id) market else m })
+        val named = OfficialMarket.named(res, market)
+        it.copy(markets = it.markets?.map { m -> if (m.id == named.id) named else m })
     }
 
     private suspend fun working(id: String, failed: Int, block: suspend () -> Unit): Boolean {

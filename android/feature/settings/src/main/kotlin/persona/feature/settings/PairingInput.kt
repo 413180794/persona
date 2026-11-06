@@ -5,6 +5,7 @@ import persona.core.contracts.api.*
 import persona.core.domain.Pairing
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
+import persona.core.hub.SpkiTrustManager
 import java.net.*
 import javax.net.ssl.SSLException
 
@@ -35,6 +36,9 @@ object PairingInput {
 
     private fun validate(request: PairingRequest): PairingRequest {
         if (request.token.isBlank() || request.tls?.let { it !in 1..65535 } == true) invalid()
+        // The same hub id and fingerprint checks as HubPairingClient.addresses, so a malformed link is 配对码无效, not 未知错误.
+        if (request.hub?.matches(Regex("[A-Za-z0-9_-]{1,128}")) == false) invalid()
+        if (request.fp != null && runCatching { SpkiTrustManager(request.fp) }.isFailure) invalid()
         (listOf(request.url) + request.alt).forEach { address ->
             val uri = runCatching { URI(address) }.getOrNull() ?: invalid()
             if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank() ||

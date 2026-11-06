@@ -129,6 +129,29 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
         {t("settings-extensions.intro")}
       </p>
+      {/* 扩展市场 first, above the installed list (#5017): where a phone or a browser gets another extension. */}
+      {markets && (
+        <Group title={t("settings-extensions.market_title")} footer={t("settings-extensions.market_footer")}>
+          <Row
+            label={
+              <span className="flex items-center gap-2">
+                <Icon name="search" size={13} className="shrink-0 text-ink-3" />
+                {t("settings-extensions.browse_market")}
+              </span>
+            }
+            onClick={onMarket}
+          />
+          <Row
+            label={
+              <span className="flex items-center gap-2">
+                <Icon name="gear" size={13} className="shrink-0 text-ink-3" />
+                {t("settings-extensions.manage_markets")}
+              </span>
+            }
+            onClick={onMarkets}
+          />
+        </Group>
+      )}
       <Group
         title={
           <span className="flex items-center gap-2">
@@ -193,28 +216,6 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
           </button>
         ))}
       </Group>
-      {markets && (
-        <Group title={t("settings-extensions.market_title")} footer={t("settings-extensions.market_footer")}>
-          <Row
-            label={
-              <span className="flex items-center gap-2">
-                <Icon name="search" size={13} className="shrink-0 text-ink-3" />
-                {t("settings-extensions.browse_market")}
-              </span>
-            }
-            onClick={onMarket}
-          />
-          <Row
-            label={
-              <span className="flex items-center gap-2">
-                <Icon name="gear" size={13} className="shrink-0 text-ink-3" />
-                {t("settings-extensions.manage_markets")}
-              </span>
-            }
-            onClick={onMarkets}
-          />
-        </Group>
-      )}
     </>
   );
 }

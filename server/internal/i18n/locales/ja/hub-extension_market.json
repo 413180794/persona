@@ -12,5 +12,6 @@
   "no_package": "このハブ（{platform}）で使えるパッケージがありません",
   "bad_signature_install": "マーケットの署名が正しくないため、当面ここからはインストールもアップデートもしません：{err}",
   "not_in_market": "このマーケットに拡張機能 {id} はありません",
-  "token_and_token_from": "token と token_from はどちらか一方だけ指定してください"
+  "token_and_token_from": "token と token_from はどちらか一方だけ指定してください",
+  "official_name": "公式拡張機能"
 }
