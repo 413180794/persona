@@ -15,6 +15,7 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/tailscale/go-winio v0.0.0-20231025203758-c4f33415bf55
 	github.com/tailscale/tailcat v0.7.0
+	github.com/tdewolff/parse/v2 v2.8.20
 	github.com/yuin/goldmark v1.8.5
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.41.0

@@ -47,6 +47,8 @@ func (e *Error) WireError() (string, json.RawMessage) { return e.Code, e.Data }
 
 var ErrClosed = errors.New("rpc: connection closed")
 
+var errFrameBudget = errors.New("rpc: runtime frame budget exceeded")
+
 // ErrDropped is what Call answers when the connection closed after the request went out: the other side may have done
 // it. It is ErrClosed too (errors.Is), with the same words (a relay further on passes them as they are).
 var ErrDropped error = droppedError{}
@@ -56,7 +58,12 @@ type droppedError struct{}
 func (droppedError) Error() string        { return ErrClosed.Error() }
 func (droppedError) Is(target error) bool { return target == ErrClosed }
 
+// Limits are optional transport budgets for untrusted runtime peers. Zero preserves
+// existing process/node behavior; configure them before Serve or any concurrent call.
+type Limits struct{ FrameBytes, ConcurrentRequests, PendingCalls int }
+
 type Peer struct {
+	Limits Limits
 	prefix string
 	w      io.Writer
 	// wsem is a one-slot semaphore around w, not a mutex: a write can block for good (SSH stdin to a frozen node,
@@ -78,6 +85,8 @@ type Peer struct {
 	Cancels map[string]bool
 
 	running map[string]context.CancelFunc // requests being handled, by id: what a cancelEvent ends
+	// Only bounded peers couple accepted work to closure; legacy peers retain their cancellation semantics.
+	runtimeCancel context.CancelFunc
 }
 
 // cancelEvent is sent for a request the caller no longer waits for: an approval the hub asks for on the phone stays
@@ -106,8 +115,25 @@ func New(prefix string, w io.Writer) *Peer {
 
 // Serve reads messages until r fails; it returns the read error.
 func (p *Peer) Serve(ctx context.Context, r io.Reader) error {
+	if p.Limits.ConcurrentRequests > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		defer cancel()
+		p.mu.Lock()
+		p.runtimeCancel = cancel
+		select {
+		case <-p.closed:
+			cancel()
+		default:
+		}
+		p.mu.Unlock()
+	}
 	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
+	maximum := 64 * 1024 * 1024
+	if p.Limits.FrameBytes > 0 {
+		maximum = p.Limits.FrameBytes
+	}
+	sc.Buffer(make([]byte, min(64*1024, maximum)), maximum)
 	for sc.Scan() {
 		var m message
 		if err := json.Unmarshal(sc.Bytes(), &m); err != nil {
@@ -118,6 +144,13 @@ func (p *Peer) Serve(ctx context.Context, r io.Reader) error {
 			// Registered before the handler starts: a cancel right behind the request finds it.
 			hctx, cancel := context.WithCancel(context.WithValue(ctx, connKey{}, ctx))
 			p.mu.Lock()
+			if p.Limits.ConcurrentRequests > 0 && (len(p.running) >= p.Limits.ConcurrentRequests || p.running[m.ID] != nil || m.ID == "") {
+				p.mu.Unlock()
+				cancel()
+				err := errors.New("rpc: runtime request budget exceeded")
+				p.Close(err)
+				return err
+			}
 			p.running[m.ID] = cancel
 			p.mu.Unlock()
 			go p.handle(hctx, m)
@@ -185,7 +218,13 @@ func (p *Peer) handle(ctx context.Context, m message) {
 			out.Result = b
 		}
 	}
-	_ = p.write(out)
+	if err := p.write(out); errors.Is(err, errFrameBudget) {
+		// The request must get an error, not a permanently unresolved promise.
+		// If even the error cannot fit, disconnect so all pending calls fail.
+		if err := p.write(message{ID: m.ID, Error: &Error{Message: errFrameBudget.Error()}}); err != nil {
+			p.Close(err)
+		}
+	}
 }
 
 func (p *Peer) write(m message) error {
@@ -198,6 +237,9 @@ func (p *Peer) writeContext(ctx context.Context, m message) error {
 		return err
 	}
 	b = append(b, '\n')
+	if p.Limits.FrameBytes > 0 && len(b) > p.Limits.FrameBytes {
+		return errFrameBudget
+	}
 	// Wait for the writer, but not past the caller or the connection: the write ahead may never finish. A write
 	// already under way cannot be interrupted.
 	select {
@@ -230,6 +272,10 @@ func (p *Peer) Call(ctx context.Context, method string, params any, out any) err
 	id := fmt.Sprintf("%s%d", p.prefix, p.nextID.Add(1))
 	ch := make(chan message, 1)
 	p.mu.Lock()
+	if p.Limits.PendingCalls > 0 && len(p.pending) >= p.Limits.PendingCalls {
+		p.mu.Unlock()
+		return errors.New("rpc: runtime pending-call budget exceeded")
+	}
 	p.pending[id] = ch
 	p.mu.Unlock()
 	defer func() {
@@ -277,6 +323,11 @@ func (p *Peer) Close(err error) {
 	p.once.Do(func() {
 		p.err = err
 		close(p.closed)
+		p.mu.Lock()
+		if p.runtimeCancel != nil {
+			p.runtimeCancel()
+		}
+		p.mu.Unlock()
 	})
 }
 

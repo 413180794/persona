@@ -199,7 +199,7 @@ The generator understands only what is below; anything else stops it with an err
     generator reuses that type and rejects alias cycles; no second model is generated.
   - **A struct**: `"type": "object"` + `properties` + `required`. An object `oneOf` may contain single-field
     `required` alternatives for exactly one payload; TS generates an exclusive union, other models rely on schema
-    validation. Known fields keep their types. An object that says
+    validation. Validation-only `allOf`, `anyOf` and `not` overlays constrain combinations such as source versus process runtimes in both canonical validators; they do not generate additional models. Known fields keep their types. An object that says
     `additionalProperties: true` or a sub-schema also keeps extra keys (see "Custom contributions" below); one that
     says nothing or `false` is generated as before.
   - **A string enum**: `"type": "string"` + `enum`. The field stays a string in every language (an unknown value
@@ -230,7 +230,7 @@ The generator understands only what is below; anything else stops it with an err
 - In one union, same-named fields of several variants become one field of Go's flat struct, so their types must be
   the same (enums count as strings); the generator stops otherwise: give the new field another name.
 - The validation keywords (`pattern`, `minLength`, `maxLength`, `minimum`, `maximum`, `minItems`, `maxItems`,
-  `uniqueItems`, `minProperties`, `maxProperties`, `propertyNames`, `const`, `enum`) do not change what is generated; `sdk/go/wire`'s
+  `uniqueItems`, `minProperties`, `maxProperties`, `propertyNames`, `const`, `enum`, `allOf`, `anyOf`, `not`) do not change what is generated; `sdk/go/wire`'s
   `Validate` and the validator in `scripts/test/test_extension_schema.py` both know them. A keyword neither knows
   fails `test_schema_keywords_are_known` (#4012); what an `x-` annotation holds is not checked as keywords.
   Rules a schema cannot say (at most 300 components a page, the same labels in every chart series, field names

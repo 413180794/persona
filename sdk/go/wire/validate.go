@@ -221,6 +221,32 @@ func (c *checker) check(s map[string]any, v any, here, at string) {
 		}
 		return
 	}
+	if all, ok := s["allOf"].([]any); ok {
+		for _, option := range all {
+			c.check(option.(map[string]any), v, here, at)
+		}
+	}
+	if anyOf, ok := s["anyOf"].([]any); ok {
+		passing := false
+		for _, option := range anyOf {
+			sub := checker{}
+			sub.check(option.(map[string]any), v, here, at)
+			if len(sub.errs) == 0 {
+				passing = true
+				break
+			}
+		}
+		if !passing {
+			c.add("%s: no matching anyOf branch", at)
+		}
+	}
+	if forbidden, ok := s["not"].(map[string]any); ok {
+		sub := checker{}
+		sub.check(forbidden, v, here, at)
+		if len(sub.errs) == 0 {
+			c.add("%s: matches forbidden schema", at)
+		}
+	}
 	if one, ok := s["oneOf"].([]any); ok {
 		if disc, ok := s["x-discriminator"].(string); ok {
 			obj, _ := v.(map[string]any)

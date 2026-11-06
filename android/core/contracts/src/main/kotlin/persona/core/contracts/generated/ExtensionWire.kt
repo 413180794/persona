@@ -226,12 +226,29 @@ data class ExtensionEngines(
 
 @Serializable
 data class ExtensionRuntime(
-    val command: JsonElement = JsonNull,
+    /**
+     * Default process preserves executable packages. deno requires a self-contained source bundle and verified
+     * independent Linux isolation.
+     */
+    val mode: String? = null,
+    val source: ExtensionSourceRuntime? = null,
+    val command: JsonElement? = null,
     val args: List<String>? = null,
     val env: Map<String, String>? = null,
     val rpc: String? = null,
     val http: Boolean? = null,
     val resources: ExtensionResources? = null,
+)
+
+/**
+ * entry is offline build input only; bundle is the signed self-contained artifact, verified again on each start. No
+ * runtime dependency resolution.
+ */
+@Serializable
+data class ExtensionSourceRuntime(
+    val entry: String = "",
+    val bundle: String = "",
+    val sha256: String = "",
 )
 
 /**

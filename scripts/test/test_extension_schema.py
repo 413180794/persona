@@ -50,6 +50,12 @@ class Validator:
             rest = {k: v for k, v in schema.items() if k not in ("$ref", "description")}
             return errs + (self.errors(rest, value, here, at) if rest else [])
         errs = []
+        for option in schema.get("allOf", []):
+            errs += self.errors(option, value, here, at)
+        if "anyOf" in schema and not any(not self.errors(o, value, here, at) for o in schema["anyOf"]):
+            errs.append(f"{at}: no matching anyOf branch")
+        if "not" in schema and not self.errors(schema["not"], value, here, at):
+            errs.append(f"{at}: matches forbidden schema")
         if "oneOf" in schema:
             disc = schema.get("x-discriminator")
             if disc:
@@ -170,7 +176,7 @@ class ExtensionSchemaTests(unittest.TestCase):
     def test_schema_keywords_are_known(self):
         # A keyword neither validator knows is silently ignored (maxProperties and uniqueItems were, #4012): every
         # keyword the schemas use is one both validate, or an annotation (description, title, format, x-*).
-        validated = {"$ref", "oneOf", "type", "const", "enum", "minLength", "maxLength", "pattern", "minimum", "maximum",
+        validated = {"$ref", "oneOf", "allOf", "anyOf", "not", "type", "const", "enum", "minLength", "maxLength", "pattern", "minimum", "maximum",
                      "items", "minItems", "maxItems", "uniqueItems", "properties", "required", "additionalProperties",
                      "minProperties", "maxProperties", "propertyNames", "$defs"}
         annotations = {"$schema", "$id", "title", "description", "format"}

@@ -108,7 +108,10 @@ func (e *Engines) UnmarshalJSON(data []byte) error {
 
 // Runtime is how the plugin's program runs; a plugin without one runs no code.
 type Runtime struct {
-	Command Command           `json:"command"`
+	// Mode is process (the default) or deno, a prebuilt source bundle in an independently confined runtime.
+	Mode    string            `json:"mode,omitempty"`
+	Source  *SourceRuntime    `json:"source,omitempty"`
+	Command Command           `json:"command,omitzero"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
 	// RPC: "stdio" (the default) speaks the plugin protocol on stdin / stdout; "none" does not.
@@ -381,6 +384,9 @@ func (m *Manifest) Validate() error {
 	}
 	if m.Runtime != nil {
 		errs = append(errs, m.Runtime.validate()...)
+		if m.Runtime.IsDeno() && (m.Node != nil || len(m.Tools) != 0 || m.Permissions.AgentRuntimes || m.Permissions.FullHub()) {
+			bad("runtime deno: node programs, command-line tools, agent runtimes and unrestricted hub access are not supported")
+		}
 	}
 	if m.Node != nil {
 		errs = append(errs, m.Node.validate(m)...)
@@ -575,7 +581,16 @@ func (r *Runtime) validate() []error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 	paths := map[string]string{"": r.Command.Path}
-	if r.Command.ByPlatform != nil {
+	if r.Mode != "" && r.Mode != "process" && r.Mode != RuntimeDeno {
+		bad("runtime.mode: expected process or deno")
+	}
+	if r.IsDeno() {
+		errs = append(errs, r.validateSource()...)
+		paths = nil
+	} else if r.Source != nil {
+		bad("runtime.source: only supported with mode deno")
+	}
+	if r.Command.ByPlatform != nil && !r.IsDeno() {
 		paths = r.Command.ByPlatform
 		if len(paths) == 0 {
 			bad("runtime.command: no platform")

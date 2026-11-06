@@ -23,6 +23,7 @@ import (
 	sdk "github.com/nwverse/persona/sdk/go"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/conformance"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Writing an extension (docs/extensions.md "Writing extensions: SDK, templates and CLI"): `personad extension new |
@@ -93,6 +94,9 @@ func newExtension(id, template, name, dir string, stdout io.Writer) error {
 	}
 	if template == "" {
 		template = "go"
+	}
+	if template == "deno" {
+		return newSourceExtension(id, name, dir, stdout)
 	}
 	if template != "go" && template != "ts" {
 		return fmt.Errorf("模板只有 go 和 ts，没有 %q", template)
@@ -233,6 +237,8 @@ func openProject(dir string) (*devProject, error) {
 	switch {
 	case m.Runtime == nil:
 		p.kind = "" // declarations only: nothing to build
+	case m.Runtime.IsDeno():
+		p.kind = "deno"
 	case exists(filepath.Join(abs, "go.mod")):
 		p.kind = "go"
 	case exists(filepath.Join(abs, "src", "main.ts")):
@@ -265,6 +271,9 @@ func (p *devProject) platforms() []string {
 	if p.manifest.Runtime == nil {
 		return nil
 	}
+	if p.manifest.Runtime.IsDeno() {
+		return []string{"linux-amd64", "linux-arm64"}
+	}
 	if ps := p.manifest.Runtime.Command.Platforms(); len(ps) > 0 {
 		return ps
 	}
@@ -273,6 +282,9 @@ func (p *devProject) platforms() []string {
 
 // build builds the program for platform (goos-goarch) where the manifest says it is.
 func (p *devProject) build(ctx context.Context, platform string, stderr io.Writer) error {
+	if p.kind == "deno" {
+		return p.buildSource(ctx, stderr)
+	}
 	if p.kind == "" {
 		return nil
 	}
@@ -378,6 +390,9 @@ func testExtension(ctx context.Context, dir string, stdout, stderr io.Writer) er
 		fmt.Fprintln(stdout, "  警告："+w)
 	}
 	rt := p.manifest.Runtime
+	if rt.IsDeno() {
+		return i18n.Err("extension-source.package_check_only")
+	}
 	if rt == nil || !rt.SpeaksRPC() {
 		fmt.Fprintln(stdout, "✓ 没有说协议的程序，不用查握手")
 		return nil
@@ -442,7 +457,10 @@ func packExtension(ctx context.Context, dir string, opts map[string]string, stdo
 	if s := opts["platforms"]; s != "" {
 		platforms = strings.Split(s, ",")
 	}
-	for _, pl := range platforms {
+	for i, pl := range platforms {
+		if p.kind == "deno" && i > 0 {
+			continue // One platform-independent artifact serves every package platform.
+		}
 		fmt.Fprintf(stdout, "构建 %s…\n", pl)
 		if err := p.build(ctx, pl, stderr); err != nil {
 			return err
@@ -515,6 +533,9 @@ func (p *devProject) tarball(platforms []string) ([]byte, error) {
 		}
 	}
 	if rt := p.manifest.Runtime; rt != nil {
+		if rt.IsDeno() {
+			paths = append(paths, filepath.FromSlash(rt.Source.Bundle))
+		}
 		for _, pl := range platforms {
 			if rel, ok := rt.Command.For(pl); ok && !extension.IsBuiltinCommand(rel) {
 				paths = append(paths, filepath.FromSlash(rel))

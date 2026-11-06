@@ -115,6 +115,22 @@ func sandboxApplies(p *extension.Extension) bool {
 
 // sandboxOf is whether p runs in a sandbox, and why.
 func (ps *extensions) sandboxOf(ctx context.Context, p *extension.Extension) sandboxState {
+	if p != nil && p.Manifest.Runtime.IsDeno() {
+		st := sandboxState{applies: true, SandboxView: SandboxView{Enabled: true, Default: true}}
+		development, err := sandbox.SourceDevelopmentResources(selfExecutable())
+		st.Active = err == nil
+		if development {
+			st.Detail = "DEVELOPMENT_ONLY_RESOURCE_FALLBACK: " + i18n.T(ps.h.contextLang(ctx), "extension-source.development_resources")
+		}
+		if err != nil {
+			st.Why = i18n.T(ps.h.contextLang(ctx), "extension-status.sandbox_unavailable")
+			st.Detail = err.Error()
+		}
+		if px := ps.sandboxes.proxyIfStarted(); px != nil {
+			st.Egress = px.Stats(p.Record.ID)
+		}
+		return st
+	}
 	if !sandboxApplies(p) {
 		return sandboxState{}
 	}
@@ -294,6 +310,9 @@ func (ps *extensions) saveSandboxes(ctx context.Context) error {
 
 // setSandbox records the owner's choice (nil: back to the default) and restarts it.
 func (ps *extensions) setSandbox(ctx context.Context, p *extension.Extension, on *bool, who string) error {
+	if p.Manifest.Runtime.IsDeno() && on != nil && !*on {
+		return i18n.Err("extension-source.isolation_required")
+	}
 	if !sandboxApplies(p) {
 		return i18n.Err("hub-extension_sandbox.not_applicable")
 	}
@@ -330,6 +349,9 @@ func (ps *extensions) setSandbox(ctx context.Context, p *extension.Extension, on
 // moves to its run directory, the hub's API is HubHost through the proxy, and the program runs inside; with a sandbox
 // on but none on this machine, it is at least pointed at the proxy.
 func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *hubExtension, s *host.Spec) error {
+	if p.Manifest.Runtime.IsDeno() {
+		return ps.confineSource(ctx, p, s)
+	}
 	st := ps.sandboxOf(ctx, p)
 	if !st.applies || !st.Enabled {
 		return nil

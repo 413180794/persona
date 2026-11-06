@@ -55,6 +55,20 @@ type Plan struct {
 	Scope bool
 	// Env is the hub's environment, for what systemd-run needs to reach the user's manager.
 	Env []string
+	// Strict starts only after verifying independent kernel resource controls.
+	// ReadOnly replaces broad system/package/data mounts with exact runtime files.
+	Strict   bool
+	ReadOnly []Mount
+	// Development replaces only unavailable resource scopes in a tagged binary.
+	// It never changes linuxSetup's strict mount/network namespace options.
+	Development *DevelopmentLimits
+}
+
+type Mount struct {
+	Source, Target string
+	// DataFD is consumed by bubblewrap into a read-only mount. No artifact
+	// pathname or writable descriptor is exposed in the guest namespace.
+	DataFD int
 }
 
 // Support is what this machine can do.
@@ -213,19 +227,31 @@ var systemDirs = []string{"/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "
 // Linux is the command line that runs plan in bubblewrap (in a systemd scope with plan.Scope), and the environment it
 // adds. The program sees HTTP(S)_PROXY on its loopback (RunCommand carries it to plan.ProxySocket), HOME its data.
 func Linux(bwrap string, plan Plan) (string, []string, []string) {
-	args := append(linuxSetup(plan),
-		"--", SelfPath, RunCommand, "--proxy-socket", plan.ProxySocket, "--listen", "127.0.0.1:"+strconv.Itoa(ProxyPort),
-		"--", plan.Command)
+	launch := []string{SelfPath, RunCommand, "--proxy-socket", plan.ProxySocket, "--listen", "127.0.0.1:" + strconv.Itoa(ProxyPort)}
+	if plan.Development != nil {
+		launch = append(launch, "--development-limits")
+		launch = append(launch, plan.Development.args()...)
+	}
+	launch = append(launch, "--", plan.Command)
+	args := append(linuxSetup(plan), append([]string{"--"}, launch...)...)
 	args = append(args, plan.Args...)
 	proxy := "http://127.0.0.1:" + strconv.Itoa(ProxyPort)
 	env := ProxyEnv(proxy)
+	if plan.Strict {
+		env = ProxyEnv("")
+	} // the adapter explicitly addresses the fixed-identity broker
 	if !plan.Scope {
 		return bwrap, args, env
 	}
 	unit := fmt.Sprintf("persona-ext-%s-%d", plan.ID, time.Now().UnixNano())
+	launcher := []string{bwrap}
+	if plan.Strict {
+		launcher = []string{plan.Self, RunCommand, "--resource-check", strconv.Itoa(plan.MemoryMB), strconv.Itoa(plan.CPUPercent), unit + ".scope", "--", bwrap}
+	}
 	scope := []string{"--user", "--scope", "--quiet", "--collect", "--unit", unit,
 		"-p", "MemoryMax=" + strconv.Itoa(plan.MemoryMB) + "M", "-p", "MemorySwapMax=0",
-		"-p", "CPUQuota=" + strconv.Itoa(plan.CPUPercent) + "%", "--", bwrap}
+		"-p", "CPUQuota=" + strconv.Itoa(plan.CPUPercent) + "%", "--"}
+	scope = append(scope, launcher...)
 	for _, kv := range plan.Env { // systemd-run reaches the user's manager with these; bwrap drops them again
 		if strings.HasPrefix(kv, "XDG_RUNTIME_DIR=") || strings.HasPrefix(kv, "DBUS_SESSION_BUS_ADDRESS=") {
 			env = append(env, kv)
@@ -238,6 +264,19 @@ func Linux(bwrap string, plan Plan) (string, []string, []string) {
 // runs true after them, so the probe tries what a start does.
 func linuxSetup(plan Plan) []string {
 	args := []string{"--die-with-parent"}
+	if plan.Strict {
+		args = append(args, "--unshare-user", "--unshare-ipc", "--unshare-pid", "--unshare-net", "--unshare-uts", "--cap-drop", "ALL",
+			"--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/run",
+			"--ro-bind", plan.Self, SelfPath, "--ro-bind", plan.ProxySocket, plan.ProxySocket)
+		for _, m := range plan.ReadOnly {
+			if m.DataFD > 0 {
+				args = append(args, "--ro-bind-data", strconv.Itoa(m.DataFD), m.Target)
+			} else {
+				args = append(args, "--ro-bind", m.Source, m.Target)
+			}
+		}
+		return append(args, "--setenv", "HOME", "/tmp", "--setenv", "TMPDIR", "/tmp", "--unsetenv", "DBUS_SESSION_BUS_ADDRESS", "--unsetenv", "XDG_RUNTIME_DIR", "--remount-ro", "/", "--chdir", "/tmp")
+	}
 	args = append(args, bwrapNamespaces()...)
 	for _, d := range systemDirs {
 		args = append(args, "--ro-bind-try", d, d)
@@ -383,8 +422,40 @@ func linksOn(p string) []string {
 // Run is RunCommand: carry the sandbox's loopback port to the proxy's socket, run the program with this process's
 // stdin, stdout and stderr, pass on the signals the hub sends, and exit as it does.
 func Run(args []string, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--development-exec" {
+		return runDevelopmentExec(args[1:], stderr)
+	}
+	if len(args) > 0 && args[0] == "--resource-check" {
+		if len(args) < 6 || args[4] != "--" {
+			return 2
+		}
+		memory, mErr := strconv.Atoi(args[1])
+		cpu, cErr := strconv.Atoi(args[2])
+		if mErr != nil || cErr != nil {
+			return 2
+		}
+		if err := VerifyResources(memory, cpu, args[3]); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		cmd := exec.Command(args[5], args[6:]...)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
+	}
 	var sock, listen string
+	var dev []string
 	for len(args) > 0 && args[0] != "--" {
+		if args[0] == "--development-limits" {
+			if !developmentResourcesBuilt || len(args) < 4 {
+				return 2
+			}
+			dev, args = args[1:4], args[4:]
+			continue
+		}
 		if len(args) < 2 {
 			fmt.Fprintln(stderr, "sandbox: --proxy-socket <path> --listen <addr> -- <command> …")
 			return 2
@@ -409,7 +480,11 @@ func Run(args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "sandbox: %v\n", err)
 		return 1
 	}
+	defer ln.Close()
 	go carry(ln, sock)
+	if dev != nil {
+		return runDevelopmentChild(append(dev, args...), SelfPath, stderr)
+	}
 	cmd := exec.Command(args[1], args[2:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Start(); err != nil {

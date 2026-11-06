@@ -166,12 +166,28 @@ export interface Engines {
 }
 
 export interface Runtime {
-  command: unknown;
+  /**
+   * Default process preserves executable packages. deno requires a self-contained source bundle and verified
+   * independent Linux isolation.
+   */
+  mode?: string;
+  source?: SourceRuntime;
+  command?: unknown;
   args?: string[];
   env?: Record<string, string>;
   rpc?: string;
   http?: boolean;
   resources?: Resources;
+}
+
+/**
+ * entry is offline build input only; bundle is the signed self-contained artifact, verified again on each start. No
+ * runtime dependency resolution.
+ */
+export interface SourceRuntime {
+  entry: string;
+  bundle: string;
+  sha256: string;
 }
 
 /**

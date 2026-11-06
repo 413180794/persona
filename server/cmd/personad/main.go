@@ -19,6 +19,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
+	"github.com/nwverse/persona/server/internal/extension/sourcevalidate"
 	"github.com/nwverse/persona/server/internal/hub"
 	"github.com/nwverse/persona/server/internal/manager"
 	"github.com/nwverse/persona/server/internal/relay"
@@ -93,6 +94,12 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, named(usage))
 		os.Exit(2)
+	}
+	if os.Args[1] == sandbox.ValidationRunCommand {
+		os.Exit(sandbox.RunValidation(os.Args[2:]))
+	}
+	if os.Args[1] == sourcevalidate.Command {
+		os.Exit(sourcevalidate.Run(os.Args[2:], os.Stdin, os.Stdout))
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

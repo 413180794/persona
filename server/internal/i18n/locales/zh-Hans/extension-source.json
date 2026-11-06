@@ -1,0 +1,14 @@
+{
+  "validator_unavailable": "源码验证需要隔离环境及独立的内存和 CPU 限制。验证未完成。",
+  "validator_rejected": "源码文件存在语法错误或禁止的运行时模块加载。",
+  "validator_busy": "源码验证队列已满，请稍后重试。",
+  "validator_stopped": "源码验证已取消或超过时间限制。",
+  "validator_inaccessible": "源码包不是可访问的包内普通文件。",
+  "development_validator_resources": "警告：已启用仅供开发使用的原生验证进程限制。Go 内存、栈和线程设置属于协作式限制；采样 RSS 和进程 CPU、运行时限不等于内核强制内存、CPU 配额或任务数限制。请勿部署此构建。",
+  "development_unavailable": "此构建不支持启用开发资源回退。",
+  "development_resources": "警告：已启用仅供开发使用的资源回退。进程 CPU 时间、V8 老生代堆、采样 RSS 和运行时限终止不等于内核强制内存限制或 CPU 配额。请勿部署此构建。",
+  "runtime_required": "启用此扩展前，请先在管理器上配置固定版本的源码运行时。",
+  "isolation_required": "源码扩展的隔离不能关闭。",
+  "package_check_only": "源码包检查通过。运行时验证必须使用管理器强制执行的沙箱；单独启动引擎不算通过。",
+  "created": "已创建源码扩展。使用 personad extension pack 打包；启用时需要固定版本运行时及强制执行的 Linux 隔离。"
+}

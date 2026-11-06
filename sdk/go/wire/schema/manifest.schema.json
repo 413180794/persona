@@ -173,6 +173,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "mode": {"type": "string", "enum": ["process", "deno"], "description": "Default process preserves executable packages. deno requires a self-contained source bundle and verified independent Linux isolation."},
+        "source": {"$ref": "#/$defs/SourceRuntime"},
         "command": {"$ref": "#/$defs/Command"},
         "args": {"type": "array", "items": {"type": "string"}},
         "env": {"type": "object", "additionalProperties": {"type": "string"}},
@@ -180,7 +182,20 @@
         "http": {"type": "boolean"},
         "resources": {"$ref": "#/$defs/Resources"}
       },
-      "required": ["command"]
+      "allOf": [{"oneOf": [
+        {"required": ["command"], "not": {"required": ["source"]}, "properties": {"mode": {"enum": ["process"]}}},
+        {"required": ["mode", "source"], "properties": {"mode": {"const": "deno"}, "rpc": {"const": "stdio"}, "http": {"const": false}}, "not": {"anyOf": [{"required": ["command"]}, {"required": ["args"]}, {"required": ["env"]}]}}
+      ]}]
+    },
+    "SourceRuntime": {
+      "type": "object", "additionalProperties": false,
+      "description": "entry is offline build input only; bundle is the signed self-contained artifact, verified again on each start. No runtime dependency resolution.",
+      "properties": {
+        "entry": {"type": "string", "pattern": "^[a-zA-Z0-9_/-]+\\.tsx?$"},
+        "bundle": {"type": "string", "pattern": "^[a-zA-Z0-9_/-]+\\.mjs$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["entry", "bundle", "sha256"]
     },
     "Resources": {
       "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions.md \"Sandbox\"): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",

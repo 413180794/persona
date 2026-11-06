@@ -436,14 +436,20 @@ nonisolated struct ExtensionEngines: Codable, Hashable, Sendable {
 }
 
 nonisolated struct ExtensionRuntime: Codable, Hashable, Sendable {
-    var command: JSONValue
+    /// Default process preserves executable packages. deno requires a self-contained source bundle and verified
+    /// independent Linux isolation.
+    var mode: String?
+    var source: ExtensionSourceRuntime?
+    var command: JSONValue?
     var args: [String]?
     var env: [String: String]?
     var rpc: String?
     var http: Bool?
     var resources: ExtensionResources?
 
-    init(command: JSONValue = .null, args: [String]? = nil, env: [String: String]? = nil, rpc: String? = nil, http: Bool? = nil, resources: ExtensionResources? = nil) {
+    init(mode: String? = nil, source: ExtensionSourceRuntime? = nil, command: JSONValue? = nil, args: [String]? = nil, env: [String: String]? = nil, rpc: String? = nil, http: Bool? = nil, resources: ExtensionResources? = nil) {
+        self.mode = mode
+        self.source = source
         self.command = command
         self.args = args
         self.env = env
@@ -453,6 +459,8 @@ nonisolated struct ExtensionRuntime: Codable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case mode
+        case source
         case command
         case args
         case env
@@ -463,12 +471,41 @@ nonisolated struct ExtensionRuntime: Codable, Hashable, Sendable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.command = (try? c.decodeIfPresent(JSONValue.self, forKey: .command)) ?? .null
+        self.mode = try? c.decodeIfPresent(String.self, forKey: .mode)
+        self.source = try? c.decodeIfPresent(ExtensionSourceRuntime.self, forKey: .source)
+        self.command = try? c.decodeIfPresent(JSONValue.self, forKey: .command)
         self.args = try? c.decodeIfPresent([String].self, forKey: .args)
         self.env = try? c.decodeIfPresent([String: String].self, forKey: .env)
         self.rpc = try? c.decodeIfPresent(String.self, forKey: .rpc)
         self.http = try? c.decodeIfPresent(Bool.self, forKey: .http)
         self.resources = try? c.decodeIfPresent(ExtensionResources.self, forKey: .resources)
+    }
+}
+
+/// entry is offline build input only; bundle is the signed self-contained artifact, verified again on each start. No
+/// runtime dependency resolution.
+nonisolated struct ExtensionSourceRuntime: Codable, Hashable, Sendable {
+    var entry: String
+    var bundle: String
+    var sha256: String
+
+    init(entry: String = "", bundle: String = "", sha256: String = "") {
+        self.entry = entry
+        self.bundle = bundle
+        self.sha256 = sha256
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case entry
+        case bundle
+        case sha256
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.entry = (try? c.decodeIfPresent(String.self, forKey: .entry)) ?? ""
+        self.bundle = (try? c.decodeIfPresent(String.self, forKey: .bundle)) ?? ""
+        self.sha256 = (try? c.decodeIfPresent(String.self, forKey: .sha256)) ?? ""
     }
 }
 

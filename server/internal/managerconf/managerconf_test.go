@@ -34,6 +34,7 @@ const oldHubJSON = `{
   "extensions": [{"id": "example"}],
   "plugins": [{"id": "older"}],
   "trusted_extension_markets": ["https://market.example.com"],
+  "extension_runtime": {"path": "/runtime/deno", "version": "2.9.6", "sha256": "example-digest"},
   "usage": {"sources": [{"id": "relay", "key": "secret-key"}]},
   "sent_ledger_days": 30
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -763,21 +764,31 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	if len(conns) > 0 {
 		s.CallTimeout = 2 * time.Minute // the connector protocol's
 	}
+	if rt.IsDeno() && p.Record.Remote != nil {
+		return s, errors.New("source runtimes cannot use remote process sockets")
+	}
 	if r := p.Record.Remote; r != nil {
 		s.RPCSocket, s.Socket = r.RPCSocket, r.HTTPSocket
 		s.RPC, s.HTTP = r.RPCSocket != "", r.HTTPSocket != ""
 		hp.socket = r.HTTPSocket
 	} else {
-		cmd, ok := rt.Command.For(runtime.GOOS + "-" + runtime.GOARCH)
-		if !ok {
-			return s, i18n.Err("hub-extensions.no_program", i18n.Args{"platform": runtime.GOOS + "-" + runtime.GOARCH})
-		}
-		if extension.IsBuiltinCommand(cmd) {
-			s.Command = selfExecutable()
+		if rt.IsDeno() {
+			if err := ps.sourceSpec(ctx, p, &s); err != nil {
+				return s, err
+			}
 		} else {
-			s.Command = filepath.Join(p.Dir, filepath.FromSlash(cmd))
+			cmd, ok := rt.Command.For(runtime.GOOS + "-" + runtime.GOARCH)
+			if !ok {
+				return s, i18n.Err("hub-extensions.no_program", i18n.Args{"platform": runtime.GOOS + "-" + runtime.GOARCH})
+			}
+			if extension.IsBuiltinCommand(cmd) {
+				s.Command = selfExecutable()
+			} else {
+				s.Command = filepath.Join(p.Dir, filepath.FromSlash(cmd))
+			}
+			s.Args = rt.Args
 		}
-		s.Args, s.Dir = rt.Args, p.Dir
+		s.Dir = p.Dir
 		s.CleanEnv = p.Record.Source == extension.SourceInstalled || p.Record.Source == extension.SourceDev // not the hub's own credentials
 		dataDir := ps.reg.DataDir(id)
 		if err := os.MkdirAll(dataDir, 0o700); err != nil {

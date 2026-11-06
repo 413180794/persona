@@ -401,7 +401,10 @@ func (r *Registry) validatePlan(id, previewID, digest string, refs []PreviewRef,
 			if !ManifestsEqual(m, staged) {
 				return nil, errors.New("预览后的包清单变了，请重新预览")
 			}
-			if err = r.checkPackage(m, pv.root); err != nil {
+			// Preview already validated this exact signed digest outside r.mu.
+			// Recheck bounded integrity here, never wait for a validator while
+			// holding the registry lock needed by neighboring extensions.
+			if err = r.checkPackageFiles(context.Background(), m, pv.root, false); err != nil {
 				return nil, err
 			}
 		}

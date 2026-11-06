@@ -98,14 +98,18 @@ type Proxy struct {
 	Dial    func(ctx context.Context, network, addr string) (net.Conn, error)
 	Logf    func(string, ...any)
 
-	mu     sync.Mutex
-	ln     net.Listener
-	rules  map[string]Rule
-	creds  map[string]string // credential → extension
-	credOf map[string]string // extension → its credential
-	unix   map[string]net.Listener
-	relay  map[string]net.Listener // ext → its socket that leads to one fixed unix socket (RelayUnix)
-	counts map[string]*Counts
+	mu            sync.Mutex
+	ln            net.Listener
+	rules         map[string]Rule
+	creds         map[string]string // credential → extension
+	credOf        map[string]string // extension → its credential
+	unix          map[string]net.Listener
+	relay         map[string]net.Listener // ext → its socket that leads to one fixed unix socket (RelayUnix)
+	counts        map[string]*Counts
+	active        map[string]map[*ioLease]struct{}
+	runtimeActive map[string]int
+	runtimeTotal  int
+	runtimeSlots  chan struct{}
 }
 
 // Start listens on loopback (an unused port).
@@ -150,6 +154,9 @@ func (p *Proxy) Close() {
 	for _, l := range p.relay {
 		_ = l.Close()
 	}
+	for ext := range p.active {
+		p.cancelIOLocked(ext)
+	}
 	p.unix, p.relay = nil, nil
 }
 
@@ -159,6 +166,7 @@ func (p *Proxy) SetTargets(ext string, targets []Target) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if r, ok := p.rules[ext]; ok {
+		p.cancelIOLocked(ext)
 		r.Targets = slices.Clone(targets)
 		p.rules[ext] = r
 	}
@@ -175,6 +183,7 @@ func (p *Proxy) Register(ext string, r Rule) string {
 	if p.rules == nil {
 		p.rules, p.creds, p.credOf, p.counts = map[string]Rule{}, map[string]string{}, map[string]string{}, map[string]*Counts{}
 	}
+	p.cancelIOLocked(ext)
 	if old, ok := p.credOf[ext]; ok {
 		delete(p.creds, old)
 	}
@@ -188,7 +197,12 @@ func (p *Proxy) Register(ext string, r Rule) string {
 }
 
 // ListenUnix serves ext on a unix socket at path (made anew; only this user may connect): its sandbox's way out.
-func (p *Proxy) ListenUnix(ext, path string) error {
+func (p *Proxy) ListenUnix(ext, path string) error { return p.listenUnix(ext, path, false) }
+
+// ListenRuntimeUnix additionally bounds pre-header sockets from source runtimes.
+func (p *Proxy) ListenRuntimeUnix(ext, path string) error { return p.listenUnix(ext, path, true) }
+
+func (p *Proxy) listenUnix(ext, path string, source bool) error {
 	p.mu.Lock()
 	if old := p.unix[ext]; old != nil {
 		_ = old.Close()
@@ -201,6 +215,15 @@ func (p *Proxy) ListenUnix(ext, path string) error {
 		return err
 	}
 	_ = os.Chmod(path, 0o600)
+	if source {
+		p.mu.Lock()
+		if p.runtimeSlots == nil {
+			p.runtimeSlots = make(chan struct{}, 128)
+		}
+		slots := p.runtimeSlots
+		p.mu.Unlock()
+		ln = &runtimeListener{Listener: ln, slots: slots, done: make(chan struct{}), connections: map[*runtimeConn]struct{}{}}
+	}
 	p.mu.Lock()
 	if p.unix == nil {
 		p.unix = map[string]net.Listener{}
@@ -215,6 +238,7 @@ func (p *Proxy) ListenUnix(ext, path string) error {
 func (p *Proxy) Unregister(ext string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.cancelIOLocked(ext)
 	if cred, ok := p.credOf[ext]; ok {
 		delete(p.creds, cred)
 		delete(p.credOf, ext)
@@ -299,6 +323,24 @@ func (p *Proxy) Stats(ext string) Counts {
 func (p *Proxy) serve(ln net.Listener, ext string) {
 	srv := &http.Server{Handler: p.handler(ext), ReadHeaderTimeout: 30 * time.Second,
 		ErrorLog: nil}
+	if _, source := ln.(*runtimeListener); source {
+		// The guest can open raw sockets to its broker. Enforce the bounded
+		// runtime route here, not just in the replaceable JavaScript environment.
+		handler := srv.Handler
+		srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Host != "" || r.URL.Path != RuntimeFetchPath || r.Method != http.MethodPost {
+				// This path never enters runtimeFetch's body deadline. Do not let
+				// net/http drain an incomplete hostile body before rejecting it.
+				r.Close = true
+				w.Header().Set("Connection", "close")
+				http.Error(w, "runtime fetch broker required", http.StatusForbidden)
+				return
+			}
+			handler.ServeHTTP(w, r)
+		})
+		srv.MaxHeaderBytes = 64 << 10
+		srv.ReadHeaderTimeout = 10 * time.Second
+	}
 	_ = srv.Serve(ln)
 }
 
@@ -379,14 +421,26 @@ func (p *Proxy) handler(fixed string) http.Handler {
 				return
 			}
 		}
+		ctx, finish, live := p.requestLifetime(r.Context(), ext)
+		if !live {
+			http.Error(w, "extension registration unavailable", http.StatusForbidden)
+			return
+		}
+		defer finish()
+		r = r.WithContext(ctx)
+		if fixed != "" && r.URL.Host == "" && r.URL.Path == RuntimeFetchPath {
+			p.runtimeFetch(w, r, fixed)
+			return
+		}
 		rule, ok := p.rule(ext)
 		if !ok {
 			http.Error(w, "persona: this extension is not running", http.StatusForbidden)
 			return
 		}
+		broker, _ := r.Context().Value(runtimeFetchKey{}).(bool)
 		hostport := r.Host
 		if r.Method != http.MethodConnect {
-			if r.URL.Host == "" || r.URL.Scheme != "http" {
+			if r.URL.Host == "" || (r.URL.Scheme != "http" && !(broker && r.URL.Scheme == "https")) {
 				http.Error(w, "persona: only http:// requests and CONNECT", http.StatusBadRequest)
 				return
 			}
@@ -395,7 +449,7 @@ func (p *Proxy) handler(fixed string) http.Handler {
 		host, port, err := net.SplitHostPort(hostport)
 		if err != nil {
 			host, port = hostport, "80"
-			if r.Method == http.MethodConnect {
+			if r.Method == http.MethodConnect || r.URL.Scheme == "https" {
 				port = "443"
 			}
 		}
@@ -409,7 +463,7 @@ func (p *Proxy) handler(fixed string) http.Handler {
 			allowed = rule.Local() && !p.ownPort(port)
 		default:
 			allowed = Matches(host, rule.Hosts)
-			if !allowed && rule.target(host, port, r.Method == http.MethodConnect) {
+			if !allowed && rule.target(host, port, r.Method == http.MethodConnect || r.URL.Scheme == "https") {
 				allowed, configured = true, true
 			}
 		}
@@ -424,17 +478,31 @@ func (p *Proxy) handler(fixed string) http.Handler {
 			http.Error(w, fmt.Sprintf("persona: %s is not in this extension's permissions.network", host), http.StatusForbidden)
 			return
 		}
-		ctx := r.Context()
 		dial := func() (net.Conn, error) {
+			var c net.Conn
+			var err error
 			switch {
 			case hub:
-				return p.dial(ctx, "tcp", p.HubAddr)
+				c, err = p.dial(ctx, "tcp", p.HubAddr)
 			case local:
-				return p.dial(ctx, "tcp", net.JoinHostPort("127.0.0.1", port))
+				c, err = p.dial(ctx, "tcp", net.JoinHostPort("127.0.0.1", port))
 			case configured:
-				return p.dialConfigured(ctx, host, port)
+				if broker {
+					c, err = p.runtimeDial(ctx, host, port, true)
+				} else {
+					c, err = p.dialConfigured(ctx, host, port)
+				}
+			default:
+				if broker {
+					c, err = p.runtimeDial(ctx, host, port, false)
+				} else {
+					c, err = p.dialOut(ctx, host, port, rule)
+				}
 			}
-			return p.dialOut(ctx, host, port, rule)
+			if c != nil {
+				context.AfterFunc(ctx, func() { _ = c.Close() })
+			}
+			return c, err
 		}
 		if r.Method == http.MethodConnect || isUpgrade(r) {
 			p.tunnel(w, r, dial)
@@ -538,6 +606,10 @@ func (p *Proxy) connectVia(ctx context.Context, up *url.URL, target string) (net
 	if err != nil {
 		return nil, err
 	}
+	// Bind cancellation immediately, not only once the tunnel handshake finishes.
+	// ReadResponse and Body.Close do not otherwise observe request contexts.
+	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
+	defer stop()
 	req := &http.Request{Method: http.MethodConnect, URL: &url.URL{Opaque: target}, Host: target, Header: http.Header{}}
 	if up.User != nil {
 		pass, _ := up.User.Password()
@@ -665,6 +737,15 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, ext string, dial
 		return
 	}
 	defer resp.Body.Close()
+	if broker, _ := r.Context().Value(runtimeFetchKey{}).(bool); broker {
+		resp.Header.Del(RuntimeHeadLengthHeader)
+		if r.Method == http.MethodHead {
+			if length := resp.Header.Get("Content-Length"); length != "" {
+				resp.Header.Set(RuntimeHeadLengthHeader, length)
+			}
+			resp.Header.Del("Content-Length")
+		}
+	}
 	for _, h := range hop {
 		resp.Header.Del(h)
 	}

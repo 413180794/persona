@@ -1,6 +1,7 @@
 package extension
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,10 @@ const SourceDev = "dev"
 // AddDev registers (or replaces) the extension being written in dir, with these settings and secrets. Its package is
 // checked as an install's is (its program for this platform is in dir); its id may not be another source's.
 func (r *Registry) AddDev(dir string, config json.RawMessage, secrets map[string]string) (*Extension, error) {
+	return r.AddDevContext(context.Background(), dir, config, secrets)
+}
+
+func (r *Registry) AddDevContext(ctx context.Context, dir string, config json.RawMessage, secrets map[string]string) (*Extension, error) {
 	unlock, err := r.beginOperation()
 	if err != nil {
 		return nil, err
@@ -28,7 +33,7 @@ func (r *Registry) AddDev(dir string, config json.RawMessage, secrets map[string
 	if err != nil {
 		return nil, err
 	}
-	if err := r.checkPackage(m, dir); err != nil {
+	if err := r.checkPackageContext(ctx, m, dir); err != nil {
 		return nil, err
 	}
 	if err := CheckTriageRules(m); err != nil {

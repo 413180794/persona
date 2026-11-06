@@ -681,7 +681,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 			m, err = Parse(data)
 		}
 		if err == nil {
-			err = r.checkPackage(m, root)
+			err = r.checkPackageContext(ctx, m, root)
 		}
 		if err == nil {
 			err = CheckTriageRules(m)
@@ -752,6 +752,12 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 
 // checkPackage holds a staged package to what a manifest says of it: its program is in it for this platform.
 func (r *Registry) checkPackage(m *Manifest, root string) error {
+	return r.checkPackageContext(context.Background(), m, root)
+}
+func (r *Registry) checkPackageContext(ctx context.Context, m *Manifest, root string) error {
+	return r.checkPackageFiles(ctx, m, root, true)
+}
+func (r *Registry) checkPackageFiles(ctx context.Context, m *Manifest, root string, syntax bool) error {
 	for _, a := range m.AssistantParts() {
 		for _, sk := range a.Skills {
 			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(sk), "SKILL.md")); err != nil {
@@ -796,6 +802,14 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 	}
 	if m.Runtime == nil {
 		return nil
+	}
+	if m.Runtime.IsDeno() {
+		if !syntax {
+			_, err := CheckSourceBundleIntegrity(root, m.Runtime.Source)
+			return err
+		}
+		_, err := CheckSourceBundleContext(ctx, root, m.Runtime.Source)
+		return err
 	}
 	cmd, ok := m.Runtime.Command.For(r.platform)
 	if !ok {

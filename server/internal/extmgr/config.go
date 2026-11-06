@@ -8,6 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
 	"github.com/nwverse/persona/server/internal/connector/imessage"
+	"github.com/nwverse/persona/server/internal/extension/denohost"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/managerconf"
@@ -37,6 +38,8 @@ type Config struct {
 	Extensions              []ExtensionConfig `json:"extensions,omitempty"`
 	LegacyExtensions        []ExtensionConfig `json:"plugins,omitempty"`
 	TrustedExtensionMarkets []string          `json:"trusted_extension_markets,omitempty"`
+	// ExtensionRuntime pins the shared engine; missing/unsupported enforcement blocks source activation.
+	ExtensionRuntime *denohost.Config `json:"extension_runtime,omitempty"`
 
 	// SentLedgerDays is how many days the ledger of what was written as the user is kept (sent_ledger.go): 0 or
 	// absent is 90, below 0 keeps it for good.

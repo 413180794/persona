@@ -121,7 +121,7 @@ func (h *Manager) extensionDevRoutes(api *http.ServeMux) {
 			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", errors.New("dir: an absolute path on the hub's machine"))
 			return
 		}
-		p, err := ps().reg.AddDev(filepath.Clean(in.Dir), in.Config, in.Secrets)
+		p, err := ps().reg.AddDevContext(r.Context(), filepath.Clean(in.Dir), in.Config, in.Secrets)
 		if err != nil {
 			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
 			return

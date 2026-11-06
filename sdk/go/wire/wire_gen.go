@@ -149,12 +149,24 @@ type Engines struct {
 }
 
 type Runtime struct {
-	Command   json.RawMessage   `json:"command"`
+	// Default process preserves executable packages. deno requires a self-contained source bundle and verified
+	// independent Linux isolation.
+	Mode      string            `json:"mode,omitempty"`
+	Source    *SourceRuntime    `json:"source,omitempty"`
+	Command   json.RawMessage   `json:"command,omitempty"`
 	Args      []string          `json:"args,omitempty"`
 	Env       map[string]string `json:"env,omitempty"`
 	RPC       string            `json:"rpc,omitempty"`
 	HTTP      bool              `json:"http,omitempty"`
 	Resources *Resources        `json:"resources,omitempty"`
+}
+
+// SourceRuntime: entry is offline build input only; bundle is the signed self-contained artifact, verified again on
+// each start. No runtime dependency resolution.
+type SourceRuntime struct {
+	Entry  string `json:"entry"`
+	Bundle string `json:"bundle"`
+	Sha256 string `json:"sha256"`
 }
 
 // Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions.md "Sandbox"): memory in
@@ -4804,6 +4816,7 @@ var newDef = map[string]func() any{
 	"PackMember":                   func() any { return new(PackMember) },
 	"Engines":                      func() any { return new(Engines) },
 	"Runtime":                      func() any { return new(Runtime) },
+	"SourceRuntime":                func() any { return new(SourceRuntime) },
 	"Resources":                    func() any { return new(Resources) },
 	"NodeRuntime":                  func() any { return new(NodeRuntime) },
 	"NodePermissions":              func() any { return new(NodePermissions) },

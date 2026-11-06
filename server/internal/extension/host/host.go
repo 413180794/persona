@@ -76,8 +76,14 @@ type Spec struct {
 	// Wrap, when set, is the command line that really runs Command and Args (a sandbox around it), and more environment
 	// for that one start; asked at each start.
 	Wrap func(command string, args []string) (string, []string, []string, error)
+	// Prepare is Wrap with per-run resource ownership (for sealed artifacts).
+	// It takes precedence over Wrap. Disposal runs on every start failure and
+	// after the wrapper exits. Files are passed only to the trusted launcher;
+	// its namespace setup must consume them, never retain them in the guest.
+	Prepare func(command string, args []string) (string, []string, []string, []*os.File, func(), error)
 
 	// RPC: it speaks the plugin protocol, on stdin / stdout when the hub runs it, else on RPCSocket.
+	RPCBounds rpc.Limits // source-runtime budgets; zero preserves legacy process peers
 	RPC       bool
 	RPCSocket string
 	// HTTP: it serves HTTP on Socket (the hub's path for a program it runs: removed before each start and after each run).
@@ -564,6 +570,7 @@ func (p *Proc) runOnce(ctx context.Context) error {
 	var s *session
 	if p.spec.RPC {
 		peer := rpc.New("h", writerOf(ch))
+		peer.Limits = p.spec.RPCBounds
 		peer.OnRequest = p.spec.Handle
 		peer.OnEvent = p.spec.OnEvent
 		go func() { _ = peer.Serve(context.Background(), out) }()
@@ -769,13 +776,28 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	}
 	name, args := p.spec.Command, p.spec.Args
 	var wrapEnv []string
-	if p.spec.Wrap != nil {
+	var files []*os.File
+	var dispose func()
+	started := false
+	defer func() {
+		if !started && dispose != nil {
+			dispose()
+		}
+	}()
+	if p.spec.Prepare != nil {
+		var err error
+		name, args, wrapEnv, files, dispose, err = p.spec.Prepare(name, args)
+		if err != nil {
+			return nil, nil, i18n.Err("extension-status.sandbox_start", i18n.Args{"name": p.spec.Name, "err": err.Error()})
+		}
+	} else if p.spec.Wrap != nil {
 		var err error
 		if name, args, wrapEnv, err = p.spec.Wrap(name, args); err != nil {
 			return nil, nil, i18n.Err("extension-status.sandbox_start", i18n.Args{"name": p.spec.Name, "err": err.Error()})
 		}
 	}
 	cmd := exec.Command(name, args...)
+	cmd.ExtraFiles = files
 	cmd.Dir = p.spec.Dir
 	base := os.Environ()
 	if p.spec.CleanEnv {
@@ -822,9 +844,13 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 		logs.Close()
 		return nil, nil, i18n.Err("extension-status.program_start", i18n.Args{"name": p.spec.Name, "err": err.Error()})
 	}
+	started = true
 	go p.logLines(logs)
 	go func() {
 		ch.waitErr = cmd.Wait()
+		if dispose != nil {
+			dispose()
+		}
 		close(ch.exited)
 	}()
 	return ch, out, nil

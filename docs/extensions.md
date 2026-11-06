@@ -918,6 +918,64 @@ A process only runs when "something needs it":
   it also goes into this extension's own log ("Runtime status" below), viewable per extension in the admin UI.
 - Installed extensions run in the sandbox by default, with memory / CPU limits (Linux); see "Sandbox" and "Egress" under "Permissions".
 
+## Source runtime (#5956)
+
+Executable packages retain the default `runtime.mode: "process"` behavior. A source package explicitly selects `"deno"` and carries a prebuilt, self-contained JavaScript module:
+
+```json
+{"runtime":{"mode":"deno","source":{"entry":"src/main.tsx","bundle":"bundle/main.mjs","sha256":"<bundle SHA-256>"},"resources":{"memory_mb":128,"cpu_percent":20}}}
+```
+
+The module default-exports an SDK `Program`; the manager supplies a separate, embedded trusted stdio adapter using the existing `connect` protocol. The merged SDK includes transport-independent JSX components and hooks; the runtime-to-page-session bridge and client streaming remain separate stages.
+
+- `personad extension new <id> --template deno` creates source scaffolding; `pack` bundles with Bun (no lifecycle scripts or macros), updates the artifact digest and uses the existing package/market signing flow. Authoring inputs and SDK copies stay out of the package. `entry` is never evaluated during activation. The artifact is nonempty, limited to 16 MiB, and rejects traversal and symlinks. A pinned ECMAScript parser rejects import statements, re-exports, dynamic imports and import metadata, including imports inside template expressions; ordinary strings, comments and regular expressions remain valid. Unsupported syntax fails closed, and dependencies must be erased during bundling.
+- Source validation has its own **disposable native process**, separate from the manager heap and from the eventual guest. The manager streams a bounded artifact after checking its signed hash and contained path; the child checks the same stream's hash before constructing or walking an AST. A fresh systemd scope limits memory to 128 MiB, swap to zero, CPU to 50% and tasks to 32, with a five-second external deadline. The supervisor verifies actual controller membership and kernel limits before entering bubblewrap; the parser rechecks them inside the namespace. Bare helper invocation, partial delegation and unavailable controls fail before parsing. Only the trusted native executable, exact ELF libraries and its own read-only cgroup metadata are mounted; there is no artifact directory, proxy, configuration, secret, inherited environment or guest execution. Results use a fixed 16-byte buffer, stderr is discarded, and cancellation kills/reaps the process and disposes its unique scope. Admission allows one active validator and two queued requests; excess requests fail immediately.
+- Preview/build/activation use the process validator. Commit-time checks under the registry lock recheck only the already-validated signed digest and package fingerprint, so another extension's reads do not wait for a parser. Activation validates again outside that lock. Production resource acceptance remains deployment gate #5975. The explicit development policy below is shared by `sandbox.ValidationProcess` / `RunValidation` and `sourcevalidate.Run`; no manager-side AST construction or independent parser fixture bypass exists. The validator prefers a verified kernel scope, including `pids.max <= 32`; a missing resource controller may select only the tagged manager's exact opt-in. Both parser-entry gates remain mandatory.
+- The manager's `manager.json` supplies `extension_runtime: {"path":"<absolute pinned executable>","version":"2.9.6","sha256":"<runtime SHA-256>"}`. Installation is explicit offline administration. Activation verifies the bounded executable, its digest and actual version; it never searches PATH, downloads a runtime or discovers project configuration. The trusted adapter is content-addressed separately from extension source.
+- **Production:** one shared pinned installation runs **one independent process and Linux namespace sandbox per extension**, inside a separate systemd resource scope. Exact kernel cgroup files and this scope's memory/CPU membership are checked **before any guest executes**, on both cgroup v1 and v2. A working user bus or accepted systemd properties alone is not enforcement. Missing namespaces, resource delegation, memory/swap denial or CPU quota fail closed. Trusted markets and owner sandbox switches cannot opt out. The explicit development resource exception below does not apply to production builds.
+- Read-only mounts contain only the runtime, adapter, own bundle, exact ELF dependencies and trusted launcher. No manager directory, other extension, host data or general system directories are exposed. Deno can read only its bundle, connect only to its registered loopback broker, and cannot access environment variables, write files, spawn processes, use FFI or load remote/npm modules. String-based code generation and worker creation are disabled.
+- Global `fetch` uses a bounded broker over the **existing registered egress**. Deno's proxy-aware client still requires destination permissions, so proxy environment variables or a custom client alone are insufficient. Every target and redirect uses the registration's granted network rules; guest identity cannot select another registration. Registration replacement, settings changes and revocation cancel pending HTTP and tunnels. Input, output, bodies and pending queues are bounded. Source-only listeners also cap idle/pre-header sockets and header bytes; revocation closes sockets even before they submit a request.
+- Config, secrets, scoped tokens, grants, idle reclamation, timeout strikes and selective shutdown remain manager/`host.Proc` responsibilities. Full hub access, command-line tools, agent-runtime sockets, remote process sockets and source-runtime node programs are not supported by this stage. Existing executable node programs remain unchanged; no source program silently falls back to an unsandboxed node.
+- CLI source `test` verifies the package but refuses to label a bare engine launch as runtime acceptance. Actual-engine/namespace tests are separate from full resource acceptance; tests requiring unavailable enforcement explicitly report unavailable rather than passing via a developer bypass.
+
+### Development-only resource fallback (#5956)
+
+The maintainer authorized this exception solely for isolated local development/test instances without delegated kernel memory/CPU controllers. **Production remains blocked by deployment issue #5975.** Never change cgroup, system services or live configuration to exercise it.
+
+Both gates are mandatory:
+
+1. Build on Linux with `go build -tags persona_dev_resources -o "$DEV_BINARY" ./cmd/personad` from `server/`. Normal release builds omit this tag and contain only rejecting stubs, not the child-limit implementation.
+2. Set `PERSONA_DEV_SOURCE_RESOURCES=1` **only for the isolated manager process** (it is not a persisted configuration field). Tagged builds default off; normal builds reject the opt-in. If kernel controls are available, the normal verified scope is still used. Only a resource-probe failure after successful namespace verification is eligible.
+
+Every fallback activation/restart emits a localized warning and the machine-readable marker `DEVELOPMENT_ONLY_RESOURCE_FALLBACK`; sandbox status includes the same warning. The filesystem/network namespaces, exact read-only mounts, registered egress/redirect checks, signed bundle and pinned engine, native permission gates, scoped tokens, and per-extension config/secrets remain unchanged. Missing namespace or mount enforcement refuses even in development.
+
+| Mechanism | Development default | What it actually enforces |
+| --- | --- | --- |
+| Child `RLIMIT_CPU`, soft and hard | 30 seconds | Cumulative CPU time for this process lifetime, **not a CPU percentage/quota** |
+| V8 `--max-old-space-size` | 64 MiB | Old-space heap ceiling, **not total process memory** |
+| External child RSS watchdog | Kill above 256 MiB, sampled every 25 ms | Best-effort observed RSS termination threshold; allocation can overshoot before the next scheduled sample |
+| External wall-clock watchdog | Five minutes per process lifetime | Terminates even an idle or blocked guest; normal host backoff can restart it |
+| Child `RLIMIT_NOFILE` | 128 | Descriptor-table ceiling |
+| Child `RLIMIT_FSIZE` | 8 MiB | Individual file growth ceiling; native writes remain denied by Deno |
+| Child `RLIMIT_CORE` | Zero | Ordinary core-file size limit; host pipe-based crash collectors can ignore it |
+| Existing RPC/adapter/egress bounds | Unchanged | Frame, concurrency, body and pending-I/O budgets |
+
+A separate trusted child helper calls `setrlimit` and immediately `exec`s Deno. Neither the manager nor the supervising proxy changes its own limits. The supervisor kills only this child; namespace shutdown closes its proxy connections and the host closes pending RPCs. Lifetime expiration deliberately discards that development process's ephemeral state. The implementation does **not** use ineffective Linux `RLIMIT_RSS`, limit V8's reserved address space with `RLIMIT_AS`, disable the V8/native sandbox, or claim a hard total RSS cap. A pinned-engine measurement reserved about 18 GiB of virtual address space with ordinary RSS around 35–42 MiB; restricting that reservation would break runtime startup, not provide valid sandbox evidence.
+
+For **native source validation**, the same explicit policy uses a two-second child `RLIMIT_CPU`, 128 MiB sampled RSS termination, a five-second deadline (including resource probing and queue time), and the same FD/file/core limits. Go applies a 96 MiB cooperative memory target, a 2 MiB per-stack runtime ceiling, 16 runtime threads and `GOMAXPROCS=2`; there is no V8 heap in the compiler/validator. These do not establish hard process RSS, CPU quota or kernel task-count enforcement. A sealed manager-created policy descriptor authorizes the launcher; bubblewrap consumes it into one exact read-only policy mount, the trusted supervisor re-seals it, and the parser verifies both that descriptor and its actual child rlimits before reading source. The namespace environment is cleared, so child environment variables, manifests and guests cannot opt in. Every validator launch warns separately. Production builds reject all development helper modes and opt-ins.
+
+Race tests build the trusted limited child without race instrumentation and run the parent/infrastructure with `-race` separately; `PERSONA_TEST_VALIDATOR_HELPER` selects that already-built test helper only inside test code. TSAN startup failure is not an adversarial-parser pass. The validator's allocation comparison records parent and child **total allocation deltas**, not peak heap/RSS; sampled RSS peaks are separately reported and can exceed the watchdog threshold.
+
+Resource-only executable verification (use the **same already verified engine**, not another installation):
+
+```sh
+GOTMPDIR="$TEST_BUILD_DIR" python3 -I scripts/test/test_source_development_resources.py \
+  --engine "$PINNED_DENO" --sha256 "$PINNED_DENO_SHA256" \
+  --log "$PRIVATE_NEW_LOG" --watch-file "$UNCHANGED_CONFIG"
+```
+
+The harness runs normal-build default/refusal and opt-in rejection, tagged default-off/explicit acceptance, real hostile CPU/heap/ArrayBuffer/wall-time cases with neighboring Deno survival and pending RPC/I/O cleanup, namespace/egress/native API/config separation checks, child descriptor/file-limit probes, and before/after controller/config comparisons. It starts no hub or node. Test budget overrides only tighten the defaults (for example one CPU second and one wall second). CPU death is distinguished from the longer caller timeout; heap failure is distinguished from sampled ArrayBuffer RSS termination. Raw output is private, with exact mechanisms and observed peaks, including overshoot. These are resource-layer tests, **not full hub/session/client E2E or production resource acceptance**. Manager page sessions, client renderers, Apple/platform verification and node-side source eligibility remain separate stages.
+
 ## Runtime status (#1857)
 
 The hub records per extension how it is running, viewable on the extension page of the admin UI ([admin.md](admin.md) ("Extensions")). Code is in `server/internal/extmgr/extension_metrics.go`;

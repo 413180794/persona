@@ -21,12 +21,19 @@ import (
 	"github.com/nwverse/persona/server/internal/db/dbtest"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
+	"github.com/nwverse/persona/server/internal/extension/sourcevalidate"
 	"github.com/nwverse/persona/server/internal/voice"
 )
 
 // TestMain doubles as a plugin: re-run with PERSONA_TEST_PLUGIN=1 the test binary serves on PERSONA_PLUGIN_SOCKET.
 // Otherwise the tests run on a database of their own (dbtest, #583).
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == sandbox.ValidationRunCommand {
+		os.Exit(sandbox.RunValidation(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == sourcevalidate.Command {
+		os.Exit(sourcevalidate.Run(os.Args[2:], os.Stdin, os.Stdout))
+	}
 	if len(os.Args) > 1 && os.Args[1] == sandbox.RunCommand { // a sandbox's first process (extension_sandbox_test.go)
 		os.Exit(sandbox.Run(os.Args[2:], os.Stderr))
 	}
