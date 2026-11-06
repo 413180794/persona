@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,8 +81,8 @@ func TestDeltaToUnsubscribedSessionQueuesNothing(t *testing.T) {
 }
 
 // benchSubscribersHub is a hub with five connected apps, the first subscribed of them following m1/s1.
-func benchSubscribersHub(b *testing.B, subscribed int) *Hub {
-	b.Helper()
+func benchSubscribersHub(tb testing.TB, subscribed int) *Hub {
+	tb.Helper()
 	h := &Hub{clients: map[*client]struct{}{}}
 	for i := 0; i < 5; i++ {
 		c := &client{out: make(chan []byte, 1), subs: map[[2]string]bool{}}
@@ -102,5 +103,56 @@ func BenchmarkToSubscribersDelta(b *testing.B) {
 				h.toSubscribers("m1", "s1", deltaPush{Type: "delta", MachineID: "m1", SessionID: "s1", Text: "chunk of streamed text"})
 			}
 		})
+	}
+}
+
+// A machine's session.delta reaches the session's follower as the delta push, in the bytes the apps parse, and
+// nobody else.
+func TestSessionDeltaEventGoesToTheFollower(t *testing.T) {
+	h := benchSubscribersHub(t, 1)
+	m := newMachine(h, MachineConfig{ID: "m1"})
+	m.onEvent("session.delta", json.RawMessage(`{"session_id":"s1","text":"hi there"}`))
+	var got []string
+	for c := range h.clients {
+		if len(c.out) > 0 {
+			got = append(got, string(<-c.out))
+		}
+	}
+	want := `{"machine_id":"m1","session_id":"s1","text":"hi there","type":"delta"}`
+	if len(got) != 1 || got[0] != want {
+		t.Errorf("pushed %q, want only %s", got, want)
+	}
+}
+
+// BenchmarkSessionDeltaEvent drives a streamed text chunk through the machine's event entry point, so the encoding
+// the delta path really uses is measured, not just toSubscribers.
+func BenchmarkSessionDeltaEvent(b *testing.B) {
+	params, err := json.Marshal(map[string]string{"session_id": "s1", "text": strings.Repeat("streamed text ", 40)})
+	if err != nil {
+		b.Fatal(err)
+	}
+	for _, subscribed := range []int{0, 1} {
+		b.Run(fmt.Sprintf("subscribed=%d", subscribed), func(b *testing.B) {
+			m := newMachine(benchSubscribersHub(b, subscribed), MachineConfig{ID: "m1"})
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				m.onEvent("session.delta", params)
+			}
+		})
+	}
+}
+
+// A new subscription is followed by the session's live text as the same delta push the stream sends.
+func TestSendLiveTextIsTheDeltaPush(t *testing.T) {
+	h := &Hub{}
+	c := &client{out: make(chan []byte, 1)}
+	h.sendLiveText(c, "m1", "s1")
+	if len(c.out) != 0 {
+		t.Fatal("sent live text for a session generating nothing")
+	}
+	h.rememberLiveText("m1", "s1", "so far")
+	h.sendLiveText(c, "m1", "s1")
+	if got, want := string(<-c.out), `{"machine_id":"m1","session_id":"s1","text":"so far","type":"delta"}`; got != want {
+		t.Errorf("sent %s, want %s", got, want)
 	}
 }

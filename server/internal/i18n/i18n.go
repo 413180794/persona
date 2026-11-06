@@ -15,7 +15,6 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -146,8 +145,6 @@ func load() map[Lang]map[string]string {
 // Args are a text's placeholder values.
 type Args map[string]any
 
-var placeholder = regexp.MustCompile(`\{(\w+)\}`)
-
 func lookup(l Lang, key string, args Args) (string, bool) {
 	cat := catalogs[l]
 	if n, ok := count(args); ok {
@@ -198,21 +195,64 @@ func T(l Lang, key string, args ...Args) string {
 	if a == nil {
 		return s
 	}
-	return placeholder.ReplaceAllStringFunc(s, func(m string) string {
-		v, ok := a[m[1:len(m)-1]]
-		if !ok {
-			return m
+	return fill(s, a)
+}
+
+// fill replaces each {name} in s (name an ASCII word, [0-9A-Za-z_]+) with a[name]; an unknown name or a brace
+// that does not close such a word stays as written. It is the byte-scan form of a `\{(\w+)\}` regexp replace,
+// which T runs on every call with args.
+func fill(s string, a Args) string {
+	i := strings.IndexByte(s, '{')
+	if i < 0 {
+		return s
+	}
+	var b strings.Builder
+	done := 0 // s[:done] is already in b
+	for i >= 0 {
+		j := i + 1
+		for j < len(s) && isWordByte(s[j]) {
+			j++
 		}
-		switch v := v.(type) {
-		case string:
-			return v
-		case int:
-			return strconv.Itoa(v)
-		case int64:
-			return strconv.FormatInt(v, 10)
+		if j > i+1 && j < len(s) && s[j] == '}' {
+			if v, ok := a[s[i+1:j]]; ok {
+				val := argText(v)
+				if done == 0 {
+					b.Grow(len(s) + len(val)) // one allocation for the common one-placeholder text
+				}
+				b.WriteString(s[done:i])
+				b.WriteString(val)
+				done = j + 1
+			}
+			j++
 		}
-		return fmt.Sprint(v)
-	})
+		// Word bytes are never '{', so the next placeholder starts at or after j.
+		k := strings.IndexByte(s[j:], '{')
+		if k < 0 {
+			break
+		}
+		i = j + k
+	}
+	if done == 0 {
+		return s
+	}
+	b.WriteString(s[done:])
+	return b.String()
+}
+
+func isWordByte(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_'
+}
+
+func argText(v any) string {
+	switch v := v.(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	}
+	return fmt.Sprint(v)
 }
 
 // Has: key is in the catalogs (any plural form counts).

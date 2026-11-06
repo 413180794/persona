@@ -252,6 +252,14 @@ func (h *Hub) fullDrop(c *client) {
 	}
 }
 
+// herdrDataPush is the herdr_data message to the app. Its fields are in sorted key order, so the bytes are what
+// json.Marshal gave for the map this replaced, without the map build, key sort and boxing on every output chunk.
+type herdrDataPush struct {
+	Data string `json:"data"`
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
 // onHerdrClientData gives a node's client output to the view's app.
 func (h *Hub) onHerdrClientData(machineID string, params json.RawMessage) {
 	var p struct {
@@ -275,7 +283,7 @@ func (h *Hub) onHerdrClientData(machineID string, params json.RawMessage) {
 		h.fullAbort(r, "the browser fell too far behind the terminal")
 		return
 	}
-	b, err := json.Marshal(map[string]any{"type": "herdr_data", "id": r.id, "data": p.Data})
+	b, err := json.Marshal(herdrDataPush{Data: p.Data, ID: r.id, Type: "herdr_data"})
 	if err != nil {
 		return
 	}

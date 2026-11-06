@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -62,6 +63,31 @@ func equalInts(a, b []int) bool {
 		}
 	}
 	return true
+}
+
+// TestTerminalPushEncodesAsItsMap: the typed frame push is byte for byte what the map[string]any it replaced was, so
+// the apps read the same JSON.
+func TestTerminalPushEncodesAsItsMap(t *testing.T) {
+	for _, f := range []termFrame{
+		{Seq: 7, Full: true, Cols: 120, Rows: 40, Data: "eA=="},
+		{Seq: 0, Full: false, Data: "a <b> & \"c\"\n\u2028 中文 ↓ \x1b[0m"},
+		{},
+	} {
+		for _, ids := range [][3]string{{"m1", "s1", "e1"}, {"<m>", "s&1", "\u2029"}, {}} {
+			got, err := json.Marshal(termMessage(ids[0], ids[1], ids[2], f))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := json.Marshal(map[string]any{"type": "terminal", "machine_id": ids[0], "session_id": ids[1], "epoch": ids[2],
+				"seq": f.Seq, "full": f.Full, "cols": f.Cols, "rows": f.Rows, "data": f.Data})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("\n got  %s\n want %s", got, want)
+			}
+		}
+	}
 }
 
 func TestTerminalFramesFanOutFromAWholeFrame(t *testing.T) {

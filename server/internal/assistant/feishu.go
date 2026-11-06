@@ -704,6 +704,11 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus, acti
 		return
 	}
 	content := feishubot.ParseContent(msg.MessageType, msg.Content, msg.Mentions)
+	if content.Sticker {
+		// A sticker carries no request: do not react, do not start an Agent turn.
+		s.logf("bots: a sticker was accepted silently: no turn")
+		return
+	}
 	if _, _, isCommand := parseBotCommand(content.Text); isCommand && !content.Forward && len(content.Media) == 0 {
 		handled, rest := s.botCommand(ctx, st.Features, msg.MessageID, content.Text, msg.RootID, msg.ParentID)
 		if handled {

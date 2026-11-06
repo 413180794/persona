@@ -67,7 +67,7 @@ func (h *Hub) sendLiveText(c *client, machineID, sessionID string) {
 	text := h.deltas[[2]string{machineID, sessionID}]
 	h.mu.Unlock()
 	if text != "" {
-		c.sendJSON(map[string]any{"type": "delta", "machine_id": machineID, "session_id": sessionID, "text": text})
+		c.sendJSON(deltaPush{Type: "delta", MachineID: machineID, SessionID: sessionID, Text: text})
 	}
 }
 

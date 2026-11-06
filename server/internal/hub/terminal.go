@@ -66,9 +66,23 @@ type termFrame struct {
 	Data string `json:"data"`
 }
 
-func termMessage(machineID, sessionID, epoch string, f termFrame) map[string]any {
-	return map[string]any{"type": "terminal", "machine_id": machineID, "session_id": sessionID, "epoch": epoch,
-		"seq": f.Seq, "full": f.Full, "cols": f.Cols, "rows": f.Rows, "data": f.Data}
+// termPush is a terminal frame as the apps get it, typed so a frame costs no map and no key sort. Fields are in sorted
+// key order, the bytes the map[string]any it replaced encoded to.
+type termPush struct {
+	Cols      int    `json:"cols"`
+	Data      string `json:"data"`
+	Epoch     string `json:"epoch"`
+	Full      bool   `json:"full"`
+	MachineID string `json:"machine_id"`
+	Rows      int    `json:"rows"`
+	Seq       int    `json:"seq"`
+	SessionID string `json:"session_id"`
+	Type      string `json:"type"` // "terminal"
+}
+
+func termMessage(machineID, sessionID, epoch string, f termFrame) termPush {
+	return termPush{Type: "terminal", MachineID: machineID, SessionID: sessionID, Epoch: epoch,
+		Seq: f.Seq, Full: f.Full, Cols: f.Cols, Rows: f.Rows, Data: f.Data}
 }
 
 // replay is what a subscriber holding (epoch, after) is missing: the frames after its last when it is on this stream
@@ -466,9 +480,13 @@ func (h *Hub) onTerminalFrame(machineID string, params json.RawMessage) {
 	} else {
 		return
 	}
-	msg := termMessage(machineID, p.SessionID, r.epoch, p.termFrame)
+	// Encoded once for every watcher: a frame's data can be a large diff, and it arrives many times a second.
+	b, err := json.Marshal(termMessage(machineID, p.SessionID, r.epoch, p.termFrame))
+	if err != nil {
+		return
+	}
 	for c := range r.subs {
-		c.sendTerm(msg)
+		c.queue(b) // the same non-blocking queue sendTerm uses
 	}
 }
 
@@ -529,11 +547,7 @@ func (c *client) sendTerm(v any) {
 	if err != nil {
 		return
 	}
-	select {
-	case c.out <- b:
-	default:
-		c.dropSlow()
-	}
+	c.queue(b)
 }
 
 // terminalsEnded ends every terminal stream of the machine, saying why.

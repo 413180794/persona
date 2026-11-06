@@ -77,6 +77,9 @@ func TestParseContent(t *testing.T) {
 	if c := ParseContent("interactive", `{"title":"告警","elements":[[{"tag":"text","text":"CPU 高"}]]}`, nil); !strings.Contains(c.Text, "告警") || !strings.Contains(c.Text, "CPU 高") {
 		t.Fatalf("card: %q", c.Text)
 	}
+	if c := ParseContent("sticker", `{"file_key":"f1"}`, nil); !c.Sticker || c.Text != "[表情]" {
+		t.Fatalf("sticker: %+v", c)
+	}
 }
 
 func TestParsePostAtFallback(t *testing.T) {

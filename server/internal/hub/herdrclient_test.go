@@ -552,3 +552,40 @@ func TestHerdrFocusEventsTellEachViewWhetherTheChangeIsItsOwn(t *testing.T) {
 		t.Fatalf("told %v", got)
 	}
 }
+
+// TestHerdrDataPushMatchesMap pins the herdr_data bytes to what the map form gave, ids and data that need escaping
+// included, so the browser sees the same message.
+func TestHerdrDataPushMatchesMap(t *testing.T) {
+	for _, c := range []struct{ id, data string }{
+		{"v1", b64("hello")},
+		{"", ""},
+		{`v"<&>` + " ", "not base64 <script>"},
+	} {
+		want, err := json.Marshal(map[string]any{"type": "herdr_data", "id": c.id, "data": c.data})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := json.Marshal(herdrDataPush{Data: c.data, ID: c.id, Type: "herdr_data"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(want) {
+			t.Fatalf("got %s, want %s", got, want)
+		}
+	}
+}
+
+// BenchmarkHerdrClientData measures one 4 KB node output chunk going to a full view's app.
+func BenchmarkHerdrClientData(b *testing.B) {
+	r := &fullRelay{c: &client{out: make(chan []byte, 1)}, machineID: "m1", id: "v1", nodeID: "hc_1"}
+	h := &Hub{byID: map[string]*Machine{}, logger: log.New(io.Discard, "", 0)}
+	h.fulls.byNode = map[string]*fullRelay{"hc_1": r}
+	params := dataMsg("hc_1", base64.StdEncoding.EncodeToString(make([]byte, 4096)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		h.onHerdrClientData("m1", params)
+		<-r.c.out
+		r.acked = r.sent // the app keeps up, so the window never closes
+	}
+}

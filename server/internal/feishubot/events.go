@@ -173,6 +173,8 @@ type Content struct {
 	Media []Media
 	// Forward: a merged forward; its messages are read with Client.Message.
 	Forward bool
+	// Sticker: a sticker carries no request; accept it silently instead of starting an Agent turn.
+	Sticker bool
 }
 
 // Media is an image or file in a message.
@@ -225,6 +227,7 @@ func ParseContent(msgType, content string, mentions []Mention) Content {
 		c.Forward = true
 	case "sticker":
 		c.Text = "[表情]"
+		c.Sticker = true
 	case "interactive":
 		c.Text = cardText(content)
 	case "share_chat":

@@ -492,7 +492,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		if json.Unmarshal(params, &p) == nil {
 			m.hub.rememberLiveText(m.cfg.ID, p.SessionID, p.Text)
-			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
+			m.hub.toSubscribers(m.cfg.ID, p.SessionID, deltaPush{Type: "delta", MachineID: m.cfg.ID, SessionID: p.SessionID, Text: p.Text})
 		}
 	case "codex.inventory":
 		m.rememberCodexInventory(params)
