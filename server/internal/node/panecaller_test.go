@@ -17,3 +17,25 @@ func TestPaneCaller(t *testing.T) {
 		}
 	}
 }
+
+// The agents' own tools that act for their caller get the pane's session; others, an assistant's call and a call
+// that names its session go as they are.
+func TestMCPCaller(t *testing.T) {
+	n := &Node{panes: map[string]string{"w1:p1": "sess-pane"}}
+	for _, c := range []struct {
+		name, session string
+		assistant     bool
+		want          string
+	}{
+		{"report_to_supervisor", "", false, "sess-pane"},
+		{"todo_decisions", "", false, "sess-pane"},
+		{"todo_decision_add", "", false, "sess-pane"},
+		{"kb_search", "", false, ""},
+		{"todo_decisions", "", true, ""},
+		{"todo_decisions", "sess-named", false, "sess-named"},
+	} {
+		if got := n.mcpCaller(c.name, c.session, "w1:p1", c.assistant); got != c.want {
+			t.Errorf("mcpCaller(%q, %q, assistant=%v) = %q, want %q", c.name, c.session, c.assistant, got, c.want)
+		}
+	}
+}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -190,6 +192,103 @@ func (s *Service) cardDecisions(ctx context.Context, ix proto.Interaction, r pro
 	}
 }
 
+// agentDecisionTool runs todo_decisions / todo_decision_add for agent machine/session (#5279): the decisions of the
+// open todo it works on, read or noted by it. The todo is the agent's own (activeBySession), never one it names:
+// an agent cannot read or write another todo's decisions.
+func (s *Service) agentDecisionTool(ctx context.Context, machine, session, name string, args json.RawMessage, now time.Time) (string, error) {
+	if session == "" { // an older node names no session for these tools
+		return "", errors.New("Persona could not tell which agent session is calling (the node on this machine may be older than the hub)")
+	}
+	st := s.todoDB()
+	if st == nil {
+		return "", errNoDecisionStore
+	}
+	if err := s.ensureTodosLoaded(ctx); err != nil {
+		return "", errTodosUnavailable
+	}
+	t, ok := s.openTodoOfAgent(machine, session)
+	if !ok {
+		return "You are not working on an open todo: there are no decisions to read or note.", nil
+	}
+	if name == "todo_decisions" {
+		list, err := st.ListTodoDecisions(ctx, t.ID, false)
+		if err != nil {
+			return "", err
+		}
+		if len(list) == 0 {
+			return fmt.Sprintf("Todo %s (%q) has no decisions yet.", t.ID, t.Title), nil
+		}
+		b, _ := json.Marshal(map[string]any{"todo": map[string]string{"id": t.ID, "title": t.Title}, "decisions": agentDecisionViews(list)})
+		return string(b), nil
+	}
+	var a struct {
+		Question     string `json:"question"`
+		Choice       string `json:"choice"`
+		Reason       string `json:"reason"`
+		SupersedesID string `json:"supersedes_id"`
+	}
+	if err := json.Unmarshal(args, &a); err != nil {
+		return "", fmt.Errorf("arguments: %v", err)
+	}
+	row := db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: t.ID, Question: decisionText(a.Question),
+		Choice: decisionText(a.Choice), Reason: decisionText(a.Reason), Source: db.DecisionAgent, SourceMachine: machine,
+		SourceSession: session, SupersedesID: strings.TrimSpace(a.SupersedesID), CreatedAt: now.UTC().Truncate(time.Microsecond)}
+	if row.Question == "" || row.Choice == "" {
+		return "", errors.New("question and choice cannot be empty")
+	}
+	if row.SupersedesID != "" {
+		// The user's calls are theirs to change: an agent replacing one would drop it from what every later agent reads.
+		all, err := st.ListTodoDecisions(ctx, t.ID, true)
+		if err != nil {
+			return "", err
+		}
+		i := slices.IndexFunc(all, func(d db.TodoDecisionRow) bool { return d.ID == row.SupersedesID })
+		if i < 0 {
+			return "", errors.New("supersedes_id must be an earlier decision of this todo (see todo_decisions)")
+		}
+		if src := all[i].Source; src != db.DecisionAgent && src != db.DecisionOutcome {
+			return "", errors.New("that decision is the user's: ask them instead of replacing it")
+		}
+	}
+	if !s.noteRate.allow(machine, session, now) {
+		return "", fmt.Errorf("too many decisions: at most %d in %d minutes; note only the calls that change the work",
+			reportLimit, int(reportWindow.Minutes()))
+	}
+	if _, err := st.InsertTodoDecision(ctx, row); err != nil {
+		if errors.Is(err, db.ErrDecisionSupersede) {
+			return "", errors.New("supersedes_id must be an earlier decision of this todo (see todo_decisions)")
+		}
+		return "", err
+	}
+	s.decisionsChanged(ctx, t.ID, row.CreatedAt)
+	s.logf("todo %s: %s noted decision %s", t.ID, short(session), row.ID)
+	return fmt.Sprintf("Noted on todo %s as decision %s (yours, not the user's: it shows as noted by an agent).", t.ID, row.ID), nil
+}
+
+// agentDecisionView is a decision as todo_decisions gives it to an agent: who made the call, in words.
+type agentDecisionView struct {
+	ID         string `json:"id"`
+	Question   string `json:"question"`
+	Choice     string `json:"choice"`
+	Reason     string `json:"reason,omitempty"`
+	By         string `json:"by"` // user / agent
+	Supersedes string `json:"supersedes,omitempty"`
+	At         string `json:"at"`
+}
+
+func agentDecisionViews(list []db.TodoDecisionRow) []agentDecisionView {
+	out := make([]agentDecisionView, 0, len(list))
+	for _, r := range list {
+		by := "user"
+		if r.Source == db.DecisionAgent || r.Source == db.DecisionOutcome {
+			by = "agent"
+		}
+		out = append(out, agentDecisionView{ID: r.ID, Question: r.Question, Choice: r.Choice, Reason: r.Reason, By: by,
+			Supersedes: r.SupersedesID, At: r.CreatedAt.UTC().Format(time.RFC3339)})
+	}
+	return out
+}
+
 // decisionsChanged: the store bumped the todo's updated_at with its decisions; the kept todo follows, and the apps
 // refetch (they reload a todo's decisions when its updated_at moves).
 func (s *Service) decisionsChanged(ctx context.Context, todoID string, at time.Time) {
@@ -230,6 +329,8 @@ func (s *Service) todoDecisionsContext(ctx context.Context, todoID string) strin
 		from := ""
 		if r.Source == db.DecisionOutcome {
 			from = "Agent 做完时记的，不是用户定的" // todo_outcome.go: pulled out of a reply, the user did not make it
+		} else if r.Source == db.DecisionAgent {
+			from = "Agent 干活时记的，不是用户定的" // i18n-ignore: a line of the prompt the model reads (prompts/todo/decisions.md); todo_decision_add, the agent's own call
 		} else if r.Source == db.DecisionCard {
 			from = "在 Agent 的提问里答的"
 			if t := strings.TrimSpace(agents[[2]string{r.SourceMachine, r.SourceSession}]); t != "" {

@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -198,12 +199,7 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		resp = n.cliCall(ctx, c, req)
 	case "mcp.call":
 		var res proto.ToolResult
-		sid := req.SessionID
-		// An agent's MCP server names no session; the one tool that needs to know whose call it is gets the session
-		// its pane runs. The rest go on as before, with none (a connector's card is not hung on the agent).
-		if sid == "" && !req.Assistant && req.Name == reportToSupervisorTool {
-			sid = n.paneCaller(req.Pane)
-		}
+		sid := n.mcpCaller(req.Name, req.SessionID, req.Pane, req.Assistant)
 		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": sid,
 			"assistant": req.Assistant, "guest": req.Guest || n.guestOf(sid) != nil}, &res); err != nil {
 			res = proto.TextResult("Persona hub error: "+err.Error(), true)
@@ -831,8 +827,19 @@ func dialSocket(ctx context.Context, path string, req any, hangUpOnCancel bool) 
 	return line, nil
 }
 
-// reportToSupervisorTool is the agents' tool that reports to their supervisor (assistant/agent_control.go).
-const reportToSupervisorTool = "report_to_supervisor"
+// callerTools are the agents' own tools that act for the agent calling them (assistant/agent_control.go
+// agentToolNames): reporting to its supervisor, reading and noting the decisions of the todo it works on.
+var callerTools = []string{"report_to_supervisor", "todo_decisions", "todo_decision_add"}
+
+// mcpCaller is the session an MCP call of tool name goes to the hub with: the one it names, else, for an agent's
+// tools that need to know whose call it is (callerTools), the session its pane runs. The rest go on as before, with
+// none (a connector's card is not hung on the agent).
+func (n *Node) mcpCaller(name, session, pane string, assistant bool) string {
+	if session == "" && !assistant && slices.Contains(callerTools, name) {
+		return n.paneCaller(pane)
+	}
+	return session
+}
 
 // paneCaller is the agent session running in pane (a hook's PaneRef): the one the host shows there now, else the one
 // its hooks bound it to (an agent the host does not recognise); "" when none is known.

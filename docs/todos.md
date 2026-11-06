@@ -72,7 +72,7 @@ Decisions the user has made for this task ("Decision records"):
 - `id` (text, PK): opaque identifier starting with `dec_`.
 - `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE).
 - `question` / `choice` / `reason` (text): question, selected choice, reason (reason may be empty).
-- `source` (text, NOT NULL, DEFAULT 'manual'): `manual`, recorded manually in the to-do; `card`, recorded automatically when user answers an Agent question card; `outcome`, conclusions, decisions and lessons extracted from the Agent's last reply when the task finishes ("Record conclusions on completion" below).
+- `source` (text, NOT NULL, DEFAULT 'manual'): `manual`, recorded manually in the to-do; `card`, recorded automatically when user answers an Agent question card; `outcome`, conclusions, decisions and lessons extracted from the Agent's last reply when the task finishes ("Record conclusions on completion" below); `agent`, noted by an Agent on the to-do while it works (`todo_decision_add`, below).
 - `source_machine` / `source_session` / `source_message` (text): provenance; for `card`, the asking Agent and card (interaction id), empty for manual records.
 - `supersedes_id` (text, FK → `todo_decisions(id)` ON DELETE SET NULL): earlier decision this one supersedes.
 - `created_at` (timestamptz, NOT NULL).
@@ -309,11 +309,12 @@ The costliest long-task mistake is an Agent forgetting a decision already made: 
 - **One decision** = question + choice + reason + time + provenance (asking Agent, answering card).
 - **Automatic**: when user answers Claude Code's choice question in App (`question` card, `AskUserQuestion`) and the Agent is linked to an unfinished to-do, record each answered question (`source = "card"`; hub emits `interaction.resolved`, assistant records; nothing recorded if assistant disconnected). Do not record authorization, plan approvals, terminal dialogs or ignored cards; duplicate reports of a card record once.
 - **Manual**: **Decisions › Record one** in to-do details.
+- **From the Agent** (#5279): an Agent on an open to-do has two MCP tools of its own (`mcp/todo/`, `agentToolNames` in `assistant/agent_control.go`). `todo_decisions` gives the effective decisions with who made each (`by`: `user`, or `agent` for `agent` / `outcome`), to reread after compaction; `todo_decision_add {question, choice, reason?, supersedes_id?}` notes a call the Agent made (`source = "agent"`, its machine and session as provenance), at most 10 in 10 minutes per Agent; it may replace an Agent's decision, never the user's (it is told to ask them). The to-do is always the one the calling Agent works on (node passes its pane's session, as for `report_to_supervisor`); an Agent cannot read or write another to-do's decisions, and outside an open to-do both say there is none. Handoff context marks these as the Agent's, not the user's.
 - **Supersession**: a new decision can **Replace** an earlier one (`supersedes_id`), keeping the old one struck through; only unsuperseded decisions are effective. PATCH can mark/undo later corrections. Only earlier decisions in the same to-do can be replaced, preventing cycles.
 - **Hand to Agent**: when `POST /api/v1/sessions` `prompt` or `POST …/messages` `text` carries `todo_id` (all clients' handoff does), hub asks assistant (`assistant.todo_handoff`); assistant prepends effective decisions as `<jarvis-context kind="context" title="待办 · <title> · 已定的决策">` ("To-do · <title> · Established decisions", prompt `server/internal/prompts/todo/decisions.md`), no client change needed; send unchanged without decisions. On read failure (database error), still send and only log.
 - Recording/superseding updates to-do `updated_at` and broadcasts `{"type":"todos"}` so clients refetch decisions.
 
-Not yet: MCP tool to fetch decisions by to-do on demand from Agent (after compaction), Android / iOS decision lists.
+Not yet: Android / iOS decision lists.
 
 ## Record conclusions on completion
 

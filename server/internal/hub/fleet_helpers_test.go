@@ -133,8 +133,10 @@ func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	agents, assistantOnly := fakeExtOf(h).AgentTools(ctx, assistant) // the extensions' (the manager's, faked)
 	tools := append(h.phoneToolList(), agents...)
 	if !assistant {
-		t := prompts.Tool("report_to_supervisor") // the agents' own, the manager's (assistant AgentTools)
-		tools = append(tools, proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
+		for _, n := range []string{"report_to_supervisor", "todo_decisions", "todo_decision_add"} { // the agents' own, the manager's (assistant AgentTools)
+			t := prompts.Tool(n)
+			tools = append(tools, proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
+		}
 	}
 	if assistant {
 		tools = append(tools, h.asst().Tools(ctx)...) // the assistant's own, when one is connected

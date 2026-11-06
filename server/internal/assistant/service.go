@@ -65,6 +65,7 @@ type Service struct {
 	supervise  superviseBook     // supervise.go
 	reports    reportBook        // reports.go
 	upReports  reportRate        // agent_control.go: report_to_supervisor
+	noteRate   reportRate        // todo_decisions.go: todo_decision_add
 	adoptMu    sync.Mutex        // agent_control.go: one agent_supervise at a time
 	accept     acceptBook        // acceptance.go
 	reporters  reporterBook      // reporters.go

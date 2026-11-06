@@ -18,11 +18,12 @@ import (
 
 // The main conversation in charge of any agent (#5112, docs/unified-entry.md「督办」): stopping and redirecting one
 // (agent_interrupt), taking one it did not hand out under its supervision (agent_supervise), and the agents' own way
-// up to their supervisor (report_to_supervisor, the one tool here an agent gets, not the assistant).
+// up to their supervisor (report_to_supervisor, one of the tools an agent gets, not the assistant; agentToolNames).
 
 // agentToolNames are the tools of the agents (not the assistant's conversations) that are this manager's own; their
-// descriptions and schemas are in prompts/mcp (docs/prompts.md).
-var agentToolNames = []string{"report_to_supervisor"}
+// descriptions and schemas are in prompts/mcp (docs/prompts.md). Each needs to know which agent calls it: the node
+// names the session of the agent's pane for them (node.callerTools).
+var agentToolNames = []string{"report_to_supervisor", "todo_decisions", "todo_decision_add"}
 
 // AgentTools are the agents' own tools (mcpTools for an agent).
 func (s *Service) AgentTools() []proto.Tool { return toolsNamed(agentToolNames) }
@@ -294,6 +295,12 @@ func (s *Service) agentTool(ctx context.Context, machine, session, name string, 
 		if errors.Is(err, errNoSupervisor) {
 			return proto.TextResult(res, false) // not an error: there is nobody to tell, and the agent goes on
 		}
+		if err != nil {
+			return proto.TextResult(err.Error(), true)
+		}
+		return proto.TextResult(res, false)
+	case "todo_decisions", "todo_decision_add": // todo_decisions.go
+		res, err := s.agentDecisionTool(ctx, machine, session, name, args, time.Now())
 		if err != nil {
 			return proto.TextResult(err.Error(), true)
 		}

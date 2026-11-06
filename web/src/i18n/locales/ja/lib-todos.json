@@ -18,6 +18,7 @@
   "decision_agent_question": "エージェントの質問で回答",
   "decision_in_question": "「{title}」の質問で回答",
   "decision_outcome": "エージェントの完了時に記録",
+  "decision_by_agent": "エージェントが作業中に記録",
   "with_project_named": "プロジェクト{name}に連動",
   "with_project": "プロジェクトに連動",
   "spawned_by": "{title}から派生",

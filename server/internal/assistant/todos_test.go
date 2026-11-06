@@ -575,3 +575,107 @@ func TestCardAnswerRecordsDecision(t *testing.T) {
 		t.Fatalf("handoff = %q", res.Text)
 	}
 }
+
+// An agent on a todo reads its decisions and notes its own (todo_decisions / todo_decision_add, #5279): always on
+// the todo it works on, marked as the agent's; an agent on no todo has none, and a bad supersedes_id is refused.
+func TestAgentReadsAndNotesDecisions(t *testing.T) {
+	e := newTodoEnv(t, todoTestDB(t))
+	ctx := context.Background()
+	e.f.setSessions("box", proto.Session{SessionID: "s1", Title: "迁移 Agent"}, proto.Session{SessionID: "s2", Title: "闲着的 Agent"})
+	todoID := e.create("天气 App 发 1.3 版").ID
+	other := e.create("别的事").ID
+	e.must("PUT", "/api/v1/todos/"+todoID+"/agents/box/s1", "")
+	e.must("POST", "/api/v1/todos/"+other+"/decisions", `{"question":"别的事的问题","choice":"别的事的答案"}`)
+	e.must("POST", "/api/v1/todos/"+todoID+"/decisions", `{"question":"先发哪个平台？","choice":"iOS"}`)
+	tool := func(session, name, args string) proto.ToolResult {
+		return e.s.agentTool(ctx, "box", session, name, json.RawMessage(args))
+	}
+
+	// Its own todo's decisions only, the user's marked as theirs.
+	res := tool("s1", "todo_decisions", `{}`)
+	var read struct {
+		Todo      struct{ ID string }
+		Decisions []agentDecisionView
+	}
+	if res.IsError || json.Unmarshal([]byte(res.Content[0].Text), &read) != nil || read.Todo.ID != todoID || len(read.Decisions) != 1 ||
+		read.Decisions[0].Choice != "iOS" || read.Decisions[0].By != "user" {
+		t.Fatalf("read: %+v", res)
+	}
+	userDecision := read.Decisions[0].ID
+
+	// The user's call is theirs to change: replacing it is refused, and it stays in effect.
+	if res := tool("s1", "todo_decision_add", `{"question":"先发哪个平台？","choice":"安卓","supersedes_id":"`+userDecision+`"}`); !res.IsError ||
+		!strings.Contains(res.Content[0].Text, "the user's") {
+		t.Fatalf("replace the user's: %+v", res)
+	}
+	// It notes its own: kept as the agent's, with where it came from; a later one of its own may replace it.
+	res = tool("s1", "todo_decision_add", `{"question":"迁移号用哪个？","choice":"0311","reason":"0271 已占"}`)
+	if res.IsError || !strings.Contains(res.Content[0].Text, todoID) {
+		t.Fatalf("add: %+v", res)
+	}
+	own := listDecisions(t, e, todoID, "")[1]
+	if own.Choice != "0311" || own.Source != db.DecisionAgent || own.SourceMachine != "box" || own.SourceSession != "s1" {
+		t.Fatalf("after add: %+v", own)
+	}
+	if res := tool("s1", "todo_decision_add", `{"question":"迁移号用哪个？","choice":"0312","supersedes_id":"`+own.ID+`"}`); res.IsError {
+		t.Fatalf("replace its own: %+v", res)
+	}
+	live := listDecisions(t, e, todoID, "")
+	if len(live) != 2 || live[0].ID != userDecision || live[1].Choice != "0312" || live[1].SupersedesID != own.ID {
+		t.Fatalf("in effect: %+v", live)
+	}
+	if res := tool("s1", "todo_decisions", `{}`); !strings.Contains(res.Content[0].Text, `"by":"agent"`) ||
+		!strings.Contains(res.Content[0].Text, `"by":"user"`) {
+		t.Fatalf("read again: %+v", res)
+	}
+	if h, _ := e.s.TodoHandoff(ctx, TodoHandoff{TodoID: todoID, Text: "发版"}); !strings.Contains(h.Text, "Agent 干活时记的，不是用户定的") {
+		t.Fatalf("handoff = %q", h.Text)
+	}
+
+	// Refused: no question or choice, superseding another todo's decision; the other todo is untouched.
+	otherDecision := listDecisions(t, e, other, "")[0].ID
+	for _, bad := range []string{`{"question":"q"}`, `{"question":" ","choice":"c"}`,
+		`{"question":"q","choice":"c","supersedes_id":"` + otherDecision + `"}`} {
+		if res := tool("s1", "todo_decision_add", bad); !res.IsError {
+			t.Fatalf("%s: %+v", bad, res)
+		}
+	}
+	if got := listDecisions(t, e, other, "?all=1"); len(got) != 1 {
+		t.Fatalf("other todo: %+v", got)
+	}
+
+	// An agent on no todo, or a call from no session: nothing to read or note, and nothing written.
+	if res := tool("s2", "todo_decision_add", `{"question":"q","choice":"c"}`); res.IsError || !strings.Contains(res.Content[0].Text, "not working on an open todo") {
+		t.Fatalf("no todo: %+v", res)
+	}
+	if res := tool("", "todo_decisions", `{}`); !res.IsError || !strings.Contains(res.Content[0].Text, "which agent session") {
+		t.Fatalf("no session: %+v", res)
+	}
+	if got := listDecisions(t, e, todoID, "?all=1"); len(got) != 3 {
+		t.Fatalf("decisions = %+v", got)
+	}
+
+	// At most reportLimit notes in reportWindow (two went in above).
+	for i := 2; i < reportLimit; i++ {
+		if res := tool("s1", "todo_decision_add", fmt.Sprintf(`{"question":"q%d","choice":"c"}`, i)); res.IsError {
+			t.Fatalf("note %d: %+v", i, res)
+		}
+	}
+	if res := tool("s1", "todo_decision_add", `{"question":"one more","choice":"c"}`); !res.IsError || !strings.Contains(res.Content[0].Text, "too many") {
+		t.Fatalf("over the limit: %+v", res)
+	}
+
+	// Once the todo is done its agent is on no open todo.
+	e.must("PATCH", "/api/v1/todos/"+todoID, `{"done":true}`)
+	if res := tool("s1", "todo_decisions", `{}`); res.IsError || !strings.Contains(res.Content[0].Text, "not working on an open todo") {
+		t.Fatalf("done todo: %+v", res)
+	}
+}
+
+// Without the database an agent's decision tools say so instead of pretending.
+func TestAgentDecisionToolsNeedTheStore(t *testing.T) {
+	e := newTodoEnv(t, nil)
+	if res := e.s.agentTool(context.Background(), "box", "s1", "todo_decisions", json.RawMessage(`{}`)); !res.IsError {
+		t.Fatalf("without a store: %+v", res)
+	}
+}

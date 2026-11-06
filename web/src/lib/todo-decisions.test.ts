@@ -21,6 +21,9 @@ describe("decisionSourceLabel", () => {
   it("says a decision recorded when the task was finished came from the agent's outcome", () => {
     expect(decisionSourceLabel(dec("a", { source: "outcome", source_machine: "mac", source_session: "s1" }), todo, lookup)).toBe("Agent 做完时记的");
   });
+  it("says a decision an agent noted while it worked is the agent's, not the user's", () => {
+    expect(decisionSourceLabel(dec("a", { source: "agent", source_machine: "mac", source_session: "s1" }), todo, lookup)).toBe("Agent 干活时记的");
+  });
   it("names the agent whose card it was answered in, from the session list or the todo's snapshot", () => {
     expect(decisionSourceLabel(dec("a", { source: "card", source_machine: "mac", source_session: "s1" }), todo, lookup)).toBe("在「发版 Agent」的提问里答的");
     expect(decisionSourceLabel(dec("a", { source: "card", source_machine: "mac", source_session: "gone" }), todo, lookup)).toBe("在「旧 Agent」的提问里答的");

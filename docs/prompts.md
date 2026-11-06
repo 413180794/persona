@@ -98,6 +98,7 @@ so layout is arbitrary (short arrays can be one line) and does not affect transm
 | `mcp/inbox/` | `inbox_suggest` (handling chat submits suggestions and a summary), `inbox_draft` (legacy name, reply only) | Same as above |
 | `mcp/kb/` | `kb_search`, `kb_list`, `kb_get`, `kb_update` | Same as above |
 | `mcp/supervisor/` | `report_to_supervisor` (a supervised task's agent reports to its supervisor, #5112) | Every agent, not assistant chats (`agentToolNames` in `assistant/agent_control.go`) |
+| `mcp/todo/` | `todo_decisions`, `todo_decision_add` (an agent reads the decisions of the todo it works on and notes its own, #5279) | Same as above |
 | `mcp/mail/` | `mail_accounts`, `mail_search`, `mail_read`, `mail_send` | All chats (`Tools` in `mail/mcp.go`) |
 | `mcp/github/` | `github_search`, `github_read`, `github_diff`, `github_checks` (read-only); `github_comment`, `github_review` (writes, gated) | Assistant, when GitHub connector status is `ok` (`connector/github/tools.go`; golden `mcp_tools.assistant_with_github`) |
 | `mcp/browser/` | `browser_run`, `browser_look` | Assistant, when the ego browser extension is on for some machine (`browserTools` in `extmgr/browser.go`) |
