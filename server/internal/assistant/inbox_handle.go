@@ -573,7 +573,7 @@ func (s *Service) inboxSuggestionRoutes() {
 		case errors.Is(err, errMailReplyTargetChanged):
 			apierr.WriteBody(w, http.StatusConflict, map[string]any{"code": "mail_reply_target_changed", "error": i18n.T(l, "assistant-inbox.mail_target_changed"), "retryable": false, "delivered": "none"})
 		case replyInDoubt(err):
-			body := apierr.Body(http.StatusBadGateway, assistantwire.CodeAssistantInDoubt, err)
+			body := apierr.LocalizedBody(http.StatusBadGateway, assistantwire.CodeAssistantInDoubt, err, i18n.OfWriter(w))
 			body["delivered"], body["retryable"] = "unknown", false
 			apierr.WriteBody(w, http.StatusBadGateway, body)
 		case err != nil:

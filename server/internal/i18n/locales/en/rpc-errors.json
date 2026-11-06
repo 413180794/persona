@@ -1,0 +1,12 @@
+{
+  "timeout": "The request timed out. Check the result before retrying.",
+  "unreachable": "The connection to the computer was lost. Check its connection and the result before retrying.",
+  "failed": "The request could not be completed. Open details for the diagnostic.",
+  "input_draft": "There is a draft in the terminal. Resolve it before sending.",
+  "dialog_open": "The terminal is waiting for a choice. Resolve it there first.",
+  "prompt_changed": "The terminal prompt has changed. Refresh before answering.",
+  "attach_busy": "This session is busy in another client. Wait until it is available.",
+  "node_outdated": "The computer’s Persona service is too old for this operation. Update it first.",
+  "in_doubt": "Delivery cannot be confirmed. Check the result before sending again.",
+  "offline": "This computer is offline. Reconnect it before retrying."
+}

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
+
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -587,7 +589,11 @@ func (h *Hub) terminalEnded(machineID, sessionID, why string, only *termRelay) {
 	unsupported := strings.Contains(why, "unknown method") || strings.HasPrefix(why, "unsupported")
 	for c, ids := range r.subs {
 		for id := range ids {
-			c.sendTerm(map[string]any{"type": "terminal", "machine_id": id, "session_id": sessionID, "error": why, "unsupported": unsupported})
+			message := map[string]any{"type": "terminal", "machine_id": id, "session_id": sessionID, "error": apierr.RPCText(c.lang(), why), "unsupported": unsupported}
+			if message["error"] != why {
+				message["detail"] = why
+			}
+			c.sendTerm(message)
 		}
 	}
 }

@@ -1181,7 +1181,7 @@ func (s *Service) inboxRoutes() {
 			apierr.Write(w, http.StatusNotFound, err)
 		case replyInDoubt(err):
 			// It may have gone out: the apps say so (delivered unknown); the same reply again is not sent twice.
-			body := apierr.Body(http.StatusBadGateway, assistantwire.CodeAssistantInDoubt, err)
+			body := apierr.LocalizedBody(http.StatusBadGateway, assistantwire.CodeAssistantInDoubt, err, i18n.OfWriter(w))
 			body["delivered"], body["retryable"] = "unknown", false
 			apierr.WriteBody(w, http.StatusBadGateway, body)
 		case err != nil:

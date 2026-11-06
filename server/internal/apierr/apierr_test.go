@@ -1,6 +1,7 @@
 package apierr
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -111,5 +112,80 @@ func TestStandardStatusTextLocalization(t *testing.T) {
 	}
 	if body["error"] != "custom diagnostic" {
 		t.Fatalf("custom text changed: %v", body)
+	}
+}
+
+func TestRPCFailureLocalePreservesOutcomeAndDiagnostics(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		key  string
+	}{
+		{"offline", ErrOffline, "rpc-errors.offline"},
+		{"closed", fmt.Errorf("read: %w", rpc.ErrClosed), "rpc-errors.unreachable"},
+		{"timeout", fmt.Errorf("read: %w", context.DeadlineExceeded), "rpc-errors.timeout"},
+		{"internal", errors.New("example raw diagnostic"), "rpc-errors.failed"},
+		{"draft", &rpc.Error{Code: "input_draft", Message: "original terminal instructions", Data: json.RawMessage(`{"delivered":"none","retryable":false,"draft":"example user draft"}`)}, "rpc-errors.input_draft"},
+		{"unknown delivery", &rpc.Error{Code: "timeout", Message: "original diagnostic", Data: json.RawMessage(`{"delivered":"unknown","retryable":false}`)}, "rpc-errors.timeout"},
+		{"partial delivery", &rpc.Error{Code: "internal", Message: "original diagnostic", Data: json.RawMessage(`{"delivered":"yes","retryable":false}`)}, "rpc-errors.failed"},
+		{"busy", &rpc.Error{Code: "attach_busy", Message: "original diagnostic"}, "rpc-errors.attach_busy"},
+		{"old node", &rpc.Error{Code: "node_outdated", Message: "original diagnostic"}, "rpc-errors.node_outdated"},
+	}
+	for _, tc := range cases {
+		legacy := httptest.NewRecorder()
+		before := call(t, legacy, legacy, tc.err)
+		for _, lang := range []i18n.Lang{i18n.En, i18n.ZhHans, i18n.Ja} {
+			rec := httptest.NewRecorder()
+			after := call(t, langWriter{rec, lang}, rec, tc.err)
+			if rec.Code != legacy.Code || after["error"] != i18n.T(lang, tc.key) {
+				t.Fatalf("%s %s: %d %v", tc.name, lang, rec.Code, after)
+			}
+			for _, key := range []string{"code", "retryable", "delivered", "draft", "clearable"} {
+				if after[key] != before[key] {
+					t.Fatalf("%s %s changed %s: before=%v after=%v", tc.name, lang, key, before, after)
+				}
+			}
+			if after["detail"] != before["error"] {
+				t.Fatalf("diagnostic lost: before=%v after=%v", before, after)
+			}
+		}
+	}
+	raw := &rpc.Error{Code: "external_custom", Message: "external author text"}
+	rec := httptest.NewRecorder()
+	if body := call(t, langWriter{rec, i18n.Ja}, rec, raw); body["error"] != raw.Message {
+		t.Fatal("external custom message guessed")
+	}
+	typed := i18n.ErrEnglish("inbox-errors.no_item")
+	rec = httptest.NewRecorder()
+	if body := call(t, langWriter{rec, i18n.Ja}, rec, typed); body["error"] != i18n.T(i18n.Ja, "inbox-errors.no_item") {
+		t.Fatal("typed summary overwritten")
+	}
+}
+
+func TestInvalidJSONAndInDoubtLocale(t *testing.T) {
+	var v struct {
+		Count int `json:"count"`
+	}
+	decodeErr := json.Unmarshal([]byte(`{"count":"bad"}`), &v)
+	for _, lang := range []i18n.Lang{i18n.En, i18n.ZhHans, i18n.Ja} {
+		rec := httptest.NewRecorder()
+		Write(langWriter{rec, lang}, 400, decodeErr)
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body["error"] != i18n.T(lang, "http-status.bad_request") || body["detail"] != decodeErr.Error() || body["code"] != "bad_request" {
+			t.Fatal(body)
+		}
+		doubt := LocalizedBody(502, "assistant_in_doubt", rpc.ErrDropped, lang)
+		if doubt["error"] != i18n.T(lang, "rpc-errors.in_doubt") || doubt["delivered"] != nil {
+			t.Fatal("delivery certainty invented", doubt)
+		}
+	}
+	if RPCText(i18n.Ja, "third-party raw text") != "third-party raw text" || RPCText("", rpc.ErrClosed.Error()) != rpc.ErrClosed.Error() {
+		t.Fatal("raw/legacy stream text changed")
+	}
+	if RPCText(i18n.Ja, rpc.ErrClosed.Error()) != i18n.T(i18n.Ja, "rpc-errors.unreachable") {
+		t.Fatal("stream error not localized")
 	}
 }

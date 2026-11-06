@@ -649,3 +649,7 @@ Error-valued message arguments and structured field errors also need the request
 
 - The session list asks `rolloutPath` once a second for every registered Codex thread; for a thread with no rollout (an app-server thread that never wrote one) that was a glob over every day directory of the whole history, each time. On a hub with 194 rollouts it was 61% of the node's CPU. Profile the live node before guessing: `perf record -p <pid>`, then map the addresses with an unstripped build of the same commit (`go tool addr2line`; the deployed binary is built with `-s -w`, but `.text` is laid out the same).
 - Caching a miss on directory mtimes needs care: a file created or moved into a directory changes its mtime, but the kernel stamps it with a coarse clock, so a second change within the same tick can leave it unchanged. Keep no miss whose directories changed in the last second (`TestRolloutPathMissRacy`).
+
+## Localized RPC summaries must not imply successful or absent delivery
+
+A timeout or disconnected stream may happen after input reached the node. Translate the error summary, but preserve every existing code, delivered and retryable field; never infer delivered=none just because the transport failed. Keep raw diagnostics in detail, preserve node-provided details/drafts, and leave unknown custom error codes as external data. HTTP replies, uncertain inbox replies and backlog/terminal errors must use the same locale-aware boundary rules.

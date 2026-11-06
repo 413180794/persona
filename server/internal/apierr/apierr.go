@@ -33,9 +33,9 @@ func Write(w http.ResponseWriter, status int, err error) {
 // WriteCode preserves error for old clients and adds a stable machine-readable code.
 // An i18n.Message reads in the request's language (docs/i18n.md "Protocol").
 func WriteCode(w http.ResponseWriter, status int, code string, err error) {
-	body := Body(status, code, err)
-	if l := i18n.OfWriter(w); l != "" {
-		body["error"] = i18n.Localize(err, l)
+	l := i18n.OfWriter(w)
+	body := LocalizedBody(status, code, err, l)
+	if l != "" {
 		// Only exact standard status text is ours to translate; arbitrary server/node details remain untouched.
 		if key, ok := standardStatusKeys[status]; ok && err.Error() == http.StatusText(status) {
 			body["error"] = i18n.T(l, key)
@@ -179,7 +179,79 @@ func Call(w http.ResponseWriter, err error) {
 			explain(body, code, re.Message, i18n.OfWriter(w))
 		}
 	}
+	if _, explained := codeActions[code]; !explained {
+		localizeFailure(body, status, err, i18n.OfWriter(w))
+	}
 	WriteBody(w, status, body)
+}
+
+// LocalizedBody preserves all machine-readable outcome fields while translating a known failure summary.
+func LocalizedBody(status int, code string, err error, l i18n.Lang) map[string]any {
+	body := Body(status, code, err)
+	localizeFailure(body, status, err, l)
+	return body
+}
+
+var rpcFailureKeys = map[string]string{
+	"timeout":            "rpc-errors.timeout",
+	"node_unreachable":   "rpc-errors.unreachable",
+	"internal":           "rpc-errors.failed",
+	"input_draft":        "rpc-errors.input_draft",
+	"dialog_open":        "rpc-errors.dialog_open",
+	"prompt_changed":     "rpc-errors.prompt_changed",
+	"attach_busy":        "rpc-errors.attach_busy",
+	"node_outdated":      "rpc-errors.node_outdated",
+	"assistant_in_doubt": "rpc-errors.in_doubt",
+}
+
+func localizeFailure(body map[string]any, status int, err error, l i18n.Lang) {
+	if l == "" {
+		return
+	}
+	original, _ := body["error"].(string)
+	localized := i18n.Localize(err, l)
+	// A typed structured error owns its summary; do not replace it with a generic transport message.
+	if _, ok := err.(interface{ Text(i18n.Lang) string }); ok || localized != err.Error() {
+		body["error"] = localized
+		return
+	}
+	code, _ := body["code"].(string)
+	key := rpcFailureKeys[code]
+	if errors.Is(err, ErrOffline) {
+		key = "rpc-errors.offline"
+	}
+	var syntax *json.SyntaxError
+	var wrongType *json.UnmarshalTypeError
+	if status == http.StatusBadRequest && (errors.As(err, &syntax) || errors.As(err, &wrongType) || errors.Is(err, io.EOF)) {
+		key = "http-status.bad_request"
+	}
+	if key == "" {
+		return
+	}
+	body["error"] = i18n.T(l, key)
+	if _, hasDetail := body["detail"]; !hasDetail && original != body["error"] {
+		body["detail"] = original
+	}
+}
+
+// RPCText localizes only canonical transport strings after a stream has lost the typed error.
+func RPCText(l i18n.Lang, text string) string {
+	if l == "" {
+		return text
+	}
+	var key string
+	switch text {
+	case ErrOffline.Error():
+		key = "rpc-errors.offline"
+	case context.DeadlineExceeded.Error():
+		key = "rpc-errors.timeout"
+	case rpc.ErrClosed.Error(), io.EOF.Error(), io.ErrUnexpectedEOF.Error():
+		key = "rpc-errors.unreachable"
+	}
+	if key != "" {
+		return i18n.T(l, key)
+	}
+	return i18n.InboxText(l, text)
 }
 
 // codeActions are the refusals whose words the hub writes itself, wherever they came from (the assistant, a node),

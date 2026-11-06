@@ -1225,7 +1225,11 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 			itemSpan
 		}
 		if err := m.call(ctx, "session.items", params, &res); err != nil {
-			c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
+			_, raw := callErrBytes(c.lang(), err)
+			var failure map[string]any
+			_ = json.Unmarshal(raw, &failure)
+			failure["type"], failure["machine_id"], failure["session_id"] = "error", m.cfg.ID, sid
+			c.sendJSON(failure)
 			return
 		}
 		res.Items = localizedItems(c.lang(), h.withInjected(res.Items))
