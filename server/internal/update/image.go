@@ -31,17 +31,21 @@ func ParseImage(s string) (Image, error) {
 	if s == "" || strings.ContainsAny(s, " \t") {
 		return Image{}, fmt.Errorf("image %q is not a reference", s)
 	}
-	im := Image{Registry: "registry-1.docker.io", Tag: "latest"}
+	im := Image{Registry: "docker.io", Tag: "latest"}
 	if first, rest, ok := strings.Cut(s, "/"); ok && (strings.ContainsAny(first, ".:") || first == "localhost") {
 		im.Registry, s = first, rest
-	} else if !ok {
-		s = "library/" + s
 	}
 	if i := strings.LastIndex(s, ":"); i > 0 {
 		s, im.Tag = s[:i], s[i+1:]
 	}
 	if s == "" || im.Tag == "" {
 		return Image{}, fmt.Errorf("image %q is not a reference", s)
+	}
+	if im.Registry == "docker.io" {
+		im.Registry = "registry-1.docker.io"
+		if !strings.Contains(s, "/") {
+			s = "library/" + s
+		}
 	}
 	im.Repo = strings.ToLower(s)
 	return im, nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,23 +17,50 @@ func TestParseImage(t *testing.T) {
 		pinned                        bool
 	}{
 		{"ghcr.io/Owner/Persona:latest", "ghcr.io", "owner/persona", "latest", "ghcr.io/owner/persona", false},
-		{"ghcr.io/Owner/Persona:latest", "ghcr.io", "owner/persona", "latest", "ghcr.io/owner/persona", false},
 		{"ghcr.io/owner/persona", "ghcr.io", "owner/persona", "latest", "ghcr.io/owner/persona", false},
 		{"ghcr.io/owner/persona:1.2.0", "ghcr.io", "owner/persona", "1.2.0", "ghcr.io/owner/persona", true},
 		{"ghcr.io/owner/persona:edge@sha256:0123", "ghcr.io", "owner/persona", "edge", "ghcr.io/owner/persona", false},
 		{"localhost:5000/owner/persona:v1.3.0-rc1", "localhost:5000", "owner/persona", "v1.3.0-rc1", "localhost:5000/owner/persona", true},
 		{"me/persona:0.3.0", "registry-1.docker.io", "me/persona", "0.3.0", "me/persona", true},
 		{"postgres", "registry-1.docker.io", "library/postgres", "latest", "postgres", false},
+		{"docker.io/me/persona:0.3.0", "registry-1.docker.io", "me/persona", "0.3.0", "me/persona", true},
+		{"docker.io/postgres", "registry-1.docker.io", "library/postgres", "latest", "postgres", false},
+		{"docker.io/library/postgres:1.2.0", "registry-1.docker.io", "library/postgres", "1.2.0", "postgres", true},
+		{"registry-1.docker.io/postgres", "registry-1.docker.io", "postgres", "latest", "postgres", false},
+		{"ghcr.io/postgres", "ghcr.io", "postgres", "latest", "ghcr.io/postgres", false},
 	} {
 		im, err := ParseImage(c.in)
 		if err != nil || im.Registry != c.registry || im.Repo != c.repo || im.Tag != c.tag || im.Name() != c.name || im.Pinned() != c.pinned {
 			t.Errorf("%s: %+v name %s pinned %v, %v", c.in, im, im.Name(), im.Pinned(), err)
 		}
 	}
-	for _, bad := range []string{"", "  ", "ghcr.io/owner/persona:", "a b"} {
+	for _, bad := range []string{"", "  ", "ghcr.io/owner/persona:", "a b", "docker.io/"} {
 		if _, err := ParseImage(bad); err == nil {
 			t.Errorf("%q parsed", bad)
 		}
+	}
+}
+
+type imageRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f imageRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestLatestVersionExplicitDockerHub(t *testing.T) {
+	im, err := ParseImage("docker.io/postgres")
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	client := &http.Client{Transport: imageRoundTripper(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if r.Method != http.MethodGet || r.URL.Scheme != "https" || r.URL.Host != "registry-1.docker.io" || r.URL.Path != "/v2/library/postgres/tags/list" || r.URL.Query().Get("n") != "1000" {
+			t.Errorf("unexpected tags request: %s %s", r.Method, r.URL)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"tags":["1.2.0","1.3.0"]}`))}, nil
+	})}
+	got, err := LatestVersion(context.Background(), client, im, "")
+	if err != nil || got != "1.3.0" || calls != 1 {
+		t.Fatalf("latest %q, error %v, requests %d", got, err, calls)
 	}
 }
 

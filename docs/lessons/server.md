@@ -712,6 +712,10 @@ while that side is still writing to `NetConn`. Server closes, `Serve` returns, c
 (small bodies entirely gone, large bodies missing the final frame; ordinary manager requests too, not just extension HTTP). Cancel `NetConn` context only after copying finishes;
 regression `TestRelayedAnswersArriveWhole` (concurrent small responses, slow-read large responses, SSE, byte-for-byte comparison). WebSocket-only tests, direct mux calls, or fake managers with a separately written splice don't catch it.
 
+## Docker Hub references share one registry endpoint (#6167)
+
+Explicit `docker.io` references use the same `registry-1.docker.io` API endpoint as implicit Docker Hub names. Apply the `library/` namespace to their single-component repositories only after rejecting empty names. Keep other explicitly named registry hosts unchanged, and test the actual tag-list request as well as parsed fields.
+
 ## Self-update node platforms can't depend on "current machines" (2026-11-05, #3186)
 
 Hub self-update downloaded node binaries only for machines whose platforms were known at that moment. Later-added machines, or never-connected machines with empty os / arch during update, had platforms absent from downloads.
