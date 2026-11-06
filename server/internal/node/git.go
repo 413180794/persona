@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -389,30 +390,62 @@ func (n *Node) gitShow(ctx context.Context, cwd, hash string) (*GitShow, error) 
 			res.Files = append(res.Files, f)
 		}
 	}
-	if o, err := git(ctx, dir, "show", "--name-status", "-z", "--format=", hash); err == nil {
-		kinds := map[string]string{}
-		recs := strings.Split(o, "\x00")
-		for i := 0; i+1 < len(recs); i += 2 {
-			k := recs[i]
-			if k == "" {
-				i--
-				continue
-			}
-			p := recs[i+1]
-			if (k[0] == 'R' || k[0] == 'C') && i+2 < len(recs) {
-				p = recs[i+2]
-				i++
-			}
-			kinds[p] = k[:1]
+	sortFiles(res.Files)
+	// The diff is the content of every file the commit touched: the ones file.read refuses (either side of a rename
+	// or copy) are left out of it, by name. Without the names, or without a working tree to check them against (a
+	// bare repository, cwd inside .git), the commit and its files are shown without the diff. -M: renames are paired
+	// the same way in both commands, whatever diff.renames says.
+	o, err = git(ctx, dir, "show", "-M", "--name-status", "-z", "--format=", hash)
+	if err != nil {
+		return res, nil
+	}
+	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return res, nil
+	}
+	root = strings.TrimSpace(root)
+	kinds := map[string]string{}
+	refused := map[string]bool{} // checked once: a range names a path once per commit
+	isRefused := func(p string) bool {
+		r, ok := refused[p]
+		if !ok {
+			r = n.guardRepoPath(root, p) != nil
+			refused[p] = r
 		}
-		for i := range res.Files {
-			if k, ok := kinds[res.Files[i].Path]; ok {
-				res.Files[i].Index = k
+		return r
+	}
+	excluded := map[string]bool{}
+	var exclude []string
+	recs := strings.Split(o, "\x00")
+	for i := 0; i+1 < len(recs); i += 2 {
+		k := recs[i]
+		if k == "" {
+			i--
+			continue
+		}
+		paths := recs[i+1 : i+2]
+		if (k[0] == 'R' || k[0] == 'C') && i+2 < len(recs) {
+			paths = recs[i+1 : i+3] // from, to
+			i++
+		}
+		p := paths[len(paths)-1]
+		kinds[p] = k[:1]
+		// Without its pair, the other side of a rename is diffed whole: both go when either is refused.
+		if slices.ContainsFunc(paths, isRefused) {
+			for _, p := range paths {
+				if !excluded[p] {
+					excluded[p] = true
+					exclude = append(exclude, ":(top,exclude,literal)"+p)
+				}
 			}
 		}
 	}
-	sortFiles(res.Files)
-	diff, err := git(ctx, dir, "show", "--no-color", "--format=", hash)
+	for i := range res.Files {
+		if k, ok := kinds[res.Files[i].Path]; ok {
+			res.Files[i].Index = k
+		}
+	}
+	diff, err := git(ctx, dir, append([]string{"show", "-M", "--no-color", "--format=", hash, "--"}, exclude...)...)
 	if err == nil {
 		res.Truncated = len(diff) > maxDiffBytes
 		if res.Truncated {

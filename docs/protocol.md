@@ -953,6 +953,7 @@ Permissions follow the endpoint that started the operation: only a device that c
 - **iCloud** (any segment containing `Library/Mobile Documents`, case-insensitive): touching it on a locked Mac hangs, so `stat` treats it as nonexistent and reads are refused.
 - **Sensitive files**: the whole directories `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.password-store`, `Library/Keychains`, `.local/share/keyrings`, `.config/gcloud`, `.config/gh` under home,
   `.netrc`, `.git-credentials`, `.npmrc`, `.pypirc`, `.pgpass`, `.claude/.credentials.json`, `.codex/auth.json`, private keys named `id_rsa` / `id_ed25519` etc. anywhere, and in `.persona` / `.jarvis` the `hub.json` (including backups `hub.json.*`), `apns*` and `.key` / `.p8` / `.pem` / `.crt` (the knowledge base `data/` stays readable). `stat` treats them as nonexistent; reading, listing and downloading are all refused.
+- The Git panel reads the same files' content: `git/diff` and `git/blob` refuse these paths; `git/show` still lists every file of the commit but leaves the refused ones (both sides of a rename or copy that has one) out of `diff` (with no working tree to check the names against, a bare repository or a `cwd` inside `.git`, `diff` is empty).
 - Links are followed at most 40 levels deep (a loop stops it). This is basic protection, not a sandbox: a device token can already have an Agent read these files.
 
 For mail, see "Mail API" below. For the HTTP error format and optional fields, see "Error body" above.
