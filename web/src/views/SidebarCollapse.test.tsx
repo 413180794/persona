@@ -15,7 +15,8 @@ import { refresh, reset } from "../lib/store";
 import type { AssistantInfo, Session } from "../lib/types";
 import { checkBinding, eventChord, getBindings, matchShortcut } from "../lib/shortcuts";
 import { useShortcuts } from "../lib/use-shortcuts";
-import { Sidebar, SidebarRail } from "./Sidebar";
+import { initI18n } from "../i18n";
+import { NavGrid, Sidebar, SidebarRail, useNavPages } from "./Sidebar";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -68,6 +69,52 @@ describe("folding the whole sidebar", () => {
     setSidebarCollapsed(true);
     act(() => open.click());
     expect(getLayout().sidebarCollapsed).toBe(false);
+  });
+});
+
+describe("localized page names in the drawer and desktop sidebar (#3579)", { timeout: 30_000 }, () => {
+  const locales = [
+    { lang: "en", full: ["Overview", "Inbox", "Health", "Scheduled tasks", "Knowledge", "Machines"], short: ["Home", "Inbox", "Health", "Tasks", "KB", "Hosts"] },
+    { lang: "ja", full: ["概要", "受信トレイ", "ヘルスケア", "定期タスク", "ナレッジ", "マシン"], short: ["概要", "受信", "健康", "定期", "ナレッジ", "マシン"] },
+    { lang: "zh-Hans", full: ["总览", "收件箱", "健康", "定时任务", "知识库", "机器"], short: ["总览", "收件箱", "健康", "定时任务", "知识库", "机器"] },
+  ] as const;
+  const paths = ["/overview", "/inbox", "/health", "/routines", "/kb", "/machines"];
+  const pageLink = (path: string) => host.querySelector<HTMLAnchorElement>(`a[href="${path}"]`)!;
+  function DrawerPages() {
+    const { pages } = useNavPages();
+    return <NavGrid pages={pages} activeKey="home" go={() => () => {}} />;
+  }
+
+  afterEach(() => initI18n("zh-Hans"), 30_000);
+
+  it.each(locales)("uses short visible names and full accessible names in $lang", async ({ lang, full, short }) => {
+    await initI18n(lang);
+    act(() => root.render(<DrawerPages />));
+    await flush();
+    paths.forEach((path, i) => {
+      const link = pageLink(path);
+      expect(link.textContent).toBe(short[i]);
+      expect(link.title).toBe(full[i]);
+      expect(link.getAttribute("aria-label")).toBe(full[i]);
+      expect(link.getAttribute("aria-current")).toBe(i === 0 ? "page" : null);
+    });
+  });
+
+  it.each(locales)("keeps full names in desktop rows and the icon rail in $lang", async ({ lang, full }) => {
+    await initI18n(lang);
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    paths.forEach((path, i) => expect(pageLink(path).textContent).toBe(full[i]));
+
+    act(() => root.render(<SidebarRail route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    paths.forEach((path, i) => {
+      const link = pageLink(path);
+      expect(link.textContent).toBe("");
+      expect(link.title).toBe(full[i]);
+      expect(link.getAttribute("aria-label")).toBe(full[i]);
+      expect(link.getAttribute("aria-current")).toBe(i === 0 ? "page" : null);
+    });
   });
 });
 

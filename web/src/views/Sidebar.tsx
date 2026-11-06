@@ -252,15 +252,15 @@ export function useNavPages() {
   const online = machines.filter((m) => m.online).length;
   const main = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
   const page: Record<(typeof NAV_PAGES)[number], NavPage | false> = {
-    home: { k: "home", to: { name: "home" }, icon: "home", label: t("sidebar.nav_home"), badge: counts.badge || undefined, badgeTone: "red" },
-    inbox: { k: "inbox", to: { name: "inbox" }, icon: "inbox", label: t("sidebar.nav_inbox"), badge: inbox || undefined, badgeTone: "red", title: inbox ? t("sidebar.inbox_badge_title", { count: inbox }) : undefined },
-    health: { k: "health", to: { name: "health" }, icon: "heart", label: t("sidebar.nav_health") },
+    home: { k: "home", to: { name: "home" }, icon: "home", label: t("sidebar.nav_home"), short: t("sidebar.nav_home_short"), badge: counts.badge || undefined, badgeTone: "red" },
+    inbox: { k: "inbox", to: { name: "inbox" }, icon: "inbox", label: t("sidebar.nav_inbox"), short: t("sidebar.nav_inbox_short"), badge: inbox || undefined, badgeTone: "red", title: inbox ? t("sidebar.inbox_badge_title", { count: inbox }) : undefined },
+    health: { k: "health", to: { name: "health" }, icon: "heart", label: t("sidebar.nav_health"), short: t("sidebar.nav_health_short") },
     messages: larkHome && { k: "messages", to: { name: "messages" }, icon: "chat", label: t("sidebar.nav_messages") },
     "workspace-board": boardOn && { k: "workspace-board", to: { name: "workspace-board" }, icon: "layers", label: t("sidebar.nav_board"), short: t("sidebar.nav_board_short") },
     todos: todosSupported !== false && { k: "todos", to: { name: "todos" }, icon: "todo", label: t("sidebar.nav_todos"), badge: uncompletedTodosCount || undefined },
-    routines: { k: "routines", to: { name: "routines" }, icon: "clock", label: t("sidebar.nav_routines") },
-    kb: { k: "kb", to: { name: "kb" }, icon: "book", label: t("sidebar.nav_kb") },
-    machines: { k: "machines", to: { name: "machines" }, icon: "machine", label: t("sidebar.nav_machines"), hint: machines.length ? `${online}/${machines.length}` : undefined },
+    routines: { k: "routines", to: { name: "routines" }, icon: "clock", label: t("sidebar.nav_routines"), short: t("sidebar.nav_routines_short") },
+    kb: { k: "kb", to: { name: "kb" }, icon: "book", label: t("sidebar.nav_kb"), short: t("sidebar.nav_kb_short") },
+    machines: { k: "machines", to: { name: "machines" }, icon: "machine", label: t("sidebar.nav_machines"), short: t("sidebar.nav_machines_short"), hint: machines.length ? `${online}/${machines.length}` : undefined },
     terminal: terminalPanes && { k: "terminal", to: { name: "terminal" }, icon: "terminal", label: t("sidebar.nav_terminal") },
     settings: { k: "settings", to: { name: "settings" }, icon: "gear", label: t("sidebar.nav_settings") },
   };

@@ -251,6 +251,7 @@
 
 ## 手机版（2026-11-05，#1996）
 
+- **图标格的标签要量真实字宽**（#3579）：手机抽屉五列时，标签可用宽度约 47 px；英文 Overview / Scheduled tasks / Knowledge / Machines、日文受信トレイ / ヘルスケア / 定期タスク都会被 `truncate` 截断，中文正常并不能代表其他语言。连备选短名 Routines 也有约 47.7 px，仍被截断，定时任务最终用 Tasks。用独立的 `nav_*_short` 词条提供格子短名，完整名称留给提示和无障碍；浏览器里用文本 Range 的宽度对照标签 `clientWidth`，并检查选中时的字重。截图要检查各语言的整组导航，不能只盯住英文报错的几个入口，否则会漏掉日文收件箱和健康。jsdom 不做布局，只能验证词条、链接和无障碍语义。
 - **没分层的全局样式会盖过 utility**：`.prose-j { font-size:14px }` 写在 `@layer` 外面，所以回答外层的 `[&_.prose-j]:text-[15px]` 一直没生效。#1990 设定的 15 / 1.6 实际显示的是 14 / 1.7，桌面上也一样，要在构建后的 CSS 或 computed style 里核对才看得出来。现在暂时在 Answer 上加 `!`，以后应该把 `.prose-*` 放进 `@layer components`。
 - **StrictMode 让「打开时 pushState、关闭时 back()」的浮层一打开就关掉**：dev 环境下 effect 会跑两次，cleanup 里的 `history.back()` 是异步的，等它真正执行时，退掉的是新压进去的那条记录，结果触发 popstate，浮层被关上。`lib/back-close.ts` 的做法是关闭时推迟一个 tick 再退，紧接着又打开时复用同一条记录（replaceState）。生产构建不会这样，所以只拿生产构建测会漏掉。
 - **A reload keeps the overlay's history entry, not the overlay** (#5134): `history.state` and the stack survive a reload, so a panel opened over a chat leaves a same-URL entry on top and the first Back only lands on the copy under it. Rewriting the marker with `replaceState` is not enough (the two entries stay); the first load has to `history.back()` off it before the app renders (`settleOverlayEntry` in `lib/back-close.ts`, which records the address the overlay opened on so a page that moved under it is not navigated away from). Reproduce with `scripts/test/web_overlay_reload_e2e.py`.
