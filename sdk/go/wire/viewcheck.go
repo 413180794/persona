@@ -2,6 +2,7 @@ package wire
 
 import (
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -47,6 +48,25 @@ func checkView(v *View, hubNames bool) error {
 		}
 		return err
 	}
+	return checkViewSemantics(v, hubNames)
+}
+
+// CheckViewJSON validates the original native JSON before decoding it for semantic checks.
+// Unlike CheckView, it does not re-encode Component: optional zero values and required
+// empty fields must not disappear at a stream's validation boundary. Legacy encoding
+// and CheckView behavior are unchanged. Stream callers also apply UIStreamView's overlay.
+func CheckViewJSON(raw []byte) error {
+	if err := ValidateJSON("View", raw); err != nil {
+		return err
+	}
+	var v View
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return err
+	}
+	return checkViewSemantics(&v, false)
+}
+
+func checkViewSemantics(v *View, hubNames bool) error {
 	if len(v.State) > StateMost {
 		return fmt.Errorf("state: more than %d bytes", StateMost)
 	}

@@ -122,6 +122,21 @@ re-encodes native Components and still rejects these fields as missing. Resolve 
 stream runtime activation; do not treat the fixture as semantic acceptance. General optional empty component
 properties still have their existing Go `omitempty` behavior and require a later explicitly scoped serialization decision.
 
+The native keyed-tree core in `server/internal/extension/uistream` now retains raw JSON property presence and
+applies the generated stream contracts before detached semantic decoding. Serialize its `Tree` / `Delta`, not
+their generated DTO projections. This core resolves the stream validation/presence boundary without changing
+legacy Component encoding: `wire.CheckViewJSON` checks the source shape and native semantics without
+re-encoding Components. `examples/traces/UIStreamSnapshot.native-presence.json` is shared lossless-core evidence,
+deliberately separate from the legacy DTO round-trip examples.
+
+The core stages batches atomically, bounds the resulting serialized tree, and emits deterministic stable-key diffs.
+`Diff` recommends snapshots when deltas are not smaller; it returns a nil delta with that recommendation when even
+root replacement would exceed the frame byte budget. Nonempty deltas advance exactly one version to reject gaps;
+empty deltas retain the same version. This is not an interaction anti-replay fence: a later manager must separately
+prevent accepted no-UI-change callbacks from executing again after receipt eviction. Changing empty-version
+advancement requires an explicit protocol decision, not a silent reducer change. Owner/session authorization,
+fitting, quotas, runtime and transport activation remain outside this core.
+
 ## Plugin-side schemas and calls
 
 A schema file with `"x-side": "plugin"` (`connector.schema.json`, `channel.schema.json`, `kb.schema.json`) describes only what the hub and an
