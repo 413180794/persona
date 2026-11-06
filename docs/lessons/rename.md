@@ -1,51 +1,51 @@
-# 经验：产品改名与兼容身份
+# Lessons: renaming the product and keeping compatible identities
 
-2026-11-03 的 Jarvis → Persona 迁移经验。入口和保留清单见 [兼容迁移](../rename.md)；本页不替代各车道的实际构建、真机升级或发布验收记录。
+Lessons from the Jarvis → Persona migration on 2026-11-03. The entry point and the list of what is kept are in [compatibility migration](../rename.md); this page does not replace each lane's actual build, on-device upgrade or release acceptance records.
 
-## 先冻结提交，再区分三种名字
+## Freeze the commit first, then tell three kinds of names apart
 
-- **显示名称**：Persona 自己生成的品牌标题、按钮、默认文案，可以按产品要求更新。
-- **源码名称**：目录、文件、纯辅助类型、Go module、Xcode target、私有 npm 包名，可以迁移，但所有真实读取路径和构建引用都要一起更新。
-- **系统 / wire / stored 身份**：Bundle ID、module、Siri / Control 类型、ActivityAttributes、序列化值、服务单元、缓存键和更新包 ID，不能因为含旧品牌就改。
+- **Display names**: brand titles, buttons and default copy that Persona generates itself. These can be updated as the product requires.
+- **Source names**: directories, files, pure helper types, the Go module, Xcode targets, private npm package names. These can be migrated, but every real read path and build reference has to be updated with them.
+- **System / wire / stored identities**: Bundle ID, module, Siri / Control types, ActivityAttributes, serialized values, service units, cache keys and update package IDs. These must not change just because they contain the old brand.
 
-多 worktree 共享远端 refs；每次 `git show origin/master:…` 都会重新解析一个可能已移动的基准。先记完整 SHA，再按该 SHA 读源码和清单；机械路径映射也要记录来源提交。别人新合进来的旧目录文件和 module imports 需要在最终 rebase 后重查，不能把首次审计当成最终集成结果。
+Multiple worktrees share remote refs; every `git show origin/master:…` re-resolves a base that may have moved. Record the full SHA first, then read source and lists at that SHA; record the source commit of mechanical path mappings too. Old-directory files and module imports that others merged in later have to be rechecked after the final rebase; the first audit is not the final integration result.
 
-历史 SHA、当时的源码行号、日志和验收数字保留。旧路径的历史引用不是新装默认入口；查当前实现时使用迁移表。文档更新不证明运行时迁移、回退或真机升级已经成功。
+Keep historical SHAs, source line numbers from that time, logs and acceptance numbers. A historical reference to an old path is not the default entry point for new installs; use the migration table when looking up the current implementation. Updating docs does not prove that the runtime migration, rollback or on-device upgrade succeeded.
 
-## target 改名不等于 module 改名
+## Renaming a target is not renaming the module
 
-Apple 新 target / 工程使用 Persona 名称，但 `PRODUCT_MODULE_NAME` 仍保留原模块身份。检查实际通知扩展的 `NSExtensionPrincipalClass` 和编译后的 AppIntents metadata：源码能编译，不代表系统还能加载 `JarvisNotify.NotificationService` 或找到旧快捷指令类型。
+New Apple targets / projects use the Persona name, but `PRODUCT_MODULE_NAME` keeps the original module identity. Check the actual notification extension's `NSExtensionPrincipalClass` and the compiled AppIntents metadata: source that compiles does not mean the system can still load `JarvisNotify.NotificationService` or find the old Shortcuts types.
 
-`JarvisActivityAttributes` 也是 APNs push-start 的 `attributes-type`，不是随手可改的纯 Swift struct 名。hub 和 App 分别改名会导致真实推送寻址失败，模拟器里的手动启动不能证明这条链路仍然有效。Widget kind、App Group、钥匙串组和签名 profile 同样按真实契约保留。
+`JarvisActivityAttributes` is also the `attributes-type` for APNs push-to-start, not a plain Swift struct name you can change at will. Renaming it separately in the hub and the App breaks addressing for real pushes, and starting it manually in the simulator does not prove that path still works. Widget kinds, App Groups, keychain groups and signing profiles are likewise kept per their real contracts.
 
-旧 scheme alias 不能替代旧 `.xcodeproj` 入口；老脚本可能同时写死工程路径和 scheme。新工程为 `Persona.xcodeproj`，旧工程路径软链到它；新旧 schemes 都指向新 targets。`-only-testing:` 用新测试 target，`@testable import Jarvis` 则仍按旧 module 使用。`PersonaLink` 的 Swift target 与已有菜单栏 helper / 进程路径也分别核验。
+An old scheme alias does not replace the old `.xcodeproj` entry point; old scripts may hard-code both the project path and the scheme. The new project is `Persona.xcodeproj`, and the old project path is a symlink to it; old and new schemes all point at the new targets. `-only-testing:` uses the new test target, while `@testable import Jarvis` still uses the old module. Verify `PersonaLink`'s Swift target and the existing menu bar helper / process paths separately.
 
-改 Info.plist 文案要改 XcodeGen 的源头 `apple/project.yml` 或对应资源 catalog，不编辑生成工程或构建产物。改 catalog 时保留 source-language 条目；归档后再检查 App / 扩展的实际 purpose strings，不把看到源码中的 Persona 当成系统弹窗已更新。
+To change Info.plist copy, change the XcodeGen source `apple/project.yml` or the matching resource catalog; do not edit the generated project or build products. Keep source-language entries when editing a catalog; after archiving, check the App's / extensions' actual purpose strings. Seeing Persona in the source does not mean the system prompt has been updated.
 
-## parser 也要识别旧品牌输入
+## Parsers must also recognize old-brand input
 
-来源标题或会话 header 的 parser 如果只认 `Jarvis`，新版生成 `Persona` 前缀后，旧特殊消息可能变成普通聊天正文。输入端同时识别 `Jarvis|Persona`，输出只改 Persona 自己控制的标题，测试覆盖新旧格式以及没有品牌前缀的普通正文。
+If a parser for source titles or session headers only accepts `Jarvis`, then once the new version generates a `Persona` prefix, old special messages may turn into plain chat text. Accept `Jarvis|Persona` on input, change only the titles Persona controls on output, and test the new and old formats as well as plain text with no brand prefix.
 
-用户自取的会话名、消息内容、联系人名和外部 bot 名字不是产品文案。不能用全文替换重写这些数据；对演示 fixture 也只改明确由 Persona 控制的默认品牌字段。
+Session names users chose, message content, contact names and external bot names are not product copy. Do not rewrite this data with a global replace; even in demo fixtures, only change the default brand fields Persona clearly controls.
 
-URL scheme 同样要区分 **注册 / 接收** 和 **生成**：迁移客户端需要同时收 `persona://` 与 `jarvis://`，生成继续用旧 `jarvis://` 兼容已安装客户端。检查 Apple 注册和 parser、Android intent-filter 和路由、Web / 管理输入，每个入口独立记录通过或未验收。
+URL schemes likewise need **registration / receiving** kept apart from **generation**: a migrating client has to accept both `persona://` and `jarvis://`, and keep generating the old `jarvis://` for installed clients. Check Apple registration and parser, Android intent-filter and routing, Web / admin input, and record pass or not-accepted for each entry point separately.
 
-## 源码包名不改变持久化名字
+## Source package names do not change persisted names
 
-Android 改到 `persona.android` 后，kotlinx.serialization 的默认完整类名也会改变。显式保留 `@SerialName`、`AppTab.Jarvis` 和已有 rawValue；旧 Activity / alias、receiver、HubService、通知 PendingIntent 和 WorkManager Worker 必须继续能被 OS 找到。只编新源码不足以证明老通知和排队任务能升级。
+After Android moved to `persona.android`, the default fully qualified class names used by kotlinx.serialization change too. Explicitly keep `@SerialName`, `AppTab.Jarvis` and existing rawValues; the OS must still find the old Activity / alias, receiver, HubService, notification PendingIntents and WorkManager Workers. Compiling the new source alone does not prove old notifications and queued work survive the upgrade.
 
-runtime 的私有 npm `name` 与更新包 ID 分开维护。DSH / pi 的 `jarvis-dsh-runtime` / `jarvis-pi-runtime` 同时出现在更新清单、磁盘目录和 loader 中；只改一端会把新版装成第二个插件或让旧 loader 不再更新。包名和可见文案可以迁移，更新身份与 `jarvis-runtime.v1` 线上子协议不能盲替换。
+A runtime's private npm `name` is maintained separately from its update package ID. DSH / pi's `jarvis-dsh-runtime` / `jarvis-pi-runtime` appear in the update manifest, the on-disk directory and the loader at the same time; changing only one side installs the new version as a second plugin or stops the old loader from updating. Package names and visible copy can be migrated; the update identity and the `jarvis-runtime.v1` wire subprotocol must not be blindly replaced.
 
-## 服务身份也决定运行目录
+## Service identity also decides the runtime directory
 
-部署脚本恢复根目录要定向选 hub / node / link，不能把同机第一个有环境变量的服务当成所有服务的根。旧单元存在但没有根 Environment 时，继续原默认存储；相邻服务的自定义根不能抢走它。systemd 的 `Environment=` reset、排序后的 drop-in、XDG_CONFIG_HOME 和新旧默认别名的 SameFile 都要覆盖。
+When a deploy script recovers the root directory, it has to target hub / node / link specifically; it must not treat the first service on the machine that has an environment variable as the root for every service. If an old unit exists but has no root Environment, keep using the original default storage; a neighboring service's custom root must not take it over. Cover systemd's `Environment=` reset, sorted drop-ins, XDG_CONFIG_HOME, and SameFile for old and new default aliases.
 
-`EnvironmentFile` / `UnsetEnvironment` 不是可随意忽略的配置：解析器不读外部凭据，也不能猜最终环境，必须要求显式 root。运行根解析与 CLI 真正请求时取凭据是两个职责，不把前者「不读凭据」写成后者完全不需要凭据。#773 的实现和回归在 `scripts/persona_identity.py` / `scripts/test/test_persona_script_identity.py`，完整规则见 [按服务恢复运行目录](../rename.md#部署脚本按服务恢复运行目录)。
+`EnvironmentFile` / `UnsetEnvironment` are not settings you can quietly ignore: the parser does not read external credentials and cannot guess the final environment, so it must require an explicit root. Resolving the runtime root and fetching credentials when the CLI actually makes a request are two separate jobs; "the former doesn't read credentials" does not mean the latter needs none. #773's implementation and regression tests are in `scripts/persona_identity.py` / `scripts/test/test_persona_script_identity.py`; the full rules are in [recovering the runtime directory per service](../rename.md#部署脚本按服务恢复运行目录).
 
-## 机械映射也要检查格式与边界
+## Mechanical mappings need format and boundary checks too
 
-#786 在 `scripts/test/test_apple_rename.py` 中拒绝重新创建旧 Apple 源码目录和 `mac/Sources/JarvisLink`，同时保留旧工程软链；检查新增文件时不能只查类型名或当前 target。Android 的静态 guard 也要跟已合的手填共用链接判定同步，避免源码已改、检查仍断言旧文本，或宽泛品牌扫描把有意保留的旧 OS 身份误报为残留。
+#786 makes `scripts/test/test_apple_rename.py` reject recreating the old Apple source directories and `mac/Sources/JarvisLink`, while keeping the old project symlink; when checking new files, don't only look at type names or the current target. Android's static guard also has to stay in sync with the merged shared link detection for hand-filled links, so the source isn't changed while the check still asserts old text, and a broad brand scan doesn't flag deliberately kept old OS identities as leftovers.
 
-Token baseline 的 JSON 路径可能编码成 `\/`；普通字符串替换会漏掉。按真实源文件映射 key，同时保留原始格式、全部 metric 数值和阈值，不重新生成、更不抬高基线。
+JSON paths in the token baseline may be encoded as `\/`; plain string replacement misses them. Map keys by the real source files, and keep the original format, every metric value and threshold; don't regenerate the baseline, let alone raise it.
 
-文档检查分两类：当前源码 / 命令引用必须指向真实新入口；历史快照、方案里尚未落地的模块和兼容身份不能为了让路径扫描归零而篡改。相对 Markdown 链接还需按所在文档目录解析，不能假定都相对仓库根目录。
+Doc checks come in two kinds: references to current source / commands must point at the real new entry points; historical snapshots, modules a plan has not landed yet, and compatibility identities must not be altered just to get the path scan to zero. Relative Markdown links also have to be resolved against the document's own directory, not assumed to be relative to the repository root.

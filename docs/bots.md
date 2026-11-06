@@ -1,192 +1,192 @@
-# 飞书机器人：在飞书里和 Persona 对话
+# Lark bot: chatting with Persona in Lark
 
-用户在飞书里私聊一个自建应用的机器人，就是在和 Persona 说话：消息进「Persona」tab 的主对话（或者用命令换成别的对话、
-某台电脑上的 Claude Code / Codex），这一轮的回答以机器人的身份发回飞书；Persona 和 Agent 要用户回答、批准的，在飞书里发卡片，
-点一下就答了；推送和主对话在别处的回答也可以发一份到飞书。每一项单独开关，默认全关（2026-11-02 用户要求：「P1/2/3 都做吧，可选开启」，issue #322）。
+When the user DMs the bot of a custom Lark app, they are talking to Persona: messages go into the main chat in the **Persona** tab (or, via commands, another chat or
+Claude Code / Codex on one of the computers), and the turn's answer is sent back to Lark as the bot; whenever Persona or an Agent needs the user to answer or approve something, a card is sent in Lark,
+and one tap answers it; pushes and answers from the main chat elsewhere can also be copied to Lark. Each item has its own switch, all off by default (requested 2026-11-02: "do P1/2/3, all optional", issue #322).
 
-它是渠道 `feishu`（`docs/channels.md`）：跟踪这一轮走统一管线（`assistant/channels_runs.go`，规则在 `server/internal/channel`，和微信同一份），
-这里讲飞书那一头（进度卡、答案卡、表情、提问卡片、命令）。
+It is the channel `feishu` (`docs/channels.md`): tracking the turn goes through the shared pipeline (`assistant/channels_runs.go`, rules in `server/internal/channel`, the same as WeChat);
+this page covers the Lark side (progress card, answer card, reactions, question cards, commands).
 
-**谁管什么**（2026-11-04 起，`docs/channels.md`「谁管什么」；2026-11-05 起传输也在管理者里，`server/internal/extmgr`，`docs/extensions.md`「谁管什么」，下面说「hub」的传输部分都是管理者做）：传输只有——应用凭证和功能开关（`bots.feishu`）、开放平台的长连接、配对、只认主人和只在私聊、发 / 回 / 改消息和卡片、
-表情、读消息和下载资源；主人的消息和按卡片交给助手（总线的 `feishu.message`、`feishu.card_action`）。消息进哪段对话、命令、跟踪这一轮、进度卡和答案卡、
-提问卡片和按钮的回答、推送和同步是助手的（`personad assistant`），聊天状态 `bots.feishu.state` 也是它的；它要发、要改的经 `app.call feishu.*` 叫 hub 做。
-助手没连着时，主人的消息先等它最多 60 秒（hub 刚起来、助手在重启），等不到才回「没能发出去：助手暂时连不上，稍后再试」；按卡片回 toast「助手暂时连不上，稍后再试」；
-配对、绑定和这里的设置页照常能用（见 `docs/channels.md`「助手不在的时候」）。按卡片答提问 / 批准时，hub 交给助手的是一个一次性的「主人操作」，只能答那一张卡，
-助手自己批准不了任何东西（`docs/channels.md`「谁管什么」「批准类不代答」）。换了配对（包括助手不在时换的）聊天从头来：回主对话、话题绑定和在等的回答清掉。
+**Who owns what** (since 2026-11-04, `docs/channels.md` ("Who owns what"); since 2026-11-05 the transport also lives in the manager, `server/internal/extmgr`, `docs/extensions.md` ("Who owns what"); the transport parts below that say "hub" are done by the manager): the transport is only the app credentials and feature switches (`bots.feishu`), the Open Platform long connection, pairing, accepting only the owner and only in DMs, sending / replying to / editing messages and cards,
+reactions, reading messages and downloading resources; the owner's messages and card taps are handed to the assistant (`feishu.message` and `feishu.card_action` on the bus). Which chat a message goes to, commands, tracking the turn, progress and answer cards,
+question cards and button answers, pushes and sync belong to the assistant (`personad assistant`), and so does the chat state `bots.feishu.state`; whatever it needs to send or edit, it asks the hub to do via `app.call feishu.*`.
+When the assistant isn't connected, the owner's message first waits up to 60 seconds for it (the hub just started, the assistant is restarting); only if it doesn't come does the bot reply "Couldn't send it: Can’t reach the assistant right now. Try again later"; card taps get the toast "Can’t reach the assistant right now. Try again later";
+pairing, binding and the settings page here keep working (see `docs/channels.md` ("When the assistant is away")). When a card tap answers a question / approval, the hub hands the assistant a one-time "owner action" that can only answer that one card;
+the assistant can't approve anything on its own (`docs/channels.md` ("Who owns what", "No answering approvals on the user's behalf")). After re-pairing (including while the assistant was away), the chat starts over: it goes back to the main chat, and thread bindings and pending answers are cleared.
 
-代码：`server/internal/feishubot`（长连接、REST、事件和消息内容、卡片）、`server/internal/hub/bots*.go`（配对、路由、传输：长连接上的事件交给助手，`assistant_channels.go` 是 hub 给助手的 `feishu.*`）、
-`server/internal/assistant/feishu*.go`（目标、命令、发进对话、卡片、推送、同步，统一管线里飞书的那一头）；
-提示词 `server/internal/prompts/bot/message.md`；App 的页面 `apple/Persona/Views/Settings/FeishuBotView.swift`（设置 › 连接器 › 飞书机器人）。
+Code: `server/internal/feishubot` (long connection, REST, events and message content, cards), `server/internal/hub/bots*.go` (pairing, routing, transport: events on the long connection are handed to the assistant; `assistant_channels.go` is the `feishu.*` the hub gives the assistant),
+`server/internal/assistant/feishu*.go` (targets, commands, sending into chats, cards, pushes, sync: Lark's side of the shared pipeline);
+prompt `server/internal/prompts/bot/message.md`; the App page `apple/Persona/Views/Settings/FeishuBotView.swift` (**Settings › Connectors › Lark Bot**).
 
-## 和飞书 `/agent` 的区别
+## How it differs from Lark `/agent`
 
-| | 飞书机器人（这里） | 飞书 `/agent`（`docs/lark-agent.md`） |
+| | Lark bot (this page) | Lark `/agent` (`docs/lark-agent.md`) |
 | --- | --- | --- |
-| 怎么触发 | 私聊机器人 | 在任何会话里**自己**发 `/agent …` |
-| 身份 | 机器人自己（不会被当成是你说的） | 以你的名义回复（末尾「> 🤖 AI 代答，仅供参考」，提示词要求不替你承诺） |
-| 发到哪 | 主对话（或换到的对话 / Agent），接着之前聊的 | 每个请求 / 话题一段新的无头对话，hub 先收集那个会话的上下文 |
-| 依赖 | 飞书开放平台的自建应用（可能要管理员审核） | 飞书网关（不需要审批） |
-| 交互 | 卡片按钮直接回答提问、批准 | 没有 |
+| Trigger | DM the bot | **You** send `/agent …` in any chat |
+| Identity | The bot itself (never taken as you speaking) | Replies in your name (ends with "> 🤖 AI 代答，仅供参考" (AI reply, for reference only); the prompt forbids making promises for you) |
+| Where it goes | The main chat (or the chat / Agent switched to), continuing the earlier conversation | A new headless chat per request / thread; the hub first collects that chat's context |
+| Depends on | A custom app on the Lark Open Platform (may need admin review) | The Lark gateway (no approval needed) |
+| Interaction | Card buttons answer questions and approvals directly | None |
 
-两者互补，各自开关。
+The two complement each other and have separate switches.
 
-## 为什么用开放平台的长连接
+## Why the Open Platform long connection
 
-- hub 不需要公网地址：`POST /callback/ws/endpoint` 拿到 WebSocket 地址，hub 主动连出去，事件和卡片回调都从这条连接来（开放平台「使用长连接接收事件」）。
-  内网、NAS、家里的机器都能跑。
-- 官方 Go SDK（`oapi-sdk-go/v3`）整个 4.8 MB，还要 gogo/protobuf 和 gorilla/websocket；协议本身很小（一个 protobuf 的 `Frame`），
-  所以 `feishubot/frame.go` 手写编解码，`TestFrameMatchesTheSDK` 用 SDK 生成的字节对过。WebSocket 用仓库已有的 coder/websocket。
-- 协议要点（照 SDK 的行为）：客户端按 `ClientConfig.PingInterval`（默认 2 分钟）发 ping 控制帧，pong 里可能带新配置；数据帧的
-  header 有 `type`（event / card）、`message_id`、`sum` / `seq`（大消息分片，拼齐再处理）；每个数据帧都要回同一帧、payload 换成
-  `{"code":200,"data":<base64 JSON>}`，卡片回调的 data 是要显示的 toast / 新卡片，**3 秒内**不回飞书就重试。两个 ping 周期收不到任何东西就当连接死了重连。
-- 同一事件可能重发：消息按 message_id 只处理一次（`bots.feishu.state` 的 `seen`，留最近 300 个）。
+- The hub doesn't need a public address: `POST /callback/ws/endpoint` returns a WebSocket URL, the hub connects out, and both events and card callbacks come over that connection (Open Platform's "receive events over a long connection").
+  It runs on intranet machines, NAS boxes and home machines alike.
+- The official Go SDK (`oapi-sdk-go/v3`) is 4.8 MB in total and also pulls in gogo/protobuf and gorilla/websocket; the protocol itself is tiny (one protobuf `Frame`),
+  so `feishubot/frame.go` hand-writes the encoding, checked against bytes the SDK generates in `TestFrameMatchesTheSDK`. The WebSocket is the repo's existing coder/websocket.
+- Protocol essentials (following the SDK's behavior): the client sends ping control frames every `ClientConfig.PingInterval` (2 minutes by default), and the pong may carry new config; a data frame's
+  header has `type` (event / card), `message_id`, `sum` / `seq` (fragments of large messages, reassembled before processing); every data frame must be answered with the same frame, its payload replaced with
+  `{"code":200,"data":<base64 JSON>}`; for card callbacks the data is the toast / new card to show, and if Lark gets no answer **within 3 seconds** it retries. Receiving nothing for two ping intervals means the connection is dead, and it reconnects.
+- The same event may be redelivered: messages are processed only once per message_id (`seen` in `bots.feishu.state`, keeping the latest 300).
 
-## 配对和权限
+## Pairing and permissions
 
-- 应用凭证：App 里填 App ID / App Secret（先调 `GET /open-apis/bot/v3/info` 试一次，通了才存），Secret 用 `secret.key` AES-GCM 加密后存 settings
-  `bots.feishu`（和启动器的 Key 同一个主密钥），任何接口都不返回明文。不想经过 App 的可以写 hub.json 的 `bots.feishu`（0600），App 里存过的优先。
-- **只认配对过的那一个人，只在机器人的私聊里**：主对话能用全部数据（飞书、邮件、各台电脑、手机里的日历和位置），群里谁都能 @ 它，所以群消息一律不处理；
-  别人私聊只回一句「只为它的主人服务」（同一个人 10 分钟内只回一次）。卡片按钮也只认主人的 open_id。
-- 配对：App 里点「配对」拿 6 位数字（10 分钟有效），在飞书里发给机器人，发的人就成了主人（记下 open_id 和私聊的 chat_id）。
-  没配对时私聊它会收到怎么配对的提示；猜错 5 次这个码就作废，要重新拿。换了 App ID 就要重新配对（是另一个机器人了）。
-- 名字：读通讯录要 `contact:user.base:readonly`，没有这个权限时主人叫 hub.json 的 `assistant.owner`，别人叫「某人」。
+- App credentials: enter the App ID / App Secret in the App (it tries `GET /open-apis/bot/v3/info` once first and saves only if that works); the Secret is AES-GCM encrypted with `secret.key` and stored in settings
+  `bots.feishu` (the same master key as launcher keys), and no endpoint ever returns the plaintext. If you'd rather not go through the App, write `bots.feishu` in hub.json (0600); what's saved from the App takes precedence.
+- **Only the one paired person, only in the bot's DM**: the main chat can use all the data (Lark, mail, every computer, the phone's calendar and location), and anyone in a group can @ it, so group messages are never handled;
+  anyone else who DMs it gets a single reply "This bot only works for its owner." (at most once per person per 10 minutes). Card buttons also only accept the owner's open_id.
+- Pairing: tap **Pair** in the App to get a 6-digit code (valid for 10 minutes) and send it to the bot in Lark; whoever sends it becomes the owner (its open_id and the DM's chat_id are recorded).
+  When not paired, DMing it returns instructions on how to pair; 5 wrong guesses void the code, and you have to get a new one. Changing the App ID means pairing again (it's a different bot).
+- Names: reading contacts needs `contact:user.base:readonly`; without that permission the owner is called by hub.json's `assistant.owner`, and others "someone".
 
-## 能做什么（`features`，App 里一个开关一项）
+## What it can do (`features`, one switch each in the App)
 
-| 开关 | 做什么 |
+| Switch | What it does |
 | --- | --- |
-| `main` 和 Persona 对话 | 消息发进主对话；`/new` 开新对话、`/list` 选最近的对话、`/main` 回主对话 |
-| `cards` 提问和批准 | 飞书在驱动的对话（当前目标、在等回答的、24 小时内绑过话题的）要回答 / 批准时发卡片 |
-| `all_cards` 所有 Agent 的提问 | 各台电脑上所有 Agent 的提问和批准都发卡片（打开它会顺带打开 `cards`） |
-| `pushes` 推送也发到飞书 | `notify_user` 推到手机的同时发一份；定时任务自己那段对话的回答也发。两种都和机器人自己的回答一样排成结构化卡片、发全（最多 5 张，表格、链接按钮照排）：推送的第一张表头是「🔔 标题」，正文自己的状态标签（请验收 / 无变动 / 有变动）和颜色保留在表头上，正文标题和推送标题不同时作为加粗的第一行（#4150），「打开网页版」在最后一张（#4003、#3553） |
-| `sync` 同步主对话 | 主对话里不是从飞书发起的一轮（App 里问的、定时任务发进主对话的）结束时，把回答发到飞书（和机器人自己的回答一样排成结构化卡片、发全，最多 5 张；来源和「打开网页版」在最后一张，#3553） |
-| `reports` 任务进展 | 主对话派出的任务做完、在等你、被打断、没开起来、被自动标为完成时，几条合成一张卡片发到私聊（见下「任务进展和请验收」）；到「已部署」时发「请验收」 |
-| `agents` 驱动 Agent | `/agents` 列出各台电脑上的 Agent（需要你 / 工作中 / 完成未看 / 两天内用过的），点「在这里聊」之后的消息发给它；`/start` 开新的 |
+| `main` Chat with Persona | Messages go into the main chat; `/new` starts a new chat, `/list` picks a recent chat, `/main` goes back to the main chat |
+| `cards` Questions and approvals | Sends a card when a chat Lark is driving (the current target, one waiting for an answer, one bound to a thread within 24 hours) needs an answer / approval |
+| `all_cards` Questions from all Agents | Sends cards for the questions and approvals of every Agent on every computer (turning it on also turns on `cards`) |
+| `pushes` Also send pushes to Lark | Sends a copy alongside each `notify_user` push to the phone; answers in a scheduled task's own chat are sent too. Both are laid out as structured cards just like the bot's own answers, sent in full (up to 5 cards, tables and link buttons laid out as usual): the header of a push's first card is "🔔 title", the body's own status tag (请验收 / 无变动 / 有变动: please review / no change / changed) and color stay on the header, the body title is the bold first line when it differs from the push title (#4150), and "Open on web" is on the last card (#4003, #3553) |
+| `sync` Sync the main chat | When a main-chat turn that didn't start from Lark (asked in the App, sent into the main chat by a scheduled task) ends, the answer is sent to Lark (laid out as structured cards like the bot's own answers, sent in full, up to 5 cards; source and "Open on web" on the last card, #3553) |
+| `reports` Task progress | When tasks dispatched from the main chat finish, wait for you, get interrupted, fail to start, or are automatically marked done, several are combined into one card sent to the DM (see "Task progress and review requests" below); on reaching "deployed" it sends "请验收" (please review) |
+| `agents` Drive Agents | `/agents` lists the Agents on every computer (Needs you / Working / Unread / used in the last two days); after tapping "Chat here", messages go to it; `/start` starts a new one |
 
-默认（第一次打开时）有 `main`、`cards` 和 `reports`（`reports` 是后加的：之前存的设置里没有这一项，读出来也是开）。
+Defaults (when first turned on) are `main`, `cards` and `reports` (`reports` was added later: settings saved earlier don't have it, and it reads as on).
 
-## 一条消息怎么走
+## How a message flows
 
-1. `im.message.receive_v1` → 去重 → 不是主人 / 不是私聊就停（到这里是 hub；主人的消息交给助手，助手再按 message_id 去重一次、存下来）。以 `/` 开头的先当命令（下面）；不认识的命令原样发过去（可能是 Agent 自己的，比如 `/compact`）。
-2. 目标：回复的是机器人发过的某条消息（或在它的话题里）就发给那条消息绑定的对话 / Agent（`threads`，留最近 30 天、最多 500 条，几天前的卡片回复了照样回到原来的地方，#4779），否则发给当前目标（`current`：`main` / 某段 Persona 对话 / 某个 Agent）。
-3. 内容：文字（富文本转成 Markdown，@ 换回名字）；图片（最多 4 张）作为图片附件；文件、语音、视频和多出来的图片下载后经 node 的
-   `file.upload.*` 存到那台电脑的临时目录，路径写进消息；引用的消息、合并转发的聊天记录（逐条读出来，一行一条）放进 `<jarvis-context>`；引用的消息里的图片和文件按同样的规则交给它（和这条消息自己的图片一起最多 4 张，读不到时只带引用的文字，不挡发送，#4728）；
-   发给 Persona 的再加一段说明「回答会发回飞书，结论先行、不用 notify_user」（提示词 `bot/message.md`）。
-4. 发送：Persona 的对话走 `session.send`（主对话照 App 一样跟着设置 › 助手的启动器；助手经 hub 的 `session.send_once` 发），`client_msg_id` 是 `feishu-<message_id>`，
-   和 App 共用 `sent_messages` 的去重：重发的事件不会打两遍。还没有主对话时新开一段并设为主对话。消息上点「OnIt」表情。
-5. 跟踪回答（统一管线的 run，存在 `channels.state`，助手或 hub 重启后接着等；老版本存在 `bots.feishu.state` 里的第一次读时搬过去）：助手像 App 打开对话那样跟着这段对话（`session.follow`，hub 把新条目和正在写的字转给它）。
-   - 过程：消息发出后约 1 秒就在主人的消息下面回一张**进度卡**，不等对话被看到在工作：这条消息还没出现在对话里时写「准备中…」，对话在忙别的一轮（这条排在后面）时写「排队中…」，找到这条消息之后写「处理中」，摘要是「工作中 · 已用 3 分 12 秒」，步骤只从这条消息往后算（不会列出前一轮的步骤）。
-     卡上依次是：「正在：运行 `go test ./...`（已 40 秒）」（最新一个还没有结果的工具调用和它跑了多久，同时有几个时加「等 N 个」，都有结果了就不写这行）；
-     最近 5 步（更早的写「前面还有 N 步」）；用了子任务（Task / Agent）时一个「子任务」段，每个一行写说明、类型和「进行中」/「完成」，最多 6 个、多的写「等 N 个」；
-     灰色小字「调用了 N 次工具 · 读了 X 个文件 · 改了 Y 个文件」（按不同的文件算，是 0 的不写，到 1000 个写「1000+」）；最后是正在写的字。这些在新条目进来时顺手记下（`chanLive`），不反复扫，条数有上限；后台任务回报后的下一轮从零算。
-     有新步骤时 3 秒最多改一次，没有新步骤也每 3 秒改一次，用时一直在走，不会看起来卡住。答案写进这张卡，过程放进折叠面板「已调用 N 次工具」。后台任务回报前（先答过一次、在等后台）不另发新卡，等那一轮开始工作再发。
-     改卡时内容和上次发出的一样就不发；飞书说改得太频繁（230020、99991400、HTTP 429）就先停 5 秒，再犯 10 秒、20 秒，最多 30 秒，之后发最新的样子，答案不受影响；
-     卡被撤回或删除（230011、230110）就忘掉这张卡，下一次刷新另回一张新的，答案也写进新卡。
-   - 新的一轮不再用**智能体消息**（开放平台的 `message_cot`，2026-11-06 起）：它显示不了用时和「正在做什么」，而且要等出现思考或工具调用才会建，只有文字的一段时间里什么都看不到。
-     这之前已经建了智能体消息的一轮（升级或重启前开始的）照旧往里追加、收尾（`RUN_FINISHED`），回答另发一张卡片。hub 的 `feishu.cot_create` / `cot_append` / `cot_complete` 调接口，事件是 AG-UI 格式（`feishubot/cot.go`）。
-      已经开着的智能体消息出错时（#2807）：限流、服务忙、没拿到飞书回包（hub 记错误码 -1）都只是这次没发出去，下次接着发；可能已经发到的那批不重发；结束那次追加失败时答案照发，智能体消息用 `cot_complete` 收掉（自己的 15 秒期限，最多试 3 次），不留着转圈；已显示、还没出结果的工具调用存在 run 的 `cot_calls`，助手重启后照样收尾。
-   - 这一轮结束（不在工作、没有在等你的卡片）时取**这条消息之后**的最后一段回答（最后一次工具调用之后的文字），写进进度卡
-     （还有智能体消息的老一轮：它收尾，回答另发一张卡片），表情换成「DONE」。卡片不带按钮。
-     这一轮没说话就停了（模型服务出错、被中断）：卡片写「这一轮没有文字回答就停了：<原因>」，原因只认这一轮结尾的「API 错误：…」和「已中断」（之后的压缩提示跳过不看；目标、后台任务、Codex 事件、命令输出这类提示不算原因），压成一行、最多 300 字，Codex 取会话的 `turn_error`（`channel.Stopped`，#3340）；没有原因时还是「（这一轮没有文字回答）」。
-      读到的这一轮结尾不是助手的文字（node 报「结束」比记录写完最后一段早一点）、或者答案是空的 / 只有「No response requested.」这类占位话：先不答，10 秒内再读；还是没有就给 Persona 对话发一条「把这一轮的回答写出来」（只发一次，Agent 不发），等它那一轮的回答；再没有就发「这一轮没产出回答，原因：…」并记日志（#4588）。
-     卡片最后一行写怎么结束的：「完成 · 用时 X · 调用了 N 次工具」；没正常做完的卡片标题写明结果，不会停在「处理中 / 准备中」：
-     被中断（`/stop`、App、电脑上按 Esc）是「已中断」，模型接口出错是「出错了」，4 小时（等后台的 2 小时）还没完是「已超时，去 App 里看」，
-     对话被关掉或删掉是「对话已关闭」，电脑离线（做到一半断了也算）是「电脑离线」；没有话可说的结束也把进度卡改成这一行。合到后一条消息里的，整张卡换成「接着下一条消息一起回答」。
-     改卡片失败（卡片被撤回）时回答另发一条。
-   - 消息发出时对话正在忙：它排在当前这一轮后面。那一轮结束时 transcript 里还没有这条消息，不能把那一轮的结尾当成回答，所以按这条消息的 `client_msg_id`（`feishu-<message_id>`，老 node 没有时按消息开头的一段字 `probe`）
-     找到它在 transcript 里的位置，只取它后面的回答；10 分钟还找不到才退回取最后的话。
-   - 同一段对话还没答完又发了一条：两条合成一个回答（两条消息都换「DONE」）：两条都进了对话、最后那一轮结束才答，每一条自己的回答按对话里的先后连起来（`docs/channels.md`「跟踪这一轮」）。
-     助手按收到的先后一条一条处理主人的消息（点表情、下图片、读引用、发进对话），前一条发进去了才轮到下一条：以前各自并行，慢的一条（飞书接口慢、要下图片）会被后一条抢先发进对话，合起来的回答挂到了更早那条消息下面。
-     前一条卡住（图片下得慢、`/new` 新对话开得慢）最多等 20 秒，过了下一条就不等它了。没处理的消息（重复投递、命令、不让发）也照样让下一条接着走。
-     先后从长连接就排好：长连接上的事件按收到的先后交给管理者（卡片按钮不排队），管理者也按先后一条一条交给助手（助手不在时前一条要等它，后一条跟着等）。
-     一轮的回答正要发出去时（`answering`）来的消息不再并进这一轮，不然同一段回答会发两遍。
-   - 还有后台任务（`run_in_background`、Monitor、子 Agent）：先答一次并说明「后台还有 N 个任务」，等它们回报的那一轮结束再答一次（最多再等 2 小时）。
-   - 4 小时还没完就不等了，说一声到 App 里看。
-   - 回答按规则排成卡片（不调模型，`feishubot/answer.go`，#3148）：开头的一级标题当卡片标题；标题里或正文行首的「请验收 / 无变动 / 有变动」变成标题旁的标签并定颜色（橙 / 灰 / 蓝，没有状态是蓝）；
-     二级标题和「一、…」这样的短行分节，节之间画分割线；Markdown 表格画成原生表格（一页 10 行，最多 100 行）；「备注：」「注：」行是灰色小字；回答里的网页链接在最后一张卡片底部排成按钮（最多 4 个）。代码块原样保留，里面不认标题和表格。
-     太长按 6000 字、80 个元素、5 个表格一张卡片拆开，不在代码块中间断开；最多 5 张，再多的说一声到 App 里看。中间有一张发不出去时（限流重试完、卡片和富文本都被拒），其余的照发，最后在主人的消息下面补一行「这条回答有 N 段没能发到飞书（第 x 段），完整内容在 App 里看」，已发出的不重发；`notify_user` 推送、同步主对话、定时任务的回答也一样（这几种发在私聊里，#4766）。卡片被飞书拒收（Markdown 有它不认的东西）时改发富文本。
-     一段文字或一行「备注：」转义多（`<` 在卡片里占 5 字节）、6000 字就超过 24000 字节时，按字节再切小，单独一段也不会把卡片撑过 30 KB。
-6. 从飞书发起、在飞书回答的一轮不再推手机的「完成」通知（`botAnswered`），`sync` 也不会再发一遍。
+1. `im.message.receive_v1` → de-dup → stop if it's not the owner / not a DM (up to here it's the hub; the owner's message is handed to the assistant, which de-dups again by message_id and stores it). Anything starting with `/` is first treated as a command (below); unknown commands are passed through as is (they may be the Agent's own, e.g. `/compact`).
+2. Target: if it's a reply to a message the bot sent (or in its thread), it goes to the chat / Agent bound to that message (`threads`, kept for 30 days, up to 500 entries, so replying to a card from several days ago still goes back to the original place, #4779); otherwise it goes to the current target (`current`: `main` / a Persona chat / an Agent).
+3. Content: text (rich text converted to Markdown, @ mentions turned back into names); images (up to 4) as image attachments; files, voice, video and extra images are downloaded and stored via the node's
+   `file.upload.*` in that computer's temp directory, with the path written into the message; quoted messages and merged-forward chat histories (read out one per line) go into `<jarvis-context>`; images and files in quoted messages are handed over by the same rules (up to 4 together with the message's own images; if they can't be read, only the quoted text is included, without blocking the send, #4728);
+   messages to Persona also get a note "the answer will be sent back to Lark; lead with the conclusion, don't use notify_user" (prompt `bot/message.md`).
+4. Sending: Persona chats go through `session.send` (the main chat follows the launcher in **Settings › Assistant** just like the App; the assistant sends via the hub's `session.send_once`), with `client_msg_id` `feishu-<message_id>`,
+   sharing the `sent_messages` de-dup with the App: redelivered events aren't sent twice. If there's no main chat yet, a new one is started and set as the main chat. The message gets an "OnIt" reaction.
+5. Tracking the answer (the shared pipeline's run, stored in `channels.state`, so waiting resumes after the assistant or hub restarts; old versions' data in `bots.feishu.state` is moved over on first read): the assistant follows the chat the way the App does when it opens it (`session.follow`; the hub forwards new items and text being written).
+   - Progress: about 1 second after the message is sent, a **progress card** is posted as a reply under the owner's message, without waiting to see the chat working: while the message hasn't shown up in the chat yet it says "Getting ready…"; while the chat is busy with another turn (this one queued behind it) it says "Queued…"; once the message is found it says "working", with the summary "Working · 3m 12s so far", and steps are counted only from this message on (the previous turn's steps aren't listed).
+     The card shows, in order: "Now: Run `go test ./...` (40s so far)" (the latest tool call without a result yet and how long it has run; when several are running it adds "and N more"; once all have results this line is dropped);
+     the last 5 steps (earlier ones as "…N earlier steps"); when subtasks (Task / Agent) were used, a "Subtasks" section, one line each with description, type and "running" / "done", up to 6, more as "and N more";
+     small gray text "N tool calls · read X files · changed Y files" (counting distinct files, zeros omitted, "1000+" from 1000 up); and finally the text being written. These are recorded as new items arrive (`chanLive`), not rescanned, with a cap on entries; the turn after a background task reports back starts from zero.
+     With new steps it's edited at most once every 3 seconds, and even without new steps it's edited every 3 seconds, so the elapsed time keeps moving and it never looks stuck. The answer is written into this card, and the process goes into a collapsible panel "Called tools N times". Before a background task reports back (after one answer, while waiting on the background), no new card is sent; it's sent once that turn starts working.
+     When editing, if the content is the same as last sent, nothing is sent; when Lark says edits are too frequent (230020, 99991400, HTTP 429), it pauses 5 seconds first, then 10 and 20 seconds on repeats, up to 30 seconds, and then sends the latest state; the answer isn't affected;
+     if the card was recalled or deleted (230011, 230110), it forgets the card, the next refresh posts a new one, and the answer goes into the new card.
+   - New turns no longer use **agent messages** (the Open Platform's `message_cot`, since 2026-11-06): they can't show elapsed time or "what it's doing now", and they're only created once thinking or a tool call appears, so nothing shows during a text-only stretch.
+     A turn that already created an agent message before that (started before an upgrade or restart) keeps appending to it and finishes it (`RUN_FINISHED`), and the answer is sent as a separate card. The hub's `feishu.cot_create` / `cot_append` / `cot_complete` call the API, and events are in AG-UI format (`feishubot/cot.go`).
+      When an already-open agent message errors (#2807): rate limits, a busy service or no response from Lark (the hub records error code -1) only mean this attempt wasn't sent, and the next one continues; a batch that may already have arrived isn't resent; if the final append fails, the answer is still sent and the agent message is closed with `cot_complete` (its own 15-second deadline, up to 3 tries) rather than left spinning; tool calls already shown but without results are stored in the run's `cot_calls`, so they're still closed after the assistant restarts.
+   - When the turn ends (not working, no card waiting for you), it takes the last stretch of answer **after this message** (the text after the last tool call) and writes it into the progress card
+     (for old turns that still have an agent message: that gets closed, and the answer is sent as a separate card), and the reaction changes to "DONE". The card has no buttons.
+     If the turn stopped without saying anything (model service error, interrupted): the card says "This turn stopped without a text answer: <reason>"; the only reasons recognized are "API 错误：…" (API error) and "已中断" (interrupted) at the end of the turn (compaction notices after them are skipped; goals, background tasks, Codex events and command output don't count as reasons), squeezed into one line of at most 300 characters; for Codex it takes the session's `turn_error` (`channel.Stopped`, #3340); without a reason it's still "(No text answer this turn)".
+      If the end of the turn it reads isn't the assistant's text (the node reports "ended" slightly before the record finishes writing the last stretch), or the answer is empty / only a placeholder like "No response requested.": it doesn't answer yet and rereads within 10 seconds; if there's still nothing, it sends Persona chats one message "write out this turn's answer" (only once; not for Agents) and waits for that turn's answer; if there's still none, it sends "No answer came out of this turn. Why: …" and logs it (#4588).
+     The card's last line says how it ended: "Done · took X · N tool calls"; cards that didn't finish normally say the outcome in the title rather than staying at "working / Getting ready":
+     interrupted (`/stop`, the App, Esc on the computer) is "Stopped", a model API error is "Failed", not done after 4 hours (2 hours when waiting on the background) is "Timed out, see the app",
+     a chat that was closed or deleted is "Conversation closed", and a computer going offline (including mid-task) is "Computer offline"; an ending with nothing to say also turns the progress card into this line. When merged into the next message, the whole card becomes "Answering together with the next message".
+     If editing the card fails (the card was recalled), the answer is sent as a new message.
+   - The chat is busy when the message is sent: it queues behind the current turn. When that turn ends the message isn't in the transcript yet, and that turn's ending must not be taken as the answer, so it uses the message's `client_msg_id` (`feishu-<message_id>`; for old nodes without it, a stretch of the message's opening text, `probe`)
+     to find its position in the transcript and takes only the answer after it; only if it still can't be found after 10 minutes does it fall back to the last words.
+   - Another message to the same chat before it finished answering: the two get one combined answer (both messages switch to "DONE"): both go into the chat, the answer comes only when the last turn ends, and each message's own answer is joined in chat order (`docs/channels.md` ("Tracking the turn")).
+     The assistant processes the owner's messages one at a time in the order received (adding the reaction, downloading images, reading quotes, sending into the chat), and the next one waits until the previous was sent in: previously they ran in parallel, and a slow one (slow Lark API, images to download) could be overtaken by the next one into the chat, so the combined answer got attached to the earlier message.
+     If the previous one is stuck (images downloading slowly, `/new` slow to start a new chat), it waits at most 20 seconds, then the next one stops waiting for it. Messages that weren't processed (duplicate deliveries, commands, not allowed to send) also let the next one proceed.
+     The order is set from the long connection on: events on the long connection are handed to the manager in the order received (card buttons aren't queued), and the manager hands them to the assistant one at a time in order (when the assistant is away the previous one waits for it, and the next waits behind it).
+     A message that arrives while a turn's answer is just about to be sent (`answering`) is no longer merged into that turn, or the same answer would be sent twice.
+   - There are still background tasks (`run_in_background`, Monitor, sub-Agents): it answers once, saying "N background tasks are still running", then answers again when the turn in which they report back ends (waiting up to 2 more hours).
+   - If it's not done after 4 hours, it stops waiting and says to check in the App.
+   - The answer is laid out as cards by rules (no model call, `feishubot/answer.go`, #3148): a leading H1 becomes the card title; "请验收 / 无变动 / 有变动" (please review / no change / changed) in the title or at the start of a body line becomes a tag next to the title and sets the color (orange / gray / blue; blue when there's no status);
+     H2s and short lines like "一、…" ("1. …" in Chinese numbering) start sections, with dividers between sections; Markdown tables become native tables (10 rows per page, up to 100 rows); "备注：" / "注：" (note:) lines are small gray text; web links in the answer become buttons at the bottom of the last card (up to 4). Code blocks are kept verbatim, with no headings or tables recognized inside.
+     Long answers are split into cards at 6000 characters, 80 elements or 5 tables, never breaking inside a code block; up to 5 cards, beyond that it says to see the rest in the App. If one in the middle can't be sent (rate-limit retries exhausted, rejected as both card and rich text), the rest are still sent, and finally a line is added under the owner's message: "N parts of this answer couldn't be sent to Lark (parts x); see the whole answer in the app." Already-sent ones aren't resent; the same goes for `notify_user` pushes, main-chat sync and scheduled-task answers (these are sent in the DM, #4766). If Lark rejects the card (the Markdown has something it doesn't accept), it's sent as rich text instead.
+     When a stretch of text or a "备注：" line has lots of escaping (`<` takes 5 bytes in a card) and 6000 characters exceed 24000 bytes, it's cut smaller by bytes, so even a single stretch never pushes a card past 30 KB.
+6. Turns started from Lark and answered in Lark no longer push a "done" notification to the phone (`botAnswered`), and `sync` doesn't send them again.
 
-## 命令
+## Commands
 
-`/help`、`/main`、`/new [第一句话]`、`/list`、`/agents [关键词]`、`/start [要它做什么]`（选机器、填目录的表单）、`/stop`（中文别名 `/停止`、`/停`；中断这一轮：在某条消息的话题里 / 回复它发，就中断那条消息绑定的对话或 Agent，否则中断当前目标）、`/status`（同样按回复 / 话题绑定取目标：现在发给谁、在等几个回答）。
+`/help`, `/main`, `/new [first message]`, `/list`, `/agents [keyword]`, `/start [what it should do]` (a form to pick a machine and fill in a directory), `/stop` (Chinese aliases `/停止`, `/停`; interrupts the turn: sent in a message's thread / as a reply to it, it interrupts the chat or Agent bound to that message, otherwise the current target), `/status` (picks the target the same way from the reply / thread binding: who messages go to now, how many answers are pending).
 
-命令名后面跟换行、Tab、全角空格都算分隔，开头的全角斜杠 `／` 当 `/`；`/new` 后面的内容原样带上多行（#3897）。
+A newline, Tab or full-width space after the command name all count as separators, and a leading full-width slash `／` counts as `/`; content after `/new` is passed through as is, multiple lines included (#3897).
 
-## 卡片
+## Cards
 
-- 用卡片 JSON 2.0（`schema: "2.0"`）：Markdown 支持标题、表格、代码块，模型的回答原样能显示（1.0 不支持标题和表格）。需要飞书 7.20 以上，旧客户端只显示标题和一句升级提示。
-  2.0 的坑：没有 `action` 模块，按钮横排用 `column_set`（`flex_mode: flow` 窄屏自动换行）；`note` 没了，用 `div` + `text_size: notation` + `text_color: grey`；
-  按钮的回传在 `behaviors: [{type: callback, value}]`；表单里的提交按钮要 `form_action_type: submit` 和卡片内唯一的 `name`；**多一个不认识的字段整张卡片就被拒**；
-  回调里返回的新卡片也必须是 2.0。
-- 文字里的 `<` 在代码以外转成 `&#60;`（卡片会把 `<at>`、`<font>` 这类当成自己的标签吃掉）；名字、标题这类数据用 `EscapeMarkdown`。
-  例外是模型写的自动链接 `<https://…>`、`<mailto:…>`（CommonMark）：卡片不认这种写法，转义后是一段点不开的文字，所以先改成 `[地址](地址)`（#4727）。地址里的 `(` `)`、主机名之后的 `[` `]` 用百分号编码，链接文字里的 `_` `*` `[` `]` 写成实体；别的协议（`javascript:` 等）、`\<`、代码里的照旧。测试 `go test ./internal/feishubot -run CardMarkdownAutolinks`。
-- 助手回答里的 `persona-card`（图表卡片，#886）飞书画不了，先写成数字再发（`feishubot/personacard.go` 的 `PersonaCards`，`CardMarkdown` 第一步调它，所以所有经 `CardMarkdown` 发的文字都这样，不只健康空间；机器人的回答在切成几张卡片之前先整段转换（`assistant/feishu_answer.go` 的 `answerCards`），不然比一张卡片还长的图表会被切断、读不出来，留下一张空卡片）：
-  `stat` 一行（`今天步数：**8,432 步** · 比昨天 +12%`）；`line` / `bar` 标题加一条 ▁…█ 小图，下一行逐个写数字（最多最近 31 个），单位写一次；`stacked_bar` 一张两列的小表，合计在表头，超过 31 行时后面的合成一行「其他」。
-  数字的写法和各端一样（`wire.Number`），模型写的字一律 `EscapeMarkdown`；各端都画不出的卡片只留标题；`persona-view`、别的代码块、代码块里当例子的卡片不动。聊天列表的摘要里卡片只显示标题。测试 `go test ./internal/feishubot -run PersonaCards`、`go test ./internal/assistant -run TestAnswerCardsWriteChartsAsNumbersBeforeCutting`。
-- 链接按钮只用 http(s)（文档只写了 http(s) 和 AppLink，`jarvis://` 可能让整张卡片被拒），「打开网页版」打开 hub 托管的网页版对应的会话页。
-- 交互卡片的选项和 App 的卡片一致：
-  - 提问：单个问题、最多 4 个选项、单选时是一排按钮 + 「直接写回答」的输入框；其余是表单（每题一个下拉框，多选的是多选下拉框，加一个输入框），一次提交。
-  - 计划：全文（5000 字以内）、「批准并自动执行」（bypassPermissions）/「自动接受编辑」（acceptEdits）/ 写意见「打回修改」。
-  - 授权：工具、原因、命令或参数；「允许」「拒绝」，有会话的加「本会话总是允许」。**要在手机上填的（密码、授权码，`fields`）飞书里不能批准**，只给「打开网页版」。
-  - MCP 服务要你授权或填表（`elicitation`）：卡上写它要做什么（`message`）；链接授权给「去授权」按钮（只认 http(s)、不带用户名密码的链接，按原样打开；卡上单独一行写「将打开：<网站>」，授权后回 App 点确认）；表单只列要填的字段名，到 App 里填（值可能是密码，飞书里不收），#4234。
-  - 终端对话框：读得出选项的一个选项一个按钮；读不出的给回车 / Esc / 1 / 2 和输入框；要输密码的（`secret`）不能在飞书里输。
-- 在任何地方答了（飞书、App、手表、通知按钮、电脑上），飞书的卡片都改成「✓ 已回答：…」；撤回 / 过期的改成「已结束」。终端和 Codex 的卡片按下去要等电脑那边，超过 2 秒先回「正在处理…」，做完再改卡片。
+- Cards use JSON 2.0 (`schema: "2.0"`): Markdown supports headings, tables and code blocks, so model answers display as written (1.0 doesn't support headings and tables). Needs Lark 7.20 or later; old clients show only the title and an upgrade notice.
+  2.0 pitfalls: there's no `action` module, so lay buttons out horizontally with `column_set` (`flex_mode: flow` wraps automatically on narrow screens); `note` is gone, use `div` + `text_size: notation` + `text_color: grey`;
+  button callbacks go in `behaviors: [{type: callback, value}]`; a submit button in a form needs `form_action_type: submit` and a `name` unique within the card; **one unknown extra field rejects the whole card**;
+  a new card returned from a callback must also be 2.0.
+- `<` in text outside code is turned into `&#60;` (cards swallow things like `<at>` and `<font>` as their own tags); data such as names and titles goes through `EscapeMarkdown`.
+  The exception is autolinks the model writes, `<https://…>` and `<mailto:…>` (CommonMark): cards don't recognize them, and escaped they become unclickable text, so they're first rewritten as `[url](url)` (#4727). `(` `)` in the URL and `[` `]` after the hostname are percent-encoded, and `_` `*` `[` `]` in the link text become entities; other schemes (`javascript:` etc.), `\<` and anything in code stay as they are. Test: `go test ./internal/feishubot -run CardMarkdownAutolinks`.
+- `persona-card` (chart cards, #886) in assistant answers can't be drawn by Lark, so they're written out as numbers before sending (`PersonaCards` in `feishubot/personacard.go`; it's the first step of `CardMarkdown`, so all text sent through `CardMarkdown` gets this, not just the health space; the bot's answer is converted as a whole before being cut into cards (`answerCards` in `assistant/feishu_answer.go`), otherwise a chart longer than one card would be cut off and unreadable, leaving an empty card):
+  `stat` becomes one line (`Steps today: **8,432 steps** · +12% vs yesterday`); `line` / `bar` become the title plus a ▁…█ sparkline, with the numbers on the next line one by one (at most the latest 31) and the unit written once; `stacked_bar` becomes a small two-column table with the total in the header, and beyond 31 rows the rest are combined into one "Other" row.
+  Numbers are formatted the same as on every client (`wire.Number`), and text the model wrote always goes through `EscapeMarkdown`; cards that no client can draw keep only the title; `persona-view`, other code blocks and example cards inside code blocks are left alone. In chat list summaries, cards show only their title. Tests: `go test ./internal/feishubot -run PersonaCards`, `go test ./internal/assistant -run TestAnswerCardsWriteChartsAsNumbersBeforeCutting`.
+- Link buttons only use http(s) (the docs only mention http(s) and AppLink; `jarvis://` may get the whole card rejected); "Open on web" opens the matching session page in the web version the hub hosts.
+- The options on interactive cards match the App's cards:
+  - Questions: a single question with at most 4 options and single choice is a row of buttons + a "Write your own answer" input; anything else is a form (one dropdown per question, a multi-select dropdown for multiple choice, plus an input), submitted at once.
+  - Plans: the full text (up to 5000 characters), "Approve & run" (bypassPermissions) / "Auto-accept edits" (acceptEdits) / write feedback and "Send back".
+  - Permissions: tool, reason, command or arguments; "Allow" / "Deny", plus "Always allow" for this session when there is a session. **Anything that must be filled in on the phone (passwords, authorization codes, `fields`) can't be approved in Lark**; only "Open on web" is offered.
+  - An MCP server needs your authorization or a form (`elicitation`): the card says what it wants to do (`message`); link authorization gets an "Authorize" button (only http(s) links without username / password, opened as is; the card has a separate line "Opens: <site>", and after authorizing you go back to the App and confirm); forms only list the names of the fields to fill, which you fill in the App (values may be passwords, which Lark doesn't take), #4234.
+  - Terminal dialogs: when the options can be read, one button per option; when not, Enter / Esc / 1 / 2 and an input; ones that need a password (`secret`) can't be typed in Lark.
+- Wherever it's answered (Lark, the App, the watch, a notification button, the computer), the Lark card changes to "✓ Answered: …"; recalled / expired ones change to "Ended". Pressing a terminal or Codex card has to wait for the computer; after 2 seconds it first replies "Working on it…", then edits the card when done.
 
-## 配置和接口
+## Configuration and endpoints
 
 ```json
 "bots": { "feishu": { "app_id": "cli_…", "app_secret": "…", "domain": "feishu" } }
 ```
 
-`domain`：`feishu`（默认）、`lark`，或私有部署的开放平台地址。开关、功能、配对都在 App 里，存 settings `bots.feishu`（hub 读写）；聊天的状态（当前目标、话题绑定、处理过的消息）存 `bots.feishu.state`（助手读写），在等的回答在 `channels.state`。
+`domain`: `feishu` (default), `lark`, or the Open Platform address of a private deployment. Switches, features and pairing are configured in the App and stored in settings `bots.feishu` (read / written by the hub); chat state (current target, thread bindings, processed messages) is stored in `bots.feishu.state` (read / written by the assistant), and pending answers in `channels.state`.
 
-这些路由是 hub 的；回答里的 `target`、`agents` 是 hub 当场问助手的（`feishu.view`），助手没连着时这两项不出现，其余照常。
+These routes belong to the hub; `target` and `agents` in the response are queried from the assistant on demand (`feishu.view`). When the assistant isn't connected, these two fields are absent; everything else works as usual.
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
 | GET | `/api/v1/bots/feishu` | `{enabled, app_id, domain, has_secret, from_config, features{main,cards,all_cards,pushes,sync,agents}, connected, error, last_event_at, bot_name, owner{name,paired_at}, pairing{code,expires_at}, target, agents[{title,machine_id,session_id}]}` |
-| PUT | `/api/v1/bots/feishu` | 只改带了的：`enabled`、`app_id` + `app_secret`（先验证）+ `domain`、`features`（整个替换）；`app_id: ""` 清掉 App 里的凭证（回到 hub.json 的） |
-| POST | `/api/v1/bots/feishu/pair` | 生成配对码 |
-| DELETE | `/api/v1/bots/feishu/owner` | 解除配对（聊天状态一起清掉） |
-| POST | `/api/v1/bots/feishu/test` | 给主人发一条测试消息 |
+| PUT | `/api/v1/bots/feishu` | Changes only supplied fields: `enabled`, `app_id` + `app_secret` (validated first) + `domain`, `features` (replaced as a whole); `app_id: ""` clears the credentials saved in the App (falls back to hub.json) |
+| POST | `/api/v1/bots/feishu/pair` | Generate a pairing code |
+| DELETE | `/api/v1/bots/feishu/owner` | Unpair (also clears chat state) |
+| POST | `/api/v1/bots/feishu/test` | Send the owner a test message |
 
-## 在开放平台上要做的
+## What to do on the Open Platform
 
-1. 建企业自建应用，开启「机器人」能力。
-2. 权限：`im:message`（读写单聊消息）、`im:message:send_as_bot`、`im:message.p2p_msg:readonly`（单聊里发给机器人的消息）、`im:resource`（下载消息里的图片和文件）；
-   可选 `contact:user.base:readonly`（名字）。
-3. 事件与回调：订阅方式选「使用长连接接收事件」；事件订阅「接收消息 v2.0」（`im.message.receive_v1`），可选「用户进入与机器人的会话」、「消息被撤回」（`im.message.recalled_v1`：主人撤回了还没发进对话的消息，就不发了，#4880；已收下、正在答的：这一轮只答它就像 /stop 一样停掉，进度卡收成「撤回了，这一轮停了」、不发答案，和别的消息并着答就只去掉它，已答完的不变，#5248）；回调订阅「卡片回传交互」（`card.action.trigger`）。
-4. 发布版本（企业里通常要管理员审核），App 里填 App ID / App Secret、打开、配对。
+1. Create an enterprise custom app and enable its **Bot** capability.
+2. Permissions: `im:message` (read / write direct messages), `im:message:send_as_bot`, `im:message.p2p_msg:readonly` (messages sent to the bot in a DM), `im:resource` (download images and files in messages);
+   optional `contact:user.base:readonly` (names).
+3. Events and callbacks: select **Receive events through a long connection** as the subscription method; subscribe to **Receive message v2.0** (`im.message.receive_v1`), optionally **User enters a chat with the bot** and **Message recalled** (`im.message.recalled_v1`: if the owner recalls a message before it is sent into the chat, it isn't sent, #4880; if already accepted and being answered, a turn answering only that message stops like /stop, changes its progress card to ‘Recalled, this turn stopped’, and sends no answer; if merged with other messages, only the recalled message is removed; already completed answers remain unchanged, #5248); subscribe to **Card interaction callback** (`card.action.trigger`).
+4. Publish a version (enterprises usually require admin review), then enter the App ID / App Secret in the App, enable it and pair.
 
-## 还没做 / 限制
+## Not implemented yet / limitations
 
-- 撤回：只管还没发进对话的那条（排队中、下载附件中）；已经发进对话、这一轮在跑的照常答完（要不要中断等主人定，#4880）。编辑过的消息机器人拿不到新内容（开放平台没有给机器人的编辑事件）。
-- 智能体消息只画工具调用的标题和输出，不画参数（实测），所以做了什么写在标题里；进度卡只有步骤和正在写的字。
-- 每一步是一行「动词 + 对象」（`feishu.go` 的 `stepOf`）：命令有说明就写说明（「运行 · 跑服务端测试」），后台命令写「后台运行」；读文件带行号范围，改 / 新建 / 写入分开；搜索带范围（「在 src（*.go）」）；子任务带类型；待办写正在做的那一项；Codex 的调用在对话记录里已经换成同样的工具（命令 → Bash、改文件 → Edit，新建 / 删除分开），写法一样；Persona 自己的 MCP 工具（日历、通讯录、提醒事项、邮件、知识库）有自己的动词，别的工具直接写工具名加第一个有用的参数。
-- Agent（herdr 里的 Claude Code / Codex）没有「正在写的字」，进度卡只有步骤。
-- 卡片回调的 token（30 分钟内可以再更新 2 次）没用上：答完以后的卡片都是用「更新消息」接口改的。
-- 一个 hub 只接一个飞书机器人、一个主人。
+- Recall: only handles messages not yet sent into the chat (queued, attachments downloading); once sent into the chat, an ongoing turn finishes answering as usual (whether to interrupt is the owner's decision, #4880). The bot can't obtain the new content of an edited message (the Open Platform provides no edit event to bots).
+- Agent messages show tool-call titles and outputs, not arguments (tested), so describe the action in the title; progress cards show only steps and text being written.
+- Each step is one line, "verb + object" (`stepOf` in `feishu.go`): commands use their description when available ("Run · Run server tests"), background commands say "Run in background"; file reads include the line range, while edits / creates / writes are separate; searches include their scope ("in src (*.go)"); subtasks include their type; to-dos show the item currently being worked on; Codex calls are already mapped to the same tools in the transcript (command → Bash, file change → Edit, create / delete separate), so they use the same wording; Persona's own MCP tools (calendar, contacts, reminders, mail, knowledge base) have their own verbs, while other tools show the tool name and the first useful argument.
+- Agents (Claude Code / Codex in herdr) have no "text being written", so progress cards show only steps.
+- Card callback tokens (two further updates allowed within 30 minutes) aren't used: after an answer, cards are edited through the update-message endpoint.
+- One hub connects one Lark bot and one owner.
 
-## 验证
+## Verification
 
-服务端：`go test ./internal/feishubot ./internal/hub ./internal/assistant -run 'Bot|Frame|Conn|TurnAnswer|ResolutionText|Feishu'`（帧和 SDK 的字节一致、分片、ping、
-卡片回调的回答、配对 / 只认主人 / 群消息不处理、发进主对话只发一次、回答取自这条消息之后、提问卡片答题、命令、助手不在时回「暂时连不上」再恢复；
-hub 的测试连着真的助手，经真的总线）；提示词 golden `bot_message.*`。
-端到端（2026-11-04）：隔离的 hub + 助手 + node + 假的 claude，hub 连一个假的开放平台（HTTP 加长连接的 WebSocket，protobuf 帧），配对、发消息、答案卡和表情、助手被杀掉时回「暂时连不上」、回来和 hub 重启后照常。
-App：`FeishuBotModelTests`（加载、功能整体提交、凭证保存与报错）；截图用 mock hub（`MOCK_BOT=pairing` / `off` 看配对中和没配置时）+ `-openConnectorBot YES`。
+Server: `go test ./internal/feishubot ./internal/hub ./internal/assistant -run 'Bot|Frame|Conn|TurnAnswer|ResolutionText|Feishu'` (frames byte-for-byte matching the SDK, fragmentation, ping,
+card callback responses, pairing / owner-only / ignoring group messages, sending into the main chat only once, taking the answer after this message, answering question cards, commands, replying "temporarily unreachable" while the assistant is away and recovering;
+hub tests connect to a real assistant over the real bus); prompt goldens `bot_message.*`.
+End to end (2026-11-04): isolated hub + assistant + node + fake claude, with the hub connected to a fake Open Platform (HTTP plus a long-connection WebSocket, protobuf frames); pairing, sending messages, answer cards and reactions, replying "temporarily unreachable" when the assistant is killed, normal operation after it returns and after the hub restarts.
+App: `FeishuBotModelTests` (loading, submitting all features together, saving credentials and errors); screenshots use a mock hub (`MOCK_BOT=pairing` / `off` for pairing and unconfigured states) + `-openConnectorBot YES`.
 
-## 任务进展和请验收（#2768）
+## Task progress and review requests (#2768)
 
-主人只看飞书，所以主对话派出的任务（待办）怎么样了，由机器人主动发到私聊，不走 lark-cli、不用逐条在手机上批准（2026-11-05 用户要求、授权）。只在有变动时发，没变动不发。代码 `server/internal/assistant/reports.go`、`acceptance.go`。
+The owner only watches Lark, so the bot proactively sends updates on tasks (to-dos) dispatched from the main chat to the DM, without lark-cli or individual approvals on the phone (requested and authorized 2026-11-05). Sends only when something changes; no change, no message. Code: `server/internal/assistant/reports.go`, `acceptance.go`.
 
-- **合并**：一分钟内的变动（做完一轮、在等你、被打断、没开起来、被自动标为完成）合成一张卡片；同一个任务只留最新的状态。发出前再看一眼：已经答了的提问、删掉的待办不报；提问卡片已经在聊天里的（`cards` / `all_cards`）不再报「在等你」；安静任务在开了 `sync` 时不报（主对话的回答已经同步过来），只有「被自动标为完成」照报（主对话里不说这一条）。
-- **卡片**：要拍板的放最上面（每个后面再发一张原来那种提问卡片，能直接点选项回答；已经发过卡片的不重复），然后每个任务一段：状态、标题、电脑，阶段条
-  方案 → 开发 → 审查 → 合入 → 部署 → 已验证（✅ 走过的、🔵 当前的、⚪ 后面的），Agent 最后说的话（前 300 字），按钮「任务页」「PR」「Agent 对话」（网页版的链接，hub.json 没有 `public_url` 时不放）。不写裸 id。
-- **阶段**（`Todo.stage`、`Todo.pr_url`，存在 settings `assistant.todo_stages`，只进不退）：开工是「开发」；回复里有 PR 链接是「审查」，同时说了合并 / 合入是「合入」；说了已部署 / 上线是「部署」（同一小句里前面是「还没」「未」「别」「无需」「等你确认后再」「not yet」「will be」之类、后面跟着「吗」「yet」的不算），部署之后又说了实测通过是「已验证」；请验收点了「通过」也是「已验证」。App 的待办详情照这两个字段画同样的阶段条（#2776）。
-- **请验收**：任务一到「部署」，发一张三行的卡片：改了什么（一句话）、去哪看（直接通到那个页面的链接，只能是回复里出现过的链接、任务页或 Agent 对话，模型编的不用）、怎么验（点哪里、应该看到什么）。三行由小模型（用途 `inbox.judge`，提示词 `prompts/assistant/acceptance*.md`）读任务和回复写；模型不可用时用任务标题、任务页和一句通用的验法。
-  - 点「通过」或回复这张卡片「通过」（「没问题」「OK」「LGTM」也算）：待办标成「已验证」，卡片改成「已验收」。
-  - 回复别的：记进待办的决策区（「验收意见」），并发给原来的 Agent 去改；改完再部署会重新请验收。
-  - 一张卡片每个任务只发一次（存在 settings `assistant.acceptance`）。第二天还没验收的，早报里再提（快照里「等用户验收的」，早报提示词第 4 条），同时在早报的时间（定时任务 `morning` 开着时用它的时间，关了或删了是 9:00，用户的时区）再发一张「还没验收」，每天一次。
-- 开关是 `reports`；机器人没开、没配对时什么都不发，这期间的变动丢掉（之后的卡片说那时的状态）。
+- **Coalescing**: changes within a minute (a turn finished, waiting for you, interrupted, failed to start, automatically marked done) are combined into one card; only the latest state of each task is kept. Check again before sending: don't report questions already answered or to-dos deleted; if a question card is already in the chat (`cards` / `all_cards`), don't repeat "waiting for you"; quiet tasks aren't reported when `sync` is on (the main chat's answer has already been synced), except "automatically marked done", which is still reported (the main chat doesn't mention that).
+- **Card**: decisions needed go first (each followed by the usual question card so options can be tapped directly; cards already sent aren't duplicated), then a section per task: status, title, computer, stage bar
+  Plan → Development → Review → Merged → Deployed → Verified (✅ completed, 🔵 current, ⚪ upcoming), the Agent's last words (first 300 characters), and buttons **Task page**, **PR**, **Agent chat** (web links; omitted if hub.json has no `public_url`). No bare IDs.
+- **Stages** (`Todo.stage`, `Todo.pr_url`, stored in settings `assistant.todo_stages`, only advance): starting work is **Development**; a PR link in the reply means **Review**, also mentioning a merge means **Merged**; saying deployed / live means **Deployed** (doesn't count when preceded in the same clause by "还没" (not yet), "未" (not), "别" (don't), "无需" (no need), "等你确认后再" (after you confirm), "not yet", "will be", etc., or followed by "吗" (a Chinese question particle) or "yet"); saying tested successfully after deployment means **Verified**; tapping **Pass** on a review request also means **Verified**. The App's to-do detail draws the same stage bar from these two fields (#2776).
+- **Review request**: as soon as a task reaches **Deployed**, send a three-line card: what changed (one sentence), where to look (a link straight to the page, only one present in a reply, the task page or Agent chat; never one invented by the model), how to check (what to tap, what to expect). A small model (purpose `inbox.judge`, prompts `prompts/assistant/acceptance*.md`) reads the task and replies to write these three lines; if the model isn't available, use the task title, task page and a generic check instruction.
+  - Tap **Pass** or reply to the card with "通过" (pass; "没问题" (no problem), "OK", "LGTM" also count): mark the to-do **Verified**, and change the card to **Accepted**.
+  - Any other reply: record it in the to-do's decision section (**Review feedback**) and send it to the original Agent to fix; deploying again after the fix triggers another review request.
+  - Each task gets one card (stored in settings `assistant.acceptance`). If not accepted the next day, mention it again in the morning brief ("waiting for user acceptance" in the snapshot, item 4 of the morning prompt), and send a **Not yet accepted** card at the morning-brief time (the time of scheduled task `morning` when enabled, 9:00 if disabled or deleted, in the user's time zone), once a day.
+- The switch is `reports`; when the bot is disabled or unpaired, nothing is sent and changes during that time are discarded (later cards describe the state at that later time).

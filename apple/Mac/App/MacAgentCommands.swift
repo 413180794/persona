@@ -64,14 +64,14 @@ struct MacAgentMenu: Commands {
             }
             // ⇧⌘⏎: ⌘⏎ is the composer's send (ComposerParts).
             .keyboardShortcut(.return, modifiers: [.command, .shift])
-            .disabled(ix.flatMap(MacAgentCommands.approve) == nil || current?.canApprove != true)
+            .disabled(ix.flatMap(MacAgentCommands.approve) == nil || ix.map(model.canAnswer) != true)
             // ⇧⌘⌫, not the docs' first idea ⌘⌫: that one deletes to the line's start while typing in the composer,
             // and a menu shortcut would take it.
             Button("拒绝") {
                 if let ix, let r = MacAgentCommands.reject(ix) { Task { await model.resolve(ix, r) } }
             }
             .keyboardShortcut(.delete, modifiers: [.command, .shift])
-            .disabled(ix.flatMap(MacAgentCommands.reject) == nil || current?.canApprove != true)
+            .disabled(ix.flatMap(MacAgentCommands.reject) == nil || ix.map(model.canAnswer) != true)
             // ⌥⌘1…9 (⌘1…6 are the sections): pick an option of the question or terminal dialog on screen.
             let choices = ix.map(MacAgentCommands.choices) ?? []
             Menu("回答") {
@@ -80,7 +80,7 @@ struct MacAgentMenu: Commands {
                         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .option])
                 }
             }
-            .disabled(choices.isEmpty || current?.canApprove != true)
+            .disabled(choices.isEmpty || ix.map(model.canAnswer) != true)
             Divider()
             Button("下一个需要你的") {
                 if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.sessionsNow,

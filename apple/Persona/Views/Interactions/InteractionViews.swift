@@ -72,7 +72,7 @@ struct InteractionPreviewCard: View {
                     .scaledFrame(width: Theme.Size.icon) // one column: the titles line up card to card
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(title).font(Theme.Font.heading).lineLimit(1)
-                    Text([interaction.sessionTitle, machine].compactMap { $0 }.joined(separator: " · "))
+                    Text(interaction.placeLine(machine: machine))
                         .font(Theme.Font.label)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1572,5 +1572,55 @@ struct BUIScreenSteps: View {
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("共 \(steps.count) 个问题，已答 \(steps.filter(\.done).count) 个")
+    }
+}
+
+/// A card on no session (`personad ask` outside herdr, #4059), answered where it is listed: there is no chat to open for
+/// it. It goes away once answered (here or anywhere else).
+struct SessionlessCardSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var interaction: Interaction
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                InteractionPanel(interaction: interaction)
+                    .disabled(!model.canAnswer(interaction))
+                    .padding(.horizontal, Theme.Space.page)
+                    .padding(.vertical, Theme.Space.l)
+            }
+            .themedPage()
+            .navigationTitle(interaction.sessionlessPlace ?? String(localized: "脚本"))
+            #if os(iOS) || os(visionOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            #if os(macOS)
+            .macSheetDone { dismiss() }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }.lineLimit(1)
+                }
+            }
+            #endif
+        }
+        .presentationDetents([.medium, .large])
+        .onChange(of: model.pendingInteractions.contains { $0.uid == interaction.uid }) { _, pending in
+            if !pending { dismiss() }
+        }
+        #if os(macOS)
+        .macSheet()
+        #endif
+    }
+}
+
+extension Interaction {
+    /// The line under a card's title in a list: its session's title; a sessionless card says where it comes from, and
+    /// 脚本 when its title does not already name who asks (`personad ask` labels its cards 脚本, docs/script-cli.md).
+    func placeLine(machine: String?) -> String {
+        let mark = (agentLabelHint ?? "").isEmpty ? String(localized: "脚本") : nil
+        let parts: [String?] = isSessionless ? [mark, sessionlessPlace, machine] : [sessionTitle, machine]
+        return parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

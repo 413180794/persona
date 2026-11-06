@@ -190,9 +190,12 @@ final class WatchModel {
         }
     }
 
+    /// A card on no session can always be answered (#4059); else as its session's source allows.
+    func canAnswer(_ ix: Interaction) -> Bool { ix.canAnswer(session: sessions.first { $0.key == ix.sessionKey }) }
+
     func resolve(_ ix: Interaction, _ r: Resolution) async {
         // To the hub of the interaction's own group.
-        guard sessions.first(where: { $0.key == ix.sessionKey })?.canApprove == true, let api = api(ix.group) else { return }
+        guard canAnswer(ix), let api = api(ix.group) else { return }
         do {
             _ = try await api.resolve(ix.id, r)
             interactions.removeAll { $0.uid == ix.uid }
@@ -571,7 +574,7 @@ struct WatchInteractionView: View {
             }
         }
         .navigationTitle(interaction.kind.watchTitle)
-        .disabled(model.sessions.first(where: { $0.key == interaction.sessionKey })?.canApprove != true)
+        .disabled(!model.canAnswer(interaction))
     }
 
     private func submit() {
@@ -584,7 +587,7 @@ struct WatchInteractionView: View {
     }
 
     private func act(_ r: Resolution) {
-        guard model.sessions.first(where: { $0.key == interaction.sessionKey })?.canApprove == true else { return }
+        guard model.canAnswer(interaction) else { return }
         Task {
             await model.resolve(interaction, r)
             dismiss()

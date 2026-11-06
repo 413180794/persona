@@ -129,7 +129,7 @@ struct CompactInteractionRow: View {
                 .scaledFrame(width: CompactList.mark)
             HStack(alignment: .firstTextBaseline, spacing: CompactList.gap) {
                 Text(interaction.title).font(CompactList.titleUnread).lineLimit(1).fixedSize()
-                Text([interaction.sessionTitle, machine].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                Text(interaction.placeLine(machine: machine))
                     .font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: Theme.Space.xs)

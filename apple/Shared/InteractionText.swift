@@ -44,3 +44,20 @@ nonisolated extension Interaction {
         String(localized: "：", comment: "Separator between a tool name and what it runs, e.g. Bash：npm test")
     }
 }
+
+nonisolated extension Interaction {
+    /// A card on no session (#4059): `personad ask` run outside herdr, or before the pane's agent hooked in, has no
+    /// session the node could tie it to (docs/script-cli.md「归属」).
+    var isSessionless: Bool { sessionID.isEmpty }
+
+    /// Whether the app may answer it: a sessionless card always (no session source says no); else as its session's source
+    /// allows (`canApprove`; a read-only Codex history does not), and not while that session is unknown.
+    func canAnswer(session: Session?) -> Bool { isSessionless || session?.canApprove == true }
+
+    /// Where a sessionless card comes from, for its list row: the title the node gave it, else its directory's name.
+    var sessionlessPlace: String? {
+        if let t = sessionTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty { return t }
+        let dir = cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
+        return dir.isEmpty || dir == "/" ? nil : dir
+    }
+}

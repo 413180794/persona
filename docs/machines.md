@@ -1,282 +1,282 @@
-# 机器监控
+# Machine monitoring
 
-每台电脑是什么系统、现在忙不忙、过去 24 小时的曲线。node 采集，管理者（连电脑的那个，见下面「谁连电脑」）落 Postgres，hub 把 App 的请求转给它，App 里在「机器」页和机器详情看（和 Agent 运行数放在一起）。
+Each computer's OS, current load and curves for the past 24 hours. The node collects, the manager (the one connecting to computers; see "Who connects to computers" below) stores in Postgres, and the hub forwards App requests to it. The App shows these on **Machines** and machine details alongside Agent counts.
 
-| 部分 | 代码 |
+| Part | Code |
 | --- | --- |
-| 采集（解析 /proc、vm_stat、iostat、sw_vers、Win32 的返回等） | `server/internal/sysmon/`（`sysmon.go`、`winparse.go` 纯解析，`linux.go` / `darwin.go` / `windows.go` 读系统） |
-| node 发送 | `server/internal/node/metrics.go` |
-| 管理者存储、降采样、清理、API（hub 转发 `devicewire.MetricsRoutes`） | `server/internal/devices/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
-| App | `apple/Persona/Views/Machines/`（`MachinesView` 机器页、`MachineDetailView` 机器详情、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
-| 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个，n 最多 8640，即一天），最后一行是实际采到的样本数、每次采集耗时和 personad 的 CPU（Ctrl-C 马上停） |
+| Collection (parsing /proc, vm_stat, iostat, sw_vers, Win32 responses, etc.) | `server/internal/sysmon/` (`sysmon.go`, `winparse.go` pure parsing; `linux.go` / `darwin.go` / `windows.go` read the OS) |
+| Node sending | `server/internal/node/metrics.go` |
+| Manager storage, downsampling, cleanup, API (hub forwards `devicewire.MetricsRoutes`) | `server/internal/devices/metrics.go`, `server/internal/db/metrics.go`, migration `0051_machine_metrics.sql` |
+| App | `apple/Persona/Views/Machines/` (`MachinesView`, `MachineDetailView`, `MetricCharts`, `OSBadge`), model `apple/Shared/MachineMetrics.swift` |
+| Inspect local samples / overhead | `jarvisd sysmon [n]`: prints system info and n+1 samples (one every 10 seconds, n ≤ 8640, one day); final line gives actual sample count, collection duration and personad CPU (Ctrl-C stops immediately) |
 
-## 谁连电脑（2026-11-04）
+## Who connects to computers (2026-11-04)
 
-用户拍板：**电脑是管理者的，由管理者自己去连**；hub 看不到任何一台电脑，总线上也就没有要在电脑和管理者之间把关的东西（物理隔离）。迁移期间只有一个管理者，就是首席管理者（助手的进程 `personad assistant`），所以它带着全部电脑。
+Product decision: **computers belong to the manager, which connects to them itself**; the hub sees no computers directly, so the bus has nothing to gate between computers and manager (physical separation). During migration there is only one manager, the chief manager (assistant process `personad assistant`), holding all computers.
 
-| 部分 | 代码 |
+| Part | Code |
 | --- | --- |
-| 管理者这一侧：连接、每台的状态、选路、Persona Link 的协议、kind service、tailcat、warm start、引擎、herdr 自动启动、Claude 配置目录、常驻列出的会话、node 更新 | `server/internal/devices/`（`devices.go` 入口和上报、`machine.go`、`conn.go`、`paths.go`、`link.go`、`relay.go`、`service.go`、`tailcat.go`、`warm.go`、`engine.go`、`herdr.go`、`claudedirs.go`、`deploy*.go`、`bus.go`） |
-| 两边共用的消息 | `server/internal/devicewire/`（方法名、参数、错误码、管理者自己回答的路由表 `Routes`） |
-| hub 这一侧：转发、它留的那份、它自己的功能在连上时要做的 | `server/internal/hub/devices_link.go`、`devices_relay.go`、`machines.go`、`machine.go`（`Machine` 现在是管理者报来的那份加上 hub 自己的东西） |
-| 助手进程里接起来 | `server/internal/assistant/main.go`、`devices.go`（`bus.go` 里几处只调它） |
+| Manager: connections, per-computer state, routing, Persona Link protocol, kind service, tailcat, warm start, engines, herdr auto-start, Claude config directories, permanently listed sessions, node updates | `server/internal/devices/` (`devices.go` entry/reporting, `machine.go`, `conn.go`, `paths.go`, `link.go`, `relay.go`, `service.go`, `tailcat.go`, `warm.go`, `engine.go`, `herdr.go`, `claudedirs.go`, `deploy*.go`, `bus.go`) |
+| Shared messages | `server/internal/devicewire/` (method names, parameters, errors, manager-owned route table `Routes`) |
+| Hub: forwarding, retained snapshot, its own on-connect work | `server/internal/hub/devices_link.go`, `devices_relay.go`, `machines.go`, `machine.go` (`Machine` is now the manager's report plus hub-owned data) |
+| Wiring in the assistant process | `server/internal/assistant/main.go`, `devices.go` (several places in `bus.go` only call it) |
 
-**管理者做的**（`internal/devices`，hub 不 import 它，它也不 import hub）：
+**Manager responsibilities** (`internal/devices`; neither it nor hub imports the other):
 
-- 按 hub.json 的 `machines` 连每一台：hub 机器自己的 node（`node --stdio` 子进程，现在是管理者的子进程）、ssh、tailcat（hub 的 tailcat key 文件，同一个 HOME）、kind service（拨连接器；凭据还是 hub 用自己的密钥封着存，管理者经总线要 `devices.connector_cred`，配对完交给 hub 存 `devices.connector_paired`）、
-  kind link（电脑上的 Persona Link 照旧连 hub 的地址，hub 原样转给管理者，见下）、互联组里经成员 hub 到的电脑（选路、去重、换路都在管理者，`paths.go`；经别的 hub 的那条流由 hub 打开再转过来）。
-- 每台的状态：在不在线、`node.info`、会话列表和 revs、哪些会话被 App 看着（node 换了连接时再 `session.watch`，从最后一条 item 续）、warm start、引擎（settings `machine_engines`）、herdr 自动启动、Claude 配置目录（及屏蔽的）、
-  node 不管多久没动都要列出的会话（助手的 profile 的 `keep`，助手的快照一出来就告诉各台 node，`SetKeep`）、node 更新（`node.deploy.<id>`）、node 的 `state.put` / `state.load`（表 `node_sessions`）。
-  键和表都和以前一样，不迁数据。
-- 管理者自己回答的路由（`devicewire.Routes`，hub 照助手的路由那样作为 `http.request` 转过来）：`POST …/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`；订阅额度的 `GET /api/v1/usage/windows`（`devicewire.UsageRoutes`）和管理界面的额度来源页（`AdminUsageRoutes`，只从管理界面转，`docs/usage-windows.md`「谁管这件事」）也是它答。
-- node 发来的请求：`state.load`、助手自己的（`assistant.model`、`assistant.context`）和电脑的事件的（`interaction.create`、`assistant.lark`、`mcp.tools`、`mcp.call`，见下面「谁处理电脑的事件」）它在进程里答，剩下的（`notify`：电脑上的 `personad notify`）交给 hub（`devices.request`）。
-  请求来的那条 node 连接要是在 hub 回答前断了，管理者告诉 hub（`devices.request_end`），hub 就不再等它。
-  node 发来的单向事件先给管理者自己处理（`devices.Options.Event`），App 要的再原样交给 hub（`devices.event`，顺序不变）：items、屏幕、实时状态、终端帧、端口的字节、`sessions.revs`、`hook.event`、`fs.changed`、插件的；会话列表、交互、用量、监控样本只到管理者为止。
-- hub 发给 node 的单向事件（`devices.notify`）管理者按机器排队、各写各的，一台电脑收得慢只耽误它自己，总线和别的电脑照常；一台写一条卡住 30 秒或者排着的超过 32 MiB，就重连它。
-- hub.json 里一台的条目变了（hub 改了配置重启，管理者还在），管理者换一个新的机器对象重新连它（App 正在看的会话照样再 watch），不在跑着的连接底下改配置。
-- 助手自己对机器的调用（`device.call` 里 node 的方法）直接在进程里走，不再绕 hub；hub 自己答的（`devices.list` 带手机在不在线、只发一次的 `session.send_once`）照旧问 hub；`interactions.list`、`sessions.list`、`session.get`、渠道跟对话的 `session.follow` / `session.unfollow` 2026-11-05 起管理者自己答（「谁处理电脑的事件」）。Agents 的分诊发「继续」、助手开 Agent、定时任务开对话这些对 node 的调用都在进程里直接走。
+- Connect each entry in hub.json `machines`: the hub machine's own node (`node --stdio` child, now the manager's child), SSH, tailcat (hub's tailcat key file, same HOME), kind service (dial the helper; credentials still encrypted by the hub with its key, retrieved over the bus via `devices.connector_cred`, returned for storage after pairing via `devices.connector_paired`),
+  kind link (Persona Link still connects to the hub address, forwarded unchanged to the manager; below), and computers reached through member hubs in the linked group (routing, de-duplication and path changes in manager `paths.go`; the hub opens and relays streams through another hub).
+- Per-computer state: online, `node.info`, session list and revs, sessions watched by Apps (repeat `session.watch` after node reconnection, resuming from the last item), warm start, engine (settings `machine_engines`), herdr auto-start, Claude config directories (and blocked ones),
+  sessions the node must list regardless of inactivity (assistant profile `keep`; when the assistant snapshot arrives, tell each node, `SetKeep`), node updates (`node.deploy.<id>`), node `state.put` / `state.load` (table `node_sessions`).
+  Existing keys and tables stay; no data migration.
+- Manager-owned routes (`devicewire.Routes`, forwarded by hub as `http.request` like assistant routes): `POST …/reconnect`, `PUT …/engine`, `GET/PUT …/herdr`, `POST …/herdr/start`, `POST …/deploy`, `GET …/claude-dirs`, `PUT …/claude-dirs/blocked`; also subscription quota `GET /api/v1/usage/windows` (`devicewire.UsageRoutes`) and admin quota-source page (`AdminUsageRoutes`, forwarded only from admin, `docs/usage-windows.md`, "Who owns this").
+- Node requests: answers `state.load`, assistant requests (`assistant.model`, `assistant.context`) and computer-event requests (`interaction.create`, `assistant.lark`, `mcp.tools`, `mcp.call`; "Who handles computer events" below) in-process; passes the rest (`notify`: `personad notify` on computers) to hub (`devices.request`).
+  If that node connection closes before the hub answers, the manager sends `devices.request_end`, so the hub stops waiting.
+  One-way node events are first processed by the manager (`devices.Options.Event`), then App-needed events forwarded unchanged in order to the hub (`devices.event`): items, screen, live state, terminal frames, port bytes, `sessions.revs`, `hook.event`, `fs.changed`, plugin events; session lists, interactions, usage and monitoring samples stop at the manager.
+- One-way hub-to-node events (`devices.notify`) queue per computer, with independent writers; a slow computer delays only itself, not the bus or others. Reconnect if a write stalls 30 seconds or queued data exceeds 32 MiB.
+- When a machine entry changes in hub.json (hub restarts after config edits while manager stays running), create a fresh machine object and reconnect (rewatch App-watched sessions), rather than editing config underneath an active connection.
+- Assistant calls to machines (node methods in `device.call`) run directly in-process, no hub round trip; hub-owned methods (`devices.list` including phone online state, send-once `session.send_once`) still ask hub. Since 2026-11-05 the manager answers `interactions.list`, `sessions.list`, `session.get`, channel `session.follow` / `session.unfollow` itself ("Who handles computer events"). Sending "continue" for Agent triage, starting Agents for the assistant and opening scheduled-task chats all call the node directly in-process.
 
-**hub 做的**：
+**Hub responsibilities**:
 
-- 把 hub.json 的 `machines`（加上管理界面运行中加的）作为默认值交给管理者：握手回答里的 `devices`，变了（加了电脑、互联组变了、hub 的地址或名字变了）发 `devices.config`。
-- 留着管理者报的那份（`devices.state`：每台的快照，带监控的 `system`、`node.info`、连没连着、这条连接从什么时候开始、warm 到什么时候、它的几条路），按它的顺序给 App 列，再加上管理者的扩展报的 `computer` / `browser`（Cua、ego 插件的状态，`extensions.report`，`docs/extensions.md`「谁管什么」）。
-- App 对机器的调用和流照旧经 hub：调用是 `devices.call`（带期限），发给 node 的单向事件（终端输入、转发端口的字节）是 `devices.notify`，node 的事件（items、终端帧、端口的字节……）从 `devices.event` 回来，
-  hub 推给订阅的 App；交互、状态、推送这些是管理者的（「谁处理电脑的事件」）。所以终端、端口转发、屏幕、下载都走总线这一条连接，不另开通道。
-  调用的期限管理者那头少一点（十分之一，最多 500 毫秒），它的「超时」先回来；没期限的调用（插件的 `nodes.call`）也不加期限。发出去以后才出的事——node 的连接断了、时间到了、总线断了——都算「可能已经做了」：
-  发消息的结果是 `unknown`，同一条消息不会再发一遍（和以前 hub 直连 node 时一样），只有确定没发出去的（离线、管理者不在）才算没发。
-- hub 的自更新确认「之前在线的机器都连回来了」、之后让管理者更新各台的 node，看的是报来的 `connected`（node 真连着），不是 App 看到的在线（管理者重启后的暖启动也显示在线）。
-- 管理者和 hub 的连接每次新握手，经上一条连接开着的转发流和终端两边都结束：hub 结束它那边（终端以「助手暂时连不上，稍后再试」结束，App 重新打开），管理者在 node 上关掉（`stream.close`、`terminal.unwatch`），免得 hub 重启后 node 还开着没人要的端口连接、终端还一直推帧。
-  App 正在看的会话 hub 让新连接再 watch，同时最多 8 个，一台慢的电脑不耽误别的。
-- node 一连上，管理者先问 hub 它的那部分（`devices.connected`）：要加进 `node.configure` 的（Codex 的设置）和紧接着要发的（托管的启动器、hub 记着的发送），然后才问会话列表；hub 同时开始它在连上时要做的（监控的系统信息）；Cua / ego 的状态、扩展在电脑上的程序、连接器、加进 `node.configure` 的扩展的 Agent 过滤是管理者自己的扩展做的（2026-11-05，`docs/extensions.md`「谁管什么」），hub 不在时也照做。
-  管理者和 hub 的连接每次新连上，这一步对每台在线的机器再做一遍。
-- 一台机器的连接断了（报来的 `connected` 变成 false 或者 `connected_at` 换了），hub 结束这条连接上的：终端流、正在生成的文字；还在等的不可续交互是管理者结束的（`devices.Options.Detached`）。
+- Hand hub.json `machines` (plus computers added live through admin) to the manager as defaults: `devices` in handshake response, then `devices.config` on changes (computer added, linked group changed, hub addresses or name changed).
+- Keep the manager's report (`devices.state`: per-computer snapshots with monitoring `system`, `node.info`, connection state/start, warm deadline and paths), list them to Apps in its order, then add manager extensions' `computer` / `browser` reports (Cua, ego plugin state, `extensions.report`, `docs/extensions.md`, "Who owns what").
+- App machine calls and streams still pass through hub: `devices.call` (deadline included), node-bound one-way events (terminal input, forwarded port bytes) via `devices.notify`, node events (items, terminal frames, port bytes…) via `devices.event`,
+  then pushed to subscribed Apps. Interactions, state and pushes belong to the manager ("Who handles computer events"). Thus terminal, port forwarding, screen and downloads all use this one bus connection, no extra channel.
+  The manager deadline is shortened by one tenth, at most 500 milliseconds, so its timeout arrives first; calls without deadlines (plugin `nodes.call`) aren't given one. Failures after dispatch—node disconnect, deadline or bus disconnect—mean "may have executed":
+  message results are `unknown`, and the same message isn't resent (same as when hub directly connected to node); only definite non-dispatch (offline, manager absent) counts as not sent.
+- Hub self-update confirmation that previously online computers all reconnected, and subsequent node updates through the manager, use reported `connected` (actual node connection), not App-visible online (also true during warm start after manager restart).
+- Every new manager-hub handshake ends both sides of forwarded streams and terminals opened through the previous connection: hub closes its side (terminal ends with "Can’t reach the assistant right now. Try again later", reopened by App), manager closes node-side `stream.close` / `terminal.unwatch`, avoiding abandoned port connections and terminal frames after hub restart.
+  Hub asks the new connection to rewatch App-visible sessions, at most 8 concurrently; a slow computer doesn't block others.
+- On node connection, the manager first asks the hub for its part (`devices.connected`): additions to `node.configure` (Codex settings) and immediately subsequent sends (managed launchers, remembered messages), then asks for the session list. Hub also starts its own on-connect work (monitoring system info); Cua / ego state, extension programs on computers, connectors and extension Agent filtering added to `node.configure` belong to manager extensions (2026-11-05, `docs/extensions.md`, "Who owns what"), even while hub is away.
+  Every new manager-hub connection repeats this step for each connected computer.
+- When a machine connection ends (reported `connected` false or `connected_at` changes), hub ends its terminal streams and generating text; manager ends pending non-resumable interactions (`devices.Options.Detached`).
 
-**流的转发**：App ↔ hub ↔ 管理者 ↔ node，hub 和管理者之间是本机回环上的总线。实测（隔离的 hub，hub 自己那台，转发端口上 32 字节来回 300 次，2026-11-04）：master 中位数 0.3–1.2 ms、p95 约 1.5 ms；这一版中位数 0.9–1.4 ms、p95 约 1.9 ms，多了约 0.2–0.4 ms（多一跳回环加一次编解码）。
-终端帧走的是同一条路（node 的事件 → 管理者 → hub → App，输入反过来）。
+**Stream forwarding**: App ↔ hub ↔ manager ↔ node; hub-manager uses the bus over local loopback. Measured (isolated hub, hub's own computer, 32-byte round trips over a forwarded port, 300 times, 2026-11-04): master median 0.3–1.2 ms, p95 about 1.5 ms; this version median 0.9–1.4 ms, p95 about 1.9 ms, adding about 0.2–0.4 ms (one loopback hop and encode/decode).
+Terminal frames use the same path (node event → manager → hub → App; input in reverse).
 
-**Persona Link（主动模式）**：电脑上的 Persona Link 照旧连 hub 的地址（配对码、链路凭据都不变）。hub 认凭据（必须是 kind link 那台的、走 TLS），然后把这条 WebSocket 原样交给管理者：
-`devices.accept {id, kind: link, machine_id, token_id}`，管理者用自己的总线 token 拨 `GET /api/v1/bus/relay?id=<id>`，hub 两边逐条转发消息（文本是 Persona Link 的消息，二进制是 node 的字节流），关闭码和原因原样过去。
-hello、`endpoints`、`open`、`node` 这些都是管理者说的；Persona Link 开的流（`/api/v1/link/stream`）同样转。心跳（ping）是 hub 和 Persona Link 之间的，没有 pong 时 hub 断开两边，原因交给管理者；间隔和超时在 hub.json 的 `link` 里可改，管理者在 `endpoints` 里告诉 Persona Link（[link.md](link.md)「心跳」）。
-凭据撤销时 hub 以 4002 关掉它转着的链路；管理者没连着时 hub 对 `/api/v1/link` 回 503，Persona Link 照常退避重连，管理者回来后自己连上。
+**Persona Link (active mode)**: still connects to the hub address with unchanged pairing codes and link credentials. Hub authenticates (kind-link machine, TLS), then forwards the WebSocket unchanged:
+`devices.accept {id, kind: link, machine_id, token_id}`; the manager dials `GET /api/v1/bus/relay?id=<id>` with its bus token; hub forwards messages individually (text: Persona Link messages, binary: node bytes), preserving close codes and reasons.
+hello, `endpoints`, `open`, `node` come from the manager; Persona Link streams (`/api/v1/link/stream`) are likewise forwarded. Heartbeat ping runs between hub and Persona Link; missing pong closes both sides and passes the reason to the manager. Interval and timeout are configurable in hub.json `link`, and the manager tells Persona Link in `endpoints` ([link.md](link.md), "Heartbeat").
+Credential revocation closes the relayed link with 4002; absent manager returns 503 on `/api/v1/link`, with normal Persona Link backoff and automatic reconnection when the manager returns.
 
-**互联（mesh）**：组、中心、记录、凭据交接、成员转发 App 还是 hub 的（`docs/mesh.md`）；电脑和路是管理者的：hub 在 `devices.config` 的 `mesh` 里给它组里的样子（这台是不是成员、中心叫什么、刚起来要等多久、别的 hub 到不到得了和多远、成员的电脑），
-管理者据此去重、选路、换路；经成员到的那条路由中心 hub 开（`GET /api/v1/bus/relay?hub=<成员>&machine=<id>`，hub 经互联链路开 node 流再转给管理者）；成员 hub 收到中心要的 node 流（`/api/v1/peer/node`）交给自己的管理者去开（`devices.accept` kind node），
-管理者开好了 node 成员才回 `101`，开不了就带着原因回 502，中心在那台机器上显示这个原因（和以前成员自己开 node 时一样）。
-Persona Link 链路的往返是 hub 的心跳量的，hub 告诉管理者（`devices.link_rtt`），选路和记录里的远近都用它。
-hub 的记录里自己的电脑到不到得了、多远，用管理者报的（`devices.state` 的 `entries`）。
+**Linked hubs (mesh)**: groups, primary hub, records, credential handoff and member App forwarding remain hub-owned (`docs/mesh.md`); computers and paths belong to the manager. Hub provides group state in `devices.config.mesh` (whether this hub is a member, primary name, startup wait, other hubs' reachability and distance, member computers),
+which the manager uses for de-duplication, routing and path changes. The primary hub opens the member route (`GET /api/v1/bus/relay?hub=<member>&machine=<id>`, opens a node stream over mesh and relays to manager); a member receiving the primary's node-stream request (`/api/v1/peer/node`) delegates to its own manager (`devices.accept` kind node).
+Only after the manager opens the node does the member return `101`; failure returns 502 with the reason, displayed on that machine by the primary (as when members opened nodes themselves).
+Persona Link RTT comes from hub heartbeats, reported to manager (`devices.link_rtt`) and used for route distances and records.
+Reachability and distance of the hub's own computers in its records come from manager reports (`entries` in `devices.state`).
 
-**管理者不在的时候**（进程在重启、崩了）：
+**While the manager is away** (restarting or crashed):
 
-- 机器全部显示离线，`error` 是「助手暂时连不上，稍后再试」，会话标成未知（hub 留着最后的列表，还有卡片等着的会话仍是「需要你」）；终端流以同一句话结束，转发的端口关掉；卡片 hub 留着最后那份照常列，回答不了（`503 assistant_offline`）。
-- 要经管理者的接口（items、发消息、新建、文件、git、终端、端口、管理者自己的路由……）回 `503 {"code":"assistant_offline"}`；`GET /api/v1/machines`、`GET /api/v1/sessions` 照常回 hub 留的那份。
-- 管理者回来（hub 1 秒起退避重启它）后自己把所有电脑连回来，hub 让它把 App 正在看的会话再 watch 上，不用谁动手；Persona Link 在下一次重试时连上。
-  它刚起来时对一台还在连的机器的调用（hub 替它留着的卡片回答、App 新开的 Agent）等这台第一次连完（最多 20 秒），而不是马上回「离线」。
-- 管理者不在时开不了新的 Agent、发不了消息、看不到 Agent 的一轮结束：这些都要经它到 node（以前 hub 自己连着电脑，助手不在时 Agent 照样能开）。
+- All machines show offline, `error` is "Can’t reach the assistant right now. Try again later", sessions become unknown (hub keeps the last list, sessions with pending cards stay **Needs you**); terminal streams end with the same message and forwarded ports close. Hub keeps listing the last cards, but answers fail (`503 assistant_offline`).
+- Manager-dependent endpoints (items, send, create, files, git, terminal, ports, manager-owned routes…) return `503 {"code":"assistant_offline"}`; `GET /api/v1/machines` and `GET /api/v1/sessions` return hub's retained snapshot normally.
+- When the manager returns (hub restarts it with backoff beginning at 1 second), it reconnects every computer; hub requests rewatch of App-visible sessions automatically. Persona Link reconnects on its next retry.
+  Calls to a machine still connecting after startup (hub-held card answers, new App Agents) wait for its first connection attempt to finish (up to 20 seconds), rather than immediately returning offline.
+- No new Agents, sending messages or observing Agent turn completion while manager is absent: all need its node connection (previously hub connected computers itself, so Agents could still start without assistant).
 
-**总线上的大小**：hub 和管理者之间一条消息写完之前别的消息（包括心跳）要等，所以大的东西都分块：下载、上传、node 更新包每块最多 1 MiB，转发端口的字节每块 32 KB；
-一页 items、一张图、一张截图是一条消息（和以前在 node 的连接上一样）。总线一行最多 64 MiB，node 的一条消息超过 60 MiB 时管理者不转（事件丢掉并记日志，调用回 `too_large`），免得整条总线断掉。
+**Bus sizes**: other messages, including heartbeats, wait until a hub-manager message finishes writing, so large payloads are chunked: downloads, uploads and node update packages ≤ 1 MiB per chunk, forwarded port bytes 32 KB;
+an items page, image or screenshot is one message (same as the former node connection). Maximum bus line is 64 MiB; manager doesn't forward node messages over 60 MiB (drops/logs events, calls return `too_large`), avoiding a bus disconnect.
 
-**密钥**：Persona Link 的凭据只到 hub（hub 认完只告诉管理者凭据的 id 和绑定的机器）；配对码、配对都在 hub。kind service 的连接器凭据是管理者拨号要用的：
-配对时它生成、交给 hub 封存，之后它要一次、记在内存里（连接器不认了、重新配对、被别的 hub 配走时才再要），不是每次探测都过一遍总线。
+**Keys**: Persona Link credentials stop at hub (after authentication, manager receives only credential id and bound machine); pairing codes and pairing stay hub-owned. Kind-service helper credentials are needed for manager dialing:
+manager generates them during pairing, hands to hub for encrypted storage, then retrieves once and caches in memory (retrieves again only after rejection, re-pairing or pairing to another hub), not on every probe.
 
-**hub 重启**：管理者是 hub 的子进程，跟着重启。它停的时候先把在线机器的 `node.info` 和会话列表交给下一个（settings `hub.warm_machines`，和以前 hub 交的同一个键、同一个格式，所以升级后第一次重启也接得上），再断开连接；
-新的 hub 起来先读这一份（不取走）显示机器（引擎也在里面），在管理者第一次上报之前对这些机器的调用等它（最多 30 秒），管理者起来取走这一份、30 秒内照常显示在线，同时把 node 连回来。
-hub 的监听比管理者先起来：这几秒里来的 App 请求、管理者自己的路由等它（同样最多 30 秒），Persona Link 的链路和成员 hub 收到的中心的 node 流最多等 5 秒（Persona Link 一次握手给 8 秒），
-等不到才回 503（Persona Link 照常退避再连）。过了这一段，管理者不在就立刻回 503，不再等。
+**Hub restart**: the manager is a hub child and restarts too. Before stopping, it hands online machines' `node.info` and session lists to the next instance (settings `hub.warm_machines`, unchanged key and format from hub's old handoff, so the first post-upgrade restart works), then disconnects;
+new hub reads without consuming this snapshot to display machines (including engines), and calls to them wait for manager's first report (up to 30 seconds). Manager consumes the snapshot, shows machines online for 30 seconds and reconnects nodes.
+Hub listening starts before manager: App requests and manager-owned routes arriving during these seconds wait (up to 30 seconds); Persona Link links and primary node streams arriving at member hubs wait up to 5 seconds (Persona Link gives a handshake 8 seconds),
+then return 503 if not ready (normal Persona Link backoff). After this startup window, absent manager returns 503 immediately, without waiting.
 
-和以前能看出来的差别：
+Observable differences from before:
 
-- 管理者不在时机器离线、接口 503 assistant_offline（以前 hub 自己连着电脑，不受助手重启影响）。
-- 一台机器连上时，Cua / ego 状态和扩展的程序比以前晚一点（hub 在 `devices.connected` 回答以后才开始）；`waitNodeIdle`（更新 node 前等空闲）看 node 列出的会话和管理者转给 hub 还没答的提问，不再看 hub 卡片上的「需要你」。
-- `assistant.external`（管理者跑在别的机器上）时，电脑由那台去连：ssh 配置、tailcat key、`node --stdio` 的二进制、node 更新包都是那台的；
-  hub 重启时它不跟着重启（电脑一直连着），hub 起来到它重新连上总线的那一两秒里，机器按 hub.json 显示为离线。
+- Absent manager means offline machines and 503 assistant_offline (formerly hub connected computers independently of assistant restarts).
+- On machine connection, Cua / ego state and extension programs start a little later (after hub answers `devices.connected`); `waitNodeIdle` before node updates uses node-listed sessions and unanswered questions forwarded by manager to hub, no longer **Needs you** on hub cards.
+- With `assistant.external` (manager on another computer), that computer makes connections: its SSH config, tailcat key, `node --stdio` binary and node update packages are used;
+  hub restart doesn't restart it (computers stay connected), but for the second or two before it reconnects to the bus, hub shows machines from hub.json as offline.
 
-## 谁处理电脑的事件（2026-11-05）
+## Who handles computer events (2026-11-05)
 
-电脑是管理者的，电脑发来的东西也是管理者的：hub 原来的代码原样搬进了管理者（`server/internal/assistant/fleet*.go`、监控在 `server/internal/devices/metrics.go`），hub 只剩转发和投递。
+Computers belong to the manager, and so does everything they send: the hub's existing code moved unchanged into the manager (`server/internal/assistant/fleet*.go`, monitoring in `server/internal/devices/metrics.go`); the hub only forwards and delivers.
 
-| 管理者做的 | 代码 |
+| Manager responsibility | Code |
 | --- | --- |
-| 交互：`interaction.create` 的等待、可续的卡片（node 断了留 3 分钟等 hook 认领；管理者重启时从 `interactions` 表接回，认领时不再推一遍）、过期、本会话总是允许、屏幕卡片（读屏、按键、复查）、Codex 卡片、终端里答掉的计划、历史表、助手自己的提问和卡片、hub 自己功能要问的（`fleet.ask`：发邮件、Cua 的应用、jarvis_settings） | `fleet_ix.go` |
-| 会话列表：统一状态、后台任务、模型出错、看过（`session_seen`）、状态起点、待办 / 安静 / 工作状态 / 渠道标记 / 助手对话的标题 | `fleet.go`、`fleet_work.go`、`fleet_text.go` |
-| 推送的决定：「完成」推送的等待和取舍（看过、静音、渠道答了、收件箱分身、notify_user 推过、同一个 Stop 不推两次）、卡片的推送 | `fleet_push.go` |
-| 实时活动的内容（FleetState）和灵动岛的数字 | `fleet_live.go` |
-| node 的 MCP 工具（`mcp.tools` / `mcp.call` 的分派）和 `assistant.lark` | `fleet_tools.go` |
-| 渠道跟着的对话（`session.follow`：node 把它的 items 和正在写的字发给管理者，和一轮的开始、结束按 node 发来的顺序交给渠道） | `fleet_follow.go`、`devices.Follow` |
-| 机器监控（样本、24 小时历史、降采样、清理）和 token 用量 | `devices/metrics.go` |
+| Interactions: waiting for `interaction.create`, resumable cards (retain for 3 minutes after node disconnect for hook reclaim; recover from `interactions` after manager restart, without another push on reclaim), expiry, always allow for session, screen cards (read, keypress, recheck), Codex cards, plans answered in terminal, history table, assistant questions/cards, questions from hub-owned features (`fleet.ask`: sending mail, Cua apps, jarvis_settings) | `fleet_ix.go` |
+| Session lists: unified state, background tasks, model errors, seen (`session_seen`), state start time, to-do / quiet / work state / channel markers / assistant-chat titles | `fleet.go`, `fleet_work.go`, `fleet_text.go` |
+| Push decisions: waiting and filtering for done notifications (seen, muted, answered through a channel, Inbox twin, notify_user already pushed, no duplicate push for one Stop), card notifications | `fleet_push.go` |
+| Live Activity content (FleetState) and Dynamic Island counts | `fleet_live.go` |
+| Node MCP tools (`mcp.tools` / `mcp.call` dispatch) and `assistant.lark` | `fleet_tools.go` |
+| Channel-followed chats (`session.follow`: node sends items and generating text to manager, delivered to channels with turn starts/ends in node order) | `fleet_follow.go`, `devices.Follow` |
+| Machine monitoring (samples, 24-hour history, downsampling, cleanup) and token usage | `devices/metrics.go` |
 
-**hub 做的**（只转发和投递，`server/internal/hub/fleet_link.go`）：
+**Hub responsibilities** (forwarding and delivery only, `server/internal/hub/fleet_link.go`):
 
-- 留着管理者告诉它的：每台的会话列表（`fleet.sessions`，就是机器的 `sessions`）、待处理的交互（`fleet.interaction` / `fleet.interaction_resolved`，每次握手后 `fleet.interactions` 全量换一遍）、实时活动的内容（`fleet.live`）。App 的 `GET /api/v1/sessions`、`GET /api/v1/interactions`、连接时的快照、推给 App 的事件都从这里来；管理者不在时就是最后那份。
-- 投递推送：管理者决定推什么（`notify.request`，`kind` 是 `assistant` / `done` / `input`），hub 按每台设备的设置挑设备、写成设备的语言、经 APNs / 中继发、给开着 `ws_notify` 的 App 发 `notify` 事件、告诉扩展（`agent.finished`、`agent.needs_you`）。实时活动的推送节奏（每台设备多久一次、开始和结束）也是 hub 的，内容是管理者算的。
-- 把 App 的回答、历史、看过、监控这几个路由转给管理者（`http.request`）：`POST /api/v1/interactions/{id}/resolve`（只能回答的设备先在 hub 这里查）、`GET /api/v1/interactions/history`（App 收不收 MCP 表单由 hub 带上 `X-Persona-Elicitation`）、`POST /api/v1/sessions/{mid}/{sid}/seen`、`GET /api/v1/metrics`、`GET /api/v1/machines/{id}/metrics`、`GET /api/v1/usage`。
-- 告诉管理者 App 那边的事：有没有收 MCP 表单的 App（`fleet.clients`）、WebSocket 的 `seen`（`fleet.seen`）、静音改了（`fleet.mutes`）。
-- 替管理者跑还在 hub 的：手机的工具（`app.call phone`：列工具、在连着的手机上跑，必要时静默推送叫醒）。连接器 / Cua / ego 的工具、扩展给写操作卡片起的说明、lark-cli 的设置和渠道回答卡片时的主人动作是管理者自己的扩展的（`internal/extmgr`，同一个进程里直接问，node 不等了就跟着取消，`docs/extensions.md`「谁管什么」）。
+- Keep manager-provided session lists per machine (`fleet.sessions`, machine `sessions`), pending interactions (`fleet.interaction` / `fleet.interaction_resolved`, replaced in full by `fleet.interactions` after each handshake), and Live Activity content (`fleet.live`). App `GET /api/v1/sessions`, `GET /api/v1/interactions`, connection snapshots and pushed events use these; while manager is absent, use the last copy.
+- Deliver pushes: manager decides content (`notify.request`, `kind` `assistant` / `done` / `input`); hub selects devices according to their settings, localizes to device language, sends through APNs / relay, sends `notify` to `ws_notify` Apps, and informs extensions (`agent.finished`, `agent.needs_you`). Live Activity delivery cadence (per-device intervals, start/end) also belongs to hub; content is computed by manager.
+- Forward App answer, history, seen and monitoring routes to manager (`http.request`): `POST /api/v1/interactions/{id}/resolve` (hub first checks answer-only devices), `GET /api/v1/interactions/history` (hub supplies `X-Persona-Elicitation` for App MCP-form support), `POST /api/v1/sessions/{mid}/{sid}/seen`, `GET /api/v1/metrics`, `GET /api/v1/machines/{id}/metrics`, `GET /api/v1/usage`.
+- Tell manager about Apps: any MCP-form-capable App (`fleet.clients`), WebSocket `seen` (`fleet.seen`), mute changes (`fleet.mutes`).
+- Run what still belongs to hub for manager: phone tools (`app.call phone`: list tools, run on connected phones, silent push wake-up when needed). Connector / Cua / ego tools, extension descriptions for write-action cards, lark-cli settings and owner actions for channel card answers belong to manager extensions (`internal/extmgr`, queried directly in-process and cancelled when node stops waiting; `docs/extensions.md`, "Who owns what").
 
-管理者不在的时候：列表和卡片是最后那份，回答、看过、历史、监控回 `503 assistant_offline`，什么都不丢；它回来后先把全量交互和列表交给 hub，hook 再来认领可续的卡片（同一张卡，不再推）。
+While manager is away: lists and cards use the last copy; answering, seen, history and monitoring return `503 assistant_offline`; nothing is lost. On return, it first hands full interaction and session lists to hub, then hooks reclaim resumable cards (same card, no new push).
 
-和以前能看出来的差别：
+Observable differences:
 
-- 管理者的卡片（分诊的卡、助手的提问）以前管理者不在时 hub 替它收下回答等它回来；现在卡片在管理者那边，它不在时回答不了（503），回来以后照常回答。
-- 一个会话刚开（`POST /api/v1/sessions`）回给 App 的 `state` 是 hub 等管理者列出来以后的（最多 2 秒），等不到就不带。
+- Manager cards (triage cards, assistant questions) previously had answers held by hub until manager returned; now cards live in manager, so answers fail with 503 while absent and work normally after return.
+- A newly opened session (`POST /api/v1/sessions`) returns `state` only after hub waits for manager to list it (up to 2 seconds); omitted if not available.
 
-## 系统信息
+## System information
 
-node 启动时读一次，随 `node.info` 的 `system` 字段给管理者；管理者存进 `machine_systems`（机器离线、重启后也知道它是什么系统），
-放进它报给 hub 的 `Machine.system`，hub 下发给 App。
+The node reads this once at startup and sends `system` in `node.info` to the manager, which stores it in `machine_systems` (so OS information survives offline periods and restarts),
+includes it in reported `Machine.system`, and the hub sends it to Apps.
 
-| 字段 | Linux | macOS | Windows |
+| Field | Linux | macOS | Windows |
 | --- | --- | --- | --- |
-| `distro` / `like` / `name` / `version` | `/etc/os-release` 的 `ID` / `ID_LIKE` / `PRETTY_NAME` / `VERSION_ID`（没有就读 `/usr/lib/os-release`） | `macos`，`sw_vers` 的 ProductName + ProductVersion、BuildVersion | `windows`，注册表 `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` 的 ProductName + DisplayVersion（「Windows 11 Home 25H2」；Windows 11 的 ProductName 还写着 Windows 10，按 CurrentBuild ≥ 22000 改过来），`build` 是 CurrentBuild.UBR |
-| `kernel` | `/proc/sys/kernel/osrelease` | `Darwin ` + `kern.osrelease` | `NT ` + `RtlGetVersion` 的版本号（`NT 10.0.26200`） |
-| `model` | DMI `sys_vendor` + `product_name`（去掉「To be filled by O.E.M.」这类占位） | `system_profiler SPHardwareDataType` 的 Model Name（只取这一行，同一输出里有序列号），失败用 `hw.model` | 注册表 `HARDWARE\DESCRIPTION\System\BIOS` 的 SystemManufacturer + SystemProductName（同样去掉占位） |
-| `cpu` | `/proc/cpuinfo` 第一个 `model name`（ARM 板子取 `Hardware` / `Model`） | `machdep.cpu.brand_string` | 注册表 `CentralProcessor\0` 的 ProcessorNameString |
-| `cores` / `memory` / `boot_time` | `runtime.NumCPU`、`MemTotal`、`/proc/stat` 的 `btime` | `runtime.NumCPU`、`hw.memsize`、`kern.boottime` | `runtime.NumCPU`、`GlobalMemoryStatusEx` 的总物理内存、现在减去开机以来的毫秒数 |
+| `distro` / `like` / `name` / `version` | `ID` / `ID_LIKE` / `PRETTY_NAME` / `VERSION_ID` from `/etc/os-release` (fallback `/usr/lib/os-release`) | `macos`, ProductName + ProductVersion and BuildVersion from `sw_vers` | `windows`, ProductName + DisplayVersion from registry `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` ("Windows 11 Home 25H2"; Windows 11's ProductName still says Windows 10, corrected when CurrentBuild ≥ 22000); `build` is CurrentBuild.UBR |
+| `kernel` | `/proc/sys/kernel/osrelease` | `Darwin ` + `kern.osrelease` | `NT ` + version from `RtlGetVersion` (`NT 10.0.26200`) |
+| `model` | DMI `sys_vendor` + `product_name` (strips placeholders such as "To be filled by O.E.M.") | Model Name from `system_profiler SPHardwareDataType` (only this line; same output contains serial number), fallback `hw.model` | SystemManufacturer + SystemProductName from registry `HARDWARE\DESCRIPTION\System\BIOS` (same placeholder removal) |
+| `cpu` | First `model name` in `/proc/cpuinfo` (`Hardware` / `Model` on ARM boards) | `machdep.cpu.brand_string` | ProcessorNameString from registry `CentralProcessor\0` |
+| `cores` / `memory` / `boot_time` | `runtime.NumCPU`, `MemTotal`, `btime` in `/proc/stat` | `runtime.NumCPU`, `hw.memsize`, `kern.boottime` | `runtime.NumCPU`, total physical memory from `GlobalMemoryStatusEx`, now minus milliseconds since boot |
 
-系统图标（`OSBadge`）：macOS 是 SF Symbols 的苹果标，各 Linux 发行版是自己的官方标志（Simple Icons 的矢量图，`Theme.Brand.os`），
-染发行版的颜色；不认识的发行版先看 `ID_LIKE`（Pop!_OS → Ubuntu），再不行是通用 Linux 的企鹅。矢量资源，任何尺寸、深浅色都清楚。
-（2026-10-31 以前是画的「朋友圈」和字母，用户要求换成官方标志。）
+OS icons (`OSBadge`): macOS uses the SF Symbols Apple logo; Linux distributions use their official logos (Simple Icons vectors, `Theme.Brand.os`),
+tinted with distribution colors. Unknown distributions fall back to `ID_LIKE` (Pop!_OS → Ubuntu), then the generic Linux penguin. Vector assets stay clear at every size and in light/dark.
+(Before 2026-10-31 these were drawn circles and letters; the user requested official logos.)
 
-## 采集口径
+## Collection definitions
 
-node 每 10 秒（`proto.MetricEvery`，对齐到整 10 秒，所有机器的点落在同一时刻）采一个样本，发 `metrics` 事件给管理者。
-第一个样本没有 CPU 和网络速率（要两次读数相减），字段缺省（不是 0）。
+The node samples every 10 seconds (`proto.MetricEvery`, aligned to whole 10-second boundaries so all machines' points share timestamps), sending a `metrics` event to the manager.
+The first sample lacks CPU and network rates (need two readings); fields are omitted, not zero.
 
-| 指标 | Linux | macOS | Windows |
+| Metric | Linux | macOS | Windows |
 | --- | --- | --- | --- |
-| CPU | `/proc/stat` 两次读数之差：忙 = 总 − idle − iowait（等 I/O 算空闲，同 top 的 id + wa；guest 已含在 user 里不重复加）；每核同样算，只放在最新样本里（不入库） | 常驻的 `iostat -n 0 -w 10`，取最新一行的 100 − id（过去 10 秒的平均；第一行是开机以来的平均，丢掉） | `GetSystemTimes` 两次读数之差：忙 = 内核 + 用户 − 空闲（内核时间里含空闲、DPC 和中断）；每核用 `NtQuerySystemInformation(SystemProcessorPerformanceInformation)` 同样算，只放在最新样本里；超过 64 个逻辑处理器（处理器组）时没有每核 |
-| 负载 | `/proc/loadavg` 第一列 | `sysctl vm.loadavg`（二进制 struct loadavg） | 没有（Windows 没有负载平均），字段缺省 |
-| 内存 | 已用 = MemTotal − MemAvailable（页缓存算空闲，同 `free` 的 available）；没有 MemAvailable 的老内核用 free + buffers + cached | 常驻的 `vm_stat 10`：已用 = 匿名页 − 可清除页 + wired + 压缩器占用，等于「活动监视器」的「已使用内存」（App 内存 + 联动内存 + 被压缩）；文件缓存算空闲 | `GlobalMemoryStatusEx`：已用 = 总量 − 可用（备用列表里的文件缓存算可用，同 Linux 的 MemAvailable） |
-| 交换 | SwapTotal − SwapFree | `sysctl vm.swapusage` | 页面文件：`NtQuerySystemInformation(SystemPageFileInformation)` 各页面文件的大小和在用量之和 |
-| 网络 | `/proc/net/dev` 物理网卡的收发字节之差 / 时间 | 路由 socket `NET_RT_IFLIST2`（`if_msghdr2` 的 64 位计数）的物理网卡之差 / 时间 | `GetIfEntry2Ex` 的 InOctets / OutOctets，物理网卡之差 / 时间；算哪些网卡每分钟列一次（列网卡要约 7 ms，读计数约 0.2 ms），网卡集合一变就丢掉这一个点 |
-| 磁盘 | `/proc/self/mounts` 里每个本地块设备（`/dev/…`，去掉 loop、squashfs / iso9660 这类只读镜像，同一设备的 bind mount 只算一次）各 `statfs` 一次加起来：数据盘常挂在 `/data00` 之类，只看 `/` 一台 5 TB 的机器只显示 118 GB；每个的已用 = 总块 − 空闲块，总量 = 已用 + 普通用户可用（同 df） | `statfs("/System/Volumes/Data")`（`/` 是只读的系统快照，只有几 GB） | 每个落在磁盘上的固定盘（`GetDriveType` = `DRIVE_FIXED`，卷在某块磁盘上有长度大于 0 的区段，同一个卷只算一次）各 `GetDiskFreeSpaceEx` 一次加起来，已用 = 总量 − 空闲，总量 = 已用 + 用户可用（同 df）；网络盘、U 盘、光驱不算，Google Drive 这类同步客户端的虚拟盘也不算（它自称 FAT32 固定盘、容量照抄 C 盘，但卷在磁盘上的区段长度是 0）；盘符每分钟列一次 |
+| CPU | Difference of `/proc/stat` readings: busy = total − idle − iowait (I/O wait is idle, like top id + wa; guest is already in user, not counted again); same per-core calculation, latest sample only (not stored) | Resident `iostat -n 0 -w 10`, latest line's 100 − id (past 10-second average; first line is since-boot average, discarded) | Difference of `GetSystemTimes`: busy = kernel + user − idle (kernel includes idle, DPC and interrupts); per-core via `NtQuerySystemInformation(SystemProcessorPerformanceInformation)`, latest sample only; no per-core above 64 logical processors (processor groups) |
+| Load | First column of `/proc/loadavg` | `sysctl vm.loadavg` (binary struct loadavg) | None (Windows has no load average), omitted |
+| Memory | Used = MemTotal − MemAvailable (page cache available, like `free` available); old kernels without MemAvailable use free + buffers + cached | Resident `vm_stat 10`: used = anonymous pages − purgeable + wired + compressor size, matching Activity Monitor **Memory Used** (App Memory + Wired Memory + Compressed); file cache available | `GlobalMemoryStatusEx`: used = total − available (standby-list file cache is available, like Linux MemAvailable) |
+| Swap | SwapTotal − SwapFree | `sysctl vm.swapusage` | Page files: sum size and used amount from `NtQuerySystemInformation(SystemPageFileInformation)` |
+| Network | Physical-interface receive/send byte differences in `/proc/net/dev` / elapsed time | Physical-interface differences from routing socket `NET_RT_IFLIST2` (`if_msghdr2` 64-bit counters) / elapsed time | InOctets / OutOctets from `GetIfEntry2Ex`, physical-interface differences / elapsed time; eligible interfaces listed once a minute (~7 ms to list, ~0.2 ms to read counters), discard sample when set changes |
+| Disk | Sum `statfs` for local block devices in `/proc/self/mounts` (`/dev/…`, excluding loop and read-only squashfs / iso9660 images, counting bind mounts of a device once): data disks often mount at `/data00`, so `/` alone makes a 5 TB machine show 118 GB; used = total blocks − free blocks, total = used + ordinary-user available (like df) | `statfs("/System/Volumes/Data")` (`/` is a read-only system snapshot, only a few GB) | Sum `GetDiskFreeSpaceEx` for fixed drives actually on disks (`GetDriveType` = `DRIVE_FIXED`, volume has a positive-length disk extent, each volume once); used = total − free, total = used + user available (like df); excludes network, USB, optical and sync-client virtual drives such as Google Drive (claims FAT32 fixed drive and copies C capacity, but disk extent length is 0); drive letters listed once a minute |
 
-macOS 为什么起两个常驻进程：构建是 `CGO_ENABLED=0`，拿不到 `host_statistics` 这类 Mach 调用；`vm.page_*` 的 sysctl 缺匿名页和压缩器数字。
-两个进程每 10 秒各打印一行，比每次采集都起 `vm_stat` / `top` 便宜得多；退出了就一分钟后重起，node 退出时一起结束（`exec.CommandContext`）。
+Why macOS starts two resident processes: builds use `CGO_ENABLED=0`, so Mach calls such as `host_statistics` are unavailable; `vm.page_*` sysctls lack anonymous-page and compressor counts.
+Each process prints one line every 10 seconds, much cheaper than starting `vm_stat` / `top` each sample; if they exit, restart after a minute, and stop them with node (`exec.CommandContext`).
 
-Windows 不起进程：同样是 `CGO_ENABLED=0`，但 Win32 的这些调用纯 Go 就能做（`golang.org/x/sys/windows`，`GetSystemTimes` 和 `GlobalMemoryStatusEx` 经 kernel32 直接调）。
+Windows starts no processes: also `CGO_ENABLED=0`, but these Win32 calls work in pure Go (`golang.org/x/sys/windows`; `GetSystemTimes` and `GlobalMemoryStatusEx` directly through kernel32).
 
-### 哪些网卡算
+### Which network interfaces count
 
-只算「真正出机器的」流量，虚拟网卡要么是本机内部的（lo、容器），要么在底下的物理网卡上又算了一遍（隧道、代理、网桥）：
+Count only traffic actually leaving the machine. Virtual interfaces are either local (lo, containers) or counted again on underlying physical interfaces (tunnels, proxies, bridges):
 
-- **Linux**：`/sys/class/net/<名字>` 指向 `/sys/devices/virtual/net/` 的都不算。内核把所有软件网卡放在那里：lo、docker0、veth*、br-*、
-  virbr*、tun*（TUN 代理）、tailscale0、wg*、bond / VLAN（成员网卡照算，不会重复）。真网卡（包括虚拟机里的 virtio 网卡）挂在总线下面，算。
-  没有 `/sys` 时按名字前缀排除（`sysmon.virtualName`：lo、docker、br-、veth、virbr、tailscale、tun、tap、wg、zt、cni、flannel、cali 等）。
-- **macOS**：只算以太网类型（IFT_ETHER）、名字是 `en*`、不是回环的：Wi-Fi、网线、雷雳口。utun*（Tailscale、VPN、TUN 代理）、
-  bridge*（雷雳网桥，成员 en* 已经算了）、awdl / llw（隔空投送）、anpi、gif、stf、ap 都不算。
-- **Windows**：`MIB_IF_ROW2` 的 `HardwareInterface` 标志置位、`FilterInterface` 没置位的才算：Wi-Fi、网线、USB 共享网络。
-  Tailscale（wintun）、VPN 适配器、Hyper-V / WSL 的 vEthernet、Wi-Fi Direct 虚拟网卡、蓝牙个人局域网、回环都是软件网卡，不算；
-  叠在物理网卡上的过滤层（WFP、QoS）会重复它的计数，也不算。
+- **Linux**: exclude `/sys/class/net/<name>` links into `/sys/devices/virtual/net/`. The kernel puts software interfaces there: lo, docker0, veth*, br-*,
+  virbr*, tun* (TUN proxies), tailscale0, wg*, bond / VLAN (member interfaces still count, without duplication). Real interfaces, including VM virtio, live under buses and count.
+  Without `/sys`, exclude name prefixes (`sysmon.virtualName`: lo, docker, br-, veth, virbr, tailscale, tun, tap, wg, zt, cni, flannel, cali, etc.).
+- **macOS**: Ethernet type (IFT_ETHER), `en*` name, non-loopback only: Wi-Fi, wired Ethernet, Thunderbolt. Exclude utun* (Tailscale, VPN, TUN proxies),
+  bridge* (Thunderbolt bridge, member en* already counted), awdl / llw (AirDrop), anpi, gif, stf, ap.
+- **Windows**: only `MIB_IF_ROW2` with `HardwareInterface` set and `FilterInterface` unset: Wi-Fi, Ethernet, USB tethering.
+  Tailscale (wintun), VPN adapters, Hyper-V / WSL vEthernet, Wi-Fi Direct virtual adapters, Bluetooth PAN and loopback are software interfaces and excluded;
+  filter layers atop physical interfaces (WFP, QoS) duplicate counters and are excluded too.
 
-两次读数之间计数变小（网卡没了、计数清零）就丢掉这一个点，不画一个巨大的尖峰。
+If counters decrease between readings (interface vanished or counters reset), discard that sample instead of drawing a huge spike.
 
-### 开销（2026-10-30 实测，`jarvisd sysmon 30`）
+### Overhead (measured 2026-10-30, `jarvisd sysmon 30`)
 
-| 机器 | 每次采集耗时 | personad CPU | 另外 |
+| Machine | Collection time | personad CPU | Other |
 | --- | --- | --- | --- |
-| Mac Studio（M1 Ultra，20 核，macOS 26） | 0.55–0.70 ms | 51 ms / 5 分钟 = 0.017% | iostat + vm_stat 两个进程 2 小时 21 分钟共 0.34 s CPU（0.004%） |
-| Linux 虚拟机（32 核，Ubuntu 24.04，6 块网卡） | 0.76 ms | 46 ms / 5 分钟 = 0.015% | 不起进程 |
-| Windows 11 台式机（16 线程，4 个盘符、7 块网卡，2026-11-04） | 1.8 ms（每分钟列一次网卡和盘符约 8 ms，其余每次约 0.5 ms） | 47 ms / 5 分钟 = 0.016% | 不起进程 |
+| Mac Studio (M1 Ultra, 20 cores, macOS 26) | 0.55–0.70 ms | 51 ms / 5 minutes = 0.017% | iostat + vm_stat together used 0.34 s CPU over 2 hours 21 minutes (0.004%) |
+| Linux VM (32 cores, Ubuntu 24.04, 6 interfaces) | 0.76 ms | 46 ms / 5 minutes = 0.015% | No subprocesses |
+| Windows 11 desktop (16 threads, 4 drive letters, 7 interfaces, 2026-11-04) | 1.8 ms (interface/drive enumeration once a minute ~8 ms, other samples ~0.5 ms) | 47 ms / 5 minutes = 0.016% | No subprocesses |
 
-node 启动 5 分钟后在日志里记一次平均耗时（`metrics: a sample takes …`）。刚启动的 node 同时在扫 transcript，这个数会偏高
-（同一台 Linux 上记到过 4.7 ms，单独跑 `jarvisd sysmon` 是 0.76 ms）。
+Five minutes after node starts, it logs average duration once (`metrics: a sample takes …`). Startup transcript scanning can inflate it
+(4.7 ms observed on the same Linux machine where standalone `jarvisd sysmon` takes 0.76 ms).
 
-## 存储和保留
+## Storage and retention
 
-管理者收到样本：最新一个留在内存（Dashboard 的「现在」，超过 30 秒没新样本就不算现在），同时写进 `machine_metrics`（`step = 10` 的原始行）。
-`metricsLoop` 每分钟：
+On receipt, the manager retains the latest sample in memory (Dashboard **Now**, not current if older than 30 seconds) and writes it to `machine_metrics` (raw `step = 10` row).
+Every minute `metricsLoop`:
 
-1. **降采样**：一小时前的原始行按机器、按分钟合成一行（`step = 60`）：平均值，总量（内存总量、磁盘总量等）取最大。
-   删和插是一条语句（`WITH moved AS (DELETE … RETURNING *) INSERT … SELECT … GROUP BY`），同一分钟不会合两次。
-   原始行经部分索引 `machine_metrics_raw`（`(ts) WHERE step = 10`，只含最近一小时的原始行）找到，每分钟不再扫整张 24 小时的表；SQL 里的 `step = 10` 写成常量，缓存语句换成通用计划也能用上这个索引。
-2. **清理**：删掉 24 小时 10 分钟以前的所有行（多留 10 分钟，24 小时的图一打开左边就是满的）。
+1. **Downsamples** raw rows older than an hour into one row per machine per minute (`step = 60`): averages values and takes maximum totals (memory, disk, etc.).
+   Delete and insert are one statement (`WITH moved AS (DELETE … RETURNING *) INSERT … SELECT … GROUP BY`), so a minute isn't merged twice.
+   Raw rows are found through partial index `machine_metrics_raw` (`(ts) WHERE step = 10`, containing only the latest hour's raw rows), avoiding scanning the full 24-hour table each minute; SQL uses constant `step = 10` so cached statements' generic plans can still use it.
+2. **Cleans up** all rows older than 24 hours 10 minutes (10-minute margin keeps the left edge full when opening a 24-hour chart).
 
-查询时按图的步长把两种行按覆盖时长加权平均（原始行权重 10、合成行 60），所以跨过「一小时前」那条线的曲线是连着的。
+Queries average both row types weighted by covered duration (raw 10, aggregate 60), keeping curves continuous across the one-hour boundary.
 
-### 量
+### Volume
 
-每台机器稳定在：最近 1 小时 360 行原始 + 之前 23 小时 10 分钟约 1390 行合成 ≈ **1750 行**；6 台约 **1.05 万行**。
-实测一行数据 116 字节（`pg_column_size`），加上行头、行指针和主键索引约 200 字节，整表约 **2 MB**。写入：每台每天 8640 行原始 + 1440 行合成，
-6 台每天约 6 万次插入、5 万次删除（autovacuum 会回收，表不会涨）。
+Per machine at steady state: 360 raw rows for the latest hour + about 1390 aggregate rows for the preceding 23 hours 10 minutes ≈ **1750 rows**; 6 machines ≈ **10,500 rows**.
+Measured row data is 116 bytes (`pg_column_size`), roughly 200 bytes including headers, pointers and primary index; whole table about **2 MB**. Writes per machine per day: 8640 raw + 1440 aggregate rows;
+6 machines about 60,000 inserts and 50,000 deletes daily (autovacuum reclaims them; table doesn't grow).
 
-## 断开
+## Gaps
 
-机器没发样本的时段在图上是断开的，不连线：
+Periods without machine samples are breaks in the chart, not connected lines:
 
-- 管理者返回的 `points` 里，相邻两点隔了超过 3 个步长，就在中间插一个 `{"t": …, "gap": true}`；最后一个点离现在超过 4 个步长（机器现在离线）也在末尾插一个。
-  比 3 个步长短的空档（偶尔丢一个样本）照常连上。各范围的步长：1 小时 10 秒、6 小时 1 分钟、24 小时 4 分钟（每张图约 360 个点）。
-- App 画图时每段（两个 gap 之间）是一条单独的线（详情页 Swift Charts 的 `series:` 用「指标#段号」，卡片上的迷你曲线按同样的段号分成几条），所以线不会跨过空档；按住图看数值时，落在空档里不显示值。
-- 卡片上的迷你曲线不用 Swift Charts，在 `Canvas` 上自己画（`Sparkline` / `SparklineGeometry`：单调三次曲线，和图表的 `.monotone` 同一种，一条线时下面带一层浅色）：
-  一页十几个图表，每个图表自己的布局在 Mac 上每次进机器页要多花约 130 ms；向量化的 `LinePlot` / `AreaPlot` 也一样慢（开销在每个图表，不在点数，#390）。样子和原来一样，截图对照过。
+- Manager `points` inserts `{"t": …, "gap": true}` between adjacent points more than 3 steps apart; also appends one when the last point is more than 4 steps old (machine offline now).
+  Gaps shorter than 3 steps (occasionally missing one sample) stay connected. Steps: 1 hour = 10 seconds, 6 hours = 1 minute, 24 hours = 4 minutes (about 360 points per chart).
+- App draws each segment between gaps as a separate line (detail Swift Charts `series:` uses "metric#segment"; card sparklines split by the same segment numbers), so lines never cross gaps; holding on a gap shows no value.
+- Card sparklines use custom `Canvas`, not Swift Charts (`Sparkline` / `SparklineGeometry`: monotone cubic curves like chart `.monotone`, with a light fill beneath a single line):
+  with a dozen charts per page, each chart's own layout adds about 130 ms on Mac each time Machines opens; vectorized `LinePlot` / `AreaPlot` is equally slow (overhead per chart, not point count, #390). Appearance is unchanged and compared in screenshots.
 
 ## App
 
-原来「机器」（Agent 运行数）和「机器监控」（Dashboard）是两个页面，机器详情里还要再点一层「系统与监控」才看到曲线；2026-11-01 按用户要求合成一个「机器」页，
-「机器监控」这个名字和入口都去掉了。
+Previously **Machines** (Agent counts) and **Machine Monitoring** (Dashboard) were separate pages, and machine details needed another tap into **System & Monitoring** to see curves. Requested 2026-11-01: merge into one **Machines** page,
+removing the **Machine Monitoring** name and entry point.
 
-- **入口**（都进同一个 `MachinesView`）：新外壳抽屉里的「机器」；设置 › 机器；Agents 列表左上角菜单最下面的「机器」（`MachineListRoute`，iPad 分栏里开在右栏）；
-  Mac 侧边栏的「机器」（⌘5）。项目页 / 机器的项目页右上角 ⓘ 进机器详情（`MachineDetailRoute`）。
-- **机器页**（`MachinesView`）：顶部一行「N/M 台在线 · K 台用量偏高 · J 个 Agent 需要你」。每台一张卡（`MachineCard`）：系统图标、名字、系统 · 核数 · 内存、
-  在线 / 离线（离线显示最后在线时间和 ssh 的错误）；告警标签（下面「异常」）；Agent 数「需要你 / 工作中 / 空闲」（空闲 = 完成未看 + 已看 + 未知，
-  只算活着的、不含助手的对话，和 Agents 列表一致）；CPU / 内存 / 网络的当前值和最近 1 小时的迷你曲线；personad 和 hub 不是同一次部署时的「重新部署」。
-  iPad / Mac 上卡片按宽度排成多列。点卡片进机器详情。
-  Web 的部署入口按 `can_deploy` 显示：旧 Link node 提示先本机升级一次，支持时显示等待空闲 / 传输 / 重启 / 版本确认；细节见 [node-update.md](node-update.md)。
-- **排序**（`MachineConcern`）：需要注意的在前，依次是 离线 → 严重告警 → 注意告警 → 有 Agent 需要你 → 版本不一致；同一类和其余的按 hub 配置里的顺序，
-  只有卡片上显示的东西变了才会换位置（换位置有动画）。
-- **机器详情**（`MachineDetailView`）：一页看完，常用的在上面。顶部是同一张卡（不带数字，下面有）；离线时紧接着是「hub 通过 ssh … 接入」和「重新连接」。
-  然后是 **Agent**：需要你的在前、工作中其次，最多先列 5 个，其余点「显示全部 N 个」，点一个进对话；下面一行「引擎」（这台显示哪个引擎的会话，点开选，`EngineSelectionView`）。然后是 **监控**：现在的 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换，
-  1 小时 / 6 小时 / 24 小时切换，CPU、内存、网络（下行 + 上行）、负载四张曲线（负载图上虚线标出核数），Linux 还有每个核心的柱子；
-  按住任一张图拖动看某一时刻，四张图跟着同一时刻（共享选中时间），标题行显示那一刻的值和时间。然后是 **系统**（系统、内核、架构、机型、处理器、
-  核心、内存、主机名、开机时间和已运行多久、herdr / Claude Code / node 版本），**启动器**，在线时最后是接入方式和「重新连接」。
-- **更新**：机器的在线状态和 Agent 随 hub 推送实时变；数字在页面在屏幕上且 App 在前台时轮询：机器页每 10 秒，详情 1 小时范围每 10 秒、其余每分钟；
-  进后台就停（`task(id: scenePhase)`）。下拉刷新（Mac 上是 ⌘R，`macRefreshes`）连机器列表一起重新取。
-- **异常**（`MetricAlert`）：CPU ≥ 75% 注意、≥ 90% 严重；内存 ≥ 80% / 90%；磁盘 ≥ 80% / 90%；负载 ≥ 1 / 2 倍核数。卡片加一圈状态色的边，
-  标签是图标（状态色）+ 文字（正文色），不单靠颜色。
-- 旧 hub 没有这些接口（404）时机器页的卡片不带数字（Agent 数照常），详情的监控说「部署新版本的 hub 和 node 后再看」；旧 node 不发样本，数字是「—」。
+- **Entry points** (all open `MachinesView`): **Machines** in the new shell drawer; **Settings › Machines**; **Machines** at the bottom of the Agents list's top-left menu (`MachineListRoute`, opens in the right column on iPad);
+  Mac sidebar **Machines** (⌘5). Top-right ⓘ on Projects / machine projects opens machine detail (`MachineDetailRoute`).
+- **Machines page** (`MachinesView`): top line "N/M online · K high-usage machines · J Agents need you". One card per machine (`MachineCard`): OS icon, name, OS · cores · memory,
+  online / offline (last online time and SSH error when offline); alert tags ("Alerts" below); Agent counts **Needs you / Working / Idle** (Idle = Unread + Seen + Unknown,
+  live sessions only, excluding assistant chats, matching Agents list); current CPU / memory / network values and past-hour sparklines; **Redeploy** when personad and hub aren't from the same deployment.
+  iPad / Mac cards form multiple columns according to width. Tap to open machine detail.
+  Web deployment entry depends on `can_deploy`: old Link nodes prompt a one-time local upgrade; supported nodes show waiting for idle / transfer / restart / version confirmation; details in [node-update.md](node-update.md).
+- **Ordering** (`MachineConcern`): attention-needed first: offline → severe alerts → caution alerts → Agents needing you → version mismatch; within each category and for remaining machines, hub config order.
+  Reorder only when something shown on the card changes, with animation.
+- **Machine detail** (`MachineDetailView`): everything on one page, common actions first. Same card at top (without metrics, shown below); when offline, next comes **Hub connects through SSH …** and **Reconnect**.
+  Then **Agents**: Needs you first, Working next, first 5 shown, **Show all N** for the rest; tap to open chat. Next **Engine** (which engine's sessions this machine shows; tap to choose, `EngineSelectionView`). Then **Monitoring**: current CPU / memory / network / load / disk / swap,
+  1 hour / 6 hours / 24 hours selector, four charts for CPU, memory, network (download + upload), load (dashed core-count line); Linux also has per-core bars.
+  Hold and drag any chart to inspect a time; all four share the selected timestamp, showing its value and time in the header. Then **System** (OS, kernel, architecture, model, processor,
+  cores, memory, hostname, boot time and uptime, herdr / Claude Code / node versions), **Launchers**, and, when online, connection method and **Reconnect** last.
+- **Updates**: machine online state and Agents update live through hub pushes; numbers poll only while page is visible and App foreground: Machines every 10 seconds, detail's 1-hour range every 10 seconds, other ranges every minute;
+  stops in background (`task(id: scenePhase)`). Pull to refresh (Mac ⌘R, `macRefreshes`) also reloads the machine list.
+- **Alerts** (`MetricAlert`): CPU ≥ 75% caution, ≥ 90% severe; memory ≥ 80% / 90%; disk ≥ 80% / 90%; load ≥ 1 / 2 times core count. Cards get a status-colored border,
+  and tags use icon (status color) + text (body color), not color alone.
+- With old hubs lacking these endpoints (404), machine cards omit metrics (Agent counts remain), and detail monitoring says **Deploy newer hub and node versions to see this**; old nodes sending no samples show **—**.
 
-### 图
+### Charts
 
-按 dataviz 的规则：
+Follow dataviz rules:
 
-- 一个指标一个颜色，机器页和详情一致；浅色 / 深色是各自选的色阶（`MetricColor`），用 `validate_palette.js` 验过两种模式
-  （CPU 蓝、内存青绿、下行橙、上行紫、负载品红；网络两条线的色盲区分 ΔE > 25）。
-- 线 2pt（迷你图 1.5pt），单条线下面铺 10% 的同色面积，两条线不铺；网格是一像素的细线；纵轴在右边、最多 3 个刻度，横轴最多 4 个时间。
-- 数值用正文色，颜色只在线和图例的圆点上；两条线的图（网络）有图例（圆点 + 名字），一条线的图标题就是名字。
-- 状态色（注意黄、严重红）只用于异常，不当普通系列色用。
-- 每张图有 VoiceOver 描述（现在多少、最高多少）。
+- One color per metric, consistent on Machines and details; separate light/dark shades (`MetricColor`), both validated with `validate_palette.js`
+  (CPU blue, memory teal, download orange, upload purple, load magenta; network lines' color-blind separation ΔE > 25).
+- Lines 2pt (sparklines 1.5pt), one line has 10% same-color fill below, two lines have none; one-pixel grid; right-side y-axis with at most 3 ticks, x-axis at most 4 times.
+- Values use body color; series color appears only on lines and legend dots. Two-line charts (network) have dot + name legends; single-line titles name the metric.
+- Status colors (caution yellow, severe red) only indicate alerts, not ordinary series.
+- Each chart has a VoiceOver description (current value, maximum).
 
-## 自检：这台电脑能做什么（#2429）
+## Doctor: what this computer can do (#2429)
 
-网页版机器页有一张「这台电脑能做什么」（照 Moshi 的 Doctor 页），把 `personad node doctor` 的结果（`docs/claude-integration.md`「自检」）按功能读给人看，而不是丢一串检查名。
-iOS / Mac 的机器详情（#3018，`apple/Persona/Views/Machines/NodeHealthSection.swift`，归并逻辑 `NodeHealthModel.swift` 的 `NodeHealth`）放在引擎后面，归并表、状态、文案和网页一致，改一边要同步改另一边。
+The web Machines page has **What this computer can do** (modeled on Moshi's Doctor page), presenting `personad node doctor` results (`docs/claude-integration.md`, "Doctor") by feature, not a string of check names.
+iOS / Mac machine detail (#3018, `apple/Persona/Views/Machines/NodeHealthSection.swift`, grouping in `NodeHealthModel.swift`'s `NodeHealth`) places it after Engine. Grouping, states and copy match web; changing one requires updating the other.
 
-- **取数**：hub 路由 `GET /api/v1/machines/{mid}/doctor`（只读）和 `POST …/doctor/fix`（重写 Persona 自己生成的文件，写完再检查一次，返回新的报告），都**只有 `full` 设备**（报告里有路径和用户自己的钩子命令，fix 会写电脑上的文件）；node RPC 是 `node.doctor`（只读，`{"fix":true}` 才写）和 `node.doctor.fix`（`node/doctor_rpc.go`），检查在 node 进程里跑，用的就是命令行的 `RunDoctor`，JSON 模型是同一个 `DoctorReport`。hub 的 GET 从不把 `fix` 传给 node。
-- **按功能归并**（`web/src/lib/node-health.ts` 的 `FEATURES`）：手机审批卡片（`node.sock`、claude / assistant 的 settings 和 hooks、`command-paths`）、状态与通知（`node.sock`、`command-paths`）、终端与引擎（`herdr`）、MCP 工具（`node.sock`、`mcp.json`、`command-paths`）、技能（`agent-plugin`、`claude-version`）、运行时接入（`runtime.sock`）。
-  一项功能取它那几个检查里最差的：有 `fail` 是「有问题」，有 `warn` 是「部分可用」，都正常是「就绪」。「终端与引擎」和「运行时接入」是可选的：只有 `warn` 时是「未启用」（写在「没有设置：…」里，不算需要处理），
-  但「终端与引擎」在这台电脑的引擎是 herdr（含 herdr + Herdr App，没选过也算 herdr）时，herdr 连不上是「有问题」。node 多报的、没归进任何功能的检查，不正常时进「其他检查」，不会藏起来。
-  `global-permission-hooks`（用户自己的同步 PermissionRequest 钩子）不算功能，作为一行说明列在功能下面，只看不改。
-- **界面**：顶部「一切正常」或「N 项功能需要处理」（Moshi 的 Everything works / N feature(s) need attention），下面一行「没有设置：…」；「查看全部检查（N）」展开逐项（状态、名字、发现了什么、怎么办、哪些文件不同）；「重新检查」；
-  有 `stale` / `missing` 的生成文件时出现「修复」，点了先确认一次（说明会重写哪几个文件、不改用户自己的 Claude Code 设置）。打开页面时检查一次，不轮询。
-- **旧 node**：没有这个 RPC 的 node 回 `unknown method`，卡片写「这台电脑的 node 太旧，更新后可以在这里自检」，旁边是机器页已有的部署按钮（同一个 `POST …/deploy`，同样的 `can_deploy` 判断）；旧 hub 没有这条路由（404）和非 `full` 设备（403）各有一句说明。离线的电脑不发请求。
-- **连不上时的分类**（`classifyConnection`）：机器卡片和机器页离线时，按 hub 记下的错误文本分「认证没通过 / 连不上这台电脑 / 连接超时 / 版本不一致」，各配一句下一步（ssh 接入和 Persona Link 的措辞不同）；
-  文本认不出来就什么都不加，不猜。计划内的重启（部署中）不算。
-- 截图用假 hub：`MOCK_DOCTOR=healthy|stale|broken|mixed|old|error|slow`、`MOCK_DOCTOR_OLD=<机器 id,…>`（`scripts/mock/mock_hub.py`）。
-- 测试：`node/doctor_rpc_test.go`（临时目录；不带 fix 时不写任何文件、fix 只重写生成的文件且不碰用户的 settings.json、检查名和网页的归并表对得上）、`hub/node_doctor_test.go`（权限）、`web/src/lib/node-health.test.ts`（归并、总结、修复、旧 node、连接分类）、`apple/PersonaTests/NodeHealthTests.swift`（同一张归并表、解码、旧 node / 旧 hub、模型的检查和修复）。
+- **Fetch**: hub routes `GET /api/v1/machines/{mid}/doctor` (read-only) and `POST …/doctor/fix` (rewrite Persona-generated files, recheck and return a new report) are **`full` devices only** (reports contain paths and user hook commands; fix writes files). Node RPC: `node.doctor` (read-only unless `{"fix":true}`), `node.doctor.fix` (`node/doctor_rpc.go`); checks run in node with CLI `RunDoctor`, same `DoctorReport` JSON. Hub GET never passes `fix` to node.
+- **Group by feature** (`FEATURES` in `web/src/lib/node-health.ts`): phone approval cards (`node.sock`, claude / assistant settings and hooks, `command-paths`), state and notifications (`node.sock`, `command-paths`), terminal and engine (`herdr`), MCP tools (`node.sock`, `mcp.json`, `command-paths`), skills (`agent-plugin`, `claude-version`), runtime integrations (`runtime.sock`).
+  Each feature takes its worst check: any `fail` → **Has issues**, any `warn` → **Partly available**, all normal → **Ready**. Terminal/engine and runtime integration are optional: warn-only means **Not enabled** (in **Not set up: …**, not counted as needing attention),
+  except when this computer uses herdr (including herdr + Herdr App, and no selection defaults to herdr), unreachable herdr means **Has issues**. Unmapped extra checks reported by node go to **Other checks** if abnormal, never hidden.
+  `global-permission-hooks` (user's synchronous PermissionRequest hooks) is not a feature; displayed as an informational line below features, read-only.
+- **UI**: **Everything works** or **N feature(s) need attention** at top (Moshi wording), then **Not set up: …**; **View all checks (N)** expands individual state, name, finding, remedy and differing files; **Check again**;
+  **Fix** appears for generated files marked `stale` / `missing`, with confirmation listing files to rewrite and stating that user Claude Code settings won't change. Check once on opening, no polling.
+- **Old node**: unsupported RPC returns `unknown method`; card says **This computer's node is too old. Update it to run checks here**, beside the existing deployment button (same `POST …/deploy`, same `can_deploy`). Old hub route 404 and non-`full` device 403 each have specific explanations. Offline computers make no request.
+- **Connection failures** (`classifyConnection`): offline machine cards/pages classify recorded hub error text as **Authentication failed / Can't reach this computer / Connection timed out / Version mismatch**, each with a next step (different SSH / Persona Link wording);
+  unrecognized text adds nothing, no guessing. Planned restarts during deployment don't count.
+- Mock-hub screenshots: `MOCK_DOCTOR=healthy|stale|broken|mixed|old|error|slow`, `MOCK_DOCTOR_OLD=<machine id,…>` (`scripts/mock/mock_hub.py`).
+- Tests: `node/doctor_rpc_test.go` (temporary directories; no writes without fix, fix only generated files and never user settings.json, check names match web grouping), `hub/node_doctor_test.go` (permissions), `web/src/lib/node-health.test.ts` (grouping, summary, fixing, old node, connection classification), `apple/PersonaTests/NodeHealthTests.swift` (same grouping table, decoding, old node / hub, model check/fix).
 
 ## API
 
-见 `docs/protocol.md`：`GET /api/v1/metrics`（机器页）、`GET /api/v1/machines/{id}/metrics?range=1h|6h|24h`（详情），
-node → 管理者的 `metrics` 事件，`node.info` / `Machine` 里的 `system`；这几个路由 hub 原样转给管理者（`devicewire.MetricsRoutes`，管理者不在时 `503 assistant_offline`）。
+See `docs/protocol.md`: `GET /api/v1/metrics` (Machines), `GET /api/v1/machines/{id}/metrics?range=1h|6h|24h` (detail),
+node → manager `metrics` event, `system` in `node.info` / `Machine`; hub forwards these routes unchanged to manager (`devicewire.MetricsRoutes`, `503 assistant_offline` if absent).
 
-## 验证
+## Verification
 
-- Go：`sysmon` 的夹具测试（`testdata/` 里的 /proc/stat、meminfo、net/dev、os-release、cpuinfo、vm_stat、iostat、sw_vers、system_profiler），
-  `db.TestMachineMetrics`（降采样、加权平均、空档没有点、清理），`devices.TestMetricGaps`（断开标记）；`./scripts/test/test-server.sh`。
-- 真实采集：本机起一个测试 hub（假 HOME、独立数据库经 SSH 隧道，一台 `kind: local` 的 Mac 加一台 ssh 的 Linux），模拟器配对它看机器页和详情。
-- 假数据：`scripts/mock/mock_hub.py` 有 4 台机器：服务器最近 25 分钟高负载（CPU / 内存 / 负载告警），Mac Studio 早上断开过两小时（空档），
-  NAS 三小时前离线。UI 测试 `MachinesPageTests`：从机器菜单打开机器页（离线的 NAS 在最前、服务器的告警、MacBook 的「需要你」）、进服务器详情
-  （Agent 在曲线上面、没有「系统与监控」这一层）、切到 24 小时、按住网络图、看系统信息、点 Agent 进对话；离线机器的详情（「重新连接」在第一屏）。
-  排序的单元测试 `MachineConcernTests`。36 个 Agent 的「显示全部」在 `MachinePagesTests.testMachineProjects`，「重新部署」在 `DeployButtonTests`。
-- 截图：`-tab dev -openMonitor all`（机器页）、`-openMonitor <机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`（详情，按住在范围的 55% 处）；
-  `-tab settings -openMachines YES [-openMachineDetail <机器 id>]` 从设置进。
+- Go: `sysmon` fixtures (/proc/stat, meminfo, net/dev, os-release, cpuinfo, vm_stat, iostat, sw_vers, system_profiler in `testdata/`),
+  `db.TestMachineMetrics` (downsampling, weighted averages, no points in gaps, cleanup), `devices.TestMetricGaps` (gap markers); `./scripts/test/test-server.sh`.
+- Real collection: local test hub (fake HOME, separate database through SSH tunnel, one `kind: local` Mac and one SSH Linux), simulator paired to inspect Machines and details.
+- Fake data: `scripts/mock/mock_hub.py` has 4 machines: server with high load over latest 25 minutes (CPU / memory / load alerts), Mac Studio disconnected for two hours that morning (gap),
+  NAS offline for three hours. UI `MachinesPageTests`: open Machines from machine menu (offline NAS first, server alerts, MacBook **Needs you**), open server detail
+  (Agents above charts, no **System & Monitoring** layer), switch to 24 hours, hold network chart, inspect system info, tap Agent into chat; offline detail (**Reconnect** on first screen).
+  Ordering unit tests `MachineConcernTests`. **Show all** for 36 Agents in `MachinePagesTests.testMachineProjects`; **Redeploy** in `DeployButtonTests`.
+- Screenshots: `-tab dev -openMonitor all` (Machines), `-openMonitor <machine id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]` (detail, holding at 55% of range);
+  `-tab settings -openMachines YES [-openMachineDetail <machine id>]` enters through settings.

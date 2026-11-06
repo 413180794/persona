@@ -1,122 +1,120 @@
-# 飞书能力整合（#392）
+# Bringing Lark features in (#392)
 
-> **2026-11-04 起（#1520，插件第 3 步 3c）**：经飞书网关接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
-> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/extensions.md`，`docs/plan-extensions.md`「第 3 步」）。
-> 下文描述的行为由插件照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
+> **Since 2026-11-04 (#1520, plugin step 3, 3c)**: the whole path that connects Lark through the Lark gateway (the App's `/api/v1/lark/…`, the Lark source for the Inbox and knowledge base, Moments,
+> the assistant's `ol` gate and credentials, /agent, personal Agents) is no longer in the open-source repository; it is provided by the extension that connects Lark (`docs/extensions.md`, `docs/plan-extensions.md` ("Step 3")).
+> The behavior described below is provided unchanged by that extension; the hub source files mentioned here (`hub/lark*.go`, the `internal/lark` client…) have been deleted. The open-source version keeps only the official lark-cli, the Lark bot and Lark Mail.
 
-以 Persona 原生收件箱、Hub 认证、聊天页、发件箱和实时同步为基础，逐项迁入缺失能力；不并排维护两个完整客户端。
+Build on Persona's native Inbox, hub authentication, chat page, outbox and live sync, and bring missing features in one at a time; don't maintain two complete clients side by side.
 
-## 入口
+## Entry point
 
-复用「设置 → 连接器 → 飞书」，在账号连接状态下增加「首页显示消息」开关，默认关闭。
-开启后，iPhone 首页顶部为「助手 / Agents / 消息」；关闭后回到原有两页。设置保存在本机，重启后保留。
-旧布局和 iPad 对应增加「消息」Tab；共用 Hub 的飞书账号，无需再次登录。
-Mac 上同一个开关在侧边栏收件箱上面加「消息」分区：会话列表在左、聊天在右（#3162，`docs/mac.md`「主窗口」）。
+Reuse **Settings → Connectors → Lark**, and while the account is connected add a **Show Messages on Home** switch, off by default.
+When on, the top of the iPhone home screen shows **Assistant / Agents / Messages**; when off, it goes back to the original two pages. The setting is stored on the device and survives restarts.
+The old layout and iPad get a matching **Messages** tab; it shares the hub's Lark account, so no second sign-in is needed.
+On the Mac, the same switch adds a **Messages** section above the Inbox in the sidebar: chat list on the left, chat on the right (#3162, `docs/mac.md` ("Main window")).
 
-- 收件箱继续负责跨来源聚合、AI 分拣、草稿和待办；飞书筛选保持原用途。
-- 「消息」浏览全部私聊与群聊，点入后复用 `LarkChatView`。聊天右滑返回消息列表；列表与相邻首页可横滑切换。
-- 「消息」右上角进入原有飞书设置。在该页面关闭开关时，设置保持打开，关闭设置后回到「助手」。
-- 列表先显示按 Hub 地址与设备凭据隔离的缓存，再通过现有会话 API 更新；实时变更更新已加载的分页窗口，整批成功后替换缓存；刷新失败保留原列表，成功后移除已退出的会话。
-  列表不将所有会话加入后台消息预取；预取仍沿用已有收件箱 / 最近会话策略。
-- 搜索范围明确为已加载会话。未连接时返回飞书设置，网络错误保留缓存并提供重试。
-- 引用、话题回复、已读、媒体、时间分组与消息对齐沿用主线实现。
+- The Inbox keeps doing cross-source aggregation, AI triage, drafts and to-dos; the Lark filter keeps its original purpose.
+- **Messages** browses all direct and group chats; tapping one reuses `LarkChatView`. Swiping right in a chat returns to the message list; the list and the neighboring home pages switch with a horizontal swipe.
+- The top right of **Messages** opens the existing Lark settings. If the switch is turned off on that page, the settings stay open; closing the settings returns to **Assistant**.
+- The list first shows a cache isolated by hub address and device credentials, then updates through the existing session API; live changes update the loaded page window, and the cache is replaced once a whole batch succeeds; a failed refresh keeps the existing list, and a successful one removes chats you've left.
+  The list does not add every chat to background message prefetch; prefetch keeps the existing Inbox / recent chats policy.
+- Search is explicitly limited to loaded chats. When not connected it goes back to the Lark settings; on network errors it keeps the cache and offers a retry.
+- Quotes, thread replies, read state, media, time grouping and message alignment follow the mainline implementation.
 
-## 后续范围
+## Later scope
 
-### 首页置顶会话（#949 第一阶段）
+### Pinned chats on the home page (#949 phase 1)
 
-消息页顶部显示飞书网关的完整置顶集合，顺序和未读跟随服务端。默认一排头像；超出一排时，可点击「展开」或下拉后松手展开，再次下拉不会刷新消息。展开区滑出顶部后自动收起，反向滑动保持收起状态，不要求先回到页面最顶端。点头像沿用同一个聊天页与返回路径。置顶会话在头像栏和下方列表里都有（同正版飞书）：Hub 的会话分页把置顶排在最前面，列表按各自最新消息的时间把它们放回该在的位置；比已加载的最后一条更旧、后面还有页的，等翻到那一页再出现。搜索时头像栏隐藏，结果照常包含置顶会话（#1307 的去重是误解，已改正）。展开 / 收起用 `Theme.Motion.expand`（0.4 s），比状态切换慢，跟得上眼睛。
+The top of the Messages page shows the Lark gateway's full set of pinned chats, with order and unread counts following the server. By default it's one row of avatars; when there are more than fit in a row, tap **Expand** or pull down and release to expand, and pulling down again doesn't refresh messages. Once the expanded area scrolls off the top it collapses automatically; scrolling back keeps it collapsed, without requiring a return to the very top of the page. Tapping an avatar uses the same chat page and back path. Pinned chats appear both in the avatar row and in the list below (as in the official Lark client): the hub's chat pagination puts pinned chats first, and the list puts them back where they belong by their latest message time; ones older than the last loaded chat, with more pages left, appear once that page is loaded. While searching, the avatar row is hidden and results include pinned chats as usual (the de-duplication in #1307 was a misunderstanding and has been corrected). Expand / collapse uses `Theme.Motion.expand` (0.4 s), slower than state changes so the eye can follow.
 
-置顶与已加载的会话分页组成同一份快照，按 Hub 地址、设备凭据和服务端确认的飞书账号隔离。先显示缓存，后台静默读取，失败保留最后完整快照；换号或退出登录立即移除旧账号数据，迟到响应不能合并进新账号。拖动期间延后同账号的实时替换，停下后应用最新快照并保留阅读位置。收到新数据不触发整页刷新提示。
+Pinned chats and the loaded chat pages form one snapshot, isolated by hub address, device credentials and the Lark account the server confirms. The cache is shown first and read silently in the background; on failure the last complete snapshot is kept. Switching accounts or signing out removes the old account's data immediately, and late responses can't be merged into the new account. Live replacements for the same account are deferred while dragging, then the latest snapshot is applied after it stops, keeping the reading position. New data does not trigger a whole-page refresh prompt.
 
-这需要 Hub 支持 `account_bound=1`；旧 Hub 不返回账号归属时，不把无归属记录存入新缓存，并提示更新 Hub。飞书网关的实际选中账号读取与页面读取前后校验并非跨登录操作的数据库事务。聊天内 Pin 属于下面的第二阶段；本阶段不包含编辑首页置顶会话。
+This requires hub support for `account_bound=1`; when an old hub doesn't return account ownership, records without an owner are not stored in the new cache and the user is asked to update the hub. Reading the Lark gateway's actually selected account and checking it before and after the page read is not a database transaction spanning sign-in operations. Pins inside chats are phase 2 below; this phase does not include editing the pinned chats on the home page.
 
-### 聊天内 Pin 消息（#949 第二阶段）
+### Pinned messages in chats (#949 phase 2)
 
-聊天右上角的 Pin 按钮打开原生列表，接近底部时自动翻页。点一条 Pin 先确认原消息能定位，再关闭列表并在原聊天中定位高亮；话题回复沿用现有话题页。找不到原消息时留在列表，不丢弃聊天阅读位置。关闭列表也不改变阅读位置。
+The Pin button at the top right of a chat opens a native list that pages automatically near the bottom. Tapping a pin first confirms the original message can be located, then closes the list and scrolls to and highlights it in the original chat; thread replies use the existing thread page. If the original message can't be found, it stays in the list and does not lose the chat's reading position. Closing the list doesn't change the reading position either.
 
-长按支持该操作的消息可「添加 Pin」，列表内可移除；二者均需确认。权限来自飞书网关当前消息的 capabilities，Hub 写入前再检查原消息、会话、账号与 Pin 的对应关系。撤回或删除的消息不能新建 Pin；原有 Pin 能否移除仍以服务端权限为准。超时或丢失回执不自动重试，先重新读取列表确认结果。
+Long-pressing a message that supports it offers **Pin**; it can be removed from the list. Both require confirmation. Permission comes from the capabilities of the current message from the Lark gateway; before writing, the hub checks again that the original message, chat, account and pin match. Recalled or deleted messages can't get a new pin; whether an existing pin can be removed is still up to the server's permissions. A timeout or lost receipt is not retried automatically; the list is reread first to confirm the result.
 
-列表复用 OLK 对外展示、解密正文和防撤回设置；没有原消息或没有权限时保留可理解的占位。Pin 列表只存当前页面内存，响应 `no-store`，不另建磁盘明文缓存。离线时已打开的列表保留最后一份完整数据；冷启动离线不能恢复 Pin 列表。换号或退出登录清空旧内容，迟到响应不能重新填回。
+The list reuses the OLK external display, decrypted body and keep-recalled settings; when the original message is missing or not permitted, it keeps an understandable placeholder. The pin list lives only in the current page's memory, responses are `no-store`, and there is no separate plaintext cache on disk. Offline, an open list keeps the last complete data; a cold start offline cannot restore the pin list. Switching accounts or signing out clears the old content, and late responses can't refill it.
 
-飞书网关的 Pin 列表 GET **会标记 Pin 已读**。因此只在用户打开列表或明确操作 Pin 后读取，不在首页预取，不在真实账号运行自动化。订阅 `pins.updated`，忽略 `pins.read-state.updated`，避免读列表触发事件、再循环读列表。旧 Hub / 旧飞书网关分别返回具体的升级提示；原消息不存在不误报版本过旧。
+The Lark gateway's pin list GET **marks pins as read**. So it's only read after the user opens the list or explicitly acts on a pin, not prefetched on the home page, and automation never runs against a real account. Subscribe to `pins.updated` and ignore `pins.read-state.updated`, so reading the list doesn't trigger an event that reads the list again in a loop. An old hub / old Lark gateway each return a specific upgrade prompt; a missing original message is not misreported as an outdated version.
 
-定位普通消息使用 around 窗口；话题回复按飞书网关现有 before 游标最多读取 20 页、每页 100 条，超出范围明确提示暂时无法定位。读取前后核对账号不是跨上游登录操作的事务，仍有极短换号竞态；不将这项校验描述为上游原子写入。
+Locating a normal message uses an around window; thread replies use the Lark gateway's existing before cursor for at most 20 pages of 100 messages each, and beyond that it says clearly that the message can't be located for now. Checking the account before and after the read is not a transaction across upstream sign-in operations, so a very short account-switch race remains; don't describe this check as an atomic upstream write.
 
-验证：`LarkChatPinsTests`、`LarkChatPinFlowTests` 与 Go Pin API 测试覆盖分页、换号、OLK 脱敏、失败保留、定位和未知写结果；截图与执行边界见 [Pin 消息验证](screenshots/lark-chat-pins/README.md)。
+Verification: `LarkChatPinsTests`, `LarkChatPinFlowTests` and the Go pin API tests cover paging, account switching, OLK redaction, keeping data on failure, locating, and unknown write results; screenshots and execution boundaries are in [Pin message verification](screenshots/lark-chat-pins/README.md).
+### Automatic history paging (#1033)
 
-### 历史消息自动续页（#1033）
+In normal group chats and direct chats, scrolling up to within half a screen of the top of the loaded content automatically reads the next earlier page; there is no more tapping **Load Earlier Messages**. Only one request runs at a time, and the top shows a single small spinner. A failed read shows one tappable retry row and doesn't retry automatically; an empty page, a duplicate page or a cursor loop keeps what has been fetched and stops until tapped, so no request loop forms. When there are no earlier messages, nothing shows at the top. Topic groups keep the original manual button (#333's topic paging is unchanged).
 
-普通群聊和私聊往上翻到离已加载内容顶部半屏以内时，自动读取更早的一页，不再点「加载更早的消息」；同一时刻只有一个请求，顶部只显示一个小转圈。读失败显示一行可点的重试，不自动重试；空页、重复页、游标循环保留已拿到的内容并停下等点击，不形成请求循环。没有更早的消息时顶部什么都不显示。话题群沿用原来的手动按钮（#333 的话题分页不变）。
+After a page is prepended, the message being read stays at the same place on screen (to the pixel): when the page lands, the message in the middle of the screen is taken as the anchor, only that row reports its position in the content, and the list shifts by however much the content above it changes (`LarkHistoryHold`, the same approach as `ChatPin` in Agent chats). New messages arriving, finger drags and momentum scrolling work as usual meanwhile; when following the newest end (short chats), the original follow logic takes over. Keeping the scroll position by id and `defaultScrollAnchor(for: .sizeChanges)` were both tested and don't work; see `docs/lessons/ios.md`.
 
-前插一页后正在读的消息保持在屏幕上同一位置（像素级）：页落下时取屏幕中间的一条消息作锚，只这一行报它在内容里的位置，上面每变化多少列表就挪多少（`LarkHistoryHold`，与 Agents 对话的 `ChatPin` 同一做法）。这期间新消息到达、手指拖动和惯性滑动照常；跟随最新端（短会话）时交给原来的跟随逻辑。滚动位置按 id 保持、`defaultScrollAnchor(for: .sizeChanges)` 都实测无效，见 `docs/lessons/ios.md`。
+History requests carry the Lark account `account_id` that the current chat belongs to (with `ol_account` when there are several accounts); the extension that connects Lark checks that account before and after reading, and the response carries `account_id` and is `no-store`. If the response's account is wrong, or an old version returns no ownership, it is not merged, with the prompts "Your Lark account changed. Open the chat again." and "Update the hub to load earlier messages" respectively. Old versions only affect history; reading the latest messages is unchanged. Leaving the chat, going to the background, switching accounts or jumping to a pin's location cancels the request, and late responses are not written back.
 
-历史请求带当前会话所属飞书账号 `account_id`（多账号时连同 `ol_account`），接飞书的插件读取前后核对该账号，响应带 `account_id` 且 `no-store`；回答的账号不对、旧版本不返回归属时都不合并，分别提示「飞书账号已切换，请重新打开会话」「更新 Hub 后可加载更早的消息」。旧版本只影响历史，最新消息的读取不变。离开会话、退到后台、切换账号或跳到 Pin 定位的窗口时取消请求，迟到的回答不写回。
+Verification: `LarkHistoryPagingTests` (unit), `LarkHistoryFlowTests` (simulator + isolated mock `MOCK_LARK_HISTORY=1`, light / dark): position kept after prepending, retry on failure, stopping on duplicate / empty pages / cursor loops, stopping after a short page is auto-filled, no late responses landing after leaving or switching accounts, direct chats, flicking fast to the earliest, no movement when new messages arrive while reading, single line at large text sizes; tests for the account check and unchanged old calls live in the extension that connects Lark.
 
-验证：`LarkHistoryPagingTests`（单元），`LarkHistoryFlowTests`（模拟器 + 隔离 mock `MOCK_LARK_HISTORY=1`，浅色 / 深色）：前插保持位置、失败重试、重复 / 空页 / 游标循环停下、短页自动补满后停下、离开和换号后迟到回答不落、私聊、快速滑到最早、阅读中新消息到达不动、大字号单行；账号核对和旧调用不变的测试在接飞书的扩展里。
+### Jump to latest (#1034)
 
-### 回到最新（#1034）
+Tapping **Jump to Latest** goes back immediately to the newest messages already on the device, without waiting for the network: when the window moves away from the newest end (opened at the unread position, jumped to @Me, located a pin), the newest 80 messages at that moment are remembered; if there are none, the chat's local cache is used, whichever of the two is newer. After reaching the bottom, it silently fetches the latest page once, with no spinner: if it connects to the local tail (the latest page starts right after the tail, overlaps it, or is all the messages), new messages are appended in order and de-duplicated; if there's a gap (many messages arrived while away) and you're still at the bottom, the latest page replaces what's there (scrolling up auto-pages as usual); if you've already scrolled up, the position you're reading is left alone and only a small progress indicator hangs at the bottom, and the gap is filled in order when you scroll to the bottom. Only when the device has no latest message at all does it wait for the hub, with the button showing loading. The button hides once you're truly at the bottom.
 
-点「回到最新」立即回到本机已有的最新消息，不等网络：窗口从最新处挪开时（从未读位置打开、跳到 @我、Pin 定位）记下当时最新的 80 条，没有就用这个会话的本机缓存，取两者里更新的那份。回到底部后静默拉一次最新页，不显示转圈：和本机末尾接得上（最新页从末尾的下一条开始、有重叠或就是全部消息），新消息按顺序追加、去重；中间有断档（离开期间来了很多），还停在底部就把最新页换上来（再往上照常自动续页），已经往上翻了就不动正在读的位置，只在底部挂一个小进度，滑到底时按顺序补齐。本机一条最新消息都没有时才等 Hub，按钮上显示加载中。真正到底时按钮隐藏。
+Verification: `LarkPagerTests` (keeping the tail page, taking the newer of the cache and the kept copy, connected / gap, filling in order after a gap), `LarkJumpLatestFlowTests` (simulator + the "跳转测试" (jump test) chat of `MOCK_LARK_HISTORY=1`, with a new chat id per test case so earlier caches don't interfere; holding back the latest page proves it doesn't depend on the network).
 
-验证：`LarkPagerTests`（保留尾页、缓存与本次保留取新、接得上 / 断档、断档后按顺序补齐），`LarkJumpLatestFlowTests`（模拟器 + `MOCK_LARK_HISTORY=1` 的「跳转测试」会话，每个用例换一个会话 id，不受之前缓存影响；扣住最新页证明不依赖网络）。
+Sending images and files is tracked separately in #410 and extends the existing chat page. Contacts are on hold at the user's request.
+Differences such as encrypted messages and cached scrolling are verified separately later, each in its own issue.
+Claude / Codex, host connections and the terminal keep using the Persona architecture.
 
-图片与文件发送单独跟踪 #410，在现有聊天页上扩展。通讯录按用户要求暂缓。
-加密消息、缓存滚动等差异后续各自验证、拆 issue。
-Claude / Codex、主机连接、终端继续使用 Persona 架构。
+## Verification
 
-## 验证
+- `LarkConversationsTests`: cache first, page window refresh, unread updates on the tail page and removal of chats you've left, concurrent refresh and load-more, page de-duplication and stopping on a repeated cursor, keeping the list offline and on cancel, credential isolation.
+- `DemoHubTests`: demo-mode chats decode with the real model and can read chat history.
+- `LarkEntryTests`: switch on → Messages on home → chat → swipe right to go back; swiping from Agents to Messages; opening settings from the Messages page and turning the switch off; switch state kept across restarts; two pages kept by default.
+- `LarkMessagesShellTests`: swiping across three pages, cancelled gestures, overscroll on the last page and removing the third page.
+- iPhone 18 Pro simulator, light and dark; [screenshots](screenshots/lark-native/README.md). All with mock data; no test messages were sent to real accounts.
+### Re-verifying against the mainline shell (2026-11-03)
 
-- `LarkConversationsTests`：缓存优先、分页窗口刷新、尾页未读更新及已退出会话移除、刷新与加载更多并发、分页去重与重复游标停止、离线与取消保留列表、凭据隔离。
-- `DemoHubTests`：体验模式会话能按真实模型解码并读取聊天记录。
-- `LarkEntryTests`：开关开启 → 首页消息 → 聊天 → 右滑返回；Agents 横滑到消息；在消息页打开设置并关闭开关；重启保持开关状态；默认保留两页。
-- `LarkMessagesShellTests`：三页滑动、取消手势、末页越界与移除第三页。
-- iPhone 18 Pro 模拟器，浅色与深色；[截图](screenshots/lark-native/README.md)。全部使用 mock 数据，未向真实账号发送测试消息。
+Adapted to mainline `a2e28039`'s single page state in `ShellState`, synchronized routing, lazy creation and top bar animation guards; the three-page switch reuses these mechanisms, and the Mac doesn't get the iOS-only tab. The combined build passed 699 unit tests; then 15 targeted shell and encrypted-display tests passed. On iPhone 18 Pro, three entry-flow runs each passed in light Glass and dark BeautifulUI, and eight screenshots were updated and checked. iOS (including Watch / extensions) and Mac arm64 builds passed with Xcode 26.0.
 
-### 主线外壳同步复验（2026-11-03）
+The GitHub Actions smoke run was blocked by an account billing / quota limit and is not counted as passing; the results above are local. New review items in the attachments and persistence PRs are handled separately and are not claimed as done in this PR.
 
-适配主线 `a2e28039` 的 `ShellState` 单一页状态、同步路由、懒创建和顶栏动画保护；三页开关复用这些机制，Mac 不引入 iOS 专用 tab。组合构建 699 项单元测试通过；随后 15 项外壳与加密展示定向测试通过。iPhone 18 Pro 上浅色玻璃、深色 BeautifulUI 各三组入口流程通过，八张截图已更新并检查。Xcode 26.0 的 iOS（含 Watch / 扩展）及 Mac arm64 构建通过。
+## Message Tweaks display (#882)
 
-GitHub Actions 的 smoke 被账户付款/额度限制阻止，未计作通过；以上为本地结果。附件及持久化 PR 中的新审查项独立处理，不在本 PR 宣称完成。
+The entry point is **Settings → Connectors → Lark → Message Tweaks**; no new home page is added. Keep-recalled-messages and edit history share the Lark gateway's settings for the current account; the hub returns only these two booleans and the actually signed-in user ID, and doesn't forward script, stand-in or auto-send settings.
 
-## 风灵月影消息显示（#882）
+- Keep recalled messages shows the original content the Lark gateway kept, while keeping the **Recalled** label. It can't be restored when nothing was kept or only a system notice exists. The recall flag still drives permission checks; showing the original doesn't re-enable replies or reactions.
+- Edit history offers the **Edited** entry only when enabled, and shows the versions that were kept. Encrypted content in the body, quotes, forwards and versions keeps using the OLK projection; when locked, only the public external display is shown. iOS's version cache strips decrypted bodies just like messages / quotes do; old caches are also cleaned of OLK bodies and forward previews before being read.
+- The switches are held by the model for each hub connection, and responses are bound to the actual account; writes carry the account and the old value. Conflicts and unknown results are not retried automatically; after rereading, the user decides. When the settings can't be confirmed, kept content / the edit entry are hidden; a cold start offline doesn't borrow the switches of another account or the last connection either.
+- The `local.settings.updated` event triggers a reread; when the hub merges a batch of messages it keeps a separate `settings_changed`, so settings changes don't depend on an empty chat list. Entering a chat, returning to the foreground and foreground polling also read the settings, for compatibility with old deployments that don't push this event.
+- The Lark gateway needs to support `PATCH /agent/v1/settings/local/message-display` (upstream #987). Old deployments can still read the existing switches; changing them explains that an upgrade is needed.
 
-入口为「设置 → 连接器 → 飞书 → 风灵月影」，不增加新的首页页面。防撤回和编辑历史共用飞书网关当前账号的设置，Hub 只返回这两个布尔值与实际登录用户 ID，不转发脚本、替身或自动发送设置。
+These two switches only control display, matching the web semantics; they don't control retention or access authorization. After turning them off, the server doesn't delete kept content; clients with permission to read messages still receive recalled originals and history versions, and ordinary unencrypted versions may still be saved in the phone's cache. OLK decrypted bodies separately follow the never-written-to-disk rule.
 
-- 防撤回展示飞书网关已留存的原内容，保留「已撤回」。没有留存或只有系统提示时不能恢复。撤回标记仍用于权限判断，不因为展示原文重新允许回复、表情操作。
-- 编辑历史只在启用后提供「已编辑」入口；展示已留存的版本。正文、引用、转发和版本内的加密内容继续使用 OLK 投影，锁定时只显示公开外显。iOS 的版本缓存与消息/引用一样去除解密正文；旧缓存读取前也清理 OLK 正文和转发预览。
-- 开关由每条 Hub 连接的模型持有，响应绑定实际账号；写入携带账号和旧值。冲突、未知结果不自动重试；重新读取后由用户决定。无法确认设置时隐藏留存内容/编辑入口；冷启动离线也不借用另一账号或上次连接的开关。
-- `local.settings.updated` 事件触发重新读取；Hub 合并同批消息时保留独立的 `settings_changed`，设置变化不依赖空会话列表。聊天进入、回到前台与前台轮询也读取设置，以兼容未推送该事件的旧部署。
-- 飞书网关需要支持 `PATCH /agent/v1/settings/local/message-display`（上游 #987）。旧部署仍可读取已有开关，修改时说明需升级。
+The Inbox's AI triage and the assistant's quoting don't yet have a unified policy for recalled content, and may still put recalled `Text` into context; this is handled separately as follow-up to #882, and this display switch must not be described as AI access control.
 
-这两个开关只控制展示，与网页语义一致，不控制留存或访问授权。关闭后，服务端不会删除已留存内容；具备消息读取权限的客户端仍会收到撤回原文和历史版本，普通未加密版本仍可能保存到手机缓存。OLK 解密正文独立遵守不落盘规则。
+Migration list:
 
-现有收件箱 AI 分拣和助手引用尚未统一撤回内容策略，仍可能把已撤回的 `Text` 放入上下文；#882 后续单独处理，不将本次显示开关描述为 AI 访问控制。
-
-迁移清单：
-
-| 能力 | 当前安排 |
+| Feature | Current plan |
 | --- | --- |
-| 防撤回、编辑历史 | 本阶段 #882 |
-| 加密正文、对外展示、密钥分发提示 | #764 已合入 |
-| 手机解锁、加密发送 | #689 已迁入；协议见 [加密消息](lark-encryption.md) |
-| [removed]编码/解码 | 文字已迁入（下文「[removed]」）；图片由飞书网关媒体接口按开关处理 |
-| 禁止已读回执 | 后续；需要同时覆盖聊天与话题，不把旧版网页开关误称为手机已支持 |
-| 自动撤回、自动签名、替身 | 保持飞书网关原有服务端控制，不能因迁移自动开启 |
-| 水印、公司圈防删除、桌面悬浮窗、装饰性计数 | 网页能力；不照搬为手机消息功能 |
+| Keep recalled messages, edit history | This phase, #882 |
+| Encrypted body, external display, key distribution prompts | #764 merged |
+| Unlock on phone, encrypted sending | #689 migrated; protocol in [encrypted messages](lark-encryption.md) |
+| Brave Climb encoding / decoding | Text migrated ("Brave Climb" below); images are handled by the Lark gateway's media API according to the switch |
+| Disable read receipts | Later; must cover both chats and threads, and an old web switch must not be passed off as supported on the phone |
+| Auto-recall, auto-signature, stand-in | Stay under the Lark gateway's existing server-side control; must not be turned on automatically by the migration |
+| Watermark, Moments anti-deletion, desktop floating window, decorative counters | Web features; not copied as phone messaging features |
 
-防撤回与编辑历史的 [模拟器截图与流程](screenshots/lark-trainer/README.md)。
+[Simulator screenshots and flows](screenshots/lark-trainer/README.md) for keep-recalled-messages and edit history.
 
-### [removed]（#882）
+### Brave Climb (#882)
 
-飞书网关的「[removed]消息编码」把文字编成 `**字…**`：34 个字符的 base-34，与网页逐字节兼容，旧的四字编码（``）也能读。它是可还原的编码，不是加密，打开开关的人都能读到。App 的编解码在 `LarkBraveClimb.swift`（移植自 removed，单测用网页的已知向量）。
+The Lark gateway''s Chinese name) can also be read. It is a reversible encoding, not encryption: anyone with the switch on can read it. The App's encoder / decoder is in `LarkBraveClimb.swift` (ported from the web implementation; unit tests use the web's known vectors).
 
-- 开关是飞书网关本地设置 `braveClimbCodec`，和防撤回、编辑历史一起经 `/api/v1/lark/message-display` 读写（`brave_climb_codec`，飞书扩展 0.10.0 起）。旧扩展的响应里没有这个字段，「风灵月影」里不出现这一项，文字原样显示。
-- 开关打开：聊天、话题卡片、合并转发、编辑历史里的编码文字解码显示，下方标「[removed] · 已解码」；富文本把一段编码拆成几段时先拼起来再解；句中夹着的编码只替换那几段。引用、话题回复摘要、会话列表摘要也解码。
-- 开关关闭：气泡里保持原文（和飞书官方客户端一样）；一行摘要里整条编码显示为「[removed]编码消息」，不显示一串编码字符。
-- 发送：输入框模式菜单多一项「[removed]编码」，只在开关打开、没有附件、不是话题群时可选；所选模式随草稿保存。发出的是编码后的文字，不带 @（编码后无法识别）；超过飞书网关的 10000 字上限时提示，草稿保留。开关在别处被关掉后再发，提示去设置里打开，不发送；飞书网关也会以 `BRAVE_CLIMB_CODEC_DISABLED` 拒绝。发送失败放回输入框时还原成原文并回到这个模式。
-- 话题详情（回复话题）的输入框暂不提供这个模式。
+- The switch is the Lark gateway's local setting `braveClimbCodec`, read and written together with keep-recalled-messages and edit history via `/api/v1/lark/message-display` (`brave_climb_codec`, from Lark extension 0.10.0). Old extensions' responses don't have this field, so the item doesn't appear in **Message Tweaks** and text is shown as is.
+- Switch on: encoded text in chats, thread cards, merged forwards and edit history is shown decoded, labeled **Brave Climb · Decoded** underneath; when rich text splits one encoded run into several segments, they are joined before decoding; encoding embedded mid-sentence replaces only those segments. Quotes, thread reply summaries and chat list summaries are decoded too.
+- Switch off: bubbles keep the original text (like the official Lark client); in one-line summaries a fully encoded message shows as **Brave Climb encoded message** instead of a string of encoded characters.
+- Sending: the composer's mode menu gets an extra **Brave Climb Encoding** item, selectable only when the switch is on, there are no attachments and it isn't a topic group; the selected mode is saved with the draft. What's sent is the encoded text, without @ (it can't be recognized after encoding); exceeding the Lark gateway's 10000-character limit shows a prompt and keeps the draft. If the switch was turned off elsewhere before sending, it prompts you to turn it on in settings and doesn't send; the Lark gateway also rejects it with `BRAVE_CLIMB_CODEC_DISABLED`. When a failed send is put back in the composer, it's restored to the original text and back in this mode.
+- The composer in thread details (replying to a thread) doesn't offer this mode yet.
 
-[模拟器截图](screenshots/lark-brave-climb/README.md)。
+[Simulator screenshots](screenshots/lark-brave-climb/README.md).
 
-Android（`feature/inbox` 的 `LarkBraveClimb.kt`，同一组已知向量）：打开飞书会话时读一次 `/api/v1/lark/message-display`，开关打开时气泡（含合并转发、话题浮层）和引用解码，下方标「[removed] · 已解码」；关闭时气泡保持原文，整条编码的引用写「[removed]编码消息」。会话页输入框上方多一个「[removed]编码」开关 chip（开关打开、或草稿已在这个模式时出现），模式记进草稿（`InboxStoredDraft.braveClimb`），发出的是编码后的文字，草稿和失败后放回的仍是原文。Android 没有「风灵月影」设置页，开关要在网页或 iOS 上改；Android 的飞书会话只发文字、不分辨话题群，也没有会话列表摘要和编辑历史，这几处不涉及。截图：`./gradlew :feature:inbox:testDebugUnitTest --tests '*LarkBraveClimbShotsTest*'`。
+Android (`LarkBraveClimb.kt` in `feature/inbox`, same set of known vectors): opening a Lark chat reads `/api/v1/lark/message-display` once; with the switch on, bubbles (including merged forwards and the thread overlay) and quotes are decoded, labeled **Brave Climb · Decoded** underneath; with it off, bubbles keep the original text, and quotes of fully encoded messages read **Brave Climb encoded message**. The chat page gets a **Brave Climb Encoding** switch chip above the composer (shown when the switch is on, or the draft is already in this mode); the mode is stored in the draft (`InboxStoredDraft.braveClimb`); what's sent is the encoded text, while the draft and the text put back after a failure are still the original. Android has no **Message Tweaks** settings page, so the switch has to be changed on the web or iOS; Android's Lark chats only send text, don't distinguish topic groups, and have no chat list summaries or edit history, so those parts don't apply. Screenshots: `./gradlew :feature:inbox:testDebugUnitTest --tests '*LarkBraveClimbShotsTest*'`.

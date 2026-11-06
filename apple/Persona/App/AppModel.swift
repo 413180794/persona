@@ -125,6 +125,10 @@ final class AppModel {
     @ObservationIgnored var interactionsListedAt: [String: Date] = [:]
     /// Interactions ended locally (answered, cancelled or gone): snapshots will not restore them (#1688).
     @ObservationIgnored var endedInteractionIDs: Set<String> = []
+    #if DEBUG
+    /// Unit tests: the client every group's requests go to (`FakeHub.client`) instead of the paired hubs'.
+    @ObservationIgnored var apiForTests: APIClient?
+    #endif
     /// Cards being answered, and whether the hub ended them meanwhile: a failed answer puts back only the ones it did not.
     @ObservationIgnored private var answering = AnsweringInteractions()
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
@@ -1604,9 +1608,13 @@ final class AppModel {
 
     // MARK: Actions
 
+    /// Whether the app may answer a card (#4059): one on no session (`personad ask` outside herdr) always; else as its
+    /// session's source allows. Every place that answers or greys a card asks this.
+    func canAnswer(_ ix: Interaction) -> Bool { ix.canAnswer(session: session(ix.sessionKey)) }
+
     func resolve(_ ix: Interaction, _ r: Resolution) async {
         // To the hub of the interaction's own group (docs/multi-hub.md「操作发到哪」).
-        guard session(ix.sessionKey)?.canApprove == true, let api = api(ix.group) else { return }
+        guard canAnswer(ix), let api = api(ix.group) else { return }
         // No network: the card stays as it is (taking it away and bringing it back a moment later read as "done").
         guard connection.networkUp else { notDone(); return }
         interactions[ix.uid] = nil

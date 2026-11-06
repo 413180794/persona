@@ -433,6 +433,8 @@ private struct AgentsList: View {
     @State private var deletingSession: Session?
     @State private var linkingSession: Session?
     @State private var linkingSpace: SpaceGroup?
+    /// A card on no session, open in a sheet of its own (#4059): it has no chat to go to.
+    @State private var answering: Interaction?
     /// The long-press menu's actions on a row (not observed: see `AgentRowMenu`).
     @State private var rowActions = AgentRowMenu.Actions()
     /// The agents, the questions and the machines the list shows (`AgentsFeed`): held still while it is scrolled or
@@ -585,11 +587,10 @@ private struct AgentsList: View {
             .map { (session: $0, order: model.pinOrder($0.key)) }
             .sorted { $0.order < $1.order }
             .map(\.session)
-        let interactions = (feed.following ? feed.interactions : model.pendingInteractions).filter { ix in
-            guard let s = session(ix.sessionKey), !s.assistant, machineFilter.isEmpty || s.machineRef.path == machineFilter,
-                  !model.isMultiHub || HubFilter.matches(hubFilter, s.group) else { return false }
-            return quick == .all || quick == .needsYou
-        }
+        let interactions = quick == .all || quick == .needsYou
+            ? AgentsNeedsYou.cards(feed.following ? feed.interactions : model.pendingInteractions, session: session,
+                                   machine: machineFilter, hub: model.isMultiHub ? hubFilter : nil)
+            : []
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
         // Agents on more than one machine: By Repository and By Project split the list by machine first (#2108), and the headers under
         // a machine do not name it. Counted before the quick filter: choosing one does not add or take away headings.
@@ -658,7 +659,14 @@ private struct AgentsList: View {
             if !interactions.isEmpty && query.isEmpty {
                 listSection {
                     ForEach(interactions, id: \.uid) { ix in
-                        if compact {
+                        if compact && ix.isSessionless {
+                            Button { answering = ix } label: {
+                                CompactInteractionRow(interaction: ix, machine: machine(ix.machineRef)?.title)
+                            }
+                            .buttonStyle(.plain)
+                            .listRowInsets(CompactList.rowInsets)
+                            .accessibilityIdentifier("agents.interaction")
+                        } else if compact {
                             // Compact List: one row like an agent's; the chat answers it.
                             NavigationLink(value: ix.sessionKey) {
                                 CompactInteractionRow(interaction: ix, machine: machine(ix.machineRef)?.title)
@@ -672,14 +680,14 @@ private struct AgentsList: View {
                             // A card of its own on the page, as the agents' capsules.
                             // Several groups of hubs: the card says whose (one group: as it always was, no machine).
                             InteractionPreviewCard(interaction: ix, machine: model.isMultiHub ? machine(ix.machineRef)?.title : nil,
-                                                   inCell: false) { openFromList(ix.sessionKey) }
+                                                   inCell: false) { openCard(ix) }
                                 .listRowInsets(Self.capsuleInsets)
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                                 .accessibilityIdentifier("agents.interaction")
                         } else {
                             InteractionPreviewCard(interaction: ix, machine: machine(ix.machineRef)?.title,
-                                                   agentLabel: session(ix.sessionKey)?.agentLabel ?? "Claude", inCell: true) { openFromList(ix.sessionKey) }
+                                                   agentLabel: session(ix.sessionKey)?.agentLabel ?? "Claude", inCell: true) { openCard(ix) }
                                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 } // rows of different shapes: one line
                                 .accessibilityIdentifier("agents.interaction")
                         }
@@ -837,6 +845,7 @@ private struct AgentsList: View {
         .sheet(item: $linkingSession) { s in
             TodoLinkAgentSheet(session: s)
         }
+        .sheet(item: $answering) { SessionlessCardSheet(interaction: $0) }
         .sheet(item: $linkingSpace) { group in
             if let space = group.todoSpace {
                 TodoLinkAgentSheet(space: TodoItem.Space(machineID: group.machineID, space: space))
@@ -960,6 +969,11 @@ private struct AgentsList: View {
 
     /// The agent open beside the list, if it is one of the list's (not a Persona conversation).
     private var macOpenNow: SessionKey? { model.visibleSession.flatMap { session($0)?.assistant == true ? nil : $0 } }
+
+    /// A card's chat, where it is answered; a card on no session opens by itself (#4059).
+    private func openCard(_ ix: Interaction) {
+        if ix.isSessionless { answering = ix } else { openFromList(ix.sessionKey) }
+    }
 
     /// Something the list opens: in the split it replaces the detail column; in one stack the list is at the root, so
     /// this is the same as pushing it.
@@ -3239,5 +3253,16 @@ struct AgentsTopBar: View, Equatable {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("agents-top-bar") // ShellSearchTests: nothing of it over the search field
         .modifier(ShellBarAtRest(page: 1)) // ShellMovingBar stands in while the strip slides
+    }
+}
+
+/// Agents' 需要你处理: every card but the assistant's, on the machine and hub picked. A card on no session (`personad
+/// ask` outside herdr) or on one not listed yet is here too, as the tab's badge counts it (#4059).
+enum AgentsNeedsYou {
+    static func cards(_ all: [Interaction], session: (SessionKey) -> Session?, machine: String = "", hub: String? = nil) -> [Interaction] {
+        all.filter { ix in
+            session(ix.sessionKey)?.assistant != true && (machine.isEmpty || ix.machineRef.path == machine)
+                && (hub.map { HubFilter.matches($0, ix.group) } ?? true)
+        }
     }
 }

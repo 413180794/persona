@@ -1,187 +1,187 @@
-# 连接器 Persona Link：电脑连 hub，或者 hub 来连电脑
+# Persona Link: the computer connects to the hub, or the hub connects to the computer
 
-> 名字（#1159）：连接器叫 **Persona Link**，命令是 `persona-link`。`persona-link` 是安装器在 `jarvis-link` 旁边建的别名，两个名字是同一个程序，
-> 用哪个名字运行，它的提示里就用哪个名字。可执行文件 `~/.persona/bin/jarvis-link`、下载名 `jarvis-link-<os>-<arch>.gz`、
-> systemd 单元 `jarvis-link.service`、launchd、Mac App 里的 helper 都保持旧名，所以本文下面提到程序时仍写 `jarvis-link`。
-> hub 和管理页给出的可复制命令也暂时写 `jarvis-link`，因为 hub 不知道那台电脑的版本，旧版没有 `persona-link`。
+> Naming (#1159): the connection helper is **Persona Link**, and the command is `persona-link`. The installer creates `persona-link` beside `jarvis-link` as an alias; both names run the same program,
+> and its prompts use whichever name you ran. The executable `~/.persona/bin/jarvis-link`, download name `jarvis-link-<os>-<arch>.gz`,
+> systemd unit `jarvis-link.service`, launchd identity and helper inside the Mac App keep their old names, so this page still says `jarvis-link` when referring to the program below.
+> Copyable commands from the hub and admin page also still use `jarvis-link`, because the hub doesn't know that computer's version, and older versions have no `persona-link`.
 
-笔记本这类 IP 和网络经常变的电脑，hub 没法稳定地 ssh 进去。2026-10-31 用户要求：不用 Tailscale，也不用反向隧道，
-改成由电脑上的客户端主动连 hub、断了自己重连，hub 复用这条链路和这台的 node 通信。这样整条路不需要 SSH，也不需要 VPN。
+The hub can't reliably SSH into computers such as laptops whose IP and network keep changing. Requested 2026-10-31: no Tailscale or reverse tunnels;
+instead, the client on the computer connects to the hub and reconnects on its own after a disconnect, and the hub reuses that link to talk to its node. No SSH or VPN is needed anywhere along the path.
 
-2026-11-02 用户又定（[plan-hub-center.md](plan-hub-center.md) 第 0、4 节）：hub 和电脑之间一律经电脑上预装的服务连，不用 SSH（权限太大）；
-电脑可以主动连 hub，也可以被 hub 连。推荐全家只装一台 hub，其他电脑都装 **node 服务**：常驻 node 加连接器 jarvis-link，一条命令或一个 App 装好。
+The user decided again on 2026-11-02 ([plan-hub-center.md](plan-hub-center.md), sections 0 and 4): hubs and computers always connect through a preinstalled service on the computer, not SSH (too much permission);
+the computer can connect to the hub or accept a connection from it. The recommendation is one hub for the whole household, with a **node service** on every other computer: resident node plus jarvis-link, installed by one command or one App.
 
-## 两种模式
+## Two modes
 
-同一个 jarvis-link，配对时选，之后随时可以换（`jarvis-link mode active|passive`，菜单栏 App 的配对窗口）。两种模式的配对各存各的，换回去不用重新配对。
+The same jarvis-link supports both, selected during pairing and changeable anytime (`jarvis-link mode active|passive`, or the menu bar App's pairing window). Each mode stores its pairing separately, so switching back doesn't require pairing again.
 
-| 模式 | 谁连谁 | 适合 | 要什么 |
+| Mode | Who connects to whom | Best for | Requirements |
 | --- | --- | --- | --- |
-| **主动**（我去连 hub） | jarvis-link 拨 hub 的 WSS `/api/v1/link`（下面「链路」） | 笔记本、在 NAT 后面、经常换网络的电脑 | hub 开着 TLS 端口（`public.tls_listen`），或者在 HTTPS 反向代理后面（下面「[hub 在反向代理后面](#hub-在反向代理后面)」）；这台连得到 hub |
-| **被动**（让 hub 来连） | hub 拨 jarvis-link 在本机监听的 TLS 端口（下面「被动模式」） | 地址固定、hub 连得到的电脑：服务器、开发工作站、家里的台式机 | hub 连得到这台的端口（直连或经 SOCKS 代理），这台的防火墙只对 hub 放行这个端口 |
+| **Active** (connect to the hub) | jarvis-link dials the hub's WSS `/api/v1/link` ("Link" below) | Laptops, computers behind NAT or frequently changing networks | The hub has a TLS port (`public.tls_listen`) or sits behind an HTTPS reverse proxy ("[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)" below); this computer can reach the hub |
+| **Passive** (let the hub connect) | The hub dials the TLS port jarvis-link listens on locally ("Passive mode" below) | Computers with stable addresses reachable by the hub: servers, development workstations, home desktops | The hub can reach this computer's port (directly or through a SOCKS proxy); the computer's firewall opens this port only to the hub |
 
-怎么选：这台电脑连得到 hub、hub 连不到它（笔记本、公司内网里的机器连家里的 hub）→ 主动；hub 连得到它、它连不到 hub（hub 在公网不可达的地方，
-但能经代理进到这台所在的网络）或者不想让它对外发起连接 → 被动；两边都通时都行，主动模式不用开端口，更省事。
+Choosing: the computer can reach the hub but the hub can't reach it (a laptop, a computer on a company intranet connecting to a home hub) → active; the hub can reach it but it can't reach the hub (the hub is somewhere unreachable from the public internet,
+but can enter the computer's network through a proxy), or you don't want the computer initiating outbound connections → passive. If both directions work, either is fine; active needs no open port and is simpler.
 
-## 装 node 服务
+## Install the node service
 
-配对链接从哪来：推荐在已登录的网页「机器 › 添加电脑」里拿（iOS、Android 的入口在做），它按所选系统给出整条可以拷贝的命令或链接，
-电脑连上后在同一屏点「是我的电脑」确认（下面「[接入一台电脑](#接入一台电脑以-mac-为例)」）。管理界面和 hub 机器上的命令行做法放在那一节的「高级」里。
+Where to get a pairing link: preferably from **Machines › Add Computer** on the signed-in web app (iOS and Android entry points are in progress). It provides a full copyable command or link for the selected OS;
+after the computer connects, confirm **This is my computer** on the same screen ("[Connecting a computer](#connecting-a-computer-mac-example)" below). The admin interface and command-line steps on the hub machine are in that section's "Advanced" subsection.
 
-**Linux**（一条命令，`scripts/deploy/install.sh` 的「node」角色）：
+**Linux** (one command, the "node" role in `scripts/deploy/install.sh`):
 
 ```sh
-curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<配对链接>'   # 主动
-curl -fsSL <站点>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 连这台用的地址>]         # 被动
+curl -fsSL <site>/install.sh | sh -s -- --node --pair '<pairing link>'   # Active
+curl -fsSL <site>/install.sh | sh -s -- --node --listen [:18663] [--addr <address the hub uses to reach this computer>]         # Passive
 ```
 
-- 下载 personad 和 jarvis-link（都按 `SHA256SUMS` 核对）到 `~/.persona/bin/`，然后交给 `jarvis-link install`：装常驻 node 的 systemd 用户服务
-  `jarvisd-node`（已经有了就保持原样）和 jarvis-link 自己的服务，配对，等它连上（被动模式：等它开始监听，再打印给 hub 管理界面的链接）。
-- `--pair` / `--listen` 自带 `--node`；`JARVIS_ROLE=node`、`JARVIS_PAIR`、`JARVIS_LISTEN` 同理。什么都不带、有终端时它会问；
-  局域网里已经听到 hub（mDNS `_jarvis-hub._tcp`，`jarvis-link discover`）时先说「全家只要一台 hub，这台装 node 服务就够了」。
-- 没有 systemd 的机器照样装好二进制、打印替代做法（见「Linux（headless）」）。
-- Mac 上跑 `--node` 只装常驻 node 的 launchd agent 和配对，连接器用菜单栏 App。
-- 发布：`scripts/publish.sh` 在 personad 旁边多编四个 `jarvis-link-<os>-<arch>.gz`，进同一份 `SHA256SUMS`。
+- Downloads personad and jarvis-link (both verified against `SHA256SUMS`) to `~/.persona/bin/`, then hands off to `jarvis-link install`: installs the resident node's systemd user service
+  `jarvisd-node` (leaves an existing one unchanged) and jarvis-link's own service, pairs, and waits for connection (passive mode: waits for the listener to start, then prints a link for the hub admin interface).
+- `--pair` / `--listen` imply `--node`; so do `JARVIS_ROLE=node`, `JARVIS_PAIR`, `JARVIS_LISTEN`. With no options and a terminal, it asks;
+  if a hub is already detected on the LAN (mDNS `_jarvis-hub._tcp`, `jarvis-link discover`), it first says "One hub is enough for the whole household; install the node service on this computer."
+- Without systemd, it still installs the binaries and prints alternative instructions (see "Linux (headless)").
+- On Mac, `--node` only installs the resident node's launchd agent and pairs; the menu bar App handles the connection.
+- Publishing: `scripts/publish.sh` builds four extra `jarvis-link-<os>-<arch>.gz` files alongside personad and adds them to the same `SHA256SUMS`.
 
-**Mac**：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`，给别人看的一步步指南在 [persona-link-install.md](persona-link-install.md)）。App 里带着 personad（`Contents/Helpers/jarvisd`），**第一次运行**就用
-`jarvis-link node install --jarvisd <App 里的>` 装好常驻 node 的 LaunchAgent `com.jarvis.node`：没有 `~/.persona/bin/jarvisd` 时先复制过去（node 服务跑的文件叫 `jarvisd`，`personad` 是安装脚本在旁边建的别名，Mac App 不建），
-已经装了的（比如以前跑过 `scripts/deploy/node-launchd.sh install`）保持原样。之后只在菜单里提供「安装本机 node 服务」，用户删掉的不会自己装回来。
-App 更新不替换已安装的常驻 node。支持更新协议的 node 可以由 hub 经现有连接远程更新，含备份、回滚和上线确认；旧 node 首次本机升级、进度和安装边界见 [node-update.md](node-update.md)（#1158）。
+**Mac**: install the **Persona Link** menu bar App (`./scripts/app/mac-link.sh install`; a step-by-step guide for others is in [persona-link-install.md](persona-link-install.md)). The App includes personad (`Contents/Helpers/jarvisd`), and **on first launch** runs
+`jarvis-link node install --jarvisd <inside the App>` to install the resident node LaunchAgent `com.jarvis.node`: if `~/.persona/bin/jarvisd` doesn't exist, it copies it there first (the node service executable is named `jarvisd`; `personad` is an alias the install script creates beside it, not created by the Mac App),
+leaving an existing installation unchanged (for example from `scripts/deploy/node-launchd.sh install`). Afterwards it only offers **Install local node service** in the menu; a service the user deletes isn't reinstalled automatically.
+App updates don't replace the installed resident node. Nodes supporting the update protocol can be remotely updated by the hub over the existing connection, with backup, rollback and online confirmation; first-time local upgrades for old nodes, progress and installation boundaries are in [node-update.md](node-update.md) (#1158).
 
-**Windows**（Orca 引擎，[windows.md](windows.md)「安装和开机自启」）：`jarvis-link install --jarvisd <personad.exe> [--pair '<链接>']`，不要管理员。
-注册当前用户的计划任务「Persona Link」：登录时启动，另外每 5 分钟看一次；任务跑的是不带窗口的守护进程（`jarvis-link supervise`），由它拉起
-jarvis-link 和常驻 node、退出了重启，两个都在一个任务里（没有单独的 `node install`）。没有一键安装脚本和安装包（#1179）。
+**Windows** (Orca engine, [windows.md](windows.md) ("Installation and startup")): `jarvis-link install --jarvisd <personad.exe> [--pair '<link>']`, without admin privileges.
+Registers the current user's scheduled task **Persona Link**, starting at sign-in and checked every 5 minutes; it runs a windowless supervisor (`jarvis-link supervise`), which starts
+jarvis-link and the resident node and restarts them on exit. Both are in one task (no separate `node install`). There is no one-command installer script or installation package (#1179).
 
-**hub 这一侧**：主动模式的电脑在 hub.json 里是 kind `link`，被动模式的是 kind `service`（hub 那一路 #435 实现，管理界面「电脑 › 添加电脑 › hub 来连」粘贴链接）。
+**On the hub side**: active-mode computers are kind `link` in hub.json; passive-mode ones are kind `service` (the hub side implemented in #435; paste the link in admin **Computers › Add Computer › Hub connects**).
 
-## 分工
+## Responsibilities
 
-- **jarvis-link**（`server/cmd/jarvis-link`、`server/internal/link`）：一个单独的小程序，只做三件事：
-  - 发现：从候选地址里找到 hub 并连上；
-  - 上报：说自己是哪台、什么版本、走的哪条地址；
-  - 链路：保持这条连接，并把 hub 在链路上开的流原样转给本机的常驻 node。
+- **jarvis-link** (`server/cmd/jarvis-link`, `server/internal/link`): a separate small program doing only three things:
+  - Discovery: find the hub among candidate addresses and connect;
+  - Reporting: identify the computer, version and address used;
+  - Link: maintain the connection and forward streams opened by the hub unchanged to the local resident node.
 
-  它不承担任何具体功能。
-- **node 不变**：功能都在 `personad node` 里。这台电脑要跑常驻 node（上面「装 node 服务」一起装好；单独装是 `jarvis-link node install`
-  或 `scripts/deploy/node-launchd.sh install`），jarvis-link 只把流转给它的 socket `~/.persona/node-attach.sock`。这就是 ssh 起的 `node --stdio` 原来转给它的那条路
-  （`internal/node/attach.go`）。替常驻 node 写 systemd / launchd 服务只是打包安装，不是功能：服务的内容和 `scripts/deploy/node-launchd.sh` 写的一样。
-- **hub 和管理者**（2026-11-04 起电脑是管理者的，[machines.md](machines.md)「谁连电脑」）：
-  - hub.json 里这台的 kind 是 `link`，没人 ssh 它；
-  - Persona Link 照旧连 hub 的地址，hub 认凭据后把这条连接原样转给管理者（`devices.accept` + `GET /api/v1/bus/relay`，逐条消息、关闭码照转），
-    下面的协议是管理者说的；
-  - 链路一说 hello，管理者就开一条流去连 node（Persona Link 开的流同样经 hub 转过来），流上跑的 node 协议和 ssh 完全一样；
-  - 链路一断，这台马上离线；管理者不在时 hub 对 `/api/v1/link` 回 503，Persona Link 照常退避，管理者回来后连上。
-- **Mac** 上是菜单栏 App「Persona Link」（`apple/PersonaLink/`）：jarvis-link 作为 helper 打包在 App 里，由 App 启动和看护。
-  **Linux**（服务器、NAS、树莓派，不要图形界面）上 `jarvis-link install` 把它自己装成 systemd 用户服务，见「Linux（headless）」；
-  **Windows** 上装成登录时启动的计划任务，连常驻 node 一起看护，见 [windows.md](windows.md)「安装和开机自启」。
+  It implements no specific feature.
+- **node is unchanged**: all features live in `personad node`. This computer needs a resident node (installed together under "Install the node service" above; separately, use `jarvis-link node install`
+  or `scripts/deploy/node-launchd.sh install`); jarvis-link forwards streams only to its socket `~/.persona/node-attach.sock`. This is the same path that SSH-started `node --stdio` forwarded to
+  (`internal/node/attach.go`). Writing a systemd / launchd service for the resident node is packaging, not functionality: the service contents match those written by `scripts/deploy/node-launchd.sh`.
+- **hub and manager** (since 2026-11-04 computers belong to the manager, [machines.md](machines.md), "Who connects to computers"):
+  - This computer is kind `link` in hub.json; nobody SSHs into it;
+  - Persona Link still connects to the hub address; after authenticating, the hub forwards the connection unchanged to the manager (`devices.accept` + `GET /api/v1/bus/relay`, preserving individual messages and close codes);
+    the manager speaks the protocol below;
+  - As soon as the link says hello, the manager opens a stream to connect to the node (streams Persona Link opens are also relayed through the hub); the node protocol on the stream is exactly the SSH protocol;
+  - When the link disconnects, this computer goes offline immediately; while the manager is away the hub returns 503 on `/api/v1/link`, and Persona Link backs off normally and connects when the manager returns.
+- **Mac** uses the **Persona Link** menu bar App (`apple/PersonaLink/`), with jarvis-link packaged as a helper and started and supervised by the App.
+  On **Linux** (servers, NAS, Raspberry Pi, no GUI), `jarvis-link install` installs itself as a systemd user service; see "Linux (headless)";
+  on **Windows**, it installs as a sign-in scheduled task supervising both it and the resident node; see [windows.md](windows.md), "Installation and startup".
 
-## 链路（主动模式）
+## Link (active mode)
 
 ```text
-jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_listen）
-  → hello {machine, version, address}          第一条消息；机器 id 和凭据对不上时 hub 以 4003 关闭
+jarvis-link ── WSS /api/v1/link ──▶ hub TLS port (public.tls_listen)
+  → hello {machine, version, address}          First message; hub closes with 4003 if machine id doesn't match credentials
   ← endpoints {endpoints, hub_name, mesh_hubs, ping_ms?, ping_timeout_ms?, pending?}
-                                               连上就发，hub 的地址、互联组、心跳或这台待不待确认变了再发
-  ← open {id}                                  hub 要连 node 了
-      jarvis-link 先连 ~/.persona/node-attach.sock，再开 WSS /api/v1/link/stream?id=<id>，两边原样转发字节
-  → open_failed {id, error}                    开不了（常驻 node 没在跑等），hub 把原因记成这台的错误
-  ← node {online, error}                       hub 连没连上 node，菜单栏显示
+                                               Sent on connect and again when hub addresses, linked group, heartbeat or pending status changes
+  ← open {id}                                  hub wants to connect to node
+      jarvis-link connects ~/.persona/node-attach.sock first, then opens WSS /api/v1/link/stream?id=<id>, forwarding bytes unchanged both ways
+  → open_failed {id, error}                    Can't open (resident node not running, etc.); hub records the reason as this computer's error
+  ← node {online, error}                       Whether hub connected to node, displayed in the menu bar
 ```
 
-**选路**
-- 候选地址按「内网 → 公网 IPv6 → 域名 → 公网 IPv4」排，手动加的排在同类前面。
-- 每隔 300 ms 开始试下一个，几个同时进行，谁先连上用谁，晚连上的关掉。每个候选 8 秒超时。
-- 不在家时内网地址连不上或一直挂着，也只多等 300 ms 就会去试下一个。这些都是配置值，没实测。
+**Route selection**
+- Candidate addresses are ordered "LAN → public IPv6 → domain → public IPv4", with manually added addresses first within their category.
+- Starts trying the next candidate every 300 ms, several concurrently; the first connection wins and late successes are closed. Each candidate has an 8-second timeout.
+- Away from home, even if LAN addresses fail or hang, it waits only another 300 ms before trying the next. These are configured values, not measured results.
 
-**hub 的名字和互联组**
-- hub 在 `endpoints` 里带 `hub_name`：hub.json 的 `name`，没填时 hub 机器主机名的短名，Docker 里（主机名是容器 id）是 `hub-<hub_id 前 6 位>`
-  （[config.md](config.md)）；和 `mesh_hubs`：hub 所在互联组有几台 hub（含自己）。互联（#294）合进来之前固定是 1，由 `meshHubCount()`
-  给出，互联那一路接线；组变了 hub 重发一次 `endpoints`（`sendLinkEndpoints`）。
-- jarvis-link 把名字记进 link.json 的 `hub_name`，断开时也知道自己连的是哪台；状态里带 `hub_name`，连着时带 `mesh_hubs`。
-- 名字只留一行可打印的文字（控制字符换成空格），最多 80 个字。
-- 旧 hub 两个都不发：状态里没有这两项，Mac 菜单照旧，`jarvis-link status` 显示 hub id。只带名字、不带地址的 `endpoints` 不会清掉候选地址。
+**Hub name and linked group**
+- The hub includes `hub_name` in `endpoints`: `name` from hub.json, otherwise the short hostname of the hub machine; in Docker (where the hostname is a container id), `hub-<first 6 characters of hub_id>`
+  ([config.md](config.md)); and `mesh_hubs`: the number of hubs in its linked group, including itself. Before linked hubs (#294) landed, this was fixed at 1, returned by `meshHubCount()`
+  and wired up by the mesh lane; when the group changes the hub sends `endpoints` again (`sendLinkEndpoints`).
+- jarvis-link saves the name as `hub_name` in link.json, so it knows which hub even when disconnected; status includes `hub_name`, and `mesh_hubs` while connected.
+- The name is restricted to one printable line (control characters become spaces), up to 80 characters.
+- Old hubs send neither: neither field appears in status, the Mac menu stays as before, and `jarvis-link status` displays the hub id. An `endpoints` message containing a name but no addresses does not clear candidate addresses.
 
-**待确认**（#4655）
-- 从手机 / 网页「添加电脑」加的电脑在用户点「是我的电脑」之前是待确认（`hub/machine_trust.go`）。hub 把待确认的机器 id 交给管理者（`devices.config` 的 `pending`），
-  管理者给这台的链路发的 `endpoints` 带 `pending: true`；确认了（或者被拒、过期）hub 重新交接，管理者再发一次 `endpoints`，不带 `pending`。
-- `endpoints` 是按机器发的：每一条都说这台现在的样子，没有 `pending` 就是已确认。jarvis-link 收到就照着改状态行的 `pending`。
-- 旧 hub 不发：状态里没有 `pending`，按已确认显示（Persona Link 的状态页 #4198 已经这样处理）。被动模式（hub 连电脑）还没有这一项。
+**Pending confirmation** (#4655)
+- A computer added through **Add Computer** on the phone / web is pending until the user taps **This is my computer** (`hub/machine_trust.go`). The hub hands pending machine ids to the manager (`pending` in `devices.config`),
+  and the manager's `endpoints` to that computer's link carries `pending: true`; once confirmed (or rejected or expired), the hub hands over the config again and the manager sends `endpoints` without `pending`.
+- `endpoints` is per machine: every message describes that computer's current state; absent `pending` means confirmed. jarvis-link updates `pending` in its status line accordingly.
+- Old hubs don't send it: status omits `pending` and shows confirmed (Persona Link's status page already handles this in #4198). Passive mode (hub connects to computer) doesn't have it yet.
 
 **TLS**
-- 按配对时拿到的 hub 公钥指纹（SubjectPublicKeyInfo 的 SHA-256）钉扎，内网也走 TLS。
-- hub 的证书是自签的，信任靠的就是这个指纹，和 App 的公网直连一样（[network.md](network.md)「TLS 与公钥钉扎」）。
-- 配对链接没有指纹（hub 自己不开 TLS，在 HTTPS 反向代理后面）时，按系统信任的 CA 和主机名校验代理的证书，见「[hub 在反向代理后面](#hub-在反向代理后面)」。
-  有指纹的配对只认钉住的公钥，不会回落到系统 CA。
+- Pins the hub public-key fingerprint received during pairing (SHA-256 of SubjectPublicKeyInfo); LAN connections also use TLS.
+- The hub certificate is self-signed; trust comes from this fingerprint, just like the App's public direct connection ([network.md](network.md), "TLS and public-key pinning").
+- If the pairing link has no fingerprint (the hub doesn't serve TLS itself and sits behind an HTTPS reverse proxy), validate the proxy certificate against system-trusted CAs and the hostname; see "[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)".
+  Pairings with a fingerprint accept only the pinned public key and never fall back to system CAs.
 
-**上报**
-- 连上后第一条消息 hello，报这台的机器 id、jarvis-link 的版本和用的哪个地址。
-- 管理者核对机器 id 和凭据绑定的那台一致（hub 转过来时带着凭据绑定的机器），然后马上开流连 node，不等 ssh 那样的重试间隔。
-- 机器列表里这台多一个 `link` 字段：`{version, address, since}`。
+**Reporting**
+- The first message after connecting is hello, reporting this computer's machine id, jarvis-link version and chosen address.
+- The manager checks that the machine id matches the computer bound to the credentials (the hub includes that binding when forwarding), then immediately opens a stream to the node without waiting for the SSH retry interval.
+- This computer gets an extra `link` field in the machine list: `{version, address, since}`.
 
-**心跳**
-- 两边都每 10 秒 ping 一次，5 秒没有 pong 就断开。死链路约 15 秒内发现。
-- 慢链路可以在 hub.json 的 `link` 里改（`ping_seconds`、`ping_timeout_seconds`，[config.md](config.md)）：hub 自己照它 ping，写了的时候管理者在 `endpoints` 里带上
-  `ping_ms`、`ping_timeout_ms`，Persona Link 收到就换成它，不重连；没带（旧 hub、没配）或不是两个正数时用自己的。新连上的链路先用自己的，等 hub 说。
-  两端都把它限在 50 毫秒到 10 分钟之间（`link.PingTimes`）。旧版的 Persona Link 不认这两个字段，照旧 10 秒 / 5 秒。
-- ping 要排在这条连接上已经在发的数据后面：hub 到电脑每秒只有几十 KB 时，一块 1 MiB 的数据要 30 多秒才送完，超时短于这个就一定断，重连上以后照样再断。
-- 调心跳管不到的两个时限（`docs/lessons/server.md`「慢链路上心跳超时」）：coder/websocket 发 ping、回 pong 等写锁最多 5 秒，一条大到发送缓冲一次装不下的消息还在写时照样断；
-  hub 转发时写一条消息最多等 1 分钟（`spliceWS`），比约 17 KB/s 还慢的链路上 1 MiB 一块照样超时。hub 停掉链路时的原因里带着 ping 的错误，分得出是哪种。
-- hub 在流上也 ping，防止链路还通、流的 TCP 连接却已经悄悄断了。
-- ping 是 hub 和 Persona Link 之间的（hub 握着这一端的连接）：没有 pong 时 hub 断开它，转给管理者的那条以「no pong within …」关闭，管理者把它当链路断了。
-  每次 pong 的往返 hub 告诉管理者（`devices.link_rtt`），这条路的远近（选路、记录里给中心的）就是它。
-- 这些都是配置值，没实测。
+**Heartbeat**
+- Both sides ping every 10 seconds and disconnect after 5 seconds without pong. Dead links are detected in about 15 seconds.
+- Slow links can be configured in hub.json's `link` (`ping_seconds`, `ping_timeout_seconds`, [config.md](config.md)): the hub pings accordingly, and when configured the manager includes
+  `ping_ms`, `ping_timeout_ms` in `endpoints`; Persona Link adopts them without reconnecting. If absent (old hub, unconfigured) or not both positive, it uses its own values. New connections use their own values until the hub speaks.
+  Both sides clamp them between 50 milliseconds and 10 minutes (`link.PingTimes`). Older Persona Link versions don't recognize these fields and retain 10 seconds / 5 seconds.
+- Ping queues behind data already being sent on the connection: at only tens of KB per second from hub to computer, a 1 MiB block takes over 30 seconds; any shorter timeout guarantees disconnects, repeating after reconnect.
+- Two deadlines heartbeat tuning doesn't control (`docs/lessons/server.md`, "Heartbeat timeouts on slow links"): coder/websocket waits at most 5 seconds for the write lock when sending ping / pong, so it still disconnects while a message larger than the send buffer is being written;
+  the hub relay waits at most 1 minute to write one message (`spliceWS`), so a 1 MiB block still times out below roughly 17 KB/s. The hub's link-stop reason includes the ping error to distinguish these cases.
+- The hub also pings streams, detecting when the link is alive but a stream's TCP connection silently died.
+- Ping runs between hub and Persona Link (the hub owns this end of the connection): without pong, the hub closes it, and the relay to the manager closes with "no pong within …"; the manager treats that as a disconnected link.
+  The hub reports each pong round-trip to the manager (`devices.link_rtt`), which supplies the path distance for routing and records sent to the primary hub.
+- These are configured values, not measured results.
 
-**重连**
-- 指数退避：1 秒起，翻倍，最长 1 分钟；每次在「一半到全部」之间随机。连满 1 分钟的链路断了以后从头算。
-- 几种特殊情况：
+**Reconnect**
+- Exponential backoff: starts at 1 second, doubles up to 1 minute; randomized between half and full delay each time. After a link connected for a full minute disconnects, it starts over.
+- Special cases:
 
-  | 情况 | 等多久 |
+  | Case | Wait |
   | --- | --- |
-  | 被同一台的新链路顶掉（4001） | 30 秒 |
-  | 凭据被拒（401 / 403）或被撤销（4002） | 5 分钟，或者等到 link.json 变了（重新配对）就立刻重试 |
-  | hub 重启（1001） | 照常退避 |
-  | 手动「立即重连」 | 不等 |
+  | Replaced by a new link from the same computer (4001) | 30 seconds |
+  | Credentials rejected (401 / 403) or revoked (4002) | 5 minutes, or retry immediately when link.json changes (re-pairing) |
+  | Hub restarts (1001) | Normal backoff |
+  | Manual **Reconnect now** | No wait |
 
-- 同一台电脑只能跑一个 jarvis-link（`~/.persona/link.json.run` 文件锁），否则两个会互相顶。
+- Only one jarvis-link can run per computer (`~/.persona/link.json.run` file lock), or they replace each other repeatedly.
 
-**换网**
-- Mac：App 用 `NWPathMonitor`，网络一变就给 helper 发 `SIGUSR1`：
-  - 链路原来用的本机地址已经不在了，马上重连；
-  - 还在，就立刻 ping 一次（3 秒；hub 设的心跳超时更长时等那么久），不通再重连；
-  - 本来就没连着，立刻重试。
-- Linux：jarvis-link 自己用 netlink 盯地址变化（`internal/netaddr`）。
-- 「立即重连」是 `SIGUSR2`。等 pong 不挡它，也不挡换网的检查：慢链路上一个 ping 可能要等上 hub 设的整个超时。
+**Network changes**
+- Mac: the App uses `NWPathMonitor` and sends helper `SIGUSR1` on a network change:
+  - If the link's original local address is gone, reconnect immediately;
+  - If still present, ping immediately (3 seconds, or the hub-configured heartbeat timeout if longer), reconnecting on failure;
+  - If already disconnected, retry immediately.
+- Linux: jarvis-link watches address changes itself with netlink (`internal/netaddr`).
+- **Reconnect now** is `SIGUSR2`. Waiting for pong blocks neither this nor the network-change check: on a slow link, ping may wait the hub's entire configured timeout.
 
-**转发**
-- 只转给 `~/.persona/node-attach.sock`，只连回这条链路用的那个 hub 地址，流 id 只能是字母、数字、`-`、`_`。hub 没法让它去连别的地址。
-- 流上开 permessage-deflate 压缩。原来的 ssh 开了 `Compression=yes`，原因见 `devices/machine.go` 的注释（hub 和管理者之间是本机回环，那一段不压缩）。
-- 对常驻 node 来说，每条流就是一次新的 attach 连接，新的顶掉旧的，和 ssh 时一样。
+**Forwarding**
+- Only forwards to `~/.persona/node-attach.sock` and only connects back to the hub address used by this link; stream ids may contain only letters, digits, `-`, `_`. The hub can't make it connect elsewhere.
+- Streams enable permessage-deflate compression. SSH previously used `Compression=yes`; see the comment in `devices/machine.go` (the hub-to-manager hop is local loopback and isn't compressed).
+- To the resident node, each stream is a new attach connection, replacing the previous one just as with SSH.
 
-## hub 在反向代理后面
+## Hub behind a reverse proxy
 
-hub 自己不开 TLS、挂在反向代理的子路径下（`public_url` 是 `https://<域名>/<前缀>`，证书在代理上、来自公共 CA，代理去掉前缀转给 hub 的明文端口）时，
-手机 App 和网页本来就能用（[network.md](network.md)「反向代理的子路径（Android）」），主动模式的 Persona Link 也能用（#2573）：
+When the hub doesn't serve TLS itself and is mounted under a reverse proxy's subpath (`public_url` is `https://<domain>/<prefix>`, the proxy has a public-CA certificate and strips the prefix before forwarding to the hub's plaintext port),
+the phone App and web already work ([network.md](network.md), "Reverse-proxy subpaths (Android)"), and active-mode Persona Link works too (#2573):
 
 ```text
-jarvis-link ── WSS https://<域名>/<前缀>/api/v1/link ──▶ 反向代理（TLS，公共 CA）── 去掉 /<前缀>，明文 ──▶ hub 的 listen 端口
+jarvis-link ── WSS https://<domain>/<prefix>/api/v1/link ──▶ reverse proxy (TLS, public CA) ── strip /<prefix>, plaintext ──▶ hub listen port
 ```
 
-- **配对**：hub 没开 TLS 时，`personad hub pair --machine <id>`（和管理界面的「配对链接」）照样给链接，只要 `public_url` 是 `https://…`：链接里 `url` 就是 `public_url`，
-  没有 `fp` 和 `tls`。jarvis-link 收下这种链接：地址保留路径前缀、端口写全（`https://<域名>:443/<前缀>`，和 hub 下发的候选一致），
-  link.json 记 `"trust": "system"`、不记指纹。链接里没有 `fp`、`url` 也不是 `https://` 时拒绝（没有能用的地址）。
-- **校验**：这种配对的每个候选都按系统信任的 CA 和主机名校验（TLS 1.2 起，`http/1.1`），和浏览器开网页版一样。有 `fp` 的配对照旧只认钉住的公钥：
-  代理的证书对不上指纹就是「TLS 公钥指纹和配对时的不一样」，不会回落到系统 CA。
-- **链路**：`/api/v1/link`、`/api/v1/link/stream`、配对时的 `/api/v1/auth/tokens` 都拼在前缀后面；心跳、重连退避、选路都和上面一样。hub 下发的候选里 `public_url` 本来就带前缀。
-- **hub 这边**：经代理进来的是明文请求，hub 只在这两种情况放链路进来（凭据照旧要对）：
-  - 代理和 hub 在同一台机器上（来源是回环）；
-  - 代理在内网另一台机器上（来源是内网地址），并且转发头说它收的是 HTTPS：`X-Forwarded-Proto: https`（或 `Forwarded: proto=https`）。
+- **Pairing**: without hub TLS, `personad hub pair --machine <id>` (and **Pairing link** in admin) still returns a link if `public_url` is `https://…`: its `url` is `public_url`,
+  with no `fp` or `tls`. jarvis-link accepts this link, preserving the path prefix and spelling out the port (`https://<domain>:443/<prefix>`, matching candidates sent by the hub);
+  link.json stores `"trust": "system"` and no fingerprint. A link with no `fp` and no `https://` `url` is rejected (no usable address).
+- **Validation**: every candidate in this pairing is checked against system-trusted CAs and the hostname (TLS 1.2 or later, `http/1.1`), like opening the web app in a browser. Pairings with `fp` still accept only the pinned public key:
+  if the proxy certificate doesn't match, the error is "TLS public-key fingerprint differs from pairing", with no fallback to system CAs.
+- **Link**: `/api/v1/link`, `/api/v1/link/stream` and pairing's `/api/v1/auth/tokens` are appended after the prefix; heartbeat, reconnect backoff and routing remain as above. The hub's candidates already include the prefix in `public_url`.
+- **Hub side**: requests arriving through the proxy are plaintext; the hub accepts links only in these two cases (credentials must still match):
+  - Proxy and hub are on the same machine (loopback source);
+  - Proxy is on another LAN machine (private source address), and forwarding headers say it received HTTPS: `X-Forwarded-Proto: https` (or `Forwarded: proto=https`).
 
-  公网来源的明文一律拒绝（`403 tls_required`），带什么头都一样；别的入口（App 的 API、总线、互联）不受影响。hub 在 Docker 里经端口映射、来源显示成容器网关时按公网处理，
-  要把网关写进 `security.trusted_cidrs`（[network.md](network.md)「来源判断与反向代理」）。转发头可以伪造：在内网里伪造它，只能让自己的链路凭据走明文，Persona Link 自己从不发明文。
-- **状态**：`jarvis-link status` 多一行「校验：经反向代理 · 系统证书」，`--json` 的 `trust` 是 `system`（钉扎时是 `pin`）；运行中的状态行带 `"trust": "system"`；
-  菜单栏 App 在连接方式下面显示「经反向代理 · 系统证书」，配对窗口的地址列表上方也有说明。证书不受系统信任、证书上的域名对不上时，失败原因分别写「证书不受系统信任」「证书上的域名对不上」。
+  Plaintext from public sources is always rejected (`403 tls_required`), whatever the headers; other entry points (App APIs, bus, mesh) are unaffected. If the hub runs in Docker and port mapping makes the source appear as a container gateway, it is treated as public;
+  add the gateway to `security.trusted_cidrs` ([network.md](network.md), "Source classification and reverse proxies"). Forwarding headers can be spoofed: on the LAN, spoofing only lets one's own link credentials travel in plaintext; Persona Link itself never sends plaintext.
+- **Status**: `jarvis-link status` adds "Validation: via reverse proxy · system certificates"; `trust` in `--json` is `system` (`pin` for pinning); the running status line carries `"trust": "system"`;
+  the menu bar App shows "Via reverse proxy · system certificates" below the connection method, and the pairing window explains it above the address list. Untrusted certificates and hostname mismatches report "Certificate not trusted by the system" and "Certificate hostname doesn't match" respectively.
 
-nginx 的写法（占位符按自己的改；`map` 放在 `http { }` 里，`location` 放在 443 的 `server { }` 里）：
+nginx example (replace placeholders; put `map` in `http { }`, and `location` in the port-443 `server { }`):
 
 ```nginx
 map $http_upgrade $connection_upgrade {
@@ -189,307 +189,307 @@ map $http_upgrade $connection_upgrade {
     ''      close;
 }
 
-location /<前缀>/ {
-    proxy_pass http://<hub 地址>:<hub 的 listen 端口>/;   # 末尾的 / 去掉前缀
+location /<prefix>/ {
+    proxy_pass http://<hub address>:<hub listen port>/;   # Trailing / strips the prefix
     proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;              # WebSocket：/api/v1/ws、/api/v1/link、/api/v1/link/stream
+    proxy_set_header Upgrade $http_upgrade;              # WebSocket: /api/v1/ws, /api/v1/link, /api/v1/link/stream
     proxy_set_header Connection $connection_upgrade;
     proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto https;            # 代理在另一台机器上时 hub 认它，才让明文的链路进来
+    proxy_set_header X-Forwarded-Proto https;            # Allows a plaintext link when proxy is on another LAN machine
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_buffering off;
-    proxy_read_timeout 1h;                               # 长连接：至少要比心跳（默认 10 秒，hub.json 的 link 可改）长，留余量
+    proxy_read_timeout 1h;                               # Long connection: exceed heartbeat (default 10s, configurable in hub.json link) with margin
     proxy_send_timeout 1h;
 }
 ```
 
-**取舍**：钉扎只信 hub 的一把公钥；系统信任则信系统里所有的 CA，任何一家给这个域名签了证书（被入侵或误签的 CA、能往这台电脑装根证书的设备管理）都能冒充 hub，
-拿到这台电脑的链路凭据、把 hub 的流接到这台的常驻 node 上。这和浏览器访问网页版一样：比明文好、比钉扎弱。代理到 hub 那一段是明文，要放在可信的网络里（同机或内网）。
-能用 hub 自带 TLS 和指纹时优先用它；hub 开了 TLS 时配对链接总带 `fp`，就不会走系统信任。
+**Trade-off**: pinning trusts one hub public key; system trust trusts every CA in the system. Any CA that signs for this domain (a compromised or mistaken CA, or device management able to install roots on this computer) can impersonate the hub,
+obtain this computer's link credentials and connect hub streams to its resident node. This is the same as accessing the web app in a browser: better than plaintext, weaker than pinning. The proxy-to-hub hop is plaintext and must be on a trusted network (same machine or LAN).
+Prefer the hub's own TLS and fingerprint when possible; when hub TLS is enabled, pairing links always carry `fp` and won't use system trust.
 
-## 被动模式（hub 来连）
+## Passive mode (the hub connects)
 
-协议在 [plan-hub-center.md](plan-hub-center.md) 第 4 节定死，这里是细节；拨号的那一侧（#435）按这里实现，2026-11-04 起是管理者
-（`server/internal/devices/service.go`；配对时生成的凭据交给 hub 用它的密钥封着存，拨的时候再要回来）。实现：`server/internal/link/`
-（`listen.go` 监听和三个接口、`passive.go` 配对码和链接、`tlsid.go` 身份、`ratelimit.go` 限流），命令行在 `server/cmd/jarvis-link/passive.go`。
+The protocol is fixed in [plan-hub-center.md](plan-hub-center.md), section 4; details are here. The dialing side (#435) follows this specification and has belonged to the manager since 2026-11-04
+(`server/internal/devices/service.go`; credentials generated during pairing are handed to the hub for encrypted storage with its key and retrieved when dialing). Implementation: `server/internal/link/`
+(`listen.go` for the listener and three endpoints, `passive.go` for pairing codes and links, `tlsid.go` for identity, `ratelimit.go` for rate limiting); CLI in `server/cmd/jarvis-link/passive.go`.
 
-### 监听和身份
+### Listener and identity
 
-- 监听 link.json 里的 `passive.listen`，默认 `:18663`（所有地址）；`jarvis-link mode passive --listen <地址>` 或 `pair --listen <地址>` 改。只开这一个端口。
-- TLS 1.2 起，ALPN 只有 `http/1.1`。身份是连接器自己的 ECDSA P-256 密钥和自签证书，在 `~/.persona/link-tls/`（目录 0700，`link.key`、`link.crt` 0600），
-  第一次 `pair --listen` 或第一次监听时生成。证书只带 `connector.jarvis.invalid` 这一个名字，不带主机名和地址（谁连到这个端口都看得到证书）。
-- 指纹和 hub 的一样：证书 SubjectPublicKeyInfo DER 的 SHA-256，base64url 不带填充（43 个字符）。hub 按配对链接里的指纹钉扎，不验证书名字。
-- 证书一年，剩不到 30 天时用同一把密钥重签（监听中也会，握手时检查），指纹不变。换了密钥（删了 `link-tls/`）就要重新配对。这些是配置值。
+- Listens on `passive.listen` in link.json, default `:18663` (all addresses); change with `jarvis-link mode passive --listen <address>` or `pair --listen <address>`. Only this one port is opened.
+- TLS 1.2 or later, ALPN only `http/1.1`. Identity is the helper's own ECDSA P-256 key and self-signed certificate in `~/.persona/link-tls/` (directory 0700, `link.key` and `link.crt` 0600),
+  generated on the first `pair --listen` or first listener start. The certificate contains only `connector.jarvis.invalid`, no hostname or addresses (anyone connecting to this port can see the certificate).
+- Fingerprint format matches the hub's: SHA-256 of the certificate's SubjectPublicKeyInfo DER, unpadded base64url (43 characters). The hub pins the fingerprint from the pairing link and doesn't validate the certificate name.
+- Certificate lifetime is one year; with fewer than 30 days left it is renewed with the same key (also while listening, checked during handshakes), keeping the fingerprint. Changing the key (deleting `link-tls/`) requires re-pairing. These are configured values.
 
-### 配对
+### Pairing
 
-方向和主动模式反过来（电脑不一定连得到 hub）：
+The direction is reversed from active mode (the computer may not be able to reach the hub):
 
-1. 电脑上 `jarvis-link pair --listen [<监听地址>] [--addr <地址>]…`（菜单栏 App：配对窗口选「让 hub 来连」，点「生成配对链接」）。
-   它把 link.json 改成被动模式、生成一次性配对码（128 位随机，`jc_` 开头，只存 SHA-256），**标准输出只有链接**，说明在标准错误：
+1. On the computer: `jarvis-link pair --listen [<listen address>] [--addr <address>]…` (menu bar App: select **Let the hub connect** in the pairing window, then **Generate pairing link**).
+   It switches link.json to passive mode and generates a one-time pairing code (128 random bits, `jc_` prefix, only SHA-256 stored); **stdout contains only the link**, explanations go to stderr:
 
    ```text
-   jarvis://connector?addr=<host:port>[&addr=<host:port>…]&fp=<连接器指纹>&code=<一次性码>
+   jarvis://connector?addr=<host:port>[&addr=<host:port>…]&fp=<helper fingerprint>&code=<one-time code>
    ```
 
-   - `addr` 可以重复，好的在前，都是 `host:port`（不带协议，IPv6 带方括号，整个做了 URL 编码）。没给 `--addr` 时是本机的地址加端口，按主动模式试 hub
-     的顺序排：内网（私网 IPv4、ULA）→ 公网 IPv6（Linux 上排除临时、废弃、tentative 的地址）→ 公网 IPv4；不要回环、链路本地、隧道和桥接网卡
-     （Docker、VPN、Tailscale……）。全是虚拟网卡时（容器的 eth0、NAS 的网卡挂在虚拟交换机上）退一步用它们，隧道和桥接照样不要。
-     一个也没有时 `pair --listen` 报错要 `--addr`；`install --listen` 照样装好服务，提示之后 `pair --listen --addr`。给了 `--addr` 就只有给的那些。
-   - 码 10 分钟内有效，只能用一次；再 `pair --listen` 生成新的，旧码作废。已经配对过的 hub 在新 hub 用掉新码之前照常能连。
-2. hub 管理界面「电脑 › 添加电脑 › hub 来连」粘贴链接（可以改地址、填代理），hub 按 `fp` 钉扎连过去，`POST /api/v1/connector/pair` 用码换长期凭据：
-   凭据是 hub 自己生成的随机串，连接器只存它的 SHA-256。
-3. 之后 hub 用这个凭据开 `stream` 连 node，和主动模式一样。
+   - `addr` may repeat, best first, always `host:port` (no scheme, IPv6 in brackets, URL-encoded as a whole). Without `--addr`, local addresses plus port are ordered like active-mode hub candidates:
+     LAN (private IPv4, ULA) → public IPv6 (excluding temporary, deprecated and tentative addresses on Linux) → public IPv4; exclude loopback, link-local, tunnel and bridge interfaces
+     (Docker, VPN, Tailscale…). If all interfaces are virtual (container eth0, NAS interface attached to a virtual switch), fall back to those, still excluding tunnels and bridges.
+     If none remain, `pair --listen` errors asking for `--addr`; `install --listen` still installs the service and instructs you to run `pair --listen --addr` later. If `--addr` is supplied, only those addresses are used.
+   - Codes expire after 10 minutes and can be used once; another `pair --listen` generates a new code and invalidates the old one. The previously paired hub can keep connecting until the new hub consumes the new code.
+2. Paste the link into hub admin **Computers › Add Computer › Hub connects** (addresses can be edited and a proxy supplied). The hub connects with `fp` pinning and exchanges the code for long-term credentials through `POST /api/v1/connector/pair`:
+   the hub generates the random token itself; the helper stores only its SHA-256.
+3. Afterwards the hub uses that credential to open `stream` to the node, as in active mode.
 
-### 接口
+### Endpoints
 
-除了下面三个什么都没有：没有 shell、文件、端口转发，流只能连到 `~/.persona/node-attach.sock`。其他路径、其他方法一律 `404 {"error":"not_found"}`。
-错误都是 JSON：`{"error":"<代码>","message":"<给人看的中文>"}`。
+Only these three exist: no shell, files or port forwarding; streams can connect only to `~/.persona/node-attach.sock`. All other paths and methods return `404 {"error":"not_found"}`.
+Errors are JSON: `{"error":"<code>","message":"<human-readable Chinese>"}`.
 
-| 接口 | 认证 | 请求 | 回答 |
+| Endpoint | Authentication | Request | Response |
 | --- | --- | --- | --- |
-| `POST /api/v1/connector/pair` | 一次性码 | body ≤ 16 KiB：`{"code","token","machine","hub_id","hub_name"}`；`code`、`token`、`machine` 必填（`token` 32–512 个可打印 ASCII、不含空白），`hub_id`、`hub_name` 可选但请带上 | `200 {"version"}`；字段不对 `400 bad_request`（不计限流，不作废码）；码错、过期、用过 `401 bad_code`（计限流） |
-| `GET /api/v1/connector/info` | `Authorization: Bearer <凭据>` | — | `200 {"machine","version"}`：`machine` 是配对时 hub 给的机器 id；凭据缺或错 `401 unauthorized` |
-| `GET /api/v1/connector/stream` | 同上 | WebSocket 升级；可带 `X-Persona-Ping`（心跳，见下） | 先认证，再连 node-attach.sock，最后才升级：node 连不上 `503 node_unavailable`（`message` 说原因，hub 可以记成这台的错误）；不是升级请求 `400`；升级后见下 |
+| `POST /api/v1/connector/pair` | One-time code | Body ≤ 16 KiB: `{"code","token","machine","hub_id","hub_name"}`; `code`, `token`, `machine` required (`token`: 32–512 printable ASCII characters, no whitespace), `hub_id`, `hub_name` optional but please include them | `200 {"version"}`; invalid fields: `400 bad_request` (not rate-limited, doesn't invalidate the code); wrong, expired or used code: `401 bad_code` (rate-limited) |
+| `GET /api/v1/connector/info` | `Authorization: Bearer <credential>` | — | `200 {"machine","version"}`: `machine` is the machine id supplied by the hub during pairing; missing / wrong credential: `401 unauthorized` |
+| `GET /api/v1/connector/stream` | Same | WebSocket upgrade; optional `X-Persona-Ping` (heartbeat, below) | Authenticate, connect node-attach.sock, then upgrade: node unreachable: `503 node_unavailable` (`message` gives the reason for the hub to record as this computer's error); non-upgrade request: `400`; after upgrading, see below |
 
-- 配对成功会替换之前配对的 hub（「只认配对它的那台」：组里的中心；换中心时由新中心重新配对）：旧凭据马上不认，旧凭据开着的流以关闭码 **4002** 关掉。
-- 流：二进制消息，原样是 node 的字节，两个方向都不改。接受 permessage-deflate（context takeover，和主动模式的流、原来 ssh 的 `Compression=yes` 一样）。
-  连接器每 10 秒 ping、5 秒没 pong 就断，hub 的 ping 照常回。hub 关流时连接器对 node 半关（写端关掉），node 读完收尾，node 关了流就结束。
-  hub.json 设了心跳（`link`）时，开流的请求带 `X-Persona-Ping: <间隔毫秒> <超时毫秒>`，连接器在这条流上照它 ping（同样限在 50 毫秒到 10 分钟）；
-  没带或不是两个数时用自己的。旧连接器不认这个头，照旧 10 秒 / 5 秒。
-- 对常驻 node 来说每条流是一次新的 attach，新的顶掉旧的，和主动模式、ssh 时一样；连接器自己不管哪条是新的。
-- 连接器停止或改回主动模式时，流以 **1001** 关；被动模式的配对留在 link.json 里，改回被动后原凭据照样能用。
+- Successful pairing replaces the previously paired hub ("only trusts the hub it paired with": the group's primary; a new primary re-pairs after a switch). Old credentials stop working immediately, and streams opened with them close with code **4002**.
+- Streams are binary messages containing unchanged node bytes in both directions. Accepts permessage-deflate (context takeover, like active-mode streams and SSH's former `Compression=yes`).
+  The helper pings every 10 seconds and disconnects after 5 seconds without pong, while answering hub pings normally. When the hub closes a stream, the helper half-closes the node connection (write end), letting the node finish reading and clean up; the stream ends when the node closes.
+  With a heartbeat configured in hub.json (`link`), the stream request carries `X-Persona-Ping: <interval milliseconds> <timeout milliseconds>`; the helper uses it on that stream (also clamped to 50 milliseconds–10 minutes);
+  absent or not two numbers, it uses its own values. Old helpers ignore the header and retain 10 seconds / 5 seconds.
+- Each stream is a new attach to the resident node, replacing the previous one as in active mode and SSH; the helper itself doesn't decide which is newest.
+- When the helper stops or changes back to active mode, streams close with **1001**. Passive pairing stays in link.json; switching back to passive makes the same credential usable again.
 
-### 认证和限流
+### Authentication and rate limiting
 
-- 凭据只存 hash（link.json 的 `passive.token_sha256`），比较用常数时间。
-- 认证失败（码不对、凭据缺或错）按来源计数：IPv4 一个地址、IPv6 一个 /64 算一个来源。**内网和回环也算**（hub 多半就在内网，不能因为在内网就不限）。
-  60 秒内失败 10 次封 15 分钟；封禁中的来源先于认证被拒，凭据对也回 `429 {"error":"rate_limited"}` 和 `Retry-After`（秒）。最多记 4096 个来源，
-  满了先丢没封的。这些都是配置值，没实测。
-- 日志：认证失败、TLS 握手失败每 30 秒最多一行（带省略了几条），来源只记 /24 或 /64。
+- Only the credential hash is stored (`passive.token_sha256` in link.json), compared in constant time.
+- Failed authentication (wrong code, missing / wrong credential) is counted per source: one IPv4 address or one IPv6 /64. **LAN and loopback count too** (the hub is usually on the LAN, which must not exempt it).
+  10 failures within 60 seconds block the source for 15 minutes; blocked sources are rejected before authentication, returning `429 {"error":"rate_limited"}` and `Retry-After` (seconds) even with correct credentials. At most 4096 sources are tracked;
+  when full, unblocked ones are evicted first. These are configured values, not measured results.
+- Logs: at most one line per 30 seconds for authentication and TLS handshake failures (with the number omitted); sources are recorded only as /24 or /64.
 
-### 给 hub 实现方的建议
+### Recommendations for hub implementers
 
-- 链接里的 `addr` 按顺序试（或者先只取第一个），记下连通的那个；用户在管理界面改了地址就用改的。
-- 拿到 401 要退避，别拿着坏凭据一直重试（会把自己的来源封掉）；429 按 `Retry-After` 等。
-- 流被 4002 关掉：这台被别的 hub 配走了，标成「要重新配对」，别重试；1001 或连不上：照常退避重连。
-- 503 `node_unavailable`：链路是通的、常驻 node 没在跑，把 `message` 显示成这台的错误，过一会再试。
-- 想知道连接器活着、测 RTT：`GET /api/v1/connector/info`。连接器会记下 hub 最后一次来的时间和来源，显示在菜单栏和 `jarvis-link status` 里。
+- Try `addr` values in link order (or start with only the first), and remember the working one; use edited addresses if the user changes them in admin.
+- Back off on 401; don't keep retrying bad credentials (you'll block your own source). On 429, wait for `Retry-After`.
+- Stream closed with 4002: another hub paired this computer; mark **Pairing required** and don't retry. On 1001 or connection failure, back off and reconnect normally.
+- 503 `node_unavailable`: the link works but the resident node isn't running; show `message` as this computer's error and retry later.
+- To check helper liveness and RTT: `GET /api/v1/connector/info`. The helper records the hub's last visit time and source, displayed in the menu bar and `jarvis-link status`.
 
-### link.json 里的被动模式
+### Passive mode in link.json
 
 ```json
-{"mode":"passive","passive":{"listen":":18663","hub_id":"…","hub_name":"家里","machine":"example-workstation",
+{"mode":"passive","passive":{"listen":":18663","hub_id":"…","hub_name":"Home","machine":"example-workstation",
  "token_sha256":"…","paired_at":"…","code":{"sha256":"…","expires":"…"}}}
 ```
 
-- 和主动模式的字段（`hub`、`machine`、`fp`、`token`、`endpoints`）分开，谁也不覆盖谁；`mode` 没有或是 `active` 都是主动模式（旧文件照旧能用）。
-- `jarvis-link pair <链接>`（主动）把 `mode` 改成 `active`，`pair --listen` 改成 `passive`，`mode` 只改模式。正在跑的 jarvis-link 每秒看一眼 link.json，
-  模式变了就换过去（关掉链路或监听，开另一个）；监听地址变了就换端口。
-- `jarvis-link uninstall --purge` 连 `link-tls/` 一起删。
+- Separate from active-mode fields (`hub`, `machine`, `fp`, `token`, `endpoints`), neither overwrites the other; absent `mode` or `active` means active mode (old files still work).
+- `jarvis-link pair <link>` (active) sets `mode` to `active`, `pair --listen` sets `passive`, and `mode` changes only the mode. A running jarvis-link checks link.json every second,
+  switching when mode changes (closing the link or listener and opening the other); a changed listen address changes the port.
+- `jarvis-link uninstall --purge` also deletes `link-tls/`.
 
-### 安全边界
+### Security boundary
 
-- 能连到这个端口的人：没有码或凭据什么都做不了，只能看到证书（没有主机名和地址）和 404；猜码、猜凭据被限流，而且两者都是 128 位以上的随机数。
-- 拿到凭据的 hub：只能开到常驻 node 的流，和 ssh 时 hub 能做的一样（node 协议本身），不多。
-- 配对链接在 10 分钟里、用掉之前等于配对权：别贴到不可信的地方。链接里的 `fp` 让 hub 不会连到冒充的连接器。
-- 防火墙：只对 hub（或 hub 用的代理）放行这个 TCP 端口，别对所有人开。`pair --listen`、`install --listen`、`mode passive` 都会提示，例如
-  `sudo ufw allow from <hub 的地址> to any port 18663 proto tcp`；路由器、云主机的安全组同理。Mac 开着应用防火墙时，第一次监听系统可能问要不要允许
-  传入连接（没实测）。
+- Someone able to reach this port can do nothing without a code or credential, only see the certificate (no hostname or addresses) and 404; guesses are rate-limited, and both are random values of at least 128 bits.
+- A hub holding the credential can only open streams to the resident node, with exactly the same capabilities as via SSH (the node protocol), no more.
+- For 10 minutes until consumed, the pairing link grants pairing authority: don't paste it into an untrusted place. Its `fp` prevents the hub connecting to an impersonating helper.
+- Firewall: open this TCP port only to the hub (or its proxy), not everyone. `pair --listen`, `install --listen` and `mode passive` all show a reminder, for example
+  `sudo ufw allow from <hub address> to any port 18663 proto tcp`; likewise for routers and cloud security groups. With the Mac application firewall enabled, the system may ask whether to allow
+  incoming connections on first listen (not tested).
 
-## 凭据（主动模式）
+## Credentials (active mode)
 
-- 是设备凭据的一种：kind `link`、role `link`，绑定 hub.json 里的那台机器（`device_tokens.machine_id`，迁移 0131）。
-  - hub 只存 hash。
-  - 只能开 `/api/v1/link` 和 `/api/v1/link/stream`，别的接口一律 403。
-  - App 的「设置 › 设备」里能看到、能撤销，撤销后链路立刻断开（4002）。
-- 两种配对码都能换成它：
-  - `personad hub pair --machine <id>`：专给这台的配对码（`pair_tokens.machine_id`）。链接是 `jarvis://link?…&machine=<id>`，
-    只能换成这台的链路凭据，别的什么都做不了。标准输出只有链接，说明打在标准错误，方便用管道。
-    hub.json 里还没有这台时加 `--add [--name <名字>]`：先加一条 `kind: link`（运行中生效，不用重启），加的直接是已确认的；不带 `--add` 时提示加上。
-  - 已登录的 App / 网页「添加电脑」（`POST /api/v1/auth/pair-codes` 带 `add`，[protocol.md](protocol.md)「临时配对」）：hub 照管理界面的「添加电脑」加一条 `kind: link`，
-    给这台的配对码。这样加的电脑是**待确认**的，用户在 App 里点「是我的电脑」之前收不到 Persona 管理的 Key（[protocol.md](protocol.md)「电脑的信任」）。
-  - App 用的普通配对码（`personad hub pair`），再指定机器 id：命令行 `jarvis-link pair --machine <id>`，App 里填「机器 id」。
-- hub 要开着 TLS（`public.tls_listen`），或者 `public_url` 是 `https://` 的反向代理地址；都没有时 `--machine` 返回 409。
-- 鉴权失败按 hub 原有的规矩限流（公网来源计数）。公网只收 TLS；内网也不收明文，只有回环可以，
-  或者内网的反向代理说它收的是 HTTPS（`X-Forwarded-Proto: https`，见「[hub 在反向代理后面](#hub-在反向代理后面)」）。
-- 凭据存在 `~/.persona/link.json`（0600）：hub id、机器 id、指纹（或 `"trust": "system"`：没有指纹，按系统 CA 校验）、凭据、候选地址（hub 下发的加上手动加的）。
+- A kind of device credential: kind `link`, role `link`, bound to that machine in hub.json (`device_tokens.machine_id`, migration 0131).
+  - The hub stores only the hash.
+  - Can open only `/api/v1/link` and `/api/v1/link/stream`; every other endpoint returns 403.
+  - Visible and revocable in App **Settings › Devices**; revocation immediately disconnects the link (4002).
+- Both kinds of pairing code can be exchanged for it:
+  - `personad hub pair --machine <id>`: a code specifically for this computer (`pair_tokens.machine_id`). The link is `jarvis://link?…&machine=<id>`,
+    exchangeable only for this computer's link credentials and nothing else. Stdout contains only the link, explanations go to stderr for easy piping.
+    If the computer isn't in hub.json yet, add `--add [--name <name>]`: first adds `kind: link` (effective while running, no restart), already confirmed; without `--add`, it asks you to include it.
+  - **Add Computer** in a signed-in App / web (`POST /api/v1/auth/pair-codes` with `add`, [protocol.md](protocol.md), "Temporary pairing"): the hub adds `kind: link` just like admin's **Add Computer**,
+    with a code for that machine. Computers added this way are **pending confirmation** and don't receive Persona-managed keys until the user taps **This is my computer** in the App ([protocol.md](protocol.md), "Computer trust").
+  - A normal App pairing code (`personad hub pair`) plus a machine id: CLI `jarvis-link pair --machine <id>`, or fill in **Machine id** in the App.
+- The hub needs TLS (`public.tls_listen`) or an `https://` reverse-proxy `public_url`; without either, `--machine` returns 409.
+- Failed authentication follows the hub's existing rate limits (public sources counted). Public connections require TLS; LAN plaintext isn't accepted either, except loopback
+  or a LAN reverse proxy reporting HTTPS (`X-Forwarded-Proto: https`; see "[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)").
+- Credentials are stored in `~/.persona/link.json` (0600): hub id, machine id, fingerprint (or `"trust": "system"`: no fingerprint, system-CA validation), credential, candidate addresses (hub-provided plus manually added).
 
-## 接入一台电脑（以 Mac 为例）
+## Connecting a computer (Mac example)
 
-推荐在 App 里添加：不用进管理界面，也不用登录 hub 机器。下面是 Mac 的主动模式；Linux 第 2、3 步换成在那台电脑的终端里粘贴网页给的一行命令，
-Windows 见 [windows.md](windows.md)。给不用终端的人的写法在 [getting-started.md](getting-started.md)「接上一台电脑」。
+Prefer adding it in the App: no admin interface or sign-in to the hub machine needed. Below is active mode on Mac; for Linux, replace steps 2 and 3 with pasting the web app's one-line command into that computer's terminal;
+for Windows see [windows.md](windows.md). Instructions for people who don't use terminals are in [getting-started.md](getting-started.md), "Connect a computer".
 
-1. 在 Mac 上装 Persona Link：`./scripts/app/mac-link.sh install`（[persona-link-install.md](persona-link-install.md)）。它会编译（连同 personad）、放进 `/Applications`，然后打开；
-   第一次打开就装好常驻 node（`com.jarvis.node`），已经装了的不动。
-2. 在已登录的网页打开「机器 › 添加电脑」，系统选 Mac，填名字（可以中文，id 由 hub 从名字生成）。hub 加一条 `kind: link`、状态**待确认**，给出这台的配对链接
-   （`POST /api/v1/auth/pair-codes` 带 `add`，[protocol.md](protocol.md)「电脑的配对码」）。iOS、Android 的入口在做。
-3. 把链接发到这台 Mac（「拷贝配对链接」或「分享…」），粘贴进 菜单栏 › 配对 / 修改连接…。
-4. 这台连上后，网页同一屏问「有一台电脑想加入：<名字>，是你的吗？」，点「是我的电脑」（`POST /api/v1/machines/{id}/confirm`）。
-   确认之前它收不到 Persona 管理的 Key、不参与助手机器的选择、不出现在新建 Agent 的电脑列表里；24 小时不确认自动删掉（[protocol.md](protocol.md)「电脑的信任」）。
-   关掉了那一屏的话，机器列表里这台的卡片上也能确认或删掉。
-5. 确认：菜单栏图标变成已连接，菜单里写「本机 node 在线」，App 的「设置 › 机器」里这台在线。
-6. 想开机就连上：在菜单里勾「登录时启动」（`SMAppService`）。
+1. Install Persona Link on the Mac: `./scripts/app/mac-link.sh install` ([persona-link-install.md](persona-link-install.md)). It builds (including personad), copies to `/Applications`, and opens;
+   first launch installs the resident node (`com.jarvis.node`), leaving existing installations untouched.
+2. In the signed-in web app, open **Machines › Add Computer**, select Mac and enter a name (Chinese is allowed; the hub generates the id from the name). The hub adds `kind: link`, **pending confirmation**, and provides its pairing link
+   (`POST /api/v1/auth/pair-codes` with `add`, [protocol.md](protocol.md), "Computer pairing codes"). iOS and Android entry points are in progress.
+3. Send the link to this Mac (**Copy pairing link** or **Share…**) and paste it into **Menu bar › Pair / Change connection…**.
+4. Once it connects, the same web screen asks "A computer wants to join: <name>. Is it yours?"; tap **This is my computer** (`POST /api/v1/machines/{id}/confirm`).
+   Before confirmation it receives no Persona-managed keys, isn't considered for assistant-machine selection, and doesn't appear in the computer list for creating Agents; unconfirmed computers are removed after 24 hours ([protocol.md](protocol.md), "Computer trust").
+   If you closed that screen, its card in the machine list also lets you confirm or delete it.
+5. Verify: the menu bar icon becomes connected, the menu says **Local node online**, and the computer is online in App **Settings › Machines**.
+6. To connect on startup, enable **Launch at login** in the menu (`SMAppService`).
 
-链接 10 分钟内有效、只能用一次；过期了在网页那一屏点「重新生成」（`{"machine": <id>}` 重出码，旧的 Persona Link 凭据一起吊销）。
-hub 没开 TLS 时网页报「hub 还没打开安全连接」（409 `tls_required`），见下面「高级」。
+Links expire after 10 minutes and are single-use; if expired, tap **Regenerate** on the web screen (`{"machine": <id>}` issues a new code and also revokes old Persona Link credentials).
+Without hub TLS, the web reports "The hub hasn't enabled a secure connection yet" (409 `tls_required`); see "Advanced" below.
 
-### 高级
+### Advanced
 
-- **不经 App 添加**（加的直接是已确认）：管理界面 › 电脑 › 添加电脑 › 电脑来连；或者在 hub 机器上生成配对链接：
-  - 普通部署：`personad hub pair --machine macbook --add --name MacBook`（已经有这台时 `--add` 不做什么，照样给链接）；
-  - NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine macbook --add`。
-- **手写 hub.json**：`machines` 加一条（或把原来的 ssh 那条改成）`{"id":"macbook","name":"MacBook","kind":"link","icon":"laptop"}` 再重启 hub，然后用上面的命令出链接。
-- claude 是 shell 包装函数时，要在 hub.json 的 `machines[].launchers` 里配启动器。
-- **命令行配对**：
+- **Add without the App** (already confirmed): admin **Computers › Add Computer › Computer connects**; or generate a pairing link on the hub machine:
+  - Native deployment: `personad hub pair --machine macbook --add --name MacBook` (`--add` does nothing if the computer exists, but still returns a link);
+  - Docker on NAS: `sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine macbook --add`.
+- **Hand-edit hub.json**: add a `machines` entry (or change the previous SSH entry) to `{"id":"macbook","name":"MacBook","kind":"link","icon":"laptop"}`, restart the hub, then generate the link with the command above.
+- If claude is a shell wrapper function, configure its launcher in `machines[].launchers` in hub.json.
+- **CLI pairing**:
   ```sh
   … | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
   ```
-- **被动模式**：第 2、3 步换成配对窗口里的「让 hub 来连」，链接粘贴到 hub 管理界面 › 电脑 › 添加电脑 › hub 来连（上面「被动模式」）。
+- **Passive mode**: replace steps 2 and 3 with **Let the hub connect** in the pairing window, then paste the link into hub admin **Computers › Add Computer › Hub connects** ("Passive mode" above).
 
-Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-link install --pair -` 一条命令配对、装好、等它连上。
+For Linux see "Linux (headless)" below: build `jarvis-link`, then `jarvis-link install --pair -` pairs, installs and waits for connection in one command.
 
-## 菜单栏 App（`apple/PersonaLink/`）
+## Menu bar App (`apple/PersonaLink/`)
 
-**构建**
-- `./scripts/app/mac-link.sh build|install|snapshot <目录>`。
-- 独立的 SwiftPM 包（不在 `apple/project.yml` 里，和 Persona 的 App 不共用代码），用 `xcodebuild` 编：这台开发机上 `swift build` 默认的构建系统报「找不到开发者目录」。
-- jarvis-link 和 personad 编进 `Contents/Helpers/`（personad 给常驻 node 用，见「装 node 服务」；App 因此大了约 37 MB）。
-- 用本机 ad-hoc 签名（Sign to Run Locally），不写死团队。
-- bundle id 默认用占位的 `com.example.jarvis.link`，可以用 `~/.config/persona/config.json` 的 `mac.link_bundle_id` 或环境变量
-  `PERSONA_LINK_BUNDLE_ID`（旧名 `JARVIS_LINK_BUNDLE_ID`）覆盖。
-- 编完用 `vtool` 把可执行文件记下的 SDK 版本改成真正用的 SDK：xcodebuild 编 Swift package 时记成了部署目标 15.0，系统就按旧 SDK 的老样子画菜单栏面板
-  （[lessons/macos.md](lessons/macos.md)「Persona Link 的面板是老样子」）。
-- `UNIVERSAL=1` 时同时编 Intel 版。
+**Build**
+- `./scripts/app/mac-link.sh build|install|snapshot <directory>`.
+- A standalone SwiftPM package (not in `apple/project.yml`, no shared code with the Persona App), built with `xcodebuild`: on this development machine, `swift build`'s default build system reports "Developer directory not found".
+- jarvis-link and personad are built into `Contents/Helpers/` (personad is for the resident node; see "Install the node service"; adds about 37 MB to the App).
+- Local ad-hoc signing (Sign to Run Locally), no hard-coded team.
+- Default bundle id is the placeholder `com.example.jarvis.link`, overrideable by `mac.link_bundle_id` in `~/.config/persona/config.json` or environment variable
+  `PERSONA_LINK_BUNDLE_ID` (old name `JARVIS_LINK_BUNDLE_ID`).
+- After building, `vtool` changes the executable's recorded SDK version to the actual SDK used: xcodebuild records Swift packages as deployment target 15.0, making the system draw menu bar panels in the old SDK style
+  ([lessons/macos.md](lessons/macos.md), "Persona Link's panel looks old").
+- `UNIVERSAL=1` also builds Intel.
 
-**系统设置**
-- 没有 Dock 图标（`LSUIElement`）。
-- 不开沙盒：要读写 `~/.persona` 里的 socket 和配置。
-- Info.plist 注册了 `jarvis` 和 `persona` 两个 URL scheme（#4198）：在备忘录、AirDrop、邮件、Safari 里点 `jarvis://link?…` 会打开配对窗口并预填，见下面「配对窗口」。
-  App 没签名公证：第一次打开要在 Finder 里右键 › 打开，过一次 Gatekeeper 的提示；scheme 要在 App 打开过一次之后才登记到系统里，之前点链接打不开它。
-  同一台 Mac 上装着 Mac App（`PersonaMac`，也注册了这两个 scheme）时，系统可能把链接交给它：它认出 `link` 链接就转给 Persona Link（按可执行文件 `JarvisLink` 找，bundle id 可配置），没装 Persona Link 时提示先装，不会拿它配对；iPhone 的 Persona 收到时提示「在要加入的那台电脑上打开这条链接」。
-- Info.plist 写了 `NSLocalNetworkUsageDescription`：macOS 15 起，连内网地址要本地网络权限，第一次连内网时系统会弹窗问。
-  拒绝的话，内网候选会报「不可达」，要去 系统设置 › 隐私与安全性 › 本地网络 里打开。
+**System settings**
+- No Dock icon (`LSUIElement`).
+- No sandbox: needs sockets and config in `~/.persona`.
+- Info.plist registers both `jarvis` and `persona` URL schemes (#4198): opening `jarvis://link?…` in Notes, AirDrop, mail or Safari opens and prefills the pairing window; see "Pairing window" below.
+  The App is not signed and notarized: on first launch, right-click it in Finder and choose Open to pass Gatekeeper. The schemes are registered only after the App has been opened once; earlier link taps cannot open it.
+  If the Mac App (`PersonaMac`, which also registers both schemes) is installed on the same Mac, the system may send the link there instead: it recognizes `link` and forwards to Persona Link (found by executable `JarvisLink`, with configurable bundle id). If Persona Link is absent, it asks you to install it rather than pairing with that link; Persona on iPhone says "Open this link on the computer you want to add."
+- Info.plist includes `NSLocalNetworkUsageDescription`: from macOS 15, LAN connections require local-network permission, and the first prompts the user.
+  If denied, LAN candidates report unreachable; enable it in **System Settings › Privacy & Security › Local Network**.
 
-**helper**
-- App 用 `jarvis-link run --parent` 启动它。
-- 标准输出一行一个 JSON 状态，App 读最新一行。
-- 标准错误追加到 `~/.persona/link.log`，超过 1 MB 就在下次启动 helper 时清掉重来。
-- 数据目录和常驻 node 用同一个：App 自己的环境里没有 `PERSONA_HOME` / `JARVIS_HOME` 时，读 `~/Library/LaunchAgents/com.jarvis.node.plist` 里写的那个交给 helper；都没有就按 `~/.persona`（用过旧版的机器上是 `~/.jarvis`）（`LinkStatePaths.swift`）。
-- `--parent` 让 helper 在标准输入关掉时退出，所以 App 不管怎么退出（包括崩溃），helper 都跟着退出。
-- helper 退出了，App 会重启它：1 秒起翻倍，最长 30 秒；跑满 1 分钟后从 1 秒重新算。
+**Helper**
+- The App starts it with `jarvis-link run --parent`.
+- Stdout emits one JSON status per line; the App reads the latest.
+- Stderr appends to `~/.persona/link.log`; if over 1 MB, it is cleared on the next helper start.
+- Uses the resident node's data directory: if the App environment lacks `PERSONA_HOME` / `JARVIS_HOME`, it reads the directory from `~/Library/LaunchAgents/com.jarvis.node.plist` and passes it to the helper; otherwise defaults to `~/.persona` (`~/.jarvis` on machines that used the old version) (`LinkStatePaths.swift`).
+- `--parent` exits the helper when stdin closes, so any App exit, including a crash, also exits the helper.
+- If the helper exits, the App restarts it: exponential delay from 1 second to 30 seconds; after running for a full minute, restart delay resets to 1 second.
 
-**图标**：用模板图，深浅色菜单栏上都看得清。
+**Icons**: template images remain clear on light and dark menu bars.
 
-| 状态 | 图标 |
+| State | Icon |
 | --- | --- |
-| 已连上（被动模式：hub 连进来了） | `personalhotspot` |
-| 连上了，等你在手机上确认（`pending`） | `hourglass` |
-| 连接中 | `arrow.triangle.2.circlepath` |
-| 被动模式在监听、等 hub 连进来 | `antenna.radiowaves.left.and.right` |
-| 离线或出错（被动模式：监听不了） | `personalhotspot.slash` |
-| 未配对 | `link.badge.plus` |
-| 链路通了，但这台电脑上的 Persona 后台服务（常驻 node）没在运行 | `exclamationmark.triangle` |
+| Connected (passive: hub connected) | `personalhotspot` |
+| Connected, waiting for confirmation on your phone (`pending`) | `hourglass` |
+| Connecting | `arrow.triangle.2.circlepath` |
+| Passive listener waiting for hub | `antenna.radiowaves.left.and.right` |
+| Offline or error (passive: can't listen) | `personalhotspot.slash` |
+| Unpaired | `link.badge.plus` |
+| Link connected, but Persona's background service (resident node) on this computer is not running | `exclamationmark.triangle` |
 
-**菜单**
-- 第二行是模式：「我去连 hub（主动）」，或「让 hub 来连（被动）· 监听 :18663」。
-- 主动模式：哪条地址（内网 / 公网 IPv6 / 域名）、连了多久、断开的原因（每个候选一行）、本机 node 在不在线。
-- 被动模式：hub 连进来了（来自哪个地址、连了多久、本机 node 在不在线）；或者在监听（上一次 hub 什么时候、从哪连进来）；或者等配对（配对链接还剩几分钟有效）；
-  或者监听不了（端口被占用等，多久后重试）。
-- 连着哪台 hub、所在互联组几台：「hub「家里」· 互联组共 3 台 hub」，只有一台时「hub「家里」· 没和别的 hub 互联」；没连上时只写名字。
-  旧 hub 不发名字时没有这一行，菜单和以前一样。
-- 第一行用大白话说状态：未配对「还没连上 hub」（菜单项是「粘贴配对链接…」）；「已连上 hub」；hub 还在等确认时「等你在手机上确认」加「在手机 App 里点「是我的电脑」」；
-  常驻 node 没在运行时「这台电脑上的 Persona 后台服务没在运行」，菜单里有「重新安装」（`jarvis-link node uninstall` 再 `node install`，`~/.persona/bin/jarvisd` 留着）；「连接中」「离线」。
-  「等你确认」看状态行的 `pending`：hub 还不发这个字段（#4655），现在这段时间显示「已连上」。
-- 立即重连（被动模式没有：是 hub 来连）、配对 / 修改连接…、安装本机 node 服务（只在没装时出现）、登录时启动、退出。
+**Menu**
+- Second line is the mode: **Connect to hub (active)** or **Let hub connect (passive) · Listening :18663**.
+- Active: selected address (LAN / public IPv6 / domain), connection duration, disconnect reason (one line per candidate), local node online state.
+- Passive: hub connected (source address, duration, local node state); or listening (when and where the hub last connected); or waiting for pairing (remaining validity of the pairing link);
+  or unable to listen (port occupied, etc., retry delay).
+- Connected hub and group size: "hub ‘Home’ · 3 hubs in linked group", or "hub ‘Home’ · Not linked to other hubs" when alone; disconnected shows only the name.
+  Old hubs sending no name omit the line, preserving the previous menu.
+- The first line describes the state plainly: unpaired is "Not connected to hub yet" (menu action "Paste pairing link…"); "Connected to hub"; awaiting confirmation is "Waiting for confirmation on your phone" plus "Tap ‘This is my computer’ in the phone App";
+  if the resident node is not running, "Persona's background service on this computer is not running", with **Reinstall** in the menu (`jarvis-link node uninstall` then `node install`, preserving `~/.persona/bin/jarvisd`); "Connecting" or "Offline".
+  "Waiting for confirmation" uses status-line `pending`: the hub does not yet send this field (#4655), so this period currently shows "Connected".
+- **Reconnect now** (not in passive mode, where the hub initiates), **Pair / Change connection…**, **Install local node service** (only when absent), **Launch at login**, **Quit**.
 
-**配对窗口**
-- 顶上选「我去连 hub（主动）」或「让 hub 来连（被动）」，默认是现在的模式；只是看，不切换。切换发生在配对时（主动：粘贴链接配对；被动：生成配对链接），
-  或者点「改用这个」（那个模式以前配对过，不用重新配对，`jarvis-link mode`）。
-- 主动：粘贴手机或网页「添加电脑」给的配对链接，或者直接点开它（URL scheme 打开窗口并预填）。**不自动配对**：窗口里先写出要连的 hub（链接里 `url` 的主机）、
-  带了指纹（`fp`）时写「已带安全指纹」、这台在 hub 上叫什么，用户点「配对」才执行：一条被转发、伪造的链接不能自己把这台电脑交给别人的 hub。
-  只认 `link` 这个 host；`jarvis://pair?…` 之类别的链接，窗口里说「这是给手机 / Mac App 用的链接」，不填也不做别的。
-  机器 id 收在「高级」里（链接没写 `machine` 时才有，比如 `personad hub pair` 不带 `--machine` 打的链接）。App 调 `jarvis-link pair`，成功的结果或错误都显示在窗口里。列出候选地址，正在用的那个标「在用」；
-  可以手动加一个地址（`jarvis-link address add`），手动加的可以移除。
-- 被动：填监听地址（默认 `:18663`），「生成配对链接」调 `jarvis-link pair --listen`，显示链接（可以选中、有「复制」）、链接里的地址和防火墙提示；
-  已经配对过时写着和哪台 hub、这台叫什么。
+**Pairing window**
+- Select **Connect to hub (active)** or **Let hub connect (passive)** at the top, defaulting to the current mode; viewing doesn't switch. Switching happens when pairing (active: paste and pair; passive: generate link),
+  or by tapping **Use this** (that mode was paired before, no re-pairing, `jarvis-link mode`).
+- Active: paste the pairing link from **Add Computer** on the phone or web, or open it directly (the URL scheme opens and prefills the window). **Never pairs automatically**: first shows the destination hub (`url` host),
+  "Security fingerprint included" when `fp` is present, and this computer's name on the hub. Pairing runs only after the user taps **Pair**: a forwarded or forged link cannot hand this computer to someone else's hub on its own.
+  Only accepts host `link`; other links such as `jarvis://pair?…` show "This link is for the phone / Mac App", without prefilling or taking further action.
+  Machine id is under **Advanced** (only when the link lacks `machine`, such as `personad hub pair` without `--machine`). The App calls `jarvis-link pair`, displaying success or errors in the window. Lists candidate addresses and marks the selected one **In use**;
+  manual addresses can be added (`jarvis-link address add`) and removed.
+- Passive: enter listen address (default `:18663`); **Generate pairing link** calls `jarvis-link pair --listen`, showing the selectable link with **Copy**, its addresses and firewall guidance;
+  if already paired, shows which hub and this computer's name.
 
-**截图**
-- `./scripts/app/mac-link.sh snapshot <目录>` 用 App 自己的视图离屏画出这些图，深浅色各一套：
-  - 菜单的每个状态；
-  - 配对窗口；
-  - 各个图标。
-- 不需要屏幕录制权限，也不会拍进别的东西。
+**Screenshots**
+- `./scripts/app/mac-link.sh snapshot <directory>` renders the App's own views offscreen, a light and dark set each:
+  - Every menu state;
+  - Pairing window;
+  - Every icon.
+- No screen-recording permission needed, and no unrelated content captured.
 
-## 状态行（helper → App）
+## Status line (helper → App)
 
 ```json
-{"state":"connected","machine":"macbook","hub_name":"家里","mesh_hubs":1,"address":"https://192.0.2.10:18662","kind":"lan",
+{"state":"connected","machine":"macbook","hub_name":"Home","mesh_hubs":1,"address":"https://192.0.2.10:18662","kind":"lan",
  "since":"…","node":"online","endpoints":[{"url":"https://192.0.2.10:18662","kind":"lan"}]}
 ```
 
-- `mode`：`active` / `passive`。
-- `state`：`unpaired` / `connecting` / `connected` / `waiting` / `refused`；被动模式是 `unpaired`（在监听、等配对）/ `listening`（配对了、hub 现在没连着）/
-  `connected`（hub 开着流，`address` 是 hub 的地址、`since` 是流开始的时间）/ `waiting`（监听不了）。
-- 被动模式另有 `listen`（在哪监听）、`addrs`（hub 可以用的本机地址，`host:port`，好的在前）、`last_seen` 和 `from`（hub 最后一次来的时间和地址）、
-  `code_expires`（`pair --listen` 的码到什么时候）。
-- `node`：`online` / `offline` / `unknown`，原因在 `node_error`。
-- `pending`（待做，#4655）：`true` 时 hub 还在等用户在 App 里确认这台电脑；没有这个字段按已确认处理。
-- `waiting` / `refused` 时带 `error`（多个候选的失败用「；」隔开）和 `retry`（下次尝试的时间）。
-- `hub_name`、`mesh_hubs`：见「hub 的名字和互联组」，旧 hub 时没有。
-- `pending`：只在 `connected` 时有意义，`true` 是 hub 还在等用户确认这台电脑（见「待确认」）；没有这一项或 `false` 按已确认处理。
-- `trust`：主动模式按系统 CA 校验 hub（在反向代理后面，没有指纹）时是 `system`，钉扎时没有这一项。
-- 不带凭据。
-- 每一行同时写进 `~/.persona/link.status.json`（加上 `pid`、`version`、`updated`；正常退出时写 `"state":"stopped"`），给
-  `jarvis-link status` 读：它没法问正在跑的那个。
+- `mode`: `active` / `passive`.
+- `state`: `unpaired` / `connecting` / `connected` / `waiting` / `refused`; passive mode uses `unpaired` (listening, waiting for pairing), `listening` (paired, hub not connected),
+  `connected` (hub has a stream open; `address` is the hub's address and `since` the stream start time), `waiting` (unable to listen).
+- Passive mode also includes `listen` (listen address), `addrs` (local addresses usable by the hub, `host:port`, best first), `last_seen` and `from` (time and address of the hub's last visit),
+  `code_expires` (expiration of the `pair --listen` code).
+- `node`: `online` / `offline` / `unknown`, reason in `node_error`.
+- `pending` (planned, #4655): `true` means the hub is waiting for the user to confirm this computer in the App; absent means confirmed.
+- `waiting` / `refused` include `error` (candidate failures separated by "；", a full-width semicolon) and `retry` (next attempt time).
+- `hub_name`, `mesh_hubs`: see "Hub name and linked group"; absent with old hubs.
+- `pending`: meaningful only when `connected`; `true` means the hub is waiting for the user to confirm this computer (see "Pending confirmation"); absent or `false` means confirmed.
+- `trust`: `system` when active mode validates the hub through system CAs (reverse proxy, no fingerprint); absent when pinned.
+- No credentials included.
+- Each line is also written to `~/.persona/link.status.json` (with `pid`, `version`, `updated`; normal exit writes `"state":"stopped"`) for
+  `jarvis-link status` to read, since it can't query the running instance.
 
-## Linux（headless）
+## Linux (headless)
 
-服务器、NAS、树莓派这类没有图形界面的机器上，`jarvis-link` 自己就够了。
+On servers, NAS boxes and Raspberry Pis without a GUI, `jarvis-link` alone is enough.
 
-**构建**
-- 纯 Go、不要 cgo：`cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o jarvis-link ./cmd/jarvis-link`。
-  `amd64`、`arm64`、32 位树莓派（`GOARCH=arm GOARM=7`）都能编；Windows 也能编（文件锁、信号按平台分文件），还没有托盘程序（#299）。
-- `personad` 也能为 Windows 编译（`GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间按平台分文件，在 `internal/osproc` 和各包的 `_windows.go` 里），
-  Windows 上的常驻 node 配 Orca 引擎能用；`jarvis-link install` 在 Windows 上装的是登录时启动的计划任务（下面「装 node 服务」的 Windows 一段），见 [windows.md](windows.md)。
-- 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/jarvisd`，安装脚本另建别名 `personad`）；`scripts/deploy/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
+**Build**
+- Pure Go, no cgo: `cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o jarvis-link ./cmd/jarvis-link`.
+  Builds for `amd64`, `arm64` and 32-bit Raspberry Pi (`GOARCH=arm GOARM=7`); Windows also builds (file locks and signals in platform-specific files), but has no tray app yet (#299).
+- `personad` also builds for Windows (`GOOS=windows go build ./...`; process groups, signals, file locks and CPU time are platform-specific in `internal/osproc` and each package's `_windows.go`),
+  and the Windows resident node works with Orca; `jarvis-link install` installs a sign-in scheduled task on Windows (the Windows paragraph under "Install the node service"), see [windows.md](windows.md).
+- The resident node uses `jarvisd` built from the same commit (`~/.persona/bin/jarvisd`, with the install script creating a `personad` alias); `scripts/deploy/node-launchd.sh install` installs it on Linux as systemd user service `jarvisd-node`.
 
-**一条命令装好**
+**One-command installation**
 
-链接从已登录网页的「机器 › 添加电脑」拿（这样加的要在网页里确认），或者在 hub 机器上用命令行出（加的直接是已确认）：
+Get the link from signed-in web **Machines › Add Computer** (requires confirmation on the web), or generate it on the hub machine via CLI (already confirmed):
 
 ```sh
-personad hub pair --machine nas --add             # 在 hub 机器上；没有这台时先添加；标准输出只有链接
-./jarvis-link install --pair - <<< '<链接>'       # 在这台电脑上；链接从标准输入读
+personad hub pair --machine nas --add             # On hub machine; adds it if absent; stdout contains only the link
+./jarvis-link install --pair - <<< '<link>'       # On this computer; reads link from stdin
 ```
 
-被动模式：`./jarvis-link install --listen [:18663] [--addr <hub 连这台用的地址>]`，装好后打印给 hub 管理界面的链接。
+Passive mode: `./jarvis-link install --listen [:18663] [--addr <address the hub uses to reach this computer>]`; after installation, prints a link for hub admin.
 
-`install` 依次做：
-1. 带 `--pair` 时先配对（同 `jarvis-link pair`；`--pair` 后面不跟链接或跟 `-` 时从标准输入读）。带 `--listen` 时改成被动模式，还没配对过就生成配对链接
-   （同 `pair --listen`）；已经配对过就保持原样。两个不能一起给。
-2. 把自己复制到 `~/.persona/bin/jarvis-link`；已经是它就不复制。拿新版本再跑一次 `install` 就是升级。
-3. 常驻 node 的服务（systemd 用户服务 `jarvisd-node`，内容同 `scripts/deploy/node-launchd.sh`）还没有就装上并启动：要有 `~/.persona/bin/jarvisd`（安装脚本会先放好），
-   没有时用 `--jarvisd <路径>` 给一个复制过去；已经装了的保持原样；`--no-node` 不管它。
-4. 写 `~/.config/systemd/user/jarvis-link.service`（有 `XDG_CONFIG_HOME` 时在它下面），`daemon-reload`、`enable`、`restart`。
-5. 没开 linger 时提示 `sudo loginctl enable-linger <用户>`：不开的话没人登录时用户实例不在，退出登录服务就停，开机也不会起来。
-6. 最多等 20 秒，等到连上 hub、hub 查过本机 node，打印一行结论。连上了退出码 0；没连上打印每个候选为什么失败，退出码 1，服务照样装着、一直重试。
-   被动模式等到开始监听（或者说清楚为什么监听不了），再打印配对链接和防火墙提示。
+`install` runs these steps:
+1. With `--pair`, pair first (same as `jarvis-link pair`; no link after `--pair`, or `-`, reads stdin). With `--listen`, switch to passive mode and generate a link if never paired
+   (same as `pair --listen`); an existing pairing stays unchanged. These options can't be combined.
+2. Copy itself to `~/.persona/bin/jarvis-link`, unless already there. Running `install` again with a new version upgrades it.
+3. If absent, install and start the resident node service (systemd user service `jarvisd-node`, same contents as `scripts/deploy/node-launchd.sh`): requires `~/.persona/bin/jarvisd` (the install script puts it there first),
+   or `--jarvisd <path>` to copy a supplied binary. Existing installations stay unchanged; `--no-node` leaves it alone.
+4. Write `~/.config/systemd/user/jarvis-link.service` (under `XDG_CONFIG_HOME` if set), then `daemon-reload`, `enable`, `restart`.
+5. If linger is off, suggest `sudo loginctl enable-linger <user>`: otherwise the user instance is absent when nobody is signed in, services stop at logout and don't start at boot.
+6. Wait up to 20 seconds for hub connection and the hub's local-node check, then print a one-line conclusion. Connected: exit 0; not connected: print every candidate's failure reason, exit 1, leaving the service installed and retrying.
+   Passive mode waits for listening (or explains why it can't), then prints the pairing link and firewall guidance.
 
-单元里不写模式和监听地址：都在 link.json 里，换模式、换端口不用重装服务，在跑的 jarvis-link 一两秒内就换过去。
+The unit contains neither mode nor listen address: both live in link.json. Changing mode or port requires no service reinstall; the running jarvis-link switches within a second or two.
 
-还没配对就 `install`：服务先跑着（unpaired），之后 `jarvis-link pair` 几秒内它就用上新凭据，不用重启（它每 2 秒看一眼 link.json 变没变）。
+Running `install` before pairing starts the service as unpaired; later `jarvis-link pair` makes it adopt new credentials within seconds, without restart (checks link.json changes every 2 seconds).
 
-写出的 unit：
+Generated unit:
 
 ```ini
 [Unit]
 Description=Persona link: keeps this computer reachable from the Persona hub
 
 [Service]
-ExecStart="/home/<用户>/.persona/bin/jarvis-link" run --log "/home/<用户>/.persona/link.log"
-Environment="PERSONA_HOME=/home/<用户>/.persona"
-Environment="JARVIS_HOME=/home/<用户>/.persona"
+ExecStart="/home/<user>/.persona/bin/jarvis-link" run --log "/home/<user>/.persona/link.log"
+Environment="PERSONA_HOME=/home/<user>/.persona"
+Environment="JARVIS_HOME=/home/<user>/.persona"
 Restart=always
 RestartSec=5
 StandardOutput=null
@@ -498,107 +498,107 @@ StandardOutput=null
 WantedBy=default.target
 ```
 
-- 路径是这台的数据目录（新装是 `~/.persona`，用过旧版的机器上是 `~/.jarvis`，设了 `PERSONA_HOME` 就是它，见 [rename.md](rename.md)）；两行 `Environment` 把同一个目录交给服务，免得服务里算出另一个。
-- 不等 `network-online.target`：用户实例里没有这个 target，jarvis-link 自己会一直重试。
-- 状态行是给菜单栏 App 的，不进 journal；日志写 `~/.persona/link.log`（`run --log`，满 1 MB 挪到 `link.log.1` 重新开始，这是配置值）。
-  journal 不持久的机器上普通用户 `journalctl --user` 看不到用户服务的日志，所以日志不靠它。
-- `su`、`sudo -u`、`docker exec` 进来的会话没有 `XDG_RUNTIME_DIR`，`systemctl --user` 找不到用户实例：install / status / uninstall
-  在它没设时自己补上 `/run/user/<uid>`（存在才补）。用户实例本身不在（没开 linger、也没人登录）时补了也没用，提示开 linger 或者 ssh 登录这个用户再装。
-- 用 root 装会提示：服务以 root 跑、用 root 的数据目录，常驻 node 也要在 root 下（提示文字里写死的是 `/root/.jarvis`，实际用的是按上面规则算出的 root 的数据目录）。
+- Paths use this computer's data directory (`~/.persona` for new installs, `~/.jarvis` on machines using an old version, or `PERSONA_HOME` if set; see [rename.md](rename.md)); both `Environment` lines pass the same directory to the service so it doesn't resolve another.
+- Doesn't wait for `network-online.target`: user instances don't have this target, and jarvis-link retries itself.
+- Status lines are for the menu bar App, not journal; logs go to `~/.persona/link.log` (`run --log`; at 1 MB, rotates to `link.log.1`, a configured value).
+  On machines without persistent journals, ordinary users can't see user-service logs with `journalctl --user`, so logging doesn't depend on it.
+- Sessions entered through `su`, `sudo -u`, `docker exec` lack `XDG_RUNTIME_DIR`, so `systemctl --user` can't find the user instance; install / status / uninstall
+  fill in `/run/user/<uid>` if unset and present. This doesn't help if the user instance itself is absent (no linger and nobody signed in); prompts to enable linger or SSH in as that user before installing.
+- Installing as root warns that the service runs as root with root's data directory, and the resident node must also run as root (the prompt hard-codes `/root/.jarvis`, but the actual directory is resolved by the rules above).
 
-**没有 systemd**（容器、部分 NAS）
+**Without systemd** (containers, some NAS systems)
 
-`install` 照样配对、复制二进制，然后打印能直接粘贴的替代做法，退出码 1：
-- 现在就在后台跑：`nohup ~/.persona/bin/jarvis-link run --log ~/.persona/link.log >/dev/null 2>&1 &`
-- 开机就跑：cron 的 `@reboot` 跑同一条；
-- 群晖：任务计划里加一个「开机」触发的用户脚本，内容是上面 nohup 那一行；
-- 容器：让 `jarvis-link run --log …` 当主进程、重启策略 `unless-stopped`、`~/.persona` 挂成卷，常驻 node 在同一个容器里；
-- supervisord、runit、s6、OpenRC：前台跑 `jarvis-link run --log …`，退出就重启。
+`install` still pairs and copies binaries, then prints copyable alternatives and exits 1:
+- Run in the background now: `nohup ~/.persona/bin/jarvis-link run --log ~/.persona/link.log >/dev/null 2>&1 &`
+- At boot: cron `@reboot` with the same command;
+- Synology: a user script triggered at startup in Task Scheduler, containing the nohup line above;
+- Container: `jarvis-link run --log …` as the main process, restart policy `unless-stopped`, `~/.persona` mounted as a volume, resident node in the same container;
+- supervisord, runit, s6, OpenRC: run `jarvis-link run --log …` in foreground and restart on exit.
 
-常驻 node 同理：`nohup ~/.persona/bin/jarvisd node --attach >> ~/.persona/node-attach.log 2>&1 &`。
+Resident node likewise: `nohup ~/.persona/bin/jarvisd node --attach >> ~/.persona/node-attach.log 2>&1 &`.
 
-**状态、日志、卸载**
+**Status, logs, uninstall**
 
-| 命令 | 做什么 |
+| Command | Action |
 | --- | --- |
-| `jarvis-link status` | 模式、链路（哪条地址、连了多久；没连上时每个候选为什么失败）、hub 的名字和互联组台数、本机 node、机器 id、候选地址、systemd 服务（active / enabled / linger）、pid 和版本、日志在哪。被动模式换成：监听地址、在监听还是 hub 连着、配对的 hub 和什么时候配的、上一次 hub 什么时候从哪连进来、连接器指纹、hub 可以用的本机地址。连着（被动模式：在监听也算）时退出码 0，否则 1 |
-| `jarvis-link status --json` | 同上给脚本用：`running`、`mode`、`paired`、`machine`、`hub_id`、`hub_name`、`endpoints`、`trust`（`pin` / `system`）、`link`（最后报的状态）、`passive`（`listen`、`paired`、`hub_id`、`hub_name`、`machine`、`paired_at`、`code_expires`、`fp`）、`service`、`config`、`log`，link.json 读不了时有 `error`；不含凭据和它的 hash |
-| `jarvis-link logs [-f] [-n 行数]` | `~/.persona/link.log` 的最后 100 行（`-n` / `--lines` 改），`-f` / `--follow` 一直跟着，日志换文件也跟得上；没有日志文件、装了服务时看 journal。`log` 是同一个命令 |
-| `jarvis-link uninstall` | 停掉、禁用、删掉 systemd 用户服务（Windows：计划任务），凭据留着。Linux、Mac 上常驻 node 的服务留着（`node uninstall` 删）；Windows 上 node 在同一个计划任务里，跟着一起停，`jarvisd.exe` 留着 |
-| `jarvis-link uninstall --purge` | 再删凭据（link.json 和它的 `.lock` / `.run`）、状态、日志（连 `link.log.1`）、被动模式的 TLS 身份 `link-tls/`、`~/.persona/bin/jarvis-link`，以及安装脚本建的 `persona-link` 别名（只删确实是别名的那个）；还有别的 jarvis-link 在跑（菜单栏 App、手动起的）时拒绝。hub 那边的凭据去 App「设置 › 设备」撤销 |
-| `jarvis-link pair [--machine <id>] [<链接>\|-]` | 主动模式配对，凭据写进 `~/.persona/link.json`。不给链接或给 `-` 时从标准输入读；在终端里提示粘贴，回车就读那一行。链接里没带机器 id（App 用的普通配对码）时用 `--machine` 指定 |
-| `jarvis-link pair --listen [<监听地址>] [--addr <地址>]…` | 被动模式的配对链接（标准输出只有链接，方便管道）；监听地址默认 `:18663`；不能和配对链接、`--machine` 一起给 |
-| `jarvis-link mode [active\|passive] [--listen <地址>]` | 什么都不带时只显示现在的模式（被动模式带监听地址）；带了就换，两种模式的配对都留着；只给 `--listen` 时不换模式、只改被动模式的监听地址 |
-| `jarvis-link node install [--jarvisd <路径>]` / `node status [--json]` / `node uninstall` | 常驻 node 的服务（Linux systemd `jarvisd-node`，Mac launchd `com.jarvis.node`）；已经有的不动；`uninstall` 不删 `~/.persona/bin/jarvisd`。Windows 上 node 在 jarvis-link 的计划任务里，只有 `node status` |
-| `jarvis-link discover [--wait <秒>] [--json]` | 局域网里听到的 hub（mDNS），只看不配对；默认听 3 秒，`--wait` 可以是小数、最多 60；听到了退出码 0，否则 1 |
-| `jarvis-link run [--parent] [--log <文件>]` | 在前台保持链路，状态一行一个 JSON 打到标准输出（见「状态行」）；`--parent` 标准输入关掉就退出（菜单栏 App 这样起它）；`--log` 日志写进这个文件（满 1 MB 挪到 `<文件>.1`），不写标准错误。systemd 服务和「没有 systemd」的做法跑的都是它 |
-| `jarvis-link address add <地址>` / `address remove <地址>` | 手动加 / 去掉一个 hub 的候选地址（`https://域名:端口`，或只写域名），写进 link.json；要先配对过才能加。`remove` 去掉写的那一条，不管是手动加的还是 hub 下发的（hub 下发的下次连上可能又发回来） |
-| `jarvis-link version` | 打印版本（`--version`、`-v` 一样） |
-| `jarvis-link help` | 打印用法（`--help`、`-h` 一样）；不认识的命令或参数也打印用法，退出码 2 |
+| `jarvis-link status` | Mode, link (address, duration; candidate failure reasons when disconnected), hub name and group size, local node, machine id, candidate addresses, systemd service (active / enabled / linger), pid and version, log location. Passive mode instead shows: listen address, listening or hub connected, paired hub and pairing time, hub's last visit time and address, helper fingerprint, local addresses usable by hub. Exit 0 when connected (also listening in passive mode), otherwise 1 |
+| `jarvis-link status --json` | Same for scripts: `running`, `mode`, `paired`, `machine`, `hub_id`, `hub_name`, `endpoints`, `trust` (`pin` / `system`), `link` (last reported status), `passive` (`listen`, `paired`, `hub_id`, `hub_name`, `machine`, `paired_at`, `code_expires`, `fp`), `service`, `config`, `log`; `error` if link.json can't be read; no credential or hash |
+| `jarvis-link logs [-f] [-n lines]` | Last 100 lines of `~/.persona/link.log` (change with `-n` / `--lines`); `-f` / `--follow` keeps following, including rotation; without a log file but with an installed service, reads journal. `log` is the same command |
+| `jarvis-link uninstall` | Stop, disable and delete systemd user service (Windows: scheduled task), preserving credentials. Linux / Mac resident-node service remains (`node uninstall` removes it); on Windows the node shares the task and stops too, but `jarvisd.exe` remains |
+| `jarvis-link uninstall --purge` | Also remove credentials (link.json and `.lock` / `.run`), status, logs (including `link.log.1`), passive TLS identity `link-tls/`, `~/.persona/bin/jarvis-link`, and install-script `persona-link` alias (only if truly an alias); refuses while another jarvis-link is running (menu bar App, manually started). Revoke hub-side credentials in App **Settings › Devices** |
+| `jarvis-link pair [--machine <id>] [<link>\|-]` | Active pairing, credentials saved to `~/.persona/link.json`. No link or `-` reads stdin; prompts to paste in a terminal and reads one line on Enter. If the link lacks a machine id (normal App code), specify `--machine` |
+| `jarvis-link pair --listen [<listen address>] [--addr <address>]…` | Passive pairing link (only link on stdout, for piping); default listen `:18663`; can't combine with pairing link or `--machine` |
+| `jarvis-link mode [active\|passive] [--listen <address>]` | No arguments: display current mode (with passive listen address); supplied mode: switch, retaining both pairings; `--listen` alone changes passive listen address without switching mode |
+| `jarvis-link node install [--jarvisd <path>]` / `node status [--json]` / `node uninstall` | Resident node service (Linux systemd `jarvisd-node`, Mac launchd `com.jarvis.node`); leaves existing services unchanged; `uninstall` doesn't delete `~/.persona/bin/jarvisd`. On Windows the node shares jarvis-link's task; only `node status` exists |
+| `jarvis-link discover [--wait <seconds>] [--json]` | Hubs heard on the LAN (mDNS), viewing only, no pairing; listens 3 seconds by default, `--wait` allows decimals up to 60; exit 0 if found, otherwise 1 |
+| `jarvis-link run [--parent] [--log <file>]` | Maintain the link in foreground, one JSON status per stdout line (see "Status line"); `--parent` exits on stdin close (used by menu bar App); `--log` writes there (rotates to `<file>.1` at 1 MB), not stderr. Used by systemd and the alternatives under "Without systemd" |
+| `jarvis-link address add <address>` / `address remove <address>` | Manually add / remove a hub candidate (`https://domain:port`, or just domain), stored in link.json; pairing required before adding. `remove` deletes that entry, manual or hub-provided (the hub may send it again on next connect) |
+| `jarvis-link version` | Print version (`--version`, `-v` equivalent) |
+| `jarvis-link help` | Print usage (`--help`, `-h` equivalent); unknown commands / options also print usage and exit 2 |
 
-`status` 的依据：
-- 在不在跑：`~/.persona/link.json.run` 的文件锁有没有人拿着（谁起的都算：systemd、菜单栏 App、手动）。它要拿一下锁才知道，
-  恰好在这一瞬间启动的 jarvis-link 会因为「已经有一个在运行」退出，由 systemd 5 秒后再起。
-- 链路状态：`~/.persona/link.status.json`（见「状态行」）；没在跑时显示最后一次报告和时间。
-- **不去连常驻 node 的 socket** 来判断它在不在：对常驻 node 来说每条连接都是一次新的 attach，会把 hub 正在用的那条顶掉。本机 node 只看 hub 报的。
-- Mac 上也能用（菜单栏 App 的 helper 一样写状态文件）；`install` 在 Mac 上只提示去装菜单栏 App。
+`status` uses:
+- Running: whether the file lock `~/.persona/link.json.run` is held (regardless of who started it: systemd, menu bar App, manual). It briefly acquires the lock to check;
+  a jarvis-link starting at that exact moment exits as "already running", then systemd starts it again after 5 seconds.
+- Link state: `~/.persona/link.status.json` (see "Status line"); when not running, shows the last report and time.
+- **Does not connect to the resident node socket** to check liveness: every connection is a new attach and would replace the hub's current connection. Local-node status comes only from the hub.
+- Also works on Mac (the menu bar helper writes the same status file); `install` on Mac only suggests installing the menu bar App.
 
-`scripts/deploy/link-systemd.sh` 留着当薄包装：`install` / `uninstall` / `status` 转给 `~/.persona/bin/jarvis-link`，`restart` 是 `systemctl --user restart`。
+`scripts/deploy/link-systemd.sh` remains a thin wrapper: `install` / `uninstall` / `status` delegate to `~/.persona/bin/jarvis-link`; `restart` runs `systemctl --user restart`.
 
-**怎么验证的**（2026-11-02）：本机 Docker 里的干净 Debian 12 容器（arm64），测试 hub 跑在宿主上、只听 127.0.0.1，容器经
-`host.docker.internal` 连它的 TLS 端口，测完都关掉。
-- 没有 systemd 的容器：`install --pair -` 配对、复制、打印替代做法（退出码 1）；照提示 `nohup … run --log …` 后 `status` 显示连上、
-  `logs` 有日志；起了常驻 node 后本机 node 在线，hub 的机器列表里这台在线。
-- 有 systemd 的容器（`--privileged --cgroupns=host`，镜像要有 `libpam-systemd`，否则用户实例起不来；`loginctl enable-linger`）：
-  用 `docker exec -u` 进去（没有 `XDG_RUNTIME_DIR`）一条 `install --pair -` 装好并连上；`scripts/deploy/node-launchd.sh install` 后本机 node 在线；
-  重启容器（相当于开机）后自己连上；关掉 linger 后 `status` 提示开 linger；再跑一次 install（升级）、先 install 后 pair、
-  uninstall、uninstall --purge 都按预期。
-- amd64 版在 amd64 模拟容器里跑了 version 和 status。没在真的树莓派 / NAS 上试过。
+**Verification** (2026-11-02): a clean Debian 12 container (arm64) in local Docker, with a test hub on the host listening only on 127.0.0.1; the container connects through
+`host.docker.internal` to its TLS port. Everything was stopped afterwards.
+- Without systemd: `install --pair -` pairs, copies and prints alternatives (exit 1); after the suggested `nohup … run --log …`, `status` shows connected and
+  `logs` contains logs; starting a resident node makes the local node online and the hub machine list shows this computer online.
+- With systemd (`--privileged --cgroupns=host`, image needs `libpam-systemd` or the user instance won't start; `loginctl enable-linger`):
+  enter with `docker exec -u` (no `XDG_RUNTIME_DIR`), install and connect with one `install --pair -`; after `scripts/deploy/node-launchd.sh install`, local node is online;
+  container restart (equivalent to boot) reconnects automatically; disabling linger makes `status` suggest enabling it; another install (upgrade), install before pair,
+  uninstall and uninstall --purge all behave as expected.
+- amd64 version ran version and status in an emulated amd64 container. Not tested on a real Raspberry Pi / NAS.
 
-## 出了家门也要用
+## Use it away from home too
 
-链路只走 hub 的 TLS 端口。出了家门还要做这几件事：
-- DSM 防火墙放行 18662/tcp（18660 不放）。
-- 路由器放行到 NAS 的 IPv6 入站。
-- 在 hub.json 的 `public.advertise` 写上域名（DDNS 指到 NAS 的 IPv6）。连上一次后，hub 会把它下发给 jarvis-link；也可以在 App 里手动加。
+The link uses only the hub's TLS port. Away-from-home use also needs:
+- DSM firewall allows 18662/tcp (not 18660).
+- Router allows IPv6 inbound to NAS.
+- Domain in hub.json `public.advertise` (DDNS points to NAS IPv6). After one connection the hub sends it to jarvis-link; it can also be manually added in the App.
 
-只有 IPv4 的网络连不到家里的 IPv6，这一点和手机一样。
+IPv4-only networks can't reach a home IPv6 address, just as with the phone.
 
-## 排查
+## Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Action |
 | --- | --- |
-| 被动模式「监听不了 :18663：端口被占用了」 | 别的程序占了：换个端口 `jarvis-link mode passive --listen :18664`（然后在 hub 管理界面改这台的地址），或者停掉那个程序 |
-| 被动模式 hub 连不进来，`status` 里「上一次 hub 连进来」一直不变 | 防火墙 / 路由器没放行这个端口；链接里的地址 hub 连不到（在 hub 管理界面改地址或填代理）；hub 的指纹对不上（删过 `link-tls/`：重新配对） |
-| 被动模式 hub 报 429 | 那个来源认证失败太多次（多半是拿着旧凭据重试），等 15 分钟，或者重启 jarvis-link 清掉计数 |
-| `pair --listen` 说找不到地址 | 只有回环、隧道或临时地址：`--addr <hub 连这台用的域名或地址>` |
-| 菜单写「链路是通的，但 hub 连不上本机的 node」 | 常驻 node 没在跑：`launchctl print gui/$(id -u)/com.jarvis.node`，日志在 `~/.persona/node-attach.log` |
-| 「hub 不认这台的凭据」 | 凭据被撤销了，或者 hub 换了数据库：重新配对 |
-| 经反向代理：「证书不受系统信任」「证书上的域名对不上」 | 代理的证书不是公共 CA 签的、过期了，或者 `public_url` 的域名和证书对不上：修代理的证书或 `public_url`，重新配对 |
-| 经反向代理：hub 回了 HTTP 403 | hub 日志里是 `tls_required`：代理在另一台机器上却没带 `X-Forwarded-Proto: https`，或者 hub 把代理的地址当成公网（容器网关、公网地址）：见「[hub 在反向代理后面](#hub-在反向代理后面)」 |
-| 经反向代理：hub 回了 HTTP 404 / 400，或者连上就断 | 前缀没去掉、WebSocket 没转（`Upgrade` / `Connection` 头）、`proxy_read_timeout` 太短 |
-| 「这台电脑在别处又连了一条链路」 | 同一个 link.json 被拷到了别的电脑，或者开了两个 jarvis-link |
-| 内网候选「不可达」，网络却是好的 | 看本地网络权限 |
-| Linux：`install` 说「连不上你的 systemd 用户实例」 | `su` / `sudo -u` / `docker exec` 进来、又没开 linger：用 ssh 直接登录这个用户，或者先 `sudo loginctl enable-linger <用户>` |
-| Linux：退出登录后链路就断，重启后不连 | 没开 linger：`sudo loginctl enable-linger <用户>`（`jarvis-link status` 的「后台服务」一行会说） |
-| Linux：链路通了，本机 node 不在线 | 常驻 node 没在跑：`systemctl --user status jarvisd-node`，日志在 `~/.persona/node-attach.log` |
+| Passive: "Can't listen on :18663: port in use" | Another program owns it: change port with `jarvis-link mode passive --listen :18664` (then edit this computer's address in hub admin), or stop that program |
+| Passive: hub can't connect, and "Last hub connection" in `status` never changes | Firewall / router doesn't allow the port; hub can't reach the link addresses (edit address or proxy in admin); fingerprint mismatch (deleted `link-tls/`: re-pair) |
+| Passive: hub reports 429 | Too many failed authentications from that source (usually retrying old credentials); wait 15 minutes or restart jarvis-link to clear counters |
+| `pair --listen` finds no address | Only loopback, tunnel or temporary addresses: use `--addr <domain or address the hub can reach>` |
+| Menu says "Link connected, but hub can't reach local node" | Resident node isn't running: `launchctl print gui/$(id -u)/com.jarvis.node`; log at `~/.persona/node-attach.log` |
+| "Hub rejects this computer's credentials" | Credentials revoked or hub database changed: re-pair |
+| Reverse proxy: "Certificate not trusted by the system" / "Certificate hostname doesn't match" | Proxy certificate isn't public-CA signed, expired, or doesn't match `public_url`: fix certificate or `public_url`, then re-pair |
+| Reverse proxy: hub returns HTTP 403 | Hub logs show `tls_required`: proxy on another machine lacks `X-Forwarded-Proto: https`, or hub treats its address as public (container gateway, public address); see "[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)" |
+| Reverse proxy: HTTP 404 / 400, or immediate disconnect | Prefix not stripped, WebSocket not forwarded (`Upgrade` / `Connection` headers), or `proxy_read_timeout` too short |
+| "This computer opened another link elsewhere" | Same link.json copied to another computer, or two jarvis-link instances running |
+| LAN candidates "unreachable" though network works | Check local-network permission |
+| Linux: `install` says "Can't reach your systemd user instance" | Entered through `su` / `sudo -u` / `docker exec` without linger: SSH directly as this user, or first `sudo loginctl enable-linger <user>` |
+| Linux: link disconnects at logout and doesn't connect after reboot | Enable linger: `sudo loginctl enable-linger <user>` (`jarvis-link status`'s background-service line explains) |
+| Linux: link connected, local node offline | Resident node isn't running: `systemctl --user status jarvisd-node`; log at `~/.persona/node-attach.log` |
 
-日志：
-- helper / Linux 的服务：`~/.persona/link.log`（`jarvis-link logs -f`）；被动模式是 `passive: …`（开始监听、配对、流开始 / 结束、被拒的请求）；
-- hub：`[<机器>] link up …` / `link down …`。
+Logs:
+- Helper / Linux service: `~/.persona/link.log` (`jarvis-link logs -f`); passive mode uses `passive: …` (listener start, pairing, stream start / end, rejected requests);
+- Hub: `[<machine>] link up …` / `link down …`.
 
-## 被动模式和 node 服务是怎么验证的（2026-11-02）
+## How passive mode and the node service were verified (2026-11-02)
 
-- Go 测试（`server/internal/link/listen_test.go`、`server/cmd/jarvis-link/passive_test.go`）里有一个按第 4 节行为的假 hub：钉扎链接里的指纹（别的指纹握不了手）、
-  用码配对、带凭据开流，连到临时目录里的假 node（回声）；验证 300 KiB 随机字节两个方向原样、错凭据 401、限流后连对的凭据也 429、码只能用一次、过期、
-  其他路径 404、重新配对后旧凭据 401 且旧流以 4002 关掉、node 不在时 503、hub 不回 pong 时连接器断流、端口被占时报错重试、主动 / 被动来回切换。
-  主动模式原来的测试都照过。
-- 真二进制（临时 HOME、只听 127.0.0.1）：`jarvis-link pair --listen` + `jarvis-link run` + 真的 `personad node --attach`，假 hub 配对后在流上发 node 协议的
-  `ping`、`node.info`，常驻 node 都回答了。
-- 干净的 Debian 12（arm64）容器、有 systemd：`curl … install.sh | sh -s -- --node --listen`（`docker exec -u`，没有 `XDG_RUNTIME_DIR`），两个用户服务都 active、
-  打印了链接；宿主上的假 hub 经映射到 127.0.0.1 的端口配对、和容器里的真 node 说上话；重启容器后两个服务自己起来，原凭据照样能用。
-  第一次跑时容器里唯一的网卡是虚拟的，没有候选地址、装不下去，于是有了「全是虚拟网卡时退一步」。
-- `jarvis-link discover` 在局域网里听到了一个临时广播的假 hub（mDNS，测完就停了）。
-- Mac 菜单栏和配对窗口的被动模式截图（深浅色，`mac-link.sh snapshot`）。App 第一次运行装常驻 node 的那段**没在真机上跑过**：这台开发机上有真实在用的
-  `com.jarvis.node`，不能碰；`node install` 在 Mac 上的命令序列（`launchctl bootout` / `bootstrap`）只在假命令里测过，plist 过了 `plutil -lint`。
-- 没测：真的 hub 拨号侧（#435 在做）、经 SOCKS 代理、Windows 上的被动模式（只编译；Windows 的主动模式和计划任务见 [windows.md](windows.md)）、公网 IPv6 入站。
+- Go tests (`server/internal/link/listen_test.go`, `server/cmd/jarvis-link/passive_test.go`) use a fake hub following section 4: pins the link fingerprint (a different fingerprint fails the handshake),
+  pairs with the code and opens authenticated streams to a fake node in a temporary directory (echo); verifies 300 KiB random bytes unchanged both ways, wrong credential 401, correct credentials also 429 after rate limiting, single-use and expired codes,
+  other paths 404, old credentials 401 and old streams closing with 4002 after re-pairing, missing node 503, helper disconnecting when hub doesn't pong, occupied port error and retry, switching between active / passive.
+  Existing active-mode tests all still pass.
+- Real binaries (temporary HOME, listening only on 127.0.0.1): `jarvis-link pair --listen` + `jarvis-link run` + real `personad node --attach`; after pairing, the fake hub sends node-protocol
+  `ping` and `node.info` on the stream, and the resident node answers both.
+- Clean Debian 12 (arm64) container with systemd: `curl … install.sh | sh -s -- --node --listen` (`docker exec -u`, no `XDG_RUNTIME_DIR`), both user services active,
+  link printed; a fake hub on the host pairs through a port mapped to 127.0.0.1 and talks to the real node in the container; both services restart themselves after container restart, and original credentials still work.
+  On the first run the container's only interface was virtual, leaving no candidate addresses and blocking installation; this led to the "fall back when all interfaces are virtual" behavior.
+- `jarvis-link discover` heard a temporary fake hub broadcast on the LAN (mDNS, stopped afterwards).
+- Passive-mode screenshots of the Mac menu bar and pairing window (light and dark, `mac-link.sh snapshot`). The App's first-launch resident-node installation **was not run on a real machine**: this development machine has a real, actively used
+  `com.jarvis.node` that must not be touched; Mac `node install` command sequences (`launchctl bootout` / `bootstrap`) were tested only with fake commands; the plist passed `plutil -lint`.
+- Not tested: real hub dialing side (#435 in progress), SOCKS proxy, passive mode on Windows (compiled only; Windows active mode and scheduled task in [windows.md](windows.md)), public IPv6 inbound.

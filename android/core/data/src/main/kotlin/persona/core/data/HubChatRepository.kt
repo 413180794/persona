@@ -201,7 +201,11 @@ class HubChatRepository(
         }
         override suspend fun editQueue(session: Session, keep: List<Int>) = delegate.editQueue(session, keep)
         override suspend fun info(session: Session) = delegate.info(session)
-        override suspend fun fork(session: Session, atItemId: String) = delegate.fork(session, atItemId)
+        override suspend fun fork(session: Session, atItemId: String): String {
+            // A finished streamed reply keeps showing its draft id; the node only knows the transcript one (#5305).
+            val entry = existing(session.key)
+            return delegate.fork(session, entry?.lock?.withLock { entry.realtime.canonicalId(atItemId) } ?: atItemId)
+        }
         override suspend fun rewind(session: Session, target: RewindTarget, restore: RewindRestore) = delegate.rewind(session, target, restore)
     }
 

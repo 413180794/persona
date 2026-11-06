@@ -2707,6 +2707,13 @@ MOCK_INTERACTIONS = INTERACTIONS + [
      "tool_name": "Bash", "tool_use_id": "toolu_check",
      "tool_input": {"command": "python3 -m unittest discover", "description": "验证格式转换与元数据保留"}},
 ]
+# MOCK_SCRIPT_ASK=1: a card on no session (#4059), as `personad ask` run outside herdr sends it (session_id empty).
+if os.environ.get("MOCK_SCRIPT_ASK") == "1":
+    MOCK_INTERACTIONS.insert(0, {"id": "ix_script_ask", "machine_id": "macbook", "session_id": "",
+        "cwd": "/Users/me/code/deploy", "kind": "question", "created_at": ago(minutes=5), "expires_at": later(minutes=25),
+        "tool_name": "personad_ask", "tool_use_id": "", "agent": "script", "agent_label": "脚本", "resumable": True,
+        "questions": [{"question": "staging 已经跑完，继续部署到生产吗？", "header": "脚本", "multi_select": False,
+                       "options": [{"label": "继续", "description": ""}, {"label": "先停", "description": ""}]}]})
 # Reentrant: resolving an interaction (resolve_mock_interaction) reads the list (mock_interactions) under it; a plain
 # Lock deadlocked there and every later read of the interactions hung (CodexCardsTests after its first answer).
 REQUEST_LOCK = threading.RLock()

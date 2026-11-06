@@ -317,6 +317,15 @@ class ChatRepositoriesTest {
         assertEquals(draftId, repository.observe(key).first().lastSeenMessageId)
         repository.fullText(key, draftId)
         assertEquals(reply.id, transport.fullItemId)
+        // #5305: forking the shown reply sends the node its transcript id.
+        var forkedAt: String? = null
+        repository.trackActions(object : ChatActions {
+            override suspend fun isMuted(session: Session) = false
+            override suspend fun execute(session: Session, action: ChatAction) = ChatActionResult.Done
+            override suspend fun verify(session: Session, action: ChatAction) = ChatActionResult.Done
+            override suspend fun fork(session: Session, atItemId: String) = "forked".also { forkedAt = atItemId }
+        }).fork(Session(key.machineId, key.sessionId), draftId)
+        assertEquals(reply.id, forkedAt)
 
         event(ScreenEvent(key.machineId, key.sessionId, "屏幕内容", "working"))
         val screenId = snapshot.items.last().id

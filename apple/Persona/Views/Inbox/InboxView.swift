@@ -52,6 +52,7 @@ struct InboxPage: View {
     @State private var expanded: Set<String> = ["action", "working", "fyi"]
     @State private var composing: ComposeDraft?
     @State private var editingDraft: InboxItem? // Edit on the AI Twin's draft
+    @State private var answering: Interaction? // a card on no session, open by itself (#4059)
     @State private var showingMutes = false     // Muted
     @State private var confirming = false // Clear All over many items asks first
     private var store: InboxStore { .shared }
@@ -123,6 +124,7 @@ struct InboxPage: View {
                 }
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
                 .sheet(item: $editingDraft) { InboxDraftSheet(item: $0, accounts: accounts) }
+                .sheet(item: $answering) { SessionlessCardSheet(interaction: $0) }
                 .sheet(isPresented: $showingMutes) { InboxMutesView() }
                 .confirmationDialog(InboxBulk.confirmTitle, isPresented: $confirming, titleVisibility: .visible) {
                     Button(InboxBulk.confirmButton(count: cleanScope.count)) { clean(confirmed: true) }
@@ -148,6 +150,11 @@ struct InboxPage: View {
                     if let id = UserDefaults.standard.string(forKey: "openInboxItem") {
                         for _ in 0..<20 where !store.items.contains(where: { $0.id == id }) { try? await Task.sleep(for: .milliseconds(500)) }
                         if let it = store.items.first(where: { $0.id == id }) { path = NavigationPath([it]) }
+                    }
+                    // `-openInboxAsk <id>`: open that waiting agent's row as a tap does (a sessionless card in its sheet, #4059).
+                    if let id = UserDefaults.standard.string(forKey: "openInboxAsk") {
+                        for _ in 0..<20 where !model.pendingInteractions.contains(where: { $0.id == id }) { try? await Task.sleep(for: .milliseconds(500)) }
+                        if let ix = model.pendingInteractions.first(where: { $0.id == id }) { open(ix) }
                     }
                     #endif
                 }
@@ -301,6 +308,8 @@ struct InboxPage: View {
 
     /// The agent's chat (the assistant's in Chat), where the question / plan / approval waits.
     private func open(_ ix: Interaction) {
+        // A card on no session has no chat: it opens by itself (#4059).
+        if ix.isSessionless { answering = ix; return }
         model.open(ix.sessionKey) // in its own group (another group's Persona: that group's)
     }
 

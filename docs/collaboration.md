@@ -1,190 +1,190 @@
-# 多人 / 多 Agent 协作：先认领 issue 再动手
+# Working with other people and Agents: claim the issue before you start
 
-仓库是多人协作的，每个人和自己的 Agent 同时在改。出现过两个人修同一个 bug、修到一半才发现已经被别人修掉的情况，所以：
-**动手前在 issue 里认领，PR 必须关联 issue**。整体流程（建分支、英文 PR、自行合并）见 `CLAUDE.md`「开发工作流」，这里是认领的细节、评论模板和可以照抄的命令。
+Several people work in this repository, each alongside their own Agents. Two people have fixed the same bug, and someone has found halfway through a fix that it was already fixed. So:
+**claim the issue before you start, and every PR must link an issue**. The overall flow (branching, English PRs, merging yourself) is in `CLAUDE.md` ("Development workflow"); this page has the claiming details, comment templates and commands you can copy.
 
-## 规则
+## Rules
 
-1. **开工前先查重**：搜有没有同一件事的 open issue 和 open PR，再看一眼最近关闭的 issue、合并的 PR（别重复做已经做完的）。
-2. **已经有人认领、没有过期**：不要做。可以在 issue 下面补充信息、复现步骤、日志、线索（评论以「补充：」开头）。已经有 open PR 的同理，去 PR / issue 里补充。
-3. **没有 issue 就新建**；开工时在 issue 里发一条认领评论：在做什么、打算怎么改、预计多久；Agent 在做要注明是 Agent。
-4. **24 小时没有任何更新视为放弃**：别人可以发评论接手（写明接手原因）。自己还在做，就发一条进展评论续期。
-5. **PR 必须关联 issue**：描述里写 `Fixes #N` / `Closes #N` / `Refs #N`。没有关联 issue 的 PR 由 Action 自动评论并关闭。
+1. **Check for duplicates before starting**: search for an open issue and open PR about the same thing, and glance at recently closed issues and merged PRs (don't redo finished work).
+2. **Someone has claimed it and the claim hasn't expired**: don't work on it. You can add information, repro steps, logs or leads under the issue (start the comment with "Note:"). The same goes when there is already an open PR: add to the PR / issue.
+3. **No issue? Create one**. When you start, post a claim comment on the issue: what you're doing, how you plan to change it, how long you expect it to take. If an Agent is doing the work, say so.
+4. **24 hours with no update counts as abandoned**: someone else can post a comment taking it over (with the reason). If you're still working on it, post a progress comment to renew.
+5. **Every PR must link an issue**: write `Fixes #N` / `Closes #N` / `Refs #N` in the description. PRs with no linked issue get a comment from an Action and are closed automatically.
 
-不用 GitHub 的 assign（很多人没有 triage 权限，也不需要）、不用 `/claim` 之类的命令，过期也不自动处理：一切以 issue 里的评论为准。
+Don't use GitHub's assign (many people don't have triage permission, and it isn't needed), don't use commands like `/claim`, and expiry isn't handled automatically: the comments in the issue are the only source of truth.
 
-## 谁在做：以评论和 GitHub 账号为准
+## Who is working on it: the comment and its GitHub account decide
 
-- **负责人就是评论作者的 GitHub 账号**。Agent 用它所属的那个人的 gh 账号发评论（不另开 bot 账号），这个人对 Agent 的认领负责；评论正文里不用再写名字。
-- Agent 在做时，认领评论加一行 `Agent：是（<机器 id> / <分支或会话>）`：同一个人的几个 Agent 共用一个账号，靠这一行区分。
-  机器 id 用配置里给机器起的 id，不写主机名。
-- **只认 issue 里写的**：群里说一声、私聊约好、issue 的 assignee、标签都不算认领。
-- 评论按第一行的前缀分类，方便人和 Agent 筛：`认领：`、`进展：`、`接手：`、`放弃：`、`补充：`。
+- **The owner is the GitHub account that wrote the comment**. An Agent posts comments with the gh account of the person it belongs to (no separate bot account), and that person is responsible for the Agent's claim; the comment body doesn't need a name.
+- When an Agent is doing the work, the claim comment gets an extra line `Agent: yes (<machine id> / <branch or session>)`: several Agents of the same person share one account and are told apart by this line.
+  Use the machine id given to the machine in the config, not its hostname.
+- **Only what's written in the issue counts**: mentioning it in a group chat, agreeing in a DM, the issue's assignee or labels are not claims.
+- Comments are classified by the prefix on their first line, so people and Agents can filter: `Claim:`, `Progress:`, `Take over:`, `Abandon:`, `Note:`.
 
-### 什么算有效的认领
+### What counts as a valid claim
 
-- 当前负责人是最新一条「认领：」或「接手：」评论的作者，并且之后这个账号没有发「放弃：」。
-- **更新**：负责人在这个 issue 里的任何新评论，或关联 PR（描述里 `Fixes` / `Closes` / `Refs` 这个 issue 的 PR）有新的推送或评论。
-- 从负责人**最后一次更新**算起 24 小时内，认领有效；超过 24 小时没有任何更新，视为放弃。
-- 两个人几乎同时认领：先发的算。发完认领评论后再看一遍评论，自己不是先发的就删掉自己那条（`gh issue comment <号> --delete-last --yes`），去做别的。
+- The current owner is the author of the latest "Claim:" or "Take over:" comment, provided that account hasn't posted "Abandon:" since.
+- **Update**: any new comment by the owner on this issue, or a new push or comment on a linked PR (a PR whose description has `Fixes` / `Closes` / `Refs` for this issue).
+- The claim is valid for 24 hours from the owner's **last update**; after 24 hours with no update, it counts as abandoned.
+- Two people claim at almost the same time: the earlier one wins. After posting your claim, read the comments again; if yours wasn't first, delete it (`gh issue comment <number> --delete-last --yes`) and do something else.
 
-## 评论模板
+## Comment templates
 
-认领（Agent 照抄，人自己做就删掉「Agent」那一行）：
-
-```text
-认领：<在做什么，一句话>
-打算：<怎么改、改哪几处>
-预计：<多久，如「2 小时」「今天内」>
-Agent：是（<机器 id> / <分支或会话>）
-```
-
-续期（还在做，24 小时内至少一条；有关联 PR 的推送也算更新）：
+Claim (Agents copy it as is; if a person is doing it, drop the "Agent" line):
 
 ```text
-进展：<做到哪了、下一步、新的预计>
+Claim: <what you're doing, one sentence>
+Plan: <how you'll change it, which places>
+ETA: <how long, e.g. "2 hours", "today">
+Agent: yes (<machine id> / <branch or session>)
 ```
 
-接手（原负责人超过 24 小时没有更新）：
+Renew (still working; at least one within 24 hours; a push to a linked PR also counts as an update):
 
 ```text
-接手：原认领 <时间>，最后一次更新 <时间>，已超过 24 小时
-打算：<怎么改；原来的分支 / PR 有可用的进度就说明接着用>
-预计：<多久>
-Agent：是（<机器 id> / <分支或会话>）
+Progress: <how far you've got, next step, new ETA>
 ```
 
-放弃（做不下去或改做别的，主动说一声，别人不用等 24 小时）：
+Take over (the original owner has had no update for more than 24 hours):
 
 ```text
-放弃：<做到哪一步、剩下什么、分支 / PR 在哪>
+Take over: claimed <time>, last update <time>, more than 24 hours ago
+Plan: <how you'll change it; if the original branch / PR has usable progress, say you'll continue from it>
+ETA: <how long>
+Agent: yes (<machine id> / <branch or session>)
 ```
 
-补充（别人认领了，你有信息要给负责人）：
+Abandon (you can't finish or are switching to something else; say so, so others don't wait 24 hours):
 
 ```text
-补充：<复现步骤、日志、线索、相关代码位置>
+Abandon: <how far you got, what's left, where the branch / PR is>
 ```
 
-## 命令（Agent 可以直接照抄）
+Note (someone else has claimed it and you have information for the owner):
 
-在仓库目录里执行，`gh` 自动用当前仓库；`gh api` 路径里的 `{owner}/{repo}` 由 gh 自动填。时间都是 UTC。
+```text
+Note: <repro steps, logs, leads, relevant code locations>
+```
 
-### 1. 查重
+## Commands (Agents can copy these directly)
+
+Run them in the repository directory; `gh` uses the current repository automatically, and gh fills in `{owner}/{repo}` in `gh api` paths. All times are UTC.
+
+### 1. Check for duplicates
 
 ```sh
-# 同一件事的 open issue / open PR（标题、正文、评论都会搜）
-gh issue list --state open --search "<关键词>"
-gh pr list --state open --search "<关键词>"
-# 一次搜 issue 和 PR
-gh search issues "<关键词>" --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" --state open --include-prs
-# 最近关闭的 issue、合并的 PR、master 上的提交：别重复做已经做完的
-gh issue list --state closed --search "<关键词>" --limit 10
-gh pr list --state merged --search "<关键词>" --limit 10
-git fetch origin && git log origin/master --oneline -i --grep "<关键词>" | head
+# Open issues / open PRs about the same thing (searches titles, bodies and comments)
+gh issue list --state open --search "<keywords>"
+gh pr list --state open --search "<keywords>"
+# Search issues and PRs at once
+gh search issues "<keywords>" --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" --state open --include-prs
+# Recently closed issues, merged PRs, commits on master: don't redo finished work
+gh issue list --state closed --search "<keywords>" --limit 10
+gh pr list --state merged --search "<keywords>" --limit 10
+git fetch origin && git log origin/master --oneline -i --grep "<keywords>" | head
 ```
 
-查到同样意思的 issue（不管谁建的、标题怎么写）就在它上面认领，不另建一个；别人认领着的按「接手」的规矩来。确实没有才新建。
+If you find an issue that means the same thing (whoever created it, however the title is worded), claim it there instead of creating another; if someone else has claimed it, follow the "Take over" rules. Create a new one only if there really is none.
 
-### 2. 看一个 issue 有没有人认领、过没过期
+### 2. Check whether an issue is claimed and whether the claim has expired
 
 ```sh
-gh issue view <号> --comments
-# 只看认领 / 进展 / 接手 / 放弃（时间、账号、第一行）
-gh issue view <号> --json comments --jq '.comments[] | select(.body | test("^(认领|进展|接手|放弃)[：:]")) | "\(.createdAt)  \(.author.login)  \(.body | split("\n")[0])"'
-# 关联到这个 issue 的 PR 和它们最后更新的时间
-gh api 'repos/{owner}/{repo}/issues/<号>/timeline' --paginate --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null) | .source.issue | "#\(.number)  \(.state)  \(.updated_at)  \(.user.login)  \(.title)"'
+gh issue view <number> --comments
+# Only Claim / Progress / Take over / Abandon (time, account, first line)
+gh issue view <number> --json comments --jq '.comments[] | select(.body | test("^(Claim|Progress|Take over|Abandon):")) | "\(.createdAt)  \(.author.login)  \(.body | split("\n")[0])"'
+# PRs linked to this issue and when they were last updated
+gh api 'repos/{owner}/{repo}/issues/<number>/timeline' --paginate --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null) | .source.issue | "#\(.number)  \(.state)  \(.updated_at)  \(.user.login)  \(.title)"'
 ```
 
-最新的「认领：/接手：」作者之后没有「放弃：」，且负责人的最后一条评论或关联 PR 的更新在 24 小时内：别做，去补充。
+If the author of the latest "Claim:" / "Take over:" hasn't posted "Abandon:" since, and the owner's last comment or the linked PR's last update is within 24 hours: don't work on it; add a note instead.
 
-### 3. 建 issue
+### 3. Create an issue
 
 ```sh
-gh issue create --title "<一句话说清楚要做什么>" --label bug --body-file - <<'EOF'
-## 现象 / 需求
-<是什么、为什么>
+gh issue create --title "<one sentence saying what to do>" --label bug --body-file - <<'EOF'
+## Symptom / requirement
+<what it is, why>
 
-## 复现
-<步骤、日志>
+## Repro
+<steps, logs>
 EOF
 ```
 
-需求加 `enhancement`，fix 加 `bug`，文档加 `documentation`。命令最后打印 issue 链接，末尾的数字就是号。
+Requirements get `enhancement`, fixes get `bug`, docs get `documentation`. The command prints the issue link at the end; the trailing number is the issue number.
 
-在网页上新建 issue 时可以选 `Bug report` 或 `Feature request` 表单（`.github/ISSUE_TEMPLATE/`），会自动带上 `bug` / `enhancement` 标签；字段名是英文，正文用中文写。也可以照常选空白 issue 或用上面的命令。
+When creating an issue on the web, choose the `Bug report` or `Feature request` form (`.github/ISSUE_TEMPLATE/`) to add the `bug` / `enhancement` label automatically. Field names and issue bodies are in English. You can also use a blank issue or the command above.
 
-#### TestFlight 反馈
+#### TestFlight feedback
 
-来自 TestFlight 的反馈（App Store Connect 里的崩溃报告、测试员的文字 / 截图反馈）建 issue 时要能按来源筛出来：
+Issues created from TestFlight feedback (crash reports in App Store Connect, testers' text / screenshot feedback) must be filterable by source:
 
-- **一律加 `testflight` 标签**（和 `bug` / `enhancement` 一起加）；没有加标签的权限时，在标题前加 `[TestFlight]` 前缀，有权限的人看到后补上标签。
-- **先查重**：同一条反馈只建一个 issue。正文末尾带去重标记 `<!-- testflight-intake:<sha256(反馈 submission id)> -->`，
-  建之前用 `gh search issues --repo <owner/repo> "testflight-intake:<hash>"` 查有没有建过；同一个崩溃原因已有 issue 时在原 issue 下「补充：」。
-- **脱敏**：只放技术摘要和只保留符号的调用栈（去掉地址）、App 版本、系统版本、设备型号。不放测试员邮箱和身份、
-  崩溃 / 安装 / 设备的各种标识、Bundle ID、内存地址和镜像 UUID、容器及个人路径、网络 / 电量 / 存储、语言和时区、精确时间、
-  具体构建号和原始附件；原始日志只留在本机 0600 的文件里。正文末尾写一段「隐私处理」说明去掉了什么。
-  例子见 #752、#1144。
+- **Always add the `testflight` label** (together with `bug` / `enhancement`); if you don't have permission to add labels, prefix the title with `[TestFlight]`, and someone with permission adds the label when they see it.
+- **Check for duplicates first**: one issue per piece of feedback. End the body with the dedup marker `<!-- testflight-intake:<sha256(feedback submission id)> -->`,
+  and before creating, check with `gh search issues --repo <owner/repo> "testflight-intake:<hash>"` whether it already exists; if an issue for the same crash cause exists, add a "Note:" on it.
+- **Redact**: include only the technical summary, a symbol-only call stack (addresses removed), App version, OS version and device model. Leave out the tester's email and identity,
+  crash / install / device identifiers of any kind, Bundle ID, memory addresses and image UUIDs, container and personal paths, network / battery / storage, language and time zone, exact times,
+  the specific build number and raw attachments; raw logs stay only in a 0600 file on your machine. End the body with a "Privacy handling" section saying what was removed.
+  Examples: #752, #1144.
 
 ```sh
-gh issue create --label bug --label testflight --title "<一句话说清楚现象>" --body-file <脱敏后的正文>
+gh issue create --label bug --label testflight --title "<one sentence describing the symptom>" --body-file <redacted body>
 ```
 
-### 4. 认领、续期、接手、放弃
+### 4. Claim, renew, take over, abandon
 
 ```sh
-gh issue comment <号> --body-file - <<'EOF'
-认领：<在做什么>
-打算：<怎么改>
-预计：<多久>
-Agent：是（<机器 id> / <分支或会话>）
+gh issue comment <number> --body-file - <<'EOF'
+Claim: <what you're doing>
+Plan: <how you'll change it>
+ETA: <how long>
+Agent: yes (<machine id> / <branch or session>)
 EOF
 
-# 发完再看一遍，确认最早的有效认领是自己（不是就 --delete-last --yes 删掉自己那条）
-gh issue view <号> --json comments --jq '.comments[] | select(.body | test("^(认领|接手|放弃)[：:]")) | "\(.createdAt)  \(.author.login)  \(.body | split("\n")[0])"'
+# Read again after posting to confirm the earliest valid claim is yours (if not, delete yours with --delete-last --yes)
+gh issue view <number> --json comments --jq '.comments[] | select(.body | test("^(Claim|Take over|Abandon):")) | "\(.createdAt)  \(.author.login)  \(.body | split("\n")[0])"'
 
-gh issue comment <号> --body "进展：<做到哪、下一步、新的预计>"
-gh issue comment <号> --body "放弃：<做到哪一步、剩下什么、分支 / PR 在哪>"
+gh issue comment <number> --body "Progress: <how far you've got, next step, new ETA>"
+gh issue comment <number> --body "Abandon: <how far you got, what's left, where the branch / PR is>"
 ```
 
-接手用上面的模板，同样 `--body-file -` 发。
+Take over uses the template above, also posted with `--body-file -`.
 
-### 5. 提 PR 时关联 issue
+### 5. Link the issue when opening a PR
 
 ```sh
-# 提之前再查一次：issue 的评论、master 上有没有人已经修了
-gh issue view <号> --comments
+# Check once more before opening: the issue's comments, and whether someone already fixed it on master
+gh issue view <number> --comments
 git fetch origin && git rebase origin/master
 
-gh pr create --title "fix(ios): <英文标题>" --body-file - <<'EOF'
+gh pr create --title "fix(ios): <English title>" --body-file - <<'EOF'
 <English: what changed and why>
 
-Fixes #<号>
+Fixes #<number>
 EOF
 ```
 
-- 合并：`scripts/hooks/merge-pr.sh <号>`，不直接 `gh pr merge`：它先用这台机器的私有值扫 PR 改的文件、提交信息和标题正文，通过才 squash 合并、删分支（`docs/testing.md`「隐私扫描」）。
-- `Fixes #N` / `Closes #N`：合并后 GitHub 自动关闭 issue。`Refs #N`：只关联不关闭（一个 issue 拆成几个 PR、只修了一部分）。
-- PR 的标题和正文用英文（squash 合并后就是 master 上的 commit），issue 和评论用中文。
+- Merging: `scripts/hooks/merge-pr.sh <number>`, not `gh pr merge` directly. It first scans the PR's changed files, commit messages, title and body with this machine's private values, and only squash-merges and deletes the branch if that passes (`docs/testing.md`, "Privacy scan").
+- `Fixes #N` / `Closes #N`: GitHub closes the issue automatically after merging. `Refs #N`: links without closing (an issue split into several PRs, or only partly fixed).
+- PR titles and bodies are in English (after a squash merge they are the commit on master); issues and comments are also in English.
 
-## 自动关闭没关联 issue 的 PR
+## Automatically closing PRs with no linked issue
 
-`.github/workflows/pr-needs-issue.yml`，PR 打开、编辑、重新打开时检查**描述**：
+`.github/workflows/pr-needs-issue.yml` checks the **description** when a PR is opened, edited or reopened:
 
-- **算关联**（大小写不敏感）：`fix` / `fixes` / `fixed` / `close` / `closes` / `closed` / `resolve` / `resolves` / `resolved` / `ref` / `refs`
-  后面跟 `#号`（关键词后可以有冒号，如 `Fixes: #12`），或本仓库的 `owner/repo#号`；或者本仓库 issue 的链接（`https://github.com/<owner>/<repo>/issues/<号>`）。
-- **不算**：写在代码块、行内代码、HTML 注释（PR 模板里的示例）里的；只写了 `#12` 没有关键词；别的仓库的 issue；PR 的链接；只在标题里写、
-  或只在 PR 页面侧栏「Development」里手动关联的。
-- 没有关联：留一条评论说明规则，然后关闭 PR。**作者编辑描述补上关联后会自动重新打开**，评论改成「已重新打开」；
-  自动重新打开失败（比如分支已经删了）会再评论一条，这时补上后手动 Reopen（`gh pr reopen <PR 号>`）。
-- 只重新打开 Action 自己关掉的 PR；被人关掉的 PR 补上关联也不会被打开。已经关闭的 PR 再编辑、仍然没有关联，不会重复评论。
-- bot 账号（dependabot 等）的 PR 豁免。
-- 改描述：`gh pr edit <PR 号> --body-file <文件>`，或者在网页上编辑。
+- **Counts as linked** (case-insensitive): `fix` / `fixes` / `fixed` / `close` / `closes` / `closed` / `resolve` / `resolves` / `resolved` / `ref` / `refs`
+  followed by `#number` (a colon after the keyword is allowed, e.g. `Fixes: #12`), or `owner/repo#number` for this repository; or a link to an issue in this repository (`https://github.com/<owner>/<repo>/issues/<number>`).
+- **Doesn't count**: anything inside code blocks, inline code or HTML comments (the examples in the PR template); a bare `#12` with no keyword; issues in other repositories; PR links; links written only in the title,
+  or linked by hand only in the "Development" sidebar of the PR page.
+- No link: it leaves a comment explaining the rule, then closes the PR. **Once the author edits the description to add a link, the PR is reopened automatically** and the comment changes to "Reopened";
+  if automatic reopening fails (for example the branch was deleted), it posts another comment, and after adding the link you reopen it by hand (`gh pr reopen <PR number>`).
+- It only reopens PRs the Action itself closed; a PR closed by a person is not reopened even after adding a link. Editing an already closed PR that still has no link doesn't produce a duplicate comment.
+- PRs from bot accounts (dependabot and the like) are exempt.
+- Editing the description: `gh pr edit <PR number> --body-file <file>`, or edit it on the web.
 
-### 维护
+### Maintenance
 
-- 判断逻辑和流程测试：`node scripts/test/pr_needs_issue_test.mjs`（从 workflow 里取出 github-script 的脚本，用假的 GitHub 客户端跑几十种描述样例和关闭 / 重开流程），
-  改完再跑 `actionlint .github/workflows/pr-needs-issue.yml`。
-- 用的是 `pull_request_target`：跑的是默认分支上的那份 workflow，带写权限的 token，所以**绝不 checkout、不运行 PR 的代码**，
-  PR 的标题、描述只通过 API 当数据读，不写进 `${{ }}`（会被注入脚本）。权限只给 `pull-requests: write` 和 `issues: write`。
-- 也因为跑的是默认分支上的版本，改这个 workflow 的 PR 自己不会用到新逻辑，合并后才生效：合并前靠上面的测试。
+- Logic and flow tests: `node scripts/test/pr_needs_issue_test.mjs` (extracts the github-script script from the workflow and runs dozens of description samples and the close / reopen flow against a fake GitHub client);
+  after changing it, also run `actionlint .github/workflows/pr-needs-issue.yml`.
+- It uses `pull_request_target`: it runs the workflow from the default branch with a token that has write permission, so it **never checks out or runs the PR's code**;
+  the PR's title and description are read only as data via the API and never put into `${{ }}` (that would inject them into the script). Permissions are limited to `pull-requests: write` and `issues: write`.
+- Also because it runs the default branch's version, a PR that changes this workflow doesn't use the new logic itself; it takes effect only after merging. Before merging, rely on the tests above.

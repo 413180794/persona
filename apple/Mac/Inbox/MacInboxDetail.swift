@@ -37,6 +37,15 @@ struct MacInboxDetail: View {
         } else if case .item(let id)? = sel.first, let item = state.item(id) {
             MacInboxItemDetail(item: item, accounts: state.accounts)
                 .id(item.id)
+        } else if case .agent(let id)? = sel.first, let ix = model.pendingInteractions.first(where: { $0.id == id }), ix.isSessionless {
+            // A card on no session has no chat to open: the whole card, answered here (#4059).
+            ScrollView {
+                InteractionPanel(interaction: ix)
+                    .frame(maxWidth: Theme.Size.readable)
+                    .padding(Theme.Space.xl)
+            }
+            .frame(maxWidth: .infinity)
+            .navigationTitle(ix.sessionlessPlace ?? String(localized: "脚本"))
         } else if case .agent(let id)? = sel.first, let ix = model.pendingInteractions.first(where: { $0.id == id }) {
             ScrollView {
                 InteractionPreviewCard(interaction: ix) { state.open(ix, model: model) }

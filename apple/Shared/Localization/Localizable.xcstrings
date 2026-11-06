@@ -87368,6 +87368,29 @@
         }
       }
     },
+    "脚本": {
+      "comment": "A needs-you card on no agent session (personad ask run outside herdr)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Script"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリプト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "脚本"
+          }
+        }
+      }
+    },
     "脚本和网络都已打开": {
       "localizations": {
         "en": {

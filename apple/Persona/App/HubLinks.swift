@@ -67,7 +67,12 @@ extension AppModel {
     var hub: HubLink? { link(hubGroup) ?? links.first }
 
     /// A client for the group a session, machine or interaction is from.
-    func api(_ group: String) -> APIClient? { link(group)?.api }
+    func api(_ group: String) -> APIClient? {
+        #if DEBUG
+        if let apiForTests { return apiForTests }
+        #endif
+        return link(group)?.api
+    }
 
     /// Back in the app: every group's socket opens again.
     func resumeLinks() {

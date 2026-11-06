@@ -1,159 +1,159 @@
-# 经验：飞书与邮件
+# Lessons: Lark and mail
 
-踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
+Pitfalls, odd behavior and the trade-offs made at the time (originally in `CLAUDE.md` ("Lessons"); index in `docs/lessons/README.md`). Put new lessons in the matching section; if none fits, start a new one.
 
-## 附件发送
+## Sending attachments
 
-- 不要把文字/图片的 client_id 幂等性推断到文件：飞书网关的直接文件上传不进入 outbox，未知结果不能重新上传。API 返回成功却丢失或无法解析回执也属于未知；只有明确拒绝才允许重试。测试 mock 必须区分 429 拒绝与已接受后回执丢失，不能一律返回 502 再假设重试安全。
-- 强退恢复时，草稿清空与待发送记录必须在同一个原子快照里；媒体先复制，再提交引用。保存失败不能清空输入或开始网络请求。回执已收到但落盘失败，不得把已经发送的消息改成“发送失败”。
+- Don't extend the client_id idempotency of text / images to files: the Lark gateway's direct file upload doesn't go through the outbox, and an unknown result must not be uploaded again. An API success whose receipt is lost or can't be parsed is also unknown; only an explicit rejection allows a retry. Test mocks must tell a 429 rejection apart from a receipt lost after acceptance, rather than always returning 502 and assuming a retry is safe.
+- When recovering from a force quit, clearing the draft and recording the pending send must be in the same atomic snapshot; copy the media first, then commit the reference. A failed save must not clear the input or start a network request. If the receipt arrived but writing it to disk failed, a message already sent must not be changed to "failed to send".
 
-- 附件乐观回显不能沿用纯文本的「文字相同 + 20 秒超时删除」：图片文字可能为空，同名文件也不是同一条。
-  保留 client_id 与 message_id，确认回显后替换；飞书网关的 local: 暂存消息不能当成发送确认。请求超时以后到达的确认推送仍要合并，不能一直留着失败气泡。
-- 原生发送队列不能串行等待消息回显的轮询延迟；只串行网络提交，回显同步独立进行。文件选择后持有私有副本直到移除或回显确认，重试不再读取可能变化的原始文件。
+- Optimistic echo for attachments can't reuse plain text's "same text + delete after 20 seconds": an image's text may be empty, and files with the same name aren't the same message.
+  Keep client_id and message_id, and replace once the echo is confirmed; the Lark gateway's local: staged messages don't count as send confirmation. Confirmation pushes that arrive after the request timed out must still be merged, rather than leaving a failure bubble forever.
+- The native send queue must not serially wait for the polling delay of the message echo; only the network submission is serial, and echo sync runs independently. After a file is picked, hold a private copy until it is removed or the echo is confirmed, so retries don't reread an original file that may have changed.
 
-- iOS 27 的 Quick Look 先显示关闭按钮，再加载文件内容；初始占位阶段的点击可能没有关闭预览。UI 回归要等待文件内容工具栏出现，并断言预览确已消失，再操作聊天输入区，避免点到预览的共享按钮。
+- In iOS 27, Quick Look shows the close button first and then loads the file content; taps during the initial placeholder may not close the preview. UI regression tests must wait for the file-content toolbar to appear and assert the preview is really gone before operating the chat input, so they don't tap the preview's share button.
 
-- 验证新外壳收件箱的返回路径，要从实际列表点进聊天。`-openInboxItem` 会直接重建路径为聊天，省略收件箱父页面；
-  拿这个截图快捷参数测「返回收件箱再重试」会误判。附件回归从真实收件箱行进入，再验证退出和恢复。
+- To verify the back path of the new shell's Inbox, tap into the chat from the actual list. `-openInboxItem` rebuilds the path straight to the chat and leaves out the Inbox parent page;
+  using that screenshot shortcut to test "go back to the Inbox and retry" gives a false result. Attachment regression tests enter from a real Inbox row, then verify leaving and recovery.
 
-- 附件的本机行用 UUID，服务器回显用消息 ID。发送后若只定位本机行，回显替换会丢失滚动目标；
-  对刚发送的消息跟随底边，确认替换后再次对齐。用户开始拖动就停止跟随，避免把阅读历史的人拉回底部。
+- An attachment's local row uses a UUID, while the server echo uses the message ID. If you only locate the local row after sending, the echo replacement loses the scroll target;
+  follow the bottom edge for a just-sent message, and realign once the replacement is confirmed. Stop following as soon as the user starts dragging, so someone reading history isn't pulled back to the bottom.
 
-### 收件箱摘要与附件回显的滚动位置
+### Inbox summary and the scroll position of attachment echoes
 
-收件箱聊天上方的摘要改变了 ScrollView 的 top inset。用 `contentOffset + containerSize` 判断到底会漏算这部分：图片已经完整在输入框上方，仍显示「回到最新」。使用 `visibleRect.maxY` 和 `contentSize.height` 比较。附件的本机 UUID 在确认回显后消失，发送时跟随底部边缘；确认替换后重新定位，用户开始滚动就停止跟随。UI 回归需断言已确认图片后没有回到底部按钮，手动上翻后按钮重新出现，不能只断言「发送中」消失。
+The summary above an Inbox chat changes the ScrollView's top inset. Using `contentOffset + containerSize` to decide "at the bottom" misses this: the image is already fully above the composer, yet **Jump to Latest** still shows. Compare `visibleRect.maxY` with `contentSize.height`. An attachment's local UUID disappears once the echo is confirmed; follow the bottom edge while sending, relocate after the replacement is confirmed, and stop following once the user starts scrolling. UI regression tests must assert that there is no jump-to-bottom button after the image is confirmed and that the button reappears after scrolling up by hand; asserting only that "Sending" disappears isn't enough.
 
-发送行上不要给整个 `LarkMessageRow` 加同一个 accessibilityIdentifier：SwiftUI 会把它传播给子节点，覆盖气泡旁发送 / 失败标记自己的 identifier。附件确认回显断言本机预览按钮消失，发送状态继续使用主线的 `lark.outgoing.sending` / `lark.outgoing.failed`。
+Don't give the whole `LarkMessageRow` one accessibilityIdentifier on sending rows: SwiftUI propagates it to child nodes and overrides the identifiers of the sending / failed markers next to the bubble. Attachment echo confirmation asserts that the local preview button disappears; sending state keeps using mainline's `lark.outgoing.sending` / `lark.outgoing.failed`.
 
-主线空输入框隐藏发送按钮时，附件草稿也算可发送内容：仅照片 / 文件仍应有按钮，移除最后一个附件后隐藏；准备附件时禁用。原有文字、引用、话题输入框和已读标记保留。
+When mainline hides the send button for an empty composer, attachment drafts still count as sendable content: photos / files alone should still show the button, it hides after the last attachment is removed, and it's disabled while attachments are being prepared. Existing text, quote, thread composer and read markers stay.
 
-## 消息与文档
+## Messages and documents
 
-- 飞书消息渲染照搬飞书网关的网页（`docs/ios.md`「飞书消息渲染」）：hub 原样转发 `parts`，只把媒体 URL 改写到 `/api/v1/lark/media/`；
-  看网关源码去克隆它的上游仓库（地址见接飞书的扩展的说明；hub 机器上只有部署产物）。
-- 个人 Agent 的来源先看 hub 的 `GET /api/v1/agents`：未配置飞书网关或仅配置飞书 CLI 时返回 `{"sources":[]}`，会话接口返回 `{"sessions":[]}`，均为 HTTP 200；飞书 CLI 不提供个人 Agent bridge。
-  Bridge 只在 `LegacyGatewayConfigured()` 为真时注册（#1571 起个人 Agent 来源由扩展提供）；无条件注册会使未配置时的列表请求因「未配置网关」返回 502。配置了网关后，其 agent-bridge 默认仍是关的：要在网关的部署里打开（变量见接飞书的扩展的说明）并重启，否则 `/agent-bridge` 返回 `enabled:false`，
-  会话为空；更早的飞书网关版本没有这个接口，hub 拿到的是 404。开了以后还要在飞书网关的设置里添加 Cue / Grok Bot 账号（只有主人登录的网页接口能加，
-  Agent API 只读）。来源已注册时，`setup` 是 `missing` / `disabled` / `no_accounts` 就是没配好，`lastError` 是账号同步失败。
-  飞书网关自动更新后检查部署配置里这个开关还在不在。
-- 飞书网关 Agent API 的资源地址使用 `/agent/v1/media/`、`/agent/v1/messages/`；hub 改写要同时兼容这些前缀和旧的 `/api/` 地址，保留查询参数。
-  只检查 HTTP 200 不够：未改写的图片路径会落入 hub 网页并返回 HTML，手机还会在解码前把它缓存。验证消息返回的新 URL、图片 MIME 和实际字节；改写为正确代理地址也会改变手机缓存键。
-- 飞书网关会话列表的坑（`docs/protocol.md` 飞书 API）：`isDone` 字段不可靠（done scope 里全是 false），已完成以 scope 为准；
-  置顶看 `onTopRankAt`（`settings.isShortcut` 也不准），且置顶会话分散在 inbox 和 done 两个 scope；未知 scope 会被静默当成 inbox。
-- 置顶集合不能固定读三页就宣告完整。读到第一个非置顶项或没有下一页才结束；隐藏项可能让整页过滤为空，仍应跟随游标。重复／缺失游标和安全上限都返回错误，不能让客户端用残缺数据覆盖缓存。置顶时间要解析后比较：带毫秒的 ISO 时间与整秒字符串直接排序会颠倒顺序。
-- 打开飞书会话不能用 `tail=1`（那是「回到最新」）：有未读时要 `aroundPosition=readPosition+1`，已读只上报真正上屏的消息。
-- 话题群（`chatMode: "topic"`）的 `GET /conversations/F/messages` 多半只有 position 0 的「创建了话题群」系统消息、`hasOlder=false`（实测 5 个话题群里 4 个如此，tail、around、before 都一样），内容在 `…/threads`（话题根消息，`nextOlderCursor` 往前翻），回复在 `GET /messages/ROOT/thread`。不能指望调用方带对 `topic`（人的名片进来、旧的收件箱条目、网页都没带）：hub 用 `lark.ChatPage` 自己按 chatMode 判断（会话列表里记下，没见过的查一次 `GET /conversations/F`），返回带 `topic: true`。
-- 有的网络（作者的 hub 机器）连不上 Google 的多数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 常解析到 173.194.x.x，所有端口超时），HTTPS 能通只是走了 IPv6。
-  hub 访问 Gmail 一律走 `hub.json` 的 `google.proxy`（比如 hub 机器上的本地代理），别再加直连兜底（`docs/mail.md`）。
-- 客户端和 hub 的 JSON 形状对不上，Go 的解码器直接 400，模拟器上不点那条路径就看不出来：iOS 回复邮件时把 `references` 发成数组，
-  hub 的 `SendRequest` 只收字符串，手动回复会被 400 拒掉（#587，读代码发现）。改请求体的字段类型时 hub 两种都收（`mail.MessageIDs`），
-  并加一个按各端真实形状 POST 的 HTTP 测试（`TestHTTPSendReferences`）。
-- IMAP 扩展要先看服务端声明的能力再用：QQ 邮箱不声明 LIST-EXTENDED，收到带 `RETURN` 的 `LIST` 直接不回，只能等超时（`docs/mail.md`「注意事项」）。
-- 服务端回「搜索成功、0 条」不代表真的没有：163 对任何关键词 `SEARCH`（`TEXT`、`BODY`、`SUBJECT`、`FROM`，中英文、加不加 `CHARSET UTF-8`）都回 0 条，只有 `ALL`、日期这类条件生效（2026-11-03 实测）。所以关键词搜索回 0 条时要在本地匹配邮件头（`docs/mail.md`「搜索」）；测试里用 `blindSearch` 模拟这种服务端。
-- 163 取信也慢，越旧越慢、波动大：每页 200 封摘要，最新一页 4 秒，往后 6～20 秒不等，第 1000 封附近那页超过 20 秒（2026-11-03 实测）。一次 IMAP 操作只有 20 秒（`withConn`），所以找邮件头、取摘要都要分小批，时间从这次操作开始就算，建连接也在内（#858）；一批 500 封、时间从扫描开始才算时会超时。
-- 按 UID 记游标要同时记 UIDVALIDITY：服务端重建 / 迁移邮箱后 UID 从头编号（RFC 3501 2.3.1.1），新邮件的 UID 都比旧游标小，只比 UID 会什么都不归档，直到新 UID 涨过旧的最大值。
-  游标也不能直接跳到「最新一页的最大 UID」：两次之间来了超过一页，中间的就永远读不到了。知识库的邮件归档（`extmgr/mail_connector.go`）现在记 `<账号>#v`，
-  一页没读到旧游标时记下空洞（`#f` < UID < `#h`）按页往下补，UIDVALIDITY 变了从最新一页重新开始、只收比已归档最新一封（`#t`）更晚的（#2633）。
-- 飞书文档 / 表格 / 多维表格里 @我、评论我，不进 IM 会话列表（没有「云文档助手」会话），只在飞书网关的文档通知中心
-  `documents/notifications`，而且卡片只说「谁提及了你」，不说哪一行：要自己读表按「@名字」找（`docs/inbox.md`「云文档」）。
-  表格里带下拉的格子 `sheet/edit` 一律报 `DOCUMENT_EDIT_UNSUPPORTED`，改值要用 `sheet/structure` 的 `choose`；多维表格 `base/edit` 的
-  `expect` 指纹要按当前值算（`BaseCell.Fingerprint`），人员字段的 id 格式和 `accounts` 给的 userId 不一样（写不进去，读得出）。
-  测试只拿自己建的 demo 文档（链接放环境变量），别动用户给的真表。
+- Lark message rendering copies the Lark gateway's web client (`docs/ios.md` ("Lark message rendering")): the hub forwards `parts` unchanged and only rewrites media URLs to `/api/v1/lark/media/`;
+  to read the gateway's source, clone its upstream repository (the address is in the notes of the extension that connects Lark; the hub machine only has the deployed build).
+- For personal Agent sources, look at the hub's `GET /api/v1/agents` first: when no Lark gateway is configured, or only the Lark CLI is, it returns `{"sources":[]}` and the sessions endpoint returns `{"sessions":[]}`, both HTTP 200; the Lark CLI doesn't provide a personal Agent bridge.
+  The bridge is only registered when `LegacyGatewayConfigured()` is true (since #1571 personal Agent sources come from the extension); registering it unconditionally makes the list request return 502 with "gateway not configured" when nothing is configured. Once a gateway is configured, its agent-bridge is still off by default: turn it on in the gateway's deployment (the variable is in the notes of the extension that connects Lark) and restart; otherwise `/agent-bridge` returns `enabled:false`
+  and sessions are empty; older Lark gateway versions don't have this endpoint, and the hub gets 404. After turning it on you still need to add the Cue / Grok Bot accounts in the Lark gateway's settings (only the web endpoint the owner is signed in to can add them;
+  the Agent API is read-only). With the source registered, `setup` being `missing` / `disabled` / `no_accounts` means it isn't set up, and `lastError` is an account sync failure.
+  After the Lark gateway auto-updates, check that this switch is still in the deployment config.
+- The Lark gateway Agent API's resource URLs use `/agent/v1/media/` and `/agent/v1/messages/`; the hub's rewriting must handle these prefixes as well as the old `/api/` URLs, keeping query parameters.
+  Checking for HTTP 200 isn't enough: an unrewritten image path falls through to the hub's web page and returns HTML, and the phone caches it before decoding. Verify the new URLs returned in messages, the image MIME type and the actual bytes; rewriting to the correct proxy URL also changes the phone's cache key.
+- Pitfalls in the Lark gateway's chat list (`docs/protocol.md`, Lark API): the `isDone` field is unreliable (all false in the done scope), so "done" is decided by scope;
+  pinned is `onTopRankAt` (`settings.isShortcut` is wrong too), and pinned chats are spread across both the inbox and done scopes; an unknown scope is silently treated as inbox.
+- Don't declare the pinned set complete after reading a fixed three pages. Stop only at the first non-pinned item or when there is no next page; hidden items can filter a whole page to empty, and the cursor should still be followed. Duplicate / missing cursors and the safety cap all return errors, so the client can't overwrite its cache with incomplete data. Parse pinned times before comparing: sorting ISO times with milliseconds directly against whole-second strings reverses the order.
+- Opening a Lark chat must not use `tail=1` (that's "Jump to Latest"): with unread messages use `aroundPosition=readPosition+1`, and only report messages that actually made it on screen as read.
+- For topic groups (`chatMode: "topic"`), `GET /conversations/F/messages` usually has only the position 0 system message "创建了话题群" (created the topic group) and `hasOlder=false` (in testing, 4 of 5 topic groups were like this, for tail, around and before alike); the content is in `…/threads` (topic root messages, paged back with `nextOlderCursor`), and replies are in `GET /messages/ROOT/thread`. Don't count on callers passing the right `topic` (coming in from a person's card, old Inbox items and the web all leave it out): the hub decides by chatMode itself in `lark.ChatPage` (remembered from the chat list; for ones it hasn't seen, it queries `GET /conversations/F` once) and returns `topic: true`.
+- Some networks (the author's hub machine) can't reach most of Google's IPv4 addresses (`imap.gmail.com` / `smtp.gmail.com` often resolve to 173.194.x.x, and every port times out); HTTPS works only because it goes over IPv6.
+  The hub always reaches Gmail through `google.proxy` in `hub.json` (for example a local proxy on the hub machine); don't add a direct-connection fallback again (`docs/mail.md`).
+- When the client's JSON shape doesn't match the hub's, Go's decoder returns 400 outright, and you won't see it in the simulator unless you exercise that path: iOS sent `references` as an array when replying to mail,
+  the hub's `SendRequest` only accepted a string, and manual replies were rejected with 400 (#587, found by reading code). When changing a request field's type, have the hub accept both (`mail.MessageIDs`),
+  and add an HTTP test that POSTs each client's real shape (`TestHTTPSendReferences`).
+- Check the capabilities the server advertises before using IMAP extensions: QQ Mail doesn't advertise LIST-EXTENDED and simply never answers a `LIST` with `RETURN`, so you can only wait for the timeout (`docs/mail.md` ("Caveats")).
+- A server answering "search succeeded, 0 results" doesn't mean there really are none: 163 returns 0 for any keyword `SEARCH` (`TEXT`, `BODY`, `SUBJECT`, `FROM`, Chinese or English, with or without `CHARSET UTF-8`); only conditions like `ALL` and dates work (tested 2026-11-03). So when a keyword search returns 0, match headers locally (`docs/mail.md` ("Search")); tests simulate this kind of server with `blindSearch`.
+- 163 is also slow to fetch, slower and more erratic the older the mail: 200 summaries per page, 4 seconds for the newest page, 6 to 20 seconds after that, over 20 seconds for the page around message 1000 (tested 2026-11-03). One IMAP operation gets only 20 seconds (`withConn`), so finding headers and fetching summaries must be done in small batches, with time counted from the start of the operation, connecting included (#858); batches of 500 with time counted from the start of the scan time out.
+- A cursor kept by UID must also record UIDVALIDITY: after the server rebuilds / migrates a mailbox, UIDs are renumbered from the start (RFC 3501 2.3.1.1), new mail's UIDs are all smaller than the old cursor, and comparing UIDs alone archives nothing until the new UIDs pass the old maximum.
+  The cursor also can't jump straight to "the max UID of the newest page": if more than a page arrives between two runs, the ones in the middle are never read. The knowledge base's mail archiving (`extmgr/mail_connector.go`) now records `<account>#v`;
+  when a page doesn't reach the old cursor it records the gap (`#f` < UID < `#h`) and fills it page by page; when UIDVALIDITY changes it starts again from the newest page and only takes mail later than the newest archived one (`#t`) (#2633).
+- @mentions of me and comments to me in Lark docs / sheets / Base don't go into the IM chat list (there's no "Docs Assistant" chat); they're only in the Lark gateway's document notification center
+  `documents/notifications`, and the card only says "who mentioned you", not which row: you have to read the sheet and look for "@name" yourself (`docs/inbox.md` ("Docs")).
+  In sheets, `sheet/edit` on a cell with a dropdown always reports `DOCUMENT_EDIT_UNSUPPORTED`; change the value with `choose` in `sheet/structure`; Base `base/edit`'s
+  `expect` fingerprint must be computed from the current value (`BaseCell.Fingerprint`), and the id format of person fields differs from the userId `accounts` gives (can't be written, can be read).
+  Tests only use demo docs you created yourself (link in an environment variable); don't touch real sheets the user gave you.
 
-- 新会话入口要让 mock / 体验模式也走真实模型解码：会话 fixture 曾遗漏服务端必回的 `is_mine`，收件箱自己组装会话所以没暴露。
-  补齐 fixture，并验证体验模式返回的会话都能打开消息；不为测试放松真实协议。
+- New chat entry points must make mock / demo mode go through real model decoding too: the chat fixture once lacked `is_mine`, which the server always returns, and the Inbox didn't expose it because it assembled chats itself.
+  Complete the fixture and verify every chat demo mode returns can open its messages; don't loosen the real protocol for tests.
 
-## OLK 展示与本机缓存
+## OLK display and the local cache
 
-Agent 返回的普通文字不能用于猜测是否加密。新增的 `olk` 投影要贯穿 Hub、消息及引用模型：正文、公开外显和密钥分发是三个不同的展示部分。旧 `parts` 继续保留给旧客户端兼容，原生 UI 使用投影，避免把公开表情和分发提示拼入正文。
+Plain text returned by the Agent can't be used to guess whether something is encrypted. The new `olk` projection has to run through the hub and the message and quote models: body, public external display and key distribution are three separate display parts. The old `parts` stay for old-client compatibility; the native UI uses the projection, so public emoji and distribution notices aren't spliced into the body.
 
-禁止只在主消息缓存处删除解密正文：引用也会进入草稿／发件箱。消息和引用的 Encodable 实现同时清除 legacy 文本、parts 与投影正文，持久化仅保留公开内容。默认 MainActor 隔离工程中，nonisolated 模型在另一文件的 extension 内实现 encode 时仍需显式 nonisolated，否则无法安全满足 Encodable。
+Don't strip decrypted bodies only where the main message cache is written: quotes also end up in drafts / the outbox. The Encodable implementations of messages and quotes clear legacy text, parts and the projection body together, and persistence keeps only public content. In a project with default MainActor isolation, a nonisolated model that implements encode in an extension in another file still needs explicit nonisolated, or it can't safely satisfy Encodable.
 
-审查补充：可选投影不是整页消息的必填条件。Hub 将缺失 / null 的公开内容规范成空数组，App 对未知版本、缺失状态及不完整字段安全降级，不读取旧压平正文。离线外显必须标注为公开内容，避免被当作原文。上述编码保护仅覆盖 iOS 消息 / 引用快照；Hub 收件箱和 Agent 上下文仍有独立的压平持久化路径，不应概括为全链路无明文存储。
+Review follow-up: the optional projection isn't a required field for a whole page of messages. The hub normalizes missing / null public content to an empty array, and the App degrades safely on unknown versions, missing state and incomplete fields, without reading the old flattened body. Offline external display must be labeled as public content so it isn't taken for the original. The encoding protection above only covers iOS message / quote snapshots; the hub's Inbox and Agent context still have separate flattened persistence paths, so this must not be summarized as no plaintext storage end to end.
 
-- 加密消息的外显标记必须覆盖气泡、聊天引用和输入框引用三条路径。只在气泡里加标记，恢复引用草稿后仍会把公开伪装内容误当作原文；统一使用引用的展示文本，并分别验证锁定、缓存和解密状态。
+- The external-display marker for encrypted messages must cover three paths: bubbles, chat quotes and composer quotes. With the marker only in bubbles, restoring a quote draft still treats the public disguise as the original; use the quote's display text everywhere, and verify the locked, cached and decrypted states separately.
 
-- 原生加密发送先准备密文，再进入现有持久化队列。重试若重新调用 encrypt 会生成不同信封，已有的 client ID 幂等性就失效；多条密钥分发也要稳定派生 ID。作者自己的加密草稿、乐观回显正文与密文同属一份 AES-GCM 快照，不能只清理收到的消息缓存。钥匙串暂不可用应阻止覆盖，不当作空草稿。
-- 消息与收件箱共用草稿：只把模式切换放进消息页还不够，收件箱恢复加密草稿时必须防止降级普通发送。跨页面、强退恢复和普通草稿的老格式要一起回归。新外壳保留隐藏页面，scenePhase 变化时隐藏聊天仍可能写回旧输入；只允许当前页保存，在可见性离开边界刷新一次，重新出现时从共用发件箱恢复。
+- Native encrypted sending prepares the ciphertext first, then enters the existing persistent queue. If a retry calls encrypt again it produces a different envelope, and the existing client ID idempotency breaks; multiple key distributions also need stably derived IDs. The author's own encrypted draft, the optimistic echo body and the ciphertext all belong to one AES-GCM snapshot, so clearing only the received-message cache isn't enough. A temporarily unavailable keychain must block overwriting, not be treated as an empty draft.
+- Messages and the Inbox share drafts: putting the mode switch only in the Messages page isn't enough; when the Inbox restores an encrypted draft, it must not downgrade to a plain send. Cross-page, force-quit recovery and the old format of plain drafts need regression testing together. The new shell keeps hidden pages, and a hidden chat may still write back old input when scenePhase changes; only let the current page save, flush once at the visibility exit boundary, and restore from the shared outbox when it reappears.
 
-## 飞书开放平台机器人（`docs/bots.md`）
+## Lark Open Platform bots (`docs/bots.md`)
 
-- 卡片 JSON 2.0 **多一个不认识的字段整张卡片被拒**（1.0 是忽略）：2.0 没有 `action` 模块和 `note`（按钮横排用 `column_set` + `flex_mode: flow`，
-  小字用 `div` + `text_size: notation`），按钮的回传要写在 `behaviors` 里；卡片回调里返回的新卡片也必须是 2.0，否则报 200830。写之前对着 2.0 的组件文档逐个字段核对。
-- 1.0 的 Markdown 不支持标题、表格、引用，模型的回答直接塞进去会显示成原始符号；要用 2.0。卡片会把 `<at>`、`<font>` 这类当成自己的标签：正文里的 `<` 先转义。
-- 卡片的链接按钮文档只写了 http(s) 和 AppLink，自定义 scheme（`jarvis://`）不要放，免得整张卡片被拒。
-- 长连接的事件要在 3 秒内回执，不然飞书重发同一事件：处理放后台，按 message_id 去重。
-- 一条消息发给正在忙的对话会排在当前这一轮后面：那一轮的结束不是它的回答，要在 transcript 里找到这条消息再取它后面的回答（`botRun.Probe`）。
+- With card JSON 2.0, **one unknown extra field rejects the whole card** (1.0 ignores it): 2.0 has no `action` module and no `note` (lay buttons out horizontally with `column_set` + `flex_mode: flow`,
+  small text with `div` + `text_size: notation`), and button callbacks go in `behaviors`; a new card returned from a card callback must also be 2.0, otherwise you get 200830. Before writing, check every field against the 2.0 component docs.
+- 1.0's Markdown doesn't support headings, tables or quotes, so a model answer dropped straight in shows raw symbols; use 2.0. Cards treat things like `<at>` and `<font>` as their own tags: escape `<` in the body first.
+- The docs for card link buttons only mention http(s) and AppLink; don't put a custom scheme (`jarvis://`) there, or the whole card may be rejected.
+- Long-connection events must be acknowledged within 3 seconds, or Lark redelivers the same event: do the processing in the background and de-duplicate by message_id.
+- A message sent to a chat that's busy queues behind the current turn: the end of that turn isn't its answer; find this message in the transcript and take the answer after it (`botRun.Probe`).
 
-- 飞书网关文件发送的 201 回执可能只有 `fileKey/name/size`，`messageId` 是可选字段，不能因此把已发送文件报成失败并鼓励重发。图片 JSON 的 base64 斜杠也可能被全部转义，HTTP body 上限要覆盖这个合法编码，实际图片大小仍按解码后的 7.5 MiB 限制。
-- 未发送附件是用户数据，选取后的私有副本放 Application Support 并排除备份；不能放在「清除缓存」会删除的 tmp/uploads 或 tmp/lark-drafts。
+- The Lark gateway's 201 receipt for a file send may contain only `fileKey/name/size`; `messageId` is optional, so don't report a sent file as failed because of it and invite a resend. In image JSON, the slashes in base64 may also all be escaped; the HTTP body limit must cover this legal encoding, while the actual image size is still limited to 7.5 MiB after decoding.
+- Unsent attachments are user data: put the private copies made after picking in Application Support, excluded from backup; not in tmp/uploads or tmp/lark-drafts, which clearing the cache deletes.
 
-## 全部会话的分页刷新（#530 审查）
+## Paged refresh of all chats (#530 review)
 
-- 刷新只替换第一页而分页总让旧值优先，会让尾页未读数永久过期；按已加载页数重新读取窗口，成功后原子替换，游标停在窗口末尾。失败保持旧快照，不落半批缓存。
-- 实时事件带着变了的会话（`feed_ids`，#3006）：新消息总把会话顶到第一页，所以事件点到的会话全在新第一页里时，只读第一页、把它们挪到顶上，
-  其余行和游标不动（置顶 + 第一页 2 个请求，原来是置顶 + 已加载页数 + 状态 + 账号列表）。置顶每次都读：事件点到置顶会话时，
-  变的可能是它的未读数，也可能是置顶栏本身（数量、顺序）。换了账号照常整窗重读。有一个不在新第一页里（别处读了、完成、退群：可能在窗口里原地变了或离开了），
-  照上一条重读整个窗口。别的账号的事件不读；重连、不带会话的事件（置顶、设置）仍整窗重读。
-- 页尾的加载请求遇到刷新不能直接丢弃：游标不变时 SwiftUI 不会重启 task。等待刷新结束再用新游标继续；排队刷新仍在页面所属任务内，避免离开后另起后台任务。
-- 会话列表不等于消息订阅名单；列出全部群不应让所有活跃群都持续预取聊天内容。
+- If refresh replaces only the first page while paging always lets old values win, unread counts on the tail pages go stale forever; reread the window by the number of loaded pages, replace atomically on success, and leave the cursor at the end of the window. On failure keep the old snapshot, and don't write half a batch to the cache.
+- Live events carry the chats that changed (`feed_ids`, #3006): a new message always pushes its chat to the first page, so when every chat the event names is on the new first page, read only the first page and move them to the top,
+  leaving other rows and the cursor alone (pinned + first page = 2 requests, versus pinned + loaded pages + state + account list before). Pinned is read every time: when the event names a pinned chat,
+  what changed may be its unread count or the pinned bar itself (count, order). After switching accounts, reread the whole window as usual. If one isn't on the new first page (read elsewhere, done, left the group: it may have changed in place in the window or left it),
+  reread the whole window as in the previous item. Events for other accounts aren't read; reconnects and events without chats (pinned, settings) still reread the whole window.
+- A load request at the end of the page can't just be dropped when a refresh comes along: SwiftUI doesn't restart the task when the cursor is unchanged. Wait for the refresh to finish, then continue with the new cursor; the queued refresh stays inside the page's own task, so leaving doesn't spawn a separate background task.
+- The chat list isn't the message subscription list; listing every group shouldn't make every active group keep prefetching chat content.
 
-- 持久化发送队列要单独记录是否已尝试提交。重启时只有已开始提交、结果未知的文件需要检查；排队中从未发出的文件应保留显式重试。离线、DNS 或建连失败也不能误判为已上传但未知。
-- 飞书网关成功文件回执允许省略消息 ID；客户端和 Hub 都必须承认成功，不能在客户端再次把可选字段变为发送失败。
+- The persistent send queue must record separately whether a submission has been attempted. On restart, only files whose submission started with an unknown result need checking; queued files that were never sent should keep an explicit retry. Offline, DNS or connection failures must not be misjudged as uploaded-but-unknown either.
+- The Lark gateway's successful file receipt may omit the message ID; both the client and the hub must accept the success, and the client must not turn the optional field back into a send failure.
 
-- Application Support 的选取临时副本不会被系统自动清理；进程重启后先清理旧 UUID 目录，再开始新的选取。清理只运行一次，与选取共用锁，不能删除当前进程新建的副本或独立的持久化媒体目录。
-- 流式上传的超时包含手机上传时间，应按文件大小给手机和 Hub 相同预算；飞书网关的 pending / failed 本地消息即使已从本机发件箱删除，也不能变成普通已发送气泡。
+- Temporary picked copies in Application Support aren't cleaned up automatically by the system; after the process restarts, clean up old UUID directories first, then start new picks. Cleanup runs only once and shares a lock with picking, and must not delete copies the current process just created or the separate persistent media directory.
+- The timeout for streaming uploads includes the phone's upload time, so give the phone and the hub the same budget based on file size; the Lark gateway's pending / failed local messages must not become ordinary sent bubbles even after they're removed from the local outbox.
 
-## 风灵月影与账号设置
+## Message Tweaks and account settings
 
-整份 local settings PUT 会覆盖网页或另一客户端刚改的字段。手机只通过受限 PATCH 修改两个展示开关，并携带旧值；未知结果先重读，不能自动重试。Hub 返回实际选中账号的用户 ID，不能用账号列表里另一个 primary 用户代替。前后身份校验可以拒绝换号响应，但不是跨登录操作的数据库事务。
+A PUT of the whole local settings overwrites fields that the web or another client just changed. The phone changes the two display switches only through a restricted PATCH that carries the old values; unknown results are reread first and never retried automatically. The hub returns the user ID of the actually selected account, and must not substitute another primary user from the account list. The identity check before and after can reject a response from a switched account, but it isn't a database transaction spanning sign-in operations.
 
-防撤回的原内容就在飞书网关的 parts 中，必须另看 hasRetainedRecallContent，不能把系统撤回提示误当原文。展示与权限分离：保留 recalled 标记；未开启时正文、引用和转发都走撤回提示。编辑版本有自己的 OLK 投影，不能只清主消息和引用的磁盘明文而漏掉 editHistory。
+The original content for keep-recalled-messages is right there in the Lark gateway's parts; you must check hasRetainedRecallContent separately and not mistake the system recall notice for the original. Keep display separate from permissions: keep the recalled flag; when the switch is off, the body, quotes and forwards all show the recall notice. Edit versions have their own OLK projection, so don't clear only the on-disk plaintext of the main message and quotes and miss editHistory.
 
-合并转发卡片的 metadata 同时包含 messages 和复制出来的 previews；不能只处理展开后的正文。预览按原记录的撤回状态/OLK 投影生成；落盘递归去除记录及历史的解密正文，再重建预览，避免无 OLK 标记的复制文本漏进缓存。编辑时间可能包含毫秒，沿用 JSON.parseDate，不能仅用默认 ISO8601DateFormatter。
+The metadata of merged-forward cards contains both messages and copied previews; don't handle only the expanded body. Previews are generated from each original record's recall state / OLK projection; when writing to disk, recursively strip decrypted bodies from records and their history, then rebuild the previews, so copied text without an OLK marker doesn't leak into the cache. Edit times may contain milliseconds; keep using JSON.parseDate rather than only the default ISO8601DateFormatter.
 
-设置变更推送可能早于保存请求的 HTTP 回执，也可能在旧账号的读取尚未结束时到达。不能因为 `loading` / `saving` 就丢掉刷新：合并期间的通知，在当前请求结束后用最近一次客户端补读，不发布已被通知取代的旧响应。补读由设置模型持有，离开先前页面或取消该页面的等待不能同时取消新的实时变更；写操作仍只提交一次。
+A settings-change push may arrive before the HTTP receipt of the save request, or while the old account's read is still in flight. Don't drop the refresh just because of `loading` / `saving`: coalesce notifications during that time, and after the current request finishes, reread using the most recent client, without publishing an old response that a notification has superseded. The reread is owned by the settings model, so leaving the earlier page or cancelling its wait must not also cancel new live changes; writes are still submitted only once.
 
-Hub 在 400ms 内合并事件时，设置变化必须独立累积为 `settings_changed`，不能依赖空 `feed_ids` 表示；同一批有新消息时仍须重读设置。未登录错误沿用 `lark_not_logged_in`，指向 Hub 所在机器的飞书网关登录入口，不能建议无效的反复重读。
+When the hub coalesces events within 400ms, settings changes must accumulate separately as `settings_changed` rather than being signaled by an empty `feed_ids`; a batch that also has new messages must still reread settings. The not-signed-in error keeps using `lark_not_logged_in`, pointing at the Lark gateway sign-in on the hub's machine, rather than suggesting useless repeated rereads.
 
-这两个开关控制展示，沿用飞书网关的语义，不是留存或访问授权：关闭后并不删除服务端留存，Hub 仍向已有消息读取权限的客户端返回原内容与版本，普通未加密内容仍可能进入本地缓存。OLK 解密正文与此独立，持久化必须清理。现有收件箱分拣及助手引用仍可能使用已撤回的 `Text`；其 AI 上下文策略在 #882 后续单独统一，本阶段不宣称已改变。
+These two switches control display and follow the Lark gateway's semantics; they aren't retention or access authorization: turning them off doesn't delete what the server kept, the hub still returns original content and versions to clients with message read permission, and ordinary unencrypted content may still end up in the local cache. OLK decrypted bodies are separate from this and must be cleaned from persistence. The existing Inbox triage and assistant quoting may still use recalled `Text`; their AI context policy will be unified separately as follow-up to #882, and this phase doesn't claim to have changed it.
 
-## 消息列表行间距
+## Row spacing in the message list
 
-SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 实测：46 pt 头像 + 上下各 8 pt 内容留白，最终行高却是 92 pt；显式把行上下 inset 设为 0 并用现有 48 pt 头像 token 后，普通行是 64 pt。不要用固定高度掩盖重复留白，动态字体应允许增高。仅在消息列表的 NavigationLink 上设定，避免改变共用收件箱。
+SwiftUI List's default row insets stack on top of the content's own padding. #957 measured on iOS 27: a 46 pt avatar + 8 pt content padding top and bottom ended up with a 92 pt row; explicitly setting the row's top and bottom insets to 0 and using the existing 48 pt avatar token gives 64 pt for a normal row. Don't hide the duplicated padding with a fixed height; Dynamic Type should be allowed to grow the row. Set it only on the message list's NavigationLink, so the shared Inbox doesn't change.
 
-给行增加 `.id`、几何观测或背景探针后，再把 `.listRowInsets` 放在最外层。#949 的首轮截图发现原来的零 inset 因包装顺序失效，普通行重新变成约 94 pt；调整顺序并用 UI 测试约束普通字号行高，恢复 64 pt。不能只检查 Swift 源码里是否出现 `top: 0`。
+After adding `.id`, geometry observation or a background probe to a row, put `.listRowInsets` back at the outermost layer. #949's first round of screenshots found the original zero insets had stopped working because of the wrapping order, and normal rows were back to about 94 pt; fixing the order and constraining the normal-text-size row height with a UI test restored 64 pt. Checking that `top: 0` appears in the Swift source isn't enough.
 
-首页置顶与普通分页需要共同绑定真实选中账号。Hub 的 `SelectedUserID` 在上游读前、读后校验；旧客户端通过不加 `account_bound=1` 保持原接口。缓存清理和写入用同一串行队列，避免换号清空后被旧异步写恢复。实时事件的订阅要在首次读取之前建立，否则读取期间的变化可能错过。
+Pinned chats on the home page and normal paging both need to be bound to the actually selected account. The hub's `SelectedUserID` is checked before and after the upstream read; old clients keep the original API by not adding `account_bound=1`. Cache clearing and writing use the same serial queue, so a stale async write can't restore data after an account switch cleared it. The live event subscription must be set up before the first read, or changes during the read may be missed.
 
 - When merging message-display controls with interactive quotes, keep the shared `QuoteCard` and `larkJump` action. Apply recall visibility to the card summary before rendering; UI tests should query the quote button, not the former static text.
 
-- 原生消息新能力必须在入口核验当前会话所用 Hub 的接口，并给出明确的升级对象。客户端更新早于 Hub 时，普通 404 不能直接展示成 not found；上游接口缺失须由 Hub 区分为飞书网关需要升级，未授权不能误报旧版本。保留加密草稿和重新检查入口，避免失败后隐式改成普通发送。
+- New native messaging features must check at the entry point the API of the hub used by the current chat, and name exactly what needs upgrading. When the client updates before the hub, a plain 404 must not be shown as not found; a missing upstream API must be distinguished by the hub as the Lark gateway needing an upgrade, and an unauthorized error must not be misreported as an old version. Keep the encrypted draft and a recheck entry, so a failure doesn't silently turn into a plain send.
 
-## 采集读消息时条目被标处理（#1105）
+## An item marked done while collection reads messages (#1105)
 
-- `applyLark` 先在锁里找到这个会话打开的那件，放开锁去读消息，再上锁写进去。中间用户把这件标成已处理（左滑、全部标为已处理），
-  以前新消息照样写进那件已处理的条目，`done_at` 不变，于是谁都看不到。现在重新上锁后先看这件还开着没有，已处理就把它当成「上一件」，新消息另开一件。
-  别的来源（邮件、文档、公司圈、连接器）的合并都在一把锁里做完，没有这个空档；新加采集时也别在锁外读完再往锁外拿到的条目里写。
-- 批量已处理带列表里的 `version`，在锁里比：用户看到的那份之后又并进来新消息的那件不标。
+- `applyLark` first finds, under the lock, the open item for this chat, releases the lock to read messages, then takes the lock again to write them in. If the user marked that item done in between (swipe left, mark all as done),
+  new messages used to be written into the done item anyway with `done_at` unchanged, so nobody saw them. Now, after retaking the lock, it first checks whether the item is still open; if it's done, it's treated as "the previous item" and new messages open a new one.
+  Merges for other sources (mail, docs, Moments, connectors) all happen under a single lock and don't have this gap; when adding new collection, don't read outside the lock and then write into an item obtained outside the lock either.
+- Bulk mark-as-done carries the list's `version` and compares it under the lock: an item that got new messages merged in after the copy the user saw is not marked.
 
-- 置顶头像区的大字体验要同时看头像、角标、展开图标和顶部三段切换。头像/角标可采用设计系统已有的尺寸上限，标题仍随辅助字号；顶部空间不足时用设计 token 控制紧凑切换，避免遮挡两侧入口。
-- 会话列表底部的翻页靠 `.task(id: nextCursor)`：一页还在路上时来了一次刷新（推送、回到前台），这一页被作废，游标没变，`.task` 就不会再跑，
-  转圈一直挂着（#1307）。平时看不出来，滑走再滑回来行会重新出现、再请求一次；置顶会话不在列表里重复之后，第一页全是置顶时下面只剩这个转圈，就卡住了。
-  被刷新作废的翻页在 `more()` 里等刷新完再要一次，别指望视图的 id 去重跑。
+- Checking the pinned avatar area at large text sizes means looking at avatars, badges, the expand icon and the three-segment switch at the top together. Avatars / badges can use the size caps the design system already has, while titles still follow accessibility sizes; when space at the top is tight, use design tokens to control a compact switch, so the entry points on both sides aren't covered.
+- Paging at the bottom of the chat list relies on `.task(id: nextCursor)`: if a refresh comes in (a push, returning to the foreground) while a page is in flight, that page is invalidated, the cursor doesn't change, `.task` never runs again,
+  and the spinner hangs forever (#1307). Normally you don't notice, because scrolling away and back makes the row reappear and request again; once pinned chats stopped being duplicated in the list, a first page made entirely of pinned chats left only this spinner below, and it got stuck.
+  Paging invalidated by a refresh waits in `more()` for the refresh to finish and asks again; don't rely on the view's id to rerun it.
 
-## 聊天内 Pin
+## Pins inside chats
 
-- 飞书网关的 `GET /conversations/F/pins` 会调用标记 Pin 已读，不能因为是 GET 就用于真实账号的自动化「只读验收」。只在用户主动打开列表或操作 Pin 后读取；测试写与 Pin 读取使用隔离 mock。
-- `pins.updated` 表示列表变化，`pins.read-state.updated` 是已读状态变化。订阅后者再刷新 Pin 列表会形成自触发循环。
-- `capabilities` 是部分覆盖：对象存在但没有某个键时沿用飞书网关的默认值；整个对象缺失表示旧响应、不能推定写权限。正常消息 `localState` 是 `synced`，不能以非空为由禁用；撤回/删除禁止添加，但移除旧 Pin 仍按 `unpin` 权限。
-- Pin 写请求没有客户端幂等键，不能照搬文字发送的自动重试。网络失败、服务端 5xx、成功但回执缺字段都按未知处理，重新读列表后再由用户决定。定位也先获取完整目标窗口，失败不清空聊天。
+- The Lark gateway's `GET /conversations/F/pins` marks pins as read when called, so don't use it for "read-only acceptance" automation on a real account just because it's a GET. Read only after the user opens the list or acts on a pin; tests for writing and pin reading use an isolated mock.
+- `pins.updated` means the list changed; `pins.read-state.updated` is a read-state change. Subscribing to the latter and then refreshing the pin list forms a self-triggering loop.
+- `capabilities` is a partial override: when the object exists but lacks a key, the Lark gateway's default applies; a missing object means an old response, and write permission can't be assumed. A normal message's `localState` is `synced`, so don't disable on the grounds that it's non-empty; recalled / deleted messages can't be pinned, but removing an old pin still follows the `unpin` permission.
+- Pin write requests have no client idempotency key, so don't copy the auto-retry from text sending. Network failures, server 5xx and successes with missing receipt fields are all treated as unknown; reread the list, then let the user decide. Locating also fetches the complete target window first, and a failure doesn't clear the chat.
 
-## 飞书网关多账号（#1321）
+## Lark gateway with multiple accounts (#1321)
 
-- `GET /agent/v1/accounts` 不管问的是哪个账号，列表都按飞书网关的顺序，主账号 1 在最前；哪个是这次请求的账号看 `activeId`（旧版看 `active`）。
-  以前 `lark.Client.Me` 取「第一个 `active || primary`」，带 网关的账号请求头 `2` 问到的也是账号 1 的身份；现在先按 `activeId` 找。
-- 同一个群可以同时在两个账号里，feed id 一样：收件箱条目、App 的聊天缓存（`lark-chat-<key>`）和实时监听都要按「账号 + feed」区分，
-  不能只按 feed。因此 hub 也不按 feed 猜账号（旧客户端打开别的账号的会话时就用默认账号，宁可读不到也不能以错的身份发出去）。
-- 添加的账号的资源 URL（头像、图片、文件）飞书网关自带 `ol_account`，hub 改写成 `/api/v1/lark/media/…?ol_account=N` 后原样带回来就对，
-  App 给这类 URL 加账号时不能覆盖它已有的 `ol_account`。
+- `GET /agent/v1/accounts` returns the list in the Lark gateway's order no matter which account is asking, with primary account 1 first; which one is this request's account is in `activeId` (`active` in older versions).
+  `lark.Client.Me` used to take "the first `active || primary`", so a request with the gateway's account header `2` also got account 1's identity; now it looks up `activeId` first.
+- The same group can be in two accounts at once with the same feed id: Inbox items, the App's chat cache (`lark-chat-<key>`) and live listeners must all key on "account + feed",
+  not feed alone. That's also why the hub doesn't guess the account from the feed (when an old client opens another account's chat, the default account is used: better to fail to read than to send under the wrong identity).
+- Resource URLs (avatars, images, files) for added accounts come from the Lark gateway with `ol_account` already in them; the hub rewrites them to `/api/v1/lark/media/…?ol_account=N`, and passing that back unchanged is correct;
+  when the App adds an account to such URLs, it must not overwrite the `ol_account` already there.
