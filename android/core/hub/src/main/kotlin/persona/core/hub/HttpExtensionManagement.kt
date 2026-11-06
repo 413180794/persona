@@ -9,6 +9,8 @@ import persona.core.contracts.api.ExtensionListing
 import persona.core.contracts.api.ExtensionManagement
 import persona.core.contracts.api.ExtensionMarket
 import persona.core.contracts.api.ExtensionOperation
+import persona.core.contracts.api.ExtensionAuth
+import persona.core.contracts.api.BindPrompt
 import persona.core.contracts.api.ExtensionPreview
 import persona.core.contracts.api.ExtensionUiContext
 import persona.core.contracts.api.ExtensionUiForbidden
@@ -207,6 +209,19 @@ class HttpExtensionManagement internal constructor(
     override suspend fun uninstall(id: String, keepData: Boolean) {
         call(path(id, "-", "") + if (keepData) "?keep_data=1" else "", "DELETE")
     }
+
+    // ---- signing in (#4507): the extension's own sign-in, a step at a time; the values go to the extension only.
+
+    override suspend fun auth(id: String): ExtensionAuth = read(call(path(id, "-", "auth"), "GET"), ExtensionAuth.serializer())
+
+    override suspend fun authStep(id: String, step: String, values: Map<String, String>): BindPrompt =
+        read(call(path(id, "-", "auth", "step"), "POST", buildJsonObject {
+            put("step", step)
+            put("values", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
+        }), BindPrompt.serializer())
+
+    override suspend fun authLogout(id: String): ExtensionAuth =
+        read(call(path(id, "-", "auth", "logout"), "POST", JsonObject(emptyMap())), ExtensionAuth.serializer())
 
     // ---- in steps (docs/protocol.md「扩展的安装、升级、卸载进度」): 202 `{operation}`
 

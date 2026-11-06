@@ -830,13 +830,17 @@ private fun LazyListScope.connectorSignIn(
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
             }
         }
-        else -> item("signin-step-${prompt.step}-${prompt.kind}") { ConnectorSignInStep(c, prompt, bind, model) }
+        else -> item("signin-step-${prompt.step}-${prompt.kind}") { ConnectorSignInStep(c.name, prompt, bind, model) }
     }
 }
 
-/** One sign-in step: its hint and the hub's word on it, then a QR code, a code to enter elsewhere, or fields to fill in. */
+/**
+ * One sign-in step: its hint and the hub's word on it, then a QR code, a code to enter elsewhere, or fields to fill in.
+ * [deviceLink] (an extension's sign-in, #4507) also shows a device code's page as a link to tap and its QR code (the hub
+ * draws it) to scan with another phone. [name] is what is signed in to.
+ */
 @Composable
-private fun ConnectorSignInStep(c: HubConnector, prompt: BindPrompt, bind: BindState, model: ConnectorSignInModel) {
+internal fun ConnectorSignInStep(name: String, prompt: BindPrompt, bind: BindState, model: ConnectorSignInModel, deviceLink: Boolean = false) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val res = LocalResources.current
@@ -851,9 +855,43 @@ private fun ConnectorSignInStep(c: HubConnector, prompt: BindPrompt, bind: BindS
         val rows = prompt.qr?.rows.orEmpty()
         when {
             prompt.kind == "qr" && rows.isNotEmpty() -> {
-                JQrCode(rows, Modifier.align(Alignment.CenterHorizontally), label = stringResource(R.string.settings_src_connector_qr_label, c.name))
+                JQrCode(rows, Modifier.align(Alignment.CenterHorizontally), label = stringResource(R.string.settings_src_connector_qr_label, name))
                 SignInWaiting(stringResource(R.string.settings_src_connector_waiting_scan))
                 JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+            }
+            prompt.kind == "device_code" && deviceLink -> {
+                val code = prompt.userCode.orEmpty()
+                val link = prompt.url?.takeIf { it.startsWith("https://") }
+                link?.let { url ->
+                    JGroupItem(GroupPosition.Single) {
+                        JRow(stringResource(R.string.settings_ext_auth_link_label), subtitle = url, subtitleLines = 2, leadingIcon = PhIcons.LinkSimple,
+                            trailing = { JIcon(PhIcons.ArrowSquareOut, null, size = Tokens.Space.l, tint = PersonaTheme.palette.ink3) },
+                            onClick = { runCatching { uri.openUri(url) } })
+                    }
+                }
+                // No code: the page alone is enough (the protocol leaves it out then).
+                if (code.isNotEmpty()) Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+                    JCodeDisplay(code, Modifier.weight(1f))
+                    JIconButton(PhIcons.Copy, stringResource(R.string.settings_src_connector_copy_code), {
+                        context.getSystemService(ClipboardManager::class.java)
+                            ?.setPrimaryClip(ClipData.newPlainText(res.getString(R.string.settings_src_connector_code_clip), code))
+                        feedback?.notice(res.getString(R.string.settings_src_copied))
+                    })
+                }
+                if (rows.isNotEmpty()) {
+                    JQrCode(rows, Modifier.align(Alignment.CenterHorizontally), label = stringResource(R.string.settings_src_connector_qr_label, name))
+                    Text(stringResource(R.string.settings_ext_auth_scan_other), Modifier.align(Alignment.CenterHorizontally),
+                        style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                SignInWaiting(stringResource(R.string.settings_src_channel_waiting_authorize))
+                Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                    link?.let { url ->
+                        JButton(stringResource(R.string.settings_ext_auth_open_link), { runCatching { uri.openUri(url) } }, Modifier.weight(1f),
+                            icon = PhIcons.ArrowSquareOut)
+                    }
+                    JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.weight(1f), kind = JButtonKind.Secondary)
+                }
             }
             prompt.kind == "device_code" -> {
                 val code = prompt.userCode.orEmpty()

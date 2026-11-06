@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- An extension's command-line tools and sign-in (#4507). -->
+    <string name="settings_ext_op_step_tools">Install command-line tools</string>
+    <string name="settings_ext_op_tool_reused">Uses this machine\'s copy</string>
+    <string name="settings_ext_op_tools_failed">Command-line tools not installed: %1$s</string>
+    <string name="settings_ext_auth_header">Sign-in</string>
+    <string name="settings_ext_auth_default_title">Sign in</string>
+    <string name="settings_ext_auth_signed_out">Not signed in</string>
+    <string name="settings_ext_auth_pending">Waiting for confirmation</string>
+    <string name="settings_ext_auth_signed_in">Signed in</string>
+    <string name="settings_ext_auth_signed_in_as">Signed in: %1$s</string>
+    <string name="settings_ext_auth_expired">Expired</string>
+    <string name="settings_ext_auth_error">Error</string>
+    <string name="settings_ext_auth_error_detail">Error: %1$s</string>
+    <string name="settings_ext_auth_unknown">The extension isn\'t running</string>
+    <string name="settings_ext_auth_sign_in">Sign in</string>
+    <string name="settings_ext_auth_sign_in_again">Sign in again</string>
+    <string name="settings_ext_auth_sign_out">Sign out</string>
+    <string name="settings_ext_auth_signed_out_notice">Signed out</string>
+    <string name="settings_ext_auth_sign_out_title">Sign out of %1$s?</string>
+    <string name="settings_ext_auth_sign_out_text">The sign-in the extension keeps on the hub is removed; sign in again to use it.</string>
+    <string name="settings_ext_auth_turn_on_first">Turn the extension on to sign in.</string>
+    <string name="settings_ext_auth_open_link">Open the sign-in page</string>
+    <string name="settings_ext_auth_link_label">Sign-in page</string>
+    <string name="settings_ext_auth_scan_other">Or scan it with another phone</string>
+    <string name="settings_ext_about_tools">Command-line tools</string>
+    <string name="settings_ext_tool_reused">Already on the machine</string>
+</resources>

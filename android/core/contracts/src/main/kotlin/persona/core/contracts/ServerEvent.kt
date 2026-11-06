@@ -176,6 +176,14 @@ data class HubUpdateEvent(val update: persona.core.contracts.api.HubUpdateStatus
 @Serializable(with = ExtensionOperationEventSerializer::class)
 data class ExtensionOperationEvent(val operation: persona.core.contracts.api.ExtensionOperation) : ServerEvent
 
+/**
+ * An extension's sign-in changed (#4507: signed in, out, expired, or the extension said so): only from a hub that says
+ * `extension_auth`; the extension's page updates in place.
+ */
+@KeepGeneratedSerializer
+@Serializable(with = ExtensionAuthEventSerializer::class)
+data class ExtensionAuthEvent(val extension: String, val auth: persona.core.contracts.api.ExtensionAuth) : ServerEvent
+
 data object UnknownEvent : ServerEvent
 
 object ServerEventSerializer : KSerializer<ServerEvent> {
@@ -205,6 +213,9 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "hub_update" -> input.json.decodeFromJsonElement<HubUpdateEvent>(obj)
             "extension_operation" -> input.json.decodeFromJsonElement<ExtensionOperationEvent>(obj).also {
                 require(it.operation.id.isNotEmpty()) { "An operation has its id" }
+            }
+            "extension_auth" -> input.json.decodeFromJsonElement<ExtensionAuthEvent>(obj).also {
+                require(it.extension.isNotEmpty()) { "A sign-in names its extension" }
             }
             "lock_test" -> input.json.decodeFromJsonElement<LockTestEvent>(obj).also {
                 require(it.testId.isNotBlank() && it.dueAt.isNotBlank() && it.sentAt.isNotBlank())
@@ -255,6 +266,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is ExtensionUiEvent -> "extension_ui" to output.json.encodeToJsonElement(value)
             is HubUpdateEvent -> "hub_update" to output.json.encodeToJsonElement(value)
             is ExtensionOperationEvent -> "extension_operation" to output.json.encodeToJsonElement(value)
+            is ExtensionAuthEvent -> "extension_auth" to output.json.encodeToJsonElement(value)
             is LockTestEvent -> "lock_test" to output.json.encodeToJsonElement(value)
             is DeltaEvent -> "delta" to output.json.encodeToJsonElement(value)
             is ScreenEvent -> "screen" to output.json.encodeToJsonElement(value)
@@ -297,3 +309,4 @@ object NotifyEventSerializer : WireSerializer<NotifyEvent>(NotifyEvent.generated
 object ExtensionUiEventSerializer : WireSerializer<ExtensionUiEvent>(ExtensionUiEvent.generatedSerializer())
 object HubUpdateEventSerializer : WireSerializer<HubUpdateEvent>(HubUpdateEvent.generatedSerializer())
 object ExtensionOperationEventSerializer : WireSerializer<ExtensionOperationEvent>(ExtensionOperationEvent.generatedSerializer())
+object ExtensionAuthEventSerializer : WireSerializer<ExtensionAuthEvent>(ExtensionAuthEvent.generatedSerializer())

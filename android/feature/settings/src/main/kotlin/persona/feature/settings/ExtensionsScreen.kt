@@ -62,6 +62,8 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
     LaunchedEffect(model) { model.load() }
     // The page beside it (a wide window) removed or changed one: the list follows without a pull.
     LaunchedEffect(model) { ExtensionChanges.of(extensions).collect { model.load() } }
+    // Signed in or out somewhere else: 「· 未登录」 follows.
+    LaunchedEffect(model) { model.watchAuth() }
     val list = state.extensions
     val detail = LocalDetailKey.current
     JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack, refreshing = state.loading && list != null, onRefresh = { scope.launch { model.load() } }) {
@@ -88,7 +90,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
                 JGroupItem(GroupPosition.of(index, list.size)) {
                     JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.listLine(res, extension), leadingIcon = PhIcons.PuzzlePiece,
                         trailing = { ExtensionStateMark(extension) }, chevron = true,
-                        selected = detail == ExtensionRoute(extension.id), onClick = { onExtension(extension.id) })
+                        selected = (detail as? ExtensionRoute)?.extensionId == extension.id, onClick = { onExtension(extension.id) })
                 }
             }
             item("footer") {
@@ -128,6 +130,8 @@ fun ExtensionPage(
     machines: Flow<List<Machine>>? = null,
     /** Opens a newer version in the market (market id, extension id) to review and upgrade it; without it the line only says. */
     onUpgrade: ((String, String) -> Unit)? = null,
+    /** Just installed and not signed in (`next: auth`, #4507): its sign-in starts once the page knows it. */
+    startSignIn: Boolean = false,
 ) {
     if (extensions == null) {
         JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
@@ -146,7 +150,31 @@ fun ExtensionPage(
         (machines ?: flowOf(emptyList())).map { list -> list.map { ExtensionMachine(it.id, it.displayName, it.os, it.online, it.computer) } }.distinctUntilChanged()
     }.collectAsState(emptyList())
     LaunchedEffect(model) { model.load() }
+    // Its sign-in (#4507): the hub's pushes, and the steps a sheet shows.
+    LaunchedEffect(model) { model.watchAuth() }
+    val signIn = remember(extensions, extensionId) {
+        ConnectorSignInModel({ step, values -> extensions.authStep(extensionId, step, values) }, { model.setAuth(extensions.authLogout(extensionId)) })
+    }
+    val signInState by signIn.state.collectAsState()
+    var signOutError by remember { mutableStateOf<String?>(null) }
+    var confirmingSignOut by remember { mutableStateOf(false) }
+    val polled = signInState.bind.prompt?.takeIf { it.polled }
+    LaunchedEffect(signIn, polled?.step, polled?.kind, polled?.userCode, polled?.url) { if (polled != null) signIn.poll() }
+    LaunchedEffect(signInState.signedInAs) {
+        val who = signInState.signedInAs ?: return@LaunchedEffect
+        feedback?.notice(if (who.isBlank()) res.getString(R.string.settings_ext_auth_signed_in) else res.getString(R.string.settings_ext_auth_signed_in_as, who))
+        signIn.signedInShown()
+        model.load()
+        ExtensionChanges.changed(extensions)
+    }
     val detail = state.detail
+    val auth = detail?.extension?.auth
+    var autoStarted by androidx.compose.runtime.saveable.rememberSaveable(extensionId) { mutableStateOf(false) }
+    LaunchedEffect(startSignIn, auth != null) {
+        if (!startSignIn || autoStarted || auth == null) return@LaunchedEffect
+        autoStarted = true
+        if (!auth.signedIn && detail.extension.enabled != false) signIn.start()
+    }
     val contributed = detail?.takeIf { it.extension.enabled ?: true }?.extension?.contributes.orEmpty()["connectors"].orEmpty()
     var hubConnectors by remember(connectors, extensionId) { mutableStateOf<List<HubConnector>>(emptyList()) }
     LaunchedEffect(connectors, contributed) {
@@ -166,6 +194,9 @@ fun ExtensionPage(
             }
         })) {
         header(extensionId, state, res, onRetry = { scope.launch { model.load() } })
+        if (auth != null) extensionSignIn(auth, enabled = detail.extension.enabled != false, starting = signInState.bind.sending && signInState.bind.prompt == null,
+            error = signInState.bind.error?.resolve(res)?.takeIf { signInState.bind.prompt == null } ?: signOutError, busy = state.busy,
+            onSignIn = { signOutError = null; scope.launch { signIn.start() } }, onSignOut = { confirmingSignOut = true })
         if (detail != null && onChannel != null) channelLink(detail, onChannel)
         if (detail != null) {
             if (detail.readOnly) item("read-only") {
@@ -184,7 +215,8 @@ fun ExtensionPage(
                         if (model.setAutoUpgrade(on)) feedback?.notice(res.getString(if (on) R.string.settings_ext_auto_upgrade_on else R.string.settings_ext_auto_upgrade_off))
                     }
                 })
-            if (onPage != null) extensionPages(detail.ui, onPage)
+            // The extension's own sign-in page is for older apps: this one signs in above (#4507).
+            if (onPage != null) extensionPages(detail.ui.filter { auth?.page.isNullOrBlank() || it.id != auth.page }, onPage)
             if (connectors != null) connectorInbox(hubConnectors, onConnector) { c, on ->
                 scope.launch {
                     try {
@@ -204,6 +236,21 @@ fun ExtensionPage(
             // From a market: removed here too, as in the market (docs/extensions.md「扩展市场」), read-only config or not.
             if (detail.fromMarket) uninstallRow(state.busy) { removing = true }
         }
+    }
+    if (auth != null) ExtensionSignInSheet(auth, detail.extension.name.ifBlank { extensionId }, signInState.bind, signIn)
+    if (confirmingSignOut && auth != null) {
+        JDialog({ confirmingSignOut = false }, title = res.getString(R.string.settings_ext_auth_sign_out_title, ExtensionAuthText.title(res, auth)),
+            text = stringResource(R.string.settings_ext_auth_sign_out_text), destructive = true,
+            confirm = stringResource(R.string.settings_ext_auth_sign_out) to {
+                confirmingSignOut = false
+                scope.launch {
+                    signOutError = signIn.logout()?.resolve(res)
+                    if (signOutError == null) {
+                        feedback?.notice(res.getString(R.string.settings_ext_auth_signed_out_notice))
+                        ExtensionChanges.changed(extensions)
+                    }
+                }
+            })
     }
     val current = detail
     if (removing && current != null) UninstallDialog(current.extension.name.ifBlank { current.extension.id }, onDismiss = { removing = false }) { keep ->
@@ -574,14 +621,26 @@ private fun LazyListScope.about(detail: ExtensionDetail, res: Resources) {
     )
     val origin = detail.origin?.takeIf { it.isNotBlank() }
     val homepage = detail.homepage?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-    val count = rows.size + listOfNotNull(origin, homepage).size
+    // The command-line programs this version runs with (#4507): each with its version, the machine's own copy marked.
+    val tools = extension.tools.orEmpty()
+    val count = rows.size + tools.size + listOfNotNull(origin, homepage).size
     if (count == 0 && extension.warnings.isNullOrEmpty()) return
     item("about-title") { JSectionHeader(stringResource(R.string.settings_ext_about)) }
     rows.forEachIndexed { index, (label, value) ->
         item("about-$label") { JGroupItem(GroupPosition.of(index, count)) { JRow(label, value = value) } }
     }
+    tools.forEachIndexed { index, tool ->
+        item("about-tool-${tool.name}") {
+            JGroupItem(GroupPosition.of(rows.size + index, count)) {
+                val title = tool.title?.takeIf { it.isNotBlank() }
+                JRow(title ?: tool.name, leadingIcon = PhIcons.TerminalWindow, value = tool.version.takeIf { it.isNotBlank() },
+                    subtitle = listOfNotNull(stringResource(R.string.settings_ext_about_tools), tool.name.takeIf { title != null },
+                        stringResource(R.string.settings_ext_tool_reused).takeIf { tool.reused }).joinToString(stringResource(R.string.settings_ext_dot_separator)))
+            }
+        }
+    }
     // Where it was installed from is long (a path or an address): it goes under its label, not beside it.
-    origin?.let { item("about-origin") { JGroupItem(GroupPosition.of(rows.size, count)) { JRow(stringResource(R.string.settings_ext_about_origin), subtitle = it, subtitleLines = 3) } } }
+    origin?.let { item("about-origin") { JGroupItem(GroupPosition.of(rows.size + tools.size, count)) { JRow(stringResource(R.string.settings_ext_about_origin), subtitle = it, subtitleLines = 3) } } }
     homepage?.let { url ->
         item("about-homepage") {
             val uri = LocalUriHandler.current

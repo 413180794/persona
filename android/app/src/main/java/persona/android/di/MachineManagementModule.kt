@@ -10,6 +10,7 @@ import persona.core.contracts.GroupKeys
 import persona.core.contracts.HubUpdateEvent
 import persona.core.contracts.ExtensionUiEvent
 import persona.core.contracts.ExtensionOperationEvent
+import persona.core.contracts.ExtensionAuthEvent
 import persona.core.contracts.Hello
 import persona.core.contracts.api.*
 import persona.core.hub.HttpConnectorsManagement
@@ -198,6 +199,13 @@ object MachineManagementModule {
         override suspend fun operation(id: String) = api().operation(id)
         override suspend fun retryOperation(id: String) = api().retryOperation(id)
         override suspend fun cancelOperation(id: String) = api().cancelOperation(id)
+        // Signing in (#4507): the selected hub's pushes; a finished sign-in changes the list's line too.
+        override val authAvailable: Flow<Boolean> = features.map { "extension_auth" in it }.distinctUntilChanged()
+        override val authUpdates: Flow<ExtensionAuthEvent> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.events ?: emptyFlow() }.filterIsInstance<ExtensionAuthEvent>()
+        override suspend fun auth(id: String) = api().auth(id)
+        override suspend fun authStep(id: String, step: String, values: Map<String, String>) = api().authStep(id, step, values)
+        override suspend fun authLogout(id: String) = api().authLogout(id)
     }
 
     // 设置 › hub 版本 (docs/hub-update.md「App 里」): the selected group's hub, following its `hub_update` pushes.

@@ -181,6 +181,8 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
     val state = mutable.asStateFlow()
     /** Says an operation ended well (set by [watch]). */
     private var onDone: (String) -> Unit = {}
+    /** Opens the installed extension's sign-in (an operation that succeeded with `next: auth`, #4507). */
+    private var onSignIn: (String) -> Unit = {}
 
     /** The hub runs installs in steps; asked when something starts (a hub without the flag: no). */
     private suspend fun stepped(): Boolean = try {
@@ -191,8 +193,9 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
      * While the page is open: follows this extension's operations as the hub pushes them, and lists them again after
      * each hello (opening, a reconnect), since what was missed is not replayed. [done] is what to tell the user.
      */
-    suspend fun watch(done: (String) -> Unit) {
+    suspend fun watch(signIn: (String) -> Unit = {}, done: (String) -> Unit) {
         onDone = done
+        onSignIn = signIn
         api.operationUpdates.onStart { emit(null) }.collect { op -> if (op == null) relist() else track(op) }
     }
 
@@ -215,6 +218,8 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             ExtensionOperation.Succeeded -> {
                 mutable.update { it.copy(operation = null, consentFor = null, preview = if (it.consentFor == op.id) null else it.preview) }
                 onDone(OperationText.done(res, op, state.value.extension?.label ?: op.name ?: op.extension))
+                // Installed but not signed in: straight on to its sign-in.
+                if (op.next == "auth" && op.kind != "uninstall") onSignIn(op.extension.ifBlank { id })
                 load()
             }
             ExtensionOperation.Canceled -> mutable.update {

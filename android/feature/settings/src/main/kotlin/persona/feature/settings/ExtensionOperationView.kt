@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.api.ExtensionOpStep
+import persona.core.contracts.api.ExtensionOpTool
 import persona.core.contracts.api.ExtensionOperation
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
@@ -57,7 +58,7 @@ internal fun OperationSteps(
                     })
             }
             OperationText.shown(op).forEach { StepRow(it, op.kind) }
-            if (failed) op.error?.takeIf { it.isNotBlank() }?.let { JInlineStatus(stringResource(R.string.settings_ext_op_error, it), tone = InlineTone.Failed) }
+            if (failed) OperationText.error(res, op)?.let { JInlineStatus(it, tone = InlineTone.Failed) }
             op.steps.firstOrNull { it.id == "nodes" }?.machines?.errors.orEmpty().forEach { (machine, error) ->
                 JInlineStatus(stringResource(R.string.settings_ext_op_machine_error, machine, error), tone = InlineTone.Caution)
             }
@@ -92,6 +93,27 @@ private fun StepRow(s: ExtensionOpStep, kind: String) {
         if (fraction != null || (s.state == "running" && s.id == "download")) {
             JLinearProgress(fraction, Modifier.padding(start = Tokens.Space.l + Tokens.Space.s))
         }
+        // The tools step: a line per program under it, the one downloading with its bar.
+        s.tools.orEmpty().forEach { ToolRow(s, it) }
+    }
+}
+
+@Composable
+private fun ToolRow(s: ExtensionOpStep, t: ExtensionOpTool) {
+    val res = LocalResources.current
+    val palette = PersonaTheme.palette
+    val detail = OperationText.toolDetail(res, s, t)
+    val fraction = OperationText.toolFraction(s, t)
+    val indent = Modifier.padding(start = Tokens.Space.l + Tokens.Space.s)
+    Column(indent, verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+            Box(Modifier.size(Tokens.Space.l), contentAlignment = Alignment.Center) { StepMark(t.state) }
+            Text(t.name, style = PersonaTheme.type.caption.copy(fontFamily = PersonaTheme.type.code.fontFamily), maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                color = when (t.state) { "pending" -> palette.ink3; "failed" -> palette.danger.text; else -> palette.ink2 })
+            if (detail.isNotEmpty()) Text(detail, style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1)
+        }
+        if (fraction != null || (t.state == "running" && !t.reused)) JLinearProgress(fraction, Modifier.padding(start = Tokens.Space.l + Tokens.Space.s))
     }
 }
 

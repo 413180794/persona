@@ -34,6 +34,8 @@ data class ExtensionOperation(
     @SerialName("ended_at") val endedAt: String? = null,
     /** Only from GET of one that waits for consent: what the user agrees to. */
     val preview: ExtensionPreview? = null,
+    /** What the user should do once it succeeded: `auth` (#4507) when the extension signs in and is not signed in yet. */
+    val next: String? = null,
 ) {
     val active: Boolean get() = state == Running || state == NeedsConsent
     val failed: Boolean get() = state == Failed
@@ -58,6 +60,8 @@ data class ExtensionOpStep(
     /** The package came from the hub's cache: no download. */
     val cached: Boolean = false,
     val machines: ExtensionOpMachines? = null,
+    /** The `tools` step (#4507): its command-line programs in the order they install; [bytes] / [total] are the one downloading. */
+    val tools: List<ExtensionOpTool>? = null,
     @SerialName("started_at") val startedAt: String? = null,
     @SerialName("ended_at") val endedAt: String? = null,
 )
@@ -68,4 +72,12 @@ data class ExtensionOpMachines(
     val done: Int = 0,
     val total: Int = 0,
     val errors: Map<String, String>? = null,
+)
+
+/** One command-line program of the `tools` step: `pending`, `running`, `done` or `failed`; [reused] is the machine's own copy. */
+@Serializable
+data class ExtensionOpTool(
+    val name: String = "",
+    val state: String = "",
+    val reused: Boolean = false,
 )

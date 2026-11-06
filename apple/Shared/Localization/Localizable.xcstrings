@@ -30721,6 +30721,28 @@
         }
       }
     },
+    "只在提醒时推送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pushes only when it alerts you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通知時のみプッシュ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只在提醒时推送"
+          }
+        }
+      }
+    },
     "只在群里出现过、还没有打标的%@。和你说过话、或在重要会话里的会被 AI 整理出来。": {
       "localizations": {
         "en": {

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- An extension's command-line tools and sign-in (#4507). -->
+    <string name="settings_ext_op_step_tools">安装命令行</string>
+    <string name="settings_ext_op_tool_reused">用这台机器上的</string>
+    <string name="settings_ext_op_tools_failed">命令行没装上：%1$s</string>
+    <string name="settings_ext_auth_header">登录</string>
+    <string name="settings_ext_auth_default_title">登录</string>
+    <string name="settings_ext_auth_signed_out">未登录</string>
+    <string name="settings_ext_auth_pending">等待确认</string>
+    <string name="settings_ext_auth_signed_in">已登录</string>
+    <string name="settings_ext_auth_signed_in_as">已登录：%1$s</string>
+    <string name="settings_ext_auth_expired">已过期</string>
+    <string name="settings_ext_auth_error">出错</string>
+    <string name="settings_ext_auth_error_detail">出错：%1$s</string>
+    <string name="settings_ext_auth_unknown">扩展没在运行</string>
+    <string name="settings_ext_auth_sign_in">登录</string>
+    <string name="settings_ext_auth_sign_in_again">重新登录</string>
+    <string name="settings_ext_auth_sign_out">退出登录</string>
+    <string name="settings_ext_auth_signed_out_notice">已退出登录</string>
+    <string name="settings_ext_auth_sign_out_title">退出 %1$s 的登录？</string>
+    <string name="settings_ext_auth_sign_out_text">扩展在 hub 上存的登录凭据会被清掉，要用时再登录。</string>
+    <string name="settings_ext_auth_turn_on_first">打开扩展后才能登录。</string>
+    <string name="settings_ext_auth_open_link">打开登录页</string>
+    <string name="settings_ext_auth_link_label">登录页</string>
+    <string name="settings_ext_auth_scan_other">也可以用另一台手机扫码</string>
+    <string name="settings_ext_about_tools">命令行</string>
+    <string name="settings_ext_tool_reused">机器上已有</string>
+</resources>

@@ -36,7 +36,7 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
             providers = services.providers.takeUnless { demo })
     }
     entry<ExtensionRoute> { route ->
-        ExtensionPage(services.extensions.takeUnless { demo }, route.extensionId, onBack = navigator::back,
+        ExtensionPage(services.extensions.takeUnless { demo }, route.extensionId, onBack = navigator::back, startSignIn = route.signIn,
             onPage = { page -> navigator.navigate(ExtensionUiRoute(page.extension.ifBlank { route.extensionId }, page.id, page.title.ifBlank { page.id })) },
             onChannel = { navigator.navigate(ChannelRoute(it)) }, machines = services.sessions.machines,
             onUpgrade = { market, id -> navigator.navigate(ExtensionCatalogRoute(market, id)) },
@@ -55,7 +55,7 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     }
     entry<ExtensionCatalogRoute> { route ->
         ExtensionCatalogPage(services.extensions.takeUnless { demo }, route.marketId, route.extensionId, onBack = navigator::back,
-            onInstalled = { navigator.navigate(ExtensionRoute(it)) })
+            onInstalled = { navigator.navigate(ExtensionRoute(it)) }, onSignIn = { navigator.navigate(ExtensionRoute(it, signIn = true)) })
     }
     entry<ExtensionMarketsRoute> { ExtensionMarketsPage(services.extensions.takeUnless { demo }, onBack = navigator::back) }
     entry<ChannelRoute> { route ->

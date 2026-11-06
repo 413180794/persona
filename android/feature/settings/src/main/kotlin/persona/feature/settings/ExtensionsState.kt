@@ -4,6 +4,7 @@ import android.content.res.Resources
 import persona.core.contracts.MachineComputer
 import persona.core.contracts.api.HubExtension
 import persona.core.contracts.api.ExtensionConfigRejected
+import persona.core.contracts.api.ExtensionAuth
 import persona.core.contracts.api.ExtensionDetail
 import persona.core.contracts.api.ExtensionField
 import persona.core.contracts.api.ExtensionManagement
@@ -123,10 +124,15 @@ internal object ExtensionText {
         else -> res.getString(R.string.settings_ext_not_set)
     }
 
-    /** The list's line: its state, and that a newer version waits for the user's yes (it asks for more). */
-    fun listLine(res: Resources, p: HubExtension): String =
-        if (p.upgrade?.state == "needs_permission") listOf(state(res, p), res.getString(R.string.settings_ext_upgrade_pending))
-            .joinToString(res.getString(R.string.settings_ext_dot_separator)) else state(res, p)
+    /**
+     * The list's line: its state, that a newer version waits for the user's yes (it asks for more), and that it is not
+     * signed in (#4507).
+     */
+    fun listLine(res: Resources, p: HubExtension): String = listOfNotNull(
+        state(res, p),
+        res.getString(R.string.settings_ext_upgrade_pending).takeIf { p.upgrade?.state == "needs_permission" },
+        res.getString(R.string.settings_ext_auth_signed_out).takeIf { p.auth?.needsSignIn == true },
+    ).joinToString(res.getString(R.string.settings_ext_dot_separator))
 
     /** The 升级 group's line under a newer version: what happens to it (the web's upgradeDetail). */
     fun upgradeDetail(res: Resources, u: ExtensionUpgrade): String = when (u.state) {
@@ -311,6 +317,11 @@ internal class ExtensionListModel(private val api: ExtensionManagement, private 
         catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReasonText(error).resolve(res))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
+
+    /** Follows the hub's `extension_auth` pushes while the list is open. */
+    suspend fun watchAuth() = api.authUpdates.collect { event ->
+        mutable.update { s -> s.copy(extensions = s.extensions?.map { if (it.id == event.extension) it.copy(auth = event.auth) else it }) }
+    }
 }
 
 internal data class ExtensionState(
@@ -350,6 +361,15 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
     }
 
     suspend fun setEnabled(on: Boolean) = busy { run { api.setEnabled(id, on) } }
+
+    /** Follows the hub's `extension_auth` pushes for this extension while the page is open (#4507). */
+    suspend fun watchAuth() = api.authUpdates.collect { event -> if (event.extension == id) setAuth(event.auth) }
+
+    /** The sign-in as the hub says it is now (a push, signing out). */
+    fun setAuth(auth: ExtensionAuth) = mutable.update { s ->
+        s.copy(detail = s.detail?.let { d -> d.copy(extension = d.extension.copy(auth = auth)) })
+    }
+
     suspend fun setContribution(item: persona.core.contracts.api.ExtensionContribution, on: Boolean) = busy {
         run { api.setContribution(id, item.point, item.id, on) }
     }

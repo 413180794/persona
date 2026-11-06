@@ -94,10 +94,20 @@ enum AssistantScheduleText {
         return r.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? r.prompt
     }
 
-    /// A row's rule line: the rule in words (a one-off: where it runs), then 只在提醒时推送 when 跑完推送 is
-    /// 只在它自己提醒时 (on the line rather than as a second pill, which squeezes the title on a phone).
+    /// The rule in words; a one-off says where it runs.
+    static func rule(_ r: APIClient.ScheduledTask) -> String {
+        r.repeats == .once ? (r.sessionID == nil ? String(localized: "一次 · 新对话") : String(localized: "一次 · 接着原来的对话")) : sentence(r)
+    }
+
+    /// The mark for a task whose 跑完推送 is 只在它自己提醒时; nil when it pushes after every run.
+    static func pushMark(_ r: APIClient.ScheduledTask) -> String? {
+        r.pushesOnlyAsked ? String(localized: "只在提醒时推送") : nil
+    }
+
+    /// The capsule row's rule line: the rule, then the push mark (on the line rather than as a second pill, which
+    /// squeezes the title on a phone). The plain row puts the mark on a line of its own, since its rule line is one line.
     static func ruleLine(_ r: APIClient.ScheduledTask) -> String {
-        let rule = r.repeats == .once ? (r.sessionID == nil ? String(localized: "一次 · 新对话") : String(localized: "一次 · 接着原来的对话")) : sentence(r)
+        let rule = rule(r)
         return r.pushesOnlyAsked ? String(localized: "\(rule) · 只在提醒时推送") : rule
     }
 
@@ -376,7 +386,7 @@ struct AssistantTaskRow: View {
                             .fixedSize()
                     }
                 }
-                Text(AssistantScheduleText.ruleLine(t))
+                Text(AssistantScheduleText.rule(t))
                     .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -396,6 +406,13 @@ struct AssistantTaskRow: View {
                         .labelStyle(AssistantCompactLabel())
                         .font(Theme.Font.label)
                         .foregroundStyle(with.danger ? Theme.danger : Color.secondary)
+                        .lineLimit(1)
+                }
+                if let mark = AssistantScheduleText.pushMark(t) {
+                    Label(mark, systemImage: Theme.Icon.notifications)
+                        .labelStyle(AssistantCompactLabel())
+                        .font(Theme.Font.label)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 if let last = AssistantScheduleText.lastRun(t) {

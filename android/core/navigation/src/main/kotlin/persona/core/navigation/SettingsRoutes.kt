@@ -10,8 +10,11 @@ import kotlinx.serialization.Serializable
  */
 @Serializable @SerialName("jarvis.core.navigation.ModelPurposeRoute") data class ModelPurposeRoute(val purposeId: String) : NavKey
 
-/** One extension of 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」), by the hub's extension id. */
-@Serializable @SerialName("jarvis.core.navigation.PluginRoute") data class ExtensionRoute(val extensionId: String) : NavKey
+/**
+ * One extension of 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」), by the hub's extension id; [signIn] opens it with
+ * its sign-in started (just installed and not signed in, #4507).
+ */
+@Serializable @SerialName("jarvis.core.navigation.PluginRoute") data class ExtensionRoute(val extensionId: String, val signIn: Boolean = false) : NavKey
 
 /**
  * A page an extension draws (its `extension_page` UI, docs/extensions.md「声明式 UI」), opened from the extension's page.

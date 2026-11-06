@@ -51,6 +51,9 @@ class ExtensionWireTest {
         "MessagingItem" to ExtensionMessagingItem.serializer(),
         "MessagingMessagePage" to ExtensionMessagingMessagePage.serializer(),
         "MessagingOutgoing" to ExtensionMessagingOutgoing.serializer(),
+        // An extension's sign-in (#4507).
+        "AuthStatus" to ExtensionAuthStatus.serializer(),
+        "AuthPrompt" to ExtensionAuthPrompt.serializer(),
     )
 
     @Suppress("UNCHECKED_CAST")

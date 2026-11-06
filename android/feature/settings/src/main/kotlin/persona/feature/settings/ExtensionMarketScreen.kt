@@ -138,7 +138,11 @@ private fun LazyListScope.marketProblems(markets: List<ExtensionMarket>) {
  * upgrading first fetch and check the package and list what it may do; nothing happens until the user agrees.
  */
 @Composable
-fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, extensionId: String, onBack: () -> Unit, onInstalled: (String) -> Unit) {
+fun ExtensionCatalogPage(
+    extensions: ExtensionManagement?, marketId: String, extensionId: String, onBack: () -> Unit, onInstalled: (String) -> Unit,
+    /** Installed and it signs in (`next: auth`, #4507): its page, with the sign-in started. */
+    onSignIn: (String) -> Unit = onInstalled,
+) {
     if (extensions == null) {
         JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
@@ -151,7 +155,7 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
     var removing by remember { mutableStateOf(false) }
     LaunchedEffect(model) { model.load() }
     // In steps (a hub with extension_operations): the hub's pushes, and the one going on when the page opens again.
-    LaunchedEffect(model) { model.watch { feedback?.notice(it) } }
+    LaunchedEffect(model) { model.watch(signIn = onSignIn) { feedback?.notice(it) } }
     val extension = state.extension
     val actions = extension?.let(CatalogText::actions).orEmpty()
     val op = state.operation

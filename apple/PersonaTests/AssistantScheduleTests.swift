@@ -58,13 +58,16 @@ struct AssistantScheduleTests {
         #expect(try body(back)["push"] as? String == "")
     }
 
-    /// The row says 只在提醒时推送 on its rule line; the editor sees a switch to it as a change, and nil and "" as the same.
+    /// The capsule row says 只在提醒时推送 on its rule line, the plain row on a line of its own; the editor sees a switch to it as a change, and nil and "" as the same.
     @Test func pushOnTheRowAndInTheEditor() {
         var t = APIClient.ScheduledTask(id: "p", title: "巡检", prompt: "x", repeats: .interval, everyMinutes: 30)
         #expect(AssistantScheduleText.ruleLine(t) == "每 30 分钟")
         var asked = t
         asked.push = APIClient.ScheduledTask.pushAsked
         #expect(AssistantScheduleText.ruleLine(asked) == "每 30 分钟 · 只在提醒时推送")
+        #expect(AssistantScheduleText.pushMark(t) == nil)
+        #expect(AssistantScheduleText.rule(asked) == "每 30 分钟", "the plain row keeps the mark off its one-line rule")
+        #expect(AssistantScheduleText.pushMark(asked) == "只在提醒时推送")
         #expect(!AssistantTaskEditor.same(t, asked))
         var every = t
         every.push = ""

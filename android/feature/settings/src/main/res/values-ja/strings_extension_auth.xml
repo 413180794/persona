@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- An extension's command-line tools and sign-in (#4507). -->
+    <string name="settings_ext_op_step_tools">コマンドラインをインストール</string>
+    <string name="settings_ext_op_tool_reused">このマシンのものを使用</string>
+    <string name="settings_ext_op_tools_failed">コマンドラインをインストールできませんでした：%1$s</string>
+    <string name="settings_ext_auth_header">サインイン</string>
+    <string name="settings_ext_auth_default_title">サインイン</string>
+    <string name="settings_ext_auth_signed_out">未サインイン</string>
+    <string name="settings_ext_auth_pending">確認待ち</string>
+    <string name="settings_ext_auth_signed_in">サインイン済み</string>
+    <string name="settings_ext_auth_signed_in_as">サインイン済み：%1$s</string>
+    <string name="settings_ext_auth_expired">期限切れ</string>
+    <string name="settings_ext_auth_error">エラー</string>
+    <string name="settings_ext_auth_error_detail">エラー：%1$s</string>
+    <string name="settings_ext_auth_unknown">拡張機能が実行されていません</string>
+    <string name="settings_ext_auth_sign_in">サインイン</string>
+    <string name="settings_ext_auth_sign_in_again">再サインイン</string>
+    <string name="settings_ext_auth_sign_out">サインアウト</string>
+    <string name="settings_ext_auth_signed_out_notice">サインアウトしました</string>
+    <string name="settings_ext_auth_sign_out_title">%1$s からサインアウトしますか？</string>
+    <string name="settings_ext_auth_sign_out_text">拡張機能が hub に保存しているサインイン情報を削除します。使うときはもう一度サインインしてください。</string>
+    <string name="settings_ext_auth_turn_on_first">サインインするには拡張機能をオンにしてください。</string>
+    <string name="settings_ext_auth_open_link">サインインページを開く</string>
+    <string name="settings_ext_auth_link_label">サインインページ</string>
+    <string name="settings_ext_auth_scan_other">別のスマートフォンでスキャンすることもできます</string>
+    <string name="settings_ext_about_tools">コマンドライン</string>
+    <string name="settings_ext_tool_reused">マシンに既存</string>
+</resources>

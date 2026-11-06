@@ -61,6 +61,27 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
     /** `PUT /api/v1/extensions/{id}/-/auto-upgrade`: a market extension's own auto-upgrade switch (docs/extensions.md「自动升级」). */
     suspend fun setAutoUpgrade(id: String, auto: Boolean): ExtensionDetail =
         throw UnsupportedOperationException("Auto-upgrades unsupported by this hub")
+
+    // ---- signing in (#4507): only with a hub that says `extension_auth`; an older one has no 登录 section.
+
+    /** The selected hub signs extensions in. */
+    val authAvailable: Flow<Boolean> get() = kotlinx.coroutines.flow.flowOf(false)
+
+    /** Each `extension_auth` the hub pushes. */
+    val authUpdates: Flow<persona.core.contracts.ExtensionAuthEvent> get() = kotlinx.coroutines.flow.emptyFlow()
+
+    /** `GET /api/v1/extensions/{id}/-/auth`. */
+    suspend fun auth(id: String): ExtensionAuth = throw UnsupportedOperationException("Sign-in unsupported by this hub")
+
+    /**
+     * `POST /api/v1/extensions/{id}/-/auth/step`: step "" starts over. The answer is a connector's prompt (fields, a
+     * device code or a QR code to wait on, or done).
+     */
+    suspend fun authStep(id: String, step: String, values: Map<String, String>): BindPrompt =
+        throw UnsupportedOperationException("Sign-in unsupported by this hub")
+
+    /** `POST /api/v1/extensions/{id}/-/auth/logout`. */
+    suspend fun authLogout(id: String): ExtensionAuth = throw UnsupportedOperationException("Sign-in unsupported by this hub")
 }
 
 /** The hub refused the configuration (400 `invalid_config`): [field] is its dotted path (`proxy.host`). */

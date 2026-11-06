@@ -5,6 +5,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import persona.core.contracts.api.BindPrompt
 import persona.core.contracts.api.ConnectorsManagement
 import persona.core.contracts.api.HubConnector
 import persona.core.contracts.api.LarkStatus
@@ -78,7 +79,12 @@ internal data class ConnectorSignIn(val bind: BindState = BindState(), val signe
  * channel's binding): the fields the hub names, a QR code or a device code asked about again every interval, or done;
  * and signing out. What a step asks for is the hub's, nothing per connector.
  */
-internal class ConnectorSignInModel(private val api: ConnectorsManagement, private val id: String) {
+internal class ConnectorSignInModel(
+    private val stepCall: suspend (String, Map<String, String>) -> BindPrompt,
+    private val logoutCall: suspend () -> Unit,
+) {
+    constructor(api: ConnectorsManagement, id: String) : this({ step, values -> api.connectorLogin(id, step, values) }, { api.connectorLogout(id) })
+
     private val mutable = MutableStateFlow(ConnectorSignIn())
     val state = mutable.asStateFlow()
 
@@ -116,7 +122,7 @@ internal class ConnectorSignInModel(private val api: ConnectorsManagement, priva
 
     /** 退出登录; why it did not go, null when it did. */
     suspend fun logout(): ResText? = try {
-        api.connectorLogout(id)
+        logoutCall()
         update { BindState() }
         null
     } catch (cancelled: CancellationException) { throw cancelled }
@@ -133,7 +139,7 @@ internal class ConnectorSignInModel(private val api: ConnectorsManagement, priva
             update { it.copy(sending = true, error = null) }
         }
         return try {
-            val prompt = api.connectorLogin(id, step, values)
+            val prompt = stepCall(step, values)
             if (prompt.done) mutable.update { ConnectorSignIn(signedInAs = prompt.account.orEmpty()) }
             // A new step starts empty; the same step asked again (a mistake) keeps what was typed.
             else update { BindState(prompt, if (it.prompt?.step == prompt.step) it.values else emptyMap()) }

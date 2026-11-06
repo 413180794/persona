@@ -2,6 +2,7 @@ package persona.feature.settings
 
 import android.content.res.Resources
 import persona.core.contracts.api.ExtensionOpStep
+import persona.core.contracts.api.ExtensionOpTool
 import persona.core.contracts.api.ExtensionOperation
 import java.time.Instant
 import java.util.Locale
@@ -20,6 +21,7 @@ internal object OperationText {
         "unpack" -> res.getString(R.string.settings_ext_op_step_unpack)
         "check" -> res.getString(R.string.settings_ext_op_step_check)
         "consent" -> res.getString(R.string.settings_ext_op_step_consent)
+        "tools" -> res.getString(R.string.settings_ext_op_step_tools)
         "install" -> res.getString(if (kind == "upgrade") R.string.settings_ext_op_step_upgrade else R.string.settings_ext_op_step_install)
         "start" -> res.getString(R.string.settings_ext_op_step_start)
         "nodes" -> res.getString(R.string.settings_ext_op_step_nodes)
@@ -42,8 +44,31 @@ internal object OperationText {
             (s.bytes ?: 0) > 0 -> size(s.bytes!!)
             else -> ""
         }
+        // The tools step's bytes are the program downloading: they go on its own line (toolDetail).
+        if (s.id == "tools") return ""
         val m = s.machines ?: return ""
         return if (m.total > 0) res.getString(R.string.settings_ext_op_machines, m.done, m.total) else ""
+    }
+
+    /** A program of the tools step: the machine's own copy, or the bytes of the one downloading. */
+    fun toolDetail(res: Resources, s: ExtensionOpStep, t: ExtensionOpTool): String = when {
+        t.reused -> res.getString(R.string.settings_ext_op_tool_reused)
+        t.state == "running" && (s.total ?: 0) > 0 -> res.getString(R.string.settings_ext_op_bytes_of, size(s.bytes ?: 0), size(s.total!!))
+        t.state == "running" && (s.bytes ?: 0) > 0 -> size(s.bytes!!)
+        else -> ""
+    }
+
+    /** The share of the program the tools step downloads now (0–1); null for the others or while its size is not known. */
+    fun toolFraction(s: ExtensionOpStep, t: ExtensionOpTool): Float? {
+        if (s.state != "running" || t.state != "running" || t.reused) return null
+        val total = s.total ?: 0
+        return if (total > 0) ((s.bytes ?: 0).toFloat() / total).coerceIn(0f, 1f) else null
+    }
+
+    /** Why it failed, in words: the tools step names the program and the reason (`tools_failed`). */
+    fun error(res: Resources, op: ExtensionOperation): String? {
+        val error = op.error?.takeIf { it.isNotBlank() } ?: return null
+        return res.getString(if (op.errorCode == "tools_failed") R.string.settings_ext_op_tools_failed else R.string.settings_ext_op_error, error)
     }
 
     /** A download's or a sync's fraction (0–1); null when it is not known or the step is not running. */
@@ -51,6 +76,7 @@ internal object OperationText {
         if (s.state != "running") return null
         val total = s.total ?: 0
         if (s.id == "download" && total > 0) return ((s.bytes ?: 0).toFloat() / total).coerceIn(0f, 1f)
+        if (s.id == "tools") return null
         val m = s.machines ?: return null
         return if (m.total > 0) m.done.toFloat() / m.total else null
     }
