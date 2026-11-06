@@ -76,6 +76,10 @@ type Hub struct {
 	wokeAt     map[string]time.Time // device -> last silent push to wake it for a tool call
 	live       *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
 
+	// phoneToolsMu: one phone tool registration written at a time, so the rows and phoneTools agree on the latest.
+	// Never held with mu taken first; the write it covers runs outside mu (#5358).
+	phoneToolsMu sync.Mutex
+
 	// askVia replaces fleet.ask in tests that play the manager (waitInteraction).
 	askVia func(context.Context, proto.Interaction) (proto.Resolution, error)
 	// reported is what the manager told of the nodes' interactions and the fleet (fleet_link.go).
@@ -309,14 +313,28 @@ func (h *Hub) loadPhoneTools() {
 	h.mu.Unlock()
 }
 
+// phoneToolsTimeout bounds a phone tool registration's write (the pool has no statement_timeout); tests shorten it.
+var phoneToolsTimeout = 5 * time.Second
+
+// setPhoneTools saves a phone's tools, then lists them. The write runs outside h.mu, the hub's global lock: a stalled
+// database used to stop every broadcast and client message with it (#5358).
 func (h *Hub) setPhoneTools(registration db.PhoneToolRegistration) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.phoneToolsMu.Lock()
+	defer h.phoneToolsMu.Unlock()
 	if h.store != nil {
-		if err := h.store.ReplacePhoneTools(context.Background(), registration); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), phoneToolsTimeout)
+		err := h.store.ReplacePhoneTools(ctx, registration)
+		cancel()
+		if err != nil {
 			h.logf("save phone tools: %v", err)
 			return
 		}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Revoked while the rows were written: revoked() already cleared this device under h.mu, so it must not come back.
+	if registration.CredentialID != "" && h.isDeviceRevoked(registration.CredentialID) {
+		return
 	}
 	if h.phoneTools == nil {
 		h.phoneTools = map[string]db.PhoneToolRegistration{}

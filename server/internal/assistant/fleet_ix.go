@@ -1179,9 +1179,12 @@ func (s *Service) codexPending(machine string, ix proto.Interaction) *pending {
 		ctx, cancel := context.WithTimeout(context.Background(), codexAnswerTimeout)
 		defer cancel()
 		err := s.nodeCall(ctx, machine, "codex.answer", map[string]any{"session_id": ix.SessionID, "id": ix.ID, "resolution": r}, nil)
-		if err == nil && !r.Dismiss {
-			// Answered from the phone: the card is no longer pending, so the node's next list does not count it as
-			// gone. It ended now: listed again after codexAskedAgain, it is Codex asking again and rings (#4105).
+		var re *rpc.Error
+		changed := errors.As(err, &re) && re.Code == screen.PromptChanged
+		if (err == nil || changed) && !r.Dismiss {
+			// Answered from the phone, or Codex no longer asks it (prompt_changed): either way the card is over and no
+			// longer pending, so the node's next list does not count it as gone. It ended now: listed again after
+			// codexAskedAgain, it is Codex asking again and rings (#4105).
 			s.fleet.mu.Lock()
 			if s.fleet.codexEnded == nil {
 				s.fleet.codexEnded = map[string]time.Time{}
@@ -1189,8 +1192,7 @@ func (s *Service) codexPending(machine string, ix proto.Interaction) *pending {
 			s.fleet.codexEnded[ix.ID] = time.Now()
 			s.fleet.mu.Unlock()
 		}
-		var re *rpc.Error
-		if err != nil && !r.Dismiss && !(errors.As(err, &re) && re.Code == screen.PromptChanged) {
+		if err != nil && !r.Dismiss && !changed {
 			s.fleet.mu.Lock()
 			if m := s.ixMapLocked(); m[ix.ID] == nil {
 				m[ix.ID] = p

@@ -1449,3 +1449,46 @@ func TestScreenCardSameDialogAfterWorkingIsAsked(t *testing.T) {
 		t.Fatalf("pushed %d times, want 2", len(pushes))
 	}
 }
+
+// An answer the node refuses with prompt_changed ends the card too: the same approval asked again later rings.
+func TestCodexCardPromptChangedAskedAgainIsAnnounced(t *testing.T) {
+	old := codexAskedAgain
+	codexAskedAgain = 50 * time.Millisecond
+	t.Cleanup(func() { codexAskedAgain = old })
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	a := proto.Interaction{ID: "cxa_1", SessionID: "s2", Kind: proto.IxPermission, Agent: "codex", Summary: "npm test",
+		ExpiresAt: time.Now().Add(time.Hour)}
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(got) != 1 {
+		t.Fatalf("first: pushed %d times", len(got))
+	}
+	n.mu.Lock()
+	n.err = &rpc.Error{Code: screen.PromptChanged, Message: "gone"}
+	n.mu.Unlock()
+	yes := true
+	_ = s.resolve("cxa_1", proto.Resolution{Allow: &yes})
+	if len(pendingIDs(s)) != 0 {
+		t.Fatalf("still pending after prompt_changed: %v", pendingIDs(s))
+	}
+	n.mu.Lock()
+	n.err = nil
+	n.mu.Unlock()
+	listCodex(s, a) // listed again at once (the screen lagging): quiet
+	if got := ft.pushesOf(assistantwire.NotifyInput, 2, 200*time.Millisecond); len(got) != 1 {
+		t.Fatalf("listed again at once after prompt_changed: pushed %d times", len(got))
+	}
+	n.mu.Lock()
+	n.err = &rpc.Error{Code: screen.PromptChanged, Message: "gone"}
+	n.mu.Unlock()
+	_ = s.resolve("cxa_1", proto.Resolution{Allow: &yes})
+	n.mu.Lock()
+	n.err = nil
+	n.mu.Unlock()
+	listCodex(s)
+	time.Sleep(2 * codexAskedAgain)
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(got) != 2 {
+		t.Fatalf("asked again after prompt_changed: pushed %d times", len(got))
+	}
+}
