@@ -1285,14 +1285,9 @@ func (s *Service) oneOffNotStarted(ctx context.Context, t Task, run ScheduleRun)
 	go func() {
 		time.Sleep(delay)
 		cctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		cur, ok, err := s.currentTask(cctx, t.ID)
+		cur, ok := s.retryStillDue(cctx, t.ID, run)
 		cancel()
-		switch {
-		case err != nil:
-			s.logf("task %s retry: %v", t.ID, err)
-			return
-		case !ok:
-			s.logf("task %s: deleted since it could not start; not retried", t.ID)
+		if !ok {
 			return
 		}
 		if _, err := s.runTask(cur, time.Now(), time.Now(), false, true); err != nil {
@@ -1385,16 +1380,8 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	// The failure push sends the user to the task's page; by now they may have switched it off, deleted it or changed
 	// its prompt. The retry goes by what the schedule holds now, not by the copy the run started with: that copy ran
 	// again regardless, with the old prompt, and silently (a retry that fails is not pushed).
-	cur, ok, err := s.currentTask(ctx, t.ID)
-	switch {
-	case err != nil:
-		s.logf("task %s retry: %v", t.ID, err)
-		return
-	case !ok:
-		s.logf("task %s: deleted since its run failed; not retried", t.ID)
-		return
-	case cur.Repeat != repeatOnce && !cur.Enabled: // a one-off is off as soon as it is due: its retry is still its run
-		s.logf("task %s: switched off since its run failed; not retried", t.ID)
+	cur, ok := s.retryStillDue(ctx, t.ID, run)
+	if !ok {
 		return
 	}
 	if _, err := s.runTask(cur, time.Now(), time.Now(), false, true); err != nil {
@@ -1402,18 +1389,60 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	}
 }
 
-// currentTask is the task as the schedule holds it now: false when it is gone, an error while the schedule cannot be
-// read (nothing is known then, see lockedSchedule).
-func (s *Service) currentTask(ctx context.Context, id string) (Task, bool, error) {
+// retryStillDue reads the task as the schedule holds it now for the automatic retry of its failed run; false (and
+// logged) when the retry does not go. The failure push sends the owner to the task, and what they did there wins
+// (#5320): a Run now meanwhile already ran it (the retry ran it a second time: the mail, the message went twice), and
+// a one-off moved to another time runs then (the retry ran it now, early, and it was then done).
+func (s *Service) retryStillDue(ctx context.Context, id string, failed ScheduleRun) (Task, bool) {
 	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
-		return Task{}, false, err
+		s.logf("task %s retry: %v", id, err)
+		return Task{}, false
 	}
-	defer sc.mu.Unlock()
-	if i := sc.indexLocked(id); i >= 0 {
-		return sc.tasks[i], true, nil
+	var cur Task
+	i := sc.indexLocked(id)
+	if i >= 0 {
+		cur = sc.tasks[i]
 	}
-	return Task{}, false, nil
+	runs := slices.Clone(sc.runs)
+	sc.mu.Unlock()
+	now := time.Now()
+	if s.retryNow != nil {
+		now = s.retryNow()
+	}
+	if why := retryCancelled(cur, i >= 0, failed, runs, now); why != "" {
+		s.logf("task %s: %s since its run failed; not retried", id, why)
+		return Task{}, false
+	}
+	return cur, true
+}
+
+// retryCancelled is why the retry of failed, due at now, does not go ("" when it does). cur is the task now (found:
+// false when it was deleted); runs is the history, newest last.
+//   - Another run of the task went out after the failed one (a Run now, or its next time): it already ran again. A
+//     run that could not start (no conversation) or was skipped did nothing, so the retry still goes.
+//   - A one-off is switched on again with its time after now (moved later, or earlier but still ahead): the
+//     scheduler runs it then. A one-off that is due is off (runDue), so being on again means the owner set it.
+//   - A repeating task switched off. (A repeating task's next time is always ahead, so its time says nothing.)
+func retryCancelled(cur Task, found bool, failed ScheduleRun, runs []ScheduleRun, now time.Time) string {
+	if !found {
+		return "deleted"
+	}
+	for _, r := range slices.Backward(runs) {
+		if r.RefID == cur.ID && r.At.After(failed.At) && r.Status != runSkipped && r.SessionID != "" {
+			return "run again"
+		}
+	}
+	if cur.Repeat == repeatOnce {
+		if cur.Enabled && cur.At.After(now) {
+			return "moved to " + cur.At.UTC().Format(time.RFC3339)
+		}
+		return ""
+	}
+	if !cur.Enabled {
+		return "switched off"
+	}
+	return ""
 }
 
 // silentRun: the run's turn is known to have ended with no output, so failing it (and running the task again) is

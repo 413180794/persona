@@ -44,6 +44,8 @@ type Service struct {
 	logf  func(format string, args ...any)
 	// runRetry is how long after a failed run the retry goes (0: runRetryDelay; tests shorten it).
 	runRetry time.Duration
+	// retryNow is the clock a due retry checks the task's time against (retryStillDue; nil: time.Now, tests set it).
+	retryNow func() time.Time
 
 	mux    *http.ServeMux
 	routes []string
