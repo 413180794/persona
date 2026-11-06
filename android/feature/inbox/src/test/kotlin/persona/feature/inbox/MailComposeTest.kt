@@ -142,6 +142,19 @@ class MailComposeTest {
     }
 
     @Test
+    fun parseMailtoKeepsPlusAndReadsToParam() {
+        // RFC 6068: '+' is a literal character, and to= values add recipients (#5079).
+        val plus = MailCompose.parseMailto("mailto:a+b@example.com?body=1+1", "")
+        assertEquals("a+b@example.com", plus.to)
+        assertEquals("1+1", plus.body)
+        assertEquals("a@example.com", MailCompose.parseMailto("mailto:?to=a@example.com", "").to)
+        assertEquals(
+            "x@example.com, a@example.com,b@example.com",
+            MailCompose.parseMailto("mailto:x@example.com?to=a@example.com,b@example.com", "").to,
+        )
+    }
+
+    @Test
     fun buildSendRequest() {
         val draft = MailDraft(
             accountId = "acc-1",

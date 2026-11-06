@@ -228,6 +228,7 @@ object MailCompose {
         var body = ""
         var cc = ""
         var bcc = ""
+        var extraTo = ""
 
         if (queryString.isNotEmpty()) {
             queryString.split('&').forEach { param ->
@@ -235,36 +236,36 @@ object MailCompose {
                 if (eq > 0) {
                     val key = param.substring(0, eq).lowercase()
                     val rawVal = param.substring(eq + 1)
-                    val value = try {
-                        URLDecoder.decode(rawVal, "UTF-8")
-                    } catch (_: Exception) {
-                        rawVal
-                    }
+                    val value = decodePercent(rawVal)
                     when (key) {
                         "subject" -> subject = value
                         "body" -> body = value
                         "cc" -> cc = if (cc.isEmpty()) value else "$cc, $value"
                         "bcc" -> bcc = if (bcc.isEmpty()) value else "$bcc, $value"
-                        "to" -> {} // Extra to addresses handled if specified
+                        "to" -> extraTo = if (extraTo.isEmpty()) value else "$extraTo, $value"
                     }
                 }
             }
         }
 
-        val decodedTo = try {
-            URLDecoder.decode(rawTo, "UTF-8")
-        } catch (_: Exception) {
-            rawTo
-        }
+        // RFC 6068: to= values add to the recipients in the path.
+        val to = listOf(decodePercent(rawTo), extraTo).filter { it.isNotEmpty() }.joinToString(", ")
 
         return MailDraft(
             accountId = defaultAccountId,
-            to = decodedTo.replace(';', ','),
+            to = to.replace(';', ','),
             cc = cc.replace(';', ','),
             bcc = bcc.replace(';', ','),
             subject = subject,
             body = body,
         )
+    }
+
+    /** Percent-decodes [raw] as UTF-8; unlike form decoding, `+` stays literal (RFC 6068). */
+    private fun decodePercent(raw: String): String = try {
+        URLDecoder.decode(raw.replace("+", "%2B"), "UTF-8")
+    } catch (_: Exception) {
+        raw
     }
 
     /** The request for [draft] as edited (`references` space-joined, the way the hub's SendRequest takes it). */

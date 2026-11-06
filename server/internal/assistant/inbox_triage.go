@@ -367,6 +367,16 @@ func (s *Service) replyInboxDo(ctx context.Context, id, text, clientID string, f
 	once := r.(*inboxReply)
 	once.mu.Lock()
 	defer once.mu.Unlock()
+	if fromCard {
+		// Another reply of the item may have been out (the phone's, a repeat): filed while this one waited for it, the
+		// item is not answered again from a card either (#5117).
+		b.mu.Lock()
+		open := it.open()
+		b.mu.Unlock()
+		if !open {
+			return InboxItem{}, errInboxItemDone
+		}
+	}
 	req := inboxReplyReq{id: id, live: it, item: c, text: text, clientID: clientID, changes: changes, once: once,
 		sendID: replySendID(id, text, clientID, changes)}
 	var already bool

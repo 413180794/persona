@@ -336,3 +336,42 @@ func TestReplyNotFromACardAnswersAFiledItem(t *testing.T) {
 		t.Fatalf("reply = %v, sent %+v", err, rc.got)
 	}
 }
+
+// Another reply of the item may be out when 发送 on its card comes (the phone's reply, a repeat): the card's send waits
+// for it on the item's reply lock, past the check #4899 made. An item filed meanwhile (that reply went out, or
+// 已处理 on another device) is not answered again, and keeps its mark.
+func TestMessageCardOfAnItemFiledWhileAnotherReplyIsOutSendsNothing(t *testing.T) {
+	for _, by := range []string{"replied", "user", "dismissed"} {
+		h, rc, it := cardHub(t)
+		draft(t, h, "在修了")
+		list := cards(t, h, time.Time{})
+		if len(list) != 1 {
+			t.Fatalf("filed by %s: feed = %+v", by, list)
+		}
+		r, _ := h.inbox.replies.LoadOrStore(it.ID, &inboxReply{})
+		other := r.(*inboxReply)
+		other.mu.Lock() // the other reply is out
+		sent := make(chan error, 1)
+		go func() {
+			send := func() (InboxItem, error) {
+				return h.replyInboxChecked(context.Background(), it.ID, "在修了", "", true, nil, nil)
+			}
+			_, _, err := h.sendFromCard(context.Background(), list[0].ID, it.ID, send)
+			sent <- err
+		}()
+		time.Sleep(200 * time.Millisecond) // the card's send is past its checks, waiting on the reply lock
+		h.inbox.mu.Lock()
+		it.done(time.Now(), by)
+		h.inbox.mu.Unlock()
+		other.mu.Unlock()
+		if err := <-sent; !errors.Is(err, errInboxItemDone) {
+			t.Fatalf("filed by %s: 发送 = %v", by, err)
+		}
+		h.inbox.mu.Lock()
+		doneBy := it.DoneBy
+		h.inbox.mu.Unlock()
+		if len(rc.got) != 0 || doneBy != by {
+			t.Fatalf("filed by %s: sent %+v, the item is now by %q", by, rc.got, doneBy)
+		}
+	}
+}
