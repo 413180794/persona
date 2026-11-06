@@ -206,26 +206,9 @@ func (d *doctorReport) running(ctx context.Context, cfg *Config) []Endpoint {
 		d.problem("运行中的 hub", "配置缺少主 token；请检查 hub.json 的 token，自检不会生成或打印 token")
 		return nil
 	}
-	transport := &http.Transport{Proxy: nil}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: 5 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	// Never resolve a configured host or send the master token outside loopback.
-	host, _, _ := net.SplitHostPort(cfg.Listen)
-	loopbacks := []netip.Addr{netip.AddrFrom4([4]byte{127, 0, 0, 1}), netip.IPv6Loopback()}
-	if ip, err := netip.ParseAddr(host); err == nil && ip.Is6() {
-		loopbacks[0], loopbacks[1] = loopbacks[1], loopbacks[0]
-	}
+	get := doctorLoopback(cfg, port)
 	for _, path := range []string{"/api/v1/health", "/api/v1/endpoints"} {
-		var resp *http.Response
-		for _, ip := range loopbacks {
-			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort(ip.String(), port)+path, nil)
-			req.Header.Set("Authorization", "Bearer "+cfg.Token)
-			resp, err = client.Do(req)
-			if err == nil {
-				break
-			}
-		}
+		resp, err := get(ctx, path)
 		if err != nil {
 			d.problem("运行中的 hub", "无法连接本机回环，hub 可能没运行或未监听回环地址；请启动 personad hub run 并检查 listen")
 			return nil
@@ -256,9 +239,84 @@ func (d *doctorReport) running(ctx context.Context, cfg *Config) []Endpoint {
 				fmt.Fprintf(d.out, "  %s（%s，端口 %d，发现时间 %s）\n", e.URL, e.Kind, e.Port, e.SeenAt.Format(time.RFC3339))
 			}
 		}
+		d.pushRoutes(ctx, get)
 		return body.Endpoints
 	}
 	return nil
+}
+
+// doctorLoopback GETs a path from the running hub with the master token. Never resolves a configured host or sends
+// the token outside loopback.
+func doctorLoopback(cfg *Config, port string) func(ctx context.Context, path string) (*http.Response, error) {
+	client := &http.Client{Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}, Timeout: 5 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	host, _, _ := net.SplitHostPort(cfg.Listen)
+	loopbacks := []netip.Addr{netip.AddrFrom4([4]byte{127, 0, 0, 1}), netip.IPv6Loopback()}
+	if ip, err := netip.ParseAddr(host); err == nil && ip.Is6() {
+		loopbacks[0], loopbacks[1] = loopbacks[1], loopbacks[0]
+	}
+	return func(ctx context.Context, path string) (resp *http.Response, err error) {
+		for _, ip := range loopbacks {
+			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort(ip.String(), port)+path, nil)
+			req.Header.Set("Authorization", "Bearer "+cfg.Token)
+			if resp, err = client.Do(req); err == nil {
+				return resp, nil
+			}
+		}
+		return nil, err
+	}
+}
+
+// pushRoutes reports which way the running hub pushes to each device (#5998): straight to APNs, through the relay the
+// phone registered with, or not at all and why.
+func (d *doctorReport) pushRoutes(ctx context.Context, get func(context.Context, string) (*http.Response, error)) {
+	resp, err := get(ctx, "/api/v1/devices/push")
+	if err != nil {
+		return // the checks before said whether the hub answers at all
+	}
+	var body struct {
+		Direct  bool         `json:"direct"`
+		Devices []pushDevice `json:"devices"`
+	}
+	decodeErr := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body)
+	resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		d.problem("推送", "运行中的 hub 版本太旧，不会报每台设备的推送路径；升级后再查")
+		return
+	case resp.StatusCode != http.StatusOK || decodeErr != nil:
+		d.problem("推送", fmt.Sprintf("本机 hub 的 /api/v1/devices/push 返回 HTTP %d；请检查 hub 日志", resp.StatusCode))
+		return
+	}
+	way := "hub 没有 apns.json，经各台设备登记的推送中继"
+	if body.Direct {
+		way = "hub 有自己的 APNs key（apns.json），直连 APNs"
+	}
+	if len(body.Devices) == 0 {
+		d.ok("推送", way+"；还没有设备登记推送（在手机上打开 App、允许通知后会出现在这里）")
+		return
+	}
+	bad := 0
+	for _, dev := range body.Devices {
+		if dev.Push.Route == pushNone || dev.Push.Reason == pushFailed {
+			bad++
+		}
+	}
+	if bad == 0 {
+		d.ok("推送", way)
+	} else {
+		d.problem("推送", fmt.Sprintf("%s；%d 台设备收不到或上一条没推出去，见下面", way, bad))
+	}
+	for _, dev := range body.Devices {
+		name := dev.Name
+		if name == "" {
+			name = dev.DeviceID
+		}
+		if dev.Kind != "" {
+			name += "（" + dev.Kind + "）"
+		}
+		fmt.Fprintf(d.out, "  %s：%s\n", name, pushRouteLine(dev.Push))
+	}
 }
 
 func doctorAddressReason(a netaddr.Addr) string {
@@ -390,4 +448,32 @@ func doctorRouteInterfaces(raw string, ipv6 bool) []string {
 		out = append(out, iface)
 	}
 	return out
+}
+
+// pushRouteLine is a device's way in `hub doctor`'s words.
+func pushRouteLine(r pushRoute) string {
+	var line string
+	switch r.Route {
+	case pushDirect:
+		line = "直连 APNs"
+	case pushRelay:
+		line = "经推送中继"
+	default:
+		line = "收不到后台推送"
+	}
+	switch r.Reason {
+	case pushNoToken:
+		line += "：没有 APNs token（这台设备没允许通知，或向 APNs 登记失败）"
+	case pushRelayFailed:
+		line += "：向推送中继登记失败（" + r.Detail + "）"
+	case pushNoRelay:
+		line += "：hub 没有 apns.json，这台设备也没报中继（构建没配中继，或 App 太旧）"
+	case pushFailed:
+		at := ""
+		if r.FailedAt != nil {
+			at = r.FailedAt.UTC().Format("01-02 15:04 UTC") + " "
+		}
+		line += fmt.Sprintf("，但 %s上一条没推出去（%s）", at, r.Detail)
+	}
+	return line
 }

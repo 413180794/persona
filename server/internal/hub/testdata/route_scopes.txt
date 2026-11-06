@@ -112,6 +112,7 @@ assistant.ask        GET /api/v1/assistant/reporters
 -                    GET /api/v1/connectors/sent
 -                    GET /api/v1/connectors/{id}/media
 -                    GET /api/v1/connectors/{id}/thread
+-                    GET /api/v1/devices/push
 -                    GET /api/v1/devices/{id}/lock-tests/{test_id}
 -                    GET /api/v1/devices/{id}/prefs
 -                    GET /api/v1/devices/{id}/sessions

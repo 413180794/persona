@@ -396,7 +396,8 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		writeJSON(w, map[string]any{"tokens": list, "current": principalOf(r.Context()).ID})
+		// push: per token, the way pushes reach the device it registered (Settings › Devices, #5998)
+		writeJSON(w, map[string]any{"tokens": list, "current": principalOf(r.Context()).ID, "push": h.push.routesByCredential()})
 	})
 	api.HandleFunc("DELETE /api/v1/auth/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if h.store == nil {

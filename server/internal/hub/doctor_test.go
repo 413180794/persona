@@ -73,7 +73,7 @@ func TestDoctorReadOnly(t *testing.T) {
 	if endpoints := d.running(context.Background(), loaded); len(endpoints) != 1 {
 		t.Fatalf("missing published endpoints: %s", out.String())
 	}
-	if !reflect.DeepEqual(paths, []string{"/api/v1/health", "/api/v1/endpoints"}) {
+	if !reflect.DeepEqual(paths, []string{"/api/v1/health", "/api/v1/endpoints", "/api/v1/devices/push"}) {
 		t.Fatalf("unexpected requests: %v", paths)
 	}
 	for _, want := range []string{pin, cert.Leaf.NotAfter.UTC().Format(time.RFC3339), "当前已开启公网明文", "2001:db8::2", "回环 health 检查通过"} {

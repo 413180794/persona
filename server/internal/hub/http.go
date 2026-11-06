@@ -162,8 +162,13 @@ func (h *Hub) routes() http.Handler {
 		d.CredentialID = principalOf(r.Context()).ID
 		d.Credential = d.CredentialID
 		h.push.register(d)
-		writeJSON(w, map[string]any{"ok": true})
+		resp := map[string]any{"ok": true}
+		if route, ok := h.push.routeOfID(d.DeviceID); ok {
+			resp["push"] = route // the app's Settings › Notifications says which way, or why none (#5998)
+		}
+		writeJSON(w, resp)
 	})
+	h.pushRoutes(api)
 	h.live.routes(api)
 	h.metricsRoutesRelayed(api) // the monitoring is the manager's (devices_link.go)
 	api.HandleFunc("GET /api/v1/devices/{id}/sessions", h.serveDeviceSessions)

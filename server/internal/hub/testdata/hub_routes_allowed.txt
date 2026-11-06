@@ -23,6 +23,7 @@ GET /api/v1/admin/state
 GET /api/v1/app/android/apk
 GET /api/v1/app/android/latest
 GET /api/v1/auth/tokens
+GET /api/v1/devices/push
 GET /api/v1/devices/{id}/lock-tests/{test_id}
 GET /api/v1/devices/{id}/prefs
 GET /api/v1/devices/{id}/sessions

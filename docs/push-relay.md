@@ -108,6 +108,27 @@ lost alerts and Live Activity updates. Live Activity pushes carry `aps.timestamp
   without `e` (direct pushes never carry `mutable-content`, so the extension isn't invoked) the notification is shown as-is.
 - Silent pushes (`background`) are decrypted in the App process; `jarvis_wake` wakes the connection as before.
 
+## Which way a device is pushed (#5998)
+
+A phone whose relay registration failed used to log one line and report empty relay fields; on a hub without `apns.json` its background pushes then went nowhere, and nothing said so.
+Now every side says which way pushes take and, when none, why:
+
+- **App**: the relay registration does not follow redirects (URLSession turns a redirected POST into a GET, so an old relay address that answers 301 could never work). The App keeps the outcome of the last attempt:
+  registered, the relay's status and its own words (`403 topic not served`), a redirect and where to (`301 https://<new address>`), a network error. It also notes notifications not allowed, APNs refusing to register, and a build without a relay.
+  A failure goes to the hub as `relay_error` in `POST /api/v1/devices`, which answers with the device's `push` way. **Settings › Notifications** shows "Background push: available (direct / via the relay) / unavailable", the reason and what to do.
+- **hub**: `push` is `{"route":"direct|relay|none","reason"?,"detail"?,"failed_at"?}`:
+
+  | route | reason | When |
+  | --- | --- | --- |
+  | `none` | `no_token` | The device has no APNs token: notifications not allowed, or APNs refused it |
+  | `direct` | | The hub has `apns.json` and the device a token |
+  | `relay` | | No `apns.json`; the device reported relay, grant and push key |
+  | `none` | `relay_failed` | No `apns.json`; the phone's relay registration failed (`detail`: its words, kept in `devices.relay_error`) |
+  | `none` | `no_relay` | No `apns.json`, and the phone names no relay (a build without one, or an App too old to say why) |
+  | `direct` / `relay` | `push_failed` | The way is there, but the last push did not go (`detail`: APNs' or the relay's answer). In memory, until a push goes or the device registers a new token / relay |
+
+  `GET /api/v1/auth/tokens` adds `push` (credential id → the way of the device it registered last) for **Settings › Devices**; `GET /api/v1/devices/push` lists every device (`personad hub doctor` prints it under "推送").
+
 ## Deployment (publisher)
 
 1. On a machine with outbound internet access, put `~/.persona/relay.json` (0600):
