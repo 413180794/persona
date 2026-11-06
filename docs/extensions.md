@@ -453,6 +453,14 @@ Private extensions: clone the private repository on the hub machine and install 
 Every step is recorded in `plugin_audit` (who, when, from which version to which), without config values or secrets. Who: `personad extension` (CLI), `admin UI` (admin UI),
 `hub token` / `device:<id>` (the App's toggles, config, secrets).
 
+Connectors are recorded in the same table (#5281), with the connector's id in the `plugin` column and a `connector_` prefix on the action, so they never read as the extension's own:
+`connector_login_start` (a sign-in started), `connector_signed_in` (`{account}`, the display name the status shows), `connector_logout`, `connector_enabled` (`{enabled}`) and
+`connector_feed` (`{feed, on}`) only when the value changes, `connector_options` (the connector's own settings changed; never their values), `connector_data_deleted`
+(`{chats, people, inbox}`), `connector_archive_deleted` (`{chats, people}`; both add `incomplete: true` when part of the deletion failed) and `connector_auth_source`
+(`{source, machine}`, where GitHub's token comes from). This covers Settings › Connectors and binding or unbinding an extension channel, which signs its connector in or out.
+Who is `device:<id>` or `hub token`; what the user typed and the credential itself are never recorded. A record that cannot be written does not undo the action; the hub logs it.
+A program saving its own credential (`connector.secrets.save`, e.g. a refreshed session) is not recorded.
+
 ### Command-line programs (tools)
 
 When an extension works through some command-line tool (for example, wrapping the CLI of a company's internal service), it lists it in the manifest's `tools`, and the hub installs it at install time, so computers that never had that CLI can use it right away (#4507).

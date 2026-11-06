@@ -393,7 +393,7 @@ func (h *Manager) bindChannel(ctx context.Context, id, step string, values map[s
 			return connector.Prompt{}, err
 		}
 	}
-	return l.LoginStep(ctx, step, values)
+	return h.connectorLoginStep(ctx, pc.item.Connector, l, step, values)
 }
 
 func (h *Manager) bindFeishu(ctx context.Context, step string, values map[string]string) (connector.Prompt, error) {
@@ -463,7 +463,7 @@ func (h *Manager) unbindChannel(ctx context.Context, id string) error {
 	if !ok {
 		return errors.New(i18n.T(lang, "hub-channels.not_bound", i18n.Args{"name": v.Name}))
 	}
-	return l.Logout(ctx) // the assistant forgets what the channel waited on
+	return h.connectorLogout(ctx, pc.item.Connector, l) // the assistant forgets what the channel waited on
 }
 
 func firstNonEmpty(s ...string) string {

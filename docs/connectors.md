@@ -105,6 +105,9 @@ hub 每轮把连接器给的候选交给管理者（总线上的 `inbox.collecte
 `archive` / `inbox` 是「进知识库」「进收件箱」两个开关（`Registry.SetFeed`，默认开，存在 hub 设置里）：关掉「进知识库」后 hub 不再调 `Archive`，「删除已存的知识库内容」（`DELETE …/{id}/archive`）只删知识库里它的会话和人；关掉「进收件箱」后不再 `Collect`，已有的条目不动。连接器本身照常跑，工具照常给。
 App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读各自的接口），信息有自己的页，其余走通用的连接器页。接口细节见 `docs/protocol.md`「连接器 API」。
 
+Audit: signing in or out, the switch, the two feeds, the connector's own settings, deleting its data or knowledge base content and GitHub's token source are recorded in `plugin_audit`
+with who did it (#5281); never a credential or a typed value. The actions and their details are listed in `docs/extensions.md` (after the install / upgrade steps).
+
 ### 加一个连接器（v1 的做法）
 
 1. `connector/<id>` 一个包，实现 `Connector`（含 `Manifest()`）和清单里声明的能力；工具的描述放 `prompts/mcp/<id>/`，收件箱的种类说明放

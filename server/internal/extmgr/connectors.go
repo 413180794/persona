@@ -1,6 +1,7 @@
 package extmgr
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -79,7 +80,8 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 	// Signing in, a step at a time (connector.Login): the app shows each Prompt's fields and sends them back. The
 	// values (a phone number, a code, a password) go to the connector only: never into a log or a response.
 	api.HandleFunc("POST /api/v1/connectors/{id}/login", func(w http.ResponseWriter, r *http.Request) {
-		l, ok := h.connectorLogin(w, r.PathValue("id"))
+		id := r.PathValue("id")
+		l, ok := h.connectorLogin(w, id)
 		if !ok {
 			return
 		}
@@ -91,7 +93,7 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 			writeBodyErr(w, err, err)
 			return
 		}
-		p, err := l.LoginStep(r.Context(), body.Step, body.Values)
+		p, err := h.connectorLoginStep(r.Context(), id, l, body.Step, body.Values)
 		if err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
@@ -103,11 +105,12 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 		writeJSON(w, p)
 	})
 	api.HandleFunc("POST /api/v1/connectors/{id}/logout", func(w http.ResponseWriter, r *http.Request) {
-		l, ok := h.connectorLogin(w, r.PathValue("id"))
+		id := r.PathValue("id")
+		l, ok := h.connectorLogin(w, id)
 		if !ok {
 			return
 		}
-		if err := l.Logout(r.Context()); err != nil {
+		if err := h.connectorLogout(r.Context(), id, l); err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
 		}
@@ -132,9 +135,13 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 			return
 		}
 		if len(body.Options) > 0 && string(body.Options) != "null" {
+			before := h.optionsOf(id)
 			if err := h.setConnectorOptions(r.Context(), id, body.Options); err != nil {
 				writeErr(w, http.StatusBadRequest, err)
 				return
+			}
+			if !bytes.Equal(before, h.optionsOf(id)) {
+				h.auditConnector(r.Context(), id, auditConnectorOptions, nil)
 			}
 		}
 		for f, on := range map[connector.Feed]*bool{connector.FeedArchive: body.Archive, connector.FeedInbox: body.Inbox} {
@@ -195,7 +202,9 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 		}
 		var res sourceForgotten
 		var err error
-		if res.Chats, res.People, err = h.forgetArchive(r.Context(), id); err != nil {
+		res.Chats, res.People, err = h.forgetArchive(r.Context(), id)
+		h.auditConnector(r.Context(), id, auditConnectorArchiveDeleted, forgotten(map[string]any{"chats": res.Chats, "people": res.People}, err))
+		if err != nil {
 			h.logf("connector %s: delete the archive: %v", id, err)
 			writeForgetErr(w, err)
 			return
@@ -223,7 +232,9 @@ func (h *Manager) forgetSource(ctx context.Context, source string) (sourceForgot
 	var kerr, ierr error
 	out.Chats, out.People, kerr = h.forgetArchive(ctx, source)
 	out.Inbox, ierr = h.forgetInbox(ctx, source)
-	return out, errors.Join(kerr, ierr)
+	err := errors.Join(kerr, ierr)
+	h.auditConnector(ctx, source, auditConnectorDataDeleted, forgotten(map[string]any{"chats": out.Chats, "people": out.People, "inbox": out.Inbox}, err))
+	return out, err
 }
 
 // forgetArchive removes a source's chats and people from the knowledge base, with their index rows, their places in
@@ -352,8 +363,12 @@ func (h *Manager) applyConnectorOptions(ctx context.Context, id string, raw json
 
 // setConnectorEnabled switches a connector and keeps the choice for the next start.
 func (h *Manager) setConnectorEnabled(ctx context.Context, id string, on bool) error {
+	was := h.connectors.Enabled(id)
 	if err := h.connectors.SetEnabled(id, on); err != nil {
 		return err
+	}
+	if was != on {
+		h.auditConnector(ctx, id, auditConnectorEnabled, map[string]any{"enabled": on})
 	}
 	if h.store == nil {
 		return nil
@@ -372,8 +387,12 @@ func (h *Manager) setConnectorEnabled(ctx context.Context, id string, on bool) e
 // setConnectorFeed turns one of a connector's feeds on or off and keeps the choice for the next start; turned on, the
 // inbox or the archive goes again soon.
 func (h *Manager) setConnectorFeed(ctx context.Context, id string, f connector.Feed, on bool) error {
+	was := h.connectors.Feeds(id, f)
 	if err := h.connectors.SetFeed(id, f, on); err != nil {
 		return err
+	}
+	if was != on {
+		h.auditConnector(ctx, id, auditConnectorFeed, map[string]any{"feed": f, "on": on})
 	}
 	if h.store != nil {
 		var cs connectorSettings

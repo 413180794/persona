@@ -212,6 +212,11 @@ func (h *Manager) githubAuthRoutes(api *http.ServeMux) {
 				return
 			}
 		}
+		detail := map[string]any{"source": a.Source}
+		if a.Machine != "" {
+			detail["machine"] = a.Machine
+		}
+		h.auditConnector(r.Context(), c.ID(), auditConnectorAuthSource, detail)
 		if ext := h.githubExtension(); ext != nil {
 			if _, err := h.applyGitHubExtensionSource(r.Context(), ext, a); err != nil {
 				writeErr(w, http.StatusBadGateway, err)
