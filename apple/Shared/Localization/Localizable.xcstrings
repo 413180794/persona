@@ -10902,7 +10902,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "補足（キューに入れて送信）"
+            "value": "補足（後で送信）"
           }
         },
         "zh-Hans": {
@@ -79436,6 +79436,29 @@
       },
       "extractionState": "manual"
     },
+    "Run": {
+      "comment": "BeautifulUI looks this up in the app's catalog (#5574)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "実行"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行"
+          }
+        }
+      }
+    },
     "Run Agent Here": {
       "localizations": {
         "en": {
@@ -121057,29 +121080,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "降序 ↓"
-          }
-        }
-      }
-    },
-    "Run": {
-      "comment": "BeautifulUI looks this up in the app's catalog (#5574)",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Run"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "実行"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "运行"
           }
         }
       }

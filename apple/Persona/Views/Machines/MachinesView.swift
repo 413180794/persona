@@ -218,7 +218,8 @@ struct MachinesView: View {
 
     private func summary(_ machines: [Machine], alerts: [MetricLevel], waiting: Int) -> some View {
         let online = machines.filter(\.online).count
-        return HStack(spacing: Theme.Space.l) {
+        // Wraps to a second line rather than cutting the last one off (Japanese did: #5648).
+        return LarkFlowLayout(spacing: Theme.Space.l, lineSpacing: Theme.Space.xs) {
             Label("\(online)/\(machines.count) online", systemImage: Theme.Icon.dot)
                 .labelStyle(DotLabel(color: online == machines.count ? Theme.positive : .secondary))
             if let worst = alerts.max() {
@@ -231,7 +232,6 @@ struct MachinesView: View {
                 Label("\(waiting) agents need you", systemImage: Theme.Icon.dot)
                     .labelStyle(DotLabel(color: StatusPalette.needsYou.dot))
             }
-            Spacer(minLength: 0)
         }
         .font(Theme.Font.captionMedium)
         .lineLimit(1)

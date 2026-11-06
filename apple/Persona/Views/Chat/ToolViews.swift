@@ -58,7 +58,7 @@ enum ToolPresentation {
         case "computer_run": return String(localized: "Control Computer")
         case "browser_run": return String(localized: "Use Browser")
         case "browser_look": return String(localized: "View Browser")
-        case "Bash": return String(localized: "Runtime")
+        case "Bash": return String(localized: "Run")
         case "Read": return String(localized: "Read [Tool Views 534cb3]")
         case "Edit", "MultiEdit": return String(localized: "Edit [Message Menu 051836]")
         case "Write": return String(localized: "Write")
@@ -267,7 +267,7 @@ enum ToolRunSummary {
         switch kind {
         case .read: return named(String(localized: "Read [Tool Views 534cb3]"), many: String(localized: "\(calls.count) files"))
         case .search: return named(ToolPresentation.verb(first.name), many: String(localized: "\(calls.count) times"))
-        case .run: return named(String(localized: "Runtime"), many: String(localized: "\(calls.count) commands"))
+        case .run: return named(String(localized: "Run"), many: String(localized: "\(calls.count) commands"))
         case .todo:
             // The latest list is the state of the to-dos.
             return ToolChipGroup.Chip(symbol: Theme.Icon.todo, label: String(localized: "To-dos"), detail: ToolPresentation.subject(calls[calls.count - 1]),

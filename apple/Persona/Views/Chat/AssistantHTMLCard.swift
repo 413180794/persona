@@ -252,7 +252,7 @@ struct AssistantHTMLCard: View {
             }
             if enabled {
                 Button { running = true; stopped = false; actions.restart() } label: {
-                    Label(autoRun ? String(localized: "Retry [Components b8784c]") : String(localized: "Runtime"), systemImage: Theme.Icon.run).lineLimit(1)
+                    Label(autoRun ? String(localized: "Retry [Components b8784c]") : String(localized: "Run"), systemImage: Theme.Icon.run).lineLimit(1)
                 }
                 .themedButton(prominent: true)
                 .accessibilityIdentifier("html-card-run")

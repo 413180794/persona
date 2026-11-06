@@ -384,7 +384,7 @@ struct RunAgentHereSheet: View {
                     if busy {
                         ProgressView()
                     } else {
-                        Button("Runtime") { run() }
+                        Button("Run") { run() }
                             .lineLimit(1)
                             .disabled(pane.isEmpty || launcher.isEmpty)
                     }

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// A new conversation in the shell (docs/ios.md「新外壳」): the same welcome as the old layout's (`AssistantWelcome`:
 /// greeting, what Persona can reach, things to ask), and over the composer what needs the user right now — agents
-/// waiting on them and the inbox's Needs You — one quiet line each, as many as fit under the welcome's first row of things
+/// waiting on them and the inbox's Needs You — one quiet line each, as many as fit under the welcome's first two rows of things
 /// to ask (`NeedsRoom`). While the conversation spins up, the first message and a typing line so the send feels instant.
 struct ShellHome: View {
     @Environment(AppModel.self) private var model
@@ -39,7 +39,7 @@ struct ShellHome: View {
             } else {
                 VStack(alignment: .leading, spacing: Theme.Space.xl) {
                     // Its errors stay over the composer, where the send was.
-                    AssistantWelcome(send: send, openHelp: { route = .help($0, machine: nil) })
+                    AssistantWelcome(send: send, openHelp: { route = .help($0, machine: nil) }, cardRows: 2)
                 }
                 .padding(.horizontal, Theme.Space.l)
                 .frame(maxWidth: ChatView.readableWidth)
@@ -101,8 +101,8 @@ struct ShellHome: View {
     }
 }
 
-/// How tall Needs You may be on the new conversation page: what is left between the end of the welcome's first row of things
-/// to ask and the composer (2026-11-02, #283: on iPhone Duo's outer screen three rows and the composer took half of the
+/// How tall Needs You may be on the new conversation page: what is left between the end of the welcome's first two rows of
+/// things to ask and the composer (2026-11-02, #283: on iPhone Duo's outer screen three rows and the composer took half of the
 /// screen and cut the suggestions in two). It shows as many rows as fit there, at least one. No limit until it is all
 /// measured.
 private struct NeedsRoom {
@@ -111,7 +111,7 @@ private struct NeedsRoom {
     /// rows away; turning the phone or the other screen of an iPhone Duo changes the width.
     private(set) var page: CGFloat = 0
     private var pageWidth: CGFloat = 0
-    /// Where the welcome's first row of things to ask ends, from the top of the scroll content (`WelcomeFold`).
+    /// Where the welcome's things to ask that stay in view end, from the top of the scroll content (`WelcomeFold`).
     var fold: CGFloat = 0
     /// The composer at rest, one line: the least it has been at this text size (typing grows it, which must not take
     /// rows away either).

@@ -496,6 +496,9 @@ struct AssistantWelcome: View {
     var send: (String, [ImagePayload]) -> Void
     /// Opens local help for a readiness example question that is `local` (never sent to the model).
     var openHelp: ((String) -> Void)? = nil
+    /// The cards' rows at most (the shell: two, the page ends at their bottom, with no third row peeking out under the
+    /// fade over Needs You, #5648); every suggestion when nil.
+    var cardRows: Int? = nil
 
     /// A thing to ask: sent as `prompt`, or (`local`) opening help on this device; `needs`: the phone data it reads.
     struct Suggestion {
@@ -578,7 +581,7 @@ struct AssistantWelcome: View {
                 }
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    ForEach(suggestions, id: \.title) { s in
+                    ForEach(cardRows.map { Array(suggestions.prefix($0 * 2)) } ?? suggestions, id: \.title) { s in
                         Button {
                             ask(s)
                         } label: {
@@ -592,8 +595,10 @@ struct AssistantWelcome: View {
                             .card(padding: 14)
                         }
                         .buttonStyle(.plain)
-                        // Two cards a row: the row ends where the taller of the first two does.
-                        .modifier(WelcomeFold.Mark(first: suggestions.prefix(2).contains { $0.title == s.title }))
+                        // Two cards a row, and the first two rows kept clear of Needs You: the fold is where the tallest
+                        // of the first four ends (#5648: English and Japanese titles run to two lines, and the second row
+                        // was half under the fade when the fold was the first row's end).
+                        .modifier(WelcomeFold.Mark(first: suggestions.prefix(WelcomeFold.cards).contains { $0.title == s.title }))
                     }
                 }
             }
@@ -636,14 +641,16 @@ struct AssistantWelcome: View {
     }
 }
 
-/// Where the welcome's first row of things to ask ends, from the welcome's top (so scrolling does not move it): the
-/// shell keeps what needs the user over the composer below it (`ShellHome`).
+/// Where the welcome's things to ask that must stay in view end (the cards' first two rows, the list's first row), from the
+/// welcome's top (so scrolling does not move it): the shell keeps what needs the user over the composer below it (`ShellHome`).
 struct WelcomeFold: PreferenceKey {
     static let space = "assistant-welcome"
+    /// The cards kept in view: two rows of two.
+    static let cards = 4
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 
-    /// On every thing to ask; the ones in the first row say where they end.
+    /// On every thing to ask; the ones kept in view say where they end.
     struct Mark: ViewModifier {
         var first: Bool
 
