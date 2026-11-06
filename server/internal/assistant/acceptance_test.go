@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -189,7 +190,7 @@ func TestUnacceptedInTheMorningBriefing(t *testing.T) {
 	if got := posts()[n:]; len(got) != 1 || !strings.Contains(got[0], "还没验收") {
 		t.Fatalf("reminders %q", got)
 	}
-	s.accepted(ctx, todo.ID)
+	s.accepted(ctx, todo.ID, "")
 	if got, _ := s.snapshotUnaccepted(ctx, loc); len(got) != 0 {
 		t.Fatalf("still listed after 通过: %+v", got)
 	}
@@ -329,7 +330,7 @@ func TestAcceptanceAskEndedElsewhere(t *testing.T) {
 					t.Fatalf("reminders %q, ask kept=%v", got, askOf(s, id) != nil)
 				}
 			} else if td := onlyTodo(s); td.DoneAt == nil || td.DoneBy == db.DoneByAuto ||
-				len(got) != 0 || askOf(s, id) != nil || s.accepted(ctx, id) {
+				len(got) != 0 || askOf(s, id) != nil || s.accepted(ctx, id, "") {
 				t.Fatalf("ended task was not cleaned: task=%+v reminded=%q ask=%v", td, got, askOf(s, id) != nil)
 			}
 		})
@@ -391,6 +392,40 @@ func TestAcceptanceReopenRound(t *testing.T) {
 		}
 	})
 
+	t.Run("the old card stays dead once the next round has its card", func(t *testing.T) { // #4853
+		s, f, _, notes, id := setup(t)
+		old := askOf(s, id).MessageID
+		f.answerApp(AppFeishu, FeishuPost, func(json.RawMessage) (any, error) { return map[string]any{"message_id": "om_round2"}, nil })
+		closeReopen(s, id)
+		agentTurn(s, f, proto.StatusWorking, "", 0)
+		agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+		waitFor(t, "the second round's card", func() bool { a := askOf(s, id); return a != nil && a.MessageID == "om_round2" })
+		press := func(mid string) *feishubot.CardAction {
+			var a feishubot.CardAction
+			a.Action.Value = map[string]any{"a": "accept", "id": id}
+			a.Context.MessageID = mid
+			return &a
+		}
+		s.botCardAction(ctx, press(old), "")
+		if a := askOf(s, id); !a.AcceptedAt.IsZero() || onlyTodo(s).Stage == "verify" {
+			t.Fatalf("the first round's button verified the second round: %+v stage=%q", a, onlyTodo(s).Stage)
+		}
+		before := len(f.agentSent)
+		for _, text := range []string{"通过", "再改一下这个开关"} {
+			if !s.acceptReply(ctx, "om_reply", text, old) {
+				t.Fatalf("a reply %q to the first round's card went on to the chat", text)
+			}
+		}
+		if a, got := askOf(s, id), notes(); len(f.agentSent) != before || !a.AcceptedAt.IsZero() || onlyTodo(s).Stage == "verify" ||
+			len(got) != 2 || !strings.Contains(got[0], "已经处理过了") || !strings.Contains(got[1], "已经处理过了") {
+			t.Fatalf("routed=%d notes=%q ask=%+v stage=%q", len(f.agentSent)-before, got, a, onlyTodo(s).Stage)
+		}
+		s.botCardAction(ctx, press("om_round2"), "")
+		if askOf(s, id).AcceptedAt.IsZero() || onlyTodo(s).Stage != "verify" {
+			t.Fatal("the second round's own button did not accept it")
+		}
+	})
+
 	t.Run("the old card is dead after reopen", func(t *testing.T) {
 		for _, c := range []struct{ name, text string }{
 			{"pass reply", "通过"}, {"change reply", "再改一下这个开关"},
@@ -412,13 +447,13 @@ func TestAcceptanceReopenRound(t *testing.T) {
 		t.Run("button", func(t *testing.T) {
 			s, _, _, _, id := setup(t)
 			closeReopen(s, id)
-			if s.accepted(ctx, id) || !askOf(s, id).AcceptedAt.IsZero() {
+			if s.accepted(ctx, id, "") || !askOf(s, id).AcceptedAt.IsZero() {
 				t.Fatal("the old card's button verified the reopened task")
 			}
 			s.todos.mu.Lock()
 			delete(s.todos.todos, id)
 			s.todos.mu.Unlock()
-			if !s.accepted(ctx, id) || askOf(s, id).AcceptedAt.IsZero() {
+			if !s.accepted(ctx, id, "") || askOf(s, id).AcceptedAt.IsZero() {
 				t.Fatal("a deleted todo's button changed its old accept behavior")
 			}
 		})

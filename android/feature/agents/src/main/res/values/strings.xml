@@ -265,7 +265,7 @@
     <string name="agents_new_prefill_offline">“%1$s” is offline, so another one is picked; switch back once it connects</string>
     <string name="agents_new_reload">Reload options</string>
     <string name="agents_new_agent_type">Agent type</string>
-    <string name="agents_new_launcher_this_time">Launcher this time</string>
+    <string name="agents_new_launcher_this_time">Launcher (this time only)</string>
     <string name="agents_new_launcher">Launcher</string>
     <string name="agents_new_search_launcher">Search launchers or models</string>
     <string name="agents_new_no_launchers">No launchers on this machine</string>

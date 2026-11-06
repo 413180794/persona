@@ -250,7 +250,7 @@
     <string name="agents_new_prefill_offline">「%1$s」はオフラインのため、別のマシンを選びました。接続後に戻せます</string>
     <string name="agents_new_reload">オプションを再読み込み</string>
     <string name="agents_new_agent_type">エージェントの種類</string>
-    <string name="agents_new_launcher_this_time">今回のランチャー</string>
+    <string name="agents_new_launcher_this_time">ランチャー（今回だけ変更）</string>
     <string name="agents_new_launcher">ランチャー</string>
     <string name="agents_new_search_launcher">ランチャーまたはモデルを検索</string>
     <string name="agents_new_no_launchers">このマシンには使えるランチャーがありません</string>

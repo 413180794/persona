@@ -65,7 +65,7 @@ private fun SpaceDestination(route: SpaceRoute, navigator: Navigator, dependenci
         val scope = wiring.scope.ifEmpty { operations?.operations?.scope.orEmpty() }
         val model = viewModel(key = "space:${wiring.scope}:${operations?.operations?.scope.orEmpty()}") {
             AgentsViewModel(dependencies.sessions(), dependencies.interactions(), dependencies.connection(), dependencies.sender(),
-                dependencies.preferences(), operations, wiring.mainSender, scope, renamer)
+                dependencies.preferences(), operations, wiring.mainSender, scope, renamer, hubGroups = dependencies.groups())
         }
         val creationService = LocalAgentCreationService.current
         val creationModel = creationService?.let { service ->

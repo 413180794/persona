@@ -266,14 +266,14 @@ internal class AgentsViewModel(
     }
     fun compact() = localChange { preferences.compact(!page.value.preferences.compact) }
     fun foldTab(tab: AgentTab) = localChange { preferences.foldTab(tab.foldKey, tab.foldKey !in page.value.preferences.foldedTabs) }
-    fun pin(row: AgentSession) = change { it.preference(pin = true, space = false, key = row.id) }
-    fun mute(row: AgentSession) = change { it.preference(pin = false, space = false, key = row.id, spaceKey = row.spacePreferenceKey) }
-    fun spacePin(session: Session) = change { it.preference(true, true, "${session.machineId}/${session.spaceName}") }
-    fun spaceMute(session: Session) = change { it.preference(false, true, "${session.machineId}/${session.spaceName}") }
+    fun pin(row: AgentSession) = change(row.session.machineId) { it.preference(pin = true, space = false, key = row.id) }
+    fun mute(row: AgentSession) = change(row.session.machineId) { it.preference(pin = false, space = false, key = row.id, spaceKey = row.spacePreferenceKey) }
+    fun spacePin(session: Session) = change(session.machineId) { it.preference(true, true, "${session.machineId}/${session.spaceName}") }
+    fun spaceMute(session: Session) = change(session.machineId) { it.preference(false, true, "${session.machineId}/${session.spaceName}") }
     fun rename(session: Session, title: String?, tab: String?) {
         val edit = SessionRename.changes(session, title, tab)
         if (!edit.changed) return
-        change(R.string.agents_notice_renamed) {
+        change(session.machineId, R.string.agents_notice_renamed) {
             if (renamer != null) renamer.rename(session, edit.title, edit.tabName)
             else it.session(session, AgentSessionEdit(title = edit.title, tab = edit.tabName))
         }
@@ -281,14 +281,14 @@ internal class AgentsViewModel(
     fun renameSpace(session: Session, name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty() || trimmed == session.spaceName) return
-        change(R.string.agents_notice_renamed) { it.renameSpace(session, trimmed) }
+        change(session.machineId, R.string.agents_notice_renamed) { it.renameSpace(session, trimmed) }
     }
-    fun close(session: Session) = change {
+    fun close(session: Session) = change(session.machineId) {
         it.session(session, AgentSessionEdit(closed = true))
         bindings?.onSessionClosed?.invoke(session.key)
     }
     /** 删除对话: out of every app's list (the transcript stays); a chat open on it goes. */
-    fun delete(session: Session) = change(R.string.agents_notice_deleted) {
+    fun delete(session: Session) = change(session.machineId, R.string.agents_notice_deleted) {
         it.session(session, AgentSessionEdit(deleted = true))
         bindings?.onSessionClosed?.invoke(session.key)
     }
@@ -299,9 +299,9 @@ internal class AgentsViewModel(
     fun closable(session: Session): Boolean = page.value.sessions.firstOrNull { it.key == session.key }
         ?.let { it.isLive && it.canTerminal } ?: page.value.sessions.isEmpty()
     /** 实时接入: join a Codex app-server thread live; the list refreshes after it. */
-    fun attach(session: Session) = change(R.string.agents_notice_attached) { it.attach(session) }
+    fun attach(session: Session) = change(session.machineId, R.string.agents_notice_attached) { it.attach(session) }
     fun stopLoop(session: Session) = sendOperation("loop:${session.key.path}") {
-        if (connection.state.value != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_stop_loop_offline); return@sendOperation }
+        if (hubGroups.groups.value.stateFor(session.machineId, connection.state.value) != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_stop_loop_offline); return@sendOperation }
         sendOnce("loop:${session.key.path}", session.key, STOP_LOOP_PROMPT)
         _notice.value = AgentText(R.string.agents_notice_stop_loop_sent)
     }
@@ -338,9 +338,10 @@ internal class AgentsViewModel(
             finally { sending.remove(key) }
         }
     }
-    private fun change(@androidx.annotation.StringRes success: Int = R.string.agents_notice_saved, action: suspend (AgentOperationsState) -> Unit) {
+    /** [machineId] is the target's: it goes through its own hub group's connection, as answers do (stateFor). */
+    private fun change(machineId: String, @androidx.annotation.StringRes success: Int = R.string.agents_notice_saved, action: suspend (AgentOperationsState) -> Unit) {
         val operations = operations ?: run { _notice.value = AgentText(R.string.agents_notice_operations_missing); return }
-        if (connection.state.value != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_offline); return }
+        if (hubGroups.groups.value.stateFor(machineId, connection.state.value) != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_offline); return }
         if (changing) { _notice.value = AgentText(R.string.agents_notice_saving); return }
         changing = true
         viewModelScope.launch {

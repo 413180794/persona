@@ -28,8 +28,11 @@ const acceptanceKey = "assistant.acceptance"
 const acceptMorningHour = 9
 
 type acceptAsk struct {
-	MessageID  string    `json:"message_id"`
-	Messages   []string  `json:"messages,omitempty"` // every card asking it (the first and the reminders)
+	MessageID string   `json:"message_id"`
+	Messages  []string `json:"messages,omitempty"` // every card asking it (the first and the reminders)
+	// Earlier are the cards of the task's rounds before this one (#4853): dead, so a press or a reply on one is answered
+	// 已经处理过了 and never accepts this round or reaches the chat.
+	Earlier    []string  `json:"earlier,omitempty"`
 	MachineID  string    `json:"machine_id"`
 	SessionID  string    `json:"session_id"`
 	Changed    string    `json:"changed"`
@@ -80,13 +83,16 @@ func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 	b := &s.accept
 	b.mu.Lock()
 	s.loadAcceptLocked(ctx)
+	var earlier []string
 	if old := b.asks[t.ID]; old != nil && !acceptAskStale(old, t) {
 		b.mu.Unlock()
 		return
 	} else if old != nil {
-		delete(b.asks, t.ID) // asked before the task's latest reopen: the new round gets its own card
+		// asked before the task's latest reopen: the new round gets its own card, the old ones stay dead
+		earlier = lastOf(slices.Concat(old.Earlier, old.Messages), acceptEarlierMost)
+		delete(b.asks, t.ID)
 	}
-	b.asks[t.ID] = &acceptAsk{} // claimed: a second turn ending meanwhile does not ask twice
+	b.asks[t.ID] = &acceptAsk{Earlier: earlier} // claimed: a second turn ending meanwhile does not ask twice
 	b.mu.Unlock()
 	release := func() {
 		b.mu.Lock()
@@ -106,7 +112,7 @@ func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 		release()
 		return
 	}
-	a.MessageID, a.Messages = mid, []string{mid}
+	a.MessageID, a.Messages, a.Earlier = mid, []string{mid}, earlier
 	b.mu.Lock()
 	b.asks[t.ID] = &a
 	s.saveAcceptLocked(ctx)
@@ -181,8 +187,20 @@ func (s *Service) acceptCard(ctx context.Context, t Todo, a acceptAsk, again boo
 	return c.Note(i18n.T(l, "assistant-reports.accept_reply_hint"))
 }
 
-// acceptFor is the todo whose 请验收 card message id is (or the thread it is in), "" when none.
-func (s *Service) acceptFor(ids ...string) string {
+// acceptEarlierMost is how many cards of earlier rounds a task's ask remembers.
+const acceptEarlierMost = 20
+
+// lastOf is list's last n.
+func lastOf(list []string, n int) []string {
+	if len(list) > n {
+		return list[len(list)-n:]
+	}
+	return list
+}
+
+// acceptFor is the todo whose 请验收 card message id is (or the thread it is in), "" when none; earlier when the card
+// is one of an earlier round of that task (Earlier).
+func (s *Service) acceptFor(ids ...string) (todo string, earlier bool) {
 	b := &s.accept
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -190,11 +208,18 @@ func (s *Service) acceptFor(ids ...string) string {
 	for todo, a := range b.asks {
 		for _, id := range ids {
 			if id != "" && slices.Contains(a.Messages, id) {
-				return todo
+				return todo, false
 			}
 		}
 	}
-	return ""
+	for todo, a := range b.asks {
+		for _, id := range ids {
+			if id != "" && slices.Contains(a.Earlier, id) {
+				return todo, true
+			}
+		}
+	}
+	return "", false
 }
 
 // acceptAskLocked returns todo id's stored ask (nil: none); callers only read its immutable AskedAt.
@@ -214,13 +239,17 @@ var passWords = regexp.MustCompile(`(?i)^\s*(验收)?(通过|没问题|可以|�
 // acceptReply answers a reply to a 请验收 card (true: it was one): 通过 marks it verified, anything else is the
 // user's change, written into the todo's decisions and sent to its agent.
 func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids ...string) bool {
-	id := s.acceptFor(ids...)
+	id, earlier := s.acceptFor(ids...)
 	if id == "" {
 		return false
 	}
 	l := s.botLang(ctx)
 	text = strings.TrimSpace(text)
 	if text == "" {
+		return true
+	}
+	if earlier { // a card of a round before the one asking now: answered, it neither accepts nor changes this round
+		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.already_handled"))
 		return true
 	}
 	t, ok := s.todoNow(id)
@@ -232,7 +261,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 				return true
 			}
 		}
-		if s.accepted(ctx, id) {
+		if s.accepted(ctx, id, "") {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accepted"))
 		}
 		return true
@@ -279,14 +308,16 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	return true
 }
 
-// accepted marks task id verified; false when already handled, never asked, or asked before the latest reopen.
-func (s *Service) accepted(ctx context.Context, id string) bool {
+// accepted marks task id verified; false when already handled, never asked, or asked before the latest reopen. card is
+// the message pressed ("" from a reply, which acceptFor already matched, or when Feishu does not say): a card that is
+// not this round's (an earlier round's, once the next one has its own) accepts nothing (#4853).
+func (s *Service) accepted(ctx context.Context, id, card string) bool {
 	t, todoOK := s.todoNow(id)
 	b := &s.accept
 	b.mu.Lock()
 	s.loadAcceptLocked(ctx)
 	a, ok := b.asks[id]
-	if !ok || a.MessageID == "" || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) {
+	if !ok || a.MessageID == "" || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) || (card != "" && card != a.MessageID && !slices.Contains(a.Messages, card)) {
 		b.mu.Unlock()
 		return false
 	}

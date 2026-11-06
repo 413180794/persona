@@ -110,10 +110,12 @@ func TestAnswerCardsWriteChartsAsNumbersBeforeCutting(t *testing.T) {
 	for i := 1; i <= 7; i++ {
 		week = append(week, fmt.Sprintf(`{"label":"11/%d","value":%d}`, i, 8000+i))
 	}
-	across := "~~~persona-card\n" + `{"type":"line","title":"近 7 天步数","unit":"步","points":[` + strings.Join(week, ",") + `]}` + "\n~~~"
-	for _, tc := range []struct{ name, answer, want string }{
-		{"longer than a card", "最近 300 天平均每天 8,150 步。\n\n" + long + "\n\n后面的话", "近 300 天步数"},
-		{"across the cut", strings.Repeat("说", botAnswerPiece-100) + "\n\n" + across + "\n\n后面的话", "近 7 天步数"},
+	// pretty-printed, as models often write it: the cut lands inside the JSON
+	across := "~~~persona-card\n{\n  \"type\": \"line\",\n  \"title\": \"近 7 天步数\",\n  \"unit\": \"步\",\n  \"points\": [\n    " +
+		strings.Join(week, ",\n    ") + "\n  ]\n}\n~~~"
+	for _, tc := range []struct{ name, answer, want, point string }{
+		{"longer than a card", "最近 300 天平均每天 8,150 步。\n\n" + long + "\n\n后面的话", "近 300 天步数", "8,300"},
+		{"across the cut", strings.Repeat("说", botAnswerPiece-100) + "\n\n" + across + "\n\n后面的话", "近 7 天步数", "8,007"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cards := answerCards(i18n.ZhHans, tc.answer, false, nil, "FOOT")
@@ -125,7 +127,7 @@ func TestAnswerCardsWriteChartsAsNumbersBeforeCutting(t *testing.T) {
 				}
 				all += js
 			}
-			if !strings.Contains(all, tc.want) || strings.Contains(all, "persona-card") || strings.Contains(all, `\"label\"`) || strings.Contains(all, `\"type\"`) {
+			if !strings.Contains(all, tc.want) || !strings.Contains(all, tc.point) || strings.Contains(all, "persona-card") || strings.Contains(all, `\"label\"`) || strings.Contains(all, `\"type\"`) {
 				t.Errorf("the chart is not written as numbers:\n%s", all)
 			}
 		})

@@ -250,7 +250,7 @@
     <string name="agents_new_prefill_offline">「%1$s」现在离线，先选了另一台；它连上后可以换回去</string>
     <string name="agents_new_reload">重新加载选项</string>
     <string name="agents_new_agent_type">Agent 类型</string>
-    <string name="agents_new_launcher_this_time">本次启动器</string>
+    <string name="agents_new_launcher_this_time">启动器（只换这一次）</string>
     <string name="agents_new_launcher">启动器</string>
     <string name="agents_new_search_launcher">搜索启动器或模型</string>
     <string name="agents_new_no_launchers">这台机器没有可用启动器</string>

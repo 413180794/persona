@@ -159,7 +159,7 @@ Agents、机器、要你处理的请求把各组合在一起显示；Persona、�
 | `MachineManagementModule` 的机器管理（重连、重新部署、启动器、引擎、botmux 开关、Claude Code / Codex 设置） | 当前配对 | 机器 id 的后缀所在的组（`mergedMachineManagement` + `MachineManagement.inGroup`，#634）：别的组的机器原来被拿去问选中组的 hub，找不到机器或改错了地方；配对后选引擎的那台也从合并列表来，同样按后缀走 |
 | 模型配置（`MachineManagementModule.models`）、语音（`AppServices` 的 `VoiceExtensions`） | 当前配对 | 选中的组：都是 hub 级的（一台 hub 一份配置、一个语音扩展），和收件箱、Persona 一样一次看一组（#634 定的）；模型配置里的机器是那台 hub 自己报的，原样用它的 id |
 | 连接诊断的候选地址 | 唯一的配对 | 选中的组自己的 hub（组里第一台已配对的 hub）；同组别的 hub 的候选也参与选路，诊断里一起列出 |
-| Agents 页的请求卡、请求详情能不能作答 | 选中组的连接 | 请求的机器 id 后缀所在组的连接（`AgentGroups.stateFor`，#4291）：一组掉线不再挡住别的组的请求；只有一组时不变 |
+| Agents 页的请求卡、请求详情能不能作答；会话和空间的置顶、屏蔽、重命名、关闭、删除、实时接入、停止循环能不能发 | 选中组的连接 | 请求或会话的机器 id 后缀所在组的连接（`AgentGroups.stateFor`，#4291、#4702）：一组掉线不再挡住别的组的请求和操作；只有一组时不变 |
 | `Notify.install(connection.events)`、前台服务 | 一条 WebSocket 的事件 | 各组事件合成一条流（ID 已加后缀，见下）；常驻通知的状态是选中组的，Agent 计数各组相加 |
 | `ScopedListPreferences`（Agents 列表设置）、对话阅读位置 | 唯一的作用域 | 第一组的作用域：切换选中组不会动它们 |
 
@@ -1067,7 +1067,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 - **模型配置**（设置 › AI › 模型配置，`SettingsPage.ModelConfig`，深链 `page=modelconfig`）：hub 的用途目录按分组列出、可搜索（名称、分组、id、模型），每行写生效的供应商和模型、状态或继承来源；一个用途一页（`ModelPurposeRoute(purposeId)`，语音页可以直接打开 `plugin.<id>`）：当前生效、供应商选择（隐藏的标「已隐藏」，引用了不可用的标「当前引用不可用」，换供应商清掉模型和思考强度）、具体模型、思考强度（Messages API 的供应商不显示）、恢复继承；保存是带 revision 的 PATCH，空值发 null，409 时保留编辑、提示「配置已在别处修改……」并只给「重新加载（丢弃编辑）」。旧 hub（路由 404、没有 JSON 错误）提示先更新服务器，hub 有配置但没有这个用途时说没有。扩展用途的「具体模型」暂时是文本框：语音扩展的模型目录接口随语音模块（G 组）接入后再换成选择。
 - **新建 Agent**：
   - Claude 一律异步新建（`async: true`）：hub 立刻回一个 `starting` 的会话，先并进会话列表（`SessionsRepository.adopt`），对话页马上打开；第一条消息不放 `prompt`，改带 `name_hint` 起标签名，消息本身当普通消息走待发队列，它的 id 和启动的操作 ID 一起存在启动记录里（`AgentCreationStore`），回执丢了、进程重启后核对时用同一个 id 入队，只发一次。Codex 照旧同步新建、第一条消息放 `prompt`（必填）。
-  - hub 有「新建 Agent」用途（`agent.new`）时默认「跟随模型配置」（发空 launcher），不再自动带上次的启动器；在「本次启动器」里手选一个是这一次的覆盖。旧 hub 照旧选启动器；读不到这个用途时提示原因，要先选启动器或重新加载。
+  - hub 有「新建 Agent」用途（`agent.new`）时默认「跟随模型配置」（发空 launcher），不再自动带上次的启动器；在「启动器（只换这一次）」里手选一个是这一次的覆盖。旧 hub 照旧选启动器；读不到这个用途时提示原因，要先选启动器或重新加载。
   - 对话页输入框上方：「正在启动 Claude，消息会在它就绪后发出」/「没有启动起来：原因」（`ChatStartingNote`）。
   - `NewAgentRoute(machineId, cwd, prompt)` 是同一张表单的页面版，给知识库的「开 Agent」：那台机器在线时预选机器和目录（都能改），不在线就选别的并写明；开好后页面关掉，对话在 Agents 打开。
 - **设备**（设置 › 设备）：已撤销的凭据单独一组（灰，「撤销于 …」），没用过的设备显示「添加于」，写明凭据的意思；hub 不支持设备凭据（404）、没有数据库（503）时直接说明。

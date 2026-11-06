@@ -588,7 +588,7 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 		return s.answerFromCard(ctx, a, action)
 	case "accept":
 		// The hub checked the owner pressed it; marking a task verified approves nothing.
-		if s.accepted(ctx, a.Str("id")) {
+		if s.accepted(ctx, a.Str("id"), a.Context.MessageID) {
 			return toast("success", i18n.T(l, "assistant-reports.accepted"))
 		}
 		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
