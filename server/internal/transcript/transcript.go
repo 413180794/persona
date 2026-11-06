@@ -174,6 +174,10 @@ type Meta struct {
 	tree treeLine
 	// localInput: the line being parsed is input the terminal handles itself (a slash command, "! cmd"), no message.
 	localInput bool
+	// localTurn: the open turn was started by a local command (localInput), with no reply from the agent since; its
+	// local output ends it, putting back the turn state from before it (beforeLocal) (#4661).
+	localTurn   bool
+	beforeLocal [2]bool // TurnOpen, TurnClosed
 	// bashInput is the last "! cmd" typed in Claude Code, for the Bash call its output line turns into.
 	bashInput string
 	// notified holds the background-task notifications already shown: one is often recorded twice (as a user line and
@@ -288,6 +292,11 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			}
 		}
 		if !meta.Codex && (it.Wake || it.Role == "user" && it.Kind == proto.KindText && !it.Queued) {
+			if local := meta.localInput && !it.Wake; local && !meta.localTurn {
+				meta.localTurn, meta.beforeLocal = true, [2]bool{meta.TurnOpen, meta.TurnClosed}
+			} else if !local {
+				meta.localTurn = false
+			}
 			meta.TurnOpen, meta.TurnClosed = true, false // a Claude turn starts; parseLine closes it
 		}
 	}
@@ -318,6 +327,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	// The mode is written on every prompt (user lines) and as its own line when it changes; the effort on replies.
 	if e.PermissionMode != "" && !e.IsSidechain && (e.Type == "permission-mode" || e.Type == "user") {
 		meta.PermissionMode, meta.ModeAt = e.PermissionMode, meta.Updated
+	}
+	if e.Type == "assistant" && !e.IsSidechain {
+		meta.localTurn = false // the agent answers: a skill or a custom command expanded into a prompt is a turn
 	}
 	if e.Effort != "" && e.Type == "assistant" && !e.IsSidechain {
 		meta.Effort, meta.EffortAt = e.Effort, meta.Updated
@@ -984,6 +996,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		out := strings.TrimSpace(strings.TrimSpace(firstTag(trimmed, "bash-stdout")) + "\n" + strings.TrimSpace(firstTag(trimmed, "bash-stderr")))
 		input, _ := json.Marshal(map[string]string{"command": meta.bashInput})
 		meta.bashInput = ""
+		meta.endLocalTurn()
 		use := mk(0, "assistant", proto.KindToolUse)
 		id := strings.TrimSuffix(use.ID, "#0") + "-bash"
 		use.ToolUseID, use.ToolName, use.ToolInput = id, "Bash", input
@@ -1007,6 +1020,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		return []proto.Item{it}
 	}
 	if strings.HasPrefix(trimmed, "<local-command-stdout>") || strings.HasPrefix(trimmed, "<local-command-stderr>") {
+		meta.endLocalTurn()
 		it := mk(0, "system", proto.KindNotice)
 		it.Text = clip(strings.TrimSpace(ansiRe.ReplaceAllString(tagRe.ReplaceAllString(trimmed, "$2"), "")))
 		if it.Text == "" {
@@ -1045,6 +1059,15 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 	it := mk(0, "user", proto.KindText)
 	it.Text = clip(text)
 	return []proto.Item{it}
+}
+
+// endLocalTurn: a local command's output came, so the turn it started (no agent reply in between) is over and the
+// turn state is what it was before the command: Claude Code writes no turn_duration for it (#4661).
+func (m *Meta) endLocalTurn() {
+	if m.localTurn && m.TurnOpen {
+		m.TurnOpen, m.TurnClosed = m.beforeLocal[0], m.beforeLocal[1]
+	}
+	m.localTurn = false
 }
 
 // ansiRe matches terminal escape sequences (colors, bold) that local command output keeps.
