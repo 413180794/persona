@@ -42,7 +42,7 @@ class AppleRenameTests(unittest.TestCase):
             "PersonaMacNotify": "JarvisNotify",
         }
         # The share extension (#4586) is new, so it has no Jarvis module to keep.
-        self.assertEqual(set(targets), {*expected, "PersonaShare", "PersonaTests", "PersonaMacTests", "PersonaUITests"})
+        self.assertEqual(set(targets), {*expected, "PersonaShare", "PersonaVisionShare", "PersonaTests", "PersonaMacTests", "PersonaUITests"})
         for target, module in expected.items():
             with self.subTest(target=target):
                 self.assertIn("PRODUCT_MODULE_NAME: " + module + "\n", targets[target])
