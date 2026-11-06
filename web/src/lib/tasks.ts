@@ -245,14 +245,56 @@ export function isLaunchReceipt(result?: Item): boolean {
   return LAUNCH_RECEIPT.test(result?.text ?? "");
 }
 
-/** How a subagent call is going. The session's list knows best (`running`); without it, the call's result: none yet
- *  while the agent works is running, none after it stopped is stopped; a launch receipt runs until the agent stops. */
+/** How a subagent call is going, by the call's result first (#5602: the session's list used to win over a result
+ *  already in, and its `running` comes and goes, so a finished card flipped back to running): an error failed, a
+ *  result done; none yet runs while the exchange is live or the list says it does, and stopped otherwise. A
+ *  background subagent (its result is the launch receipt) is the list's to tell; without it, it runs while the
+ *  exchange is live. */
 export function agentStatus(result: Item | undefined, meta: Subagent | undefined, live: boolean): AgentStatus {
   if (result?.is_error) return "failed";
+  if (!result) return live || meta?.running ? "running" : "stopped";
+  if (!isLaunchReceipt(result)) return "completed";
   if (meta) return meta.running ? "running" : "completed";
-  if (!result) return live ? "running" : "stopped";
-  if (isLaunchReceipt(result)) return live ? "running" : "completed";
-  return "completed";
+  return live ? "running" : "completed";
+}
+
+/** When a finished subagent ended (ms): at its result, but a background one's result is the launch receipt, written as
+ *  it started, so at its last line (#5602: its card said it took no time). */
+export function subagentEnded(result: Item | undefined, meta: Subagent | undefined): number | undefined {
+  const at = (ts?: string) => {
+    const v = Date.parse(ts ?? "");
+    return Number.isFinite(v) ? v : undefined;
+  };
+  return isLaunchReceipt(result) ? (at(meta?.updated_at) ?? at(result?.ts)) : (at(result?.ts) ?? at(meta?.updated_at));
+}
+
+/** A subagent launched to run in the background: its call returns a launch receipt and it reports after the
+ *  exchange, so its card is never folded away with the exchange's work. */
+export function isBackgroundAgent(use: Item, result: Item | undefined, meta: Subagent | undefined): boolean {
+  return Boolean(meta?.background) || isLaunchReceipt(result) || (use.tool_input as { run_in_background?: unknown } | undefined)?.run_in_background === true;
+}
+
+const sameTool = (x: Subagent["last_tool"], y: Subagent["last_tool"]) => x === y || (x?.id === y?.id && x?.name === y?.name && x?.summary === y?.summary);
+
+/** What of a subagent its card and list show: everything but `updated_at`, which moves with every line it writes. */
+function subagentShown(a: Subagent): Omit<Subagent, "updated_at"> {
+  const { updated_at: _, ...shown } = a;
+  return shown;
+}
+
+/** `next`, or `prev` when nothing a card shows changed (#5602: the session list's subagents are a new array on every
+ *  push, about once a second while one runs, and every exchange of the chat drew again). A subagent that stopped
+ *  changed `running`, so the array that says so carries its last `updated_at`. */
+export function stableSubagents(prev: Subagent[] | undefined, next: Subagent[] | undefined): Subagent[] | undefined {
+  if (!prev || !next || prev.length !== next.length) return next;
+  for (let i = 0; i < next.length; i++) {
+    const a = subagentShown(prev[i]);
+    const b = subagentShown(next[i]);
+    const keys = Object.keys(b) as (keyof typeof b)[];
+    const same = (k: keyof typeof b) => (k === "last_tool" ? sameTool(a.last_tool, b.last_tool) : a[k] === b[k]);
+    if (keys.length !== Object.keys(a).length || !keys.every(same)) return next;
+  }
+  return prev;
 }
 
 /** What the subagent reported, without its agentId line; a launch receipt says nothing yet (its latest words do). */

@@ -2,6 +2,7 @@
 // step it is on in its header, a 2 px progress bar under it when folded. While the card is out of view, a small
 // "Step N / M" pill above the composer (PlanPill) brings it back.
 import { useEffect, useState, type RefObject } from "react";
+import { useExpanded } from "./expanded";
 import type { Segment } from "../../lib/turns";
 import { isPlanStep, planProgress, planSteps, planTodos, type Todo } from "../../lib/work-groups";
 import { cx, Spinner } from "../../ui/atoms";
@@ -42,8 +43,10 @@ export function usePlanOutOfView(scroller: RefObject<HTMLDivElement | null>, id?
   return out;
 }
 
-export function PlanCard({ id, todos, live }: { id?: string; todos: Todo[]; live?: boolean }) {
-  const [open, setOpen] = useState(true);
+/** `openKey`: where the reader's open / closed is kept (expanded.ts), the same for the exchange's every TodoWrite, so a
+ *  new one does not open a card the reader closed (#5602). */
+export function PlanCard({ id, todos, live, openKey }: { id?: string; todos: Todo[]; live?: boolean; openKey?: string }) {
+  const [open, setOpen] = useExpanded(openKey ?? `plan:${id ?? ""}`, true);
   if (!todos.length) return null;
   const p = planProgress(todos);
   return (

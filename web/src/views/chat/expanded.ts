@@ -17,6 +17,12 @@ export function openExpanded(keys: string[]) {
  *  key they get once the range is unfolded (a plan card taken out of it moves the first step). */
 const foldRanges = new Map<string, [number, number][]>();
 
+/** Forget what was opened: for tests, whose rows reuse the same ids. */
+export function forgetExpanded() {
+  opened.clear();
+  foldRanges.clear();
+}
+
 export function openFoldRange(scope: string, from: number, through: number) {
   foldRanges.set(scope, [...(foldRanges.get(scope) ?? []), [from, through]]);
 }

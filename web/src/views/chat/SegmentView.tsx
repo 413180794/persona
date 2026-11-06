@@ -202,8 +202,8 @@ export const SegmentView = memo(function SegmentView({
   const thinking = useMemo(() => thinkingDurations(steps, turnStart), [steps, turnStart]);
   const p = useMemo<WorkProps>(() => {
     const agent = (s: ToolStep) => agentStatus(s.result, subagentFor(subagents, s.use), live);
-    return { mid, sid, scope, expandFold, agentStatus: agent, thinking };
-  }, [mid, sid, scope, expandFold, subagents, live, thinking]);
+    return { mid, sid, scope, expandFold, agentStatus: agent, thinking, segment: seg.id };
+  }, [mid, sid, scope, expandFold, subagents, live, thinking, seg.id]);
   const nodes = useMemo(() => workBlocks(steps, { live, turnStart, agentStatus: p.agentStatus }), [steps, live, turnStart, p.agentStatus]);
   useCallSeeker(scope, nodes);
   // the pictures the agent looked at this turn, between its work and its last words

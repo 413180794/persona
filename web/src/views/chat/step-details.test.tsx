@@ -21,6 +21,7 @@ vi.mock("../../lib/panel", async (original) => ({
   openPanel: (p: unknown) => panels.opened.push(p),
 }));
 import { ActionRow } from "./ActionRow";
+import { forgetExpanded } from "./expanded";
 import { Answer, UserBubble } from "./SegmentView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,6 +45,7 @@ const render = (s: ToolStep) => act(() => root.render(<ActionRow step={s} mid="m
 const openRow = () => act(() => host.querySelector<HTMLButtonElement>("[data-action-row] > button")!.click());
 
 beforeEach(() => {
+  forgetExpanded(); // every row here has the same id
   full.calls = [];
   full.fail = false;
   panels.opened = [];

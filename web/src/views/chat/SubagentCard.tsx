@@ -4,7 +4,7 @@
 import { memo, useEffect, useState } from "react";
 import { api, sessionPath } from "../../lib/api";
 import { openPanel } from "../../lib/panel";
-import { agentSummary, nestedSubagents, subagentFor, subagentTitle } from "../../lib/tasks";
+import { agentSummary, nestedSubagents, subagentEnded, subagentFor, subagentTitle } from "../../lib/tasks";
 import { segments } from "../../lib/turns";
 import type { Item, ItemsPage, Subagent } from "../../lib/types";
 import { tsMs, workDuration, type AgentStatus, type ToolStep } from "../../lib/work-groups";
@@ -46,7 +46,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
   const summary = agentSummary(result, meta);
   const type = (typeof inp.subagent_type === "string" && inp.subagent_type) || meta?.type || "";
   const start = ms(meta?.started_at) ?? ms(use.ts);
-  const end = running ? now : (ms(result?.ts) ?? ms(meta?.updated_at));
+  const end = running ? now : subagentEnded(result, meta);
   const took = start !== undefined && end !== undefined && end >= start ? workDuration(end - start) : "";
   const nested = meta ? nestedSubagents(subagents, meta.id) : [];
   return (

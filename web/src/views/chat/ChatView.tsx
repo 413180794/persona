@@ -12,7 +12,7 @@ import { attachLive, flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
 import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, saveMutes, useStore } from "../../lib/store";
-import { buildTaskIndex, STOP_LOOP_MESSAGE, subagentParent, type TaskIndex } from "../../lib/tasks";
+import { buildTaskIndex, stableSubagents, STOP_LOOP_MESSAGE, subagentParent, type TaskIndex } from "../../lib/tasks";
 import { stabilizeLines, stableValue } from "../../lib/stable-lines";
 import { planProgress } from "../../lib/work-groups";
 import { echoed, taggedSeen } from "../../lib/echo";
@@ -161,14 +161,19 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
   // a subagent's own launches are listed on the session that launched it
   const parentSid = subagentParent(sid);
-  const subagents = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === parentSid)?.subagents);
+  const listed = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === parentSid)?.subagents);
+  // the same array while nothing a card shows changed (#5602): the context, and every exchange reading it, stay put
+  const lastSubagents = useRef<Subagent[] | undefined>(undefined);
+  const subagents = stableSubagents(lastSubagents.current, listed);
+  lastSubagents.current = subagents;
   const machineName = useStore((s) => machineWithHub(mid, s.machines));
   const allSessions = useStore((s) => s.sessions[mid]);
   const panes = useMemo(() => (session && !assistant && !readOnly ? tabSessions(allSessions ?? [], session) : []), [allSessions, session, assistant, readOnly]);
   const siblings = useStore((s) => (session?.space_id ? (s.sessions[mid] ?? []).filter((x) => x.space_id === session.space_id && stateOf(x) !== "offline") : []));
   const interactions = useStore((s) => s.interactions.filter((i) => i.machine_id === mid && i.session_id === sid));
   const answered = useStore((s) => Object.values(s.answered).filter((a) => a.ix.machine_id === mid && a.ix.session_id === sid));
-  const viewed = readOnly ? (subagents?.find((a) => a.session_id === sid) ?? null) : null;
+  // the list as pushed: its updated_at is what tells the page it fell behind (useTranscript)
+  const viewed = readOnly ? (listed?.find((a) => a.session_id === sid) ?? null) : null;
   const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at });
   // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/onboarding.md 4.4)
   const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure; fromBox?: boolean } | null>(null);

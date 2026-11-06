@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAPIError } from "./api-errors";
-import { agentStatus, agentSummary, buildTaskIndex, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask, nestedSubagents, subagentTree, taskBadge, taskPill, wakeSummary } from "./tasks";
+import { agentStatus, agentSummary, buildTaskIndex, isBackgroundAgent, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask, nestedSubagents, stableSubagents, subagentEnded, subagentTree, taskBadge, taskPill, wakeSummary } from "./tasks";
 import type { Item, Subagent } from "./types";
 
 describe("buildTaskIndex", () => {
@@ -100,7 +100,7 @@ describe("a subagent call's card", () => {
   const res = (text: string, is_error = false): Item => ({ id: "r#0", seq: 2, role: "user", kind: "tool_result", tool_use_id: "c", text, is_error });
   const meta = (running: boolean): Subagent => ({ id: "a", session_id: "s@a", running, last_text: "最近说的话" });
 
-  it("goes by the session's list, then by the result", () => {
+  it("goes by the result, then by the session's list", () => {
     expect(agentStatus(undefined, meta(true), false)).toBe("running");
     expect(agentStatus(res("done"), meta(false), true)).toBe("completed");
     expect(agentStatus(res("boom", true), meta(true), true)).toBe("failed");
@@ -109,6 +109,51 @@ describe("a subagent call's card", () => {
     expect(agentStatus(res("Async agent launched successfully.\nagentId: x (This is an internal ID for your use)"), undefined, true)).toBe("running");
     expect(agentStatus(res("Async agent launched successfully."), undefined, false)).toBe("completed");
     expect(agentStatus(res("42 passed"), undefined, true)).toBe("completed");
+  });
+
+  it("does not flip a finished call back to running when the list still says running (#5602)", () => {
+    // a foreground call's result is in: done, whatever the list says (its running lags, or is still true for 20 min)
+    expect(agentStatus(res("42 passed"), meta(true), true)).toBe("completed");
+    expect(agentStatus(res("42 passed"), meta(true), false)).toBe("completed");
+    // the list dropping it (past a day, no meta) does not bring a result back to running either
+    expect(agentStatus(res("42 passed"), undefined, true)).toBe("completed");
+    // a background one goes by the list once its receipt is in
+    const receipt = res("Async agent launched successfully.\nagentId: x (This is an internal ID for your use)");
+    expect(agentStatus(receipt, meta(true), false)).toBe("running");
+    expect(agentStatus(receipt, meta(false), true)).toBe("completed");
+  });
+
+  it("tells a background subagent by its list entry, receipt or call", () => {
+    const use: Item = { id: "c#0", seq: 1, role: "assistant", kind: "tool_use", tool_use_id: "c", tool_name: "Agent", tool_input: { description: "d" } };
+    expect(isBackgroundAgent(use, res("done"), meta(false))).toBe(false);
+    expect(isBackgroundAgent(use, res("done"), { ...meta(false), background: true })).toBe(true);
+    expect(isBackgroundAgent(use, res("Async agent launched successfully."), undefined)).toBe(true);
+    expect(isBackgroundAgent({ ...use, tool_input: { run_in_background: true } }, undefined, undefined)).toBe(true);
+  });
+
+  it("times a background subagent to its last line, not its launch receipt (#5602)", () => {
+    const receipt: Item = { ...res("Async agent launched successfully."), ts: "2026-11-06T10:00:00Z" };
+    expect(subagentEnded(receipt, { ...meta(false), updated_at: "2026-11-06T10:07:00Z" })).toBe(Date.parse("2026-11-06T10:07:00Z"));
+    const done: Item = { ...res("42 passed"), ts: "2026-11-06T10:03:00Z" };
+    expect(subagentEnded(done, { ...meta(false), updated_at: "2026-11-06T10:09:00Z" })).toBe(Date.parse("2026-11-06T10:03:00Z"));
+    expect(subagentEnded(undefined, undefined)).toBeUndefined();
+  });
+
+  it("keeps the subagents array while only updated_at moved (#5602)", () => {
+    const one = [{ ...meta(true), updated_at: "2026-11-06T10:00:00Z" }];
+    const later = [{ ...meta(true), updated_at: "2026-11-06T10:00:01Z" }];
+    expect(stableSubagents(one, later)).toBe(one);
+    const stopped = [{ ...meta(false), updated_at: "2026-11-06T10:00:02Z" }];
+    expect(stableSubagents(one, stopped)).toBe(stopped);
+    const text = [{ ...meta(true), updated_at: "2026-11-06T10:00:03Z", last_text: "又说了一句" }];
+    expect(stableSubagents(one, text)).toBe(text);
+    expect(stableSubagents(one, [...one, { ...meta(true), id: "b", session_id: "s@b" }])).toHaveLength(2);
+    expect(stableSubagents(one, undefined)).toBeUndefined();
+    // the latest call comes as a new object on every push: the same call keeps the array, a new one changes it
+    const tool = (id: string) => [{ ...meta(true), steps: 2, last_tool: { id, name: "Read", summary: "在读 a.go" } }];
+    const withTool = tool("t1");
+    expect(stableSubagents(withTool, tool("t1"))).toBe(withTool);
+    expect(stableSubagents(withTool, tool("t2"))).not.toBe(withTool);
   });
 
   it("summarizes the report without its agentId line; a launch receipt by the latest words", () => {

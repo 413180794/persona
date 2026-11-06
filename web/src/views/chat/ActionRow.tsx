@@ -2,6 +2,7 @@
 // the like open in place (what went in, what came out, in full); an edit opens its diff over the page; a read opens
 // the file in the side panel.
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useExpanded } from "./expanded";
 import { createPortal } from "react-dom";
 import { useCloseOnBack } from "../../lib/back-close";
 import { diffLines, type Op } from "../../lib/compare";
@@ -161,8 +162,9 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
   const p = useMemo(() => presentAction(use), [use]);
   const diffs = useMemo(() => (DIFF_TOOLS.has(name) ? editDiffs(use) : null), [name, use]);
   const stats = diffs ? diffStats(diffs) : null;
-  const [open, setOpen] = useState(false);
-  const [diffOpen, setDiffOpen] = useState(false);
+  // kept by the chat, not the row (expanded.ts): a row drawn again (a group regrouped, a line rebuilt) stays as the reader left it
+  const [open, setOpen] = useExpanded(`${scope}act:${use.id}`);
+  const [diffOpen, setDiffOpen] = useExpanded(`${scope}diff:${use.id}`);
   const inPlace = !FILE_TOOLS.has(name);
   const call = use.tool_use_id;
   const bg = call && (tasks.started.has(call) || tasks.notes.has(call)) ? taskBadge(tasks.notes.get(call) ?? []) : null;

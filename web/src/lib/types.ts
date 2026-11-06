@@ -77,6 +77,10 @@ export interface Subagent {
   started_at?: string;
   updated_at?: string;
   last_text?: string;
+  /** Tool calls it made (newer nodes, #5602). */
+  steps?: number;
+  /** Its latest tool call: what it is doing now while it runs (newer nodes). */
+  last_tool?: { id?: string; name: string; summary: string };
 }
 
 export interface SessionCapabilities {

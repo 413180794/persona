@@ -30,6 +30,8 @@ export interface WorkProps {
   thinking: Map<string, number>;
   /** Inside an open group (a finished timeline's inner groups stay folded). */
   nested?: boolean;
+  /** The exchange these steps are of (its segment's id): what of it the reader opened is kept under it. */
+  segment?: string;
 }
 
 /** Every fold under a group, nested ones too: opening it fetches their steps. */
@@ -181,7 +183,7 @@ export function StepView({ step, p, live, fade }: { step: Step; p: WorkProps; li
   switch (step.kind) {
     case "tool":
       if (isAgentStep(step)) return <SubagentCard step={step} status={p.agentStatus(step)} mid={p.mid} scope={p.scope} />;
-      if (isPlanStep(step)) return <PlanCard id={step.id} todos={planTodos(step)} live={live} />;
+      if (isPlanStep(step)) return <PlanCard id={step.id} todos={planTodos(step)} live={live} openKey={`${p.scope}plan:${p.segment ?? step.id}`} />;
       return <ActionRow step={step} running={live && !step.result} mid={p.mid} sid={p.sid} />;
     case "thinking":
       return <ThinkingCard item={step.item} durationMs={p.thinking.get(step.id)} scope={p.scope} />;
