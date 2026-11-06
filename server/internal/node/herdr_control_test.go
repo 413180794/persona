@@ -586,8 +586,9 @@ func TestHerdrKeysWithPreKeys(t *testing.T) {
 	assertTrace(t, f.trace(), []string{call("session.snapshot", nil)})
 }
 
-// session.close: ctrl+c twice, then the pane alone in a split tab, else the whole tab — also when the panes cannot be
-// counted. A session Persona started that is gone is already closed; one herdr never had cannot be closed.
+// session.close: ctrl+c twice, then the pane alone in a split tab, else the whole tab. When the panes cannot be counted
+// only the pane goes (#4873): herdr closes the tab itself when it was the tab's last pane, and the other panes of a
+// split tab stay. A session Persona started that is gone is already closed; one herdr never had cannot be closed.
 func TestHerdrClose(t *testing.T) {
 	n, f, _ := herdrNode(t)
 	seedAgents(t, n, f,
@@ -615,7 +616,7 @@ func TestHerdrClose(t *testing.T) {
 		call("tab.close", map[string]any{"tab_id": "w1:t2"}),
 		sendKeys("w2:p1", "ctrl+c"), sendKeys("w2:p1", "ctrl+c"),
 		call("pane.list", map[string]any{"workspace_id": "w2"}),
-		call("tab.close", map[string]any{"tab_id": "w2:t1"}), // pane count unknown: the whole tab
+		call("pane.close", map[string]any{"pane_id": "w2:p1"}), // pane count unknown: only the pane
 	})
 
 	f.reset()

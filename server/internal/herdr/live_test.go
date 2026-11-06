@@ -211,6 +211,19 @@ func TestLiveMenuActions(t *testing.T) {
 	if n, _ := c.TabPanes(ctx, ws, tab); n != 0 {
 		t.Fatalf("panes after closing the tab = %d", n)
 	}
+	// Closing a tab's only pane closes the tab: the node's Close relies on it when it cannot count the panes (#4873).
+	lone, err := c.TabCreate(ctx, ws, dir, "menu-live-lone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.PaneClose(ctx, lone.RootPane.ID); err != nil {
+		_ = c.TabClose(ctx, lone.Tab.ID)
+		t.Fatalf("close the only pane: %v", err)
+	}
+	if n, _ := c.TabPanes(ctx, ws, lone.Tab.ID); n != 0 {
+		_ = c.TabClose(ctx, lone.Tab.ID)
+		t.Fatalf("panes after closing a tab's only pane = %d: the tab stayed", n)
+	}
 }
 
 // The mouse through a control session, against a pane running vim with the mouse on (`:set mouse=a ruler`) on a file of

@@ -269,9 +269,11 @@ func (h *herdrHost) RenameSlot(ctx context.Context, slot, name string) error {
 	return h.c.TabRename(ctx, slot, name)
 }
 
-// Close closes the pane when its tab is split, else the whole tab (also when the panes cannot be counted).
+// Close closes the pane when its tab is split, else the whole tab. When the panes cannot be counted it closes only the
+// pane: herdr closes the tab itself when that was its last pane, and a split tab keeps its other panes (#4873).
 func (h *herdrHost) Close(ctx context.Context, pane host.PaneRef, space, slot string) error {
-	if panes, err := h.c.TabPanes(ctx, space, slot); err == nil && panes > 1 {
+	panes, err := h.c.TabPanes(ctx, space, slot)
+	if err != nil || panes > 1 {
 		return h.c.PaneClose(ctx, pane.ID)
 	}
 	return h.c.TabClose(ctx, slot)
