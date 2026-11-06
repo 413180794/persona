@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -64,7 +65,7 @@ func relayService(t *testing.T, res wire.AuthRelayResult, items []proto.Item) (*
 // The extension authorized it: the agent is told, no card goes up.
 func TestAuthRelayDone(t *testing.T) {
 	s, f, e := relayService(t, wire.AuthRelayResult{Status: "done", App: "示例 CLI"},
-		printedBy("Bash", `{"verification_url":"`+strings.ReplaceAll(relayLink, "&", `&`)+`"}`))
+		printedBy("Bash", `{"verification_url":"`+strings.ReplaceAll(relayLink, "&", `\u0026`)+`"}`))
 	triage(t, s, "s1")
 	if cards := s.workCards(); len(cards) != 0 {
 		t.Fatalf("cards %+v", cards)
@@ -153,6 +154,14 @@ func TestCommandPrinted(t *testing.T) {
 		if got := commandPrinted(printedBy("Bash", text), relayLink, nil); got != want {
 			t.Errorf("%q: %v, want %v", text, got, want)
 		}
+	}
+	// Go's encoding/json writes & as \u0026: the whole link is printed, its start before an & is not.
+	b, _ := json.Marshal(map[string]string{"url": relayLink})
+	if !commandPrinted(printedBy("Bash", string(b)), relayLink, nil) {
+		t.Errorf("%s: the link a JSON printer escaped is not found", b)
+	}
+	if head := strings.Split(relayLink, "&")[0]; commandPrinted(printedBy("Bash", string(b)), head, nil) {
+		t.Errorf("%s: %q, the start of a longer link, is taken as printed", b, head)
 	}
 }
 

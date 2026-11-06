@@ -155,7 +155,7 @@ func commandPrinted(items []proto.Item, link string, full func(id string) (strin
 				text = t
 			}
 		}
-		text = strings.NewReplacer(`&`, "&", `\/`, "/").Replace(text) // a JSON printer's escapes
+		text = strings.NewReplacer(`\u0026`, "&", `\/`, "/").Replace(text) // a JSON printer's escapes
 		if containsWhole(text, link) {
 			return true
 		}
