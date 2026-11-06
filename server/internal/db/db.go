@@ -1355,6 +1355,7 @@ func (d *DB) TruncateForTest(ctx context.Context) error {
 		[]string{"workspace_board", "workspace_snapshots", "devices", "device_tokens", "live_activities", "phone_tools",
 			"node_sessions", "mail_accounts", "interactions", "settings", "inbox_items", "kb_entities", "connector_secrets",
 			"machine_systems", "machine_metrics", "sent_messages", "todos", "todo_agents", "assistant_always", "machine_trust", "hub_settings",
+			"manager_outbox", "handed_over",
 			"machine_audit", "sent_as_user"}).Scan(&tables)
 	if err != nil || len(tables) == 0 {
 		return err

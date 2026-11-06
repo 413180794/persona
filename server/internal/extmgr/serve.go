@@ -286,19 +286,19 @@ func (h *Manager) Hello(res json.RawMessage) {
 }
 
 // BusUp is told each time the connection to the hub is up: the hub (maybe just restarted) gets the report again, and
-// the inbox goes round (a full round: the hub may have missed changes).
+// the inbox goes round (a full round: the hub may have missed changes). It returns once the report went (or after a
+// minute of the extensions not started): what the manager kept while the hub was away goes after it (the hub takes an
+// extension's live update only once it knows the extension, internal/assistant outbox.go).
 func (h *Manager) BusUp() {
-	go func() {
-		select {
-		case <-h.started:
-		case <-time.After(time.Minute):
-			return
-		}
-		h.reportMu.Lock()
-		h.reportSent = nil
-		h.reportMu.Unlock()
-		h.sendReport()
-	}()
+	select {
+	case <-h.started:
+	case <-time.After(time.Minute):
+		return
+	}
+	h.reportMu.Lock()
+	h.reportSent = nil
+	h.reportMu.Unlock()
+	h.sendReport()
 }
 
 // Request takes the hub's extensions.* calls (handled false: not one).

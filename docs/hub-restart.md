@@ -218,6 +218,26 @@ The shared client approach (done on web and Android; for iOS / Mac see the issue
   `tools/list` already retries until the node is up (#1584); `tools/call` uses `mcpserver.callNode`, which retries every 0.5 s for up to 15 s only when it "cannot connect to the socket" (nothing has been sent yet). Calls already sent that hit the old hub's shutdown
   (including ones where the hub asks the phone to do something over WebSocket and waits for `tool_result`) fail, and claude gets a tool error and decides whether to retry. No automatic retry, because calls like sending an email must not happen twice.
 
+### The manager while the hub is away (`assistant/outbox.go`, `hub/outbox_relay.go`)
+
+A manager that is not the hub's child keeps running when the hub stops: one made in the app, or the assistant with `assistant.external`. It keeps doing its own work: sources, triage, scheduled tasks, and the computers it reaches directly (this machine, ssh, tailcat). What it would have handed the hub meanwhile is kept, not lost.
+
+- **What is kept.** The pushes it decides on (`notify.request`: an agent finished, a card that needs you, a conversation's `notify_user`, a reminder) and the apps' live updates (`ws.broadcast`), its extensions' included.
+  - They go into its own database, table `manager_outbox`, byte for byte and in the order made.
+  - Items are kept while the hub is not connected, and while older items still wait, so nothing overtakes them.
+  - A push or update whose sending got no answer from the hub is kept too: the bus dropped, the call timed out, or the write failed. It may have arrived.
+- **Bounds.** Each kind is bounded on its own, so live updates never crowd out pushes: at most 1000 pushes and 200 updates, oldest out first.
+  - A push older than 24 hours is no news any more.
+  - A live update older than 10 minutes goes too. Apps of a hub that was away longer start a new event stream and load everything again ("Event resume"), and an old update would only take them back.
+- **What is not kept.** What the hub shows of the manager is reported whole on every connection anyway: the snapshot, the machines' sessions, the cards, the Live Activity.
+- **Handing over.** On every connection the manager first reports its state, its extensions (once they started, at most a minute) and its cards: a card's push needs the card, and an extension's update the extension. Only then does it send the outbox, oldest first, in batches (100 items, 4 MiB), with `manager.outbox {items:[{id, at, notification | message}]}` → `{done:[id…]}`, and it forgets what the hub took.
+- **Each item once.** The hub delivers each item as it would have then, only about the manager's own machines, sessions and cards, as live. It delivers each id once per manager:
+  - It records what it took in its database (`handed_over`, kept for two hours), so neither it nor the next hub process delivers an item again. That covers an answer that was lost, and a push sent live that also comes from the outbox. `notify.request` checks the same records.
+  - An item the hub refused, such as a card's push whose card was resolved, is answered done like the rest (the manager forgets it) but not recorded: if a manager sends it again, it is looked at again.
+  - A hub from before `manager.outbox` answers `unknown_method`. The manager then sends the items one by one, as `notify.request` and `ws.broadcast`, without the hub's check for repeats.
+- **When the outbox is used.** A manager the hub starts as its child stops with the hub. Its outbox only matters when the hub's connection drops while both run, or when the database still has items from an earlier run; those are handed over at its next start.
+- **The computers' own side.** A resident node keeps its scripts' notifications (`personad notify`) until its manager takes them (`spooldedupe.go`); that is the device's own buffering, step 4.
+
 ## Deployment and rollback
 
 Two deployment changes:

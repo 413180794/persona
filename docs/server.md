@@ -351,6 +351,8 @@ Without Docker, use system Postgres (Ubuntu postgresql, version 16 tested, local
 | `hub_settings` | The hub's own settings: persistent `hub_id`, the user's locale, look, mutes and pins, the managers' default and machine owners, mesh records, update settings, the event log and machines handed to the next process |
 | settings | A manager's settings (the assistant, inbox rules, models and launchers, extensions, the computers' engines and warm start) |
 | `pair_tokens` | Temporary token hashes, expiration / redemption records, surviving restart |
+| `manager_outbox` | A manager's pushes and the apps' live updates made while the hub was away, in order, until the hub took them (bounded; [hub-restart.md](hub-restart.md) ("The manager while the hub is away")) |
+| `handed_over` | The hub's record of what each manager handed it lately (pushes, outbox items) by manager and id, so an item that comes again is delivered once, also by the next hub process (two hours) |
 
 Connect: `ssh <hub machine> 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`.
 Tests: `./scripts/test/test-server.sh` syncs to hub and runs all; local without Docker skips DB tests. `JARVIS_TEST_DATABASE_URL` pointing `jarvis_test` is only a starting point: each test binary creates adjacent private database and deletes afterward (`server/internal/db/dbtest`), isolating concurrent runs. Jarvis role needs database creation (container superuser; system Postgres grant CREATEDB). Without privilege, fallback queues on jarvis_test.
@@ -361,8 +363,8 @@ Legacy `phone_tools.json`, `devices.json`, `mail_accounts.json`, `sessions.json`
 
 The migrations are two sets, one per side (`server/internal/db/migrations/`):
 
-- `hub/`: the hub's own tables: devices and their tokens, pairing, phone tools, Live Activities, device sessions, client operations, lock tests, peers and the mesh, connector credentials, the admin page, bus identities and the managers' install codes, machine trust.
-- `manager/`: a manager's: interactions, mail, the computers' sessions and metrics, session views and work, the inbox, the knowledge base, todos, task plans and the assistant's feed and views, extensions and their markets, secrets and metrics, the workspace board.
+- `hub/`: the hub's own tables: devices and their tokens, pairing, phone tools, Live Activities, device sessions, client operations, lock tests, peers and the mesh, connector credentials, the admin page, bus identities and the managers' install codes, machine trust, what the managers handed it (`handed_over`).
+- `manager/`: a manager's: interactions, mail, the computers' sessions and metrics, session views and work, the inbox, the knowledge base, todos, task plans and the assistant's feed and views, extensions and their markets, secrets and metrics, the workspace board, the outbox it keeps while the hub is away (`manager_outbox`).
 
 `db.Open(ctx, url, sets)` applies the pending migrations of the sets it is given: the hub opens its database with `db.HubSet`, a manager with `db.ManagerSet` (tests that use both sides' tables: `db.AllSets`). While the default manager shares the hub's database, both sets run there, each when its side starts. Non-default managers have databases of their own (`docs/managers.md`) and get only the manager set.
 

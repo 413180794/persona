@@ -250,13 +250,13 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 			return bus.DialAt(ctx, hub, token, httpClient, devicewire.RelayPath, query)
 		},
 		Connected: func() bool { return bh.Client().Peer() != nil },
-		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
+		Hub:       lazyHost{c: func() *bus.Client { return bh.Client() }}})
 	// The extensions, connectors and bots (internal/extmgr): the data directory here, its own sections in manager.json
 	// (as moveConfig read and checked them) and its own secret.key.
 	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, Config: o.ExtConfig, SecretKey: o.SecretKey,
 		Store: database, Build: build,
 		Logf: log.New(stderr, "extensions: ", log.LstdFlags).Printf,
-		Hub:  lazyHost{func() *bus.Client { return bh.Client() }}, Devices: devs,
+		Hub:  lazyHost{c: func() *bus.Client { return bh.Client() }, b: func() *BusHub { return bh }}, Devices: devs,
 		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 			return bh.Answer(ctx, method, params)
 		},
@@ -272,8 +272,8 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		Timezone:  func() string { return svc.userTZ() }})
 	o.Errors.ext.Store(ext)
 	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
-		ConfigFile: o.ConfigFile,
-		Logf:       logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
+		ConfigFile: o.ConfigFile, Outbox: database,
+		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
 	// The knowledge base in its directory, kept as its manager.json's kb section says (over the hub's hello). The model
 	// providers' keys are sealed with its own secret.key.
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logf, Devices: devs,
@@ -301,13 +301,25 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	return nil
 }
 
-// lazyHost is the bus client, made after the devices that use it.
-type lazyHost struct{ c func() *bus.Client }
+// lazyHost is the bus client, made after the devices that use it. Its apps' live updates (ws.broadcast) go through
+// the outbox like the assistant's (outbox.go), when b gives one.
+type lazyHost struct {
+	c func() *bus.Client
+	b func() *BusHub
+}
 
 func (l lazyHost) Call(ctx context.Context, method string, params, out any) error {
 	return l.c().Call(ctx, method, params, out)
 }
-func (l lazyHost) Notify(event string, params any) error { return l.c().Notify(event, params) }
+
+func (l lazyHost) Notify(event string, params any) error {
+	if bc, ok := params.(Broadcast); ok && event == assistantwire.EventBroadcast && l.b != nil {
+		if bh := l.b(); bh != nil && bh.out != nil {
+			return bh.sendBroadcast(context.Background(), bc)
+		}
+	}
+	return l.c().Notify(event, params)
+}
 
 // hubConfig is what the assistant reads of the hub's hub.json.
 type hubConfig struct {

@@ -45,6 +45,9 @@ type BusOptions struct {
 	Extensions Extensions
 	// StopWhenRevoked: Run returns bus.ErrRevoked once the hub refuses the token (bus.Client.StopWhenRevoked).
 	StopWhenRevoked bool
+	// Outbox keeps the pushes and the apps' live updates made while the hub is away, for when it is back
+	// (outbox.go); nil: they are lost then (tests).
+	Outbox OutboxStore
 	// ConfigFile is the manager's manager.json: its sections go over the hub's hello (ownconfig.go); "": the
 	// hello as it is (tests).
 	ConfigFile string
@@ -79,6 +82,9 @@ type BusHub struct {
 	// in events for each at most, so they never crowd out the others (bus_events.go).
 	deltaMu sync.Mutex
 	deltas  map[string]json.RawMessage
+
+	out      *outbox // nil: none (outbox.go)
+	reported *report // the current connection's report of the manager's state (outbox.go); guarded by mu
 }
 
 type busEvent struct {
@@ -93,7 +99,7 @@ func NewBusHub(o BusOptions) *BusHub {
 	if o.Logf == nil {
 		o.Logf = func(string, ...any) {}
 	}
-	b := &BusHub{opts: o, events: make(chan busEvent, 1024), helloed: make(chan struct{})}
+	b := &BusHub{opts: o, events: make(chan busEvent, 1024), helloed: make(chan struct{}), out: newOutbox(o.Outbox)}
 	if own, err := readOwnConfig(o.ConfigFile); err == nil { // it read as the manager started (moveConfig)
 		b.own = own
 	}
@@ -146,6 +152,7 @@ func (b *BusHub) Serve(ctx context.Context, svc *Service) error {
 	b.mu.Unlock()
 	defer svc.kbClose()
 	go b.takeEvents(ctx)
+	go b.runOutbox(ctx) // what was made while the hub was away, once it is back (outbox.go)
 	return b.client.Run(ctx)
 }
 
@@ -163,13 +170,18 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	b.mu.Lock()
 	svc, ctx := b.svc, b.ctx
 	b.mu.Unlock()
+	// The outbox waits until what follows has reported the manager's state on this connection (its extensions, its
+	// cards): a card's push needs the card, an extension's live update the extension (outbox.go).
+	reported := b.newReport()
 	if e := b.opts.Extensions; e != nil && ctx != nil {
 		mine, err := json.Marshal(h) // with manager.json's sections over the hub's
 		if err != nil {
 			return err
 		}
 		e.Hello(mine)
+		reported.Add(1)
 		go func() {
+			defer reported.Done()
 			if b.client.Wait(ctx) == nil {
 				e.BusUp()
 			}
@@ -177,7 +189,9 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	}
 	if d := b.opts.Devices; d != nil && ctx != nil {
 		d.Hello(res)
+		reported.Add(1)
 		go func() { // once the connection counts as up (after this returns)
+			defer reported.Done()
 			if b.client.Wait(ctx) == nil {
 				d.BusUp()
 				if svc != nil {
@@ -186,6 +200,7 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 			}
 		}()
 	}
+	reported.seal()
 	if svc != nil && h.Mutes != nil {
 		svc.setMutes(*h.Mutes) // the hub's, before anything is pushed (fleet.go)
 	}
@@ -326,14 +341,12 @@ func (b *BusHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error
 	return out, busError(err)
 }
 
-func (b *BusHub) NotifyRequest(ctx context.Context, p NotifyRequest) error {
-	return busError(b.client.Call(ctx, assistantwire.MethodNotify, p, nil))
-}
+func (b *BusHub) NotifyRequest(ctx context.Context, p NotifyRequest) error { return b.sendPush(ctx, p) }
 
 func (b *BusHub) Tell(event string, params any) error { return b.client.Notify(event, params) }
 
-func (b *BusHub) Broadcast(_ context.Context, m Broadcast) {
-	if err := b.client.Notify(assistantwire.EventBroadcast, m); err != nil {
+func (b *BusHub) Broadcast(ctx context.Context, m Broadcast) {
+	if err := b.sendBroadcast(ctx, m); err != nil {
 		b.opts.Logf("assistant: %s: %v", assistantwire.EventBroadcast, err)
 	}
 }

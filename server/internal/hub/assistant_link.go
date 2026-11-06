@@ -357,8 +357,15 @@ func init() {
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: assistantwire.MethodNotify + ": " + err.Error()}
 		}
+		from, id := c.managerID(), p.Notification.ID
+		if id != "" && !h.firstHandOver(ctx, from, id) {
+			return map[string]bool{"ok": true}, nil // delivered already: it came again (outbox_relay.go)
+		}
 		// Only about its own machines, sessions and cards (fleet_link.go deliverPushFrom).
-		if err := h.deliverPushFrom(c.managerID(), p.Notification); err != nil {
+		if err := h.deliverPushFrom(from, p.Notification); err != nil {
+			if id != "" {
+				h.forgetHandOver(from, id)
+			}
 			return nil, busCodedError(err)
 		}
 		return map[string]bool{"ok": true}, nil

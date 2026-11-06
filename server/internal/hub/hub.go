@@ -56,6 +56,10 @@ type Hub struct {
 	// machineAdd: one computer is added for a pairing code at a time (machines_add.go), so two get different ids.
 	machineAdd sync.Mutex
 
+	// handedOver: the managers' pushes and outbox items delivered lately, so one sent again is delivered once
+	// (outbox_relay.go).
+	handedOver seenItems
+
 	mutesMu   sync.Mutex
 	mutesSend sync.Mutex // one send of the mutes to the managers at a time (fleet_link.go)
 	mutes     *Pins      // muted spaces / agents (no pushes); loaded from settings on first use

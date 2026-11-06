@@ -18,7 +18,7 @@ import (
 // Extensions is the manager's extensions, connectors and bots (internal/extmgr.Manager).
 type Extensions interface {
 	Hello(res json.RawMessage)
-	BusUp()
+	BusUp() // returns once its report went: the outbox goes after it (outbox.go)
 	Request(ctx context.Context, method string, params json.RawMessage) (any, bool, error)
 	Event(name string, params json.RawMessage) bool
 	// AppCall answers the assistant's app.calls that are its (handled false: the hub's).
