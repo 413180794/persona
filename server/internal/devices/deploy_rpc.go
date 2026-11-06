@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -44,7 +45,7 @@ func (m *Machine) canDeployLocked() error {
 	if m.cfg.Kind == "local" {
 		return i18n.Err("hub-machine.deploy_local")
 	}
-	if m.rpcDeploymentLocked() && !m.info.NodeUpdate {
+	if m.rpcDeploymentLocked() && !(nodeHas(m.info, nodeproto.NodeUpdate) && m.info.NodeUpdate) {
 		if m.info.NodeUpdateReason != "" {
 			return errors.New(m.info.NodeUpdateReason)
 		}

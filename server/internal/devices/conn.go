@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -277,8 +278,12 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	}
 	m.d.logf("[%s] connected over %s: %s %s/%s herdr %s claude %s", m.cfg.ID, where, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
 	m.tellLinks(true, "")
-	if v := m.d.hubVersion(); nodeMismatch(v, info.Version) {
-		m.d.logf("[%s] node %s is not the hub's build %s: update it", m.cfg.ID, info.Version, v)
+	compat := compatOf(info)
+	if compat.Incompatible != "" {
+		m.d.logf("[%s] node %s speaks node protocol %d (min manager %d, missing %v): this manager speaks %d (min node %d), %s: update it",
+			m.cfg.ID, info.Version, info.Protocol, info.ProtocolMin, compat.Missing, nodeproto.Version, nodeproto.MinVersion, compat.Incompatible)
+	} else if v := m.d.hubVersion(); buildDiffers(v, info.Version) {
+		m.d.logf("[%s] node %s is not the hub's build %s (node protocol %d): an update is offered", m.cfg.ID, info.Version, v, info.Protocol)
 	}
 	// The hub has it connected before it is asked to hand the node what is the hub's (devices.connected).
 	m.d.reportNow()
@@ -294,18 +299,24 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 		defer context.AfterFunc(ctx, func() { _ = a.Close() })()
 	}
 
-	// The hub's part (Codex, managed launchers, its sends; it starts the plugins' work on the computer) with it.
-	m.configureNode(ctx, c.peer, m.d.withOwn(ctx, m.cfg.ID, m.d.hubConnected(ctx, m, connectedAt)))
-	var list struct {
-		Sessions []proto.Session `json:"sessions"`
-	}
-	if err := c.peer.Call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
-		m.setSessions(list.Sessions)
-		m.d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
-		m.nodeUpdateConnected(ctx, c.peer, info)
+	// A node this manager cannot drive stays connected, so it shows and can be updated (machine.call refuses the
+	// rest), but is neither configured nor listed nor watched: what it would answer is not known.
+	if compat.Incompatible == "" {
+		// The hub's part (Codex, managed launchers, its sends; it starts the plugins' work on the computer) with it.
+		m.configureNode(ctx, c.peer, m.d.withOwn(ctx, m.cfg.ID, m.d.hubConnected(ctx, m, connectedAt)))
+		var list struct {
+			Sessions []proto.Session `json:"sessions"`
+		}
+		if err := c.peer.Call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
+			m.setSessions(list.Sessions)
+			m.d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
+			m.nodeUpdateConnected(ctx, c.peer, info)
+		}
+	} else {
+		rewatch = nil
 	}
 	m.firstTried() // configured and listed: the calls that waited for it go now
-	if f := m.d.opts.OnConnected; f != nil {
+	if f := m.d.opts.OnConnected; f != nil && compat.Incompatible == "" {
 		go f(m.cfg.ID)
 	}
 	for id, since := range rewatch {

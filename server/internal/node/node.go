@@ -21,6 +21,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/nodeupdate"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/quota"
@@ -1214,6 +1215,9 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 	canUpdate, updateReason := n.updater.Capability()
 	running, runningKnown := n.herdrRunning(ctx)
 	return proto.NodeInfo{
+		Protocol:           nodeproto.Version,
+		ProtocolMin:        nodeproto.MinManagerVersion,
+		Capabilities:       nodeproto.Announced,
 		NodeUpdate:         canUpdate,
 		NodeUpdateReason:   updateReason,
 		ModelConfiguration: true,

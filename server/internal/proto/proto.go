@@ -36,10 +36,17 @@ type Machine struct {
 	HerdrVersion  string    `json:"herdr_version,omitempty"`
 	ClaudeVersion string    `json:"claude_version,omitempty"`
 	LastSeen      time.Time `json:"last_seen,omitempty"`
-	// NodeVersion is the machine's jarvisd build; NodeMismatch: not the hub's build (deploy.sh missed it, or
-	// deployed it alone). Hub and node read terminal dialogs with the same code, so a mismatch can refuse answers.
+	// NodeVersion is the machine's jarvisd build. NodeMismatch: the hub offers to redeploy the node, because it runs
+	// another build than the hub's (deploy.sh missed it, or it was installed on its own) or because its manager cannot
+	// drive it (NodeIncompatible). Another build alone is an upgrade offer, not a fault: whether the node can be used
+	// is decided by its protocol and capabilities (docs/protocol.md "Node handshake").
 	NodeVersion  string `json:"node_version,omitempty"`
 	NodeMismatch bool   `json:"node_mismatch,omitempty"`
+	// NodeProtocol is the node protocol the node announced (0: from before the handshake). NodeIncompatible is a
+	// code when its manager cannot drive it (it then refuses everything but updating it): node_protocol_old (an older
+	// protocol, or a required capability missing: update the node) or node_protocol_new (it needs a newer manager).
+	NodeProtocol     int    `json:"node_protocol,omitempty"`
+	NodeIncompatible string `json:"node_incompatible,omitempty"`
 	// Deploying: the hub is installing its own node build there (POST …/deploy); DeployError: why the last one failed.
 	Deploying   bool   `json:"deploying,omitempty"`
 	DeployError string `json:"deploy_error,omitempty"`
@@ -368,18 +375,24 @@ type HealthReports struct {
 }
 
 type NodeInfo struct {
-	NodeUpdate         bool    `json:"node_update,omitempty"`
-	NodeUpdateReason   string  `json:"node_update_reason,omitempty"`
-	ModelConfiguration bool    `json:"model_configuration,omitempty"`
-	Hostname           string  `json:"hostname"`
-	OS                 string  `json:"os"`
-	Arch               string  `json:"arch"`
-	Home               string  `json:"home"`
-	DataDir            string  `json:"data_dir,omitempty"`
-	HerdrVersion       string  `json:"herdr_version"`
-	ClaudeVersion      string  `json:"claude_version"`
-	Version            string  `json:"version"`
-	System             *System `json:"system,omitempty"`
+	// Protocol, ProtocolMin and Capabilities are the node protocol handshake (internal/nodeproto, docs/protocol.md
+	// "Node handshake"): the node protocol it speaks, the oldest manager protocol it answers, and what it can do.
+	// Nodes from before the handshake leave all three out (protocol 0); managers from before it ignore them.
+	Protocol           int      `json:"protocol,omitempty"`
+	ProtocolMin        int      `json:"protocol_min,omitempty"`
+	Capabilities       []string `json:"capabilities,omitempty"`
+	NodeUpdate         bool     `json:"node_update,omitempty"`
+	NodeUpdateReason   string   `json:"node_update_reason,omitempty"`
+	ModelConfiguration bool     `json:"model_configuration,omitempty"`
+	Hostname           string   `json:"hostname"`
+	OS                 string   `json:"os"`
+	Arch               string   `json:"arch"`
+	Home               string   `json:"home"`
+	DataDir            string   `json:"data_dir,omitempty"`
+	HerdrVersion       string   `json:"herdr_version"`
+	ClaudeVersion      string   `json:"claude_version"`
+	Version            string   `json:"version"`
+	System             *System  `json:"system,omitempty"`
 	// Engine is the engine the node drives now; Engines, what it found (proto.Machine.Engines). Older nodes leave
 	// both out.
 	Engine  string   `json:"engine,omitempty"`

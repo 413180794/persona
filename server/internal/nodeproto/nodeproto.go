@@ -1,0 +1,49 @@
+// Package nodeproto is the node protocol's handshake contract (manager ↔ device, docs/protocol.md "Node handshake"):
+// the protocol version and the capability names a node announces in node.info, and the version a manager speaks.
+// It holds only constants and name lists and imports nothing, so the manager, the node and any other implementation
+// can share it without depending on each other.
+//
+// Compatibility is decided by these, not by build strings: a node and a manager built from different commits work
+// together as long as their protocol ranges overlap and the node has the capabilities the manager requires. A build
+// difference is only an upgrade hint.
+package nodeproto
+
+// Version is the node protocol this code speaks. Raise it only for a change an older peer cannot follow (a method
+// whose params or results changed meaning); additions go in as capabilities instead.
+//
+// Protocol 0 is the implicit version of nodes from before the handshake: they leave protocol and capabilities out.
+const Version = 1
+
+// MinVersion is the oldest announcing node protocol a manager built from this code still drives. Nodes from before
+// the handshake (protocol 0) are not judged by it: the manager keeps working with them as before.
+const MinVersion = 1
+
+// MinManagerVersion is what a node built from this code announces as protocol_min: the oldest manager protocol it
+// still answers.
+const MinManagerVersion = 1
+
+// Capabilities a node announces (stable names: never renamed or reused; a node drops one only with a protocol bump).
+const (
+	// Sessions: sessions.list / session.watch / session.unwatch / session.start / session.send and the session events.
+	Sessions = "sessions"
+	// ModelConfiguration: assistant.send / assistant.warm / session.start / session.send take a launcher's model and
+	// model_fingerprint (docs/model-config.md). Older nodes said so with node.info's model_configuration.
+	ModelConfiguration = "model_configuration"
+	// NodeUpdate: the node.update.* methods (docs/node-update.md). Whether an update can run right now is still
+	// node.info's node_update / node_update_reason.
+	NodeUpdate = "node_update"
+	// Engines: engine.use and node.info's engine / engines (docs/engines.md).
+	Engines = "engines"
+	// MachineUID: node.info's machine_uid (docs/mesh.md).
+	MachineUID = "machine_uid"
+	// HerdrServer: herdr.server.status / herdr.server.start and node.info's herdr_running / herdr_running_known.
+	HerdrServer = "herdr_server"
+	// PluginNodeCall: plugin.node.call for the programs in node.info's builtin_programs.
+	PluginNodeCall = "plugin_node_call"
+)
+
+// Required are the capabilities a manager built from this code cannot drive a node without.
+var Required = []string{Sessions}
+
+// Announced is what a node built from this code announces.
+var Announced = []string{Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall}

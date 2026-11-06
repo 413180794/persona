@@ -19,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -182,6 +183,10 @@ func (m *Machine) snapshot() proto.Machine {
 	// A failed update is moot once the node runs the hub's own build (it was updated by hand, or the try that failed
 	// was made while the machine was away): the card would keep "Last deploy failed" until another deploy (#2868).
 	deployErr := m.deployErr
+	incompatible := ""
+	if m.online {
+		incompatible = compatOf(m.info).Incompatible
+	}
 	if m.online && version != "" && m.info.Version == version {
 		deployErr = ""
 	}
@@ -193,7 +198,8 @@ func (m *Machine) snapshot() proto.Machine {
 		ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost, Online: m.online || warm, Error: m.err,
 		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
-		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(version, m.info.Version),
+		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(version, m.info),
+		NodeProtocol: m.info.Protocol, NodeIncompatible: incompatible,
 		Deploying: m.deploying, DeployError: deployErr,
 		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
@@ -357,7 +363,14 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 	p := m.peer
 	info := m.info
 	m.mu.Unlock()
-	if info.Version != "" && !info.ModelConfiguration && (method == "assistant.send" || method == "assistant.warm" || method == "session.start" || method == "session.send") {
+	if c := compatOf(info); c.Incompatible != "" && !usableWhileIncompatible(method) {
+		key := "hub-machine.node_protocol_old"
+		if c.Incompatible == incompatibleNodeNew {
+			key = "hub-machine.node_protocol_new"
+		}
+		return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(i18n.From(ctx), key)}
+	}
+	if !nodeHas(info, nodeproto.ModelConfiguration) && (method == "assistant.send" || method == "assistant.warm" || method == "session.start" || method == "session.send") {
 		raw, _ := json.Marshal(params)
 		var fields struct {
 			Model       string `json:"model"`
@@ -618,15 +631,6 @@ func (m *Machine) machinePending() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.pending > 0
-}
-
-// nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>
-// (deploy.sh); dev builds ("dev", empty) are never flagged. The local node is the hub binary itself.
-func nodeMismatch(hub, node string) bool {
-	if hub == "" || node == "" || hub == "dev" || node == "dev" {
-		return false
-	}
-	return hub != node
 }
 
 func (m *Machine) isOnline() bool {

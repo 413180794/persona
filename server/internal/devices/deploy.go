@@ -193,7 +193,7 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 		m.mu.Lock()
 		online, version := m.online, m.info.Version
 		m.mu.Unlock()
-		if online && !nodeMismatch(m.d.hubVersion(), version) {
+		if online && !buildDiffers(m.d.hubVersion(), version) {
 			return nil
 		}
 	}
@@ -203,7 +203,7 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 		why = "" // how the old connection ended (our own reconnect), not why the new node is not reached
 	}
 	m.mu.Unlock()
-	if online && !nodeMismatch(m.d.hubVersion(), version) {
+	if online && !buildDiffers(m.d.hubVersion(), version) {
 		return nil // came back just now
 	}
 	if !online {
@@ -225,7 +225,7 @@ func (d *Devices) updateNodes(ctx context.Context) {
 	version := d.hubVersion()
 	for _, m := range d.machinesNow() {
 		m.mu.Lock()
-		need := m.cfg.Kind != "local" && m.online && nodeMismatch(version, m.info.Version)
+		need := m.cfg.Kind != "local" && m.online && buildDiffers(version, m.info.Version)
 		offlineLinked := !m.online && m.rpcDeploymentLocked()
 		m.mu.Unlock()
 		if offlineLinked {
