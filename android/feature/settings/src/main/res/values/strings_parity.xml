@@ -117,7 +117,7 @@
     <string name="settings_desktops_banner">Persona is signed in on a Mac</string>
     <string name="settings_desktops_mute">Mute phone</string>
     <string name="settings_desktops_header">While a computer is online</string>
-    <string name="settings_desktops_mute_note">While Persona on a Mac is online, this phone stops pushing “needs you” and “agent finished” notifications and the Mac reminds you instead; reminders you asked Persona for still come.</string>
+    <string name="settings_desktops_mute_note">While Persona on a Mac is online, this phone stops pushing “needs you” and “agent finished” notifications and script and extension alerts, and the Mac reminds you instead; reminders you asked Persona for still come.</string>
     <string name="settings_desktops_title">Signed-in Macs</string>
     <string name="settings_desktops_empty">No Mac is signed in</string>
     <string name="settings_desktops_empty_detail">Persona on a Mac shows here while it is connected to this hub.</string>
@@ -156,7 +156,7 @@
     <string name="settings_notify_system_off">Notifications are off</string>
     <string name="settings_notify_system_off_text">The settings below take effect once system settings allow Persona to send notifications.</string>
     <string name="settings_notify_system_settings">System notification settings</string>
-    <string name="settings_notify_needs_you_subtitle">Questions, plan approvals, tool permissions, a terminal waiting for input</string>
+    <string name="settings_notify_needs_you_subtitle">Questions, plans, tool permissions, terminal input, script and extension alerts</string>
     <string name="settings_notify_needs_you_footer">Permission and plan notifications let you allow / approve (after unlocking) or deny / send back right from the notification.</string>
     <string name="settings_notify_system_footer">Sound, lock screen display and Do Not Disturb are changed in system settings.</string>
 </resources>

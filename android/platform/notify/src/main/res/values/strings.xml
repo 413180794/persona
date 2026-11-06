@@ -44,4 +44,9 @@
     <string name="notify_stopped_text">Tap Resume to get notifications again</string>
     <string name="notify_resume">Resume</string>
     <string name="notify_public_title">New message from Persona</string>
+    <string name="notify_question_more_options">and %1$d more</string>
+    <plurals name="notify_question_more">
+        <item quantity="one">%1$d more question</item>
+        <item quantity="other">%1$d more questions</item>
+    </plurals>
 </resources>

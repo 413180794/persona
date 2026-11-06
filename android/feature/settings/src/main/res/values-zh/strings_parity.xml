@@ -114,7 +114,7 @@
     <string name="settings_desktops_banner">Mac 上的 Persona 已登录</string>
     <string name="settings_desktops_mute">手机静音</string>
     <string name="settings_desktops_header">电脑在线时</string>
-    <string name="settings_desktops_mute_note">Mac 上的 Persona 在线时，这台手机不再推送「需要你处理」和「Agent 做完」的通知，由 Mac 提醒你；你让 Persona 定的提醒照常推送。</string>
+    <string name="settings_desktops_mute_note">Mac 上的 Persona 在线时，这台手机不再推送「需要你处理」「Agent 做完」的通知和脚本、扩展发来的提醒，由 Mac 提醒你；你让 Persona 定的提醒照常推送。</string>
     <string name="settings_desktops_title">已登录的 Mac</string>
     <string name="settings_desktops_empty">没有已登录的 Mac</string>
     <string name="settings_desktops_empty_detail">Mac 上的 Persona 连着这个 hub 时会出现在这里。</string>
@@ -152,7 +152,7 @@
     <string name="settings_notify_system_off">通知没有打开</string>
     <string name="settings_notify_system_off_text">下面的设置要在系统设置里允许 Persona 发通知后才生效。</string>
     <string name="settings_notify_system_settings">系统通知设置</string>
-    <string name="settings_notify_needs_you_subtitle">提问、计划审批、工具授权、终端等你输入</string>
+    <string name="settings_notify_needs_you_subtitle">提问、计划审批、工具授权、终端等你输入，以及脚本和扩展发来的提醒</string>
     <string name="settings_notify_needs_you_footer">授权和计划的通知上可以直接「允许 / 批准」（要先解锁）或「拒绝 / 打回」。</string>
     <string name="settings_notify_system_footer">声音、锁屏显示、勿扰在系统设置里改。</string>
 </resources>

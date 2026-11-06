@@ -12,6 +12,6 @@ export function classicWorkerProblem(code: string, imports: readonly string[] = 
   return (
     `dist/sw.js imports ${what}, and a classic service worker can't: the page and src/sw.ts import a value from the same module, ` +
     `so it became a shared chunk. Give the page its own copy of that value and import only types across ` +
-    `(docs/lessons/web.md「service worker 和页面别共用有值的模块」).`
+    `(docs/lessons/web.md, the section on the service worker and the page sharing a module).`
   );
 }

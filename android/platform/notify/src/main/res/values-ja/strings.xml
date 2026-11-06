@@ -44,4 +44,8 @@
     <string name="notify_stopped_text">「再開」をタップすると通知を再び受け取れます</string>
     <string name="notify_resume">再開</string>
     <string name="notify_public_title">Personaから新しいメッセージ</string>
+    <string name="notify_question_more_options">ほか %1$d 個</string>
+    <plurals name="notify_question_more">
+        <item quantity="other">ほかに %1$d 問</item>
+    </plurals>
 </resources>

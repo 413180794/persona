@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import persona.core.contracts.Elicitation
 import persona.core.contracts.Interaction
+import persona.core.contracts.Question
+import persona.core.contracts.QuestionOption
 import persona.core.contracts.api.ConnectionState
 import org.junit.Assert.*
 import org.junit.Test
@@ -72,8 +74,42 @@ class NotificationCopyTest {
         assertEquals("MCP 表单：Pick a repository", requestCopy(context, form.copy(summary = null)).first)
         val codex = Interaction("c", kind = "permission", agent = "codex", toolName = "mcp__github__create_issue")
         assertEquals("Codex 请求使用 github · create issue", requestCopy(context, codex).first)
-        val question = Interaction("k", kind = "question", questions = listOf(persona.core.contracts.Question(question = "Which branch?")))
+        val question = Interaction("k", kind = "question", questions = listOf(Question(question = "Which branch?")))
         assertEquals("Which branch?" to "Which branch?", requestCopy(context, question))
+    }
+
+    private fun options(vararg labels: String) = labels.map { QuestionOption(label = it) }
+    private fun ask(vararg questions: Question) = Interaction("a", kind = "question", questions = questions.toList())
+    private val deploy = Question(question = "这次部署到哪？", options = options("测试环境", "预发", "生产环境", "回滚"))
+
+    /** A question's body is the hub push's (#4308): the first question, its choices and how many questions follow (#4726). */
+    @Test fun questionNotificationsListTheChoicesAndTheQuestionsLeft() {
+        assertEquals("这次部署到哪？\n测试环境 / 预发 / 生产环境 / 回滚\n还有 1 个问题",
+            requestCopy(context, ask(deploy, Question(question = "要不要通知群里？", options = options("要", "不要")))).second)
+        // Past four choices the rest are counted; each label is clipped to 20 characters and kept on one line.
+        val long = Question(question = "Pick one", multiSelect = true,
+            options = options("a\nb", "一二三四五六七八九十一二三四五六七八九十一二", "c", "d", "e", "f"))
+        assertEquals("Pick one\na b / 一二三四五六七八九十一二三四五六七八九十… / c / d 等 2 个", requestCopy(context, ask(long)).second)
+        // No choices (free text): the question alone; blank labels do not count as choices.
+        assertEquals("Why?", requestCopy(context, ask(Question(question = " Why? ", options = options(" ")))).second)
+        assertEquals("Why?\nA B", requestCopy(context, ask(Question(question = "Why?", options = options("A\u00A0 B")))).second)
+        assertEquals("Choose a target", requestCopy(context, Interaction("n", kind = "question", summary = "Choose a target")).second)
+        assertEquals("这次部署到哪？\n测试环境 / 预发 / 生产环境 / 回滚\n还有 2 个问题",
+            requestCopy(context, ask(deploy, Question(question = "b"), Question(question = "c"))).second)
+    }
+
+    @Config(sdk = [35], qualifiers = "en")
+    @Test fun questionNotificationsInEnglish() {
+        val five = Question(question = "Where?", options = options("a", "b", "c", "d", "e"))
+        assertEquals("Where?\na / b / c / d and 1 more\n1 more question", requestCopy(context, ask(five, Question(question = "Tell the team?"))).second)
+        assertEquals("Where?\na / b / c / d and 1 more\n2 more questions",
+            requestCopy(context, ask(five, Question(question = "x"), Question(question = "y"))).second)
+    }
+
+    @Config(sdk = [35], qualifiers = "ja")
+    @Test fun questionNotificationsInJapanese() {
+        val five = Question(question = "どこ？", options = options("a", "b", "c", "d", "e"))
+        assertEquals("どこ？\na / b / c / d ほか 1 個\nほかに 1 問", requestCopy(context, ask(five, Question(question = "x"))).second)
     }
 
     @Config(sdk = [35], qualifiers = "en")

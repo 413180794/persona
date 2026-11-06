@@ -11,7 +11,7 @@ describe("sw.js 不能有 import", () => {
   it("开头是 import（共享 chunk）就报错，说明原因和怎么修", () => {
     const msg = classicWorkerProblem(`import{N as a}from"./assets/notify-abc.js";self.x=a;`);
     expect(msg).toContain("classic service worker");
-    expect(msg).toContain("service worker 和页面别共用有值的模块");
+    expect(msg).toContain("docs/lessons/web.md");
   });
 
   it("中间的 import 语句、只为副作用的 import、带默认名的 import 也算", () => {

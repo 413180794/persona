@@ -3,6 +3,7 @@ package persona.platform.notify
 import android.content.Context
 import androidx.annotation.StringRes
 import persona.core.contracts.Interaction
+import persona.core.contracts.Question
 import persona.core.contracts.api.ConnectionState
 import persona.core.designsystem.resolve
 
@@ -37,7 +38,8 @@ internal fun actionResultCopy(result: NotificationActionResult): Pair<Int, Int>?
 internal fun requestCopy(context: Context, ix: Interaction): Pair<String, String> {
     val headline = ix.headline.resolve(context)
     val detail = when (ix.kind) {
-        "question" -> ix.questions.orEmpty().joinToString("\n") { it.question }
+        // Without questions the hub's push says the summary (push.go), so this does too.
+        "question" -> ix.questions?.takeIf { it.isNotEmpty() }?.let { questionBody(context, it) } ?: ix.summary.orEmpty()
         "plan" -> ix.plan ?: headline
         // The headline already carries the summary; the summary alone would drop which tool asks.
         "permission" -> headline
@@ -51,3 +53,30 @@ internal fun requestCopy(context: Context, ix: Interaction): Pair<String, String
 
 private fun elicitationMessage(ix: Interaction): String? =
     listOf(ix.summary, ix.elicitation?.message).firstNotNullOfOrNull { it?.trim()?.takeIf(String::isNotEmpty) }
+
+// The same body as the hub's push for a question (questionAlertBody, #4308): the first question, its choices (at most
+// QUESTION_OPTIONS, each clipped) and how many questions follow, so a glance tells what can be picked (#4726).
+private const val QUESTION_OPTIONS = 4
+private const val QUESTION_OPTION_MAX = 20
+// Every Unicode space, as Go's strings.Fields: the JVM's plain \s misses a no-break space.
+private val UNICODE_SPACE = Regex("(?U)\\s+")
+
+private fun questionBody(context: Context, questions: List<Question>): String {
+    val lines = mutableListOf<String>()
+    questions.first().question.trim().takeIf(String::isNotEmpty)?.let(lines::add)
+    // A label's line break would break the notification's lines.
+    val labels = questions.first().options.map { it.label.split(UNICODE_SPACE).filter(String::isNotEmpty).joinToString(" ") }
+        .filter(String::isNotEmpty)
+    if (labels.isNotEmpty()) {
+        val shown = labels.take(QUESTION_OPTIONS).joinToString(" / ") { clip(it, QUESTION_OPTION_MAX) }
+        val rest = labels.size - QUESTION_OPTIONS
+        lines += if (rest > 0) "$shown ${context.getString(R.string.notify_question_more_options, rest)}" else shown
+    }
+    val rest = questions.size - 1
+    if (rest > 0) lines += context.resources.getQuantityString(R.plurals.notify_question_more, rest, rest)
+    return lines.joinToString("\n")
+}
+
+/** [s] cut to [max] characters (code points, not UTF-16 units) with an ellipsis, as the hub's textfmt.Clip. */
+private fun clip(s: String, max: Int): String =
+    if (s.codePointCount(0, s.length) <= max) s else s.substring(0, s.offsetByCodePoints(0, max)) + "…"

@@ -114,7 +114,7 @@
     <string name="settings_desktops_banner">Mac の Persona にログイン中</string>
     <string name="settings_desktops_mute">スマホを消音</string>
     <string name="settings_desktops_header">コンピューターがオンラインのとき</string>
-    <string name="settings_desktops_mute_note">Mac の Persona がオンラインの間、この端末には「対応が必要」と「エージェント完了」の通知を送らず、Mac が知らせます。Persona に頼んだリマインダーは通常どおり届きます。</string>
+    <string name="settings_desktops_mute_note">Mac の Persona がオンラインの間、この端末には「対応が必要」「エージェント完了」の通知と、スクリプトや拡張機能のアラートを送らず、Mac が知らせます。Persona に頼んだリマインダーは通常どおり届きます。</string>
     <string name="settings_desktops_title">ログイン中の Mac</string>
     <string name="settings_desktops_empty">ログイン中の Mac はありません</string>
     <string name="settings_desktops_empty_detail">Mac の Persona がこの hub に接続している間ここに表示されます。</string>
@@ -152,7 +152,7 @@
     <string name="settings_notify_system_off">通知がオフです</string>
     <string name="settings_notify_system_off_text">下の設定は、システム設定で Persona の通知を許可すると有効になります。</string>
     <string name="settings_notify_system_settings">システムの通知設定</string>
-    <string name="settings_notify_needs_you_subtitle">質問、プランの承認、ツールの許可、ターミナルの入力待ち</string>
+    <string name="settings_notify_needs_you_subtitle">質問、プラン承認、ツール許可、入力待ち、スクリプトと拡張のアラート</string>
     <string name="settings_notify_needs_you_footer">許可とプランの通知から、そのまま「許可 / 承認」（ロック解除後）や「拒否 / 差し戻し」ができます。</string>
     <string name="settings_notify_system_footer">サウンド、ロック画面の表示、おやすみモードはシステム設定で変更します。</string>
 </resources>

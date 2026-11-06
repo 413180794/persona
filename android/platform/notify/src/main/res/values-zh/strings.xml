@@ -44,4 +44,8 @@
     <string name="notify_stopped_text">点「恢复」重新接收通知</string>
     <string name="notify_resume">恢复</string>
     <string name="notify_public_title">Persona 有新消息</string>
+    <string name="notify_question_more_options">等 %1$d 个</string>
+    <plurals name="notify_question_more">
+        <item quantity="other">还有 %1$d 个问题</item>
+    </plurals>
 </resources>
