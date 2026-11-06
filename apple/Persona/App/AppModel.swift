@@ -2293,13 +2293,12 @@ final class AppModel {
     private func countBadges() {
         var b = TabBadges()
         for ix in interactions.values {
-            let s = sessionIndex[ix.sessionKey]
             // A quiet task's agent asking is the main conversation's to tell (#1731): its count goes there, not on Agents.
-            if s?.assistant == true || isQuiet(ix.sessionKey) {
-                b.assistant += 1
-            } else if pinsStore(ix.sessionKey.group)?.isMuted(session: Self.pinKey(session: ix.sessionKey),
-                                                              space: s?.spaceName.map { "\(ix.sessionKey.machineID)/\($0)" }) != true {
-                b.agents += 1
+            switch TabBadges.place(ix.sessionKey, session: sessionIndex[ix.sessionKey], quiet: isQuiet(ix.sessionKey),
+                                   mutes: pinsStore(ix.sessionKey.group)?.mutes) {
+            case .assistant, .quiet: b.assistant += 1
+            case .agents: b.agents += 1
+            case .muted: break
             }
         }
         if b != badges { badges = b }
@@ -2349,7 +2348,7 @@ final class AppModel {
     func pinsStore(_ group: String) -> PinsStore? { link(group)?.pins }
 
     static func pinKey(space g: SpaceGroup) -> String { "\(g.machineID)/\(g.name)" }
-    static func pinKey(session k: SessionKey) -> String { "\(k.machineID)/\(k.sessionID)" }
+    nonisolated static func pinKey(session k: SessionKey) -> String { "\(k.machineID)/\(k.sessionID)" }
 
     func isPinned(_ g: SpaceGroup) -> Bool { pinsStore(g.group)?.isPinned(space: Self.pinKey(space: g)) == true }
     func isPinned(_ k: SessionKey) -> Bool { pinsStore(k.group)?.isPinned(session: Self.pinKey(session: k)) == true }
@@ -2641,6 +2640,18 @@ enum Haptics {
 nonisolated struct TabBadges: Equatable, Sendable {
     var assistant = 0
     var agents = 0
+
+    /// Whose the agent `key` is, for what counts it: one of Persona's own conversations, a quiet task's agent (#1731:
+    /// the main conversation tells about it), a muted one (it or its space, `Pins.mutes`, the hub's rule), or one of
+    /// the Agents tab's. The tab badges and Siri's intents (`IntentPicker.visible`) go by this one rule.
+    nonisolated enum Place: Hashable, Sendable { case assistant, quiet, muted, agents }
+
+    static func place(_ key: SessionKey, session s: Session?, quiet: Bool, mutes: Pins?) -> Place {
+        if s?.assistant == true { return .assistant }
+        if quiet { return .quiet }
+        let space = s?.spaceName.map { "\(key.machineID)/\($0)" }
+        return mutes?.mutes(session: AppModel.pinKey(session: key), space: space) == true ? .muted : .agents
+    }
 }
 
 /// Who shows the app's tabs, told of each new one as it is set (`AppModel.tabRouter`): the iPhone's shell.

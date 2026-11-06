@@ -177,6 +177,14 @@ nonisolated enum IntentSupport {
         return out
     }
 
+    /// Every group's muted spaces and agents (`GET /api/v1/mutes`), by group. A hub that does not answer mutes nothing
+    /// here; its cards still carry the hub's own `muted` stamp (#4360).
+    static func mutes() async throws -> [String: Pins] {
+        var out: [String: Pins] = [:]
+        for api in try clients() { out[api.group] = try? await api.mutes() }
+        return out
+    }
+
     static func host() -> String? { HubStore.load().hubs.first?.config.url.host() }
 
     /// A dialog built from runtime text; `IntentDialog`'s literal initializer only takes compile-time strings.
@@ -202,5 +210,30 @@ nonisolated enum IntentPicker {
     /// Oldest first: the one that has been waiting longest.
     static func pending(_ interactions: [Interaction]) -> Interaction? {
         interactions.min { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+    }
+
+    /// The cards the user sees waiting, by the tab badges' rule (`TabBadges.place`): the Agents tab's and Persona's
+    /// own. A quiet task's agent (the hub's `quiet`, #1731) is the main conversation's to tell, and a muted agent (it
+    /// or its space, `mutes` by group, or the hub's `muted` stamp on the card) is not shown anywhere. 「Persona 状态」
+    /// reads from these and 「批准第一个待处理」 settles from these, so Siri never approves a card it did not read
+    /// out (#5257).
+    static func visible(_ interactions: [Interaction], sessions: [Session], mutes: [String: Pins]) -> [Interaction] {
+        let byKey = Dictionary(sessions.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        return interactions.filter { ix in
+            let s = byKey[ix.sessionKey]
+            switch TabBadges.place(ix.sessionKey, session: s, quiet: s?.quiet == true, mutes: mutes[ix.group]) {
+            case .assistant: return true
+            case .agents: return !ix.muted
+            case .quiet, .muted: return false
+            }
+        }
+    }
+
+    /// What Siri reads out as waiting and the first of it: 「Persona 状态」 says how many and reads `first`;
+    /// 「批准第一个待处理」 settles that same `first` (#5257).
+    static func waiting(_ interactions: [Interaction], sessions: [Session], mutes: [String: Pins])
+        -> (cards: [Interaction], first: Interaction?) {
+        let cards = visible(interactions, sessions: sessions, mutes: mutes)
+        return (cards, pending(cards))
     }
 }

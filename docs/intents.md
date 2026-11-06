@@ -37,7 +37,11 @@ They do not need the app in the foreground and do not use WebSocket: each call r
 
 `ApproveFirstIntent`:
 
-- Takes the first pending item ordered by `created_at`, oldest first.
+- Takes the first pending item ordered by `created_at`, oldest first, from the same cards `JarvisStatusIntent` reads
+  out (`IntentPicker.waiting`, #5257), by the tab badges' rule (`TabBadges.place`): Persona's own cards count; a quiet
+  task's agent's (the hub's `quiet`, #1731) and a muted agent's (itself or its space unless turned back on, from each
+  group's `GET /api/v1/mutes`, or the hub's `muted` stamp on the card) are skipped. So Siri never approves a card other
+  than the one it just read out.
 - `permission` → `{allow:true}`; `plan` → `{approve:true, mode:"bypassPermissions"}` (same as **Approve & Auto-Run** in the app,
   see `docs/claude-integration.md`).
 - `question` / `screen` need the screen, so it only replies "Open Persona to handle this." and records no decision.

@@ -19,16 +19,25 @@ struct JarvisStatusIntent: AppIntent {
             // Every group added up (docs/multi-hub.md「Siri」).
             async let sessionsRequest = IntentSupport.sessions()
             async let interactionsRequest = IntentSupport.interactions()
+            async let mutesRequest = IntentSupport.mutes()
             let sessions = try await sessionsRequest
             let interactions = try await interactionsRequest
-            let text = IntentText.status(
-                working: sessions.filter { $0.status == .working }.count,
-                waiting: interactions.count,
-                first: IntentPicker.pending(interactions).map(IntentText.waitingPrompt)
-            )
+            let mutes = try await mutesRequest
+            let text = Self.text(sessions: sessions, interactions: interactions, mutes: mutes)
             return .result(value: text, dialog: IntentSupport.dialog(text))
         } catch {
             throw IntentFailureSentence(IntentFailure.sentence(for: error, host: IntentSupport.host()))
         }
+    }
+
+    /// What it says. Waiting counts the cards the app shows (muted agents' and quiet tasks' left out) and reads the
+    /// first of them, the card ApproveFirstIntent settles (`IntentPicker.waiting`, #5257).
+    static func text(sessions: [Session], interactions: [Interaction], mutes: [String: Pins]) -> String {
+        let waiting = IntentPicker.waiting(interactions, sessions: sessions, mutes: mutes)
+        return IntentText.status(
+            working: sessions.filter { $0.status == .working }.count,
+            waiting: waiting.cards.count,
+            first: waiting.first.map(IntentText.waitingPrompt)
+        )
     }
 }

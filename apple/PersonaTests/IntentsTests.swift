@@ -183,6 +183,127 @@ struct IntentsTests {
         #expect(IntentPicker.pending([]) == nil)
     }
 
+    // MARK: Waiting cards (#5257)
+
+    private func waitingAgent(_ id: String, group: String = "", assistant: Bool = false, quiet: Bool = false,
+                              space: String? = nil) -> Session {
+        var o: [String: Any] = ["machine_id": "server", "session_id": id, "title": id, "cwd": "/tmp/p", "status": "idle",
+                                "assistant": assistant, "quiet": quiet]
+        if let space { o["space_name"] = space }
+        do {
+            var s = try JSON.decoder.decode(Session.self, from: JSONSerialization.data(withJSONObject: o))
+            s.group = group
+            return s
+        } catch { fatalError("bad fixture: \(error)") }
+    }
+
+    private func waitingCard(_ id: String, session: String, created: TimeInterval?, group: String = "",
+                             kind: InteractionKind = .permission, hubMuted: Bool = false) -> Interaction {
+        var ix = Interaction(id: id, machineID: "server", sessionID: session, kind: kind,
+                             createdAt: created.map { Date(timeIntervalSince1970: $0) }, summary: "card \(id)")
+        ix.group = group
+        if hubMuted { ix.muted = true }
+        return ix
+    }
+
+    /// The mutes of the default group: one agent, one space, and one agent turned back on inside that space.
+    private var waitingMutes: [String: Pins] {
+        var p = Pins()
+        p.sessions = ["server/muted"]
+        p.spaces = ["server/loud-off"]
+        p.allowed = ["server/back-on"]
+        return ["": p]
+    }
+
+    private var waitingSessions: [Session] {
+        [
+            waitingAgent("plain"), waitingAgent("other"), waitingAgent("muted"),
+            waitingAgent("in-space", space: "loud-off"), waitingAgent("back-on", space: "loud-off"),
+            waitingAgent("task", quiet: true), waitingAgent("persona", assistant: true),
+            waitingAgent("muted", group: "work"),
+        ]
+    }
+
+    private struct WaitingCase {
+        let name: String
+        let cards: [Interaction]
+        let visible: [String]
+        let first: String?
+    }
+
+    private var waitingCases: [WaitingCase] {
+        [
+            WaitingCase(name: "a muted agent's older card is skipped",
+                        cards: [waitingCard("m", session: "muted", created: 1), waitingCard("p", session: "plain", created: 2)],
+                        visible: ["p"], first: "p"),
+            WaitingCase(name: "a muted space's card is skipped, an agent turned back on in it is not",
+                        cards: [waitingCard("s", session: "in-space", created: 1),
+                                waitingCard("b", session: "back-on", created: 2)],
+                        visible: ["b"], first: "b"),
+            WaitingCase(name: "a quiet task's older card is skipped",
+                        cards: [waitingCard("q", session: "task", created: 1), waitingCard("p", session: "plain", created: 2)],
+                        visible: ["p"], first: "p"),
+            WaitingCase(name: "the hub's muted stamp is skipped even without the mutes list",
+                        cards: [waitingCard("h", session: "other", created: 1, hubMuted: true),
+                                waitingCard("p", session: "plain", created: 2)],
+                        visible: ["p"], first: "p"),
+            WaitingCase(name: "Persona's own question counts",
+                        cards: [waitingCard("a", session: "persona", created: 1, kind: .question),
+                                waitingCard("p", session: "plain", created: 2)],
+                        visible: ["a", "p"], first: "a"),
+            WaitingCase(name: "mutes are each group's own",
+                        cards: [waitingCard("w", session: "muted", created: 1, group: "work"),
+                                waitingCard("m", session: "muted", created: 2)],
+                        visible: ["w"], first: "w"),
+            WaitingCase(name: "everything skipped: nothing waiting",
+                        cards: [waitingCard("m", session: "muted", created: 1), waitingCard("q", session: "task", created: 2),
+                                waitingCard("s", session: "in-space", created: 3)],
+                        visible: [], first: nil),
+            WaitingCase(name: "nothing at all", cards: [], visible: [], first: nil),
+            WaitingCase(name: "oldest first whatever the order, a card without a time first",
+                        cards: [waitingCard("late", session: "plain", created: 30), waitingCard("early", session: "other", created: 10),
+                                waitingCard("m", session: "muted", created: 5), waitingCard("undated", session: "plain", created: nil)],
+                        visible: ["late", "early", "undated"], first: "undated"),
+            WaitingCase(name: "a card whose agent is not in the list still counts unless muted by its key",
+                        cards: [waitingCard("m", session: "muted", created: 1), waitingCard("u", session: "unknown", created: 2)],
+                        visible: ["u"], first: "u"),
+        ]
+    }
+
+    @Test func waitingSkipsMutedAndQuietCards() {
+        for c in waitingCases {
+            let waiting = IntentPicker.waiting(c.cards, sessions: waitingSessions, mutes: waitingMutes)
+            #expect(waiting.cards.map(\.id) == c.visible, "\(c.name)")
+            #expect(waiting.first?.id == c.first, "\(c.name)")
+        }
+    }
+
+    /// The card 「Persona 状态」 reads out is the card 「批准第一个待处理」 settles (#5257): each intent's own code, the
+    /// status sentence against the approve target.
+    @Test func statusReadsOutTheCardApproveSettles() {
+        let sessions = waitingSessions, mutes = waitingMutes
+        for c in waitingCases {
+            let text = JarvisStatusIntent.text(sessions: sessions, interactions: c.cards, mutes: mutes)
+            let approved = ApproveFirstIntent.target(c.cards, sessions: sessions, mutes: mutes)
+            #expect(approved?.id == c.first, "\(c.name)")
+            #expect(text.hasPrefix(IntentText.status(working: 0, waiting: c.visible.count, first: nil)), "\(c.name)")
+            if let approved {
+                #expect(text.contains(IntentText.waitingPrompt(approved)), "\(c.name)")
+                // No skipped card is ever what Siri reads out.
+                for skipped in c.cards where !c.visible.contains(skipped.id) {
+                    #expect(!text.contains(IntentText.waitingPrompt(skipped)), "\(c.name)")
+                }
+            } else {
+                #expect(text == IntentText.status(working: 0, waiting: 0, first: nil), "\(c.name)")
+            }
+        }
+        // The issue's case: the oldest card of all is a muted agent's plan; picking from every card would approve it.
+        let cards = [waitingCard("m", session: "muted", created: 1, kind: .plan), waitingCard("p", session: "plain", created: 2)]
+        #expect(IntentPicker.pending(cards)?.id == "m")
+        #expect(ApproveFirstIntent.target(cards, sessions: sessions, mutes: mutes)?.id == "p")
+        #expect(JarvisStatusIntent.text(sessions: sessions, interactions: cards, mutes: mutes).contains("card p"))
+    }
+
     // MARK: Approve
 
     @Test func onlyPermissionAndPlanCanBeResolvedFromSiri() {
