@@ -80,6 +80,12 @@ SCOPES = [
     Scope("web/home", "json", WEB + "home.json"),
     Scope("web/assistant-persona", "json", WEB + "assistant-persona.json"),
     Scope("web/personaassistant", "json", WEB + "personaassistant.json"),
+    # Zero computers / zero sources (#4485, #4480): 新建 Agent's empty 电脑 field, the inbox's sources, the composer's
+    # 还没发出去 line, 设置 › 通用's line under 运行在.
+    Scope("web/newagent-no-computer", "json", WEB + "newagent.json", r"^no_computer_"),
+    Scope("web/lib-inbox-sources", "json", WEB + "lib-inbox-sources.json"),
+    Scope("web/chat-composer-blocked", "json", WEB + "chat-composer.json", r"^blocked_hint$"),
+    Scope("web/settings-assistant-footer", "json", WEB + "settings.json", r"^assistant_footer"),
     # The hub's words: the coded refusals, the readiness steps, confirming a computer, pairing, the built-in presets and
     # the provider test's errors.
     Scope("server/apierr", "json", SERVER + "apierr-apierr.json"),

@@ -13,7 +13,7 @@
   "avatar": "Avatar",
   "avatar_footer": "Persona's name, avatar, the site's logo and tab icon, and the moving state in conversations; synced across your devices when the hub supports it. With the theme color set to follow the avatar, the site's colors follow it too. Extensions can add avatars.",
   "assistant": "Persona assistant",
-  "assistant_footer": "Each chat runs in the background in {cwd} on {machine}. Pick models and launchers in Model settings; manage connections and credentials in Model providers.",
+  "assistant_footer": "Each chat runs in the background on {machine}. Pick models in Model settings; manage connections and credentials in Model providers.",
   "hub_machine": "the hub machine",
   "runs_on": "Runs on",
   "this_browser": "This browser",
@@ -160,5 +160,6 @@
   "from_zshrc": "Imported from ~/.zshrc",
   "providers_advanced": "Advanced",
   "zshrc_import_hint": "Turns the functions that call claude in a computer's ~/.zshrc into providers. The hub reads the keys from that computer; they never pass through the browser.",
-  "zshrc_import_no_machines": "No computer is connected yet. This reads ~/.zshrc on a computer, so add one under Machines first."
+  "zshrc_import_no_machines": "No computer is connected yet. This reads ~/.zshrc on a computer, so add one under Machines first.",
+  "assistant_footer_none": "No computer connected yet. Once one is, each chat runs in the background on it. Pick models in Model settings; manage connections and credentials in Model providers."
 }

@@ -47,6 +47,7 @@ function hub(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     machine = { ...machine, trust: undefined };
     return Promise.resolve(json({ ok: true }));
   }
+  if (/^\/machines\/[abc]\/reject$/.test(path)) return Promise.resolve(json({ ok: true })); // the ones in the way
   if (path === "/machines/home/reject") {
     machine = null;
     return Promise.resolve(json({ ok: true }));
@@ -178,6 +179,31 @@ describe("AddComputer", () => {
     await click("下一步");
     expect(text()).toContain("hub 还没打开安全连接");
     expect(button("下一步")).toBeTruthy(); // still on the form, to try again
+  });
+
+  it("says the computers in the way never connected (not 等你确认) and removes one in place", async () => {
+    refuse = "too_many_pending";
+    const waiting = ["a", "b", "c"].map((id) => ({ id, name: `电脑 ${id}`, online: false, trust: "pending" as const, error_code: "never_connected" }));
+    Object.assign(getState(), { machines: waiting });
+    try {
+      await act(async () => root.render(<AddComputer open onClose={() => {}} />));
+      await flush();
+      await type("我的 MacBook");
+      await click("下一步");
+      const box = document.querySelector("[data-too-many]");
+      expect(box?.textContent).toContain("都还没连上来过");
+      expect(box?.textContent).not.toContain("等你确认");
+      expect(box?.textContent).toContain("电脑 a");
+      const remove = [...box!.querySelectorAll("button")].find((b) => b.textContent?.trim() === "删掉")!;
+      await act(async () => remove.click());
+      await flush();
+      expect(posts.at(-1)?.path).toBe("/machines/a/reject");
+      expect(document.querySelector("[data-too-many]")).toBeNull(); // back to the form, 下一步 tries again
+      expect(document.querySelector('[role="alert"]')).toBeNull();
+      expect(button("下一步")).toBeTruthy();
+    } finally {
+      Object.assign(getState(), { machines: [] });
+    }
   });
 
   it("asks a new code for a computer added before instead of adding one", async () => {

@@ -47,5 +47,10 @@
   "offline_hint": "它连上来以后，这里会问你是不是你的电脑。那台电脑还没拿到配对链接，就重新出一个。",
   "offline_hint_old": "它连上来以后，这里会问你是不是你的电脑。",
   "new_link": "重新出链接",
-  "remove": "删掉"
+  "remove": "删掉",
+  "too_many_never": "已经加了 {count} 台电脑，它们都还没连上来过。删掉用不上的，再添加新的。",
+  "too_many_waiting": "已经有 {count} 台电脑在等着：没连上来的可以删掉，连上来的先确认是不是你的，再添加新的。",
+  "never_connected": "还没连上来过",
+  "waiting_confirm": "等你确认",
+  "offline_short": "离线"
 }

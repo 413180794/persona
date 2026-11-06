@@ -9,11 +9,14 @@ vi.hoisted(() => {
 });
 
 let fail = true;
+// the hub's mail accounts: one by default (a source is connected, an empty inbox is 都处理完了); [] for none
+let mailAccounts: { id: string; email: string }[] = [{ id: "a1", email: "me@example.com" }];
 const calls: string[] = [];
 vi.mock("../../lib/api", async (orig) => ({
   ...(await orig<typeof import("../../lib/api")>()),
   api: (path: string) => {
     calls.push(path);
+    if (path === "/mail/accounts") return Promise.resolve({ accounts: mailAccounts });
     return path.startsWith("/inbox") && fail ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve({});
   },
 }));
@@ -28,6 +31,7 @@ vi.mock("../../lib/store", async (orig) => {
 
 import { InboxList } from "./InboxList";
 import { resetInboxForTests } from "../../lib/inbox";
+import { resetMailForTests } from "../../lib/mail";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,6 +43,8 @@ const flush = async () => {
 
 beforeEach(() => {
   resetInboxForTests();
+  resetMailForTests();
+  mailAccounts = [{ id: "a1", email: "me@example.com" }];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -47,6 +53,19 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+});
+
+describe("收件箱：还没接入消息来源", () => {
+  it("an empty inbox with nothing connected says so and offers 邮箱, not 都处理完了", async () => {
+    fail = false;
+    mailAccounts = [];
+    act(() => root.render(<InboxList />));
+    await flush();
+    const none = host.querySelector("[data-inbox-no-sources]");
+    expect(none?.textContent).toContain("还没接入消息来源");
+    expect([...none!.querySelectorAll("button")].map((b) => b.textContent?.trim())).toContain("接入邮箱");
+    expect(host.textContent).not.toContain("都处理完了");
+  });
 });
 
 describe("收件箱：首次加载失败", () => {

@@ -4,10 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Machine } from "../lib/types";
 
-vi.mock("../lib/store", () => {
-  const state = { machines: [{ id: "first", name: "First computer", online: true }, { id: "second", name: "Second computer", online: true }] };
-  return { useStore: (selector: (value: { machines: Machine[] }) => unknown) => selector(state) };
-});
+const TWO: Machine[] = [{ id: "first", name: "First computer", online: true }, { id: "second", name: "Second computer", online: true }];
+const state = vi.hoisted(() => ({ loaded: true, features: [] as string[], machines: [] as Machine[] }));
+vi.mock("../lib/store", () => ({ useStore: (selector: (value: { machines: Machine[] }) => unknown) => selector(state), hubHas: () => false }));
 vi.mock("react-dom", async (original) => ({ ...(await original<typeof import("react-dom")>()), createPortal: (children: React.ReactNode) => children }));
 
 import { NewAgent } from "./NewAgent";
@@ -23,6 +22,7 @@ const dirs = (name: string) => ({ path: `/projects/${name}`, entries: [{ name, p
 const clickMachine = (name: string) => act(() => [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === name)!.click());
 
 beforeEach(() => {
+  state.machines = TWO;
   localStorage.clear();
   pending = [];
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -79,5 +79,17 @@ describe("NewAgent directory requests", () => {
     expect(spinner()).not.toBeNull();
     await act(async () => pending.at(-1)!.answer(dirs("current-folder")));
     expect(spinner()).toBeNull();
+  });
+});
+
+describe("NewAgent with no computer", () => {
+  it("says why the 电脑 field is empty and offers 添加电脑 instead of a form that cannot start", async () => {
+    state.machines = [];
+    act(() => root.render(<NewAgent open onClose={() => {}} key="none" />));
+    await flush();
+    const empty = document.body.querySelector('[data-testid="new-agent-no-computer"]');
+    expect(empty?.textContent).toContain("还没有电脑");
+    expect([...empty!.querySelectorAll("button")].map((b) => b.textContent?.trim())).toContain("添加电脑");
+    expect(document.body.textContent).not.toContain("选一个目录");
   });
 });

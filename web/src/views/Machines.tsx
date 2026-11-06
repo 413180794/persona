@@ -2,7 +2,7 @@
 // (feature machines_add) adds one from here, and a computer waiting to be confirmed (trust pending) says so on its card.
 import { useEffect, useState } from "react";
 import { t as tr } from "../i18n";
-import { canAddComputer, isPending, machineErrorText } from "../lib/add-computer";
+import { canAddComputer, isPending, machineErrorText, neverConnected } from "../lib/add-computer";
 import { api, enc, errorText } from "../lib/api";
 import { readinessChanged } from "../lib/readiness";
 import { bytes, stateOf } from "../lib/format";
@@ -133,7 +133,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                       )}
                       <span className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[11px] font-medium", m.online ? "bg-green-tint text-green" : "bg-field text-ink-3")}>
                         <span className={cx("size-1.5 rounded-full", m.online ? "bg-green" : "bg-ink-3")} />
-                        {m.online ? t("machines.online") : t("machines.offline")}
+                        {m.online ? t("machines.online") : neverConnected(m) ? t("machines.not_connected_yet") : t("machines.offline")}
                       </span>
                     </div>
                     <p className="truncate text-[11.5px] text-ink-3">{[m.system?.name || m.os, m.system?.model, m.system?.cpu].filter(Boolean).join(" · ") || m.hostname}</p>

@@ -27,6 +27,9 @@ import { isModelCommand, requestModelPicker } from "../../lib/model-switch";
 import { MAX_IMAGES } from "../../lib/composer-commands";
 import { t } from "../../i18n";
 
+/** How long「还没发出去」stays under the box after Enter was pressed while blocked. */
+const NUDGE_MS = 4000;
+
 export interface Attachment {
   id: string;
   name: string;
@@ -109,7 +112,7 @@ export function Composer({
   onFocusChange?: (focused: boolean) => void;
   /** The main conversation cannot answer yet (docs/onboarding.md 4.4): the send button says what to do first and opens
    *  it; the box still takes typing and keeps the draft, nothing is sent or queued. */
-  blocked?: { label: string; onClick?: () => void };
+  blocked?: { label: string; onClick?: () => void; onNudge?: () => void };
   /** Set to this box's send (what is in it now): a failed send's 重新发送 sends the words that were put back (#4270). */
   resendRef?: React.MutableRefObject<(() => void) | null>;
   /** You typed in the box (not a send putting words back). */
@@ -129,6 +132,13 @@ export function Composer({
   const [focused, setFocused] = useState(false);
   const [mActive, setMActive] = useState(0);
   const [editing, setEditing] = useState<Attachment | null>(null);
+  // Enter while blocked (#4480): a line says why nothing went, the button and the card light up; it fades after a while
+  const [nudge, setNudge] = useState(0);
+  useEffect(() => {
+    if (!nudge) return;
+    const timer = setTimeout(() => setNudge(0), NUDGE_MS);
+    return () => clearTimeout(timer);
+  }, [nudge]);
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -613,7 +623,11 @@ export function Composer({
             // trackpad, an iPad's, sends on Enter)
             if (enterSends(e, hasFinePointer())) {
               e.preventDefault();
-              void submit();
+              // any Enter while blocked says why (also an empty box or attachments only): submit() would do nothing
+              if (blocked) {
+                setNudge((n) => n + 1);
+                blocked.onNudge?.();
+              } else void submit();
             }
           }}
           placeholder={pill && hasFinePointer() ? t("chat-composer.suggestion", { suggestion: pill }) : placeholder}
@@ -626,6 +640,12 @@ export function Composer({
           <div role="status" className={cx("flex items-center gap-1.5 px-2 text-[11.5px]", loop.missing ? "text-ink-3" : "text-ink-2")}>
             <Icon name="loop" size={12} stroke={2.2} className="shrink-0" />
             <span className="min-w-0 truncate">{loop.text}</span>
+          </div>
+        )}
+        {nudge > 0 && blocked && (
+          <div role="status" data-testid="composer-nudge" className="flex items-center gap-1.5 px-2 text-[11.5px] text-ink-2" style={{ animation: "fade-in 160ms ease-out both" }}>
+            <Icon name="info" size={12} stroke={2.2} className="shrink-0 text-accent-ink" />
+            <span className="min-w-0 truncate">{t("chat-composer.blocked_hint", { label: blocked.label })}</span>
           </div>
         )}
         <div className="flex items-center gap-1 [@media(pointer:coarse)]:gap-2">
@@ -683,12 +703,13 @@ export function Composer({
             </button>
           ) : blocked ? (
             <button
+              key={nudge}
               type="button"
               data-testid="composer-blocked"
               onClick={blocked.onClick}
               disabled={!blocked.onClick}
               className="touch-hit flex h-7 max-w-[60%] shrink-0 items-center gap-1 rounded-[8px] bg-ink px-2.5 text-[12px] font-medium whitespace-nowrap text-surface transition-[opacity,transform] duration-150 enabled:hover:opacity-90 enabled:active:scale-[0.96] disabled:opacity-45"
-              style={{ animation: `pop-in 200ms ${EASE} both` }}
+              style={{ animation: nudge ? `nudge-x 420ms ease-out both` : `pop-in 200ms ${EASE} both` }}
             >
               <span className="truncate">{blocked.label}</span>
               <Icon name="chevronRight" size={11} stroke={2.4} className="shrink-0" />

@@ -391,6 +391,11 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
   VoiceOver 也会走进去；`opacity(0)` 也一样。一直建着、平时藏起来的大块界面（Persona 侧边栏）放进自己的 `UIHostingController`，用 UIKit 的
   `isHidden` 藏。SwiftUI 会在每次更新时重设 representable 给它的那个视图的 frame、transform、alpha、isHidden，自己要动的是里面一层
   （`DrawerSidebarHost.Container`）；整套环境用 `.environment(\.self, context.environment)` 带进去。
+  但深浅色不能跟着这份拷贝走（2026-11-06，#4496）：拷贝只和 SwiftUI 最后一次 `updateUIViewController` 一样新，SwiftUI 还把同一个值当成
+  里面 controller 的 trait 传下去，所以 `traitCollection` 也不可信；iOS 退到后台时会把窗口切到另一种外观拍 App 切换器的快照（日志里后台时 env
+  深 → 浅 → 深地来回），最后一次切回的更新没来，侧边栏就停在另一种外观：浅色背景上 `Color.primary` 是白字，玻璃按钮、红色角标照常。
+  做法：以所在窗口的 `traitCollection.userInterfaceStyle` 为准（`ColorSchemeChoice` 设在窗口上），注册窗口的 trait 变化重新渲染，
+  `colorScheme` 盖在拷贝的环境上、宿主的 `overrideUserInterfaceStyle` 也设成同一个。`DrawerSidebarLookTests` 守着；`-showLookBlink <秒>` 模拟快照的来回。
   Agents 对话的顶栏（`ChromeHeader`）是同一类坑（2026-11-02）：全开的和折起的叠在一个 ZStack 里，只靠透明度和 `allowsHitTesting` 切换，
   两层的「返回」一直都在树上；折起后全开那层上移进了裁切区，它的「返回」落在状态栏那一条，XCUITest 说点得到，点了是状态栏，不返回。
   `.accessibilityHidden` 加在层上、甚至直接加在 plain 按钮上，XCUITest 都照样找得到。做法：看不见的那层不在树上（折起的细条半程前不建；

@@ -254,7 +254,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 
 除 `demo` 外只有 `mbp` 一台、没有 Agent 和别的助手对话（新用户的样子）。`MOCK_START_ERROR=<码>` 不管场景，开对话一律按这个码拒绝
 （`no_machine`、`machine_pending`、`claude_missing`、`launcher_missing`、`node_unreachable`、`node_outdated`、`assistant_offline`），拍每个码的卡片；
-`MOCK_BUILTIN_PRESETS=1` 不带场景，只加内置供应商和 `builtin_presets`。这两种情况下，`MOCK_PROVIDERS=1` 的「测试连接」遇到含 `region` 的 Key 时，回 Anthropic 按地区拦下的那句话和 `code: "region_blocked"`（#4482，文字取自 hub 的文案）。`mock_scenarios.py` 里是 `readiness-<场景>`（运行中切换）。
+`MOCK_BUILTIN_PRESETS=1` 不带场景，只加内置供应商和 `builtin_presets`。这两种情况下，`MOCK_PROVIDERS=1` 的「测试连接」遇到含 `region` 的 Key 时，回 Anthropic 按地区拦下的那句话和 `code: "region_blocked"`（#4482，文字取自 hub 的文案）。添加电脑和 hub 一样最多 3 台待确认（第 4 台 429 `too_many_pending`）；
+`MOCK_INBOX_SOURCES=none` 让收件箱什么来源都没接（没有条目、没有邮箱账号、飞书没设置、GitHub 没登录），和 `zero` 一起拍零电脑、零来源的空状态（#4485、#4480）。`mock_scenarios.py` 里是 `readiness-<场景>`（运行中切换）。
 
 不会漂移：`server/internal/assistant/readiness_scenarios_test.go` 在假 hub 上搭出同样的场景，把真代码回的就绪度（三种语言）和开对话的拒绝存进
 `testdata/readiness_scenarios/<场景>.json`；`scripts/mock/test_readiness_mock.py` 起 mock 逐个比对。改了就绪度或文案：`UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`，
@@ -924,6 +925,10 @@ Time Profiler 能用：附加到模拟器里的进程要带 `--device <模拟器
   每轮拖开松手、拖回、半路松手（弹回）、快甩、点页面关闭，经过和手指一样的 `AssistantDrawer.dragBegan / drag / letGo`，每个显示帧一步。
   用开了优化的 Debug 构建（`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`，单独的 derivedData）。对照组用 `git worktree`
   在旧提交上加同样的 `DrawerProbe.swift` 和三个同名方法。
+- 侧边栏的深浅色（#4496）：`SidebarContrastTests` 截图量「收件箱」行左半边的亮度差（正常 0.9 以上，白字在浅底上只有几个百分点），反复开关、回主屏再回来、
+  `-showLookBlink 3`（每 3 秒把窗口切到另一种外观排一次版再切回，模拟后台拍快照）；`testRowsFollowALookChange` 要 `TEST_RUNNER_JARVIS_FLIP_LOOK=<文件>`，
+  测试往文件里写 light / dark，由跑测试的脚本 `simctl ui <udid> appearance` 切换后删掉文件（没设就跳过）。`TEST_RUNNER_JARVIS_SCHEME=light|dark` 加上 `-ui.scheme`。
+  确定性的回归在单测 `DrawerSidebarLookTests`（页面环境和窗口外观不一致时，侧边栏跟窗口）。
 - 看主线程在忙什么：`sample <pid> 30 1`，pid 要按自己模拟器的设备目录找（`pgrep -f "Devices/<udid>/.*Persona.app/Persona"`，别的车道的模拟器也在跑 Persona）。
 
 2026-10-31 改前（master e4fca3b）/ 改后，模拟器 iPhone 18 Pro Max（60 Hz），长对话，每种 10 次（5 轮 × 2 次启动）：

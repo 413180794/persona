@@ -314,8 +314,10 @@ function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; o
         <PersonaPicker onExtensions={onExtensions} />
       </Group>
 
-      <Group title={t("settings.assistant")} footer={t("settings.assistant_footer", { machine: machineName ?? t("settings.hub_machine"), cwd: assistant?.cwd ?? "~/.persona/assistant" })}>
-        <Row label={t("settings.runs_on")}>{machineName ?? "—"}</Row>
+      {/* where it runs by the computer's name only: its folder is a path a newcomer has no use for (设置 › 助手 shows it);
+          no computer yet ("" from the hub) says so instead of a sentence with gaps */}
+      <Group title={t("settings.assistant")} footer={assistantFooter(machineName, !!assistant)}>
+        <Row label={t("settings.runs_on")}>{machineName || (assistant ? t("settings-assistantsettings.machine_none") : "—")}</Row>
       </Group>
 
       <TriageSettings onModel={onTriageModel} />
@@ -324,6 +326,12 @@ function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; o
       <About />
     </>
   );
+}
+
+/** 设置 › 通用's line under 运行在: the computer by name; none yet ("" from the hub) says so; nothing before it is read. */
+export function assistantFooter(machine: string | undefined, loaded: boolean): string | undefined {
+  if (machine) return t("settings.assistant_footer", { machine });
+  return loaded ? t("settings.assistant_footer_none") : undefined;
 }
 
 function About() {

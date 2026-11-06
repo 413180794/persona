@@ -33,5 +33,6 @@
   "confirmed": "已添加：{name}",
   "rejected": "已删掉「{name}」",
   "answer_failed": "没有成功：{error}",
-  "never_connected": "还没连上来过"
+  "never_connected": "还没连上来过",
+  "not_connected_yet": "还没连上"
 }

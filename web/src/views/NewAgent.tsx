@@ -21,6 +21,7 @@ import { Pill } from "./settings/SettingsParts";
 import { Icon } from "../ui/icons";
 import { ModelPicker, type ModelList } from "../ui/ModelPicker";
 import { t } from "../i18n";
+import { useAddComputer } from "./machines/AddComputerEntry";
 
 interface Dirs {
   path: string;
@@ -32,6 +33,10 @@ interface Dirs {
 export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: () => void; /** Filled in when another page opens it (知识库's 开 Agent). */ preset?: NewAgentPreset | null }) {
   const machines = useStore((s) => s.machines);
   const online = useMemo(() => machines.filter((m) => m.online), [machines]);
+  // no computer at all (docs/onboarding.md 4.5): the 电脑 field says why it is empty and adds one, nothing else to fill in
+  const loaded = useStore((s) => s.loaded);
+  const none = loaded && machines.length === 0;
+  const adding = useAddComputer();
   const [mid, setMid] = useState(() => localStorage.getItem("new.machine") ?? "");
   const [cwd, setCwd] = useState("");
   const [launcher, setLauncher] = useState("");
@@ -218,187 +223,230 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     onClose();
   };
 
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title={t("newagent.title")}
-      width={520}
-      footer={
-        <>
-          <span className="mr-auto min-w-0 truncate text-[11.5px] text-ink-3">{cwd ? shortPath(cwd) : t("newagent.pick_folder")}</span>
-          <Button tone="quiet" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button tone="primary" disabled={loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()} onClick={start}>
-            {t("newagent.start")}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <Field label={t("newagent.computer")}>
-          <div className="flex flex-wrap gap-1.5">
-            {machines.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                disabled={!m.online}
-                onClick={() => setMid(m.id)}
-                className={cx(
-                  "flex h-8 items-center gap-1.5 rounded-control px-2.5 text-[12.5px] whitespace-nowrap transition-[background-color,box-shadow,color] disabled:opacity-40",
-                  mid === m.id ? "bg-ink font-medium text-surface" : "bg-surface text-ink-2 shadow-btn enabled:hover:bg-hover enabled:hover:text-ink",
-                )}
+  if (none)
+    return (
+      <>
+        <Dialog
+          open={open}
+          onClose={onClose}
+          title={t("newagent.title")}
+          width={520}
+          footer={
+            <Button tone="quiet" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+          }
+        >
+          <Field label={t("newagent.computer")}>
+            <div data-testid="new-agent-no-computer" className="flex flex-col items-start gap-3 rounded-control bg-inset px-3.5 py-3 shadow-hairline">
+              <div className="flex items-start gap-2.5">
+                <Icon name="machine" size={15} className="mt-0.5 shrink-0 text-ink-3" />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[13px] font-medium text-ink">{t("newagent.no_computer_title")}</span>
+                  <span className="text-[12.5px] leading-relaxed text-ink-2">{t("newagent.no_computer_body")}</span>
+                </div>
+              </div>
+              <Button
+                tone="primary"
+                icon="plus"
+                onClick={() => {
+                  onClose(); // the add flow is a dialog of its own, not one over this
+                  adding.open();
+                }}
               >
-                <span className={cx("size-1.5 rounded-full", m.online ? "bg-green" : "bg-ink-3")} />
-                {m.name}
-                {hubLabel(m, machines) && <span className={mid === m.id ? "opacity-70" : "text-ink-3"}>{hubLabel(m, machines)}</span>}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        <Field label={t("newagent.folder")}>
-          <input
-            value={cwd}
-            onChange={(e) => setCwd(e.target.value)}
-            placeholder={t("newagent.folder_placeholder")}
-            spellCheck={false}
-            className="h-9 w-full rounded-control bg-inset px-3 font-mono text-[12.5px] text-ink shadow-hairline outline-none placeholder:font-sans placeholder:text-ink-3 focus:shadow-[0_0_0_1px_var(--line-strong)]"
-          />
-          <div className="mt-1.5 max-h-52 overflow-y-auto rounded-control bg-surface p-1 shadow-hairline">
-            {!browse && (dirs?.recent?.length ?? 0) > 0 && (
-              <>
-                <div className="px-2 pt-1 pb-0.5 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{t("newagent.recent")}</div>
-                {dirs!.recent!.slice(0, 6).map((d) => (
-                  <DirRow key={d.path} name={d.name || baseName(d.path)} path={d.path} sub={shortPath(d.path)} selected={cwd === d.path} onPick={() => setCwd(d.path)} />
-                ))}
-              </>
-            )}
-            <div className="flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">
-              {browse && dirs?.parent !== undefined && (
-                <button type="button" aria-label={t("newagent.parent_folder")} onClick={() => setBrowse(dirs!.parent!)} className="-ml-1 flex size-4.5 items-center justify-center rounded-[4px] hover:bg-hover hover:text-ink">
-                  <Icon name="chevronLeft" size={12} stroke={2.4} />
-                </button>
-              )}
-              <span className="truncate normal-case tracking-normal">{dirs?.path ? shortPath(dirs.path) : t("newagent.home_folder")}</span>
-              {loadingDirs && <Spinner size={10} />}
+                {t("machines.add")}
+              </Button>
             </div>
-            {dirs?.entries?.map((d) => (
-              <DirRow key={d.path} name={d.name} path={d.path} git={d.is_git} selected={cwd === d.path} onPick={() => setCwd(d.path)} onOpen={() => setBrowse(d.path)} />
-            ))}
-          </div>
-        </Field>
+          </Field>
+        </Dialog>
+        {adding.dialog}
+      </>
+    );
 
-        {(unified || launchers.length > 1) && (
-          <Field label={unified ? t("newagent.launcher_override") : t("newagent.launcher")}>
+  return (
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title={t("newagent.title")}
+        width={520}
+        footer={
+          <>
+            <span className="mr-auto min-w-0 truncate text-[11.5px] text-ink-3">{cwd ? shortPath(cwd) : t("newagent.pick_folder")}</span>
+            <Button tone="quiet" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button tone="primary" disabled={loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()} onClick={start}>
+              {t("newagent.start")}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label={t("newagent.computer")}>
             <div className="flex flex-wrap gap-1.5">
-              {unified && <Choice selected={launcher === ""} onClick={() => setLauncher("")} title={modelDefault}>{hubDefault ? defaultLabel(hubDefault) : t("newagent.follow_model_settings")}</Choice>}
-              {launchers.map((l) => (
-                <Choice key={l.name} mono selected={launcher === l.name} onClick={() => setLauncher(l.name)} title={l.model}>
-                  <span className="flex items-center gap-1.5">
-                    <AgentMark agent={l.agent_type || l.agent} size={13} className="text-current" />
-                    {l.name}
-                  </span>
-                </Choice>
+              {machines.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  disabled={!m.online}
+                  onClick={() => setMid(m.id)}
+                  className={cx(
+                    "flex h-8 items-center gap-1.5 rounded-control px-2.5 text-[12.5px] whitespace-nowrap transition-[background-color,box-shadow,color] disabled:opacity-40",
+                    mid === m.id ? "bg-ink font-medium text-surface" : "bg-surface text-ink-2 shadow-btn enabled:hover:bg-hover enabled:hover:text-ink",
+                  )}
+                >
+                  <span className={cx("size-1.5 rounded-full", m.online ? "bg-green" : "bg-ink-3")} />
+                  {m.name}
+                  {hubLabel(m, machines) && <span className={mid === m.id ? "opacity-70" : "text-ink-3"}>{hubLabel(m, machines)}</span>}
+                </button>
               ))}
             </div>
-            {unified && (
-              <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
-                {launcher && <Pill tone="accent">{oneOff()}</Pill>}
-                <span className="min-w-0 truncate">{launcher ? t("newagent.override_hint") : modelDefault || t("newagent.default_hint")}</span>
-              </p>
-            )}
           </Field>
-        )}
 
-        {listLauncher && models.status !== "idle" && !(models.status === "ready" && !models.list?.models.length) && (
-          <Field label={t("newagent.model")}><ModelPicker
-            models={models}
-            model={model}
-            followed={followed}
-            ownModel={launchers.find((l) => l.name === listLauncher)?.model}
-            open={picking}
-            onToggle={() => setPicking((o) => !o)}
-            query={query}
-            onQuery={setQuery}
-            search={search}
-            onPick={(id) => {
-              setModel(id);
-              setPicking(false);
-              setQuery("");
-            }}
-            onReload={reloadModels}
-            failedNote={t("newagent.models_failed")}
-          /></Field>
-        )}
-
-        {takesEffort(agent) && (
-          <Field label={t("newagent.permission_mode")}>
-            <div role="radiogroup" aria-label={t("newagent.permission_mode")} className="flex flex-wrap gap-1.5">
-              <Choice radio selected={mode === ""} onClick={() => setMode("")}>{t("newagent.follow_launcher")}</Choice>
-              {PERMISSION_MODES.map((m) => (
-                <Choice key={m.id} radio selected={mode === m.id} onClick={() => setMode(m.id)} title={m.detail}>
-                  {m.title}
-                </Choice>
+          <Field label={t("newagent.folder")}>
+            <input
+              value={cwd}
+              onChange={(e) => setCwd(e.target.value)}
+              placeholder={t("newagent.folder_placeholder")}
+              spellCheck={false}
+              className="h-9 w-full rounded-control bg-inset px-3 font-mono text-[12.5px] text-ink shadow-hairline outline-none placeholder:font-sans placeholder:text-ink-3 focus:shadow-[0_0_0_1px_var(--line-strong)]"
+            />
+            <div className="mt-1.5 max-h-52 overflow-y-auto rounded-control bg-surface p-1 shadow-hairline">
+              {!browse && (dirs?.recent?.length ?? 0) > 0 && (
+                <>
+                  <div className="px-2 pt-1 pb-0.5 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{t("newagent.recent")}</div>
+                  {dirs!.recent!.slice(0, 6).map((d) => (
+                    <DirRow key={d.path} name={d.name || baseName(d.path)} path={d.path} sub={shortPath(d.path)} selected={cwd === d.path} onPick={() => setCwd(d.path)} />
+                  ))}
+                </>
+              )}
+              <div className="flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">
+                {browse && dirs?.parent !== undefined && (
+                  <button type="button" aria-label={t("newagent.parent_folder")} onClick={() => setBrowse(dirs!.parent!)} className="-ml-1 flex size-4.5 items-center justify-center rounded-[4px] hover:bg-hover hover:text-ink">
+                    <Icon name="chevronLeft" size={12} stroke={2.4} />
+                  </button>
+                )}
+                <span className="truncate normal-case tracking-normal">{dirs?.path ? shortPath(dirs.path) : t("newagent.home_folder")}</span>
+                {loadingDirs && <Spinner size={10} />}
+              </div>
+              {dirs?.entries?.map((d) => (
+                <DirRow key={d.path} name={d.name} path={d.path} git={d.is_git} selected={cwd === d.path} onPick={() => setCwd(d.path)} onOpen={() => setBrowse(d.path)} />
               ))}
             </div>
-            <p className={cx("mt-1.5 text-[11.5px]", mode === BYPASS_MODE ? "text-red" : "text-ink-3")}>
-              {mode === BYPASS_MODE ? BYPASS_WARNING : PERMISSION_MODES.find((m) => m.id === mode)?.detail ?? t("newagent.permission_mode_hint")}
-            </p>
           </Field>
-        )}
 
-        {!loadingModels && takesEffort(agent) && (
-          <Field label={t("newagent.effort")}>
-            {efforts.length > 0 ? (
+          {(unified || launchers.length > 1) && (
+            <Field label={unified ? t("newagent.launcher_override") : t("newagent.launcher")}>
               <div className="flex flex-wrap gap-1.5">
-                <Choice selected={effort === ""} onClick={() => setEffort("")}>{followed.effort ? t("newagent.follow_model_settings") : t("newagent.follow_launcher")}</Choice>
-                {efforts.map((id) => (
-                  <Choice key={id} selected={effort === id} onClick={() => setEffort(id)} title={EFFORTS.find((e) => e.id === id)?.detail}>
-                    {effortTitle(id)}
+                {unified && <Choice selected={launcher === ""} onClick={() => setLauncher("")} title={modelDefault}>{hubDefault ? defaultLabel(hubDefault) : t("newagent.follow_model_settings")}</Choice>}
+                {launchers.map((l) => (
+                  <Choice key={l.name} mono selected={launcher === l.name} onClick={() => setLauncher(l.name)} title={l.model}>
+                    <span className="flex items-center gap-1.5">
+                      <AgentMark agent={l.agent_type || l.agent} size={13} className="text-current" />
+                      {l.name}
+                    </span>
                   </Choice>
                 ))}
               </div>
-            ) : (
-              <p className="flex h-7 items-center text-[11.5px] text-ink-3">
-                {pickedModel ? t("newagent.effort_unsupported", { model: modelName(pickedModel) }) : t("newagent.effort_unsupported_default")}
-              </p>
-            )}
-          </Field>
-        )}
+              {unified && (
+                <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
+                  {launcher && <Pill tone="accent">{oneOff()}</Pill>}
+                  <span className="min-w-0 truncate">{launcher ? t("newagent.override_hint") : modelDefault || t("newagent.default_hint")}</span>
+                </p>
+              )}
+            </Field>
+          )}
 
-        <Field label={t("newagent.first_message_optional")}>
-          <div className={cx("flex flex-col gap-2 rounded-control bg-inset shadow-hairline focus-within:shadow-[0_0_0_1px_var(--line-strong)]", dragging && "outline-2 outline-accent")}
-            onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
-            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
-            onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
-            {attachments.length > 0 && <div className="px-3 pt-2"><AttachmentTray attachments={attachments} onRemove={(id) => {
-              releaseAttachments(attachments.filter((a) => a.id === id));
-              setAttachments((current) => current.filter((a) => a.id !== id));
-            }} /></div>}
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
-              onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); start(); }
+          {listLauncher && models.status !== "idle" && !(models.status === "ready" && !models.list?.models.length) && (
+            <Field label={t("newagent.model")}><ModelPicker
+              models={models}
+              model={model}
+              followed={followed}
+              ownModel={launchers.find((l) => l.name === listLauncher)?.model}
+              open={picking}
+              onToggle={() => setPicking((o) => !o)}
+              query={query}
+              onQuery={setQuery}
+              search={search}
+              onPick={(id) => {
+                setModel(id);
+                setPicking(false);
+                setQuery("");
               }}
-              rows={3}
-              aria-label={t("newagent.first_message")}
-              placeholder={keys ? t("newagent.prompt_placeholder_keys", { keys }) : t("newagent.prompt_placeholder")}
-              className="w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-3"
-            />
-            <div className="flex items-center gap-2 px-2 pb-2">
-              <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.currentTarget.files) addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-              <button type="button" aria-label={t("newagent.add_files")} title={t("newagent.add_files")} onClick={() => fileInput.current?.click()} className="flex size-7 shrink-0 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink"><Icon name="plus" size={16} stroke={2} /></button>
-              <span className="min-w-0 text-[11.5px] text-ink-3">{t("newagent.attach_hint")}</span>
+              onReload={reloadModels}
+              failedNote={t("newagent.models_failed")}
+            /></Field>
+          )}
+
+          {takesEffort(agent) && (
+            <Field label={t("newagent.permission_mode")}>
+              <div role="radiogroup" aria-label={t("newagent.permission_mode")} className="flex flex-wrap gap-1.5">
+                <Choice radio selected={mode === ""} onClick={() => setMode("")}>{t("newagent.follow_launcher")}</Choice>
+                {PERMISSION_MODES.map((m) => (
+                  <Choice key={m.id} radio selected={mode === m.id} onClick={() => setMode(m.id)} title={m.detail}>
+                    {m.title}
+                  </Choice>
+                ))}
+              </div>
+              <p className={cx("mt-1.5 text-[11.5px]", mode === BYPASS_MODE ? "text-red" : "text-ink-3")}>
+                {mode === BYPASS_MODE ? BYPASS_WARNING : PERMISSION_MODES.find((m) => m.id === mode)?.detail ?? t("newagent.permission_mode_hint")}
+              </p>
+            </Field>
+          )}
+
+          {!loadingModels && takesEffort(agent) && (
+            <Field label={t("newagent.effort")}>
+              {efforts.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  <Choice selected={effort === ""} onClick={() => setEffort("")}>{followed.effort ? t("newagent.follow_model_settings") : t("newagent.follow_launcher")}</Choice>
+                  {efforts.map((id) => (
+                    <Choice key={id} selected={effort === id} onClick={() => setEffort(id)} title={EFFORTS.find((e) => e.id === id)?.detail}>
+                      {effortTitle(id)}
+                    </Choice>
+                  ))}
+                </div>
+              ) : (
+                <p className="flex h-7 items-center text-[11.5px] text-ink-3">
+                  {pickedModel ? t("newagent.effort_unsupported", { model: modelName(pickedModel) }) : t("newagent.effort_unsupported_default")}
+                </p>
+              )}
+            </Field>
+          )}
+
+          <Field label={t("newagent.first_message_optional")}>
+            <div className={cx("flex flex-col gap-2 rounded-control bg-inset shadow-hairline focus-within:shadow-[0_0_0_1px_var(--line-strong)]", dragging && "outline-2 outline-accent")}
+              onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
+              onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
+              {attachments.length > 0 && <div className="px-3 pt-2"><AttachmentTray attachments={attachments} onRemove={(id) => {
+                releaseAttachments(attachments.filter((a) => a.id === id));
+                setAttachments((current) => current.filter((a) => a.id !== id));
+              }} /></div>}
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); start(); }
+                }}
+                rows={3}
+                aria-label={t("newagent.first_message")}
+                placeholder={keys ? t("newagent.prompt_placeholder_keys", { keys }) : t("newagent.prompt_placeholder")}
+                className="w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-3"
+              />
+              <div className="flex items-center gap-2 px-2 pb-2">
+                <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.currentTarget.files) addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
+                <button type="button" aria-label={t("newagent.add_files")} title={t("newagent.add_files")} onClick={() => fileInput.current?.click()} className="flex size-7 shrink-0 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink"><Icon name="plus" size={16} stroke={2} /></button>
+                <span className="min-w-0 text-[11.5px] text-ink-3">{t("newagent.attach_hint")}</span>
+              </div>
             </div>
-          </div>
-        </Field>
-      </div>
-    </Dialog>
+          </Field>
+        </div>
+      </Dialog>
+      {adding.dialog}
+    </>
   );
 }
 

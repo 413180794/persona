@@ -4415,6 +4415,12 @@ IMESSAGE_MESSAGES = {
 
 if os.environ.get("MOCK_INBOX") == "empty":
     INBOX.clear()
+# MOCK_INBOX_SOURCES=none (#4480): nothing feeds the inbox yet: no items, no mail account, Feishu not set up, GitHub not
+# signed in; the inbox says 还没接入消息来源 and offers the sources.
+NO_SOURCES = os.environ.get("MOCK_INBOX_SOURCES") == "none"
+if NO_SOURCES:
+    INBOX.clear()
+    GITHUB_CONNECTOR.update(status="not_configured", account=None, via=None)
 
 # MOCK_INBOX_EXTRA=<n>: n more 知悉即可 mails (示例通知), for 一键清理's confirmation over many items (docs/inbox.md).
 for _i in range(int(os.environ.get("MOCK_INBOX_EXTRA", "0"))):
@@ -5493,6 +5499,8 @@ MOMENT_COMMENTS = [
 
 MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com", "provider": "imap", "auth": "password",
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
+if NO_SOURCES:
+    MAIL_ACCOUNTS.clear()
 
 # ---------- area: mail (Android mail lane; fake data only) ----------
 # The mail's write paths: flags, sending, adding / testing / deleting accounts, Google sign-in's start. Nothing is sent
@@ -10753,6 +10761,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
             return self.send_json(LARK_PIN_FIXTURE)
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
+            if NO_SOURCES:
+                return self.send_json({"configured": False, "connected": False})
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
         lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
             p.startswith(("/api/v1/lark/conversations/", "/api/v1/lark/messages/")) and p.endswith(("/messages", "/thread")))
@@ -12741,6 +12751,7 @@ def features():
 
 MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_PLUGINS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
+MOCK_HELP.append("MOCK_INBOX_SOURCES=none  还没接任何消息来源：收件箱空、没有邮箱账号、飞书没设置、GitHub 没登录（#4480）")
 MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试一键清理的「将处理 N 件」确认")
 MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")
 MOCK_HELP.append("MOCK_AUTO_CONVERSATIONS=1  助手对话带来源 origin（feature conversation_origin）：另有 10 段自动对话（收件箱 6、定时任务 2、飞书 /agent、对话派生），侧边栏收进「自动对话」（#3264）")
@@ -13398,6 +13409,11 @@ if ADD_COMPUTER:
                     handler.send_json({"error": "名字不能为空，最多 40 个字", "code": "invalid_name"}, 400)
                     return True
                 m = next((x for x in MACHINES if x.get("name") == name and x.get("trust") == "pending" and not x.get("online")), None)
+                if m is None and sum(1 for x in MACHINES if x.get("trust") == "pending") >= 3:
+                    # the hub's own limit (maxPendingComputers, server/internal/hub/machines_add.go)
+                    handler.send_json({"error": "已经加了 3 台电脑还没处理完（有的可能还没连上来过）。删掉用不上的，再添加新的",
+                                       "code": "too_many_pending"}, 429)
+                    return True
                 if m is None:
                     base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or add.get("os") or "computer"
                     mid, n = base, 2

@@ -75,6 +75,9 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
 
   const markets = data?.markets ?? [];
   const broken = markets.filter((m) => m.error);
+  // nothing listed because the market(s) shown could not be read: not 这个市场还没有扩展 under 暂时读不到 (#4480)
+  // with several markets and none picked there is no single 这个市场: say what was read is empty (some may be unreadable)
+  const unread = market ? !!markets.find((m) => m.id === market)?.error : markets.length > 0 && broken.length === markets.length;
   return (
     <>
       <Back
@@ -162,7 +165,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
           </div>
         )}
         {data && markets.length > 0 && data.extensions.length === 0 && (
-          <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q ? t("settings-extensionmarket.not_found", { query: q.trim() }) : t("settings-extensionmarket.market_empty")}</p>
+          <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q ? t("settings-extensionmarket.not_found", { query: q.trim() }) : unread ? t("settings-extensionmarket.market_unread") : !market && markets.length > 1 ? t("settings-extensionmarket.markets_read_empty") : t("settings-extensionmarket.market_empty")}</p>
         )}
         {data?.extensions.map((it, i) => {
           const st = itemState(it);

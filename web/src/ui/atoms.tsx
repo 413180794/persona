@@ -173,7 +173,8 @@ export function Button({
   const tones: Record<BtnTone, string> = {
     primary: "bg-ink text-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] enabled:hover:opacity-90",
     accent: "bg-accent text-white enabled:hover:brightness-105",
-    secondary: "bg-surface text-ink shadow-btn enabled:hover:bg-hover",
+    // dark: at 45% the ring and the light label still read as a button you can press, so a disabled one drops both
+    secondary: "bg-surface text-ink shadow-btn enabled:hover:bg-hover dark:disabled:bg-transparent dark:disabled:text-ink-3 dark:disabled:shadow-hairline",
     quiet: "text-ink-2 enabled:hover:bg-hover enabled:hover:text-ink",
     danger: "bg-red text-white enabled:hover:brightness-105",
   };

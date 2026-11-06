@@ -504,7 +504,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     选系统（Mac / Linux / Windows）、填名字（可以中文）→ `POST /api/v1/auth/pair-codes` 带 `add` → 按系统给说明：Linux 一行可拷贝的命令（hub 给了 `install.linux` 就是装 + 配对，没给就是 `jarvis-link pair`）；
     Mac 先装 Persona Link（如实写「目前要自己从源码编译」，链到 persona-link-install.md）再把配对链接拷贝 / 分享过去，粘贴到它的「配对…」；Windows 照 [windows.md](windows.md) 给 `jarvis-link.exe install --jarvisd .\personad.exe --pair …`。
     倒计时沿用「连接新设备」的 `connect-device.ts`，每 3 秒读一次机器列表（WebSocket 推得更快就用推的）；连上后同一屏问「有一台电脑想加入：<名字>，是你的吗？」，「是我的电脑」/「不是，删掉」调 `…/confirm` / `…/reject`。
-    过期了「重新生成」（`{"machine": id}`）。`tls_required`、`mesh_member`、`too_many_pending` 等按 code 出中文。
+    过期了「重新生成」（`{"machine": id}`）。`tls_required`、`mesh_member`、`too_many_pending` 等按 code 出中文；`too_many_pending` 时列出挡着的待确认电脑，每台可以「删掉」（#4480）。
+  - **零电脑、零来源**（#4485、#4480，[onboarding.md](onboarding.md) 4.5）：别的页要电脑时用 `src/views/machines/AddComputerEntry.tsx`（`useAddComputer` 打开同一个添加流程，老 hub 是说明弹窗；`NoComputers` 是机器页同款空状态）：Agents 页零电脑时整页是它，新建 Agent 的「电脑」一栏写原因和「添加电脑」。
+    收件箱什么来源都没接时（`src/lib/inbox-sources.ts`）说「还没接入消息来源」并列邮箱、飞书和能在这里登录的连接器。从没连上来过的电脑（`neverConnected`）显示「还没连上」而不是「离线」。
   - 待确认的电脑（`trust: pending`）卡片上一条橙色提示：在线时「有一台电脑想加入…」+ 确认 / 删掉，没连上过时「等这台电脑用配对链接连上来」+「重新出链接」/「删掉」，不显示「重新连接」和 hub 写给老 App 的 `error`。
     机器的 `error_code`（`node_service_down` / `link_offline` / `never_connected` / `node_outdated`）用自己的中文代替原文（原文放在悬停提示里），没有 `error_code` 的照旧按原文归类。
   - 截图：假 hub 带 `MOCK_ADD_COMPUTER=1`（加 `MOCK_MACHINES_KEEP=none` 看空状态）或 `MOCK_ADD_COMPUTER=seed`（列表里有待确认、离线的），`MOCK_ADD_COMPUTER_JOIN=<秒>` 调电脑多久「连上来」。

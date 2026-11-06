@@ -38,5 +38,6 @@
   "interrupt": "Interrupt",
   "interrupt_hint": "Interrupt (Esc)",
   "send": "Send",
-  "send_hint": "Send (Enter) · New line (Shift+Enter)"
+  "send_hint": "Send (Enter) · New line (Shift+Enter)",
+  "blocked_hint": "Not sent yet: {label}. What you wrote stays here."
 }

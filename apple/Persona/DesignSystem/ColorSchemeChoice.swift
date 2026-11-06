@@ -53,3 +53,28 @@ nonisolated enum ColorSchemeChoice: String, CaseIterable, Identifiable, Sendable
     }
     #endif
 }
+
+#if DEBUG && (os(iOS) || os(visionOS))
+/// `-showLookBlink <seconds>`: every that many seconds the windows go to the other look and back, laid out in between
+/// (what iOS does for its app-switcher snapshots as the app goes to the background: one in each look). The sidebar's
+/// own hosting controller kept the other look's text colors after it (#4496); `SidebarContrastTests` runs with it.
+@MainActor enum LookBlink {
+    static func run() async {
+        let every = UserDefaults.standard.double(forKey: "showLookBlink")
+        guard every > 0 else { return }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(every))
+            for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                for w in scene.windows {
+                    let kept = w.overrideUserInterfaceStyle
+                    let other: UIUserInterfaceStyle = w.traitCollection.userInterfaceStyle == .dark ? .light : .dark
+                    w.overrideUserInterfaceStyle = other
+                    w.layoutIfNeeded()
+                    w.overrideUserInterfaceStyle = kept
+                    w.layoutIfNeeded()
+                }
+            }
+        }
+    }
+}
+#endif

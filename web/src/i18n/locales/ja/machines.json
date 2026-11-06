@@ -33,5 +33,6 @@
   "confirmed": "{name}を追加しました",
   "rejected": "「{name}」を削除しました",
   "answer_failed": "失敗しました：{error}",
-  "never_connected": "未接続"
+  "never_connected": "未接続",
+  "not_connected_yet": "未接続"
 }

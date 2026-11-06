@@ -8,6 +8,6 @@
   "new_device": "有新设备配对：{name}",
   "no_computer": "没有这台电脑",
   "tls_required": "hub 还没打开安全连接，电脑接不进来",
-  "too_many_pending": "已经有 {count} 台电脑在等你确认。先确认或移除它们，再添加新的",
+  "too_many_pending": "已经加了 {count} 台电脑还没处理完（有的可能还没连上来过）。删掉用不上的，再添加新的",
   "unknown_machine": "没有要「电脑来连」的电脑「{id}」"
 }

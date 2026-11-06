@@ -1,4 +1,5 @@
 {
   "new_agent": "New agent",
-  "title": "Agents"
+  "title": "Agents",
+  "no_computers_body": "Agents work on your computers. Add one to watch them work here and step in any time."
 }

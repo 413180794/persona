@@ -5,7 +5,7 @@
   "code_node_outdated": "Persona on this computer is too old to update from here. Reinstall it on that computer.",
   "err_tls_required": "The hub hasn't turned on secure connections, so computers can't connect. Turn them on in the hub's admin page › Network, then try again.",
   "err_mesh_member": "This hub is a member of a group. Add computers on the primary hub.",
-  "err_too_many_pending": "3 computers are already waiting for you to confirm them. Confirm or remove them first.",
+  "err_too_many_pending": "You already have 3 computers that aren't set up yet (some may never have connected). Remove the ones you don't need on the Machines page, then add a new one.",
   "err_forbidden": "This device can't add computers. Try from an app or browser that's signed in.",
   "err_invalid_name": "Give it a name of up to 40 characters."
 }

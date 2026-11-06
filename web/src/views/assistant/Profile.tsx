@@ -35,7 +35,8 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   }, []);
 
   const machine = machines.find((m) => m.id === assistant?.machine_id);
-  const machineName = machine?.name ?? assistant?.machine_id ?? t("assistant-profile.hub_machine");
+  // "" (no computer yet) is not a name: 运行在 then says there is none rather than leaving a gap
+  const machineName = machine?.name || assistant?.machine_id || (assistant ? "" : t("assistant-profile.hub_machine"));
   const next = tasks ? upcoming(tasks, 3) : [];
   const reach = [{ text: machines.length ? t("assistant-profile.reach_machines", { machines: machines.map((m) => m.name).join(t("assistant-profile.list_separator")) }) : t("assistant-profile.reach_hub_computers"), icon: "machine" as IconName }, ...REACH];
 
@@ -51,7 +52,7 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           <div className="mb-8 flex flex-col items-center gap-2 text-center">
             <PersonaAvatar size={88} className="shadow-raised" />
             <h2 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">{persona.name}</h2>
-            <p className="max-w-full truncate text-[13px] text-ink-2">{t("assistant-profile.subtitle", { machine: machineName })}</p>
+            <p className="max-w-full truncate text-[13px] text-ink-2">{machineName ? t("assistant-profile.subtitle", { machine: machineName }) : t("assistant-profile.subtitle_no_machine")}</p>
             <div className="mt-1 flex flex-wrap justify-center gap-1.5">
               {machine && <Pill tone={machine.online ? "green" : undefined}>{machine.online ? t("assistant-profile.online") : t("assistant-profile.offline")}</Pill>}
               {working && <Pill tone="accent">{t("assistant-profile.working")}</Pill>}

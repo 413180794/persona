@@ -18,6 +18,7 @@
   "add_market": "添加市场",
   "not_found": "没有找到「{query}」",
   "market_empty": "这个市场还没有扩展",
+  "markets_read_empty": "读到的市场里还没有扩展",
   "gone": "这个市场里没有这个扩展了",
   "preview_failed": "看不了：{error}",
   "reload": "重新读取",
@@ -113,5 +114,6 @@
   "op_error": "原因：{error}",
   "op_machine_error": "{machine}：{error}",
   "op_progress": "{done}/{total} 步",
-  "official_unreachable": "暂时读不到官方扩展，稍后再试。"
+  "official_unreachable": "暂时读不到官方扩展，稍后再试。",
+  "market_unread": "读到以后，扩展会显示在这里。"
 }

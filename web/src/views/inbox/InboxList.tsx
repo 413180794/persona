@@ -10,7 +10,8 @@ import {
 import { useMailAccounts } from "../../lib/mail";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
 import { machineWithHub } from "../../lib/mesh";
-import { href, onLinkClick } from "../../lib/router";
+import { href, navigate, onLinkClick } from "../../lib/router";
+import { useInboxSources } from "../../lib/inbox-sources";
 import { useStore } from "../../lib/store";
 import type { Interaction } from "../../lib/types";
 import { t } from "../../i18n";
@@ -69,6 +70,9 @@ export function InboxList({ selected }: { selected?: string }) {
   const connectors = useMemo(() => connectorSources(items), [items]);
   const failed = Boolean(error) && !items.length;
   const empty = !s.tiers.action.length && !s.tiers.fyi.length && !s.tiers.noise.length && !agents.length;
+  // nothing ever came in, nothing filtered: is anything connected at all? (still unknown: the plain 都处理完了)
+  const sources = useInboxSources(ready && empty && !failed && !items.length && !query && !source && !kind);
+  const unconnected = sources && !sources.connected ? sources : null;
   // 全部标为已处理: the open items the list shows (its filters and search); the agents waiting are not items.
   const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.fyi, ...s.tiers.noise];
   const filterNames = [
@@ -163,7 +167,23 @@ export function InboxList({ selected }: { selected?: string }) {
             </Button>
           </div>
         )}
-        {ready && empty && !failed && (
+        {ready && empty && !failed && unconnected && (
+          <div className="mt-10 flex flex-col items-center gap-2 text-center" data-inbox-no-sources>
+            <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3">
+              <Icon name="inbox" size={17} />
+            </span>
+            <p className="text-[13.5px] font-medium text-ink">{t("inbox-inboxlist.no_sources_title")}</p>
+            <p className="max-w-80 text-[12.5px] leading-relaxed text-ink-3">{t("inbox-inboxlist.no_sources_hint")}</p>
+            <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+              {unconnected.offers.map((o, i) => (
+                <Button key={o.id} tone={i === 0 ? "primary" : "secondary"} icon={i === 0 ? "plus" : undefined} onClick={() => navigate(o.href)}>
+                  {t("inbox-inboxlist.no_sources_connect", { name: o.name })}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+        {ready && empty && !failed && !unconnected && (
           <div className="mt-10 flex flex-col items-center gap-2 text-center">
             <span className="flex size-10 items-center justify-center rounded-full bg-green-tint text-green">
               <Icon name="check" size={17} stroke={2.6} />

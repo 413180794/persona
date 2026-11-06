@@ -21,8 +21,11 @@ export interface ReadinessGate {
   readiness: Readiness | null;
   /** The step the card shows; null: nothing missing (or a hub without readiness). */
   step: ReadinessStep | null;
-  /** The send button's stand-in while a step is missing: its words and what it opens. Nothing is queued (4.4). */
-  blocked?: { label: string; onClick?: () => void };
+  /** The send button's stand-in while a step is missing: its words and what it opens. Nothing is queued (4.4).
+   *  `onNudge`: a send was tried anyway (Enter): the card draws the eye to what is missing. */
+  blocked?: { label: string; onClick?: () => void; onNudge?: () => void };
+  /** How many times a send was tried while blocked: the card replays its nudge on each. */
+  nudged: number;
   help: (topic: HelpTopic) => void;
   /** 确认电脑: the confirm screen of the computer waiting to be confirmed (the machines page on an older hub). */
   confirm: () => void;
@@ -38,6 +41,7 @@ export function useReadinessGate(on = true): ReadinessGate {
   const [topic, setTopic] = useState<HelpTopic | null>(null);
   // the add computer flow: a new one ({}), or the one waiting to be confirmed
   const [computer, setComputer] = useState<{ confirm?: PendingComputer } | null>(null);
+  const [nudged, setNudged] = useState(0);
   const canAdd = useStore((s) => canAddComputer(s.features));
   const canConfirm = useStore((s) => canConfirmComputer(s.features));
   const machines = useStore((s) => s.machines);
@@ -56,12 +60,14 @@ export function useReadinessGate(on = true): ReadinessGate {
     ? {
         label: sendLabel(step),
         onClick: step.action && knownAction(step.action.id) ? () => act(step.action!.id) : undefined,
+        onNudge: () => setNudged((n) => n + 1),
       }
     : undefined;
   return {
     readiness: r,
     step,
     blocked,
+    nudged,
     help,
     confirm,
     probing: on && probing,
@@ -102,12 +108,15 @@ export function ReadinessCard({ gate }: { gate: ReadinessGate }) {
   const probe = gate.readiness?.probe;
   return (
     <div
+      // a new key replays the nudge: Enter while blocked lights the card up (and gives it a small shake)
+      key={gate.nudged}
       role="status"
       data-testid="readiness-card"
       data-step={step.id}
       data-code={step.code}
+      data-nudged={gate.nudged || undefined}
       className="flex items-start gap-3 rounded-card bg-surface px-3.5 py-3 shadow-card"
-      style={{ animation: "fade-up 220ms ease-out both" }}
+      style={{ animation: gate.nudged ? "ready-nudge 700ms ease-out both" : "fade-up 220ms ease-out both" }}
     >
       <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-control", problem ? "bg-orange-tint text-orange" : "bg-accent-tint text-accent-ink")}>
         <Icon name={stepIcon(step)} size={15} stroke={2} />
@@ -295,17 +304,33 @@ export function HelpDialog({ topic, machine, step, onClose, onAction }: { topic:
           </div>
         </Dialog>
       );
-    case "how_to_connect_model":
+    case "how_to_connect_model": {
+      // an API key alone does not make the main conversation work: it still runs on a computer (#4480), so with none
+      // the first thing to do is add one
+      // only "add a computer" when there is none: an offline, unconfirmed or outdated one is the same step with its own
+      // action (wake / confirm / update), and adding a second computer would not help
+      const computerStep = step?.id === "computer" ? step : undefined;
+      const computerAction = computerStep?.action && knownAction(computerStep.action.id) ? computerStep.action.id : undefined;
+      const noComputer = computerStep !== undefined && (computerAction === "add_computer" || (!computerAction && computerStep.code === "no_machine"));
+      const main = noComputer ? "add_computer" : computerAction ?? "connect_model";
       return (
-        <Dialog open onClose={onClose} title={t("assistant-readiness.help_model_title")} footer={footer(<Button tone="primary" onClick={() => then("connect_model")}>{actionLabel("connect_model")}</Button>)}>
+        <Dialog open onClose={onClose} title={t("assistant-readiness.help_model_title")} footer={footer(<Button tone="primary" onClick={() => then(main)}>{actionLabel(main)}</Button>)}>
           <div className="flex flex-col gap-2">
             <P>{t("assistant-readiness.help_model_body")}</P>
             <ol className="flex list-decimal flex-col gap-1 pl-5 text-[13px] leading-relaxed text-ink-2">
               <li>{t("assistant-readiness.help_model_key")}</li>
               <li>{t("assistant-readiness.help_model_claude")}</li>
             </ol>
+            <div data-testid="help-model-computer" className="flex flex-col gap-1 text-[12.5px] leading-relaxed">
+              <p className="text-ink-2">{t("assistant-readiness.help_model_computer")}</p>
+              {noComputer && <p className="font-medium text-ink">{t("assistant-readiness.help_model_no_computer")}</p>}
+              {computerStep && !noComputer && (
+                <p className="font-medium text-ink">{t("assistant-readiness.help_model_computer_not_ready", { step: computerStep.title || sendLabel(computerStep) })}</p>
+              )}
+            </div>
           </div>
         </Dialog>
       );
+    }
   }
 }

@@ -107,6 +107,13 @@ export function isPending(m: Pick<Machine, "trust"> | undefined): boolean {
   return m?.trust === "pending";
 }
 
+/** A computer added here that has not come online once (the hub's error_code never_connected, or one waiting to be
+ *  confirmed that the hub has never seen): it is not 离线, it was never there. */
+export function neverConnected(m: Pick<Machine, "online" | "trust" | "error_code" | "last_seen">): boolean {
+  if (m.online) return false;
+  return m.error_code === "never_connected" || (isPending(m) && !m.last_seen);
+}
+
 /** Where adding a computer is, from what the machine list says of it now. `offline`: only when confirming one with no
  *  code made here (it waits to be confirmed but is not online to be looked at). */
 export type AddStage = "waiting" | "expired" | "joined" | "connected" | "gone" | "offline";

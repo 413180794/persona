@@ -56,11 +56,36 @@ export function snippet(s) {
   return chars.length > 200 ? chars.slice(0, 200).join('') + '…' : one
 }
 
-/** One line saying what a tool is about to do, for a permission card. */
+// The arguments that say what a call does, best first: what it runs or touches, then what it is about (a subagent's
+// description and prompt, an MCP tool's title, text or message), then what it names.
+const SUMMARY_KEYS = ['command', 'file_path', 'path', 'url', 'pattern', 'query', 'description', 'prompt', 'title', 'text', 'message', 'name']
+
+// Argument names whose values are credentials, never shown in a summary. Parts of a name that say so wherever they
+// are (apiKey, x-api-key, client_secret, accessKeyId), and whole words that say so only alone: key, pass, auth…
+// (so author, oauth_scope, session_name and keyword are shown). A DSN, a connection string or a webhook URL carries
+// its credential inside the value, so those names count too.
+const SECRET_PARTS = /token|passw|secret|apikey|accesskey|privatekey|credential|cookie|bearer|jwt|signature|sessionid|sessionkey|header|totp|webhook|connectionstring|connstr/
+const SECRET_WORDS = new Set(['key', 'keys', 'pass', 'pwd', 'pin', 'auth', 'authorization', 'authentication', 'authn', 'sig', 'otp', 'dsn'])
+
+/** Whether an argument's name says its value is a credential. */
+function secretKey(k) {
+  const words = String(k).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+  return SECRET_PARTS.test(words.join('')) || words.some((w) => SECRET_WORDS.has(w))
+}
+
+/**
+ * One line saying what a tool is about to do, for a permission card: the owner decides from it without opening the
+ * card. An input with none of the usual arguments shows its first string one as "key: value", never one whose name
+ * looks like a credential; only an input with no such text is the bare tool name.
+ */
 export function summaryOf(name, input) {
-  if (!input || typeof input !== 'object') return name ?? ''
-  for (const k of ['command', 'file_path', 'path', 'url', 'pattern', 'query']) {
-    if (typeof input[k] === 'string' && input[k]) return snippet(input[k])
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return name ?? ''
+  for (const k of SUMMARY_KEYS) {
+    if (typeof input[k] === 'string' && input[k].trim()) return snippet(input[k])
+  }
+  for (const [k, v] of Object.entries(input)) {
+    if (secretKey(k)) continue // the summary is a push's body: it shows on the lock screen
+    if (typeof v === 'string' && v.trim()) return snippet(`${k}: ${v}`)
   }
   return name ?? ''
 }

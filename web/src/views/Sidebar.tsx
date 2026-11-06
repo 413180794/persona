@@ -69,6 +69,8 @@ import { clipsOverflow, glideBox, glideStyle, sameBox, type GlideBox, type Span 
 import { AGENTS_FOLD, onGrouping, setAgentsFolded } from "../lib/sidebar-api";
 import { formatChord, jumpHint, useBindings } from "../lib/shortcuts";
 import { toggleSidebarColumn } from "../lib/layout";
+import { NoComputers, useAddComputer } from "./machines/AddComputerEntry";
+import { neverConnected } from "../lib/add-computer";
 
 /** The open row's own fill (#2283): it stays while the pointer is elsewhere in the list, a step darker than hover. */
 const CURRENT_ROW = "bg-hover-2";
@@ -356,12 +358,17 @@ export function AgentsList({ route, onNewAgent }: { route: Route; onNewAgent: ()
   const activeKey = useActiveKey(route);
   const { nav, reg, hover, highlight } = useGlide(activeKey);
   const go = useGo();
+  // no computer and nothing to list (docs/onboarding.md 4.5): the machines page's empty state, not a bare title
+  const bare = useStore((s) => s.loaded && s.machines.length === 0 && Object.keys(s.launches).length === 0);
+  const none = useAgentSessions().length === 0 && bare;
+  const adding = useAddComputer();
   return (
     <div className="h-full overflow-y-auto overscroll-contain">
       <div ref={nav} onMouseLeave={() => hover(null)} className="relative mx-auto max-w-[640px] px-2.5 pb-6">
         {highlight}
-        <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} add={false} />
+        {none ? <NoComputers body={t("agentspage.no_computers_body")} onAdd={adding.open} /> : <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} add={false} />}
       </div>
+      {adding.dialog}
     </div>
   );
 }
@@ -1022,7 +1029,7 @@ function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRo
         <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left [@media(pointer:coarse)]:min-h-11">
           <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", online ? "bg-green" : "bg-line-strong")} />
           <span className={cx("min-w-0 truncate text-[12.5px] font-semibold", online ? "text-ink" : "text-ink-3")}>{machineWithHub(m.machine.id, machines)}</span>
-          <span className="sr-only">{online ? t("sidebar.online") : t("sidebar.offline")}</span>
+          <span className="sr-only">{online ? t("sidebar.online") : neverConnected(m.machine) ? t("sidebar.not_connected_yet") : t("sidebar.offline")}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {m.needs > 0 && !(folded && online) ? (
@@ -1030,7 +1037,7 @@ function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRo
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
         ) : !online ? (
-          <span className="shrink-0 text-[10.5px] whitespace-nowrap text-ink-3">{t("sidebar.offline")}</span>
+          <span className="shrink-0 text-[10.5px] whitespace-nowrap text-ink-3">{neverConnected(m.machine) ? t("sidebar.not_connected_yet") : t("sidebar.offline")}</span>
         ) : (
           <SessionTally sessions={m.sessions} folded={folded} />
         )}
@@ -1195,7 +1202,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
         <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left [@media(pointer:coarse)]:min-h-11">
           <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", online ? "bg-green" : "bg-line-strong")} />
           <span className={cx("min-w-0 truncate text-[12.5px] font-semibold", online ? "text-ink" : "text-ink-3")}>{machineWithHub(m.machine.id, p.machines)}</span>
-          <span className="sr-only">{online ? t("sidebar.online") : t("sidebar.offline")}</span>
+          <span className="sr-only">{online ? t("sidebar.online") : neverConnected(m.machine) ? t("sidebar.not_connected_yet") : t("sidebar.offline")}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {m.needs > 0 && !(folded && online) ? (
@@ -1203,7 +1210,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
         ) : !online ? (
-          <span className="shrink-0 text-[10.5px] whitespace-nowrap text-ink-3">{t("sidebar.offline")}</span>
+          <span className="shrink-0 text-[10.5px] whitespace-nowrap text-ink-3">{neverConnected(m.machine) ? t("sidebar.not_connected_yet") : t("sidebar.offline")}</span>
         ) : (
           <SessionTally sessions={m.sessions} folded={folded} />
         )}

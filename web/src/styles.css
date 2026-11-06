@@ -190,6 +190,10 @@ body {
 @keyframes pin-flash{0%,35%{opacity:.9}to{opacity:0}}
 /* a chat row an in-conversation search went to (ChatView, Android ChatSearchHighlight): ringed, then gone */
 @keyframes search-hit{0%,75%{outline-color:var(--accent)}to{outline-color:transparent}}
+/* the main conversation's readiness card when a send is tried while it blocks (Readiness.tsx): ringed and shaken once */
+@keyframes ready-nudge{0%{box-shadow:0 0 0 2px var(--accent),var(--shadow-card);transform:translateX(0)}12%{transform:translateX(-4px)}26%{transform:translateX(4px)}40%{transform:translateX(-2px)}54%{transform:translateX(0)}70%{box-shadow:0 0 0 2px var(--accent),var(--shadow-card)}to{box-shadow:var(--shadow-card);transform:none}}
+/* the send button's stand-in when Enter was pressed while it blocks (Composer.tsx) */
+@keyframes nudge-x{0%,to{transform:none}20%{transform:translateX(-3px)}40%{transform:translateX(3px)}60%{transform:translateX(-2px)}80%{transform:translateX(1px)}}
 [data-search-hit] { outline: 2px solid transparent; outline-offset: -2px; border-radius: var(--radius-control); animation: search-hit 3s ease-out both; }
 @media (prefers-reduced-motion: reduce) { [data-search-hit] { animation: none; outline-color: var(--accent); } }
 

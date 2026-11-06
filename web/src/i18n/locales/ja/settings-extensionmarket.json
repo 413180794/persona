@@ -18,6 +18,7 @@
   "add_market": "マーケットを追加",
   "not_found": "「{query}」は見つかりませんでした",
   "market_empty": "このマーケットにはまだ拡張機能がありません",
+  "markets_read_empty": "読み込めたマーケットにはまだ拡張機能がありません",
   "gone": "この拡張機能はこのマーケットにありません",
   "preview_failed": "プレビューできません：{error}",
   "reload": "再読み込み",
@@ -113,5 +114,6 @@
   "op_error": "理由：{error}",
   "op_machine_error": "{machine}：{error}",
   "op_progress": "{done}/{total} ステップ",
-  "official_unreachable": "今は公式の拡張機能を読み込めません。しばらくしてから試してください。"
+  "official_unreachable": "今は公式の拡張機能を読み込めません。しばらくしてから試してください。",
+  "market_unread": "マーケットを読み込めると、ここに拡張機能が表示されます。"
 }

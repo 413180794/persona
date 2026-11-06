@@ -212,6 +212,12 @@ private struct DrawerTabBarProbe: UIViewRepresentable {
 /// (building it on a drag's first frame cost that frame 15–20 ms on the simulator), and closed it has to be gone from
 /// VoiceOver too: SwiftUI's `accessibilityHidden` left its search field, scroll view and rows in the tree. A UIKit view
 /// can be hidden for real (`AssistantDrawer.sidebarView`), and moved and faded without SwiftUI updating anything.
+///
+/// The look (light or dark) is the one thing not taken from the page: it is the window's. The copied environment is only
+/// as new as the last update SwiftUI sent here (and SwiftUI hands the same value down as the hosted controllers' traits),
+/// while iOS draws the app-switcher snapshots in the other look as the app goes to the background: the sidebar was then
+/// left with the other look's `Color.primary`, white text on the light backdrop, until the next update that did not
+/// always come (#4496). The window is where 设置 › 外观 › 深浅色 and the system set the look (`ColorSchemeChoice`).
 private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
     let drawer: AssistantDrawer
     let content: Content
@@ -220,9 +226,14 @@ private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
     /// sidebar back in place, shown): the hosting view inside it is the drawer's own.
     final class Container: UIViewController {
         let host: UIHostingController<AnyView>
+        /// The page's content and environment, as last handed in (`set`): the look goes on top of it.
+        private var content: AnyView
+        private var environment: EnvironmentValues
 
-        init(_ root: AnyView) {
-            host = UIHostingController(rootView: root)
+        init(_ content: AnyView, _ environment: EnvironmentValues) {
+            self.content = content
+            self.environment = environment
+            host = UIHostingController(rootView: AnyView(content.environment(\.self, environment)))
             super.init(nibName: nil, bundle: nil)
         }
 
@@ -231,13 +242,41 @@ private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
         /// Touches only for the sidebar itself: closed (hidden), the container is clear room over the page's top bar and
         /// conversation, and took the 历史对话 button's tap on a 6.3" phone.
         final class PassThrough: UIView {
+            var movedToWindow: () -> Void = {}
+
             override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
                 let hit = super.hitTest(point, with: event)
                 return hit === self ? nil : hit
             }
+
+            override func didMoveToWindow() {
+                super.didMoveToWindow()
+                movedToWindow()
+            }
         }
 
-        override func loadView() { view = PassThrough() }
+        /// The window whose look changes are followed, and the registration for them.
+        private weak var watched: UIWindow?
+        private var watching: UITraitChangeRegistration?
+
+        /// In a window (or another one): follow its look.
+        private func watchWindow() {
+            let window = view.window
+            if window !== watched {
+                if let watching, let watched { watched.unregisterForTraitChanges(watching) }
+                watched = window
+                watching = window?.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: UIWindow, _) in
+                    self?.render()
+                }
+            }
+            render()
+        }
+
+        override func loadView() {
+            let v = PassThrough()
+            v.movedToWindow = { [weak self] in self?.watchWindow() }
+            view = v
+        }
 
         override func viewDidLoad() {
             super.viewDidLoad()
@@ -257,23 +296,37 @@ private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
             host.view.bounds = view.bounds
             host.view.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
         }
+
+        func set(_ content: AnyView, _ environment: EnvironmentValues) {
+            self.content = content
+            self.environment = environment
+            if isViewLoaded { render() }
+        }
+
+        /// The page's environment with the window's look in it; the hosting controller's traits on the same look, for
+        /// what UIKit and the glass draw in the sidebar. Not in a window yet: the page's.
+        private func render() {
+            var look = environment
+            let style = view.window?.traitCollection.userInterfaceStyle ?? .unspecified
+            if style == .dark { look.colorScheme = .dark } else if style == .light { look.colorScheme = .light }
+            if host.overrideUserInterfaceStyle != style { host.overrideUserInterfaceStyle = style }
+            host.rootView = AnyView(content.environment(\.self, look))
+        }
     }
 
     func makeUIViewController(context: Context) -> Container {
-        let c = Container(root(context))
+        let c = Container(root, context.environment)
         c.loadViewIfNeeded()
         drawer.sidebarView = c.host.view
         return c
     }
 
     func updateUIViewController(_ c: Container, context: Context) {
-        c.host.rootView = root(context)
+        c.set(root, context.environment)
         if drawer.sidebarView !== c.host.view { drawer.sidebarView = c.host.view }
     }
 
-    private func root(_ context: Context) -> AnyView {
-        AnyView(content.accessibilityIdentifier("assistant-sidebar").environment(\.self, context.environment))
-    }
+    private var root: AnyView { AnyView(content.accessibilityIdentifier("assistant-sidebar")) }
 }
 
 /// The page pushed aside: a card with rounded corners, a shadow and (dark mode) an edge line, dimmed; a tap on
@@ -1707,3 +1760,4 @@ nonisolated enum HeadingMenu {
         Items.self == EmptyView.self ? nil : Theme.Size.wellXS
     }
 }
+

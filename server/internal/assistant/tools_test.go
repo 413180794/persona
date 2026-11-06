@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -165,5 +166,63 @@ func TestAdoptStartedSessionFilters(t *testing.T) {
 	f.setSessions("box", mk("new", func(*proto.Session) {}))
 	if _, ok := s.adoptStartedSession(context.Background(), dev, "claude-code", "/code/app", nil); ok {
 		t.Fatal("adoption happened without a pre-start snapshot")
+	}
+}
+
+// ask_user's answers come back keyed by question text: two questions worded alike (after trimming) are refused before
+// any card goes on the phone, instead of one answer silently overwriting the other (#4517). Distinct wording still asks.
+func TestAskUserRefusesDuplicateQuestionText(t *testing.T) {
+	s := newTestService(t, newFakeHub())
+	q := func(text string) map[string]any {
+		return map[string]any{"question": text, "options": []map[string]any{{"label": "好"}, {"label": "不好"}}}
+	}
+	call := func(texts ...string) (proto.ToolResult, bool) {
+		var qs []map[string]any
+		for _, x := range texts {
+			qs = append(qs, q(x))
+		}
+		raw, _ := json.Marshal(map[string]any{"questions": qs})
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		carded := make(chan bool, 1)
+		go func() {
+			for ctx.Err() == nil {
+				if qs := s.pendingQuestions(); len(qs) == 1 {
+					yes := map[string]string{}
+					for _, x := range qs[0].Questions {
+						yes[x.Question] = "好"
+					}
+					raw, _ := json.Marshal(proto.Resolution{Answers: yes})
+					_, _ = s.Action(context.Background(), Action{Op: "answer", InteractionID: qs[0].ID, Answer: raw})
+					carded <- true
+					return
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			carded <- false
+		}()
+		r := s.Tool(ctx, ToolCall{Name: "ask_user", Arguments: raw, MachineID: "mac", SessionID: "conv-assistant"})
+		cancel()
+		return r, <-carded
+	}
+	text := func(r proto.ToolResult) string {
+		var b strings.Builder
+		for _, c := range r.Content {
+			b.WriteString(c.Text)
+		}
+		return b.String()
+	}
+
+	r, carded := call("发吗？", "  发吗？ ")
+	if !r.IsError || text(r) != i18n.Err("hub-hub.duplicate_question").Error() {
+		t.Fatalf("duplicate questions: error=%v %q", r.IsError, text(r))
+	}
+	if carded {
+		t.Fatal("a card went on the phone for duplicate questions")
+	}
+
+	r, carded = call("发吗？", "现在发吗？")
+	if r.IsError || !carded || !strings.Contains(text(r), "发吗？ → 好") || !strings.Contains(text(r), "现在发吗？ → 好") {
+		t.Fatalf("distinct questions: carded=%v error=%v %q", carded, r.IsError, text(r))
 	}
 }

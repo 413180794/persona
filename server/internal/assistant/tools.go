@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -404,6 +405,10 @@ func (s *Service) toolAskUser(ctx context.Context, machine, sessionID string, ar
 	}
 	for _, q := range a.Questions {
 		ix.Questions = append(ix.Questions, proto.Question{Question: q.Question, Header: q.Header, MultiSelect: q.MultiSelect, Options: q.Options})
+	}
+	// Answers come back keyed by question text: two questions with the same text would lose one answer.
+	if proto.HasDuplicateQuestionText(ix.Questions) {
+		return "", i18n.Err("hub-hub.duplicate_question")
 	}
 	r, err := s.ask(ctx, ix)
 	if err != nil {

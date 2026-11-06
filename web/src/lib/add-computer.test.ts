@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addBody, addErrorText, addStage, canAddComputer, canConfirmComputer, confirmStage, linuxCommand, machineErrorText, pairCommand, pendingToConfirm, windowsCommand,
+  addBody, addErrorText, addStage, canAddComputer, canConfirmComputer, confirmStage, linuxCommand, machineErrorText, neverConnected, pairCommand, pendingToConfirm, windowsCommand,
 } from "./add-computer";
 import { ApiError } from "./api";
 import type { Machine } from "./types";
@@ -100,5 +100,15 @@ describe("confirming a computer waiting to be confirmed", () => {
     expect(pendingToConfirm([a, b, c])?.id).toBe("b");
     expect(pendingToConfirm([a, c])?.id).toBe("a");
     expect(pendingToConfirm([c])).toBeUndefined();
+  });
+});
+
+describe("neverConnected", () => {
+  it("is a computer that has not come online once: the hub's never_connected, or one waiting with no last_seen", () => {
+    expect(neverConnected(m({ error_code: "never_connected" }))).toBe(true);
+    expect(neverConnected(m({ trust: "pending" }))).toBe(true);
+    expect(neverConnected(m({ trust: "pending", last_seen: "2026-11-06T09:00:00Z" }))).toBe(false);
+    expect(neverConnected(m({ error_code: "link_offline", last_seen: "2026-11-06T09:00:00Z" }))).toBe(false);
+    expect(neverConnected(m({ online: true, trust: "pending" }))).toBe(false);
   });
 });

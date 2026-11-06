@@ -13,7 +13,7 @@
   "avatar": "形象",
   "avatar_footer": "Persona 的名字、头像、网页的标志和标签页图标，以及对话里会动的状态；hub 支持时在你的各台设备上同步。主题色选「跟随形象」时，网页的颜色也跟着形象走。扩展可以加形象。",
   "assistant": "Persona 助手",
-  "assistant_footer": "每段对话在 {machine} 的 {cwd} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。",
+  "assistant_footer": "每段对话在 {machine} 上后台运行。模型统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。",
   "hub_machine": "hub 所在的机器",
   "runs_on": "运行在",
   "this_browser": "这个浏览器",
@@ -157,5 +157,6 @@
   "from_zshrc": "从 ~/.zshrc 导入",
   "providers_advanced": "高级",
   "zshrc_import_hint": "读一台电脑 ~/.zshrc 里调用 claude 的函数，把它们变成供应商。Key 由 hub 从那台电脑读，不经过浏览器。",
-  "zshrc_import_no_machines": "还没有接上电脑。这一项要读电脑上的 ~/.zshrc，先在「机器」里添加一台电脑。"
+  "zshrc_import_no_machines": "还没有接上电脑。这一项要读电脑上的 ~/.zshrc，先在「机器」里添加一台电脑。",
+  "assistant_footer_none": "还没接上电脑。接上一台以后，每段对话会在它上面后台运行。模型统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。"
 }

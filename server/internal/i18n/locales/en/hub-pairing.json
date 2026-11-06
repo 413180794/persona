@@ -8,6 +8,6 @@
   "new_device": "New device paired: {name}",
   "no_computer": "There’s no such computer",
   "tls_required": "The hub hasn’t turned on secure connections yet, so computers can’t connect",
-  "too_many_pending": "{count} computers are already waiting for your confirmation. Confirm or remove them before adding another",
+  "too_many_pending": "{count} computers you added aren’t set up yet (some may never have connected). Remove the ones you don’t need before adding another",
   "unknown_machine": "There’s no computer “{id}” that connects to the hub"
 }

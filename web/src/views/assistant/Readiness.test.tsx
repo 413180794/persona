@@ -11,7 +11,8 @@ import type { Readiness } from "../../lib/readiness";
 
 vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;
-  g.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  // a mouse (Enter sends, as on a desktop); nothing else matches
+  g.matchMedia = (q: string) => ({ matches: /pointer:\s*fine/.test(q), addEventListener() {}, removeEventListener() {} });
 });
 
 const fake = vi.hoisted(() => ({ machines: [] as Machine[], features: [] as string[] }));
@@ -24,7 +25,7 @@ vi.mock("../../lib/store", async (importOriginal) => {
 });
 
 const { PersonaAssistant } = await import("../PersonaAssistant");
-const { resetReadiness } = await import("../../lib/readiness");
+const { resetReadiness, actionLabel } = await import("../../lib/readiness");
 const { getState } = await import("../../lib/store");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -116,10 +117,21 @@ describe("the main conversation's readiness", () => {
     await flush();
     expect(calls).not.toContain("POST /api/v1/assistant/conversations");
     expect(textarea().value).toBe("帮我看看日程");
+    // not nothing (#4480): a line says why, and the card is nudged
+    expect(host.querySelector('[data-testid="composer-nudge"]')?.textContent).toContain("还没发出去：先添加电脑");
+    expect(host.querySelector('[data-testid="readiness-card"]')?.getAttribute("data-nudged")).toBe("1");
 
-    // the button opens the step (add a computer: how, in place)
-    act(() => blocked!.click());
+    // the button opens the step (add a computer: how, in place); the nudge drew it anew, so it is looked up again
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="composer-blocked"]')!.click());
     expect(document.body.textContent).toContain("Persona Link");
+  });
+
+  it("answers Enter on an empty box too while blocked", async () => {
+    await render();
+    act(() => textarea().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await flush();
+    expect(calls).not.toContain("POST /api/v1/assistant/conversations");
+    expect(host.querySelector('[data-testid="composer-nudge"]')?.textContent).toContain("先添加电脑");
   });
 
   it("draws the hub's local questions as help, not messages", async () => {
@@ -128,8 +140,31 @@ describe("the main conversation's readiness", () => {
     expect(q).toBeTruthy();
     act(() => q!.click());
     expect(document.body.textContent).toContain("设置 › 模型供应商");
+    // a key alone is not enough today: the computer comes first (#4480)
+    const note = document.body.querySelector('[data-testid="help-model-computer"]')?.textContent ?? "";
+    expect(note).toContain("只粘贴 API Key、不接电脑，还开始不了");
+    expect(note).toContain("先添加一台");
     expect(textarea().value).toBe("");
     expect(host.textContent).not.toContain("今天我有哪些会");
+  });
+
+  it("points the model help at a waiting computer, not at adding another", async () => {
+    readiness = {
+      ...setup,
+      steps: [
+        { id: "computer", state: "problem", code: "machine_pending", machine: "m1", title: "确认小林的 MacBook", action: { id: "confirm_computer" } },
+        ...setup.steps.slice(1),
+      ],
+    };
+    await render();
+    const q = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("怎么接模型？"));
+    act(() => q!.click());
+    const note = document.body.querySelector('[data-testid="help-model-computer"]')?.textContent ?? "";
+    expect(note).not.toContain("先添加一台");
+    expect(note).toContain("确认小林的 MacBook");
+    const buttons = [...document.body.querySelectorAll("button")].map((b) => b.textContent ?? "");
+    expect(buttons).not.toContain("添加电脑");
+    expect(buttons).toContain(actionLabel("confirm_computer"));
   });
 
   it("is the page as before on an older hub", async () => {

@@ -66,6 +66,7 @@ struct RootView: View {
             try? await Task.sleep(for: .seconds(1))
             flipped = false
         }
+        .task { await LookBlink.run() }
         #endif
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)

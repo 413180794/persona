@@ -35,5 +35,6 @@
   "confirmed": "Added {name}",
   "rejected": "Removed \"{name}\"",
   "answer_failed": "Didn't work: {error}",
-  "never_connected": "Never connected"
+  "never_connected": "Never connected",
+  "not_connected_yet": "Not connected yet"
 }

@@ -19,6 +19,7 @@
   "add_market": "Add marketplace",
   "not_found": "No results for \"{query}\"",
   "market_empty": "This marketplace has no extensions yet",
+  "markets_read_empty": "No extensions in the markets that could be read yet",
   "gone": "This extension is no longer in this marketplace",
   "preview_failed": "Couldn't preview: {error}",
   "reload": "Reload",
@@ -116,5 +117,6 @@
   "op_error": "Why: {error}",
   "op_machine_error": "{machine}: {error}",
   "op_progress": "Step {done} of {total}",
-  "official_unreachable": "Can't reach the official extensions right now. Try again later."
+  "official_unreachable": "Can't reach the official extensions right now. Try again later.",
+  "market_unread": "Extensions show up here once the market can be read."
 }
