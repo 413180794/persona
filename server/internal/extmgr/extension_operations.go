@@ -649,6 +649,7 @@ func (h *Manager) snapshot(op *extOp) ExtensionOperation {
 	v := op.v
 	v.Steps = slices.Clone(v.Steps)
 	for i, s := range v.Steps {
+		v.Steps[i].Tools = slices.Clone(s.Tools) // toolProgress writes its elements in place
 		if s.Machines != nil {
 			ms := *s.Machines
 			ms.Errors = maps.Clone(ms.Errors)

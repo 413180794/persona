@@ -49,6 +49,8 @@ CATALOGS = [
     "Vision/Resources/InfoPlist.xcstrings",
     "PersonaWatch/InfoPlist.xcstrings",
 ]
+# A package whose explicit localized keys are looked up in the app's catalog (check).
+PERSONAKIT = "Packages/PersonaKit/Sources"
 # The targets whose extracted strings go into the catalogs (sync / strict).
 TARGETS = ["Persona", "PersonaMac", "PersonaVision", "PersonaWatch", "PersonaWidgets", "PersonaNotify", "PersonaShare"]
 
@@ -537,10 +539,11 @@ def localized_literals(src, streams=None):
             yield lit, table, hashes
 
 
-def source_problems(src, catalog_keys, rel="source"):
-    """Validate source text against {table name: iterable of keys}; never match visible English aliases."""
+def source_problems(src, catalog_keys, rel="source", cjk=True):
+    """Validate source text against {table name: iterable of keys}; never match visible English aliases.
+    `cjk=False` checks only the explicit localized keys (a package whose other text is not migrated yet)."""
     problems = []
-    marked = ignored_lines(src)
+    marked = ignored_lines(src) if cjk else None
     skip = preview_lines(src)
     streams = _swift_tokens(src)
     notes = {(token[1].line, token[1].col) for tokens in streams for i, token in enumerate(tokens)
@@ -655,6 +658,11 @@ def check():
     for path in sorted(glob.glob(os.path.join(APPLE, BEAUTIFULUI, "**", "*.swift"), recursive=True)):
         with open(path, encoding="utf-8") as f:
             problems.extend(beautifului_problems(f.read(), catalog_keys.get("Localizable", set()), os.path.relpath(path, ROOT)))
+    # PersonaKit (apple/Packages/PersonaKit) looks its `String(localized:)` keys up in the app's main bundle, so they
+    # need app-catalog entries too (#5575). Its other Chinese literals are not migrated yet, so only the keys.
+    for path in sorted(glob.glob(os.path.join(APPLE, PERSONAKIT, "**", "*.swift"), recursive=True)):
+        with open(path, encoding="utf-8") as f:
+            problems.extend(source_problems(f.read(), catalog_keys, os.path.relpath(path, ROOT), cjk=False))
     return problems
 
 

@@ -121405,6 +121405,282 @@
           }
         }
       }
+    },
+    "Sheet “%@”": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sheet “%1$@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シート「%1$@」"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作表「%1$@」"
+          }
+        }
+      }
+    },
+    "No document.xml": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No document.xml"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "document.xmlがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有 document.xml"
+          }
+        }
+      }
+    },
+    "No presentation.xml": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No presentation.xml"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "presentation.xmlがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有 presentation.xml"
+          }
+        }
+      }
+    },
+    "Notes: %@": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ノート：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备注：%1$@"
+          }
+        }
+      }
+    },
+    "Slide %lld": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide %1$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スライド%1$lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %1$lld 张幻灯片"
+          }
+        }
+      }
+    },
+    "Not a valid xlsx file (not a zip)": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not a valid xlsx file (not a zip)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有効なxlsxファイルではありません（zipではありません）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不是有效的 xlsx 文件（不是 zip）"
+          }
+        }
+      }
+    },
+    "Unsupported xlsx file: %@": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported xlsx file: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サポートされていないxlsxファイル：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持的 xlsx 文件：%1$@"
+          }
+        }
+      }
+    },
+    "The xlsx file is damaged: %@": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The xlsx file is damaged: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xlsxファイルが破損しています：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xlsx 文件已损坏：%1$@"
+          }
+        }
+      }
+    },
+    "central directory": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "central directory"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セントラルディレクトリ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目录"
+          }
+        }
+      }
+    },
+    "compression method %u": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compression method %1$u"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圧縮方式%1$u"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩方式 %1$u"
+          }
+        }
+      }
+    },
+    "No workbook.xml": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No workbook.xml"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "workbook.xmlがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有 workbook.xml"
+          }
+        }
+      }
+    },
+    "No sheets": {
+      "comment": "A document's part or an xlsx error, shown in Compare and the table viewer (PersonaKit, #5575)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No sheets"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シートがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有工作表"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

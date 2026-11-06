@@ -254,6 +254,12 @@ class SourceKeysTest(unittest.TestCase):
         src = "\n".join(('Text(verbatim: "Missing")', 'Text("Missing", bundle: .module)', 'Text(name ?? "Missing")',
                          'Text(open ? title : "Missing")', 'Text(format("Missing"))', 'Text("—")', 'Text("\\(a) / \\(b)")'))
         self.assertEqual(self.bui(src), [])
+    def test_keys_only_checks_explicit_keys_not_chinese_literals(self):
+        # PersonaKit (#5575): its String(localized:) keys must be in the app catalog; its other text isn't migrated yet.
+        src = 'String(localized: "Missing")\nlet note = "中文"\nString(localized: "Open")'
+        problems = apple_l10n.source_problems(src, {"Localizable": ("Open",)}, cjk=False)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("localized key not in Localizable", problems[0])
 
     def test_chinese_catalog_membership_never_excuses_a_source_literal(self):
         problems = self.check_source('Text("打开")', ("打开",))

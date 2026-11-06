@@ -27,10 +27,10 @@ public nonisolated enum DocumentText {
         switch kind {
         case .pdf:
             guard let doc = PDFDocument(data: data) else { throw ZipArchive.Failure.corrupt("PDF") }
-            return (0..<doc.pageCount).map { i in Unit(label: String(localized: "第 \(i + 1) 页"), lines: lines(doc.page(at: i)?.string ?? "")) }
+            return (0..<doc.pageCount).map { i in Unit(label: String(localized: "Page \(i + 1)"), lines: lines(doc.page(at: i)?.string ?? "")) }
         case .docx: return try docx(data)
         case .pptx: return try pptx(data)
-        case .xlsx: return try XLSXReader.read(data).map { s in Unit(label: String(localized: "工作表「\(s.name)」"), lines: s.rows.map { $0.joined(separator: "\t") }) }
+        case .xlsx: return try XLSXReader.read(data).map { s in Unit(label: String(localized: "Sheet “\(s.name)”"), lines: s.rows.map { $0.joined(separator: "\t") }) }
         case .image: return []
         }
     }
@@ -44,13 +44,13 @@ public nonisolated enum DocumentText {
 
     private static func docx(_ data: Data) throws -> [Unit] {
         let zip = try ZipArchive(data)
-        guard let xml = try zip.file("word/document.xml") else { throw ZipArchive.Failure.corrupt(String(localized: "没有 document.xml")) }
+        guard let xml = try zip.file("word/document.xml") else { throw ZipArchive.Failure.corrupt(String(localized: "No document.xml")) }
         let p = WordText()
         let parser = XMLParser(data: xml)
         parser.delegate = p
         parser.parse()
         p.endPage()
-        return p.pages.enumerated().map { i, lines in Unit(label: String(localized: "第 \(i + 1) 页"), lines: lines) }
+        return p.pages.enumerated().map { i, lines in Unit(label: String(localized: "Page \(i + 1)"), lines: lines) }
     }
 
     /// Paragraphs (a table's row as its cells joined by tabs), deleted runs (tracked changes) left out, a new page at
@@ -109,7 +109,7 @@ public nonisolated enum DocumentText {
     private static func pptx(_ data: Data) throws -> [Unit] {
         let zip = try ZipArchive(data)
         // Slides in the deck's order: presentation.xml's list of ids, through its relationships.
-        guard let pres = try zip.file("ppt/presentation.xml") else { throw ZipArchive.Failure.corrupt(String(localized: "没有 presentation.xml")) }
+        guard let pres = try zip.file("ppt/presentation.xml") else { throw ZipArchive.Failure.corrupt(String(localized: "No presentation.xml")) }
         let order = Elements.collect(pres, ["p:sldId"]).compactMap { $0["r:id"] }
         var targets: [String: String] = [:]
         if let rels = try zip.file("ppt/_rels/presentation.xml.rels") {
@@ -128,9 +128,9 @@ public nonisolated enum DocumentText {
                let notes = Elements.collect(r, ["Relationship"]).first(where: { ($0["Type"] ?? "").hasSuffix("/notesSlide") })?["Target"] {
                 let notesPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(notes)
                 let normalized = (notesPath as NSString).standardizingPath.replacingOccurrences(of: "ppt/slides/../", with: "ppt/")
-                if let n = try zip.file(normalized).map(Paragraphs.text), !n.isEmpty { lines += n.map { String(localized: "备注：\($0)") } }
+                if let n = try zip.file(normalized).map(Paragraphs.text), !n.isEmpty { lines += n.map { String(localized: "Notes: \($0)") } }
             }
-            return Unit(label: String(localized: "第 \(i + 1) 张幻灯片"), lines: lines)
+            return Unit(label: String(localized: "Slide \(i + 1)"), lines: lines)
         }
     }
 
