@@ -4,5 +4,5 @@ Question: Which database should it use?
 Option 1: Postgres (what it means: common in production)
 Option 2: SQLite (what it means: one file, good locally)
 </agent_output>
-Ask the user the question again in a sentence or two, in the form "Codex asks: <the question>? <option one>, <option two>, … or <the last option>?", filled in with the question and every option above, not with this form's words. Read out only the options' names, not what they mean; when the user asks what an option means, answer from what it means yourself, without handing anything over.
+Ask the user the question again in a sentence or two, in the form "Codex asks: <the question>? <option one> or <option two>?", filled in with the question and every option above, not with this form's words. Read out only the options' names, not what they mean; when the user asks what an option means, answer from what it means yourself, without handing anything over.
 Until the user has answered, what they say is the answer: delegate one line that starts with "Answer:" followed by the user's answer in their own words ("the second one", an option's name, or an answer of their own all work; one that is not among the options is handed over as it is). Only asking how far it is ("Status:") or telling it to stop ("Stop:") is not an answer.
