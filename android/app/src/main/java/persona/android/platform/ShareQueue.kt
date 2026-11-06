@@ -151,7 +151,7 @@ class ShareQueue @Inject constructor(
                 remaining = deliverQueuedShare(file, owner.hub.connection.state.value == ConnectionState.Online,
                     untitled = application.getString(R.string.app_share_content),
                     prepareMain = { owner.data.messages.prepareMainConversation() },
-                    upload = { machine, attachment, name -> upload(owner, machine, attachment, name) },
+                    upload = { machine, attachment, name, main -> upload(owner, machine, main, attachment, name) },
                     main = { body, id -> owner.data.messages.sendToMain(body, id) },
                     // A session of another hub group goes to that group (docs/android.md「多 hub」); one group: the same outbox.
                     agent = { target, body, id ->
@@ -165,10 +165,9 @@ class ShareQueue @Inject constructor(
         remaining
     } }
 
-    private suspend fun upload(owner: PlatformSession, machine: String, file: File, name: String): String {
+    private suspend fun upload(owner: PlatformSession, machine: String, main: Boolean, file: File, name: String): String {
         owner.active()
-        // Attachments go to the hub group of the machine they are for, with its plain id.
-        val api = runtime.groupOf(machine)?.hub?.api ?: owner.hub.api
+        val api = shareUploadApi(main, machine, owner.hub.api) { runtime.groupOf(it)?.hub?.api }
         val url = api.url("/api/v1/machines").newBuilder().addPathSegment(persona.core.contracts.GroupKeys.raw(machine)).addPathSegment("files")
             .addQueryParameter("name", name).build()
         val request = Request.Builder().url(url).header("Authorization", "Bearer ${api.token}")
@@ -211,12 +210,17 @@ class ShareQueue @Inject constructor(
     }
 }
 
+// Attachments go to the hub group of the machine they are for, with its plain id. The main target comes from
+// the share owner's own data with an unsuffixed id, which groupOf would map to the primary group (#4816).
+internal fun <A> shareUploadApi(main: Boolean, machine: String, owner: A, groupApi: (String) -> A?): A =
+    if (main) owner else groupApi(machine) ?: owner
+
 /** Returns true while the staged entry still needs a connection or a main target. */
 internal suspend fun deliverQueuedShare(
     file: File, connected: Boolean,
     untitled: String,
     prepareMain: suspend () -> SessionKey?,
-    upload: suspend (String, File, String) -> String,
+    upload: suspend (String, File, String, Boolean) -> String,
     main: suspend (String, String) -> Unit,
     agent: suspend (SessionKey, String, String) -> Unit,
 ): Boolean {
@@ -229,7 +233,7 @@ internal suspend fun deliverQueuedShare(
         for (index in entry.attachments.indices) {
             val attachment = entry.attachments[index]
             if (attachment.path != null) continue
-            val path = upload(target.machineId, File(file.parentFile, attachment.file), attachment.name)
+            val path = upload(target.machineId, File(file.parentFile, attachment.file), attachment.name, entry.machine == null)
             entry = entry.copy(attachments = entry.attachments.mapIndexed { i, value ->
                 if (i == index) value.copy(path = path) else value
             })

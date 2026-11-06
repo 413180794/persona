@@ -58,19 +58,108 @@ func TestAnotherHookAnswersFirst(t *testing.T) {
 	if out != nil || len(fh.interactions()) != 1 || took >= permissionGrace {
 		t.Fatalf("answered by another hook: out %v after %v, %d cards", out, took, len(fh.interactions()))
 	}
+	// That answer was the card's: the same call asked again is a new call, and nobody answers it (#4646).
+	if out, took := runPermissionHook(t, n, in); out == nil || took < permissionGrace || len(fh.interactions()) != 2 {
+		t.Fatalf("asked again after the answer was used: out %v after %v, %d cards", out, took, len(fh.interactions()))
+	}
 	// An answer that came before the card asked: no card either.
-	if out, _ := runPermissionHook(t, n, in); out != nil || len(fh.interactions()) != 1 {
+	n.decided.decide(in, time.Now())
+	if out, _ := runPermissionHook(t, n, in); out != nil || len(fh.interactions()) != 2 {
 		t.Fatalf("answered before: out %v, %d cards", out, len(fh.interactions()))
 	}
 	// Nobody answers this one: after the grace the card goes out.
-	if out, took := runPermissionHook(t, n, decidedInput("rm -rf \"$t\"")); out == nil || took < permissionGrace || len(fh.interactions()) != 2 {
+	if out, took := runPermissionHook(t, n, decidedInput("rm -rf \"$t\"")); out == nil || took < permissionGrace || len(fh.interactions()) != 3 {
 		t.Fatalf("not answered: out %v after %v, %d cards", out, took, len(fh.interactions()))
 	}
 	// Another subagent's call with the same input is another call.
 	sub := in
 	sub.AgentID = "a1b2"
-	if out, _ := runPermissionHook(t, n, sub); out == nil || len(fh.interactions()) != 3 {
+	if out, _ := runPermissionHook(t, n, sub); out == nil || len(fh.interactions()) != 4 {
 		t.Fatalf("a subagent's: out %v, %d cards", out, len(fh.interactions()))
+	}
+}
+
+// #4646: another hook answered a call once; the same call, asked again within decidedKeep, still goes to the phone,
+// and so does every call the answer does not name (another session, another input). The phone's own allow is not
+// remembered either: the next same call asks again.
+func TestAnotherHooksAnswerIsUsedOnce(t *testing.T) {
+	defer func(g time.Duration) { permissionGrace = g }(permissionGrace)
+	permissionGrace = 10 * time.Millisecond
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	in := decidedInput("npm test")
+
+	n.decided.decide(in, time.Now())
+	otherSession := in
+	otherSession.SessionID = "44444444-4444-4444-8444-444444444444"
+	otherInput := decidedInput("npm test -- --watch")
+	for name, c := range map[string]hookInput{"another session": otherSession, "another input": otherInput} {
+		before := len(fh.interactions())
+		if out, _ := runPermissionHook(t, n, c); out == nil || len(fh.interactions()) != before+1 {
+			t.Fatalf("%s: out %v, %d cards", name, out, len(fh.interactions()))
+		}
+	}
+	cards := len(fh.interactions())
+	// The answer is still there for the call it names, and goes to it.
+	if out, _ := runPermissionHook(t, n, in); out != nil || len(fh.interactions()) != cards {
+		t.Fatalf("the answered call: out %v, %d cards", out, len(fh.interactions()))
+	}
+	// The next same call is not that one: it goes to the phone, and the phone's allow is the hook's output.
+	for i := 1; i <= 2; i++ {
+		if out, _ := runPermissionHook(t, n, in); out == nil || len(fh.interactions()) != cards+i {
+			t.Fatalf("same call again (%d): out %v, %d cards", i, out, len(fh.interactions()))
+		}
+	}
+}
+
+// Two same calls wait for the phone and another hook answers one: only the earliest card is withdrawn.
+func TestAnotherHookAnswersOneOfTwo(t *testing.T) {
+	defer func(g time.Duration) { permissionGrace = g }(permissionGrace)
+	permissionGrace = 10 * time.Millisecond
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	release := make(chan struct{})
+	fh.mu.Lock()
+	fh.answer = func(proto.Interaction) proto.Resolution { <-release; yes := true; return proto.Resolution{Allow: &yes} }
+	fh.mu.Unlock()
+	in := decidedInput("npm test")
+	first, second := make(chan any, 1), make(chan any, 1)
+	waitCards := func(k int) {
+		t.Helper()
+		for deadline := time.Now().Add(3 * time.Second); len(fh.interactions()) < k; {
+			if time.Now().After(deadline) {
+				t.Fatalf("%d cards, want %d", len(fh.interactions()), k)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	go func() { out, _ := runPermissionHook(t, n, in); first <- out }()
+	waitCards(1)
+	go func() { out, _ := runPermissionHook(t, n, in); second <- out }()
+	waitCards(2)
+
+	n.decided.decide(in, time.Now())
+	select {
+	case out := <-first:
+		if out != nil {
+			t.Fatalf("withdrawn card answered: %v", out)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the earliest card was not withdrawn")
+	}
+	select {
+	case out := <-second:
+		t.Fatalf("the second card was withdrawn too: %v", out)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case out := <-second:
+		if out == nil {
+			t.Fatal("the second card's allow from the phone was dropped")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the second card never got the phone's answer")
 	}
 }
 
@@ -126,11 +215,16 @@ func TestHookDecidedOnTheSocket(t *testing.T) {
 	}
 	bad := decidedInput("ls")
 	bad.HookEventName = "PreToolUse"
-	if r := send(bad); r["ok"] != true || n.decided.answered(permissionKey(bad)) {
+	kept := func(in hookInput) int {
+		n.decided.mu.Lock()
+		defer n.decided.mu.Unlock()
+		return len(n.decided.unused[permissionKey(in)])
+	}
+	if r := send(bad); r["ok"] != true || kept(bad) != 0 {
 		t.Fatalf("a PreToolUse counted: %v", r)
 	}
 	in := decidedInput("ls")
-	if r := send(in); r["ok"] != true || !n.decided.answered(permissionKey(in)) {
+	if r := send(in); r["ok"] != true || kept(in) != 1 {
 		t.Fatalf("not recorded: %v", r)
 	}
 }
@@ -140,7 +234,15 @@ func TestDecisionsForget(t *testing.T) {
 	old, now := decidedInput("old"), time.Now()
 	d.decide(old, now.Add(-decidedKeep-time.Second))
 	d.decide(decidedInput("new"), now)
-	if d.answered(permissionKey(old)) || !d.answered(permissionKey(decidedInput("new"))) {
+	answered := func(in hookInput) bool {
+		_, ok, stop := d.watch(context.Background(), permissionKey(in))
+		defer stop()
+		return ok()
+	}
+	if answered(old) || !answered(decidedInput("new")) {
 		t.Fatal("old answers are forgotten, new ones kept")
+	}
+	if answered(decidedInput("new")) {
+		t.Fatal("an answer is used once")
 	}
 }

@@ -415,14 +415,13 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 			ix.AlwaysKeys = []string{alwaysKey}
 		}
 		// Another hook may answer it first (hookdecided.go): then nothing is shown, or what was is withdrawn.
-		key := permissionKey(in)
-		ctx, stop := n.decided.watch(ctx, key)
+		ctx, answered, stop := n.decided.watch(ctx, permissionKey(in))
 		defer stop()
-		if n.decided.grace(ctx, key) {
+		if n.decided.grace(ctx, answered) {
 			return nil, nil
 		}
 		res, ok, err := n.ask(ctx, ix)
-		if n.decided.answered(key) {
+		if answered() {
 			return nil, nil
 		}
 		if err != nil || !ok || res.Allow == nil {

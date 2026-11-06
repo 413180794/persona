@@ -148,6 +148,7 @@ node 启动时把同一组 hooks 写两份（命令是 node 二进制自身的 `
   一直跑到各自的超时（2.1.308 实测）。Persona 的 hook 那时还在等手机，手机上就留着一张过期的卡。作答的 hook 可以告诉 node：往 node.sock
   （`~/.persona/node.sock`，`personad hook` 连的那个）写一行 `{"kind": "hook.decided", "input": <Claude Code 给它的 PermissionRequest 输入，原样>}`，
   回 `{"ok": true}`。node 按会话、子 Agent、工具和输入认出是哪一次调用：卡还没发就不发，已经发了就撤掉（`node/hookdecided.go`）。
+  一次 `hook.decided` 只算一次调用（#4646）：给正在等的最早那张卡；没有在等的，就留给 2 分钟内第一个来问的同样调用，用过即删。之后同样的调用照常上手机。
   这台电脑上一旦有 hook 这样说过（node 启动以来），工具授权的卡先等 1 秒再发，免得手机先收到推送、马上又撤；没有的电脑不等，和以前一样。
   扩展 claude-bypass-allow（bypass 模式下自动允许 Bash 的安全确认）就是这样做的。
 

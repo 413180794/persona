@@ -30,10 +30,10 @@ class PlatformEntryTest {
         val agent: suspend (SessionKey, String, String) -> Unit = { _, _, _ -> error("Wrong destination") }
         val target = SessionKey("machine", "main-session")
         assertTrue(deliverQueuedShare(file, false, "Shared content", { error("Offline must not resolve main") },
-            { _, _, _ -> error("Offline must not upload") }, main, agent))
+            { _, _, _, _ -> error("Offline must not upload") }, main, agent))
         assertTrue(first.exists() && second.exists())
         try {
-            deliverQueuedShare(file, true, "Shared content", { target }, { _, attachment, _ ->
+            deliverQueuedShare(file, true, "Shared content", { target }, { _, attachment, _, _ ->
                 uploads += attachment.name
                 if (attachment.name == second.name) throw IOException("Disconnected")
                 "/tmp/shared/first.txt"
@@ -44,7 +44,7 @@ class PlatformEntryTest {
         assertTrue(first.exists() && second.exists())
         val restored = JsonCodec.decodeFromString<QueuedShare>(file.readText())
         assertEquals("/tmp/shared/first.txt", restored.attachments.first().path)
-        assertFalse(deliverQueuedShare(file, true, "Shared content", { target }, { _, attachment, _ ->
+        assertFalse(deliverQueuedShare(file, true, "Shared content", { target }, { _, attachment, _, _ ->
             uploads += attachment.name
             assertEquals("second attachment", attachment.readText())
             "/tmp/shared/second.txt"
@@ -57,8 +57,23 @@ class PlatformEntryTest {
         val textFile = File(temporary.newFolder(), "entry.json")
         writePlatformFile(textFile, JsonCodec.encodeToString(QueuedShare.serializer(), QueuedShare("offline-text", "", "你好", queued = true)))
         assertFalse(deliverQueuedShare(textFile, false, "Shared content", { error("Main is resolved by core outbox later") },
-            { _, _, _ -> error("No attachments") }, main, agent))
+            { _, _, _, _ -> error("No attachments") }, main, agent))
         assertEquals("offline-text", sent.last().first)
+    }
+
+    @Test fun mainConversationUploadsGoToTheShareOwnersHub() = runTest {
+        // #4816: the selected (non-primary) group's main target has a plain id the primary group would claim.
+        val directory = temporary.newFolder()
+        File(directory, "photo.bin").writeText("photo")
+        val file = File(directory, "entry.json")
+        writePlatformFile(file, JsonCodec.encodeToString(QueuedShare.serializer(), QueuedShare("main-photo", "", "",
+            listOf(SharedAttachment("photo.bin", "photo.jpg")), queued = true)))
+        val hubs = mutableListOf<String>()
+        assertFalse(deliverQueuedShare(file, true, "Shared content", { SessionKey("machine", "main-session") },
+            { machine, _, _, main -> hubs += shareUploadApi(main, machine, "owner") { "primary" }; "/tmp/shared/photo.jpg" },
+            { _, _ -> }, { _, _, _ -> error("Wrong destination") }))
+        assertEquals(listOf("owner"), hubs)
+        assertEquals("primary", shareUploadApi(false, "machine", "owner") { "primary" })
     }
 
     @Test fun lockEventsRequireIndependentFieldsAndReceiptPreservesUnknownDisplay() {

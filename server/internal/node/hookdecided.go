@@ -20,14 +20,22 @@ import (
 // permissionGrace is how long a tool card waits for another hook's answer, once any hook here has given one.
 var permissionGrace = time.Second
 
-// decidedKeep is how long an answer is remembered for a card that asks after it.
+// decidedKeep is how long an answer no card was waiting for is kept for the next card that asks after it.
 const decidedKeep = 2 * time.Minute
 
+// One hook.decided stands for one call (#4646): it goes to the earliest card waiting for that call, or, when none
+// waits, to the first that asks after it, and is used up. A later call with the same input is a new call and asks.
 type decisions struct {
 	mu      sync.Mutex
-	seen    bool                 // some hook said hook.decided since the node started
-	done    map[string]time.Time // calls answered, by permissionKey
-	waiting map[string]map[*int]context.CancelFunc
+	seen    bool                         // some hook said hook.decided since the node started
+	unused  map[string][]time.Time       // answers no card took yet, by permissionKey, oldest first
+	waiting map[string][]*decisionWaiter // cards waiting, by permissionKey, in the order they asked
+}
+
+// decisionWaiter is one card watching for another hook's answer.
+type decisionWaiter struct {
+	cancel   context.CancelFunc
+	answered bool
 }
 
 // permissionKey names one tool call: its session, its subagent, the tool and its input (decoded and encoded again,
@@ -46,65 +54,90 @@ func permissionKey(in hookInput) string {
 	return in.SessionID + "\x00" + in.AgentID + "\x00" + in.ToolName + "\x00" + input
 }
 
-// decide records that another hook answered the call in and withdraws a card waiting for it.
+// decide records that another hook answered one call in: the earliest card waiting for it is withdrawn, or, with
+// none waiting, the answer is kept for the next card that asks.
 func (d *decisions) decide(in hookInput, now time.Time) {
 	key := permissionKey(in)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.seen = true
-	if d.done == nil {
-		d.done = map[string]time.Time{}
-	}
-	for k, at := range d.done {
-		if now.Sub(at) > decidedKeep {
-			delete(d.done, k)
+	for _, w := range d.waiting[key] {
+		if !w.answered {
+			w.answered = true
+			w.cancel()
+			return
 		}
 	}
-	d.done[key] = now
-	for _, cancel := range d.waiting[key] {
-		cancel()
+	d.forget(now)
+	if d.unused == nil {
+		d.unused = map[string][]time.Time{}
+	}
+	d.unused[key] = append(d.unused[key], now)
+}
+
+// forget drops answers kept longer than decidedKeep. d.mu is held.
+func (d *decisions) forget(now time.Time) {
+	for k, ats := range d.unused {
+		i := 0
+		for i < len(ats) && now.Sub(ats[i]) > decidedKeep {
+			i++
+		}
+		if i == len(ats) {
+			delete(d.unused, k)
+		} else {
+			d.unused[k] = ats[i:]
+		}
 	}
 }
 
-// answered says whether another hook answered key.
-func (d *decisions) answered(key string) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	_, ok := d.done[key]
-	return ok
-}
-
-// watch returns a context that ends when another hook answers key (or ctx ends), and the function that stops watching.
-func (d *decisions) watch(ctx context.Context, key string) (context.Context, func()) {
+// watch returns a context that ends when another hook answers this call (or ctx ends), a function saying whether it
+// did, and the function that stops watching. An answer kept for key is taken now.
+func (d *decisions) watch(ctx context.Context, key string) (context.Context, func() bool, func()) {
 	ctx, cancel := context.WithCancel(ctx)
-	id := new(int)
+	w := &decisionWaiter{cancel: cancel}
 	d.mu.Lock()
-	if d.waiting == nil {
-		d.waiting = map[string]map[*int]context.CancelFunc{}
-	}
-	if d.waiting[key] == nil {
-		d.waiting[key] = map[*int]context.CancelFunc{}
-	}
-	d.waiting[key][id] = cancel
-	_, done := d.done[key]
-	d.mu.Unlock()
-	if done {
-		cancel()
-	}
-	return ctx, func() {
-		d.mu.Lock()
-		delete(d.waiting[key], id)
-		if len(d.waiting[key]) == 0 {
-			delete(d.waiting, key)
+	d.forget(time.Now())
+	if len(d.unused[key]) > 0 {
+		w.answered = true
+		if d.unused[key] = d.unused[key][1:]; len(d.unused[key]) == 0 {
+			delete(d.unused, key)
 		}
-		d.mu.Unlock()
+	}
+	if d.waiting == nil {
+		d.waiting = map[string][]*decisionWaiter{}
+	}
+	d.waiting[key] = append(d.waiting[key], w)
+	answered := w.answered
+	d.mu.Unlock()
+	if answered {
 		cancel()
 	}
+	return ctx, func() bool {
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			return w.answered
+		}, func() {
+			d.mu.Lock()
+			ws := d.waiting[key]
+			for i, o := range ws {
+				if o == w {
+					ws = append(ws[:i:i], ws[i+1:]...)
+					break
+				}
+			}
+			if len(ws) == 0 {
+				delete(d.waiting, key)
+			} else {
+				d.waiting[key] = ws
+			}
+			d.mu.Unlock()
+			cancel()
+		}
 }
 
-// grace waits permissionGrace on a machine where hooks say hook.decided, and says whether key was answered by then
-// (ctx is a watch's: it ends when it is).
-func (d *decisions) grace(ctx context.Context, key string) bool {
+// grace waits permissionGrace on a machine where hooks say hook.decided, and says whether the call was answered by
+// then (ctx and answered are a watch's).
+func (d *decisions) grace(ctx context.Context, answered func() bool) bool {
 	d.mu.Lock()
 	seen := d.seen
 	d.mu.Unlock()
@@ -116,5 +149,5 @@ func (d *decisions) grace(ctx context.Context, key string) bool {
 		case <-t.C:
 		}
 	}
-	return d.answered(key)
+	return answered()
 }
