@@ -65,4 +65,8 @@ test('a branch shows only its entries, at their file positions; its key changes 
   // Appending on that branch keeps its key.
   const more = [...edited, msg('a2b', 'u2b', { role: 'assistant', content: [{ type: 'text', text: 'ok' }] })]
   assert.equal(branchKey(more, [...branch, more[6]]), 'u2b')
+  // Back on the first branch (/tree), nothing written: its key again; at an earlier point of it, another one.
+  assert.equal(branchKey(more, main), 'root')
+  assert.equal(branchKey(more, main.slice(0, 3)), 'root@a1', 'a leaf with entries after it is a branch of its own')
+  assert.equal(branchKey(e, main.slice(0, 3)), 'root@a1')
 })

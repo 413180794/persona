@@ -65,7 +65,7 @@ export function createPiHost(deps, options = {}) {
   const rt = createRuntime({
     listSessions,
     items,
-    cursor: async (id) => view(id).then((v) => v.toSeq),
+    cursor: async (id) => view(id).then((v) => ({ to_seq: v.toSeq, history: v.history })),
     image,
     item,
     send,
@@ -134,7 +134,7 @@ export function createPiHost(deps, options = {}) {
       cwd,
       status: s.running ? 'working' : branch.some((e) => e.message?.role === 'assistant') ? 'done' : 'idle',
       updated_at: new Date(s.updatedAt ?? Date.now()).toISOString(),
-      rev: sm.getEntries().length,
+      rev: sm.getEntries().length + (s.moves ?? 0), // a move to another branch changes it too
       space_id: cwd,
       space_name: basename(cwd),
     }
@@ -292,9 +292,11 @@ export function createPiHost(deps, options = {}) {
     const sm = s?.ctx?.sessionManager
     if (!sm) return
     const entries = sm.getEntries()
-    if (entries.length === s.pushed) return
     const branch = sm.getBranch()
     const key = branchKey(entries, branch)
+    if (entries.length === s.pushed && key === s.key) return
+    // Back on a branch already in the file (/tree): nothing was written, but the conversation is another one.
+    if (entries.length === s.pushed) s.moves = (s.moves ?? 0) + 1
     const fresh = rt.watching(id) ? branchItems(entries, branch).filter((i) => i.seq > s.pushed).map(light) : [] // cut as pages are
     rt.append(id, { items: fresh, fromSeq: s.key === key ? s.pushed : undefined, toSeq: entries.length, history: `pi:${id}:${key}` })
     s.pushed = entries.length

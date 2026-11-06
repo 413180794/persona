@@ -40,6 +40,27 @@ test('appended content goes out as continuous batches, and a gap says where it s
   assert.equal(n.all('session.items')[1].from_seq, 19)
 })
 
+test('content rewritten under another history goes out even where its seq did not grow, and goes on from there', async (t) => {
+  const n = await startFakeNode(t)
+  const rt = createRuntime(minimal({ items: async () => ({ items: [], history: 'h1', to_seq: 10 }) }), { runtime: 'toy', socketPath: n.path, retryMs: 20 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await n.peer.call('session.watch', { session_id: 's1', since_seq: 0 })
+  rt.append('s1', { items: [], toSeq: 10, history: 'h2' }) // another branch of as many entries
+  await until('the same seq, another history', () => n.all('session.items').length === 1)
+  assert.deepEqual(n.all('session.items')[0], { session_id: 's1', items: [], to_seq: 10, history: 'h2' })
+  rt.append('s1', { items: [], toSeq: 4, history: 'h3' }) // a rewind: a shorter one
+  await until('a lower seq, another history', () => n.all('session.items').length === 2)
+  assert.deepEqual(n.all('session.items')[1], { session_id: 's1', items: [], to_seq: 4, history: 'h3' })
+  rt.append('s1', { items: [{ id: 'i5', seq: 5 }], fromSeq: 4, toSeq: 5, history: 'h3' }) // below the old 10, still new
+  await until('goes on from the rewrite', () => n.all('session.items').length === 3)
+  assert.deepEqual(n.all('session.items')[2], { session_id: 's1', items: [{ id: 'i5', seq: 5 }], from_seq: 4, to_seq: 5, history: 'h3' })
+  rt.append('s1', { items: [], fromSeq: 4, toSeq: 5, history: 'h3' }) // the same again: already pushed
+  await new Promise((r) => setTimeout(r, 100))
+  assert.equal(n.all('session.items').length, 3)
+})
+
 test('content committed while a watch catches up is held, then sent once without repeats', async (t) => {
   const n = await startFakeNode(t)
   let release
@@ -91,6 +112,29 @@ test('asking the phone marks the session as needing you, and a withdrawn ask tak
   await assert.rejects(withdrawn, /gone/)
   await until('cancelled', () => n.last('interaction.cancel')?.id === 'toy-2')
   assert.equal(interactionId('toy', 's1', 'permission', 'call-1'), id, 'stable ids')
+})
+
+test('rewrites held while a watch catches up go out in order: to another history and back', async (t) => {
+  const n = await startFakeNode(t)
+  let release
+  const gate = new Promise((r) => { release = r })
+  const rt = createRuntime(minimal({
+    items: async (p) => {
+      await gate
+      return { items: [{ id: 'c', seq: 10 }], history: 'h1', from_seq: p.after_seq, to_seq: 10 }
+    },
+  }), { runtime: 'toy', socketPath: n.path, retryMs: 20 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  const watching = n.peer.call('session.watch', { session_id: 's1', since_seq: 9 })
+  await until('watching', () => rt.watching('s1'))
+  rt.append('s1', { items: [], toSeq: 6, history: 'h2' }) // to a shorter branch
+  rt.append('s1', { items: [], toSeq: 10, history: 'h1' }) // and back to the first, as long as it was
+  release()
+  await watching
+  await until('the catch-up and both moves', () => n.all('session.items').length === 3)
+  assert.deepEqual(n.all('session.items').map((b) => [b.history, b.to_seq]), [['h1', 10], ['h2', 6], ['h1', 10]])
 })
 
 test('live text is throttled to the latest whole text, and ends empty', async (t) => {

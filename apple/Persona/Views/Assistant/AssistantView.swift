@@ -776,19 +776,23 @@ struct BeautifulStarterComposer: View {
     @FocusState private var focused: Bool
 
     private var launcherMachine: String { model.assistantConfig?.machineID ?? model.hubMachineID }
-    private var currentLauncher: String { launcher ?? model.assistantConfig?.launcher ?? "ccc" }
+    /// The launcher a new conversation starts with (the user's pick, else the one in Persona settings), or nil while
+    /// settings are not known (#4200): no name is made up, and requests omit the field so the hub picks its default.
+    private var currentLauncher: String? { launcher ?? model.starterLauncherSetting }
     /// Where files and videos go: the assistant's machine.
     private var machine: MachineRef { model.hubRef(launcherMachine) }
 
     /// The machine's launchers; until they load, the current one alone, so the button shows what a new
-    /// conversation starts with.
+    /// conversation starts with. With no launcher known (#4200) the model button stays hidden.
     private var models: [PromptModel] {
         let list = launchers.map { PromptModel(id: $0.name, name: $0.name, tag: SessionModes.gptModelName($0.model) ?? Fmt.model($0.model) ?? "") }
-        return list.isEmpty ? [PromptModel(id: currentLauncher, name: currentLauncher, tag: "")] : list
+        guard list.isEmpty, let currentLauncher else { return list }
+        return [PromptModel(id: currentLauncher, name: currentLauncher, tag: "")]
     }
 
     var body: some View {
         VStack(spacing: Theme.Space.s) {
+            if currentLauncher == nil { StarterLauncherStatus() }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             #if os(iOS)
@@ -806,7 +810,7 @@ struct BeautifulStarterComposer: View {
                            attach: PromptItems.attachments(camera: false),
                            mentions: { PromptItems.sessions(model.sessionsNow, except: nil) },
                            models: models,
-                           modelID: currentLauncher,
+                           modelID: currentLauncher ?? "",
                            pickModel: { id in
                                launcher = id
                                Haptics.tap()
@@ -959,28 +963,87 @@ struct AssistantToolsRow: View {
     }
 }
 
-/// Model chip on the assistant home page: which launcher the next new conversation starts with.
+/// Model chip on the assistant home page: which launcher the next new conversation starts with. While the Persona
+/// settings are not read it shows 正在读取, and when they cannot be read 读不到设置 with a retry — never a name (#4200).
 struct StarterModelChip: View {
     @Environment(AppModel.self) private var model
     @Binding var launcher: String?
     @State private var launchers: [Launcher] = []
 
+    private var current: String? { launcher ?? model.starterLauncherSetting }
+
     var body: some View {
-        let current = launcher ?? model.assistantConfig?.launcher ?? "ccc"
-        Menu {
-            ForEach(launchers) { l in
-                Button {
-                    launcher = l.name
-                    Haptics.tap()
-                } label: {
-                    if l.name == current { Label(l.name, systemImage: Theme.Icon.done) } else { Text("\(l.name)  \(SessionModes.gptModelName(l.model) ?? Fmt.model(l.model) ?? "")") }
+        if let current {
+            Menu {
+                ForEach(launchers) { l in
+                    Button {
+                        launcher = l.name
+                        Haptics.tap()
+                    } label: {
+                        if l.name == current { Label(l.name, systemImage: Theme.Icon.done) } else { Text("\(l.name)  \(SessionModes.gptModelName(l.model) ?? Fmt.model(l.model) ?? "")") }
+                    }
                 }
+            } label: {
+                ModeChip(symbol: Theme.Icon.model, text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
             }
-        } label: {
-            ModeChip(symbol: Theme.Icon.model, text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
+            .labelOnlyMenu()
+            .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID))) ?? [] }
+        } else {
+            StarterLauncherStatus()
         }
-        .labelOnlyMenu()
-        .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID))) ?? [] }
+    }
+}
+
+/// The new-conversation page's model capsule while Persona settings are not known yet (#4200): a spinner with
+/// 正在读取, or 读不到设置 as a button that retries. It never shows a launcher name, and uses the `ModeChip` metrics.
+struct StarterLauncherStatus: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.assistantConfigLoadFailed {
+            Button {
+                Haptics.tap()
+                model.retryAssistantLoad()
+            } label: {
+                HStack(spacing: Theme.Space.xs) {
+                    Image(systemName: Theme.Icon.error)
+                    Text(String(localized: "读不到设置")).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(String(localized: "重试")).lineLimit(1).foregroundStyle(Theme.accent)
+                }
+                .statusCapsule()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("读不到设置"))
+            .accessibilityHint(Text("重试"))
+        } else {
+            HStack(spacing: Theme.Space.xs) {
+                ProgressView().controlSize(.mini)
+                Text(String(localized: "正在读取")).lineLimit(1)
+            }
+            .statusCapsule()
+            .accessibilityLabel(Text("正在读取"))
+        }
+    }
+}
+
+private extension View {
+    /// The same capsule metrics and ink as a neutral `ModeChip`, for the starter's loading / error states.
+    func statusCapsule() -> some View {
+        font(Theme.Font.labelMedium)
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.sm)
+            .background(Color.primary.opacity(0.06), in: .capsule)
+            .contentShape(.capsule)
+    }
+}
+
+/// The launcher a new conversation starts with per Persona settings; nil when settings are not known or the hub
+/// names none (#4200).
+private extension AppModel {
+    var starterLauncherSetting: String? {
+        guard let name = assistantConfig?.launcher, !name.isEmpty else { return nil }
+        return name
     }
 }
 
@@ -991,19 +1054,46 @@ struct StarterModesMenu: View {
     var modes: StarterComposer.ShellModes
     var launchers: [Launcher]
 
-    /// The button's title: the launcher's model (its name when it names none) and the effort picked.
+    /// The button's title: the launcher's model (its name when it names none) and the effort picked. While the
+    /// launcher is not known (#4200) the title is the status text, not nil — the shell bar draws the button so the
+    /// menu's 正在读取 / 读不到设置 section is reachable on the iPhone path.
     @MainActor static func title(modes: StarterComposer.ShellModes, launchers: [Launcher], model: AppModel) -> SessionModes.ComposerTitle? {
-        let name = modes.launcher ?? model.assistantConfig?.launcher
+        let effort = SessionModes.effort(modes.effort)?.title
+        guard let name = modes.launcher ?? model.starterLauncherSetting else {
+            return SessionModes.ComposerTitle(model: String(localized: model.assistantConfigLoadFailed ? "读不到设置" : "正在读取"), effort: effort)
+        }
         let launcher = launchers.first { $0.name == name }
         return SessionModes.composerTitle(model: SessionModes.modelName(launcher?.model) ?? launcher?.name ?? name,
-                                          effort: SessionModes.effort(modes.effort)?.title)
+                                          effort: effort)
     }
 
     var body: some View {
         if modes.mode == "bypassPermissions" { // said first, as in a running conversation's menu (SessionModesMenu)
             Section { BypassWarning() }
         }
-        if !launchers.isEmpty {
+        if modes.launcher ?? model.starterLauncherSetting == nil {
+            // Settings are not read yet: the menu says so (and offers a retry) instead of a launcher name (#4200).
+            Section("模型") {
+                if model.assistantConfigLoadFailed {
+                    Button {} label: { Label(String(localized: "读不到设置"), systemImage: Theme.Icon.error) }.disabled(true)
+                    Button {
+                        Haptics.tap()
+                        model.retryAssistantLoad()
+                    } label: {
+                        Label(String(localized: "重试"), systemImage: Theme.Icon.retry)
+                    }
+                } else {
+                    Button {} label: {
+                        HStack {
+                            Text(String(localized: "正在读取"))
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                    .disabled(true)
+                }
+            }
+        } else if !launchers.isEmpty {
             Section("模型") {
                 Picker("启动器", selection: Binding(get: { modes.launcher ?? model.assistantConfig?.launcher ?? "" }, set: { modes.launcher = $0 })) {
                     ForEach(launchers) { l in

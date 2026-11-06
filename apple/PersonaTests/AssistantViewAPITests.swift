@@ -51,6 +51,55 @@ struct AssistantViewAPITests {
             Issue.record("a stale confirmation was accepted")
         } catch let error as APIError { #expect(error.status == 409 && error.code == "view_changed") }
     }
+    @Test func warmWithoutALauncherOmitsTheFieldSoTheHubUsesItsDefault() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/assistant/warm", json: "{}")
+        try await hub.client.warmAssistant(launcher: nil)
+        let request = try #require(hub.requests.last)
+        let data = try #require(request.body)
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(body["launcher"] == nil)
+    }
+    @Test func warmWithAnEmptyLauncherOmitsTheField() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/assistant/warm", json: "{}")
+        try await hub.client.warmAssistant(launcher: "")
+        let request = try #require(hub.requests.last)
+        let data = try #require(request.body)
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(body["launcher"] == nil)
+    }
+    @Test func warmWithALauncherSendsIt() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/assistant/warm", json: "{}")
+        try await hub.client.warmAssistant(launcher: "codex")
+        let request = try #require(hub.requests.last)
+        let data = try #require(request.body)
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(body["launcher"] as? String == "codex")
+    }
+    @Test func newConversationWithoutALauncherOmitsTheField() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/assistant/conversations",
+               json: #"{"session":{"session_id":"s1","status":"working","state":"working","started_by_jarvis":true,"assistant":true,"pending_interactions":0}}"#)
+        let session = try await hub.client.startConversation(prompt: "你好")
+        #expect(session.sessionID == "s1")
+        let request = try #require(hub.requests.last)
+        let data = try #require(request.body)
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(body["prompt"] as? String == "你好")
+        #expect(body["launcher"] == nil)
+    }
+    @Test func newConversationWithALauncherSendsIt() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/assistant/conversations",
+               json: #"{"session":{"session_id":"s2","status":"working","state":"working","started_by_jarvis":true,"assistant":true,"pending_interactions":0}}"#)
+        _ = try await hub.client.startConversation(prompt: "你好", launcher: "codex")
+        let request = try #require(hub.requests.last)
+        let data = try #require(request.body)
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(body["launcher"] as? String == "codex")
+    }
     @Test func executionBudgetNeverGrantsAThirdCardAndReleaseIsOwnerScoped() {
         let budget = HTMLExecutionBudget(), first = UUID(), second = UUID(), third = UUID()
         #expect(budget.acquire(first) && budget.acquire(second))

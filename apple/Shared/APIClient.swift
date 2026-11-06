@@ -851,9 +851,12 @@ nonisolated struct APIClient: Sendable {
         try JSON.decoder.decode(AssistantState.self, from: try await request("PUT", "/api/v1/assistant",
             body: AssistantConfigBody(machineID: machine, launcher: launcher, timezone: timezone, notes: notes, mainTasksQuiet: mainTasksQuiet)))
     }
-    /// The 对话 tab is open: the hub gets a claude process ready so the first message starts at once.
+    /// The 对话 tab is open: the hub gets a claude process ready so the first message starts at once. With no launcher
+    /// chosen the field is omitted and the hub warms its own default (#4200: the client never sends a made-up name).
     func warmAssistant(launcher: String?) async throws {
-        _ = try await request("POST", "/api/v1/assistant/warm", body: ["launcher": launcher ?? ""])
+        var body: [String: String] = [:]
+        if let launcher, !launcher.isEmpty { body["launcher"] = launcher }
+        _ = try await request("POST", "/api/v1/assistant/warm", body: body)
     }
 
     // MARK: Assistant schedule, memory (docs/assistant.md)

@@ -43,8 +43,9 @@ export function defaultSocketPath() {
  *   updated_at, rev, last_text, space_*…; docs/protocol.md「数据类型」).
  * @property {(params: object) => Promise<object>} items - one session.items page (before_seq / turns / limit /
  *   after_seq / from_seq + through_seq → items, has_more, history, to_seq, from_seq, more_after, more).
- * @property {(sessionId: string) => Promise<number>} [cursor] - the session's current to_seq (where a watch from now
- *   starts); default: the to_seq of a one-turn page.
+ * @property {(sessionId: string) => Promise<number | {to_seq: number, history?: string}>} [cursor] - the session's
+ *   current to_seq (where a watch from now starts), with its history so that a rewrite of as many entries is told
+ *   apart; default: the to_seq and history of a one-turn page.
  * @property {(params: object) => Promise<object>} [image] - session.image → {mime, data}.
  * @property {(params: object) => Promise<object>} [item] - session.item → the whole item.
  * @property {(params: {session_id: string, text: string, images?: object[], client_msg_id?: string}) => Promise<void>} [send]
@@ -422,10 +423,10 @@ export function createRuntime(driver, options) {
 
   // ---- watching ----
 
+  /** Where a session's content ends now, and its history when the driver says (a cursor() may give only the seq). */
   async function cursorOf(sessionId) {
-    if (typeof driver.cursor === 'function') return driver.cursor(sessionId)
-    const page = await driver.items({ session_id: sessionId, turns: 1 })
-    return page?.to_seq ?? 0
+    const at = typeof driver.cursor === 'function' ? await driver.cursor(sessionId) : await driver.items({ session_id: sessionId, turns: 1 })
+    return typeof at === 'number' ? { seq: at } : { seq: at?.to_seq ?? 0, history: at?.history }
   }
 
   async function watch(params) {
@@ -440,7 +441,7 @@ export function createRuntime(driver, options) {
       watchChanged(id, true, { transcript: true })
       return { ok: true }
     }
-    const w = { last: since, catchingUp: true, held: [], batch: undefined, timer: undefined }
+    const w = { last: since, history: undefined, catchingUp: true, held: [], batch: undefined, timer: undefined }
     watched.set(id, w)
     watchChanged(id, true, { transcript: false })
     try {
@@ -454,17 +455,22 @@ export function createRuntime(driver, options) {
             peer?.notify('session.items', { session_id: id, items: page.items ?? [], history: page.history, from_seq: page.from_seq ?? after, to_seq: page.to_seq })
             w.last = page.to_seq
           }
+          if (page.history !== undefined) w.history = page.history
           if (!page.more_after) break
           after = page.to_seq
         }
       } else {
-        w.last = await cursorOf(id)
+        const at = await cursorOf(id)
+        w.last = at.seq
+        w.history = at.history
       }
     } catch (err) {
       log(`jarvis: catch up ${id}: ${err.message}`)
     } finally {
       w.catchingUp = false
-      const held = w.held.filter((a) => a.toSeq > w.last)
+      // In order, each against what went out before it: queue drops what the catch-up already pushed, and a move to
+      // another history and back is two rewrites, not one to skip.
+      const held = w.held
       w.held = []
       for (const a of held) queue(id, w, a)
     }
@@ -518,15 +524,26 @@ export function createRuntime(driver, options) {
     queue(sessionId, w, a)
   }
 
+  /**
+   * Whether a batch is of another history than what was pushed or is waiting to go: the content was rewritten (a
+   * branch, a rewind) and its seq need not have grown, so it goes out whatever its seq.
+   */
+  function rewrites(w, a) {
+    const current = w.batch ? w.batch.history : w.history
+    return a.history !== undefined && current !== undefined && a.history !== current
+  }
+
   function queue(id, w, a) {
-    if (a.toSeq <= w.last && w.batch === undefined) return // already pushed (caught up past it)
+    const rewritten = rewrites(w, a)
+    if (!rewritten && a.toSeq <= w.last && w.batch === undefined) return // already pushed (caught up past it)
     const b = w.batch
-    if (b && (a.fromSeq === undefined || a.fromSeq === b.toSeq) && a.history === b.history) {
+    if (b && !rewritten && (a.fromSeq === undefined || a.fromSeq === b.toSeq) && a.history === b.history) {
       b.items.push(...a.items)
       b.toSeq = Math.max(b.toSeq, a.toSeq)
     } else {
       if (b) flush(id, w)
-      w.batch = { items: [...a.items], fromSeq: a.fromSeq ?? w.last, toSeq: a.toSeq, history: a.history }
+      // Another history starts over at its own seq: what came before it says nothing of where it goes on from.
+      w.batch = { items: [...a.items], fromSeq: a.fromSeq ?? (rewritten ? undefined : w.last), toSeq: a.toSeq, history: a.history, rewritten }
     }
     if (!w.timer) {
       w.timer = setTimeout(() => flush(id, w), APPEND_WINDOW)
@@ -540,10 +557,12 @@ export function createRuntime(driver, options) {
     const b = w.batch
     w.batch = undefined
     if (!b || watched.get(id) !== w || !peer) return
-    const msg = { session_id: id, items: b.items, from_seq: b.fromSeq, to_seq: b.toSeq }
+    const msg = { session_id: id, items: b.items, to_seq: b.toSeq }
+    if (b.fromSeq !== undefined) msg.from_seq = b.fromSeq
     if (b.history !== undefined) msg.history = b.history
     peer.notify('session.items', msg)
-    w.last = Math.max(w.last, b.toSeq)
+    w.last = b.rewritten ? b.toSeq : Math.max(w.last, b.toSeq)
+    if (b.history !== undefined) w.history = b.history
   }
 
   // ---- live text ----

@@ -417,7 +417,7 @@ export function createPaseoBridge(deps = {}, options = {}) {
       w.safe = t.tl.safeSeq
       w.epoch = t.epoch
     }
-    return t.tl.toSeq
+    return { to_seq: t.tl.toSeq, history: t.history }
   }
 
   async function item(params) {
@@ -728,8 +728,9 @@ export function createPaseoBridge(deps = {}, options = {}) {
     if (watches.get(sessionId) !== w) return
     const p = inner.payload ?? {}
     if (inner.type === 'agent.timeline.replacement') {
-      // Its history was rewritten (a rewind): the phone takes the conversation again.
-      w.epoch = undefined
+      // Its history was rewritten (a rewind): read it whole; the new epoch is another history, which the phone takes
+      // again (the epoch it had is kept, so that refresh sees the change).
+      w.safe = undefined
       timelines.delete(w.agentId)
       scheduleRefresh(sessionId)
       return

@@ -174,7 +174,8 @@ export function branchItems(entries, branch) {
 
 /**
  * The branch's identity: the latest entry on it that does not follow the entry before it in the file (where the
- * branch left the file's order: an edit, a jump back in the tree). Unchanged while entries are only appended.
+ * branch left the file's order: an edit, a jump back in the tree), and its leaf when the leaf has entries after it
+ * (a jump back to an earlier point, nothing written yet). Unchanged while entries are only appended.
  */
 export function branchKey(entries, branch) {
   const prev = new Map(entries.map((e, i) => [e.id, entries[i - 1]?.id ?? null]))
@@ -182,6 +183,8 @@ export function branchKey(entries, branch) {
   for (const e of branch) {
     if (e.parentId !== null && e.parentId !== undefined && prev.get(e.id) !== e.parentId) key = e.id
   }
+  const leaf = branch.at(-1)?.id
+  if (leaf !== undefined && entries.some((e) => e.parentId === leaf)) key += `@${leaf}`
   return key
 }
 

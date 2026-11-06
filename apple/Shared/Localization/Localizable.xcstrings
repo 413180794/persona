@@ -87770,6 +87770,28 @@
         }
       }
     },
+    "读不到设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't Load Settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定を読み込めません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读不到设置"
+          }
+        }
+      }
+    },
     "读不到运行记录": {
       "localizations": {
         "en": {

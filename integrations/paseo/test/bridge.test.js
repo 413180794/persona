@@ -125,6 +125,37 @@ test("an agent's timeline as items, its live text, and what it writes next while
   await until('the subscription released', () => fake.requestsOf('subscription.release.request').length > 0)
 })
 
+test('a rewind in Paseo goes to the phone as another history, even when the timeline got shorter', async (t) => {
+  const { fake, node, a } = await setup(t)
+  const id = `paseo-${a.codex.id}`
+  fake.setTimeline(a.codex.id, [
+    entry(1, { type: 'user_message', text: '一', messageId: 'u1' }),
+    entry(2, { type: 'assistant_message', text: '答一' }),
+    entry(3, { type: 'user_message', text: '二', messageId: 'u2' }),
+    entry(4, { type: 'assistant_message', text: '答二' }),
+  ])
+  await call(node, 'session.watch', { session_id: id, since_seq: 0 })
+  await until('the subscription made', () => [...fake.subs.values()].some((s) => s.kind === 'timeline'))
+  // Rewound to before "二": a new epoch, two entries.
+  fake.setTimeline(a.codex.id, [
+    entry(1, { type: 'user_message', text: '一', messageId: 'u1' }),
+    entry(2, { type: 'assistant_message', text: '答一' }),
+  ], 'ep2')
+  fake.emit('timeline', { type: 'agent.timeline.replacement', payload: { agentId: a.codex.id, epoch: 'ep2' } }, (s) => s.agentIds.includes(a.codex.id))
+  const b = await until('another history', () => node.all('session.items').find((x) => x.session_id === id && x.history === `paseo:${a.codex.id}:ep2`))
+  assert.ok(b.to_seq <= 2, 'the shorter timeline, not the old end')
+  // What it writes next goes on from there.
+  fake.setTimeline(a.codex.id, [
+    entry(1, { type: 'user_message', text: '一', messageId: 'u1' }),
+    entry(2, { type: 'assistant_message', text: '答一' }),
+    entry(3, { type: 'user_message', text: '二，重来', messageId: 'u3' }),
+  ], 'ep2')
+  fake.stream(a.codex.id, { type: 'timeline', provider: 'codex', turnId: 't2', item: { type: 'user_message', text: '二，重来', messageId: 'u3' } }, 3)
+  const next = await until('the next entry', () => node.all('session.items').find((x) => x.session_id === id && x.items.some((i) => i.text === '二，重来')))
+  assert.equal(next.history, `paseo:${a.codex.id}:ep2`)
+  assert.equal(next.from_seq, b.to_seq)
+})
+
 test("a Claude Code session's watch is its live text only: the node reads the transcript", async (t) => {
   const { fake, node, a } = await setup(t)
   await call(node, 'session.watch', { session_id: SID, since_seq: 0, transcript: true })

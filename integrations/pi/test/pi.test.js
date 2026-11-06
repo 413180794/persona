@@ -159,6 +159,43 @@ test('a watched session gets what it writes as continuous batches, its live text
   assert.deepEqual(n.all('session.items').at(-1).items.map((i) => i.text), ['two, again'])
 })
 
+test('a move to another branch already in the file goes out as another history, and the list sees it', async (t) => {
+  const { n, host } = await setup(t)
+  const a = piSession('s-t', '/w/app', [msg('u1', null, 'user', 'one'), msg('a1', 'u1', 'assistant', 'a1'),
+    msg('u2', 'a1', 'user', 'two'), msg('a2', 'u2', 'assistant', 'answer two'),
+    msg('u2b', 'a1', 'user', 'two, again'), msg('a2b', 'u2b', 'assistant', 'answer two again')])
+  host.register(a.pi)
+  await a.fire('session_start')
+  await n.ready
+  const rev = () => n.last('runtime.sessions')?.sessions.find((s) => s.session_id === 's-t')?.rev
+  await until('listed', () => rev() === 6)
+  // Not watched: back on the first branch (/tree), nothing written.
+  a.sm.leaf = 'a2'
+  await a.fire('session_tree')
+  await until('the list moves', () => rev() !== 6)
+  await n.peer.call('session.watch', { session_id: 's-t', since_seq: 0 })
+  const page = await n.peer.call('session.items', { session_id: 's-t', turns: 10 })
+  assert.equal(page.history, 'pi:s-t:root')
+  assert.deepEqual(page.items.map((i) => i.text), ['one', 'a1', 'two', 'answer two'])
+  // Watched: to the other branch, then to an earlier point of it.
+  a.sm.leaf = 'a2b'
+  await a.fire('session_tree')
+  await until('pushed as another history', () => n.last('session.items')?.history === 'pi:s-t:u2b')
+  assert.equal(n.last('session.items').to_seq, 6)
+  a.sm.leaf = 'a1'
+  await a.fire('session_tree')
+  await until('an earlier point is another history too', () => n.last('session.items')?.history === 'pi:s-t:root@a1')
+  assert.deepEqual((await n.peer.call('session.items', { session_id: 's-t', turns: 10 })).items.map((i) => i.text), ['one', 'a1'])
+  assert.equal(host.live.get('s-t').key, 'root@a1')
+  // Writing from there: a third branch, its entries pushed on from its seq.
+  a.sm.append(msg('u2c', 'a1', 'user', 'two, a third time'))
+  await a.fire('message_end')
+  await until('the new entry', () => n.last('session.items')?.items.some((i) => i.text === 'two, a third time'))
+  assert.equal(n.last('session.items').history, 'pi:s-t:u2c')
+  assert.equal(n.last('session.items').to_seq, 7)
+  assert.equal(rev() >= 7, true)
+})
+
 test('what a watched session writes is pushed cut to the page limits, as its pages are', async (t) => {
   const { n, host } = await setup(t)
   const a = piSession('s-big', '/w/app', [msg('u1', null, 'user', 'one'), msg('a1', 'u1', 'assistant', 'a1')])

@@ -46,7 +46,7 @@ runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系�
 
 | driver 方法 | 能力 |
 | --- | --- |
-| `cursor(sessionId)` | 现在的 `to_seq`（不写就用一页 `turns: 1` 的 `to_seq`） |
+| `cursor(sessionId)` | 现在的 `to_seq`，或 `{to_seq, history}`（带上 history，同样条数的重写才认得出来；不写就用一页 `turns: 1` 的 `to_seq` 和 `history`） |
 | `image(params)` / `item(params)` | 图片原始数据 / 被截断的 item 全文 |
 | `send({session_id, text, images, client_msg_id})` | 从手机发消息。**按 `client_msg_id` 去重**：App 在重连时会重发 |
 | `interrupt` / `rename` / `close` / `start({cwd, prompt})` | 中断、改名、关闭、从手机新建（有 `start` 且配了 `launcher` 时新建表单里多一个启动器） |
@@ -93,7 +93,7 @@ runtime 之间共用、但不属于协议的，也在 SDK 里，各 runtime 直�
 - **seq**：每个会话一条单调递增的序号，从 1 开始（0 表示「还没有」）；一条 item 的 seq 是产生它的那条记录的序号，同一条记录可以出好几个 item，
   id 用 `<seq>#<序号>`。DSH 的事件 seq 从 0 开始，所以映射成 seq + 1。**id 只在会话内唯一**：不同会话、尤其是同一个会话分出来的
   两个分支，同一个 id 是不同的内容。客户端按 id 缓存的东西（渲染结果、解析结果）要连会话一起做 key（#372）。
-- **history**：会话内容的身份（`docs/protocol.md`「items 的连续性」）。内容被重写（分支、重置）时换一个，App 会整页重取；只追加时不变。
+- **history**：会话内容的身份（`docs/protocol.md`「items 的连续性」）。内容被重写（分支、重置）时换一个，App 会整页重取；只追加时不变。换了 history 的批次 seq 不必变大（切回同样条数的分支、回退后更短），SDK 照样推出，之后从它的 `toSeq` 接着推。
 - **item 种类**照 App 已有的：`text`（user / assistant）、`thinking`、`tool_use`（`tool_name`、`tool_input`、`tool_use_id`）、`tool_result`
   （`tool_use_id`、`is_error`）、`image`（`lazy: true` 占位，数据走 `image`）、`notice`（system：中断、出错、压缩）。
 - **工具名对齐 Claude**：App 按 `Bash`、`Read`、`Edit`、`Write`、`Grep`、`Glob`、`WebFetch`、`WebSearch`、`TodoWrite` 画命令、diff、文件，

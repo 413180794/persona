@@ -64,7 +64,10 @@ export function createOpencodeHost(deps, options = {}) {
   const rt = createRuntime({
     listSessions,
     items,
-    cursor: async (id) => (await view(id)).toSeq,
+    cursor: async (id) => {
+      const v = await view(id)
+      return { to_seq: v.toSeq, history: v.history }
+    },
     image,
     item,
     send,

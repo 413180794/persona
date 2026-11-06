@@ -186,6 +186,11 @@ final class AppModel {
             saveSnapshot()
         }
     }
+    /// GET /api/v1/assistant failed while no settings are held: the new-conversation page shows 读不到设置 with a retry
+    /// instead of a made-up launcher name (#4200). Held settings (or a restored snapshot) keep the page usable. An
+    /// answer that names no launcher sets it too (current hubs always name one; purely defensive against old hubs).
+    private(set) var assistantConfigLoadFailed = false
+    @ObservationIgnored private var assistantRetryInFlight: Task<Void, Never>?
     /// The assistant conversation shown in the 对话 tab (persisted across launches).
     var assistantCurrent: SessionKey? {
         didSet {
@@ -725,7 +730,8 @@ final class AppModel {
     /// Loads the assistant config; with no remembered conversation, picks up the newest one.
     func refreshAssistant() async {
         guard let api else { return }
-        if let st = try? await api.assistant() {
+        do {
+            let st = try await api.assistant()
             guard api.group == hub?.group else { return } // another group was picked meanwhile
             assistantConfig = st
             // Only on the very first launch: after "新对话" the key exists but is empty, and the home page stays.
@@ -741,6 +747,23 @@ final class AppModel {
             // own too; the hub keeps whichever came last).
             let tz = TimeZone.current.identifier
             if st.timezone != tz, let updated = try? await api.setAssistant(timezone: tz) { assistantConfig = updated }
+            // A hub that names no launcher gets the same retry state as a failed read (#4200): current hubs always
+            // resolve one (their default), so an empty answer means an old hub — show 读不到设置 instead of an
+            // endless 正在读取 or a made-up name.
+            assistantConfigLoadFailed = (assistantConfig?.launcher ?? "").isEmpty
+        } catch {
+            // Settings that already name a launcher stay usable; with none held the page shows 读不到设置 (#4200).
+            if (assistantConfig?.launcher ?? "").isEmpty { assistantConfigLoadFailed = true }
+        }
+    }
+
+    /// The 读不到设置 retry: the page flips back to 正在读取 at once, and repeated taps share the one request (#4200).
+    func retryAssistantLoad() {
+        guard assistantRetryInFlight == nil else { return }
+        assistantConfigLoadFailed = false
+        assistantRetryInFlight = Task {
+            await refreshAssistant()
+            assistantRetryInFlight = nil
         }
     }
 
@@ -2197,6 +2220,8 @@ final class AppModel {
         if let g = hub?.group {
             assistantConfig = assistantByGroup[g]
         }
+        // The picked group's settings are read again: until that read finishes, the page shows its loading state.
+        assistantConfigLoadFailed = false
         if let a = assistantCurrent, a.group != hub?.group { assistantCurrent = assistantMain }
         InboxStore.shared.forget()
         TasksStore.shared.forget()
