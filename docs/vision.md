@@ -23,6 +23,8 @@
 | 抽屉、侧滑切换 | 捏合拖动在 visionOS 上是滚动：远程画面的抽屉不能下拉关闭（点把手关），对话的左右分页只用按钮切 |
 | VNC 画中画 | 没有（visionOS 不支持 sample buffer 画中画）：`VNCPiP.supported` 为 false，只开完整页 |
 | 液态玻璃 | 窗口本身就是玻璃：玻璃容器只做布局，表面用系统材质 |
+| 分享 › Persona（`PersonaShare`） | 同一份代码和 Info.plist，编成 visionOS 的扩展 target `PersonaVisionShare`，嵌在 Vision App 里；bundle id 和 iPhone 的一样（`<bundle id>.share`） |
+| 输入框上的「粘贴图片」（`PasteImageChip`） | 一样：系统的 `PasteButton` 和剪贴板在 visionOS 上都有 |
 
 ## 壳
 

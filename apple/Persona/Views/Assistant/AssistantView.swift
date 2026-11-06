@@ -759,7 +759,7 @@ struct StarterComposer: View {
         VStack(spacing: Theme.Space.s) {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             PasteImageChip(focused: focused) { img in
                 guard images.count < 4 else { return model.toast = Toast(String(localized: "一次最多 4 张"), style: .error) }
                 let scaled = img.scaledDown(maxSide: 1600)
@@ -867,7 +867,7 @@ struct BeautifulStarterComposer: View {
             if currentLauncher == nil { StarterLauncherStatus() }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             PasteImageChip(focused: focused) { img in
                 guard images.count < 4 else { return model.toast = Toast(String(localized: "一次最多 4 张"), style: .error) }
                 let scaled = img.scaledDown(maxSide: 1600)

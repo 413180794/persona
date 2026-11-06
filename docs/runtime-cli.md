@@ -47,6 +47,8 @@ scripts/app/personactl.py call <命令> k=v …           # 任何 App 认识的
 | `type` | `text`，可带元素过滤（先激活它拿焦点，取法同 `activate`） | 往有焦点的输入框里打字 |
 | `dismiss-keyboard` | | 收起键盘 |
 | `snapshot` | `path` 或不带（回 base64），`scale` | App 窗口的 PNG（不含状态栏；要和老截图逐像素比用 `jarvisctl.py screenshot`） |
+| `pasteboard` | `text`，或者不给就放一张纯色图片（`width`、`height`，默认 40 × 30 pt） | `changeCount`、`hasImages`；像在别的 App 里复制了一样，输入框的「粘贴」chip 等的就是这个（不用 UI 测试也能截到） |
+| `share` | `text`（默认 Persona）、`url` | `presented`；从当前窗口弹出系统的分享面板，看「分享 › Persona」在不在里面 |
 | `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openAllWork": true}`），`keep`（不换新的界面树），`coldChats`、`dropChatCache`（同 `reset`） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
 | `set-style` | `style`（glass / clay / island / lark / beautiful）、`color`（主题色） | 同 `state`；整棵树按新风格重建 |
 | `set-appearance` | `value`（light / dark / system） | 只改 App：走 设置 › 外观 › 深浅色（`AppModel.colorScheme`，会存下来，用完 `system` 还原）；`jarvisctl.py appearance` 默认改整个模拟器（`simctl ui appearance`，状态栏一起变，截图脚本用这个） |

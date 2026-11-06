@@ -298,6 +298,7 @@ targets:
       - path: LiveActivity/FleetPersona.swift
       - path: LiveActivity/FleetIslandViews.swift
     dependencies:
+      - target: PersonaVisionShare
       - package: MarkdownUI
       - package: BeautifulUI
       - package: PersonaSSH
@@ -456,6 +457,29 @@ targets:
         PRODUCT_NAME: PersonaShare
         INFOPLIST_FILE: PersonaShare/Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+  # Share › Persona on Apple Vision Pro: the iPhone's share extension (PersonaShare) as it is, built for visionOS. Same
+  # code, Info.plist and bundle id (the Vision app has the iPhone's bundle id, so its extension does too).
+  PersonaVisionShare:
+    type: app-extension
+    platform: visionOS
+    sources:
+      - path: PersonaShare
+        excludes: ["*.plist", "*.entitlements"]
+      - path: Shared/Localization
+    entitlements:
+      path: PersonaShare/PersonaVisionShare.entitlements
+      properties:
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).share
+        PRODUCT_MODULE_NAME: PersonaShare
+        PRODUCT_NAME: PersonaShare
+        INFOPLIST_FILE: PersonaShare/Info.plist
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES

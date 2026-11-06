@@ -2,7 +2,8 @@
 import SwiftUI
 import UIKit
 
-/// Acting on the app (docs/runtime-cli.md「动作和截图」): `activate`, `scroll`, `type`, `dismiss-keyboard`, `snapshot`.
+/// Acting on the app (docs/runtime-cli.md「动作和截图」): `activate`, `scroll`, `type`, `dismiss-keyboard`, `snapshot`,
+/// `pasteboard`, `share`.
 /// A real touch (a menu's items, which take no accessibility activation) is `jarvisctl.py tap`'s fallback: `idb`.
 extension RuntimeCLI {
     static let actionCommands: [String: Command] = [
@@ -11,7 +12,40 @@ extension RuntimeCLI {
         "type": { a in type(a) },
         "dismiss-keyboard": { _ in windows.forEach { $0.endEditing(true) }; return [:] },
         "snapshot": { a in snapshot(a) },
+        "pasteboard": { a in pasteboard(a) },
+        "share": { a in share(a) },
     ]
+
+    /// Puts a picture (`image`: a solid `width` × `height` pt, default 40 × 30) or `text` on the clipboard, as a copy in
+    /// another app would: what the composer's Paste chip (`PasteImageChip`) waits for, without a UI test to set it.
+    private static func pasteboard(_ a: Args) -> Reply {
+        if let text = a["text"] as? String {
+            UIPasteboard.general.string = text
+        } else {
+            let size = CGSize(width: a["width"] as? Double ?? 40, height: a["height"] as? Double ?? 30)
+            UIPasteboard.general.image = UIGraphicsImageRenderer(size: size).image { ctx in
+                UIColor.systemTeal.setFill()
+                ctx.fill(CGRect(origin: .zero, size: size))
+            }
+        }
+        return ["changeCount": UIPasteboard.general.changeCount, "hasImages": UIPasteboard.general.hasImages]
+    }
+
+    /// The system's share sheet for `text` (and `url`, when given), from the key window: where Share › Persona
+    /// (`PersonaShare`) is listed, without a share button to find on the page.
+    private static func share(_ a: Args) -> Reply {
+        var items: [Any] = [a["text"] as? String ?? "Persona"]
+        if let u = (a["url"] as? String).flatMap(URL.init(string:)) { items.append(u) }
+        guard var top = windows.first(where: \.isKeyWindow)?.rootViewController ?? windows.first?.rootViewController else {
+            return fail("no window")
+        }
+        while let next = top.presentedViewController { top = next }
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = top.view
+        sheet.popoverPresentationController?.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 1, height: 1)
+        top.present(sheet, animated: false)
+        return ["presented": true, "items": items.count]
+    }
 
     /// What VoiceOver's double tap does to the element `target` finds: a button's action, a menu opening.
     /// `activated` false when the element does not take it (a menu's items).

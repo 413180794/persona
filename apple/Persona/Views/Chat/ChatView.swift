@@ -3726,7 +3726,7 @@ struct Composer: View, Equatable {
             }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             PasteImageChip(focused: focused) { add($0) }
             #endif
             if !images.isEmpty {
