@@ -1,14 +1,14 @@
-# 消息列表密度
+# Message list density
 
-iPhone 18 Pro / iOS 27.0，合成 mock 会话，标准字号。AXe 读取实际行 frame；新旧布局下三条普通会话修改后均为 64 pt，修改前为 92 pt。
+iPhone 18 Pro / iOS 27.0, synthetic mock chats, standard text size. AXe reads the actual row frames; after the change, all three ordinary chats measure 64 pt in both the new and old layouts, down from 92 pt.
 
-只调整「消息」页的会话行：头像改用已有 48 pt token，List 行上下 inset 设为 0，保留内容上下各 8 pt。动态字体不固定行高，系统 accessibility-large 下实际为 95.67 pt，标题和预览保持原有单行截断。收件箱视图及输入框未改变。
+Only chat rows on the "Messages" page changed: avatars use the existing 48 pt token, the List's top and bottom row insets are 0, and content retains 8 pt of padding above and below. Dynamic Type does not use a fixed row height: at the system accessibility-large size, the actual height is 95.67 pt. Titles and previews keep their existing single-line truncation. The Inbox view and input field are unchanged.
 
-| 场景 | 截图 |
+| Scenario | Screenshot |
 | --- | --- |
-| 修改前，92 pt | [修改前](before.png) |
-| 新布局，浅色玻璃，64 pt | [新布局浅色](new-light.png) |
-| 新布局，深色 BeautifulUI，64 pt | [新布局深色](new-dark.png) |
-| 旧布局，浅色玻璃，64 pt | [旧布局浅色](old-light.png) |
-| 旧布局，深色 BeautifulUI，64 pt | [旧布局深色](old-dark.png) |
-| 辅助字号，95.67 pt | [辅助字号](large-type.png) |
+| Before, 92 pt | [Before](before.png) |
+| New layout, light glass, 64 pt | [New layout, light](new-light.png) |
+| New layout, dark BeautifulUI, 64 pt | [New layout, dark](new-dark.png) |
+| Old layout, light glass, 64 pt | [Old layout, light](old-light.png) |
+| Old layout, dark BeautifulUI, 64 pt | [Old layout, dark](old-dark.png) |
+| Accessibility text size, 95.67 pt | [Accessibility text size](large-type.png) |

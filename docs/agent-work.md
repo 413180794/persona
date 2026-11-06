@@ -1,278 +1,278 @@
-# Agent 的工作态：工作中 / 卡在具名的前置条件上 / 做完了（#1686）
+# Agent work state: working / blocked on a named prerequisite / done (#1686)
 
-用户原话（2026-11-04）：「现在 persona 不够主动，我看到有好多未读的 session……每个 session 要么是在工作，要么是明确在等什么前置需要，
-要么就是做完了……尽量压缩等待的时间」。
+The user's words (2026-11-04): "Persona isn't proactive enough right now. I see lots of unread sessions… Every session should either be working, explicitly waiting for a prerequisite,
+or done… Minimize waiting time as much as possible."
 
-## 为什么
+## Why
 
-`docs/agent-states.md` 的统一状态是**宿主视角**：需要你 / 工作中 / 完成未看 / 已看。「完成未看」只说明这一轮结束了、用户没看，
-不说明这个会话**在工作上**到了哪一步。于是 Agents 页堆一排绿点，要一个个点进去读才知道：
+The unified states in `docs/agent-states.md` describe the **host's perspective**: Needs you / Working / Unread / Seen. "Unread" means only that a turn ended and the user has not read it,
+not how far the session has progressed **in its work**. The Agents page ends up with a row of green dots that must each be opened and read to find out:
 
-- 哪个已经做完、可以收尾；
-- 哪个在等用户拍板（「要不要 push 到 beta」「D2 / D4 / D10 选哪个」），但列表里只是一个绿点；
-- 哪个在等外部事件（等部署跑完再测、等 CI、等 OAuth 链接），却没有任何东西在事件发生时叫醒它；
-- 哪个只是 `API Error: 503` 这类瞬时错误停住了，其实发一句「继续」就行；
-- 要用户点的授权链接几分钟就过期，看到时早失效了。
+- Which tasks are done and ready to wrap up;
+- Which are waiting for a user decision ("Should I push to beta?", "Which of D2 / D4 / D10?"), yet show only a green dot in the list;
+- Which are waiting for an external event (deployment completion before testing, CI, an OAuth link), with nothing to wake them when the event occurs;
+- Which stopped only because of a transient error such as `API Error: 503`, and simply need a "continue" message;
+- Authorization links that expire within minutes and are already invalid by the time the user sees them.
 
-## 模型
+## Model
 
-每个会话在工作意义上只处于三态之一（`proto.Session.work.phase`）：
+In work terms, each session is in exactly one of three states (`proto.Session.work.phase`):
 
-| phase | 是什么 | 列表的一行 |
+| phase | Meaning | List preview |
 | --- | --- | --- |
-| `working` 工作中 | 宿主在跑（`state = working`） | 沿用 `activity` / `last_text` |
-| `blocked` 卡住 | 停下了，在等一个**具名**的前置条件（`on`） | 「在等什么」 |
-| `done` 做完了 | 这件事做完并交付了 | 一句话结论 + 产物 |
+| `working` | The host is running (`state = working`) | Keep using `activity` / `last_text` |
+| `blocked` | Stopped, waiting for a **named** prerequisite (`on`) | "What it is waiting for" |
+| `done` | The task is complete and delivered | One-line conclusion + artifacts |
 
-`blocked` 的前置条件分四类（`work.on`）：
+A `blocked` prerequisite has four types (`work.on`):
 
-| on | 例子 | 谁来推进 |
+| on | Examples | Who advances it |
 | --- | --- | --- |
-| `user` 等你决定 | 选方案、要不要推到 beta、补信息、点授权链接、登录过期 | 用户：Persona 把问题和选项做成「需要你」卡片，一键选完把答案发回给 Agent |
-| `agent` 等另一个 Agent | 「等隔壁那个合完我再 rebase」 | Persona：那个 Agent 停下时叫醒它 |
-| `external` 等外部事件 | 等部署 / CI / 审核 / 某个时间点；后台命令、`/loop` 自己会醒 | Persona：到点叫醒它自己去查（后台命令、`/loop` 不用叫） |
-| `transient` 瞬时错误 | `API Error: 503 / 529 overloaded / Connection error` | Persona：退避后自动发「继续」，有上限 |
+| `user` | Choose a plan, decide whether to push to beta, provide information, click an authorization link, expired login | User: Persona turns the question and options into a "Needs you" card; one tap sends the answer back to the Agent. |
+| `agent` | "Wait for the neighboring Agent to merge, then rebase" | Persona: wakes it when that Agent stops. |
+| `external` | Wait for deployment / CI / review / a time; background commands and `/loop` wake themselves | Persona: wakes it on schedule to check for itself (no wake needed for background commands or `/loop`). |
+| `transient` | `API Error: 503 / 529 overloaded / Connection error` | Persona: automatically sends "continue" after backoff, with a limit. |
 
-和统一状态的关系：`state` 的取值**不变**（老 App 照常显示），只是算法多看一眼工作态：
+Relationship to unified states: `state` values **do not change** (old Apps display them as before); the algorithm simply also considers work state:
 
-| 工作态（这一轮的） | `state` | 说明 |
+| Work state (this turn) | `state` | Explanation |
 | --- | --- | --- |
-| `done` | `idle` | 不再占「完成未看」；结论在 `work.line`，推送也带结论 |
-| `blocked` · `user`，有选项 | `needs_you` | Persona 建了一张提问卡片（`pending_interactions` 加一） |
-| `blocked` · `agent` / `external` / `transient`，Persona 在等（`wake_at` 或等的 Agent） | `idle` | 新 App 显示成「待唤醒」+ 在等什么；老 App 是已看 |
-| 没分诊、分诊失败、看不出来（`unsure`） | 照旧（`unread`） | 宁可留着绿点，也不把没看清的事藏起来 |
+| `done` | `idle` | No longer occupies "Unread"; conclusion is in `work.line` and included in pushes. |
+| `blocked` · `user`, with options | `needs_you` | Persona created a question card (`pending_interactions` increases by one). |
+| `blocked` · `agent` / `external` / `transient`, with Persona waiting (`wake_at` or a target Agent) | `idle` | New Apps show "Waiting" + what it is waiting for; old Apps show Seen. |
+| Not triaged, triage failed, or unclear (`unsure`) | Unchanged (`unread`) | Better to leave a green dot than hide something not understood. |
 
-「完成未看」于是只剩分诊还没出结果（一轮结束后十几秒）和模型看不出来的。
+"Unread" then remains only while triage is pending (a dozen or so seconds after a turn ends) or when the model cannot tell.
 
-## 谁管什么（2026-11-04 起：在管理者里）
+## Responsibilities (in the manager since 2026-11-04)
 
-分诊这件事是**管理者**的（现在只有一个，就是助手进程 `personad assistant`，`server/internal/assistant/agents_*.go`），hub 只是通道
-（`hub/agents_link.go`，总线上的方法见 `docs/protocol.md`「总线」的「Agents」）：
+Triage belongs to the **manager** (currently just one: the assistant process `personad assistant`, `server/internal/assistant/agents_*.go`). The hub is only a transport
+(`hub/agents_link.go`; bus methods are in `docs/protocol.md`, "Bus" → "Agents"):
 
-| 谁 | 做什么 |
+| Component | Responsibilities |
 | --- | --- |
-| 管理者 | 一轮停下后的分诊（规则 + 模型 `agent.triage`，经 hub 的 `app.call models.json`）、自动继续、叫醒、卡片和卡片的答案、四个开关（settings `agents.triage`）、`session_work` / `session_work_events` 两张表、统计；新 Agent 的标签名（`agent.title`）、新建和续上的 Agent 跑在哪个启动器和模型上（下面「新建」） |
-| hub | 告诉管理者发生了什么：一轮开始 / 结束（`session.turn_started` / `session.turn_ended`，原来就发）、用户在 App 里看了一个会话（`session.seen`）；照管理者的快照显示：会话列表的 `work`（快照的 `work`）、它的卡片（快照的 `interactions`，和助手的提问一样显示、推送、到期，答案经 `manager.action` 回去）；它要发给 Agent 的经 `device.call session.send` 转给 node |
+| Manager | Post-turn triage (rules + model `agent.triage`, through the hub's `app.call models.json`), automatic continuation, wakeups, cards and answers, four switches (settings `agents.triage`), tables `session_work` / `session_work_events`, statistics; labels for new Agents (`agent.title`), and launchers / models for new and resumed Agents ("Starting" below). |
+| hub | Reports what happened: turn starts / ends (`session.turn_started` / `session.turn_ended`, already sent), a user views a session in the App (`session.seen`). Displays the manager's snapshot: session-list `work` (snapshot `work`), its cards (snapshot `interactions`, displayed, pushed, and expired like assistant questions, with answers returned through `manager.action`). Messages to Agents forward to the node through `device.call session.send`. |
 
-- **会话列表的 `work`**：管理者在快照里报每个会话最新一轮的工作态（`work.turn_at` 是那一轮结束的时间），hub 只在会话还停在那一轮上时显示它；
-  工作中（`{"phase":"working"}`）、Agent 自己在问（它的卡片排在管理者的卡片前面）、终端里有对话框这三种是 hub 照会话当时的样子说的，不等管理者。总开关关着时没有 `work`。
-- **新建**：`POST /api/v1/sessions` 之前 hub 问管理者 `agents.start_params`：它按「模型配置 › Agents」填启动器、模型、思考强度和指纹（这一次选的启动器、模型盖在上面，`docs/model-config.md`），
-  再从第一条消息起标签名；后台开始的（`async`）和飞书卡片开的 Agent 之后经 `agents.tab_name` 要名字。给一个不知道启动器的停着的会话发消息（续上）之前问 `agents.resume_params`。
-  `POST /api/v1/tabs/autoname` 也是管理者的。
+- **Session-list `work`**: the manager's snapshot reports each session's latest turn's work state (`work.turn_at` is when that turn ended). The hub displays it only if the session is still on that turn.
+  Working (`{"phase":"working"}`), the Agent asking its own question (its cards precede the manager's), and a terminal dialog are reported by the hub from the current session state without waiting for the manager. No `work` when the main switch is off.
+- **Starting**: before `POST /api/v1/sessions`, the hub asks the manager for `agents.start_params`. It fills launcher, model, thinking effort, and fingerprint from **Model Settings › Agents** (the launcher / model selected for this start override them; `docs/model-config.md`),
+  then derives a tab label from the first message. Agents started in the background (`async`) or from Lark cards request their names later through `agents.tab_name`. Before sending to a stopped session with an unknown launcher (resuming it), ask `agents.resume_params`.
+  `POST /api/v1/tabs/autoname` also belongs to the manager.
 
-**管理者没连着的时候**（hub 刚起来、它还没握手；它重启的那一两秒；崩了在被拉起来）：
+**When the manager is disconnected** (the hub just started and it has not handshaken; the second or two during its restart; it crashed and is being relaunched):
 
-- 新建 Agent、续上不知道启动器的会话：hub 起来后它还没连上过的，先等它（等到 hub 起来 60 秒，不超过这次请求自己的期限）：hub 一重启就有排在端口上的请求和 App 的重放进来，
-  这样它们照样由管理者填。它连上过、现在不在的不等。
-- 等不到就开不了：2026-11-04 起电脑是管理者连的（[machines.md](machines.md)「谁连电脑」），没有它什么都到不了那台机器，新建回 `503 assistant_offline`，
-  给停着的会话发消息（续上）也一样（以前 hub 自己套「模型配置 › Agents」照样开）。
-- 分诊暂停：轮次结束的事件不发给它（hub 不排队），到点的继续 / 叫醒等它回来再发（发之前照样重新检查）。它（重新）连上以后补上：下一次检查（15 秒内）开始把这期间结束、
-  还是完成未看、24 小时内的轮次分诊掉（每次最多 3 个，之后每分钟接着补；hub 刚起来时也一样：它的总线最后才开，node 先连上）；这期间用户已经看过（App 里、或在电脑上 herdr 里）的不补，和以前 hub 重启后一样。
-  这期间又开始工作的会话，它的卡片在下一次检查（15 秒一次）撤掉。
-- 会话列表留着它最后报的 `work`（照样只对还停在那一轮上的会话显示）；里面的叫醒时间过了 5 分钟还没人叫，就不再算「待唤醒」（列表里去掉 `wake_at`，又是完成未看）。
-- 它的卡片照样挂着、能答：答案 hub 先记下，它回来、报了快照以后再交给它；它一时收不下（还没读回自己的状态之类）的也留着，过 10 秒再给，直到它收下、
-  说那张卡片已经没了，或者卡片本该过期。hub 也重启了的话这条答案丢了，卡片会再挂出来。
-- 开关和统计的接口（`/api/v1/agents/triage`、`/api/v1/agents/work/stats`、`/api/v1/tabs/autoname`）回 `503 assistant_offline`。
-- 只有管理者重启：hub 还挂着的卡片照旧挂着，不再推一次，和分诊在 hub 里时一样只在答了、Agent 又开始工作、过期时撤。
-- hub 重启（管理者是它的子进程，跟着重启）：管理者报第一份快照之前的一两秒，列表里没有 `work`（分诊过的那一两秒又显示成完成未看）；卡片在那台电脑重新连上后重新挂上（同一个 id，会再推一次，和以前 hub 重启一样）。
-  只有 Agent 往下走了（又开始工作、或者有了更晚的一轮）才撤卡；电脑刚连回来时会话看着不一样（被看过成了 idle、还在等它自己的提问、node 也重启了还没读出对话记录的时间）都不算，卡片留着、下一次检查再挂（`cardBack`）。
-  交互历史里这张卡也一直是 pending：hub 启动时把上一个进程留下的 pending 交互记成 cancelled，`session_work.interaction_id` 指着的不算（`db.ExpireStaleInteractions`），管理者没再挂上的才由它记成 cancelled。
-  以前（2026-11-06 前）每次 hub 重启都把等你拍板的卡（包括部署、合并这类红线卡）撤掉：电脑连回来的头几秒会话看着「被看过」或「换了一轮」，管理者就把卡忘了，交互历史也先被记成 cancelled。
+- Starting an Agent or resuming a session with an unknown launcher: if the manager has never connected since hub startup, wait for it (until 60 seconds after hub startup, no longer than the request's own deadline). Requests queued on the port and App replays arrive immediately after a hub restart,
+  so they still get parameters from the manager. If it connected before and is now absent, do not wait.
+- If it does not arrive, the Agent cannot start: since 2026-11-04, the manager connects to computers ([machines.md](machines.md), "Who connects to computers"). Without it nothing can reach the machine, so starts return `503 assistant_offline`,
+  as do messages to stopped sessions (resuming them). Previously, the hub applied **Model Settings › Agents** itself and could still start them.
+- Triage pauses: turn-end events are not sent to it (the hub does not queue them). Due continuations / wakeups wait until it returns, with the usual rechecks before sending. On connection / reconnection, catch up: the next check (within 15 seconds) begins triaging turns that ended during the outage,
+  remain unread, and are within 24 hours (up to 3 at a time, with further batches each minute; the same applies at hub startup, because its bus opens last and nodes connect first). Do not catch up turns already seen during the outage (in the App or herdr on the computer), as before after hub restarts.
+  Cards for sessions that resumed working during the outage are removed at the next check (every 15 seconds).
+- The session list retains its last reported `work` (still only for sessions remaining on that turn). If a wakeup is over 5 minutes late, it no longer counts as "Waiting" (`wake_at` is removed from the list, returning to Unread).
+- Its cards remain visible and answerable: the hub records the answer first and delivers it after the manager returns and reports a snapshot. If the manager temporarily cannot accept it (for example, it has not restored its state), retain it and retry after 10 seconds until it accepts,
+  says the card no longer exists, or the card's expiry is reached. If the hub also restarts, this answer is lost and the card reappears.
+- Switch / statistics endpoints (`/api/v1/agents/triage`, `/api/v1/agents/work/stats`, `/api/v1/tabs/autoname`) return `503 assistant_offline`.
+- Manager-only restart: cards still held by the hub remain, without another push. As when triage lived in the hub, remove them only on answer, resumed Agent work, or expiry.
+- Hub restart (the manager is its child process and restarts with it): for the second or two before the manager's first snapshot, the list has no `work` (triaged sessions briefly return to Unread). Cards reappear after the computer reconnects (same id, another push, as with previous hub restarts).
+  Remove a card only if the Agent has progressed (resumed work or a later turn). A session merely looking different just after reconnection (seen and now idle, waiting for its own question, or a restarted node not yet having read the transcript timestamp) does not count. Retain the card and restore it at the next check (`cardBack`).
+  This card also stays pending in interaction history: at startup the hub marks pending interactions left by the previous process as cancelled, except those referenced by `session_work.interaction_id` (`db.ExpireStaleInteractions`). The manager marks as cancelled only those it does not restore.
+  Previously (before 2026-11-06), every hub restart removed decision cards (including safety-critical deployment and merge cards): sessions looked "seen" or "on another turn" in the first seconds after reconnection, so the manager forgot the cards, and interaction history had already marked them cancelled.
 
-卡片答了以后，发给 Agent 没发出去（那台电脑刚断开）：卡片换一个 id 重新挂上、再推一次，用户可以再答（以前是 App 那次回答报错）。
-管理者在快照里还报着一张答案已经交给它的卡片（它没收下），过 30 秒 hub 再把它挂出来。
+If a card is answered but the message cannot reach the Agent (its computer just disconnected), recreate the card with a new id and push again so the user can answer again (previously the App's answer attempt returned an error).
+If the manager's snapshot still reports a card whose answer was delivered to it (but not accepted), the hub restores the card after 30 seconds.
 
-## 分诊
+## Triage
 
-### 什么时候
+### When
 
-- 一轮结束（`setSessions` 里 working → done / idle，和推送「完成」同一处），等 `triage_settle_seconds`（默认 15 秒）没再动，开始分诊。
-  这期间又开始工作（Stop hook 让它接着干、马上又发了一条），这一轮不分诊。
-- 管理者每次连上后、之后每分钟补一次：停着、24 小时内结束、还是完成未看、这一轮还没分诊过的会话（部署后、管理者断开期间结束的轮次也就分掉了，见下「谁管什么」）。
-- 不分诊：助手的对话（`assistant`，含 AI 分身、飞书 /agent）、没在宿主里的（`offline`）、免打扰的会话照样分诊但不建卡片。
+- A turn ends (working → done / idle in `setSessions`, at the same point as the "Completed" push). If it remains inactive for `triage_settle_seconds` (default 15 seconds), begin triage.
+  If work resumes during that interval (a Stop hook continues it, or another message arrives immediately), do not triage that turn.
+- After every manager connection and once per minute afterward, catch up stopped sessions whose turns ended within 24 hours, are still unread, and have not yet been triaged (including turns that ended after deployment or while the manager was disconnected; see "Responsibilities").
+- Do not triage assistant chats (`assistant`, including AI twins and Lark /agent) or sessions outside the host (`offline`). Muted sessions are still triaged, but no cards are created.
 
-### 先规则，后模型
+### Rules first, then the model
 
-按顺序，命中就不调模型：
+Apply in order; on a match, do not call the model:
 
-1. 有待处理的交互 / 宿主 `blocked`：已经是需要你，`blocked · user`，`line` 用交互的问题。
-2. 这一轮被模型 API 错误打断（`turn_error`）：
-   - 哪来的：Claude Code 把错误写成最后一句（`API Error: …`），hub 从 `last_text` 的开头认；Codex 不写成回复，错误在这一轮的
-     `task_complete.error`（rollout）或 `turn/completed` 的 `status: failed` + `turn.error`（app-server），node 读出来直接报
-     `turn_error`，还按 Codex 的错误种类（`codex_error_info`）报 `turn_error_kind`（#2185，下面「Codex 的错误种类」）。
-   - 有 `turn_error_kind` 就按它；没有就按文字：
-   - 瞬时的（5xx、`overloaded`、`Connection error`、`timed out`、`socket hang up`、`ECONNRESET`、`fetch failed`、`no eligible upstream`、429）→ `transient`，安排自动「继续」；
-   - 其余（`Failed to authenticate`、`OAuth token has expired`、`Invalid API key`、`Not logged in · Please run /login`（没登录，Claude Code 合成的回答）、401 / 403、选的模型不可用）→ `blocked · user`，卡片「模型服务需要你处理：<原文>」，选项「已处理，继续」「先不管」。
+1. Pending interactions / host `blocked`: already Needs you, `blocked · user`, with the interaction's question as `line`.
+2. This turn was interrupted by a model API error (`turn_error`):
+   - Source: Claude Code writes the error as its last words (`API Error: …`); the hub recognizes the prefix of `last_text`. Codex does not write it as a reply. Its error is in this turn's
+     `task_complete.error` (rollout) or `turn/completed` with `status: failed` + `turn.error` (app-server). The node reads and reports `turn_error` directly,
+     plus `turn_error_kind` based on the Codex error type (`codex_error_info`) (#2185, "Codex error types" below).
+   - Use `turn_error_kind` when present; otherwise use the text:
+   - Transient (5xx, `overloaded`, `Connection error`, `timed out`, `socket hang up`, `ECONNRESET`, `fetch failed`, `no eligible upstream`, 429) → `transient`, schedule automatic continuation;
+   - Other errors (`Failed to authenticate`, `OAuth token has expired`, `Invalid API key`, `Not logged in · Please run /login`—Claude Code's synthetic reply when not logged in—401 / 403, selected model unavailable) → `blocked · user`, with a card "The model service needs your attention: <original text>" and options "Fixed, continue" / "Leave it for now".
 
-   **Codex 的错误种类**（`transcript/codex_error.go`；rollout 里是 `server_overloaded`，app-server 里是 `serverOverloaded`，同一个东西）：
+   **Codex error types** (`transcript/codex_error.go`; `server_overloaded` in rollout and `serverOverloaded` in app-server mean the same thing):
 
-   | Codex 报的 | `turn_error_kind` |
+   | Codex reports | `turn_error_kind` |
    | --- | --- |
-   | `server_overloaded`、`internal_server_error`、`rate_limit_exceeded` | `transient` |
-   | `http_connection_failed`、`response_stream_connection_failed`、`response_stream_disconnected`、`response_too_many_failed_attempts`：没有状态码，或 408 / 429 / 5xx | `transient` |
-   | 同上，其他状态码（401、403、400…） | `user` |
-   | `usage_limit_exceeded`、`context_window_exceeded`、`unauthorized`、`model_not_found`、各种策略，以及以后新加的种类 | `user`（「继续」过不去） |
-   | `other`、没有种类 | 不报，按文字 |
+   | `server_overloaded`, `internal_server_error`, `rate_limit_exceeded` | `transient` |
+   | `http_connection_failed`, `response_stream_connection_failed`, `response_stream_disconnected`, `response_too_many_failed_attempts`: no status code, or 408 / 429 / 5xx | `transient` |
+   | Same types, other status codes (401, 403, 400…) | `user` |
+   | `usage_limit_exceeded`, `context_window_exceeded`, `unauthorized`, `model_not_found`, policy errors, and future new types | `user` (continuation cannot resolve them) |
+   | `other`, no type | Not reported; use text |
 
-   用户按 Esc 停下（`turn_aborted`、`status: interrupted`）不是错误。node 对变化中的 rollout 最多每 3 秒重读一次：节流期间文件又写了，
-   缓存里的 `turn_error` 就不报（可能「继续」那一轮已经正常做完，旧错误会让它再被继续一次），宁可晚几秒。
-3. 后台命令 / 子 Agent 还在跑（`background`、`subagents` 有 running）→ `external`，「后台 N 个任务在跑」，不登记叫醒（它自己会被结果叫醒）。
-4. `/loop` 在跑（`loop`）→ `external`，「定时循环，下次 HH:MM」，不登记叫醒。
-5. 其余：模型。
+   Stopping with Esc (`turn_aborted`, `status: interrupted`) is not an error. The node rereads a changing rollout at most every 3 seconds. If the file is written again during throttling,
+   omit the cached `turn_error` (the continued turn may already have completed normally; an old error would continue it again). Better to be a few seconds late.
+3. Background commands / sub-Agents still running (`background`, `subagents` contain running entries) → `external`, "N background tasks running"; do not register a wakeup (results wake it themselves).
+4. `/loop` running (`loop`) → `external`, "Scheduled loop, next at HH:MM"; do not register a wakeup.
+5. Otherwise: model.
 
-### 模型
+### Model
 
-- 用途 `agent.triage`「会话分诊」（「设置 › 模型配置」，挂在「信息筛选」下面，默认继承收件箱分拣用的便宜模型）。
-- 输入：Agent 的名字、目录 / 项目、这一轮用户的要求（`lastTurn` 的 ask）、最后的回复（首尾各 1500 字）、同一台电脑上在工作的其他 Agent（名字 + 短 id）、现在的时间。
-- 输出 JSON（`server/internal/prompts/agents/triage.md`）：
+- Purpose `agent.triage`, "Session Triage" (**Settings › Model Settings**, under "Information filtering"; defaults to inheriting the inexpensive Inbox triage model).
+- Input: Agent name, directory / project, the user's request for this turn (`lastTurn` ask), final reply (first and last 1500 characters), other working Agents on the same computer (name + short id), current time.
+- JSON output (`server/internal/prompts/agents/triage.md`):
 
   ```json
   {"phase":"done|blocked|unsure", "on":"user|agent|external",
-   "line":"不超过 30 字：结论，或在等什么",
+   "line":"At most 30 characters: conclusion or what it is waiting for",
    "questions":[{"question":"…","header":"…","options":[{"label":"…","description":"…"}],"multi_select":false}],
    "link":{"url":"https://…","minutes":10},
-   "wait":{"what":"等的事","then":"等到以后要做的事","check_minutes":10,"agent":"<短 id>","risky":false},
+   "wait":{"what":"What it is waiting for","then":"What to do afterward","check_minutes":10,"agent":"<short id>","risky":false},
    "artifacts":[{"kind":"pr|commit|doc|build|url","ref":"…"}]}
   ```
 
-- 判断的原则写在提示词里：
-  - 末尾「要不要我顺便……」这种可选的提议不算卡住：事情做完了就是 `done`，提议放进结论。
-  - 下一步是**推代码、部署 / 发布、给别人发消息 / 评论、合并或改别人的 MR / PR**，不管 Agent 说它要不要等什么，一律 `blocked · user`，问用户要不要做（见下面「安全边界」）。
-  - 拿不准做没做完就 `unsure`，不选 `done`。
+- Decision principles in the prompt:
+  - An optional offer at the end such as "Would you also like me to…?" does not mean blocked. If the task is complete, it is `done`; include the offer in the conclusion.
+  - If the next step is **pushing code, deploying / releasing, sending messages / comments to others, or merging / modifying someone else's MR / PR**, always classify it as `blocked · user` and ask whether to proceed, regardless of what the Agent says it is waiting for (see "Safety boundary").
+  - If uncertain whether the task is complete, use `unsure`, not `done`.
 
-### 结论写到哪
+### Where the conclusion goes
 
-- `session_work` 表（下面「存储」），随会话列表下发成 `work`；
-- 做完了：知识库里这个目录对应的项目时间线加一行「完成：<结论>」（`kbAgentDone` 原来每轮记最后一句，现在有结论就记结论）；
-- 推送「完成」的正文换成结论；主对话的实时快照多两节「做完的」「在等的」（下面「Persona 知道」）。
+- The `session_work` table ("Storage" below), sent with the session list as `work`;
+- When done: add `完成：<结论>` ("Completed: <conclusion>") to the knowledge-base project timeline for this directory (`kbAgentDone` used to record the last words of every turn; now it records the conclusion when available);
+- Replace the "Completed" push body with the conclusion; the main chat's live snapshot adds "Done" and "Waiting" sections ("What Persona knows" below).
 
-## 自动动作
+## Automatic actions
 
-### 瞬时错误：自动「继续」
+### Transient errors: automatic continuation
 
-- 退避：30 秒、2 分钟、8 分钟，最多 3 次（`agents.triage.max_retries`）。一轮正常结束（不是错误）后清零。
-- 3 次都失败：变成 `blocked · user` 的卡片「模型服务一直出错，自动重试了 3 次：<原文>」，选项「再试一次」「先不管」。
-- 发出去的就是 App 错误卡片上「重试」发的那句「继续」（`continueText`）。
+- Backoff: 30 seconds, 2 minutes, 8 minutes; up to 3 attempts (`agents.triage.max_retries`). Reset after a normal (non-error) turn completion.
+- If all 3 fail: a `blocked · user` card, "The model service keeps failing after 3 automatic retries: <original text>", with options "Try Again" / "Leave it for now".
+- Send exactly `继续` ("Continue"), the same text sent by "Retry" on the App's error card (`continueText`).
 
-### 等待：到点叫醒
+### Waiting: scheduled wakeups
 
-- `external`：按模型给的 `check_minutes`（2 分钟到 4 小时，没给就 10 分钟）登记 `wake_at`；之后每次还在等就翻倍（最长 1 小时），最多叫 6 次（`max_wakes`）。
-  到点 Persona 给它发一条叫醒消息（`prompts/agents/wake.md`）：上一轮说要等什么、等到以后做什么，请它自己查；好了就接着做，没好就说还要多久。
-  叫醒以后它这一轮结束时照常分诊，还在等就再登记。叫满 6 次还没好，变成卡片「等「X」已经叫了 6 次还没好」，选项「再等等」「不等了」。
-- `agent`：模型从给它看的在工作的 Agent 里认出等的是谁（短 id），那个 Agent 一轮结束（或离线）时叫醒它；同时按 `check_minutes` 兜底。
+- `external`: register `wake_at` using the model's `check_minutes` (2 minutes to 4 hours, default 10 minutes); double the interval for each further wait (up to 1 hour), with at most 6 wakeups (`max_wakes`).
+  At the scheduled time, Persona sends a wakeup message (`prompts/agents/wake.md`): what the previous turn said it was waiting for, what to do afterward, and a request to check for itself. If ready, continue; if not, say how much longer.
+  Triage the resulting turn as usual; register again if still waiting. After 6 wakeups without completion, show a card "Still waiting for 'X' after 6 wakeups", with options "Keep waiting" / "Stop waiting".
+- `agent`: the model identifies the target among the working Agents shown to it (short id). Wake this Agent when the target's turn ends (or it goes offline), with `check_minutes` as a fallback.
 
-### 等你决定：卡片
+### User decisions: cards
 
-- Persona 建一张 `question` 交互（`tool_name: persona_triage`，`summary` 是 `line`；管理者在快照的 `interactions` 里报，hub 照它显示、推送、到期），问题和选项来自模型；App、网页、安卓、手表、飞书卡片、收件箱的「等你的 Agent」、主对话的任务坞都已经会画、会答，不用改客户端。
-  推送和别的提问一样（时间敏感）。
-- 选完（或「其他回答」打字）以后管理者（答案经 `manager.action` 到它）把答案组织成一条消息（`prompts/agents/answer.md`：「关于你上面的问题：Q → A」）用 `session.send` 发给那个 Agent。
-- 带授权链接的（`link`）：卡片的第一个问题就是链接和有效期，选项「已授权，继续」「先不」；分诊一出来就推（一轮停下后 15 秒加模型的一两秒），不等「做完了」推送的 60 秒。
-- 卡片在这些时候撤掉（不发任何东西）：Agent 又开始工作（你在电脑上或 App 里直接回了）、开始了新的一轮、会话没了、24 小时没人答。
+- Persona creates a `question` interaction (`tool_name: persona_triage`, `summary` is `line`; the manager reports it in snapshot `interactions`, and the hub displays, pushes, and expires it accordingly), using the model's questions and options. The App, web, Android, Watch, Lark cards, Inbox's "Agents waiting for you", and main-chat task dock already render and answer them; no client changes needed.
+  Push is time-sensitive, like other questions.
+- After selection (or typing an "Other answer"), the manager receives the answer through `manager.action`, formats it as a message (`prompts/agents/answer.md`: `关于你上面的问题：Q → A`, "Regarding your question above: Q → A"), and sends it to that Agent with `session.send`.
+- For authorization links (`link`), the card's first question contains the link and validity period, with options "Authorized, continue" / "Not now". Push as soon as triage finishes (15 seconds after the turn stops plus a second or two for the model), not after the 60-second "Completed" push delay.
+- Remove a card (without sending anything) when the Agent resumes work (you replied directly on the computer or in the App), a new turn starts, the session disappears, or 24 hours pass without an answer.
 
-## 安全边界
+## Safety boundary
 
-Persona **自己会发**给 Agent 的只有三种，都不带新的意图：
+Persona **sends to Agents on its own** only three kinds of message, none introducing new intent:
 
-1. 瞬时错误后的「继续」：和 App 错误卡片上的「重试」一样，接着做它被打断的事；
-2. 登记过的等待到点后的叫醒：只请它查一下等的事好了没有，并且明说「接下来要推代码、部署、给别人发消息、合并或改别人的 MR 时先停下来问用户，不要自己做」；
-3. 用户在卡片上选的答案。
+1. Continuation after a transient error: like "Retry" on the App's error card, it resumes the interrupted task;
+2. A wakeup after a registered wait: asks only whether the awaited event is ready, and explicitly says `接下来要推代码、部署、给别人发消息、合并或改别人的 MR 时先停下来问用户，不要自己做` ("Before pushing code, deploying, messaging others, or merging / modifying someone else's MR, stop and ask the user; do not do it yourself");
+3. The answer the user selected on a card.
 
-凡是**推代码、部署 / 发布、给别人发消息、碰别人的 MR / PR** 的下一步，只能变成「等你决定」：
+Any next step involving **pushing code, deploying / releasing, messaging others, or touching someone else's MR / PR** can only become "Waiting for your decision":
 
-- 提示词要求模型把这类下一步判成 `blocked · user`（`wait.risky` 为真时也一样）；
-- 代码兜底：`wait.then` / `line` 里有 push、deploy、部署、发布、上线、merge、合并、发消息、回复、评论、testflight、release 这些词时，不登记叫醒，改成卡片问用户「等「X」以后它要「Y」，要它去做吗」；
-- 用户在卡片上选了「做」，发给 Agent 的就是用户的回答，算用户授权。
+- The prompt requires the model to classify these next steps as `blocked · user` (also when `wait.risky` is true);
+- Code fallback: if `wait.then` / `line` contains push, deploy, `部署` (deploy), `发布` (release), `上线` (go live), merge, `合并` (merge), `发消息` (send a message), `回复` (reply), `评论` (comment), testflight, or release, do not register a wakeup. Instead, ask on a card, "After 'X', it plans to 'Y'. Should it proceed?";
+- When the user chooses "Do it" on the card, the Agent receives the user's answer, which counts as user authorization.
 
-## 不和用户手动操作打架
+## Avoid conflicting with manual user actions
 
-每个自动动作（继续、叫醒、建卡片）**动手前一刻**重新读会话，下面都满足才做：
+**Immediately before** each automatic action (continue, wake, create a card), reread the session and proceed only if all conditions hold:
 
-- 还是分诊时那一轮（`updated_at` 没变）、停着（不在工作）、没有待处理的交互、没有排着的输入（`queued`）；
-- 宿主是 `done` 不是 `idle`：herdr 里你聚焦过这个 tab（在电脑前看着它）就不动它，只记下工作态。停下后一直报 `idle` 的宿主也就不会有自动动作（宁可不动）；
-- 这台电脑在线。
+- It is still the triaged turn (`updated_at` unchanged), stopped (not working), with no pending interaction or queued input (`queued`);
+- The host is `done`, not `idle`: if you focused this tab in herdr (watching it at the computer), leave it alone and only record work state. Hosts that keep reporting `idle` after stopping therefore get no automatic actions (better not to interfere);
+- The computer is online.
 
-你自己发了消息、在电脑上打了字，会话就开始工作：这一轮的重试、叫醒、卡片全部作废；新的一轮结束再分诊。
-App 里点了错误卡片的「重试」也一样（会话开始工作，排着的自动重试作废）。Persona 发的「继续」和叫醒都记在 `session_work` 里，同一轮只发一次。
+Sending a message yourself or typing on the computer starts the session working: all retries, wakeups, and cards for that turn become invalid. Triage again after the new turn ends.
+The same applies to "Retry" on an App error card (work begins, invalidating queued automatic retries). Persona records continuations and wakeups in `session_work`, sending each only once per turn.
 
-## 开关（2026-11-05 用户要求：默认全关）
+## Switches (requested 2026-11-05: all off by default)
 
-分诊每停一轮就调一次模型，「继续」和叫醒还会让 Agent 用它自己的模型再跑一轮，都花用户的 token。所以**全部默认关**，
-用户在「设置 › 会话分诊」（网页、安卓、iOS / Mac）里自己打开，四个开关存在 settings `agents.triage`（只有管理者读写）：
+Triage calls a model after every stopped turn; continuation and wakeups also make the Agent run another turn on its own model. All consume the user's tokens. Therefore **everything defaults to off**.
+Users enable them under **Settings › Session Triage** (web, Android, iOS / Mac). Four switches are stored in settings `agents.triage` (read and written only by the manager):
 
-| 开关 | 管什么 | 花谁的 token |
+| Switch | Controls | Whose tokens it uses |
 | --- | --- | --- |
-| `enabled` 会话分诊 | 总开关：一轮停下后分诊，列表显示在等什么，做完的不再算完成未看 | 分诊模型（「设置 › 模型配置 › 会话分诊」，`agent.triage`，默认跟收件箱分拣一样） |
-| `decide` 要你决定的开卡片 | 等你拍板的做成「需要你」卡片 | 不另花 |
-| `auto_continue` 出错自动继续 | 瞬时的模型 API 错误后自动发「继续」 | Agent 的模型（接着跑被打断的那一轮） |
-| `wake` 到点叫醒 | 等部署 / CI / 另一个 Agent 的，到点叫醒它自己查 | Agent 的模型（每叫一次跑一轮） |
+| `enabled` Session Triage | Main switch: triage after a turn stops, show what it is waiting for, and stop counting completed work as Unread | Triage model (**Settings › Model Settings › Session Triage**, `agent.triage`, defaults to the Inbox triage model) |
+| `decide` Create decision cards | Turn user decisions into "Needs you" cards | No extra tokens |
+| `auto_continue` Continue automatically on errors | Automatically send continuation after transient model API errors | Agent's model (resumes the interrupted turn) |
+| `wake` Scheduled wakeups | Wake Agents waiting for deployment / CI / another Agent so they check for themselves | Agent's model (one turn per wakeup) |
 
-- 子开关只在总开关开着时起作用。关掉某个开关立刻生效：Persona 开的卡片撤掉，排着的重试 / 叫醒不发。
-- `GET / PUT /api/v1/agents/triage`（`{enabled, auto_continue, wake, decide}`，hub 转给管理者），改了广播 `{"type":"agents.triage"}`。
-- hub.json 的 `agents.triage` 只剩上限（`max_retries` 默认 3、`max_wakes` 默认 6、`settle_seconds` 默认 15）；
-  它的四个开关是从没在 App 里保存过时的初始值（不写就是关）。这一节经握手的回答交给管理者（`assistantwire.Hello.Agents`）。
+- Subswitches work only when the main switch is on. Disabling a switch takes effect immediately: Persona-created cards are removed, and queued retries / wakeups are not sent.
+- `GET / PUT /api/v1/agents/triage` (`{enabled, auto_continue, wake, decide}`, forwarded by the hub to the manager); changes broadcast `{"type":"agents.triage"}`.
+- `agents.triage` in hub.json now retains limits (`max_retries` default 3, `max_wakes` default 6, `settle_seconds` default 15);
+  its four switches are initial values only when settings have never been saved in the App (omitted means off). This section is passed to the manager in the handshake reply (`assistantwire.Hello.Agents`).
 
-## 存储
+## Storage
 
-进程随时会被重新部署清掉，所以分诊结果、重试次数、叫醒时间、卡片都落库（`0331_session_work.sql`，只有管理者读写）：
+A process can be redeployed and cleared at any time, so triage results, retry counts, wakeup times, and cards are persisted (`0331_session_work.sql`, read and written only by the manager):
 
-- `session_work`：每个会话一行，最新这一轮的工作态（`work` 的 JSON）、这一轮的结束时间 `turn_at`、下次动作 `wake_at`、重试 / 叫醒次数、卡片 id。
-  管理者起来时读回来：到点的接着做，没答的卡片重新挂上（还是同一轮、还停着的才挂，同一个 id；那台电脑还没连上的等它连上再挂）。
-- `session_work_events`：分诊、自动继续、叫醒、建卡片、答卡片、等待结束，每件一行（30 天），给下面的评估用。
+- `session_work`: one row per session, with the latest turn's work state (`work` JSON), turn-end time `turn_at`, next action `wake_at`, retry / wakeup counts, and card id.
+  On startup the manager restores it: continue due actions and restore unanswered cards (only if still the same stopped turn, with the same id; wait for the computer to connect before restoring cards).
+- `session_work_events`: one row per triage, automatic continuation, wakeup, card creation, card answer, and wait completion (30 days), for evaluation below.
 
-## Persona 知道
+## What Persona knows
 
-主对话的实时快照（`prompts/assistant/snapshot*.md`）：
+The main chat's live snapshot (`prompts/assistant/snapshot*.md`):
 
-- 「需要你」每个 Agent 后面带它在等什么；
-- 新增「在等的」（Persona 在替它等：重试中、等部署、等另一个 Agent）和「做完的（24 小时内）」：名字 + 结论；
-- 「完成未看」只剩没分诊出来的。
+- Each Agent under "Needs you" includes what it is waiting for;
+- Adds "Waiting" (Persona is waiting for it: retrying, deployment, another Agent) and "Done (within 24 hours)": name + conclusion;
+- "Unread" contains only sessions not yet successfully triaged.
 
-从主对话派的任务（`internal/assistant/tasks.go`）：Agent 停在瞬时错误上、Persona 还会自动继续（`work.on = transient` 且有 `wake_at`）时，先不写「中断了」的回执，等重试用完再写。
+For tasks dispatched from the main chat (`internal/assistant/tasks.go`), if the Agent stops on a transient error and Persona will still continue automatically (`work.on = transient` with `wake_at`), do not yet write an "Interrupted" receipt. Wait until retries are exhausted.
 
-## 协议
+## Protocol
 
-`proto.Session` 多一个字段 `work`（`docs/protocol.md`「数据类型」）：
+`proto.Session` adds `work` (`docs/protocol.md`, "Data types"):
 
 ```json
-"work": {"phase":"blocked","on":"external","line":"等部署跑完再跑线上测试",
-         "wait":"部署跑完","then":"跑线上测试","wake_at":"…","attempts":1,"max":6,
+"work": {"phase":"blocked","on":"external","line":"Wait for deployment, then run production tests",
+         "wait":"Deployment completes","then":"Run production tests","wake_at":"…","attempts":1,"max":6,
          "agent":{"machine_id":"…","session_id":"…","label":"…"},
          "link":{"url":"…","expires_at":"…"},
          "artifacts":[{"kind":"pr","ref":"https://github.com/…/pull/1"}],
          "turn_at":"…","at":"…","by":"rule|model"}
 ```
 
-- 工作中只有 `{"phase":"working"}`；待处理的交互是 `{"phase":"blocked","on":"user","line":<问题>}`；没分诊过的不带 `work`。
-- `GET /api/v1/agents/work/stats?hours=24`：评估用的数字（下面）。
+- While working, only `{"phase":"working"}`; pending interactions use `{"phase":"blocked","on":"user","line":<question>}`; sessions not triaged omit `work`.
+- `GET /api/v1/agents/work/stats?hours=24`: evaluation metrics (below).
 
-## 评估
+## Evaluation
 
-`GET /api/v1/agents/work/stats`（hub 转给管理者）和管理者的日志（hub 日志里 `assistant:` 开头，`triage <机器>/<会话>: done (model 1.2s): …`）：
+`GET /api/v1/agents/work/stats` (forwarded by the hub to the manager) and manager logs (prefixed `assistant:` in hub logs, `triage <machine>/<session>: done (model 1.2s): …`):
 
-- 一轮结束后的分诊结果分布（done / 各种 blocked / unsure / 失败），规则和模型各多少；
-- 「完成未看」的数量：管理者每 5 分钟采一次非助手会话里 `state = unread` 的个数（`session_work_events` 的 `sample`），给出这段时间的平均、最大和现在；
-- 等待时长：一轮结束到你处理（看过、回了、答了卡片）的中位数 / p90，分「做完了」「等你决定」「没分诊」；
-- 自动继续：发了几次、之后正常结束的比例；叫醒：几次、叫醒后做完的比例；
-- 卡片：建了几张、答了几张、答之前等了多久、被撤掉（你直接回了）几张。
+- Distribution of post-turn triage results (done / blocked types / unsure / failure), split by rule and model;
+- "Unread" count: every 5 minutes the manager samples the number of non-assistant sessions with `state = unread` (`sample` in `session_work_events`), reporting average, maximum, and current count for the interval;
+- Wait duration: median / p90 from turn end to user action (viewed, replied, answered a card), split by "Done", "Waiting for your decision", and "Not triaged";
+- Automatic continuation: number sent and proportion followed by normal completion; wakeups: count and proportion completed after waking;
+- Cards: created, answered, wait before answer, and removed (because you replied directly).
 
-上线前的基线（2026-11-04 晚，hub 上的非助手会话）：完成未看 5 个（24 小时内 4 个），中位已经等了约 10 分钟。
+Pre-launch baseline (evening of 2026-11-04, non-assistant sessions on the hub): 5 unread (4 within 24 hours), with a median wait already around 10 minutes.
 
-## 客户端
+## Clients
 
-- 网页（#1837）：列表行的那一行字（`sessionPreview`：总览、机器页、知识库详情，侧边栏的悬停提示）在会话停着且 hub 分诊过时换成工作态：
-  做完的「✓ 结论」，在等的「在等什么（N 分钟后叫醒 / 马上重试）」；hub 会替它等的排进「待唤醒」（`hubWaits`，`web/src/lib/work.ts`）。
-  「设置 › 通用 › 会话分诊」四个开关，脚注里能跳到「模型配置 › 会话分诊」选模型。截图用 `MOCK_WORK=1` 的假 hub。
-- 安卓（#1837）：Agents 列表、知识库的「在做这个项目的 Agent」行用同样的一行（`Session.workLine`，`core:domain` 的 `WorkLine.kt`），hub 会替它等的排进「待唤醒」；
-  「设置 › AI › 会话分诊」一页：总开关、分诊模型（跳到模型配置）、三个动作的开关。
-- iOS / Mac（#2895）：Agents 列表、空间页卡片的那一行字（`Session.listPreview`）在会话停着且 hub 分诊过时换成同样的一行（`Session.workLine`，`apple/Shared/Models.swift`），
-  宿主自己说的等你原因（botmux）、失败通知仍排在前面；hub 会替它等的排进「待唤醒」、不折进空闲（`WorkState.hubWaits`，`Session.isWaiting`）。单测 `SessionWorkTests`。
-  「设置 › 会话分诊」一页（助手下面，`TriageSettingsView` / `TriageSettingsModel`）：总开关、分诊模型（打开模型配置的 `agent.triage`）、三个动作的开关（总开关关着时不能改），没改成的退回原值并说原因，老 hub（404）说不支持。单测 `TriageSettingsTests`，DEBUG `-tab settings -openTriageSettings YES`。
-- 手表：列表行不显示最后一句话，暂不显示工作行。
+- Web (#1837): the list preview (`sessionPreview`: overview, Machines page, knowledge-base details, sidebar hover tooltip) switches to work state when the session is stopped and the hub has triaged it:
+  "✓ Conclusion" for completed work, "What it is waiting for (wake in N minutes / retrying now)" for waits. Sessions the hub will wait for go into "Waiting" (`hubWaits`, `web/src/lib/work.ts`).
+  Four switches under **Settings › General › Session triage**, with a footer link to **Model settings › Session triage** to choose the model. Screenshots use a fake hub with `MOCK_WORK=1`.
+- Android (#1837): the Agents list and knowledge-base "Agents working on this project" rows use the same preview (`Session.workLine`, `WorkLine.kt` in `core:domain`). Sessions the hub waits for go into "Waiting";
+  **Settings › AI › Session triage** has the main switch, triage model (link to model settings), and three action switches.
+- iOS / Mac (#2895): Agents-list and space-page card previews (`Session.listPreview`) switch to the same line when the session is stopped and the hub has triaged it (`Session.workLine`, `apple/Shared/Models.swift`).
+  Host-provided reasons for needing the user (botmux) and failure notices still take precedence. Sessions the hub waits for go into "Waiting", not collapsed into idle (`WorkState.hubWaits`, `Session.isWaiting`). Unit tests: `SessionWorkTests`.
+  **Settings › Session Triage** (below the assistant, `TriageSettingsView` / `TriageSettingsModel`) has the main switch, triage model (opens `agent.triage` in Model Settings), and three action switches (disabled when the main switch is off). Failed changes revert to the old value with an explanation; old hubs (404) report unsupported. Unit tests: `TriageSettingsTests`; DEBUG `-tab settings -openTriageSettings YES`.
+- Watch: list rows do not show last words; work previews are not displayed yet.
 
-## 分步
+## Steps
 
-| 步 | 内容 |
+| Step | Scope |
 | --- | --- |
-| 1 | 本文档；hub（2026-11-04 起挪到管理者，见「谁管什么」）：`session_work` 表、分诊（规则 + 模型）、自动继续、叫醒、卡片、`state` 的算法、`work` 字段、统计接口；快照；任务的中断回执 |
-| 2 | 开关改成 App 里的设置、默认全关；网页显示 `work.line`、待唤醒、开关（#1837） |
-| 3 | 安卓（#1837）；iOS / Mac 的工作行（#2895）和设置页（#3078） |
+| 1 | This document; hub (moved to the manager since 2026-11-04, see "Responsibilities"): `session_work` table, triage (rules + model), automatic continuation, wakeups, cards, `state` algorithm, `work` field, statistics endpoint; snapshot; task interruption receipts |
+| 2 | Move switches into App settings, all off by default; web displays `work.line`, Waiting, and switches (#1837) |
+| 3 | Android (#1837); iOS / Mac work previews (#2895) and settings page (#3078) |

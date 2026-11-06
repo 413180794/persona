@@ -1,461 +1,461 @@
-# hub 网络现状核查（公网直连 / IPv6 优先 / TLS / 配对）
+# Current hub networking audit (direct public connectivity / IPv6 priority / TLS / pairing)
 
-> 调研对象：Persona worktree（master，ec11652 之后），只读核查。
-> 约定：**[事实]** = 直接读代码 / 文档得到，带 `相对路径:行号`；**[判断]** = 基于事实的推断或建议。
-> 隐私：本文不出现任何真实主机名、IP、域名、账号、token，一律用占位符（`<hub 地址>`、`<token>`）。
+> Subject: Persona worktree (master, after ec11652), read-only audit.
+> Labels: **[Fact]** = directly from code / docs, with `relative path:line`; **[Assessment]** = inference or recommendation based on facts.
+> Privacy: no real hostnames, IPs, domains, accounts, or tokens; placeholders only (`<hub address>`, `<token>`).
 
-> 路径：同一节里第一次出现写全路径，之后简写文件名。`hub.go` `config.go` `http.go` `devicetokens.go` `terminal.go` `push.go` 都在 `server/internal/hub/`；`APIClient.swift` `LiveConnection.swift` `Keychain.swift` `WatchSync.swift` 在 `ios/Shared/`；Android 的 `data/` `ui/` `service/` 在 `android/app/src/main/java/jarvis/android/`。
-> 状态：已完成（各节按 1→9 排列；第 0 节是摘要）。
+> Paths: the first reference in a section uses the full path, later references use filenames. `hub.go`, `config.go`, `http.go`, `devicetokens.go`, `terminal.go`, and `push.go` are under `server/internal/hub/`. `APIClient.swift`, `LiveConnection.swift`, `Keychain.swift`, and `WatchSync.swift` are under `ios/Shared/`. Android `data/`, `ui/`, and `service/` are under `android/app/src/main/java/jarvis/android/`.
+> Status: complete (sections 1→9 in order; section 0 is the summary).
 
-## 0. 摘要
+## 0. Summary
 
-**现状 [事实]**
-- 监听：`hub.json` 的 `listen` 默认 `:18660`，只有一个明文 `http.Server`（`server/internal/hub/hub.go:189-197`），没有 TLS，也没设任何超时和头大小（Go 默认：无超时、头 1 MB）。Go 对通配地址开双栈 socket，默认就收 IPv4 + IPv6（未在 hub 机器实测）。`public_url`（默认 `http://<主机名>:18660`）只进二维码和启动日志，不出现在任何响应里。
-- 配对：`jarvisd hub pair` 是独立进程，读 hub.json 打印 `public_url`、**主 token** 和二维码 `jarvis://pair?token=…&url=…`（`server/internal/hub/config.go:149-162`）。主 token 永久有效、没有轮换命令。设备 token `jd_…` 只存 sha256，可撤销，查询缓存 30 秒（`server/internal/hub/devicetokens.go:57`）。
-- 鉴权：`Bearer` 头，或**任意 `/api/` 路由**上的 `?token=`（两端客户端都没用）。失败不限流、不记来源 IP，`/api/v1/ws` 的失败连日志都没有；查不到的 token 也进缓存，而且缓存不清理。
-- health：`{ok, version, features}`，不鉴权。hello：`{server_version, client_id, features}`，没有 `client_hello`。hub 每 20 秒 ping（15 秒超时，写死），每个连接一条 512 条消息的队列：单发时满了就断开，广播时满了**静默丢消息**。
-- iOS：Keychain 存 `{url, token}`；三个 URLSession 都没有 delegate（做不了钉扎）；`NSAllowsArbitraryLoads`（手机 + 手表）；手表 token 存在手表的 `UserDefaults`；Intents、通知按钮、实时活动按钮各自读 Keychain 直连 hub；`jarvis://pair` 链接不确认就配对。
-- Android：`SharedPreferences` 明文存 `{url, token}`；REST 和 WS 共用一个 OkHttp 客户端（`pingInterval` 20 秒）；`network_security.xml` 整体放开明文；`health()` 写了但没人调。
+**Current state [Fact]**
+- Listener: `listen` in `hub.json` defaults to `:18660`, with a single plaintext `http.Server` (`server/internal/hub/hub.go:189-197`), no TLS, timeouts, or header-size settings (Go defaults: no timeouts, 1 MB headers). Go wildcard listeners use a dual-stack socket, accepting IPv4 + IPv6 by default (not measured on the hub machine). `public_url` (default `http://<hostname>:18660`) appears only in QR codes and startup logs, not responses.
+- Pairing: `jarvisd hub pair` is a separate process that reads hub.json and prints `public_url`, the **main token**, and QR `jarvis://pair?token=…&url=…` (`server/internal/hub/config.go:149-162`). Main token never expires; no rotation command. Device `jd_…` tokens store only sha256, are revocable, and have a 30-second lookup cache (`server/internal/hub/devicetokens.go:57`).
+- Authentication: `Bearer` header or `?token=` on **any `/api/` route** (neither client uses it). Failures have no rate limiting or source-IP logging; `/api/v1/ws` failures have no logs at all. Unknown tokens are cached too, and the cache is never cleaned.
+- health: `{ok, version, features}`, unauthenticated. hello: `{server_version, client_id, features}`, no `client_hello`. Hub pings every 20 seconds (hardcoded 15-second timeout). Each connection has a 512-message queue: full direct-send queues disconnect; full broadcast queues **silently drop messages**.
+- iOS: Keychain stores `{url, token}`; three URLSessions have no delegates (cannot pin); `NSAllowsArbitraryLoads` on phone + Watch. Watch tokens are in Watch `UserDefaults`. Intents, notification buttons, and Live Activity buttons independently read Keychain and connect directly. `jarvis://pair` links pair without confirmation.
+- Android: plaintext `{url, token}` in `SharedPreferences`; REST and WS share one OkHttp client (`pingInterval` 20 seconds); `network_security.xml` allows plaintext globally; `health()` exists but has no callers.
 
-**改动 [判断]**（行数是估计，不是实测）
-- 4a TLS：新文件 `tlscert.go`，`~/.jarvis/tls/` 下放 ECDSA P-256 自签证书（key 0600），钉 SPKI。`Run()` 加一个 TLS listener，或同端口嗅探。明文端口保留，只给内网 / VPN。约 150–250 行。
-- 4b 多地址：新文件 `endpoints.go`，探测全局单播 IPv6（排除 ULA、链路本地、临时地址、TUN），加上配置的 `advertise`。经 hello、`GET /endpoints`、二维码下发，变化时广播 `endpoints`。health 只放 `hub_id`。约 150–250 行。
-- 4c 配对码：新表 `pair_codes`。`hub pair` 经回环调运行中的 hub 生成配对码；不鉴权的 `POST /auth/pair` 兑换，必须限流；`--legacy` 给旧 App。约 200 行。
-- 4d 拒绝公网明文 + 限流：按 `RemoteAddr` 判断来源，IPv6 按 /64 限流，限流放在查库之前；补 WS 鉴权失败的日志、给负缓存加上限、补 `ReadHeaderTimeout`。约 150 行。
-- 4e `client_hello` 协商心跳：只改 `http.go`，约 40–60 行。
-- 4f `hub_id`：存 `settings` 表，不用迁移，约 20 行。
-- 客户端：统一一个带钉扎 delegate 的会话；候选地址并发探测（IPv6 先发）；AVPlayer 要先下载再播；Android 用自定义 `X509TrustManager`（`pin-set` 和 `CertificatePinner` 都绕不过自签）。
+**Changes [Assessment]** (line counts are estimates, not measurements)
+- 4a TLS: new `tlscert.go`, ECDSA P-256 self-signed certificate under `~/.jarvis/tls/` (key 0600), SPKI pinning. Add a TLS listener to `Run()`, or sniff one port. Keep plaintext for private-network / VPN only. About 150–250 lines.
+- 4b Multiple addresses: new `endpoints.go`, discover global unicast IPv6 (exclude ULA, link-local, temporary, TUN), plus configured `advertise`. Send via hello, `GET /endpoints`, QR, and broadcast `endpoints` on change. health includes only `hub_id`. About 150–250 lines.
+- 4c Pairing codes: new `pair_codes` table. `hub pair` calls the running hub over loopback to generate codes; unauthenticated `POST /auth/pair` exchanges them, with mandatory rate limiting; `--legacy` for old Apps. About 200 lines.
+- 4d Reject public plaintext + rate limiting: classify by `RemoteAddr`, limit IPv6 by /64 before database lookup, log WS authentication failures, bound the negative cache, add `ReadHeaderTimeout`. About 150 lines.
+- 4e `client_hello` heartbeat negotiation: only `http.go`, about 40–60 lines.
+- 4f `hub_id`: stored in `settings`, no migration, about 20 lines.
+- Clients: unify into one session with a pinning delegate; concurrent candidate probes (IPv6 first); download before AVPlayer playback; Android custom `X509TrustManager` (`pin-set` and `CertificatePinner` cannot bypass self-signed trust rejection).
 
-## 1. hub 怎么监听
+## 1. How the hub listens
 
-### 1.1 配置来源 [事实]
+### 1.1 Configuration sources [Fact]
 
-| 项 | 位置 | 现状 |
+| Item | Location | Current behavior |
 | --- | --- | --- |
-| 监听地址 | `server/internal/hub/config.go:50`（`Config.Listen`，json `listen`） | 默认 `":18660"`（`config.go:90`） |
-| 对外地址 | `config.go:52`（`Config.PublicURL`，json `public_url`） | 默认 `fmt.Sprintf("http://%s:18660", host)`，`host` 是 `os.Hostname()` 的**完整**主机名（`config.go:87-92`） |
-| 主 token | `config.go:51`（json `token`） | 默认 `randomHex(24)` = 48 位十六进制（`config.go:91`、`config.go:142-146`） |
-| 配置文件 | `~/.jarvis/hub.json` | 目录 0700（`config.go:101`），首次运行按默认值写入，文件 0600（`config.go:108-112`）；别人先写的 hub.json（`scripts/db.sh` 只写 `database_url`）缺 `token` 时把生成的 token 回写（`config.go:119-130`） |
+| Listening address | `server/internal/hub/config.go:50` (`Config.Listen`, json `listen`) | Default `":18660"` (`config.go:90`) |
+| Advertised address | `config.go:52` (`Config.PublicURL`, json `public_url`) | Default `fmt.Sprintf("http://%s:18660", host)`, with the **full** `os.Hostname()` as `host` (`config.go:87-92`) |
+| Main token | `config.go:51` (json `token`) | Default `randomHex(24)` = 48 hex digits (`config.go:91`, `config.go:142-146`) |
+| Configuration file | `~/.jarvis/hub.json` | Directory 0700 (`config.go:101`), defaults written on first run, file 0600 (`config.go:108-112`). If an existing hub.json lacks `token` (`scripts/db.sh` writes only `database_url`), write the generated token back (`config.go:119-130`). |
 
-- `public_url` 在服务端**只有三处用到**：启动日志 `listening on %s (%s)`（`server/internal/hub/hub.go:196`）、二维码 `PairURL()`（`config.go:149-151`）、`hub pair` 打印（`config.go:158`）。
-  它**不出现在任何 HTTP / WS 响应里**，也不参与推送。zoekt `public_url` / `PublicURL` 只命中这几处 + 测试 + 文档。
-- 含义：给手机用的「hub 的访问地址」，单个字符串、单个 scheme（目前一律 `http://`）。
+- Server-side `public_url` has **only three uses**: startup log `listening on %s (%s)` (`server/internal/hub/hub.go:196`), QR `PairURL()` (`config.go:149-151`), and `hub pair` output (`config.go:158`).
+  It **never appears in HTTP / WS responses** or push. zoekt searches for `public_url` / `PublicURL` match only these locations + tests + docs.
+- Meaning: "hub address for the phone", one string, one scheme (currently always `http://`).
 
-### 1.2 HTTP 服务器 [事实]
+### 1.2 HTTP server [Fact]
 
-- `srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}`（`hub.go:189`），`srv.ListenAndServe()`（`hub.go:197`）；ctx 结束时 `Shutdown`，5 秒超时（`hub.go:190-195`）。
-- **没有 TLS**：hub 包里没有 `crypto/tls`、`ListenAndServeTLS`、证书相关代码（zoekt `crypto/tls` 只命中 `server/internal/mail/*`）。
-- **没有任何超时 / 头大小设置**：`ReadTimeout`、`ReadHeaderTimeout`、`WriteTimeout`、`IdleTimeout`、`MaxHeaderBytes` 都没设（zoekt `ReadHeaderTimeout` / `MaxHeaderBytes` 零命中）。
-  按 Go 默认：无超时；请求头上限 `http.DefaultMaxHeaderBytes` = 1 MB。
-- **没有用到客户端地址**：整个 `server/` 里 `RemoteAddr`、`X-Forwarded-*` 零命中，没有任何按来源 IP 的逻辑。
-- 只有这一个 TCP 监听；node 的 `~/.jarvis/node.sock` 是 unix socket（`server/internal/node/hooks.go:80`），与手机无关。
+- `srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}` (`hub.go:189`), `srv.ListenAndServe()` (`hub.go:197`); `Shutdown` on ctx completion, with a 5-second timeout (`hub.go:190-195`).
+- **No TLS**: no `crypto/tls`, `ListenAndServeTLS`, or certificate code in the hub package (zoekt `crypto/tls` matches only `server/internal/mail/*`).
+- **No timeout / header-size settings**: `ReadTimeout`, `ReadHeaderTimeout`, `WriteTimeout`, `IdleTimeout`, `MaxHeaderBytes` all unset (zoekt `ReadHeaderTimeout` / `MaxHeaderBytes`: zero matches).
+  Go defaults: no timeout, `http.DefaultMaxHeaderBytes` = 1 MB.
+- **Client addresses unused**: zero `RemoteAddr` or `X-Forwarded-*` matches across `server/`, no source-IP logic.
+- Only this TCP listener; node `~/.jarvis/node.sock` is a Unix socket (`server/internal/node/hooks.go:80`), unrelated to phones.
 
-### 1.3 双栈 [事实 + 判断]
+### 1.3 Dual stack [Fact + Assessment]
 
-- [事实] `Listen` 只有一个字符串、只起一个 listener。
-- [事实，Go 标准库行为] `net.Listen("tcp", ":18660")`：host 为空或是未指定地址（`0.0.0.0` / `::`）时，Go 在支持 IPv4-mapped 的系统（Linux / macOS）上开一个 `AF_INET6` socket 并设 `IPV6_V6ONLY=0`（`net/ipsock_posix.go` 的 `favoriteAddrFamily`），所以默认值**本来就是双栈**，IPv4 连接以 `::ffff:a.b.c.d` 的形式进来。
-  写成具体地址（如某个内网 IPv4）就只有那个地址族。**未在 hub 机器上用 `ss -ltnp` 实测**。
-- [判断] 双栈监听本身不用改；公网 IPv6 能不能直达取决于 hub 机器的防火墙（`ip6tables` / `nft`）、路由器 / 光猫的 IPv6 入站策略（很多家用光猫默认拦入站 IPv6）。这些不在代码里，文档要写清楚。
+- [Fact] One `Listen` string, one listener.
+- [Fact, Go standard library] `net.Listen("tcp", ":18660")`: an empty or unspecified host (`0.0.0.0` / `::`) on systems supporting IPv4-mapped addresses (Linux / macOS) creates an `AF_INET6` socket with `IPV6_V6ONLY=0` (`favoriteAddrFamily` in `net/ipsock_posix.go`). The default is **already dual-stack**, with IPv4 connections represented as `::ffff:a.b.c.d`.
+  A specific address (for example, private IPv4) uses only that family. **Not tested with `ss -ltnp` on the hub machine.**
+- [Assessment] No need to change dual-stack listening itself. Direct public IPv6 reachability depends on the hub host firewall (`ip6tables` / `nft`) and router / ONT inbound IPv6 policy (many home ONTs block by default). These are outside code and need clear documentation.
 
-### 1.4 路由与鉴权入口 [事实]
+### 1.4 Routing and authentication entry points [Fact]
 
-- 外层 mux 只挂两样（`server/internal/hub/http.go:19-23`、`http.go:159-160`）：
-  - `GET /api/v1/health`：**不鉴权**；
-  - `/api/`：全部经 `h.auth`。其他路径落到 Go 默认的纯文本 404。
-- 最外层是 `logRequests`（`http.go:160`、`http.go:199-210`）：只记 ≥400 或 >2 秒的请求，格式 `[<id>] 方法 路径 -> 状态 (耗时)`，**不记 query、body、token、来源 IP**；
-  而且 **`/api/v1/ws` 整条路径不记**（`http.go:206`），所以 WS 的 401 不会留下任何日志。
+- Outer mux registers only two entries (`server/internal/hub/http.go:19-23`, `http.go:159-160`):
+  - `GET /api/v1/health`: **unauthenticated**;
+  - `/api/`: all pass through `h.auth`. Other paths use Go's default plaintext 404.
+- Outermost `logRequests` (`http.go:160`, `http.go:199-210`) logs only ≥400 or >2-second requests, format `[<id>] method path -> status (duration)`, **without query, body, token, or source IP**.
+  **All `/api/v1/ws` requests are excluded** (`http.go:206`), so WS 401s leave no logs.
 
-### 1.5 请求体 / 消息大小上限 [事实]
+### 1.5 Request-body / message-size limits [Fact]
 
-| 地方 | 上限 | 位置 |
+| Location | Limit | Code |
 | --- | --- | --- |
-| `proxyBody`（发消息、按键、改名等转发给 node 的 POST） | 32 MB | `http.go:371` |
-| 助手接口 | 32 MB | `server/internal/hub/assistant.go:297` |
-| AI 小功能 | 64 KB | `server/internal/hub/ai.go:43` |
-| 知识库更新 | 1 MB | `server/internal/hub/kb.go:664` |
-| 邮件接口 | 1 MB | `server/internal/mail/http.go:125` |
-| 上传文件 | 按 `Content-Length`，≤ 200 MB（`proto.MaxUploadBytes`），不给长度 411 | `server/internal/hub/upload.go:23-34`、`upload.go:62`、`server/internal/proto/proto.go`（`MaxUploadBytes = 200 << 20`） |
-| WS 单条读 | 64 MB | `http.go:571` |
-| 未设上限的 JSON 解码 | resolve（`http.go:90`）、`/devices`（`http.go:106`）、prefs（`http.go:122`）、新会话（`http.go:415`）、`/auth/tokens`（`devicetokens.go:133`） | 都在鉴权之后 |
+| `proxyBody` (POSTs forwarding messages, keys, renames, etc. to nodes) | 32 MB | `http.go:371` |
+| Assistant endpoints | 32 MB | `server/internal/hub/assistant.go:297` |
+| Small AI features | 64 KB | `server/internal/hub/ai.go:43` |
+| Knowledge-base updates | 1 MB | `server/internal/hub/kb.go:664` |
+| Mail endpoints | 1 MB | `server/internal/mail/http.go:125` |
+| File upload | `Content-Length` ≤200 MB (`proto.MaxUploadBytes`), missing length returns 411 | `server/internal/hub/upload.go:23-34`, `upload.go:62`, `server/internal/proto/proto.go` (`MaxUploadBytes = 200 << 20`) |
+| Single WS read | 64 MB | `http.go:571` |
+| Unlimited JSON decoding | resolve (`http.go:90`), `/devices` (`http.go:106`), prefs (`http.go:122`), new session (`http.go:415`), `/auth/tokens` (`devicetokens.go:133`) | All after authentication |
 
-[判断] 鉴权之后的接口不加上限问题不大；暴露公网后最该补的是**鉴权之前**的：`ReadHeaderTimeout`（防慢速攻击）、`MaxHeaderBytes` 收小、`IdleTimeout`。WS 和上传不能设整体 `ReadTimeout` / `WriteTimeout`（会掐断长连接和大文件），要么只设 `ReadHeaderTimeout`，要么按路由用 `http.ResponseController` 设截止时间。
+[Assessment] Missing limits after authentication are less concerning. Public exposure most urgently needs **pre-authentication** `ReadHeaderTimeout` (slow-client attacks), smaller `MaxHeaderBytes`, and `IdleTimeout`. Do not set global `ReadTimeout` / `WriteTimeout` for WS and uploads (breaks persistent connections and large files); use only `ReadHeaderTimeout`, or per-route deadlines with `http.ResponseController`.
 
-## 2. 配对与鉴权
+## 2. Pairing and authentication
 
-### 2.1 `jarvisd hub pair` [事实]
+### 2.1 `jarvisd hub pair` [Fact]
 
-- 入口：`server/cmd/jarvisd/main.go:52-53` → `hub.Pair()`（`server/internal/hub/config.go:153-162`）。
-- `Pair()` **不连正在运行的 hub**，自己 `LoadConfig()` 读 `~/.jarvis/hub.json`（没有就按默认值新建一份，`config.go:108-112`：副作用），然后打印：
+- Entry: `server/cmd/jarvisd/main.go:52-53` → `hub.Pair()` (`server/internal/hub/config.go:153-162`).
+- `Pair()` **does not connect to the running hub**. It independently calls `LoadConfig()` on `~/.jarvis/hub.json` (creates defaults if missing, `config.go:108-112`: a side effect), then prints:
   ```
   Server: <public_url>
-  Token:  <主 token>
+  Token:  <main token>
 
   用 Jarvis App 扫码配对：
-  <终端二维码>
+  <terminal QR code>
   ```
-  （`config.go:158`），二维码 `qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, os.Stdout)`，纠错级别 L（`config.go:159`）。
-- 二维码内容：`"jarvis://pair?" + url.Values{"url": {PublicURL}, "token": {Token}}.Encode()`（`config.go:149-151`），即
-  `jarvis://pair?token=<主 token>&url=<public_url 百分号编码>`（`Values.Encode` 按键名排序）。**只有一个地址，就是 `public_url`**，不探测本机地址。
-- 测试：`server/internal/hub/hub_test.go:164-177`（特殊字符编码）、`hub_test.go:33-34`（默认 public_url 含 `:18660`）。
+  The Chinese line means "Scan with the Jarvis App to pair." (`config.go:158`); QR uses `qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, os.Stdout)`, error correction L (`config.go:159`).
+- QR content: `"jarvis://pair?" + url.Values{"url": {PublicURL}, "token": {Token}}.Encode()` (`config.go:149-151`), namely
+  `jarvis://pair?token=<main token>&url=<percent-encoded public_url>` (`Values.Encode` sorts by key). **Only one address: `public_url`**, no local-address discovery.
+- Tests: `server/internal/hub/hub_test.go:164-177` (special-character encoding), `hub_test.go:33-34` (default public_url contains `:18660`).
 
-### 2.2 主 token [事实]
+### 2.2 Main token [Fact]
 
-- 永久有效：没有过期、没有轮换命令；只能手改 hub.json 再重启 hub。比较用 `subtle.ConstantTimeCompare`（`server/internal/hub/devicetokens.go:69`），角色 `full`、`ID` 为空。
-- 二维码和 `hub pair` 输出里放的就是它。App 配对后会换设备 token 并「不再保存」主 token（见 5.1 / 6.1），但主 token 本身一直有效。
+- Permanent: no expiry or rotation command; manually edit hub.json and restart. Comparison uses `subtle.ConstantTimeCompare` (`server/internal/hub/devicetokens.go:69`), role `full`, empty `ID`.
+- It is the token in QR and `hub pair` output. Apps exchange for device tokens after pairing and stop storing the main token (5.1 / 6.1), but the main token itself remains valid.
 
-### 2.3 设备 token [事实]
+### 2.3 Device tokens [Fact]
 
-| 动作 | 接口 | 位置 | 说明 |
+| Action | Endpoint | Location | Details |
 | --- | --- | --- | --- |
-| 发放 | `POST /api/v1/auth/tokens {name, kind}` | `devicetokens.go:128-168` | 调用者必须是 `full`（主 token 或手机 token）。`kind=watch` → 角色 `answer`；`phone` → `full`；其他记成 `other`、`full`。token = `"jd_" + randomHex(24)`（`:160`），库里只存 sha256（`:59-62`、`:162`）；id = `dev_` + 6 字节十六进制；返回 `{id, token, role, name}` |
-| 列表 | `GET /api/v1/auth/tokens` | `:169-179` | `{tokens, current}`（`current` 是调用者自己的 id） |
-| 撤销 | `DELETE /api/v1/auth/tokens/{id}` | `:180-197` | 库里标记撤销 → `revoked()`（`:200-222`）清缓存、`CloseNow` 这台设备所有 WS |
-| 查找 | `authenticate()` | `:65-109` | 先比主 token，再按哈希查库；**结果缓存 30 秒**（`tokenCacheFor`，`:57`、`:80`），`last_seen` 最多 5 分钟写一次（`:99-107`） |
-| 权限 | `allowed()` | `:113-124` | `full` 全部；`answer` 只能 GET/HEAD + 正则 `answerWrites` 里的写（resolve、发消息、seen、interrupt、收件箱 done/reply/draft/refresh、`devices`） |
+| Issue | `POST /api/v1/auth/tokens {name, kind}` | `devicetokens.go:128-168` | Caller must be `full` (main or phone token). `kind=watch` → `answer`; `phone` → `full`; others stored as `other`, `full`. token = `"jd_" + randomHex(24)` (`:160`), only sha256 in database (`:59-62`, `:162`); id = `dev_` + 6 bytes of hex; returns `{id, token, role, name}`. |
+| List | `GET /api/v1/auth/tokens` | `:169-179` | `{tokens, current}` (`current` is caller's own id) |
+| Revoke | `DELETE /api/v1/auth/tokens/{id}` | `:180-197` | Mark revoked in database → `revoked()` (`:200-222`) clears cache and `CloseNow`s all this device's WS connections. |
+| Lookup | `authenticate()` | `:65-109` | Compare main token first, then query by hash; **cache results 30 seconds** (`tokenCacheFor`, `:57`, `:80`), write `last_seen` at most every 5 minutes (`:99-107`). |
+| Permissions | `allowed()` | `:113-124` | `full`: all. `answer`: GET/HEAD + writes in `answerWrites` regex (resolve, messaging, seen, interrupt, Inbox done/reply/draft/refresh, `devices`). |
 
-[判断] 任何 `full` 设备 token 都能再发新 token、撤销别的设备（含主 token 之外的所有设备）。公网后一台手机的 token 泄露 = 能自己续命（发新 token）。一次性配对码落地时，可以考虑「只有主 token / 配对码能发 `full` token」。
+[Assessment] Any `full` device token can issue new tokens and revoke others (all devices except the main token). After public exposure, one leaked phone token can perpetuate access by issuing new tokens. When implementing one-time pairing codes, consider limiting issuance of `full` tokens to main tokens / pairing codes.
 
-### 2.4 鉴权失败：没有限流，几乎没有记录 [事实]
+### 2.4 Authentication failures: no rate limiting, almost no logs [Fact]
 
-- `h.auth`（`server/internal/hub/http.go:163-184`）：取 `Authorization: Bearer`，没有就取 **`?token=`**（`:165-168`）；认不出 → `401 {"error":"invalid token"}`（`:169-172`）；`answer` 角色越权 → 403（`:174-177`）。
-- **没有限流、没有锁定、没有退避**：`server/` 里 zoekt `rate.Limit`、`golang.org/x/time` 零命中，`go.mod` 也没有这个依赖。
-- **不记来源**：`RemoteAddr` 零命中。`logRequests` 只记 `[<id>] GET /api/v1/... -> 401 (耗时)`；**`/api/v1/ws` 的失败完全不记**（`http.go:206`）。
-- **负缓存无上限** [事实 + 判断]：库里查不到的 token 也会以 `c.p == nil` 存进 `devtok.cache`（`devicetokens.go:85-94`），这个 map 只在撤销时删条目（`:203-208`），没有过期清理。公网上被人用随机 token 刷：每个新 token 一次 Postgres 查询 + map 永久多一条 → 内存只增不减。限流要放在查库**之前**，缓存要有上限或定期清。
+- `h.auth` (`server/internal/hub/http.go:163-184`): `Authorization: Bearer`, falling back to **`?token=`** (`:165-168`). Unknown → `401 {"error":"invalid token"}` (`:169-172`); `answer` exceeding permissions →403 (`:174-177`).
+- **No rate limiting, lockout, or backoff**: zoekt `rate.Limit` / `golang.org/x/time` across `server/`: zero matches; no dependency in `go.mod`.
+- **No source logging**: zero `RemoteAddr` matches. `logRequests` records only `[<id>] GET /api/v1/... -> 401 (duration)`; **WS failures entirely excluded** (`http.go:206`).
+- **Unbounded negative cache** [Fact + Assessment]: unknown database tokens are cached with `c.p == nil` in `devtok.cache` (`devicetokens.go:85-94`). Entries are deleted only on revocation (`:203-208`), with no expired-entry cleanup. Random-token flooding from the Internet costs one Postgres query and a permanent map entry per new token: memory only grows. Rate-limit **before** database lookup, and bound or periodically clean the cache.
 
-### 2.5 `?token=` 查询参数 [事实]
+### 2.5 `?token=` query parameter [Fact]
 
-- 服务端：对**所有** `/api/` 路由生效（不只 WS），`http.go:165-168`。`docs/protocol.md:7` 写的是「WebSocket 也可用 `?token=`」。
-- 客户端**目前没人用**：
-  - iOS 的 REST、上传、图片、全文、飞书文档、WS 全部走 `Authorization` 头（`ios/Shared/APIClient.swift:116`、`:150`、`:278`、`:291`；`ios/Shared/LiveConnection.swift:236`；`ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:12`），视频用 `AVURLAssetHTTPHeaderFieldsKey` 带头（`ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift:299`）。
-  - Android 的 REST 和 WS 也是头（`android/app/src/main/java/jarvis/android/data/ApiClient.kt:43`、`:113`、`:122`；`data/Hub.kt:103`）。
-  - zoekt `token=` 只命中配对链接、测试、脚本。
-- [判断] 公网化时可以收紧为「只有 WS 握手接受 `?token=`」或干脆去掉（两端都已用头），避免 token 出现在任何反向代理 / 访问日志里。去掉前确认没有旧版 App 依赖（目前代码里没有）。
+- Server: applies to **all** `/api/` routes, not just WS (`http.go:165-168`). `docs/protocol.md:7` says "WebSocket also supports `?token=`."
+- **No current clients use it**:
+  - iOS REST, uploads, images, full text, Lark docs, and WS all use `Authorization` (`ios/Shared/APIClient.swift:116`, `:150`, `:278`, `:291`; `ios/Shared/LiveConnection.swift:236`; `ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:12`). Video uses `AVURLAssetHTTPHeaderFieldsKey` (`ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift:299`).
+  - Android REST and WS also use headers (`android/app/src/main/java/jarvis/android/data/ApiClient.kt:43`, `:113`, `:122`; `data/Hub.kt:103`).
+  - zoekt `token=` matches only pairing links, tests, scripts.
+- [Assessment] For public exposure, restrict it to WS handshake or remove entirely (both clients already use headers), avoiding token leakage in reverse-proxy / access logs. Verify old-App dependencies before removal (none in current code).
 
-## 3. 健康检查与 WebSocket
+## 3. Health checks and WebSocket
 
-### 3.1 `/api/v1/health` [事实]
+### 3.1 `/api/v1/health` [Fact]
 
-- `GET /api/v1/health`，不鉴权，`http.go:21-23`：`{"ok": true, "version": <hub 版本>, "features": proto.Features}`。
-- `proto.Features`（`server/internal/proto/proto.go:40-54`）：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
-- 没有 `hub_id`、没有地址列表、没有 TLS 信息。`docs/protocol.md:15` 写的是 `{"ok":true,"version":"..."}`，没写 `features`（第 16 行另说了 features）。
-- [判断] 不鉴权的 health 暴露了版本号和能力位；公网上要不要隐藏版本可以讨论（客户端多地址探测正好要用一个不鉴权、便宜的接口，见 4b）。
+- `GET /api/v1/health`, unauthenticated, `http.go:21-23`: `{"ok": true, "version": <hub version>, "features": proto.Features}`.
+- `proto.Features` (`server/internal/proto/proto.go:40-54`): `client_msg_id`, `send_refusals`, `screen_dialog`, `resumable_interactions`, `secret_prompts`, `request_id`, `terminal_stream`, `terminal_control`, `terminal_scroll`, `terminal_click`, `file_upload`.
+- No `hub_id`, address list, or TLS information. `docs/protocol.md:15` shows `{"ok":true,"version":"..."}` without `features` (line 16 mentions features separately).
+- [Assessment] Unauthenticated health exposes version and capabilities. Whether to hide the version publicly is open to discussion (multi-address probes need a cheap unauthenticated endpoint, 4b).
 
-### 3.2 WS 握手与 `hello` [事实]
+### 3.2 WS handshake and `hello` [Fact]
 
-- `GET /api/v1/ws` 挂在鉴权之后（`http.go:154`），`serveWS`（`http.go:566-640`）。
-- `websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})`（`http.go:567`）：关掉了 coder/websocket 的 Origin 校验（浏览器跨站发起的 WS 也会被接受，前提是带得出 token）。
-- `conn.SetReadLimit(64 << 20)`（`:571`）。
-- 连上后依次发（`:624-631`）：
-  1. `{"type":"hello","server_version":…,"client_id":<6 字节随机十六进制>,"features":[…]}`；
-  2. `{"type":"machines",…}`；
-  3. 每台机器一条 `sessions`；
-  4. 每个待处理交互一条 `interaction`。
-- 客户端能发的类型（`onClientMessage`，`http.go:642-731`）：`terminal_subscribe`、`terminal_input`、`terminal_unsubscribe`、`subscribe`、`unsubscribe`、`register_phone`、`seen`、`tool_result`。
-  **没有 `client_hello`、没有 JSON 的 `ping` / `pong`**（`docs/protocol.md:176`、`:189` 写了 `ping` / `pong`，代码里没有；hub-changes.md 4.12 已记）。
+- `GET /api/v1/ws` is behind authentication (`http.go:154`), handled by `serveWS` (`http.go:566-640`).
+- `websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})` (`http.go:567`) disables coder/websocket Origin checks (cross-site browser WS accepted if it can supply a token).
+- `conn.SetReadLimit(64 << 20)` (`:571`).
+- After connection, sends in order (`:624-631`):
+  1. `{"type":"hello","server_version":…,"client_id":<6 random bytes in hex>,"features":[…]}`;
+  2. `{"type":"machines",…}`;
+  3. One `sessions` per machine;
+  4. One `interaction` per pending interaction.
+- Accepted client types (`onClientMessage`, `http.go:642-731`): `terminal_subscribe`, `terminal_input`, `terminal_unsubscribe`, `subscribe`, `unsubscribe`, `register_phone`, `seen`, `tool_result`.
+  **No `client_hello` or JSON `ping` / `pong`** (`docs/protocol.md:176`, `:189` document ping / pong absent from code; recorded in hub-changes.md 4.12).
 
-### 3.3 心跳、发送队列、慢连接 [事实]
+### 3.3 Heartbeat, send queues, slow connections [Fact]
 
-| 项 | 值 | 位置 |
+| Item | Value | Location |
 | --- | --- | --- |
-| 协议层 ping 间隔 | 20 秒（`time.NewTicker(20 * time.Second)`，写死在 `serveWS` 的写协程里） | `http.go:598` |
-| ping 超时 | 15 秒，失败即 `cancel()` 断开 | `http.go:612-620` |
-| 单条写超时 | 20 秒，失败即断开 | `http.go:604-611` |
-| 每连接发送队列 | `make(chan []byte, 512)`（按条数，不按字节） | `http.go:573` |
-| 队列满（`sendJSON`） | `conn.Close(StatusPolicyViolation, "too slow")` 断开，App 重连后补齐 | `http.go:456-467` |
-| 队列满（终端帧 `sendTerm`） | 同上，异步关 | `server/internal/hub/terminal.go:481-491` |
-| 队列满（`broadcast` / `toSubscribers` / `itemsToSubscribers`） | **静默丢这一条，不断开** | `http.go:469-488`、`:490-509`、`:512-548` |
-| 断开清理 | 删客户端、退订（`removeWatcher`）、`terminalDrop`、`CloseNow` | `http.go:579-595` |
+| Protocol-ping interval | 20 seconds (`time.NewTicker(20 * time.Second)`, hardcoded in `serveWS` writer goroutine) | `http.go:598` |
+| Ping timeout | 15 seconds; failure calls `cancel()` to disconnect | `http.go:612-620` |
+| Single-write timeout | 20 seconds; disconnect on failure | `http.go:604-611` |
+| Per-connection send queue | `make(chan []byte, 512)` (message count, not bytes) | `http.go:573` |
+| Full queue (`sendJSON`) | Disconnect with `conn.Close(StatusPolicyViolation, "too slow")`; App catches up after reconnect | `http.go:456-467` |
+| Full queue (terminal `sendTerm`) | Same, asynchronous close | `server/internal/hub/terminal.go:481-491` |
+| Full queue (`broadcast` / `toSubscribers` / `itemsToSubscribers`) | **Silently drop the message, no disconnect** | `http.go:469-488`, `:490-509`, `:512-548` |
+| Disconnect cleanup | Remove client, unsubscribe (`removeWatcher`), `terminalDrop`, `CloseNow` | `http.go:579-595` |
 
-- [判断] 广播静默丢消息是「慢连接」最隐蔽的问题：`interaction` / `interaction_resolved` / `sessions` 丢了，连接不断、客户端也不知道，要等下次全量（重连的 hello 之后）才对上。Android 前台服务这种常驻、经常处在弱网的连接更容易碰到。改法：广播队列满时也断开（和 `sendJSON` 一致），或给事件编号让客户端发现缺口。
-- 客户端侧（iOS）：每 20 秒 `sendPing`，挂着时每 5 秒，5 秒没 pong 记弱网，45 秒没收到任何东西判死（`ios/Shared/LiveConnection.swift:178-181`、`:249-284`），见第 5 节。
+- [Assessment] Silent broadcast drops are the least visible slow-connection failure: lost `interaction` / `interaction_resolved` / `sessions` leave the connection open and client unaware until the next full snapshot after reconnect hello. Persistent Android foreground-service connections on weak networks are especially exposed. Disconnect on full broadcast queue, as `sendJSON` does, or number events so clients detect gaps.
+- Client side (iOS): `sendPing` every 20 seconds, every 5 seconds when unhealthy; no pong for 5 seconds marks weak networking, no received data for 45 seconds marks dead (`ios/Shared/LiveConnection.swift:178-181`, `:249-284`), section 5.
 
-### 3.4 按连接调心跳：改动点 [判断]
+### 3.4 Per-connection heartbeat: change points [Assessment]
 
-- 现在 ping 间隔是写死在 `serveWS` 写协程里的局部 `ticker`（`http.go:598`），`client` 结构（`http.go:440-454`）里没有任何心跳相关字段。
-- 改法（改动面小，集中在 `http.go`）：
-  1. `client` 加 `pingEvery time.Duration` 和一个 `setPing chan time.Duration`；
-  2. 写协程里用这个 ticker，`select` 多一个 `case d := <-c.setPing: ping.Reset(d)`；
-  3. `onClientMessage` 加 `case "client_hello"`：读 `heartbeat_seconds`（夹到比如 15–300 秒），写进 `setPing`；顺带记 `platform` / `device_id` / `version`（hub-changes.md 3.3）；
-  4. 「死连接判定」现在只靠 ping 失败（15 秒超时），后台长间隔时可以同时放宽 ping 超时。
-  5. `features` 加 `client_heartbeat`；实际生效的间隔另回一条（`hello` 在连上时就发了，早于 `client_hello`，见 4e）。旧 hub 不认 `client_hello` 会直接忽略（`json.Unmarshal` 后 switch 落空，`http.go:669-672`），兼容。
-- 要注意：hub 侧 ping 是「hub 发、手机回」，后台连接的耗电主要在手机被唤醒收发；Android OkHttp 自己的 `pingInterval` 也要一起调（第 6 节）。NAT / 运营商网关会回收空闲的 TCP 连接，心跳间隔超过它的空闲超时就会被中间设备掐断；这个超时因网络而异，**未实测，不给具体值**。
+- Current ping interval is hardcoded in a local `ticker` in `serveWS`'s writer (`http.go:598`); `client` (`http.go:440-454`) has no heartbeat fields.
+- Approach (small scope, concentrated in `http.go`):
+  1. Add `pingEvery time.Duration` and `setPing chan time.Duration` to `client`;
+  2. Use this ticker in the writer, add `case d := <-c.setPing: ping.Reset(d)` to `select`;
+  3. Add `case "client_hello"` to `onClientMessage`, read `heartbeat_seconds` (clamp, for example, 15–300 seconds), write to `setPing`; also record `platform` / `device_id` / `version` (hub-changes.md 3.3);
+  4. Dead-connection detection relies only on ping failure (15-second timeout); longer background intervals can also have longer ping timeouts;
+  5. Add `client_heartbeat` to `features`; return the effective interval separately (`hello` is sent before `client_hello`, 4e). Old hubs ignore unknown `client_hello` (unmatched switch after `json.Unmarshal`, `http.go:669-672`), preserving compatibility.
+- Hub ping is hub-initiated, phone-replied; background power use mostly comes from waking the phone to receive / send. Adjust Android OkHttp `pingInterval` too (section 6). NAT / carrier gateways expire idle TCP connections; intervals exceeding the network-specific timeout are cut by middleboxes. **Not measured; no concrete timeout given.**
 
-## 4. 实现「公网直连」服务端要改的地方
+## 4. Server changes for direct public connectivity
 
-> 本节的「改动面」是按读代码估的行数量级，**不是实测**；数字型参数（限流次数、心跳秒数、证书年限）都是建议值，要在真机 / hub 机器上验证后再定。
+> Scope here is estimated line-count scale from reading code, **not measured**. Numeric settings (rate limits, heartbeat seconds, certificate lifetimes) are proposed values, to be finalized after real-device / hub-machine testing.
 
-### 4a. TLS 监听、自签证书、SPKI 指纹
+### 4a. TLS listener, self-signed certificate, SPKI fingerprint
 
-**现状 [事实]**：只有 `srv.ListenAndServe()` 一个明文 listener（`server/internal/hub/hub.go:189-197`）；`Config` 没有任何 TLS 字段（`server/internal/hub/config.go:49-77`）；
-`~/.jarvis/` 下已经放着同类的私密文件 `secret.key`、`apns_key.p8`（`docs/server.md:66-74`）；Postgres 占了 `127.0.0.1:18661`（`docs/server.md:48`）。
+**Current state [Fact]**: one plaintext listener, `srv.ListenAndServe()` (`server/internal/hub/hub.go:189-197`); no TLS fields in `Config` (`server/internal/hub/config.go:49-77`).
+Comparable private files already live under `~/.jarvis/`: `secret.key`, `apns_key.p8` (`docs/server.md:66-74`). Postgres occupies `127.0.0.1:18661` (`docs/server.md:48`).
 
-**建议 [判断]**：
-- 新文件 `server/internal/hub/tlscert.go`：`loadOrCreateTLS(dir) (tls.Certificate, pin string, error)`。
-  - 存放：`~/.jarvis/tls/hub.key`（PKCS#8，0600）+ `hub.crt`，目录 0700。符合 CLAUDE.md「密钥绝不入库」（不进 Postgres），和 `secret.key` 一样是文件；不是「JSON 状态文件」。
-  - 算法：ECDSA P-256 + SHA-256 签名（iOS ATS 的密钥 / 签名要求都满足，见 5.5）；`MinVersion: tls.VersionTLS12`。
-  - SAN：放主机名和配置里的域名即可；客户端按 SPKI 钉扎、不校验主机名，地址是 IP 也没关系。
-  - 指纹：`base64(sha256(cert.RawSubjectPublicKeyInfo))`（和 HPKP 的 `pin-sha256` 同格式）。**钉公钥不钉证书**：证书快到期时用同一把私钥重签，指纹不变；换私钥 = 所有设备要重新配对（或者先在 hello 里预告 `next_pin`，可选）。
-  - 两个进程都可能先生成（`jarvisd hub` 和 `jarvisd hub pair`）：写文件用 `O_EXCL`，失败就读别人写好的。
-  - 用户自己有正规证书（比如域名 + Let's Encrypt）时可选 `tls.cert_file` / `tls.key_file`；这种情况下客户端也可以走系统信任，但证书续期常会换私钥，钉扎要钉 CA 或者关掉。第一版可以只做自签。
-- `hub.json` 新字段（`config.go:49-77`、`defaultConfig()` 在 `:86-96`）：`tls: {listen, cert_file?, key_file?}`。**端口避开 18661**（Postgres）。
-- `Run()`（`hub.go:189-200`）两种做法：
-  1. **两个 listener**（简单，推荐第一版）：保留明文 `listen`，另起 `tlsSrv.ListenAndServeTLS("", "")`，共用 `h.routes()`；`Shutdown` 两个。约 30 行。
-  2. **同端口嗅探**：自己的 accept 循环，在每连接的 goroutine 里带超时 peek 第一个字节，`0x16` 包成 `tls.Server(conn, cfg)`，否则原样，再从一个 channel 喂给 `srv.Serve(ln)`（不能在 `Accept` 里同步 peek，会被不发数据的连接卡住）。约 100 行；好处是只有一个端口、一条防火墙规则，旧 App 的 `http://<hub>:18660` 和新 App 的 `https://<hub>:18660` 都能用。
-- 两个 server 都补上 `ReadHeaderTimeout`（如 10 秒）、`IdleTimeout`（如 120 秒）、`MaxHeaderBytes`（如 64 KB）。不要设整体 `ReadTimeout` / `WriteTimeout`（会掐断 WS 和上传）。
-- HTTP/2：`ListenAndServeTLS` 默认开 h2。WS 走 HTTP/1.1 Upgrade（coder/websocket 的 `Accept` 要 `http.Hijacker`），iOS `URLSessionWebSocketTask`、OkHttp 的 WebSocket 都走 HTTP/1.1，REST 走 h2 没问题。想少一个变量可以先 `TLSNextProto: map[string]func(...){}` 关掉 h2。
-- **明文端口留不留**：留，但只对非公网来源开放（4d）。理由：旧 App 不会钉自签证书（iOS 用 `URLSession.shared` 系统信任、Android 用系统 CA，握手直接失败），内网 / VPN 里的旧设备和 CLI、`sim.sh`、`mock_hub.py` 的测试都靠它。等新 App 普及后再考虑把默认 `listen` 收到回环 / VPN。新 App 在内网也可以直接走 TLS + 钉扎。
-- `hub pair`（`config.go:153-162`）多打印一行 `Fingerprint: sha256/<pin>`，二维码加 `pin=`（`config.go:149-151`）。
-- **改动面**：Go 约 150–250 行 + 测试（生成 / 复用 / 指纹稳定性 / 嗅探），`docs/config.md`、`docs/server.md`、`docs/protocol.md`。
+**Proposal [Assessment]**:
+- New `server/internal/hub/tlscert.go`: `loadOrCreateTLS(dir) (tls.Certificate, pin string, error)`.
+  - Storage: `~/.jarvis/tls/hub.key` (PKCS#8, 0600) + `hub.crt`, directory 0700. Follows CLAUDE.md's "Secrets never in the database": a file like `secret.key`, not a JSON state file.
+  - Algorithm: ECDSA P-256 + SHA-256 signature (meets iOS ATS key / signature requirements, 5.5); `MinVersion: tls.VersionTLS12`.
+  - SAN: hostname and configured domain are enough. Clients pin SPKI rather than verify hostname, so IP addresses are fine.
+  - Fingerprint: `base64(sha256(cert.RawSubjectPublicKeyInfo))` (same format as HPKP `pin-sha256`). **Pin the public key, not certificate**: renew with the same key before expiry, preserving the fingerprint. A new private key requires all devices to re-pair (or optionally announce `next_pin` in hello first).
+  - Either process (`jarvisd hub`, `jarvisd hub pair`) may generate first. Write with `O_EXCL`; on failure, read the other process's file.
+  - Optional `tls.cert_file` / `tls.key_file` for user-provided trusted certificates (domain + Let's Encrypt). Clients may use system trust, but renewals often change keys, so pin the CA or disable pinning. First version can be self-signed only.
+- New hub.json `tls: {listen, cert_file?, key_file?}` (`config.go:49-77`, `defaultConfig()` at `:86-96`). **Avoid port 18661** (Postgres).
+- Two approaches to `Run()` (`hub.go:189-200`):
+  1. **Two listeners** (simple, recommended first version): retain plaintext `listen`, add `tlsSrv.ListenAndServeTLS("", "")`, share `h.routes()`, `Shutdown` both. About 30 lines.
+  2. **Same-port sniffing**: custom accept loop; per-connection goroutine peeks at the first byte with a timeout, wraps `0x16` in `tls.Server(conn, cfg)` and leaves others unchanged, then feeds a channel-backed listener to `srv.Serve(ln)` (never peek synchronously in `Accept`; silent connections would block it). About 100 lines. One port and firewall rule support old `http://<hub>:18660` and new `https://<hub>:18660`.
+- Add `ReadHeaderTimeout` (for example, 10 seconds), `IdleTimeout` (120 seconds), `MaxHeaderBytes` (64 KB) to both servers. No global `ReadTimeout` / `WriteTimeout` (breaks WS / uploads).
+- HTTP/2: `ListenAndServeTLS` enables h2 by default. WS uses HTTP/1.1 Upgrade (coder/websocket `Accept` requires `http.Hijacker`); iOS `URLSessionWebSocketTask` and OkHttp WS use HTTP/1.1, REST h2 is fine. To remove a variable, initially disable h2 with `TLSNextProto: map[string]func(...){}`.
+- **Keep plaintext?** Yes, but only nonpublic sources (4d). Old Apps cannot pin self-signed certificates (iOS `URLSession.shared` / Android system CAs reject the handshake). Private-network / VPN devices, CLI, `sim.sh`, and `mock_hub.py` tests depend on it. Once new Apps are widespread, consider narrowing default `listen` to loopback / VPN. New Apps can use TLS + pinning on private networks too.
+- `hub pair` (`config.go:153-162`) adds `Fingerprint: sha256/<pin>` output and `pin=` to QR (`config.go:149-151`).
+- **Scope**: about 150–250 Go lines + tests (generation / reuse / fingerprint stability / sniffing), `docs/config.md`, `docs/server.md`, `docs/protocol.md`.
 
-### 4b. 多地址下发（IPv6 探测、配置的公网地址 / 域名）
+### 4b. Multiple advertised addresses (IPv6 discovery, configured public addresses / domains)
 
-**现状 [事实]**：只有单个 `public_url`，而且只进二维码和日志（1.1）；没有任何地址探测；`golang.org/x/sys` 已经是依赖（`server/go.mod`）；
-`server/internal/sysmon/linux.go:95-103` 有「是不是物理网卡」的判断，但它把网桥、bond、VLAN 都算虚拟，hub 的全局 IPv6 常常就在网桥上，**不能直接拿来筛地址**。
+**Current state [Fact]**: only one `public_url`, used only in QR and logs (1.1); no address discovery. `golang.org/x/sys` is already a dependency (`server/go.mod`).
+`server/internal/sysmon/linux.go:95-103` detects physical interfaces, but counts bridges, bonds, and VLANs as virtual. Hub global IPv6 is often on a bridge, so **do not reuse it directly for address filtering**.
 
-**建议 [判断]**：
-- 配置：`public_url` 保留（旧二维码、旧 App）；新增 `advertise: ["https://<域名>:<端口>", …]`（手填：域名 / DDNS、路由器端口转发的 IPv4）、`advertise_ipv6`（自动探测开关，默认开）、`advertise_lan`（内网地址，默认开）。
-- 探测（新文件 `server/internal/hub/endpoints.go`，纯函数部分可单测）：
-  - `net.Interfaces()` + `Addrs()`，保留 up、非回环接口上的 IPv6 **全局单播**；排除 `netip.Addr.IsPrivate()`（ULA，含 Tailscale 的 IPv6）、链路本地、文档前缀 `2001:db8::/32`；
-  - Linux 上用 netlink（`unix.NetlinkRIB(RTM_GETADDR)`，x/sys 已有）读 `IFA_F_TEMPORARY` / `IFA_F_DEPRECATED` / `IFA_F_TENTATIVE`，**不下发临时（隐私）地址**，它们一天左右就换；
-  - TUN 代理网卡的地址要排除（hub 机器走 TUN 代理，见 CLAUDE.md 经验；这类网卡常见 ULA 或 RFC 2544 的基准测试网段 198.18/15，**未在 hub 机器上实测**）；
-  - 公网 IPv4 在 NAT 后面探测不到，只能来自 `advertise`；内网 IPv4 作为 `scope: lan` 候选。
-  - 每 60 秒重探一次（或订阅 netlink 的地址变更），变了就记一行日志。
-- 每个候选：`{"url": "https://[<v6>]:<端口>", "family": "ipv6|ipv4|name", "scope": "global|lan|configured", "tls": true}`，按「全局 IPv6 → 配置的域名 → 内网 → public_url」排序（客户端照样自己并发探测，见 5.5 / 6.2）。
-- 下发：
-  - WS `hello`（`http.go:624`）加 `hub_id`、`endpoints`、`tls_pin`；
-  - 新的鉴权接口 `GET /api/v1/endpoints`（给只走 HTTP 的手表、Intents）；
-  - `/api/v1/health`（不鉴权）只加 `hub_id`（探测时确认是同一台 hub），**不放地址列表**，免得任何能扫到端口的人拿到这台机器的内网 / 其他地址；
-  - 二维码：多个 `url=`（或新键 `alt=`）+ `pin=` + `hid=`（4f）+ `code=`（4c）。二维码纠错级别 L、几个 IPv6 地址加起来一两百个字符，终端二维码会变大，可以只放 2–3 个，其余连上后从 hello 拿。
-- 变化事件：`h.broadcast({"type":"endpoints","endpoints":[…]})`（`http.go:469-488`）。iPhone 在后台收不到 WS，可以顺带发一条静默推送（`push.go` 已有 `wake`）带新列表，App 写回 Keychain。
-- **坑 [判断]**：家宽 IPv6 前缀可能被运营商定期换（PPPoE 重拨），手机记住的地址全部失效时就再也问不到新地址。文档要建议配一个 DDNS 域名（AAAA 记录）作兜底候选，VPN / 内网地址也留着。
-- **坑 [判断，未实测]**：hub 机器开了 TUN 代理的 auto-route 时，外部 IPv6 连进来的回包可能被路由进代理，连接建不起来。公网直连前要在 hub 机器上实测（手机用蜂窝网络访问 `https://[<hub 的 IPv6>]:<端口>/api/v1/health`）。光猫 / 路由器默认拦入站 IPv6 也很常见，文档要写放行方法。
-- **改动面**：Go 约 150–250 行 + 测试；客户端解析和持久化见第 5、6 节。
+**Proposal [Assessment]**:
+- Configuration: retain `public_url` (old QR / Apps); add `advertise: ["https://<domain>:<port>", …]` (manual domains / DDNS / router-forwarded IPv4), `advertise_ipv6` (automatic discovery, default on), `advertise_lan` (private addresses, default on).
+- Discovery (new `server/internal/hub/endpoints.go`, pure functions unit-testable):
+  - `net.Interfaces()` + `Addrs()`, retain IPv6 **global unicast** on up, non-loopback interfaces; exclude `netip.Addr.IsPrivate()` (ULA, including Tailscale IPv6), link-local, documentation prefix `2001:db8::/32`;
+  - On Linux, use netlink (`unix.NetlinkRIB(RTM_GETADDR)`, x/sys already present) for `IFA_F_TEMPORARY` / `IFA_F_DEPRECATED` / `IFA_F_TENTATIVE`. **Do not advertise temporary privacy addresses**, which change roughly daily;
+  - Exclude TUN proxy-interface addresses (hub uses a TUN proxy, CLAUDE.md lessons; these commonly use ULA or RFC 2544 benchmarking range 198.18/15, **not measured on the hub machine**);
+  - Public IPv4 behind NAT is undiscoverable and must come from `advertise`; private IPv4 is a `scope: lan` candidate;
+  - Rediscover every 60 seconds or subscribe to netlink address changes; log changes once.
+- Each candidate: `{"url": "https://[<v6>]:<port>", "family": "ipv6|ipv4|name", "scope": "global|lan|configured", "tls": true}`, ordered global IPv6 → configured domain → private network → public_url (clients still probe concurrently, 5.5 / 6.2).
+- Distribution:
+  - WS `hello` (`http.go:624`) adds `hub_id`, `endpoints`, `tls_pin`;
+  - New authenticated `GET /api/v1/endpoints` for HTTP-only Watch / Intents;
+  - Unauthenticated `/api/v1/health` adds only `hub_id` to confirm identity during probes, **not addresses**, so port scanners cannot obtain private / other addresses;
+  - QR: multiple `url=` or new `alt=`, plus `pin=`, `hid=` (4f), `code=` (4c). Error correction L; several IPv6 addresses add one or two hundred characters and enlarge terminal QR. Include only 2–3, get the rest from hello after connection.
+- Change event: `h.broadcast({"type":"endpoints","endpoints":[…]})` (`http.go:469-488`). Background iPhones cannot receive WS; optionally send a silent push (existing `wake` in `push.go`) with the new list, written back to Keychain by the App.
+- **Pitfall [Assessment]**: carrier PPPoE redial may periodically change residential IPv6 prefixes. If all saved addresses expire, the phone cannot ask for new ones. Recommend DDNS AAAA as fallback, retaining VPN / private addresses.
+- **Pitfall [Assessment, unmeasured]**: TUN proxy auto-routing on the hub may send inbound IPv6 replies into the proxy, preventing connection establishment. Test on the hub before public use (phone on cellular accesses `https://[<hub IPv6>]:<port>/api/v1/health`). ONT / router default blocking is also common; document allowances.
+- **Scope**: about 150–250 Go lines + tests; client parsing and persistence in sections 5, 6.
 
-### 4c. 一次性配对码代替二维码里的永久主 token
+### 4c. One-time pairing code instead of permanent main token in QR
 
-**现状 [事实]**：二维码里就是主 token（`config.go:149-151`）；`Pair()` 是独立进程，只读 hub.json、不连运行中的 hub（`config.go:153-162`）；
-hub 的内存状态会被部署清掉（CLAUDE.md 经验：跨请求的流程要自包含或落库）；`POST /api/v1/auth/tokens` 只给 `full` 调（`devicetokens.go:137-140`）。
+**Current state [Fact]**: QR contains the main token (`config.go:149-151`). `Pair()` is a separate process reading hub.json, not the running hub (`config.go:153-162`).
+Deployment clears hub memory (CLAUDE.md: cross-request flows must be self-contained or persisted). `POST /api/v1/auth/tokens` accepts only `full` (`devicetokens.go:137-140`).
 
-**建议 [判断]**：
-- 新迁移 `pair_codes(hash text primary key, expires_at timestamptz, used_at timestamptz, used_by text, created_at timestamptz)`。迁移号按车道规则挑（现有 `0002`、`0022`、`0031`、`0041`、`0051`、`0061`，挑号前看所有 worktree 和 `jarvis_test` 的 `schema_migrations`，CLAUDE.md）。
-- `jarvisd hub pair`（`server/cmd/jarvisd/main.go:52-53`、`config.go:153-162`）：
-  - 默认：用 hub.json 里的主 token 调**本机回环上运行中的 hub**：`POST http://127.0.0.1:<listen 端口>/api/v1/auth/pair-codes` → hub 生成、落库、返回 `{code, short_code, expires_at, endpoints, pin, hub_id}`；`hub pair` 打印二维码 `jarvis://pair?v=2&code=…&pin=…&hid=…&url=…&url=…`、手动输入用的短码、指纹、过期时间。
-    这样地址探测、证书、hub_id 都只在 hub 进程里一份逻辑，`hub pair` 顺带确认 hub 在跑。
-  - `--legacy`：老格式（`url=` + 主 token），给旧 App。
-  - hub 没在跑：报错提示先启动（或退回直接写库，`Pair()` 能读到 `database_url`）。
-- hub：`POST /api/v1/auth/pair {code, name, kind}`，挂在 `h.auth` **外面**（和 health 一样，`http.go:21`），必须限流（4d）。
-  - 原子地用掉：`UPDATE pair_codes SET used_at = now(), used_by = $2 WHERE hash = $1 AND used_at IS NULL AND expires_at > now() RETURNING …`；
-  - 发 token 和 `POST /auth/tokens` 共用一个函数（把 `devicetokens.go:145-167` 抽成 `issueToken(ctx, name, kind)`），返回 `{id, token, role, name, hub_id}`；
-  - 码的长度：二维码里用 128 位随机；手动输入的短码 8 位 Crockford base32（约 40 位）+ 5 分钟过期 + 限流；
-  - `features` 加 `pair_code`。
-- 主 token：留给 CLI 和旧 App。建议加 `jarvisd hub rotate-token`（换主 token，旧 App 要重新配对），并考虑「开了公网模式时主 token 只接受回环 / 内网来源」。
-- **改动面**：Go 约 200 行（迁移、db 函数、两个路由、`Pair()` 改写、测试）；两端的解析和手动输入页（「地址 + 配对码」，token 输入框收进「高级」）。
+**Proposal [Assessment]**:
+- New migration `pair_codes(hash text primary key, expires_at timestamptz, used_at timestamptz, used_by text, created_at timestamptz)`. Choose its number by workstream rules (existing `0002`, `0022`, `0031`, `0041`, `0051`, `0061`; inspect all worktrees and `jarvis_test.schema_migrations` before choosing, CLAUDE.md).
+- `jarvisd hub pair` (`server/cmd/jarvisd/main.go:52-53`, `config.go:153-162`):
+  - Default: use hub.json's main token to call the **running hub over local loopback**: `POST http://127.0.0.1:<listen port>/api/v1/auth/pair-codes`. Hub generates, persists, and returns `{code, short_code, expires_at, endpoints, pin, hub_id}`. `hub pair` prints QR `jarvis://pair?v=2&code=…&pin=…&hid=…&url=…&url=…`, a short manual-entry code, fingerprint, expiry.
+    Address discovery, certificates, and hub_id thus have one implementation in the hub process, while `hub pair` also checks it is running.
+  - `--legacy`: old format (`url=` + main token) for old Apps;
+  - Hub not running: ask to start it, or fall back to direct database writes (`Pair()` has `database_url`).
+- Hub: `POST /api/v1/auth/pair {code, name, kind}` **outside** `h.auth`, like health (`http.go:21`), with mandatory rate limiting (4d).
+  - Atomic consumption: `UPDATE pair_codes SET used_at = now(), used_by = $2 WHERE hash = $1 AND used_at IS NULL AND expires_at > now() RETURNING …`;
+  - Share issuance with `POST /auth/tokens` (extract `devicetokens.go:145-167` into `issueToken(ctx, name, kind)`), return `{id, token, role, name, hub_id}`;
+  - Code length: 128 random bits in QR, 8 Crockford base32 characters (about 40 bits) for manual entry + 5-minute expiry + rate limiting;
+  - Add `pair_code` to `features`.
+- Main token: retained for CLI / old Apps. Add `jarvisd hub rotate-token` (old Apps re-pair after rotation), and consider accepting main tokens only from loopback / private sources in public mode.
+- **Scope**: about 200 Go lines (migration, db helpers, two routes, `Pair()` rewrite, tests); both clients' parsing and manual entry page ("Address + pairing code", token field under "Advanced").
 
-### 4d. 拒绝来自公网的明文请求；鉴权失败限流
+### 4d. Reject public plaintext; rate-limit authentication failures
 
-**现状 [事实]**：服务端完全不看来源地址（`RemoteAddr` 零命中）；鉴权失败不限流、只在非 WS 路径记一行不带来源的日志（2.4）；负缓存无上限（`devicetokens.go:85-94`）。
+**Current state [Fact]**: server never inspects sources (zero `RemoteAddr` matches). Authentication failures are unbounded, logged without source only on non-WS paths (2.4); negative cache unbounded (`devicetokens.go:85-94`).
 
-**建议 [判断]**：
-- 来源判断 `clientIP(r)`：`netip.ParseAddrPort(r.RemoteAddr)` 后 `Unmap()`（双栈 socket 上 IPv4 是 `::ffff:` 映射地址，见 1.3）；
-  「本地」= `IsLoopback() || IsPrivate() || IsLinkLocalUnicast()` + `100.64.0.0/10`（CGNAT，Tailscale 的 IPv4，`IsPrivate` 不含）+ 配置的 `trusted_cidrs`（VPN 网段）。
-- 明文 listener 上 `r.TLS == nil && !本地` → `403 {"error":"…","code":"tls_required"}`；挂在 `routes()` 最外层（`http.go:159-160`）或明文 listener 的包装里。可以只放行不鉴权的 `/api/v1/health`，方便客户端给出「请用 https」的提示。
-- **注意**：token 在请求里，hub 拒绝时它已经明文走过公网了。真正的保护在客户端：**公网地址上绝不用 `http://` 发 token**（5.5、6.2）。hub 这一道是让错误配置「立刻坏掉、看得见」。
-- **注意**：前面套了反向代理 / 隧道（frp 之类）时来源会变成 `127.0.0.1`，被当成本地。文档要写清楚：用代理就只让代理连 TLS 端口，或者配 `trusted_proxies` 后才读 `X-Forwarded-For`。路由器端口转发（DNAT）一般保留真实来源地址。
-- 限流（新文件，比如 `ratelimit.go`，不必引入新依赖）：
-  - 键：IPv4 按 /32，**IPv6 按 /64**（攻击者通常握有整个 /64）；
-  - 规则示例：同一键 10 分钟内失败 10 次 → 封 15 分钟，返回 `429` + `Retry-After`；再加一个全局失败速率上限，保护数据库。**数字未经实测**，上线前按实际调；
-  - 位置：`h.auth`（`http.go:163-184`）里**先查是否被封、再 `authenticate()` 查库**；失败时计数；`POST /auth/pair` 同样处理；
-  - 负缓存加上限或定期清理（`devicetokens.go:85-94`）；
-  - 日志：失败记一行（来源按 /64 或 /24 打码、路径、计数），**包括 `/api/v1/ws`**：改 `http.go:206` 的条件（比如 401 / 429 时 WS 也记），日志本身也要限速。
-- 顺带：`websocket.AcceptOptions{InsecureSkipVerify: true}`（`http.go:567`）关掉了 Origin 校验。WS 握手要 token，浏览器跨站发起又带不了 `Authorization` 头，只有 `?token=` 能做到，风险低；收紧 `?token=`（2.5）后基本无碍。
-- **改动面**：约 150 行 + 测试。
+**Proposal [Assessment]**:
+- Source helper `clientIP(r)`: `netip.ParseAddrPort(r.RemoteAddr)` followed by `Unmap()` (IPv4 on dual-stack sockets appears as `::ffff:`, 1.3).
+  Local = `IsLoopback() || IsPrivate() || IsLinkLocalUnicast()` + `100.64.0.0/10` (CGNAT / Tailscale IPv4, not covered by `IsPrivate`) + configured `trusted_cidrs` (VPN ranges).
+- Plaintext `r.TLS == nil && !local` → `403 {"error":"…","code":"tls_required"}`; outermost `routes()` (`http.go:159-160`) or a plaintext-listener wrapper. Optionally permit unauthenticated `/api/v1/health` so clients can say "Use https."
+- **Caution**: by the time the hub rejects a request, its token has already traveled in plaintext. Real protection is client-side: **never send tokens over `http://` to public addresses** (5.5 / 6.2). Hub rejection makes misconfiguration fail immediately and visibly.
+- **Caution**: a reverse proxy / tunnel such as frp makes sources appear as `127.0.0.1`, classified local. Document that proxies should connect only to TLS, or read `X-Forwarded-For` only with configured `trusted_proxies`. Router forwarding (DNAT) generally retains real sources.
+- Rate limiter (new file such as `ratelimit.go`, no new dependency needed):
+  - Key: IPv4 /32, **IPv6 /64** (attackers usually control an entire /64);
+  - Example: 10 failures in 10 minutes per key →15-minute ban, `429` + `Retry-After`; add a global failure-rate cap to protect the database. **Unmeasured numbers**, tune before launch;
+  - In `h.auth` (`http.go:163-184`), **check bans before `authenticate()` database lookup**, count failures; same for `POST /auth/pair`;
+  - Bound or periodically clean negative cache (`devicetokens.go:85-94`);
+  - Failure logs include redacted source (/64 or /24), path, count, **including `/api/v1/ws`**: change `http.go:206` to log WS 401 / 429, with log rate limits too.
+- Also: `websocket.AcceptOptions{InsecureSkipVerify: true}` (`http.go:567`) disables Origin validation. WS needs a token; cross-site browsers cannot supply `Authorization`, only `?token=`, so risk is low and mostly removed by restricting `?token=` (2.5).
+- **Scope**: about 150 lines + tests.
 
-### 4e. `client_hello` 里协商心跳间隔
+### 4e. Heartbeat negotiation in `client_hello`
 
-见 3.4。改动集中在 `http.go`（`client` 结构 `:440-454`、写协程 `:597-622`、`onClientMessage` `:642-731`、`hello` `:624`）+ `proto.Features` 加能力位（`server/internal/proto/proto.go:42-54`）+ `docs/protocol.md`。约 40–60 行。
-hub-changes.md 3.3 的 `client_hello`（平台、版本、能力）和 3.8 的应用层 ping / pong 可以一起做：客户端发 `{"type":"client_hello","device_id","platform","version","features":[…],"heartbeat_seconds":N}`，hub 回一条确认，带实际生效的间隔。
-注意顺序：hub 的 `hello` 是连上就发的（`http.go:624`），`client_hello` 在它之后到，所以「生效值」要另回一条（比如 `{"type":"client_hello_ack","heartbeat_seconds":N}`），或者客户端在握手时用请求头 / 查询参数带上。
+See 3.4. Changes concentrated in `http.go` (`client` `:440-454`, writer `:597-622`, `onClientMessage` `:642-731`, `hello` `:624`), capability in `proto.Features` (`server/internal/proto/proto.go:42-54`), and `docs/protocol.md`. About 40–60 lines.
+Combine `client_hello` (platform, version, capabilities) from hub-changes.md 3.3 with application ping / pong from 3.8: client sends `{"type":"client_hello","device_id","platform","version","features":[…],"heartbeat_seconds":N}`, hub confirms with effective interval.
+Ordering: hub `hello` is sent on connection (`http.go:624`), before `client_hello`. Return the effective value separately, for example `{"type":"client_hello_ack","heartbeat_seconds":N}`, or send client settings in handshake headers / query.
 
 ### 4f. `hub_id`
 
-**现状 [事实]**：服务端没有 `hub_id`（zoekt 零命中）；`settings` 表是通用的键值表（`server/internal/db/migrations/0002_settings.sql`，`Setting` / `PutSetting` 在 `server/internal/db/db.go:444-468`，`Store` 接口 `hub.go:103-104`）。
-**建议 [判断]**：`Run()` 里 `db.Open` 之后（`hub.go:140-145`）读 `settings["hub_id"]`，没有就用 `crypto/rand` 生成 UUIDv4 写回，存在 `Hub` 上。不用新迁移，约 20 行。
-下发：`/api/v1/health`（`http.go:21-23`）、WS `hello`（`http.go:624`）、配对码兑换的响应、二维码 `hid=`。
-语义：库在，id 就在（换机器带着数据库迁移也不变）；清库就是新 hub，客户端整体清掉本地数据（`docs/redesign/README.md` D6 的作用域）。
-TLS 指纹本身也能标识 hub，但内网明文连接没有指纹，数据作用域也不该跟证书走，所以两个都要。
+**Current state [Fact]**: no server `hub_id` (zero zoekt matches). `settings` is a generic key-value table (`server/internal/db/migrations/0002_settings.sql`, `Setting` / `PutSetting` in `server/internal/db/db.go:444-468`, `Store` in `hub.go:103-104`).
+**Proposal [Assessment]**: after `db.Open` in `Run()` (`hub.go:140-145`), read `settings["hub_id"]`; if absent, generate UUIDv4 with `crypto/rand`, write it back, and keep it on `Hub`. No new migration, about 20 lines.
+Publish in `/api/v1/health` (`http.go:21-23`), WS `hello` (`http.go:624`), pairing exchange response, QR `hid=`.
+Semantics: same database, same id (including migration to another machine); a cleared database means a new hub and clients clear all local data (`docs/redesign/README.md`, D6 scoping).
+TLS fingerprint also identifies a hub, but private plaintext has no fingerprint and data scope should not track certificates, so keep both.
 
-## 5. iOS 客户端
+## 5. iOS client
 
-### 5.1 配对信息怎么存 [事实]
+### 5.1 Pairing storage [Fact]
 
-- 类型：`ServerConfig { url: URL, token: String }`，`Codable`（`ios/Shared/APIClient.swift:3-27`）；`init?(pairURL:)` 只认 `jarvis://pair?url=…&token=…`（`:7-16`）；体验模式是 `https://demo.invalid`（`:25-26`）。
-- Keychain（`ios/Shared/Keychain.swift`）：通用密码，`service` = App 的 bundle id（手表上去掉 `.watchkitapp`，`:6`），`kSecAttrAccessibleAfterFirstUnlock`（`:14`），**没设 access group**。
-  - account `server`：手机自己的 `ServerConfig`（`:42-48`），JSON 编码整个结构；
-  - account `watch`：给手表换的只读回答 token（`:34-40`）。
-- 换 token：`AppModel.pair()`（`ios/Jarvis/App/AppModel.swift:140-156`）先 `client.machines()` 校验，再存 Keychain、清设备凭据、重连、推给手表；
-  `upgradeCredentials()`（`ios/Jarvis/App/DeviceCredentials.swift:15-39`）用配对 token 调 `POST /api/v1/auth/tokens kind=phone`，**用新 token 覆盖 Keychain 里的 `server`**（`:22-28`），设备 id 记在 `UserDefaults` 的 `auth.deviceID`（`:10`、`:25`）；再给手表换 `kind=watch`（`:33-37`）。旧 hub 没这个接口就继续用配对 token（`catch { return }`，`:29-31`）。
-- 配对入口：
-  - 扫码 / 手动：`PairView`（`ios/Jarvis/Views/Settings/SettingsView.swift:367-428`，`connect()` 在 `:415`），手动输入是「服务器地址」+「Token」两个框；
-  - 链接：`onOpenURL` 解析成 `ServerConfig` 后**直接** `model.pair(cfg)`（`ios/Jarvis/App/JarvisApp.swift:15-25`），不确认、已配对也会被换掉；
-  - DEBUG：`-pairURL` 启动参数（`JarvisApp.swift:46-49`）。
+- Type: `ServerConfig { url: URL, token: String }`, `Codable` (`ios/Shared/APIClient.swift:3-27`). `init?(pairURL:)` recognizes only `jarvis://pair?url=…&token=…` (`:7-16`); demo mode uses `https://demo.invalid` (`:25-26`).
+- Keychain (`ios/Shared/Keychain.swift`): generic password, `service` = App bundle id (strip `.watchkitapp` on Watch, `:6`), `kSecAttrAccessibleAfterFirstUnlock` (`:14`), **no access group**.
+  - account `server`: phone `ServerConfig`, JSON-encoded whole structure (`:42-48`);
+  - account `watch`: exchanged answer-only Watch token (`:34-40`).
+- Token exchange: `AppModel.pair()` (`ios/Jarvis/App/AppModel.swift:140-156`) validates with `client.machines()`, saves Keychain, clears device credentials, reconnects, sends to Watch.
+  `upgradeCredentials()` (`ios/Jarvis/App/DeviceCredentials.swift:15-39`) uses pairing token for `POST /api/v1/auth/tokens kind=phone`, **overwrites Keychain `server` with the new token** (`:22-28`), and records device id in UserDefaults `auth.deviceID` (`:10`, `:25`), then exchanges `kind=watch` (`:33-37`). Old hubs lacking the endpoint keep using pairing token (`catch { return }`, `:29-31`).
+- Pairing entry points:
+  - Scan / manual: `PairView` (`ios/Jarvis/Views/Settings/SettingsView.swift:367-428`, `connect()` at `:415`), manual fields "Server Address" and "Token";
+  - Link: `onOpenURL` parses `ServerConfig` and **directly** calls `model.pair(cfg)` (`ios/Jarvis/App/JarvisApp.swift:15-25`), without confirmation, replacing existing pairing too;
+  - DEBUG: `-pairURL` launch argument (`JarvisApp.swift:46-49`).
 
-### 5.2 URL 怎么拼 [事实]
+### 5.2 URL construction [Fact]
 
-| 用途 | 怎么拼 | 用哪个 URLSession | 位置 |
+| Purpose | Construction | URLSession | Location |
 | --- | --- | --- | --- |
-| REST | `config.url.appending(path:)` + query | `APIClient.session`，默认 `URLSession.shared` | `APIClient.swift:89`、`:100-105`、`:107-123` |
-| 上传 | 同上，`/machines/{mid}/files?name=` | `APIClient.uncachedSession` | `:143-155`、`:93-98` |
-| 懒加载图片 / 全文 | `itemURL()` 手拼 `percentEncodedPath`（id 里有 `#` `:`） | `uncachedSession` | `:273-285`、`:288-298`、`:301-308` |
-| 飞书文档原始接口 | `url("/api/v1/lark/raw/…")` | `self.session` | `ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:10-17` |
-| 飞书媒体 | 相对路径走 `api.request`（`uncachedSession`）；绝对 http(s) URL 直接 `uncachedSession.data(from:)`、**不带 token** | `uncachedSession` | `ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift:37-60` |
-| 飞书视频 | `AVURLAsset(url: cfg.url.appending(path:), options: [AVURLAssetHTTPHeaderFieldsKey: Authorization])` | AVFoundation 自己的网络栈 | `LarkMedia.swift:296-302` |
-| WS | `config.url.appending(path: "/api/v1/ws")`，scheme：`https` → `wss`，否则 `ws`；`Authorization` 头；握手超时 15 秒；单条最大 64 MB | `LiveConnection` 自己的 `URLSession(configuration: .default)` | `ios/Shared/LiveConnection.swift:174`、`:222-247` |
+| REST | `config.url.appending(path:)` + query | `APIClient.session`, default `URLSession.shared` | `APIClient.swift:89`, `:100-105`, `:107-123` |
+| Upload | Same, `/machines/{mid}/files?name=` | `APIClient.uncachedSession` | `:143-155`, `:93-98` |
+| Lazy images / full text | `itemURL()` builds `percentEncodedPath` manually (ids contain `#`, `:`) | `uncachedSession` | `:273-285`, `:288-298`, `:301-308` |
+| Lark raw-doc endpoint | `url("/api/v1/lark/raw/…")` | `self.session` | `ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:10-17` |
+| Lark media | Relative paths via `api.request` (`uncachedSession`); absolute http(s) directly via `uncachedSession.data(from:)`, **without token** | `uncachedSession` | `ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift:37-60` |
+| Lark video | `AVURLAsset(url: cfg.url.appending(path:), options: [AVURLAssetHTTPHeaderFieldsKey: Authorization])` | AVFoundation networking | `LarkMedia.swift:296-302` |
+| WS | `config.url.appending(path: "/api/v1/ws")`, `https` →`wss`, otherwise `ws`; `Authorization`; handshake timeout 15 seconds; maximum message 64 MB | `LiveConnection`'s own `URLSession(configuration: .default)` | `ios/Shared/LiveConnection.swift:174`, `:222-247` |
 
-- 所有请求都带 `Authorization: Bearer`，不用 `?token=`（见 2.5）。
-- 心跳（`LiveConnection.swift:178-181`、`:249-284`）：每 20 秒 `sendPing`；5 秒没 pong 记弱网（之后每 5 秒 ping）；45 秒没收到任何东西主动断；退避 1→20 秒（`:340-349`）。
-  收到第一条消息（hello）才算 `connected`（`:300-306`）。`hello` 里只读 `features`（`AppModel.swift:572-573`）。
-- 网络变化：`ConnectionStatus` 用 `NWPathMonitor`（`ios/Jarvis/App/ConnectionStatus.swift:43`、`:65-66`），恢复时 `reconnectNow()`、换网卡时 `probe()`（`:118-120`）。
-- 进后台就断 WS（`JarvisApp.swift:27-35`）；静默推送 `jarvis_wake` 唤醒后 `ensureConnected()`，25 秒后断（`JarvisApp.swift:106-120`），hub 那边只等 20 秒（`server/internal/hub/hub.go:737`）。
+- All requests use `Authorization: Bearer`, not `?token=` (2.5).
+- Heartbeat (`LiveConnection.swift:178-181`, `:249-284`): `sendPing` every 20 seconds; no pong for 5 seconds means weak networking (then ping every 5 seconds); no data for 45 seconds disconnects; backoff 1→20 seconds (`:340-349`).
+  `connected` only after the first message (hello) (`:300-306`); hello reads only `features` (`AppModel.swift:572-573`).
+- Network changes: `ConnectionStatus` uses `NWPathMonitor` (`ios/Jarvis/App/ConnectionStatus.swift:43`, `:65-66`); on recovery `reconnectNow()`, interface change `probe()` (`:118-120`).
+- Backgrounding disconnects WS (`JarvisApp.swift:27-35`). Silent push `jarvis_wake` calls `ensureConnected()`, disconnects 25 seconds later (`JarvisApp.swift:106-120`); hub waits only 20 seconds (`server/internal/hub/hub.go:737`).
 
-### 5.3 ATS [事实]
+### 5.3 ATS [Fact]
 
-- iPhone App：`NSAppTransportSecurity.NSAllowsArbitraryLoads = true`（`ios/project.yml:84-86`，注释「hub 通常在私有网络里走明文 HTTP」；生成后的 `ios/Jarvis/Resources/Info.plist:38-42`）。
-- 手表 App：同样 `NSAllowsArbitraryLoads = true`（`ios/project.yml:144-145`、`ios/JarvisWatch/Info.plist:23-27`）。
-- 小组件 / 实时活动扩展 `JarvisWidgets`：没设 ATS（`ios/project.yml:101-128`），它也不联网：实时活动按钮的 intent 在 App 进程里跑（`ios/LiveActivity/FleetIntents.swift:4-6`、`project.yml:127-128` 的注释）。
-- `ITSAppUsesNonExemptEncryption: false`（`project.yml:75`）。[判断] 用系统 TLS（URLSession）做钉扎仍属豁免范围，不用改；如果自己实现加密协议才需要重新评估。
+- iPhone App: `NSAppTransportSecurity.NSAllowsArbitraryLoads = true` (`ios/project.yml:84-86`, comment "hub usually uses plaintext HTTP on a private network"; generated `ios/Jarvis/Resources/Info.plist:38-42`).
+- Watch App: also `NSAllowsArbitraryLoads = true` (`ios/project.yml:144-145`, `ios/JarvisWatch/Info.plist:23-27`).
+- Widget / Live Activity extension `JarvisWidgets`: no ATS settings (`ios/project.yml:101-128`), and no networking. Live Activity button intents run in the App process (`ios/LiveActivity/FleetIntents.swift:4-6`, comments in `project.yml:127-128`).
+- `ITSAppUsesNonExemptEncryption: false` (`project.yml:75`). [Assessment] Pinning with system TLS (URLSession) remains exempt; no change needed. Reassess only for custom cryptographic protocols.
 
-### 5.4 其他直连 hub 的地方 [事实]
+### 5.4 Other direct hub callers [Fact]
 
-| 地方 | 怎么拿配置 | 位置 |
+| Caller | Configuration source | Location |
 | --- | --- | --- |
-| 手表 | 手机经 WatchConnectivity 推 `ServerConfig`（JSON，`applicationContext` + `transferUserInfo`，`ios/Shared/WatchSync.swift:35-45`）；手表存进 **`UserDefaults` 的 `config`**（不是 Keychain，`ios/JarvisWatch/JarvisWatchApp.swift:34-43`），自己用 `APIClient`（`URLSession.shared`）直连 hub（`:31`、`:75-145`） | 手表拿的是 `Keychain.watchConfig ?? serverConfig`（`AppModel.swift:113-117`、`:136`） |
-| Siri / 快捷指令 | `IntentSupport.client()`：`Keychain.serverConfig` → `APIClient`（`ios/Jarvis/Intents/IntentSupport.swift:133-141`）；错误文案「确认手机能访问 hub（同一个网络或 VPN）」（`:116-126`） | |
-| 通知按钮 | `resolveFromNotification`：`Keychain.serverConfig` → `APIClient.resolve`（`JarvisApp.swift:159-176`）；失败文案也用 `host`（`ios/Jarvis/App/NotificationActions.swift:58`） | |
-| 实时活动按钮 | `FleetActions.run`：`Keychain.serverConfig` → `APIClient.resolve`（`ios/Jarvis/App/FleetActions.swift:17-21`） | |
-| 推送注册 | `PushRegistrar.didRegister` → `AppModel.shared.api` → `POST /api/v1/devices`（`JarvisApp.swift:230-241`） | |
-| 设置页显示地址 | `model.config?.url.absoluteString`（`SettingsView.swift:27`） | |
-| WKWebView | `LinkSheet`（外部链接）、`MailViews`（邮件 HTML），**没发现**直接加载 hub 地址的 | `ios/Jarvis/Views/Link/LinkSheet.swift`、`ios/Jarvis/Views/Mail/MailViews.swift:189-224` |
+| Watch | Phone pushes JSON `ServerConfig` through WatchConnectivity (`applicationContext` + `transferUserInfo`, `ios/Shared/WatchSync.swift:35-45`). Watch saves it in **UserDefaults `config`**, not Keychain (`ios/JarvisWatch/JarvisWatchApp.swift:34-43`), then uses `APIClient` (`URLSession.shared`) directly (`:31`, `:75-145`). | Receives `Keychain.watchConfig ?? serverConfig` (`AppModel.swift:113-117`, `:136`). |
+| Siri / Shortcuts | `IntentSupport.client()`: `Keychain.serverConfig` →`APIClient` (`ios/Jarvis/Intents/IntentSupport.swift:133-141`); error says "Check that your phone can reach the hub (same network or VPN)" (`:116-126`). | |
+| Notification buttons | `resolveFromNotification`: `Keychain.serverConfig` →`APIClient.resolve` (`JarvisApp.swift:159-176`); errors also use `host` (`ios/Jarvis/App/NotificationActions.swift:58`). | |
+| Live Activity buttons | `FleetActions.run`: `Keychain.serverConfig` →`APIClient.resolve` (`ios/Jarvis/App/FleetActions.swift:17-21`) | |
+| Push registration | `PushRegistrar.didRegister` →`AppModel.shared.api` →`POST /api/v1/devices` (`JarvisApp.swift:230-241`) | |
+| Settings address display | `model.config?.url.absoluteString` (`SettingsView.swift:27`) | |
+| WKWebView | `LinkSheet` (external links), `MailViews` (mail HTML); **no direct hub-address loads found** | `ios/Jarvis/Views/Link/LinkSheet.swift`, `ios/Jarvis/Views/Mail/MailViews.swift:189-224` |
 
-### 5.5 要支持「多候选地址 + 证书钉扎」，iOS 要改哪里 [判断]
+### 5.5 iOS changes for multiple candidates + certificate pinning [Assessment]
 
-1. **数据模型**：`ServerConfig`（`APIClient.swift:3-27`）加字段，保持 `Codable` 向后兼容（新字段可选）：
-   - `addresses: [URL]`（候选，按优先级；`url` 保留为「上次成功的那个」，旧代码路径不受影响）；
-   - `pin: String?`（证书 SPKI 的 sha256，base64）；
-   - `hubID: String?`（4f）。
-   `init?(pairURL:)` 解析新参数（多个 `url=`、`pin=`、`code=`，见 4a–4c）。Keychain 存的是整份 JSON，旧数据解码后新字段为空即可。
-2. **一个统一的、带代理的 URLSession**：现在有三个会话（`URLSession.shared`、`uncachedSession`、`LiveConnection.session`），都没有 delegate，**做不了钉扎**。
-   要换成同一个 delegate（实现 `urlSession(_:didReceive:completionHandler:)`，对 `NSURLAuthenticationMethodServerTrust` 取叶子证书公钥算 SPKI sha256，与 `pin` 比对，相等才 `.useCredential`）。改动点：`APIClient.session` 默认值（`:89`）、`uncachedSession`（`:93-98`）、`LiveConnection.session`（`LiveConnection.swift:174`）、上传用的任务级 delegate `UploadProgress`（`:154`，定义在 `:795-802`，只实现了进度回调，认证回调会落到会话级 delegate，不用改）。
-3. **AVPlayer 没法挂 URLSession delegate**：`LarkMedia.swift:296-302` 的视频直接走 AVFoundation，自签证书会握手失败。只能先下载到本地再播（`file(_:name:)` 已有，`LarkMedia.swift:68`），或者 `AVAssetResourceLoaderDelegate` + 自定义 scheme 转发。
-4. **候选地址选择**：放在一个共享的 `HubEndpoint`（新类型）里，`APIClient.url()`（`:100-105`）、`itemURL()`（`:301-308`）、`LiveConnection.open()`（`:222-247`）、`LarkMedia`（`:298`）都从它取当前地址。
-   - 选法：并发探测 `GET /api/v1/health`（不鉴权，便宜；新 hub 返回 `hub_id` 用来确认是同一台），IPv6 先发、IPv4 稍后再发（RFC 8305 Happy Eyeballs 建议的尝试间隔是 250 ms，属设计参数、非实测），第一个通过钉扎和 `hub_id` 校验的胜出；
-   - 时机：冷启动、`NWPathMonitor` 路径变化（`ConnectionStatus.swift:65-120`）、WS 断开重连前、静默推送唤醒时（只有约 25 秒，`JarvisApp.swift:116`，探测要并发，不能串行等 15 秒超时）；
-   - 手表、Intents、通知按钮、实时活动按钮都在 App 外或后台跑，不能依赖 App 内存里的「当前地址」：要么把选中的地址写回 Keychain，要么每次快速探测。
-5. **ATS**：[判断，需真机验证] 用自定义信任评估接受自签证书时，ATS 仍检查 TLS 1.2+、前向保密套件、证书密钥（RSA ≥ 2048 / ECC ≥ 256）和 SHA-256 签名。hub 生成证书时用 ECDSA P-256 + SHA-256 就能满足。
-   `NSAllowsArbitraryLoads` 先保留（内网 / VPN 的明文旧 hub 还要能连）；App 里再加一道：`http://` 只接受私有 / VPN / 回环地址和 `.local`，公网地址必须 `https` + 钉扎（与 android.md 5.1 一致）。
-6. **手表**：`WatchSync` 传的 `ServerConfig` 自动带上新字段；手表的 `APIClient` 也要用带钉扎的会话。手表 token 现在明文存在手表的 `UserDefaults`（`JarvisWatchApp.swift:34-43`），公网化后建议改存手表 Keychain。
-7. **配对链接**：`onOpenURL` 直接配对（`JarvisApp.swift:15-25`）在公网场景风险更大（任何网页 / 消息里的 `jarvis://pair?url=<别人的 hub>` 都能把手机改连过去，之后那个 hub 能调手机工具）。建议加确认页（显示地址、指纹），已配对时不能静默替换。
-8. **错误分类**：Intents（`IntentSupport.swift:116-126`）、飞书文档（`FeishuDocsComponents.swift:20-30`）、PairView 的错误要加「证书不匹配」一类，文案去掉「同一个网络或 VPN」。
+1. **Data model**: add backward-compatible optional `Codable` fields to `ServerConfig` (`APIClient.swift:3-27`):
+   - `addresses: [URL]` (prioritized candidates; retain `url` as last successful address to preserve old code paths);
+   - `pin: String?` (certificate SPKI sha256, base64);
+   - `hubID: String?` (4f).
+   `init?(pairURL:)` parses new parameters (multiple `url=`, `pin=`, `code=`, 4a–4c). Keychain stores the entire JSON; old data simply decodes with empty new fields.
+2. **Unified URLSession with a delegate**: three current sessions (`URLSession.shared`, `uncachedSession`, `LiveConnection.session`) all lack delegates and **cannot pin**.
+   Use the same delegate, implementing `urlSession(_:didReceive:completionHandler:)` for `NSURLAuthenticationMethodServerTrust`, computing leaf-public-key SPKI sha256, comparing to `pin`, and using `.useCredential` only on equality. Change `APIClient.session` default (`:89`), `uncachedSession` (`:93-98`), `LiveConnection.session` (`LiveConnection.swift:174`). Upload task delegate `UploadProgress` (`:154`, defined `:795-802`) handles only progress; authentication falls through to session delegate, requiring no change.
+3. **AVPlayer cannot use a URLSession delegate**: video in `LarkMedia.swift:296-302` uses AVFoundation directly, failing self-signed TLS. Download locally before playback (existing `file(_:name:)`, `LarkMedia.swift:68`), or use `AVAssetResourceLoaderDelegate` with custom-scheme forwarding.
+4. **Candidate selection**: shared new `HubEndpoint` type supplies current address to `APIClient.url()` (`:100-105`), `itemURL()` (`:301-308`), `LiveConnection.open()` (`:222-247`), `LarkMedia` (`:298`).
+   - Probe unauthenticated cheap `GET /api/v1/health` concurrently, with new hub `hub_id` identity check. IPv6 first, IPv4 delayed (RFC 8305 recommends 250 ms attempt delay; design parameter, not measurement). First pin + `hub_id` success wins;
+   - Probe on cold start, `NWPathMonitor` changes (`ConnectionStatus.swift:65-120`), before WS reconnect, and on silent-push wake (only about 25 seconds, `JarvisApp.swift:116`; concurrent probes, not serial 15-second timeouts);
+   - Watch, Intents, notification buttons, and Live Activity buttons run outside the App or in background, so cannot rely on App-memory current address. Write the selected address back to Keychain or probe quickly each time.
+5. **ATS** [Assessment, real-device verification needed]: custom trust for self-signed certificates still checks TLS 1.2+, forward-secret suites, certificate keys (RSA ≥2048 / ECC ≥256), and SHA-256 signatures. Hub ECDSA P-256 + SHA-256 meets these.
+   Retain `NSAllowsArbitraryLoads` initially (plaintext old hubs on private networks / VPN must still work). Add an App-level rule: `http://` only for private / VPN / loopback addresses and `.local`; public addresses require `https` + pinning (android.md 5.1).
+6. **Watch**: `ServerConfig` sent by `WatchSync` automatically includes new fields; Watch `APIClient` must also use a pinned session. Current plaintext token storage in Watch UserDefaults (`JarvisWatchApp.swift:34-43`) should move to Watch Keychain for public use.
+7. **Pairing links**: direct `onOpenURL` pairing (`JarvisApp.swift:15-25`) is riskier publicly: any web / message `jarvis://pair?url=<someone else's hub>` can redirect the phone, allowing that hub to call phone tools. Add confirmation showing address / fingerprint; never silently replace existing pairing.
+8. **Error categories**: add "Certificate mismatch" to Intents (`IntentSupport.swift:116-126`), Lark docs (`FeishuDocsComponents.swift:20-30`), and PairView errors; remove "same network or VPN" wording.
 
-## 6. Android 第一版（PR #84）
+## 6. First Android version (PR #84)
 
-### 6.1 现状 [事实]
+### 6.1 Current state [Fact]
 
-（表里 `data/`、`ui/`、`service/` 开头的路径都在 `android/app/src/main/java/jarvis/android/` 下。）
+(Paths beginning `data/`, `ui/`, `service/` below are under `android/app/src/main/java/jarvis/android/`.)
 
-| 项 | 现状 | 位置 |
+| Item | Current behavior | Location |
 | --- | --- | --- |
-| 配对数据 | `data class Pairing(val url: String, val token: String)` | `android/app/src/main/java/jarvis/android/data/Pairing.kt:7` |
-| 存储 | `PairingStore`：`SharedPreferences("pairing", MODE_PRIVATE)`，`url`、`token` **明文**（没走 Keystore） | `Pairing.kt:9-19` |
-| 备份 | `android:allowBackup="false"` | `android/app/src/main/AndroidManifest.xml:19` |
-| 解析 | `PairingStore.parse()`：scheme `jarvis`、host `pair`、`url` 以 `http` 开头、`token` 非空 | `Pairing.kt:22-30` |
-| 链接配对 | manifest 声明 `jarvis://pair`（`AndroidManifest.xml:36-42`）→ `MainActivity.handle` 放进 `pendingPair`（`android/app/src/main/java/jarvis/android/MainActivity.kt:49-54`、`:60`）→ `PairScreen` 自动配对（`ui/PairScreen.kt:82-85`，`LaunchedEffect(link)` 在 `:83`）。`PairScreen` 只在没配对时显示（`ui/Root.kt:16-17`），所以**已配对时链接不会静默替换** | |
-| 配对流程 | `ApiClient(url, token).machines()` 校验 → `createToken(deviceName)`（404 = 旧 hub，留配对 token）→ 存 `Pairing(url.trimEnd('/'), own)` → `JarvisApp.connect` | `ui/PairScreen.kt:55-76` |
-| 配对报错 | 401 →「token 不对」；其他 →「连不上 …。手机和 hub 要在同一个网络或 VPN 里」；手动输入框 placeholder `http://<hub 地址>:18660`，按钮要求 `url.startsWith("http")` | `PairScreen.kt:69-73`、`:108-120` |
-| 连接对象 | `JarvisApp.connect(p)`：每次配对 / 启动建一个 `Hub(ApiClient(p.url, p.token), …)` 并起前台服务 | `android/app/src/main/java/jarvis/android/JarvisApp.kt:29-45`（`connect` 在 `:39`） |
-| HTTP 客户端 | `ApiClient(val baseUrl: String, val token: String)`，一个 `OkHttpClient`：connect 10 秒、read 110 秒、`pingInterval(20 s)`，REST 和 WS 共用 | `data/ApiClient.kt:23-28` |
-| URL | `url()`：`baseUrl.toHttpUrl()` 逐段 `addPathSegment`；`wsUrl()`：`replaceFirst("http", "ws")`（`https` → `wss` 也成立） | `ApiClient.kt:32-38` |
-| 鉴权 | 全部 `Authorization: Bearer`（REST `:43`，图片 `:113`，全文 `:122`，WS `data/Hub.kt:103`），不用 `?token=` | |
-| health | `health()` 定义了（只解 `ok`、`version`），**没有调用方** | `ApiClient.kt:67-68` |
-| WS | `api.http.newWebSocket`；onOpen 就算 Online、注册手机工具、重订阅；退避 1→30 秒 | `Hub.kt:72-88`、`:102-122` |
-| hello | 只取 `server_version`，不看 `features` | `Hub.kt:146` |
-| JSON ping | 收到 `{"type":"ping"}` 回 `pong`（`Hub.kt:147`），但 hub 从不发 JSON ping（见 3.2） | |
-| 网络变化 | 前台服务 `registerDefaultNetworkCallback`，`onAvailable` → `kick()`（`service/HubService.kt:47-50`）；`kick()` **只在不是 Online 时**才断开重连（`Hub.kt:97-100`） | |
-| 通知按钮 | `ActionReceiver` 用当前 `hub.api.resolve`（`service/ActionReceiver.kt:19`、`:39`） | |
-| 明文 | `network_security.xml` 只有 `<base-config cleartextTrafficPermitted="true" />`，注释写「hub 在私有网络或 VPN 里讲明文 HTTP」；没有 `trust-anchors` / `pin-set` | `android/app/src/main/res/xml/network_security.xml`；manifest `:22` 引用 |
-| SDK | `compileSdk 34`、`targetSdk 34`、`minSdk 26`；OkHttp 4.12.0；没有 Coil / Ktor 等别的网络栈 | `android/app/build.gradle.kts:13-18`、`:57` |
+| Pairing data | `data class Pairing(val url: String, val token: String)` | `android/app/src/main/java/jarvis/android/data/Pairing.kt:7` |
+| Storage | `PairingStore`: `SharedPreferences("pairing", MODE_PRIVATE)`, **plaintext** `url`, `token` (no Keystore) | `Pairing.kt:9-19` |
+| Backup | `android:allowBackup="false"` | `android/app/src/main/AndroidManifest.xml:19` |
+| Parsing | `PairingStore.parse()`: scheme `jarvis`, host `pair`, `url` begins with `http`, nonempty `token` | `Pairing.kt:22-30` |
+| Link pairing | Manifest `jarvis://pair` (`AndroidManifest.xml:36-42`) →`MainActivity.handle` sets `pendingPair` (`android/app/src/main/java/jarvis/android/MainActivity.kt:49-54`, `:60`) →`PairScreen` automatically pairs (`ui/PairScreen.kt:82-85`, `LaunchedEffect(link)` at `:83`). `PairScreen` appears only when unpaired (`ui/Root.kt:16-17`), so **links do not silently replace existing pairing**. | |
+| Pairing flow | Validate with `ApiClient(url, token).machines()` →`createToken(deviceName)` (404 = old hub, retain pairing token) →store `Pairing(url.trimEnd('/'), own)` →`JarvisApp.connect` | `ui/PairScreen.kt:55-76` |
+| Pairing errors | 401 →"Invalid token"; others →"Cannot connect … Phone and hub must be on the same network or VPN". Manual placeholder `http://<hub address>:18660`; button requires `url.startsWith("http")`. | `PairScreen.kt:69-73`, `:108-120` |
+| Connection object | `JarvisApp.connect(p)` creates `Hub(ApiClient(p.url, p.token), …)` on each pairing / launch and starts the foreground service. | `android/app/src/main/java/jarvis/android/JarvisApp.kt:29-45` (`connect` at `:39`) |
+| HTTP client | `ApiClient(val baseUrl: String, val token: String)`, one `OkHttpClient`: connect 10 seconds, read 110 seconds, `pingInterval(20 s)`, shared REST / WS | `data/ApiClient.kt:23-28` |
+| URLs | `url()`: `baseUrl.toHttpUrl()` then `addPathSegment` per segment. `wsUrl()`: `replaceFirst("http", "ws")` (also maps `https` →`wss`). | `ApiClient.kt:32-38` |
+| Authentication | All `Authorization: Bearer` (REST `:43`, images `:113`, full text `:122`, WS `data/Hub.kt:103`), no `?token=` | |
+| health | `health()` exists (decodes only `ok`, `version`), **no callers** | `ApiClient.kt:67-68` |
+| WS | `api.http.newWebSocket`; Online on onOpen, registers phone tools and resubscribes; backoff 1→30 seconds | `Hub.kt:72-88`, `:102-122` |
+| hello | Reads only `server_version`, ignores `features` | `Hub.kt:146` |
+| JSON ping | Replies `pong` to `{"type":"ping"}` (`Hub.kt:147`), but hub never sends JSON ping (3.2) | |
+| Network changes | Foreground service `registerDefaultNetworkCallback`, `onAvailable` →`kick()` (`service/HubService.kt:47-50`); `kick()` reconnects **only when not Online** (`Hub.kt:97-100`). | |
+| Notification buttons | `ActionReceiver` uses current `hub.api.resolve` (`service/ActionReceiver.kt:19`, `:39`) | |
+| Plaintext | `network_security.xml` only has `<base-config cleartextTrafficPermitted="true" />`, comment "hub uses plaintext HTTP on private networks or VPN"; no `trust-anchors` / `pin-set` | `android/app/src/main/res/xml/network_security.xml`, manifest reference at `:22` |
+| SDK | `compileSdk 34`, `targetSdk 34`, `minSdk 26`; OkHttp 4.12.0; no other networking such as Coil / Ktor | `android/app/build.gradle.kts:13-18`, `:57` |
 
-### 6.2 要改哪里 [判断]
+### 6.2 Changes needed [Assessment]
 
-1. **`Pairing` / `PairingStore`**（`Pairing.kt`）：加 `addresses`、`pin`、`hubId`；`parse()` 认多 `url=` / `pin=` / `code=`。token 改用 Android Keystore 里的 AES 密钥加密后再存（android.md 已写「Keystore」）；旧数据读出来没有新字段就当单地址、无钉扎。
-2. **钉扎只能在代码里做**：`network_security.xml` 的 `<pin-set>` 和 OkHttp 的 `CertificatePinner` 都是在**系统信任链校验通过之后**再比对，自签证书过不了前一步；`<trust-anchors>` 要把证书打包成资源，用户各自的证书放不进去。
-   做法：给 hub 专用的 `OkHttpClient` 配自定义 `X509TrustManager`（只认叶子证书 SPKI sha256 = `pin`）+ `hostnameVerifier`（地址是 IP、会变，主机名校验交给钉扎）。只给 hub 用，别影响以后的其他请求（Gmail 登录、FCM 等）。改动点：`ApiClient.kt:24-28`。
-3. **候选地址**：`ApiClient.baseUrl` 是 `val`、`Hub.api` 是 `val`（`Hub.kt:44`），换地址要么重建 `Hub`（会丢订阅状态），要么把 `baseUrl` 抽成可变的 `HubEndpoint`。
-   探测用已有但没用的 `health()`（`ApiClient.kt:67-68`，加 `hub_id`、`addresses` 字段）；`kick()`（`Hub.kt:97-100`）在网络变化时也要触发重新选址，而不是只在离线时（Wi-Fi 切蜂窝时旧 socket 还「Online」，要等 OkHttp ping 失败）。
-4. **明文**：`network_security.xml` 的整体放开保留（兼容内网明文 hub），App 里加判断：`http://` 只给私有 / VPN / 回环 / `.local`，公网地址强制 `https` + 钉扎（android.md 5.1 已有同样的规则）。
-5. **心跳**：OkHttp 的 `pingInterval` 是客户端级的、WS 建立后改不了，要换间隔只能 `http.newBuilder().pingInterval(x)` 建新客户端再重连；OkHttp 在下一次 ping 之前没收到 pong 就判失败，所以「ping 间隔」同时也是「超时」。
-   和 hub 侧的 `client_hello.heartbeat_seconds`（3.4）配合：前台 20 秒，息屏 / 后台（前台服务常驻时）可以放到 60–120 秒；**耗电和 NAT 超时都没实测**，要在真机上量。
-6. **错误分类**：`SSLHandshakeException` / `SSLPeerUnverifiedException` → 「证书不匹配，重新扫码」；`PairScreen.kt:69-73` 的「同一个网络或 VPN」文案要改。
-7. **本地网络权限**（升 target 37 时，android.md 5.1）：IPv6 全局地址是否算「本地网络」**未核实**；如果不算，「优先走公网 IPv6」在同一 Wi-Fi 下还能顺带绕开这个权限，值得真机验证。
+1. **`Pairing` / `PairingStore`** (`Pairing.kt`): add `addresses`, `pin`, `hubId`, parse multiple `url=` / `pin=` / `code=`. Encrypt tokens with an Android Keystore AES key before storing (android.md already specifies Keystore). Old records without fields mean single address, no pin.
+2. **Pinning must be implemented in code**: `network_security.xml` `<pin-set>` and OkHttp `CertificatePinner` compare **after system trust-chain verification**; self-signed certificates fail before that. `<trust-anchors>` needs bundled certificate resources, unsuitable for each user's own certificate.
+   Hub-specific `OkHttpClient` with custom `X509TrustManager` (accept leaf SPKI sha256 only when equal to `pin`) + `hostnameVerifier` (changing IPs; pinning supplies identity). Use only for hub, not future Gmail login / FCM requests. Change `ApiClient.kt:24-28`.
+3. **Candidates**: `ApiClient.baseUrl` and `Hub.api` are `val` (`Hub.kt:44`); changing address means rebuilding `Hub` (losing subscriptions), or extracting mutable `HubEndpoint`.
+   Use existing unused `health()` (`ApiClient.kt:67-68`, add `hub_id`, `addresses`). `kick()` (`Hub.kt:97-100`) must reroute on network changes even while Online (Wi-Fi→cellular old socket stays "Online" until OkHttp ping fails).
+4. **Plaintext**: retain global permission in `network_security.xml` for old private hubs, but enforce App-level `http://` only for private / VPN / loopback / `.local`; public addresses require `https` + pinning (android.md 5.1).
+5. **Heartbeat**: OkHttp `pingInterval` is client-wide and immutable after WS establishment. Change by `http.newBuilder().pingInterval(x)` and reconnect. No pong before the next ping means failure, so interval is also timeout.
+   Coordinate with hub `client_hello.heartbeat_seconds` (3.4): foreground 20 seconds, screen-off / background persistent service potentially 60–120 seconds. **Power use and NAT timeouts are unmeasured**; test devices.
+6. **Errors**: `SSLHandshakeException` / `SSLPeerUnverifiedException` →"Certificate mismatch, scan again"; revise "same network or VPN" in `PairScreen.kt:69-73`.
+7. **Local-network permission** (when targeting 37, android.md 5.1): whether global IPv6 counts as local is **unverified**. If not, IPv6 priority could also bypass this permission on the same Wi-Fi; worth real-device testing.
 
-## 7. 文档
+## 7. Documentation
 
-### 7.1 现在写了「只放内网 / VPN」「默认 HTTP」的地方 [事实]
+### 7.1 Existing "private network / VPN only" and "HTTP by default" text [Fact]
 
-| 位置 | 原文要点 | 公网直连后怎么改 [判断] |
+| Location | Original point | Revision after public-connectivity support [Assessment] |
 | --- | --- | --- |
-| `README.md:53` | 准备表：「手机能访问它的 18660 端口（同一个网络或 VPN）」 | 改成「手机能访问 hub：同一个网络、VPN，或公网直连（IPv6 优先，需要放行 TLS 端口）」 |
-| `README.md:68`、`:71` | 第 3 步「填上…手机访问用的地址」；第 5 步扫码 | 第 3 步说明 `public_url` / `advertise` / `tls`；第 5 步说明二维码是 5 分钟有效的一次性配对码，旧 App 用 `--legacy` |
-| `README.md:79` | 「hub 默认是 HTTP，只该放在内网或 VPN 里访问，不要直接暴露到公网」 | 改成：TLS 端口（自签证书 + App 钉扎指纹）可以暴露到公网；明文端口只对内网 / VPN 来源开放，公网来的明文请求一律拒绝；鉴权失败限流 |
-| `docs/config.md:22` | 同 README 的准备表 | 同上 |
-| `docs/config.md:35`、`:88`、`config.example.json:27` | 构建配置 `hub.url` 写 `http://…:18660` | 这是给 `sim.sh` 配对模拟器用的，可以保留内网明文地址；加一句说明 |
-| `docs/config.md:50`、`:118-119`、`:138` | hub.json 示例 `listen`、`public_url` 是 `http://`；「第一次运行…对外地址是 `http://<主机名>:18660`」 | 示例和字段表补 `tls`、`advertise`、`advertise_ipv6`、`advertise_lan`、`trusted_cidrs`（`## hub 运行配置` 在 `:114`） |
-| `docs/server.md:43` | 「监听 `:18660`」 | 补 TLS 端口；防火墙 / 光猫放行（IPv6 入站）；TUN 代理的回包问题 |
-| `docs/server.md:71`、`:77` | hub.json 字段表；配对「打印地址、token 和二维码（`jarvis://pair?url=…&token=…`）」 | 字段表补新字段；配对改成配对码格式，写 `--legacy` |
-| `docs/server.md:94` | `curl -H "Authorization: Bearer $TOKEN" http://<hub 地址>:18660/…` | 补 https 示例：`curl --pinnedpubkey 'sha256//<pin>' -k https://…`（`-k` 跳过 CA 校验，钉扎仍然生效） |
-| `docs/server.md`「运维」（`:90-100` 一带） | 只记失败和慢请求，不记 query/body/token | 补：限流、封禁、WS 鉴权失败日志的格式，来源打码规则 |
-| `docs/protocol.md:3` | 「hub 默认监听 `:18660`」 | 补 TLS 端口 |
-| `docs/protocol.md:5-21` | 鉴权：`Bearer`，「WebSocket 也可用 `?token=`」；health 返回 `{"ok":true,"version":"..."}` | 写清楚 `?token=` 的新范围（2.5）；health 加 `features`（已有但没写）、`hub_id`；新增「配对码」「证书钉扎」「候选地址」三小节；限流的 `429` |
-| `docs/protocol.md:154-190` | WS 表：`hello` 只写了 `server_version, client_id`；有 `ping` / `pong` 两行（代码里没有） | `hello` 补 `features`、`hub_id`、`endpoints`、`tls_pin`；新增 `endpoints` 事件、`client_hello`；删掉或实现 `ping` / `pong`（hub-changes.md 3.8、4.12） |
-| `docs/architecture.md:17-18`、`docs/architecture.svg:3` | 图上写「HTTPS/WS (Bearer token)」「hub 机器 :18660」 | **现在就不准确**（实际是明文 HTTP）。改成「HTTPS（自签 + 钉扎，公网）/ HTTP（内网、VPN）」 |
-| `docs/android.md:13` | 配对：`jarvis://pair?url=…&token=…` | 新格式 |
-| `docs/android.md:47` | 「hub 默认是 HTTP（内网 / VPN），`network_security.xml` 放开了明文流量；不要把 hub 暴露到公网」 | 改成明文只给内网 / VPN、公网走 TLS + 钉扎；说明为什么钉扎只能在代码里做（6.2） |
-| `docs/android.md:84-85` | USB `adb reverse` 联调用 `http://127.0.0.1:18660` | 回环明文继续允许，保留 |
-| `docs/intents.md:51`、`:56` | 「手机要在公司网络或 VPN 上」「hub 是公司内网的明文 HTTP」 | 改成通用说法；`.background` 模式的理由（网络不可达不拉起 App）仍然成立 |
-| `docs/ios.md:306`、`:318-320`、`:343` | 配对信息存 Keychain；手表配对；`jarvis://pair` 链接 | 补：候选地址 / 指纹 / hub_id 也在配对信息里；手表 token 改存 Keychain；链接配对要确认 |
-| `docs/testing.md:50`、`scripts/mock/mock_hub.py:6`、各 UI 测试 | `-pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1…&token=mock"` | 新规则必须继续允许「回环 + 明文 + token」，否则 UI 测试全挂 |
+| `README.md:53` | Preparation table: "Phone can reach port 18660 (same network or VPN)" | "Phone can reach the hub: same network, VPN, or direct public connection (IPv6 preferred, allow TLS port)." |
+| `README.md:68`, `:71` | Step 3: enter the address the phone uses; step 5: scan | Explain `public_url` / `advertise` / `tls` in step 3; step 5's QR is a one-time code valid 5 minutes, old Apps use `--legacy`. |
+| `README.md:79` | "Hub defaults to HTTP; private network or VPN only, never expose directly to the Internet." | TLS (self-signed + App fingerprint pinning) may be exposed publicly; plaintext only private / VPN sources, public plaintext rejected, authentication failures rate-limited. |
+| `docs/config.md:22` | Same preparation table as README | Same change |
+| `docs/config.md:35`, `:88`, `config.example.json:27` | Build `hub.url` is `http://…:18660` | Used by `sim.sh` to pair simulators; keep private plaintext, add explanation. |
+| `docs/config.md:50`, `:118-119`, `:138` | hub.json `listen`, `public_url` examples are `http://`; first-run advertised URL `http://<hostname>:18660` | Add `tls`, `advertise`, `advertise_ipv6`, `advertise_lan`, `trusted_cidrs` to examples / field table ("Hub runtime configuration" at `:114`). |
+| `docs/server.md:43` | "Listens on `:18660`" | Add TLS port, host / ONT firewall IPv6 allowances, TUN reply-routing issue. |
+| `docs/server.md:71`, `:77` | hub.json fields; pairing prints address, token, QR `jarvis://pair?url=…&token=…` | Add fields; pairing-code format and `--legacy`. |
+| `docs/server.md:94` | `curl -H "Authorization: Bearer $TOKEN" http://<hub address>:18660/…` | Add https: `curl --pinnedpubkey 'sha256//<pin>' -k https://…` (`-k` skips CA validation, pinning still applies). |
+| `docs/server.md`, "Operations" (around `:90-100`) | Log failures / slow requests only, no query/body/token | Add rate limits, bans, WS failure-log format, source redaction. |
+| `docs/protocol.md:3` | "Hub listens on `:18660` by default" | Add TLS port |
+| `docs/protocol.md:5-21` | `Bearer`, WS `?token=`, health `{"ok":true,"version":"..."}` | Define new `?token=` scope (2.5); health `features` (already implemented), `hub_id`; new pairing-code / certificate-pinning / candidate-address subsections; rate-limit `429`. |
+| `docs/protocol.md:154-190` | WS hello only `server_version, client_id`; ping / pong documented but absent from code | Add hello `features`, `hub_id`, `endpoints`, `tls_pin`; `endpoints` event and `client_hello`; remove or implement ping / pong (hub-changes.md 3.8 / 4.12). |
+| `docs/architecture.md:17-18`, `docs/architecture.svg:3` | Diagram: "HTTPS/WS (Bearer token)", "hub machine :18660" | **Already inaccurate** (actually plaintext HTTP). Use "HTTPS (self-signed + pinning, public) / HTTP (private network, VPN)". |
+| `docs/android.md:13` | Pairing `jarvis://pair?url=…&token=…` | New format |
+| `docs/android.md:47` | HTTP private / VPN default, `network_security.xml` allows plaintext; do not expose publicly | Private / VPN plaintext only, public TLS + pinning; explain why code-based pinning is required (6.2). |
+| `docs/android.md:84-85` | USB `adb reverse` uses `http://127.0.0.1:18660` | Keep loopback plaintext allowed |
+| `docs/intents.md:51`, `:56` | "Phone must be on the company network or VPN"; "hub uses plaintext HTTP on the company intranet" | Generalize; `.background` rationale still holds (do not launch the App when networking is unreachable). |
+| `docs/ios.md:306`, `:318-320`, `:343` | Keychain pairing data, Watch pairing, `jarvis://pair` links | Include candidates / fingerprint / hub_id; Watch token to Keychain; link-pairing confirmation. |
+| `docs/testing.md:50`, `scripts/mock/mock_hub.py:6`, UI tests | `-pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1…&token=mock"` | Continue allowing loopback + plaintext + token, or all UI tests fail. |
 
-### 7.2 代码里的同类文案 / 注释 [事实]
+### 7.2 Equivalent UI text / comments in code [Fact]
 
-- `ios/project.yml:84`（注释「hub 通常在私有网络里走明文 HTTP」）、`android/app/src/main/res/xml/network_security.xml:2`（同义注释）。
-- 「同一个网络或 VPN」：`ios/Jarvis/Intents/IntentSupport.swift:123`、`:127`；`ios/Jarvis/Views/Settings/SettingsView.swift:424`；`android/app/src/main/java/jarvis/android/ui/PairScreen.kt:72`。
-- 「确认手机能访问 hub」：`ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:28`。
-- Android 手动输入 placeholder `http://<hub 地址>:18660`：`PairScreen.kt:110`。
+- `ios/project.yml:84` (comment "hub usually uses plaintext HTTP on a private network"), `android/app/src/main/res/xml/network_security.xml:2` (equivalent comment).
+- "Same network or VPN": `ios/Jarvis/Intents/IntentSupport.swift:123`, `:127`; `ios/Jarvis/Views/Settings/SettingsView.swift:424`; `android/app/src/main/java/jarvis/android/ui/PairScreen.kt:72`.
+- "Check that your phone can reach the hub": `ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:28`.
+- Android manual placeholder `http://<hub address>:18660`: `PairScreen.kt:110`.
 
-### 7.3 新增 [判断]
+### 7.3 Additions [Assessment]
 
-- 建议新文档 `docs/network.md`（公网直连）：TLS 端口和证书文件、指纹怎么看 / 怎么换、IPv6 放行（hub 防火墙、光猫 / 路由器）、DDNS 兜底、TUN 代理的回包问题、反向代理的来源地址问题、限流参数。写进 CLAUDE.md 文档索引。
-- CLAUDE.md「约定」记一条用户要求（2026-10-30：手机经公网直连 hub 要能通，优先探测和使用 IPv6；VPN 用户自己配），按「随时沉淀经验」的规则。
-- `docs/redesign/ux.md` 3.7 第 3 点「明文 HTTP 地址：提示『HTTP 不加密，只在内网或 VPN 里用』」和 `docs/redesign/android.md` 5.1「明文 HTTP」与本方案一致；ux.md 3.7 第 5 点、hub-changes.md 4.1 的「一次性配对码」从「可选」升为公网直连的前提。
+- New `docs/network.md` for direct public connectivity: TLS port / certificate files, checking / changing fingerprints, IPv6 allowances (hub firewall, ONT / router), DDNS fallback, TUN reply-routing issues, reverse-proxy source addresses, rate-limit settings. Add to CLAUDE.md index.
+- Record the user requirement in CLAUDE.md conventions (2026-10-30: phone must connect directly to the hub over the Internet, probing and preferring IPv6; user manages VPN), following the rule to capture lessons as they arise.
+- `docs/redesign/ux.md` 3.7 item 3 ("HTTP is unencrypted, use only on private networks or VPN") and `docs/redesign/android.md` 5.1 ("Plaintext HTTP") align with this plan. One-time pairing codes in ux.md 3.7 item 5 / hub-changes.md 4.1 become a prerequisite for public connectivity, not optional.
 
-## 8. 兼容旧客户端要注意什么
+## 8. Old-client compatibility concerns
 
-1. **旧 App 连不上自签 TLS** [事实 + 判断]：iOS 的三个 URLSession 都没有 delegate（`ios/Shared/APIClient.swift:89`、`:93-98`，`ios/Shared/LiveConnection.swift:174`），Android 用系统 CA（`network_security.xml` 没有 trust-anchors）。所以明文 listener 必须留着给内网 / VPN 的旧设备，`public_url` 的语义（单个、旧 App 能用的地址）也别改。
-2. **二维码格式**：旧 iOS 的 `ServerConfig(pairURL:)` 和旧 Android 的 `PairingStore.parse()` 都**要求有 `token=`**（`APIClient.swift:12`、`Pairing.kt:28`）。只带 `code=` 的新二维码，旧 iOS 扫了没反应，旧 Android 提示「不是 Persona 的配对二维码」。所以 `hub pair --legacy` 要保留老格式；新 App 也要继续认老格式（`mock_hub.py`、`sim.sh`、所有 UI 测试都用 `http://127.0.0.1…&token=mock`）。
-3. **多个 `url=`**：旧客户端取第一个（iOS `queryItems.first`，`APIClient.swift:11`；Android `getQueryParameter` 也是第一个）。如果想让旧 App 也能扫新码，第一个 `url=` 必须是它能用的明文内网地址，而且还得带 `token=`（主 token），这就和「二维码里不放主 token」冲突。结论：新旧二维码分开。
-4. **已配对的新版 App 怎么升级到 TLS**：hello 里下发 `tls_pin` + `endpoints`，App 在现有的已鉴权通道上记下指纹。这是在内网明文 / VPN 上「首次信任」（同一局域网里的攻击者能塞假指纹）；更严格的做法是要求重新扫码。**要拍板**。
-5. **WS 新字段 / 新事件**：旧 iOS 对未知 `type` 返回 nil 丢掉（`LiveConnection.swift:130`），旧 Android 的 `when` 没有 else（`data/Hub.kt:145-211`），都能忽略。但 iOS 是先把整条消息解成 `Envelope`（`LiveConnection.swift:42-85`）：**新字段名不能和里面已有的键撞名且类型不同**（`error`、`id`、`state`、`data`、`name`、`status`、`text` 等都是字符串），否则整条消息解码失败、被丢掉（比如 hello 里加一个对象型的 `error` 就会把 hello 弄丢）。
-6. **`client_hello`**：旧 hub 的 `onClientMessage` 对未知类型什么都不做（`http.go:672-730` 的 switch 没有 default），新客户端要靠 `features` 里有没有 `client_heartbeat` 判断协商是否生效，不能等回执。
-7. **手表**：手机经 WatchConnectivity 推整份 `ServerConfig` JSON（`ios/Shared/WatchSync.swift:35-45`），旧手表 App 解码时忽略新字段、继续用 `url`。如果新手机把 `url` 换成了自签 TLS 地址，旧手表就连不上。手表和 iPhone App 一般随同一个 TestFlight 构建一起更新，但会有时间差：`url` 最好保持「旧代码也能用的地址」，新地址放新字段。
-8. **限流误伤** [判断]：两端的 WS 在 401 时都会无限重连（iOS 退避到 20 秒封顶，`LiveConnection.swift:340-349`；Android 到 30 秒，`data/Hub.kt:76-86`），没有「401 就停」的逻辑（只有 Intents 把 401/403 说成「配对已失效」，`ios/Jarvis/Intents/IntentSupport.swift:112-113`）。按这两个退避上限推算，一台被撤销的设备每小时会失败上百次（**未实测**，仅由 20 秒 / 30 秒的退避上限推断）。
-   如果限流按 IPv4 /32 计，同一个家庭 NAT 后面的其他设备会被一起封。建议：内网 / VPN 来源不计；公网按「来源前缀 + token 哈希」计；客户端收到 401 停止自动重连、提示重新配对（新版本两端都要改）。
-9. **`?token=`**：当前两端都不用（2.5），收紧安全。更早的 App 构建有没有用过**没查**（只看了当前 master）。
-10. **调试链路**：`scripts/sim.sh:16-19` 从 hub.json 读主 token、用配置里的 `hub.url` 配对模拟器；`docs/android.md:84-85` 的 `adb reverse` 用 `http://127.0.0.1:18660`。新客户端规则要允许「回环 + 明文 + token」，hub 侧回环来源也必须算本地。
-11. **推送、node（SSH）**：不受影响。APNs 不经过 hub 的监听端口；node 走 SSH 标准输入输出。
+1. **Old Apps cannot connect to self-signed TLS** [Fact + Assessment]: iOS's three URLSessions have no delegates (`ios/Shared/APIClient.swift:89`, `:93-98`, `ios/Shared/LiveConnection.swift:174`); Android uses system CAs (no trust-anchors in `network_security.xml`). Keep plaintext for private / VPN devices, and retain `public_url` as one old-App-compatible address.
+2. **QR format**: old iOS `ServerConfig(pairURL:)` and Android `PairingStore.parse()` **require `token=`** (`APIClient.swift:12`, `Pairing.kt:28`). Code-only QR produces no response on old iOS and "Not a Persona pairing QR code" on old Android. Keep old format with `hub pair --legacy`; new Apps must also recognize it (`mock_hub.py`, `sim.sh`, all UI tests use `http://127.0.0.1…&token=mock`).
+3. **Multiple `url=`**: old clients take the first (iOS `queryItems.first`, `APIClient.swift:11`; Android `getQueryParameter`). Old-App compatibility would require first URL to be private plaintext and include `token=` (main token), conflicting with removing main tokens from QR. Conclusion: separate old / new QR formats.
+4. **Upgrading already-paired new Apps to TLS**: send `tls_pin` + `endpoints` in hello; save the fingerprint over the existing authenticated channel. This is TOFU on private plaintext / VPN (same-LAN attackers can inject fake fingerprints). Stricter approach: re-scan. **Decision required.**
+5. **New WS fields / events**: old iOS drops unknown types by returning nil (`LiveConnection.swift:130`); old Android `when` has no else (`data/Hub.kt:145-211`), so both ignore them. But iOS first decodes the whole `Envelope` (`LiveConnection.swift:42-85`). **Do not add differently typed fields whose names collide with existing keys** (`error`, `id`, `state`, `data`, `name`, `status`, `text`, etc. are strings), or the whole message fails decoding and is dropped (an object-valued `error` in hello would lose hello).
+6. **`client_hello`**: old hubs ignore unknown types (`onClientMessage` switch without default, `http.go:672-730`). New clients use `client_heartbeat` in `features` to determine negotiation support, not wait for a receipt.
+7. **Watch**: WatchConnectivity sends whole `ServerConfig` JSON (`ios/Shared/WatchSync.swift:35-45`); old Watch decoders ignore new fields and keep using `url`. If a new phone replaces `url` with self-signed TLS, old Watches fail. Watch / iPhone Apps generally update through the same TestFlight build, but timing differs: keep `url` usable by old code and put new addresses in new fields.
+8. **Rate-limit collateral damage** [Assessment]: both WS clients retry indefinitely on 401 (iOS max backoff 20 seconds, `LiveConnection.swift:340-349`; Android 30 seconds, `data/Hub.kt:76-86`), no stop-on-401 logic (only Intents says pairing expired for 401/403, `ios/Jarvis/Intents/IntentSupport.swift:112-113`). Those backoff limits imply hundreds of failures per hour from one revoked device (**not measured**, inferred only from 20 / 30 seconds).
+   IPv4 /32 limits would ban other devices behind the same home NAT too. Exclude private / VPN sources, key public limits by "source prefix + token hash", and stop client auto-reconnection on 401 with a re-pair prompt (both new clients must change).
+9. **`?token=`**: current clients do not use it (2.5), so restricting is safe. Earlier App builds **not checked** (current master only).
+10. **Debug paths**: `scripts/sim.sh:16-19` reads the main token from hub.json and pairs with configured `hub.url`; `adb reverse` in `docs/android.md:84-85` uses `http://127.0.0.1:18660`. New clients must allow loopback + plaintext + token, and the hub must treat loopback as local.
+11. **Push, node (SSH)**: unaffected. APNs does not traverse the hub listener; nodes use SSH stdin / stdout.
 
-## 9. 没查清 / 待确认
+## 9. Unresolved / awaiting confirmation
 
-- **未实测**（按用户规则，下面都不能给数字）：hub 机器上 `:18660` 是否真的双栈（`ss -ltnp`）；手机蜂窝网络能否经 IPv6 直达 hub；hub 机器 TUN 代理对入站连接回包的影响；光猫 / 路由器的入站 IPv6 策略；运营商 / NAT 的 TCP 空闲超时；不同心跳间隔的耗电。
-- **待真机验证**：iOS 在 ATS 开启（或保留 `NSAllowsArbitraryLoads`）时，自定义信任评估接受自签证书的具体限制；watchOS 能否直连公网 IPv6 的 hub（手表经手机代理 / Wi-Fi / 蜂窝时行为不同）；Android 本地网络权限对「同一局域网内的全局 IPv6 地址」算不算本地。
-- **没查**：更早的 App 构建是否用过 `?token=`；`mail` 子路由、飞书网关代理、Gmail OAuth 回调在公网暴露后有没有额外风险（它们都在 `h.auth` 之后，OAuth state 已加密自包含，`docs/mail.md:52`，但没逐个审）；hub ↔ node（SSH）不在本次范围。
-- **设计上要拍板**：两个端口还是同端口嗅探（4a）；已配对设备是否允许在内网通道上「首次信任」指纹（8.4）；`/api/v1/health` 要不要继续公开版本号和 features（3.1）；开公网后主 token 是否限制为只接受回环 / 内网来源（4c）。
-- **既有资料的行号已漂移**：`docs/redesign/research/jarvis-protocol.md:26` 引用的 `config.go:144-147`，现在是 `config.go:148-151`。
+- **Not measured** (under user rules, no numbers can be given for these): whether `:18660` is actually dual-stack on the hub (`ss -ltnp`), phone-cellular IPv6 reachability, TUN effects on inbound replies, ONT / router inbound IPv6 policies, carrier / NAT TCP idle timeouts, power use at different heartbeat intervals.
+- **Real-device verification**: exact iOS restrictions on accepting self-signed certificates through custom trust with ATS on or `NSAllowsArbitraryLoads` retained; watchOS public IPv6 connectivity (phone proxy / Wi-Fi / cellular differ); Android local-network permission classification of global IPv6 on the same LAN.
+- **Not checked**: `?token=` use in earlier builds, added public-exposure risks for `mail` subroutes, Lark gateway proxy, Gmail OAuth callback (all behind `h.auth`, OAuth state encrypted and self-contained, `docs/mail.md:52`, but not individually audited). hub ↔ node SSH is outside scope.
+- **Design decisions required**: two ports vs same-port sniffing (4a), TOFU fingerprint trust over existing private channels for paired devices (8.4), retaining public version / features in `/api/v1/health` (3.1), limiting main tokens to loopback / private sources in public mode (4c).
+- **Existing source line references have drifted**: `config.go:144-147` cited by `docs/redesign/research/jarvis-protocol.md:26` is now `config.go:148-151`.

@@ -1,56 +1,56 @@
-# Siri 深度集成（问 Persona、个人 Agent、控制中心）
+# Deeper Siri integration (Ask Persona, personal Agents, Control Center)
 
-在 `docs/intents.md`（问 Claude / 状态 / 批准第一个 / 打开会话）之上，加了助手和个人 Agent 的 Siri 入口。所有 intent 都在后台直连 hub：
-每次现读 `Keychain.serverConfig`（配对时存的 hub 地址 + 设备 token），App 不用在前台、也不用 WebSocket。
+Building on `docs/intents.md` (Ask Claude / status / approve first / open session), this adds Siri entry points for the assistant and personal Agents. Every intent connects directly to the hub in the background:
+it reads `Keychain.serverConfig` afresh each time (the hub address + device token saved during pairing). The App does not need to be in the foreground, and no WebSocket is required.
 
-## Intent
+## Intents
 
-| Intent | 标题 | 作用 | 运行模式 |
+| Intent | Title | Purpose | Run mode |
 | --- | --- | --- | --- |
-| `AskJarvisIntent` | 问 Persona | 把问题发进助手的主对话（`GET /api/v1/assistant` 的 `main`；没有主对话时 `POST /api/v1/assistant/conversations` 带 `main:true` 新开），轮询 `items?after_seq=` 最多约 24 秒，等会话不再 working 后把 assistant 的文本读出来，并显示一张卡片（问题 + 全文）。答得慢就说「已发给 Persona，它还在想」 | 后台 |
-| `TalkToPersonaIntent` | 跟 Persona 聊聊 | 已连 CarPlay 时开始双工语音对话（`docs/carplay.md`）；没连时说明「先连上 CarPlay」，不开始 | 后台 |
-| `AgentTaskIntent` | 让 Agent 去做 | `POST /api/v1/agents/sessions/{id}/messages`，`clientId` 每次新 UUID（hub 去重 + outbox）。会话用 `PersonalAgentEntity` 选；不选时用列表里第一个 `canSend` 的 | 后台 |
-| `AgentsStatusIntent` | 个人 Agent 未读 | `GET /api/v1/agents/sessions`：几个会话共几条未读，列前三个；没有未读就报最近的三个 | 后台 |
-| `AddTodoIntent` | 新建待办 | `POST /api/v1/todos`（`{"title", "notes"?}`，见 `docs/todos.md`），建到 App 当前选中的 hub 组（`hub.group`，和待办页一致；没有这组时用第一组）。读出「已记下待办：「…」」，返回值是标题，快捷指令里可以接着用；旧 hub 没有待办接口（404）时说先更新 hub | 后台 |
-| `OpenPersonalAgentIntent` | 打开个人 Agent | Spotlight 里点个人 Agent 会话时打开 App 的 Agents tab | 前台 |
-| `OpenJarvisAssistantIntent` / `OpenJarvisAgentsIntent` | 打开 Persona 助手 / Agents | 控制中心、锁屏、操作按钮用的控件背后的 intent | 前台 |
+| `AskJarvisIntent` | Ask Persona | Sends a question to the assistant's main chat (`main` from `GET /api/v1/assistant`; if none exists, opens one with `POST /api/v1/assistant/conversations` and `main:true`). Polls `items?after_seq=` for up to about 24 seconds, waits until the session is no longer working, then reads the assistant's text aloud and displays a card (question + full answer). If the answer is slow, says "Sent to Persona. It's still thinking." | Background |
+| `TalkToPersonaIntent` | Talk to Persona | Starts a duplex voice chat when CarPlay is connected (`docs/carplay.md`). Otherwise asks the user to connect CarPlay first and does not start. | Background |
+| `AgentTaskIntent` | Give an Agent a Task | `POST /api/v1/agents/sessions/{id}/messages`, with a new UUID for `clientId` each time (hub deduplication + outbox). Choose a session through `PersonalAgentEntity`; if none is selected, use the first in the list with `canSend`. | Background |
+| `AgentsStatusIntent` | Personal Agent Unread | `GET /api/v1/agents/sessions`: reports how many sessions have how many unread messages, listing the first three; if none are unread, reports the three most recent. | Background |
+| `AddTodoIntent` | New To-Do | `POST /api/v1/todos` (`{"title", "notes"?}`, see `docs/todos.md`), in the App's currently selected hub group (`hub.group`, the same as the To-dos page; falls back to the first group if it is missing). Reads "To-do saved: '…'" and returns the title for use in subsequent Shortcuts actions. If an old hub lacks the to-do endpoint (404), asks the user to update the hub first. | Background |
+| `OpenPersonalAgentIntent` | Open Personal Agent | Opens the App's Agents tab when a personal Agent session is tapped in Spotlight. | Foreground |
+| `OpenJarvisAssistantIntent` / `OpenJarvisAgentsIntent` | Open Persona Assistant / Agents | Intents behind the controls for Control Center, the Lock Screen, and the Action Button. | Foreground |
 
-`PersonalAgentEntity` 是 `IndexedEntity`：Agents 页每次加载完就 `CSSearchableIndex.default().indexAppEntities(...)`，
-并调用 `JarvisShortcuts.updateAppShortcutParameters()`，于是 Spotlight 能搜到会话，带会话名的 Siri 短语也能匹配。
+`PersonalAgentEntity` is an `IndexedEntity`: whenever the Agents page finishes loading, it calls `CSSearchableIndex.default().indexAppEntities(...)`
+and `JarvisShortcuts.updateAppShortcutParameters()`, so Spotlight can find sessions and Siri phrases containing session names can match them.
 
-## 短语（`JarvisShortcuts`，装好就能用，不用手动设置）
+## Phrases (`JarvisShortcuts`, available immediately after installation, no manual setup)
 
-- 问 Persona：「问 Persona」「用 Persona 问一下」「Ask Persona」「Ask Persona a question」→ Siri 再问「要问 Persona 什么？」
-- 让 Agent 去做：「用 Persona 让 Agent 去做」「让 Persona 的 <会话名> 去做」「Persona 交给 Agent」「Have Persona agent do something」「Send a task to <会话名> with Persona」
-- 个人 Agent 未读：「Persona 个人 Agent 未读」「Persona Agent 有什么新消息」「Check Persona agents」
-- 新建待办：「用 Persona 新建待办」「Persona 记个待办」「Persona 加个待办」「Add a to-do in Persona」「New Persona to-do」→ Siri 再问「要记什么待办？」；说明只在快捷指令 App 里填
-- 原有的问 Claude / 状态各加了一条英文短语。
+- Ask Persona: "问 Persona" (Ask Persona), "用 Persona 问一下" (Ask with Persona), "Ask Persona", "Ask Persona a question" → Siri then asks "What do you want to ask Persona?"
+- Give an Agent a Task: "用 Persona 让 Agent 去做" (Have Persona give an Agent a task), "让 Persona 的 <会话名> 去做" (Have Persona's <session name> do it), "Persona 交给 Agent" (Persona, hand it to an Agent), "Have Persona agent do something", "Send a task to <session name> with Persona"
+- Personal Agent Unread: "Persona 个人 Agent 未读" (Persona personal Agent unread), "Persona Agent 有什么新消息" (What's new from Persona Agents), "Check Persona agents"
+- New To-Do: "用 Persona 新建待办" (Create a to-do with Persona), "Persona 记个待办" (Persona, note a to-do), "Persona 加个待办" (Persona, add a to-do), "Add a to-do in Persona", "New Persona to-do" → Siri then asks "What's the to-do?"; notes can only be entered in the Shortcuts App.
+- The existing Ask Claude / status actions each gain an English phrase.
 
-`String` 参数不能出现在短语里（见 `docs/intents.md`），所以问题 / 任务内容都是说完短语后 Siri 追问。
+`String` parameters cannot appear in phrases (see `docs/intents.md`), so Siri asks for the question / task contents after the invocation phrase.
 
-## 操作按钮、控制中心
+## Action Button and Control Center
 
-- 操作按钮（Action Button）：设置 › 操作按钮 › 快捷指令，直接选「问 Persona」「让 Agent 去做」或「新建待办」（App Shortcuts 自动出现）。
-- 控制中心 / 锁屏：`JarvisWidgets` 扩展里加了两个 `ControlWidget`（`AskJarvisControl`、`JarvisAgentsControl`），打开 App 的助手页 / Agents 页。
-  控件的 intent 放在 `LiveActivity/PersonaControlIntents.swift`（App 和扩展都编译，`perform` 只在 App 里改 `AppModel`）。
+- Action Button: **Settings › Action Button › Shortcut**; select "Ask Persona", "Give an Agent a Task", or "New To-Do" directly (App Shortcuts appear automatically).
+- Control Center / Lock Screen: the `JarvisWidgets` extension adds two `ControlWidget`s (`AskJarvisControl`, `JarvisAgentsControl`) that open the App's assistant page / Agents page.
+  Their intents live in `LiveActivity/PersonaControlIntents.swift` (compiled into both App and extension; `perform` changes `AppModel` only in the App).
 
-## 没做 / 推迟
+## Not implemented / deferred
 
-- `@AppIntent(schema: .assistant...)` 这类 Apple Intelligence 的 assistant schema：没有贴合「问一个私有助手」的 schema（现有的是 mail / photos / books 等领域），没接。
-- 点 Spotlight 里的个人 Agent 只切到 Agents tab，不直接推到那段会话（ChatsView 的导航栈还没有外部入口）。
-- 问 Persona 的回答有 24 秒上限：长任务读不出全文，去 App 主对话看。
-- 车里的长对话见 `docs/carplay.md`（Siri 只当入口，双工语音）。
-- 控件只能打开 App；在控件里直接发问需要 App Intents 的文本输入，控件不支持。
+- Apple Intelligence assistant schemas such as `@AppIntent(schema: .assistant...)`: none fits "ask a private assistant" (existing schemas cover domains such as mail / photos / books), so they are not integrated.
+- Tapping a personal Agent in Spotlight switches only to the Agents tab, not directly to that session (ChatsView's navigation stack has no external entry point yet).
+- Ask Persona has a 24-second answer limit: long tasks cannot be read in full; view them in the App's main chat.
+- For long chats in the car, see `docs/carplay.md` (Siri is only the entry point; the chat uses duplex voice).
+- Controls can only open the App. Asking directly from a control would require App Intents text input, which controls do not support.
 
-## 在手机上验证
+## Verification on a phone
 
-1. TestFlight / Xcode 装上后先打开一次 App（配好对），再进一次 Agents › 个人 Agent，让会话被索引。
-2. 对 Siri 说「问 Persona」，说一个问题：应读出回答，卡片显示全文；App 里主对话多了这一轮。
-3. 说「用 Persona 让 Agent 去做」，选会话、说任务：应回「已交给「…」」；飞书网关里那个会话收到消息。同一任务不会重复（clientId）。
-4. 说「Persona Agent 有什么新消息」。
-5. 说「用 Persona 新建待办」，说一个标题：应回「已记下待办：「…」」，App 的待办页多了这一条。
-6. 快捷指令 App › Persona 能看到这些动作；操作按钮里能选；控制中心 › 添加控件 › Persona 有两个控件。
-7. Spotlight 搜个人 Agent 会话名能搜到。
+1. After installing through TestFlight / Xcode, open the App once (and pair it), then visit **Agents › Personal Agents** once so sessions are indexed.
+2. Say "Ask Persona" to Siri, then ask a question: it should read the answer and show the full text on a card; the App's main chat should contain this turn.
+3. Say "Have Persona agent do something", choose a session, and describe the task: it should reply "Sent to '…'"; that session in the Lark gateway should receive the message. The same task must not be duplicated (clientId).
+4. Say "Check Persona agents".
+5. Say "Add a to-do in Persona", then give a title: it should reply "To-do saved: '…'", and the App's To-dos page should contain the new entry.
+6. These actions should appear under **Shortcuts App › Persona** and be selectable for the Action Button; **Control Center › Add a Control › Persona** should contain two controls.
+7. Searching for a personal Agent's session name in Spotlight should find it.
 
-单元测试：`PersonaTests/SiriIntentsTests.swift`（回答提取、轮询结束判断、读出文案、会话选择、未读文案）、`PersonaTests/IntentsTests.swift`（新建待办的文案、旧 hub、读的 hub 组）。
-编译后 `Persona.app/Metadata.appintents/extract.actionsdata` 里能看到新的 action 和 autoShortcut。
+Unit tests: `PersonaTests/SiriIntentsTests.swift` (answer extraction, polling completion, spoken text, session selection, unread text), `PersonaTests/IntentsTests.swift` (new to-do text, old hubs, the hub group read).
+After compilation, `Persona.app/Metadata.appintents/extract.actionsdata` should contain the new actions and autoShortcuts.
