@@ -138,3 +138,13 @@ There is no gate on the bus any more: every manager may call every method and pu
 - Both have to be connected (`503 assistant_offline`). `404 no_source`: `from` does not have it; `409 source_exists` / `source_kind`: `id` has it already, or it is a kind that cannot move yet. When the import worked but the release did not, `502 source_not_released`: both have it; move it again or delete it at `from`.
 
 **Revoking a manager** (`DELETE /api/v1/managers/{id}`): its machines go back to the carrier (`assistant`), what the hub kept of it goes. Its sources live in its own database, which the hub cannot reach once it is gone: move them away first (`POST /api/v1/managers/assistant/sources`); the app should say so before it removes one.
+
+## Settings › Managers in the apps
+
+Every client has the same page (web: `docs/web.md`, Android: `docs/android.md`). On iOS and the Mac it is the **Managers** row in Settings' server section (`SettingsPage.managers`, `Persona/Views/Settings/ManagersView.swift`; logic and words in `ManagersModel.swift`, tests `ManagersModelTests`):
+
+- The list shows each manager's name, a Default chip, a status dot with Online / Offline · last synced … / Installing · code expires in n min, and where it runs (host · OS · the hub's own / service / container / standalone).
+- A manager's page (`SettingsPage.manager(id)`) has its status, where it runs, version, and when it connected or last synced. Its actions are Rename, Make Default, Install Elsewhere (it warns first that the old install stops; a manager still installing gets New Install Code instead), and Delete (confirmed; Cancel Install while installing). Delete is disabled for the hub's own manager and for the default one, and the footer says why.
+- New Manager asks for a name, then opens the install code sheet: the code with Copy, an m:ss countdown, and New Install Code once it runs out. When the hub sends `commands`, the sheet adds As a Service and With Docker, each with Copy. Without them it shows the code and a short note.
+- The socket asks for feature `managers` in its URL's `?features=` (`LiveConnection.queryItems`; the Apple apps' `client_hello` only carries the locale), and each `{"type":"managers"}` push moves `AppModel.managersRevision`, which makes the open page reread the roster. A hub without the roster (404 without a code) gets a line saying to update the hub.
+- DEBUG launch arguments for screenshots: `-tab settings -openManagers YES`, `-openManagerPage <id>`, and `-showManagerCode YES` (makes a manager on the fake hub and opens its code sheet). The fake hub (`scripts/mock/mock_hub.py`) serves the roster; `MOCK_MANAGER_COMMANDS=1` adds the commands.

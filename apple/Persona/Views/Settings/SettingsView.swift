@@ -185,6 +185,12 @@ struct SettingsView: View {
                             }
                             .settingsListRow(SettingsPage.hub)
                             .accessibilityIdentifier("settings.hub")
+                            // The hub's managers, each a whole assistant (docs/managers.md).
+                            NavigationLink(value: SettingsPage.managers) {
+                                SettingsRow(title: String(localized: "Managers"), symbol: Theme.Icon.managers, tint: Theme.ai)
+                            }
+                            .settingsListRow(SettingsPage.managers)
+                            .accessibilityIdentifier("settings.managers")
                             Button { showPair = true } label: { SettingsRow(title: String(localized: "Pair Again"), symbol: "qrcode.viewfinder", tint: Theme.accent) }
                                 .modifier(SettingsButtonLook())
                             Button(role: .destructive) { confirmUnpair = true } label: {
@@ -254,6 +260,7 @@ struct SettingsView: View {
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
             // memoryEdit|about`, `-openStorage YES` (Storage), `-openNotificationSettings YES` (Notifications), `-openMachines YES` (Machines;
             // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (Devices), `-openHubUpdate YES` (hub),
+            // `-openManagers YES` (Managers; `-openManagerPage <id>` one of them, `-showManagerCode YES` a new one's install code),
             // `-openSkills YES` (Skills), `-openExtensions YES` (Extensions; `-openExtension <id>` one of them; the old `-openPlugin…` names too), `-openChannels YES`
             // (Channels; `-openChannel <id>` one of them).
             .onAppear(perform: openDebugPage)
@@ -322,6 +329,11 @@ struct SettingsView: View {
             if d.bool(forKey: "openSSHTunnel"), let first = model.registry.hubs.first { p.append(SettingsPage.sshTunnel(first.id)) }
         }
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
+        else if d.bool(forKey: "openManagers") || d.string(forKey: "openManagerPage") != nil || d.bool(forKey: "showManagerCode") {
+            // Settings › Managers (› one by its id; `-showManagerCode YES` makes one and opens its code sheet)
+            p.append(SettingsPage.managers)
+            if let id = d.string(forKey: "openManagerPage") { p.append(SettingsPage.manager(id)) }
+        }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
         else if flag("openExtensions") || str("openExtension") != nil { // Settings › Extensions (› one (› a page of it))
             p.append(SettingsPage.plugins)
@@ -444,6 +456,9 @@ enum SettingsPage: Hashable {
     /// Settings › hub › SSH Tunnel of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
     case sshTunnel(String)
     case inAppTunnel(String)
+    /// Settings › Managers, and one manager by its id (docs/managers.md).
+    case managers
+    case manager(String)
 
 }
 
@@ -494,6 +509,8 @@ private struct SettingsDestinations: ViewModifier {
         case .hubs: HubsView()
         case .sshTunnel(let id): HubSSHTunnelPage(hubID: id)
         case .inAppTunnel(let id): HubInAppTunnelPage(hubID: id)
+        case .managers: ManagersView()
+        case .manager(let id): ManagerDetailView(id: id)
         case .hub: HubSettingsPage()
         case .skills: SkillsPage()
         case .plugins: ExtensionsView()

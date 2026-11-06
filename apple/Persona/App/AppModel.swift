@@ -976,6 +976,9 @@ final class AppModel {
         guard let hello = hub?.hello, hello != HubHello() else { return nil }
         return hello
     }
+    /// Moves on each `managers` push from the hub-level group's hub: its roster changed (docs/managers.md).
+    var managersRevision = 0
+
     /// The hub's version and its updating itself: fetched on connect, then the `hub_update` events.
     var hubUpdate: HubUpdateStatus? {
         didSet {
@@ -1453,6 +1456,9 @@ final class AppModel {
         case .personas:
             // The new tier's package is downloaded whole before the face changes (PersonaStore.load).
             if isHub { Task { await personas.refresh(api) } }
+        case .managers:
+            // Settings › Managers reads the roster again (ManagersView watches this).
+            if isHub { managersRevision += 1 }
         case .assistantFeed(let item):
             if isHub { TasksStore.shared.received(item, group: group) }
         case .assistantView(let view):
@@ -1552,6 +1558,7 @@ final class AppModel {
         case .inbox: "inbox"
         case .todos: "todos"
         case .personas: "personas"
+        case .managers: "managers"
         case .assistantFeed: "assistant_feed"
         case .assistantView: "assistant_view"
         case .assistantViewAction: "assistant_view_action"

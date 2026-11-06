@@ -58,6 +58,9 @@ nonisolated enum ServerEvent: Sendable {
     case todos
     /// The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/persona.md): list them again.
     case personas
+    /// The hub's roster of managers changed (docs/managers.md): Settings › Managers reads it again. Sent only to a
+    /// socket that asked for feature `managers` (`queryItems`).
+    case managers
     case assistantFeed(FeedItem)
     case assistantView(ExtensionAssistantView)
     case assistantViewAction(conversation: String, action: ExtensionViewAction)
@@ -217,6 +220,7 @@ nonisolated enum ServerEvent: Sendable {
         case "inbox": return .inbox
         case "todos": return .todos
         case "personas": return .personas
+        case "managers": return .managers
         case "assistant_feed": return e.item.map { .assistantFeed($0) }
         case "assistant_view":
             guard let view = e.view, !view.id.isEmpty, view.version > 0,
@@ -278,7 +282,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged, .extensionOperation,
+             .personas, .managers, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged, .extensionOperation,
              .extensionAuth: return self
         }
     }
@@ -498,10 +502,10 @@ final class LiveConnection {
     }
 
     /// The socket URL's query: session lists as deltas (an older hub ignores the question and sends whole lists), the
-    /// extensions' install steps (`extension_operation`, #3307), and
-    /// where to resume the broadcasts from once a hello gave a stream.
+    /// extensions' install steps (`extension_operation`, #3307), the managers' roster changes (`managers`,
+    /// docs/managers.md), and where to resume the broadcasts from once a hello gave a stream.
     static func queryItems(_ cursor: EventCursor) -> [URLQueryItem] {
-        [URLQueryItem(name: "features", value: "sessions_delta,extension_operations")] + cursor.queryItems
+        [URLQueryItem(name: "features", value: "sessions_delta,extension_operations,managers")] + cursor.queryItems
     }
 
     private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {

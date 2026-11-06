@@ -335,6 +335,10 @@ extension Theme {
         /// A group of hubs that know each other (Settings › hub, the group filter and labels of the merged lists;
         /// docs/multi-hub.md).
         static let hubGroup = "network"
+        /// The hub's managers, each a whole assistant (Settings › Managers, docs/managers.md).
+        static let managers = "person.2.circle"
+        /// Make a manager the default one (the one Siri, shortcuts and the assistant page go to).
+        static let makeDefault = "star.circle"
         /// A hub reached through an SSH tunnel (Settings › hub › SSH Tunnel, docs/network.md「经 SSH 隧道连 hub」).
         static let sshTunnel = "network.badge.shield.half.filled"
         /// A hub reached through the app's own in-app tunnel (docs/network.md「经 App 内隧道连 hub」).
@@ -454,17 +458,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"
