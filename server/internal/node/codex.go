@@ -212,7 +212,7 @@ func mainThread(home, id string) string {
 // rolloutPath finds a session's rollout under a home by id.
 func rolloutPath(home, id string) string {
 	for _, r := range rollouts(home) {
-		if r.id == id {
+		if r.id == id && fileExists(r.path) {
 			return r.path
 		}
 	}

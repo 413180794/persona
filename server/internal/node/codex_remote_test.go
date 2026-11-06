@@ -226,7 +226,8 @@ func TestCodexRemoteIdentityAndOnlyReadDiscovery(t *testing.T) {
 		t.Fatal("loaded pagination skipped")
 	}
 	sessions := n.codexSessions(map[string]bool{})
-	if len(sessions) != 4 {
+	// The legacy routing identity has neither a rollout nor a live owner.
+	if len(sessions) != 3 {
 		t.Fatalf("sessions: %d", len(sessions))
 	}
 	if _, _, err := n.codexOwner(id1); err != nil {

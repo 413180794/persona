@@ -392,7 +392,8 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 	var out []proto.Session
 	projects := map[string]string{}
 	for id, src := range sources {
-		if seen[id] || n.isAssistantSession(id) || n.ownedAssistantSource(src.thread) {
+		src, visible := n.listedCodexSource(id, src)
+		if !visible || seen[id] || n.isAssistantSession(id) || n.ownedAssistantSource(src.thread) {
 			continue
 		}
 		if n.programRun(id, src) {
