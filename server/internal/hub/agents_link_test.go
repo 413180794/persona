@@ -126,12 +126,17 @@ func pendingWorkCards(h *Hub) []proto.Interaction {
 // for the decision, the user answers it on the hub, and the answer goes to the agent.
 func TestAgentWorkOverTheBus(t *testing.T) {
 	h := newTestHub(t)
+	database := setupTestDB(t)
+	// The shared fixture does not truncate session_work; repeated runs must not restore the previous turn.
+	if err := database.PruneSessionWork(t.Context(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	h.cfg.Agents.Triage.SettleSeconds = 1
 	m, n := workMachine(t, h)
 	useModel(t, h, workModel(t, `{"phase":"blocked","on":"user","line":"等你选方案",
 		"questions":[{"question":"用哪个方案？","header":"方案","options":[{"label":"用 D4","description":"推荐"},{"label":"用 D2"}]}]}`))
 	n.reply = "D2 / D4 选哪个？"
-	connectAssistant(t, h)
+	connectAssistant(t, h, database) // Owned question answers require the manager's durable Store.
 	mux := h.routes()
 	if code, out := call(t, mux, "PUT", "/api/v1/agents/triage", h.cfg.Token, `{"enabled":true,"decide":true,"auto_continue":true,"wake":true}`); code != 200 {
 		t.Fatalf("switches: %d %v", code, out)
@@ -162,6 +167,10 @@ func TestAgentWorkOverTheBus(t *testing.T) {
 	})
 	if err := h.resolve(card.ID, proto.Resolution{Answers: map[string]string{"用哪个方案？": "用 D4"}}); err != nil {
 		t.Fatal(err)
+	}
+	status, kept, err := database.InteractionOutcome(t.Context(), card.ID)
+	if err != nil || status != "resolved" || kept == nil || kept.Answers["用哪个方案？"] != "用 D4" {
+		t.Fatalf("the accepted answer was not durably recorded: status=%q resolution=%+v err=%v", status, kept, err)
 	}
 	eventually(t, 10*time.Second, "the answer at the agent", func() bool {
 		got := n.sends()

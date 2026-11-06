@@ -1,5 +1,7 @@
 # Lessons: assistant (headless Claude / Codex)
 
+- Owned triage questions require a durable interaction history Store before acknowledging an answer (#5994). A bus integration test that previously used no Store must supply its manager with the isolated Postgres fixture and assert `InteractionOutcome` after resolution; never weaken the production missing-store failure merely to keep the test green. The shared hub fixture does not truncate `session_work`, so explicitly prune old work in this isolated fixture before connecting: otherwise a repeated run can restore the previous answered turn and suppress the new card as a duplicate.
+
 Pitfalls, unusual behavior, and decisions at the time (formerly `CLAUDE.md` “Lessons”; index `docs/lessons/README.md`). Add lessons to relevant sections, or a new section if none fits.
 
 - A byte limit can split UTF-8 even when each message was clipped by runes (2026-11-07, #5948). `transcriptText`, shared by `agent_read` and `conversation_read`, limits the assembled transcript to its last 40000 bytes. Advance the suffix start past continuation bytes with `utf8.RuneStart` to keep the byte budget and whole characters. Test every cut position in two-, three-, and four-byte characters, cuts already at rune boundaries, and lengths below, at, and above the limit; assert valid UTF-8 and the exact retained suffix.
