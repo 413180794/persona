@@ -155,6 +155,11 @@ struct FleetStateTests {
         #expect(FleetText.short(12000) == "12k")
         #expect(FleetText.short(4_200_000) == "4.2M")
         #expect(FleetText.short(42_000_000) == "42M")
+        #expect(FleetText.short(999_499) == "999k")
+        #expect(FleetText.short(999_500) == "1M")
+        #expect(FleetText.short(999_999) == "1M")
+        #expect(FleetText.short(999_499_999) == "999M")
+        #expect(FleetText.short(999_600_000) == "1B")
         #expect(FleetText.stat(.tpm(12000)) == "12k/分")
         #expect(FleetText.stat(.tokens(42_000_000)) == "今日 42M")
     }

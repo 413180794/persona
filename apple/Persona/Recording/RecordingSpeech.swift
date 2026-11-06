@@ -86,9 +86,15 @@ nonisolated struct RecordingAnalyzerEngine: RecordingSpeechEngine {
     }
 
     /// Downloads the on-device model if needed (Apple's asset, shared with other apps).
+    /// Download / install failures surface as `.modelUnavailable` so the user sees what to do, not the system's raw error.
     static func ensureAssets(_ modules: [any SpeechModule]) async throws {
-        if let request = try await AssetInventory.assetInstallationRequest(supporting: modules) {
+        guard let request = try await AssetInventory.assetInstallationRequest(supporting: modules) else { return }
+        do {
             try await request.downloadAndInstall()
+        } catch {
+            // A cancelled download may throw a framework error; keep it a cancellation so no error is shown.
+            if error is CancellationError || Task.isCancelled { throw CancellationError() }
+            throw RecordingSpeechError.modelUnavailable
         }
     }
 

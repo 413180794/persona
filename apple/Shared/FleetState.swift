@@ -236,10 +236,11 @@ nonisolated enum FleetText {
         func scaled(_ v: Double, _ unit: String) -> String {
             v < 10 ? String(format: "%.1f", v).replacingOccurrences(of: ".0", with: "") + unit : "\(Int(v.rounded()))" + unit
         }
+        // A unit ends where its number would round to 1000: 999_600 is "1M", not "1000k".
         switch n {
         case ..<1000: return "\(n)"
-        case ..<1_000_000: return scaled(Double(n) / 1000, "k")
-        case ..<1_000_000_000: return scaled(Double(n) / 1_000_000, "M")
+        case ..<999_500: return scaled(Double(n) / 1000, "k")
+        case ..<999_500_000: return scaled(Double(n) / 1_000_000, "M")
         default: return scaled(Double(n) / 1_000_000_000, "B")
         }
     }

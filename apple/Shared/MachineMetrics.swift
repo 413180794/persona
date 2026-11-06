@@ -169,9 +169,11 @@ nonisolated enum MetricFormat {
     static func bytes(_ v: Double) -> String {
         let units = ["B", "KB", "MB", "GB", "TB"]
         var x = v, i = 0
-        while x >= 1024 && i < units.count - 1 { x /= 1024; i += 1 }
+        // Pick the unit and the decimals from the number as it will be shown, after rounding: 1023.6 KB is
+        // "1.00 MB", not "1024 KB"; 99.97 GB is "100 GB", not "100.0 GB".
+        while i < units.count - 1 && x >= (i == 0 ? 1024 : 1023.5) { x /= 1024; i += 1 }
         if i == 0 { return "\(Int(x)) B" }
-        return x >= 100 ? String(format: "%.0f %@", x, units[i]) : x >= 10 ? String(format: "%.1f %@", x, units[i]) : String(format: "%.2f %@", x, units[i])
+        return x >= 99.95 ? String(format: "%.0f %@", x, units[i]) : x >= 9.995 ? String(format: "%.1f %@", x, units[i]) : String(format: "%.2f %@", x, units[i])
     }
 
     static func bytes(_ v: Int64) -> String { bytes(Double(v)) }

@@ -761,7 +761,10 @@ export function createRuntime(driver, options) {
       clearTimeout(pushTimer)
       clearInterval(refreshTimer)
       unwatchAll()
+      // Forget the live texts too: an entry left with its cleared timer would keep stream() waiting on it after a
+      // start(). The next stream() carries the whole text again.
       for (const s of streams.values()) clearTimeout(s.timer)
+      streams.clear()
       peer?.close(new Error('runtime stopped'))
       peer = undefined
     },

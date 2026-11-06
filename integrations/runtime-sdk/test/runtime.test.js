@@ -153,6 +153,24 @@ test('live text is throttled to the latest whole text, and ends empty', async (t
   await until('end', () => n.last('session.delta')?.text === '')
 })
 
+test('live text flows again after stop() then start(): a text pending at stop does not hold the session silent', async (t) => {
+  const n = await startFakeNode(t)
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20, refreshMs: 0 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await n.peer.call('session.watch', { session_id: 's1', since_seq: 0 })
+  rt.stream('s1', 'a')
+  await until('the first text', () => n.last('session.delta')?.text === 'a')
+  rt.stream('s1', 'ab') // within the window: waits on the throttle timer
+  rt.stop()
+  rt.start()
+  await until('hello again', () => n.hellos === 2)
+  await n.peer.call('session.watch', { session_id: 's1', since_seq: 0 })
+  rt.stream('s1', 'abc')
+  await until('the text after the restart', () => n.last('session.delta')?.text === 'abc', 1000)
+})
+
 test('item helpers cut long text the way the apps expect', () => {
   const it = light({ kind: 'text', text: 'a'.repeat(PAGE_TEXT + 10) })
   assert.equal(it.full_size, PAGE_TEXT + 10)

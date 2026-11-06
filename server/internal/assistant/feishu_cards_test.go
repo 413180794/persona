@@ -289,3 +289,83 @@ func TestStartCardLateFailureKeepsNewerSlot(t *testing.T) {
 		t.Fatal("third press was not deduped: the late failure had dropped the newer slot")
 	}
 }
+
+// cardButtons is every button of a card's button rows (top level), by its text: what pressing it answers.
+func cardButtons(t *testing.T, c *feishubot.Card) map[string]map[string]any {
+	t.Helper()
+	var m struct {
+		Body struct {
+			Elements []map[string]any `json:"elements"`
+		} `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(c.JSON()), &m); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]map[string]any{}
+	for _, e := range m.Body.Elements {
+		if e["tag"] != "column_set" {
+			continue
+		}
+		cols, _ := e["columns"].([]any)
+		for _, col := range cols {
+			els, _ := col.(map[string]any)["elements"].([]any)
+			for _, one := range els {
+				b, _ := one.(map[string]any)
+				if b["tag"] != "button" {
+					continue
+				}
+				label, _ := b["text"].(map[string]any)["content"].(string)
+				value := map[string]any{}
+				if bs, ok := b["behaviors"].([]any); ok && len(bs) > 0 {
+					value, _ = bs[0].(map[string]any)["value"].(map[string]any)
+				}
+				out[label] = value
+			}
+		}
+	}
+	return out
+}
+
+// A permission card's third button follows the app's rule (BUIPermissionForm, the web's PermissionCard): 本会话总是允许
+// for Claude on a conversation, and for another agent only what it says that always allows. A runtime cannot keep
+// Claude's session rule (node/runtimes.go), so the button there would allow once and ask again.
+func TestFeishuPermissionCardOffersAlwaysOnlyWhereItWorks(t *testing.T) {
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	s := newTestService(t, f)
+	ctx := context.Background()
+	always := i18n.T(i18n.ZhHans, "assistant-feishu_cards.always_allow")
+	allow := i18n.T(i18n.ZhHans, "assistant-feishu_cards.allow")
+	deny := i18n.T(i18n.ZhHans, "assistant-feishu_cards.deny")
+
+	claude := proto.Interaction{ID: "ix_p1", MachineID: "server", SessionID: "s1", Kind: proto.IxPermission, ToolName: "Bash"}
+	bs := cardButtons(t, s.interactionCard(ctx, claude))
+	if v, ok := bs[always]; !ok || bs[allow] == nil || bs[deny] == nil || v["always"] != "1" || v["allow"] != "1" {
+		t.Fatalf("claude's card: %v", bs)
+	}
+	named := claude // the web's rule also takes agent "claude" as Claude
+	named.ID, named.Agent = "ix_p5", "claude"
+	if _, ok := cardButtons(t, s.interactionCard(ctx, named))[always]; !ok {
+		t.Fatal(`agent "claude" lost 本会话总是允许`)
+	}
+
+	// A runtime's card (pi, DSH, opencode, Paseo): a session, no always_label, and no rule of Claude's to keep.
+	runtime := claude
+	runtime.ID, runtime.Agent, runtime.AgentLabel = "ix_p2", "pi", "pi"
+	bs = cardButtons(t, s.interactionCard(ctx, runtime))
+	if _, ok := bs[always]; ok || bs[allow] == nil || bs[deny] == nil {
+		t.Fatalf("a runtime's card offers 本会话总是允许: %v", bs)
+	}
+
+	// Codex that does offer it: its own words, as the app shows them.
+	codex := runtime
+	codex.ID, codex.Agent, codex.AlwaysLabel = "ix_p3", "codex", "本会话不再问这个命令"
+	if v, ok := cardButtons(t, s.interactionCard(ctx, codex))["本会话不再问这个命令"]; !ok || v["always"] != "1" {
+		t.Fatalf("codex's own always label: %v", v)
+	}
+
+	// A card of the hub's own (no conversation) with nothing naming an always: nothing to offer.
+	bare := proto.Interaction{ID: "ix_p4", MachineID: "server", Kind: proto.IxPermission, ToolName: "Bash"}
+	if bs := cardButtons(t, s.interactionCard(ctx, bare)); len(bs) != 2 || bs[always] != nil {
+		t.Fatalf("a card without a conversation: %v", bs)
+	}
+}

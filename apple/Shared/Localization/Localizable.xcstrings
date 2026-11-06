@@ -91882,6 +91882,28 @@
       },
       "extractionState": "manual"
     },
+    "The computer that runs the assistant didn't respond in time": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The computer that runs the assistant didn't respond in time"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アシスタントを動かしているコンピューターが時間内に応答しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跑助手的那台电脑没有及时回应"
+          }
+        }
+      }
+    },
     "The connection dropped before the send was confirmed. Retrying checks existing messages first.": {
       "localizations": {
         "en": {

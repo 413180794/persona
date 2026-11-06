@@ -425,13 +425,32 @@ struct HubNoticeRow: View {
 
     init(api: @escaping () -> APIClient? = { AppModel.shared.api }) { self.api = api }
 
+    static var noHub: String { String(localized: "Not connected to the hub yet") }
+    static var unreachable: String { String(localized: "Can't reach the hub") }
+    static var machineSlow: String { String(localized: "The computer that runs the assistant didn't respond in time") }
+
+    /// What the page says for a failed load: the hub's own reason when it gave one (409: no machine set for the
+    /// assistant, 502: that machine offline), else why nothing came back. A bare 「读不到」 said none of it (#4274).
+    /// Nil for a cancelled load (the page went away).
+    static func failure(_ error: Error) -> String? {
+        if error.isCancellation { return nil }
+        // The hub answered, but the assistant's machine did not in time (its skills.list ran past the deadline).
+        if let e = error as? APIError, e.status == 502, APIError.isTimeoutText(e.message) { return machineSlow }
+        return error.shown ?? unreachable
+    }
+
     func load() async {
-        guard let api = api() else { return }
+        guard let api = api() else {
+            error = Self.noHub
+            loaded = true
+            return
+        }
         do {
             let r = try await api.skills()
             (skills, machine, error) = (r.skills, r.machine, nil)
         } catch {
-            self.error = error.shown ?? String(localized: "Couldn't load [Connector Thread Models 153e20]")
+            guard let shown = Self.failure(error) else { return }
+            self.error = shown
         }
         loaded = true
     }

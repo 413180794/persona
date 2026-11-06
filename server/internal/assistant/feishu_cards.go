@@ -423,11 +423,14 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			feishubot.Btn(i18n.T(l, "assistant-feishu_cards.allow"), feishubot.Primary, val(map[string]any{"allow": "1"})),
 			feishubot.Btn(i18n.T(l, "assistant-feishu_cards.deny"), feishubot.Danger, val(map[string]any{"allow": "0"})),
 		}
-		if ix.AlwaysLabel != "" || ix.SessionID != "" { // as the app's card
-			label := ix.AlwaysLabel
-			if label == "" {
-				label = i18n.T(l, "assistant-feishu_cards.always_allow")
-			}
+		// As the app's card (InteractionViews.swift's BUIPermissionForm, web's PermissionCard): 本会话总是允许 for
+		// Claude on a conversation, and for another agent only what it says that always allows — a runtime cannot keep
+		// Claude's session rule (node/runtimes.go), so the button there would only allow once and ask again.
+		label := ix.AlwaysLabel
+		if label == "" && (ix.Agent == "" || ix.Agent == "claude") && ix.SessionID != "" {
+			label = i18n.T(l, "assistant-feishu_cards.always_allow")
+		}
+		if label != "" {
 			bs = append(bs, feishubot.Btn(clip(label, 20), feishubot.Default, val(map[string]any{"allow": "1", "always": "1"})))
 		}
 		return safeCard(l, c.Buttons(bs...).Buttons(open), open)

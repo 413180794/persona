@@ -146,4 +146,30 @@ struct HubUpdateTests {
         await m.load()
         #expect(m.skills.map(\.name) == ["lark-gateway"] && m.machine == "服务器")
     }
+
+    /// Skills that cannot be read say why: not connected, the hub out of reach, the assistant's machine too slow, or
+    /// the hub's own reason; a cancelled load says nothing (#4274).
+    @Test func skillsSayWhyTheyCannotBeRead() async {
+        let none = SkillsModel(api: { nil })
+        await none.load()
+        #expect(none.loaded && none.error == SkillsModel.noHub)
+        let hub = FakeHub()
+        let m = SkillsModel(api: { hub.client })
+        hub.on("GET", "/api/v1/skills") { _ in throw URLError(.timedOut) }
+        await m.load()
+        #expect(m.loaded && m.error == SkillsModel.unreachable)
+        hub.on("GET", "/api/v1/skills") { _ in throw APIError(status: 502, message: "context deadline exceeded") }
+        await m.load()
+        #expect(m.error == SkillsModel.machineSlow)
+        hub.on("GET", "/api/v1/skills") { _ in throw APIError(status: 409, message: "还没设置助手跑在哪台电脑上") }
+        await m.load()
+        #expect(m.error == "还没设置助手跑在哪台电脑上")
+        hub.on("GET", "/api/v1/skills", json: #"{"machine":"服务器","skills":[]}"#)
+        await m.load()
+        #expect(m.error == nil && m.skills.isEmpty)
+        let cancelled = SkillsModel(api: { hub.client })
+        hub.on("GET", "/api/v1/skills") { _ in throw CancellationError() }
+        await cancelled.load()
+        #expect(!cancelled.loaded && cancelled.error == nil)
+    }
 }

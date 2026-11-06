@@ -45,6 +45,12 @@ struct MachineMetricsTests {
         #expect(MetricFormat.bytes(1536.0) == "1.50 KB")
         #expect(MetricFormat.bytes(Int64(64) << 30) == "64.0 GB")
         #expect(MetricFormat.bytes(Double(200) * 1024 * 1024 * 1024) == "200 GB")
+        // Rounding that reaches the next unit or the next width takes it.
+        #expect(MetricFormat.bytes(1023.0) == "1023 B")
+        #expect(MetricFormat.bytes(1023.4 * 1024) == "1023 KB")
+        #expect(MetricFormat.bytes(1023.6 * 1024) == "1.00 MB")
+        #expect(MetricFormat.bytes(99.97 * 1024 * 1024 * 1024) == "100 GB")
+        #expect(MetricFormat.bytes(9.998 * 1024 * 1024) == "10.0 MB")
         #expect(MetricFormat.rate(nil) == "—")
         #expect(MetricFormat.rate(3.91 * 1024 * 1024) == "3.91 MB/s")
         #expect(MetricFormat.percent(4.46) == "4.5%")
