@@ -1,242 +1,242 @@
-# Android P0 第 4 轮联合验收清单
+# Android P0 round 4 joint acceptance checklist
 
-## 需要你先准备的
+## What you need to prepare first
 
-以下准备由协调者和环境持有人完成。本清单只用占位符，实际地址、账号、机器名称、凭据和原始业务内容留在仓库外的配置或私有验收记录中。
+The coordinator and the environment owners prepare the following. This checklist only uses placeholders; real addresses, accounts, machine names, credentials, and raw business content stay in configuration or private acceptance records outside the repo.
 
-| 准备项 | 需要准备的内容 |
+| Item | What to prepare |
 | --- | --- |
-| 可控的 hub 环境 | `<验收 hub>`、`<独立数据库>`、`<验收提交>`及对应 node；准备可停机、重启、丢弃响应的隔离环境与脱敏日志。故障注入只在该环境执行。 |
-| hub 主机防火墙 | 放行 `<TLS 端口>` 的入站，确认 hub 实际监听；使用容器时同时核对端口发布规则。参见 [公网直连](../network.md)。 |
-| 路由器与 IPv6 | 光猫／路由器放行到 `<hub IPv6 地址>` 的 `<TLS 端口>` 入站，确认家宽有公网 IPv6、手机蜂窝侧可访问；不能只以同一 Wi-Fi 内可达作为结果。 |
-| DDNS 与 TLS 身份 | 准备 `<DDNS 域名>`、`<DNS 凭据文件>`、`<配对指纹>`，配置 `public.ddns` 或外部 DDNS，并把 HTTPS 域名候选写入 `public.advertise`；只填候选不会自动更新 DNS。准备可回退的证书／前缀变更方案。 |
-| 要接入的电脑 | hub 上配置到 `<接入电脑>` 的 SSH 与 `machines`，确认目录权限、herdr、node、Claude Code／Codex／TRAEX 和启动器可用；包装启动器在 `machines[].launchers` 标明 `agent_type`。见 [配置](../config.md)。 |
-| 飞书网关 | 在 `<飞书网关实例>` 开启 agent API，在 hub 的 `lark` 填好 `base_url`、`token`；准备可收发的 `<验收会话>`、含足够历史的 `<验收话题>`、可编辑／撤回消息和 @我事项。见 [服务端](../server.md)与[飞书](../feishu.md)。 |
-| 邮箱 | hub 已接入 `<验收邮箱账号>`，可收发测试邮件；准备纯文本／HTML、多个 UID、目标变化、同名附件、不同 MIME、无查看器及下载中断场景，内容全部脱敏。 |
-| iOS 推送与兼容设备 | hub 配好 `apns.json` 及其引用的 `<APNs 密钥文件>`、`<推送环境>`；准备现有 iOS App 和可接收推送的 iPhone，用于旧客户端共存与通知策略核对。Android 仍只走常驻 WS。 |
-| Android 测试手机 | 准备 `<设备编号>`、`<ROM／版本>`、`<系统 API>`；覆盖 Android 16、17 及不同国产 ROM，具备相机、照片、文件选择器及附件查看器。准备三家运营商的 `<SIM 编号>`、Wi-Fi 与蜂窝网络，不依赖 Google 服务。 |
-| 后台与通知条件 | 能修改通知总开关／渠道、锁屏详情、提升通知权限、本地网络权限、电池优化、自启动、后台限制、休眠联网和最近任务设置；准备不插电过夜条件。保留每次设置组合。 |
-| 多设备与重新配对 | 至少两台 Android 和一台现有 iPhone 同时在线；准备 `<配对甲>`、`<配对乙>`，可撤销设备并重新配对，验证设备与 hub 代次隔离。 |
-| MCP 请求 | 准备 `<验收 MCP 服务器>`，能触发 form 和 URL elicitation，包含必填／无效／敏感字段；Claude 重启后已读到新 hooks。准备不声明 elicitation 能力的旧客户端对照。 |
-| 验收素材与发布包 | 准备 650 条命令的脱敏长会话、带／不带原生轮次用时的 Claude／Codex 记录、可超出缓存预算的图片／历史，以及同包名同签名的 `<已装版本 APK>`、`<待升级 APK>`和校验失败对照包。签名密钥留在仓库外。 |
-| 记录与判定口径 | 协调者先填写 `<性能阈值>`、`<耗电阈值>`、`<存活要求>`、`<恢复时限>`，明确计时点和采样工具；准备仓库外的 `<原始记录目录>`。未定阈值的项目只能记录，不能判性能通过。 |
+| A controllable hub environment | `<acceptance hub>`, `<separate database>`, `<acceptance commit>` and the matching node; an isolated environment that can be stopped, restarted, and made to drop responses, with redacted logs. Fault injection runs only in this environment. |
+| hub host firewall | Allow inbound `<TLS port>` and confirm the hub is actually listening; with containers, also check the port publishing rules. See [Public direct connection](../network.md). |
+| Router and IPv6 | The ONT / router allows inbound `<TLS port>` to `<hub IPv6 address>`; confirm the home broadband has public IPv6 and the phone can reach it over cellular. Reachability from the same Wi-Fi alone doesn't count as a result. |
+| DDNS and TLS identity | Prepare `<DDNS domain>`, `<DNS credentials file>`, `<pairing fingerprint>`; configure `public.ddns` or an external DDNS, and put the HTTPS domain candidate in `public.advertise`; adding a candidate alone does not update DNS. Prepare a reversible certificate / prefix change plan. |
+| Computers to connect | Configure SSH and `machines` on the hub for `<connected computer>`; confirm directory permissions, herdr, node, Claude Code / Codex / an internal Codex variant, and launchers work; wrapper launchers declare `agent_type` in `machines[].launchers`. See [Configuration](../config.md). |
+| Lark gateway | Enable the agent API on `<Lark gateway instance>`, fill `base_url` and `token` in the hub's `lark`; prepare a `<test chat>` that can send and receive, a `<test thread>` with enough history, messages that can be edited / recalled, and @me items. See [Server](../server.md) and [Lark](../feishu.md). |
+| Mail | The hub has `<test mail account>` connected and can send and receive test mail; prepare plain text / HTML, multiple UIDs, changed targets, same-name attachments, different MIME types, no-viewer and interrupted-download cases, all content redacted. |
+| iOS push and compatible devices | The hub has `apns.json` and the `<APNs key file>` and `<push environment>` it references; prepare the existing iOS App and an iPhone that can receive pushes, to check coexistence with old clients and notification policy. Android still uses only the persistent WS. |
+| Android test phones | Prepare `<device id>`, `<ROM / version>`, `<system API>`; cover Android 16, 17 and different Chinese OEM ROMs, with camera, photos, file picker, and attachment viewers. Prepare `<SIM id>` for three carriers, Wi-Fi and cellular, without relying on Google services. |
+| Background and notification conditions | Be able to change the notification master switch / channels, lock screen details, elevated notification permissions, local network permission, battery optimization, auto-start, background restrictions, network during doze, and recents settings; prepare unplugged overnight conditions. Record every settings combination. |
+| Multiple devices and re-pairing | At least two Android phones and one existing iPhone online at the same time; prepare `<pairing A>`, `<pairing B>`; be able to revoke a device and re-pair, to verify device and hub generation isolation. |
+| MCP requests | Prepare `<test MCP server>` that can trigger form and URL elicitation, including required / invalid / sensitive fields; Claude has picked up the new hooks after restart. Prepare an old client that doesn't declare elicitation capability for comparison. |
+| Test material and release builds | Prepare a redacted long session with 650 commands, Claude / Codex records with and without native turn durations, images / history that can exceed the cache budget, and `<installed APK>`, `<upgrade APK>` with the same package name and signature, plus a package that fails verification for comparison. Signing keys stay outside the repo. |
+| Recording and judging criteria | The coordinator first fills `<performance thresholds>`, `<battery thresholds>`, `<survival requirements>`, `<recovery time limits>`, with explicit timing points and sampling tools; prepare a `<raw records directory>` outside the repo. Items without agreed thresholds can only be recorded, not judged as performance passes. |
 
-本清单对应 [状态表](android-p0-status.md) 的当前基准提交 `f77a76eca205168a93015cefb26825374013ddb7`，日期为 2026-10-31。本轮只编写清单，**未运行构建、测试、安装、App、截图或真实 hub；以下各项均未实测**。实际验收时记录新的 App／hub／node 提交及构建版本，不把这份清单当作通过记录。
+This checklist corresponds to the current baseline commit `f77a76eca205168a93015cefb26825374013ddb7` of the [status table](android-p0-status.md), dated 2026-10-31. This round only wrote the checklist; **no build, test, install, App, screenshot, or real hub was run; none of the items below were measured**. During actual acceptance, record the new App / hub / node commits and build versions; don't treat this checklist as a pass record.
 
-## 统一记录规则
+## Common recording rules
 
-每次记录使用设备、账号、机器和配对的匿名编号。仓库内只保留脱敏结论及私有证据编号，不粘贴地址、真实消息、附件内容、邮箱、token、SSH 信息、证书原文或带凭据的 URL。可以保存字段是否存在、结果码、脱敏 ID 的一致性及经过审核的摘要。
+Every record uses anonymous ids for devices, accounts, machines, and pairings. The repo keeps only redacted conclusions and private evidence ids; never paste addresses, real messages, attachment content, mail addresses, tokens, SSH details, raw certificates, or URLs with credentials. It's fine to keep whether a field is present, result codes, consistency of redacted IDs, and reviewed summaries.
 
-性能、耗电、延迟、连接频率、吞吐、并发和存活数据按「ROM／系统版本 × 运营商／网络 × 前后台／省电设置 × 场景」分别分组，**每组至少 10 个独立样本**。冷／热启动、成功／失败、不同网络不混算。过夜每组至少 10 晚，每晚计划锁屏、不插电观察 8 小时；这些是采样计划，所有结果当前均为「未实测」。功能步骤可逐例执行，若引用其中耗时或成功率基线，同样必须满足采样要求。
+Performance, battery, latency, connection frequency, throughput, concurrency, and survival data are grouped separately by "ROM / OS version × carrier / network × foreground / background / power-saving setting × scenario", with **at least 10 independent samples per group**. Cold / warm start, success / failure, and different networks are not mixed. Overnight runs: at least 10 nights per group, each with a planned 8-hour locked, unplugged observation. These are sampling plans; all results are currently "not measured". Functional steps can be run case by case, but if they cite a duration or success-rate baseline, the sampling requirements apply too.
 
-每个数值指标同时记录 `n`、单位、`min / p50 / p90 / max / mean` 和原始样本索引。分位数统一取升序样本第 `ceil(p × n)` 项，mean 为算术平均；缺测不记作零。失败、超时、人工终止和观察结束仍存活的样本分别标注，记录总尝试数、有效数与失败数，不能静默删除。观察结束仍未断开的连接记「截至观察结束未断」，不能把观察时长当作真实寿命或空闲超时。
+Every numeric metric records `n`, unit, `min / p50 / p90 / max / mean`, and the raw sample index. Percentiles always take the `ceil(p × n)`-th item of the ascending samples; mean is the arithmetic mean; missing measurements are not recorded as zero. Failed, timed-out, manually aborted, and still-alive-at-end samples are each labeled; record total attempts, valid count, and failure count; nothing is silently dropped. A connection still open at the end of observation is recorded as "not dropped as of end of observation"; the observation length must not be taken as the real lifetime or idle timeout.
 
-计时用可对齐的事件时间与单调时钟，明确起止点；不同设备时钟无法对齐时，不报告跨设备端到端耗时。配置的 timeout、心跳间隔、预算上限和 SLA 仅是配置，不能当作实测结果。样本不足 10 个只能写「未实测完，n＝<样本数>」，不能作为基线。
+Timing uses alignable event times and a monotonic clock, with explicit start and end points; when clocks across devices can't be aligned, don't report cross-device end-to-end durations. Configured timeouts, heartbeat intervals, budget caps, and SLAs are only configuration, not measured results. With fewer than 10 samples, write only "not fully measured, n = <sample count>"; it can't serve as a baseline.
 
-| 每组每指标记录模板 | 初始值 |
+| Per-group, per-metric record template | Initial value |
 | --- | --- |
-| 验收项／场景／环境／提交／设置组合 | `<待填>` |
-| 指标／单位／起止点／采样工具 | `<待填>` |
-| 样本数 n／尝试数／失败数／原始证据编号 | 未实测 |
-| min／p50／p90／max／mean | 未实测 |
-| 通过标准／结果／异常及下一步 | `<预先约定的标准>`／未实测／`<待填>` |
+| Acceptance item / scenario / environment / commit / settings combination | `<to fill>` |
+| Metric / unit / start and end points / sampling tool | `<to fill>` |
+| Sample count n / attempts / failures / raw evidence ids | Not measured |
+| min / p50 / p90 / max / mean | Not measured |
+| Pass criteria / result / anomalies and next steps | `<pre-agreed criteria>` / not measured / `<to fill>` |
 
-以下 V01～V10 与状态表「真机真实环境验收」逐条对应。原 A05（邮件附件预算与退出写入）已在代码里补齐并有单测，V02／V07／V08 里对应的子项要在真机上复验后才能关闭。验完先回填各行的证据和剩余问题；标为「已完成」的行也要补真实记录。只有对应范围全部通过，才能将「只能真机验证」改成「已完成」。上游限制、后排实现和产品确认各自保留，不能靠一次环境通过关闭。
+V01–V10 below map one-to-one to "On-device real-environment acceptance" in the status table. The former A05 (mail attachment budget and write-on-exit) has been completed in code with unit tests; the matching sub-items in V02 / V07 / V08 can only be closed after re-verification on a device. After verifying, first fill in each row's evidence and remaining issues; rows marked "Done" also need real records. Only when the whole corresponding scope passes can "Device-only verification" be changed to "Done". Upstream limitations, deferred implementation, and product confirmations each stay as they are; one passing environment doesn't close them.
 
-## V01：配对、公网链路和连接恢复
+## V01: Pairing, public network path, and connection recovery
 
-对应状态表：1.2、1.3、1.4、1.14、16.1～16.4、N45、N47、N48、N57、N61～N63、N69、A1-网络。当前结果：**未实测**。
+Status table rows: 1.2, 1.3, 1.4, 1.14, 16.1–16.4, N45, N47, N48, N57, N61–N63, N69, A1-network. Current result: **not measured**.
 
-**前置条件**：TLS、防火墙、IPv6 入站、DDNS 和机器列表已准备；Android 17 设备可拒绝／恢复本地网络权限；另备本地兼容入口和可控的身份不符端点。
+**Preconditions**: TLS, firewall, inbound IPv6, DDNS, and the machine list are ready; the Android 17 device can deny / restore local network permission; also have a local compatibility entry point and a controllable endpoint with a mismatched identity.
 
-**操作步骤**：
+**Steps**:
 
-1. 分别扫码、手填和打开配对深链，核对分段进度、候选地址、证书与 hub 身份；拒绝本地网络权限，再从设置授权返回。对临时码分别执行有效兑换、复用和过期。
-2. 关 Wi-Fi，经蜂窝公网 IPv6 配对，打开普通聊天和飞书窗口，执行 WS 收流、HTTP 历史分页、发送与回复。切换 Wi-Fi／蜂窝并制造短暂断网，观察统一标题状态及诊断页。
-3. 延迟打开窗口的补拉与回复核对，检查 Updating 在核对完成前保持；超过已配置等待期限时，检查退出等待后仍保留未核对窗口标记和已读门禁。
-4. 在隔离环境变更 IPv6 前缀，确认 DDNS 更新和域名候选找回；模拟 DNS、拒绝连接、无 IPv6、证书／hub 身份不符及证书轮换，核对错误类别和恢复入口。
-5. 撤销当前设备 token，分别触发 HTTP 和 WS 鉴权，确认 401 后停止重连并进入重新配对。检查公网不使用明文发送凭据，本地兼容入口仍可用。
+1. Pair by scanning, by manual entry, and by opening a pairing deep link; check the staged progress, candidate addresses, certificate, and hub identity. Deny local network permission, then grant it from Settings and return. For temporary codes, do a valid redemption, a reuse, and an expired one.
+2. Turn off Wi-Fi, pair over cellular public IPv6, open an ordinary chat and a Lark window, and do WS streaming, HTTP history paging, sending, and replying. Switch Wi-Fi / cellular and cause brief network drops; watch the shared title status and the diagnostics page.
+3. Delay the catch-up and reply reconciliation of an opened window; check that Updating stays until reconciliation completes. Past the configured wait limit, check that after leaving the wait, the unreconciled-window marker and the read gate remain.
+4. In the isolated environment, change the IPv6 prefix and confirm DDNS updates and the domain candidate is found again; simulate DNS failures, refused connections, no IPv6, certificate / hub identity mismatch, and certificate rotation, and check the error categories and recovery entry points.
+5. Revoke the current device token, trigger HTTP and WS auth separately, and confirm that after 401 it stops reconnecting and goes to re-pairing. Check that credentials are never sent in plaintext over the internet, and the local compatibility entry point still works.
 
-**通过标准**：正确端点可完成真实收发，IPv6 可达与域名找回有独立证据；身份不符时拒绝连接；权限恢复能继续。所有页面共用当前选路和连接状态，未核对缓存不能报已读。401 后不无限重连，业务错误按 code／delivered／retryable 给出核对、终端或重配动作。恢复耗时须满足预先填写的标准。
+**Pass criteria**: the correct endpoint completes real send and receive; IPv6 reachability and domain recovery have separate evidence; mismatched identity refuses the connection; restoring permission lets it continue. All pages share the current route and connection state, and unreconciled cache can't report read. After 401 there's no endless reconnecting; business errors give reconcile, terminal, or re-pair actions according to code / delivered / retryable. Recovery times must meet the pre-filled criteria.
 
-**要记录的数据**：匿名网络类型、候选路径类别、每段结果、证书匹配结论、错误码／恢复动作、重连和窗口 verified 顺序。配对耗时、探测 RTT、切网到 WS 可用、切网到 HTTP 可用及窗口核对耗时各分组至少 10 个样本，填写 n 和五项统计，当前未实测。
+**Data to record**: anonymous network type, candidate path category, per-stage results, certificate match conclusion, error code / recovery action, reconnect and window-verified order. Pairing duration, probe RTT, network switch to WS usable, network switch to HTTP usable, and window reconciliation duration each need at least 10 samples per group, with n and the five statistics; currently not measured.
 
-**验后回填**：上述所有对应行；公网蜂窝收发、分页与切网全部通过后，才关闭 A1-网络 的真实验收缺口。权限、身份或重连失败留在具体行，不只改汇总行。
+**Fill in after verifying**: all the rows above. Only when cellular public send / receive, paging, and network switching all pass does A1-network's real acceptance gap close. Permission, identity, or reconnect failures stay in their specific rows; don't only change the summary row.
 
-## V02：长会话、轮次用时和缓存预算
+## V02: Long sessions, turn durations, and cache budgets
 
-对应状态表：1.6、7.5～7.12、7.15、N14、N35、A1-工程、A1-对话、A1-长会话、UX3.3-失败、UX3.3-搜索、UX3.3-任务、UX3.3-阅读器。当前结果：**未实测**。
+Status table rows: 1.6, 7.5–7.12, 7.15, N14, N35, A1-engineering, A1-chat, A1-long-session, UX3.3-failure, UX3.3-search, UX3.3-task, UX3.3-reader. Current result: **not measured**.
 
-**前置条件**：真实 650 条命令会话，普通 Agent／助手／飞书三种长列表，带图片和长工具输出；Claude／Codex 的原生耗时标记样本及无标记对照；记录本次实际缓存预算配置。
+**Preconditions**: a real session with 650 commands; long lists of all three kinds (ordinary Agent / assistant / Lark), with images and long tool output; Claude / Codex samples with native duration markers and controls without markers; record the actual cache budget configuration used.
 
-**操作步骤**：
+**Steps**:
 
-1. 分别清空该验收作用域的可丢缓存和保留缓存，执行冷／热打开；记录点击到缓存首屏、点击到已核对首屏的时间，不混用两者。
-2. 前翻历史、展开／收起 fold_work、快速滑动、离开最新端等待新消息，再回最新。检查冻结、阅读锚点、图片布局、流式终稿、失败／无结果提示、任务跳转、搜索返回和全文复制。
-3. 对照原始记录核对工作行／状态行用时，只接受 Claude turn_duration 或 Codex task_complete 的明确关联；缺标记、缺关联或关联尚未加载时隐藏，新轮次不沿用旧值。
-4. 逐步打开多会话并载入图片／收件箱媒体及邮件附件，超过本次配置预算；检查未使用数据的 LRU 淘汰、使用中数据保护、图片实际解码尺寸与同一作用域重启后的恢复。
-5. 分别统计 items JSON、图片、收件箱媒体和 SQLite／WAL 的实际体积；区分受保护数据与可淘汰数据，并单列邮件附件子目录，不能漏算。SQLite 物理文件未设硬上限，不能以 JSON 淘汰直接声称磁盘已等量回收。
+1. Clear the disposable cache and the retained cache of this acceptance scope separately, then do cold / warm opens; record tap-to-cached-first-screen and tap-to-reconciled-first-screen times, without mixing the two.
+2. Page back through history, expand / collapse fold_work, scroll fast, leave the latest end and wait for new messages, then return to latest. Check freezing, reading anchor, image layout, streamed final text, failure / no-result notices, task jumps, search return, and copy-all.
+3. Check work-row / status-row durations against the raw records; only accept explicit associations with Claude turn_duration or Codex task_complete. Hide the duration when the marker is missing, the association is missing, or the association hasn't loaded yet; a new turn must not reuse an old value.
+4. Open more sessions step by step and load images / Inbox media and mail attachments until this run's configured budget is exceeded; check LRU eviction of unused data, protection of in-use data, actual image decode sizes, and recovery after restarting in the same scope.
+5. Measure the actual size of items JSON, images, Inbox media, and SQLite / WAL separately; separate protected from evictable data, and list the mail attachment subdirectory on its own so it isn't missed. The SQLite physical file has no hard cap, so JSON eviction can't be claimed to free the same amount of disk.
 
-**通过标准**：分页连续、无重复终稿，阅读位置和冻结不被新流推走，展开／搜索／任务返回可达；用时与原生记录及轮次一致。可淘汰数据遵守配置预算，使用中数据不被误删，预算不足有可理解的结果。首屏、掉帧、内存和存储指标按预先约定标准判定；默认预算仍需这轮数据支持。
+**Pass criteria**: paging is continuous with no duplicate final text; reading position and freezing aren't pushed away by new streams; expand / search / task return are reachable; durations match the native records and turns. Evictable data respects the configured budget, in-use data is never deleted by mistake, and an insufficient budget gives an understandable result. First screen, dropped frames, memory, and storage metrics are judged against pre-agreed criteria; the default budget still needs this round's data to support it.
 
-**要记录的数据**：会话类型、命令／行／图片规模、缓存状态、预算配置、受保护对象、淘汰顺序及原生耗时来源／匿名关联。每组至少 10 个样本，首屏耗时、滚动掉帧或帧耗时、峰值 PSS、各类缓存及数据库体积分别记 n 和五项统计，当前未实测。工具真实记录的轮次耗时不等同于客户端性能测量。
+**Data to record**: session type, command / row / image scale, cache state, budget configuration, protected objects, eviction order, and native duration source / anonymous association. At least 10 samples per group; first-screen time, scroll dropped frames or frame time, peak PSS, each cache type and database size each recorded with n and the five statistics; currently not measured. Turn durations recorded by the tools themselves are not client performance measurements.
 
-**验后回填**：上述对应行，重点补 1.6、N14、N35 和 A1-长会话 的数据；只完成一次滚动或静态关联核对不能关闭 A1-长会话。
+**Fill in after verifying**: the rows above, focusing on data for 1.6, N14, N35, and A1-long-session; a single scroll or static association check can't close A1-long-session.
 
-## V03：后台连接、耗电和国产系统
+## V03: Background connection, battery, and Chinese OEM systems
 
-对应状态表：1.4、N55、N64、N70、N72、A1-后台、UX3.7-接入。当前结果：**未实测**。
+Status table rows: 1.4, N55, N64, N70, N72, A1-background, UX3.7-onboarding. Current result: **not measured**.
 
-**前置条件**：不同 ROM 设备、三家运营商、可查看的设备连接记录和系统电池数据；已记录系统权限、电池优化、自启动及后台设置，确认能将 hub 重启导致的断开单独归因。
+**Preconditions**: devices with different ROMs, three carriers, viewable device connection records and system battery data; system permissions, battery optimization, auto-start, and background settings recorded; confirm that disconnects caused by hub restarts can be attributed separately.
 
-**操作步骤**：
+**Steps**:
 
-1. 逐个点击准备清单的厂商跳转，确认到达正确页面；不可查询项保留人工确认，不能把「已点过」写成系统已放行。
-2. 按 Wi-Fi／蜂窝和前后台分别观察空闲连接及心跳协商 ACK；加入切网、Doze、锁屏和休眠联网限制场景。原生 Doze 只作其中一项，另测厂商实际策略。
-3. 每组至少 10 晚执行锁屏、不插电过夜观察，单晚计划 8 小时；保留开始／结束电量、观察时长、每段断开、恢复、进程退出与 hub 重启记录。
-4. 分别划掉最近任务、从系统「活跃应用」停止、强制停止以及重启手机，检查服务状态、停止提示和用户主动恢复。区分用户停止与系统回收，不能假定系统禁止的自动恢复会发生。
+1. Tap each vendor jump in the preparation checklist one by one and confirm it lands on the right page; items that can't be queried stay as manual confirmations, and "tapped it" can't be written as "the system allowed it".
+2. Observe idle connections and heartbeat negotiation ACKs separately for Wi-Fi / cellular and foreground / background; add network switching, Doze, lock screen, and network-during-sleep restrictions. Stock Doze is only one of these; also test the vendor's actual policy.
+3. Do at least 10 nights per group of locked, unplugged overnight observation, 8 hours planned per night; keep start / end battery, observation length, every disconnect, recovery, process exit, and hub restart record.
+4. Swipe away from recents, stop from the system's "Active apps", force-stop, and reboot the phone, each separately; check service state, stop notice, and user-initiated recovery. Tell user stops apart from system reclaims; don't assume an auto-recovery the system forbids will happen.
 
-**通过标准**：系统设置状态可信，跳转失败可退回；前后台心跳实际生效且有观测。自然回收／重启后的恢复与明确用户停止后的恢复符合系统约束，不重复建连接。耗电、存活及恢复满足预先约定标准；如果运营商或 ROM 导致丢通知／长期断开，记录为失败或待解决，不能只凭收到 ACK 判通过。
+**Pass criteria**: system settings state is trustworthy and failed jumps can go back; foreground and background heartbeats actually take effect and are observed. Recovery after natural reclaim / reboot and after an explicit user stop follows system constraints without duplicate connections. Battery, survival, and recovery meet pre-agreed criteria; if a carrier or ROM causes lost notifications / long disconnects, record it as failed or pending; receiving ACKs alone doesn't make it pass.
 
-**要记录的数据**：每个设置组合的连接建立／断开时刻和原因、实际心跳收发、退出原因、电量与实际观察时长。每小时耗电、断开次数、恢复耗时、可观察存活时长每组至少 10 个样本，记 n 和五项统计，当前未实测；未断开的样本注明观察截止，不把 timeout 当空闲超时。
+**Data to record**: for each settings combination, connection established / dropped times and reasons, actual heartbeats sent and received, exit reasons, battery and actual observation length. Battery per hour, disconnect count, recovery time, and observable survival time need at least 10 samples per group, with n and the five statistics; currently not measured. Samples that never disconnected note the observation cutoff; a timeout isn't taken as the idle timeout.
 
-**验后回填**：上述对应行；N55 和 A1-后台 必须有逐 ROM／运营商的真实记录。N72 的回报与连接诊断只能辅助，锁屏可见性还要完成 V04。
+**Fill in after verifying**: the rows above; N55 and A1-background must have real records per ROM / carrier. N72's reports and connection diagnostics only help; lock screen visibility still requires V04.
 
-## V04：真实请求、通知作答和 Live Updates
+## V04: Real requests, answering from notifications, and Live Updates
 
-对应状态表：2.11、5.3、7.30～7.32、13.8、17.1～17.5、N10、N16～N18、N50、N56、N58、N72、A1-通知、UX3.1-请求、UX3.4-呈现、UX3.4-扩展、UX3.8-平台。当前结果：**未实测**。
+Status table rows: 2.11, 5.3, 7.30–7.32, 13.8, 17.1–17.5, N10, N16–N18, N50, N56, N58, N72, A1-notifications, UX3.1-requests, UX3.4-presentation, UX3.4-extension, UX3.8-platform. Current result: **not measured**.
 
-**前置条件**：真实 Agent 和 MCP 可触发各类请求，通知权限／渠道可切换；Android 16、17 和至少一台不支持通知提升的对照设备；实际操作使用脱敏内容。
+**Preconditions**: real Agents and MCP can trigger every kind of request, and notification permission / channels can be toggled; Android 16, 17, and at least one control device that doesn't support notification promotion; use redacted content for actual operations.
 
-**操作步骤**：
+**Steps**:
 
-1. 触发授权、计划、单选／多题、屏幕卡和助手 ask_user，从 Agents 卡片直达完整页并打开会话；填原因后检查允许禁用，填计划意见后检查批准禁用，全文门禁只在 App 中允许全部放行。
-2. 锁屏后收请求：允许／批准先解锁，拒绝／打回使用 RemoteInput，单选／屏幕卡核对选项。故意重复点击、在电脑先处理、等请求过期或变更屏幕提示，检查禁用、撤回、410／prompt_changed 和终端兜底。
-3. 发起 MCP form，覆盖字符串、数字、布尔、单选／多选、校验失败和敏感字段；分别提交、拒绝、取消。URL 模式核对完整 URL／主机，未打开或打开失败不得继续；实际打开指定链接并关闭网页返回后才继续，提示打开不代表授权成功。
-4. 核对本次配对期间的请求历史只读，不能重新作答；该入口不能算历史会话范围完成。回传后去电脑确认 Agent 确实继续，不能只看「已回传你的选择」。
-5. 分别设置 done=long／always／off，触发短／长任务、已看、屏蔽、前台正在看及助手完成；核对通知策略和冷启动路由。观察前台工作到完成只产生一次系统确认触感，后台／重复完成不补发，关闭系统触感后遵守设置。
-6. 切换 Live Updates：设备默认开，关闭后普通常驻通知仍在；拒绝提升权限／不支持时降级。Android 16 检查 BigText，17 及以上检查 MetricStyle；锁屏默认隐藏详情，收紧隐私后旧详情撤回或刷新。预约测试要人工登记响铃、亮屏和是否可见。
+1. Trigger permission, plan, single-choice / multi-question, screen cards, and the assistant's ask_user; go straight from the Agents card to the full page and open the session. After entering a reason, check that Allow is disabled; after entering plan feedback, check that Approve is disabled; the full-text gate allows "allow all" only inside the App.
+2. Receive requests with the screen locked: Allow / Approve unlock first; Deny / send back use RemoteInput; check options for single-choice / screen cards. Tap repeatedly on purpose, handle it on the computer first, let the request expire, or change the screen prompt; check disabling, withdrawal, 410 / prompt_changed, and the terminal fallback.
+3. Start an MCP form covering strings, numbers, booleans, single / multiple choice, validation failures, and sensitive fields; submit, decline, and cancel separately. In URL mode, check the full URL / host; it must not continue if not opened or opening fails. Only continue after actually opening the given link and returning from the web page; a prompt to open doesn't mean authorization succeeded.
+4. Check that the request history for this pairing is read-only and can't be answered again; this entry point doesn't count as covering past-session scope. After sending the answer back, go to the computer and confirm the Agent really continued; don't just look at "Your choice was sent back".
+5. Set done=long / always / off separately and trigger short / long tasks, seen, muted, currently viewing in the foreground, and assistant completion; check notification policy and cold-start routing. Watch that foreground work running to completion produces exactly one system confirmation haptic, background / duplicate completions don't add more, and turning off system haptics is respected.
+6. Toggle Live Updates: on by default on the device; when off, the ordinary persistent notification remains; it degrades when promotion permission is denied / unsupported. On Android 16 check BigText, on 17 and above check MetricStyle; lock screen hides details by default, and after tightening privacy, old details are withdrawn or refreshed. Scheduled tests must manually log ringing, screen wake, and whether it's visible.
 
-**通过标准**：每种请求的三态结果、期限和安全门禁正确，回答不自动重发，真实 Agent 按所选继续或拒绝；密码／敏感答案和 URL 打开凭据不落盘。通知策略、隐私、路由、触感与设备偏好一致。系统未提升时可正常降级。上游缺少工具关联／配置来源时显示「未提供」，不伪造信息。
+**Pass criteria**: each request type's three-state result, deadline, and safety gates are correct; answers are not auto-resent; the real Agent continues or refuses as chosen; passwords / sensitive answers and URL-open credentials aren't written to disk. Notification policy, privacy, routing, and haptics match device preferences. It degrades normally when the system doesn't promote. When upstream lacks tool association / config source, it shows "Not provided" and doesn't fabricate information.
 
-**要记录的数据**：匿名请求／操作 ID 对应、请求类型、作答入口、解锁要求、原因／意见是否送达、Agent 继续证据、重复点击次数、撤回与过期结果；记录权限、ROM、API、样式、开关及人工可见性。通知可见延迟和作答至 Agent 继续耗时，每组至少 10 个样本，记 n 和五项统计，当前未实测。
+**Data to record**: anonymous request / operation ID mapping, request type, answer entry point, unlock requirement, whether the reason / feedback arrived, evidence the Agent continued, repeated tap count, withdrawal and expiry results; record permissions, ROM, API, style, switches, and manual visibility. Notification visible latency and answer-to-Agent-continues time need at least 10 samples per group, with n and the five statistics; currently not measured.
 
-**验后回填**：上述对应行；完成真实锁屏到 Agent 继续才关闭 A1-通知。UX3.4-扩展 保留 U02，UX3.1-请求 保留 A01；N72 不能仅凭 received 回报关闭可见性缺口。
+**Fill in after verifying**: the rows above; A1-notifications closes only after a real lock screen → Agent continues run. UX3.4-extension keeps U02, UX3.1-requests keeps A01; N72 can't close the visibility gap on the strength of received reports alone.
 
-## V05：离线发送、附件草稿和助手交接
+## V05: Offline sending, attachment drafts, and assistant handoff
 
-对应状态表：1.12、1.13、2.2、2.5、7.20、7.21、N5、N6、N12、N49、UX3.1-草稿、UX3.9-助手。当前结果：**未实测**。
+Status table rows: 1.12, 1.13, 2.2, 2.5, 7.20, 7.21, N5, N6, N12, N49, UX3.1-drafts, UX3.9-assistant. Current result: **not measured**.
 
-**前置条件**：有／无主对话两种配对，电脑输入框可放草稿或打开对话框；系统照片、相机、文件和外部分享来源可用，可在上传／发送中断网并终止 App 进程。
+**Preconditions**: two pairings, with and without a main chat; the computer's input box can hold a draft or open a dialog; system photos, camera, files, and external share sources are available; the network can be cut and the App process killed during upload / send.
 
-**操作步骤**：
+**Steps**:
 
-1. 电脑留草稿时发消息，分别取消和确认清空后发送；制造发出后丢回执，核对原 client_msg_id、未知结果和人工处置，不能当作成功或悄悄重发。
-2. 在无主对话且离线时，从助手首页发首句，并分别走分享、Agents、知识库、飞书总结／拟回复及邮件 AI 交接；检查先持久入队、切 Persona，再在联网后绑定主对话。
-3. 选照片、拍照、选文件及在光标中间插入路径，覆盖普通与助手首页输入框。已上传附件随消息入队，未上传附件断网时保留草稿并提示联网重试。
-4. 保存含附件草稿后杀进程再开；撤回来源 URI 权限、删除源文件、让会话被替换／历史重写，再打开检查失效条目和旧版本提醒。发送期间继续编辑，确认回执只清对应版本。
-5. 分享多种来源内容并终止来源进程，确认复制后的作用域队列仍可用；检查分享目标排序、屏蔽和已看口径与 Agents 一致。
+1. Send a message while the computer has a draft, once cancelling and once confirming the clear before sending; cause a lost receipt after sending, and check the original client_msg_id, the unknown result, and manual handling; it must not count as success or be silently resent.
+2. With no main chat and offline, send the first message from the assistant home, and also go through share, Agents, knowledge base, Lark summarize / draft reply, and mail AI handoff; check that it is persisted to the queue first, switches to Persona, then binds to the main chat once online.
+3. Pick photos, take a photo, pick files, and insert a path in the middle at the cursor, covering both the ordinary and the assistant home input boxes. Already-uploaded attachments are queued with the message; attachments not yet uploaded keep the draft when offline and prompt to retry once online.
+4. Save a draft with attachments, kill the process, and reopen; revoke the source URI permission, delete the source file, have the session replaced / history rewritten, then reopen and check the invalid entries and the old-version notice. Keep editing during sending, and confirm the receipt only clears the matching version.
+5. Share content from various sources and kill the source process; confirm the copied scoped queue still works; check that share target ordering, muting, and seen semantics match Agents.
 
-**通过标准**：确定未发、拒绝和未知结果区分正确；原 ID 可核对，同内容不会因重开页面或进程恢复而重复发送。所有主对话交接离线可排队，附件恢复或明确提示失效，失败保留输入；新编辑不会被旧回执清掉。
+**Pass criteria**: definitely-not-sent, rejected, and unknown results are told apart correctly; the original ID can be reconciled, and the same content isn't sent twice because a page reopened or the process recovered. Every main chat handoff can queue offline; attachments recover or clearly say they're invalid; failures keep the input; new edits aren't cleared by old receipts.
 
-**要记录的数据**：入口、配对／会话匿名编号、原 ID 一致性、outbox 状态迁移、上传状态、URI 权限变化、草稿版本、实际发送次数及恢复结果。若报告上传／恢复耗时，按组至少 10 个样本并记 n 和五项统计，当前未实测。
+**Data to record**: entry point, pairing / session anonymous ids, original ID consistency, outbox state transitions, upload state, URI permission changes, draft version, actual send count, and recovery result. If upload / recovery times are reported, at least 10 samples per group with n and the five statistics; currently not measured.
 
-**验后回填**：上述对应行，分别注明有／无主对话、普通／首页附件和分享来源覆盖，不能用普通聊天发送通过替代知识库或助手首句。
+**Fill in after verifying**: the rows above, noting coverage of with / without main chat, ordinary / home attachments, and share sources separately; an ordinary chat send passing can't substitute for the knowledge base or the assistant's first message.
 
-## V06：会话操作、启动回执和返回栈
+## V06: Session operations, launch receipts, and the back stack
 
-对应状态表：5.4、5.5、5.8、5.11、5.13、5.14、6.4、9.3、UX3.3-状态；联动回填 1.1。当前结果：**未实测**。
+Status table rows: 5.4, 5.5, 5.8, 5.11, 5.13, 5.14, 6.4, 9.3, UX3.3-state; also fills in 1.1. Current result: **not measured**.
 
-**前置条件**：真实接入电脑与各类启动器，hub 的 client_ops 可查；准备同一会话在多个 tab 的聊天／请求／终端返回栈，可控制请求取消、回执丢失及 hub 重启。
+**Preconditions**: real connected computers and all kinds of launchers; the hub's client_ops can be queried; prepare chat / request / terminal back stacks for the same session across several tabs; be able to control request cancellation, lost receipts, and hub restarts.
 
-**操作步骤**：
+**Steps**:
 
-1. 置顶、屏蔽、改名、空间操作和交给 Persona，检查其他列表、角标、通知及收件箱更新；屏蔽例外按 hub 规则核对。
-2. 分别启动 Claude／Codex／TRAEX，检查可选 agent_type、实际启动器与会话归属；旧响应没有 agent_type 时保留 Claude 兼容行为，不给其他类型展示 Claude 专属模式／强度。
-3. 新建发出后丢弃响应，重开表单、终止 App、重启 hub，沿原操作 ID 查询回执；同 ID 同参数重放不新增会话，改参数复用 ID 应拒绝，pending／unknown 不重复创建。
-4. 对恢复、重连、关闭分别制造取消和丢回执，重开 App 后再次点击，检查一次性操作日志仍在、只读核对而不重复触发。明确拒绝或核对成功后才释放记录。
-5. 确认关闭或核对关闭成功后遍历各 tab 返回栈，确保该会话的聊天／请求／终端路由均被移除，请求和通知撤回，列表与收件箱一致。
+1. Pin, mute, rename, do space operations, and hand to Persona; check that other lists, badges, notifications, and the Inbox update. Check mute exceptions against the hub's rules.
+2. Launch Claude / Codex / an internal Codex variant separately; check the selectable agent_type, the actual launcher, and session ownership. When an old response has no agent_type, keep the Claude-compatible behavior, and don't show Claude-only modes / effort for other types.
+3. Drop the response after creating a session, reopen the form, kill the App, restart the hub, and query the receipt with the original operation ID. Replaying the same ID with the same parameters creates no new session; reusing the ID with changed parameters should be rejected; pending / unknown doesn't create duplicates.
+4. For resume, reconnect, and close, cause cancellation and lost receipts separately; reopen the App and tap again; check that the one-time operation log is still there and is reconciled read-only, not triggered again. The record is released only after an explicit rejection or successful reconciliation.
+5. After confirming close or reconciling a successful close, go through each tab's back stack and make sure the session's chat / request / terminal routes are all removed, requests and notifications withdrawn, and the list and Inbox consistent.
 
-**通过标准**：真实副作用次数与操作次数一致，结果未知时有核对入口；没有重复启动／关闭／恢复／重连。关闭后返回不会进入已移除会话，屏蔽／角标联动正确，旧字段缺失仍兼容。
+**Pass criteria**: the number of real side effects matches the number of operations, and there's a reconcile entry point when the result is unknown; no duplicate launch / close / resume / reconnect. After closing, going back never enters a removed session; mute / badge links are correct; missing old fields stay compatible.
 
-**要记录的数据**：匿名机器／会话与启动器类型、操作 ID 及参数摘要一致性、回执状态、重启前后记录、实际新增／关闭次数、返回栈检查结论。启动和核对耗时如需引用，每组至少 10 个样本并记 n 和五项统计，当前未实测。
+**Data to record**: anonymous machine / session and launcher type, operation ID and parameter summary consistency, receipt state, records before and after restart, actual sessions added / closed, back stack check conclusion. If launch and reconciliation times are cited, at least 10 samples per group with n and the five statistics; currently not measured.
 
-**验后回填**：上述对应行，5.13／6.4 补 start 回执证据，5.11／UX3.3-状态 补取消与跨重启核对证据，9.3／1.1 补联动结果。
+**Fill in after verifying**: the rows above; 5.13 / 6.4 add start receipt evidence, 5.11 / UX3.3-state add evidence of cancellation and cross-restart reconciliation, 9.3 / 1.1 add the linked results.
 
-## V07：飞书窗口、邮件回复和附件
+## V07: Lark windows, mail replies, and attachments
 
-对应状态表：9.8、10.1～10.3、12.1、N15、N39～N42、UX3.5-列表、UX3.6-草稿、UX3.6-话题、UX3.6-已读。当前结果：**未实测**。
+Status table rows: 9.8, 10.1–10.3, 12.1, N15, N39–N42, UX3.5-list, UX3.6-drafts, UX3.6-threads, UX3.6-read. Current result: **not measured**.
 
-**前置条件**：飞书网关与邮箱已配置，能创建 @我、编辑／撤回、历史断档、话题和新邮件；备同名不同内容附件、可用和不可用查看器。来源已读按可见即读（2026-10-31 用户确认）：从收件箱打开时第一屏真正看到的消息也报已读。
+**Preconditions**: the Lark gateway and mail are configured; @me items, edits / recalls, history gaps, threads, and new mail can be created; prepare same-name attachments with different content, and usable and unusable viewers. Source read state follows read-on-visible (confirmed by the user 2026-10-31): when opened from the Inbox, messages actually seen on the first screen are reported read too.
 
-**操作步骤**：
+**Steps**:
 
-1. 从收件箱事项起点打开飞书会话，核对先画缓存、分界线、普通会话前／后分页；断网期间新增／编辑／撤回，重连后检查完整窗口权威替换、缺口回最新与不连续页处理。
-2. 分别遮挡、后台、初次定位、程序滚动及未核对缓存，确认均不报来源已读；满足门禁后核对真实来源结果。从收件箱打开时，满足门禁后第一屏上屏的消息也要报已读；「已处理」只影响 Persona。
-3. 话题前翻，再点「↓ 最新回复」重取最新页，验证窗口替换和回复；明确不测试不存在的 after 连续分页，也不借普通会话游标拼接话题。
-4. 飞书直接回复、话题回复、AI 草拟回复和邮件回复分别保存草稿、断网、丢回执、重启 App／hub，确认原 client_id、持久回执／回显核对和未知结果不重发。
-5. 打开邮件纯文本／HTML、多个 UID 与链接，显式切已读／未读并核对来源。编辑回复期间加入新邮件或改变收件人，检查 UID／版本冲突返回 `mail_reply_target_changed`、保留草稿、展示最新目标并再次确认；离线队列保留原目标。
-6. 同名附件分别下载、系统打开，检查稳定 ID、完整内容与进度；在隔离的鉴权 HTTP 客户端验证 Range／Content-Range、无效范围和无鉴权拒绝。中断 App 下载后点重试，检查半成品不被打开和失败提示；在退出配对前后延迟创建目录／重命名，复验原 A05 的修复（迟到写入被拒、不重建目录）；无查看器时保留已下载提示。当前界面重试从头下载，不能把传输接口支持 offset 写成界面已支持断点续传。
+1. Open a Lark chat from an Inbox item as the starting point; check that the cache is drawn first, the divider, and backward / forward paging for ordinary chats. Add / edit / recall while offline; after reconnecting, check authoritative replacement of the full window, gaps returning to latest, and handling of non-contiguous pages.
+2. Obscure, background, initial positioning, programmatic scrolling, and unreconciled cache each separately; confirm none of them report source read. Once the gate is met, check the real source result. When opened from the Inbox, messages on the first screen after the gate is met must also be reported read; "done" only affects Persona.
+3. Page back in a thread, then tap "↓ Latest replies" to refetch the latest page; verify window replacement and replies. Explicitly don't test after-contiguous paging, which doesn't exist, and don't stitch threads using ordinary chat cursors.
+4. For Lark direct replies, thread replies, AI-drafted replies, and mail replies, separately save a draft, cut the network, lose the receipt, and restart the App / hub; confirm the original client_id, persistent receipt / echo reconciliation, and that unknown results aren't resent.
+5. Open plain text / HTML mail, multiple UIDs, and links; explicitly toggle read / unread and check the source. While editing a reply, add new mail or change recipients; check that a UID / version conflict returns `mail_reply_target_changed`, keeps the draft, shows the latest target, and asks for confirmation again; the offline queue keeps the original target.
+6. Download and open same-name attachments with the system separately; check stable IDs, complete content, and progress. In an isolated authenticated HTTP client, verify Range / Content-Range, invalid ranges, and rejection without auth. Interrupt an App download and tap retry; check that the partial file is never opened and the failure notice appears. Delay directory creation / renames before and after leaving the pairing, and re-verify the former A05 fix (late writes rejected, directory not recreated); without a viewer, keep the downloaded notice. The current UI retries by downloading from the start; the transfer API supporting offset doesn't mean the UI supports resumable download.
 
-**通过标准**：窗口没有假连续和重复消息，编辑／撤回按完整性更新，已读满足门禁和可见即读的语义；未知回复只按原 ID 核对，无重复发送。邮件目标变化时不发给旧／新目标中的任何一个，直到用户重新确认；附件鉴权、Range、内容、作用域和失败恢复正确。
+**Pass criteria**: windows have no fake continuity and no duplicate messages; edits / recalls update by completeness; read state meets the gate and read-on-visible semantics; unknown replies are reconciled only by the original ID, with no duplicate sends. When the mail target changes, nothing is sent to either the old or new target until the user confirms again; attachment auth, Range, content, scope, and failure recovery are correct.
 
-**要记录的数据**：窗口起止与游标方向、sync_state、verified、已读上报／实际来源变化、原 client_id 和实际发送次数；邮件 UID／版本变化、冲突码、是否再次确认；附件匿名 ID、大小、内容校验结论、Range 状态码和重试结果。分页、重连追平和下载耗时如需引用，每组至少 10 个样本并记 n 和五项统计，当前未实测。
+**Data to record**: window start and end and cursor direction, sync_state, verified, read reports / actual source changes, original client_id and actual send count; mail UID / version changes, conflict code, whether confirmed again; attachment anonymous ID, size, content verification conclusion, Range status code, and retry result. If paging, reconnect catch-up, and download times are cited, at least 10 samples per group with n and the five statistics; currently not measured.
 
-**验后回填**：上述对应行，12.1 分开记录正文、回复冲突与附件；UX3.6-已读 的语义已确认，实测通过后回填证据，UX3.6-话题 保留 U01。
+**Fill in after verifying**: the rows above; 12.1 records body, reply conflicts, and attachments separately; the semantics of UX3.6-read are confirmed, so fill in evidence once measured and passing; UX3.6-threads keeps U01.
 
-## V08：多设备、iOS 兼容和退出清理
+## V08: Multiple devices, iOS compatibility, and cleanup on leaving
 
-对应状态表：1.3、N4、N9、N13、N65、N69、UX3.4-扩展、UX3.8-设备、UX3.8-平台。当前结果：**未实测**。
+Status table rows: 1.3, N4, N9, N13, N65, N69, UX3.4-extension, UX3.8-devices, UX3.8-platform. Current result: **not measured**.
 
-**前置条件**：两台 Android 与现有 iOS 同连可控 hub，设备具备不同手机工具权限；配对甲／乙可切换，能延迟上传、阅读位置写入、回复回调和 shell 保存。
+**Preconditions**: two Android phones and the existing iOS connected to a controllable hub at the same time, with different phone tool permissions per device; pairings A / B can be switched; uploads, reading position writes, reply callbacks, and shell saves can be delayed.
 
-**操作步骤**：
+**Steps**:
 
-1. 分别注册工具并切换前台、撤回日历权限／工具开关，检查按设备能力与在线状态路由；日历写入要在目标手机确认，Android 不覆盖 iOS 独有工具。
-2. 同时触发普通交互和 elicitation，检查声明能力的 Android 收到新类型，未声明的 iOS 不收到新类型；仅有旧客户端时回终端，普通收流、提问、审批、推送与发消息仍可用。
-3. 两台 Android 分别设置 Live Updates、锁屏详情和 done 偏好，重启后读取，检查不串设备。撤销一台设备，检查它的连接、工具与推送注册处理，另一台和 iOS 继续工作。
-4. 在配对甲留文本／附件草稿、图片、回复／操作日志、飞书锚点、shell 位置和未完成回调；断开／撤销／401 后重配乙，再释放旧回调并重启 App。检查旧数据已清，目录没有迟到重建，乙不出现甲的草稿／路由／状态。
+1. Register tools on each, switch the foreground, and revoke calendar permission / tool switches; check routing by device capability and online state. Calendar writes must be confirmed on the target phone; Android doesn't override iOS-only tools.
+2. Trigger an ordinary interaction and an elicitation at the same time; check that the Android that declares the capability gets the new type, and the iOS that doesn't declare it doesn't. With only old clients, it falls back to the terminal; ordinary streaming, questions, approvals, push, and sending messages still work.
+3. Set Live Updates, lock screen details, and done preferences separately on the two Android phones, read them after restart, and check they don't leak across devices. Revoke one device and check how its connection, tools, and push registration are handled, while the other one and iOS keep working.
+4. On pairing A, leave text / attachment drafts, images, reply / operation logs, Lark anchors, shell position, and pending callbacks; after disconnect / revoke / 401, re-pair to B, then release the old callbacks and restart the App. Check that the old data is cleared, directories aren't recreated late, and B shows none of A's drafts / routes / state.
 
-**通过标准**：设备注册、撤回和权限更新准确，写操作经确认；旧 iOS 全程可正常工作。退出后作用域数据及兼容记录不泄漏到新代次，旧实例不能恢复已删除目录；设备通知偏好各自保持。
+**Pass criteria**: device registration, revocation, and permission updates are accurate, and writes are confirmed; the old iOS works normally throughout. After leaving, scoped data and compatibility records don't leak into the new generation, old instances can't restore deleted directories, and each device keeps its own notification preferences.
 
-**要记录的数据**：匿名设备／配对代次、平台／能力集合、工具注册撤回与实际落点、新类型是否过滤、iOS 普通流程结果；清理前后文件类别、迟到回调结果和两端偏好对照。若引用清理／撤回延迟，每组至少 10 个样本并记 n 和五项统计，当前未实测。
+**Data to record**: anonymous device / pairing generation, platform / capability set, tool registration, revocation and where calls actually land, whether new types are filtered, results of ordinary iOS flows; file categories before and after cleanup, late callback results, and a comparison of preferences on both ends. If cleanup / revocation latency is cited, at least 10 samples per group with n and the five statistics; currently not measured.
 
-**验后回填**：上述对应行，N4／N65 补清理与迟到写入证据，N13 补多设备路由，UX3.4-扩展 补旧 iOS 兼容结论并继续保留 U02。
+**Fill in after verifying**: the rows above; N4 / N65 add cleanup and late-write evidence, N13 adds multi-device routing, UX3.4-extension adds the old iOS compatibility conclusion and still keeps U02.
 
-## V09：APK 实机更新
+## V09: On-device APK update
 
-对应状态表：N71。当前结果：**未实测**。
+Status table rows: N71. Current result: **not measured**.
 
-**前置条件**：已装版本和更高版本同包名同签名，hub 已托管匹配清单；准备哈希不符、签名不符、用户取消及网络中断对照，能切换未知来源安装授权。
+**Preconditions**: the installed version and a higher version have the same package name and signature, and the hub hosts a matching manifest; prepare hash-mismatch, signature-mismatch, user-cancel, and network-interruption controls; be able to toggle the install-unknown-apps permission.
 
-**操作步骤**：
+**Steps**:
 
-1. App 检查更新，核对版本与说明，经当前受信路由下载；拒绝未知来源授权，再从系统设置放行后重试。
-2. 分别注入哈希不符和签名不符，确认失败时保留旧版本；正常包拉起系统确认，分别取消和确认安装。
-3. 升级后打开，核对配对、文本／附件草稿、阅读位置、outbox、回复及一次性操作日志，并观察常驻服务恢复；在各 ROM 复验。
+1. Check for updates in the App, verify the version and notes, and download over the current trusted route; deny the unknown-sources permission, then allow it from system Settings and retry.
+2. Inject a hash mismatch and a signature mismatch separately, and confirm the old version is kept on failure; a valid package brings up the system confirmation; cancel and confirm the install separately.
+3. Open after upgrading and check pairing, text / attachment drafts, reading position, outbox, replies, and one-time operation logs, and watch the persistent service recover; re-verify on each ROM.
 
-**通过标准**：失败／取消不破坏旧数据，不绕过系统安装确认；正常升级后可继续真实收发，常驻服务恢复。系统主动停止／限制要有可恢复入口，不能把未恢复记成更新通过。
+**Pass criteria**: failure / cancel doesn't damage old data or bypass the system install confirmation; after a normal upgrade, real send and receive continue and the persistent service recovers. A system-initiated stop / restriction must have a recovery entry point; not recovering can't be recorded as an update pass.
 
-**要记录的数据**：匿名设备、包名／签名一致性结论、版本、清单与包校验结果、授权／确认／取消状态、数据类别核对和服务状态。下载／安装／恢复耗时每组至少 10 个样本并记 n 和五项统计，当前未实测。
+**Data to record**: anonymous device, package name / signature consistency conclusion, version, manifest and package verification results, permission / confirm / cancel state, data category checks, and service state. Download / install / recovery times need at least 10 samples per group with n and the five statistics; currently not measured.
 
-**验后回填**：N71 的各 ROM 结果；同签名升级、失败对照、数据保留和服务恢复全部通过后，才改为已完成。
+**Fill in after verifying**: N71's per-ROM results; it changes to done only after same-signature upgrade, failure controls, data retention, and service recovery all pass.
 
-## V10：视觉、无障碍和整体 P0 记录
+## V10: Visuals, accessibility, and the overall P0 record
 
-对应状态表：22.1、22.7、22.8、22.10、23.1、N2、N54、A1-开发验收、A2-范围、A2-验收；其他发现问题回填所属功能行。当前结果：**未实测**。
+Status table rows: 22.1, 22.7, 22.8, 22.10, 23.1, N2, N54, A1-dev-acceptance, A2-scope, A2-acceptance; other issues found are filled into the feature rows they belong to. Current result: **not measured**.
 
-**前置条件**：协调者安排统一界面验收，准备关键页与状态矩阵和原型（2026-10-31 已获认可）；持有与验收提交一致的 debug／Release 产物及现有 token 基线记录。本轮文档车道不构建、不安装、不截图。
+**Preconditions**: the coordinator arranges a unified UI acceptance and prepares the key page and state matrix and the prototype (approved 2026-10-31); have debug / Release artifacts matching the acceptance commit and the existing token baseline record. This round's documentation lane doesn't build, install, or take screenshots.
 
-**操作步骤**：
+**Steps**:
 
-1. 检查四 tab、配对、聊天／助手、请求完整页、收件箱／邮件／话题、设置与系统通知，覆盖深浅色、动态取色、默认／大／辅助字号和窄屏。确认按钮文字单行、操作可达、系统启动图与品牌一致。
-2. 使用 TalkBack，检查计数读完整数字、图标有可理解名称、装饰不干扰；测试键盘弹出、预测性返回、浮层关闭、网页拖动及背后对话交互，减少动画设置生效。
-3. debug 逐一检查固定状态入口；检查已有 Release APK 的 manifest／dex 不含调试 Activity、固定状态夹具及可达的调试入口，登记产物版本与检查证据。debug 直达只能证明入口，不能替代真实故障恢复。
-4. 核对 token 采用率基线和本次文件增量记录。当前是独立脚本，不预设 Gradle／CI 自动执行过；由协调者另行安排检查并登记结果。动态取色仍由实际页面验收。
-5. 按状态表原编号逐行登记适用场景、设备、真实 hub／账号结果与证据，核对 V01～V09 是否齐全。未覆盖、失败、样本不足和受限项各自保留。
+1. Check the four tabs, pairing, chat / assistant, full request page, Inbox / mail / threads, settings, and system notifications, covering dark and light mode, dynamic color, default / large / accessibility font sizes, and narrow screens. Confirm button labels are single-line, actions are reachable, and the system splash screen matches the brand.
+2. With TalkBack, check that counts read the full number, icons have understandable names, and decorations don't get in the way; test keyboard appearance, predictive back, overlay dismissal, web page dragging and interacting with the chat behind it, and that the reduce-animations setting takes effect.
+3. In debug, check each fixed-state entry point one by one; check that the manifest / dex of the existing Release APK contain no debug Activity, fixed-state fixtures, or reachable debug entry points, and log the artifact version and check evidence. Jumping straight there in debug only proves the entry point; it can't replace real fault recovery.
+4. Check the token adoption baseline and this run's per-file delta records. It's currently a standalone script, and it's not assumed that Gradle / CI has run it automatically; the coordinator arranges the check separately and logs the result. Dynamic color is still verified on actual pages.
+5. Log, row by row using the status table's original numbers, the applicable scenarios, devices, real hub / account results, and evidence, and check that V01–V09 are complete. Uncovered, failed, insufficient-sample, and restricted items are each kept as they are.
 
-**通过标准**：所列页面在约定矩阵下操作与读屏可用；Release 没有 debug 入口，token 增量有明确结果。所有 Android P0 都有真实环境证据或明确的未通过结论；A2-验收 只有全部适用 P0 通过才关闭。用户认可、历史会话范围和 Swift 出口仍须分别处理，不以视觉通过代替。
+**Pass criteria**: the listed pages are operable and screen-readable under the agreed matrix; Release has no debug entry points, and the token delta has a clear result. Every Android P0 has real-environment evidence or a clear not-passed conclusion; A2-acceptance closes only when all applicable P0s pass. User approval, past-session scope, and the Swift exit still have to be handled separately; a visual pass doesn't replace them.
 
-**要记录的数据**：页面／状态／主题／字号／设备矩阵及问题清单，TalkBack／键盘／返回结果、Release 检查证据、token 基线版本，以及每个 P0 的通过／失败／未测原因。若汇报渲染或启动性能，复用 V02 每组至少 10 个样本及五项统计要求，当前未实测。
+**Data to record**: the page / state / theme / font size / device matrix and issue list, TalkBack / keyboard / back results, Release check evidence, token baseline version, and each P0's pass / fail / not-tested reason. If rendering or launch performance is reported, reuse V02's requirement of at least 10 samples per group and the five statistics; currently not measured.
 
-**验后回填**：上述对应行；N54 依据认可记录单独更新，N2 的 Swift 出口保持缺口，A1-开发验收 补实际检查记录，A2-验收 在所有门槛满足后更新。表内编号和行顺序保持不变。
+**Fill in after verifying**: the rows above; N54 is updated separately based on the approval record, N2's Swift exit stays a gap, A1-dev-acceptance adds the actual check records, and A2-acceptance is updated once all thresholds are met. Row numbers and row order in the table stay unchanged.

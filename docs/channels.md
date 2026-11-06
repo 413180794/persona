@@ -1,51 +1,51 @@
-# 渠道（channel）：所有和 Persona 对话的入口
+# Channels: every entry point for talking to Persona
 
-渠道是「用户从哪儿和 Persona 说话」：Persona 自己的 App、微信机器人、飞书机器人、飞书里的 `/agent`、语音……每个都是一个渠道。
-一条消息从渠道进来，助手（`personad assistant`，hub 总线上的管理者）把它发进对话，盯着这一轮，答完把答案发回同一个渠道；这段对话里 Agent 要用户回答、批准的，也发到这个渠道，
-在别处答过了就撤掉。「渠道」页列出所有支持的渠道、哪些连上了，每个都能进去设置（#1466）。Apple 端、网页和安卓都从设置 › 渠道进入，独立放在连接器前（#2195、#2196；见「界面」）。
+A channel is "where the user talks to Persona from": Persona's own App, the WeChat bot, the Lark bot, `/agent` in Lark, voice… each is a channel.
+A message comes in from a channel; the assistant (`personad assistant`, a manager on the hub bus) sends it into a chat, watches the turn, and when it's answered sends the answer back to the same channel. When an Agent in that chat needs the user to answer or approve something, that goes to this channel too,
+and it's withdrawn once answered elsewhere. The "Channels" page lists every supported channel and which ones are connected, and each can be opened to configure it (#1466). Apple, web, and Android all enter from Settings › Channels, as its own entry placed before connectors (#2195, #2196; see "UI").
 
-**渠道和连接器是两回事**：
+**Channels and connectors are different things**:
 
-| | 连接器（`docs/connectors.md`） | 渠道（这里） |
+| | Connector (`docs/connectors.md`) | Channel (here) |
 | --- | --- | --- |
-| 是什么 | 数据来源：进知识库、收件箱，给助手工具 | 对话的入口：用户在那儿说话，Persona 在那儿回答 |
-| 数据往哪走 | 外面 → 知识库 / 收件箱（hub 去拉） | 用户 → 对话 → 用户（一来一回） |
-| 例子 | GitHub、信息、Telegram（用户自己的账号）、邮件、飞书 | Persona App、微信机器人、飞书机器人、飞书 `/agent`、语音 |
+| What it is | A data source: feeds the knowledge base and Inbox, provides assistant tools | An entry point for chat: the user talks there, Persona answers there |
+| Where data flows | Outside → knowledge base / Inbox (pulled by the hub) | User → chat → user (a round trip) |
+| Examples | GitHub, Messages, Telegram (the user's own account), mail, Lark | Persona App, WeChat bot, Lark bot, Lark `/agent`, voice |
 
-同一个东西可能两类都是：飞书既是连接器（飞书网关读消息、文档进知识库），又有两个渠道（飞书机器人、飞书 `/agent`）。
-微信扩展贡献了一个连接器 `wechat`，但那个连接器只管扫码绑定和状态，没有任何数据进知识库，它本身是个渠道。
+The same thing can be both: Lark is a connector (the Lark gateway reads messages and docs into the knowledge base) and also has two channels (the Lark bot and Lark `/agent`).
+The WeChat extension contributes a connector `wechat`, but that connector only handles QR binding and status; no data goes into the knowledge base, and it is itself a channel.
 
-## 一、现在有哪些入口（2026-11-04 盘点）
+## 1. Current entry points (inventory 2026-11-04)
 
-| 入口 | 代码在哪 | 进哪个对话 | 答案怎么回去 | 提问 / 批准 | 归到 |
+| Entry point | Where the code is | Which chat it goes to | How the answer gets back | Questions / approvals | Classified as |
 | --- | --- | --- | --- | --- | --- |
-| Persona App：iOS、Mac、Android、网页 | 各端的对话页，`POST /api/v1/sessions/{m}/{s}/messages`（`client_msg_id` 是随机 id） | 用户在 App 里选的那段 | 实时流（WebSocket） | 卡片，原地作答 | 渠道 `app` |
-| Apple Watch | 手表 App，经 hub 的同一套接口 | 主对话 / 选的那段 | 同上 | 通知按钮、手表上的卡片 | 渠道 `app` 的一个端 |
-| Siri / 快捷指令（问 Persona） | `apple/Persona/Intents`（`docs/siri.md`） | 主对话 | App 里轮询 `items` 最多 24 秒，读出最后的话 | 没有 | 渠道 `app` 的一个端（它自己的轮询是第二份「等一轮答完」，见「还没做」） |
-| 微信机器人 | 内置扩展 `wechat`（`server/internal/wechat`，`docs/wechat.md`，#1447） | 主对话，或 `/new` 开的对话 | 扩展经 hub 的 API 每 2 秒看一次会话，取这一轮的答案，发文字 | 文字往返（回复序号、允许 / 拒绝） | 渠道 `wechat`（扩展贡献） |
-| 飞书机器人 | 收发在 hub（`hub/bots*.go`、`feishubot/`），对话的事在助手（`assistant/feishu*.go`，`docs/bots.md`） | 主对话、`/new` 的对话、`/agents` 选的 Agent、回复绑定了目标的那条消息 | hub 内部 watch 会话，一开始就回一张进度卡、每 3 秒刷新，结束时答案写进这张卡（过程折叠）；老版本建过智能体消息的那一轮照旧收尾 | 卡片按钮 | 渠道 `feishu`（内置） |
-| 飞书里的 `/agent` | 接飞书的扩展里（#1571 起；原来是 hub 的 lark_agent.go、lark_agent_docs.go；`docs/lark-agent.md`） | 每个请求 / 话题一段新的无头对话 | Agent 调 `lark_agent_reply`，以**我的名义**回复那条消息 / 评论 | 没有 | 不在 hub 的渠道列表里（#1571 起不再是内置渠道，`GET /api/v1/channels` 不列它）；`lark_agent` 仍是保留 id，扩展渠道不能用它 |
-| 语音 | hub.json 的扩展 `voice`、内置语音扩展（`server/internal/voice`，`docs/extensions.md`「语音」） | 语音模型自己说；要交给主对话的事经 hub 的 API 发进主对话 | 声音 | 没有 | 渠道 `voice`（扩展贡献的 `voice` 扩展点，列出来但不走下面的管线） |
-| Telegram | 扩展 `telegram` 的**连接器**（扩展市场 `nwverse/persona-extensions`；用户自己的账号，MTProto，#1704） | —— | —— | —— | **不是渠道**：只是数据来源。现在没有 Telegram 的对话机器人；以后做就是一个扩展渠道（Bot API），见「还没做」 |
-| 邮件 | 连接器 `mail` | 收件箱 | AI 分身起草、点一下发送 | —— | 不是渠道（数据来源） |
-| 收件箱的 AI 分身、定时任务、飞书机器人的 `pushes` / `sync` | hub / 助手 | hub 或助手自己发起的对话 | 推送、飞书 | —— | 不是入口：hub 发起的。它们**往外发**时用渠道的「推送」能力（见「推送和同步」） |
-| botmux | node 的宿主（`docs/engines.md`「botmux」） | 飞书话题 ↔ 某台电脑上的 Claude Code | botmux 自己 | botmux 自己 | 不是 Persona 的渠道：那是 Agent 自己的入口，Agents 页照常显示 |
-| 扩展的 `assistant`、`api`、`events`、`hub_api` | `docs/extensions.md` | —— | —— | —— | 不是渠道，是拼出渠道的零件；微信第一版就是用 `connectors` + `hub_api` + `events` 拼的 |
+| Persona App: iOS, Mac, Android, web | Each client's chat page, `POST /api/v1/sessions/{m}/{s}/messages` (`client_msg_id` is a random id) | The one the user picked in the App | Live stream (WebSocket) | Cards, answered in place | Channel `app` |
+| Apple Watch | The watch App, via the same hub API | Main chat / the one picked | Same as above | Notification buttons, cards on the watch | One client of channel `app` |
+| Siri / Shortcuts (Ask Persona) | `apple/Persona/Intents` (`docs/siri.md`) | Main chat | The App polls `items` for up to 24 seconds and reads out the last words | None | One client of channel `app` (its own polling is a second copy of "wait for the turn to finish", see "Not done yet") |
+| WeChat bot | Built-in extension `wechat` (`server/internal/wechat`, `docs/wechat.md`, #1447) | Main chat, or a chat started with `/new` | The extension checks the session through the hub API every 2 seconds, takes this turn's answer, and sends text | Text round trip (reply with a number, allow / deny) | Channel `wechat` (contributed by the extension) |
+| Lark bot | Sending and receiving in the hub (`hub/bots*.go`, `feishubot/`), chat logic in the assistant (`assistant/feishu*.go`, `docs/bots.md`) | Main chat, a `/new` chat, the Agent picked with `/agents`, or the chat bound to the message being replied to | The hub watches the session internally, replies right away with a progress card refreshed every 3 seconds, and writes the answer into that card at the end (process folded); turns for which an old version created an agent message still finish the old way | Card buttons | Channel `feishu` (built in) |
+| `/agent` in Lark | In the extension that connects Lark (since #1571; previously the hub's lark_agent.go, lark_agent_docs.go; `docs/lark-agent.md`) | A new headless chat per request / thread | The Agent calls `lark_agent_reply` and replies to that message / comment **as me** | None | Not in the hub's channel list (since #1571 no longer a built-in channel; `GET /api/v1/channels` doesn't list it); `lark_agent` is still a reserved id that extension channels can't use |
+| Voice | The `voice` extension in hub.json, the built-in voice extension (`server/internal/voice`, `docs/extensions.md` ("Voice")) | The voice model speaks for itself; things to hand to the main chat are sent into the main chat through the hub API | Audio | None | Channel `voice` (the `voice` extension point contributed by an extension; listed but not using the pipeline below) |
+| Telegram | The **connector** of the `telegram` extension (extension market `nwverse/persona-extensions`; the user's own account, MTProto, #1704) | — | — | — | **Not a channel**: only a data source. There's no Telegram chat bot yet; if built, it would be an extension channel (Bot API), see "Not done yet" |
+| Mail | Connector `mail` | Inbox | The AI twin drafts, one tap sends | — | Not a channel (data source) |
+| The Inbox's AI twin, scheduled tasks, the Lark bot's `pushes` / `sync` | hub / assistant | Chats started by the hub or the assistant itself | Push, Lark | — | Not entry points: started by the hub. When they **send outward** they use the channel's "push" capability (see "Push and sync") |
+| botmux | A node host (`docs/engines.md` ("botmux")) | Lark thread ↔ Claude Code on some computer | botmux itself | botmux itself | Not a Persona channel: it's the Agent's own entry point; the Agents page shows it as usual |
+| Extension `assistant`, `api`, `events`, `hub_api` | `docs/extensions.md` | — | — | — | Not channels but the parts channels are assembled from; the first WeChat version was built from `connectors` + `hub_api` + `events` |
 
-结论：**真正「外面的消息进对话、答案发回去」的有三份实现**——飞书机器人（当时在 hub 里，bots_runs.go）、微信机器人（当时在插件里，wechat/turns.go，
-注释里写着规则照飞书机器人）、Siri（App 里）。`/agent` 和语音的形状不一样（一个以我的名义回复、每次新对话；一个自己就是模型），
-列进渠道表，但不进统一管线。
+Conclusion: **there are three implementations of "outside messages go into a chat and the answer goes back"**: the Lark bot (then in the hub, bots_runs.go), the WeChat bot (then in a plugin, wechat/turns.go,
+whose comments say the rules follow the Lark bot), and Siri (in the App). `/agent` and voice have different shapes (one replies as me with a new chat each time; the other is a model itself);
+they're listed in the channel table but don't go through the unified pipeline.
 
-> 盘点时的 bots_runs.go、wechat/turns.go 已删：#1521 起飞书机器人和微信机器人都走统一管线（现在在 `assistant/channels_runs.go`；从对话里读这一轮的回答在 `channel/read.go`，#3497），#2079 起飞书机器人对话的事在助手（`assistant/feishu.go`），hub 只管收发（`extmgr/bots.go`、`bots_chat.go`）。
+> The bots_runs.go and wechat/turns.go from the inventory have been deleted: since #1521 both the Lark bot and the WeChat bot use the unified pipeline (now in `assistant/channels_runs.go`; reading this turn's answer from the chat is in `channel/read.go`, #3497). Since #2079 the Lark bot's chat logic lives in the assistant (`assistant/feishu.go`), and the hub only sends and receives (`extmgr/bots.go`, `bots_chat.go`).
 
-## 二、渠道的接口
+## 2. Channel interface
 
-`server/internal/channel` 是不依赖 hub 的纯数据和纯计算（hub、助手、扩展程序、测试都用）。一个渠道在接口里是这样（`channel.View`）：
+`server/internal/channel` contains pure data and computation with no dependency on the hub (used by the hub, assistant, extension programs, and tests). A channel looks like this in the API (`channel.View`):
 
 ```json
 {
   "id": "wechat",
-  "name": "微信",
+  "name": "WeChat",
   "kind": "im",
   "source": "plugin",
   "plugin": "wechat",
@@ -53,165 +53,165 @@
   "enabled": true,
   "state": "connected",
   "error": "",
-  "account": {"name": "微信用户 a1b2c3"},
+  "account": {"name": "WeChat user a1b2c3"},
   "capabilities": {"images_in": true, "files_in": false, "voice_in": true, "format": "plain", "max_text": 3500,
                    "asks": "text", "push": true, "typing": true, "progress": false, "threads": false},
   "target": {"kind": "main"},
-  "features": [{"id": "asks", "title": "提问和批准", "description": "…", "on": true}],
+  "features": [{"id": "asks", "title": "Questions and approvals", "description": "…", "on": true}],
   "bind": "qr",
   "last_event_at": "2026-11-04T10:00:00Z"
 }
 ```
 
-| 字段 | 意思 |
+| Field | Meaning |
 | --- | --- |
-| `id` | `^[a-z][a-z0-9_]*$`，全局唯一（内置的和扩展贡献的不能撞）。也是这个渠道发进对话的消息的 `client_msg_id` 前缀：`<id>-<消息 id>`（见「来源标记」） |
-| `name` | 给人看的名字 |
-| `kind` | `app`（Persona 自己的 App 端）、`im`（第三方 IM 里的机器人：微信、飞书机器人、以后的 Telegram / Slack / Discord）、`mention`（在别人的会话里叫它、以我的名义回复：飞书 `/agent`）、`voice`（语音） |
-| `source` | `builtin`（hub 自带：`app`、`feishu`）、`plugin`（扩展贡献，`plugin` 是扩展 id）、`market`（扩展市场里有、还没装：`installed: false`，只给去安装的入口） |
-| `enabled` | 渠道的总开关。扩展渠道：扩展启用 **且** 它的连接器开着；飞书机器人：`bots.feishu.enabled` |
-| `state` | `connected`（绑好了、在收消息）、`not_connected`（没绑 / 没配）、`error`（`error` 写原因，给人看的一句话）、`disabled`（关着）、`not_installed`（市场里的） |
-| `account` | 绑定的账号 `{id?, name}`：只给人看（微信是 iLink 给的 id 的末几位，飞书是主人的名字），不放手机号、邮箱 |
-| `capabilities` | 见下表 |
-| `target` | 消息进哪个对话：`{kind: "main"}`（主对话，默认）、`{kind: "conversation", machine_id, session_id, title}`（某段对话）、`{kind: "new"}`（下一条消息开一段新对话，开了以后变成 `conversation`）。飞书机器人还有 `{kind: "agent", …}`（`/agents` 选的 Agent） |
-| `features` | 这个渠道能单独开关的功能，`{id, title, description, on}` 的列表：App 照列表画开关，不认识的也能画。飞书机器人是 `main`、`cards`、`all_cards`、`pushes`、`sync`、`agents`（`docs/bots.md`「能做什么」）；扩展渠道统一是 `asks`（提问和批准）、`all_asks`（所有 Agent 的提问）、`pushes`（推送也发到这里）、`sync`（主对话里别处问的也同步过来），按能力出现 |
-| `bind` | 怎么绑定：`qr`（扫码）、`code`（App 给一个配对码，在 IM 里发给机器人）、`fields`（填凭据，再可能接一步 `code`）、`none`（不用绑：`app`、`voice`）、`config`（只能在 hub.json 里配；#1571 起没有渠道用它） |
-| `owner` | 不在接口里：**谁能用**永远是绑定的那一个人（扫码的微信、配对的飞书账号）。只有他的消息进对话；别人发来只回一句「这个机器人只为绑定它的人服务」（同一个人 10 分钟一次），群里一律不处理。判断谁是主人是渠道自己的事（只有它认得 IM 里的身份），hub 只收主人的消息 |
+| `id` | `^[a-z][a-z0-9_]*$`, globally unique (built-in and extension-contributed channels must not collide). Also the `client_msg_id` prefix for messages this channel sends into chats: `<id>-<message id>` (see "Source markers") |
+| `name` | Human-readable name |
+| `kind` | `app` (Persona's own App clients), `im` (bots in third-party IM: WeChat, Lark bot, future Telegram / Slack / Discord), `mention` (invoked in someone else's chat, replies as me: Lark `/agent`), `voice` (voice) |
+| `source` | `builtin` (ships with the hub: `app`, `feishu`), `plugin` (extension-contributed; `plugin` is the extension id), `market` (in the extension market, not installed: `installed: false`, only offers an install entry point) |
+| `enabled` | The channel's master switch. Extension channels: the extension is enabled **and** its connector is on; Lark bot: `bots.feishu.enabled` |
+| `state` | `connected` (bound, receiving messages), `not_connected` (not bound / configured), `error` (`error` contains the reason, one human-readable sentence), `disabled` (off), `not_installed` (market entry) |
+| `account` | Bound account `{id?, name}`: display only (WeChat uses the last few characters of the id from iLink; Lark uses the owner's name), no phone number or email |
+| `capabilities` | See the table below |
+| `target` | Which chat messages go to: `{kind: "main"}` (main chat, default), `{kind: "conversation", machine_id, session_id, title}` (a particular chat), `{kind: "new"}` (the next message starts a new chat, then becomes `conversation`). The Lark bot also has `{kind: "agent", …}` (the Agent selected with `/agents`) |
+| `features` | Features this channel can toggle individually, a list of `{id, title, description, on}`: the App draws switches from this list, even for unknown features. For the Lark bot: `main`, `cards`, `all_cards`, `pushes`, `sync`, `agents` (`docs/bots.md` ("What it can do")); extension channels uniformly use `asks` (Questions and approvals), `all_asks` (All agents' questions), `pushes` (Send notifications here too), `sync` (Sync main chat turns started elsewhere), shown according to capabilities |
+| `bind` | How to bind: `qr` (scan a QR code), `code` (the App gives a pairing code to send to the bot in IM), `fields` (enter credentials, possibly followed by a `code` step), `none` (no binding needed: `app`, `voice`), `config` (only configurable in hub.json; no channel uses it since #1571) |
+| `owner` | Not in the API: **who can use it** is always the one person who bound it (the WeChat account that scanned, the paired Lark account). Only that person's messages go into chats; others receive only "This bot only works for the person who bound it" (once per person per 10 minutes), and groups are never handled. Identifying the owner is the channel's job (only it understands IM identities); the hub receives only the owner's messages |
 
-**能力**（`channel.Capabilities`）：
+**Capabilities** (`channel.Capabilities`):
 
-| 能力 | 取值 | 管线（助手）怎么用 |
+| Capability | Values | How the pipeline (assistant) uses it |
 | --- | --- | --- |
-| 收文字 | 总是有 | —— |
-| `images_in` | 布尔 | 收图片（最多 4 张，作为图片附件进对话） |
-| `files_in` | 布尔 | 收文件：hub 存到对话所在电脑的临时目录，路径写进消息（飞书机器人一直这样做）；没有就在消息里写明「发来了文件「…」，还不能转交」 |
-| `voice_in` | 布尔 | 收语音（渠道给转写好的字） |
-| `format` | `markdown` / `plain` | 答案是什么格式到用户那儿。hub 永远发 Markdown，渠道自己转成 IM 认的样子（微信去掉图片、删除线……留粗体和代码；飞书卡片原样）；`plain` 的渠道，hub 给 Persona 的说明里要求「纯文字、结论先行」 |
-| `max_text` | 字数，0 是不限 | hub 按它把答案拆成几条，不在代码块中间断开（`channel.Split`） |
-| `asks` | `none` / `text` / `buttons` | Agent 的提问和批准：`text` 由 hub 写成文字、把用户下一条消息读成回答（`channel.AskText`、`channel.ReadAnswer`，规则见「提问和批准」）；`buttons` 由渠道自己画（飞书卡片），hub 告诉它问什么、什么时候撤 |
-| `push` | 布尔 | 能不能主动给用户发（不是回一条消息）：推送、同步、提问都要它 |
-| `typing` | 布尔 | 有没有「正在输入」：一轮进行中 hub 每 5 秒叫一次 |
-| `progress` | 布尔 | 能不能发一条再改它（进度卡）：hub 5 秒后还没答完就发进度、每 3 秒最多改一次，答案写进同一条 |
-| `threads` | 布尔 | 回复某条机器人发的消息，就发给那条消息绑定的对话（飞书机器人的 `/agents`） |
+| Receive text | Always available | — |
+| `images_in` | Boolean | Receive images (up to 4, sent into the chat as image attachments) |
+| `files_in` | Boolean | Receive files: the hub saves them to a temporary directory on the computer hosting the chat and writes the path into the message (as the Lark bot has always done); if unavailable, the message says "A file ‘…’ was sent, but can't be handed over yet" |
+| `voice_in` | Boolean | Receive voice (the channel supplies transcribed text) |
+| `format` | `markdown` / `plain` | The format of answers delivered to the user. The hub always sends Markdown; the channel converts it to what the IM understands (WeChat removes images, strikethrough… keeps bold and code; Lark cards unchanged); for `plain` channels, the hub's instructions to Persona request "plain text, conclusion first" |
+| `max_text` | Character count; 0 is unlimited | The hub splits the answer accordingly, never in the middle of a code block (`channel.Split`) |
+| `asks` | `none` / `text` / `buttons` | Agent questions and approvals: for `text`, the hub renders text and reads the user's next message as an answer (`channel.AskText`, `channel.ReadAnswer`; rules in "Questions and approvals"); for `buttons`, the channel draws them itself (Lark cards), and the hub tells it what to ask and when to withdraw |
+| `push` | Boolean | Whether it can proactively send to the user (rather than reply to a message): pushes, sync, and questions all need it |
+| `typing` | Boolean | Whether it has "typing": the hub calls it every 5 seconds during a turn |
+| `progress` | Boolean | Whether it can send a message and edit it later (progress card): if a turn isn't done after 5 seconds, the hub sends progress, edits at most every 3 seconds, and writes the answer into the same message |
+| `threads` | Boolean | Replying to a bot message sends to the chat bound to that message (the Lark bot's `/agents`) |
 
-## 三、统一管线（助手的）
+## 3. Unified pipeline (owned by the assistant)
 
-一份实现，飞书机器人和扩展渠道都走它（`server/internal/assistant/channels*.go`、飞书那一头 `feishu*.go`，判断规则在 `channel` 包里）。渠道只管「和 IM 说话」：收消息、发消息、画卡片。
-下面说的「管线」「助手」做的事，2026-11-04 以前在 hub 里（`hub/channels*.go`、`bots*.go`），规则、文字、存的键都没变。
+One implementation, used by the Lark bot and extension channels (`server/internal/assistant/channels*.go`, `feishu*.go` for the Lark end, with decision rules in the `channel` package). Channels only "talk to the IM": receive messages, send messages, draw cards.
+The work attributed below to the "pipeline" or "assistant" lived in the hub before 2026-11-04 (`hub/channels*.go`, `bots*.go`); rules, text, and stored keys are unchanged.
 
-### 谁管什么（2026-11-04，从 hub 挪进助手）
+### Responsibilities (2026-11-04, moved from hub to assistant)
 
-2026-11-05 起表里「hub（传输）」那一列也在管理者里（`server/internal/extmgr`：飞书开放平台的长连接、凭证、配对、扩展渠道的程序、绑定，`docs/extensions.md`「谁管什么」）：
-它和助手在同一个进程，下面说的总线消息照旧（方法和参数一样），只是在进程里直接调；`/api/v1/bots…` 和绑定 `POST /api/v1/channels/{id}/bind` 由 hub 原样转给管理者。
-hub 留下的只有跟对话（`session.follow` 等）和卡片本身；会话列表上的来源标记和完成推送也在管理者里（`server/internal/assistant/fleet.go`、`fleet_push.go`，照助手快照的 `channels`）；渠道里主人的回答经 `app.call hub interactions.resolve_owner` 让 hub 答卡片（主人的操作在管理者里核）。
+Since 2026-11-05, the "hub (transport)" column is also in a manager (`server/internal/extmgr`: the Lark developer platform's persistent connection, credentials, pairing, extension channel programs, binding; `docs/extensions.md` ("Responsibilities")):
+it runs in the same process as the assistant. The bus messages below remain the same (same methods and parameters), but are direct calls in-process; hub forwards `/api/v1/bots…` and binding `POST /api/v1/channels/{id}/bind` unchanged to the manager.
+The hub keeps only chat following (`session.follow`, etc.) and cards themselves; session-list source markers and completion pushes also belong to the manager (`server/internal/assistant/fleet.go`, `fleet_push.go`, using the assistant snapshot's `channels`); the owner's channel answer reaches hub through `app.call hub interactions.resolve_owner` to answer the card (the manager verifies the owner action).
 
-| | hub（传输） | 助手（管理者，`personad assistant`） |
+| | hub (transport) | Assistant (manager, `personad assistant`) |
 | --- | --- | --- |
-| 飞书机器人 | 应用凭证（`bots.feishu`，连同功能开关）、开放平台的长连接、配对和「只认主人」「只在私聊」、发 / 回 / 改消息和卡片、表情、读引用和转发、下载图片和文件；`/api/v1/bots/feishu*` 的路由 | 消息进哪段对话（当前目标、话题绑定、`/main` `/new` `/list` `/agents` `/start` 这些命令）、组织内容、发进对话、跟踪这一轮、进度卡和答案卡、提问和批准的卡片和按钮的回答、推送和同步；聊天状态 `bots.feishu.state` |
-| 扩展渠道 | 起扩展程序、`channel.receive` / `channel.status` / `channel.send` / `channel.typing`（同一个 `ref` 重试）、开关、绑定（连接器登录、二维码）、列出有哪些渠道和它们的状态 | 目标、功能开关、最近的对话（`channels`）、runs、文字提问、去重（`channels.state`）、命令、提问和回答、推送和同步 |
-| 来源标记、完成推送 | 不管：会话列表和推送由管理者的 fleet 给（`server/internal/assistant/fleet.go`、`fleet_push.go`），hub 只把它们交给 App | 记哪段对话从哪些渠道来过、哪段对话的一轮正在 / 刚在渠道里答，报在快照的 `channels`（`assistantwire.ChannelsReport`）；fleet 照它在会话列表上画 `channels`、一轮在渠道里答了就不推「完成」 |
-| 接口 | `/api/v1/channels*` 原样转给助手（`http.request`），除了绑定 `POST …/bind`：它带着凭证和登录要填的东西，是 hub 自己的路由，渠道和机器人的密钥从不经过助手 | 回答 `/api/v1/channels*`（绑定除外） |
-| 批准类不代答 | 答卡片要有主人刚做的那一下：hub 把主人的按卡片、一条消息交给助手时各发一个**一次性的主人操作**（只在发它的渠道里有效，10 分钟内；按卡片的只能答那一张；一条消息的只能答这个渠道收文字回答的那几种卡：飞书只有提问，插件渠道是 `channel.TypedAnswerKinds`），`interactions.resolve` 带上它和答的是哪个渠道，没有、用过、渠道或卡对不上的一律拒绝（#5011）；记成用户自己答的（不带 `answered_by`） | 用渠道里的回答答卡片时带上那一下的主人操作；自己没有任何办法批准计划、允许工具、往终端里打字 |
+| Lark bot | App credentials (`bots.feishu`, including feature switches), the developer platform's persistent connection, pairing and "owner only" / "private chats only", sending / replying / editing messages and cards, reactions, reading quotes and forwards, downloading images and files; routes for `/api/v1/bots/feishu*` | Which chat a message goes to (current target, thread bindings, commands such as `/main` `/new` `/list` `/agents` `/start`), assembling content, sending into the chat, tracking the turn, progress and answer cards, question / approval cards and button answers, push and sync; chat state `bots.feishu.state` |
+| Extension channels | Start extension programs, `channel.receive` / `channel.status` / `channel.send` / `channel.typing` (retry with the same `ref`), switches, binding (connector login, QR code), list channels and their states | Target, feature switches, recent chats (`channels`), runs, text questions, deduplication (`channels.state`), commands, questions and answers, push and sync |
+| Source markers, completion push | Not owned by hub: the manager's fleet supplies session lists and pushes (`server/internal/assistant/fleet.go`, `fleet_push.go`); hub only delivers them to the App | Track which chats have received messages from which channels and which turns are being / were just answered there; report in snapshot `channels` (`assistantwire.ChannelsReport`). fleet draws session-list `channels` and suppresses completion push for turns answered in a channel |
+| API | Forward `/api/v1/channels*` unchanged to the assistant (`http.request`), except binding `POST …/bind`: it carries credentials and login input, so it is hub's own route; channel and bot secrets never pass through the assistant | Serve `/api/v1/channels*` (except binding) |
+| No answering approvals on the user's behalf | Answering a card requires the owner's fresh action: when handing an owner card tap or message to the assistant, hub issues a **one-time owner action** for each (valid only in the issuing channel for 10 minutes; a card tap answers only that card; a message answers only card kinds accepting text in this channel: Lark questions only, plugin channels `channel.TypedAnswerKinds`); `interactions.resolve` must carry it and the answering channel; reject missing, used, wrong-channel, or mismatched-card actions (#5011). Recorded as answered by the user (no `answered_by`) | Carry that message's owner action when using a channel answer to answer a card; has no way itself to approve plans, allow tools, or type into the terminal |
 
-两边经总线（`docs/protocol.md`「总线」「渠道用的方法」）：主人的消息和按钮 hub 交给助手（`channels.receive`、`feishu.message`、`feishu.card_action`），
-新的、结束的卡片告诉助手（`interaction.announced`、`interaction.ended`），助手跟的对话 hub 把新的条目和正在写的字转给它（`session.follow` 之后的 `session.items`、`session.delta`）；
-助手要发什么、改什么经 `app.call`（`feishu.*`、`channels.*`、`interactions.resolve`）叫 hub 做，发进对话用 `device.call session.send_once`（和 App 同一个只发一次的保护）。
-一轮的答案要真交到 hub 手里（`channels.send` / `feishu.post` 成功）这个 run 才结束：hub 一时答不上（重启、扩展程序在重启）就下一次再试，同一个 `ref`，最多试 2 分钟。
-飞书机器人换了配对（别人配对、同一个人重新配对、解除配对）时聊天状态从头来：回主对话、话题绑定和在等的回答清掉。助手不光听 `feishu.owner`，每次读 `feishu.status` 都对一下配对（`owner` + `paired_at`），所以它不在时换的配对，回来后也一样从头来。
+The two sides use the bus (`docs/protocol.md` ("Bus", "Methods used by channels")): hub hands owner messages and buttons to the assistant (`channels.receive`, `feishu.message`, `feishu.card_action`),
+notifies it of new and ended cards (`interaction.announced`, `interaction.ended`), and forwards new items and text being written for chats it follows (`session.items`, `session.delta` after `session.follow`);
+the assistant asks hub to send or edit through `app.call` (`feishu.*`, `channels.*`, `interactions.resolve`), and sends into chats with `device.call session.send_once` (the same send-once protection as the App).
+A run ends only when the turn's answer has actually been handed to hub (`channels.send` / `feishu.post` succeeds): if hub can't respond temporarily (restart, extension program restarting), retry next time with the same `ref`, for up to 2 minutes.
+When the Lark bot's pairing changes (someone else pairs, the same person re-pairs, or unpairing), chat state starts over: back to main chat, with thread bindings and pending answers cleared. The assistant not only listens for `feishu.owner`, but also checks pairing (`owner` + `paired_at`) each time it reads `feishu.status`; a pairing changed while it was away therefore starts over just the same when it returns.
 
-### 助手不在的时候
+### When the assistant is away
 
-助手的进程在重启、没连着 hub 时，**收消息的照常收，什么都不悄悄丢**：
+While the assistant process is restarting or disconnected from hub, **receivers keep receiving; nothing is silently dropped**:
 
-- **先等它**：主人的一条消息 hub 先等助手连上，最多 60 秒（hub 刚起来时长连接和扩展程序比助手先起来、扩展一开始就把攒下的一批消息交过来；助手的进程在重启），
-  一时没答上（调用断了、超时）就再交一次：助手按消息 id 只收一次，所以不会答两遍，也不会既说「没能发出去」又照常答。最多同时等 500 条，再多的马上回下面那句。
-- 等不到：飞书机器人的配对、陌生人、群消息照旧由 hub 处理；主人的消息 hub 回一句「没能发出去：助手暂时连不上，稍后再试」（每条一次，和以前助手不在时发给主对话的一样），按卡片按钮（飞书只等 3 秒）回 toast「助手暂时连不上，稍后再试」。
-  设置 › 连接器 › 飞书机器人 的页面照常能用（凭证、开关、功能、配对、测试消息都是 hub 的），只是不显示「现在发给」和绑定的 Agent。
-- 扩展渠道：主人的消息 hub 用 `channel.send`（`kind: note`）回「没发出去：助手暂时连不上，稍后再试」，同一条消息 IM 重投只回一次。
-- 「渠道」页（`/api/v1/channels*`）回 `503 assistant_offline`；绑定（`POST /api/v1/channels/{id}/bind`）是 hub 的，照常能用。
-- hub 刚起来、助手还没报第一份快照时，一轮的「完成」推送最多多等 10 秒它的报告，不会把在渠道里答了的那一轮再推一次。
-- 这期间来的提问和批准照旧在 App 里（推送照常），不发到渠道；助手连回来后补发（第一次启动时不补：之前可能已经发过）。这期间结束的，飞书里的卡片改成「已结束」，文字提问不再等。
-- 在等的一轮（runs）存在数据库里：助手回来接着跟、照常答；hub 重启也一样（长连接、扩展程序回来，助手重新跟上对话）。
+- **Wait for it first**: hub waits up to 60 seconds for the assistant to connect for an owner message (on hub startup, persistent connections and extension programs start before the assistant and extensions immediately hand over their backlog; the assistant process may be restarting).
+  If no answer arrives temporarily (dropped call, timeout), hand it over again: the assistant accepts each message id only once, so it neither answers twice nor says "Couldn't send" while answering normally. Up to 500 messages can wait at once; any more immediately receive the notice below.
+- If it doesn't arrive: hub still handles Lark bot pairing, strangers, and group messages; for an owner's message, hub replies "Couldn't send: the assistant is temporarily unreachable, try again later" (once per message, same as sending to main chat while the assistant was away before). Card buttons (Lark waits only 3 seconds) get a toast: "The assistant is temporarily unreachable, try again later".
+  Settings › Connectors › Lark bot still works (credentials, switches, features, pairing, and test messages all belong to hub); only "Send to now" and the bound Agent are hidden.
+- Extension channels: hub replies to the owner's message with `channel.send` (`kind: note`), "Not sent: the assistant is temporarily unreachable, try again later"; IM redelivery of the same message gets only one reply.
+- The "Channels" page (`/api/v1/channels*`) returns `503 assistant_offline`; binding (`POST /api/v1/channels/{id}/bind`) belongs to hub and still works.
+- On hub startup, before the assistant reports its first snapshot, a turn's "completion" push waits up to 10 extra seconds for its report, avoiding an extra push for a turn already answered in a channel.
+- Questions and approvals arriving during this time remain in the App (push works as usual), not in channels; the assistant forwards them after reconnecting (not on first start: they may already have been sent). Ones ended during this time have their Lark cards changed to "Ended", and text questions stop waiting.
+- Pending turns (runs) are stored in the database: when the assistant returns, it resumes following and answering normally; likewise after hub restarts (persistent connections and extension programs return, and the assistant follows the chats again).
 
-### 一条消息怎么走
+### Message flow
 
-1. **收**：渠道把主人的一条消息交给 hub（飞书的长连接，扩展发 `channel.receive`），hub 交给助手（`feishu.message`、`channels.receive`）：`{id, text, images, files, quote, forward, reply_to, unsupported}`。
-2. **去重**：按 `<渠道>-<消息 id>` 只处理一次（IM 会重投）；同一个 id 也是 `client_msg_id`，和 App 共用 `sent_messages` 的去重，重发的不会打两遍。
-3. **命令**：`/` 开头的先当命令，管线统一实现 `/help`、`/new [第一句话]`、`/main`、`/stop`、`/status`；渠道可以有自己的（飞书机器人的 `/list`、`/agents`、`/start`）。
-   不认识的原样发进对话（可能是对话自己的，比如 `/compact`）。
-4. **回答提问**：这个渠道有在等的文字提问（`asks: text`），而且它还在 hub 的待处理列表里（`interactions.list`），这条消息就是回答。在别处答过了的放掉，这条当普通消息。
-5. **目标**：回复的是绑定了目标的那条消息（`threads`）就发给它，否则发给渠道的 `target`。主对话还不存在时新开一段并设为主对话；`new` 开的对话之后就是目标。
-6. **组织内容**：文字前面加一段 `<jarvis-context>`，说明这条从哪个渠道来、回答会发回去、用什么格式（提示词 `prompts/channel/message.md`，飞书机器人保留自己的 `bot/message.md`）；
-   引用的消息、合并转发的聊天记录各放一段 `<jarvis-context>`；图片作为附件；文件见能力 `files_in`。
-7. **发**：Persona 的对话走 `session.send`（主对话跟着设置里的模型），`client_msg_id = <渠道>-<消息 id>`。
-8. **跟踪这一轮**（一个 run，存数据库，助手或 hub 重启接着等），规则就是原来飞书机器人和微信机器人各写了一遍的那套，现在在 `channel.Check`；一轮在 Agent 写出文字之前就被叫停（只跟着一条「已中断」或模型服务出错的提示）时，消息都到齐了就直接按「已停止 / 出错」收尾，不再当成排队等满 10 分钟（#4505）；还在重试的模型服务出错不算；
-   读回答是 `channel.ReadTurn`（翻页读到 transcript 末尾、长条目读全文、合并的几条按消息分段 `RunAnswer`）。对话从哪来由调用方给一个 `ItemSource`：
-   助手经总线（`session.items` / `session.item`），语音扩展经 hub 的 HTTP 接口（`…/items?after_seq=`、`…/items/{iid}/full`，#3489），规则只有一份：
-   - 先按 `client_msg_id`（老 node 没有时按消息开头的一段字 `probe`）在 transcript 里找到这条消息，取它后面最后一次工具调用之后的回答；
-     新开对话的那一条（`/new`、主对话还不存在时；经 `assistant.send` 发进去，没有 `client_msg_id`）从对话开头读；它没答完又来一条、合成一个 run 时记 `head`：开头到下一条之前那段是它的回答（#4746）；语音新开对话的那一条只有 `probe`、`base` 为 0，同样记 `head`；
-   - 会话在工作、或在等用户回答就等；20 秒都没看到它工作才开始找；过了 `QueuedMost`（10 分钟）还找不到这条消息就不等了，这一轮以 `gave_up` 结束，告诉用户「没能确认消息送达，请重发一次」，不拿对话最后的话充数（那是上一轮的收尾，#4455 / #4504；语音同样，#4630）；
-   - 同一段对话还没答完又发了一条：两条合成一个回答。等这几条都进了对话、最后那一轮结束才答，答的是每一条自己的回答（那一条之后、下一条之前的话），按对话里的先后连起来；
-     对话里的先后不一定是发的先后（hub 刚起来时扩展一起交来的一批，第一条要先把对话起起来，后发的可能先进去）。对话在一轮中途收下了下一条、接着做下去的，前面那段没有结论，回答在后面那段里。
-     判断前面那段是否以回答结束时，跳过思考、空文字、轮次耗时（`TurnDuration`）和压缩上下文的通知；这些行不说明这一轮怎么结束，不能让已经答完的前一段被丢掉（#4120）。工具调用、错误、中断、后台任务和其他通知仍按原来的结束边界判断。
-     老 node 的条目上没有 `client_msg_id` 时分不出来，照旧只取最后的话；
-   - 后台还有任务：先答一次并说「后台还有 N 个任务在跑，做完再告诉你」，等后台回报的那一轮结束再答一次（最多再等 2 小时）；
-   - 4 小时还没完就不等了，说一声到 App 里看；对话不见了（3 分钟）也说一声。
-   - 进行中：有 `progress` 的发进度（最近 4 步、正在写的字、用时），有 `typing` 的叫「正在输入」。
-9. **发回**：答案按 `max_text` 拆开发回；有 `progress` 的写进进度那条。这一轮不再推手机的「完成」通知（结果已经在渠道里了），`sync` 也不再发一遍。
+1. **Receive**: the channel hands an owner's message to hub (Lark's persistent connection, an extension's `channel.receive`), and hub hands it to the assistant (`feishu.message`, `channels.receive`): `{id, text, images, files, quote, forward, reply_to, unsupported}`.
+2. **Deduplicate**: handle `<channel>-<message id>` only once (IM redelivers); this same id is `client_msg_id`, sharing the App's `sent_messages` deduplication, so retries aren't typed twice.
+3. **Commands**: treat a leading `/` as a command first; the pipeline implements `/help`, `/new [first message]`, `/main`, `/stop`, `/status` uniformly. Channels can add their own (the Lark bot's `/list`, `/agents`, `/start`).
+   Send unknown commands into the chat unchanged (they might belong to the chat, such as `/compact`).
+4. **Answer a question**: if this channel has a pending text question (`asks: text`) still in hub's pending list (`interactions.list`), this message is its answer. Drop questions already answered elsewhere and treat this as an ordinary message.
+5. **Target**: if replying to a target-bound message (`threads`), send to that target; otherwise send to the channel's `target`. If main chat doesn't exist yet, create a chat and set it as main chat; a chat created by `new` becomes the target afterward.
+6. **Assemble content**: prepend a `<jarvis-context>` explaining which channel this came from, that the answer goes back there, and the format to use (prompt `prompts/channel/message.md`; the Lark bot keeps its own `bot/message.md`);
+   put quoted messages and merged-forward chat records in separate `<jarvis-context>` blocks; images become attachments; files follow `files_in`.
+7. **Send**: Persona chats use `session.send` (main chat follows the model selected in Settings), `client_msg_id = <channel>-<message id>`.
+8. **Track the turn** (a run, stored in the database; assistant or hub restarts resume waiting): the rules are the ones formerly implemented separately by the Lark and WeChat bots, now in `channel.Check`. If a turn is stopped before the Agent writes text (only an "Interrupted" or model-service error notice follows), once all messages have arrived it ends directly as "Stopped / Error", rather than treating it as queued and waiting the full 10 minutes (#4505); model-service errors still being retried don't count.
+   Reading answers uses `channel.ReadTurn` (page to the transcript end, read full long items, split merged messages into per-message `RunAnswer`). The caller supplies an `ItemSource` for the chat source:
+   the assistant uses the bus (`session.items` / `session.item`), the voice extension uses hub HTTP (`…/items?after_seq=`, `…/items/{iid}/full`, #3489); there is only one set of rules:
+   - Find this message in the transcript using `client_msg_id` (or a beginning-text `probe` for old nodes lacking it), then take the answer after the last tool call following it;
+     the first message of a new chat (`/new`, or when main chat doesn't exist; sent via `assistant.send`, without `client_msg_id`) reads from the chat start. If another message arrives before it finishes and merges into one run, record `head`: the section from the start to before the next message is its answer (#4746); the first message in a voice-created chat has only `probe` with `base` equal to 0, and records `head` the same way;
+   - Wait while the session is working or awaiting a user answer; start searching only after 20 seconds without seeing work. If this message is still not found after `QueuedMost` (10 minutes), stop waiting, end this turn as `gave_up`, and tell the user "Couldn't confirm the message arrived; please send it again"; don't substitute the chat's last words (they finish the previous turn, #4455 / #4504; voice likewise, #4630);
+   - Another message arrives before the same chat finishes: combine the two into one answer. Wait until all these messages have entered the chat and the last turn ends, then answer with each message's own answer (text after it and before the next), joined in chat order;
+     chat order need not be send order (a backlog handed over together by extensions on hub startup; the first message must start the chat, so later ones may enter first). If the chat accepts the next message mid-turn and carries on working, the earlier section has no conclusion; the answer is in the later section.
+     When deciding whether the earlier section ended with an answer, skip thinking, empty text, turn-duration (`TurnDuration`), and context-compaction notices. These do not explain how the turn ended and must not discard an already-answered earlier section (#4120). Tool calls, errors, interruptions, background tasks, and other notices still follow the original end-boundary rules.
+     Old node items lack `client_msg_id` and can't be distinguished, so keep taking only the last words;
+   - Background tasks remain: answer once with "N background tasks are still running; I'll tell you when they're done", then answer again after the background-report turn ends (wait up to 2 more hours);
+   - After 4 hours without finishing, stop waiting and tell the user to look in the App; also notify if the chat has disappeared (3 minutes).
+   - While running: send progress if `progress` is supported (latest 4 steps, text being written, elapsed time), and call "typing" if `typing` is supported.
+9. **Send back**: split the answer by `max_text` and send it back; with `progress`, write it into the progress message. Don't send this turn's phone "completion" notification (the result is already in the channel), or send it again through `sync`.
 
-### 提问和批准
+### Questions and approvals
 
-- **发到哪个渠道**：这个渠道在「驱动」那段对话——它是渠道的目标、有 run 在等它、24 小时内有绑定的话题（`threads`）——而且 `asks` 开着；
-  `all_asks` 开着时所有 Agent 的都发。各台电脑上别的 Agent 的提问照旧只在 App 里。
-- **`asks: buttons`**（飞书机器人）：助手画卡片，按钮的回答经 hub 的同一个 `resolve`（`interactions.resolve`）。
-- **`asks: text`**（微信、以后的 Telegram）：助手写成文字（`channel.AskText`），用户的下一条消息就是回答（`channel.ReadAnswer`）：
+- **Which channel receives them**: a channel "drives" the chat if it is the channel's target, has a run waiting on it, or has a thread binding from the last 24 hours (`threads`), and `asks` is on;
+  with `all_asks` on, all Agents' questions are sent. Questions from other Agents on the computers still only appear in the App.
+- **`asks: buttons`** (Lark bot): the assistant draws cards, and button answers use the same hub `resolve` (`interactions.resolve`).
+- **`asks: text`** (WeChat, future Telegram): the assistant renders text (`channel.AskText`), and the user's next message is the answer (`channel.ReadAnswer`):
 
-  | 卡片 | 怎么答 |
+  | Card | How to answer |
   | --- | --- |
-  | 批准工具 | 「允许」（同意、可以、好…）或「拒绝」；英文、日文的说法（allow / yes / deny、許可 / はい / 拒否…）也认，和用户语言无关；别的字再提示一次 |
-  | 计划 | `1` 批准并自动执行、`2` 批准且改文件时自动同意、「拒绝」打回；写别的就是打回并附上这段话 |
-  | 提问 | 选项序号、序数（「第二个」「第2个」「二」「second」「2nd」「2番目」「最后一个」）或选项名（不分大小写、空格和标点；「用 SQLite 吧」「I'd go with sqlite」「SQLiteで」这种除了选项名只有「用、吧、go with、で」一类虚词的也认；选项名的开头也认，「Postgres」就是「PostgreSQL」，英文从词首算，「all」不是「Small fix」）；多选用逗号、顿号、「和」「and」、斜杠、空格隔开。对不上、拿不准的一律原样当回答本身，交给 Agent 自己看：多说了条件或要求的（「SQLite，加密」「备份后删除」「approve but rename it」）、否定的（「不要 SQLite」）、带问号的（「SQLite?」「第二个？」）、只说数量的（「全部」「all」；「1个」「一个」也不当成第一个），以及光说一个数、而另一个选项名就是这个数的（选项是 1 / 3 / 5 时回「3」）。实现在 `channel.MatchOption`，语音作答用同一个；几个问题一个一个问 |
-  | 终端里的对话框 | 选项序号 |
-  | 要在手机上填写的、表单、读不出选项的终端画面 | 说一声「这个要在 App 里处理」 |
+  | Tool permission | `允许` ("allow"; also `同意`, `可以`, `好`—"agree", "okay", "yes"…) or `拒绝` ("deny"); English and Japanese forms (allow / yes / deny, 許可 / はい / 拒否…) are also recognized regardless of user language; other text prompts once more |
+  | Plan | `1` approves with automatic execution, `2` approves with automatic permission for file edits, `拒绝` ("deny") sends it back; anything else sends it back with that text as feedback |
+  | Question | Option number, ordinal (`第二个`, `第2个`, `二`—"second", "second item", "two"; "second", "2nd", "2番目", `最后一个`—"last") or option name (ignoring case, spaces, and punctuation; `用 SQLite 吧` ("use SQLite"), "I'd go with sqlite", "SQLiteで" are recognized when the only words besides the option name are filler such as `用`, `吧`, "go with", "で"; option-name prefixes work too: "Postgres" matches "PostgreSQL", English matches from a word start, so "all" doesn't match "Small fix"). Multiple choices use commas, the Chinese list separator `、`, `和` ("and"), "and", slashes, or spaces. Unmatched or uncertain text is always passed unchanged as the answer for the Agent to interpret: added conditions or requirements (`SQLite，加密`—"SQLite, encrypted"; `备份后删除`—"delete after backup"; "approve but rename it"), negations (`不要 SQLite`—"not SQLite"), questions ("SQLite?", `第二个？`—"the second?"), quantities only (`全部` / "all"; `1个`, `一个`—"one item"—don't mean the first), and a bare number when another option is named that number (answering "3" when options are 1 / 3 / 5). Implemented in `channel.MatchOption`, shared with voice answers; multiple questions are asked one by one |
+  | Terminal dialog | Option number |
+  | Something to fill in on the phone, a form, or a terminal screen whose options can't be read | Say "This needs to be handled in the App" |
 
-  同时有几个在等时，回复答的是最近发出的那个。渠道还没法主动发（微信：主人还没发过消息，没有 `context_token`）时不记为「在渠道里问了」，App 里照常能答。
-- **在别处答过**（App、手表、通知按钮、电脑上、另一个渠道）：`buttons` 的卡片改成「✓ 已回答：…」，撤回 / 过期的改成「已结束」；`text` 的从等待列表里拿掉，
-  用户再回复就当普通消息（文字发出去了撤不回，不另发一条打扰）。
+  With several pending questions, a reply answers the most recently sent one. If the channel can't send proactively yet (WeChat: the owner hasn't sent a message, so there is no `context_token`), don't record it as "asked in the channel"; it can still be answered in the App.
+- **Answered elsewhere** (App, watch, notification buttons, computer, another channel): change `buttons` cards to "✓ Answered: …", withdrawn / expired ones to "Ended"; remove `text` questions from the waiting list,
+  so the next reply becomes an ordinary message (sent text can't be withdrawn; don't send another interruption).
 
-### 推送和同步
+### Push and sync
 
-渠道有 `push` 时可以开：`pushes`（`notify_user` 推到手机的同时发一份；定时任务那段对话的回答也发）、`sync`（主对话里不是从这个渠道发起的一轮结束时，把回答发过来）。
-飞书机器人原来就有这两个；扩展渠道照同一套开关，默认关。
+With `push`, a channel can enable `pushes` (send a copy when `notify_user` pushes to the phone; also send scheduled-task chat answers) and `sync` (send the answer when a main chat turn started outside this channel ends).
+The Lark bot already had both; extension channels use the same switches, off by default.
 
-### 来源标记
+### Source markers
 
-- **每条消息**：渠道发进对话的消息 `client_msg_id` 都是 `<渠道 id>-<消息 id>`（飞书机器人一直是 `feishu-…`，微信 `wechat-…`），node 把它带到 transcript 的 item 上（`Item.client_msg_id`）。
-  客户端按前缀认出渠道：前缀（第一个 `-` 之前）等于 `GET /api/v1/channels` 里某个渠道的 id 就是从那儿来的，对话页在这条消息下面画一行「来自 微信」。
-  App 自己发的是 UUID，第一段是 8 位十六进制，所以渠道 id 不能是 8 位十六进制（注册时拒绝）。语音扩展交给主对话的消息带 `voice-<随机 id>`。
-- **每段对话**：会话上有 `channels`（这段对话里从哪些渠道来过消息，按最近排，`proto.Session.Channels`；助手记、在快照里报，管理者的 fleet 照着画），对话列表画成渠道的小图标；
-  `/agent` 开的无头对话是 `lark_agent`。老的 App 不认这个字段，照旧显示。
-- 每一轮的 run 记着它是哪个渠道的，`GET /api/v1/channels/{id}` 里有「在等几个回答、几个提问」。
+- **Per message**: channel messages sent into chats have `client_msg_id = <channel id>-<message id>` (the Lark bot has always used `feishu-…`, WeChat `wechat-…`), and node carries it onto the transcript item (`Item.client_msg_id`).
+  Clients recognize the channel by prefix: if the prefix (before the first `-`) matches a channel id from `GET /api/v1/channels`, that's its source; the chat page draws "From WeChat" below the message.
+  The App sends UUIDs, whose first segment is 8 hexadecimal characters, so channel ids must not be 8 hex characters (rejected at registration). Messages the voice extension hands to main chat use `voice-<random id>`.
+- **Per chat**: sessions have `channels` (channels that have sent messages into this chat, most recent first, `proto.Session.Channels`; recorded by the assistant and reported in its snapshot, drawn by the manager's fleet), shown as small channel icons in the chat list;
+  headless chats started by `/agent` use `lark_agent`. Old Apps don't recognize this field and display as before.
+- Each turn's run records its channel; `GET /api/v1/channels/{id}` includes "how many answers and questions are pending".
 
-### 排队、去重、并发
+### Queuing, deduplication, concurrency
 
-- 同一段对话同时只有一个 run：后来的消息并进去（「两条合成一个回答」）。不同对话的 run 各自跑。
-- 一个 run 的检查同时只跑一个（watch 循环和「一轮结束」可能同时来，两个检查会把同一个答案发两遍：`chanMutex`）。
-- 渠道的消息 id 只处理一次（每个渠道留最近 300 个，助手存）；助手发给渠道的每条消息带 `ref`（run id + 第几段），扩展渠道按 `ref` 去重，hub 重发不会发两遍。
+- Only one run per chat at a time: later messages merge into it ("two messages, one answer"). Runs for different chats proceed independently.
+- Only one check of a run executes at a time (the watch loop and "turn ended" can arrive together; two checks would send the same answer twice: `chanMutex`).
+- Channel message ids are processed only once (the assistant keeps the latest 300 per channel); each message the assistant sends to a channel carries `ref` (run id + segment number), and extension channels deduplicate by `ref`, so a hub retry doesn't send twice.
 
-## 四、扩展怎么贡献渠道：`channel` 扩展点
+## 4. Contributing a channel: the `channel` extension point
 
-### 为什么加扩展点，不继续拼
+### Why add an extension point instead of assembling more parts
 
-微信第一版是 `connectors`（扫码、状态）+ `hub_api`（发消息、读会话、答提问）+ `events`（`agent.needs_you`、`agent.finished`）拼的，能用，但：
+The first WeChat version combined `connectors` (QR binding, status) + `hub_api` (sending messages, reading sessions, answering questions) + `events` (`agent.needs_you`, `agent.finished`). It worked, but:
 
-- 每个扩展都要自己写一遍「等一轮答完」：找消息、等工作、后台任务、合并、超时……微信的 347 行就是从飞书机器人抄的。写 Slack、Discord 的还要再抄，第三方扩展（别的语言）抄都没法抄。
-- `hub_api` 给的是 hub 主人的完整 token：一个只想当聊天入口的扩展，拿到了 hub 能做的一切。
-- 扩展每 2 秒轮询一次会话（`GET /sessions` 是整台机器的列表），hub 自己明明知道一轮什么时候结束。
-- hub 不知道它是个渠道：设置里列不出来，对话页标不出来源，推送 / 同步接不上。
+- Every extension had to implement "wait for a turn to finish": finding the message, waiting for work, background tasks, merging, timeouts… WeChat's 347 lines were copied from the Lark bot. Slack and Discord would need another copy; third-party extensions in other languages couldn't even copy it.
+- `hub_api` provides the hub owner's full token: an extension that only wants to be a chat entry point receives everything the hub can do.
+- The extension polls sessions every 2 seconds (`GET /sessions` lists the whole machine), although hub already knows when a turn ends.
+- Hub doesn't know it's a channel: it can't list it in Settings, mark sources on the chat page, or connect push / sync.
 
-所以加一个明确的扩展点 `channel`：**扩展只管和 IM 说话，其余都是管线的**（2026-11-04 起管线在助手，扩展仍只和 hub 说话）。不需要 `hub_api`，也不用订 `events`。
+So add an explicit `channel` extension point: **the extension only talks to the IM; everything else belongs to the pipeline** (since 2026-11-04 the pipeline is in the assistant, while extensions still only talk to hub). No `hub_api` or `events` subscription needed.
 
-### 清单
+### Manifest
 
 ```json
 "contributes": {
@@ -223,104 +223,104 @@ hub 留下的只有跟对话（`session.follow` 等）和卡片本身；会话�
 }
 ```
 
-| 字段 | 规则 |
+| Field | Rules |
 | --- | --- |
-| `id` | `^[a-z][a-z0-9_]{0,31}$`，不能是 8 位十六进制；和内置的（`app`、`feishu`、`lark_agent`）、别的扩展的渠道都不能撞 |
-| `name` | 1–40 个字符 |
-| `kind` | `im`（扩展现在只能贡献 IM 机器人） |
-| `connector` | 可选：同一个扩展贡献的连接器 id。绑定（`login`：扫码、填 token）、状态、账号都来自它；渠道跟着它的开关跑（进程在它开着时才跑）。不写就要 `on_startup`，没有绑定这一步 |
-| `capabilities` | 上面那张表；`format`、`asks` 只能是表里的值，`max_text` 不小于 0 |
+| `id` | `^[a-z][a-z0-9_]{0,31}$`, not 8 hexadecimal characters; must not collide with built-ins (`app`, `feishu`, `lark_agent`) or other extensions' channels |
+| `name` | 1–40 characters |
+| `kind` | `im` (extensions can currently contribute only IM bots) |
+| `connector` | Optional: a connector id contributed by the same extension. Binding (`login`: QR scan, entering a token), status, and account come from it; the channel follows its switch (the process only runs while it is on). Without it, `on_startup` is required and there is no binding step |
+| `capabilities` | The table above; `format` and `asks` must use values from that table, `max_text` must be at least 0 |
 
-要求：进程说协议（`NeedsRPC`）。版本 1。
+Requires a process that speaks the protocol (`NeedsRPC`). Version 1.
 
-### 协议（`channel.` 命名空间，参数都带 `contribution`）
+### Protocol (`channel.` namespace; all parameters include `contribution`)
 
-**扩展调 hub**：
+**Extension calls hub**:
 
-| 方法 | 参数 | 回 |
+| Method | Parameters | Returns |
 | --- | --- | --- |
-| `channel.receive` | `{contribution, message: {id, text?, images?: [{mime, data}], files?: [{name, mime, data}], quote?, forward?, reply_to?, unsupported?: [string]}}` | `{}`：hub 收下了（去重后排进处理，不等这一轮）。只交主人的消息 |
-| `channel.status` | `{contribution, state, error?, account?}` | `{}`：不用连接器的渠道报自己的状态；有 `connector` 的不用调 |
+| `channel.receive` | `{contribution, message: {id, text?, images?: [{mime, data}], files?: [{name, mime, data}], quote?, forward?, reply_to?, unsupported?: [string]}}` | `{}`: hub accepted it (deduplicated and queued for handling, not waiting for the turn). Hand over only the owner's messages |
+| `channel.status` | `{contribution, state, error?, account?}` | `{}`: channels without a connector report their own state; channels with `connector` don't need this call |
 
-`data` 是 base64。图片最多 4 张、每张 3 MB，文件每个 50 MB，超了丢掉并在消息里写明；hub 经总线交给助手时一条消息的图片和文件加起来最多 40 MB（总线一条消息 64 MB，按 base64 带着），放不下的写成「图片 / 文件「…」（太大）」。
+`data` is base64. Up to 4 images, 3 MB each; files up to 50 MB each. Oversized ones are dropped with an explanation in the message. When hub hands a message to the assistant over the bus, images and files total at most 40 MB (a bus message is 64 MB, with base64 data); ones that don't fit become "Image / file ‘…’ (too large)".
 
-**hub 调扩展**：
+**hub calls extension**:
 
-| 方法 | 参数 | 回 |
+| Method | Parameters | Returns |
 | --- | --- | --- |
-| `channel.send` | `{contribution, ref, text, kind, reply_to?}`：`text` 是 Markdown（已经按 `max_text` 拆好），`kind` 是 `answer` / `note` / `ask` / `push` | `{message_id?}`；发不出去（还没有可以发的会话）回错误码 `cannot_send` |
-| `channel.typing` | `{contribution, on}` | `{}`（有 `typing` 才调） |
-| `channel.edit` | `{contribution, message_id, text}` | `{}`（有 `progress` 才调） |
+| `channel.send` | `{contribution, ref, text, kind, reply_to?}`: `text` is Markdown (already split by `max_text`), `kind` is `answer` / `note` / `ask` / `push` | `{message_id?}`; if sending is impossible (no conversation it can send to yet), return error code `cannot_send` |
+| `channel.typing` | `{contribution, on}` | `{}` (called only with `typing`) |
+| `channel.edit` | `{contribution, message_id, text}` | `{}` (called only with `progress`) |
 
-错误码之外的错误只有 `message`，不带正文和密钥。hub 调 `channel.send` 失败（不是 `cannot_send`）隔 1、2、4 秒重试 3 次，同一个 `ref`。
+Errors beyond the error code include only `message`, never content or secrets. If hub's `channel.send` fails (other than `cannot_send`), retry 3 times after 1, 2, and 4 seconds, with the same `ref`.
 
-**一致性测试**：`channel/conformance.Check(t, manifest, run, init)` 在进程扩展协议的检查之外：清单里每个渠道的 `channel.send` 回「发了」或 `cannot_send`，
-同一个 `ref` 两次回得一样（只发一次）；`channel.typing` 收得下；没有 `ref` 的不收；不认识的渠道回 `no_contribution`，不认识的方法回 `unknown_method`。
-微信扩展跑它（`extmgr/wechat_test.go` 的 `TestWeChatProgramIsAChannel`）。
+**Conformance tests**: `channel/conformance.Check(t, manifest, run, init)`, in addition to process-extension protocol checks: each channel in the manifest returns "sent" or `cannot_send` from `channel.send`;
+the same `ref` twice returns the same result (sent only once); `channel.typing` is accepted; requests without `ref` aren't; unknown channels return `no_contribution`, unknown methods `unknown_method`.
+The WeChat extension runs it (`TestWeChatProgramIsAChannel` in `extmgr/wechat_test.go`).
 
-### 写一个渠道扩展
+### Writing a channel extension
 
-Go 的用 `connector/serve.MainWith`，连接器实现 `channel.Transport`（`Send`、可选的 `Typing`、`Edit`），收到消息调 `serve` 给的 `channel.Hub.Receive`。
-别的语言照上面的协议，一行一条 JSON（`docs/extensions.md`「进程扩展协议」）。
+In Go, use `connector/serve.MainWith`; the connector implements `channel.Transport` (`Send`, optional `Typing`, `Edit`), and calls the `channel.Hub.Receive` supplied by `serve` on incoming messages.
+Other languages follow the protocol above, one JSON line per message (`docs/extensions.md` ("Process extension protocol")).
 
-## 五、兼容和迁移
+## 5. Compatibility and migration
 
-- **飞书机器人**：配置、凭据、主人、功能开关原样留在 settings `bots.feishu`（hub 的），`/api/v1/bots/feishu*` 的接口不变（老 App 照用）。聊天状态 `bots.feishu.state`（助手的）里的 `runs`
-  第一次读时搬进统一管线的 runs（字段一一对应：`message_id` → `reply_to`，`card` / `reaction` 进 `ext`），`current`、`threads`、`seen` 留在原处。
-- **微信**：插件的密封状态（`connector_secrets` 的 `wechat`）里原来有 `target`、`runs`、`asks`：新版本的 hub 启动时、在起插件程序和助手之前读出这三项，
-  搬进渠道的设置和 runs（`channels`、`channels.state`，助手的键：hub 只在这一次搬的时候写），再把它们从那份状态里删掉（token、游标、`context_token`、去重留给插件，`extmgr/channels_migrate.go` 的 `migrateWeChatState`）。已经绑定的不用重新扫码。
-  插件和 hub 是同一次构建（`version -v` 不一样就不启动），不存在新插件配老 hub。插件不再要 `hub_api` 权限：hub 不再给它 hub 的 token。
-- **Telegram**：不是渠道，什么都不动；连接器的会话、开关、选项都照旧。
-- **老 App**：新接口都是新增的；会话上多的 `channels`、设置首页的新入口，老 App 不认就不显示。原来的入口（设置 › 连接器 › 飞书机器人 / 微信）照旧在，
-  新版本里两边互相链接（见「界面」）。
-- **老插件**：用 `connectors` + `hub_api` + `events` 拼的第三方渠道照旧能跑（hub 不知道它是渠道，列表里没有它）。
+- **Lark bot**: configuration, credentials, owner, and feature switches remain unchanged in settings `bots.feishu` (owned by hub), and `/api/v1/bots/feishu*` stays unchanged (old Apps keep using it). On first read, `runs` in chat state `bots.feishu.state` (owned by the assistant)
+  move into the unified pipeline's runs (fields map one-to-one: `message_id` → `reply_to`, `card` / `reaction` go into `ext`); `current`, `threads`, `seen` stay where they are.
+- **WeChat**: the plugin's sealed state (`wechat` in `connector_secrets`) formerly contained `target`, `runs`, `asks`: on startup, before starting the plugin program and assistant, the new hub reads these three,
+  moves them into channel settings and runs (`channels`, `channels.state`, assistant-owned keys; hub writes them only for this migration), and removes them from that state (token, cursor, `context_token`, and deduplication remain with the plugin; `migrateWeChatState` in `extmgr/channels_migrate.go`). Already-bound accounts don't need to scan again.
+  Plugin and hub come from the same build (if `version -v` differs, it doesn't start), so no new-plugin / old-hub combination exists. The plugin no longer needs `hub_api` permission: hub stops giving it the hub token.
+- **Telegram**: not a channel, nothing changes; the connector's chats, switches, and options remain as before.
+- **Old Apps**: all new APIs are additions; old Apps don't recognize the extra session `channels` or new Settings entry, so don't display them. Existing entries (Settings › Connectors › Lark bot / WeChat) remain,
+  and in new versions the two link to each other (see "UI").
+- **Old plugins**: third-party channels assembled from `connectors` + `hub_api` + `events` keep running (hub doesn't know they're channels and doesn't list them).
 
-## 六、接口
+## 6. API
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/channels` | `{channels: [View]}`：内置的、扩展贡献的（装了的，含停用的）、市场里有 `channel` 贡献还没装的。按 `app`、已连接、未连接、市场排 |
-| GET | `/api/v1/channels/{id}` | `View` 加 `waiting: {answers, asks}`、`conversations`（这个渠道最近进过的对话，最多 5 段：`{machine_id, session_id, title, at}`）、`settings_url`（飞书机器人这种有自己完整设置页的，App 链过去） |
-| PUT | `/api/v1/channels/{id}` | `{enabled?, target?, features?: {id: bool}}`，只改带了的；回 `View`。`target.kind` 是 `main` / `new` / `conversation`（带 `machine_id`、`session_id`，必须是助手的对话） |
-| POST | `/api/v1/channels/{id}/bind` | `{step?, values?}` → `connector.Prompt`（`docs/connectors.md` 的分步登录：填字段、扫码 `qr`、配对码 `pair_code`）。`step` 为空是从头开始。扩展渠道转给它的连接器；飞书机器人：没凭据时一步填 App ID / Secret，有了以后给配对码 |
-| DELETE | `/api/v1/channels/{id}/binding` | 解绑：扩展渠道是连接器的退出登录；飞书机器人是解除配对。runs 和在等的提问一起清掉 |
-| POST | `/api/v1/channels/{id}/test` | 给**主人自己**发一条测试消息（只能发给绑定的那个人） |
+| GET | `/api/v1/channels` | `{channels: [View]}`: built-ins, extension-contributed channels (installed, including disabled ones), and not-yet-installed market entries with `channel` contributions. Ordered by `app`, connected, not connected, market |
+| GET | `/api/v1/channels/{id}` | `View` plus `waiting: {answers, asks}`, `conversations` (the channel's recent chats, up to 5: `{machine_id, session_id, title, at}`), `settings_url` (for channels like the Lark bot with a full settings page of their own, linked by the App) |
+| PUT | `/api/v1/channels/{id}` | `{enabled?, target?, features?: {id: bool}}`, changes only supplied fields; returns `View`. `target.kind` is `main` / `new` / `conversation` (with `machine_id`, `session_id`; must be an assistant chat) |
+| POST | `/api/v1/channels/{id}/bind` | `{step?, values?}` → `connector.Prompt` (the step-by-step login in `docs/connectors.md`: fields, QR scan `qr`, pairing code `pair_code`). Empty `step` starts over. Extension channels forward to their connector; Lark bot: one step for App ID / Secret if no credentials, then a pairing code once they exist |
+| DELETE | `/api/v1/channels/{id}/binding` | Unbind: connector logout for extension channels; unpair for the Lark bot. Clears runs and pending questions together |
+| POST | `/api/v1/channels/{id}/test` | Send a test message to **the owner themselves** (only the bound person) |
 
-只读设备只能 GET。`/health` 和 hello 的 `features` 有 `channels` 时才有这些接口。2026-11-04 起除了 `POST …/bind`，这些路由是助手的（`assistantwire.Routes`，hub 原样转过去）：
-助手没连着时回 `503 assistant_offline`，字段和以前一样；它要的传输那一半（有哪些渠道和状态、开关、解绑、发测试消息）问 hub（`channels.list`、`channels.enable`、`channels.unbind`、`feishu.configure`、`feishu.test`）。
-`POST /api/v1/channels/{id}/bind` 是 hub 自己的（带 App Secret、连接器登录要填的东西，这些不经过助手），助手不在时也照常。
+Read-only devices can only GET. These APIs exist only when `/health` and hello's `features` include `channels`. Since 2026-11-04, except for `POST …/bind`, these routes belong to the assistant (`assistantwire.Routes`, forwarded unchanged by hub):
+if the assistant is disconnected, return `503 assistant_offline`; fields are unchanged. For the transport half (channel list and states, switches, unbinding, test messages), it asks hub (`channels.list`, `channels.enable`, `channels.unbind`, `feishu.configure`, `feishu.test`).
+`POST /api/v1/channels/{id}/bind` belongs to hub (carries App Secret and connector login input, which never pass through the assistant), and works while the assistant is away.
 
-## 七、界面
+## 7. UI
 
-- **入口**：Apple 端（iOS / iPadOS / macOS，#2195）、网页和安卓（#2196）都是设置里的独立「渠道」项，放在「连接器」前，扩展页不再重复列入口。Apple 端显示已连接的个数，有出错的标红；hub 没有 `channels` 这个 feature 时不显示。
-- **列表**：每行是渠道的图标（品牌标志，`Theme.Brand` / 各端同名的 token；没有标志的用名字首字）、名字、绑定的账号（没有就是一句说明），右边是状态：已连接（绿点）/
-  未连接（灰）/ 出错（红，带一句原因）/ 已停用。分三节：「Persona」（`app`：iOS、Mac、手表、Android、网页、Siri，只是告诉用户这些都能用）、「已接入」、「可以安装」（市场里的，点进去是扩展市场的详情）。
-- **单个渠道**：
-  - 顶上状态：图标、名字、状态、账号、最近一条消息的时间；出错时的原因和怎么修。
-  - 「启用」开关。
-  - 绑定：没绑时一个「绑定」按钮，走 `bind` 的分步（扫码时画二维码，可「保存二维码」；配对码时显示 6 位数字、等对方发；填字段时是表单）。绑了以后是账号和「解除绑定」（先确认）。
-  - 「消息发到」：主对话 / 新对话（下一条消息开）/ 选一段对话（助手最近的对话列表）。
-  - 功能开关：按 `features` 画。
-  - 「发一条测试消息」（只发给自己）。
-  - 有 `settings_url` 的（飞书机器人）多一行「更多设置」，进原来的页面。
-- **连接器页**：微信连接器、飞书机器人原来在设置 › 连接器里的入口留着，页面顶上有一行说明它是对话渠道并链接到「设置 › 渠道」；Apple 端的说明是「在 设置 › 渠道 里设置」。渠道页的绑定和连接器页的登录是同一个接口，哪边做都一样。
-- **对话页**：从渠道来的用户消息下面一行小字「来自 微信」（渠道的图标 + 名字，次要色）；App 自己发的不标。
-- **对话列表**：会话的 `channels` 不空时，标题旁边画最近那个渠道的小图标。
+- **Entry point**: Apple (iOS / iPadOS / macOS, #2195), web, and Android (#2196) have a separate "Channels" item in Settings, before "Connectors"; the extension page no longer repeats it. Apple shows the connected count, red if any errors; hidden when hub lacks the `channels` feature.
+- **List**: each row has the channel icon (brand mark, `Theme.Brand` / the equivalent token on each client; name initial if no mark), name, bound account (or one sentence of description), and state on the right: Connected (green dot) /
+  Not connected (gray) / Error (red, with a reason) / Disabled. Three sections: "Persona" (`app`: iOS, Mac, watch, Android, web, Siri, simply telling users all are available), "Connected", "Available" (market entries open extension market details).
+- **Individual channel**:
+  - Top status: icon, name, state, account, latest message time; error reason and how to fix it.
+  - "Enabled" switch.
+  - Binding: when unbound, a "Bind" button follows `bind` steps (QR code displayed with "Save QR Code"; pairing code displays 6 digits and waits for the other side to send it; fields use a form). Once bound, shows the account and "Unbind" (confirmation first).
+  - "Send Messages To": main chat / new chat (starts on the next message) / select a chat (recent assistant chats).
+  - Feature switches: drawn from `features`.
+  - "Send Test Message" (only to yourself).
+  - With `settings_url` (Lark bot), an extra "More Settings" row opens the old page.
+- **Connector page**: existing WeChat connector and Lark bot entries in Settings › Connectors remain; a top explanation says it's a chat channel and links to "Settings › Channels". Apple says "Set it up in Settings › Channels". Binding on the channel page and login on the connector page use the same API; either works identically.
+- **Chat page**: a small "From WeChat" line below channel-origin user messages (channel icon + name, secondary color); no marker for App-origin messages.
+- **Chat list**: if session `channels` is nonempty, show a small icon of the most recent channel beside the title.
 
-## 八、分步
+## 8. Steps
 
-| PR | 内容 |
+| PR | Content |
 | --- | --- |
-| 1 | 这份文档；`channel` 包（类型、`Check` / `Decide`、`Split`、`AskText` / `ReadAnswer`、来源）；hub 的渠道注册表和接口；扩展点 `channel`；统一管线：飞书机器人的 runs 迁过去，微信改成 `channel` 扩展点（扩展只剩 iLink 收发、扫码），状态迁移；会话的 `channels`；一致性测试 |
-| 2 | 网页：设置 › 渠道，对话页的来源 |
-| 3 | Android：同上 |
-| —— | iOS / Mac / 手表（#1529）：设置 › 渠道（`apple/Persona/Views/Settings/ChannelsViews.swift`，绑定复用连接器的分步登录组件，多了 `pair_code`），对话页和手表上的「来自 …」，侧栏的渠道小图标，连接器页（微信、飞书机器人）链到渠道 |
+| 1 | This doc; the `channel` package (types, `Check` / `Decide`, `Split`, `AskText` / `ReadAnswer`, sources); hub channel registry and API; the `channel` extension point; unified pipeline: migrate Lark bot runs, change WeChat to the `channel` extension point (the extension keeps only iLink sending / receiving and QR binding), state migration; session `channels`; conformance tests |
+| 2 | Web: Settings › Channels, source markers on the chat page |
+| 3 | Android: same |
+| — | iOS / Mac / watch (#1529): Settings › Channels (`apple/Persona/Views/Settings/ChannelsViews.swift`, binding reuses the connector step-by-step login component, with `pair_code` added), "From …" on the chat page and watch, small channel icons in the sidebar, connector pages (WeChat, Lark bot) link to channels |
 
-## 九、还没做
+## 9. Not done yet
 
-- **Telegram 机器人**（Bot API，和现在的 Telegram 连接器是两样东西）：有了 `channel` 扩展点只要写收发，排在后面。
-- **Siri 的轮询**：「问 Persona」在 App 里自己等一轮答完（24 秒），没有走 hub 的管线。要走的话 hub 加一个「发一条、等它答完再回」的长轮询接口，Siri 调它。
-- **飞书 `/agent`、语音**：形状不一样，列进渠道表，设置在原来的地方（hub.json、扩展页），不走这条管线。
-- 一个渠道只绑一个主人；渠道里的群聊不处理。
-- `text` 的提问在别处答过后撤不回已经发出的文字。
-- 扩展渠道的 `progress`（发一条进度、再用 `channel.edit` 改它）：协议里有，管线还只给飞书机器人画进度卡，扩展渠道现在只有「正在输入」。
+- **Telegram bot** (Bot API, different from the current Telegram connector): with the `channel` extension point, only sending and receiving need to be written; deferred.
+- **Siri polling**: "Ask Persona" waits for the turn to finish in the App itself (24 seconds), not through hub's pipeline. To use it, hub would add a long-poll API to "send one message, wait for its answer, then return", called by Siri.
+- **Lark `/agent`, voice**: different shapes, listed in the channel table, configured where they were (hub.json, extension page), not using this pipeline.
+- One owner per channel; group chats in channels are not handled.
+- Once `text` questions have been answered elsewhere, already-sent text can't be withdrawn.
+- Extension channel `progress` (send progress, then edit it with `channel.edit`): in the protocol, but the pipeline still draws progress cards only for the Lark bot; extension channels currently only have "typing".

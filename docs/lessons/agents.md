@@ -1,370 +1,370 @@
-# 经验：Claude Code、Codex 与 herdr
+# Lessons: Claude Code, Codex, and herdr
 
-踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
+Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE.md` ("Lessons"), index in `docs/lessons/README.md`). Add new lessons to the matching section; create a section if none fits.
 
-- 新建开发会话的最近目录要在 node 汇总 transcript 和运行中 Agent 的目录后，用 `identity.IsAssistantDir` 排除助手目录，再排序、取前 15 个（#1662）。助手的 transcript 持续更新，未经筛选就会占据默认建议；不要只按目录名 `assistant` 排除，以免误伤同名项目。筛选只影响建议，保留已有会话和显式目录浏览。
-- Claude Code 的多个 PermissionRequest hook 是同时跑的，第一个 `allow` 就放行，其余的不会被结束、跑到各自超时（2.1.308，#2648）：等手机的 hook 会在手机上留一张过期的卡。作答的 hook 要发 `hook.decided`（`docs/claude-integration.md`）。bypass 模式下仍会弹的主要是 rm 的目标静态解析不了（`cd` 之后的相对 glob、运行时才有的目标），长度、heredoc、`eval` 都不弹。
-- herdr 里新开 tab 启动 claude 时，若 cwd 未被信任会先弹「trust this folder」，`agent prompt` 发的文字会被当成选择 → 选了 No 退出。
-  node 启动会话后要检查 blocked 屏幕（`docs/claude-integration.md`）。
-- 输入框出现了不等于 Claude 能收字（2026-11-05，#2423）：Claude Code 启动时自动更新（"Updated to latest…"）又弹了 Auto mode 的说明，
-  node 等到输入框后 `agent prompt` 的首条消息被吞，transcript 只有 1 KB、没有 user 消息，Agent 空闲了 1.5 小时。发完要看 transcript 确认，
-  没进就等就绪后重发、最后标「需要你」（`node/firstprompt.go`），不能发完就当成功。
-- Claude 输入框里的灰字（预测的下一句、新会话的 `Try "…"`）在纯文本读屏里和用户打的字一模一样：判断有没有草稿要用 ansi 读屏看 dim（SGR 2）。
-  2.1.312 的信任目录对话框选项不带编号（`❯ No, exit`），认对话框靠底部的 `Enter to confirm · Esc to cancel`（`server/internal/screen`）。
-- herdr 的 `agent_status` 会落后于 Claude（#2069，herdr 0.9.3）：上一轮结束（done、未看）后从 App 发消息开了新的一轮，herdr 一直报 done，
-  终端里状态行在转、标题是「◐ …」、transcript 在长，App 却显示做完了。本机按同样步骤（后台 workspace、send-text + Enter，还有长工具调用、
-  后台任务唤醒）试了 5 次都没复现，所以不靠猜 herdr 什么时候漏，而是 node 自己看两样兜底（`claudeStatus`）：标题的转圈字形（2.1.3xx 工作时是
-  ◐◓◑◒、等输入时是 ✳），和 transcript 里没结束的这一轮（`turn_duration` / 中断算结束；本机 955 轮里 913 轮以 `turn_duration` 结束）。
-  只纠正 done / idle / unknown，不碰 blocked；transcript 说这一轮已经结束时照 herdr 的（标题可能是结束前一刻读到的）。
-  复现时注意：herdr 新窗格里的 shell 没有当前会话的 `CLAUDE_CONFIG_DIR`，claude 会报 `Not logged in`（读不到默认目录的登录）。
-- Claude Code 的 `--settings` 只认最后一个，不合并（2026-11-02 实测：`--settings A --settings B` 时 A 的 `env` 全没了）。启动器 alias 自己带
-  `--settings`、凭据在那个文件的 `env` 里时，Persona 再追加一个 `--settings` 就把它顶掉，从手机起的会话和助手每条消息都回
-  `Not logged in · Please run /login`（transcript 里是 `isApiErrorMessage` + `authentication_failed`），在 herdr 里自己敲同一个 alias 却正常。
-  合并两份只救得了 alias：函数里的 `--settings` 读不到（#1411）。所以 Persona 要给 claude 加的东西走能叠加的参数（`--plugin-dir`、`--mcp-config`），
-  不占 `--settings`：hooks 是一个插件（`docs/claude-integration.md`「Hooks」），只有更老的 Claude Code 还合并。用户自己在启动器函数里按 Persona 的目录名
-  认出它的 `--settings` 来让位，也不可取：数据目录从 `~/.jarvis` 换成 `~/.persona` 后就认不出了。
-- 插件（`--plugin-dir`）里的 hooks 和 `--settings` 里的行为一样（2026-11-04 实测 2.1.318：SessionStart、UserPromptSubmit、Stop 触发，PreToolUse 的
-  `deny`、PermissionRequest 的 `allow` 生效，交互和 `-p` 都是），和启动器自带的其他 `--plugin-dir` 一起加载。只要关掉 hooks（`disableAllHooks`）还得用
-  `--settings`：`--bare` 也会跳过 hooks，但它只认 `ANTHROPIC_API_KEY` / `apiKeyHelper`，用登录或 `ANTHROPIC_AUTH_TOKEN` 的启动器都会失败。
-- Persona 管理的启动器用 `ANTHROPIC_API_KEY` 传 Key：交互模式的 claude 第一次见到这个 Key 会先弹「Detected a custom API key … Do you want to use this API key?」，
-  默认选中 No（2026-11-03 实测 2.1.309）。选了 No 之后 Key 进 `customApiKeyResponses.rejected`，这个启动器起的会话都报未登录；`-p` 模式不问，
-  所以启动器的「检查」能过、从手机新建却卡住。`ANTHROPIC_AUTH_TOKEN`（发 `Authorization: Bearer`）和 `apiKeyHelper` 不问，但前者官方 API 不认、
-  后者要再传一个 `--settings`（只认最后一个，见上条）。`jarvisd launch` 现在启动前把 Key 记成已允许（`docs/launchers.md`「Persona 管理的怎么跑」）。
-  写之前拿 Claude 自己的配置锁（`<配置路径>.lock` 目录，10 秒算过期），否则和正在运行的 claude 同时写会丢一边的改动。
-  Claude Code 2.1.317 里有 `storageV5` 配置后端（默认没开）；它变成默认后全局配置可能不再读 `.claude.json`，升级 Claude Code 时要重新确认这条还有效。
-- 启动器接中转网关报 401 时别先怀疑头：用过的那个中转从第一版起 `Authorization: Bearer` 和 `x-api-key` 都认（看它的鉴权中间件）。
-  看 `POST /v1/messages` 的报错分辨 Claude 实际发了什么（2026-11-04 用假 Key 实测）：`invalid x-api-key` 是只带了 `x-api-key` 但 Key 不对；
-  `invalid or missing API key` 是请求里有 `Authorization` 头（或什么都没带）；`API key has expired` 是过期。两个凭据一起来时那个中转要求恰好一个对得上。
-- 托管启动器只设 `ANTHROPIC_API_KEY`，但 hub 机器的 `~/.claude/settings.json` 的 `env` 里有 `ANTHROPIC_AUTH_TOKEN`（给别的网关的兜底）：
-  Claude Code 用 settings 的 `env` 补环境里**没有**的变量，于是 `Authorization: Bearer <那个 Token>` 和 `x-api-key` 一起发，中转回 401
-  `invalid or missing API key`（2026-11-04，误判成过「网关只认 Bearer」）。环境里已有的变量（包括空值）不会被 settings 盖掉，`jarvisd launch` 现在把另一个设成空。
-  复现：假网关记请求头，`CLAUDE_CONFIG_DIR=<临时目录>` 放一份带 `env` 的 `settings.json`，跑 `claude -p`。
-- 用户自己起的 claude（启动器、profile 目录）没有 Persona 的 hooks，AskUserQuestion 只能靠读屏幕的卡片答。读屏卡得认得 2.1.316 的多选：`[ ]`/`[✔]` 是状态不是文字，数字只勾不交，要挪到 Submit 行按 enter 再在确认页按 1；光标在自由回答行上按数字会写进去，在 Submit 行上按数字没反应；几个键一次发会丢，一次一个（`docs/claude-integration.md`「多选提问的屏幕卡」）。
-- AskUserQuestion 的选项带预览时，数字只挪光标，要再按 enter 才选；读屏卡只按数字会「答了没生效」。按键后要看屏幕确认问题真的往下走了（`docs/claude-integration.md`「带预览的提问」）。
-- 屏幕卡因为 Agent 不再 blocked 撤掉时，数据库里也要记成结束（cancelled），不然历史里一直挂着 pending，直到 hub 重启。
-- 读屏认对话框要先锚定对话框从哪一行开始（`screen.dialogTop`：对话下面最后那条分隔线、或选择面板 `▔` 边的下一行），再从锚点往下找编号；整屏找编号会把 Agent 自己答复里的「1. … 2. …」当成选项——
-  只按回车就能关的通知于是被当成选择题，`dismiss_notice` 拒绝关，手机上的屏幕卡还把答复正文列成按钮（#2872）。这个锚点 `DialogHead` 早就在用，现在两处读法共用一份。
-- AskUserQuestion：PreToolUse hook 返回 `permissionDecision: allow` + `updatedInput.answers` 即可代答（2.1.310 实测）。
-- ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
-  才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。
-- `herdr` 中批准计划后，`PermissionRequest` hook 不一定及时退出，`interaction.cancel` 也可能没有到 hub（2026-11-01：transcript 已有成功的 `ExitPlanMode` tool_result，会话 working，手机仍停在 needs_you）。hub 对待处理计划在 sessions / revs 变化时读有限的 transcript 分页，按对应 tool_use_id 的 tool_result 收尾；旧 hook 没传 id 时，只接受创建前 30 秒内唯一的 ExitPlanMode 调用，且结果不能早于卡片创建。匹配不明、节点离线、只有「working」或模型文字都不清除。30 秒定时兜底覆盖丢事件，单卡限频和单飞避免重复读盘。
-  收尾只移除过期卡片、广播 `interaction_resolved`，历史记 dismissed，不伪造手机批准、权限模式或回答；还在等的 hook 仅收到 Dismiss，不返回 allow。新计划、提问 / 工具批准不受旧计划的结果影响。回归见 `assistant/fleet_cards_test.go`（遗漏 tool_use_id、跨页、本地拒绝 / 中断、伪批准文字、新旧卡片竞态、App 推送和持久化）。
-- 工具授权同理（#3563）：终端里答了授权对话框，PermissionRequest hook 也不结束，手机卡一直挂到超时。授权卡同样按 tool_use_id 的 tool_result 收尾，但只认精确 id（没 id 的授权卡不猜）；手机已经答过的（claimed）不收，免得把 resolved 改写成 dismissed。
-- `--settings <file>` 里的 hooks 只在启动时读取，改 matcher 要重启 claude；hook 脚本本身每次执行都重新读。
-- `herdr agent wait` 可能在 herdr 识别出 agent 之前就返回 agent_not_found：启动后要轮询 `agent get`。
-- 没装 herdr claude integration 的机器，`agent list` 不带 session id（见 `docs/claude-integration.md` 的兜底）。
-- 没装 herdr claude 集成的机器认窗格对应哪个会话，用 `herdr pane process-info` 拿 claude 的 pid，再读
-  `~/.claude/sessions/<pid>.json` 的 sessionId；别靠「同目录最新的 transcript」猜（同一个仓库里开六个 Agent，tab 名全串了）。
-- Claude Code 2.1.30x 的 `/fork`、转到后台的会话跑在 Claude 的 daemon 里（`sessions/<pid>.json` 的 `kind: "bg"`），没有窗格、herdr 没有 hook，
-  一直列成离线；原窗格的 claude 带着 `parkedJobId` 显示 agents 视图，herdr 却仍按原会话 id 和后台会话的终端标题报「工作中」（2026-11-04）。
-  认窗格之前看 `sessions/<pid>.json`：parked 的进程不算开着它的会话（`docs/claude-integration.md`「后台会话」）；但窗格正打开它转去的 job 时，窗格就是那个 job 的，别把 job 另列成只读而丢掉这个标签；停在 agents 列表时窗格也留在原会话的标签里（能开终端从列表里选，不收消息），别让它哪儿都不列。
-- 从某条回复分支（#2137）不能靠 CLI：`claude --resume <id> --fork-session --session-id <新 id>` 只能整段复制；隐藏参数 `--resume-session-at <uuid>` 在 `-p` 下会截断，交互模式下不截断（2026-11-05 实测，2.1.309）。node 自己把 transcript 复制到那一轮结束、只替换 `"sessionId":"<旧 id>"`，再 `claude --resume <新 id>`（`node/fork.go`）。
-- herdr 不认识的 Agent（TRAEX）：herdr 只报它内置识别的 Agent，`agent prompt` 对其他窗格报 not found。node 用 owner 文件（pid → 会话）
-  加 pid 环境变量里的 `HERDR_PANE_ID`（pid → 窗格）自己认，状态看标题转圈字符和屏幕（`docs/codex.md` TRAEX 一节）。
-- Claude Code 的配置目录不一定是 `~/.claude`：启动器设了 `CLAUDE_CONFIG_DIR`（多套 profile）时 transcript、`sessions/<pid>.json`、`settings.json`
-  都在那个目录。node 每 30 秒扫一次正在跑的 claude 进程的环境变量（Linux 读 `/proc`，macOS 一次 `ps -E`），所有目录一起找，
-  找到的目录记进数据库；平时不跑的 profile 写进 `hub.json` 的 `machines[].claude_config_dirs`（`server/internal/node/claudedirs.go`）。
-  以前靠把 `~/.claude/projects`、`sessions` 软链到 profile 绕过，软链留着也没事（按真实路径去重），不用再加。
-  漏掉目录的症状：助手续聊报「Session ID … is already in use」、App 里 transcript not found、herdr 里的 Agent 认不出会话。
-  反过来，自动化脚本用自己的 `CLAUDE_CONFIG_DIR` 跑 claude 时，扫描会把它找出来、hub 记住，列表被上百条离线会话淹没；删 `claude_dirs/<机器>` 的记录没用
-  （下一次扫描又报上来），要用「屏蔽配置目录」（`docs/claude-integration.md`，#676）。
-- 多个配置目录全被 node 看到后（PR #12），一台跑十几个 Agent、transcript 上百 MB 的机器上 node 持续读盘约 20 MB/s：每个 herdr 事件都重建会话列表，
-  每次都把每个在增长的 transcript 尾部 384 KB 重读一遍。现在列表重建每秒最多一次，增长中的文件 meta 最多 3 秒重读一次（`metaMinInterval`），
-  后台任务扫描流式读（原来第一次整份读进内存），而且大文件的第一次读放到后台逐个做：建会话列表曾等它读完几 GB，node 重启后那台机器好几分钟一个会话都不显示。冷打开几百 MB 的 transcript 要整份解析（317 MB 约 20 秒，hub 15/30 秒超时 502），
-  node 启动后会逐个预热正在跑的会话；量延迟要用真实的大会话按 App 冷打开的参数（`items?turns=2`）测 P50 / P99。
-- Claude Code 默认清理 30 天前的 transcript（`cleanupPeriodDays`，启动时做，2026-10-29 一次删掉了这台机器 200 多个会话）：
-  想留作解析样本的会话要及时脱敏存成 fixture（`server/internal/transcript/testdata/README.md`）。脱敏只能白名单式，
-  「短数字原样保留」这种放行会把 IP 的每一段都放过去（踩过）。
-- 新开的 herdr 标签页名字（2026-10-31 用户要求）：以前往已有空间里加的标签页一律写死叫 `jarvis`。现在新对话表单可填「标签名」，
-  不填就由管理者按第一条消息起短英文名（`assistant/agents_start.go`，2026-11-04 前在 hub 的 `tabname.go`）。gpt-6.1-terra 这类推理模型先花隐藏的思考 token：`max_tokens` 给 20 时回的 content 是空的
-  （`stop_reason: max_tokens`），给 200 才有名字；小任务里给模型的 token 上限别卡太紧。
-- herdr 会把早就结束的 Codex 会话报成 working（2026-10-30：两天前结束的一轮显示「正在工作 45 小时」八分钟，rollout 没动过；App 的计时从那一轮的用户消息算起）。
-  node 以 rollout 为准：结尾是 task_complete / turn_aborted、30 秒没写过，就当 done（`codexTurnOver`）。
-- 反过来，接不进去的 Codex 也别把状态留成 unknown：App 把 unknown 当空闲（2026-11-02：Codex 桌面 App 里正在跑的任务在手机上进了「空闲的空间」，它的 app-server 是 stdio，node 只知道它开着哪些 rollout，一律报 unknown）。按 rollout 判断（`codexSessions`）；尾部只读 384 KB，而一轮常写几 MB，只认 task_started 的话长任务过一会儿又变回 unknown：尾部里没有轮次事件、又没读到文件开头，就是还在一轮之中（`quickMeta.turnOpen`）。
-- 同一个 Claude 会话 id 可能在两个配置目录里各有一个文件（在另一个 profile 下 resume 过：旧的停住，新的接着写）。按目录顺序取第一个会读到旧的：
-  在跑的会话在手机上停在两天前、子 Agent 报 not found、列表里同一个会话出现两次（2026-10-31，一台机器 45 个）。按 id 找文件一律取最近修改的那份（`newestFirst`）。
-- Codex 窗格认会话别靠「同目录最新的 rollout」（和 Claude 那条一样的坑）：终端标题是「线程名 | 目录」，按 `session_index.jsonl` 的线程名认；
-  rollout 在线程开始那天的目录里一直写，按日期目录只扫近两周会漏掉老线程（2026-10-31 一个正在跑的 Codex 显示成别的会话、灰点）。
-  按 id 对拍内容测不出这种错，要拿窗格的真值比（`scripts/diag/live_panes_check.py`）。
-  Claude 窗格同理：Persona 启动过的会话的窗格绑定存在 hub 数据库里、node 重启就载回来，可能早已过时；`sessions/<pid>.json` 优先于绑定。
-  改了认窗格的逻辑，部署（重启）后要再跑一次复核，重启前后的结果可能不一样。
-- herdr `agent.prompt` 先粘贴、约 300 ms 后才回车：同一会话的两次发送要串行，否则第二次读屏会把第一条当成输入框里的草稿。发送去重放在 hub 的 Postgres（`sent_messages`）：
-  node 的内存去重在重连 / hub 重启后就没了，而 App 恰恰在这时候自动重发。会话读取和发送的完整验证、每一跳的耗时见 `docs/archive/lanes/session-verify.md`。
-- `/model <别名>` 和 `/effort` 一样会写进 `~/.claude/settings.json`（`model` / `effortLevel`）当以后新会话的默认，不只是这一个会话；
-  对话已经被缓存时它先弹「Switch model?」确认（换模型要重读整段历史）。测试时别在自己常用的配置里试，试了要把这两个键改回去。
-- Claude Code 2.1.206 的 `/effort` 换成了滑块（「←/→ to adjust · Enter to confirm」，最左是 low），不再有旧列表的「for this session only」；
-  node 的 `tuiSetEffort` 两种都认（`effortPicker`）。滑块确认后会写进 `~/.claude/settings.json` 的 `effortLevel`（「saved as your default for new sessions」），
-  不只是这一个会话。环境里有 `CLAUDE_CODE_EFFORT_LEVEL`（settings.json 的 `env` 或启动器）时它优先，Claude 只回「… overrides this session」、什么都不改，App 会如实提示。
-- 思考强度 `auto`（Claude Code 2.1.316）只有 `/effort auto` 命令认：`--effort auto` 被警告后忽略，settings.json 的 `effortLevel` 写 auto
-  被静默丢掉（`max` 也一样，settings 只认 low…xhigh），选择器里没有这一格。`/effort auto` 会清掉 settings 里这个模型的默认档，
-  手机上的 auto 要按各条路分开做（`docs/ios.md`「思考强度和权限模式」）。在开发机上试 `/effort …` 也会改真实的 settings.json，别在自己的配置里试。
-- ultracode 是第二条轴（#3427）：`2.1.203–2.1.283` 曾是 max 右边的档位，会锁住思考强度；`2.1.284` 起改成独立的 `/effort ultracode on|off`，
-  不写默认值、恢复后关闭。Persona 只支持后者，不把 ultracode 加进 `EffortLevels`，也不发 `--effort ultracode` 或为了它新增 `--settings`。
-  版本未知时靠判词确认，命令成功返回不等于已经开启。`enableWorkflows` 未设置时默认由账号方案决定，不能伪造固定开 / 关默认。
-- ultracode 的 `ultra_effort_enter` 附件用 `reminderType: full|sparse`，等下一条真实 prompt 才生成，sparse 也不保证每轮都有；
-  不能靠 assistant 行或尾部窗口推断关闭。进程内按证据时间取最新值，跨 `startup` / `resume` 丢掉旧证据；会话的 `StartedAt` 在恢复时保留，不能当进程边界。
-  `SessionStart` 的 `clear` / `compact`、hook 重传和 sidechain 不应重新关闭主会话的开关。打字锁还要区分已持锁的发送路径和异步启动，避免启动等消息、消息又等启动。
-  以上判词、设置 schema 和附件键名本次只在安装的 `2.1.318` CLI 静态代码中核对，单测是合成 fixture，不代表真实会话端到端验收。
-- 带图的消息有一次停在了 Claude 的输入框里没发出去（2026-10-31，Claude Code 2.1.206：框里是 `[Image #1]` 和文字，Agent `done`，在电脑上按回车才发出），
-  之后在单独的 herdr 会话里试了 42 次（小 PNG、1.8 MB JPEG、CPU 跑满）都没再出现，原因没找到；11-01 用手机拍的照片又出现一次。node 的兜底（`ensureSubmitted`）：发完 2 秒后
-  看一次输入框，还是刚发的那段（`[Image #n]` / `[Pasted text #n]` 去掉后比开头几个字）就补一次回车；框空了、或者是别的内容，什么都不按。
-  只看等完以后的那一次：第一版发完马上就读、一看不对就放弃，11-01 那次就是这样漏掉的（刚粘贴完的一瞬间框里可能还不是这段）。
-- Codex app-server 接入（2026-11-02）：Unix socket 中是 WebSocket，不是 JSON-lines；外部 stdio 没有第二 attach 口。目录发现不 resume，控制只回原 loaded owner；未知/取消请求不发 error/decline，否则也可能消费桌面的审批 callback。`serverRequest/resolved` 撤卡记 dismissed，不生成批准；代际和带类型 request ID 一起去重。发送 admission 后的通用 server error 也不能当「确定未发送」自动重试，旧 outbox 的操作标识不按一天过期（`docs/codex-app-server.md`）。
-- Codex app-server 的 `thread/loaded/list` 不全是对话（2026-11-05，#2118，0.166）：TUI 在共用的 managed daemon 里起 `ephemeral: true` 的 thread 做后台小任务
-  （`threadSource: "thread_title"`，起标题），没有 `path` / rollout，跑完后仍挂在 loaded 里、状态一直 `active`。不看 `ephemeral` 就会在 Agents 页冒出一排同目录、同一秒、没标题的「工作中」Codex。
-  列会话前先跳过 `ephemeral`；它们也不支持 `includeTurns`（回 -32600）。
-- `codex app-server` 的协议以导出的为准（`codex app-server generate-ts --out <目录>`），实验接口（`thread/backgroundTerminals/*`、`process/*`）
-  要加 `--experimental` 才导出来，用的时候 `initialize` 要带 `capabilities.experimentalApi: true`。Codex 助手的其他坑见 `assistant.md`。
-  Codex 的 assistant rollout 开头是几十 KB 的指令（AGENTS.md、快照），第一条用户消息在 70 KB 之后：只扫开头 32 KB 找标题会找不到（`readQuickMeta`）。
-- Codex 生图（`scripts/assets/make_persona.py generate`）：`codex exec` 的内置 `image_gen` 用 Codex 自己的 ChatGPT 登录就能出透明背景的 PNG，
-  但它的 HTTP 客户端不认 `socks5h://` 代理（对话请求认），要给 HTTP CONNECT 代理；`-i` 吃多个值，提示词从 stdin 给；ChatGPT 登录只能用部分模型。
-  生图卡住（一张十几分钟、并行全停）先量代理隧道的吞吐，别先怪限流：2026-10-31 是 hub 机器外网只剩 11 KB/s，换一台外网快的机器开 `ssh -D` 后四个形象 6 分钟画完（`docs/persona.md`）。
-- Orca 宿主（`docs/plan-orca-support.md`「Orca 来源」）：`terminal.send` 的 `client` 必须带 `id`，只给 `type` 时每次发送都回 `invalid_argument`
-  （第一版就是这样，假 runtime 没校验参数所以测试全过；现在 `orcarttest` 按 Orca 的 schema 校验）。Orca 认不出前台的 Agent 时会把「提示」原样写进
-  壳层再回车，`accepted:false` 只在带 `requireAgentStatus` 时才有：发之前自己用进程表 + `terminal.agentStatus` 确认 Agent 在前台；
-  Orca 的 `agentPrompt` 只给见过在工作的 Agent 粘贴，新开的 claude 收到原样文字，多行会在第一个换行处提交：Persona 自己发括号粘贴再单独回车；
-  `worktree.ps` 行上的 `state` 把子 Agent 合进去了（主 Agent 这轮结束、后台子 Agent 在跑时是 working），窗格自己的状态看 `mainAgent.state`；
-  `agentIdentity` 在 Agent 退出后可能还在，「是不是 Agent」以 `ORCA_PANE_KEY` 对得上的 claude / codex 进程为准。node 的测试包把 `ORCA_USER_DATA_PATH`
-  指到空目录，别让测试碰到正在用的 Orca（它的 socket 能完全控制 Orca）。
-  Orca 新建终端（#924）：`terminal.create` 不传 `presentation: "background"` 避免 PTY 成为 orphan；创建后按确切 handle 查 `terminal.list` 校验身份与代次；普通创建路径显式 `cd` 进入目标目录；允许新建会话不意味着允许自动 resume 离线会话，后者通过 `orca_resume` 拦截以防止与桌面端竞争双写。
-- 启动器（`docs/launchers.md`，2026-11-01）：以前只认 `_claude_launchers` 这个辅助函数的输出，`~/.zshrc` 里全是 alias 的机器（一个用户 41 个）
-  列表里只剩 `claude`。alias 交给 zsh 自己拆词（`${(@Q)${(z)value}}`），不在 Go 里解析引号。`zsh -c` 里同一段脚本定义的 alias 不会在这段
-  脚本里展开（整段先解析），测试要像 node 一样 `zsh -ic` 并把定义写进临时的 `$ZDOTDIR/.zshrc`。`~/.zshrc` 里有 `alias claude=…` 时，
-  探测脚本 `claude() { … }` 这种定义会先被 alias 展开、整段语法错误，桩函数一律写成 `function claude { … }`。
-- 跑启动器或探测脚本的测试给最小环境（`HOME`、`ZDOTDIR`、`PATH`），失败信息不要整段打印输出：探测输出里是完整的进程环境，开发机上
-  有各种真实的 Key。
+- Recent directories for a new development session must be filtered with `identity.IsAssistantDir` after node combines transcript directories and running Agent directories, then sorted and limited to 15 (#1662). Assistant transcripts update continuously and otherwise dominate default suggestions; don't filter solely by the directory name `assistant`, which could hide a project with that name. Filtering affects only suggestions; existing sessions and explicit directory browsing remain.
+- Multiple Claude Code PermissionRequest hooks run concurrently. The first `allow` grants permission; the others aren't ended and run until their own timeouts (2.1.308, #2648), leaving an expired phone card from the waiting hook. The answering hook must send `hook.decided` (`docs/claude-integration.md`). In bypass mode, remaining prompts mainly come from rm targets that can't be resolved statically (relative globs after `cd`, runtime-only targets); length, heredocs, and `eval` don't prompt.
+- When starting claude in a new herdr tab, an untrusted cwd first prompts "trust this folder"; text sent by `agent prompt` becomes a selection → selects No and exits.
+  node must check for a blocked screen after starting a session (`docs/claude-integration.md`).
+- Seeing an input box doesn't mean Claude can receive text (2026-11-05, #2423): an automatic update on Claude Code startup ("Updated to latest…") also showed an Auto mode explanation.
+  After node waited for the input box, `agent prompt` swallowed the first message. The transcript was only 1 KB, with no user message, and the Agent sat idle for 1.5 hours. Check the transcript after sending;
+  if it didn't arrive, wait for readiness and resend, finally mark "Needs you" (`node/firstprompt.go`). Sending alone isn't success.
+- Gray text in Claude's input box (predicted next message, new-chat `Try "…"`) looks identical to user input in plain-text screen reads: detect drafts from ANSI dim (SGR 2).
+  The 2.1.312 trust-directory dialog has unnumbered options (`❯ No, exit`); recognize it by the bottom `Enter to confirm · Esc to cancel` (`server/internal/screen`).
+- herdr's `agent_status` can lag behind Claude (#2069, herdr 0.9.3): after the previous turn ended (done, unread), an App message started a new turn, but herdr kept reporting done.
+  The terminal status line spun, the title was "◐ …", and the transcript grew, yet the App showed completion. Five local attempts with the same steps (background workspace, send-text + Enter, long tool calls,
+  background-task wakeups) didn't reproduce it. Rather than guess when herdr misses updates, node checks two fallback signals (`claudeStatus`): the title's spinner glyphs (in 2.1.3xx, working uses
+  ◐◓◑◒, awaiting input uses ✳), and an unfinished transcript turn (`turn_duration` / interruption ends it; 913 of 955 local turns ended with `turn_duration`).
+  Only correct done / idle / unknown, not blocked. If the transcript says the turn has ended, trust herdr (the title may have been read just before completion).
+  When reproducing, note that a new herdr pane's shell lacks the current session's `CLAUDE_CONFIG_DIR`; claude reports `Not logged in` (can't read login from the default directory).
+- Claude Code `--settings` honors only the last occurrence, without merging (measured 2026-11-02: with `--settings A --settings B`, all of A's `env` disappeared). If a launcher alias supplies
+  `--settings` with credentials in that file's `env`, appending another `--settings` in Persona overrides it. Phone-started sessions and every assistant message then return
+  `Not logged in · Please run /login` (`isApiErrorMessage` + `authentication_failed` in the transcript), though typing the same alias in herdr works.
+  Merging files only rescues aliases: a function's `--settings` isn't readable (#1411). Persona additions therefore use composable flags (`--plugin-dir`, `--mcp-config`),
+  not `--settings`: hooks are a plugin (`docs/claude-integration.md` ("Hooks")); only older Claude Code versions still merge. Having users recognize Persona's `--settings` by its directory name
+  inside their launcher function and yield to it is also wrong: changing the data directory from `~/.jarvis` to `~/.persona` breaks that detection.
+- Plugin (`--plugin-dir`) hooks behave like those in `--settings` (measured 2026-11-04 on 2.1.318: SessionStart, UserPromptSubmit, Stop fire; PreToolUse `deny` and PermissionRequest `allow`
+  work, in both interactive and `-p` modes), and load alongside the launcher's other `--plugin-dir` entries. Disabling hooks (`disableAllHooks`) still needs
+  `--settings`: `--bare` also skips hooks, but accepts only `ANTHROPIC_API_KEY` / `apiKeyHelper`; launchers using login or `ANTHROPIC_AUTH_TOKEN` fail.
+- Persona-managed launchers pass keys through `ANTHROPIC_API_KEY`. Interactive claude first seeing that key prompts "Detected a custom API key … Do you want to use this API key?",
+  with No selected by default (measured 2026-11-03 on 2.1.309). Selecting No puts the key in `customApiKeyResponses.rejected`, and every session from that launcher reports not logged in. `-p` doesn't ask,
+  so the launcher "Check" passes but creating a session from the phone blocks. `ANTHROPIC_AUTH_TOKEN` (sends `Authorization: Bearer`) and `apiKeyHelper` don't ask, but the official API doesn't accept the former,
+  and the latter needs another `--settings` (only the last is used, above). `jarvisd launch` now records the key as allowed before startup (`docs/launchers.md` ("How Persona-managed launchers run")).
+  Acquire Claude's own config lock before writing (the `<config path>.lock` directory, stale after 10 seconds), or concurrent writes by a running claude lose one side's changes.
+  Claude Code 2.1.317 includes a `storageV5` config backend (off by default); once it becomes default, global config may stop reading `.claude.json`. Recheck this behavior when upgrading Claude Code.
+- If a launcher connected to a relay gateway returns 401, don't suspect the header first: the relay used here accepted both `Authorization: Bearer` and `x-api-key` from its first version (check its authentication middleware).
+  Use the `POST /v1/messages` error to tell what Claude sent (tested with a fake key 2026-11-04): `invalid x-api-key` means only `x-api-key` was present, with a wrong key;
+  `invalid or missing API key` means an `Authorization` header was present (or neither header); `API key has expired` means expiration. When both credentials are present, that relay requires exactly one to match.
+- A managed launcher sets only `ANTHROPIC_API_KEY`, but the hub machine's `~/.claude/settings.json` has `ANTHROPIC_AUTH_TOKEN` in `env` (fallback for another gateway):
+  Claude Code fills variables **absent** from the environment from settings `env`, so it sends both `Authorization: Bearer <that token>` and `x-api-key`, and the relay returns 401
+  `invalid or missing API key` (2026-11-04, once misdiagnosed as "the gateway only accepts Bearer"). Existing environment variables, even empty ones, aren't overwritten by settings. `jarvisd launch` now sets the other variable empty.
+  Reproduce with a fake gateway logging headers, a `settings.json` with `env` under `CLAUDE_CONFIG_DIR=<temporary directory>`, and `claude -p`.
+- User-started claude (launchers, profile directories) lacks Persona hooks; AskUserQuestion can only be answered through screen-reading cards. These must recognize 2.1.316 multiple selection: `[ ]` / `[✔]` are state, not text. Digits toggle but don't submit; move to Submit, press enter, then press 1 on the confirmation page. A digit on the free-answer row types text; a digit on Submit does nothing. Sending several keys together loses some; send one at a time (`docs/claude-integration.md` ("Screen cards for multi-select questions")).
+- With preview-bearing AskUserQuestion options, digits only move the cursor; enter is needed to select. A digit-only screen card appears answered but has no effect. After keys, check the screen to confirm the question actually advanced (`docs/claude-integration.md` ("Questions with previews")).
+- When a screen card is withdrawn because the Agent is no longer blocked, also mark it ended (cancelled) in the database, or history stays pending until hub restarts.
+- Screen dialog recognition must first anchor the dialog's starting row (`screen.dialogTop`: the final separator below the conversation, or the row after a selection panel's `▔` edge), then find numbers below it. Searching the whole screen mistakes the Agent's "1. … 2. …" answer for options—
+  a notice dismissible with Enter becomes a question, `dismiss_notice` refuses to dismiss it, and the phone's screen card lists answer text as buttons (#2872). This anchor, `DialogHead`, was already used; both readers now share it.
+- AskUserQuestion: a PreToolUse hook returning `permissionDecision: allow` + `updatedInput.answers` can answer on the user's behalf (tested on 2.1.310).
+- ExitPlanMode: uses PermissionRequest, not PreToolUse. `allow` must carry `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
+  to work; plain `{behavior:allow}` still shows the TUI dialog. `deny` + `message` delivers feedback to the model as tool_result.
+- After approving a plan in `herdr`, the `PermissionRequest` hook may not exit promptly, and `interaction.cancel` may not reach hub (2026-11-01: the transcript already had a successful `ExitPlanMode` tool_result, session working, phone still needs_you). On sessions / revs changes, hub reads bounded transcript pages for pending plans and ends them using the matching tool_use_id's tool_result. For old hooks without an id, accept only a unique ExitPlanMode call within 30 seconds before creation, with a result no earlier than card creation. Ambiguous matches, offline nodes, "working" alone, or model text never clear it. A 30-second timer covers lost events; per-card rate limiting and single-flight avoid duplicate disk reads.
+  Cleanup only removes stale cards, broadcasts `interaction_resolved`, and records dismissed history; it doesn't fabricate phone approval, permission mode, or answers. A still-waiting hook receives only Dismiss, not allow. New plans, questions / tool permissions aren't affected by old plan results. Regressions: `assistant/fleet_cards_test.go` (missing tool_use_id, cross-page matching, local deny / interrupt, fake approval text, old/new card races, App push and persistence).
+- Tool permissions have the same issue (#3563): answering the terminal permission dialog doesn't end PermissionRequest, leaving the phone card until timeout. Permission cards likewise end from the tool_use_id's tool_result, but require an exact id (don't guess for id-less cards); don't collect phone-answered (claimed) cards, to avoid rewriting resolved as dismissed.
+- Hooks in `--settings <file>` are read only at startup; matcher changes require restarting claude. The hook script itself is reread on every execution.
+- `herdr agent wait` may return agent_not_found before herdr recognizes the Agent: poll `agent get` after startup.
+- On computers without herdr's claude integration, `agent list` lacks session ids (fallback in `docs/claude-integration.md`).
+- To map panes to sessions without herdr's claude integration, get claude's pid from `herdr pane process-info`, then read
+  sessionId from `~/.claude/sessions/<pid>.json`. Don't guess from "newest transcript in the same directory" (six Agents in one repo mixed every tab name).
+- Claude Code 2.1.30x `/fork` and backgrounded sessions run in Claude's daemon (`kind: "bg"` in `sessions/<pid>.json`), without panes or herdr hooks,
+  and were always listed offline. The original pane's claude shows the agents view with `parkedJobId`, while herdr still reports "Working" using the original session id and the background session's terminal title (2026-11-04).
+  Before mapping panes, read `sessions/<pid>.json`: a parked process isn't running its own session (`docs/claude-integration.md` ("Background sessions")); but when the pane has opened the job it moved to, the pane belongs to that job—don't list the job separately as read-only and lose its tab. When on the agents list, keep the pane in the original session's tab too (can open the terminal and select from the list, but can't receive messages), rather than listing it nowhere.
+- Forking from a specific reply (#2137) can't rely on the CLI: `claude --resume <id> --fork-session --session-id <new id>` copies the whole chat; hidden `--resume-session-at <uuid>` truncates in `-p`, but not interactive mode (measured 2026-11-05, 2.1.309). node copies the transcript through that turn's end, replaces only `"sessionId":"<old id>"`, then runs `claude --resume <new id>` (`node/fork.go`).
+- Agents herdr doesn't recognize (an internal Codex variant): herdr reports only built-in recognized Agents, and `agent prompt` returns not found for other panes. node uses owner files (pid → session)
+  plus `HERDR_PANE_ID` from the pid's environment (pid → pane) to identify them itself, and reads spinner title characters and screens for state (`docs/codex.md`, the internal Codex variant section).
+- Claude Code's config directory isn't necessarily `~/.claude`: with a launcher's `CLAUDE_CONFIG_DIR` (multiple profiles), transcripts, `sessions/<pid>.json`, and `settings.json`
+  all live there. Every 30 seconds, node scans running claude process environments (Linux `/proc`, one `ps -E` on macOS), searches all directories together,
+  and records discovered directories in the database. Put rarely running profiles in `machines[].claude_config_dirs` in `hub.json` (`server/internal/node/claudedirs.go`).
+  The old workaround symlinked `~/.claude/projects` and `sessions` to a profile; existing symlinks are fine (deduped by real path), but no more are needed.
+  Symptoms of a missed directory: assistant resume says "Session ID … is already in use", transcript not found in the App, herdr Agents can't be mapped to sessions.
+  Conversely, automation running claude with its own `CLAUDE_CONFIG_DIR` is discovered and remembered by hub, flooding lists with hundreds of offline sessions. Deleting `claude_dirs/<machine>` records doesn't help
+  (the next scan reports it again); use "Mute configuration directory" (`docs/claude-integration.md`, #676).
+- After node discovered all config directories (PR #12), a machine with over ten Agents and hundreds of MB of transcripts read disk continuously at about 20 MB/s: every herdr event rebuilt session lists,
+  rereading 384 KB from each growing transcript's tail. List rebuilds are now at most once per second; growing-file meta is reread at most once per 3 seconds (`metaMinInterval`),
+  background-task scanning streams (previously loaded the whole file initially), and large files' first reads run one by one in the background: list construction once waited for several GB of reads, leaving no sessions visible for minutes after node restart. Cold-opening a hundreds-of-MB transcript parses it all (317 MB takes about 20 seconds; hub 15/30-second timeouts returned 502),
+  so node warms running sessions one by one after startup. Measure latency with real large sessions using App cold-open parameters (`items?turns=2`), reporting P50 / P99.
+- Claude Code cleans transcripts older than 30 days by default (`cleanupPeriodDays`, at startup; on 2026-10-29 it deleted over 200 sessions on this machine):
+  promptly redact and save sessions needed as parsing samples as fixtures (`server/internal/transcript/testdata/README.md`). Redaction must be allowlist-based;
+  "keep short numbers unchanged" lets every IP segment through (encountered).
+- Names for new herdr tabs (requested 2026-10-31): tabs added to existing spaces used to be hardcoded `jarvis`. The new-chat form now accepts "Tab name";
+  if empty, the manager generates a short English name from the first message (`assistant/agents_start.go`, hub's `tabname.go` before 2026-11-04). Reasoning models spend hidden thinking tokens first: with `max_tokens` 20 the content is empty
+  (`stop_reason: max_tokens`), while 200 produces a name. Don't set model token caps too tightly for small tasks.
+- herdr can report long-finished Codex sessions as working (2026-10-30: a turn ended two days earlier showed "Working for 45 hours" for eight minutes without rollout changes; the App times from that turn's user message).
+  node trusts rollout: if it ends in task_complete / turn_aborted and hasn't been written for 30 seconds, treat it as done (`codexTurnOver`).
+- Conversely, don't leave unattachable Codex state unknown: the App treats unknown as idle (2026-11-02: a running Codex desktop App task appeared in "Idle spaces" on the phone; its app-server was stdio, and node knew only the open rollouts, reporting all unknown). Derive state from rollout (`codexSessions`); only 384 KB of tail is read, while a turn often writes several MB. Looking only for task_started makes long tasks return to unknown: no turn event in the tail and not having read the file start means still in a turn (`quickMeta.turnOpen`).
+- One Claude session id can have files in two config directories (resumed under another profile: the old one stopped, the new one kept writing). Taking the first by directory order reads the old copy:
+  running phone sessions stop two days back, sub-Agents report not found, and the same session appears twice (2026-10-31, 45 on one machine). Always take the most recently modified file when looking up an id (`newestFirst`).
+- Don't map Codex panes from "newest rollout in the same directory" (same pitfall as Claude): terminal titles are "thread name | directory"; map by thread name in `session_index.jsonl`.
+  Rollouts keep writing in the directory of the thread's start date; scanning only the last two weeks' date directories misses old threads (2026-10-31: a running Codex appeared as another session with a gray dot).
+  Comparing content by id won't catch this; compare against actual pane truth (`scripts/diag/live_panes_check.py`).
+  Claude panes likewise: pane bindings for Persona-started sessions live in hub's database and reload after node restart, but can be stale; `sessions/<pid>.json` takes priority.
+  After changing pane identification logic, rerun verification after deployment (restart); pre- and post-restart results may differ.
+- herdr `agent.prompt` pastes, then waits about 300 ms before Enter: serialize sends to the same session, or the second screen read mistakes the first message for an input draft. Sending deduplication lives in hub Postgres (`sent_messages`):
+  node's in-memory deduplication disappears on reconnect / hub restart, exactly when the App auto-retries. Full session-reading and sending verification, with per-hop timings: `docs/archive/lanes/session-verify.md`.
+- Like `/effort`, `/model <alias>` writes to `~/.claude/settings.json` (`model` / `effortLevel`) as the default for future sessions, not just this one;
+  cached chats first prompt "Switch model?" (changing model rereads all history). Don't test in your usual configuration; restore both keys afterward if you do.
+- Claude Code 2.1.206 changed `/effort` to a slider ("←/→ to adjust · Enter to confirm", low at the left), removing the old list's "for this session only";
+  node's `tuiSetEffort` recognizes both (`effortPicker`). Confirming the slider writes `effortLevel` in `~/.claude/settings.json` ("saved as your default for new sessions"),
+  not just this session. `CLAUDE_CODE_EFFORT_LEVEL` in the environment (settings.json `env` or launcher) wins; Claude only replies "… overrides this session" and changes nothing, and the App reports that accurately.
+- Effort `auto` (Claude Code 2.1.316) works only through `/effort auto`: `--effort auto` warns and is ignored, and settings.json `effortLevel: auto`
+  is silently dropped (`max` too; settings accepts only low…xhigh). The picker has no auto position. `/effort auto` clears this model's default in settings;
+  phone auto handling must differ by path (`docs/ios.md` ("Effort and permission modes")). Testing `/effort …` on a dev machine also changes real settings.json; don't use your own configuration.
+- ultracode is a second axis (#3427): in `2.1.203–2.1.283` it was a level to the right of max and locked effort; since `2.1.284`, it is independent `/effort ultracode on|off`,
+  writes no default, and is off after resume. Persona supports only the latter, does not add ultracode to `EffortLevels`, send `--effort ultracode`, or add `--settings` for it.
+  For unknown versions, confirm from result wording; command success does not mean enabled. If `enableWorkflows` is unset, the account plan determines the default; do not fabricate a fixed on / off default.
+- ultracode `ultra_effort_enter` attachments use `reminderType: full|sparse`, generated only on the next real prompt; sparse is not guaranteed every turn either.
+  Do not infer off from assistant rows or tail windows. In-process, use the newest evidence timestamp; discard old evidence across `startup` / `resume`. Session `StartedAt` survives resume, so is not a process boundary.
+  `SessionStart` `clear` / `compact`, hook retries, and sidechains must not turn off the main session's switch again. The typing lock must distinguish sending paths already holding it from asynchronous startup, avoiding startup waiting for a message while the message waits for startup.
+  The result wording, settings schema, and attachment keys above were checked only in static code of the installed `2.1.318` CLI; unit tests use synthetic fixtures, not real-session end-to-end acceptance.
+- An image message once remained unsent in Claude's input box (2026-10-31, Claude Code 2.1.206: `[Image #1]` and text in the box, Agent `done`, Enter on the computer sent it).
+  Forty-two later attempts in a separate herdr session (small PNG, 1.8 MB JPEG, saturated CPU) didn't reproduce it; cause unknown. On 11-01 a phone photo did it again. node fallback (`ensureSubmitted`): 2 seconds after sending,
+  read the input box once; if it's still the just-sent text (strip `[Image #n]` / `[Pasted text #n]`, compare the first few words), press Enter once more. If empty or different, press nothing.
+  Use only that post-wait read: the first version read immediately and gave up on a mismatch, which missed the 11-01 case (right after pasting the box may not yet contain this text).
+- Codex app-server integration (2026-11-02): Unix sockets carry WebSocket, not JSON-lines; external stdio has no second attach port. Directory discovery doesn't resume; control goes only to the original loaded owner. Unknown / cancelled requests must not send error / decline, which could consume the desktop approval callback. `serverRequest/resolved` withdraws cards as dismissed without fabricating approval; deduplicate using generation and typed request ID together. Generic server errors after send admission aren't "definitely not sent" and must not auto-retry; old outbox operation ids don't expire after one day (`docs/codex-app-server.md`).
+- Codex app-server `thread/loaded/list` isn't all chats (2026-11-05, #2118, 0.166): TUI creates `ephemeral: true` threads for small background tasks in the shared managed daemon
+  (`threadSource: "thread_title"`, title generation), without `path` / rollout; they stay loaded and `active` after finishing. Ignoring `ephemeral` produces a row of untitled "Working" Codex entries from the same directory and second on the Agents page.
+  Skip `ephemeral` before listing sessions; they also don't support `includeTurns` (returns -32600).
+- Use the exported `codex app-server` protocol (`codex app-server generate-ts --out <dir>`). Experimental APIs (`thread/backgroundTerminals/*`, `process/*`)
+  require `--experimental` to export and `capabilities.experimentalApi: true` in `initialize` to use. Other Codex assistant pitfalls are in `assistant.md`.
+  Codex assistant rollout begins with tens of KB of instructions (AGENTS.md, snapshot), with the first user message after 70 KB: scanning only the first 32 KB for a title fails (`readQuickMeta`).
+- Codex image generation (`scripts/assets/make_persona.py generate`): `codex exec`'s built-in `image_gen` can create transparent PNGs using Codex's own ChatGPT login,
+  but its HTTP client doesn't accept `socks5h://` proxies (chat requests do); use an HTTP CONNECT proxy. `-i` takes multiple values, prompts come from stdin; ChatGPT login supports only some models.
+  If generation hangs (over ten minutes per image, all parallel work stopped), measure proxy tunnel throughput before blaming rate limits: on 2026-10-31 the hub machine's outbound bandwidth was only 11 KB/s; opening `ssh -D` on a faster internet machine produced four avatars in 6 minutes (`docs/persona.md`).
+- Orca host (`docs/plan-orca-support.md` ("Orca sources")): `terminal.send`'s `client` requires `id`; providing only `type` returns `invalid_argument` on every send
+  (the first version did this; fake runtime didn't validate parameters, so all tests passed; `orcarttest` now validates Orca's schema). If Orca can't recognize the foreground Agent, it types the "prompt" straight into
+  the shell and presses Enter; `accepted:false` exists only with `requireAgentStatus`. Before sending, verify the Agent is foreground using the process table + `terminal.agentStatus`;
+  Orca's `agentPrompt` pastes only for Agents it has seen working; newly started claude receives raw text, and multiline input submits at the first newline. Persona sends bracketed paste itself, then Enter separately;
+  `worktree.ps` row `state` includes sub-Agents (working when the main turn has ended but background sub-Agents run); pane-local state is `mainAgent.state`;
+  `agentIdentity` may remain after the Agent exits; decide "is an Agent" from claude / codex processes matching `ORCA_PANE_KEY`. node tests point `ORCA_USER_DATA_PATH`
+  to an empty directory; never touch the live Orca (its socket fully controls Orca).
+  New Orca terminals (#924): omit `presentation: "background"` in `terminal.create` to avoid an orphan PTY; after creation, check identity and generation via `terminal.list` using the exact handle; ordinary creation explicitly `cd`s to the target directory. Permission to create sessions isn't permission to auto-resume offline ones; `orca_resume` blocks the latter to prevent competing desktop writes.
+- Launchers (`docs/launchers.md`, 2026-11-01): discovery once only read `_claude_launchers` helper output; a machine with all aliases in `~/.zshrc` (41 for one user)
+  listed only `claude`. Let zsh tokenize aliases (`${(@Q)${(z)value}}`), not Go quote parsing. Aliases defined by a script in `zsh -c` don't expand within that
+  script (it is parsed all at once); tests must use `zsh -ic` like node and write definitions to temporary `$ZDOTDIR/.zshrc`. With `alias claude=…` in `~/.zshrc`,
+  a probe definition like `claude() { … }` expands the alias first, breaking the whole script. Define stubs as `function claude { … }`.
+- Tests running launchers or probes use a minimal environment (`HOME`, `ZDOTDIR`, `PATH`); never print all output in failure messages: probe output contains the complete process environment, and dev machines
+  contain real keys.
 
-- Codex 的提问有两种（2026-11-02 读源码 + 实测 0.153.4 / 0.163.0）：Default 模式下现在的模型拿到的是 `request_user_input_async`，调用马上回
-  `{"accepted":true}`、回合照常结束，答案以后作为一条带 `<send_user_message_question_reply>` 的用户消息回来——「有 call 没有 output」认不出它，
-  要看 `item_completed` 里 `delivery: "async"` 的 AgentMessage；0.163 的 TUI 在回合结束时就把提问面板清掉了，题只剩一段文字。Plan 模式才是阻塞的
-  `request_user_input`（覆盖层，output 在答完之后）。覆盖层上按「None of the above」的数字会直接把这句当答案交上去，写自己的话要光标移过去再 Tab。
-- herdr 对 Codex：有没答的 async 提问时报 blocked，`agent prompt` 回 `agent_blocked`；`agent prompt` 会把文字接在输入框里的草稿后面一起发出去
-  （以前 Codex 的发消息不查草稿）。往上翻过的窗格 `pane read --source visible` 读到的是翻上去的内容，`--source recent` 才是输出末尾；
-  按键不受滚动影响。0.153 的 Ctrl+T pager 会盖住之后来的审批（pager 里 `esc` 是编辑上一条消息，关它用 `q`）；0.163 的 Ctrl+T 只是展开细节。
-  无头 herdr 分屏不会让窗格变窄，测小窗口用 `stty cols <n>` 再起 Codex。`pane.send_text` 原样转发，括号粘贴（`\x1b[200~…\x1b[201~`）在 Codex 里有效。
-- 在本机测 Codex 时信任一个目录会写进 `~/.codex/config.toml`（`codex exec` 也会写），`-c projects.…trust_level` 压不住信任对话框；测完删掉自己加的。
-- 0.163 的 app-server control socket（守护进程的 `<CODEX_HOME>/app-server-control/app-server-control.sock`，`--listen unix://<路径>` 也一样）
-  是个符号链接，真正的 socket 在 `<规范化的 /tmp>/codex-daemon-<uid>/<别名规范路径的 SHA-256>`。按「Lstat 是 socket、不是符号链接」去认，
-  守护进程永远发现不了也连不上（2026-11-02 之前就是这样）；只跟随 Codex 自己算得出的那个目标（`codexSocketPath`）。0.153 是普通 socket 文件。
-  守护进程挂了，挂在上面的 TUI 显示「Reconnecting to server…」，新的起来后自己重连并重新加载 thread。npm 装的 `codex` 是个 node 包装脚本，
-  会再起一个原生进程：测试里停 app-server 要杀整个进程组。
-- `request_user_input_async` 的 `function_call` 不等于问了：参数解析失败（模型把 `title` 写成 `question`）时 output 是错误、模型马上重试，
-  只有被接受的调用才写 `delivery: "async"` 的 AgentMessage。#214 按 `function_call` 开卡，留下过一张永远答不掉的卡，3 轮实测第 1 轮才暴露（2026-11-02）。
-- 按目录认 Codex 的 rollout 时，`session_meta` 的 `cwd` 可能是解析过符号链接的路径（Codex 用 shell 的工作目录），也可能是 `-C` 原样传的；
-  两种都要认。macOS 的临时目录 `/var/…` 其实是 `/private/var/…`：只认解析后的，在 Linux 上测都过、到 Mac 上就 60 秒超时（2026-11-02 从手机新建 Codex）。
-- 往 herdr 窗格里打命令起 Codex 时，别把 alias 展开后的词打进去：alias 里可能带 Key，会上屏、进 shell 历史。启动器的词和第一条消息一起写进 0600 文件，
-  窗格里只打 `jarvisd codex-start <文件>`（`codex_start.go`）。
-- **开在 Claude 桌面版（或别的终端）里的 Claude 会话**（2026-11-01，没装 herdr 的 Mac）：Claude 桌面版跑的是真的 `claude` 进程，也写
-  `~/.claude/projects` 的 transcript 和 `sessions/<pid>.json`（`entrypoint: "claude-desktop"`）。Persona 没有终端宿主时看不到它在跑，按 transcript
-  列成「未运行」，从手机发消息就去 herdr 里 `claude --resume`：装了 herdr 会起第二个进程同时写同一个会话，没装就报
-  「herdr is not running on this machine: herdr workspace list: exec: "herdr"…」。现在恢复前先看有没有活着的 claude 在 `sessions/<pid>.json` 里开着这个会话，
-  有就拒绝（`open_elsewhere`，说是在哪开着）；引擎起不来时拒绝的话也换成人话（`engine_missing`）。列表里仍显示「未运行」，还没有「在别处开着」的状态。
-- Codex / TRAEX 的子 Agent 会在主对话旁边写自己的 rollout，同一个目录、同一个 cwd，而且更新；TRAEX 执行工具前的自动批准评估（guardian）
-  由同一个进程写，还有自己的 owner 文件。按「最新的 rollout / 最新的 owner 文件」认会话，App 显示的是审核对话，和终端里看到的不一样（2026-11-01）。
-  认会话一律看 `session_meta` 的 `thread_source` / `source.subagent`，子 Agent 用 `session_id` 换成它的主对话（`docs/codex.md`）。
-- **经典 herdr 和 Herdr App 是两套不互通的运行时，可能同时活在一台机器上**（2026-11-03）：Herdr App 从别的电脑 remote 连过来时，
-  本机跑的是 `herdr-core serve`（socket 在 `$XDG_RUNTIME_DIR/herdr-core/<session>.sock`，状态在 `~/.local/state/herdr-core/`），
-  旁边还有 `herdr remote-client-bridge` 进程和 `peers.json`；终端标签在 `doc.get("herdr-app")` 里。它和终端里的 `herdr server`
-  （`~/.config/herdr/herdr.sock`）互不可见。「App remote 连到本机开的会话找不到」时先看 herdr-core 的 `terminal.list`，别只查经典 socket。
-  一台机器两套都用时引擎选 `herdr-both`：node 并行刷两个宿主、事件按宿主隔离（`watcherSignals`），新建 / 恢复会话固定走经典 herdr
-  （`docs/engines.md`「并列」、`docs/plan-orca-support.md`「并列引擎」）。别再退回「刷新顺序问所有宿主」——herdr-core 慢 2 秒会拖慢 herdr。
+- Codex has two kinds of questions (source read + measurements on 0.153.4 / 0.163.0, 2026-11-02): in Default mode, current models receive `request_user_input_async`; the call immediately returns
+  `{"accepted":true}`, the turn ends normally, and the answer later arrives as a user message carrying `<send_user_message_question_reply>`. "Call without output" can't recognize this;
+  inspect the AgentMessage with `delivery: "async"` in `item_completed`. The 0.163 TUI clears the question panel as soon as the turn ends, leaving only text. Only Plan mode uses blocking
+  `request_user_input` (overlay, output after answering). Pressing the number for "None of the above" submits that phrase as the answer; to write your own, move the cursor there, then Tab.
+- herdr with Codex: an unanswered async question reports blocked and `agent prompt` returns `agent_blocked`; `agent prompt` appends text to the input draft and sends both
+  (Codex sends previously didn't check drafts). In scrolled-up panes, `pane read --source visible` reads the scrolled content; `--source recent` reads the output tail.
+  Scrolling doesn't affect keypresses. The 0.153 Ctrl+T pager covers subsequent approvals (`esc` in the pager edits the last message; close with `q`); 0.163 Ctrl+T only expands details.
+  Headless herdr splits don't narrow panes; test small windows with `stty cols <n>` before starting Codex. `pane.send_text` forwards unchanged; bracketed paste (`\x1b[200~…\x1b[201~`) works in Codex.
+- Trusting a directory while testing Codex locally writes `~/.codex/config.toml` (`codex exec` does too). `-c projects.…trust_level` doesn't suppress the trust dialog; remove your added entry after testing.
+- The 0.163 app-server control socket (daemon `<CODEX_HOME>/app-server-control/app-server-control.sock`, likewise `--listen unix://<path>`)
+  is a symlink; the actual socket is at `<canonical /tmp>/codex-daemon-<uid>/<SHA-256 of the alias's canonical path>`. Identifying it by "Lstat says socket, not symlink"
+  makes the daemon impossible to discover or connect to (as before 2026-11-02); follow only the target Codex itself computes (`codexSocketPath`). 0.153 uses a normal socket file.
+  If the daemon dies, attached TUIs show "Reconnecting to server…" and reconnect and reload the thread when a new daemon starts. npm-installed `codex` is a node wrapper script
+  that starts a native child: stopping app-server in tests must kill the whole process group.
+- A `request_user_input_async` `function_call` doesn't mean a question was asked: if parameter parsing fails (model writes `question` instead of `title`), output is an error and the model retries immediately.
+  Only accepted calls write an AgentMessage with `delivery: "async"`. #214 created cards from `function_call`, leaving a permanently unanswerable card; it appeared only in the first of three measured turns (2026-11-02).
+- When finding Codex rollouts by directory, `session_meta`'s `cwd` can be symlink-resolved (Codex uses the shell working directory) or the original `-C` value;
+  accept both. macOS temporary `/var/…` is really `/private/var/…`: accepting only resolved paths passed every Linux test but timed out after 60 seconds on Mac (phone-created Codex, 2026-11-02).
+- When typing a command into a herdr pane to start Codex, don't type expanded alias words: aliases may contain keys, exposing them on screen and in shell history. Write launcher words and the first message together to a 0600 file;
+  type only `jarvisd codex-start <file>` in the pane (`codex_start.go`).
+- **Claude sessions open in Claude desktop (or another terminal)** (2026-11-01, Mac without herdr): Claude desktop runs a real `claude` process and writes
+  `~/.claude/projects` transcripts and `sessions/<pid>.json` (`entrypoint: "claude-desktop"`). Without a terminal host, Persona couldn't see it running, listed it from transcripts as
+  "Not running", and phone sends attempted `claude --resume` in herdr. With herdr installed, this starts a second process writing the same session; without it, the error was
+  `herdr is not running on this machine: herdr workspace list: exec: "herdr"…`. Before resuming, now check whether a live claude's `sessions/<pid>.json` has this session open;
+  if so, reject (`open_elsewhere`, explaining where). Engine startup failures also get human-readable refusals (`engine_missing`). Lists still show "Not running"; there is no "Open elsewhere" state yet.
+- Codex / an internal Codex variant's sub-Agents write their own rollouts alongside the main chat, with the same directory and cwd, and newer updates. The internal variant's pre-tool automatic approval evaluation (guardian)
+  is written by the same process, with its own owner file. Identifying sessions by "newest rollout / newest owner file" makes the App show the review chat, unlike the terminal (2026-11-01).
+  Always inspect `thread_source` / `source.subagent` in `session_meta`; replace sub-Agent `session_id` with its main chat (`docs/codex.md`).
+- **Classic herdr and Herdr App are separate, non-interoperable runtimes that can coexist on one computer** (2026-11-03): when Herdr App connects remotely from another computer,
+  the local process is `herdr-core serve` (socket `$XDG_RUNTIME_DIR/herdr-core/<session>.sock`, state `~/.local/state/herdr-core/`),
+  alongside `herdr remote-client-bridge` and `peers.json`; terminal tabs live in `doc.get("herdr-app")`. It and terminal `herdr server`
+  (`~/.config/herdr/herdr.sock`) can't see each other. If "sessions opened locally through App remote aren't found", check herdr-core `terminal.list` first, not only the classic socket.
+  When using both on a computer, select engine `herdr-both`: node refreshes both hosts in parallel, isolates events per host (`watcherSignals`), and always creates / resumes sessions through classic herdr
+  (`docs/engines.md` ("Side by side"), `docs/plan-orca-support.md` ("Combined engines")). Don't return to "refresh asks every host sequentially": a 2-second herdr-core delay slows herdr too.
 
-## 判断 Claude 的输入框空不空，要按颜色读（#1434）
+## Read colors to determine whether Claude's input box is empty (#1434)
 
-Claude Code 每轮做完会在输入框里用暗色字（SGR 2）放一句建议的下一句（`❯ 现在部署一下 hub`），纯文本读屏幕看起来和真打进去的字一样。
-改思考强度前的检查只读纯文本，把建议当成了草稿，一直报「终端的输入框里有还没发出的文字」。要知道输入框里有没有用户的字，一律用
-`readPaneANSI` + `screen.ClaudeInput`（`Draft` 已经排除了建议、新会话的 `Try "…"` 提示和光标）；只有宿主读不出颜色（`plainScreen`）时才退回纯文本。
+After each turn, Claude Code puts a suggested next message in dim text (SGR 2), such as `❯ 现在部署一下 hub` ("deploy the hub now"). Plain-text screen reads can't distinguish it from typed text.
+The pre-effort-change check read only plain text, mistook suggestions for drafts, and kept reporting "The terminal input box has unsent text". To detect actual user text, always use
+`readPaneANSI` + `screen.ClaudeInput` (`Draft` already excludes suggestions, new-chat `Try "…"` hints, and the cursor); fall back to plain text only when the host can't read colors (`plainScreen`).
 
-## 给 Agent 放行一条命令（2026-11-04，#1300）
+## Allowing one command for an Agent (2026-11-04, #1300)
 
-- **skill 的 `allowed-tools` 会让启动这个 skill 本身变成一次审批**（`-p` 下直接拒绝），省不了卡片，而且写死的 SKILL.md 带不了每台机器的路径。
-  要放行就在 Persona 启动 claude 时加 `--allowedTools`：只对那个会话有效，跟启动器自带的 settings 叠加（Claude Code 只认最后一个 `--settings`，规则写在 settings 里会被启动器自己的盖掉或盖掉它的）。
-- **放行规则只认绝对路径，不用通配**：`Bash(sh */x/scripts/run.sh *)` 也会放过 Agent 在自己目录里写的同名脚本（acceptEdits 下写文件不问），实测真的跑了。
-  `;`、`&&` 连起来的命令 Claude Code 会拆开逐条判断；`.claude/` 下的文件 acceptEdits 也要问。
-- 放行之后这条命令能做的事就不用人看了：参数里能写文件路径的（`-o`）要在命令自己里限制住。
-- 测试时需要用户手机审批的卡片不要代批：先用规则放行，或者交给用户批。
+- **A skill's `allowed-tools` makes launching the skill itself an approval** (immediately denied under `-p`), so it doesn't save a card, and a fixed SKILL.md can't carry per-computer paths.
+  Grant permission with `--allowedTools` when Persona starts claude: it applies only to that session and composes with launcher settings (Claude Code honors only the last `--settings`; rules there either override or are overridden by the launcher's settings).
+- **Allow rules use absolute paths, no wildcards**: `Bash(sh */x/scripts/run.sh *)` also allows an identically named script the Agent wrote in its own directory (acceptEdits doesn't ask before writing); confirmed it actually ran.
+  Claude Code splits commands joined with `;` or `&&` and checks each individually; acceptEdits still asks for files under `.claude/`.
+- Once allowed, the command's capabilities no longer require human review: if arguments can specify output paths (`-o`), restrict them inside the command itself.
+- Don't approve test cards meant for the user's phone on their behalf: allow through rules first, or let the user approve.
 
-## Wait 不应关闭未读日志（#3276）
+## Wait must not close unread logs (#3276)
 
-- `Cmd.StderrPipe()` 的读端由 `os/exec` 持有，`Wait()` 会在进程退出后关闭它。读取 goroutine 若还没读完，最后的启动诊断就会丢失；事后等 `stderrDone` 也恢复不了这些字节。`StdoutPipe()` 有相同的读取／等待约束，不能把并发调用当成安全用法。
-- node 的助手 stderr 改用自建 `os.Pipe()`：写端交给 `cmd.Stderr`，父进程在 `Start()` 返回后立即关闭写端，启动失败时也要关；读端由读取器持有，读到结束后关闭。这样 `Wait()` 不会提前关闭读端。SDK 首条写入失败、未启动读取器的路径也要关闭它。
-- 读取器遇到超长行而停止扫描时，记录错误后继续排空管道，再关闭读端，避免子进程写满管道后阻塞或收到意外的 broken pipe。
-- 确定性回归让测试子进程写完短诊断并退出，先 `Wait()`，再启动读取器：旧实现每次都丢日志，不依赖 sleep。子进程只带测试所需环境和独立 HOME，不读用户的 shell／profile；既有启动器回归再用 `GOMAXPROCS=1` 重复验证。
+- `os/exec` owns the read end of `Cmd.StderrPipe()`, and `Wait()` closes it after process exit. If the reader goroutine hasn't finished, the final startup diagnostics are lost; waiting for `stderrDone` afterward can't recover those bytes. `StdoutPipe()` has the same read / wait constraints; concurrent calls aren't safe.
+- node's assistant stderr now uses its own `os.Pipe()`: give the write end to `cmd.Stderr`, close the parent's write end immediately after `Start()` returns (also on startup failure), and let the reader own and close the read end after EOF. `Wait()` then can't close it prematurely. SDK first-write failures and paths that never start a reader must close it too.
+- If a reader stops scanning because of an overlong line, log the error, keep draining the pipe, then close the read end, avoiding a child blocked on a full pipe or an unexpected broken pipe.
+- Deterministic regression: a test child writes a short diagnostic and exits, then `Wait()` runs before starting the reader. The old implementation loses logs every time, with no sleep dependency. The child gets only test-required environment and an isolated HOME, not the user's shell / profile; repeat existing launcher regressions with `GOMAXPROCS=1`.
 
-## 「claude did not become ready within 1m0s」多半是 shell 慢，不是 claude 慢（#1396）
+## "claude did not become ready within 1m0s" usually means a slow shell, not slow claude (#1396)
 
-一台 Mac 上同时跑着十来个 Agent 时（15 分钟平均负载 69，18 核），从对话派出的任务报这个错。查实那次：herdr 开出的标签页里 zsh
-2 秒后就起来了，加载 `~/.zshrc` 却用了 54 秒才执行到 `claude`（`ps -o lstart` 看 zsh 和 claude 进程的启动时间），而 node 从敲下命令就开始计 60 秒，
-claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude 过一会儿照常起来、空等，没有绑定到任何会话。就绪检测（输入框出现两次、herdr 认出 claude）
-本身没问题。现在分两段计：shell 跑起 claude（herdr 认出 claude 或出现信任对话框）最多 3 分钟，之后等输入框最多 1 分钟；超时的报错分得出是哪一段
-（`claude did not start within 3m0s: the tab's shell had not run it yet` / `… did not become ready within 1m0s of starting`），失败时把这次开的标签页关掉，
-重试不会再留一个空等的 claude。hub 那边等启动的上限跟着放宽（任务启动 5 分钟，启动中 / 要恢复的会话的发送 5 分钟）。
+With around ten Agents on a Mac (15-minute load average 69, 18 cores), a task dispatched from a chat reported this error. Investigation showed zsh in the new herdr tab
+started after 2 seconds, but loading `~/.zshrc` took 54 seconds before executing `claude` (`ps -o lstart` compares zsh and claude start times). node started its 60-second timer when typing the command,
+so claude timed out just 7 seconds after starting. The tab remained; claude became ready later and waited without any session binding. Readiness detection (input box seen twice, herdr recognizing claude)
+was fine. Timing is now split: up to 3 minutes for the shell to launch claude (herdr recognition or trust dialog), then up to 1 minute for the input box. Timeout errors identify the stage
+(`claude did not start within 3m0s: the tab's shell had not run it yet` / `… did not become ready within 1m0s of starting`), and failure closes the newly created tab,
+so retrying doesn't leave another waiting claude. hub startup waits expand accordingly (5 minutes for task startup; 5 minutes for sends to starting / resuming sessions).
 
-第一段的「herdr 认出 claude」本身也会等不到（#3454）：启动器是个包装、exec 的原生二进制叫 `claude-2.1.318` 这类名字时，Claude 的输入框已经在屏幕上，
-herdr 的 `agent.get` 却一直不报 claude，node 等满 3 分钟报「the tab's shell had not run it yet (is the machine busy?)」，把人引去查机器忙不忙。herdr 认 Agent 的规矩：
-- 按前台进程的名字，basename 只认 `claude` / `claude-code`（Codex 是 `codex`）；argv[0] 还是 `claude` 的包装本来就认得。认不出的窗格
-  `agent.get` 回 `agent_not_found` 错误（herdr 0.9.5 的源码如此），不是一个 agent 为空的结果：node 把它标成 `host.ErrNoAgent`，按「herdr 不知道这里有 Agent」处理。
-- 看名字之前先读 `HERDR_AGENT`，读的是前台进程 exec 时的环境（`/proc/<pid>/environ`，macOS `KERN_PROCARGS2`），herdr 0.7.1 / macOS 0.7.5 起；更老的和 Windows 上忽略。
-- 窗格 shell 自己环境里的 `HERDR_AGENT` 是权威的，`unset` 也去不掉，之后窗格里跑什么都算那个 Agent：所以只能放在 Agent 那条命令前面，绝不能 export 到窗格的 shell 或写进标签 / 工作区的环境。
+The first stage, "herdr recognizes claude", can also never arrive (#3454): a wrapper launcher execs a native binary named something like `claude-2.1.318`. Claude's input box is already visible,
+but herdr's `agent.get` never reports claude; node waits 3 minutes, then says "the tab's shell had not run it yet (is the machine busy?)", directing users to machine load. herdr's Agent detection rules:
+- By foreground process name: basename accepts only `claude` / `claude-code` (`codex` for Codex); wrappers whose argv[0] remains `claude` already work. For unrecognized panes,
+  `agent.get` returns error `agent_not_found` (herdr 0.9.5 source), not an empty-agent result; node maps this to `host.ErrNoAgent`, meaning "herdr doesn't know an Agent is here".
+- Before the name, it reads `HERDR_AGENT` from the foreground process's exec-time environment (`/proc/<pid>/environ`, macOS `KERN_PROCARGS2`), since herdr 0.7.1 / macOS 0.7.5; older versions and Windows ignore it.
+- `HERDR_AGENT` in the pane shell's own environment is authoritative and can't be removed with `unset`; everything subsequently run in the pane counts as that Agent. Therefore put it only before the Agent command, never export it into the pane shell or tab / workspace environment.
 
-现在 node 在 herdr 窗格里起 Claude 敲 `HERDR_AGENT=claude <启动器> …`（只在认这种写法的 shell 里；Codex 由 `codex-start` 设 `HERDR_AGENT=codex`，`docs/launchers.md`「herdr 怎么认出启动器起的 Agent」）。
-还是认不出时（herdr 太老、Windows、窗格的 shell 是 tcsh 这类不敲前缀的、alias 先跑了 `export` / `cd`），等待照旧、不提前失败，但 herdr 窗格里等到最后一次看时
-输入框在屏幕上、herdr 不知道这里有 claude 的（`agent_not_found` 或 agent 为空），报错换成
-`claude's input box is on screen but herdr did not recognise the agent within 3m0s (herdr sees <前台进程名> in front): is claude a wrapper? …`，
-后面说明 herdr 靠进程名或 `HERDR_AGENT=claude` 认、哪些情况前缀到不了 claude；前台进程名来自 herdr 的 `pane.process_info`。没看到输入框的照旧报 shell 没跑；
-别的引擎（Orca）的窗格不用这句，照旧报原来的。
+node now starts Claude in herdr panes with `HERDR_AGENT=claude <launcher> …` (only in shells supporting that syntax; `codex-start` sets `HERDR_AGENT=codex` for Codex; `docs/launchers.md` ("How herdr recognizes Agents started by launchers")).
+If still unrecognized (old herdr, Windows, a pane shell like tcsh that can't use the prefix, or an alias first executing `export` / `cd`), keep waiting rather than failing early. If the final check in a herdr pane sees
+an input box but herdr doesn't know claude is present (`agent_not_found` or empty agent), change the error to
+`claude's input box is on screen but herdr did not recognise the agent within 3m0s (herdr sees <foreground process name> in front): is claude a wrapper? …`,
+then explain process-name / `HERDR_AGENT=claude` recognition and cases where the prefix doesn't reach claude. Foreground process name comes from herdr `pane.process_info`. With no input box, retain the shell-not-started error;
+other engines' panes (Orca) keep their original error.
 
-- Claude Code 一轮以模型 API 错误结束（「API Error: Connection lost mid-response…」、过载、限流、登录过期）在 herdr 里和正常做完一样是 done，hub 也就算成 unread：
-  task_plan 的任务曾因此显示绿色「完成」卡片、摘要就是错误原文，快照里写「做完了」（#1516）。区分它只能看最后一句：hub 在会话停着、`last_text` 以这些错误开头时填 `turn_error`（只认开头，
-  回复里提到「API Error」不算），任务判「中断了」、不自动关、回执写 `interrupted`；普通 Agent 的推送也不再是 ✅。
-- **模型服务回 200 但内容是空的，一轮就静默结束**（2026-11-05 实测，网关的一个上游账号）：transcript 里一条 assistant 条目都没有，也没有 `isApiErrorMessage`、error 或 `stop_reason`；
-  Claude Code 补一条 `isMeta` 的「[Your previous response had no visible output. Please continue…]」重试一次，还是空就结束这一轮，终端上不报错，所以没有 `turn_error`。
-  任务曾因此写「完成了」回执、发 done 通知、拿去自动关（#2349）。现在看这一轮的条目：没有回复、工具调用、图片就算中断。
-- **Codex 被模型服务打断时不写回复**（2026-11-05 实测 Codex 0.166，假服务回 503）：rollout 里只有这一轮的 `task_complete`，`last_agent_message`
-  是 `null`，错误在它的 `error` 里（`{"message":"unexpected status 503 …","codex_error_info":{"http_connection_failed":{"http_status_code":503}}}`）；
-  app-server 是 `turn/completed` 的 `turn.status: "failed"` + `turn.error`（驼峰：`codexErrorInfo`）。只看最后一句的 `turn_error` 对 Codex 永远是空的：
-  会话分诊不自动继续、任务不写中断回执，最后一句还是出错前那句，可能被判成做完了（#2185）。现在 node 自己报 `turn_error` 和种类，
-  见 `docs/agent-work.md`「Codex 的错误种类」。要确认 Codex 的协议，`codex app-server generate-json-schema --out <目录>` 能导出本机版本的全部类型。
-- herdr 按 `HERDR_PANE_ID` 把 SessionStart 记到窗格上，这个变量会被窗格外的进程继承：在 herdr 窗格里第一次起的 tmux 服务器（botmux 的
-  `tmux new-session -d`）留着它，之后 botmux 起的每个 claude 都报进同一个窗格，main 标签显示成 botmux 的会话（2026-11-04）。
-  herdr 报的会话要和窗格里 claude 进程自己的 `sessions/<pid>.json` 对一下（`docs/claude-integration.md`「会话 id 与 transcript」）。
-- **Claude Code 默认打开 Artifacts，网关拒掉 herdr 里每个新 Agent 的第一轮**（2026-11-04）：从 2.1.26x 起交互模式默认开 Artifact 工具，
-  system 消息里带上它的技能说明，有的网关按能力拒（`400 request is not representable on this edge: Claude Code Artifacts are enabled`），
-  `claude -p` 的主对话照常，看起来像是只有 Agent 坏了。一台机器的 Claude Code 落后很久（2.1.110）、一次升到新版时才冒出来，
-  所以别的机器早就在用户设置里关掉、没人报：先查版本跳了多少。`--disallowedTools Artifact` 不管用（技能说明照发），
-  启动器参数里再给一个 `--settings` 也不管用（Persona 后面的 `--settings` 会整个替换它）。
-  手改 `launcher-settings/<名字>-env-settings.json` 加 `enableArtifact: false` 看着没用：那个文件每次启动都被 node 重写，改动在下一个 Agent 启动前就没了。
-  `--settings` 里的 `enableArtifact: false` 和环境变量 `CLAUDE_CODE_DISABLE_ARTIFACT=1` 实测都管用（tmux 里起交互式 claude 对比三份配置），
-  现在 Persona 管理的启动器两样都带（`docs/launchers.md`「Persona 管理的怎么跑」）。
+- A Claude Code turn ending with a model API error ("API Error: Connection lost mid-response…", overload, rate limit, expired login) is done in herdr just like normal completion, so hub counts it unread:
+  task_plan tasks once showed green "Done" cards with the raw error as summary and "finished" in snapshots (#1516). Only the last text distinguishes this: when a session is stopped and `last_text` begins with these errors, hub sets `turn_error` (prefix only;
+  mentioning "API Error" in an answer doesn't count), marks the task interrupted, doesn't auto-close it, and writes an `interrupted` receipt. Ordinary Agent pushes also stop using a success marker.
+- **The model service returns 200 with empty content, and the turn ends silently** (measured 2026-11-05, one gateway upstream account): the transcript contains no assistant item and no `isApiErrorMessage`, error, or `stop_reason`;
+  Claude Code inserts an `isMeta` "[Your previous response had no visible output. Please continue…]" and retries once; another empty response ends the turn without terminal error, so there is no `turn_error`.
+  Tasks once wrote "completed" receipts, sent done notifications, and auto-closed (#2349). Now inspect the turn's items: no reply, tool call, or image counts as interrupted.
+- **Codex writes no reply when interrupted by the model service** (measured 2026-11-05, Codex 0.166, fake service returning 503): rollout has only this turn's `task_complete`, with `last_agent_message`
+  `null` and the error in `error` (`{"message":"unexpected status 503 …","codex_error_info":{"http_connection_failed":{"http_status_code":503}}}`);
+  app-server reports `turn/completed` with `turn.status: "failed"` + `turn.error` (camelCase `codexErrorInfo`). Last-text-only `turn_error` is always empty for Codex:
+  session triage doesn't auto-continue, tasks don't write interrupted receipts, and the last text remains the pre-error answer and may be judged done (#2185). node now reports `turn_error` and its type;
+  see `docs/agent-work.md` ("Codex error types"). To verify the protocol, `codex app-server generate-json-schema --out <dir>` exports every type for the installed version.
+- herdr associates SessionStart with a pane by `HERDR_PANE_ID`, which processes outside panes can inherit: a tmux server first started inside herdr (botmux's
+  `tmux new-session -d`) retains it, and every claude subsequently started by botmux reports into the same pane, making the main tab show a botmux session (2026-11-04).
+  Compare herdr-reported sessions with the pane's own claude process `sessions/<pid>.json` (`docs/claude-integration.md` ("Session ids and transcripts")).
+- **Claude Code enables Artifacts by default; a gateway rejects every new herdr Agent's first turn** (2026-11-04): since 2.1.26x, interactive mode enables Artifact tools by default,
+  including their skill description in system messages; some gateways reject the capability (`400 request is not representable on this edge: Claude Code Artifacts are enabled`).
+  `claude -p` main chat works, looking like only Agents are broken. It surfaced when one computer jumped from a long-outdated Claude Code (2.1.110) to a new version,
+  while others already disabled it in user settings with no reports: first check how large the version jump was. `--disallowedTools Artifact` doesn't work (skill instructions still sent),
+  nor does another `--settings` in launcher arguments (Persona's later `--settings` replaces it entirely).
+  Manually adding `enableArtifact: false` to `launcher-settings/<name>-env-settings.json` seems ineffective: node rewrites that file at every launch, losing the edit before the next Agent starts.
+  Both `enableArtifact: false` in `--settings` and environment `CLAUDE_CODE_DISABLE_ARTIFACT=1` worked in tests (interactive claude in tmux, three configs compared);
+  Persona-managed launchers now carry both (`docs/launchers.md` ("How Persona-managed launchers run")).
 
-## 恢复外部开的会话别默认用裸 claude（2026-11-05，#411）
+## Don't default to bare claude when resuming externally created sessions (2026-11-05, #411)
 
-- 很多机器上的 `claude` 本身没登录，平时都靠启动器（`~/.zshrc` 的函数、Persona 里加的启动器）设好网关和 key。
-  在 Persona 之外开、已经退出的会话，启动器推断不出（网关地址写法不同、`inferLauncher` 对不上）时，用裸 `claude --resume` 恢复出来的
-  只有「Not logged in · Please run /login」。用户在「新建 Agent」里选过能用的启动器，就该用它（hub 带给 node，node 只在前两种都没有时用）。
-- 恢复时沿用会话原来的模型（`sessionState.Model`）：只在用 hub 选的启动器时换成「新建 Agent」的模型。
+- On many computers, `claude` itself isn't logged in; launchers (functions in `~/.zshrc`, or Persona-added launchers) supply the gateway and key.
+  For exited sessions created outside Persona, if the launcher can't be inferred (different gateway URL spelling, `inferLauncher` doesn't match), a bare `claude --resume`
+  yields only "Not logged in · Please run /login". If the user selected a working launcher in "New Agent", use it (hub passes it to node, which uses it only when neither of the first two choices exists).
+- Keep the session's original model on resume (`sessionState.Model`); switch to the "New Agent" model only when using the hub-selected launcher.
 
-## herdr 重启和恢复（v0.9.5，2026-11-04，#1879）
+## herdr restart and restore (v0.9.5, 2026-11-04, #1879)
 
-- `herdr server` 是前台运行的 headless server，不会自己转后台；socket 在 `$XDG_CONFIG_HOME/herdr/herdr.sock`（或 `HERDR_SOCKET_PATH`）。
-  在 herdr 窗格里跑的进程（包括这台机器上的 Agent）都继承了 `HERDR_SOCKET_PATH` 指向用户正在用的 server：联调、跑测试时一律 `env -i` 加独立的 HOME / XDG_CONFIG_HOME，
-  否则 herdr 命令会打到用户的 server 上。
-- 原生恢复（`resume_agents_on_restore`）只在**客户端 attach 之后**才跑，headless server 自己不会续 agent；socket API 里没有触发它的方法。
-  测试时用 `script -q /dev/null herdr` 给它一个 pty 来 attach。
-- 恢复 Claude 用的是内置的裸 `claude --resume <id>`，启动器、`--settings`、`--mcp-config` 全丢（2026-11-04 用户打开 herdr 后 8 个 Persona 会话换成了自己的订阅、
-  丢了 MCP 和 hooks，没有 transcript 的那个弹出 Login）。没有按窗格关掉恢复的开关，但有按窗格的恢复命令：`pane.report_agent_session` 的 `resume_argv`。
-  - 要先 `pane.report_agent` 占住窗格，否则报 `resume_not_accepted`；窗格里得真的有被识别出来的 agent 进程，空 shell 占不住。
-  - 占住后 herdr 仍按屏幕识别状态（报的 `idle` 不会把 working 盖掉）。
-  - herdr 把 argv 敲进窗格的 shell：只给需要的元素加引号（第一个元素是 alias 也能展开），元素里不能有单引号。
-  - 官方 integration 之后再报同一个 / 另一个 session id，herdr 都留着原来的 `resume_argv`：会话换了 id 必须自己重报，否则恢复到旧会话。
+- `herdr server` is a foreground headless server; it doesn't daemonize itself. Socket: `$XDG_CONFIG_HOME/herdr/herdr.sock` (or `HERDR_SOCKET_PATH`).
+  Processes inside herdr panes (including Agents on this computer) inherit `HERDR_SOCKET_PATH` pointing to the user's live server. Integration checks and tests must always use `env -i` with isolated HOME / XDG_CONFIG_HOME,
+  or herdr commands hit the user's server.
+- Native restore (`resume_agents_on_restore`) runs only **after a client attaches**; the headless server doesn't resume Agents itself, and the socket API has no trigger.
+  In tests, attach with a PTY via `script -q /dev/null herdr`.
+- Claude restore uses built-in bare `claude --resume <id>`, losing launchers, `--settings`, and `--mcp-config` (2026-11-04: after the user opened herdr, 8 Persona sessions switched to their own subscription,
+  lost MCP and hooks, and the transcript-less one showed Login). No per-pane disable-restore switch exists, but a per-pane restore command does: `resume_argv` in `pane.report_agent_session`.
+  - First claim the pane with `pane.report_agent`, or it returns `resume_not_accepted`; an actually recognized Agent process must be present, not an empty shell.
+  - After claiming, herdr still recognizes state from the screen (reported `idle` doesn't override working).
+  - herdr types argv into the pane shell: quote only necessary elements (an alias as the first element still expands); elements must not contain single quotes.
+  - If official integration later reports the same or another session id, herdr retains the original `resume_argv`: after a session id change, explicitly report again or it restores the old session.
 
 
-## Claude 的状态行（2026-11-05，#1963）
+## Claude status line (2026-11-05, #1963)
 
-- 工作中的 Claude 在输入框上方画 `✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`：spinner 字符每帧都在变，括号里的段会缺、顺序会变（`thought for 1s`、`esc to interrupt`），↑ 是输入 token。正文里引用的同样一行不能当成状态行，取输入框上方最后一行（`screen.AboveInputBox`，`node/claudestatus.go`）。pane 往上翻了的时候，读到的可见内容里没有状态行。
+- Working Claude draws `✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)` above the input box: spinner characters change each frame, parenthesized segments may be absent or reordered (`thought for 1s`, `esc to interrupt`), and ↑ means input tokens. An identical line quoted in the conversation isn't a status line; take the last line above the input box (`screen.AboveInputBox`, `node/claudestatus.go`). When a pane is scrolled up, visible content has no status line.
 
-## Codex app-server 改思考强度：自己校验档位，`null` 是模型默认（2026-11-04，#1709）
+## Changing Codex app-server effort: validate levels yourself; `null` means model default (2026-11-04, #1709)
 
-- 0.163 的 `thread/settings/update {threadId, effort}`（实验接口）给什么字符串都回成功，`"bogus-level"` 也收：档位要 node 自己按
-  `model/list` 的 `supportedReasoningEfforts` 校验，不能靠 app-server 报错。
-- 新 thread 的 `thread/read` 里 `reasoningEffort` 是 `null`（没设，跑的是模型的 `defaultReasoningEffort`），不是「不知道」：显示时取模型默认值。
-- `turn/start` 的 `effort` 管这一轮和之后所有轮（不是只管这一轮）；`turn/steer` 没有 `effort`。
-- 兼容旧版的路径（选择先记着、下一次 `turn/start` 带上）只能认 `-32601`（method not found）：第一版把所有非 -32602 的错误都当成「不支持」，
-  断线、超时、thread 不存在时手机也看到「改好了」，之后的 `turn/start` 还会把这个陈旧选择带出去，重连后可能意外改掉 thread 的设置（PR review）。
-  记下的选择也要绑定当时的连接和 thread，换了就作废。
-- 实测方法：临时 `CODEX_HOME` 里起 stdio 的 `codex app-server`，`thread/start` 不需要登录也不调模型，能验设置类接口；别碰正在用的 `~/.codex`。
-  详见 `docs/codex.md`「思考强度」。
+- The experimental 0.163 `thread/settings/update {threadId, effort}` accepts any string, even `"bogus-level"`, and reports success. node must validate levels against
+  `supportedReasoningEfforts` from `model/list`, not rely on app-server errors.
+- For new threads, `reasoningEffort` in `thread/read` is `null` (unset, running the model's `defaultReasoningEffort`), not "unknown"; display the model default.
+- `turn/start` `effort` applies to this and all later turns, not only this turn; `turn/steer` has no `effort`.
+- The old-version fallback (remember the selection, include it in the next `turn/start`) must recognize only `-32601` (method not found). The first version treated every non--32602 error as "unsupported",
+  so disconnections, timeouts, and missing threads appeared "changed" on the phone, and later `turn/start` carried the stale selection, potentially changing thread settings unexpectedly after reconnect (PR review).
+  Bind remembered selections to that connection and thread; invalidate on change.
+- Test method: start stdio `codex app-server` in a temporary `CODEX_HOME`; `thread/start` needs no login and calls no model, so it can test settings APIs. Don't touch live `~/.codex`.
+  See `docs/codex.md` ("Effort").
 
-## 中断（Esc）不触发 Stop，pid 文件自带 procStart（2026-11-04）
+## Interrupt (Esc) doesn't trigger Stop; pid files include procStart (2026-11-04)
 
-- Claude 的 `Stop` hook 只在一轮正常结束时触发，Esc 中断没有 `Stop`（本地斜杠命令有没有没实测）：只数 hook 会让「提交数 > 完成数」永远不平。
-  node 的 `judgeHookTurn` 用 transcript 的中断行和标题的 ✳ 等待标记兜底，见 `docs/agent-states.md`「hook 的轮次信号」。
-- `~/.claude/sessions/<pid>.json` 里有 `procStart`（Linux 上等于 `/proc/<pid>/stat` 第 22 项，五个实例都对得上）、`pidDomain`、`status`（busy / idle）和 `statusUpdatedAt`。
-  判断一个 pid 文件是不是还活着的那个 claude，别只 `kill -0`：pid 被别的程序复用后会一直显示「别处开着」，要把 `procStart` 和当前进程的启动时刻比。
-- hook 进程的父进程多半是 shell，不是 claude：找 agent 进程要往上走，取 `sessions/<pid>.json` 的 `sessionId` 对得上的那个祖先，别按进程名猜。
-- 本机的 Go 工具链要和 `go.mod` 一致（1.27.1）；依赖里有 `go 1.27.1` 的模块，降低 `go` 行也编不过。沙箱里 `go` 自动下载工具链失败时，
-  从 go.dev 下载并校验 SHA-256 后解压到临时目录，设 `GOROOT`、`GOTOOLCHAIN=local`（环境里的 `GOROOT` 指向别的版本时不设会用错标准库）。
+- Claude's `Stop` hook fires only on normal turn completion, not Esc interruption (local slash commands not measured): counting hooks alone leaves "submissions > completions" forever.
+  node's `judgeHookTurn` falls back to transcript interruption lines and the title's ✳ waiting marker; see `docs/agent-states.md` ("Hook turn signals").
+- `~/.claude/sessions/<pid>.json` includes `procStart` (equals field 22 of `/proc/<pid>/stat` on Linux, matched in all five instances), `pidDomain`, `status` (busy / idle), and `statusUpdatedAt`.
+  To determine whether a pid file still refers to the live claude, don't just use `kill -0`: another program reusing the pid makes it permanently appear "open elsewhere". Compare `procStart` with the current process start time.
+- A hook process's parent is usually a shell, not claude: walk ancestors to find the Agent process whose `sessions/<pid>.json` `sessionId` matches; don't guess by process name.
+- The local Go toolchain must match `go.mod` (1.27.1); dependencies include modules with `go 1.27.1`, so lowering the `go` line won't build. If automatic toolchain downloading fails in the sandbox,
+  download from go.dev, verify SHA-256, extract into a temporary directory, and set `GOROOT`, `GOTOOLCHAIN=local` (an existing `GOROOT` pointing to another version otherwise selects the wrong standard library).
 
-## 往用户全局 settings.json 装 hooks：只能异步、只报告（2026-11-04）
+## Hooks in user-global settings.json: asynchronous, reporting only (2026-11-04)
 
-- 往用户**全局** `~/.claude/settings.json` 装 hooks 之前先看里面已有什么（本机有 moshi-hook、Orca 的同步 `PermissionRequest` hook）：同一事件的 hooks 是叠加的，
-  几个阻塞的 hook 一个接一个跑，终端对话框要等它们都返回；Persona 的授权 / 提问 hook 要等手机（`timeout` 86400），装进全局后坐在电脑前的人在终端里也答不了。
-  所以全局只能装异步、短超时、只报告的（`hub.json machines[].claude_global_hooks`，`docs/claude-integration.md`「全局只报告的 hooks」），阻塞的留在 `--plugin-dir` 的插件里，只管 Persona 启动的会话。
-- `CLAUDE_CODE_PLUGIN_DIRS` 是真的（路径列表，PATH 分隔符，绝对路径），但只有一个变量，别的工具（moshi）已经占了 `settings.json` 的 `env` 里那一份，Persona 再用就得改别人写的值。
-- 全局条目要能认出来：命令以 `hook --persona-global` 结尾，装 / 卸只动这样的条目；不要用 `hook --global` 这类别的工具也会用的词。
-- 全局这组也不能按环境里的 `HERDR_PANE_ID` 绑窗格：tmux 服务器（botmux）起的 claude 继承了它却不在那个窗格里。
-- 全局只报告的事件照样要进轮次计数（它们是用户自己开的会话唯一的 hook 信号），但不能算「这个会话跑着 Persona 的 hooks」：后者让 hub 把屏幕卡片压住等一张永远不来的 hook 卡片；
-  Persona 自己起的会话已经由插件上报，全局这组要在计数之前先丢掉，否则一次提交数两次。见 `docs/agent-states.md`「hook 的轮次信号」。
+- Before installing hooks in the user's **global** `~/.claude/settings.json`, inspect existing hooks (locally: moshi-hook, Orca synchronous `PermissionRequest`). Hooks for an event compose;
+  several blocking hooks run one after another, and terminal dialogs wait until all return. Persona's permission / question hook waits for the phone (`timeout` 86400); installed globally, it prevents the person at the computer from answering in the terminal too.
+  Global hooks must therefore be asynchronous, short-timeout, reporting-only (`hub.json machines[].claude_global_hooks`, `docs/claude-integration.md` ("Global reporting-only hooks")); blocking hooks remain in the `--plugin-dir` plugin and affect only Persona-started sessions.
+- `CLAUDE_CODE_PLUGIN_DIRS` exists (absolute-path list, PATH separator), but is one variable. Another tool (moshi) already occupies its `settings.json` `env` value; using it for Persona would mean changing someone else's value.
+- Global entries must be recognizable: commands end with `hook --persona-global`, and install / uninstall touches only such entries; don't use generic words like `hook --global` that other tools may also use.
+- These global hooks must not bind panes by environment `HERDR_PANE_ID` either: claude started by a tmux server (botmux) inherits it without being in that pane.
+- Global reporting-only events still count toward turns (they are the only hook signals for user-created sessions), but don't mean "this session runs Persona hooks": that makes hub suppress screen cards while waiting for a hook card that will never arrive.
+  Persona-started sessions already report through the plugin, so discard the global duplicates before counting, or each submission counts twice. See `docs/agent-states.md` ("Hook turn signals").
 
-## 别的平台派起来的会话：认会话文件里的标记，在截断前过滤（2026-11-05，#2428）
+## Sessions dispatched by other platforms: use file markers and filter before truncation (2026-11-05, #2428)
 
-- 云端 Agent 平台在电脑上起 claude / codex，和用户自己的会话同一个 `~/.claude`、`~/.codex`，按配置目录屏蔽分不开。可靠的标记在会话文件开头：
-  Codex rollout 第一行 `session_meta.originator`（平台自己起的名字；Persona 起的是 `jarvis`），Claude Code（SDK 起的，`entrypoint: sdk-ts`）
-  在第一条消息后紧跟的 `attachment.type: environment` 里有 `additionalWorkingDirectories`（平台给的技能目录）。首条消息的前缀只能兜底：用户自己讨论这个平台的会话也会提到它的名字。
-- Claude 的离线会话只列最新 80 个：过滤要在截断前做，否则一天几百个平台会话把用户自己的挤出去（`scanOffline`）。
-- 实测（hub 所在的机器，7 天）：Codex 约 1300 个是平台的 originator、自己的约 30 个；Claude 约 210 个带平台目录，另有 1 个只有前缀。冷读约 2300 个文件的开头 2.8 秒，之后按文件缓存。
+- Cloud Agent platforms start claude / codex on the computer in the same `~/.claude` / `~/.codex` as the user's sessions, so muting config directories can't separate them. Reliable markers are at the start of session files:
+  Codex rollout's first-line `session_meta.originator` (the platform's own name; Persona uses `jarvis`); Claude Code (SDK-started, `entrypoint: sdk-ts`)
+  has `additionalWorkingDirectories` (the platform's skills directory) in the `attachment.type: environment` immediately after the first message. First-message prefixes are only a fallback: user discussions of the platform also mention its name.
+- Claude offline lists contain only the latest 80 sessions: filter before truncation, or hundreds of daily platform sessions crowd out the user's (`scanOffline`).
+- Measurement (hub machine, 7 days): about 1300 Codex sessions had the platform originator, about 30 were the user's; about 210 Claude sessions had platform directories, plus 1 with only the prefix. Cold-reading about 2300 file beginnings took 2.8 seconds; subsequent reads use per-file caches.
 
-## herdr 的 pane id 和布局（#2320）
+## herdr pane ids and layout (#2320)
 
-- pane id 不是「`p` + 十进制序号」：形如 `w4R:pW`、`w4R:p2E`、`w4R:p3A`，`p` 后面是 36 进制的计数（按开 pane 的先后增长），按 `/:p(\d+)$/` 解析大多对不上。
-- `api snapshot` 的 `layouts` 每个 tab 一项：`panes[]` 带 `rect {x, y, width, height}`（字段是 width / height，不是 w / h），`splits[]` 是分屏树的节点，形如 `{"id":"split_1_1","direction":"down","ratio":0.5,"rect":{…}}`：
-  不列子节点，也不引用 pane，节点和 pane 的对应只能按 rect 找（节点的 rect 是它切的那块）；`panes` 的顺序实测就是分屏树的先序，但没有文档保证，node 按 `splits` + rect 自己排。
-- 只看 rect 排不出分屏的先后：2×2 的格子横竖两条线都能切通，先上下切还是先左右切只有 `splits` 知道。
-- zoom 一个 pane 时 `zoomed: true`，每个 pane 的 `rect` 仍是分屏里原来的位置，不变成整屏（实测 herdr 0.9.5）。
+- Pane ids aren't "`p` + decimal sequence": examples `w4R:pW`, `w4R:p2E`, `w4R:p3A`; the count after `p` is base 36 (increasing as panes open), so parsing with `/:p(\d+)$/` mostly fails.
+- `layouts` in `api snapshot` has one entry per tab: `panes[]` includes `rect {x, y, width, height}` (width / height, not w / h); `splits[]` contains split-tree nodes like `{"id":"split_1_1","direction":"down","ratio":0.5,"rect":{…}}`:
+  no child nodes or pane references; match nodes to panes only by rect (a node's rect is the area it splits). Measured `panes` order is tree preorder, but undocumented, so node orders by `splits` + rect itself.
+- Rects alone can't determine split order: both horizontal and vertical lines span a 2×2 grid; only `splits` knows whether top/bottom or left/right was split first.
+- When zooming a pane, `zoomed: true`, but every pane's `rect` remains its original split position, not fullscreen (measured herdr 0.9.5).
 
-## 驱动 Claude Code 的 `/rewind`（2026-11-05，#2436，2.1.318）
+## Driving Claude Code `/rewind` (2026-11-05, #2436, 2.1.318)
 
-录下的每一屏在 `server/internal/screen/testdata/claude-2.1.318-rewind-*`，解析在 `screen/rewind.go`，驱动在 `node/rewind.go`。
+Recorded screens: `server/internal/screen/testdata/claude-2.1.318-rewind-*`; parsing: `screen/rewind.go`; driving: `node/rewind.go`.
 
-- 打 `/rewind` 回车，出一个 `▔` 线下面的面板（不是 `─`，所以 `isRule` 不认它）。**列表只有两行的窗口**（`↑ N more` / `↓ N more`），光标起在最后一行 `(current)`，↑ 往更早的消息走、到头不循环；
-  一行是被截成 109 列、以 `…` 结尾的消息，下面一行是 `No code changes` 或 `notes.txt +1 -1`。没有可回退的：`Nothing to rewind to yet.`（`/clear` 之后列表里还有一条 `/clear`）。
-- 回车进确认页：`│ ` 引用整条消息（按 109 列折行，最后一行 `(47s ago)`），下面是选项。**选项随这条消息之后有没有代码改动而不同**：有 → `Restore code and conversation` / `Restore conversation` / `Restore code` /
-  `Summarize from here` / `Summarize up to here`（第五项滚在窗口外，前面是 `↓`）；没有 → `Restore conversation` / 两个 Summarize / `Never mind`。按序号选会选错，按名字选。
-  下面的说明（`The code will be restored +1 -1 in notes.txt.` / `The code will be unchanged.`）跟着光标走。2.1.304 的措辞不同（`The conversation will be forked`），只靠标题和选项名认。
-- Esc：确认页 → 列表（光标还在）→ 关掉；`(current)` 上回车也是关掉，什么都不说。回车确认后面板立刻关，输入框里是那条消息（多行的也是），文件按所选放回去。
-- **对话记录不删**：文件是棵树，回退后的下一条消息的 `parentUuid` 是目标前一条的 uuid，被回退的几轮还留着。node 的 transcript 读取按「同一个 parent 下两条用户自己的消息，较早那条的整棵子树被放弃」去掉它们
-  （`transcript/branch.go`，`docs/protocol.md`「回退到某条消息」）。**别用「从最后一行沿 parentUuid 往回走」**：并行工具结果、attachment 都是正常的分叉（真实语料 122 个文件里 7681 个），压缩的 `compact_boundary` 的
-  `parentUuid` 是 null，沿链走会丢掉压缩前的整段对话。真实语料（本机 122 个 jsonl，只比条数 / id）：3 个文件有这样的用户消息分叉，旧读法 → 新读法只少了被放弃的那几条，别的文件逐条一样，
-  窗口读和整读一致（`TestCorpusWindowed`）。回退后文件里没有任何新行，所以 node 自己回退时直接标（`File.Rewound`）；这个标记不落库，node 重启后到下一条消息才又看得出来。
-  窗口读（大文件只读末尾 8 MB）时，分叉的较早一条在窗口之前，窗口里属于它的行要等往前翻到那一段才去掉，去掉时令牌变、客户端重取。
-- 清输入框：一行的用 `ctrl+k ctrl+u`（不会出提示），多行的只有 `ctrl+c` 一次清得掉，它会在底下显示 `Press Ctrl-C again to exit`，只按一次、且只在确认框里是那条消息时按。
-- 测试：`node/rewind_sim_test.go` 的 `claudeSim` 按录下的画法画这些屏，`TestClaudeSimMatchesRecordedScreens` 逐行对录屏，所以流程测试跑的是真屏幕的样子；
-  真机只在一次性的会话里跑过（`go test -tags herdrlive -run TestLiveRewind`，`JARVIS_LIVE_PANE` / `JARVIS_LIVE_PROMPT`）。
+- Type `/rewind`, Enter: a panel below a `▔` line (not `─`, so `isRule` doesn't recognize it). **The list window has only two rows** (`↑ N more` / `↓ N more`), cursor starts on the last `(current)` row; ↑ goes to earlier messages and doesn't wrap at the top.
+  A row is a message truncated to 109 columns ending in `…`, with `No code changes` or `notes.txt +1 -1` below. If nothing can be rewound: `Nothing to rewind to yet.` (after `/clear`, the list still contains one `/clear`).
+- Enter opens confirmation: `│ ` quotes the full message (wrapped at 109 columns, final row `(47s ago)`), then options. **Options depend on whether code changed after this message**: yes → `Restore code and conversation` / `Restore conversation` / `Restore code` /
+  `Summarize from here` / `Summarize up to here` (fifth offscreen, preceded by `↓`); no → `Restore conversation` / both Summarize options / `Never mind`. Numeric selection gets it wrong; select by name.
+  The explanation below (`The code will be restored +1 -1 in notes.txt.` / `The code will be unchanged.`) follows the cursor. 2.1.304 wording differs (`The conversation will be forked`); recognize only by title and option names.
+- Esc: confirmation → list (cursor retained) → closed; Enter on `(current)` also closes silently. After confirmation, the panel closes immediately, the input box contains that message (including multiline), and files are restored as selected.
+- **Chat history isn't deleted**: the file is a tree; the next message after rewind has `parentUuid` equal to the uuid before the target, and abandoned turns remain. node transcript reading removes them using "two user-authored messages under the same parent abandon the earlier message's whole subtree"
+  (`transcript/branch.go`, `docs/protocol.md` ("Rewind to a message")). **Don't walk parentUuid backward from the final line**: parallel tool results and attachments are legitimate branches (7681 in a real corpus of 122 files); a compaction `compact_boundary`
+  has null `parentUuid`, so walking a chain loses the entire pre-compaction chat. Real corpus (122 local jsonl files, comparing only counts / ids): 3 had such user-message branches; old → new reading removed only abandoned items, every other file matched item-for-item,
+  and windowed and full reading agree (`TestCorpusWindowed`). Rewind writes no new lines, so node marks its own rewind directly (`File.Rewound`); this isn't persisted, and after node restart it becomes detectable again only with the next message.
+  In windowed reads (only the last 8 MB of large files), if the earlier branch begins before the window, its in-window lines are removed only when paging back to that section; removal changes the token and clients refetch.
+- Clear input: single-line uses `ctrl+k ctrl+u` (no notice); multiline needs one `ctrl+c`, which shows `Press Ctrl-C again to exit` below. Press once only, and only after confirming the box holds that message.
+- Tests: `claudeSim` in `node/rewind_sim_test.go` renders the recorded screens, and `TestClaudeSimMatchesRecordedScreens` compares each row, so flow tests use actual screen appearances;
+  live testing ran only in a disposable session (`go test -tags herdrlive -run TestLiveRewind`, `JARVIS_LIVE_PANE` / `JARVIS_LIVE_PROMPT`).
 
-## herdr 把挡着终端的 Claude 通知报成 done（2026-11-05，#2553）
+## herdr reports terminal-blocking Claude notices as done (2026-11-05, #2553)
 
-Claude Code 2.1.309 在一轮结束后弹出 auto mode 计费通知（「We're changing auto mode…」「Enter to continue · Esc to cancel」），herdr 的 `agent_status` 照样是 `done`，
-Persona 只看 herdr 和 hook，于是 3 个被挡住的 Agent 显示成「完成未看」好几分钟；发消息时 `checkPane` 读屏看到对话框一律拒绝，助手也关不掉。
-现在 node 定期读歇着的 Claude 的屏幕，有对话框就记为「需要你」（`node/dialogstatus.go`）；只按回车就关的通知可以用 `dismiss_notice` 先关掉再发。
-这个通知在走网关（非 anthropic.com 的 base URL）的会话上出现，Claude Code 没有关掉它的设置：按回车后记下 `autoModeClassifierBillingNoticeAcknowledgedAt`，24 小时后会再弹。
+Claude Code 2.1.309 shows an auto mode billing notice after a turn ("We're changing auto mode…", "Enter to continue · Esc to cancel"), while herdr `agent_status` stays `done`.
+Persona only checked herdr and hooks, so 3 blocked Agents appeared "Unread" for minutes; sending hit `checkPane`, whose screen read rejected every dialog, and the assistant couldn't dismiss it either.
+node now periodically reads stopped Claude screens and marks dialogs "Needs you" (`node/dialogstatus.go`); Enter-only notices can be dismissed with `dismiss_notice` before sending.
+This notice appears in gateway sessions (base URLs outside anthropic.com); Claude Code has no setting to disable it. Enter records `autoModeClassifierBillingNoticeAcknowledgedAt`, and it reappears after 24 hours.
 
-## 后台 workflow 跑着，Agent 被判成做完、待办被自动关（#2935）
+## A background workflow runs, but the Agent is judged done and the to-do auto-closes (#2935)
 
-2026-11-05：一个 Agent 用 Workflow 工具在后台跑多 agent 审计，主轮结束等通知，hub 把它判成「完成未看」、待办判完成并推了「做完了」，按 #1696 还可能被自动关掉、连带杀掉 workflow。
-原因是 node 只认 Bash / Agent 的后台任务：Workflow 的结果文案是「Workflow launched in background. Task ID: …」，它的 agent 也不在 `subagents/agent-*.meta.json`，而在 `subagents/workflows/<run>/` 下，一个都没扫到。
-Claude Code 新加的后台类工具（Workflow、Monitor）都要在 `transcript.trackBackground` 和 node 的 `bgMarkers` 里登记，否则「这一轮结束但还有后台活」就会被当成做完；`turn_duration` 的 `pending*Count` 字段可以用来发现新的种类。
+2026-11-05: an Agent used Workflow for a background multi-Agent audit, ended its main turn, and waited for notification. hub marked it "Unread", marked the to-do done, and pushed "Finished"; #1696 could also auto-close it and kill the workflow.
+node recognized only Bash / Agent background tasks. Workflow returns "Workflow launched in background. Task ID: …", and its agents live under `subagents/workflows/<run>/`, not `subagents/agent-*.meta.json`, so none were found.
+New Claude Code background tools (Workflow, Monitor) must be registered in `transcript.trackBackground` and node `bgMarkers`, or "turn ended, background work remains" is treated as done. `turn_duration`'s `pending*Count` fields can reveal new types.
 
-- 「没在运行」的宿主别报成看板的来源错误（2026-11-05，#3023）：Agents 列表早把 `host.ErrNotRunning` 当作「没有窗格」，`workspaces.list` 却把它写进 `errors`，工作区看板在没开 Orca 的 Linux 机器上一直显示 `orca is not running`。新加按来源列东西的 RPC，先想好「没运行」和「出错」怎么分。另外老版 botmux（如 3.13）没有 `observe`：不报错、退出码 0、在 stdout 打印帮助，按 JSON 解析只会得到 `schema 0`；输出不是 JSON 就当作没运行并提示 `botmux upgrade`。
+- Don't report "not running" hosts as board source errors (2026-11-05, #3023): Agents lists already treated `host.ErrNotRunning` as "no panes", but `workspaces.list` put it in `errors`, so workspace boards on Linux computers without Orca kept showing `orca is not running`. For new source-listing RPCs, decide how "not running" differs from "error" first. Older botmux (e.g. 3.13) also lacks `observe`: no error, exit 0, help on stdout; JSON parsing yields only `schema 0`. Treat non-JSON output as not running and suggest `botmux upgrade`.
 
-## workflow 的 journal 已更新，客户端计数却不动（#3433）
+## The workflow journal updates, but client counts do not (#3433)
 
-后台 workflow 的 journal 和 agent transcript 在独立目录里，主 transcript 的大小（`Session.rev`）不变；只验证 `workflows()` 能读到最新计数，不能证明客户端收到了它。
-node 的 `listKeySized` 要包含每个 run 的 task id、状态、阶段和 agent 计数，才会发 `sessions.changed`。回归测试要真的经过 `pollAgents` 和 RPC 推送，保持主 transcript 不变、只追加一行 journal result。
+Background workflow journals and Agent transcripts are in separate directories, so the main transcript size (`Session.rev`) stays unchanged. Verifying only that `workflows()` reads new counts does not prove clients received them.
+node `listKeySized` must include each run's task id, state, phase, and Agent count to emit `sessions.changed`. Regressions must really pass through `pollAgents` and RPC pushes, keeping the main transcript unchanged and appending only one journal result line.
 
-只补列表 key 仍未通过「3 秒内推送」：workflow 原先复用 3 秒的 `metaMinInterval`，加上每秒轮询及读取完成后才记缓存时间，可能要等到第 4 秒。
-2 秒刷新间隔的重复测试也会偶尔撞上第 3 秒的截止时间。workflow 改用独立 1.5 秒刷新间隔，并从开始读取时计时，为轮询调度留出余量；主 transcript 的刷新间隔不变。
-阶段和用量汇总必须在最新 60 个 agent 的截断之前做，否则大型 workflow 的分段计数会偏小。
-为了完整数工具调用，agent 元数据首次读取扫描完整 transcript，之后只处理追加的完整行；只读尾部会漏掉较早的调用，重复累加尾部又会重复计数。
-run 有最终状态文件后会永久缓存结果，因此结束时必须绕过 agent 元数据的短时节流，读到最后一次追加的用量和回复后再缓存。
+Fixing the list key alone still missed "push within 3 seconds": workflows reused the 3-second `metaMinInterval`, plus one-second polling and cache timestamps set after reads finished, potentially delaying until the fourth second.
+Repeated tests with a 2-second refresh sometimes still hit the third-second deadline. Workflows now use a separate 1.5-second refresh interval timed from read start, leaving polling margin; the main transcript interval is unchanged.
+Aggregate phases and usage before truncating to the latest 60 Agents, or large workflow phase counts are too low.
+For complete tool-call counts, scan each Agent's full transcript on its first metadata read, then only newly appended complete lines; tail-only misses older calls, and accumulating tails double-counts.
+After a run has a final-state file, its result is permanently cached; on completion, bypass short Agent metadata throttling and read the final appended usage and reply before caching.
 
-## opencode 插件：`setup` 里 await 事件循环、订阅不随清理中止、事件被每个目录的实例各收一遍（#3070）
+## opencode plugin: awaiting the event loop in `setup`, subscriptions surviving cleanup, duplicate events per directory (#3070)
 
-2026-11-05：opencode 的插件按项目目录各加载一次，`setup` 不返回这个目录的所有请求就 503（「Location plugins did not finish activating」）；`setup` 要返回清理函数并中止事件订阅，
-否则服务进程收到 SIGINT 后一直挂着；事件流是服务器范围的，N 个目录的实例就收到每个事件 N 遍，要按事件 id 去重、只让一个实例读流。
-列表和完整对话在插件接口里读不到，读 `opencode.db`（只读）；assistant 消息在一步里原地改写、seq 不变，而 runtime SDK 不会重推 `toSeq` 没增加的批次，所以只推定稿的消息。详见 `docs/opencode.md`。
-herdr 报的、Persona 不认识的 agent 以前被 `if a.Agent != "claude" { continue }` 悄悄丢掉（手机上看不见这个窗格），现在列成只有终端的行，新接一个 agent 时别再依赖「没人认领就消失」。
+2026-11-05: opencode loads plugins once per project directory. Until `setup` returns, every request for that directory returns 503 ("Location plugins did not finish activating"); `setup` must return a cleanup function that aborts event subscriptions,
+or the server hangs after SIGINT. The event stream is server-wide, so N directory instances receive every event N times; deduplicate by event id and let only one instance read the stream.
+The plugin API doesn't expose lists or full chats, so read `opencode.db` read-only. Assistant messages are rewritten in place within a step without changing seq, and the runtime SDK doesn't repush batches without an increased `toSeq`, so push only finalized messages. See `docs/opencode.md`.
+Agents herdr reports but Persona doesn't recognize were silently dropped by `if a.Agent != "claude" { continue }` (their panes invisible on the phone). They're now terminal-only rows; new Agent integrations must not rely on "unclaimed means disappears".
 
-## claude 被杀，它的 hook 还活着（2026-11-06，#4344，2.1.318）
+## claude dies, but its hook survives (2026-11-06, #4344, 2.1.318)
 
-Claude Code 在 Linux / macOS 上用 `detached: true` 起 hook 命令，`personad hook` 自成一个进程组：claude 被 `kill -9`、崩溃或被 OOM 杀掉时 hook 不跟着死，还连着 node.sock 等手机，卡片和「需要你」挂到 `hook_timeout_minutes`。
-别指望「hook 断开 = Agent 不等了」：node 在等待期间按 hook 带来的 `agent_pid` / `agent_start` 每 2 秒看一次 claude 还在不在（`watchAgent`），连续两次不在才撤卡。被杀没收尸的 claude 是僵尸进程，`/proc/<pid>/stat` 还在、启动时刻也没变，要看状态 `Z` 才知道它没了（`procGone`）。
+Claude Code launches hook commands with `detached: true` on Linux / macOS, so `personad hook` has its own process group: when claude is killed with `kill -9`, crashes, or is OOM-killed, the hook survives, still connected to node.sock waiting for the phone; the card and "Needs you" remain until `hook_timeout_minutes`.
+Don't assume "hook disconnected = Agent no longer waiting": while waiting, node checks every 2 seconds whether claude still exists using hook-supplied `agent_pid` / `agent_start` (`watchAgent`); withdraw only after two consecutive missing checks. A killed but unreaped claude is a zombie: `/proc/<pid>/stat` and its unchanged start time remain; inspect state `Z` to detect that it is gone (`procGone`).

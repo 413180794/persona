@@ -1,79 +1,79 @@
-# 推送中继（端到端加密）
+# Push relay (end-to-end encrypted)
 
-自己搭的 hub 没有 App 所属 Apple Team 的 APNs key，发不了推送。推送中继是 App 发布方跑的一个 `personad relay`：
-它持有 APNs key，替各家 hub 把推送交给 APNs。通知正文由 hub 用手机的公钥加密，中继只转发密文，
-手机在「通知服务扩展」里解密后再显示。自己有 APNs key 的 hub（`~/.persona/apns.json`）照旧直连 APNs，不经过中继。
-Mac 版一样：它的通知服务扩展 target 是 `PersonaMacNotify`（产物 `PersonaNotify.appex`、module 和通知主类仍用 `JarvisNotify`，`docs/mac.md`「远程推送（Mac）」，#432），私钥在 data protection 钥匙串里和扩展共用。
+A self-hosted hub doesn't have the APNs key of the Apple Team that owns the App, so it can't send pushes. The push relay is a `personad relay` run by the App's publisher:
+it holds the APNs key and hands pushes to APNs on behalf of every hub. The hub encrypts the notification content with the phone's public key, the relay only forwards ciphertext,
+and the phone decrypts it in the Notification Service Extension before showing it. A hub that has its own APNs key (`~/.persona/apns.json`) keeps talking to APNs directly and never goes through the relay.
+The Mac version works the same way: its Notification Service Extension target is `PersonaMacNotify` (product `PersonaNotify.appex`; the module and principal notification class still use `JarvisNotify`, `docs/mac.md` ("Remote push (Mac)"), #432), and the private key lives in the data protection keychain, shared with the extension.
 
 ```
-hub ──(HPKE 密文 + 授权凭据)──▶ 中继 ──(APNs key)──▶ APNs ──▶ 手机：通知服务扩展解密 → 显示
- ▲                                                               │
- └──────────── 手机公钥、中继凭据（经已配对的 hub API） ◀─────────┘
+hub ──(HPKE ciphertext + grant)──▶ relay ──(APNs key)──▶ APNs ──▶ phone: Notification Service Extension decrypts → shows
+ ▲                                                                 │
+ └──────────── phone public key, relay grant (via the paired hub API) ◀┘
 ```
 
-## 谁知道什么
+## Who knows what
 
-| | 手机 | hub | 中继 |
+| | Phone | hub | Relay |
 | --- | --- | --- | --- |
-| 私钥 | 有（钥匙串，只在本机） | 无 | 无 |
-| 公钥 | 有 | 有（配对后经 hub API 拿到） | **无**：公钥从不经过中继 |
-| APNs 设备 token | 有 | 直连时有；走中继时不需要 | 有（封在凭据里） |
-| 通知正文 | 解密后有 | 有 | **无**（只有密文） |
-| Live Activity 内容 | 有 | 有 | **有**（明文，见下） |
-| 发给哪台设备、什么时间、密文大小 | | | 有 |
+| Private key | Yes (keychain, this device only) | No | No |
+| Public key | Yes | Yes (fetched via the hub API after pairing) | **No**: the public key never passes through the relay |
+| APNs device token | Yes | Yes when direct; not needed via the relay | Yes (sealed in the grant) |
+| Notification content | Yes, after decryption | Yes | **No** (ciphertext only) |
+| Live Activity content | Yes | Yes | **Yes** (plaintext, see below) |
+| Which device, when, ciphertext size | | | Yes |
 
-- 公钥只走「手机 → 自己的 hub」这条已鉴权的链路（设备 token + 配对时的地址），中继不在路上，替换不了公钥，也就冒充不了手机去解密。
-- 中继能做的最坏的事：不转发、重放旧密文、或者用 APNs key 直接发一条明文通知（它本来就有 key，任何中继方案都防不住）。
-  它造不出一条能解开的密文：只有 hub 有手机的公钥。重放的密文超过 24 小时手机不再显示正文（`iat`）。
+- The public key only travels over the authenticated "phone → its own hub" link (device token + the address from pairing). The relay is not on that path, so it can't swap the public key and therefore can't impersonate the phone to decrypt.
+- The worst the relay can do: not forward, replay old ciphertext, or use the APNs key to send a plaintext notification directly (it has the key anyway; no relay design can prevent that).
+  It can't forge a ciphertext that decrypts: only the hub has the phone's public key. For replayed ciphertext older than 24 hours, the phone no longer shows the content (`iat`).
 
-## 加密
+## Encryption
 
-- HPKE（RFC 9180）base 模式：DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM，`info = "jarvis push v1"`。
-  Go 用标准库 `crypto/hpke`，iOS 用 CryptoKit `HPKE`（`P256_SHA256_AES_GCM_256`）。密文 = `enc`（65 字节）‖ AEAD 输出，base64 放进推送的 `e` 字段。
-- 明文就是直连时 hub 会发的那份 JSON（`aps.alert` 的标题 / 副标题 / 正文、`category`、`thread-id`、`interruption-level`、
-  `interaction_id` / `machine_id` / `session_id`、配对回执的 `pair`、`jarvis_wake`），加一个 `iat`（Unix 秒）。
-- 手机的私钥：`P256.KeyAgreement.PrivateKey`，存在 App 和通知服务扩展共用的钥匙串访问组里，`AfterFirstUnlockThisDeviceOnly`
-  （开机后解锁过一次，锁屏时扩展也能读；不进 iCloud 备份，换手机重新生成）。第一次需要时生成，之后不变。
+- HPKE (RFC 9180) base mode: DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM, `info = "jarvis push v1"`.
+  Go uses the standard library `crypto/hpke`; iOS uses CryptoKit `HPKE` (`P256_SHA256_AES_GCM_256`). Ciphertext = `enc` (65 bytes) ‖ AEAD output, base64 in the push's `e` field.
+- The plaintext is exactly the JSON the hub would send when direct (`aps.alert` title / subtitle / body, `category`, `thread-id`, `interruption-level`,
+  `interaction_id` / `machine_id` / `session_id`, the pairing receipt `pair`, `jarvis_wake`), plus an `iat` (Unix seconds).
+- The phone's private key: a `P256.KeyAgreement.PrivateKey` stored in the keychain access group shared by the App and the Notification Service Extension, `AfterFirstUnlockThisDeviceOnly`
+  (readable by the extension on the lock screen once the device has been unlocked after boot; not in iCloud backups, regenerated on a new phone). Generated the first time it's needed, then never changes.
 
-## 中继收到什么、发出什么
+## What the relay receives and sends
 
-中继自己拼 APNs 的 `aps`，hub 只能给密文和少量不含内容的参数，所以拿到凭据也塞不进明文通知：
+The relay builds the APNs `aps` itself. The hub can only provide ciphertext and a few content-free parameters, so even with a grant it can't inject a plaintext notification:
 
-| hub 发的 `type` | 中继发给 APNs |
+| `type` from hub | What the relay sends to APNs |
 | --- | --- |
-| `alert` | `{"aps":{"alert":{"title":"Jarvis","body":"有新消息"},"mutable-content":1,"sound":"default"},"e":"<密文>"}`，push type `alert` |
-| `background` | `{"aps":{"content-available":1},"e":"<密文>"}`，push type `background`，优先级 5 |
-| `liveactivity` | hub 给的 `aps`（只允许 Live Activity 用到的键），push type `liveactivity`，topic 加 `.push-type.liveactivity` |
+| `alert` | `{"aps":{"alert":{"title":"Jarvis","body":"有新消息"},"mutable-content":1,"sound":"default"},"e":"<ciphertext>"}` (`有新消息` = "New message"), push type `alert` |
+| `background` | `{"aps":{"content-available":1},"e":"<ciphertext>"}`, push type `background`, priority 5 |
+| `liveactivity` | The `aps` given by the hub (only keys used by Live Activities are allowed), push type `liveactivity`, topic with `.push-type.liveactivity` appended |
 
-- 「有新消息」是兜底：扩展解密失败、超时、开机后还没解锁过（读不到私钥）、密文过期，都显示它，**不会退回明文**。
-- `collapse_id` 由 hub 先做 SHA-256 再给中继（原值是 interaction id）。
+- "New message" is the fallback: it's shown when the extension fails to decrypt, times out, the device hasn't been unlocked since boot (private key unreadable), or the ciphertext has expired. **It never falls back to plaintext.**
+- The hub SHA-256 hashes `collapse_id` before giving it to the relay (the original value is the interaction id).
 
-### Live Activity 是明文
+### Live Activities are plaintext
 
-Live Activity 的远程更新由 iOS 直接读推送里的 `content-state`，没有扩展可以插手解密，所以走中继时**中继能看到它的内容**：
-阶段、计数、计时、TPM / 负载，以及锁屏卡片和展开态显示的条目（会话标题、「机器 · 空间 › 标签」、在问什么 / 命令摘要）。
-2026-11-01 用户决定：不为此砍掉锁屏 / 灵动岛的功能，照原样转发；在意的人自己搭中继（下面「自己搭中继」）。
-普通通知、ask_user、Agent 完成、静默唤醒都是密文。
+iOS reads `content-state` straight from the push for remote Live Activity updates; no extension can step in to decrypt, so via the relay **the relay can see their content**:
+phase, counts, timers, TPM / load, and the items shown on the lock screen card and expanded view (session title, "machine · space › tab", what's being asked / command summary).
+Decided by the user on 2026-11-01: don't cut lock screen / Dynamic Island features for this; forward as-is. Those who care can run their own relay ("Running your own relay" below).
+Ordinary notifications, ask_user, Agent completion, and silent wakes are all ciphertext.
 
-## 防滥用
+## Abuse prevention
 
-- **凭据**：手机直接向中继登记 `{apns_token, env, topic}`，换回一个凭据（grant）：中继用自己的密钥（`secret_path`）
-  AES-GCM 封装的 `{设备 token, 环境, topic, 签发时间}`。中继不存状态，靠解开凭据知道发给谁。手机把凭据交给自己的 hub，
-  hub 推送时带 `Authorization: Bearer <grant>`。没有凭据、凭据被改过、topic 不在中继允许的列表里，一律 401 / 403。
-- **只发自己 App 的**：凭据里的 topic 必须在 `relay.json` 的 `topics` 里（App 的 bundle id），中继不替别的 App 推。
-- **限流**：每台设备每分钟 120 条（突发 30）；登记按来源 IP 每分钟 20 次。请求体最大 8 KB，密文最多 3800 个 base64 字符
-  （加上外层不超过 APNs 的 4 KB）；hub 加密前把放不下的标题 / 正文截短（完整内容在 App 里）。
-- **吊销**：APNs 报 410 / `BadDeviceToken` / `Unregistered` 时中继回 410，hub 删掉这台设备（和直连一样）；只在它现在登记的还是这个 token 时删，回答到之前 App 已经登记了新 token 的（中继重试、换凭据要好几秒）保留新登记和它的通知设置；
-  要让所有凭据失效，换掉中继的 `secret_path`：hub 推送时收到 401，会用它记着的设备 token 重新登记一次换新凭据再推，不用等手机。
-- 登记本身不验证设备真伪，这是已知的缺口，要堵上得用 App Attest（还没做）：
-  - 知道某台 iPhone 的 APNs 设备 token 的人可以登记到凭据，给它推「有新消息」；
-  - 任何人都能登记到一张凭据，而 Live Activity 的目标 token 不绑在凭据上（它会轮换，中继不认识），所以知道某台手机
-    Live Activity token（或 push-to-start token）的人可以往那台手机的锁屏 / 灵动岛写任意内容；提醒只允许跟着 `start` 一起。
-  - 这些 token 和设备 token 一样只在手机、它的 hub 和 APNs 之间，不公开；topic 被凭据钉死，推不了别的 App。
+- **Grants**: the phone registers `{apns_token, env, topic}` directly with the relay and gets back a grant: `{device token, environment, topic, issue time}` sealed with AES-GCM
+  under the relay's own key (`secret_path`). The relay keeps no state; it learns the recipient by opening the grant. The phone hands the grant to its own hub,
+  and the hub sends `Authorization: Bearer <grant>` with each push. A missing grant, a tampered grant, or a topic not on the relay's allowed list all get 401 / 403.
+- **Only its own App**: the topic in the grant must be in `topics` in `relay.json` (the App's bundle id); the relay doesn't push for other Apps.
+- **Rate limits**: 120 per device per minute (burst 30); registration 20 per source IP per minute. Request body at most 8 KB, ciphertext at most 3800 base64 characters
+  (with the outer layer, within APNs's 4 KB). Before encrypting, the hub truncates titles / bodies that don't fit (the full content is in the App).
+- **Revocation**: when APNs reports 410 / `BadDeviceToken` / `Unregistered`, the relay returns 410 and the hub deletes the device (same as direct). It only deletes if the device's current registration still has this token; if the App registered a new token before the answer came back (relay retries and grant renewal take several seconds), the new registration and its notification settings are kept.
+  To invalidate all grants, replace the relay's `secret_path`: when the hub gets a 401 on push, it re-registers once with the device token it remembers, gets a new grant, and pushes again, without waiting for the phone.
+- Registration itself doesn't verify that the device is genuine. This is a known gap; closing it needs App Attest (not done yet):
+  - Someone who knows an iPhone's APNs device token can register a grant and push "New message" to it;
+  - Anyone can register a grant, and the Live Activity target token is not bound to the grant (it rotates and the relay doesn't know it), so someone who knows a phone's
+    Live Activity token (or push-to-start token) can write arbitrary content to that phone's lock screen / Dynamic Island; alerts are only allowed together with `start`.
+  - Like the device token, these tokens only exist between the phone, its hub, and APNs, and are not public; the topic is pinned by the grant, so no other App can be pushed to.
 
-## 接口
+## API
 
-中继（`personad relay`，配置 `~/.persona/relay.json`）：
+Relay (`personad relay`, config `~/.persona/relay.json`):
 
 ```
 POST /relay/v1/register   {"apns_token":"<hex>","env":"production|sandbox","topic":"<bundle id>"}
@@ -81,66 +81,66 @@ POST /relay/v1/register   {"apns_token":"<hex>","env":"production|sandbox","topi
 POST /relay/v1/push       Authorization: Bearer <grant>
                           {"type":"alert|background|liveactivity","priority":"10|5","collapse_id":"<hex>",
                            "sealed":"<base64>",                      // alert / background
-                           "token":"<hex>","aps":{…}}                // liveactivity：活动或 push-to-start 的 token
+                           "token":"<hex>","aps":{…}}                // liveactivity: the activity's or push-to-start token
                           → 200 {"ok":true} | 410 {"reason":"Unregistered"} | 4xx/5xx {"error":"…"}
 GET  /relay/v1/health     → {"ok":true,"apns":true}
 ```
 
-中继地址只认 `https`（hub 也只认 `https`，或 `http` 到本机回环地址给端到端脚本用）：凭据和 Live Activity 内容不能明文过网。
+The relay address must be `https` (the hub also only accepts `https`, or `http` to a local loopback address for end-to-end scripts): grants and Live Activity content must not cross the network in plaintext.
 
-hub：`POST /api/v1/devices` 多三个字段 `push_key`（手机公钥，X9.63 未压缩点的 base64）、`relay_url`、`relay_grant`。
+hub: `POST /api/v1/devices` gains three fields: `push_key` (the phone's public key, base64 of the X9.63 uncompressed point), `relay_url`, `relay_grant`.
 
-hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样）；没有 → 设备带了 `relay_url` + `relay_grant` + `push_key` 就走中继；都没有就不推。
+hub routing (`push.go`): with `apns.json` → direct (exactly as before); without → via the relay if the device sent `relay_url` + `relay_grant` + `push_key`; otherwise no push.
 
-hub 到中继失败时重试（#2150）：网络错误（TLS 握手 / 连接超时、连接被断）和中继回 5xx / 429 的，隔 1 秒、4 秒各再试一次，
-三次都不行才放弃，日志写明试了几次；中继别的回答（4xx、410）不重试，401 照旧先换凭据。以前只试一次，hub 到中继的网络一抖，
-提醒和 Live Activity 的更新就丢了。Live Activity 的推送带 `aps.timestamp`，重试晚到的旧状态 iOS 会丢掉，不会盖掉新的。
+hub retries failed relay requests (#2150): network errors (TLS handshake / connect timeout, dropped connection) and relay 5xx / 429 are retried twice more, after 1 second and 4 seconds;
+it gives up only after three failures, and the log says how many attempts were made. Other relay answers (4xx, 410) are not retried; 401 still renews the grant first. Before, there was only one attempt, so any blip on the hub-to-relay network
+lost alerts and Live Activity updates. Live Activity pushes carry `aps.timestamp`, so iOS drops an old state that arrives late from a retry instead of overwriting a newer one.
 
 ## App
 
-- 构建配置 `app.push_relay`（`config.json`，比如 `https://<中继域名>/relay`）进 Info.plist 的 `JarvisPushRelay`；为空就不登记中继。
-- 拿到 APNs 设备 token 后：确保有推送密钥 → 向中继登记换凭据（按设备 token 缓存在钥匙串，token 变了重新登记）→
-  把 `apns_token`、`push_key`、`relay_url`、`relay_grant` 一起报给 hub。
-- 通知服务扩展 `JarvisNotify`：有 `e` 就解密并换上标题 / 副标题 / 正文 / category（通知上的按钮）/ thread / 打断级别 / userInfo；
-  没有 `e`（直连的推送本来就不带 `mutable-content`，扩展不会被调用）原样显示。
-- 静默推送（`background`）在 App 进程里解密，`jarvis_wake` 照旧唤醒连接。
+- The build config `app.push_relay` (`config.json`, e.g. `https://<relay domain>/relay`) goes into Info.plist's `JarvisPushRelay`; when empty, the App doesn't register with a relay.
+- After getting the APNs device token: make sure a push key exists → register with the relay for a grant (cached in the keychain per device token; re-registered when the token changes) →
+  report `apns_token`, `push_key`, `relay_url`, `relay_grant` together to the hub.
+- Notification Service Extension `JarvisNotify`: if `e` is present, decrypt it and swap in the title / subtitle / body / category (the notification's buttons) / thread / interruption level / userInfo;
+  without `e` (direct pushes never carry `mutable-content`, so the extension isn't invoked) the notification is shown as-is.
+- Silent pushes (`background`) are decrypted in the App process; `jarvis_wake` wakes the connection as before.
 
-## 部署（发布方）
+## Deployment (publisher)
 
-1. 在一台能出外网的机器上放 `~/.persona/relay.json`（0600）：
+1. On a machine with outbound internet access, put `~/.persona/relay.json` (0600):
 
    ```json
    {
      "listen": "127.0.0.1:18670",
      "apns": { "key_id": "<Key ID>", "team_id": "<Team ID>", "key_path": "~/.persona/AuthKey_<Key ID>.p8" },
-     "topics": ["<App 的 bundle id>"],
+     "topics": ["<the App's bundle id>"],
      "secret_path": "~/.persona/relay.secret",
-     "proxy_secret": "<随机长串，和 Worker 的 RELAY_PROXY_SECRET 一样>"
+     "proxy_secret": "<a long random string, same as the Worker's RELAY_PROXY_SECRET>"
    }
    ```
 
-   `secret_path` 不存在时第一次启动生成（32 字节随机数，0600）；**丢了它所有手机要重新登记**（App 启动时自动做）。
-   `proxy_secret`：设了以后，不带 `X-Relay-Proxy-Secret` 的请求一律 403（绕不过 Worker 直连源站），登记的限流按 Worker 给的
-   `X-Forwarded-For`（客户端地址）算；不设就按直连地址算，适合不经 Worker、自己配 TLS 直接对外的部署。
-2. 跑 `personad relay`（systemd / launchd 常驻），本机请求 `http://127.0.0.1:18670/relay/v1/health` 应看到 `"apns":true`。
-   配置了 `proxy_secret` 时，健康检查同样受保护：本机请求要带 `X-Relay-Proxy-Secret`，否则回 403；官网请求由 Worker 自动补这个头。
-3. 挂到官网域名下：官网是 Cloudflare Workers 的静态站（`site/`），`site/worker.mjs` 把 `/relay/*` 转给中继
-   （`wrangler.jsonc` 的 `run_worker_first`），其余照旧是静态文件。中继的地址和密钥不进仓库：
-   用 Cloudflare Tunnel（`cloudflared`）把本机 18670 暴露成一个只给 Worker 用的主机名，再在 `site/` 里
-   `npx wrangler secret put RELAY_ORIGIN`（值如 `https://<tunnel 主机名>`）和 `npx wrangler secret put RELAY_PROXY_SECRET`
-   （同 `proxy_secret`），然后照常部署 `site/`（只用 `scripts/release/publish.sh`：它在副本里加上 `dl/` 和 `install.sh` 再部署；在 `site/` 里直接 `wrangler deploy` 会让下载和安装脚本 404。wrangler 4 要 Node 22+）。
-   两个都没设时 `/relay/*` 回 503，站点其余部分不受影响。部署后 `curl https://<官网域名>/relay/v1/health` 应回 `{"ok":true,"apns":true}`。
-4. 发 App：`python3 scripts/release/asc_signing.py --only <bundle id>.notify` 注册通知服务扩展的 bundle id、建「Jarvis Notify App Store」
-   profile（`release.sh` 导出时要用）；`config.json` 填 `app.push_relay`（如 `https://<官网域名>/relay`）；照常发 TestFlight。
-   旧版本的 App 没有扩展、不登记中继，自建 hub 照旧收不到推送，要装这之后的版本。
+   If `secret_path` doesn't exist, it's generated on first start (32 random bytes, 0600); **if you lose it, every phone has to register again** (the App does this automatically at launch).
+   `proxy_secret`: once set, any request without `X-Relay-Proxy-Secret` gets 403 (so the origin can't be reached directly, bypassing the Worker), and registration rate limits use the
+   `X-Forwarded-For` (client address) the Worker provides. If unset, the direct peer address is used, which suits deployments that skip the Worker and terminate TLS themselves.
+2. Run `personad relay` (as a systemd / launchd service). A local request to `http://127.0.0.1:18670/relay/v1/health` should show `"apns":true`.
+   With `proxy_secret` configured, the health check is protected too: local requests must send `X-Relay-Proxy-Secret` or get 403; requests through the website have the header added by the Worker.
+3. Mount it under the website domain: the website is a static site on Cloudflare Workers (`site/`), and `site/worker.mjs` forwards `/relay/*` to the relay
+   (`run_worker_first` in `wrangler.jsonc`); everything else is still static files. The relay's address and secret are not in the repo:
+   use Cloudflare Tunnel (`cloudflared`) to expose local port 18670 as a hostname used only by the Worker, then in `site/` run
+   `npx wrangler secret put RELAY_ORIGIN` (value like `https://<tunnel hostname>`) and `npx wrangler secret put RELAY_PROXY_SECRET`
+   (same as `proxy_secret`), then deploy `site/` as usual (only with `scripts/release/publish.sh`: it adds `dl/` and `install.sh` in a copy before deploying; running `wrangler deploy` directly in `site/` makes the downloads and install script 404. wrangler 4 needs Node 22+).
+   When neither is set, `/relay/*` returns 503 and the rest of the site is unaffected. After deployment, `curl https://<website domain>/relay/v1/health` should return `{"ok":true,"apns":true}`.
+4. Ship the App: `python3 scripts/release/asc_signing.py --only <bundle id>.notify` registers the Notification Service Extension's bundle id and creates the "Jarvis Notify App Store"
+   profile (needed when `release.sh` exports); fill `app.push_relay` in `config.json` (e.g. `https://<website domain>/relay`); release to TestFlight as usual.
+   Older App versions have no extension and don't register with the relay, so self-hosted hubs still can't push to them; install a version from after this change.
 
-## 常驻 Cloudflare Tunnel（Linux）
+## Persistent Cloudflare Tunnel (Linux)
 
-远程管理的 Tunnel 在 Cloudflare 配置两条 ingress：第一条是源站主机名 → `http://127.0.0.1:18670`，最后一条是
-`http_status:404`；源站 DNS 用开启代理的 CNAME 指向 `<Tunnel ID>.cfargotunnel.com`。不要复用已有业务的 Tunnel 或覆盖它的 ingress。
+For a remotely managed Tunnel, configure two ingress rules in Cloudflare: first the origin hostname → `http://127.0.0.1:18670`, last
+`http_status:404`. The origin DNS is a proxied CNAME pointing to `<Tunnel ID>.cfargotunnel.com`. Don't reuse an existing service's Tunnel or overwrite its ingress.
 
-把经过官方发布 SHA-256 校验的 `cloudflared` 放进 `~/.persona/bin/`，Tunnel token 放进 `~/.persona/relay-tunnel.token`（0600），
-新建 `~/.config/systemd/user/jarvis-relay-tunnel.service`：
+Put a `cloudflared` verified against the official release SHA-256 into `~/.persona/bin/`, the Tunnel token into `~/.persona/relay-tunnel.token` (0600),
+and create `~/.config/systemd/user/jarvis-relay-tunnel.service`:
 
 ```ini
 [Unit]
@@ -159,40 +159,40 @@ UMask=0077
 WantedBy=default.target
 ```
 
-`jarvis-relay.service` 是这台机器上运行 `personad relay` 的 unit 名；若不同，改成实际名字。执行
-`systemctl --user daemon-reload`、`systemctl --user enable --now jarvis-relay-tunnel.service`，并确认用户已开启 linger，
-退出 SSH 后服务才会继续运行。`--token-file` 避免 token 出现在进程参数或日志里；部署机的 UDP/7844 不通时显式用 HTTP/2，
-仍需允许 TCP/7844 出站。单看 unit 是 `active` 不够，还要看到 Tunnel 已登记连接、远程 ingress 已加载。
+`jarvis-relay.service` is the name of the unit that runs `personad relay` on this machine; if yours differs, use the actual name. Run
+`systemctl --user daemon-reload` and `systemctl --user enable --now jarvis-relay-tunnel.service`, and make sure linger is enabled for the user,
+or the service stops when you log out of SSH. `--token-file` keeps the token out of process arguments and logs. When UDP/7844 is blocked on the deploy machine, use HTTP/2 explicitly;
+TCP/7844 outbound must still be allowed. The unit being `active` isn't enough: also check that the Tunnel has registered connections and the remote ingress is loaded.
 
-代理密钥与 grant 加密密钥是两回事：修改 `proxy_secret` 时同时更新 Worker 的 `RELAY_PROXY_SECRET`，但保留 `relay.secret`，
-否则已有手机的 grant 会失效。新建的代理密钥、Tunnel token 和 grant 密钥备份一起保存到密码管理器；只经权限为 0600 的临时文件传递，
-不放命令行、不打印值。部署完成后删除临时文件。
+The proxy secret and the grant encryption key are different things: when you change `proxy_secret`, update the Worker's `RELAY_PROXY_SECRET` too, but keep `relay.secret`,
+or existing phones' grants become invalid. Save the new proxy secret, the Tunnel token, and a backup of the grant key together in a password manager; pass them only through temporary files with 0600 permissions,
+never on the command line, and never print the values. Delete the temporary files after deployment.
 
-## 部署验收
+## Deployment acceptance
 
-- 官网 `GET /relay/v1/health`：200，`ok`、`apns` 都是 `true`。这只证明服务和 APNs key 已加载，不代表真实设备收到通知。
-- 源站主机名同一路径，不带代理密钥：403，正文是 `not through the proxy`，不能绕过 Worker。
-- 无效设备 token 登记：400；不在允许列表内的 topic：403。
-- 正确 topic 和测试 token 登记：200，grant 不输出；不带 grant 的推送：401。
-- 有效 grant 但无效密文：400，不向 APNs 发出；测试不要拿真实设备 token，以免误发通知。
-- `config.json` 的 `app.push_relay` 已填，通知扩展描述文件有效，归档的 `JarvisPushRelay` 指向官网 `/relay`，
-  App 和扩展的共享推送钥匙串组均通过 `entitlements.py check`。
-- 安装新 TestFlight 后，在没有自有 APNs key 的 hub 上验证普通通知解密与 Live Activity；模拟器健康检查不能代替真机验收。
+- Website `GET /relay/v1/health`: 200, with both `ok` and `apns` `true`. This only proves the service and APNs key are loaded, not that a real device receives notifications.
+- Same path on the origin hostname, without the proxy secret: 403, body `not through the proxy`; the Worker can't be bypassed.
+- Registering an invalid device token: 400; a topic not on the allowed list: 403.
+- Registering with the correct topic and a test token: 200, grant not printed; a push without a grant: 401.
+- A valid grant with invalid ciphertext: 400, nothing sent to APNs. Don't use a real device token in tests, to avoid sending notifications by mistake.
+- `app.push_relay` is filled in `config.json`, the notification extension's provisioning profile is valid, the archived `JarvisPushRelay` points to the website's `/relay`,
+  and the App's and extension's shared push keychain group both pass `entitlements.py check`.
+- After installing the new TestFlight build, verify ordinary notification decryption and Live Activities on a hub without its own APNs key; a simulator health check doesn't replace acceptance on a real device.
 
-## 自己搭中继
+## Running your own relay
 
-只有持有 App 所属 Team 的 APNs key 才能给这个 App 推送，所以「自己搭中继」= 自己签名装 App（自己的 Team、自己的 bundle id）+
-自己的 APNs key。那样直接把 key 放进自己 hub 的 `apns.json` 走直连更简单，Live Activity 也不经过任何第三方。
+Only the holder of the APNs key of the Team that owns the App can push to that App, so "running your own relay" = signing and installing the App yourself (your own Team, your own bundle id) +
+your own APNs key. In that case it's simpler to put the key straight into your hub's `apns.json` and go direct, and Live Activities don't pass through any third party either.
 
-## 验证
+## Verification
 
-- `server/internal/relay`：凭据封装 / 篡改 / topic、限流、拼出的 APNs 请求（假 APNs）、410 透传。
-- `server/internal/hub`：没有 `apns.json` 时普通通知 / 交互 / 完成 / 静默唤醒 / Live Activity 都打到假中继、请求里没有明文；有 `apns.json` 时照旧直连。
-- `server/internal/pushcrypto` 生成的密文由 JarvisTests 用 CryptoKit 解开（跨语言测试向量）。
-- `site/worker.test.mjs`（`node --test`）：静态路径不变、没配置时 503、转发时带上密钥和客户端地址、丢掉伪造的密钥和 cookie。
-- 模拟器端到端：`scripts/test/relay_sim_e2e.sh` 用 App 导出的公钥，由 hub 的 Go 代码加密 → 本机 `personad relay` → 假 APNs
-  收下请求（检查里面没有明文）→ App 进程里跑扩展的逻辑（`PushCrypto.service`，`NotificationServiceTests`）逐条解开；
-  改坏一个字节的仍是「有新消息」。
-  **`simctl push` 不运行通知服务扩展**（模拟器把它当本地通知直接加进通知中心，2026-11-01 Xcode 27.1 / iOS 27.0 实测：
-  扩展进程没有起，带 `mutable-content` 的推送原样显示成「有新消息」），所以扩展本身（`JarvisNotify`）只能在真机上验证。
-- 真 APNs、真机上的扩展：要发布方的 key 和带扩展的签名包，在发布方部署后验证（`docs/release.md`）。
+- `server/internal/relay`: grant sealing / tampering / topic, rate limits, the assembled APNs request (fake APNs), 410 passthrough.
+- `server/internal/hub`: without `apns.json`, ordinary notifications / interactions / completions / silent wakes / Live Activities all hit a fake relay, with no plaintext in the requests; with `apns.json`, it stays direct as before.
+- Ciphertext generated by `server/internal/pushcrypto` is decrypted by JarvisTests with CryptoKit (cross-language test vectors).
+- `site/worker.test.mjs` (`node --test`): static paths unchanged, 503 when unconfigured, the secret and client address added when forwarding, forged secrets and cookies dropped.
+- Simulator end-to-end: `scripts/test/relay_sim_e2e.sh` takes the public key exported by the App, encrypts with the hub's Go code → local `personad relay` → a fake APNs
+  receives the request (checked for no plaintext) → the extension's logic runs in the App process (`PushCrypto.service`, `NotificationServiceTests`) and decrypts each one;
+  one with a corrupted byte still shows "New message".
+  **`simctl push` doesn't run the Notification Service Extension** (the simulator adds it straight to Notification Center as a local notification; measured 2026-11-01 on Xcode 27.1 / iOS 27.0:
+  the extension process didn't start, and a push with `mutable-content` was shown as-is as "New message"), so the extension itself (`JarvisNotify`) can only be verified on a real device.
+- Real APNs and the extension on a real device: need the publisher's key and a signed build with the extension; verified after the publisher deploys (`docs/release.md`).

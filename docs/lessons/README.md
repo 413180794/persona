@@ -1,28 +1,28 @@
-# 经验索引
+# Lessons index
 
-产品名统一为 Persona（原 Jarvis）。历史经验中的旧路径、命令、日志、签名和源码标识保留当时的值，属于兼容 / 历史引用，不代表新装默认目录；迁移版本的 `personad`、`~/.persona` 和配置选择见 [命名与兼容](../config.md#命名与兼容)。
+The product name is Persona everywhere (formerly Jarvis). Old paths, commands, logs, signatures, and source identifiers in past lessons keep the values they had at the time. They are compatibility / historical references, not the default directory of a new install. For `personad`, `~/.persona`, and how configuration is chosen in the migrated version, see [Naming and compatibility](../config.md#命名与兼容).
 
-踩过的坑、怪异行为和设计取舍，按主题分文件。动到某一块之前先读对应的文件；新经验当场写进对应的节（没有合适的就新开一节或新开一个文件，并在这里登记），
-最常踩、跨模块的几条同时留一行在 `CLAUDE.md`「最常踩的坑」。和某个功能强相关的设计结论写进那个功能的文档（`docs/<主题>.md`），这里只记坑。
+Pitfalls, odd behavior, and design trade-offs, one file per topic. Read the matching file before touching an area. Write new lessons into the matching section on the spot (if none fits, start a new section or a new file and register it here).
+The most common, cross-module ones also get one line in `CLAUDE.md` ("Most common pitfalls"). Design conclusions tied to a specific feature go into that feature's doc (`docs/<topic>.md`); this directory only records pitfalls.
 
-| 文件 | 什么时候读 |
+| File | When to read |
 | --- | --- |
-| `workflow.md` | 多个 Agent 同时改仓库：模拟器、mock 端口、worktree、rebase、迁移号、等后台任务的脚本 |
-| `rename.md` | 产品改名：固定审计基准、源码 / 显示 / 系统身份分开、target 与 module、ActivityAttributes、双 scheme / header parser、XcodeGen 源头与更新包 ID |
-| `agents.md` | 改 node 里驱动 Claude Code / Codex / TRAEX 的部分：herdr 的行为、认窗格和会话、配置目录、发送、`/effort`、生图、启动超时 |
-| `paseo.md` | 改 Paseo 引擎的桥（`integrations/paseo`）或 node 运行它的部分、对着真的 Paseo 测试：只认 `paseo.pid` 的地址、计划正文在哪、请求被裁剪、只读命令不问权限、等不及的回复、订阅和回复同一次读到 |
-| `dsh.md` | 改 DSH 插件（`integrations/dsh`）或 runtime 接入（`runtime.sock`、`integrations/runtime-sdk`）：DSH 的应答链、事件来源、seq、日志格式、端到端测试的坑 |
-| `assistant.md` | 改「Persona」tab 的无头助手：ask_user、权限、后台任务、定时任务、飞书写操作闸门 |
-| `voice.md` | 改内置语音扩展（`personad voice`）或定语音模式的节奏常量：GPT-Live 兼容上游的实测（delegation 能开多久、`say` / thinking 会不会开口和打断、音频比实时快、插话、注入、instructions 大小、错误原样），哪些是标准、哪些是那个服务特有的 |
-| `server.md` | 改 hub / node 的进程、连接（慢链路上的心跳超时）、推送、代理、端口转发、来源判断（PROXY protocol）、机器监控、远程部署、Docker 部署（首次启动补值）、知识库的写入和保留期；工作区独立发现、物理目录和动态机器 alias；知识库人工更正、来源删除与扩展权限；数据库查询在通用计划（generic plan）下丢索引、拼接键的 JOIN |
-| `transcript.md` | 改 transcript / rollout 解析、会话列表、分页、后台同步、折叠、App 的会话缓存 |
-| `lark-mail.md` | 改飞书和邮件（IMAP / SMTP / Gmail）、云文档通知 |
-| `terminal.md` | 改终端 tab：herdr 读屏 / observe / 接管、滚动、键盘输入、宽字符 |
-| `ios.md` | 改 iOS 界面：聊天列表与滚动、导航、布局与组件、Swift 与编译、系统能力与页面约定、SSH 隧道、密钥输入框不弹「保存密码？」、要能取消的确认用 alert、列表结构一变每行修饰链重建、国际化（运行中换不了语言、开发区域 en 时的复数回退、插值整数的千分位） |
-| `android.md` | 改 Android App：Compose 与玻璃（Haze）、切页面闪烁、平板 / 折叠屏、深浅色、前台服务、模拟器和真机调试 |
-| `macos.md` | 改 Mac App：兼容层、分栏、截图、非活动窗口变灰、Form 里的危险按钮 |
-| `windows.md` | 改 Windows 上的 node、在 Windows 上开发：LF 检出、AF_UNIX 路径长度、`bash` 是 WSL、读别的进程的 PEB、Orca 的命名管道、计划任务（S4U 要管理员、失败后重启不管程序退出、控制台窗口、默认 72 小时）、机器监控（每核要正好的缓冲区、Google Drive 的假固定盘、ProductName 写着 Windows 10）、herdr（管道名是 socket 路径、ssh 起的 server 会退出、窗格 shell 设 Git Bash） |
-| `model-display.md` | 改输入框 / 模型选择项的友好名称：显式别名优先，原始 ID、请求和配置不变，详情行与搜索 |
-| `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归、xterm、加 npm 依赖、Playwright 验证、展开折叠的动画和滚动锚定、全局样式和 Tailwind 的 layer；无会话工作区的文件 / Git 面板 key |
-| `delivery.md` | 派活给 Agent、改任务的完成判断和交付：为什么一天的活大多停在 PR / 默认关 / 没部署，完成标准、集中批、追卡点、基础设施和真实环境 |
-| `testing.md` | 跑 UI 测试、截图、量帧率 / 跳动；模拟器和 XCUITest 的怪行为；起 sshd 做测试 |
+| `workflow.md` | Several Agents changing the repo at once: simulators, mock ports, worktrees, rebase, migration numbers, scripts that wait on background tasks |
+| `rename.md` | The product rename: a fixed audit baseline, keeping source / display / system identities apart, target vs. module, ActivityAttributes, dual schemes / header parser, the XcodeGen source and update bundle IDs |
+| `agents.md` | Changing the parts of node that drive Claude Code / Codex / an internal Codex variant: herdr's behavior, identifying panes and sessions, config directories, sending, `/effort`, image generation, launch timeouts |
+| `paseo.md` | Changing the Paseo engine bridge (`integrations/paseo`) or the node code that runs it, testing against a real Paseo: only trust the address in `paseo.pid`, where the plan text lives, requests get trimmed, read-only commands don't ask for permission, replies that can't wait, a subscription and a reply read in the same pass |
+| `dsh.md` | Changing the DSH plugin (`integrations/dsh`) or runtime integration (`runtime.sock`, `integrations/runtime-sdk`): DSH's response chain, event sources, seq, log format, end-to-end test pitfalls |
+| `assistant.md` | Changing the headless assistant in the "Persona" tab: ask_user, permissions, background tasks, scheduled tasks, the Lark write-operation gate |
+| `voice.md` | Changing the built-in voice extension (`personad voice`) or tuning the voice mode's timing constants: measurements against GPT-Live-compatible upstreams (how long a delegation can stay open, whether `say` / thinking speaks up and interrupts, audio faster than real time, barge-in, injection, instructions size, errors passed through as-is), which behavior is standard and which is specific to that service |
+| `server.md` | Changing hub / node processes, connections (heartbeat timeouts on slow links), push, proxies, port forwarding, source checks (PROXY protocol), machine monitoring, remote deploys, Docker deploys (filling in values on first start), knowledge base writes and retention; independent workspace discovery, physical directories and dynamic machine aliases; manual knowledge base corrections, source deletion and extension permissions; database queries losing indexes under a generic plan, JOINs on concatenated keys |
+| `transcript.md` | Changing transcript / rollout parsing, session lists, paging, background sync, folding, the App's session cache |
+| `lark-mail.md` | Changing Lark and mail (IMAP / SMTP / Gmail), cloud doc notifications |
+| `terminal.md` | Changing the terminal tab: herdr screen reading / observe / takeover, scrolling, keyboard input, wide characters |
+| `ios.md` | Changing the iOS UI: chat lists and scrolling, navigation, layout and components, Swift and compilation, system capabilities and page conventions, SSH tunnels, secret fields that don't trigger "Save Password?", alerts for confirmations that must be cancelable, the per-row modifier chain rebuilt whenever the list structure changes, i18n (language can't change at runtime, plural fallback when the development region is en, thousands separators in interpolated integers) |
+| `android.md` | Changing the Android App: Compose and glass (Haze), flicker when switching pages, tablets / foldables, light and dark mode, foreground services, emulator and device debugging |
+| `macos.md` | Changing the Mac App: compatibility layer, split view, screenshots, inactive windows turning gray, destructive buttons in a Form |
+| `windows.md` | Changing node on Windows, developing on Windows: LF checkout, AF_UNIX path length, `bash` is WSL, reading another process's PEB, Orca's named pipes, scheduled tasks (S4U needs admin, restart-on-failure ignores program exit, console windows, 72-hour default), machine monitoring (per-core needs an exactly sized buffer, Google Drive's fake fixed disk, ProductName says Windows 10), herdr (the pipe name is the socket path, a server started over ssh exits, setting the pane shell to Git Bash) |
+| `model-display.md` | Changing friendly names in the composer / model picker: explicit aliases first, raw IDs, requests and config unchanged, detail rows and search |
+| `web.md` | Changing the web UI: React events, popup menus, narrow layouts, browser interaction regressions, xterm, adding npm dependencies, Playwright verification, expand / collapse animation and scroll anchoring, global styles and Tailwind layers; file / Git panel keys for workspaces without a session |
+| `delivery.md` | Handing work to Agents, changing how tasks are judged done and delivered: why most of a day's work stops at a PR / off by default / not deployed, done criteria, batching, chasing blockers, infrastructure and real environments |
+| `testing.md` | Running UI tests, screenshots, measuring frame rate / jitter; odd simulator and XCUITest behavior; starting sshd for tests |

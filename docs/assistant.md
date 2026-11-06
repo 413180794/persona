@@ -1,543 +1,543 @@
-# 助手（「Persona」tab，原「对话」）
+# Assistant (the "Persona" tab, formerly "Chat")
 
-「Persona」tab 的 Persona 是 hub 所在机器上 `~/.persona/assistant` 里**无头运行**的 Claude Code（`claude -p` + stream-json，见
-`docs/claude-integration.md`「无头助手」）；启动器跑的是 Codex 时换成 `codex app-server`（下面「Codex」一节）；选的是能当助手的 Agent 运行时的启动器（DSH）时，由那个运行时跑（下面「Agent 运行时（DSH）」一节）。这篇讲它能做什么、怎么做到的，以及 2026-10-26 那次能力升级背后的取舍。
+Persona in the "Persona" tab is Claude Code running **headlessly** in `~/.persona/assistant` on the hub machine (`claude -p` + stream-json; see
+`docs/claude-integration.md` ("Headless assistant")). A Codex launcher uses `codex app-server` instead ("Codex" below); a launcher for an assistant-capable Agent runtime (DSH) runs in that runtime ("Agent runtime (DSH)" below). This doc covers what it can do, how it works, and the trade-offs behind the 2026-10-26 capability upgrade.
 
-## 2026-10-26 之前它为什么弱（从真实对话记录里看到的）
+## Why it was weak before 2026-10-26 (from real chat records)
 
-- **确认机制是坏的**：CLAUDE.md 让它用 AskUserQuestion 确认，但 `-p` 模式下这个工具直接报
-  `No such tool available: AskUserQuestion … nobody in this session can answer it`，PreToolUse hook 根本没机会触发。
-- **大部分时间在找数据**：一段对话 33 次 `cd`/`ls`；飞书靠 `docker inspect` 抠 token；看 Agent 要 ssh 上去解析 `herdr agent list`。
-  hub 手里本来就有这些数据。
-- **慢**：一轮 36–136 秒，ssh 命令多次超时（exit 124 / 137）；每段对话冷启动 claude，Persona 工具还要先 ToolSearch。
-- **只会被动回答**，开场时也不知道时间、谁在等他、有多少未读。
+- **Broken confirmation**: CLAUDE.md told it to confirm through AskUserQuestion, but in `-p` that tool immediately reports
+  `No such tool available: AskUserQuestion … nobody in this session can answer it`; PreToolUse hooks never get a chance to run.
+- **Most time spent finding data**: 33 `cd` / `ls` calls in one chat; `docker inspect` to extract a Lark token; ssh and parsing `herdr agent list` to see Agents.
+  The hub already has this data.
+- **Slow**: 36–136 seconds per turn, repeated ssh timeouts (exit 124 / 137); cold-starting claude for each chat, and ToolSearch before Persona tools.
+- **Reactive only**: even on starting, it didn't know the time, who was waiting, or how many unread items existed.
 
-## 现在的结构
+## Current structure
 
-| 能力 | 实现 |
+| Capability | Implementation |
 | --- | --- |
-| 在手机上问 | MCP `ask_user` → hub 建一个 `question` 交互（`tool_name: ask_user`，session 就是这段对话）→ App 里原有的提问卡片 + 推送（标题「Persona 在问你」）→ 答案作为工具结果返回 |
-| 推送 | `notify_user` → APNs（App 关着也到），点开就是这段对话；同一轮结束时不再重复推「完成」；打开了飞书机器人的「推送也发到飞书」时也发一份到飞书、插件渠道开了「推送」的也发（助手自己发，`docs/bots.md`、`docs/channels.md`） |
-| 在飞书里聊 | 私聊飞书机器人 = 在主对话里说话，回答发回飞书，提问 / 批准在飞书里点卡片（`docs/bots.md`） |
-| 自己定时回来 | `schedule_followup`（`at` 一次；`every: "30m"` 按间隔重复）/ `list_followups` / `cancel_followup`；到点 hub 把 prompt（以「⏰」开头）发进原对话（`assistant.send` 会 `--resume`），失败就新开一段 |
-| 定时任务 | 一张表（下面「定时任务」一节），默认「早报」工作日 09:00 开、「晚间回顾」工作日 21:30 关；跑完照常推「完成」。对话里说「每天 / 每周几 X 点…」时助手用 `schedule_routine` 建（App 里标「Persona 建的」），`delete_routine` 删 |
-| 运行记录 | 每次运行（成功开起对话 / 没跑起来 / 停机错过而跳过）记进 settings `assistant.runs`（最近 200 条），`GET /api/v1/assistant/runs[?ref=]`；定时任务带上次状态 `last_status` |
-| 到点 | 调度按下一个到期时间设定时器（最长睡 30 秒，列表一改就重算），不再是 20 秒轮询；hub 停机期间错过的跟进回来后照跑一次，提示词里写明晚了多久 |
-| 后台任务 / Monitor | 助手可以用 Bash 的 `run_in_background` 和 Monitor 盯事件，然后结束这一轮；命令跑完 / 事件来时 claude 自己开新一轮（node 把它当成工作中，跑完照常推送）。node 从 stream-json 的 `system/background_tasks_changed` 知道还有哪些在跑：有任务时不回收进程（最长 12 小时），任务列表记在 `node_sessions.tasks`；personad 重启（部署）会把它们连同进程一起杀掉，node 起来后给这些对话发一条说明，让助手决定要不要重开 |
-| 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Persona 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（mail_send、手机写操作）hub 自己先问，飞书写操作由 Bash 闸门先问（见下「飞书：接飞书的扩展带的 skill」）。其他 Bash / Monitor 仍按会话的权限模式 |
-| Agents | `agents_list` / `agent_read` / `agent_send` / `agent_start`：直接用 hub 的会话状态（`decorated`）和 node 的 `session.items` / `session.send` / `session.start`，不走 ssh |
-| 代答提问 | `interaction_answer`：主人说「帮我回那个问题，选 A」时，助手替他把别的 Agent 的**提问类**交互答掉。只认 `kind: question` 且不是助手自己的对话——`permission` / `plan` / `screen` 一律拒绝并说明只有主人能在 App 里答（批准类不代答是硬边界）。答案逐题核对：每题都要答、键必须是题目原文、选项必须在列表里、单选只能一个，多选按 App 的格式拼成 `A, B`；自由文本拒收（那要在 App 里答，或用 `agent_send`）。过期、已答、已忽略、已取消、不存在各自给出对应错误（后四种查交互历史）。`Resolution.AnsweredBy = "assistant"` 随交互历史（`GET /api/v1/interactions/history`）和 `interaction_resolved` 广播带出去，App 据此标「Jarvis 代答」。Agent 的提问出现时先由助手自己判断要不要代答，见下「提问先由助手代答」。`agents_list` 的「等你」行带上 `interaction_id` 和每道题的选项，助手不必再查一次（工具和这些规则都在助手：`assistant/tools_apps.go` `toolInteractionAnswer`，测试 `assistant/tools_apps_test.go`；交互队列也在管理者这边：`interactions.get` 给出这条交互、不在等了就给交互历史里的结局，`interactions.answer` 把核对过的答案记成助手代答，进程内直接答，`assistant/fleet_routes.go`） |
-| Interrupt, adopt, report | `agent_interrupt`: stop an agent's current turn at once, optionally followed by a new instruction (`agent_send` queues behind the turn); `agent_supervise`: take an agent the main conversation did not hand out under its supervision (it becomes a task of the main conversation); the agents' `report_to_supervisor`: a supervised task's agent reports a decision it needs, a block, a finish with evidence or progress, into the 督办 message. See `docs/unified-entry.md` (督办, #5112) |
-| 派发任务 | `task_plan`：把要 Agent 干的活交给用户，一个任务一个待办（`origin` = 这段对话）；只读的、用户记住过的直接开，其余在对话里成计划卡等用户「开始」，不阻塞这一轮。任务的进展在实时快照的「从对话开的任务」里，完成回执、答过的问题、直接对任务说的话进对话动态（[unified-entry.md](unified-entry.md)，`assistant/tasks.go`） |
-| Telegram | 装了 Telegram 扩展（扩展市场 `nwverse/persona-extensions`，#1704、#2057）才有：只读 MCP `telegram_chats` / `telegram_messages` / `telegram_search`；更灵活的读和写用扩展带的 telegram skill（Bash 里 `tg …`，即 `personad tool --cli telegram`，经 hub，写操作手机上确认），`tg` 只在 Telegram 登录着时在 PATH 上（`docs/connector-protocol.md`「命令行」） |
-| 飞书 | 开源版用飞书官方的 lark-cli（见下「飞书：lark-cli」）。装了经飞书网关接飞书的扩展时，主要用扩展给的 skill（Bash 里扩展的命令，读写都能做），见下「飞书：接飞书的扩展带的 skill」；MCP `lark_chats` / `lark_messages` / `lark_search` 也由扩展提供（#1571 起 hub 里没有飞书网关的客户端，`docs/plan-extensions.md`「第 3 步」）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
-| 操作 Persona 自己 | `jarvis_settings`（先 `list`，助手自己的工具，`assistant/settings_tool.go`：关于我、默认启动器、`main_tasks_quiet` 是助手自己的设置，它自己读写、自己在手机上弹确认卡片；其余是 hub 的设置，清单经 `app.call settings.list` 拿，读写经 `app.tool jarvis_settings` 交给 hub，hub 自己弹卡片）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、「主对话派的任务只在主对话里通知」（`assistant.main_tasks_quiet`）、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
-| 实时快照 | 每条发给助手的消息开头一个 `<persona-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。Agent 和任务各带网页版的链接：hub 的 `public_url`（没写时是默认的 `http://<主机名>:18660`）加 `/s/<机器>/<会话 id>`、`/todos?id=<待办 id>`，助手提到它们时写成 Markdown 链接；hub 没答上地址时不带（#2194）。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
-| 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，Persona 工具不再延迟加载 |
-| 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex、DSH 上时读写的也是这一份（下面「Codex」「Agent 运行时（DSH）」两节），换启动器记忆不丢。健康对话在单独的健康空间里，记忆也单独一份（`docs/health.md`） |
-| 关于我 | App 里编辑后存 settings `assistant.notes`，覆盖 hub.json 的 `assistant.notes`，进 CLAUDE.md 末尾 |
-| 手机不在前台 | `phone_*` 调用时没有手机连着 → hub 发静默推送（`content-available`，`jarvis_wake`）→ App 在后台连上 WS 执行，25 秒后断开；等最多 20 秒。App 进后台时主动断开 WS，否则挂起的 socket 让 hub 以为手机在线、调用干等 2 分钟；断开后在后台什么都不会再把它打开（网络恢复、刷新结束、重连退避，`LiveConnection.suspended`，2026-11-02），只有这条静默推送（`wake()`）能连 |
+| Ask on the phone | MCP `ask_user` → hub creates a `question` interaction (`tool_name: ask_user`, session is this chat) → existing App question card + push ("Persona Has a Question") → answer returned as tool result |
+| Push | `notify_user` → APNs (arrives with the App closed), tapping opens this chat; no duplicate "completion" push at the end of the same turn. Also sends to Lark if the Lark bot's "Send notifications to Lark too" is on, and to plugin channels with "Push" on (sent by the assistant itself, `docs/bots.md`, `docs/channels.md`) |
+| Chat in Lark | Private chat with the Lark bot = talking in main chat; answers return to Lark, questions / approvals use Lark card buttons (`docs/bots.md`) |
+| Return on a schedule | `schedule_followup` (`at` once; `every: "30m"` repeats by interval) / `list_followups` / `cancel_followup`; when due, hub sends the prompt (starting with "⏰") into the original chat (`assistant.send` uses `--resume`), or starts a new one on failure |
+| Scheduled tasks | One table ("Scheduled tasks" below), default "Morning briefing" on weekdays 09:00 enabled, "Evening review" weekdays 21:30 disabled; normal "completion" push afterward. When told "every day / on weekday X at…", the assistant creates one with `schedule_routine` (marked "Created by Persona" in the App), deletes with `delete_routine` |
+| Run history | Every run (chat started successfully / failed to start / skipped because downtime missed it) is stored in settings `assistant.runs` (latest 200), `GET /api/v1/assistant/runs[?ref=]`; scheduled tasks include `last_status` |
+| Due time | Scheduling sets a timer for the next due time (sleeps at most 30 seconds, recalculates on list changes), not 20-second polling. Follow-ups missed during hub downtime run once on return, with lateness stated in the prompt |
+| Background tasks / Monitor | The assistant can use Bash `run_in_background` and Monitor to watch events, then end its turn; command completion / events make claude start another turn itself (node considers it working, with normal push on completion). node learns running tasks from stream-json `system/background_tasks_changed`: don't reclaim the process while tasks exist (up to 12 hours); task lists live in `node_sessions.tasks`. personad restart (deployment) kills tasks with the process; on startup node sends these chats an explanation so the assistant decides whether to restart them |
+| Tools without approval | The assistant process gets `--allowedTools mcp__jarvis`: Persona tools (notify_user, schedule_followup, agents_list, kb_*…) no longer request phone approval each time. Actions representing the user (mail_send, phone writes) are confirmed by hub itself; Lark writes are confirmed by a Bash gate ("Lark: skill supplied by the Lark extension" below). Other Bash / Monitor calls still follow the session permission mode |
+| Agents | `agents_list` / `agent_read` / `agent_send` / `agent_start`: use hub session state (`decorated`) and node `session.items` / `session.send` / `session.start` directly, not ssh |
+| Answer questions on the user's behalf | `interaction_answer`: when the owner says "answer that question for me, choose A", the assistant answers other Agents' **question-type** interactions. Only `kind: question`, excluding the assistant's own chat; `permission` / `plan` / `screen` are always rejected with an explanation that only the owner can answer in the App (no proxy approvals is a hard boundary). Validate every question: all must be answered, keys must be exact question text, choices must be listed, single-select exactly one, multi-select joined as `A, B` like the App; reject free text (answer in the App or use `agent_send`). Expired, answered, dismissed, cancelled, and nonexistent interactions each return their own error (the latter four consult history). `Resolution.AnsweredBy = "assistant"` accompanies interaction history (`GET /api/v1/interactions/history`) and `interaction_resolved` broadcasts; the App marks "Answered by Jarvis". On Agent questions, the assistant first decides whether to answer, see "Assistant answers questions first" below. `agents_list`'s waiting rows include `interaction_id` and options for every question, avoiding another lookup (tools and rules all belong to the assistant: `toolInteractionAnswer` in `assistant/tools_apps.go`, tests `assistant/tools_apps_test.go`; the interaction queue also lives in the manager: `interactions.get` returns the interaction or its historical outcome if no longer waiting; `interactions.answer` records validated answers as assistant answers, directly in-process, `assistant/fleet_routes.go`) |
+| Interrupt, adopt, report | `agent_interrupt`: stop an Agent's current turn immediately, optionally followed by a new instruction (`agent_send` queues behind the turn); `agent_supervise`: bring an Agent not dispatched by main chat under its supervision (it becomes a main-chat task); the Agents' `report_to_supervisor`: an Agent on a supervised task reports a needed decision, blocker, completion with evidence, or progress into the supervision message. See `docs/unified-entry.md` ("Supervision", #5112) |
+| Dispatch tasks | `task_plan`: hand Agent work to the user, one task per to-do (`origin` = this chat). Read-only and user-remembered tasks start directly; others become plan cards awaiting "Start" without blocking the turn. Progress appears in the live snapshot's "Tasks started from chat"; completion receipts, answered questions, and direct task messages enter chat activity ([unified-entry.md](unified-entry.md), `assistant/tasks.go`) |
+| Telegram | Available only with the Telegram extension (extension market `nwverse/persona-extensions`, #1704, #2057): read-only MCP `telegram_chats` / `telegram_messages` / `telegram_search`; more flexible reads and writes use the bundled telegram skill (Bash `tg …`, i.e. `personad tool --cli telegram`, through hub, writes confirmed on the phone). `tg` is on PATH only while Telegram is logged in (`docs/connector-protocol.md` ("Command line")) |
+| Lark | The open-source version uses official lark-cli ("Lark: lark-cli" below). With a Lark-gateway extension installed, mainly use its skill (extension commands in Bash, both reads and writes), see "Lark: skill supplied by the Lark extension"; MCP `lark_chats` / `lark_messages` / `lark_search` also come from the extension (since #1571 no Lark gateway client in hub, `docs/plan-extensions.md` ("Step 3")). The old read-only `lark_api` and `lark_send` were removed as duplicates of the skill |
+| Control Persona itself | `jarvis_settings` (`list` first, an assistant tool, `assistant/settings_tool.go`: About Me, default launcher, and `main_tasks_quiet` are assistant-owned settings, read / written by it with its own phone confirmation cards; other settings belong to hub, listed through `app.call settings.list`, read / written through `app.tool jarvis_settings`, with hub confirmation): read / write triage rules (global `inbox.rules` and per-plugin-source `inbox.rules.<plugin>` for sources declaring `triage_rules`, overriding global when present), AI twin rules, About Me, default launcher, "Main chat tasks notify only in main chat" (`assistant.main_tasks_quiet`), per-machine muted Claude config directories (`agents.blocked_claude_dirs`), and add / remove mail accounts. Changes first show a phone confirmation card; added-account passwords / authorization codes are entered on the phone card, never through the model or chat / interaction history. After approval, hub tests IMAP / SMTP and encrypts / saves only if both work. Gmail requires Google sign-in in the App; launchers are written to unified model configuration while retaining existing model and effort |
+| Live snapshot | Each message to the assistant starts with `<persona-context>` (not system prompt, see "Live snapshots and prefix caching"): time (phone timezone), online computers, Needs you / Unread / Working Agents, Lark unread and @me, today's upcoming Lark meetings, scheduled follow-ups. Agents and tasks include web links: hub `public_url` (default `http://<hostname>:18660` when unset) plus `/s/<machine>/<session id>`, `/todos?id=<to-do id>`; the assistant uses Markdown links when mentioning them. Omit if hub can't supply the address (#2194). Include only changes since this chat's previous snapshot (time always included). hub gives each source 3 seconds, reuses reads for 45 seconds, and messages wait at most 1.5 seconds for fresh data |
+| Faster | When the App displays a new-chat page, `POST /api/v1/assistant/warm` starts a spare node process (`spare`, valid for 10 minutes), used directly by new chats. The assistant gets `ENABLE_TOOL_SEARCH=false`, disabling delayed Persona tool loading |
+| Memory | Claude Code auto memory (`~/.claude/projects/<encoded directory>/memory/*.md`); App Settings can view / edit / delete it (node `assistant.memory`). Codex and DSH read / write the same memory ("Codex", "Agent runtime (DSH)" below), so changing launchers doesn't lose it. Health chats have a separate health space and separate memory (`docs/health.md`) |
+| About Me | App edits go to settings `assistant.notes`, override hub.json `assistant.notes`, and append to CLAUDE.md |
+| Phone not in foreground | No phone connected during a `phone_*` call → hub sends a silent push (`content-available`, `jarvis_wake`) → App connects WS in the background to execute, disconnects after 25 seconds; wait up to 20 seconds. The App proactively disconnects WS on backgrounding, or a suspended socket makes hub think it is online and calls wait 2 minutes. Once disconnected, nothing else in the background reopens it (network recovery, refresh completion, reconnect backoff, `LiveConnection.suspended`, 2026-11-02); only this silent push (`wake()`) connects |
 
-说明（`~/.persona/assistant/CLAUDE.md`）里「他的电脑本身」那一段按助手**实际所在的机器**写（2026-10-31 修，原来只认 kind local）：
-- 助手所在的那台，不管什么 kind，都写「就是你所在的这台机器，直接执行命令」。
-- `ssh_host` 是 hub 那台机器的 ssh 别名，所以只有助手跑在 hub 本机（kind local）上时，才给其他 ssh 机器写 `ssh <别名> '<命令>'`。
-- 其余情况（助手在别的电脑上，或目标是 link 机器，根本没有 ssh），不给执行不了的命令，写明不能直接执行，要做事用 `agent_start` / `agent_send`。
+The "their computers" section in the instructions (`~/.persona/assistant/CLAUDE.md`) reflects the assistant's **actual machine** (fixed 2026-10-31; previously recognized only kind local):
+- For the assistant's own computer, regardless of kind: "This is the machine you are on; run commands directly."
+- `ssh_host` is an ssh alias on the hub machine, so commands `ssh <alias> '<command>'` for other ssh computers are supplied only when the assistant runs locally on hub (kind local).
+- Otherwise (assistant on another computer, or a link target without ssh), don't provide unusable commands; explain that direct execution isn't possible and use `agent_start` / `agent_send` for work.
 
-这份说明是助手准备自己的目录时写进那台机器的（`assistant.prepare`：新对话、App 打开新对话页的预热、AI 分身；`assistant/start.go` 的 `claudeMD` / `prepare`），
-写的依据是 hub 给的事实：`devices.list`（各台机器的 kind、ssh 别名、home、数据目录）、知识库目录和别的笔记目录（2026-11-04 起知识库是助手自己的，以前问 hub 的 `kb.dirs`）、`connectors.signed_in`（登录着的连接器、它们的命令行、hub.json 配没配 lark-cli）、`plugins.assistant`（插件给助手的说明和 skill）。已经在跑的 claude 进程
-用的是它启动时读到的那份，要等它下次启动才读新的：闲置 20 分钟被回收后、或那台 node 的连接重建以后，下一条消息会起新进程。
+These instructions are written on that computer when the assistant prepares its directory (`assistant.prepare`: new chats, App new-chat prewarming, AI twin; `claudeMD` / `prepare` in `assistant/start.go`),
+based on hub facts: `devices.list` (machine kind, ssh alias, home, data directory), knowledge base and other note directories (since 2026-11-04 the knowledge base belongs to the assistant, previously hub `kb.dirs`), `connectors.signed_in` (signed-in connectors, their CLIs, whether hub.json configures lark-cli), and `plugins.assistant` (plugin instructions and skills). A running claude process
+uses what it read at startup; new instructions take effect on its next start: after 20-minute idle reclamation, or rebuilding that node connection, the next message starts a fresh process.
 
-只有助手能拿到这些工具：node 给助手进程的 MCP 配置是内联 JSON，带 `JARVIS_ASSISTANT=1`、`JARVIS_SESSION_ID=<对话 id>`；
-`personad mcp` 把这两个值带给 hub，hub 只在 assistant 为真时列出这些工具、把调用交给助手（`assistant/tools.go`）。herdr 里的普通 Agent 看不到。
+Only the assistant gets these tools: node's inline-JSON MCP configuration includes `JARVIS_ASSISTANT=1`, `JARVIS_SESSION_ID=<chat id>`;
+`personad mcp` carries both to hub, which lists these tools only for assistant=true and forwards calls to the assistant (`assistant/tools.go`). Ordinary Agents in herdr can't see them.
 
-## 和 hub 的边界（2026-11-04，#1446）
+## Boundary with hub (2026-11-04, #1446)
 
-hub 只是通道：助手是自己的一个进程（`personad assistant`），经总线（`docs/protocol.md`「总线」）接到 hub。hub 转发 App 的请求、缓存助手报的快照、投递推送和给 App 的消息，自己不跑助手的代码：
-`go list -deps ./internal/hub` 里没有 `internal/assistant`，两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`），以及写字用的几个小函数（`server/internal/textfmt`）。
+hub is only a conduit: the assistant runs as its own process (`personad assistant`), connected by the bus (`docs/protocol.md` ("Bus")). hub forwards App requests, caches assistant snapshots, delivers pushes and App messages, and doesn't run assistant code:
+`go list -deps ./internal/hub` excludes `internal/assistant`; shared code is only message types, method names, error codes, and the assistant route table (`server/internal/assistantwire`), plus small text helpers (`server/internal/textfmt`).
 
-助手的业务逻辑都在 `server/internal/assistant`，这个包不 import hub：它自己的设置（在哪台机器、启动器、时区、关于我、`main_tasks_quiet`，`GET/PUT /api/v1/assistant`、`jarvis_settings` 里这几项）、主对话（新建、压缩、旧的留下的背景、标题「Persona」、不能改名）、开对话（准备目录、写 CLAUDE.md、预热、记忆的接口、`POST /api/v1/assistant/conversations`）、每条消息跑在哪个启动器和模型上、对话（归档、对话之间发消息、`conversation*` 工具）、对话标题、定时任务（调度、运行记录、`schedule_*` 工具、`/api/v1/assistant/tasks` 等路由）、派出去的任务（计划卡、对话动态、回执、自动完成的判断、做完的任务关掉 Agent、`今天` 卡片、`/api/v1/task-plans`、`/api/v1/task-trust` 等路由）、待办（2026-11-04 从 hub 挪过来：存储、`/api/v1/todos…` 的全部路由、随项目自动挂和派生跟随、herdr 标记、决策记录，见 `docs/todos.md`「谁管什么」）、Agents 这件事（2026-11-04 从 hub 挪过来：一轮停下后的分诊、自动继续、叫醒、它开的卡片和卡片的答案、四个开关、`session_work` 两张表、统计；新 Agent 的标签名、新建和续上的 Agent 跑在哪个启动器和模型上，`assistant/agents_*.go`，见 `docs/agent-work.md`「谁管什么」）、它的全部 MCP 工具（`ask_user`、`notify_user`、`agents_*`、`task_plan`…；用 hub 的交互队列、收件箱的 `interaction_answer`、`inbox_draft` 也是，参数、规则和模型看到的文字在助手，hub 只给数据，`assistant/tools_apps.go`）、每条消息开头的实时快照，模型配置（2026-11-05 从 hub 挪过来：四类的记录、Persona 里加的供应商和它们的 Key、预设、限流暂停、`/api/v1/model-config…` 和 `/api/v1/launchers…` 的路由、每一次模型调用，`assistant/models*.go`，见 `docs/model-config.md`「谁管模型」），以及渠道（2026-11-04 从 hub 挪过来：飞书机器人和插件渠道的对话那一半，消息进哪段对话、跟踪这一轮、答案和提问发回去、命令、推送和同步，`/api/v1/channels*` 的路由，`assistant/channels*.go`、`feishu*.go`；hub 只留收发，见下「渠道」和 `docs/channels.md`「谁管什么」），
-收件箱（2026-11-04 从 hub 挪过来：条目和它们的状态、分拣、事件合成、静音、AI 分身、条目的翻译和通用的翻译接口、`/api/v1/inbox…` 和 `/api/v1/translate*` 的全部路由，hub 只管来源，见 `docs/inbox.md`「谁管什么」），
-以及知识库（2026-11-04 从 hub 挪过来：引擎、循环、数据目录里的文件和索引表、`kb_*` 工具、`/api/v1/kb…` 的全部路由，hub 只管来源，见 `docs/knowledge.md`「谁管什么」）。
+All assistant business logic lives in `server/internal/assistant`, which doesn't import hub: its settings (machine, launcher, timezone, About Me, `main_tasks_quiet`, `GET/PUT /api/v1/assistant`, those `jarvis_settings` entries); main chat (creation, compaction, retained background from older chats, title "Persona", no renaming); chat creation (directory preparation, CLAUDE.md, prewarming, memory API, `POST /api/v1/assistant/conversations`); launcher and model per message; chats (archive, inter-chat messaging, `conversation*` tools); chat titles; scheduled tasks (scheduler, run history, `schedule_*`, `/api/v1/assistant/tasks` and related routes); dispatched tasks (plan cards, chat activity, receipts, auto-completion decisions, closing finished Agents, "Today" card, `/api/v1/task-plans`, `/api/v1/task-trust`); to-dos (moved from hub 2026-11-04: storage, all `/api/v1/todos…` routes, automatic project links and derived following, herdr markers, decision records; `docs/todos.md` ("Responsibilities")); Agent management (moved from hub 2026-11-04: stopped-turn triage, auto-continue, wakeups, its cards and answers, four switches, two `session_work` tables, statistics; new Agent tab names, launcher and model for new / resumed Agents, `assistant/agents_*.go`; `docs/agent-work.md` ("Responsibilities")); all its MCP tools (`ask_user`, `notify_user`, `agents_*`, `task_plan`… including `interaction_answer` using hub's interaction queue and Inbox `inbox_draft`: parameters, rules, and model-visible text belong to the assistant, hub supplies only data, `assistant/tools_apps.go`); message-prefix live snapshots; model configuration (moved from hub 2026-11-05: records for four categories, Persona-added providers and keys, presets, rate-limit pauses, `/api/v1/model-config…` and `/api/v1/launchers…`, every model call, `assistant/models*.go`; `docs/model-config.md` ("Who manages models")); channels (moved from hub 2026-11-04: the chat half of Lark bot and plugin channels, target chats, turn tracking, answers and questions sent back, commands, push and sync, `/api/v1/channels*`, `assistant/channels*.go`, `feishu*.go`; hub retains only transport, see "Channels" below and `docs/channels.md` ("Responsibilities")),
+Inbox (moved from hub 2026-11-04: items and states, triage, event synthesis, muting, AI twin, item translation and generic translation API, all `/api/v1/inbox…` and `/api/v1/translate*` routes; hub handles only sources, `docs/inbox.md` ("Responsibilities")),
+and knowledge base (moved from hub 2026-11-04: engine, loops, files in the data directory and index tables, `kb_*`, all `/api/v1/kb…` routes; hub handles only sources, `docs/knowledge.md` ("Responsibilities")).
 
-**助手找 hub 只经一个接口** `assistant.Hub`（`assistant/hub.go`），实现是总线的客户端 `assistant.BusHub`（`assistant/bus.go`）。每个方法就是总线上的一个方法：
+**The assistant accesses hub through one interface**, `assistant.Hub` (`assistant/hub.go`), implemented by bus client `assistant.BusHub` (`assistant/bus.go`). Every method corresponds to a bus method:
 
-| 方法 | 参数 → 结果 | hub 用什么回答（`hub/assistant_link.go` 的 `assistantLink`） |
+| Method | Parameters → result | How hub answers (`assistantLink` in `hub/assistant_link.go`) |
 | --- | --- | --- |
-| `manager.hello` | `{}` → `{owner, owner_notes, assistant:{machine_id, launcher?, machines, standby?}, done_delay_ms, persona_view?, html_views?, kb, agents?, models?, locale?}` | hub.json 的 `assistant` 一节，是助手自己的设置的默认值：`owner`、`owner_notes`（`assistant.notes`）、`assistant.machine_id`（hub.json 的 `assistant.machine`，hub 没有这台就是 hub 自己那台，再没有就是第一台，`defaultAssistantMachine`）、`assistant.launcher`；`machines` 是 hub 有的机器（助手存的机器不在里面就不用），`standby` 是 `isMember`（这台 hub 是互联组的成员，定时任务由中心跑），`done_delay_ms` 是 hub.json notify 的完成推送延迟（任务的 Agent 停多久才算停下）；`persona_view` 是 hub.json 的 `assistant.persona_view`（卡片写成 persona-view，`docs/config.md`），`html_views` 是它打开时的 `assistant.html_views`（默认开，HTML bridge 可用）；`kb` 是 hub.json 的 `kb` 一节 `{off?, text_days?, attachment_days?, extra_dirs?}`（知识库怎么存，以 hub 的为准，`docs/knowledge.md`「谁管什么」）；助手记住答案，这些值变了 hub 发 `manager.updated`；`agents` 是 hub.json 的 `agents` 一节（分诊的上限和开关的初始值，`docs/agent-work.md`）；`models` 是 hub.json 关于模型的几节 `{ai?, triage_ai?, judge_ai?, kb_ai?, inbox_agent_machine?, launchers?}`（模型配置的旧基线，`launchers` 是各台电脑的 `machines[].launchers`，`docs/model-config.md`「谁管模型」） |
-| `device.call` | `{device, method, params}` → 那台机器的结果 | node 自己的方法（`session.items`、`session.rename`、`session.send`、`session.start`、`session.retire`、`todo.sync_session_tokens`、`assistant.prepare`、`assistant.send`、`assistant.warm`、`assistant.memory`、`assistant.compact`、`assistant.handoff`、`launchers.list`、`launchers.probe`）原样交给那台的 node（`Machine.call`）；hub 自己答的：`devices.list` 和 `interactions.list`（`device` 写 `*`：各台机器（id、名字、kind、ssh 别名、home、数据目录、在不在线）、手机在不在线 / 各 Agent 在等用户做什么，`machinesNow`、`phoneClient`、`pendingInteractions`），`sessions.list` 是 App 拿到的那份会话列表（`decorated`），另带 `muted`：哪些会话的推送关了，分诊不给它们开卡片，`session.get` 是 node 列出的那一条（`Machine.session`）。没有这台机器时报 `assistant.ErrNoDevice` |
-| `app.call` | `{app_id, method, params, timeout_ms?}` → 应用的结果（`timeout_ms`：助手等多久，hub 到点也停，比如一次模型调用） | `interactions`（交互队列，2026-11-05 起在管理者自己这边，进程内直接答，`assistant/fleet_routes.go`；`interactions.owner_action` 还是 hub 的：渠道回答前收回主人动作）：`interactions.get {interaction_id}` → `{interaction, ok}`（不在等了 `ok` 是 false，`status` 是交互历史里的结局 resolved / dismissed / expired / cancelled，没有这条是空）、`interactions.answer {machine_id, session_id, interaction_id, answers}` → `{ok, status}`（把那个会话还在等的提问按 `answers` 答掉，记成助手代答；已经不在等了 `ok` 是 false；不是提问、不是那个会话的报错）；`connectors`：`connectors.snapshots`（登录了的连接器的实时状态：等用户的聊天、今天的会，快照和今天卡片用，`connectorSnapshots`）、`connectors.signed_in`（开着且登录着的连接器、它们的命令行、hub.json 配没配 lark-cli），知识库的来源（2026-11-04，`extmgr/kb_sources.go` 的 `kbSourcesCall`，数据用 `internal/kb`、`internal/connector` 的类型）：`connectors.archives {}` → `{archives:[{id, poll_ms?, sources?, media?}], items:[id]}`（现在该读的连接器：登录着、开着「进知识库」的；有文档 / 会议 / 日程的）、`connectors.changes {id, cursor, limit}` → `{batches, next, more?}`、`connectors.archive_media {id, ref}` → `{media:{mime, data}}`（最多 20 MB）、`connectors.items {id}` → `{items}`、`connectors.doc_title {id, url}` → `{title}`；`plugins`：`plugins.assistant`（插件给助手的说明，和给这台机器的 skill：这台已经有的只带名字和摘要）、`plugins.skills_need`（node 说缺这些 skill，下次带上文件）、模型配置要的插件的事（2026-11-05，`hub/assistant_models.go`，插件系统挪进管理者后去掉）：`plugins.presets` → `{presets}`（插件的供应商预设）、`plugins.voice` → `{plugins:[{id, name, models, default, error?}]}`（语音插件和它们的模型）、`plugins.need_triage` → `{names}`（开着、要「信息筛选」的插件）；`settings`：`settings.list`（hub 自己的、`jarvis_settings` 能读写的设置）；`inbox`（收件箱的来源，hub 的 `inbox.go` `inboxAppCall`；条目是助手的）：`inbox.collect {round}`（下拉刷新：hub 马上读一轮来源、经 `inbox.collected` 交过来再回答）、`inbox.kick`（尽快来一轮）、`inbox.config` → `{rules, agent_rules, agent, lark_account, translate, extensions}`（分拣规则、AI 分身的配置、`lark.account`、设备要翻成哪些语言、插件提供的连接器；翻译模型的指纹助手自己算）、`inbox.mail_body {account_id, uid, mailbox, readable?}` → `{from, to, cc, date, subject, text}`（读一封的全文，不标已读；`readable` 是翻译要的：只有 HTML 的信保留段落和链接）、`inbox.reply_mail {account_id, uid, mailbox, text, send_id}` → `{already?}`（用收到它的账号回这一封）、`inbox.reply {source, reply, send_id}` → `{already?}`（经连接器或接飞书的插件回复、改文档状态；没有这个连接器回「不能回复」）——同一个 `send_id` hub 只发一次（和 App 发消息同一张 `sent_messages`，留一天），再问是 `already`，上次发到一半断了的回 `assistant_in_doubt`、不再发、`inbox.settle {source, threads}` → `{over}`、`inbox.group_tool {source, call}` → `{result}`（结果去掉头像、截到 8 KB；连接器的 `unknown_method` 原样带回）、`inbox.group_fallback {source, fallback}`、`inbox.group_append {source, append, append_id}` → `{thing}`（同一个 `append_id` 再问，hub 用插件上次的回答，不再写一遍）；`app.tool {name, arguments, machine_id, session_id}` → `{content, is_error}`：只剩 `settings` 的 `jarvis_settings`，只管 hub 自己的设置（分拣规则、屏蔽的配置目录、邮箱），这一半还在 hub，助手自己的几项在助手（`assistant/settings_tool.go`） |
-| `notify.request` | `{notification:{id, kind:"assistant", title, body, subtitle, device_id, session_id, asked?}}` → `{ok}` | 推送，和 Agent 的一样按各设备的设置推（`notifyDone`）；`asked` 是 `notify_user` 自己要推的：这段对话这一轮结束时不再推「完成」（`notified`）；发到飞书机器人和插件渠道是助手自己做的（2026-11-04 起，hub 不再 `botPush` / `channelPush`） |
-| `inbox.changed` | `{items:[{id, source, kind, title}]}`，单向 | 收件箱的条目变了、存过了（一次最多报 50 件）：hub 给插件发 `inbox.changed` 事件、给 App 推 `{"type":"inbox"}`（没有条目也推：分拣状态变了）；hub 在总线的读循环外面做（一个插件读得慢不挡住助手别的消息），积压超过 256 条时这一批不发给插件，App 照样推 |
-| `ws.broadcast` | `{message}`，单向 | 给 App 的实时更新，`message` 原样发出（`broadcast`）：`assistant_schedule`、`assistant_feed`、`task_plan` |
-| `manager.snapshot` | `{epoch, seq, at, partial?, sessions:[{machine_id, session_id, title?, archived?, queued?}], interactions:[…], tasks:[…], work:{on, sessions:[{machine_id, session_id, work}]}, profile:{machine_id, main?, launcher, timezone?, keep:[{machine_id, session_id}]}, todos:{links:[{machine_id, session_id, todo_id, title, task?}], quiet:[{machine_id, session_id}]}}` → `{ok, seq}` | hub 只留最新的一份（同一个 epoch 里 seq 不比上一份大的回 `stale_snapshot`），`decorated` 照它给会话列表填标题（主对话的就是「Persona」）、归档、排队的消息，哪台机器的对话变了就推一次那台的会话列表；`interactions` 是助手在手机上问的（`ask_user`、`jarvis_settings` 改助手自己的设置，无头的 Claude 没有 AskUserQuestion），hub 照旧当一张卡片显示、推送、到期（`waitInteraction`），答案经 `manager.action` 回给助手，从列表里消失的就撤下；`tasks` 读不出来时是 `null`：模型配置的「定时任务」用途读它；`profile` 是助手的设置里 hub 自己的功能要用的（读不出来时是 `null`，hub 留着上一份），见下；`todos`（`assistantwire.TodoReport`）是每个 Agent 正在为哪个未完成的待办干活（`task` 是从对话派出去的任务）和安静的 Agent，`decorated` 照它填会话的 `todo`、`quiet`，`withTask` 照它在卡片上标任务名，`quietSession` 照它不推送（`hub/assistant_todos.go`）；读不出来时是 `null`（快照算不完整），hub 留着上一份；哪台机器的这几样变了也推一次那台的会话列表；`work` 是每个 Agent 最新一轮的工作态（`docs/agent-work.md`），`decorated` 只对还停在那一轮上的会话填 `work` 和由它算的 `state`，读不出来时是 `null`（hub 留着上一份）；`interactions` 里还有分诊开的卡片（`tool_name: persona_triage`，问的是那个 Agent 的会话；它没连着时答案 hub 记下，连上后再给） |
+| `manager.hello` | `{}` → `{owner, owner_notes, assistant:{machine_id, launcher?, machines, standby?}, done_delay_ms, persona_view?, html_views?, kb, agents?, models?, locale?}` | hub.json's `assistant` section supplies defaults for assistant settings: `owner`, `owner_notes` (`assistant.notes`), `assistant.machine_id` (hub.json `assistant.machine`, falls back to hub's own machine, then the first, `defaultAssistantMachine`), `assistant.launcher`; `machines` are hub-known computers (don't use a stored assistant machine absent from this list), `standby` is `isMember` (member hub in a linked group; primary runs scheduled tasks), `done_delay_ms` is hub.json notify completion delay (how long a task Agent must stop to count as stopped); `persona_view` is hub.json `assistant.persona_view` (cards as persona-view, `docs/config.md`), `html_views` is `assistant.html_views` when enabled (on by default, HTML bridge available); `kb` is hub.json `{off?, text_days?, attachment_days?, extra_dirs?}` (knowledge storage uses hub configuration, `docs/knowledge.md` ("Responsibilities")). The assistant remembers answers; changes send `manager.updated`. `agents` is hub.json's `agents` section (triage limits and initial switches, `docs/agent-work.md`); `models` contains model sections `{ai?, triage_ai?, judge_ai?, kb_ai?, inbox_agent_machine?, launchers?}` (legacy model baseline, `launchers` from each machine's `machines[].launchers`, `docs/model-config.md` ("Who manages models")) |
+| `device.call` | `{device, method, params}` → that computer's result | node methods (`session.items`, `session.rename`, `session.send`, `session.start`, `session.retire`, `todo.sync_session_tokens`, `assistant.prepare`, `assistant.send`, `assistant.warm`, `assistant.memory`, `assistant.compact`, `assistant.handoff`, `launchers.list`, `launchers.probe`) forwarded unchanged to its node (`Machine.call`). hub answers `devices.list` and `interactions.list` (`device` is `*`: machines' id, name, kind, ssh alias, home, data directory, online state; phone online / what Agents await, `machinesNow`, `phoneClient`, `pendingInteractions`), `sessions.list` is the App's session list (`decorated`) plus `muted` (sessions with push disabled, which triage won't open cards for); `session.get` is node's listed entry (`Machine.session`). Missing machine returns `assistant.ErrNoDevice` |
+| `app.call` | `{app_id, method, params, timeout_ms?}` → application result (`timeout_ms`: assistant wait, also stopped by hub when due, e.g. a model call) | `interactions` (queue in the manager since 2026-11-05, answered directly in-process, `assistant/fleet_routes.go`; `interactions.owner_action` still belongs to hub, redeeming owner actions before channel answers): `interactions.get {interaction_id}` → `{interaction, ok}` (`ok` is false when no longer waiting, `status` is historical resolved / dismissed / expired / cancelled, empty if nonexistent); `interactions.answer {machine_id, session_id, interaction_id, answers}` → `{ok, status}` (answer still-pending questions for that session from `answers`, recorded as assistant answers; `ok` is false if no longer waiting; errors for non-question or wrong session). `connectors`: `connectors.snapshots` (live signed-in connector state: waiting chats, today's meetings, for snapshots and Today cards, `connectorSnapshots`), `connectors.signed_in` (enabled, signed-in connectors, CLIs, hub.json lark-cli configuration); knowledge sources (2026-11-04, `kbSourcesCall` in `extmgr/kb_sources.go`, types from `internal/kb`, `internal/connector`): `connectors.archives {}` → `{archives:[{id, poll_ms?, sources?, media?}], items:[id]}` (connectors to read now: signed in, knowledge ingestion on, with docs / meetings / calendars), `connectors.changes {id, cursor, limit}` → `{batches, next, more?}`, `connectors.archive_media {id, ref}` → `{media:{mime, data}}` (up to 20 MB), `connectors.items {id}` → `{items}`, `connectors.doc_title {id, url}` → `{title}`. `plugins`: `plugins.assistant` (instructions and machine-specific skills; already-installed skills include only name and summary), `plugins.skills_need` (node reports missing skills, include files next time); model-config plugin calls (2026-11-05, `hub/assistant_models.go`, removed when plugin management moved into a manager): `plugins.presets` → `{presets}` (provider presets), `plugins.voice` → `{plugins:[{id, name, models, default, error?}]}`, `plugins.need_triage` → `{names}` (enabled plugins needing information filtering). `settings`: `settings.list` (hub-owned settings readable / writable through `jarvis_settings`). `inbox` (hub sources, `inboxAppCall` in hub `inbox.go`; items belong to assistant): `inbox.collect {round}` (pull-to-refresh: hub reads sources immediately, delivers via `inbox.collected`, then answers), `inbox.kick` (request a round soon), `inbox.config` → `{rules, agent_rules, agent, lark_account, translate, extensions}` (triage / AI twin config, `lark.account`, requested translation languages, plugin connectors; assistant computes the translation-model fingerprint); `inbox.mail_body {account_id, uid, mailbox, readable?}` → `{from, to, cc, date, subject, text}` (full mail, no read marking; `readable` preserves paragraphs / links for HTML-only translation); `inbox.reply_mail {account_id, uid, mailbox, text, send_id}` → `{already?}` (reply using the receiving account); `inbox.reply {source, reply, send_id}` → `{already?}` (connector / Lark plugin replies or doc-status changes, "Can't reply" if connector absent). The same `send_id` sends only once (App-shared `sent_messages`, retained one day); repeats return `already`, interrupted partial sends return `assistant_in_doubt` and aren't resent. `inbox.settle {source, threads}` → `{over}`, `inbox.group_tool {source, call}` → `{result}` (avatars removed, truncated to 8 KB; connector `unknown_method` preserved), `inbox.group_fallback {source, fallback}`, `inbox.group_append {source, append, append_id}` → `{thing}` (repeated `append_id` uses the plugin's previous answer without another write). `app.tool {name, arguments, machine_id, session_id}` → `{content, is_error}`: only settings `jarvis_settings` remains, handling hub-owned settings (triage rules, muted config directories, mail); assistant-owned entries live in `assistant/settings_tool.go` |
+| `notify.request` | `{notification:{id, kind:"assistant", title, body, subtitle, device_id, session_id, asked?}}` → `{ok}` | Push, same per-device settings as Agents (`notifyDone`); `asked` means `notify_user` explicitly requested it, so this chat's turn won't also push "completion" (`notified`). The assistant sends to Lark bot and plugin channels itself (since 2026-11-04, hub no longer uses `botPush` / `channelPush`) |
+| `inbox.changed` | `{items:[{id, source, kind, title}]}`, one-way | Items changed and were saved (up to 50 per report): hub sends plugins `inbox.changed` and App `{"type":"inbox"}` (even without items, for triage-state changes). Runs outside the bus read loop (slow plugins don't block other assistant messages); if backlog exceeds 256, skip plugin delivery for that batch but still push to the App |
+| `ws.broadcast` | `{message}`, one-way | Live App updates, `message` sent unchanged through `broadcast`: `assistant_schedule`, `assistant_feed`, `task_plan` |
+| `manager.snapshot` | `{epoch, seq, at, partial?, sessions:[{machine_id, session_id, title?, archived?, queued?}], interactions:[…], tasks:[…], work:{on, sessions:[{machine_id, session_id, work}]}, profile:{machine_id, main?, launcher, timezone?, keep:[{machine_id, session_id}]}, todos:{links:[{machine_id, session_id, todo_id, title, task?}], quiet:[{machine_id, session_id}]}}` → `{ok, seq}` | hub retains only the newest (within an epoch, non-increasing seq returns `stale_snapshot`). `decorated` fills session titles (main chat "Persona"), archives, queued messages; changes push that machine's session list once. `interactions` are assistant phone questions (`ask_user`, `jarvis_settings` for its own settings; headless Claude lacks AskUserQuestion), displayed / pushed / expired as normal cards (`waitInteraction`); answers return via `manager.action`, missing entries are withdrawn. `tasks` is `null` if unreadable; model configuration's "Scheduled tasks" purpose reads it. `profile` contains assistant settings needed by hub features (if unreadable, `null`, retaining the previous copy), below. `todos` (`assistantwire.TodoReport`) maps Agents to unfinished to-dos (`task` means chat-dispatched task) and quiet Agents; `decorated` fills `todo`, `quiet`, `withTask` labels cards, `quietSession` suppresses push (`hub/assistant_todos.go`); unreadable means `null` / incomplete snapshot and retains prior state. Changes push that machine's list. `work` is each Agent's latest-turn work state (`docs/agent-work.md`); `decorated` applies `work` and derived `state` only to sessions still on that turn; unreadable `null` retains prior state. `interactions` also includes triage cards (`tool_name: persona_triage`, asking about that Agent session; if disconnected, hub stores the answer and delivers after reconnect) |
 
-**电脑是助手的**（2026-11-04，[machines.md](machines.md)「谁连电脑」）：助手的进程同时是带着全部电脑的管理者，`internal/devices` 在里面连每一台（hub 不再连）。
-它和 hub 之间的消息在 `server/internal/devicewire`，经同一条总线（`docs/protocol.md`「电脑（devices.*）」）；`assistant/devices.go` 把 hub 的 `devices.*` 调用和事件交给它，`BusHub` 里只有几处调用：
-上表 `device.call` 里 node 自己的方法直接在进程里交给那台的 node（不再绕 hub，错误照旧是 `apierr.ErrOffline`、`rpc.ErrClosed`、node 的 `rpc.Error`），hub 自己答的（`assistantwire.HubDeviceMethods`：`devices.list`、`interactions.list`、`sessions.list`、`session.get`，渠道用的 `session.follow` / `session.unfollow` / `session.send_once`）照旧问 hub；
-node 问的 `assistant.model`、`assistant.context` 也在进程里直接答（`Service.NodeAnswer`），hub 不再转；快照的 `profile.keep` 由它告诉各台 node（上面）。
+**Computers belong to the assistant** (2026-11-04, [machines.md](machines.md) ("Who connects computers")): the assistant process also manages all computers, with `internal/devices` connecting each (hub no longer does).
+Messages with hub live in `server/internal/devicewire`, over the same bus (`docs/protocol.md` ("Computers (devices.*)")); `assistant/devices.go` hands hub `devices.*` calls and events to it. `BusHub` has only a few calls:
+node-owned methods in the table's `device.call` go directly in-process to that computer's node, without hub (errors remain `apierr.ErrOffline`, `rpc.ErrClosed`, node `rpc.Error`); hub-owned methods (`assistantwire.HubDeviceMethods`: `devices.list`, `interactions.list`, `sessions.list`, `session.get`, and channel `session.follow` / `session.unfollow` / `session.send_once`) still ask hub.
+node requests `assistant.model` and `assistant.context` are also answered directly in-process (`Service.NodeAnswer`), not forwarded by hub; the manager tells nodes the snapshot's `profile.keep` (above).
 
-**hub 找助手只经** `assistant.Handler`（`assistant/handler.go`；hub 那头是 `assistantRemote`，同一组消息），每个方法是一条消息：App 的请求（助手的路由 `assistantwire.Routes`，经总线是 `http.request`，hub 原样转过去，调用方的角色放在 `X-Persona-Role`，客户端自己带的会被盖掉）、
-`assistant.tools`（hub 把它们和自己的工具一起列给助手的对话）、`assistant.tool`、`assistant.context`（node 每条消息前要的实时快照）、`manager.action`（用户回答了助手的提问）、`assistant.todo_handoff`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id` 时：这个待办在不在、完成没有，能不能交由它定，要交给 Agent 的话前面拼上生效的决策）、`assistant.todo_link`（交出去以后把这个 Agent 挂上待办，没有标题时从开头的提示取）、
-`assistant.start`（hub 自己的功能要开一段助手的对话；收件箱的 AI 分身、飞书机器人和渠道 2026-11-04 起都是助手自己开，hub 现在不用它，`{text, images?, launcher?, permission_mode?, effort?, purpose?, machine_id?, main?, untitled?}` → `{session}`；AI 分身的带 `untitled`，不按助手的对话起标题）、
-`assistant.send_params`（`{machine_id, session_id, params}` → `{params}`：发给助手某段对话的消息跑在哪个启动器和模型上，新主对话空着开、第一条消息前面带上旧主对话留下的；手机发的、node 自己发的（`assistant.model`）都问它（飞书机器人和渠道发的是助手自己算）；这台机器还没列出、又不是主对话的原样返回；请求本身不对的回 `bad_request`，hub 回 400）、
-`assistant.rename`（`{machine_id, session_id, params}` → node 的回答：App 给助手的对话改名，主对话不能改名回 `bad_request`，Codex 的只改助手记的标题，node 改名照旧由它发 `session.rename`）、
-`models.usable`（`{purpose}` → `{usable}`：hub 的插件问「信息筛选」现在调不调得了）、`models.launchers`（`{}` → `{launchers: [{name, base_url}]}`：扩展的 `gateway.launchers` 要的有网关地址的启动器，不带 Key）、`models.launcher_http`（`{name, machine?, http?}`：额度插件和插件的启动器面板要带 Key 发的请求，见 `docs/launchers.md`「额度」；没有这个启动器是 `no_launcher`，没有网关是 `no_gateway`）、`agents.start_params`（`{machine_id, params, name_from?}` → `{params}`：App 开的 Agent 跑在哪个启动器和模型上、标签名；配置跑不了回 `bad_request`，hub 回 400）、`agents.resume_params`（`{machine_id, session_id, params}` → `{params}`：续上不知道启动器的会话用的启动器和模型）、`agents.tab_name`（`{prompt}` → `{name}`）、
-知识库（2026-11-04，`assistant/kb_bus.go`，hub 那头都经 `hub/kb.go` 的 `kbAsk`）：`kb.context {chat_id}` → `{context}`（收件箱 AI 分身的会话上下文，没有这个会话是 `null`）、`kb.projects {machine_id, cwd}` → `{projects:[{slug, name}]}`（分诊时 Agent 目录所属的项目）、`kb.forget {source}` → `{chats, people}`（删除一个来源的数据，连同索引行、项目里的引用、游标）、插件程序交给 hub 的帖子（hub 看过「进知识库」开着，带上连接器的名字转过来）`kb.posts_put {connector, sources, posts}` → `{statuses}`、`kb.posts_comments {connector, id, count, comments}` → `{}`、`kb.posts_pending {connector, limit}` → `{posts}`、`kb.archived_chats {connector, sources, source}` → `{chats}`，
-单向事件 `kb.kick {}`（来源有新东西，5 秒后转一轮）、`kb.agent_turn {machine_id, session_id, cwd, title?, line}`（一个 Agent 一轮做完，记进它目录所属项目的时间线；助手没连着时 hub 排着，连上就发）、
-hub 看到的事（`session.user_spoke`、`session.user_stopped`（用户在 App 里停了助手的一段对话：飞书 /agent 的对话连派出的任务一起停，#3308）、`session.turn_started`、`session.turn_ended`、`sessions.changed`（某台机器的会话列表：对话之间的消息、待办的随项目自动挂 / 派生跟随 / herdr 标记 / Agent 标题都从它来）、`interaction.resolved` 用户处理了某个 Agent 的卡片（任务的对话记一笔，挂在待办上的 Agent 的选项提问记成决策）、`todos.space_renamed` hub 改了工作区的名字、`interaction.raised` 安静的任务的 Agent 在问（#1731）、`session.seen` 用户在 App 里看了一个会话（分诊的统计）、`manager.updated` 握手的回答变了；2026-11-04 去掉 `assistant.tasks`、`assistant.card_sent`、`assistant.cards_sent`、`inbox.message`：收件箱在助手里了），
-以及 `manager.resync`（hub 还没有快照或只有一份不完整的：hub 刚起来、数据库没答）。
-收件箱的（`assistant/inbox_bus.go`）：`inbox.collected`（hub 读完一轮来源交过来：`{epoch, seq, round, sources:[{id, name, off?, extension?, migrated?, group?, meta?, meta_description?, settles?, kinds?, things}], mail?, names}`，助手合成条目、分拣后回答；`epoch` 是 hub 这次运行、`seq` 是轮次，比已经用过的旧的一轮丢掉；助手读不出存着的收件箱时回 `inbox_unavailable`，hub 下一轮再交）、`inbox.item {id}` → `{item, ok}`（插件详情页插槽要的那一条，存的 JSON）、`inbox.forget {source}` → `{deleted}`（删一个来源的数据）、`inbox.repo_mutes {source, set?, add?, repos?}` → `{repos}`（GitHub 设置页的「静音的仓库」）。快照多一项 `inbox: {agents:[{machine_id, session_id}]}`：AI 分身的对话，hub 照它不推「完成」（读不出来时是 `null`，hub 留着上一份）。
-hub 的错误带码过总线（`no_device`、`machine_offline`、`node_closed`、`stale_snapshot`、`assistant_in_doubt`（收件箱的回复上次发到一半断了）），助手认回原来的错误，判断照旧。App 看到的路由、事件、字段和推送都和以前一样。
+**hub accesses the assistant only through** `assistant.Handler` (`assistant/handler.go`; hub's `assistantRemote`, same messages), one message per method: App requests (assistant `assistantwire.Routes`, bus `http.request`, forwarded unchanged; caller role in `X-Persona-Role`, overriding any client-supplied value),
+`assistant.tools` (hub lists them alongside its own tools for assistant chats), `assistant.tool`, `assistant.context` (node's pre-message live snapshot), `manager.action` (user answered an assistant question), `assistant.todo_handoff` (`POST /api/v1/sessions` or `…/messages` with `todo_id`: it decides whether the to-do exists, is done, and can be handed over; prepends effective decisions when handing to an Agent), `assistant.todo_link` (link the Agent to the to-do after handoff, taking a title from the initial prompt if absent),
+`assistant.start` (hub features starting an assistant chat; AI twin, Lark bot, and channels start their own since 2026-11-04, so hub no longer uses it; `{text, images?, launcher?, permission_mode?, effort?, purpose?, machine_id?, main?, untitled?}` → `{session}`; AI twin uses `untitled`, avoiding assistant-style titles),
+`assistant.send_params` (`{machine_id, session_id, params}` → `{params}`: launcher and model for a message to an assistant chat; a new main chat starts empty and its first message includes the old main chat's handoff. Phone and node-generated messages (`assistant.model`) ask it; Lark bot / channels compute internally. For an unlisted machine that isn't main chat, return unchanged; malformed requests return `bad_request`, mapped by hub to 400),
+`assistant.rename` (`{machine_id, session_id, params}` → node result: App renames assistant chats, main chat rejects with `bad_request`; Codex changes only the assistant's stored title, while node renames still use its `session.rename`),
+`models.usable` (`{purpose}` → `{usable}`: hub plugins ask whether information filtering can be called), `models.launchers` (`{}` → `{launchers: [{name, base_url}]}`: gateway-address launchers for extension `gateway.launchers`, no keys), `models.launcher_http` (`{name, machine?, http?}`: authenticated requests for usage plugins and launcher panels, `docs/launchers.md` ("Usage"); absent launcher `no_launcher`, absent gateway `no_gateway`), `agents.start_params` (`{machine_id, params, name_from?}` → `{params}`: launcher, model, tab name for App-created Agents; unusable configuration `bad_request`, hub 400), `agents.resume_params` (`{machine_id, session_id, params}` → `{params}`: launcher / model when resuming sessions with unknown launcher), `agents.tab_name` (`{prompt}` → `{name}`),
+knowledge base (2026-11-04, `assistant/kb_bus.go`, all hub calls through `kbAsk` in `hub/kb.go`): `kb.context {chat_id}` → `{context}` (AI twin chat context, `null` if absent), `kb.projects {machine_id, cwd}` → `{projects:[{slug, name}]}` (projects for Agent cwd during triage), `kb.forget {source}` → `{chats, people}` (delete source data, indexes, project references, cursors); plugin posts handed to hub (after checking knowledge ingestion is on, forwarded with connector name): `kb.posts_put {connector, sources, posts}` → `{statuses}`, `kb.posts_comments {connector, id, count, comments}` → `{}`, `kb.posts_pending {connector, limit}` → `{posts}`, `kb.archived_chats {connector, sources, source}` → `{chats}`,
+one-way `kb.kick {}` (source changed, run a round after 5 seconds), `kb.agent_turn {machine_id, session_id, cwd, title?, line}` (Agent turn completed, append to its cwd project's timeline; hub queues while assistant disconnected and delivers on reconnect),
+hub-observed events: `session.user_spoke`, `session.user_stopped` (user stopped an assistant chat in the App: Lark /agent chats stop their dispatched tasks too, #3308), `session.turn_started`, `session.turn_ended`, `sessions.changed` (a machine's session list drives inter-chat messages, automatic project / derived to-do links, herdr markers, Agent titles), `interaction.resolved` (user handled an Agent card; record in task chat, and linked Agent choice questions become decisions), `todos.space_renamed` (hub renamed a workspace), `interaction.raised` (quiet task Agent asks, #1731), `session.seen` (user viewed a session, for triage statistics), `manager.updated` (handshake answers changed); removed on 2026-11-04: `assistant.tasks`, `assistant.card_sent`, `assistant.cards_sent`, `inbox.message`, because Inbox moved into the assistant,
+and `manager.resync` (hub has no snapshot or only an incomplete one: just started, database didn't answer).
+Inbox (`assistant/inbox_bus.go`): `inbox.collected` (hub hands over a source round: `{epoch, seq, round, sources:[{id, name, off?, extension?, migrated?, group?, meta?, meta_description?, settles?, kinds?, things}], mail?, names}`; assistant synthesizes / triages items then answers; `epoch` identifies this hub run, `seq` the round, discard older already-used rounds; unreadable stored Inbox returns `inbox_unavailable`, retried next round), `inbox.item {id}` → `{item, ok}` (stored JSON for plugin detail slots), `inbox.forget {source}` → `{deleted}`, `inbox.repo_mutes {source, set?, add?, repos?}` → `{repos}` (GitHub settings "Muted repositories"). Snapshots add `inbox: {agents:[{machine_id, session_id}]}` for AI twin chats, suppressing hub completion push (`null` if unreadable, retain previous).
+Hub errors cross the bus with codes (`no_device`, `machine_offline`, `node_closed`, `stale_snapshot`, `assistant_in_doubt` for interrupted partial Inbox replies), restored by the assistant to original errors with unchanged decisions. App routes, events, fields, and pushes are unchanged.
 
-**状态**经助手自己的 `assistant.Store`（`assistant/store.go`）：settings 的 `assistant`（它自己的设置，见下）、模型配置的 `model_config.*`、`launchers.managed`、`launchers.hidden`、`launchers.zshrc`（`docs/model-config.md`「谁管模型」）、`assistant.main_handoff`、`assistant.titles`、`assistant.archived`、`assistant.relay`、`assistant.tasks`、`assistant.runs`、`tasks.trust`、收件箱的 `inbox_mutes`（旧的 `assistant.routines` / `assistant.followups` 照旧只在第一次读时搬），渠道的 `channels`、`channels.state`、`bots.feishu.state`（2026-11-04 起；`bots.feishu` 的凭证、配对和功能开关仍是 hub 的），表 `task_plans`、`assistant_feed`、`todos`、`todo_spaces`、`todo_agents`、`todo_decisions`、`inbox_items`。
-知识库的状态是数据目录（`~/.persona/data`）里的文件、`~/.persona/handles.key` 和表 `kb_entities`（`docs/knowledge.md`）。
-它就是 hub 的 Postgres，键和表都和以前一样、不迁数据；助手的进程自己连这个库（和 hub 读同一个 `database_url`），只有助手读写这些键和表，hub 不碰。
-定时任务的循环和关掉做完的任务的 Agent 的循环是助手自己的（`Service.Run`，第一次连上 hub、拿到握手的回答后才开始）。
+**State** uses the assistant's `assistant.Store` (`assistant/store.go`): settings `assistant` (its own profile, below), model config `model_config.*`, `launchers.managed`, `launchers.hidden`, `launchers.zshrc` (`docs/model-config.md` ("Who manages models")), `assistant.main_handoff`, `assistant.titles`, `assistant.archived`, `assistant.relay`, `assistant.tasks`, `assistant.runs`, `tasks.trust`, Inbox `inbox_mutes` (legacy `assistant.routines` / `assistant.followups` still migrate only on first read), channel `channels`, `channels.state`, `bots.feishu.state` (since 2026-11-04; `bots.feishu` credentials, pairing, and switches still belong to hub); tables `task_plans`, `assistant_feed`, `todos`, `todo_spaces`, `todo_agents`, `todo_decisions`, `inbox_items`.
+Knowledge state is files in `~/.persona/data`, `~/.persona/handles.key`, and `kb_entities` (`docs/knowledge.md`).
+This is hub's same Postgres, with unchanged keys / tables and no data migration; the assistant connects itself using the same `database_url`. Only it reads / writes these keys and tables; hub doesn't touch them.
+Scheduled-task and finished-task Agent-closing loops belong to the assistant (`Service.Run`, beginning only after first hub connection and handshake).
 
-**助手自己的设置**（settings `assistant`，2026-11-04 起只有助手读写，`assistant/profile.go`）：对话跑在哪台机器、启动器、用户的时区（手机经 `PUT /api/v1/assistant` 报）、关于我、主对话、换下来的旧主对话、`main_tasks_quiet`。
-hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和以前 hub 写的一样，不迁数据。助手读一次用 5 秒（只有它写，`manager.updated` 来了马上重读）。
-它每份快照都带 `profile`：hub 自己的功能要用的那部分，hub 留最后一份（`assistant_profile.go` 的 `assistantProfile`），变了就存一份在它自己的键 `hub.assistant_profile`（只有 hub 读写）：
+**Assistant settings** (settings `assistant`, exclusively read / written by the assistant since 2026-11-04, `assistant/profile.go`): chat machine, launcher, user timezone (phone `PUT /api/v1/assistant`), About Me, main chat, replaced old main chats, `main_tasks_quiet`.
+hub.json `assistant` supplies defaults in the handshake; JSON matches the old hub-written form without migration. Reads are cached for 5 seconds (only it writes; `manager.updated` triggers immediate reread).
+Every snapshot includes `profile`, the subset hub needs. hub retains the latest (`assistantProfile` in `assistant_profile.go`) and persists changes under its own `hub.assistant_profile` key (hub-only):
 
-- 手机发给主对话的消息认出主对话（`isMainOn`），模型配置「主对话」用途跑在哪台、它的默认启动器（`launcher`：助手自己的，没有就是 hub.json 的，再没有是 claude），收件箱 AI 分身默认的机器，`/api/v1/skills`、启动器测试和额度挑的机器，`assistant.lark` 只给助手那台。
-- 用户的时区（`userLocation`，`hub/usertz.go`）：hub 读时间都按它。
-- `keep`：各台 node 不管多久没动都要列出的会话（主对话、换下来的旧主对话、定时任务自己的对话、未完成的待办挂着的 Agent，#4510）。2026-11-04 起电脑是助手的进程连的（[machines.md](machines.md)「谁连电脑」）：
-  助手报快照时，它的设备那一层（`internal/devices` 的 `SetKeep`）对和上一份不一样的机器发一次 `node.configure keep_sessions`，第一份来时每台都发；node 连上时也带上（`configureNode`）。hub 只留着这一份。
-- **hub 重启后、助手还没报的那一两秒**：hub 按自己存的那份（`loadAssistantProfile`，在插件、连接器起来之前读）。开机就起的插件要用户的时区，
-  只在内存里留的话这几秒是 hub 自己的时区：插件一直用 hub 的时区到它重启。
-  （知识库和飞书机器人以前也靠它：知识库每次重启都整份按 hub 的时区重排、两分钟后再排回来，飞书这时发来的消息新开一个主对话把原来的顶掉；2026-11-04 起两者都是助手的，知识库启动时直接读助手自己设置里的时区，飞书的对话由助手决定。）
-  设置挪进助手后的第一次启动还没有这份：从助手的设置（settings `assistant` 里的机器、主对话、时区）读一次，存成 hub 自己的，以后不再读；这时 `keep` 不知道，node 连上时不带 `keep_sessions`（node 留着它原来的）。
-  一份都没有（新装的 hub）：机器按 hub.json（没有就是 hub 自己那台），没有主对话，时区是 hub 自己的，启动器是 hub.json 的。
+- Identify phone messages to main chat (`isMainOn`), machine for model configuration's "Main chat" purpose, default launcher (`launcher`: assistant setting, else hub.json, else claude), AI twin default machine, machine selection for `/api/v1/skills`, launcher tests and usage, and `assistant.lark` only for the assistant machine.
+- User timezone (`userLocation`, `hub/usertz.go`): all hub time reads use it.
+- `keep`: sessions nodes must list regardless of inactivity (main chat, replaced old main chats, scheduled-task chats, Agents linked to unfinished to-dos, #4510). Since 2026-11-04 the assistant process connects computers ([machines.md](machines.md) ("Who connects computers")):
+  on snapshot reporting, its device layer (`internal/devices` `SetKeep`) sends `node.configure keep_sessions` once to changed machines, all machines on the first snapshot; also supplied on node connection (`configureNode`). hub only retains this copy.
+- **The first second or two after hub restart, before the assistant reports**: hub uses its persisted copy (`loadAssistantProfile`, before plugins and connectors start). Startup plugins need user timezone;
+  an in-memory-only copy means they get hub timezone during these seconds and keep it until their own restart.
+  (Knowledge base and Lark bot formerly depended on it too: the knowledge base reordered everything in hub timezone on each restart, then back two minutes later; Lark messages arriving then created a new main chat replacing the original. Since 2026-11-04 both belong to the assistant; knowledge startup reads its timezone directly and the assistant chooses Lark chats.)
+  The first startup after moving settings lacks this copy: read once from assistant settings (machine, main chat, timezone in settings `assistant`) and save a hub-owned copy, never reading it again. `keep` is unknown then, so node connections omit `keep_sessions` (nodes retain their prior value).
+  With no copy at all (fresh hub), machine comes from hub.json (else hub's own), no main chat, hub timezone, hub.json launcher.
 
-**渠道**（2026-11-04 从 hub 挪过来，`docs/channels.md`「谁管什么」）：飞书机器人和插件渠道里「和 Persona 对话」的那一半是助手的——消息进哪段对话、命令、发进对话、跟踪这一轮、
-进度卡 / 答案、提问和批准（卡片、文字）和它们的回答、推送和同步、来源标记，以及 `/api/v1/channels*` 的路由。hub 只管收发：飞书开放平台的长连接、凭证、配对、只认主人，插件的 `channel` 程序。
-总线上多了这些（类型在 `assistantwire` 的渠道一节）：
+**Channels** (moved from hub 2026-11-04, `docs/channels.md` ("Responsibilities")): the assistant owns the "chat with Persona" half of Lark bot and plugin channels—target chat, commands, sending into chats, turn tracking,
+progress cards / answers, questions / approvals (cards, text) and answers, push / sync, source markers, and `/api/v1/channels*`. hub handles only transport: Lark's developer-platform persistent connection, credentials, pairing, owner checks, plugin `channel` programs.
+The bus adds these (`assistantwire` channel types):
 
-| 方向 | 方法 / 事件 | 做什么 |
+| Direction | Method / event | Purpose |
 | --- | --- | --- |
-| hub → 助手，调用 | `channels.receive {channel, message, action}`、`feishu.message {event}` → `{}` | 主人的一条消息（插件渠道的；飞书私聊里的，原样的事件）。助手收下（按消息 id 去重）就回，后面的在它那儿跑；没连着时 hub 先等它最多 60 秒、断了超时就再交一次，等不到才回主人「助手暂时连不上」；助手一时答不上要的东西回 `try_again`，hub 再交 |
-| | `feishu.card_action {event, action}` → 卡片回调的回答 | 主人按了机器人的卡片（hub 认过是主人），飞书等 3 秒：助手 1.5 秒内答不完先回「正在处理…」，做完再改卡片。`action` 是一次性的主人操作，只能答这一张卡 |
-| | `feishu.view {}` → `{target, agents}` | `GET /api/v1/bots/feishu` 里「现在发给」和绑定的 Agent |
-| hub → 助手，事件 | `interaction.announced {interaction}`、`interaction.ended {interaction, resolution?}` | 新的卡片（安静的任务的除外）、结束的卡片（答了的带回答）：飞书卡片、文字提问 |
-| | `session.items`、`session.delta` | 助手跟着的对话（`session.follow`）的新条目和正在写的字：进度卡 |
-| | `feishu.owner {paired}`、`channels.noted {channel, machine_id, session_id}` | 机器人配对 / 解除配对了；一条渠道来的消息经 App 的接口进了对话（语音的 `voice-…`） |
-| 助手 → hub，`device.call` | `session.follow` / `session.unfollow {session_id}`、`session.send_once {…session.send 的参数}` | 跟一段对话（断开后 hub 全部放掉，连回来助手再跟）；发进对话，和 App 同一个只发一次的保护（`sent_messages`） |
-| 助手 → hub，`app.call` | `feishu.status`、`feishu.post`、`feishu.text`、`feishu.update_card`、`feishu.react`、`feishu.unreact`、`feishu.messages`、`feishu.resource`、`feishu.save`、`feishu.user_name`、`feishu.configure`、`feishu.test` | 飞书的传输：发 / 回 / 改卡片和文字（只发给主人的私聊）、表情、读消息、下载图片、文件存到那台电脑、开关和功能 |
-| | `channels.list`、`channels.send`、`channels.typing`、`channels.enable`、`channels.unbind`、`interactions.resolve {interaction_id, resolution, action, channel}` | 插件渠道的传输和渠道列表（不带目标、插件渠道的功能）；按渠道里的回答答掉卡片：要带 hub 在这个渠道发的主人操作（批准类不代答），没有、别的渠道的就拒绝。绑定（带凭证）是 hub 自己的路由，不经过助手 |
-| 快照 | `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}` | 每段对话从哪些渠道来过（会话列表的 `channels`）、哪段对话的一轮正在 / 刚在渠道里答（hub 不再推「完成」）；`null` 时 hub 留着上一份 |
+| hub → assistant, call | `channels.receive {channel, message, action}`, `feishu.message {event}` → `{}` | Owner message (plugin channel; raw Lark private-chat event). Assistant returns once accepted / deduplicated by id, then processes internally. If disconnected, hub waits up to 60 seconds and retries dropped / timed-out calls; only then tells the owner "Assistant temporarily unreachable". A temporary dependency failure returns `try_again`, and hub redelivers |
+| | `feishu.card_action {event, action}` → card callback answer | Owner tapped a bot card (verified by hub), Lark waits 3 seconds: if unfinished after 1.5 seconds, assistant first replies "Processing…", then edits the card on completion. `action` is one-time owner authorization for this card only |
+| | `feishu.view {}` → `{target, agents}` | "Send to now" and bound Agent in `GET /api/v1/bots/feishu` |
+| hub → assistant, event | `interaction.announced {interaction}`, `interaction.ended {interaction, resolution?}` | New cards (except quiet tasks), ended cards (answers included if answered): Lark cards and text questions |
+| | `session.items`, `session.delta` | New items and streaming text for followed chats (`session.follow`): progress cards |
+| | `feishu.owner {paired}`, `channels.noted {channel, machine_id, session_id}` | Bot paired / unpaired; channel-origin message entered a chat through App API (voice `voice-…`) |
+| Assistant → hub, `device.call` | `session.follow` / `session.unfollow {session_id}`, `session.send_once {…session.send parameters}` | Follow a chat (hub releases all on disconnect, assistant re-follows on reconnect); send with App-shared send-once protection (`sent_messages`) |
+| Assistant → hub, `app.call` | `feishu.status`, `feishu.post`, `feishu.text`, `feishu.update_card`, `feishu.react`, `feishu.unreact`, `feishu.messages`, `feishu.resource`, `feishu.save`, `feishu.user_name`, `feishu.configure`, `feishu.test` | Lark transport: send / reply / edit cards and text (owner private chat only), reactions, read messages, download images, save files on the computer, switches and features |
+| | `channels.list`, `channels.send`, `channels.typing`, `channels.enable`, `channels.unbind`, `interactions.resolve {interaction_id, resolution, action, channel}` | Plugin transport and channel list (no targets or plugin feature switches); answer cards from channel replies with owner actions issued by hub in this channel (no proxy approvals); reject missing actions or actions from another channel. Credential-bearing binding is hub's route, bypassing assistant |
+| Snapshot | `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}` | Per-chat source channels (session-list `channels`), turns being / just answered in channels (hub suppresses completion push); `null` retains previous |
 
-**为什么照总线来画**：接口就是线上的消息，hub 那头的 `assistantLink` 是唯一的实现，总线上只多了编解码；hub 这边不再算助手的状态（标题、归档、排队、提问都是助手报什么就显示什么），也不再懂助手的语义（工具清单、提示词、提问的意思都在助手那边）。
-好处：谁管什么清楚了；助手崩了、卡住了不拖垮 hub（反过来也一样），可以单独重启、单独升级；助手可以跑在别处，以后可以接不止一个；hub 不再随助手的功能长出新的状态。
+**Why model it around the bus**: interfaces are wire messages; hub's `assistantLink` is the only implementation, with just encoding / decoding added on the bus. hub no longer computes assistant state (titles, archives, queues, questions display exactly as reported), or understands assistant semantics (tool lists, prompts, question meanings belong to the assistant).
+Benefits: clear ownership; assistant crashes / hangs don't bring down hub, and vice versa; independent restart / upgrade; the assistant can run elsewhere, eventually more than one; hub no longer gains state with every assistant feature.
 
-**扩展、连接器和机器人也是助手的进程的**（2026-11-05，[extensions.md](extensions.md)「谁管什么」）：`internal/extmgr` 在同一个进程里跑扩展、连接器、邮件、飞书和微信机器人；
-`assistant/extensions.go` 把 hub 的 `extensions.*` 调用、事件交给它，助手自己对 `inbox`、`feishu`、`channels`、`connectors`、`plugins` 这几个应用的 `app.call`（收件箱和知识库的来源、渠道的传输、目录里的连接器和扩展的技能）直接在进程里由它答，不再过 hub；
-助手要发给 hub 的 `inbox.changed`、`kb.changed`、`kb.forgotten` 也先给它（扩展订阅的那部分）。它要 hub 做的（卡片、推送、模型配置的几问）经 `app.call` 的 `hub` 应用。上面说「hub 转给助手」的渠道消息（`channels.receive`、`feishu.message`、`feishu.card_action`）和收件箱的 `inbox.collected` 现在是它在进程里交给助手，方法和参数不变。
+**Extensions, connectors, and bots also belong to the assistant process** (2026-11-05, [extensions.md](extensions.md) ("Responsibilities")): `internal/extmgr` runs extensions, connectors, mail, Lark and WeChat bots in-process;
+`assistant/extensions.go` hands over hub `extensions.*` calls / events. Assistant `app.call` to `inbox`, `feishu`, `channels`, `connectors`, `plugins` (Inbox / knowledge sources, channel transport, connector CLIs and extension skills) is answered directly in-process, not via hub;
+`inbox.changed`, `kb.changed`, `kb.forgotten` destined for hub first go there for extension subscriptions. Its hub needs (cards, push, model-config queries) use `app.call` app `hub`. Channel messages described above as "hub forwards to assistant" (`channels.receive`, `feishu.message`, `feishu.card_action`) and Inbox `inbox.collected` now arrive from it in-process, with unchanged methods / parameters.
 
-**还留在 hub 的**（后续再挪）：
+**Still in hub** (move later):
 
-- App 的重命名接口（`renameSession`）还是 hub 的：助手的对话交给助手（`assistant.rename`），别的照旧。
-- 只给助手用、但做的是 hub 的事的工具：`jarvis_settings` 里 hub 自己的设置（分拣规则、屏蔽的配置目录）经 `app.tool` 回到 hub 执行（邮箱和来源自己的分拣规则是管理者的扩展的，hub 再交给它：`extensions.hub_call settings.*`）；飞书的工具是飞书插件（连接器）的，本来就不是助手的。
-- `findAgent`、`machineByName` 两边各一份（hub 的找 `*Machine`、给操控电脑用，`hub/tools_shared.go`；助手的经总线问 `devices.list` / `sessions.list`）。`conversationName` 只剩助手的一份（飞书机器人挪过去了）。
-  `clip`、`oneLine`、`firstLine`、`ago`、`short`、`agentLabel`、`stateNames` 只有一份（`server/internal/textfmt`），两边各自用原来的小写名字指向它。
+- App rename API (`renameSession`): assistant chats go to `assistant.rename`, others unchanged.
+- Assistant-only tools doing hub work: hub-owned `jarvis_settings` entries (triage rules, muted config directories) return through `app.tool` (mail and source-specific triage rules belong to the manager's extensions; hub forwards `extensions.hub_call settings.*`). Lark tools belong to its connector plugin, never the assistant.
+- `findAgent`, `machineByName` exist on both sides (hub returns `*Machine` for computer control, `hub/tools_shared.go`; assistant asks bus `devices.list` / `sessions.list`). Only the assistant retains `conversationName` after moving the Lark bot.
+  `clip`, `oneLine`, `firstLine`, `ago`, `short`, `agentLabel`, `stateNames` have one implementation (`server/internal/textfmt`), referenced by original lowercase names on both sides.
 
-和以前能看出来的差别：
+Observable differences:
 
-- 发给一段正在跑的对话的消息在它这一轮结束后送进去时，会话列表马上推一次（排队的那条消失）；以前要等那段对话开始工作的那次推送才一起变。
-- 助手没连着的时候（hub 刚起来、助手的进程在重启）：它的接口回 `503 assistant_offline`「助手暂时连不上，稍后再试」，它的工具同样失败；会话列表照常（hub 留着它最后报的快照），只是 hub 刚起来、助手还没报的那一两秒里助手对话没有标题。
-- `ws.broadcast` 的消息原样转发（加上 hub 给每条消息编的 `event_seq`），字段的顺序是助手写的顺序（以前 hub 重新编一次，键按字母排）。
-- 2026-11-04 设置和主对话挪过去之后，助手没连着时这些也回 `503 assistant_offline`：`GET/PUT /api/v1/assistant`、预热、记忆、新对话、压缩、新建主对话，手机发给助手对话的消息、给助手对话改名；
-  飞书机器人和渠道插件发给主对话的（以及开新对话）在飞书 / 渠道里回「助手暂时连不上」，收件箱的 AI 分身这一件记成失败（错误同一句）；node 自己发的消息问不到时用对话自己的启动器（和以前问老 hub 一样）。
-- 安卓先空着开新主对话、第一条消息从飞书或渠道发来时，这条也带上旧主对话留下的（以前只有手机发的带，飞书发的漏掉，背景一直挂着等手机的下一条）。
-- 定时任务换了自己的对话之后，换下来的旧主对话 node 也照样常驻列出（以前助手自己发的 `keep_sessions` 漏了它们，要等 node 重连）。
-- Agents 这件事挪到助手以后（2026-11-04，`docs/agent-work.md`「谁管什么」）：它没连着时新建 Agent 只在 hub 刚起来、它还没连上过时等它（最多 60 秒），等不到、或它连上过又不在了，新建和续上都回 `503 assistant_offline`（电脑是它连的，[machines.md](machines.md)「谁连电脑」）；它的卡片的答案 hub 记下，它回来报了快照以后再给；分诊暂停，重新连上后的下一次检查（15 秒内）开始把这期间结束、还没看的轮次补上；会话分诊的开关、统计、`POST /api/v1/tabs/autoname` 回 503；会话列表留着它最后报的工作态。hub 刚重启、它还没报的那一两秒，分诊过的会话没有 `work`（显示成完成未看）。
-- 知识库挪到助手以后（2026-11-04）：助手没连着时 `/api/v1/kb…` 回 503，`kb_*` 工具失败，删除来源数据的接口回 503、什么都不删；归档等它回来，什么都不丢（游标是它的、插件下一轮重交、Agent 的那一行 hub 排着），见 `docs/knowledge.md`「谁管什么」。
-- 待办挪到助手以后（2026-11-04）：助手没连着时待办的接口和带 `todo_id` 的新建 / 发消息回 503；随项目自动挂、派生跟随的 Agent 在下一次推送里才带上待办（以前同一次推送就带上）。细节见 `docs/todos.md`「谁管什么」。
-- 收件箱挪到助手以后（2026-11-04）：助手没连着时 `/api/v1/inbox…` 和翻译 `/api/v1/translate*` 都回 503 `assistant_offline`（回复被拒不写回执，回来后能再发）；hub 照常按时读来源，读到的替助手攒着（合并、有上限、只在内存里），助手一连上连同攒着的来一轮完整的采集，邮件最新 40 封、iMessage 最新 30 条这种窗口里滑出去的不会丢。
-  回复在路上断了（hub 和助手的连接断了、超时）回 502 `assistant_in_doubt`、`delivered: "unknown"`：可能已经发出去了；不写回执，同一条再发时助手带同一个 `send_id`，hub 发过的不再发。
-  插件的收件箱详情页插槽这时画不出、GitHub 的收件箱设置（CI、静音的仓库）整块不显示（只给不带静音仓库的设置，保存时会把静音全清掉）、删连接器数据时收件箱那部分报错。细节见 `docs/inbox.md`「谁管什么」。
-  以前 hub 刚起来就采一轮；现在等助手连上（hub 起它的子进程，通常一两秒）。
-- 渠道挪到助手以后（2026-11-04）：助手没连着时 `/api/v1/channels*` 回 503（绑定 `POST …/bind` 除外，它是 hub 的）；飞书机器人和插件渠道照常收消息，主人的消息先等助手最多 60 秒，等不到才回「助手暂时连不上」（插件渠道是「没发出去：助手暂时连不上，稍后再试」），
-  按飞书卡片回同样一句 toast；飞书机器人自己的设置页（`/api/v1/bots/feishu*`）照常，只是没有「现在发给」和绑定的 Agent。这期间来的提问只在 App 里，连回来后补发到渠道；hub 刚起来、助手还没报的那一两秒里会话没有 `channels`（「完成」推送最多多等 10 秒它的第一份报告）。配对成功时的「已配对」卡片由助手发（带它的帮助），助手不在时 hub 发一张简短的。插件渠道一条消息交给助手的图片和文件加起来最多 40 MB（总线一条消息的上限，以前单个文件 50 MB）。细节见 `docs/channels.md`「助手不在的时候」。
+- When a queued message enters a running chat after its turn ends, immediately push the session list (queued entry disappears), rather than waiting for the next working-state push.
+- While assistant is disconnected (hub startup, assistant restart), APIs / tools fail with `503 assistant_offline`, "The assistant is temporarily unreachable, try again later". Lists retain its last snapshot; during the first second or two after hub startup, assistant chats lack titles.
+- `ws.broadcast` forwards unchanged (plus hub-assigned `event_seq`); field order is the assistant's, rather than hub re-encoding with alphabetic keys.
+- After settings / main chat moved on 2026-11-04, these also return `503 assistant_offline` while disconnected: `GET/PUT /api/v1/assistant`, prewarming, memory, new chat, compaction, new main chat, phone sends and renames for assistant chats;
+  Lark bot / channel main-chat sends and new chats reply "Assistant temporarily unreachable" in-channel; the AI twin item fails with the same error. node-generated messages fall back to the chat's own launcher if it can't ask (same as asking an old hub).
+- If Android creates an empty main chat and the first message comes from Lark / a channel, include the old main chat's handoff too (formerly only phone sends did; Lark missed it, leaving background pending until the next phone message).
+- After scheduled tasks get their own chats, replaced old main chats stay listed by node too (the assistant's old `keep_sessions` omitted them until node reconnect).
+- After Agent management moved to assistant (2026-11-04, `docs/agent-work.md` ("Responsibilities")): creation waits up to 60 seconds only on hub startup before the assistant has ever connected. If unavailable then, or disconnected after connecting, create / resume returns `503 assistant_offline` (it connects computers, [machines.md](machines.md) ("Who connects computers")). hub stores card answers and delivers after a new snapshot; triage pauses, then the next check within 15 seconds catches turns finished but unread during absence. Triage switches, statistics, `POST /api/v1/tabs/autoname` return 503; lists retain the last work state. In the first second or two after hub restart, triaged sessions lack `work` and display Unread.
+- After knowledge base moved (2026-11-04): disconnected assistant means `/api/v1/kb…` 503, `kb_*` failures, delete-source API 503 with no deletion. Archiving waits without loss (its cursors, plugin redelivery next round, Agent timeline lines queued by hub); `docs/knowledge.md` ("Responsibilities").
+- After to-dos moved (2026-11-04): disconnected assistant means to-do APIs and create / send with `todo_id` return 503; automatically project-linked / derived-following Agents gain to-do fields in the next push, not the same one. `docs/todos.md` ("Responsibilities").
+- After Inbox moved (2026-11-04): disconnected assistant means `/api/v1/inbox…` and `/api/v1/translate*` return 503 `assistant_offline` (rejected replies write no receipt, can retry later). hub keeps reading sources on schedule and buffering for assistant (merged, bounded, memory-only); reconnect triggers a complete collection including buffered data, preserving items that slide out of windows like latest 40 mail / latest 30 iMessages.
+  Disconnected / timed-out in-flight replies return 502 `assistant_in_doubt`, `delivered: "unknown"`: they may have sent. No receipt is written; retries use the same `send_id`, so hub doesn't resend completed sends.
+  Plugin Inbox detail slots can't render then; GitHub Inbox settings (CI, muted repositories) are entirely hidden (providing settings without muted repositories would clear them on save); connector-data deletion reports an Inbox error. `docs/inbox.md` ("Responsibilities").
+  Previously hub collected immediately on startup; now it waits for assistant connection (hub starts its child, usually a second or two).
+- After channels moved (2026-11-04): disconnected assistant means `/api/v1/channels*` 503 except hub-owned `POST …/bind`; Lark bot / plugin receivers keep receiving, owner messages wait up to 60 seconds before "Assistant temporarily unreachable" (plugins: "Not sent: the assistant is temporarily unreachable, try again later"),
+  and Lark buttons get the same toast. Lark bot settings (`/api/v1/bots/feishu*`) still work except target / bound Agent. Questions appear only in the App during absence and catch up in channels on return; first startup seconds lack session `channels` (completion push waits up to 10 extra seconds for the first report). The assistant sends the successful "Paired" card with help; hub sends a short version if absent. Images / files handed to assistant total at most 40 MB per message (bus limit, formerly 50 MB per file). `docs/channels.md` ("When the assistant is away").
 
-## 进程（2026-11-04，#1446）
+## Process (2026-11-04, #1446)
 
-`personad assistant` 就是助手：读 hub.json（`~/.persona/hub.json`，环境变量同 hub：`PERSONA_DATABASE_URL`、`PERSONA_LISTEN`）连同一个 Postgres，用总线 token 连 hub 的 `/api/v1/bus`，
-握手、报整份快照，然后开始跑定时任务；连接断了就自己重连（1 秒起翻倍到 1 分钟），每次连上再报一次整份快照。
+`personad assistant` is the assistant: it reads hub.json (`~/.persona/hub.json`, same environment as hub: `PERSONA_DATABASE_URL`, `PERSONA_LISTEN`), connects to the same Postgres and hub `/api/v1/bus` with a bus token,
+handshakes, reports a full snapshot, then starts scheduled tasks. On disconnect it reconnects (1 second, doubling to 1 minute), reporting a full snapshot on every connection.
 
-- **默认（用户什么都不用改）**：`personad hub` 启动时用 `createBusToken` 给助手生成一个新 token，从自己的二进制起一个 `personad assistant` 子进程，token 写进它的 stdin（不放命令行，`ps` 看不到），
-  `PERSONA_ASSISTANT_HUB` 是 hub 自己的本机地址。子进程的输出进 hub 的日志（stderr，以 `assistant:` 开头）。它退出了 hub 再起：1 秒起翻倍到 1 分钟，跑满 1 分钟后再退出就从 1 秒算。
-  hub 停的时候先 SIGTERM，10 秒没退就杀掉；hub 没了（崩了也一样）它的 stdin 就关了，它跟着退出，不会留一个连不上的助手。systemd 单元、Docker 镜像和 `deploy.sh` 都不用改。
-- **跑在别处**：hub.json 写 `"assistant": {"external": true}`，hub 就不起它（`docs/config.md`）；在要跑它的机器上用 `personad hub assistant-token` 生成 token，
-  再 `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub 地址> personad assistant`。它要能连到 hub 的 Postgres。
-  知识库跟着它：在那台机器的数据目录里（hub 机器上原来的 `data/` 和 `handles.key` 要接着用就拷过去），见 `docs/knowledge.md`「谁管什么」。
-- 助手没连着的时候 hub 的表现见上一节最后。hub 每次启动都换一次 token，所以 `external` 没打开时别处跑的助手会被挤掉（旧 token 失效）。
-- 它同时是带着全部电脑的管理者（2026-11-04，[machines.md](machines.md)「谁连电脑」）：拿到握手回答里的 `devices` 就去连 hub.json 的机器（hub 机器自己的 `node --stdio` 现在是它的子进程），
-  第二条 WebSocket `GET /api/v1/bus/relay`（同一个 token）接 hub 转过来的 Persona Link 和经别的 hub 的 node 流；停的时候先把在线机器交给下一个（warm start），再断开它们。
-  它没连着时机器显示离线、机器的接口回 `503 assistant_offline`；回来后自己把电脑连回来。
-- **别的管理者**（2026-11-06）：App 里新建的管理者是同一个程序，跑法是 `personad manager run --dir <它的目录>`：身份、hub 地址和 token 在目录里的 `manager.json`，
-  知识库、`secret.key`、扩展都在那个目录下，数据库是它自己的（默认 hub 那个 Postgres 里的 `persona_mgr_<id>`），握手报它自己的 id。安装、目录、数据库、吊销见 [managers.md](managers.md)（"A second manager"）。
+- **Default (no user changes)**: `personad hub` generates a fresh assistant token with `createBusToken`, starts `personad assistant` as a child from its own binary, and writes the token to stdin (not argv, invisible to `ps`);
+  `PERSONA_ASSISTANT_HUB` is hub's local address. Child output joins hub stderr logs with `assistant:` prefix. On exit, hub restarts it with backoff from 1 second to 1 minute, resetting to 1 second after a run of at least 1 minute.
+  On hub shutdown, SIGTERM first, kill after 10 seconds. If hub disappears (including crashes), stdin closes and the assistant exits too, leaving no unreachable orphan. No systemd, Docker image, or `deploy.sh` changes needed.
+- **Run elsewhere**: set `"assistant": {"external": true}` in hub.json to stop hub spawning it (`docs/config.md`); on the machine where it will run, generate a token with `personad hub assistant-token`,
+  then `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub address> personad assistant`. It must reach hub's Postgres.
+  The knowledge base follows it, in that computer's data directory (copy hub's old `data/` and `handles.key` to retain them); `docs/knowledge.md` ("Responsibilities").
+- Disconnected-assistant hub behavior is at the end of the previous section. hub changes the token each startup, so without `external`, an assistant elsewhere is displaced when its old token expires.
+- It also manages all computers (2026-11-04, [machines.md](machines.md) ("Who connects computers")): after receiving handshake `devices`, connect hub.json machines (hub-local `node --stdio` is now its child),
+  and a second WebSocket `GET /api/v1/bus/relay` with the same token receives Persona Link and other-hub node streams forwarded by hub. On shutdown, hand online machines to the successor (warm start), then disconnect.
+  While absent, computers show offline and machine APIs return `503 assistant_offline`; on return it reconnects them itself.
 
-## 飞书：接飞书的扩展带的 skill（2026-10-30）
+- **Other managers** (2026-11-06): managers created in the App run the same program as `personad manager run --dir <its directory>`. Identity, hub address, and token live in `manager.json` in that directory;
+  the knowledge base, `secret.key`, and extensions also live there, with its own database (by default `persona_mgr_<id>` in hub's Postgres). The handshake reports its own id. Installation, directories, database, and revocation: [managers.md](managers.md) ("A second manager").
 
-> 历史：这一路最早是 hub 自己接飞书网关，仓库里放着网关上游 skill 的原样副本（`SKILL.md`、`references/`、命令脚本）和同步上游的脚本；
-> 2026-11-04（#1468）闸门改成通用的「命令闸门」，#1571 / 3c（#1520）起副本、同步脚本和 hub 合成的闸门都删了，skill、说明、闸门规则和凭据只来自扩展。
-> 2026-11-05（#1317）起凭据也不进助手的进程（见下面「凭据」）。
+## Lark: skill supplied by the Lark extension (2026-10-30)
 
-用户要求：助手不能只走 MCP 的 `lark_*` 工具（自由度低），要能直接用飞书网关自带的 skill 读写；skill 弄一个副本就行，不把整个上游仓库丢进来。
+> History: this route began with hub directly connecting the Lark gateway, with an unchanged upstream skill copy (`SKILL.md`, `references/`, command scripts) and an upstream sync script in the repo.
+> On 2026-11-04 (#1468), the gate became a generic "command gate". Since #1571 / 3c (#1520), the copy, sync script, and hub-generated gate are removed; skills, instructions, gate rules, and credentials come only from extensions.
+> Since 2026-11-05 (#1317), credentials don't enter the assistant process either ("Credentials" below).
 
-现在的做法全是通用机制，具体的命令、路由和变量名见扩展自己的说明（例如接飞书的扩展）：
+Requested: the assistant must not be limited to MCP `lark_*` tools (too restrictive), but directly read / write with the gateway's bundled skill; copy just the skill, not the entire upstream repo.
 
-- **怎么到助手手里**：扩展贡献 `assistant`（`docs/extensions.md`「助手」）：技能目录和一段说明。技能**不在 personad 里**（上游的不能再分发，`docs/hub-update.md`「skill 从二进制里拿出来」），
-  node 放在跑助手那台机器上、每次起助手进程时链接进 `~/.persona/assistant/.claude/skills/`；用户自己 `~/.persona/skills/` 里的同名技能优先。
-  有闸门的命令在 `~/.persona/assistant-bin/<命令>` 写一行包装，放在助手进程的 PATH 最前；没有这个技能时没有这个命令，助手的 CLAUDE.md 也只讲 MCP 的 `lark_*`。
-- **凭据**：hub 只给跑助手的那台 node（RPC `assistant.lark`），由扩展的 `assistant.credentials` 给；凭据留在 node 的本机代理里（`node/gateproxy.go`），
-  助手进程只拿到一个只能本机用、写操作照样要确认的地址，`env`、`printenv` 打不出凭据。
-- **闸门**（`node/larkgate.go`）：助手进程用单独的一组 hooks（插件 `assistant-hooks`，更老的 Claude Code 是 `assistant-settings.json`，`docs/claude-integration.md`「Hooks」），多一个 Bash 的 PreToolUse hook（herdr 里的 Agent 不受影响）。
-  hook 读整条命令：
-  - 只有闸门命令（和 jq / head / grep / echo / cd / `timeout N` 这类只输出的命令）时逐个判断：读直接放行；只影响他自己的（标已读、完成自己的待办）放行；
-    其余写（发 / 回复 / 撤回 / 转发、表情、文档、日程、审批、邮件、群设置……）在手机上弹「飞书」批准卡片：做什么、会话名（扩展的 `assistant.summary` 查）、
-    method、路径和要发的 body（`@file` 会读出来）。拒绝时把用户的话作为原因还给助手；「本会话总是允许」记住这类路由（id 抹掉）。
-  - 碰凭据变量、`/proc/*/environ`、直接 curl 网关、给命令加 `-v` / `--trace` / `-w` 这类会把请求头打出来的参数：直接拒绝。
-  - 别的命令（接 python、写到 /tmp 以外、`$(…)`）：闸门不管，按权限模式走普通的 Bash 批准；但只要里面有闸门命令的写，直接拒绝、提示单独一条发：
-    代理只放行闸门读出来、确认过的那一次调用，整条命令确认了也发不出去（#1317 之前是整条命令弹卡片）。
-  - 规则是配置：写在 hub.json `connector_gate`，和其他连接器的写操作一个写法，`connector` 写 `lark`，`action` 写「方法 路径」（path 里 `*` 一段、`**` 剩下的全部，
-    `"*"` 是任何调用），`match` 按 body 的顶层字段，`decision` 是 `allow|confirm|deny`；排在扩展给的规则前面，第一条匹配的说了算。
-    比如以后想让发消息不再确认：`{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`。
-    老的 `lark_gate`（`{method, path, body?, action}`）照样生效，排在 `connector_gate` 的飞书规则后面；hub 把两份合成一份交给 node（`connector.LarkRules`，2026-11-03 迁移 M5）。
+The current mechanisms are generic; specific commands, routes, and variables are in each extension's instructions (such as the Lark extension):
 
-## 飞书：lark-cli（2026-11-03，#273 的 L1）
+- **Delivery to the assistant**: extension contribution `assistant` (`docs/extensions.md` ("Assistant")) supplies a skill directory and instructions. Skills **aren't in personad** (upstream redistribution isn't allowed, `docs/hub-update.md` ("Taking skills out of the binary"));
+  node places them on the assistant machine and links them into `~/.persona/assistant/.claude/skills/` at each process start. User skills of the same name in `~/.persona/skills/` take precedence.
+  Gated commands get a one-line wrapper in `~/.persona/assistant-bin/<command>`, first on the process PATH. Without the skill there is no command, and assistant CLAUDE.md mentions only MCP `lark_*`.
+- **Credentials**: hub gives them only to the assistant node (RPC `assistant.lark`), from extension `assistant.credentials`. They stay in node's local proxy (`node/gateproxy.go`);
+  the assistant gets only a local-only address that still requires write confirmation. `env` / `printenv` can't expose credentials.
+- **Gate** (`node/larkgate.go`): the assistant uses separate hooks (plugin `assistant-hooks`, or `assistant-settings.json` for older Claude Code, `docs/claude-integration.md` ("Hooks")), with an extra Bash PreToolUse hook (herdr Agents unaffected).
+  It reads the whole command:
+  - With only gated commands (and output-only commands such as jq / head / grep / echo / cd / `timeout N`), check each: reads allowed directly; self-only actions (mark read, complete own to-dos) allowed;
+    other writes (send / reply / recall / forward, reactions, docs, schedules, approvals, mail, group settings…) show a phone "Lark" approval card with action, chat name (extension `assistant.summary`),
+    method, path, and body to send (reads `@file`). Denial returns user feedback as the reason; "Always allow in this session" remembers this route type with ids stripped.
+  - Credential variables, `/proc/*/environ`, direct gateway curl, or flags exposing headers such as `-v` / `--trace` / `-w`: reject directly.
+  - Other commands (piped to python, writes outside /tmp, `$(…)`) bypass this gate and follow ordinary Bash approval in the permission mode; but any gated write inside is rejected with instructions to send it separately:
+    the proxy allows only the exact call read and confirmed by the gate, so whole-command approval still can't send it (before #1317, the whole command showed a card).
+  - Rules are configuration: hub.json `connector_gate`, same format as other connector writes; `connector` is `lark`, `action` is "METHOD path" (`*` one path segment, `**` all remaining,
+    `"*"` any call), `match` against top-level body fields, `decision` is `allow|confirm|deny`. They precede extension rules; first match wins.
+    For example, stop confirming sends: `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`.
+    Legacy `lark_gate` (`{method, path, body?, action}`) still works after `connector_gate` Lark rules; hub combines both for node (`connector.LarkRules`, 2026-11-03 migration M5).
 
-没有飞书网关的 hub 也能让助手读写飞书：用飞书官方的开放平台命令行 lark-cli（`@larksuite/cli`），方案和后面几步见 `docs/plan-lark-cli.md`。
-这一步只做助手，收件箱、知识库、`/agent` 还是只认飞书网关。
+## Lark: lark-cli (2026-11-03, L1 of #273)
 
-- **怎么开**：hub.json `lark.cli`（`docs/config.md`），lark-cli 装在助手所在的机器上，用户自己 `lark-cli auth login --domain all` 登录一次。
-  飞书网关可以同时配着，`lark.prefer` 定提示词里谁优先。
-- **怎么到助手手里**：node 起助手进程前向 hub 要配置（RPC `assistant.lark` 多了 `cli`、`prefer`；只配 lark-cli 时不去问飞书网关；现在 hub 本来就不再给飞书网关的 token），
-  在 `~/.persona/assistant-bin/lark-cli` 写一行包装：配置的那个 lark-cli（不是绝对路径时在登录 shell 里找）加上配置的 `--profile`，
-  并把 lark-cli 所在目录放进 PATH（npm 的 lark-cli 是 `env node` 的脚本，要找得到 node）。没配 `lark.cli` 或找不到 lark-cli 就不写。
-  lark-cli 的凭据留在它自己的 `~/.lark-cli`，hub 和 node 都不碰。
-- **说明书**：不往助手目录拷 skill。CLAUDE.md（`prompts/assistant/claude_md.md`）多一段，让它先 `lark-cli skills read lark-<领域>` 读 lark-cli 自带、
-  跟版本走的领域说明，参数用 `--help` / `lark-cli schema`。只有 lark-cli 时说明没有未读和公司圈、`lark_*` MCP 工具用不了，找要处理的消息用
-  `im +messages-search --is-at-me / --chat-type p2p`；两个都有时按 `lark.prefer` 分工（golden `assistant_claude_md.lark_cli`、`.both`）。
-  发消息、回复消息让它用应用的机器人（`--as bot`）：用户身份要应用开 `im:message.send_as_user`，默认的应用没有（2026-11-04 实测）；其余读写用用户身份。
-  只配了 lark-cli 时，机器上留着的飞书网关 skill（旧版 jarvisd 拷进助手目录的）不算：没有网关可连，CLAUDE.md 里不提它的命令
-  （2026-11-03 部署到 hub 机器时撞上：说明书先推荐网关的命令，又说没有网关）。
-- **闸门**（`node/larkcligate.go`，接在 `ol` 的闸门里，同一个 `larkCheck`，Codex 也走它）：lark-cli 自己知道哪些命令会写，每个命令的 `--help` 都打印
-  `Risk: read / write / high-risk-write`，node 第一次见到一个命令时问一次（按命令缓存，约 50 ms）：
-  - `read` 直接放行；`write`、`high-risk-write`、问不出来的都在手机上弹「飞书」卡片，写的是谁做（带 `--as bot` 是「以机器人身份」，否则「以你的身份」）、做什么（发消息、回复、表情、撤回…）和整条命令，
-    高风险、没给风险等级的另外标出来。拒绝时把他的话还给助手；「本会话总是允许」记住这个命令。
-  - 只打印的直接放行：`--help`、`--version`、`--dry-run`、`schema`、`skills`、`whoami`、`doctor`、`auth status / check / scopes / list`、`event list / schema / status`；
-    `lark-cli api` 按 HTTP 方法：GET / HEAD 放行，其余确认（卡片上是方法、路径和 `--data`）。
-  - 拒绝：`auth login / logout`（登录他自己做）、`config`、`profile`、`update`、自己传 `--profile`、碰 `~/.lark-cli/`。
-  - 闸门读不懂的命令（循环、`$(…)`、接 python）里有 lark-cli：只要有一个不是已知的读，就整条命令在手机上确认，不管权限模式。
-  - hub.json 的规则先匹配：`connector_gate` 里 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（老的 `lark_gate` 写法
-    `{"method":"CLI","path":"/im/+messages-send","action":"allow"}` 也行）。
-- **还没做**：runtime 助手（DSH、pi）的提示词和扩展闸门声明的工具还只认飞书网关；设置页的 lark-cli 状态、缺的权限（L2）。
+A hub without a Lark gateway can still let the assistant read / write Lark through official developer-platform lark-cli (`@larksuite/cli`); plan and later steps: `docs/plan-lark-cli.md`.
+This step covers only the assistant; Inbox, knowledge base, and `/agent` still require the Lark gateway.
 
-## 扩展的 MCP 服务器（2026-11-01，仅限 Claude 助手）
+- **Enable**: hub.json `lark.cli` (`docs/config.md`), lark-cli installed on the assistant machine; the user runs `lark-cli auth login --domain all` once.
+  A gateway can coexist; `lark.prefer` sets prompt precedence.
+- **Delivery**: before process startup, node asks hub for configuration (RPC `assistant.lark` adds `cli`, `prefer`; CLI-only doesn't query the gateway; hub no longer supplies gateway tokens anyway),
+  writes a one-line `~/.persona/assistant-bin/lark-cli` wrapper invoking configured lark-cli (resolve nonabsolute paths in a login shell) with configured `--profile`,
+  and adds its directory to PATH (npm lark-cli uses `env node`, so node must be findable). No wrapper if `lark.cli` absent or lark-cli not found.
+  Credentials remain in its own `~/.lark-cli`; hub / node don't touch them.
+- **Instructions**: no skill copied into the assistant directory. CLAUDE.md (`prompts/assistant/claude_md.md`) adds a section directing `lark-cli skills read lark-<domain>` first for bundled,
+  version-matched domain instructions, with parameters from `--help` / `lark-cli schema`. CLI-only explains no unread / Moments and no `lark_*` MCP tools; find actionable messages with
+  `im +messages-search --is-at-me / --chat-type p2p`. With both sources, divide according to `lark.prefer` (goldens `assistant_claude_md.lark_cli`, `.both`).
+  Send / reply through the app bot (`--as bot`): user identity requires app permission `im:message.send_as_user`, absent in the default app (measured 2026-11-04); other reads / writes use user identity.
+  In CLI-only setups, a leftover gateway skill (copied by old jarvisd) doesn't count: no gateway is available, so CLAUDE.md must not mention its commands
+  (encountered deploying to the hub machine 2026-11-03: instructions recommended gateway commands then said no gateway existed).
+- **Gate** (`node/larkcligate.go`, integrated with the `ol` gate in the same `larkCheck`, also used by Codex): lark-cli knows write commands; each `--help` prints
+  `Risk: read / write / high-risk-write`. node asks once on first seeing a command (cached per command, about 50 ms):
+  - `read` allowed directly; `write`, `high-risk-write`, and unknown risk show a phone "Lark" card explaining actor (`--as bot`: "as the bot", otherwise "as you"), action (send, reply, react, recall…), and full command;
+    high / unknown risk is separately marked. Denial returns user feedback; "Always allow in this session" remembers the command.
+  - Output-only allowed directly: `--help`, `--version`, `--dry-run`, `schema`, `skills`, `whoami`, `doctor`, `auth status / check / scopes / list`, `event list / schema / status`;
+    `lark-cli api` uses HTTP methods: GET / HEAD allowed, others confirmed (method, path, `--data` on card).
+  - Reject `auth login / logout` (user handles login), `config`, `profile`, `update`, custom `--profile`, or access to `~/.lark-cli/`.
+  - Unparseable commands containing lark-cli (loops, `$(…)`, python pipelines): if any call isn't a known read, confirm the whole command on the phone regardless of permission mode.
+  - Match hub.json rules first: `connector_gate` `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}` (legacy `lark_gate`
+    `{"method":"CLI","path":"/im/+messages-send","action":"allow"}` also works).
+- **Not done**: runtime assistant (DSH, pi) prompts and extension-gate tool declarations still only know the gateway; settings-page lark-cli status and missing permissions (L2).
 
-扩展可以贡献 `mcp_servers`（`docs/extensions.md`「MCP 服务器」）：跑助手的那台电脑上装着它点名的命令行时，node 起 **Claude 助手**时把它作为又一个 MCP 服务器挂上
-（工具名 `mcp__<id>__*`，`node/assistant_mcp.go`；Codex 和 runtime 助手不挂）。命令读它自己的配置，Persona 不读、不传凭据；扩展列出的只读工具直接放行，
-点名禁掉的永远调不了，其余按对话的权限模式在手机上问。例如接飞书的扩展用它挂上游的个人 Agent 控制工具，让助手调度个人 Agent、查看待审批的请求
-（审批只转给用户、从不代批；和 Persona 自己的 `mcp__jarvis__agents_*` 重叠的 Herdr / Orca 工具禁掉），具体工具和开关见扩展的说明。
+## Extension MCP servers (2026-11-01, Claude assistant only)
 
-## 本会话总是允许（2026-11-05，#2202）
+Extensions can contribute `mcp_servers` (`docs/extensions.md` ("MCP servers")): when the named CLI is installed on the assistant computer, node attaches it as another MCP server for the **Claude assistant**
+(`mcp__<id>__*`, `node/assistant_mcp.go`; not Codex / runtime assistants). Commands read their own configuration; Persona neither reads nor passes credentials. Listed read-only tools are allowed directly,
+named denied tools are never callable; others request phone permission according to chat mode. For example, a Lark extension attaches upstream personal-Agent control tools for scheduling personal Agents and inspecting pending requests
+(approvals only forwarded to the user, never approved on their behalf; Herdr / Orca tools overlapping Persona `mcp__jarvis__agents_*` are disabled). Specific tools / switches are in extension instructions.
 
-助手对话里的授权卡点了「本会话总是允许」，这段对话里就一直有效，进程换了也一样。以前只靠 Agent 自己记：Claude 是 PermissionRequest hook 回的
-`addRules … destination: session`，Codex 是 `acceptForSession` / 权限 `scope: session`，飞书闸门记在 node 的内存里。可主对话的进程随时会换
-（空闲 20 分钟回收、部署、换启动器 / 模型、bypassPermissions 只能启动时给），`--resume` 起来的新进程没有之前的会话规则，node 重启后闸门也忘了，同一个操作又开始问。
+## Always allow in this session (2026-11-05, #2202)
 
-- node 在助手对话的授权卡上写明「总是允许」放行什么（`always_keys`，Agents 页的会话不带，行为不变）：Claude 是 `tool:<工具名>`（和 addRules 一样是整个工具）；
-  Codex 是 `codex-command:<命令>`、`codex-edit:<文件>` / `codex-root:<目录>`、`codex-permissions:<权限>`（和 Codex 自己「本会话」的范围一样）；
-  飞书闸门是 `lark:<路由>`（id 抹掉；整条命令确认的不记，和以前一样）。
-- hub 收到以「总是允许」批准的卡，把这些 key 记进 Postgres 的 `assistant_always`（对话 id + key 的 sha256）。之后这段对话的卡上的 key 都记过，hub 直接回「允许 + 总是」，
-  不弹卡、不推送；新进程照样拿到会话规则，这个进程里之后不再问。这段对话里正等着的、被这次覆盖的卡一起答掉（并行的工具调用会同时来几张）。
-- 只记放行：拒绝、只允许一次都不记；卡上有一个没记过的 key 就照常问。还没有撤销入口：新建对话即可（或删 `assistant_always` 里这段对话的行）。
+Tapping "Always allow in this session" on an assistant permission card remains effective throughout the chat, even across process changes. Previously the Agent alone remembered: Claude's PermissionRequest hook returned
+`addRules … destination: session`, Codex used `acceptForSession` / permission `scope: session`, and the Lark gate kept node memory. Main chat processes change anytime
+(20-minute idle reclamation, deployment, launcher / model change, startup-only bypassPermissions); new `--resume` processes lack old session rules, and node restart forgets gate rules, causing repeated prompts.
 
-## 提问先由助手代答（2026-11-05，#3029）
+- node states exactly what "Always allow" permits on assistant cards (`always_keys`, absent from Agents-page sessions, whose behavior is unchanged): Claude `tool:<tool name>` (whole tool, like addRules);
+  Codex `codex-command:<command>`, `codex-edit:<file>` / `codex-root:<directory>`, `codex-permissions:<permission>` (same scope as Codex's own session permission);
+  Lark gate `lark:<route>` (ids stripped; whole-command confirmations aren't remembered, unchanged).
+- hub stores approved Always keys in Postgres `assistant_always` (chat id + key sha256). If every key on a later card is remembered, hub returns "allow + always" directly,
+  without card or push; new processes receive session rules too and stop asking within that process. Also answer currently waiting covered cards in this chat (parallel tool calls produce several).
+- Remember only permission grants, not denials or one-time allows; any unknown key prompts normally. No revocation UI yet: create a new chat (or delete its `assistant_always` rows).
 
-用户同时开着十几个 Agent，它们中途停下来问的多是用户答不了的内部选项（技术方案、口径默认值、要不要重跑、用哪个分支）。所以 Agent 的提问先到助手：能代答的直接答，只有红线和目标层面的才推给用户。hub.json `agents.delegate`（**默认关**，`enabled: true` 打开，例子见 `docs/config.md`）。
+## Assistant answers questions first (2026-11-05, #3029)
 
-- **哪些先到助手**：`kind: question` 的交互，包括 hook 的 AskUserQuestion、Codex 的提问，和会话分诊开的「要你拍板」卡片（`persona_triage`，它们也经 `waitInteraction` → `announce`）。授权、计划审批、终端对话框、要填表的卡、助手自己的 `ask_user`、助手对话里的提问都不进来，照旧给用户；分诊卡里要打开授权链接的、要做推代码 / 部署这类风险动作的也不代答。助手没连着就不等它。
-- **只答真的在问的，同一个问题只答一次**（2026-11-06）：Agent 自己的提问（AskUserQuestion、Codex 的请求）本来就在等输入；分诊卡是管理者从一轮停下时的那段话里读出来的，只有某道题带问号（`?` / `？`）、或者有至少两个它自己的选项（不算「好，按你说的做」「先不管」这类管理者的固定答案）才代答（`asksForInput`）。一轮停在陈述句上（「等 runner 恢复和 0.14.0 发版」）时分诊给的是只有「好，按你说的做 / 先不管」的兜底卡，以前助手会替用户点「好」，Agent 收到后把同一句话再说一遍，又开一张卡、又被代答，看板 Agent 一分钟里被答了三次。助手代答过的题目按会话记下（去掉空格标点后逐字比较，二字组相似度 ≥ 0.8 也算同一题，记进 `session_work_events` 的 `delegated`，重启后读回）：24 小时内同一个 Agent 再问同一题就交给用户，记一条 `delegate_repeat`。
-- **流转**（`assistant/fleet_delegate.go`；交互队列 2026-11-05 起在管理者里，#3246）：管理者的 `announce` 先把卡片带 `delegating: true` 告诉 hub（App 看得到、能直接答，但不推送、不发机器人卡片），再在后台判断，最多等 `timeout_seconds`（默认 3 分钟）。助手答了 → 走 `interaction_answer` 的同一条路径（`answerQuestion` → `resolve`，`answered_by: "assistant"` + `reason`），交互历史和 `interaction_resolved` 都带着理由和答案；助手交给用户、出错或超时 → 卡片去掉 `delegating`、带上 `delegate`（助手补齐的上下文）再走原来的推送 / 机器人 / 渠道 / 安静任务那条路，hub 投递推送时正文后面加一行「助手建议：X」（`hub/push.go`）。用户在助手想的时候自己答了，先到的算，助手的答案作废。
-- **判断**（`assistant/delegate.go`，提示词 `prompts/agents/delegate.md`，模型是「设置 › 模型配置」里单独的一类「提问代答」`agent.delegate`：没选过时用信息筛选的接入、模型 Opus 5.5，在那一页换，见 `docs/model-config.md`）：一次模型调用，读这个 Agent 最近三轮里用户的话和它最后说的、它所在的待办（标题、备注、拍过的板）、目录对应的项目，和题目、选项。规则写在提示词里：内部选项代答、留一句理由；不可逆（部署、发布、merge、删数据、强推、对外消息）、社交可见（MR 评论、改 reviewer、提审批 / 工单、找人、拉群、动别人的 MR）、目标要变的交给用户，补齐「这件事是什么、为什么现在问、推荐答案、不选的代价、为什么要你定」，截止默认 24 小时（卡片更早过期就按卡片）。模型的答案还要过两道硬检查：每题都答且选项是题目里的（同 `interaction_answer`，不收自由文本）；选中的选项（label 或说明）碰到 `riskyWords`（push、部署、合并、发消息……）就不代答，改成交给用户并把它当推荐——「先不合并」「别发」这种短的「不做」选项除外。`rules`（用户自己的规则）只能放宽内部选项，放不开红线。
-- **为什么是一次模型调用，不是常驻的 Claude 会话**：要在 3 分钟里并发处理十几个 Agent 的提问；开一段无头会话本身就要一两分钟，会话还会为自己的工具弹审批卡；一次调用的输入输出也好测、好看 golden。上下文不够的题模型会交给用户（拿不准就交给用户是提示词里的规则）。
-- **为什么不做成扩展**：挂在 hub 的 `announce` 闸门和交互的 `resolve` 上，都是核心流程；扩展系统没有「拦截新交互」的扩展点，要拆出去得先加一个（清单校验、能替用户答题的权限和同意、进程协议、超时降级），不比这次小。
-- **留痕和改答**：分诊卡的答案发给 Agent 时写明「助手按我的规则先替我答了（理由：…），我之后可能改答」（`prompts/agents/answer.md`）；任务的对话动态里那一行写成「助手代答：X，因为 Y」；代答不记进待办的「拍过的板」（那是用户的决定）。用户要改：`POST /api/v1/interactions/{id}/reanswer {answers}`（hub 转给管理者，只能答卡片的设备不能用），Agent 已经按助手的答案往下走了，所以新答案作为一条消息发给它（`prompts/agents/reanswer.md`，带上助手原来答的），广播 `interaction_reanswered`，用户的答案记进任务的记录和拍过的板。
-- **统计**：每次判断记一条 `session_work_events`（`delegate_answered` / `delegate_asked` / `delegate_failed`），和分诊的统计放在一起看。
-- **还没做的**：各端的界面（卡片上「助手在看」、显示 `delegate` 的上下文、代答过的提问「改答」按钮，#3141）——服务端和协议先合进来，iOS / Android / 网页各自跟上；管理者重启时正在代答的提问不会重新代答，也不会补推（卡片还在 App 里）。
+With over ten Agents running, most mid-task questions concern internal choices the user can't answer (technical approach, default definitions, reruns, branch choice). Agent questions therefore reach the assistant first: answer what it can, send only red-line and goal decisions to the user. hub.json `agents.delegate` (**off by default**, enable with `enabled: true`; examples in `docs/config.md`).
 
-## 主对话、知识库和上下文流动（2026-10-30）
+- **Eligible questions**: `kind: question`, including hook AskUserQuestion, Codex questions, and triage "Your decision" cards (`persona_triage`, also `waitInteraction` → `announce`). Permissions, plan approvals, terminal dialogs, forms, assistant `ask_user`, and questions within assistant chats go directly to users; triage cards requiring authorization links or risky actions such as push / deployment aren't answered either. Don't wait if assistant disconnected.
+- **Answer only real questions, once per question** (2026-11-06): Agent requests (AskUserQuestion, Codex) already await input; triage cards are inferred from stopped-turn text. Delegate only if a question contains `?` / `？` or at least two Agent-authored options (not manager defaults like "Okay, do as you said" / "Leave it for now") (`asksForInput`). Declarative stops ("Waiting for runner recovery and 0.14.0 release") get only fallback choices; formerly the assistant selected "Okay", the Agent repeated itself, another card appeared, and delegation repeated—one board Agent answered three times in a minute. Remember delegated questions per session (compare after removing spaces / punctuation, or bigram similarity ≥ 0.8; `delegated` in `session_work_events`, reloaded on restart): the same Agent repeating within 24 hours goes to the user, recording `delegate_repeat`.
+- **Flow** (`assistant/fleet_delegate.go`; queue in manager since 2026-11-05, #3246): manager `announce` first reports the card to hub with `delegating: true` (visible / answerable in the App, no push or bot card), then evaluates in the background for up to `timeout_seconds` (default 3 minutes). Assistant answer → same `interaction_answer` path (`answerQuestion` → `resolve`, `answered_by: "assistant"` + `reason`), with reason / answers in history and `interaction_resolved`. User handoff, failure, or timeout → remove `delegating`, attach `delegate` context, and use the normal push / bot / channel / quiet-task path; hub appends "Assistant suggests: X" to push body (`hub/push.go`). If the user answers during evaluation, first answer wins and the assistant result is discarded.
+- **Decision** (`assistant/delegate.go`, prompt `prompts/agents/delegate.md`, separate model-config category "Question delegation", `agent.delegate`: before selection uses the information-filtering provider and Opus 5.5; change on that Settings › Model Configuration page, `docs/model-config.md`): one model call reads user messages / final Agent text from the latest three turns, its to-do (title, notes, decisions), cwd project, question, and choices. Prompt rules: answer internal choices with a short reason; send irreversible actions (deploy, release, merge, delete data, force-push, external messages), socially visible actions (MR comments, reviewers, approvals / tickets, contacting people, creating groups, touching others' MRs), and goal changes to the user, supplying "what this is, why ask now, recommended answer, cost of not choosing, why you must decide". Default deadline 24 hours, or earlier card expiry. Two hard checks follow: every question answered using listed choices (same `interaction_answer`, no free text); selected labels / descriptions containing `riskyWords` (push, deploy, merge, send messages…) are handed to the user as recommendations, except short "don't do it" choices such as "Don't merge yet" / "Don't send". User `rules` can broaden internal choices but never red lines.
+- **Why one model call, not a persistent Claude chat**: handle questions from over ten Agents concurrently within 3 minutes; headless chat startup alone takes a minute or two and its tools create permission cards. Single-call input / output is easier to test and inspect in goldens. Insufficient context goes to the user (uncertainty handoff is a prompt rule).
+- **Why not an extension**: it attaches to hub `announce` and interaction `resolve`, both core flows. No "intercept new interaction" extension point exists; extraction first needs one (manifest validation, permission / consent to answer for users, process protocol, timeout fallback), not a smaller change.
+- **Audit and changing answers**: triage answers sent to Agents explain "The assistant answered for me under my rules (reason: …); I may change my answer later" (`prompts/agents/answer.md`); task chat activity says "Assistant answered: X, because Y". Don't record delegation as to-do decisions (those are the user's). To change: `POST /api/v1/interactions/{id}/reanswer {answers}` (hub forwards to manager; card-answer-only devices can't use it). The Agent has already acted, so send the new answer as a message (`prompts/agents/reanswer.md`, including original assistant answer), broadcast `interaction_reanswered`, and record the user answer in task history / decisions.
+- **Statistics**: each evaluation writes `session_work_events` (`delegate_answered` / `delegate_asked` / `delegate_failed`), shown with triage statistics.
+- **Not done**: client UI ("Assistant is reviewing", `delegate` context, "Change answer" for delegated questions, #3141). Server / protocol merge first, iOS / Android / web follow separately. Questions being delegated during manager restart aren't delegated again or catch-up pushed (cards remain in the App).
 
-提示词都在 `server/internal/prompts/assistant/`（`docs/prompts.md`）：CLAUDE.md 是 `claude_md.md`，快照是 `snapshot.md`（主对话那句在 `context.md`），定时任务到点的消息是 `task_run.md`，默认的早报 / 晚间回顾是 `routine_*.md`。
+## Main chat, knowledge base, and context flow (2026-10-30)
+
+Prompts live in `server/internal/prompts/assistant/` (`docs/prompts.md`): CLAUDE.md is `claude_md.md`, snapshots `snapshot.md` (main-chat sentence in `context.md`), due-task messages `task_run.md`, default morning briefing / evening review `routine_*.md`.
 
 
-- **主对话**：第一段对话是主对话（助手的 settings `assistant.main`），Persona tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
-  node 的会话列表里离线会话只列 7 天内最新的 80 个，忙的机器上安静两天的主对话就被挤掉了，侧边栏没有「主对话」（2026-11-01）。
-  助手把这几个会话报在 profile 的 `keep` 里，它自己的设备那一层（2026-11-04 前是 hub）在 node 连上时、它们变了时用 `node.configure` 的 `keep_sessions` 告诉 node，不管多旧都列出来。
-  其他页面交给 Persona 的东西（Agents 长按「交给 Persona」、知识库「问 Persona」）都以 `<jarvis-context>` 发进主对话。
-- **知识库**（`docs/knowledge.md`）：工具 `kb_search` / `kb_list` / `kb_get` / `kb_update`；快照带重点项目和会话；提示词要求把对话里得出的结论写回
-  （项目进展写时间线、项目代码目录写 `dirs` 让 Agents 对上项目、给 Agent 派活前先读项目档案）。
-- **AI 分身**：处理一件事时提示词附上这个会话和它前 3 个项目的档案，处理完把新结论写回项目。
-- 助手和 AI 分身的默认启动器在 hub.json `assistant.launcher` / `inbox.agent.launcher`（这台机器的具体值见 `CLAUDE.local.md`）。
-- 「设置 › 模型配置 › 主对话」选的启动器（存在 `model_config.assistant`，旧的 settings `assistant.launcher` 兼容；#1291 起「设置 › 助手」不再有这个入口）管主对话和新对话：hub 给主对话发消息、App 没指定启动器时用它，
-  node 发现和正在跑的不一样就用新启动器 `--resume` 接着原来的会话（2026-11-01 修：以前只影响新对话，主对话一直用最初的启动器，
-  看起来「换了不生效」）。主对话每条消息都按这个设置，不看它上一轮在跑什么：#1355 一度改成沿用正在跑的，被一条跟进切到别的启动器后就一直回不来（#1518）。
-  但一段对话只能用开始时那一种 Agent 续：设置换成另一种（Codex 的主对话换成 Claude 的启动器，或反过来、或换成 / 换出运行时）时，node 用这段对话自己的启动器续，记得的也是另一种（被失败的启动覆盖过）就用同类的 `claude` / `codex`，hub 配的模型这一条不用（`node/assistant.go` 的 `assistantResumeLauncher`）。
-  以前 node 只在进程还活着时拒绝，进程退出后就拿 `claude --resume <thread>` 去续 Codex 的线程，每条都报 `No conversation found`，主对话显示「会话已结束」、消息停在「没能确认是否送达」（2026-11-05）。要换另一种 Agent 就新建主对话。
-  助手用 `schedule_followup` 给自己定的跟进发回原对话时走同一套规则（主对话按设置，其他对话沿用自己的），不按 Agents 分类（`assistant/start.go` 的 `sendModel`，hub 经 `assistant.send_params` 问）。定时任务自己的对话（早报等）也按「主对话」分类，在里面发消息、跟进发回来都和主对话一样每条按设置（#1544）。顶栏菜单里的「启动器」只换当前这一段对话的下一条消息；点开启动器还能选它模型列表里的模型（`/model` 那份），
-  随消息的 `model` 发出，hub 据此算执行指纹并让 node 重启进程；不选就是该启动器的默认模型。
-- **对话在忙时不换**（#1554）：进程正在回答或有后台任务时，启动器 / 模型变了也照样把这条消息交给正在跑的进程（会话状态仍记它实际在跑的），
-  等它空闲后的第一条消息再重启换过去；以前直接拒收「模型配置已更新，请等当前任务结束后再发送」，助手又不断起新的后台任务时用户一直发不出去。
-  重启后 node 自己告诉对话「后台任务丢了」那条也先问 hub（`assistant.model`，hub 转给助手的 `assistant.send_params`，和手机发的消息同一套），不再按会话上次跑的模型起进程。
+- **Main chat**: the first chat becomes main chat (assistant settings `assistant.main`), opened by default in the Persona tab. Snapshot begins "This is the main chat"; prompts require continuing prior work.
+  node offline lists only the latest 80 sessions within 7 days; on a busy machine, a main chat quiet for two days was crowded out, removing "Main chat" from the sidebar (2026-11-01).
+  The assistant reports these sessions in profile `keep`; its device layer (hub before 2026-11-04) supplies `node.configure` with `keep_sessions` on node connection and changes, listing them regardless of age.
+  Handoffs from other pages (Agents long-press "Hand to Persona", knowledge "Ask Persona") enter main chat as `<jarvis-context>`.
+- **Knowledge base** (`docs/knowledge.md`): `kb_search` / `kb_list` / `kb_get` / `kb_update`; snapshots include key projects / chats; prompts require writing conclusions back
+  (project progress to timelines, code directories to `dirs` for Agent-project matching, read project profiles before dispatch).
+- **AI twin**: item-processing prompts include the chat and its top 3 project profiles; afterward write new conclusions back to projects.
+- Assistant and AI twin default launchers: hub.json `assistant.launcher` / `inbox.agent.launcher` (local specifics in `CLAUDE.local.md`).
+- The launcher in Settings › Model Configuration › Main chat (stored `model_config.assistant`, legacy settings `assistant.launcher` compatible; removed from Settings › Assistant since #1291) controls main and new chats: used for hub main-chat sends and when the App doesn't specify a launcher.
+  If node sees a mismatch with the running process, it uses the new launcher with `--resume` on the same chat (fixed 2026-11-01: previously only new chats changed, main chat retained the initial launcher,
+  appearing ineffective). Every main-chat message follows this setting, not the previous turn's launcher: #1355 briefly preserved the running launcher, so a follow-up changing it prevented returning (#1518).
+  But a chat can resume only with its original Agent type. If settings select another type (Codex main chat → Claude launcher, vice versa, or into / out of a runtime), node uses the chat's launcher; if its remembered launcher is also the wrong type (overwritten by a failed start), use same-type `claude` / `codex`, ignoring the hub model for this message (`assistantResumeLauncher` in `node/assistant.go`).
+  Previously node rejected only while the process lived, then tried `claude --resume <thread>` for exited Codex threads: every message returned `No conversation found`, main chat showed "Session ended", messages stayed "Couldn't confirm delivery" (2026-11-05). To change Agent type, create a new main chat.
+  `schedule_followup` returns to the original chat using the same rules (main chat follows settings, other chats keep their own), not the Agents category (`sendModel` in `assistant/start.go`, hub asks `assistant.send_params`). Scheduled-task chats (morning briefing, etc.) also use the "Main chat" category, following settings per message and follow-up (#1544). The top-bar "Launcher" menu changes only this chat's next message; opening a launcher also allows selecting a model from its model list (the `/model` list),
+  sent as message `model`, which hub uses for the execution fingerprint and node process restart; unselected means the launcher default.
+- **Don't switch while busy** (#1554): while a process answers or has background tasks, changed launcher / model messages still go to that running process (session state records the actual one);
+  restart with the new selection on the first idle message. Previously it rejected with "Model configuration changed; wait until the current task ends", trapping users when the assistant kept creating background tasks.
+  node's post-restart "Background tasks were lost" message also first asks hub (`assistant.model`, forwarded to assistant `assistant.send_params`, same as phone sends), not starting from the session's last model.
 
-## 坑
+## Pitfalls
 
-- 模型会把 ask_user 和别的工具**并行**调用（实测：ask_user 和 schedule_followup 同一毫秒发出），所以 ask_user 不能当「先确认再做」的唯一闸门；
-  真正有副作用的工具（`lark_send`、`mail_send`）自己在 hub 里要批准。
-- 定时任务错过太久不补跑：hub 停了一上午，不会中午才发早报（晚于计划 30 分钟就跳过，只记录）。
-- 定时任务、跟进、运行记录只有从库里读成功才算加载完：读失败时不会退回默认的两条定时任务，相关接口回 503，工具报错，调度这一轮跳过，什么都不写，
-  下次调用再读。以前读失败也算加载完，下一次保存就把库里真实的定时任务和跟进覆盖掉了（2026-11-02 评审发现，`TestScheduleReadFailureNeverOverwrites`）。
-- 静默推送会被系统限流，强制退出的 App 收不到；唤醒失败时工具结果会告诉模型「请他打开 App」。
-- 快照以前放在 `--append-system-prompt`，以为每次重启都会换成新的；其实 Claude Code 续聊时一直用对话第一次启动时记下的系统提示（见下节），
-  助手看到的一直是那段对话第一天的时间和未读。现在每条消息都带。
-- Go 的零时间 `0001-01-01T00:00:00Z` 会出现在 `last_run` / `next_run` 里，App 用 `Date.realDate` 当作「没有」。
-- **无人值守的运行不能卡在批准上**（2026-10-30 实测）：助手默认权限模式下，连 `notify_user`、`schedule_followup` 都要在手机上点「允许」，
-  夜里到点的跟进、Monitor 事件就停在批准那一步，推出去的只有一条「需要批准」。现在 Persona 自己的工具预先放行（见上表）。
-- **systemd 重启 hub 服务（兼容 unit `jarvisd`）会杀掉整个 cgroup**：助手的 claude 和它的后台命令、Monitor 一起没了，node 来不及做任何收尾，所以「哪些任务在跑」
-  要随时落库（`node_sessions.tasks`），不能等关机时再记。
-- **起不来的进程会吞掉消息**（2026-11-05）：node 先把消息写进新进程的 stdin、马上回 hub「送出了」；启动器这时已经失败退出（例如 `jarvisd launch opus: no jarvis node`），
-  消息就丢了，App 一直停在「正在送达」，日志里只有 zsh 主题插件一行带 `error` 字样的提示。现在新起进程的那一次发送等它第一行输出（最多 `assistantStartWait` 8 秒）：
-  先退出就报错「<启动器> 没有启动起来，消息没有送达：<stderr 最后几行>」，App 显示发送失败可以重试；超过 8 秒还没输出按启动处理（慢的 SessionStart hook）。
-  stderr 的尾巴去掉颜色码和空行后记在进程上（`watchAssistantStderr`）。
-  进程在写入前就退出时，原来报的是管道错误（`send to claude: write |1: file already closed`），现在也等它退出、读完 stderr，报同样的「没有启动起来（N 秒后退出）：…」。
-  如果是 shell 找不到命令（退出码 127 / `command not found`，多半是 Claude Code 正被自动更新重装，`claude` 会消失约 2.5 秒），
-  隔 `assistantStartRetryDelay`（2 秒）重起，最多 `assistantStartRetries`（3）次，用户无感；别的启动失败不重试（#2581，`docs/lessons/server.md`）。
-- **node 的 socket 文件被别的进程顶替**（2026-11-05）：另一个 node 在同一路径上监听过、退出时不删文件（`SetUnlinkOnClose(false)`），路径上就剩一个没人听的 socket，
-  所有 `jarvisd launch <Persona 管理的启动器>` 和 hook 都 `connection refused`。原来的看门狗只看文件在不在；现在每 15 秒还看它是不是自己那个（`os.SameFile`），
-  不是时拨一下，没人应答才重建（`sockGone`），有人应答说明是更新的 node 在用，不抢。
-- 中文环境下 `.hour(.twoDigits(amPM: .omitted))` 是 12 小时制（17:00 显示成「05:00」）：时刻一律用 `AssistantScheduleText.hm`（固定 `HH:mm`）。
+- Models call ask_user **in parallel** with other tools (measured: ask_user and schedule_followup in the same millisecond), so ask_user can't be the sole "confirm before acting" gate;
+  genuinely side-effecting tools (`lark_send`, `mail_send`) request approval themselves in hub.
+- Don't catch up very late scheduled tasks: after a morning of hub downtime, no noon morning briefing (skip if over 30 minutes late, record only).
+- Scheduled tasks, follow-ups, and run history count as loaded only after successful database reads. Failures never fall back to the two default tasks; related APIs return 503, tools fail, the scheduler skips the round, and nothing is written;
+  retry reading on the next call. Previously failure still marked loading complete, and the next save overwrote real tasks / follow-ups (review finding 2026-11-02, `TestScheduleReadFailureNeverOverwrites`).
+- Silent pushes are system-rate-limited and don't reach force-quit Apps; failed wakeups tell the model to ask the user to open the App.
+- Snapshots formerly used `--append-system-prompt`, assuming restarts refreshed them. Claude Code resume actually retains the system prompt from the chat's first start (next section),
+  so the assistant kept seeing the first day's time / unread state. Now every message carries a snapshot.
+- Go zero time `0001-01-01T00:00:00Z` appears in `last_run` / `next_run`; App `Date.realDate` treats it as absent.
+- **Unattended runs must not block on approval** (measured 2026-10-30): default assistant permission mode asked phone approval even for `notify_user`, `schedule_followup`;
+  nighttime follow-ups and Monitor events stopped there, pushing only "Approval needed". Persona tools are now preallowed (table above).
+- **systemd restarting hub (compatibility unit `jarvisd`) kills the whole cgroup**: assistant claude, background commands, and Monitor disappear before node can clean up, so running task lists
+  must be persisted continuously (`node_sessions.tasks`), not only on shutdown.
+- **Failed process startup swallows messages** (2026-11-05): node wrote a new process's stdin and immediately told hub "sent", while the launcher had already exited (e.g. `jarvisd launch opus: no jarvis node`),
+  losing the message. The App stayed "Delivering", logs only contained a zsh theme-plugin notice with `error`. A first send to a new process now waits for its first output line (up to `assistantStartWait`, 8 seconds):
+  early exit reports "<launcher> didn't start; message not delivered: <last stderr lines>", and App shows retryable send failure. No output after 8 seconds counts as started (slow SessionStart hooks).
+  The process stores stderr tail with ANSI and blank lines removed (`watchAssistantStderr`).
+  Exit before writing formerly returned a pipe error (`send to claude: write |1: file already closed`); now wait for exit and drained stderr, reporting the same "Didn't start (exited after N seconds): …".
+  For shell command-not-found (exit 127 / `command not found`, usually Claude Code auto-update reinstall removes `claude` for about 2.5 seconds),
+  restart after `assistantStartRetryDelay` (2 seconds), up to `assistantStartRetries` (3), invisibly to users; other startup failures aren't retried (#2581, `docs/lessons/server.md`).
+- **Another process replaces node's socket file** (2026-11-05): another node listened on the same path and didn't unlink on exit (`SetUnlinkOnClose(false)`), leaving an unserved socket;
+  every `jarvisd launch <Persona-managed launcher>` and hook got `connection refused`. The watchdog once checked only existence; now every 15 seconds it checks ownership (`os.SameFile`),
+  dials if different, and recreates only when unanswered (`sockGone`). A responding newer node keeps the socket; don't take it back.
+- In Chinese locales, `.hour(.twoDigits(amPM: .omitted))` is 12-hour (17:00 appears "05:00"); always use `AssistantScheduleText.hm` (fixed `HH:mm`).
 
-## 实时快照和前缀缓存（2026-11-01）
+## Live snapshots and prefix caching (2026-11-01)
 
-**为什么快照不能放系统提示**：提示词缓存是按前缀匹配的，一次请求从前往后依次是系统提示（含工具定义）、项目上下文（CLAUDE.md、记忆）、
-整段对话；前面任何一个字节不同，后面的整段历史都读不到缓存，要按「写缓存」的价钱和速度重算一遍。助手进程空闲 20 分钟就回收，下次说话
-`--resume` 重新起，所以「每次启动都一样」的东西才能放在前面：快照（时间、未读、会议）每次都不同，只能跟着消息走，放在对话末尾。
+**Why snapshots can't be in system prompts**: prompt caching matches prefixes. A request consists of system prompt (including tool definitions), project context (CLAUDE.md, memory),
+then the whole chat. Any earlier byte change prevents reading the later history cache, requiring recomputation at cache-write price and speed. Assistant processes are reclaimed after 20 idle minutes, then restarted with
+`--resume`, so only startup-invariant content belongs at the front. Snapshots (time, unread, meetings) always change and must accompany messages at the chat's end.
 
-**实际的情况比这更绕**（Claude Code 2.1.314 实测，hub 机器、走同一个启动器）：
+**Reality is more complicated** (Claude Code 2.1.314 measured on hub machine, same launcher):
 
-- Claude Code 续聊时**不用**新给的 `--append-system-prompt`，一直用对话第一次请求时记下的系统提示，压缩后才换（文档「System prompt flags in
-  resumed conversations」，实测换了文字后模型答的还是第一次的暗号、缓存全读到）。所以以前的快照并没有让缓存失效，而是**一直是第一天那份**。
-- 真正让重启后读不到缓存的是**工具定义变了**：把一段 27.5 万 token 的真实助手对话复制一份（换个会话 id、放在临时目录，Persona 工具用导出的
-  同一份定义）后重启，结果见下表。schema 里键的顺序不影响；少一个 MCP 工具就整段重写。hub 上 Persona 的工具定义来自提示词文件（部署时改了就变）
-  和手机上报的 `phone_*`（哪台设备最后连上、授权了哪些就是哪些），所以 node 现在在每次启动时比较工具列表，变了就在日志里写
-  「tools changed since its last start」，每次启动后的第一次请求也记下读到 / 重写了多少（`assistant_context.go`、`readAssistant`）。
-- 空闲超过一小时（缓存的寿命）无论如何都要重写：这时只能靠上下文小，见下面「压缩」。
+- Resumed Claude Code chats **don't use** new `--append-system-prompt`; they retain the system prompt from the first request until compaction (documentation "System prompt flags in
+  resumed conversations"; after changing text, the model still answered the first secret phrase and read the whole cache). Old snapshots therefore didn't invalidate cache: they **stayed the first day's snapshot**.
+- What really breaks post-restart cache reads is **changed tool definitions**: copy a real 275k-token assistant chat (new session id, temporary directory, same exported Persona definitions),
+  then restart; results below. Schema key order doesn't matter; removing one MCP tool rewrites everything. Persona definitions come from prompt files (deployment changes them)
+  and phone-reported `phone_*` (the last connected device and its permissions), so node now compares tool lists at each start, logging
+  "tools changed since its last start" on changes and cache read / rewrite counts for the first request after startup (`assistant_context.go`, `readAssistant`).
+- Idle over an hour (cache lifetime) always rewrites; only smaller context helps then, see "Compaction" below.
 
-| 主对话的副本（27.5 万 token） | 首字 | cache_read | cache_creation |
+| Main-chat copy (275k tokens) | First token | cache_read | cache_creation |
 | --- | --- | --- | --- |
-| 冷启动（缓存过期） | 9.8 s | 0 | 275,373 |
-| 重启，什么都没变 | 7.0 s | 275,327 | 91 |
-| 重启，换了 `--append-system-prompt` 的文字 | 5.2 s | 275,418 | 46 |
-| 重启，工具 schema 的键换了顺序 | 7.7 s | 275,464 | 46 |
-| 重启，少了一个 MCP 工具 | 8.5 s | 0 | 275,385 |
-| `/compact`（缓存还热） | 35 s 压完 | 275,393 → 3,507（压缩后的历史） | |
-| 压缩后冷启动 | 5.3 s | 0 | 36,195 |
-| 压缩后再重启 | 4.1 s | 32,886 | 3,354 |
+| Cold start (expired cache) | 9.8 s | 0 | 275,373 |
+| Restart, unchanged | 7.0 s | 275,327 | 91 |
+| Restart, changed `--append-system-prompt` text | 5.2 s | 275,418 | 46 |
+| Restart, reordered tool schema keys | 7.7 s | 275,464 | 46 |
+| Restart, one MCP tool removed | 8.5 s | 0 | 275,385 |
+| `/compact` (warm cache) | 35 s to compact | 275,393 → 3,507 (compacted history) | |
+| Cold start after compaction | 5.3 s | 0 | 36,195 |
+| Another restart after compaction | 4.1 s | 32,886 | 3,354 |
 
-改之前线上的记录（transcript 里空闲 20 分钟以上之后的第一条回复）：10-28 起那段长对话 10-29～10-30 有 5 次空闲 39–59 分钟（缓存还没过期）后
-`cache_read` 为 0、重写 30–37 万 token，第一段回复 10–320 秒，同样空闲的另外几次读到了缓存；空闲超过一小时的都是全量重写，最后一次 51 万。
-现在的主对话 11-01 空闲 46 小时后第一条：重写 25.4 万，12.6 秒。
+Pre-change production records (first transcript reply after over 20 minutes idle): the long chat begun 10-28 had five 39–59-minute idle periods on 10-29–10-30 (cache still valid),
+with `cache_read` = 0, rewriting 300k–370k tokens and taking 10–320 seconds for the first response segment, while other equally idle runs read cache. Every idle period over an hour rewrote fully, the last 510k tokens.
+Current main chat's first message on 11-01 after 46 idle hours: 254k rewritten, 12.6 seconds.
 
-**做法**：
+**Implementation**:
 
-- node 每发一条消息先问 hub 要快照（`assistant.context`，和起进程并行），按节（顶格的一行加下面缩进的几行）和这段对话上次带过的比，
-  只带变了的和时间，包成 `<persona-context>`（`prompts/assistant/turn_context.md`；旧 node 和历史消息里是 `<jarvis-context>`，读取端两个都认，#3182）放在消息的第一个文本块。带过什么记在 node 内存里，
-  对话压缩（`compact_boundary`；Codex 的 `contextCompaction`）后清掉，下一条带全量；node 重启也是全量一次。App、网页、标题、知识库都从
-  transcript 解析里拿掉这个块（`transcript.ContextRe`），用户看不到。定时任务、飞书 `/agent`、重启后告诉对话丢了后台任务……都走 `assistant.send`，
-  一样带上。
-- 系统提示不再有 `--append-system-prompt`；Codex 的 `developerInstructions` 只剩记忆（索引变了会不同，Codex 续聊时怎么处理没有实测）。
-- hub 的快照：数据 45 秒内复用；过期了就后台去读，消息最多等 1.5 秒，等不到就用上一份（30 分钟内），时间总是现在的、已经结束的会去掉。
+- Before each message, node requests a hub snapshot (`assistant.context`, parallel with process startup), compares sections (unindented header plus indented lines) against the last sent snapshot for this chat,
+  and includes only changes and time in `<persona-context>` (`prompts/assistant/turn_context.md`; old nodes / history use `<jarvis-context>`, readers recognize both, #3182) as the first text block. Prior content is remembered in node memory,
+  cleared after compaction (`compact_boundary`; Codex `contextCompaction`), so the next message is full; node restart also sends one full snapshot. App, web, titles, and knowledge base remove it in
+  transcript parsing (`transcript.ContextRe`), hiding it from users. Scheduled tasks, Lark `/agent`, and post-restart lost-background-task explanations all use `assistant.send`
+  and include it too.
+- No `--append-system-prompt` remains; Codex `developerInstructions` contains only memory (changes with its index; resumed handling not measured).
+- hub snapshot: reuse data for 45 seconds; refresh stale data in the background, wait at most 1.5 seconds per message, then use the prior snapshot if within 30 minutes. Time is always current; ended items removed.
 
-## 压缩（2026-11-01）
+## Compaction (2026-11-01)
 
-助手的长对话从没压缩过（10-28 起的一段到了 52 万 token，现在的主对话 27.5 万）：模型是 1M 上下文，Claude Code 默认要到快满才自动压缩。
+Long assistant chats had never compacted (one begun 10-28 reached 520k tokens; current main chat 275k): the model has 1M context, and Claude Code auto-compacts only near capacity by default.
 
-- **自动压缩**：`CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000`（node 起 claude 时设，文档「Set the auto-compact window」，可设 10 万–100 万，
-  环境变量优先于设置和 `--autocompact`）。实测 `-p` stream-json 下也会自动压缩：上一轮的上下文超过窗口，下一条消息开始前先压（`system/status`
-  `compacting` → `compact_boundary`，`trigger: auto`），这一轮要等压缩（haiku 压 21 万约 19 秒）。
-- **空闲时压缩**：Claude Code 自己的 idle compaction（`idleCompaction`，默认 20 万）只在交互式会话里跑，`-p` 不跑。所以 node 回收空闲进程时，
-  上下文超过 15 万 token（低于自动压缩的点，否则永远轮不到）就先发一条 `/compact`（stream-json 的 user 消息，实测可用，`trigger: manual`），
-  趁缓存还热压掉，压完这个进程不再压、下次空闲照常回收。这不是一轮对话：App 里状态不变、不推送；transcript 里的 `/compact` 显示成
-  「压缩上下文」提示（以前显示成用户发的消息，还会让对话变成未看）。
-- **Codex**：`-c model_auto_compact_token_limit=200000`（Codex 配置文档的顶层键）。Codex 有 `thread/compact/start`，空闲压缩暂时没接。
+- **Automatic compaction**: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000` (set by node on claude start, docs "Set the auto-compact window", configurable 100k–1M;
+  environment overrides settings and `--autocompact`). Confirmed in `-p` stream-json: if previous-turn context exceeds the window, compact before the next message (`system/status`
+  `compacting` → `compact_boundary`, `trigger: auto`); this turn waits (haiku took about 19 seconds for 210k).
+- **Idle compaction**: Claude Code's `idleCompaction` (default 200k) runs only interactively, not `-p`. Before reclaiming an idle process, node
+  sends `/compact` if context exceeds 150k tokens (below automatic threshold or it never gets a chance; stream-json user message, measured working, `trigger: manual`),
+  while cache is warm. Don't compact this process again; reclaim normally next idle. This isn't a chat turn: App state unchanged, no push; transcript `/compact` displays
+  "Compact context" (formerly a user message that also made the chat unread).
+- **Codex**: `-c model_auto_compact_token_limit=200000` (top-level Codex config key). `thread/compact/start` exists; idle compaction not integrated yet.
 
-### 网关报的不可能的用量（2026-11-06，#3300）
+### Impossible gateway usage (2026-11-06, #3300)
 
-Claude Code 按最后一条回复的 `usage` 估算上下文。有的模型网关给一轮里每条回复都报 0，最后一条报整轮所有请求加起来的输入（8.5 万的对话报了 170 万）：
-下一条消息开始前 Claude Code 认为超过窗口，先自动压缩——成功了上下文白白丢掉，摘要也失败就回「Prompt is too long · automatic compaction failed」，之后每条消息都一样，对话永远用不了。
+Claude Code estimates context from the last reply's `usage`. Some gateways report zero for every reply in a turn, then total all request inputs in the last reply (85k-token chat reported 1.7M):
+before the next message, Claude Code thinks the window is exceeded and auto-compacts—successful compaction needlessly loses context; a failed summary returns "Prompt is too long · automatic compaction failed", repeated forever on every message.
 
-- **不可能的用量**（`transcript.PlausibleContext`）：一次请求的输入超过 100 万（最大的上下文窗口），或比 transcript 的字节数多出 20 万以上（一个 token 至少约一个字节，20 万留给系统提示、工具、记忆）。
-  这种数不进上下文用量（`ContextTokens`）和 node 的 `p.context`，不会触发空闲压缩。
-- **修复**（`node/assistant_usage.go`）：claude 每一轮的 `result` 后查 transcript（每个进程第一次查整份，之后从上次查到的位置往后），把不可能的 `input_tokens` / `cache_*_input_tokens` 原地改成 0
-  （用空格补齐长度，文件大小、inode 不变，读的人偏移照旧；子代理的行不动），改之前在旁边留一份 `<transcript>.usage-backup-<时间>`。数在进程内存里，所以修完让进程退出（有后台任务在跑就不退，文件照样修，下次启动用）。
-- **重发**：这一轮是「Prompt is too long」时，修完用 `assistant/usage_retry`（只有一个 `<persona-context>` 块，App 里不显示气泡）续上；同一段对话 10 分钟内最多一次，transcript 里没有不可能的用量就不重发（真的太长，错误照旧）。
-- 实测（Claude Code 2.1.318，transcript 副本 + 假 API）：原样 resume 先要压缩（`pre_tokens` 170 万），摘要为空时回「Prompt is too long」；用量改成 0 后不压缩，直接发出请求。
-  之前没送到的几条用户消息还在 transcript 里，Claude Code 把它们和新的一条合成一个用户轮次发出（合成的错误回复不进请求），所以重发不用再带原文。
+- **Impossible usage** (`transcript.PlausibleContext`): request input over 1M (largest context window), or over transcript bytes by more than 200k (at least roughly one byte per token, with 200k allowance for system prompt, tools, memory).
+  Exclude such values from context usage (`ContextTokens`) and node `p.context`, so they don't trigger idle compaction.
+- **Repair** (`node/assistant_usage.go`): after each claude turn `result`, inspect transcript (whole file on the process's first check, then from the previous position), replacing impossible `input_tokens` / `cache_*_input_tokens` in-place with 0
+  (pad with spaces, preserving size, inode, reader offsets; subagent rows untouched), first saving `<transcript>.usage-backup-<time>` beside it. Values remain in process memory, so exit after repair (don't exit with background tasks; still repair for next startup).
+- **Retry**: if the turn was "Prompt is too long", continue after repair with `assistant/usage_retry` (only a `<persona-context>` block, no App bubble); at most once per chat per 10 minutes. Don't retry without impossible usage (genuinely too long, retain error).
+- Measurement (Claude Code 2.1.318, transcript copy + fake API): unchanged resume attempted compaction (`pre_tokens` 1.7M), empty summary returned "Prompt is too long"; zeroed usage skipped compaction and sent directly.
+  Previously undelivered user messages remain in transcript; Claude Code combines them with the new message into one user turn (synthetic error replies excluded), so retry needn't include their text again.
 
-### 手动压缩（2026-11-04，#1727）
+### Manual compaction (2026-11-04, #1727)
 
-用户在主对话的菜单里点「压缩上下文」：`POST /api/v1/assistant/conversations/{id}/compact` → node 的 `assistant.compact`（`node/assistant_compact.go`）。
+User selects "Compact context" in main-chat menu: `POST /api/v1/assistant/conversations/{id}/compact` → node `assistant.compact` (`node/assistant_compact.go`).
 
-- 和空闲压缩同一条路：进程在就直接写一条 `/compact`，不在就先 `--resume` 起一个（启动器、模型按这段对话上次的）；Codex 是 `thread/compact/start`；runtime 跑的对话不支持。
-  正在回答、已经在压的回 409，不排队：排在一轮后面的 `/compact` 用户看不到什么时候开始。
-- 进度记在 node 的会话状态里（落 hub 的 Postgres），随会话列表下发 `compaction`：`running` → 看到 `compact_boundary`（Codex 的 `thread/compacted` / `contextCompaction`）是 `done`；
-  这一轮的 `result` 先到、没有边界是 `failed`，错误是 Claude Code 的原话（对话太短时是「Not enough messages to compact」之类）；
-  10 分钟没结果、进程退出、node 重启都算 `failed`（`reapAssistants` 每分钟查一次）。这一轮里自己触发的自动压缩不改它。
-- 它不是一轮对话：会话状态不变成「工作中」、不推送、不取消归档；transcript 里 `/compact` 和边界照旧是「压缩上下文」「上下文已压缩」两条提示，
-  各端把一次压缩画成一条分隔线「以上内容已压缩 · 手动 · 压缩前 N 万 token」。
+- Same path as idle compaction: write `/compact` into an existing process, or start with `--resume` (chat's previous launcher / model); Codex uses `thread/compact/start`; runtime chats unsupported.
+  Answering or already compacting returns 409, not queued: users can't see when a `/compact` queued behind a turn begins.
+- Progress lives in node session state (hub Postgres), sent with session lists as `compaction`: `running` → `done` on `compact_boundary` (Codex `thread/compacted` / `contextCompaction`);
+  if turn `result` arrives first without a boundary, `failed` with Claude Code's original error (e.g. "Not enough messages to compact" for short chats);
+  10 minutes without result, process exit, or node restart means `failed` (`reapAssistants` checks each minute). Automatic compaction triggered within a turn doesn't change it.
+- Not a chat turn: no Working state, push, or unarchive. Transcript `/compact` and boundary remain "Compact context" / "Context compacted" notices;
+  clients draw one divider per compaction: "Content above compacted · Manual · Nk tokens before compaction".
 
-### 新建主对话（2026-11-04，#1727）
+### New main chat (2026-11-04, #1727)
 
-主对话用久了上下文很大，用户可以换一段新的：`POST /api/v1/assistant/main/new`（助手的路由，`assistant/start.go`）。
+A long-used main chat accumulates large context; users can replace it: `POST /api/v1/assistant/main/new` (assistant route, `assistant/start.go`).
 
-1. 旧主对话正在回答或压缩时拒绝（409 `busy`）；App 带上它看到的主对话 id（`expect`），别的设备已经换过时拒绝（409 `main_changed`），不会把新的又换掉。
-2. 带背景（`carry: summary`，默认）：node 的 `assistant.handoff` 从旧对话的 transcript 里取最近一次压缩的摘要（Claude 的 `isCompactSummary` 行、Codex 的 `compacted` 行，最多 1.2 万字）
-   和之后的几条文字消息（最多 12 条、6000 字，去掉 `<jarvis-context>`），存进 settings `assistant.main_handoff`。
-3. 清掉 `assistant.main`，旧 id 记进 `assistant.former_main`（最多 10 个，在 profile 的 `keep` 里，hub 让 node 一直列出它们，安静多久都找得到），
-   改名「旧主对话 · 至 M月D日」（算用户起的，自动命名不覆盖），归档（都在助手里一步做完）。
-4. 下一条发给主对话的消息开新的会话（App 的 `POST /api/v1/assistant/conversations` 带 `main:true`、飞书机器人和渠道插件发给主对话的（助手自己开，带 `main`），都走助手的 `startMain`），
-   `assistant/main_handoff.md` 把带过去的背景写成 `<jarvis-context kind="context" title="接上旧主对话">` 放在第一条消息前（App 里是一个上下文标签），用完就清掉；
-   没带背景（`carry: none`）也写一句旧主对话的 id，助手要翻可以用 `conversation_read`。
-   安卓开新主对话是先用空的 `prompt` 建、再单独发消息：这时背景记上新会话的 id（`for`），等发给它的第一条消息（`POST …/messages`，或飞书、渠道发来的，都经 `assistant.send_params`）再带上，不单独成一轮。
+1. Reject if the old main chat is answering or compacting (409 `busy`); App supplies its observed main-chat id (`expect`), rejecting if another device already changed it (409 `main_changed`) rather than replacing the new one again.
+2. Carry background (`carry: summary`, default): node `assistant.handoff` extracts the latest compaction summary from the old transcript (Claude `isCompactSummary`, Codex `compacted`, up to 12k characters)
+   plus subsequent text messages (up to 12, 6000 characters, `<jarvis-context>` removed), stored in settings `assistant.main_handoff`.
+3. Clear `assistant.main`, add old id to `assistant.former_main` (up to 10, in profile `keep`, so hub ensures node always lists them),
+   rename "Old main chat · Through M/D" (user-assigned, not overridden by autonaming), archive—all in one assistant operation.
+4. The next main-chat message creates a new session (App `POST /api/v1/assistant/conversations` with `main:true`, Lark bot / plugin main-chat sends created by assistant with `main`, all via `startMain`),
+   with `assistant/main_handoff.md` prepending background as `<jarvis-context kind="context" title="接上旧主对话">` (`title` means "Continue old main chat"; App context tag), then clearing it;
+   `carry: none` still includes the old main-chat id, allowing `conversation_read`.
+   Android first creates an empty `prompt`, then sends separately: bind background to the new session id (`for`) and include it with the first `POST …/messages` or Lark / channel message, all through `assistant.send_params`, not as a separate turn.
 
-为什么这样定：
+Why:
 
-- **不当场开新会话**：没有用户的第一句话就得替用户编一句，新主对话第一条就成了机器写的。延到第一条消息，和「还没有主对话」的流程一样，各端本来就支持。
-- **带压缩摘要，不带知识库**：人、群、项目、记忆、实时快照每个助手对话本来就有（CLAUDE.md、工具、每条消息的快照），再带一遍是重复；
-  换对话会丢的是这段对话里的结论和还在进行的事，正是压缩摘要。没压缩过的只带最近几条，确认框里提示可以先压缩再新建。
-- **旧的不删**：归档只是不在列表里，用户再给它发消息就自动回到列表（`unarchiveOnSend`）。
+- **Don't create immediately**: without a user's first message, we'd have to invent one, making the first message machine-authored. Deferring matches the existing "no main chat yet" flow all clients support.
+- **Carry compaction summary, not knowledge base**: people, groups, projects, memory, live snapshots already exist for every assistant chat (CLAUDE.md, tools, message snapshots); carrying them duplicates content.
+  What's lost is chat-specific conclusions and ongoing work, exactly the compaction summary. Without compaction, carry only recent messages; confirmation suggests compacting first.
+- **Don't delete old chats**: archive only removes from lists; sending again automatically restores them (`unarchiveOnSend`).
 
-iOS / macOS（#1762）：主对话顶栏头像的菜单（Mac 同一个菜单，侧栏主对话那行的右键菜单也有）加「压缩上下文」「新建主对话…」，hub 的 features 带 `assistant_compact` / `assistant_main_new` 才显示。
-输入框上方一条状态（`MainConversationActionsView.swift`）：压缩中「正在压缩上下文…」，`done` 显示 4 秒「已压缩上下文」，`failed`「压缩失败：…」可以关掉；
-`done` / `failed` 只在这个页面看着它从 `running` 变过来、或刚结束（1 分钟 / 10 分钟内）时显示，打开页面不会提示很久以前的结果（判断在 `MainConversationActions.shown`，和网页一致）。
-新建前的确认是一个表单 sheet，「带上旧对话的摘要」默认开；成功后回到空的主对话页，第一条消息照「还没有主对话」的流程开新的。分隔线文案和网页、安卓统一。
+iOS / macOS (#1762): avatar top-bar menu (same Mac menu, also sidebar main-chat context menu) adds "Compact context" / "New main chat…", shown only with hub features `assistant_compact` / `assistant_main_new`.
+Status above input (`MainConversationActionsView.swift`): "Compacting context…", `done` shows "Context compacted" for 4 seconds, `failed` shows dismissible "Compaction failed: …";
+show `done` / `failed` only if this page observed `running` transition or completion is recent (within 1 / 10 minutes), never ancient results on opening (`MainConversationActions.shown`, same as web).
+New-chat confirmation is a form sheet, "Carry the old chat's summary" on by default; success returns to empty main-chat page, and the first message starts it via the no-main-chat flow. Divider wording matches web / Android.
 
-## 定时任务（2026-10-31 合成一张表）
+## Scheduled tasks (unified into one table 2026-10-31)
 
-以前是两套：定时任务（routines，每天几点）和跟进（follow-ups，助手用 `schedule_followup` 安排的一次性唤醒），分存在两个 settings 里，
-App 的「定时任务」页只列前者的开关。用户让助手「每 30 分钟巡检一次」，它只能在每一轮结尾再 `schedule_followup` 下一次接力：
-一轮开始时那条跟进就从列表里拿掉了，这一轮卡在 Bash 审批上（没人点）的一个多小时里，页面上什么都没有，没法看、改、停。
+Previously two systems: routines (daily time) and follow-ups (one-shot wakeups from `schedule_followup`), in separate settings;
+App "Scheduled tasks" listed only routine switches. For "check every 30 minutes", the assistant scheduled the next follow-up at each turn's end:
+removed from the list when the turn began, so an hour blocked on unanswered Bash approval left the page empty, impossible to inspect / edit / stop.
 
-现在只有一张表 `Task`（`assistant/schedule.go`，settings `assistant.tasks`），`repeat` 三种：
+Now one `Task` table (`assistant/schedule.go`, settings `assistant.tasks`), three `repeat` types:
 
-- `once`：一次性跟进，跑完关掉，再留一天（App 不显示）好让「它自己再安排下一次」接得上，然后清掉；
-- `daily`：每天 / 每周几的几点，错过 30 分钟以上跳过并记录；
-- `interval`：每 N 分钟（5 分钟到 7 天），`at` 是下一次，跑的时候按原节奏往后挪；停机错过了就回来跑一次，再从现在起算。
+- `once`: one-shot follow-up, disabled after running and retained one day (hidden in App) to link "schedule the next one", then removed;
+- `daily`: daily / selected weekday time; over 30 minutes late skips with a record;
+- `interval`: every N minutes (5 minutes–7 days), `at` is next run, advanced on original cadence; missed during downtime runs once on return, then counts from now.
 
-**等主对话接好**（#4253，`assistant/schedule_ready.go`，设计见 `docs/onboarding.md` 4.4）：到点的运行先看主对话就绪度（不 probe，不花 token），这次运行要用的那一步（电脑、Claude Code、模型）挡着时跳过，记「还没接好电脑或模型，这次跳过」，不推送、不重试。只看这次用得上的：发进另一台电脑上的对话的跟进不等助手的电脑，用了别的启动器的任务不等主对话的 Claude Code 和模型；「立即运行」不拦（用户自己点的，要看到真实的错）；一次性的任务（提醒、助手给自己定的跟进）也不拦：到点就关掉了，跳过就丢了，照旧发，失败照旧推送、重试一次。因为要用户去接、去修的那一步（没加电脑、没登录、Key 不对……）跳过过一次，就在 `assistant.readiness` 记 `routines_waiting`（电脑只是睡着 / 离线不记，醒来不算新闻），就绪（`mode: full`）后第一次运行前清掉，并在主对话的对话动态里写一条 `notice`。默认的早报照旧开着。
+**Wait for main-chat setup** (#4253, `assistant/schedule_ready.go`, design `docs/onboarding.md` 4.4): due runs check readiness without probing / tokens; if a required step (computer, Claude Code, model) is blocked, skip with "Computer or model not connected yet; skipped", no push / retry. Check only what's needed: follow-ups to another computer don't await assistant computer; tasks using another launcher don't await main-chat Claude / model. "Run now" isn't blocked (user must see actual errors), nor one-shot tasks (reminders, assistant follow-ups): they disable on due, so skipping loses them; send normally, push failures, retry once. If a user-action setup step (no computer, not logged in, invalid key…) causes a skip, store `routines_waiting` in `assistant.readiness` (not sleeping / offline computers; wakeup isn't news), clear before the first full-ready run (`mode: full`), and add a main-chat activity `notice`. Default morning briefing stays enabled.
 
-**失败和重试**：node 在模型回答前就接受 `assistant.send`，所以一轮以 API 错误收场（额度、模型没了、上游 503）的运行以前一直算「成功」。现在
-`watchScheduledRun` 盯着这一轮，结束后读最后一句话，是 API 错误就把运行记成失败、推送「定时任务失败：…」，3 分钟后再跑一次（只一次，
-`Retried`，重试再失败不再推）。重试按**那时**表里的任务来，不用启动时的那份副本（#2313 前：失败推送把用户带到任务页，顺手关掉或删掉，
-3 分钟后它照样用旧提示词再跑一遍，而且不出声）：任务删了不重试；重复任务关了不重试；一次性跟进到点就已经是关的，照样重试；提示词改了用新的。
+**Failure and retry**: node accepts `assistant.send` before model output, so runs ending in API errors (quota, removed model, upstream 503) formerly counted successful.
+`watchScheduledRun` now follows the turn, reads final text, records API errors as failed, pushes "Scheduled task failed: …", and retries after 3 minutes once
+(`Retried`, no further push on repeat failure). Retry uses the task **then** in the table, not the startup copy (before #2313, users followed failure push and disabled / deleted it,
+yet it silently reran the old prompt 3 minutes later): deleted tasks don't retry, disabled repeating tasks don't retry, once follow-ups disabled on due still retry, edited prompts use new text.
 
-### 跑完推送（#2396）
+### Push after running (#2396)
 
-每次运行就是在一段对话里跑完一轮，hub 对每一轮结束都推「做完了」（`assistant/fleet_push.go` 的 `notifyFinished`）。早报这类任务每次都有结果要看，这样没问题；
-但「有新邮件时告诉我」这类盯着某件事的任务，没有新邮件时也会推一条「新邮件 · 没有新邮件」。改提示词没用：助手一句话不说，hub 也推「完成了」。
+Every run completes a turn in a chat; hub pushes "Finished" for every turn (`notifyFinished` in `assistant/fleet_push.go`). Tasks like morning briefings always have results to read, so that's fine;
+but watchers like "Tell me when new mail arrives" also push "New mail · No new mail" when nothing happens. Prompt edits can't fix it: hub pushes "Done" even if the assistant says nothing.
 
-所以每个任务有一个 `push`：
+Each task therefore has `push`:
 
-- `""`（每次，默认）：和以前一样，每次运行的回答都推送。
-- `"asked"`（只在它自己提醒时）：只有这次运行用 `notify_user` 推的才到手机，没事就不推。运行的消息里会写明这一点（`task_run.md`）。
-  出错（`TurnError`）、回答被模型服务截断、卡在某件事上（⏳）照常推送，「定时任务失败：…」和等你回答的卡片也照常。
+- `""` (every run, default): push each run's answer as before.
+- `"asked"` (only when it explicitly notifies): only `notify_user` pushes reach the phone; no news means no push. Run messages explain this (`task_run.md`).
+  Errors (`TurnError`), model-truncated answers, blockers (⏳), "Scheduled task failed: …", and user-answer cards still push normally.
 
-**怎么做到的：按对话判断，不按轮次判断。** `asked` 的任务固定在自己的对话里跑（`ownConversationIfQuiet`：设成 `asked` 时清掉 `session_id`，
-跟进也不再跑进它发起时的那段对话，比如主对话）。助手的快照里每个任务带着 `push`（`TaskView.Push`），hub 看到是 `asked` 任务自己的对话
-（`run_session_id`），这一轮又是正常结束（`assistantwire.NormalFinish`，看的是推送会带的那段话：结束时的工作说明或最后一句），就不推「做完了」，
-照样经 `settle` 收尾。渠道的转发（飞书、插件渠道的同步和任务推送）按同一条判断跳过（`quietTaskTurn`）。
+**Implemented per chat, not per turn.** `asked` tasks always use their own chat (`ownConversationIfQuiet`: selecting `asked` clears `session_id`,
+including follow-ups no longer entering their originating chat, such as main chat). Snapshot tasks include `push` (`TaskView.Push`); if hub recognizes an `asked` task's own chat
+(`run_session_id`) and a normal completion (`assistantwire.NormalFinish`, based on pushed text: final work explanation or last answer), suppress "Finished"
+but still finish through `settle`. Channel forwarding (Lark, plugin sync and task pushes) skips under the same `quietTaskTurn` rule.
 
-代价：用户自己在这段对话里发的消息，做完也不推送。一般不会有人在任务自己的对话里聊天，真聊了多半也正看着 App。
+Cost: user-authored messages in that chat also don't push on completion. People generally don't chat in task-owned chats; if they do, they're likely viewing the App.
 
-边界（`assistantwire.QuietTaskFinish`，hub 和渠道转发共用）：
+Boundaries (`assistantwire.QuietTaskFinish`, shared by hub / channel forwarding):
 
-- **只对 Claude Code 和无头 Codex 跑的对话生效**（会话的 `agent` 为空或 `codex`）：要分得出「没事」和「出错了」。Claude 的模型错误会写在最后一句话里，
-  hub 认得出（截断）；无头 Codex 失败的一轮由 node 在会话上报 `turn_error`（#2571，#2932 起放开）。runtime（`agent` 是它的 id）失败的一轮不在会话上，
-  它跑的 asked 任务照常推「做完了」，免得把失败当成没事吞掉。
-- **主对话永远不算安静**：用户把任务自己的对话设成了主对话，这段对话照常推送，任务下一次运行另开一段新对话。
-  说不准哪段是主对话时（助手读设置失败、hub 还没收到过助手的设置），按「可能是主对话」处理：照常推送、照常转发，任务也不接着用这段对话。
-- **别的任务不跑进安静的对话**：在 asked 任务的对话里用 `schedule_followup` 安排的任务改在它自己的对话里跑；原来就指向这段对话的任务，
-  运行时也改去自己的对话（它要的是每次推送）。
-- 判断放在 `settle` 之后，不当成「已经推过」：这一轮因后台任务还在跑而被挂起的照样挂起，后台跑完唤醒的那一轮单独判断，出错照常推送。
-- 运行的消息里那几句说明（「（又到时间了…）」「（这个任务只在你用 notify_user…）」）在助手拿整条消息续约时会被去掉（`stripScheduleHeader`），
-  这样认得出是原来那个任务，`push` 和提示词都不变。
-- hub 刚重启、还没收到助手的快照，或者任务第一次运行、新对话的编号还没报上来时，hub 不知道这段对话属于谁，照常推送。
-  收到过快照以后助手断开，hub 仍按最后一份快照判断。
+- **Only Claude Code and headless Codex chats** (session `agent` empty or `codex`): must distinguish "nothing happened" from failure. Claude errors appear in final text,
+  recognized by hub (truncation); headless Codex failures report session `turn_error` from node (#2571, enabled since #2932). Runtime failures (`agent` is runtime id) aren't in session state,
+  so runtime asked tasks still push "Finished" rather than swallowing failures as no news.
+- **Main chat is never quiet**: if a user makes a task chat main chat, normal pushes resume and the next task run creates another chat.
+  If main-chat identity is uncertain (assistant settings read failure, hub hasn't received profile), treat it as possibly main: push / forward normally and don't reuse it for the task.
+- **Other tasks don't enter quiet chats**: `schedule_followup` from an asked-task chat runs in its own chat; existing tasks targeting it also move to their own on running (they require every-run push).
+- Decide after `settle`, not as "already pushed": background-pending turns remain suspended, their wakeup turn is judged separately, errors push normally.
+- Run-message explanations ("It's time again…", "This task only notifies when you use notify_user…") are stripped when the assistant renews with the whole message (`stripScheduleHeader`),
+  preserving task identity, `push`, and prompt.
+- On hub restart before snapshots, or the first run before a new chat id is reported, hub doesn't know chat ownership and pushes normally.
+  After receiving a snapshot, assistant disconnection still uses the last copy.
 
-为什么不只让「这次运行的那一轮」不推：评审了三版按轮次判断的方案（运行的消息带 `quiet`，node 记下这一轮的输入是不是全都安静、是不是成功结束，
-上报给 hub），每版都找出了会吞掉用户推送的时序：Claude 在后台轮次之后才处理排着的消息；压缩上下文的那一轮结束会沿用上一轮的结果；
-Codex 的 steer 失败转成 start 时，被别的输入的 `turn/started` 认领；hub 没看到中间的「工作中」时，旧的推送回调读到新一轮的标记。
-要做准得给每条输入、每次完成编号对应，改动集中在 node 收发消息最核心的地方。按对话判断没有这些时序，答案是固定的。
+Why not suppress only "this run's turn": three per-turn designs were reviewed (input `quiet`, node tracking whether all inputs were quiet and completion successful,
+reported to hub); each had races swallowing user pushes: Claude processes queued messages after background turns; compaction completion reuses prior results;
+failed Codex steer becoming start is claimed by another input's `turn/started`; old push callbacks read new-turn markers if hub misses intermediate Working.
+Correctness requires correlating every input / completion id in core node message paths. Per-chat decisions avoid those races and have a fixed answer.
 
-App 的 `PUT /api/v1/assistant/tasks/{id}` 请求体里没有 `push` 时保留原值（不认识这个字段的老 App），老 App 的 `PUT /api/v1/assistant/routines` 一律保留；
-`null`、非字符串、不认识的值回 400。助手的 `schedule_routine`、`schedule_followup` 有可选的 `push`（`every` / `asked`），省略时新建的是每次推送、
-已有的保持不变；`schedule_routine` 带 `id` 和 `push` 能改任何一个任务，只改这一项。网页、iOS / Mac 和 Android 的任务编辑页都有这个开关（#2570、#2676：hub 的 features 里有 `task_push` 才显示，任务已经是 `asked` 的也显示；选「只在它自己提醒时」时藏起「接着原来的对话」，列表行标「只在提醒时推送」；没设过 `push` 的任务保存时不带它，老 hub 收不到）。
+App `PUT /api/v1/assistant/tasks/{id}` omitting `push` preserves it (old Apps); old `PUT /api/v1/assistant/routines` always preserves it.
+`null`, non-string, unknown values return 400. `schedule_routine` / `schedule_followup` accept optional `push` (`every` / `asked`); omission defaults new tasks to every run,
+preserves existing values. `schedule_routine` with `id` / `push` can change only this field on any task. Web, iOS / Mac, Android editors include the switch (#2570, #2676: shown with hub `task_push` or an already-asked task; "Only when it notifies" hides "Continue original chat", list marks "Push only on notification"; tasks without prior `push` omit it on save for old hubs).
 
-每个任务可以单独设**启动器（模型）、权限模式、思考强度**（空 = 助手的默认，和以前一样），只能在 App 里改，助手的工具改不了
-（不能自己给自己提权）。`bypassPermissions` 只能在 claude 启动时用 `--permission-mode` 给（控制请求切不过去）：node 新开时不用备用进程，
-已经在跑的进程不是这个模式就重启续上（`node/assistant.go`）。在 Persona 页的模式菜单里把对话切到「全部放行」也一样（#2416）：
-空闲的进程当场停掉、下一条消息续上，忙的等这一轮之后；App 设的模式存进 hub 的会话状态，胜过 transcript 里记的旧值。App 里选「全部放行」先弹确认，选上以后选择器标红、下面写明后果。
-接着原对话跑的任务（`session_id`）会把那段对话也切到这些设置。
+Each task can separately set **launcher (model), permission mode, effort** (empty = assistant default, unchanged), editable only in the App, not assistant tools
+(no self-escalation). `bypassPermissions` requires startup `--permission-mode` (control requests can't switch): node doesn't use a spare on new startup,
+and restarts existing processes in another mode (`node/assistant.go`). Persona's mode-menu "Allow Everything" works likewise (#2416):
+stop idle processes immediately, resume next message; busy processes wait until the turn ends. App mode persists in hub session state over old transcript values. "Allow Everything" first confirms, then marks the picker red with consequences.
+Tasks continuing original chats (`session_id`) also switch those chats to these settings.
 
-**同一个任务在同一段对话里跑**（2026-11-01 用户要求：「同一个定时任务，用同一个 session 跑」）：以前没有 `session_id` 的任务
-（App 里建的早报、巡检、`schedule_routine` 建的）每次都开一段新对话，「和昨天比」「上次说的那个还在吗」无从比起。现在：
+**Same task, same chat** (requested 2026-11-01: "Run the same scheduled task in the same session"): tasks without `session_id`
+(App morning briefing / checks, `schedule_routine`) formerly created new chats each time, unable to compare "with yesterday" or "is last time's item still there?". Now:
 
-- 第一次运行开一段新对话，记在任务上（`run_machine_id` / `run_session_id` / `run_launcher`，和任务一起存 settings，hub 重启后照样续）；
-  之后每次都 `assistant.send` 进这段对话。node 上这些对话和主对话一样常驻列表（`keptSessions`），隔一周才跑一次的任务也打得开、判得出忙不忙。
-- 续上去的消息只写「⏰ 标题（定时任务）」、晚了多久、一句「还是这个任务自己的对话，前几次的结果都在上面，和上次比有变化的地方说清楚」，
-  再加任务的提示词（可能改过，也可能被压缩掉了，所以每次都带）；知识库那段说明和「不用再安排下一次」只在第一次说（`task_run.md` 的 `Continued`）。
-- 续不上就开新的，并把新对话记成这个任务的：对话没了（transcript 被 Claude Code 30 天清理、从没写下来：hub 发 `resume_only`，node 找不到进程也找不到
-  transcript 就报错，不会在旧 id 上悄悄开一段空白对话）、机器不在线、发送失败、任务或助手的启动器换了（claude ↔ codex 续不上）、助手换了机器。日志写明是哪一种。
-- 上一轮还没跑完（对话在跑，或在等用户批准 / 回答）时又到点：**跳过**这一次，运行记录里记「上一轮还在运行，这次跳过」，不排进同一段对话
-  （排进去会连着回答两遍，第二轮只看到第一轮做了一半）。一次性的跟进照样发进去（跳过就丢了）；App 里「立即运行」碰到忙时回 409、说明原因。
-  同一个任务同一时刻只会有一次在发送（`schedule.sending`），立即运行和到点撞在一起也不会叠。
-- 从对话里排的任务（`session_id`）照旧先发进原来的对话；那段对话失败时退到任务自己的对话，同样记下来，下次接着用。
-- App：定时任务页「对话」一节写「在同一个对话里运行」，点开就是这段对话（旧布局和新外壳都回到 Persona 的对话上）；「下次开新对话」
-  （`POST /api/v1/assistant/tasks/{id}/fresh`）清掉记下的对话，用于上下文太长或想重来，原来的对话还在「对话」里。还没跑过的任务写「第一次运行时开一段新对话」。
+- First run creates a chat and stores `run_machine_id` / `run_session_id` / `run_launcher` with task settings, surviving hub restart;
+  later runs `assistant.send` into it. node keeps these listed like main chat (`keptSessions`), even weekly tasks, so they open and busy state is knowable.
+- Continued messages say "⏰ Title (scheduled task)", lateness, and "This is still this task's own chat; previous results are above; explain changes from last time",
+  then the task prompt (possibly edited / compacted, included every time). Knowledge instructions and "No need to schedule the next run" appear only initially (`Continued` in `task_run.md`).
+- Failed resume creates and records a new task chat: missing chat (Claude's 30-day transcript cleanup, never written: hub `resume_only`; if neither process nor transcript exists, node errors rather than silently creating blank history under the old id),
+  offline machine, send failure, task / assistant launcher type change (claude ↔ codex can't resume), assistant machine change. Log the reason.
+- If due again while the previous run is running or awaiting approval / answer, **skip**, recording "Previous run still running; skipped", not queuing in the same chat
+  (would answer twice, the second seeing half-finished work). One-shot follow-ups still send (skip loses them); App "Run now" returns 409 with reason when busy.
+  Only one simultaneous send per task (`schedule.sending`), preventing due / Run now overlap.
+- Chat-scheduled tasks (`session_id`) still send to their originating chat first; failures fall back to a task-owned chat, recorded and reused.
+- App Scheduled tasks "Chat" section says "Runs in the same chat", opening it in Persona in both layouts / shells. "Start a new chat next time"
+  (`POST /api/v1/assistant/tasks/{id}/fresh`) clears the stored chat for large context / restart; old chat remains in Chats. Never-run tasks say "A new chat starts on the first run".
 
-部署：hub 和 node 要一起更新（`resume_only` 是 node 的新参数；旧 node 会忽略它，在找不到的旧 id 上开一段新对话）。
+Deployment: update hub and node together (`resume_only` is new; old node ignores it and creates a new chat under a missing old id).
 
-**一轮自己安排下一轮**（「最后用 schedule_followup（at=30m，prompt 和本条相同）安排下一次」）：hub 从运行记录认出这段对话是哪个任务跑出来的，
-标题或提示词一样就不新建：一次性的、用相对时间（`30m`）重排的变成每 30 分钟的 `interval`，之后再收到同样的请求只更新提示词、不动时间，
-用户在 App 里关掉的也不会被它重新打开。提示词开头抄过来的「⏰ …（你之前安排的跟进）」这类行会去掉，不会越叠越长。
-`interval` 的消息里写明「会按时再运行，不用再安排下一次」，助手的说明里也让它用 `every`。
+**A turn schedules its successor** ("Finally use schedule_followup with at=30m and the same prompt"): hub recognizes the task from run history;
+same title or prompt doesn't create another. One-shot relative-time (`30m`) renewal becomes a 30-minute `interval`; later identical requests update the prompt without changing time,
+and don't re-enable tasks disabled in the App. Copied leading "⏰ … (your scheduled follow-up)" lines are removed to prevent growth.
+`interval` messages say "It will run again on schedule; no need to arrange the next run", and assistant instructions recommend `every`.
 
-迁移：第一次启动读到没有 `assistant.tasks` 时，把 `assistant.routines` 和 `assistant.followups` 搬进来（id、时间、上次状态不变），
-然后把旧的 follow-ups 清空，免得旧版 hub 再起来时重跑一遍；之后只读新表。读 Postgres 失败时不保存任何东西（以前会用默认值盖掉）。
-旧版 App 用的 `routines` / `followups` 接口还在，读写的是同一张表（`docs/protocol.md`）。
+Migration: first startup without `assistant.tasks` moves `assistant.routines` / `assistant.followups` (ids, times, prior statuses unchanged),
+then clears old follow-ups so an older hub can't rerun them; thereafter reads only the new table. Failed Postgres reads save nothing (formerly defaults overwrote).
+Legacy App `routines` / `followups` APIs still read / write this table (`docs/protocol.md`).
 
-## 对话标题（2026-11-01）
+## Chat titles (2026-11-01)
 
-用户要求：「开启新对话后，生成标题。「MMDD | 类型 | 主题」格式的对话标题规范化」。按这个理解做：
+Requested: "Generate titles after starting new chats; standardize as ‘MMDD | Type | Topic’." Implemented as follows:
 
-- 标题 = `MMDD | 类型 | 主题`。MMDD 是对话开始那天，按**用户的时区**（`Hub.userLocation()`；hub 跑在 UTC 上，上海 00:30 开的对话是当地的日期）。
-  类型只能是 功能 / 设计 / 修复 / 优化 / 发布 / 探索 / 文档 / 研究 / 评审 / 定时；主题 ≤ 14 个字，不写项目名 / 仓库名。例：`1101 | 修复 | 搜索框和顶栏重叠`。
-- **什么时候起**：hub 开的新对话（App 的新对话 `POST /api/v1/assistant/conversations`）记一笔「待命名」；第一轮结束（会话从 working 变成 done / idle）时，
-  助手在后台用「对话标题」用途的模型（`assistant.title`，模型配置 › 信息处理，实测 2–3 秒）读第一条消息和回复起「类型 | 主题」。不打断对话、不让助手自己做，回复不等它。
-  定时任务开的对话一开始就是 `MMDD | 定时 | 任务名`，不调模型；同一个任务续在同一段对话里（上一节），标题就一直是这个。
-  收件箱 AI 分身的对话一开始就是 `MMDD | 收件箱 | 那件事的标题`（#3264，原来不起标题，侧边栏里是一串「这是收件箱里的一件事，你作…」）；「收件箱」只有 hub 用，不在模型可选的类型里。
-- **格式校验**（`parseTitle`）：取第一行，容忍引号、全角竖线、模型多写的日期；类型不在表里或主题超长就带上「上一次回的不合格式」再问一次；
-  第二次类型对、主题还长就截到 14 个字；都不行就是 `MMDD | 探索 | 第一条消息的前 14 个字`（去掉标签和 Markdown 符号）。没配模型也走这个兜底。
-- **存在哪**：助手的 store（就是 hub 的 settings `assistant.titles`：会话 id → 标题、谁起的、开始时间），经快照交给 hub，发给 App 的会话列表里替换 `title`（`decorated`）。
-  不写进 transcript：Claude 和 Codex 两种对话一样处理，不用动 node。
-- **只起一次，用户的优先**：App 里 重命名（抽屉里长按对话 › 重命名…，`POST /api/v1/sessions/{mid}/{sid}/rename`）记成用户起的，以后不再覆盖；
-  第一轮结束前就改了名的也不会被替换。Codex 对话改名只记在 hub（node 会往 Codex 的 rollout 里写 Claude 的 custom-title 行）。
-- 已有的旧对话不补（没有「待命名」那一笔）；只有收件箱 AI 分身的旧对话在回填来源时顺带补上 `MMDD | 收件箱 | …`（见下「对话的来源」）。
-- **主对话没有标题**（#1313）：发给 App 的会话列表里主对话的 `title` 一律是「Persona」（`mainTitle`，按 settings `assistant.main` 认），
-  不是 node 给的（无头跑的 transcript 没有 Claude Code 的 ai-title，node 拿第一条消息当标题）、不起「MMDD | 类型 | 主题」（开主对话时记的「待命名」在第一轮结束时直接丢掉，不调模型），
-  App 给它改标题返回 400「主对话没有标题可以改」（`conversation_rename` 本来就拒绝）。各端顶栏在主对话上显示形象：iOS / Mac / 安卓是形象名（默认「Persona」），网页是「Persona」。
-- App：抽屉的对话行里 `MMDD | 类型 | ` 用次要色、主题用主色，窄的时候从主题末尾截断（`ConversationTitle`）；别的标题照旧。
+- Title = `MMDD | Type | Topic`. MMDD is the chat's start date in **user timezone** (`Hub.userLocation()`; hub runs UTC, but a 00:30 start uses the user's local date).
+  Types: Feature / Design / Fix / Optimization / Release / Exploration / Docs / Research / Review / Scheduled; topic ≤ 14 characters, no project / repo names. Example: `1101 | 修复 | 搜索框和顶栏重叠` ("1101 | Fix | Search and top bar overlap").
+- **When generated**: new hub chats (App `POST /api/v1/assistant/conversations`) are recorded "pending title". After the first turn (working → done / idle),
+  the assistant uses the "Chat title" purpose model in the background (`assistant.title`, Model Configuration › Information processing, measured 2–3 seconds), reading first message / reply to produce "Type | Topic". No interruption, not delegated to the assistant chat itself, replies don't wait.
+  Scheduled-task chats immediately get `MMDD | Scheduled | Task name`, no model call, retained as the task reuses its chat (previous section).
+  AI twin chats immediately get `MMDD | Inbox | Item title` (#3264; formerly untitled, sidebar rows began "This is an Inbox item; you…"); Inbox is hub-only, not a model-selectable type.
+- **Validation** (`parseTitle`): take first line, tolerate quotes, fullwidth pipes, redundant model dates; invalid type / long topic retries once with "Previous result didn't match format";
+  second valid type with long topic truncates to 14 characters; otherwise fallback `MMDD | Exploration | First 14 characters of first message` (tags / Markdown stripped). Same fallback without model config.
+- **Storage**: assistant store (hub settings `assistant.titles`: session id → title, author, start time), snapshot to hub, replaces App session-list `title` (`decorated`).
+  No transcript writes; same for Claude / Codex, no node changes.
+- **Once only, user wins**: App Rename (drawer long-press chat › Rename…, `POST /api/v1/sessions/{mid}/{sid}/rename`) records user-authored titles, never overwritten;
+  even before the first turn ends. Codex renames are stored only in hub (node would write Claude custom-title lines into Codex rollout).
+- No backfill for old chats lacking pending-title records, except old AI twin chats gain `MMDD | Inbox | …` while backfilling origins ("Chat origins" below).
+- **Main chat has no title** (#1313): App session-list `title` is always "Persona" (`mainTitle`, settings `assistant.main`),
+  not node's first-message title (headless transcripts lack Claude ai-title), no `MMDD | Type | Topic` (discard pending-title on first-turn completion without model call),
+  App rename returns 400 "Main chat has no title to rename" (`conversation_rename` already rejects). Top bars show the avatar: iOS / Mac / Android avatar name (default "Persona"), web "Persona".
+- App drawer rows draw `MMDD | Type | ` in secondary color, topic primary, truncating topic end in narrow space (`ConversationTitle`); other titles unchanged.
 
 ## Guest conversations (2026-11-06, #5195)
 
@@ -553,186 +553,186 @@ An ordinary extension conversation is an assistant conversation (the assistant d
 - **Hub** (`assistant/guest.go`, setting `assistant.guests`, kept 30 days): `mcp.tools` lists and `mcp.call` runs only its tools; `assistant.context` gives it an empty snapshot; `SendParams` drops a launcher, model, runtime or permission mode picked for a message.
   While the record can't be read, every tool call is refused (the user's own conversations keep their snapshot and picks: the node enforces those for a guest itself), and a conversation the node calls a guest but the hub doesn't know gets no tools.
 
-## 对话的来源（#3264，2026-11-06）
+## Chat origins (#3264, 2026-11-06)
 
-用户反馈：侧边栏「最近」里一大串收件箱 AI 分身开的对话淹没了自己的对话，要给自动开的对话打上来源标签、默认收起，但要能点进去看。
-每段助手对话记一个来源（`assistant/origins.go`，settings `assistant.origins`），经快照交给 hub 填到会话列表的 `origin` / `origin_ref`；取值、回填、各端侧边栏的规矩见 `docs/protocol.md`「助手对话的来源」。
+Feedback: many AI twin chats flooded sidebar "Recent", hiding user chats; automatically created chats need origin labels and default collapse, while remaining openable.
+Each assistant chat records origin (`assistant/origins.go`, settings `assistant.origins`), snapshot to hub session `origin` / `origin_ref`; values, backfill, client-sidebar rules: `docs/protocol.md` ("Assistant chat origins").
 
-- **在哪记**：所有开对话的路都经过 `start()`，调用方带上来源：App 的 `POST /api/v1/assistant/conversations` 是 `user`（扩展的令牌来的是 `extension`，跑在 `lark.agent` 模型上的是 `lark_agent`，
-  扩展是谁由 hub 转发时的 `X-Persona-Extension` 头说，客户端发的会被丢掉）、渠道 `/new` 是 `channel`、收件箱 AI 分身 `inbox`、定时任务 `task`、`conversation_new` 是 `spawned`；主对话一律 `user`。
-- **回填**：hub 每次收到一台机器的会话列表（`SessionsChanged`，node 自己的列表，标题还是第一条消息）就在后台给没有来源的助手对话补一笔。证据按顺序：收件箱条目记的 AI 分身会话、
-  任务记的对话（`run_session_id`、运行记录里不是发进别的对话的）、标题是 hub 定的（定时 / 收件箱）、第一条消息的开头（收件箱、`⏰` 定时任务）；标题看不出来、又是 hub 开的（标题待命名 / 自动起的）
-  再读第一条消息认对话转发和 `/agent` 的 `<jarvis-context>`（node 的标题把这些块去掉了）。都不是就是 `user`。开对话时记的总是盖过回填猜的，回填从不改开对话时记的。
-- **重跑**：`POST /api/v1/assistant/origins/backfill` 立刻对助手那台机器的列表跑一遍；`redo` 重新判断回填记的，但不会把已经认出来的改回 `user`（那时拿到的是 hub 装饰过的列表，标题已经不是第一条消息）。
+- **Recording**: every creation path uses `start()`, with caller origin: App `POST /api/v1/assistant/conversations` is `user` (extension tokens `extension`, `lark.agent` model `lark_agent`;
+  extension identity from hub-forwarded `X-Persona-Extension`, discarding client headers), channel `/new` `channel`, AI twin `inbox`, scheduled task `task`, `conversation_new` `spawned`; main chat always `user`.
+- **Backfill**: each machine list (`SessionsChanged`, node's raw list with first-message titles) triggers background backfill for assistant chats lacking origin. Evidence order: AI twin session recorded in Inbox items,
+  task-owned chat (`run_session_id`, runs not sent to another chat), hub-assigned title (Scheduled / Inbox), first-message prefix (Inbox, `⏰` task); if title insufficient but hub-created (pending / automatic title),
+  read first message to recognize forwarded-chat and `/agent` `<jarvis-context>` (node titles strip these blocks). Otherwise `user`. Creation-time records always override inferred backfill, never changed by it.
+- **Rerun**: `POST /api/v1/assistant/origins/backfill` immediately processes the assistant machine list; `redo` reevaluates inferred records, but never changes a recognized origin back to `user` (hub-decorated list titles are no longer first messages).
 
-## 管理自己的对话（2026-11-01）
+## Managing its own chats (2026-11-01)
 
-用户要求：「jarvis 助手是否支持操作助手本身的会话历史，比如 rename title，delete（archive），new，send message to session/thread」。
-助手的 MCP 工具（`assistant/conversations.go`，描述在 `prompts/mcp/assistant/conversation*.md`），Claude 和 Codex 两种对话一样：
+Requested: "Can the Jarvis assistant manage its own chat history—rename title, delete (archive), new, send messages to sessions / threads?"
+Assistant MCP tools (`assistant/conversations.go`, descriptions `prompts/mcp/assistant/conversation*.md`), identical for Claude / Codex:
 
-| 工具 | 做什么 |
+| Tool | Purpose |
 | --- | --- |
-| `conversations_list` | 对话列表（侧边栏那些）：id、标题、最后活动时间、是不是主对话 / 这段对话 / 在跑 / Codex、最后一句话；`query` 按标题和最后一句过滤；默认不含已归档的（`include_archived`） |
-| `conversation_read` | 读另一段对话最近 N 轮（默认 2，最多 10），和 `agent_read` 同一套截断（`transcriptText`：工具调用一行、只列失败的结果、整体最后 4 万字节） |
-| `conversation_rename` | 改标题：给 `kind` + `topic`，hub 拼成「MMDD \| 类型 \| 主题」（MMDD 是对话开始那天，上一节）。用户起的标题不动，除非用户明说要改（`user_asked`，改完算用户的）；助手起的记成 `assistant`，自动命名不再覆盖，用户在 App 里改名照样优先。主对话没有标题可改 |
-| `conversation_archive` / `conversation_unarchive` | 归档 / 取消归档（下面） |
-| `conversation_new` | 带一条开场消息新开一段对话，立刻返回 id，不等它跑完；第一轮结束后照常自动起标题（开场消息里的来源说明不算） |
-| `conversation_send` | 给另一段对话发消息；不能发给自己 |
+| `conversations_list` | Sidebar chats: id, title, last activity, main / current / running / Codex flags, last text; `query` filters title / last text; archived excluded by default (`include_archived`) |
+| `conversation_read` | Read another chat's latest N turns (default 2, max 10), same `agent_read` truncation (`transcriptText`: one line per tool call, only failed results, final 40k bytes overall) |
+| `conversation_rename` | Set title with `kind` + `topic`; hub formats `MMDD \| Type \| Topic` (start date, previous section). User titles stay unless explicitly requested (`user_asked`, then user-owned); assistant titles marked `assistant`, no autonaming override, App user renames still win. Main chat has no title to rename |
+| `conversation_archive` / `conversation_unarchive` | Archive / unarchive, below |
+| `conversation_new` | Start a chat with an opening message, return id immediately without waiting; normal auto-title after first turn, excluding opening source context |
+| `conversation_send` | Send to another chat, not itself |
 
-- **归档只是不显示**：hub 的 settings `assistant.archived`（会话 id → 机器、时间、谁归档的），会话列表里带 `archived: true`；
-  `GET /api/v1/assistant` 默认不列，`?archived=1` 才列。不删 transcript，不做硬删除。主对话不能归档（接口 400，工具报错）；要换掉它用「新建主对话」（上面「压缩」一节）。
-  - **归档自己**：允许（用户在一段支线对话里说「聊完了，归档吧」是最自然的用法）。这一轮照常跑完，App 里开着的对话不会被关掉，只是不在列表里了；
-    用户再在里面发消息就自动回到列表（`sendMessage` 里 `unarchiveOnSend`），别的对话 `conversation_send` 给它也一样。
-  - node 只列最近的会话：很久以前归档的对话会从「已归档」里消失（和不归档时从列表里消失一样），归档记录还在，`conversation_unarchive` 给 id 就能取回。
-- **对话之间发消息**（`conversation_send`、`conversation_new` 的开场消息）：
-  - 消息前面带一段 `<jarvis-context kind="context" title="来自对话「…」">`（`prompts/assistant/relay.md`）：说明不是用户本人说的、从哪段对话来、第几跳，
-    要回话就 `conversation_send` 发回去，只是确认收到就别回。App 里显示成一张「上下文 · 来自对话「…」」卡片。
-  - **在跑就排队**：对方正在跑（或已经有排着的）时，消息存在 hub（settings `assistant.relay`，重启不丢），在 App 里像打字排队一样显示在它的输入框上方
-    （会话的 `queued`）；它这一轮结束（会话列表里不再是 working）时 hub 发进去，一次一条。不直接写进正在跑的进程：Codex 会把它并进当前这一轮（`turn/steer`），不是排队。
-  - **防循环**：每段对话记着它正在处理的消息离用户本人那条有几跳（用户自己发的是 0，转一次 +1，1 小时后作废）；超过 3 跳不发。
-    同一段对话 10 分钟内最多给同一段对话发 3 条、一共发 10 条（只在内存里计数，hub 重启清零）。用户在一段对话里发消息，它就回到 0 跳。
-  - 发给已归档的对话会把它取回列表。
-- **App**：侧边栏的对话左滑「归档」（主对话没有；长按菜单里也有「归档」）。侧边栏从 `ScrollView` + `LazyVStack` 换成 `List`（行的 inset、分隔线、背景都清掉，
-  外观不变），这样行有系统的左滑。抽屉开着时，从**有左滑的对话行**上开始的左拖交给行（`SwipeRowMark` 标记行，`DrawerPan` 让行的滑动手势等它先放弃），
-  其余地方左拖照旧关抽屉。列表最后有「已归档（N）」（没有就不显示），「最近」的 ⋯ 菜单里也有；点开是 `ArchivedConversationsView`：点一下打开对话，
-  左滑或长按「取消归档」。Mac 版用同一份代码（触控板双指左滑）。
-- 这些工具的调用在对话里照常是工具卡片，名字是中文（`ToolPresentation`：新开对话、发到对话、重命名对话、归档对话……）。
-- 实测（2026-11-01，hub 机器上的测试 hub：假 HOME、独立端口和库、启动器拷贝指向假 HOME 里的 Claude 配置目录）：让助手依次新开对话 → 列表 → 改名 → 发消息 → 归档 → 带归档的列表 → 取消归档 → 读回，8 步都成功；新对话两条消息都带来源说明、第 1 跳，它只回了「OK」、没有回发。第一轮还没起名的对话原来在列表和来源说明里叫「assistant」（node 用目录名当标题），改成「新对话」。
+- **Archive only hides**: hub settings `assistant.archived` (session id → machine, time, actor), session list `archived: true`;
+  `GET /api/v1/assistant` excludes by default, includes with `?archived=1`. No transcript deletion / hard delete. Main chat can't archive (API 400, tool error); replace through "New main chat" ("Compaction" above).
+  - **Archive itself**: allowed ("We're done, archive this" in a side chat is natural). Finish the turn normally; an open App chat isn't closed, only hidden from lists;
+    new user messages restore it (`unarchiveOnSend` in `sendMessage`), as does another chat's `conversation_send`.
+  - node lists only recent sessions: old archived chats can disappear from Archived (as they do from normal lists), but archive records remain and `conversation_unarchive` can retrieve by id.
+- **Inter-chat messages** (`conversation_send`, `conversation_new` opening):
+  - Prepend `<jarvis-context kind="context" title="来自对话「…」">` (`title`: "From chat ‘…’", `prompts/assistant/relay.md`), explaining it's not user-authored, source chat, hop count;
+    if a reply is needed, use `conversation_send`; do not reply merely to acknowledge receipt. App shows a "Context · From chat ‘…’" card.
+  - **Queue while running**: if target is running or already queued, persist in hub settings `assistant.relay` (survives restart), displayed above the input like typed queues
+    (session `queued`). After its turn ends (no longer working), hub sends one at a time. Don't write into running processes: Codex merges through `turn/steer`, not queueing.
+  - **Loop prevention**: each chat tracks the current message's hops from the user's input (user 0, relay +1, expires after 1 hour); don't send beyond 3 hops.
+    Per chat, at most 3 sends to the same target and 10 total within 10 minutes (memory only, reset on hub restart). User messages reset hops to 0.
+  - Sending to archived chats restores them.
+- **App**: swipe left to Archive in sidebar (not main chat; also long-press). Sidebar changes `ScrollView` + `LazyVStack` to `List`, removing insets, separators, backgrounds
+  with unchanged appearance, enabling system swipes. With drawer open, a left drag starting on a **swipeable chat row** goes to the row (`SwipeRowMark`; `DrawerPan` makes row gestures wait for it to fail);
+  other left drags still close the drawer. Bottom "Archived (N)" if nonzero, also in Recent ⋯; opens `ArchivedConversationsView`, tap to open,
+  swipe / long-press Unarchive. Mac shares code (two-finger trackpad swipe).
+- Calls remain tool cards with localized Chinese source names (`ToolPresentation`: New chat, Send to chat, Rename chat, Archive chat…).
+- Measurement (2026-11-01, isolated test hub on hub machine: fake HOME, separate port / database, copied launcher pointing to fake Claude config): assistant performed new → list → rename → send → archive → list including archived → unarchive → read, all 8 succeeded. Both new-chat messages included source and hop 1; it answered only "OK", no relay reply. First-turn untitled chats were formerly "assistant" in lists / source context (directory-name title), now "New chat".
 
-## Codex（2026-11-01，`codex app-server`）
+## Codex (2026-11-01, `codex app-server`)
 
-设置 › 助手（或顶栏菜单、定时任务）选一个启动 Codex 的启动器时，助手不再是 `claude -p`，而是 Codex 给 IDE 用的常驻 JSON-RPC 服务
-`codex app-server`（stdio，一行一条 JSON；协议以 `codex app-server generate-ts [--experimental]` 导出的为准，hub 机器上是 codex-cli 0.159.3）。
-代码：`server/internal/node/assistant_codex.go`；`assistant.go` 按启动器探测出的 agent（`launcherProbeCached`）选 Claude 或 Codex；能当助手的运行时的启动器交给运行时（下一节），别的（TRAEX…）拒绝并说明。
+Selecting a Codex launcher in Settings › Assistant (or top-bar menu / scheduled tasks) replaces `claude -p` with Codex's persistent IDE JSON-RPC service,
+`codex app-server` (stdio, one JSON line per message; protocol from `codex app-server generate-ts [--experimental]`, codex-cli 0.159.3 on hub machine).
+Code: `server/internal/node/assistant_codex.go`; `assistant.go` chooses Claude / Codex from launcher-probed agent (`launcherProbeCached`). Assistant-capable runtime launchers go to that runtime (next section); other types (internal Codex variants…) reject with explanation.
 
-**怎么起**：node 经交互式 zsh 跑启动器函数，但先把 `codex` 换成 `codex <启动器自己的参数> app-server <Jarvis 的 -c>`（`codexShell`，
-`command codex …` 也接住），所以启动器设的环境、`-c model_provider=…`、`-m` 照样生效。一段对话一个 app-server 进程、里面一个 thread：
-thread id 就是会话 id（Codex 自己定，新对话要先 `thread/start` 才知道 id），rollout 就是对话记录（`docs/codex.md`），App 照常显示。
-握手：`initialize`（打开 experimentalApi）→ `skills/extraRoots/set` → `thread/start`（新对话）/ `thread/resume`（续聊、重启后）。
-实时快照和 Claude 一样随每条消息带（`turn/start` / `turn/steer` 的第一个输入），`developerInstructions` 只放记忆。
+**Startup**: node runs the launcher function in interactive zsh, replacing `codex` with `codex <launcher arguments> app-server <Jarvis -c>` (`codexShell`,
+including `command codex …`), retaining environment, `-c model_provider=…`, `-m`. One app-server per chat, one thread inside;
+thread id is session id (assigned by Codex, known only after new-chat `thread/start`), rollout is history (`docs/codex.md`), App displays normally.
+Handshake: `initialize` (experimentalApi) → `skills/extraRoots/set` → `thread/start` / `thread/resume`.
+Snapshots accompany each message as Claude does (first `turn/start` / `turn/steer` input); `developerInstructions` holds only memory.
 
-| 能力 | Claude（`claude -p`） | Codex（`codex app-server`） |
+| Capability | Claude (`claude -p`) | Codex (`codex app-server`) |
 | --- | --- | --- |
-| 流式输出 | `stream_event` 的 text_delta | `item/agentMessage/delta` → 同一个 `session.delta` |
-| 续聊 / 重启后 | `--resume <id>` | 进程还在就接着用；没了就新起一个 `thread/resume`（hub / node 重启后实测能续上） |
-| 停止按钮 | 杀掉进程，下一条消息 `--resume` | `turn/interrupt`，进程留着；再 `thread/backgroundTerminals/clean`：`turn/interrupt` 不停正在跑的命令（实测 `sleep 120` 留在后台） |
-| 回复过程中插话 | 排队消息，被这一轮中途吸收 | `turn/steer` 进正在跑的这一轮（效果一样，实测插话在同一轮回复里生效）；这一轮刚好结束就开新一轮 |
-| Persona MCP 工具 | `--mcp-config` + `--allowedTools mcp__jarvis` | `-c mcp_servers.jarvis.*`；Codex 用 `mcpServer/elicitation/request`（`codex_approval_kind: mcp_tool_call`）问能不能调，node 对兼容 MCP server `jarvis` 一律同意；`tool_timeout_sec` 给到一天（默认 60 秒，ask_user 等手机会超时） |
-| ask_user | 阻塞的 MCP 工具 | 同一个工具。MCP 进程启动时 thread 还没有 id，环境变量里给的是一个 key（`proc-…`），node 收到调用时换成会话 id（`resolveAssistantKey`） |
-| Codex 自己的提问（request_user_input） | — | `item/tool/requestUserInput` → 手机上的提问卡片，答案按题目 id 回去 |
-| 命令 / 改文件的审批 | PermissionRequest hook → 手机 | app-server 发 `item/commandExecution/requestApproval` / `item/fileChange/requestApproval` / `item/permissions/requestApproval` 给 node，node 走同一个手机确认（`ask`） |
-| 飞书写操作的确认 | Bash PreToolUse hook（`larkgate.go`） | 命令审批里先过同一个闸门（`larkCheck`，去掉 `/bin/zsh -lc '…'` 外壳再读）：读放行、写弹「飞书」卡片、碰 token 拒绝。Codex 的 decline 不带理由，拒绝的理由（手机上写的话、闸门的说明）用 `turn/steer` 交给模型，对话里会显示成一条「（没有执行）…」 |
-| 权限模式 | `--permission-mode` / 控制请求 | 每一轮 `turn/start` 带上（`codexPolicy`）：默认 / 自动接受编辑 = `untrusted` + workspace-write（开网络）；自动 = `on-request` + workspace-write（不开网络，出沙箱、上网要升级，升级请求过闸门）；计划 = `untrusted` + read-only；全部放行 = `untrusted` + danger-full-access、node 一律同意（**不用 Codex 的 never**：never 下命令不经过 node，飞书闸门就没了）。模式切换下一轮生效，审批的同意与否按当时的模式；rollout 里记的审批策略 + 沙箱能反推回模式，node 重启后不丢 |
-| 思考强度 | `--effort` / 控制请求 | `turn/start` 的 `effort`（原样传 low…max，网关认不认看模型） |
-| 图片 | base64 image 块 | 存成文件（`~/.persona/uploads/日期/`），`localImage`；rollout 记路径，App 当缩略图显示 |
-| 指令 | `CLAUDE.md` | `AGENTS.md`（`assistant.prepare` 同时写两份，内容一样）；Codex 还会读用户自己的 `~/.codex/AGENTS.md` |
-| 扩展的 skill | `.claude/skills/<名字>` | 同一个目录作为 extra skill root（格式相同，`skills/list` 里能看到）；闸门命令在 PATH 上，凭据留在 node 的代理里（以前 token 在进程环境里时要设 `shell_environment_policy.ignore_default_excludes=true`，否则 Codex 默认把 `*TOKEN*` 变量从命令环境里去掉） |
-| 记忆 | Claude Code 的 auto memory（助手目录专属） | **同一份**（2026-11-01 用户选的）：`developerInstructions` 里带上目录、格式（一条一个文件 + `MEMORY.md` 索引，和 Claude 一样）和当前的索引（`codexMemoryPrompt`）；目录加进沙箱的 `writableRoots`，在里面改文件（apply_patch）和只读它的命令（cat / head / rg …，`readsOnlyMemory`）不问，计划模式下写也要问。Codex 自己的记忆（`~/.codex/memories`，整台机器所有 Codex 共用一份，由它自己从 rollout 提炼）对助手关掉（`features.memories=false`） |
-| 后台任务 / Monitor | `background_tasks_changed`，任务跑完 claude 自己开新一轮 | 每轮结束读 `thread/backgroundTerminals/list` 记成任务（有就不回收进程，重启后告诉对话丢了什么）；**跑完不会自己唤醒对话**，Codex 没有 Monitor |
-| 备用进程（预热） | 有 | 有（预先 `thread/start`，新对话直接用它的 thread，实测 50 ms 返回） |
+| Streaming | `stream_event` text_delta | `item/agentMessage/delta` → same `session.delta` |
+| Continue / after restart | `--resume <id>` | Reuse live process, otherwise start a new one with `thread/resume` (verified after hub / node restart) |
+| Stop | Kill process, next message `--resume` | `turn/interrupt`, retain process, then `thread/backgroundTerminals/clean`; interrupt alone doesn't stop commands (measured `sleep 120` remained backgrounded) |
+| Interject during reply | Queued message absorbed mid-turn | `turn/steer` into current turn (same effect, verified within its reply); start a turn if it just ended |
+| Persona MCP | `--mcp-config` + `--allowedTools mcp__jarvis` | `-c mcp_servers.jarvis.*`; Codex asks via `mcpServer/elicitation/request` (`codex_approval_kind: mcp_tool_call`); node always allows compatibility server `jarvis`. `tool_timeout_sec` one day (default 60 seconds times out ask_user phone waits) |
+| ask_user | Blocking MCP | Same tool. MCP starts before thread id exists; environment carries `proc-…` key, replaced by node with session id on call (`resolveAssistantKey`) |
+| Native request_user_input | — | `item/tool/requestUserInput` → phone question card, answers keyed by question id |
+| Command / file permissions | PermissionRequest hook → phone | `item/commandExecution/requestApproval` / `item/fileChange/requestApproval` / `item/permissions/requestApproval` → same phone `ask` |
+| Lark write confirmation | Bash PreToolUse (`larkgate.go`) | Command approval first uses `larkCheck`, stripping `/bin/zsh -lc '…'`: reads allowed, writes show Lark card, token access denied. Codex decline has no reason; phone feedback / gate explanation reaches model through `turn/steer`, shown as "(Not executed)…" |
+| Permission mode | `--permission-mode` / control requests | Each `turn/start` uses `codexPolicy`: Default / Accept edits = `untrusted` + workspace-write with network; Auto = `on-request` + workspace-write without network, escalation for sandbox escape / network passes gate; Plan = `untrusted` + read-only; Allow Everything = `untrusted` + danger-full-access, node always approves (**not Codex never**, which bypasses node and removes Lark gate). Switches apply next turn; approval uses current mode. Rollout policy / sandbox maps back to mode across restart |
+| Effort | `--effort` / control | `turn/start` `effort`, low…max unchanged, gateway support depends on model |
+| Images | base64 image blocks | Files in `~/.persona/uploads/<date>/`, `localImage`; rollout path becomes App thumbnail |
+| Instructions | `CLAUDE.md` | `AGENTS.md` (both written identically by `assistant.prepare`); also user `~/.codex/AGENTS.md` |
+| Extension skills | `.claude/skills/<name>` | Same directory as extra skill root (same format, visible in `skills/list`); gated commands on PATH, credentials in node proxy (previous environment tokens required `shell_environment_policy.ignore_default_excludes=true`, or Codex stripped `*TOKEN*` from command environments) |
+| Memory | Assistant-specific Claude auto memory | **Same files** (chosen 2026-11-01): `developerInstructions` gives directory, one-file-per-entry + `MEMORY.md` format, current index (`codexMemoryPrompt`); directory added to sandbox `writableRoots`. apply_patch and memory-only reads (cat / head / rg…, `readsOnlyMemory`) don't ask, but Plan writes do. Disable Codex's machine-wide rollout-derived `~/.codex/memories` for assistant (`features.memories=false`) |
+| Background / Monitor | `background_tasks_changed`, claude wakes on completion | Read `thread/backgroundTerminals/list` after every turn, record tasks and retain process, report lost tasks after restart; **completion doesn't wake chat**, no Monitor |
+| Prewarmed spare | Yes | Yes, pre-start thread reused (measured 50 ms return) |
 
-和 Claude 版的差别（用户要知道的）：
+User-visible differences:
 
-- **默认模式下问得更多**：Codex 的 `untrusted` 只放行它自己的只读命令清单，`timeout 20 head …` 这种也会在手机上问（Claude 默认模式下读文件不问）。嫌多就用「自动」。
-- 后台命令跑完不会叫醒对话；要定时回来看用 `schedule_followup`。
-- 拒绝时的理由会以一条「（没有执行）…」出现在对话里（Codex 的拒绝本身不带话）。
-- 用户自己 `~/.codex/config.toml` 里的 MCP server、`hooks.json`、`AGENTS.md` 也会加载（和 claude 读用户自己的设置一样）；别的 MCP server 的调用在非「全部放行」时要在手机上批准。
+- **More prompts in Default**: Codex `untrusted` allows only its own read-only command list; even `timeout 20 head …` asks on the phone (Claude file reads don't). Use Auto if too many.
+- Background completion doesn't wake chat; use `schedule_followup` to revisit.
+- Denial reasons appear as "(Not executed)…" messages (native Codex denial carries no text).
+- User `~/.codex/config.toml` MCP servers, `hooks.json`, `AGENTS.md` load too, like Claude user settings; other MCP calls need phone approval outside Allow Everything.
 
-实测（2026-11-01，hub 机器上的测试 hub：假 HOME、独立端口和库，真实的 cx_gpt 启动器和飞书网关）：新对话（快照、`agents_list` 不用批准）、续聊、
-ask_user 卡片答完拿到答案、`ol GET /me` 直接放行、`ol POST …/messages` 弹「飞书」卡片并在卡片上拒绝（模型停下没重试，消息没发出）、
-全部放行下命令不问、插话进同一轮、中断（即时，`sleep` 一起停掉）、hub + node 重启后续聊记得上文、思考强度和模式重启后读回、流式输出约 120 ms 一段、
-发图片认出颜色、预热的备用进程；记忆（同一天补测）：预置的「喜欢的茶」默认模式下直接读到（不弹卡片），
-让它记「花生过敏」后建了文件、更新了索引，「记忆」接口列得出来，新开的对话不读文件凭索引答对，`~/.codex/memories` 没被写。单测：`assistant_codex_test.go`（假的 app-server 按真实帧回放：握手、turn/start / steer / interrupt、
-各种审批和闸门、request_user_input）。
+Measurement (2026-11-01, isolated hub: fake HOME, separate port / database, real Codex launcher and Lark gateway): new chat (snapshot, `agents_list` no approval), resume,
+ask_user answer, `ol GET /me` allowed, `ol POST …/messages` Lark card denied (model stopped without retry, no send),
+Allow Everything commands without prompts, same-turn interjection, immediate interrupt stopping `sleep`, context retained after hub + node restart, effort / mode restored, streaming around 120 ms per segment,
+image color recognition, prewarmed spare. Memory follow-up that day: preset "preferred tea" read in Default without a card;
+"peanut allergy" created a file / updated index, memory API listed it, new chat answered from index without file read, no writes to `~/.codex/memories`. Unit tests: `assistant_codex_test.go`, fake app-server replaying actual frames for handshake, turn/start / steer / interrupt,
+approvals / gate, request_user_input.
 
-## Agent 运行时（DSH）（2026-11-02，issue #282）
+## Agent runtime (DSH) (2026-11-02, issue #282)
 
-选一个声明了助手能力的 Agent 运行时的启动器（现在是 DSH 插件的 `dsh`，`launchers.list` 带 `assistant: true`）时，对话跑在那个运行时里：
-node 的 `server/internal/node/assistant_runtime.go` 用 runtime 协议的 `session.start` / `session.send` / `session.interrupt` 驱动它，
-每条消息带上实时快照（`context`）、权限模式（`mode`）和记忆目录；对话内容、逐字、授权和提问走 runtime 本来的那几条（`docs/runtimes.md`「助手」）。
-这一层没有哪个运行时的代码：别的运行时声明了 `caps.assistant`、做到那份约定，也能当助手。
+Selecting a launcher declaring assistant capability (currently DSH plugin `dsh`, `launchers.list` `assistant: true`) runs chats in that runtime:
+node `server/internal/node/assistant_runtime.go` drives `session.start` / `session.send` / `session.interrupt`,
+with live snapshot (`context`), permission mode (`mode`), memory directory per message. Content, streaming, permissions, and questions use existing runtime paths (`docs/runtimes.md` ("Assistant")).
+This layer contains no runtime-specific code; any runtime declaring `caps.assistant` and implementing the contract can serve as assistant.
 
-和 Claude、Codex 一样的：实时快照、`ask_user` 和其他 Persona 工具（只给助手对话）、授权和提问一律先到手机、权限模式、共用的记忆
-（新对话第一条消息前带上目录、格式和索引：`prompts/assistant/runtime_instructions.md`）、助手目录的指令文件和 skill（`.agents/skills/`）、
-AI 分身 / 飞书 `/agent` / 定时任务（都走 `assistant.send`）。
+Same as Claude / Codex: live snapshots, `ask_user` / Persona tools (assistant chats only), all permissions / questions go to phone first, permission modes, shared memory
+(first message includes directory, format, index via `prompts/assistant/runtime_instructions.md`), assistant instruction files / skills (`.agents/skills/`),
+AI twin / Lark `/agent` / scheduled tasks (all `assistant.send`).
 
-不一样的：
+Differences:
 
-- **飞书**：凭据不进运行时。模型用扩展闸门声明的工具（`proto.CommandGate.Tool`，参数就是命令后面的词），node 先过同一个飞书闸门（`larkCheck`），再在 node 上
-  跑技能里的脚本，凭据只在 node 的代理上；shell 里直接跑命令拿不到凭据，也绕不过闸门。
-- **模型和思考强度**在运行时里选（DSH 的 Web GUI），模型配置对这种启动器不选具体模型；**预热**不需要（运行时常驻）。
-- 关闭对话只停正在跑的这一轮，对话留在运行时里；一段对话换成 Claude / Codex（或反过来）要新建对话：发消息时指定了别的启动器，node 仍交给这个运行时（`assistantResumeLauncher`）。
-- 运行时没连上（`dsh web` 没在跑）时发消息回 `runtime_away`，什么都没发。
+- **Lark**: credentials never enter runtime. Model uses extension-gate declared tools (`proto.CommandGate.Tool`, arguments are command words); node applies `larkCheck`, then
+  runs skill scripts locally, credentials only in node proxy. Direct shell commands can't obtain credentials or bypass gates.
+- **Model / effort** selected in runtime (DSH Web GUI); model configuration doesn't select a specific model for these launchers. **Prewarming** unnecessary (persistent runtime).
+- Closing stops only the current turn, leaving the chat in runtime. Changing between runtime and Claude / Codex requires a new chat; another launcher specified on send still goes to the original runtime (`assistantResumeLauncher`).
+- Disconnected runtime (`dsh web` not running) returns `runtime_away` without sending anything.
 
-DSH 的细节（权限预设的对应、要常驻 `dsh web`）见 `docs/dsh.md`「助手」；端到端 `integrations/dsh/e2e/assistant.mjs`。
+DSH details (permission preset mapping, persistent `dsh web`): `docs/dsh.md` ("Assistant"); end-to-end `integrations/dsh/e2e/assistant.mjs`.
 
-## 资料页和头像（2026-10-30）
+## Profile and avatar (2026-10-30)
 
-- Persona tab 右上角是 Persona 的头像，点开是资料页（`AssistantProfileView`）：身份和运行在哪台机器、在线 / 工作中、「接下来」要做的 3 件事，
-  主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（Skills、运行在、工作目录；模型在「设置 › 模型配置 › 主对话」，#1291）、能访问。设置 › 助手打开的是同一页。
-- 定时任务页：「接下来」时间线（左边大号时刻，像「提醒事项」）、「定时任务」（每天 / 每隔，规则的人话「每个工作日 上午 9:00」「每 30 分钟」）、
-  「一次性跟进」，每行图标、下次、不是默认时的运行方式（「claude-fast · 自动 · 思考 低」，全部放行标红）、上次结果、开关，左滑删除、长按立即运行；
-  最近运行。点开是同一个编辑页：重复（一次 / 每天 / 每隔）、提示词、运行方式（模型、权限模式、思考强度）、接着原来的对话（能关，关了每次新开）、
-  立即运行、历史记录。
-- 定时任务跑出来的对话收在定时任务页（#2838，和网页 #2824 同一套规则，`AssistantTaskChats`）：iOS / Mac 侧栏的「最近」不列它们（当前打开的那段例外，
-  照样留一行；置顶的不动），定时任务页每个任务下面最多 3 个「今天 09:03」这样的对话入口，点了就打开。认定：任务的 `run_session_id` / `last_session_id`
-  和 `/assistant/runs` 的 `session_id`，去掉任务的 `session_id`（接着原来的对话跑的那段是用户自己的）；运行记录只留 200 条，更早的按 hub 起的标题
-  「MMDD | 定时 | 任务名」再认一遍（任务名被截短时互为前缀就算；光有「定时」不算，模型也会给用户自己的对话起这个类别）。侧栏出来时、对话数变了时重新读任务和运行记录。
-- 头像是 SwiftUI 画的（`AssistantAvatar`），不用位图。2026-11-03 起默认是**团子**（App 图标里招手的白色团子，照图标的配色画，不跟主题色，见 `docs/persona.md`「内置形象」）；
-  下面几个跟着主题色的强调色走。之前试过四个方案（`-tab assistant -openAssistantPage avatars` 看对比）：
-  **面罩**（2026-11-03 之前的默认，现在是可选项：强调色圆盘 + 深色面罩里两只发光的眼睛，右上一颗火花呼应 App 图标；工作中眼睛左右看）、
-  **汇流**（2026-10-31 用户从科技感图标候选里挑的 B2，11-01 定为形象里的一个可选项、不当默认：强调色深底圆里，左边三个焊盘的走线
-  汇进一个带两只眼的核心，意思是各台电脑上的 Agent 汇到 Persona；工作中信号沿走线流进核心）、
-  火花（App 图标的火花放进深色圆里，和 App 图标太像，小尺寸时像个按钮）、光环（HUD 式断开的光环 + 发光的核心，酷但冷，28pt 下细节糊成一团）。
-  没放进消息旁边（助手的回复是整宽的正文，加头像要让出一列）和通知里（要做 Notification Service Extension + communication notification，另做）。
-- 2026-10-31 起头像和名字可以换成别的形象（设置 › 外观 › 形象，`docs/persona.md`；形象带的配色在主题色里选「跟随形象」才用）。面罩是默认形象，汇流在形象里紧跟其后，可以选。两个都在顶栏按状态动：
-  空闲时眨眼，思考中抬眼加思考气泡，工作中面罩的眼睛左右看、汇流的信号沿三条走线流进核心，等你处理时外圈红色呼吸，离线时变灰。
+- Persona tab top-right avatar opens `AssistantProfileView`: identity / machine, Online / Working, three "Up Next" items,
+  proactive work (scheduled tasks, run history), knowing you (About Me, memory), settings (Skills, Run on, Working directory; model in Settings › Model Configuration › Main chat, #1291), accessible data. Settings › Assistant opens the same page.
+- Scheduled tasks: "Up Next" timeline (large times on the left, like Reminders), "Scheduled tasks" (daily / interval, natural rules "Every weekday at 9:00 AM", "Every 30 minutes"),
+  "One-time follow-ups"; rows show icon, next run, nondefault execution ("claude-fast · Auto · Low effort", Allow Everything red), last result, switch; swipe delete, long-press Run now,
+  recent runs. Shared editor: repeat (Once / Daily / Interval), prompt, execution (model, permission, effort), Continue original chat (toggle off for new chats each run),
+  Run now, history.
+- Task-created chats live on Scheduled tasks (#2838, same web #2824 rules, `AssistantTaskChats`): iOS / Mac Recent excludes them (except the open chat,
+  which keeps a row; pinned unchanged). Each task shows up to 3 links like "Today 09:03". Identify by `run_session_id` / `last_session_id`
+  and `/assistant/runs` `session_id`, excluding task `session_id` (continued originating chats are user-owned). History retains 200 runs; older chats match hub titles
+  `MMDD | Scheduled | Task name` (mutual prefixes accepted for truncated names; Scheduled alone isn't enough, since model can classify user chats that way). Reread tasks / runs on sidebar appearance and chat-count changes.
+- Avatar is SwiftUI (`AssistantAvatar`), not bitmap. Default since 2026-11-03 is **Mochi** (white waving dumpling in the App icon, icon colors independent of theme; `docs/persona.md` ("Built-in avatars"));
+  the alternatives below follow theme accent. Four earlier candidates (`-tab assistant -openAssistantPage avatars` compares):
+  **Visor** (default before 2026-11-03, now optional: accent disc + dark mask, two glowing eyes, upper-right spark echoing App icon; working eyes scan side to side),
+  **Circuit** (B2 selected from tech-style icon candidates 2026-10-31, made optional not default 11-01: on a dark accent circle, traces from three left pads
+  flow into a two-eyed core, representing computer Agents converging in Persona; working signals flow along traces),
+  Spark (App-icon spark in a dark circle, too similar to the icon and button-like small), Halo (broken HUD ring + glowing core, cool but cold, details blur at 28pt).
+  Not beside messages (full-width assistant replies would lose a column), nor notifications (requires Notification Service Extension + communication notification, separate work).
+- Since 2026-10-31 avatar / name can change (Settings › Appearance › Avatar, `docs/persona.md`; avatar colors used only with "Match Avatar" theme). Visor is default, Circuit next and selectable. Both animate by top-bar state:
+  idle blinks, thinking looks up with thought bubble, working Visor scans / Circuit signals flow along three traces, Needs you red breathing outer ring, offline gray.
 
-## Android 的入口（2026-11-02）
+## Android entry points (2026-11-02)
 
-Android 的管理都在「设置 › 助手」（`docs/android.md`「助手设置」）：设置列表里的「助手 › Persona」，Persona tab 标题菜单的「助手设置」、右上角头像、抽屉的「资料页」也打开它。内容：在哪运行（机器、工作目录，可以换机器；启动器 / 模型在「模型配置 › 主对话」，#1291）、数据存在哪里、了解你（关于我、记忆）、时区（默认跟随手机）、能访问；主动做事（定时任务、跟进、运行记录）另做，接好后放进这一页。
+Android management lives in Settings › Assistant (`docs/android.md` ("Assistant settings")): Settings "Assistant › Persona", Persona title-menu "Assistant settings", top-right avatar, and drawer "Profile" all open it. Content: Run on (machine, working directory, machine switch; launcher / model in Model Configuration › Main chat, #1291), data location, knowing you (About Me, memory), timezone (phone default), accessible data; proactive work (scheduled tasks, follow-ups, run history) is separate, added here after integration.
 
-和 iOS 不同，Android 能换助手所在的机器。换的时候提示「记忆和会话记录在原来那台机器上，不会跟过去」，并在同一个 `PUT /api/v1/assistant` 里带 `"main":"-"` 清掉主对话：hub 换机器时不动 `main`，而主对话的 transcript 在原来那台机器上，不清的话 App 会把 `main` 拼到新机器上，去找一个不存在的会话。
+Unlike iOS, Android can switch the assistant machine. Warn "Memory and chat history stay on the old computer and won't follow", and send `"main":"-"` in the same `PUT /api/v1/assistant` to clear main chat. hub doesn't change `main` on machine changes; without clearing, the App combines old `main` with the new machine and seeks nonexistent history.
 
-## 验证
+## Verification
 
-`docs/testing.md` 的服务端测试覆盖 `nextRun` / `parseWhen` / 跳过过期任务 / ask_user 往返 / agents_list / 工具只给助手；
-2026-10-30 加了 hub 重启前后的调度（`TestScheduleAcrossHubRestart`：不重跑、错过的跟进晚跑一次并说明、错过太久的定时任务跳过、历史保留）、
-`schedule_routine`、有后台任务的进程不回收、重启后告诉对话丢了哪些任务；App 单测 `AssistantScheduleTests`，UI 测试 `AssistantProfileTests`
-（头像进资料页、定时任务列表和详情、定时任务和跟进的立即运行）。2026-10-31 合表后：`assistant/schedule_test.go`（迁移不丢不重跑、
-一轮自己重排变成一个 `interval`、间隔任务的节奏、权限模式校验、旧接口）；App `AssistantRoutinesModelTests`；UI `testRepeatingTaskAndItsPermissionMode`
-（巡检在列表里、改成全部放行要先确认、保存到 hub）。
+Server tests in `docs/testing.md` cover `nextRun` / `parseWhen`, expired-task skipping, ask_user round trips, agents_list, assistant-only tools.
+Added 2026-10-30: scheduling across hub restart (`TestScheduleAcrossHubRestart`: no rerun, missed follow-ups run once with lateness, very late routines skipped, history retained),
+`schedule_routine`, retaining processes with background tasks, explaining lost tasks after restart; App `AssistantScheduleTests`, UI `AssistantProfileTests`
+(avatar → profile, scheduled list / details, Run now for tasks / follow-ups). After 2026-10-31 table unification: `assistant/schedule_test.go` (lossless / nonduplicating migration,
+self-renewal becomes one `interval`, interval cadence, permission validation, old APIs), App `AssistantRoutinesModelTests`, UI `testRepeatingTaskAndItsPermissionMode`
+(check appears in list, Allow Everything confirmation, hub save).
 
-### 能力实测（2026-10-30，线上 hub，凌晨用户不在用时；测试对话都以「【Jarvis 能力测试，可忽略】」开头）
+### Capability measurements (2026-10-30, production hub, early morning while user inactive; test chats start `【Jarvis 能力测试，可忽略】`—"Jarvis capability test, safe to ignore")
 
-| 能力 | 修之前 | 证据（UTC 时间） |
+| Capability | Before fix | Evidence (UTC) |
 | --- | --- | --- |
-| 对话里口头建「3 分钟后提醒我」 | 部分能：建得出来、到点也跑，但 `schedule_followup` 和到点后的 `notify_user` 都要在手机上点允许，没人点就卡住 | 18:45:15 调 schedule_followup → 等批准；到点后 18:50:05 调 notify_user → 又等批准 |
-| 跟进准时度 | 晚 21 秒（20 秒轮询 + 恢复进程） | 应在 18:49:31.3，进对话 18:49:52.6 |
-| 口头建「每天几点做什么」 | 不能：没有建定时任务的工具，只能拿一次性跟进接力（用户的「项目巡检」就是这么串起来的） | `list_followups` 里写着「the user edits these in the app's settings」 |
-| hub 重启后的定时任务 / 跟进 | 能：存在 Postgres，18:48:07 重启后跟进照常在 18:49 触发；定时任务先记「已跑」再跑，不会重复；错过 30 分钟以上的跳过（但以前看不到跳过） | journalctl 18:48:07–10 重启；单测覆盖跳过 / 不重复 |
-| Monitor | 部分能：进程活着时事件 0.3 秒唤醒助手；但 Monitor 本身和 notify_user 都要批准，hub 重启后 Monitor 无声消失 | 18:47:33.423 写 ALERT → 18:47:33.719 助手收到 → 18:47:44.1 调 notify_user |
-| 后台任务（`run_in_background`） | 部分能：2 分钟的命令跑完立刻唤醒助手；超过 20 分钟的命令会被回收空闲进程连带杀掉，重启也会杀掉，助手永远等不到 | 18:47:14 命令结束 → 18:47:14.79 助手收到 → 18:47:33 调 notify_user；23 分钟的命令在 18:48 重启时被杀，对话再没动静 |
-| 手机在锁屏时的 phone_* 调用 | 能：静默推送唤醒 App，2.8 秒拿到结果（凌晨 2:54 本地时间） | 18:54:42.9 批准 → 18:54:45.7 结果 |
-| 推送到手机 | 能（notify_user 走 APNs，App 关着也到）；hub 以前不记成功的推送，量不了延迟，现在记「APNs 接受用时」 | — |
+| Request "Remind me in 3 minutes" in chat | Partial: created and ran on time, but both `schedule_followup` and due `notify_user` needed phone approval; blocked without a tap | 18:45:15 schedule_followup → approval wait; due 18:50:05 notify_user → approval wait again |
+| Follow-up punctuality | 21 seconds late (20-second polling + process resume) | Due 18:49:31.3, entered chat 18:49:52.6 |
+| Request "Do this daily at a time" | No scheduled-task creation tool; one-shot follow-ups had to relay (as with the user's project checks) | `list_followups` said "the user edits these in the app's settings" |
+| Scheduled tasks / follow-ups after hub restart | Yes: Postgres storage, 18:48:07 restart still triggered follow-up at 18:49; routines record ran before execution, no duplicates; over 30 minutes late skip (formerly invisible) | journalctl 18:48:07–10 restart; unit skip / no-duplicate tests |
+| Monitor | Partial: live-process event woke assistant in 0.3 seconds; Monitor and notify_user needed approval, hub restart silently lost Monitor | 18:47:33.423 ALERT write → 18:47:33.719 assistant receives → 18:47:44.1 notify_user |
+| Background (`run_in_background`) | Partial: 2-minute command immediately woke assistant on completion; over-20-minute commands killed with idle reclamation, also on restart, so assistant waited forever | 18:47:14 command ends → 18:47:14.79 assistant receives → 18:47:33 notify_user; 23-minute command killed by 18:48 restart, no further chat activity |
+| phone_* while locked | Yes: silent push woke App, result in 2.8 seconds (02:54 local) | 18:54:42.9 approval → 18:54:45.7 result |
+| Phone push | Yes, notify_user uses APNs even with App closed; hub formerly didn't record successful pushes, preventing latency measurement, now records "APNs acceptance time" | — |
 
-延迟的大头是模型本身（收到事件到调 notify_user 10–19 秒）；hub / node 这一侧在 1 秒内。
+Most latency is the model (10–19 seconds from event to notify_user); hub / node stays within 1 second.
 
-### 修好后复测（2026-10-30，e50f972 部署后，线上 hub）
+### Retest after fixes (2026-10-30, after e50f972 deployment, production hub)
 
-| 能力 | 结论 | 事件 → 助手开始处理 → 推送（APNs 接受） |
+| Capability | Result | Event → assistant handles → push (APNs accepted) |
 | --- | --- | --- |
-| 口头「3 分钟后提醒我」 | 能，全程不用批准 | 应 19:39:40.29，跑于 19:39:40.30（晚 0.01 秒）→ 19:39:47.4 notify_user → APNs 175 ms |
-| 口头「每天 HH:MM 做什么」 | 能（`schedule_routine`） | 应 19:43:00，跑于 19:43:00.01 → 新对话 19:43:01.96 → 19:43:07.9 notify_user → APNs 313 ms；运行记录里有这一次 |
-| Monitor | 能（Monitor 本身仍按权限模式要批准一次） | 19:37:23.855 写入 → 19:37:24.167 助手收到（0.3 秒）→ 19:37:30.9 notify_user → APNs 313 ms |
-| 后台任务 2 分钟 | 能，全程不用批准 | 19:38:43 命令结束 → 19:38:43.85 助手收到 → 19:38:55.5 notify_user → APNs 173 ms |
-| 后台任务 23 分钟（超过以前的 20 分钟回收） | 能：进程闲了 23 分钟没被回收 | 19:36:51 启动 → 19:59:51 命令结束 → 19:59:51.74 助手收到 → 20:00:09.9 notify_user → APNs 233 ms |
-| 锁屏时调手机工具 | 能，不用批准 | 静默推送 APNs 259 ms，手机 900 ms 后连上，工具 3.2 秒出结果 |
-| hub 重启后告诉对话丢了的后台任务 | 单测覆盖（`TestRecoverAssistantTasksAfterRestart`）；线上要等下一次部署时有任务在跑才能看到（日志 `background tasks lost in the restart`） | — |
+| "Remind me in 3 minutes" | Works, no approval throughout | Due 19:39:40.29, ran 19:39:40.30 (0.01 seconds late) → 19:39:47.4 notify_user → APNs 175 ms |
+| "Do this daily at HH:MM" | Works (`schedule_routine`) | Due 19:43:00, ran 19:43:00.01 → new chat 19:43:01.96 → 19:43:07.9 notify_user → APNs 313 ms; run recorded |
+| Monitor | Works (Monitor itself still needs one permission-mode approval) | 19:37:23.855 write → 19:37:24.167 assistant receives (0.3 seconds) → 19:37:30.9 notify_user → APNs 313 ms |
+| 2-minute background task | Works, no approval throughout | 19:38:43 command ends → 19:38:43.85 assistant receives → 19:38:55.5 notify_user → APNs 173 ms |
+| 23-minute background task (beyond old 20-minute reclamation) | Works: process stayed unreclaimed through 23 idle minutes | 19:36:51 start → 19:59:51 command ends → 19:59:51.74 assistant receives → 20:00:09.9 notify_user → APNs 233 ms |
+| Phone tools while locked | Works, no approval | Silent push APNs 259 ms, phone connects 900 ms later, tool result in 3.2 seconds |
+| Explain lost background tasks after hub restart | Unit tested (`TestRecoverAssistantTasksAfterRestart`); production verification awaits a deployment with tasks running (log `background tasks lost in the restart`) | — |
 
-App 在后台 / 锁屏时：推送（APNs alert）和静默唤醒都不依赖 App 在前台；测试时手机锁屏放着（本地凌晨 3 点多），手机工具 3.2 秒回来。手机上实际弹出通知的时刻 hub 量不到。
+Background / locked App: APNs alerts and silent wakes don't require foreground. Phone stayed locked during tests (after 03:00 local), phone tools returned in 3.2 seconds. hub can't measure when the notification actually appears on the phone.
 
-端到端（2026-10-26）：新对话 10 秒内用快照 + `agents_list` + `lark_api calendar/week` 回答「谁在等我、今天还有什么会」；
-ask_user 在 App 里显示为原生提问卡片并拿到答案；`schedule_followup 2m` 准点触发并 `notify_user`。
+End-to-end (2026-10-26): new chat answered "Who is waiting for me, what meetings remain today?" within 10 seconds using snapshot + `agents_list` + `lark_api calendar/week`;
+ask_user displayed as a native App question card and returned the answer; `schedule_followup 2m` triggered on time and used `notify_user`.
 
-接飞书的扩展带的 skill 在真实飞书上的实测（2026-10-30）记在扩展自己的说明里。
+Real-Lark tests of the extension-supplied skill (2026-10-30) are in the extension's own instructions.

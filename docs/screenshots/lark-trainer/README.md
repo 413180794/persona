@@ -1,18 +1,18 @@
-# 风灵月影：防撤回与编辑历史
+# Message Tweaks: Keep Recalled Messages and Edit History
 
-iPhone 18 Pro / iOS 27，浅色玻璃、深色 BeautifulUI。全部为 `MOCK_LARK_TRAINER=1` 生成的数据，未使用真实聊天截图。
+iPhone 18 Pro / iOS 27, light Glass and dark BeautifulUI. All data is generated with `MOCK_LARK_TRAINER=1`; no real chat screenshots are used.
 
-| 场景 | 浅色 | 深色 |
+| Scenario | Light | Dark |
 | --- | --- | --- |
-| 两个展示开关 | [设置](light/trainer-settings-on.png) | [设置](dark/trainer-settings-on.png) |
-| 开启：留存正文与撤回标记 | [聊天](light/trainer-chat-on.png) | [聊天](dark/trainer-chat-on.png) |
-| 关闭：正文与引用隐藏 | [聊天](light/trainer-chat-off.png) | [聊天](dark/trainer-chat-off.png) |
-| 历史版本及锁定的公开外显 | [历史](light/trainer-edit-history.png) | [历史](dark/trainer-edit-history.png) |
+| The two display switches | [Settings](light/trainer-settings-on.png) | [Settings](dark/trainer-settings-on.png) |
+| On: kept text and recall marker | [Chat](light/trainer-chat-on.png) | [Chat](dark/trainer-chat-on.png) |
+| Off: text and quote hidden | [Chat](light/trainer-chat-off.png) | [Chat](dark/trainer-chat-off.png) |
+| Version history and the locked public view | [History](light/trainer-edit-history.png) | [History](dark/trainer-edit-history.png) |
 
-`LarkMessageDisplayFlowTests` 从飞书设置进入、开关打开与关闭、重启进入聊天；历史面板保持打开时从 mock 改设置，验证立即隐藏；防撤回变化时同时检查正文和引用。第二轮增加长按留存消息无回复/表情操作，以及当前聊天收到撤回事件立即隐藏正文。最终复验增加已撤回系统消息：保持居中提示，不展示其原文；两个主题均完整通过。
+`LarkMessageDisplayFlowTests` enters from the Lark settings, turns the switches on and off, and relaunches into a chat. With the history panel left open, it changes the setting from the mock and checks that the content hides immediately. When Keep Recalled Messages changes, it checks both the message text and the quote. The second round added: long-pressing a kept message offers no reply / reaction actions, and a recall event arriving in the current chat hides the text immediately. The final re-check added recalled system messages: they stay a centered notice and never show their original text. Both themes pass in full.
 
-没有发送者的系统撤回提示使用「消息已撤回」，不尝试显示原文；浅深色回归同时覆盖有名和匿名系统消息。
+A system recall notice without a sender shows "Message recalled" and does not try to show the original text. The light and dark regression runs cover both named and anonymous system messages.
 
-账号冲突、只读连接、换 Hub、离线和旧缓存清理通过单元/接口测试验证；不将这些说成真实账号写入测试。媒体、发件箱仍沿用已有实现。
+Account conflicts, read-only connections, switching hubs, offline, and old-cache cleanup are verified by unit / API tests; they are not described as tests written against a real account. Media and the outbox keep using the existing implementation.
 
-合并主分支交互式引用卡片后，浅色玻璃与深色 BeautifulUI 再次完整通过；截图已更新为共享 `QuoteCard` 的外观。引用保留点击定位，关闭防撤回时标题仍显示发送者，摘要变为「消息已撤回」。
+After merging the interactive quote card from the main branch, light Glass and dark BeautifulUI passed in full again; the screenshots are updated to the shared `QuoteCard` look. Quotes still jump to the source on tap. With Keep Recalled Messages off, the title still shows the sender and the summary becomes "Message recalled".
