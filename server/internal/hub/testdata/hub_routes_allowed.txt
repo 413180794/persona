@@ -76,6 +76,7 @@ GET {link.Path}
 GET {link.StreamPath}
 GET {peerPath}
 GET /i/{code}
+GET /i/{code}/docker
 PATCH /api/v1/managers/{id}
 POST /api/v1/admin/devices/pair
 POST /api/v1/admin/doctor

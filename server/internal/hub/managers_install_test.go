@@ -9,10 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 )
@@ -89,13 +91,119 @@ func TestManagerInstallScript(t *testing.T) {
 	if code := managersDo(t, h, srv, "POST", "/api/v1/managers/"+id+"/code", nil, &again); code != 200 {
 		t.Fatalf("new code: %d", code)
 	}
-	d := again.Commands["docker"]
-	for _, want := range []string{"docker run -d --name persona-manager-" + id, "registry.example/persona-hub:1 manager run --dir /home/jarvis/.jarvis/managers/" + id,
-		"--join " + srv.URL + " " + again.Code, "--database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'"} {
-		if !strings.Contains(d, want) {
-			t.Errorf("docker %q lacks %q", d, want)
+	n := "persona-mgr-" + id
+	if want := "curl -fsSL " + srv.URL + "/i/" + again.Code + "/docker | sh"; again.Commands["docker"] != want {
+		t.Fatalf("docker %q, want %q", again.Commands["docker"], want)
+	}
+	status, script = get("/i/" + again.Code + "/docker")
+	if status != 200 || !strings.Contains(script, "IMAGE=registry.example/persona-hub:1\n") || !strings.Contains(script, "CODE="+again.Code+"\n") {
+		t.Fatalf("%d:\n%s", status, script)
+	}
+	// The hub makes up no password: the shell that runs the script does, and passes it through the environment only.
+	if strings.Contains(script, "USER:PASSWORD") || strings.Contains(script, "--database-url") || strings.Contains(script, `POSTGRES_PASSWORD="`) {
+		t.Fatalf("a password on a command line:\n%s", script)
+	}
+	runDockerScript(t, n, id, srv.URL, again.Code, script)
+	if status, _ := get("/i/mi_0123456789abcdef0123456789abcdef/docker"); status != 404 {
+		t.Fatalf("unknown code's docker script: %d", status)
+	}
+}
+
+// fakeDockerScript is docker for the install script: it keeps networks, containers, volumes and the passwords they
+// were made with in files under $STATE, logs every call's arguments and the two variables a password goes in, and
+// answers `run --rm` (reading manager.json in the home volume) with the password kept there.
+const fakeDockerScript = `#!/bin/sh
+S="$STATE"
+echo "ARGV $*" >> "$S/log"
+echo "ENV pg=${POSTGRES_PASSWORD:-} mdb=${PERSONA_MANAGER_DATABASE_URL:-}" >> "$S/log"
+last=; for a in "$@"; do last=$a; done
+case "$1 $2" in
+"info "*) exit 0 ;;
+"network inspect") [ -e "$S/net-$3" ] ;;
+"network create") touch "$S/net-$3" ;;
+"volume inspect") [ -e "$S/vol-$3" ] ;;
+"inspect -f") [ -e "$S/c-$last" ] && echo "POSTGRES_PASSWORD=$(cat "$S/c-$last")" ;;
+"start "*) [ -e "$S/c-$2" ] ;;
+"run --rm")
+	# The script's own sh -c, run here against the home volume (a directory under $S), as the image's sh would.
+	[ -d "$S/homevol" ] || exit 1
+	sh -c "$(printf '%s' "$last" | sed "s|/home/jarvis/.jarvis|$S/homevol|g")" ;;
+"run -d")
+	name=; prev=; for a in "$@"; do [ "$prev" = --name ] && name=$a; prev=$a; done
+	printf %s "${POSTGRES_PASSWORD:-}" > "$S/c-$name"
+	case "$name" in
+	*-pg) touch "$S/vol-${name%-pg}-data" ;;
+	*) touch "$S/vol-$name-home"; printf '%s' "$PERSONA_MANAGER_DATABASE_URL" > "$S/mdb" ;;
+	esac ;;
+"inspect "*) [ -e "$S/c-$2" ] ;;
+*) exit 0 ;;
+esac
+`
+
+// runDockerScript runs the docker install script against fakeDockerScript: it makes the network and both containers
+// with one password, given only through the environment; runs again without making anything; after the containers
+// are gone (volumes kept) it makes them again with the same password; and with the database volume left alone (its
+// password lost) it stops and says so.
+func runDockerScript(t *testing.T, n, id, hub, code, script string) {
+	t.Helper()
+	stub, state := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(stub, "docker"), []byte(strings.ReplaceAll(fakeDockerScript, `\\`, `\`)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f := filepath.Join(t.TempDir(), "docker.sh")
+	if err := os.WriteFile(f, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run := func() (string, error) {
+		_ = os.Remove(filepath.Join(state, "log"))
+		cmd := exec.Command("sh", f)
+		cmd.Env = append(os.Environ(), "PATH="+stub+":"+os.Getenv("PATH"), "STATE="+state)
+		out, err := cmd.CombinedOutput()
+		log, _ := os.ReadFile(filepath.Join(state, "log"))
+		return string(out) + "\n--- log\n" + string(log), err
+	}
+	read := func(name string) string { b, _ := os.ReadFile(filepath.Join(state, name)); return string(b) }
+	hex48 := regexp.MustCompile(`[0-9a-f]{48}`)
+
+	out, err := run()
+	pw := read("c-" + n + "-pg")
+	if err != nil || len(pw) != 48 || read("c-"+n) != "" || !strings.Contains(out, "ARGV network create "+n) ||
+		!strings.Contains(out, "ARGV run -d --name "+n+" --network "+n+" --restart unless-stopped -v "+n+"-home:/home/jarvis/.jarvis -e PERSONA_MANAGER_DATABASE_URL registry.example/persona-hub:1 manager run --dir /home/jarvis/.jarvis/managers/"+id+" --join "+hub+" "+code) ||
+		!strings.Contains(out, "mdb=postgres://jarvis:"+pw+"@"+n+"-pg:5432/jarvis?sslmode=disable") {
+		t.Fatalf("first run: %v\n%s", err, out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "ARGV") && hex48.MatchString(line) {
+			t.Fatalf("a password on docker's command line: %s", line)
 		}
 	}
+
+	// What the manager writes on its first start: manager.json with the URL it was given, in its home volume.
+	if err := assistant.WriteManagerConfig(filepath.Join(state, "homevol", "managers", id), assistant.ManagerConfig{ID: id,
+		Hub: hub, Token: "jb_x", DatabaseURL: read("mdb")}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err = run()
+	if err != nil || strings.Contains(out, "ARGV run") || strings.Contains(out, "ARGV network create") || !strings.Contains(out, "there already") {
+		t.Fatalf("second run: %v\n%s", err, out)
+	}
+
+	_ = os.Remove(filepath.Join(state, "c-"+n+"-pg"))
+	_ = os.Remove(filepath.Join(state, "c-"+n))
+	out, err = run()
+	if err != nil || read("c-"+n+"-pg") != pw || !strings.Contains(out, "ARGV run --rm") || !strings.Contains(read("mdb"), "jarvis:"+pw+"@") {
+		t.Fatalf("run after the containers went (volumes kept): %v %q\n%s", err, read("c-"+n+"-pg"), out)
+	}
+
+	_ = os.Remove(filepath.Join(state, "c-"+n+"-pg"))
+	_ = os.Remove(filepath.Join(state, "c-"+n))
+	_ = os.RemoveAll(filepath.Join(state, "homevol"))
+	out, err = run()
+	if err == nil || !strings.Contains(out, "docker volume rm "+n+"-data") || strings.Contains(out, "ARGV run -d") {
+		t.Fatalf("a database volume whose password is gone: %v\n%s", err, out)
+	}
+
 }
 
 // A second manager with its own id connects beside the hub's own assistant: both are online in the roster, the

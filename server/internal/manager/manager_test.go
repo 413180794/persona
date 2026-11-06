@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/bus"
@@ -48,23 +49,23 @@ func isolate(t *testing.T) string {
 	return home
 }
 
-// The code is traded once for manager.json in the default directory; without a database it could use, nothing is
-// traded (the code works once); a code the hub does not take says so.
+// The code is traded once for manager.json in the default directory; without Docker for its database and no
+// --database-url nothing is traded (the code works once); a code the hub does not take says so.
 func TestJoin(t *testing.T) {
 	home := isolate(t)
 	j := &joinHub{}
 	srv := httptest.NewServer(j)
 	defer srv.Close()
 	ctx := context.Background()
-	none := ""
+	noDocker := func(context.Context) error { return ConfigError{errNoDocker} }
+	docker := func(context.Context) error { return nil }
 	var ce ConfigError
-	if _, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_good", HubDatabaseURL: &none}); !errors.As(err, &ce) ||
+	if _, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_good", CheckDocker: noDocker}); !errors.As(err, &ce) ||
 		!strings.Contains(err.Error(), "--database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'") || strings.Contains(err.Error(), "\n") ||
 		j.trades.Load() != 0 {
 		t.Fatalf("no database: %v, %d trades", err, j.trades.Load())
 	}
-	hubDB := "postgres://jarvis:pw@[fd00::20]:5432/jarvis"
-	dir, c, err := Join(ctx, JoinOptions{Hub: srv.URL + "/", Code: " mi_good ", HubDatabaseURL: &hubDB})
+	dir, c, err := Join(ctx, JoinOptions{Hub: srv.URL + "/", Code: " mi_good ", CheckDocker: docker})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,13 +76,13 @@ func TestJoin(t *testing.T) {
 	if err != nil || *got != *c || got.Token != "jb_secret" || got.Hub != srv.URL || got.HubID != "h1" || got.DatabaseURL != "" {
 		t.Fatalf("manager.json %+v %v", got, err)
 	}
-	if _, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_good", HubDatabaseURL: &hubDB}); err == nil || !strings.Contains(err.Error(), "用过") {
+	if _, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_good", CheckDocker: docker}); err == nil || !strings.Contains(err.Error(), "用过") {
 		t.Fatalf("second trade: %v", err)
 	}
-	if _, _, err := Join(ctx, JoinOptions{Hub: "[fd00::20]:18660", Code: "mi_good", HubDatabaseURL: &hubDB}); err == nil {
+	if _, _, err := Join(ctx, JoinOptions{Hub: "[fd00::20]:18660", Code: "mi_good", CheckDocker: docker}); err == nil {
 		t.Fatal("hub without a scheme")
 	}
-	if _, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_x", DatabaseURL: "mysql://x/y", HubDatabaseURL: &none}); err == nil {
+	if _, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_x", DatabaseURL: "mysql://x/y", CheckDocker: noDocker}); err == nil {
 		t.Fatal("a database URL that is not postgres")
 	}
 
@@ -92,7 +93,7 @@ func TestJoin(t *testing.T) {
 		t.Fatal(err)
 	}
 	own := "postgres://me@[fd00::21]:5432/mine"
-	dir2, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_good", Dir: other, DatabaseURL: own, HubDatabaseURL: &none})
+	dir2, _, err := Join(ctx, JoinOptions{Hub: srv.URL, Code: "mi_good", Dir: other, DatabaseURL: own, CheckDocker: noDocker})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,10 +108,11 @@ func TestJoin(t *testing.T) {
 	}
 }
 
-// In a container (or any computer without a hub) and no --database-url, join and run --join stop with a
-// configuration error (exit 2: not restarted) before the code is traded.
+// Without Docker (to make its own Postgres) and no --database-url, join and run --join stop with a configuration
+// error (exit 2: not restarted) before the code is traded.
 func TestNoDatabaseSpendsNoCode(t *testing.T) {
-	isolate(t) // no hub.json, no PERSONA_DATABASE_URL
+	isolate(t)
+	t.Setenv("PATH", t.TempDir()) // no docker
 	j := &joinHub{}
 	srv := httptest.NewServer(j)
 	defer srv.Close()
@@ -179,15 +181,23 @@ func TestInstallSystemd(t *testing.T) {
 	}
 	var calls []string
 	var out bytes.Buffer
+	d := &fakeDocker{}
 	e := &env{stdout: &out, goos: "linux", home: home, exe: func() (string, error) { return "/opt/personad", nil },
-		look:   func(string) (string, error) { return "/usr/bin/systemctl", nil },
+		look:   func(name string) (string, error) { return "/usr/bin/" + name, nil },
 		getenv: func(string) string { return "" },
 		run: func(_ context.Context, name string, args ...string) (string, error) {
 			calls = append(calls, name+" "+strings.Join(args, " "))
 			return "active\n", nil
 		}}
+	d.wire(e)
 	if err := cmdInstall(context.Background(), e, nil); err != nil { // the only manager: no --dir needed
 		t.Fatal(err)
+	}
+	c, _ := assistant.ReadManagerConfig(dir)
+	if c.DatabaseContainer != "persona-mgr-m-0a1b2c-pg" || !strings.HasPrefix(c.DatabaseURL, "postgres://jarvis:") ||
+		!strings.Contains(c.DatabaseURL, "@127.0.0.1:25432/jarvis") || !d.called("docker run -d --name persona-mgr-m-0a1b2c-pg") ||
+		!d.called("docker volume create persona-mgr-m-0a1b2c-data") || !strings.Contains(out.String(), "建好了它自己的 Postgres") {
+		t.Fatalf("its database: %+v\n%s\n%s", c, strings.Join(d.calls, "\n"), out.String())
 	}
 	unit := filepath.Join(home, ".config", "systemd", "user", "jarvis-manager-m-0a1b2c.service")
 	b, err := os.ReadFile(unit)
@@ -199,20 +209,232 @@ func TestInstallSystemd(t *testing.T) {
 		t.Fatalf("calls: %s", got)
 	}
 	out.Reset()
-	if err := cmdStatus(context.Background(), e, nil); err != nil || !strings.Contains(out.String(), "jarvis-manager-m-0a1b2c.service active") {
+	if err := cmdStatus(context.Background(), e, nil); err != nil || !strings.Contains(out.String(), "jarvis-manager-m-0a1b2c.service active") ||
+		!strings.Contains(out.String(), "persona-mgr-m-0a1b2c-pg") {
 		t.Fatalf("status %v: %s", err, out.String())
 	}
+	out.Reset()
 	if err := cmdUninstall(context.Background(), e, []string{"--dir", dir}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(unit); !os.IsNotExist(err) {
 		t.Fatal("unit still there")
 	}
-	if _, err := assistant.ReadManagerConfig(dir); err != nil {
-		t.Fatal("uninstall took the directory")
+	if c, err := assistant.ReadManagerConfig(dir); err != nil || c.DatabaseContainer == "" {
+		t.Fatalf("uninstall took the directory or the database: %+v %v", c, err)
 	}
-	e.look = func(string) (string, error) { return "", os.ErrNotExist }
+	if !d.called("docker stop persona-mgr-m-0a1b2c-pg") || d.called("docker volume rm") || !strings.Contains(out.String(), "数据卷 persona-mgr-m-0a1b2c-data 和里面的数据都留着") {
+		t.Fatalf("uninstall keeps the volume: %s\n%s", strings.Join(d.calls, "\n"), out.String())
+	}
+
+	// Installed again: the same container and password, started again; nothing made.
+	before, _ := assistant.ReadManagerConfig(dir)
+	runs := d.count("docker run")
+	if err := cmdInstall(context.Background(), e, []string{"--dir", dir}); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := assistant.ReadManagerConfig(dir); after.DatabaseURL != before.DatabaseURL || d.count("docker run") != runs {
+		t.Fatalf("installed again: %+v", after)
+	}
+
+	out.Reset()
+	if err := cmdUninstall(context.Background(), e, []string{"--dir", dir, "--purge"}); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := assistant.ReadManagerConfig(dir); c.DatabaseURL != "" || c.DatabaseContainer != "" ||
+		!d.called("docker rm -f persona-mgr-m-0a1b2c-pg") || !d.called("docker volume rm persona-mgr-m-0a1b2c-data") ||
+		!strings.Contains(out.String(), "它的数据没了") {
+		t.Fatalf("purge: %+v\n%s", c, out.String())
+	}
+
+	e.look = func(name string) (string, error) {
+		if name == "systemctl" {
+			return "", os.ErrNotExist
+		}
+		return "/usr/bin/" + name, nil
+	}
 	if err := cmdInstall(context.Background(), e, []string{"--dir", dir}); err == nil || !strings.Contains(err.Error(), "manager run --dir") {
 		t.Fatalf("without systemd: %v", err)
+	}
+}
+
+// A database the user gave is used as it is: no docker, and uninstall leaves it alone.
+func TestGivenDatabaseIsLeftAlone(t *testing.T) {
+	home := isolate(t)
+	dir := filepath.Join(home, "m")
+	given := "postgres://me:pw@[fd00::21]:5432/mine"
+	if err := assistant.WriteManagerConfig(dir, assistant.ManagerConfig{ID: "m-0a1b2c", Hub: "http://[fd00::20]:18660", Token: "t", DatabaseURL: given}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	d := &fakeDocker{}
+	e := &env{stdout: &out, goos: "plan9", home: home, look: func(string) (string, error) { return "", os.ErrNotExist }}
+	d.wire(e)
+	c, _ := assistant.ReadManagerConfig(dir)
+	if made, err := e.ownDatabase(context.Background(), dir, c); err != nil || made || len(d.calls) != 0 {
+		t.Fatalf("given: %v %v %v", made, err, d.calls)
+	}
+	if err := cmdUninstall(context.Background(), e, []string{"--dir", dir, "--purge"}); err != nil || len(d.calls) != 0 ||
+		!strings.Contains(out.String(), "--database-url 给的，没动它") {
+		t.Fatalf("uninstall: %v %v %s", err, d.calls, out.String())
+	}
+	if c, _ := assistant.ReadManagerConfig(dir); c.DatabaseURL != given {
+		t.Fatalf("its URL changed: %+v", c)
+	}
+}
+
+// Without Docker, and none given: a configuration error (exit 2) saying what to do.
+func TestOwnDatabaseNeedsDocker(t *testing.T) {
+	home := isolate(t)
+	dir := filepath.Join(home, "m")
+	_ = assistant.WriteManagerConfig(dir, assistant.ManagerConfig{ID: "m-0a1b2c", Hub: "http://[fd00::20]:18660", Token: "t"})
+	c, _ := assistant.ReadManagerConfig(dir)
+	d := &fakeDocker{}
+	e := &env{stdout: io.Discard, look: func(string) (string, error) { return "", os.ErrNotExist }}
+	d.wire(e)
+	var ce ConfigError
+	if _, err := e.ownDatabase(context.Background(), dir, c); !errors.As(err, &ce) || !strings.Contains(err.Error(), "--database-url") {
+		t.Fatalf("no docker: %v", err)
+	}
+	d.denied = true
+	e.look = func(name string) (string, error) { return "/usr/bin/" + name, nil }
+	if _, err := e.ownDatabase(context.Background(), dir, c); !errors.As(err, &ce) || !strings.Contains(err.Error(), "usermod") {
+		t.Fatalf("denied: %v", err)
+	}
+}
+
+// fakeDocker answers docker like a machine with no containers yet: run makes one, rm removes it.
+type fakeDocker struct {
+	calls    []string
+	envs     []string
+	exists   bool
+	denied   bool
+	down     bool // docker info fails: not running
+	noVolume bool // docker volume inspect fails
+}
+
+func (d *fakeDocker) wire(e *env) {
+	e.docker = d.run
+	e.freePort = func() (int, error) { return 25432, nil }
+	e.ping = func(context.Context, string) error { return nil }
+	e.dbWait = time.Second
+}
+
+func (d *fakeDocker) run(_ context.Context, env []string, name string, args ...string) ([]byte, error) {
+	call := strings.Join(append([]string{name}, args...), " ")
+	d.calls = append(d.calls, call)
+	d.envs = append(d.envs, env...)
+	switch {
+	case strings.HasPrefix(call, "docker info") && d.down:
+		return []byte("Cannot connect to the Docker daemon"), errors.New("exit status 1")
+	case strings.HasPrefix(call, "docker volume inspect") && d.noVolume:
+		return []byte("no such volume"), errors.New("exit status 1")
+	case strings.HasPrefix(call, "docker inspect -f {{.State.Status}}") && !d.exists:
+		return []byte("No such object"), errors.New("exit status 1")
+	case strings.HasPrefix(call, "docker info") && d.denied:
+		return []byte("permission denied while trying to connect to the Docker daemon socket"), errors.New("exit status 1")
+	case strings.HasPrefix(call, "docker ps -a") && d.exists:
+		return []byte(args[len(args)-3][len("name=^/"):len(args[len(args)-3])-1] + "\n"), nil
+	case strings.HasPrefix(call, "docker run"):
+		d.exists = true
+	case strings.HasPrefix(call, "docker rm"):
+		d.exists = false
+	case strings.HasPrefix(call, "docker port"):
+		return []byte("127.0.0.1:25432\n"), nil
+	case strings.HasPrefix(call, "docker inspect -f {{.State.Status}}"):
+		return []byte("running\n"), nil
+	}
+	return nil, nil
+}
+
+func (d *fakeDocker) called(prefix string) bool { return d.count(prefix) > 0 }
+
+func (d *fakeDocker) count(prefix string) int {
+	n := 0
+	for _, c := range d.calls {
+		if strings.HasPrefix(c, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+// Joined again after a revoke, into its own directory: its database is there, so no Docker is needed and the code is
+// traded; a container given its database through PERSONA_MANAGER_DATABASE_URL (`run --join`, never on a command line)
+// keeps it; another database given into a directory whose container install made says the container is left unused.
+func TestJoinAgainAndDatabaseFromTheEnvironment(t *testing.T) {
+	home := isolate(t)
+	t.Setenv("PATH", t.TempDir()) // no docker
+	srv := httptest.NewServer(&joinHub{})
+	defer srv.Close()
+	dir := filepath.Join(home, ".persona", "managers", "m-0a1b2c")
+	own := assistant.ManagerConfig{ID: "m-0a1b2c", Hub: srv.URL, Token: "jb_old",
+		DatabaseURL: "postgres://jarvis:pw@127.0.0.1:25432/jarvis?sslmode=disable", DatabaseContainer: "persona-mgr-m-0a1b2c-pg"}
+	if err := assistant.WriteManagerConfig(dir, own); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Main(context.Background(), update.Build{}, []string{"join", srv.URL, "mi_good", "--dir", dir}, &out); err != nil {
+		t.Fatalf("join again without docker: %v", err)
+	}
+	if c, _ := assistant.ReadManagerConfig(dir); c.Token != "jb_secret" || c.DatabaseURL != own.DatabaseURL || c.DatabaseContainer != own.DatabaseContainer {
+		t.Fatalf("joined again: %+v", c)
+	}
+
+	// The container's way: run --join with the URL in the environment (the hub is a fake; the run stops at the bus).
+	srv2 := httptest.NewServer(&joinHub{})
+	defer srv2.Close()
+	dir2 := filepath.Join(t.TempDir(), "m")
+	e := newEnv(io.Discard)
+	e.getenv = func(k string) string {
+		if k == databaseEnv {
+			return "postgres://jarvis:secret@persona-mgr-m-0a1b2c-pg:5432/jarvis?sslmode=disable"
+		}
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = cmdRun(ctx, e, update.Build{}, []string{"--dir", dir2, "--join", srv2.URL, "mi_good"})
+	if c, err := assistant.ReadManagerConfig(dir2); err != nil || c.DatabaseURL != "postgres://jarvis:secret@persona-mgr-m-0a1b2c-pg:5432/jarvis?sslmode=disable" || c.DatabaseContainer != "" {
+		t.Fatalf("from the environment: %+v %v", c, err)
+	}
+
+	// Another database given into the first directory: its container is not used any more, and it says so.
+	srv3 := httptest.NewServer(&joinHub{})
+	defer srv3.Close()
+	out.Reset()
+	if err := Main(context.Background(), update.Build{}, []string{"join", srv3.URL, "mi_good", "--dir", dir,
+		"--database-url", "postgres://me@[fd00::21]:5432/mine"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "docker rm -f persona-mgr-m-0a1b2c-pg && docker volume rm persona-mgr-m-0a1b2c-data") {
+		t.Fatalf("no word about the old container: %s", out.String())
+	}
+}
+
+// When its container and volume are both gone, the run says the database it makes is a new, empty one; status tells
+// docker not running apart from a container that is gone.
+func TestLostDatabaseAndDockerDown(t *testing.T) {
+	home := isolate(t)
+	dir := filepath.Join(home, "m")
+	c := assistant.ManagerConfig{ID: "m-0a1b2c", Hub: "http://[fd00::20]:18660", Token: "t",
+		DatabaseURL: "postgres://jarvis:pw@127.0.0.1:25432/jarvis?sslmode=disable", DatabaseContainer: "persona-mgr-m-0a1b2c-pg"}
+	_ = assistant.WriteManagerConfig(dir, c)
+	var out bytes.Buffer
+	d := &fakeDocker{}
+	e := &env{stdout: &out, goos: "linux", home: home, look: func(n string) (string, error) { return "/usr/bin/" + n, nil },
+		getenv: func(string) string { return "" }}
+	d.wire(e)
+	d.noVolume = true
+	if made, err := e.ownDatabase(context.Background(), dir, &c); err != nil || !made || !strings.Contains(out.String(), "建了一个新的空库") {
+		t.Fatalf("lost: %v %v %s", made, err, out.String())
+	}
+	d.down = true
+	if got := e.containerState(context.Background(), c.DatabaseContainer); got != "Docker 没在运行，看不了" {
+		t.Fatalf("docker down: %q", got)
+	}
+	d.down, d.exists = false, false
+	if got := e.containerState(context.Background(), c.DatabaseContainer); got != "容器不在了" {
+		t.Fatalf("gone: %q", got)
 	}
 }

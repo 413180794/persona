@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/pgdocker"
 )
 
 // How a new manager is installed (docs/managers.md, "Install commands"): the app shows the commands that come with its install
@@ -38,8 +39,8 @@ func (h *Hub) managerAddress(r *http.Request) (base, fp string) {
 }
 
 // managerCommands are the commands that install manager id with code, from where r came: service (a computer, the
-// hub's own included), join (one that has personad already), docker (when the hub knows its image). The image brings
-// no Postgres: the docker command's --database-url is a placeholder the user replaces with a database of theirs.
+// hub's own included), join (one that has personad already), docker (when the hub knows its image: the script that
+// starts the manager and its own Postgres, two containers).
 func (h *Hub) managerCommands(r *http.Request, id, code string) map[string]string {
 	base, fp := h.managerAddress(r)
 	curl := "curl -fsSL"
@@ -52,21 +53,76 @@ func (h *Hub) managerCommands(r *http.Request, id, code string) map[string]strin
 		"service": fmt.Sprintf("%s %s | sh", curl, shellWord(base+installScriptPath+code)),
 		"join":    join,
 	}
-	image := identity.Getenv("JARVIS_IMAGE")
-	if image == "" {
-		image = h.build.Image
-	}
-	if image != "" {
-		dir := "/home/jarvis/.jarvis/managers/" + id
-		docker := fmt.Sprintf("docker run -d --name persona-manager-%s --restart unless-stopped -v persona-manager-%s:/home/jarvis/.jarvis %s manager run --dir %s --join %s %s --database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'",
-			id, id, shellWord(image), dir, shellWord(base), code)
-		if fp != "" {
-			docker += " --fingerprint " + fp
-		}
-		out["docker"] = docker
+	if h.managerImage() != "" {
+		out["docker"] = fmt.Sprintf("%s %s | sh", curl, shellWord(base+installScriptPath+code+"/docker"))
 	}
 	return out
 }
+
+// managerImage is the image a manager's container runs: the one this Docker hub runs, else the one it was built as;
+// "" when neither is known.
+func (h *Hub) managerImage() string {
+	if image := identity.Getenv("JARVIS_IMAGE"); image != "" {
+		return image
+	}
+	return h.build.Image
+}
+
+// managerDockerScript is the POSIX sh script GET /i/<code>/docker answers (docs/managers.md, "Containers"): manager id
+// in a container beside a Postgres container of its own, on a network of their own. Names: network persona-mgr-<id>,
+// containers persona-mgr-<id> and persona-mgr-<id>-pg, volumes persona-mgr-<id>-home and persona-mgr-<id>-data.
+//
+// The database password is made up by the shell that runs it (the hub never knows it) and goes through the
+// environment only (-e NAME with no value): never on a command line, where `ps` and the containers' Cmd would show it.
+// It can run again: what is there is kept, and an existing database's password is read back (from its container, or
+// from the manager's manager.json in its volume) instead of made up anew, which Postgres would not take.
+func managerDockerScript(id, image, base, code, fp string) string {
+	q := shellWord
+	fpArgs := ""
+	if fp != "" {
+		fpArgs = " --fingerprint " + fp
+	}
+	return `#!/bin/sh
+# Persona: run the manager ` + id + ` in Docker, beside a Postgres of its own (docs/managers.md, "Containers").
+set -eu
+N=` + q("persona-mgr-"+id) + `
+ID=` + q(id) + `
+IMAGE=` + q(image) + `
+HUB=` + q(base) + `
+CODE=` + q(code) + `
+fail() { echo "persona manager: $*" >&2; exit 1; }
+command -v docker >/dev/null 2>&1 || fail "needs docker"
+docker info >/dev/null 2>&1 || fail "docker is not running, or this user may not use it"
+docker network inspect "$N" >/dev/null 2>&1 || docker network create "$N" >/dev/null
+pw=
+if docker inspect "$N-pg" >/dev/null 2>&1; then
+	pw=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$N-pg" | sed -n 's/^POSTGRES_PASSWORD=//p')
+elif docker volume inspect "$N-data" >/dev/null 2>&1; then
+	# Its database is there from before: the password is the one in its manager.json, when that volume is there too.
+	pw=$(docker run --rm -v "$N-home:/home/jarvis/.jarvis" --entrypoint sh "$IMAGE" -c \
+		"sed -n 's|.*postgres://` + pgdocker.User + `:\([0-9a-f]*\)@.*|\1|p' /home/jarvis/.jarvis/managers/$ID/manager.json" 2>/dev/null || true)
+	[ -n "$pw" ] || fail "the volume $N-data holds a database whose password is gone: remove it (docker volume rm $N-data, its data with it) and run this again"
+fi
+[ -n "$pw" ] || pw=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+if ! docker inspect "$N-pg" >/dev/null 2>&1; then
+	POSTGRES_PASSWORD=$pw docker run -d --name "$N-pg" --network "$N" --restart unless-stopped \
+		-v "$N-data:/var/lib/postgresql" -e POSTGRES_USER=` + pgdocker.User + ` -e POSTGRES_DB=` + pgdocker.Database + ` -e POSTGRES_PASSWORD ` + pgdocker.Image + ` >/dev/null
+fi
+docker start "$N-pg" >/dev/null
+if docker inspect "$N" >/dev/null 2>&1; then
+	docker start "$N" >/dev/null
+	echo "persona manager: $N was there already: started it"
+	exit 0
+fi
+` + databaseEnvName + `="postgres://` + pgdocker.User + `:$pw@$N-pg:5432/` + pgdocker.Database + `?sslmode=disable" docker run -d --name "$N" --network "$N" \
+	--restart unless-stopped -v "$N-home:/home/jarvis/.jarvis" -e ` + databaseEnvName + ` "$IMAGE" \
+	manager run --dir "/home/jarvis/.jarvis/managers/$ID" --join "$HUB" "$CODE"` + fpArgs + ` >/dev/null
+echo "persona manager: started $N and its Postgres $N-pg (volumes $N-home, $N-data); logs: docker logs -f $N"
+`
+}
+
+// databaseEnvName is the variable a manager's container gets its database URL in (manager.databaseEnv).
+const databaseEnvName = "PERSONA_MANAGER_DATABASE_URL"
 
 // curlPin is a pin (base64url of the key's sha256, no padding) as curl's --pinnedpubkey wants it (standard base64).
 func curlPin(fp string) string {
@@ -87,44 +143,58 @@ func shellWord(s string) string {
 
 // managerInstallRoutes mounts GET /i/<code> beside the join, outside the apps' auth.
 func (h *Hub) managerInstallRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /i/{code}", func(w http.ResponseWriter, r *http.Request) {
-		if h.sourceOf(r) == sourcePublic && r.TLS == nil && !h.cfg.Security.AllowPublicPlaintext {
-			h.securityError(w, r, http.StatusForbidden, "tls_required", 0) // the code would cross the internet in the clear
+	mux.HandleFunc("GET /i/{code}", func(w http.ResponseWriter, r *http.Request) { h.serveInstallScript(w, r, false) })
+	// The same for a container: the manager and its own Postgres (managerDockerScript), when the hub knows its image.
+	mux.HandleFunc("GET /i/{code}/docker", func(w http.ResponseWriter, r *http.Request) { h.serveInstallScript(w, r, true) })
+}
+
+// serveInstallScript answers GET /i/<code> (docker: …/docker) with its script.
+func (h *Hub) serveInstallScript(w http.ResponseWriter, r *http.Request, docker bool) {
+	if h.sourceOf(r) == sourcePublic && r.TLS == nil && !h.cfg.Security.AllowPublicPlaintext {
+		h.securityError(w, r, http.StatusForbidden, "tls_required", 0) // the code would cross the internet in the clear
+		return
+	}
+	key := authSourceKey(r)
+	if retry := h.devtok.failures.retry(key, time.Now(), h.cfg.Security); retry > 0 {
+		retryAfter(w, retry)
+		h.securityError(w, r, http.StatusTooManyRequests, "rate_limited", 0)
+		return
+	}
+	code := r.PathValue("code")
+	s := h.managerStore()
+	if s == nil {
+		http.Error(w, "no database", http.StatusServiceUnavailable)
+		return
+	}
+	if !installCodeShape.MatchString(code) {
+		h.devtok.failures.fail(key, time.Now(), h.cfg.Security)
+		http.Error(w, "echo 'persona: this install code is unknown, expired or used already' >&2; exit 1", http.StatusNotFound)
+		return
+	}
+	c, err := s.ManagerInstallCodeByHash(r.Context(), hashToken(code))
+	if err != nil {
+		http.Error(w, "the hub's database did not answer", http.StatusServiceUnavailable)
+		return
+	}
+	if c == nil {
+		h.devtok.failures.fail(key, time.Now(), h.cfg.Security)
+		http.Error(w, "echo 'persona: this install code is unknown, expired or used already: get a new one in the app' >&2; exit 1", http.StatusNotFound)
+		return
+	}
+	base, fp := h.managerAddress(r)
+	script := managerInstallScript(managerScript{ID: c.ManagerID, Name: c.Name, Hub: base, Code: code,
+		Fingerprint: fp, DL: strings.TrimRight(h.build.UpdateURL, "/")})
+	if docker {
+		image := h.managerImage()
+		if image == "" {
+			http.Error(w, "echo 'persona: this hub does not know which image a manager container runs' >&2; exit 1", http.StatusNotFound)
 			return
 		}
-		key := authSourceKey(r)
-		if retry := h.devtok.failures.retry(key, time.Now(), h.cfg.Security); retry > 0 {
-			retryAfter(w, retry)
-			h.securityError(w, r, http.StatusTooManyRequests, "rate_limited", 0)
-			return
-		}
-		code := r.PathValue("code")
-		s := h.managerStore()
-		if s == nil {
-			http.Error(w, "no database", http.StatusServiceUnavailable)
-			return
-		}
-		if !installCodeShape.MatchString(code) {
-			h.devtok.failures.fail(key, time.Now(), h.cfg.Security)
-			http.Error(w, "echo 'persona: this install code is unknown, expired or used already' >&2; exit 1", http.StatusNotFound)
-			return
-		}
-		c, err := s.ManagerInstallCodeByHash(r.Context(), hashToken(code))
-		if err != nil {
-			http.Error(w, "the hub's database did not answer", http.StatusServiceUnavailable)
-			return
-		}
-		if c == nil {
-			h.devtok.failures.fail(key, time.Now(), h.cfg.Security)
-			http.Error(w, "echo 'persona: this install code is unknown, expired or used already: get a new one in the app' >&2; exit 1", http.StatusNotFound)
-			return
-		}
-		base, fp := h.managerAddress(r)
-		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write([]byte(managerInstallScript(managerScript{ID: c.ManagerID, Name: c.Name, Hub: base, Code: code,
-			Fingerprint: fp, DL: strings.TrimRight(h.build.UpdateURL, "/")})))
-	})
+		script = managerDockerScript(c.ManagerID, image, base, code, fp)
+	}
+	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write([]byte(script))
 }
 
 // managerScript is what the install script is made of.

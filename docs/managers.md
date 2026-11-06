@@ -4,7 +4,7 @@ A manager is the assistant's process, `personad assistant` (`docs/assistant.md`(
 
 - The assistant the hub starts itself (id `assistant`) is the first manager and, to begin with, the **default manager**: entry points that belong to no manager (Siri, the **Ask Persona** shortcut, the assistant page as the app opens) go to the default manager, which can be changed in settings.
 - Everything belongs to one manager (computers, sources, inbox events, sessions, model settings, the knowledge base), and the hub forwards by ownership; list endpoints are merged by the hub, each item carrying `manager` (the manager's id).
-- Each manager keeps its own data: a database of its own (one more database in the same Postgres instance, or one it brings); the default manager keeps using the hub's database, with nothing migrated.
+- Each manager keeps its own data: a Postgres of its own, which `personad manager install` sets up in Docker the way `personad hub setup` sets up the hub's (or one the user gives with `--database-url`). The hub never touches a manager's database. The default manager keeps using the hub's database, with nothing migrated.
 - Where a manager runs is the user's choice: another service on the hub machine, a service on another computer, or a container. Bots, channels, plugins and sources are set up in each manager's own settings; none of it is global.
 
 ## Steps
@@ -58,16 +58,19 @@ A manager made in the app installs and runs on its own: its own id, directory an
 ### Directory and manager.json
 
 - The default directory is `managers/<id>` in this computer's data directory (`~/.persona/managers/<id>`); `--dir` picks another. The directory is 0700 and its `manager.json` 0600:
-  `{id, name, hub, hub_id, token, fingerprint?, database_url?}`. `hub` is the address it reaches the hub at; `fingerprint` is the pin of the hub's own TLS certificate (only when it was installed through the hub's TLS port).
+  `{id, name, hub, hub_id, token, fingerprint?, database_url?, database_container?}`. `hub` is the address it reaches the hub at; `fingerprint` is the pin of the hub's own TLS certificate (only when it was installed through the hub's TLS port); `database_url` is its database, with its password; `database_container` names the container install made for it (none for a database you gave).
 - Its knowledge base (`data/`), `secret.key` and extensions are all under this directory; it never writes to the hub's. While it runs, `PERSONA_HOME` points at it, so the programs it starts use it too.
 - Moving to another computer: copy the whole directory, and the same token still connects; or get a new code for it in the app and install it again there (the old token stops working at once).
 
 ### Database
 
-- By default: one more database `persona_mgr_<id>` (the id's `-` as `_`) in the hub's Postgres, from the `database_url` in the hub machine's `hub.json` (`PERSONA_DATABASE_URL` wins) with the database name swapped. On its first run it does `CREATE DATABASE` through the same server's `postgres` database, then runs the manager set of migrations (`docs/server.md`, "Migrations"). The database role must be allowed to create databases (the ones `hub setup` and the Docker setup make are); when it isn't, the manager says so, and you create the database yourself or give `--database-url`.
-- **The image brings no Postgres**: in a container (and on any other computer that doesn't run the hub) you must give it a Postgres with `--database-url`.
-- Off the hub machine (another computer, a container) there is no hub `hub.json`, and **the hub never hands out its database password** (the join answer has nothing about databases), so `--database-url postgres://USER:PASSWORD@HOST:5432/DBNAME` gives it a database: a Postgres of its own, or a separate database and role on the same Postgres. A database that isn't there yet is created the same way. It is written to `manager.json` and used from then on. With none given and no hub database to find, `manager join` and `manager run --join` print one line saying what to add (`--database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'`) and exit 2 (a service's or a container's restart won't loop on it), and the install code is not used.
-- It can't be the hub's own database (a `database_url` pointing at it is refused); the default manager (the assistant the hub starts) keeps using the hub's database, with nothing migrated.
+A manager owns its database: a Postgres of its own, never the hub's.
+
+- **By default it gets its own container**, the way `personad hub setup` makes the hub's (`server/internal/pgdocker` is shared by both): `personad manager install` (and the `/i/` script, which runs it) makes the Docker container `persona-mgr-<id>-pg` with the volume `persona-mgr-<id>-data`, its port published on a free `127.0.0.1` port, user and database `jarvis`, with the manager set of migrations (`docs/server.md`, "Migrations"). The password is generated there and kept only in `manager.json` (0600). This holds on the hub machine too: a manager there gets its own container, not a database in the hub's Postgres. `manager run` starts the container again when it runs (after a reboot, say), and makes it when install didn't. If the container's port was taken while it was stopped, it is made again on a new free port, over the same volume and with the same password, and `manager.json` gets the new address. If both the container and its volume are gone, the new database is empty, and the manager says so. A container by that name that publishes no port (one the docker script made) can't be used from the host: install says so.
+- **`--database-url postgres://USER:PASSWORD@HOST:5432/DBNAME`** gives it another Postgres instead (its own server, or a separate database and role somewhere). It is used as it is, and the database is created when that server doesn't have it yet. It can't be the hub's own database (refused; every name of the local machine, `localhost`, `127.0.0.0/8` and `::1`, counts as the same host, and a missing port as 5432). Given into a directory whose container install made, that container is no longer used and not removed; join says how to remove it.
+- **No Docker and no `--database-url`**: `manager join`, `manager join … --install` and `manager run --join` check this before trading the code (unless `--dir` already has a `manager.json` with a database: joining again after a revoke needs no Docker), print one line saying what to do (install Docker, or add `--database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'`), exit 2 (a service's or a container's restart won't loop on it), and the install code is not used. A user who may not use Docker is told the `usermod` line; a Docker that isn't running is a plain error.
+- **The hub never hands out its database password**: the join answer has nothing about databases.
+- The default manager (the assistant the hub starts) keeps using the hub's database, with nothing migrated.
 
 ### Install commands
 
@@ -77,32 +80,29 @@ The answers of `POST /api/v1/managers` and `POST /api/v1/managers/{id}/code` car
 | --- | --- | --- |
 | `service` | `curl -fsSL <hub>/i/<code> \| sh` (through the hub's TLS port it adds `-k --pinnedpubkey 'sha256//<pin>'`) | Any Linux or Mac, the hub machine included |
 | `join` | `personad manager join <hub> <code> --install` | A computer that has personad already |
-| `docker` | `docker run -d --name persona-manager-<id> --restart unless-stopped -v persona-manager-<id>:/home/jarvis/.jarvis <image> manager run --dir /home/jarvis/.jarvis/managers/<id> --join <hub> <code> --database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME'` | A container; only when the hub knows its image (`JARVIS_IMAGE` or the one it was built as); replace `USER:PASSWORD@HOST:5432/DBNAME` with the Postgres you give it |
+| `docker` | `curl -fsSL <hub>/i/<code>/docker \| sh` (pinned as above through the TLS port): the script that starts the manager and its own Postgres, two containers on a network of their own (see "Containers") | A computer with Docker; only when the hub knows its image (`JARVIS_IMAGE` or the one it was built as) |
 
 `GET /i/<code>` answers a POSIX sh script. It needs no credential (the code is the credential), and **fetching the script doesn't use up the code**: only the join does. Unknown codes are 404 and count against the source, as at the join; public plaintext requests get 403 `tls_required`. The script looks for this computer's personad (`~/.persona/bin/jarvisd`, personad or jarvisd on the PATH); if there is none, it downloads it from the hub's release address the way `install.sh` does and checks it against `SHA256SUMS`, then runs `personad manager join <hub> <code> --install`. Arguments after `sh -s --` go to the join, e.g. `curl … | sh -s -- --database-url '…'`.
 
 ### Commands
 
-- `personad manager join <hub> <code> [--dir D] [--database-url U] [--fingerprint F] [--install]`: first checks that there will be a database (no hub database and no `--database-url`: it stops without using the code), then trades the code and writes `manager.json`. A directory that is already another manager's is not overwritten: the new manager goes to its own default directory.
+- `personad manager join <hub> <code> [--dir D] [--database-url U] [--fingerprint F] [--install]`: first checks that there will be a database (no Docker and no `--database-url`: it stops without using the code, exit 2), then trades the code and writes `manager.json`. A directory that is already another manager's is not overwritten: the new manager goes to its own default directory.
 - `personad manager run [--dir D] [--join <hub> <code>]`: runs it. `--dir` can be left out when this computer has only one manager. `--join`: trades the code first when the directory has no `manager.json` yet (a container runs the same command on every start, and from the second start on the join is skipped). Configuration mistakes (no `manager.json`, no database to use) exit 2, which the service doesn't restart.
-- `personad manager install [--dir D]`: on Linux writes the systemd user unit `jarvis-manager-<id>.service` (`Restart=always`, `RestartPreventExitStatus=2`, with a reminder about linger); on a Mac the launchd agent `com.jarvis.manager.<id>` (its log is `manager.log` in its directory). The binary it runs is the hub machine's `~/.persona/bin/jarvisd` when there is one (so it upgrades with the hub), else the current one. On other systems, or without a systemd user instance, it says how to keep it running yourself.
-- `personad manager uninstall [--dir D]`: stops and removes the service; the directory and the database stay (deleting it in the app is what makes the hub stop accepting its token).
-- `personad manager status [--dir D]`: this computer's managers, with directory, hub, database and service state.
+- `personad manager install [--dir D]`: first sets up its database (its own container, see "Database"; a database it was given is just used), then on Linux writes the systemd user unit `jarvis-manager-<id>.service` (`Restart=always`, `RestartPreventExitStatus=2`, with a reminder about linger); on a Mac the launchd agent `com.jarvis.manager.<id>` (its log is `manager.log` in its directory). The binary it runs is the hub machine's `~/.persona/bin/jarvisd` when there is one (so it upgrades with the hub), else the current one. On other systems, or without a systemd user instance, it says how to keep it running yourself.
+- `personad manager uninstall [--dir D] [--purge]`: stops and removes the service and says what happens to the data. Its database container is stopped and **its volume, with all the data, stays**; `install` again picks it up. **`--purge` removes the container and the volume**, so the data is gone and the next install starts with an empty database. A database given with `--database-url` is never touched. The directory stays either way (deleting the manager in the app is what makes the hub stop accepting its token).
+- `personad manager status [--dir D]`: this computer's managers, with directory, hub, database (and whether its container runs; Docker not running or missing is said as such) and service state.
 
 ### Containers
 
-Same image as the hub. When the entrypoint sees `manager` it writes no `hub.json` and shows none of the hub's reminders (`deploy/docker/entrypoint.sh`). The data volume is `/home/jarvis/.jarvis`, with the manager in its `managers/<id>`; don't share the hub's data volume (it holds the hub's keys). In the hub's compose file, a manager can use the same `JARVIS_DATABASE_URL` as the hub, and without `--database-url` it creates its own database in that Postgres. The database password must then be in `.env` as `JARVIS_DB_PASSWORD` (the password Postgres generates on its first start is in the hub's data volume, which the manager's container can't read):
+A manager in Docker runs the hub's image beside a Postgres container of its own, on a network of their own. `commands.docker` is `curl -fsSL <hub>/i/<code>/docker | sh`: like `GET /i/<code>`, `GET /i/<code>/docker` needs no credential, doesn't use up the code, and counts unknown codes against the source; it answers 404 when the hub doesn't know its image. The script:
 
-```yaml
-  manager-work:
-    image: ${JARVIS_IMAGE}
-    restart: unless-stopped
-    depends_on: { postgres: { condition: service_healthy } }
-    environment:
-      JARVIS_DATABASE_URL: postgres://jarvis:${JARVIS_DB_PASSWORD:?}@postgres:5432/jarvis?sslmode=disable
-    volumes: [ "./manager-work:/home/jarvis/.jarvis" ]
-    command: ["manager", "run", "--dir", "/home/jarvis/.jarvis/managers/<id>", "--join", "http://hub:18660", "<install code>"]
-```
+- makes the network `persona-mgr-<id>`, the Postgres container `persona-mgr-<id>-pg` (volume `persona-mgr-<id>-data`, not published on the host) and the manager container `persona-mgr-<id>` (volume `persona-mgr-<id>-home`), running `manager run --dir /home/jarvis/.jarvis/managers/<id> --join <hub> <code>`;
+- makes up the database password in the shell that runs it (the hub never knows it) and passes it **only through the environment**: `POSTGRES_PASSWORD` to Postgres and `PERSONA_MANAGER_DATABASE_URL` to the manager (`docker run -e NAME` with no value), never on a command line, where `ps` and the container's `Cmd` would show it. `manager run --join` reads `PERSONA_MANAGER_DATABASE_URL` when there is no `--database-url` (not `PERSONA_DATABASE_URL`: that one is the hub's, which a manager refuses), and keeps it in its `manager.json` on the first start; from the second start on the join is skipped;
+- can run again: an existing network or container is kept (a stopped one is started), and an existing database keeps its password, read back from its container, or, when only the volumes are left, from the manager's `manager.json` in its `-home` volume. When the `-data` volume is there and its password can't be found (the `-home` volume was removed), it stops and says to remove the `-data` volume too (its data goes with it).
+
+The manager retries until its Postgres answers (the container restarts it). When the entrypoint sees `manager` it writes no `hub.json` and shows none of the hub's reminders (`deploy/docker/entrypoint.sh`). Don't share the hub's data volume (it holds the hub's keys).
+
+To remove it: `docker rm -f persona-mgr-<id> persona-mgr-<id>-pg && docker network rm persona-mgr-<id>`. The volumes `persona-mgr-<id>-home` (its directory) and `persona-mgr-<id>-data` (its database) stay, and running the script again picks them up; `docker volume rm persona-mgr-<id>-home persona-mgr-<id>-data` removes them with the data.
 
 ### After it is revoked
 

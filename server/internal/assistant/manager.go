@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -22,8 +23,8 @@ import (
 
 // A manager made in the app (docs/managers.md, "A second manager") is the same program as the assistant the hub starts, with
 // a directory of its own: manager.json there says who it is and where the hub is, and everything it keeps on disk (the
-// knowledge base, secret.key, its extensions) is under it, never under the hub's. Its state is in a database of its
-// own: the one manager.json names, else one more database in the hub's Postgres named after it (ManagerDatabase).
+// knowledge base, secret.key, its extensions) is under it, never under the hub's. Its state is in a Postgres of its own,
+// never the hub's: the container `personad manager install` makes for it (internal/manager), or the one the user gave.
 
 // ManagerFile is a manager's configuration, in its directory (0600: it holds the manager's bus token).
 const ManagerFile = "manager.json"
@@ -39,9 +40,12 @@ type ManagerConfig struct {
 	// Fingerprint pins the hub's TLS key on an https Hub with the hub's own certificate (link.Pin); "" trusts the
 	// system's CAs.
 	Fingerprint string `json:"fingerprint,omitempty"`
-	// DatabaseURL is its own database, used as it is (made when missing). Empty: ManagerDatabase in the Postgres of
-	// the hub on this machine (hub.json's database_url, PERSONA_DATABASE_URL over it).
+	// DatabaseURL is its own database: its container's (DatabaseContainer), or the one --database-url gave (made
+	// when missing). Empty until `personad manager install` (or run) made its container.
 	DatabaseURL string `json:"database_url,omitempty"`
+	// DatabaseContainer is the Docker container its Postgres runs in when install made it (persona-mgr-<id>-pg); ""
+	// for a database the user gave, which uninstall never touches.
+	DatabaseContainer string `json:"database_container,omitempty"`
 }
 
 // managerID is the shape of a manager's id (the hub's busManagerID).
@@ -113,12 +117,8 @@ func WriteManagerConfig(dir string, c ManagerConfig) error {
 	return os.Rename(tmp.Name(), filepath.Join(dir, ManagerFile))
 }
 
-// ManagerDatabase is the database manager id gets in the hub's Postgres when manager.json names none:
-// persona_mgr_<id>, its - as _.
-func ManagerDatabase(id string) string { return "persona_mgr_" + strings.ReplaceAll(id, "-", "_") }
-
 // HubDatabaseURL is the database_url of the hub on this machine (hub.json in the data directory,
-// PERSONA_DATABASE_URL over it); "" when there is none.
+// PERSONA_DATABASE_URL over it); "" when there is none. A manager never uses it (SameDatabase).
 func HubDatabaseURL() string {
 	cfg, err := readHubConfig()
 	if err != nil {
@@ -127,39 +127,35 @@ func HubDatabaseURL() string {
 	return cfg.DatabaseURL
 }
 
-// DatabaseURL is the manager's own database: manager.json's, else ManagerDatabase on the server of hubURL (the
-// hub's database_url; "" when this machine has no hub). Never the hub's own database.
-func (c *ManagerConfig) Database(hubURL string) (string, error) {
-	if c.DatabaseURL != "" {
-		if hubURL != "" && sameDatabase(c.DatabaseURL, hubURL) {
-			return "", errors.New("database_url is the hub's own database: a manager keeps its state in one of its own")
-		}
-		return c.DatabaseURL, nil
-	}
-	if hubURL == "" {
-		return "", errors.New("no database for this manager: give it one with --database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME' (this computer has no hub whose Postgres it could use)")
-	}
-	return db.WithDatabase(hubURL, ManagerDatabase(c.ID))
-}
+// ErrHubDatabase: the database a manager was given is the hub's own.
+var ErrHubDatabase = errors.New("this is the hub's own database: a manager keeps its state in a Postgres of its own")
 
-// sameDatabase: a and b name the same database on the same server (as far as their URLs tell).
-func sameDatabase(a, b string) bool {
-	host := func(raw string) string {
+// SameDatabase: a and b name the same database on the same server, as far as their URLs tell: host names compared
+// without case, every loopback name (localhost, 127.0.0.0/8, ::1) as one, a missing port as 5432.
+func SameDatabase(a, b string) bool {
+	server := func(raw string) string {
 		u, err := neturl.Parse(raw)
 		if err != nil {
 			return raw
 		}
-		return strings.ToLower(u.Host)
+		host, port := strings.ToLower(u.Hostname()), u.Port()
+		if port == "" {
+			port = "5432"
+		}
+		if ip := net.ParseIP(host); host == "localhost" || (ip != nil && ip.IsLoopback()) {
+			host = "loopback"
+		}
+		return host + ":" + port
 	}
-	return host(a) == host(b) && db.DatabaseName(a) == db.DatabaseName(b)
+	return server(a) == server(b) && db.DatabaseName(a) == db.DatabaseName(b)
 }
 
 // RunManager is `personad manager run`: the manager whose manager.json is in dir, until ctx ends. Its data
-// directory is dir (PERSONA_HOME too, for what it starts); its database is manager.json's, else ManagerDatabase on
-// the server of hubDatabaseURL (HubDatabaseURL, read before: PERSONA_HOME is dir after this), made the first time. When the hub refuses
-// its token (removed in the app, or installed again elsewhere) it says so once and returns bus.ErrRevoked, not
-// trying again with it.
-func RunManager(ctx context.Context, build update.Build, dir, hubDatabaseURL string) error {
+// directory is dir (PERSONA_HOME too, for what it starts); its database is manager.json's database_url (made when it
+// is missing on that server), which the caller made sure there is (manager.ownDatabase). When the hub refuses its
+// token (removed in the app, or installed again elsewhere) it says so once and returns bus.ErrRevoked, not trying
+// again with it.
+func RunManager(ctx context.Context, build update.Build, dir string) error {
 	logger := log.New(os.Stderr, "manager: ", log.LstdFlags)
 	dir, err := filepath.Abs(dir)
 	if err != nil {
@@ -169,9 +165,9 @@ func RunManager(ctx context.Context, build update.Build, dir, hubDatabaseURL str
 	if err != nil {
 		return err
 	}
-	url, err := c.Database(hubDatabaseURL)
-	if err != nil {
-		return err
+	url := c.DatabaseURL
+	if url == "" {
+		return errors.New("no database: run personad manager install, which makes its own Postgres in Docker, or give --database-url")
 	}
 	if created, err := db.EnsureDatabase(ctx, url); err != nil {
 		return fmt.Errorf("database %s: %w", db.DatabaseName(url), err)

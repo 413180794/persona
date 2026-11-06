@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// A manager other than the one the hub starts keeps its state in a database of its own (docs/managers.md, "Database"):
-// by default one more database in the hub's Postgres, named after the manager, made the first time it runs.
+// A database a manager was given (`personad manager join --database-url`) is made when that server has none by
+// its name yet (docs/managers.md, "Database"); the container install makes comes with its own.
 
 // databaseName is what EnsureDatabase creates: plain lower-case identifiers only, so it needs no quoting rules.
 var databaseName = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)

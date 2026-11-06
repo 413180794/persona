@@ -219,6 +219,7 @@ agents.read          GET /api/v1/workspace-board
 agents.read          GET /api/v1/workspaces
 -                    GET /api/v1/ws
 -                    GET /i/{code}
+-                    GET /i/{code}/docker
 -                    GET {base}/catalog
 -                    GET {base}/markets
 -                    GET {bus.Path}

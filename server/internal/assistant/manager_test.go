@@ -47,31 +47,26 @@ func TestManagerConfigReadWrite(t *testing.T) {
 	}
 }
 
-// Its database: the one manager.json names, else persona_mgr_<id> next to the hub's; never the hub's own, and none
-// at all on a computer without a hub and without one named.
-func TestManagerDatabase(t *testing.T) {
+// A manager's database is never the hub's: SameDatabase tells the hub's own apart from another on the same server.
+func TestSameDatabase(t *testing.T) {
 	hub := "postgres://jarvis:pw@[fd00::20]:5432/jarvis?sslmode=disable"
-	c := ManagerConfig{ID: "m-0a1b2c"}
-	if ManagerDatabase(c.ID) != "persona_mgr_m_0a1b2c" {
-		t.Fatal(ManagerDatabase(c.ID))
+	if !SameDatabase("postgres://other@[FD00::20]:5432/jarvis", hub) {
+		t.Fatal("the hub's own database on the same server")
 	}
-	got, err := c.Database(hub)
-	if err != nil || got != "postgres://jarvis:pw@[fd00::20]:5432/persona_mgr_m_0a1b2c?sslmode=disable" {
-		t.Fatalf("derived %q %v", got, err)
+	if SameDatabase("postgres://jarvis:pw@[fd00::20]:5432/mine", hub) || SameDatabase("postgres://jarvis@[fd00::21]:5432/jarvis", hub) ||
+		SameDatabase("postgres://jarvis@[fd00::20]:5433/jarvis", hub) {
+		t.Fatal("another database taken for the hub's")
 	}
-	if _, err := c.Database(""); err == nil || !strings.Contains(err.Error(), "--database-url") {
-		t.Fatalf("no hub: %v", err)
+	// Every name of this machine is one, and 5432 is the port when none is written.
+	local := "postgres://jarvis:pw@127.0.0.1:5432/jarvis?sslmode=disable"
+	for _, same := range []string{"postgres://x@localhost/jarvis", "postgres://x@[::1]:5432/jarvis", "postgres://x@127.0.0.2/jarvis",
+		"postgres://x@LOCALHOST:5432/jarvis"} {
+		if !SameDatabase(same, local) {
+			t.Errorf("%s is the hub's own database too", same)
+		}
 	}
-	c.DatabaseURL = "postgres://me@[fd00::21]:5432/mine"
-	if got, err := c.Database(""); err != nil || got != c.DatabaseURL {
-		t.Fatalf("own %q %v", got, err)
-	}
-	c.DatabaseURL = "postgres://other@[FD00::20]:5432/jarvis"
-	if _, err := c.Database(hub); err == nil {
-		t.Fatal("the hub's own database was taken")
-	}
-	if ManagerDatabase("m-0a1b2c") == ManagerDatabase("m-0a1b2d") {
-		t.Fatal("two managers, one database")
+	if SameDatabase("postgres://x@localhost:18661/jarvis", local) {
+		t.Error("another port on this machine")
 	}
 }
 

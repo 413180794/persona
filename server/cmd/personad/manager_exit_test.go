@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// `personad manager join` and `manager run --join` without a database to use (no hub here, no --database-url) say
+// `personad manager join` and `manager run --join` without a database to use (no Docker to make one, no --database-url) say
 // in one line what to pass and exit 2, which a manager's service and a container's restart do not loop on, without
 // trading the install code.
 func TestManagerWithoutDatabaseExits2(t *testing.T) {
@@ -34,11 +34,11 @@ func TestManagerWithoutDatabaseExits2(t *testing.T) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestManagerWithoutDatabaseExits2$")
 		env := []string{}
 		for _, kv := range os.Environ() {
-			if !strings.HasPrefix(kv, "PERSONA_") && !strings.HasPrefix(kv, "JARVIS_") {
+			if !strings.HasPrefix(kv, "PERSONA_") && !strings.HasPrefix(kv, "JARVIS_") && !strings.HasPrefix(kv, "PATH=") {
 				env = append(env, kv)
 			}
 		}
-		cmd.Env = append(env, "PERSONAD_TEST_MANAGER_ARGS="+strings.Join(args, "\x1f"), "HOME="+home,
+		cmd.Env = append(env, "PERSONAD_TEST_MANAGER_ARGS="+strings.Join(args, "\x1f"), "HOME="+home, "PATH="+t.TempDir(), // no docker
 			"PERSONA_HOME="+filepath.Join(home, ".persona"))
 		out, err := cmd.CombinedOutput()
 		code := 0

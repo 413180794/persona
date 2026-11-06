@@ -341,7 +341,7 @@ The Unix socket and its immediate parent directory must belong to the current us
   and without `PERSONA_ASSISTANT_HUB`, connects to the local `listen` port. While the assistant is disconnected, its APIs return `503 assistant_offline`.
   The assistant also carries all computers ([machines.md](machines.md) ("Who connects computers")): when running elsewhere, that machine connects the computers in `machines` (ssh host names, tailcat key,
   and even the hub machine's own `node --stdio` are on that machine); while disconnected, machines show offline and machine APIs return `503 assistant_offline`.
-  Other managers created in the App do not read this hub.json section: their configuration is `manager.json` in their own directory ([managers.md](managers.md) ("A second manager")); on the hub machine they use hub.json `database_url` to locate the same Postgres and create their own database.
+  Other managers created in the App do not read this hub.json section: their configuration is `manager.json` in their own directory ([managers.md](managers.md) ("A second manager")); their database is a Postgres of their own (a Docker container `personad manager install` makes, or `--database-url`), never the hub's.
 - `assistant.persona_view` (default `false`): cards in assistant replies use ```` ```persona-view ```` (extension components, `docs/extensions.md` ("UI version 3")) instead of `persona-card`.
   Enable only after all clients (iOS / Mac, Android, web) can render UI version 3; `persona-card` still renders on every client.
 - `assistant.html_views` (on by default when omitted; false disables): a card's `html` component can call the hub via `persona.reply` / `persona.open` (`…/views/{key}/html-actions`).

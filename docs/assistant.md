@@ -175,7 +175,7 @@ handshakes, reports a full snapshot, then starts scheduled tasks. On disconnect 
   While absent, computers show offline and machine APIs return `503 assistant_offline`; on return it reconnects them itself.
 
 - **Other managers** (2026-11-06): managers created in the App run the same program as `personad manager run --dir <its directory>`. Identity, hub address, and token live in `manager.json` in that directory;
-  the knowledge base, `secret.key`, and extensions also live there, with its own database (by default `persona_mgr_<id>` in hub's Postgres). The handshake reports its own id. Installation, directories, database, and revocation: [managers.md](managers.md) ("A second manager").
+  the knowledge base, `secret.key`, and extensions also live there, with its own database (a Postgres of its own that install makes in Docker, never the hub's). The handshake reports its own id. Installation, directories, database, and revocation: [managers.md](managers.md) ("A second manager").
 
 ## Lark: skill supplied by the Lark extension (2026-10-30)
 

@@ -30,11 +30,13 @@ import (
 const Usage = `usage:
   personad manager join <hub 地址> <安装码> [--dir 目录] [--database-url URL] [--fingerprint 指纹] [--install]
                        用 App 里「新建管理者」给的安装码换这个管理者的 token，写进目录里的 manager.json
-                       （默认 ~/.persona/managers/<id>）；数据库默认是这台 hub 的 Postgres 里的 persona_mgr_<id>
+                       （默认 ~/.persona/managers/<id>）；数据库是它自己的 Postgres：install 时在 Docker 里建
+                       （容器 persona-mgr-<id>-pg），或者 --database-url 给一个
   personad manager run [--dir 目录] [--join <hub 地址> <安装码>]
                        运行这个管理者（--join：目录里还没有 manager.json 时先换码，容器用）
-  personad manager install [--dir 目录]     装成常驻服务（Linux：systemd 用户服务；Mac：launchd）
-  personad manager uninstall [--dir 目录]   停掉并去掉常驻服务（目录和数据库留着）
+  personad manager install [--dir 目录]     建好它自己的 Postgres（Docker），装成常驻服务（Linux：systemd 用户服务；Mac：launchd）
+  personad manager uninstall [--dir 目录] [--purge]
+                       停掉并去掉常驻服务；它的数据库容器停掉、数据卷留着（--purge：连容器和数据卷一起删掉）
   personad manager status [--dir 目录]      这台电脑上的管理者和它们的服务
 `
 
@@ -74,11 +76,13 @@ func Main(ctx context.Context, build update.Build, args []string, stdout io.Writ
 type JoinOptions struct {
 	Hub, Code   string
 	Dir         string // "" → assistant.DefaultManagerDir(id)
-	DatabaseURL string // "" → ManagerDatabase in the Postgres of the hub on this machine
+	DatabaseURL string // "" → its own Postgres in Docker, made by install (Docker must be there: checked first)
 	Fingerprint string // the hub's TLS pin, for an https hub with its own certificate
-	// HubDatabaseURL is the database_url of a hub on this machine ("" none); tests set it, else read from hub.json.
-	HubDatabaseURL *string
-	HTTPClient     *http.Client // tests
+	// CheckDocker says why Docker can't make its database (nil: it can); nil checks this machine.
+	CheckDocker func(ctx context.Context) error
+	// Warn gets what the user should know beyond the join itself (a database container left unused); nil: nobody.
+	Warn       io.Writer
+	HTTPClient *http.Client // tests
 }
 
 // joinReply is POST /api/v1/bus/join's answer (hub/managers.go).
@@ -90,7 +94,8 @@ type joinReply struct {
 }
 
 // Join trades the install code for the manager's token and writes manager.json; it returns the directory. What it
-// can check before the code is spent (where the database will be) it checks first: a code works once.
+// can check before the code is spent (that there will be a database: Docker to make it, or --database-url) it checks
+// first: a code works once.
 func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig, error) {
 	hub := strings.TrimRight(strings.TrimSpace(o.Hub), "/")
 	if !strings.HasPrefix(hub, "http://") && !strings.HasPrefix(hub, "https://") {
@@ -100,18 +105,21 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 	if code == "" {
 		return "", nil, errors.New("没有安装码：在 App 的「设置 › 管理者 › 新建」里拿一个")
 	}
-	hubDB := ""
-	if o.HubDatabaseURL != nil {
-		hubDB = *o.HubDatabaseURL
-	} else {
-		hubDB = assistant.HubDatabaseURL()
-	}
 	if o.DatabaseURL != "" {
 		if _, err := db.WithDatabase(o.DatabaseURL, "x"); err != nil {
 			return "", nil, ConfigError{fmt.Errorf("--database-url: %w", err)}
 		}
-	} else if hubDB == "" {
-		return "", nil, ConfigError{errNoDatabase} // before the code is spent: it works once
+		if hub := assistant.HubDatabaseURL(); hub != "" && assistant.SameDatabase(o.DatabaseURL, hub) {
+			return "", nil, ConfigError{assistant.ErrHubDatabase}
+		}
+	} else if !hasDatabase(o.Dir) { // joined again into its directory (after a revoke): its database is there
+		check := o.CheckDocker
+		if check == nil {
+			check = newEnv(io.Discard).dockerProblem
+		}
+		if err := check(ctx); err != nil {
+			return "", nil, err // before the code is spent: it works once
+		}
 	}
 	client := o.HTTPClient
 	if client == nil {
@@ -158,7 +166,12 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 		// The directory is another manager's: keep both, this one in its own.
 		dir = assistant.DefaultManagerDir(j.ID)
 	} else if err == nil && c.DatabaseURL == "" {
-		c.DatabaseURL = old.DatabaseURL // installed again in the same place: the same database
+		// Installed again in the same place: the same database.
+		c.DatabaseURL, c.DatabaseContainer = old.DatabaseURL, old.DatabaseContainer
+	} else if err == nil && old.DatabaseContainer != "" && o.Warn != nil {
+		// Another database given now: the container install made is not used any more (nor removed).
+		fmt.Fprintf(o.Warn, "它原来的数据库容器 %s（数据卷 %s）不再用了，留着没删：不要了就 docker rm -f %s && docker volume rm %s\n",
+			old.DatabaseContainer, dbVolume(c.ID), old.DatabaseContainer, dbVolume(c.ID))
 	}
 	dir, err = filepath.Abs(dir)
 	if err != nil {
@@ -170,11 +183,25 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 	return dir, &c, nil
 }
 
+// hasDatabase: dir has a manager.json that names its database.
+func hasDatabase(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	c, err := assistant.ReadManagerConfig(dir)
+	return err == nil && c.DatabaseURL != ""
+}
+
+// databaseEnv is how the container `commands.docker` starts hands the manager its database (the address and its
+// password): in the environment, never on a command line (`ps`, `docker inspect`'s Cmd). Not PERSONA_DATABASE_URL:
+// that is the hub's (HubDatabaseURL), which a manager refuses.
+const databaseEnv = "PERSONA_MANAGER_DATABASE_URL"
+
 func cmdJoin(ctx context.Context, e *env, args []string) error {
 	fs := flag.NewFlagSet("manager join", flag.ContinueOnError)
 	fs.SetOutput(e.stdout)
 	dir := fs.String("dir", "", "管理者的目录（默认 ~/.persona/managers/<id>）")
-	dbURL := fs.String("database-url", "", "它自己的 Postgres 库（默认这台 hub 的 Postgres 里的 persona_mgr_<id>）")
+	dbURL := fs.String("database-url", "", "它的 Postgres 库（默认 install 时在 Docker 里给它建一个）")
 	fp := fs.String("fingerprint", "", "hub 的 TLS 指纹（https 地址用 hub 自己的证书时）")
 	install := fs.Bool("install", false, "换好以后接着装成常驻服务（manager install）")
 	pos, err := parseInterleaved(fs, args)
@@ -184,12 +211,13 @@ func cmdJoin(ctx context.Context, e *env, args []string) error {
 	if len(pos) != 2 {
 		return errUsage
 	}
-	d, c, err := Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: *dir, DatabaseURL: *dbURL, Fingerprint: *fp})
+	d, c, err := Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: *dir, DatabaseURL: *dbURL, Fingerprint: *fp,
+		CheckDocker: e.dockerProblem, Warn: e.stdout})
 	if err != nil {
 		return err
 	}
-	where := "这台 hub 的 Postgres 里的 " + assistant.ManagerDatabase(c.ID) + "（第一次运行时建）"
-	if c.DatabaseURL != "" {
+	where := "它自己的 Postgres，install 时在 Docker 里建（容器 " + dbContainer(c.ID) + "）"
+	if c.DatabaseContainer == "" && c.DatabaseURL != "" {
 		where = db.DatabaseName(c.DatabaseURL) + "（--database-url 给的，没有就建）"
 	}
 	fmt.Fprintf(e.stdout, "加入了 hub：这台是管理者「%s」（%s）。\n  目录：%s\n  数据库：%s\n", c.Name, c.ID, d, where)
@@ -214,7 +242,7 @@ func cmdRun(ctx context.Context, e *env, build update.Build, args []string) erro
 	fs.SetOutput(e.stdout)
 	dir := fs.String("dir", "", "管理者的目录（这台只有一个管理者时可以不写）")
 	join := fs.Bool("join", false, "目录里还没有 manager.json 时，先用后面的 <hub 地址> <安装码> 换码")
-	dbURL := fs.String("database-url", "", "和 --join 一起：它自己的 Postgres 库")
+	dbURL := fs.String("database-url", "", "和 --join 一起：它自己的 Postgres 库（容器里经环境变量 "+databaseEnv+" 给，不放命令行）")
 	fp := fs.String("fingerprint", "", "和 --join 一起：hub 的 TLS 指纹")
 	pos, err := parseInterleaved(fs, args)
 	if err != nil {
@@ -225,7 +253,12 @@ func cmdRun(ctx context.Context, e *env, build update.Build, args []string) erro
 	}
 	d := *dir
 	if *join && (d == "" || !fileExists(filepath.Join(d, assistant.ManagerFile))) {
-		if d, _, err = Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: d, DatabaseURL: *dbURL, Fingerprint: *fp}); err != nil {
+		url := *dbURL
+		if url == "" {
+			url = e.getenv(databaseEnv)
+		}
+		if d, _, err = Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: d, DatabaseURL: url, Fingerprint: *fp,
+			CheckDocker: e.dockerProblem, Warn: e.stdout}); err != nil {
 			return err
 		}
 		fmt.Fprintf(e.stdout, "加入了 hub，目录 %s\n", d)
@@ -235,25 +268,30 @@ func cmdRun(ctx context.Context, e *env, build update.Build, args []string) erro
 			return err
 		}
 	}
-	return Run(ctx, build, d, e.stdout)
+	return e.runManager(ctx, build, d)
 }
 
 // Run runs the manager in dir until ctx ends. When the hub refuses its token it says so and waits — not dialing —
 // until manager.json has another one (`personad manager join` with a new code, into the same directory), so a
 // service manager that restarts it does not turn into a loop of refused connections.
 func Run(ctx context.Context, build update.Build, dir string, out io.Writer) error {
-	env := os.Environ()                 // as it started: RunManager points PERSONA_HOME at dir
-	hubDB := assistant.HubDatabaseURL() // the hub's hub.json
+	return newEnv(out).runManager(ctx, build, dir)
+}
+
+func (e *env) runManager(ctx context.Context, build update.Build, dir string) error {
+	out := e.stdout
+	env := os.Environ() // as it started: RunManager points PERSONA_HOME at dir
 	c, err := assistant.ReadManagerConfig(dir)
-	if err == nil {
-		_, err = c.Database(hubDB)
-	}
 	if err != nil {
 		return ConfigError{err} // restarting cannot fix it (the service's unit does not, exit 2)
 	}
+	// Its own Postgres comes up with it (started again after a reboot; made here when install did not).
+	if _, err := e.ownDatabase(ctx, dir, c); err != nil {
+		return err
+	}
 	for {
 		before, _ := assistant.ReadManagerConfig(dir)
-		err := assistant.RunManager(ctx, build, dir, hubDB)
+		err := assistant.RunManager(ctx, build, dir)
 		if !errors.Is(err, bus.ErrRevoked) {
 			return err
 		}
@@ -341,10 +379,6 @@ func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
 		args = args[1:]
 	}
 }
-
-// errNoDatabase: off the hub's machine (another computer, a container) there is no database to take one from, and
-// the hub never hands out its own: the user gives one. The image brings no Postgres.
-var errNoDatabase = errors.New("no database for this manager: add --database-url 'postgres://USER:PASSWORD@HOST:5432/DBNAME' (a Postgres of your own; the install code was not used)")
 
 // ConfigError is a mistake in the manager's configuration (no manager.json, no database to use): personad exits 2,
 // which its service does not restart on.

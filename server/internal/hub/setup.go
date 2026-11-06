@@ -24,6 +24,7 @@ import (
 	"github.com/mdp/qrterminal/v3"
 
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/pgdocker"
 )
 
 // `personad hub setup` (docs/onboarding.md 4.1, 5.5): one command that leaves a working hub on this machine. It writes
@@ -53,7 +54,6 @@ type setupOptions struct {
 const (
 	setupDBContainer = "jarvis-postgres"
 	setupDBVolume    = "jarvis-pgdata"
-	setupDBImage     = "postgres:18-alpine"
 	setupDBPort      = 18661
 	hubLaunchdLabel  = "com.jarvis.hub" // like com.jarvis.node (jarvis-link's nodesvc.go)
 )
@@ -538,38 +538,36 @@ func (e *setupEnv) database(ctx context.Context, cfg *setupConfig) error {
 		e.report("database", true, "用 hub.json 里的数据库", "")
 		return nil
 	}
-	if _, err := e.lookPath("docker"); err != nil {
+	switch err := pgdocker.CheckDocker(ctx, e.run, e.lookPath); {
+	case errors.Is(err, pgdocker.ErrNoDocker):
 		return e.noDocker()
-	}
-	if out, err := e.run(ctx, nil, "docker", "info", "--format", "{{.ServerVersion}}"); err != nil {
-		text := strings.ToLower(string(out))
-		if strings.Contains(text, "permission denied") {
-			return e.fail("database", "有 Docker，但当前用户没有权限用它",
-				"运行 sudo usermod -aG docker "+e.user+"，退出登录再登录，然后重跑 personad hub setup")
-		}
+	case errors.Is(err, pgdocker.ErrDockerDenied):
+		return e.fail("database", "有 Docker，但当前用户没有权限用它",
+			"运行 sudo usermod -aG docker "+e.user+"，退出登录再登录，然后重跑 personad hub setup")
+	case err != nil:
 		return e.fail("database", "有 Docker，但它没在运行", e.startDockerHint())
 	}
+	pg := e.pg()
 	created := false
 	var password string
-	if !e.containerExists(ctx) {
+	if !pg.Exists(ctx) {
 		password = randomHex(24)
-		if out, err := e.run(ctx, nil, "docker", "volume", "create", e.dbVolume); err != nil {
-			return e.fail("database", "建数据卷 "+e.dbVolume+" 失败："+setupFirstLine(string(out)), "看 docker 的报错，处理后重跑")
-		}
-		// postgres 18 keeps PGDATA under /var/lib/postgresql/<major>/docker, so mount the parent (db.sh). The password
-		// goes through the environment (-e NAME with no value), not the command line others can read.
-		args := []string{"run", "-d", "--name", e.dbContainer, "--restart", "unless-stopped",
-			"-p", fmt.Sprintf("127.0.0.1:%d:5432", e.dbPort), "-v", e.dbVolume + ":/var/lib/postgresql",
-			"-e", "POSTGRES_USER=jarvis", "-e", "POSTGRES_PASSWORD", "-e", "POSTGRES_DB=jarvis", setupDBImage}
-		if out, err := e.run(ctx, []string{"POSTGRES_PASSWORD=" + password}, "docker", args...); err != nil {
-			return e.fail("database", "建数据库容器 "+e.dbContainer+" 失败："+setupFirstLine(string(out)),
-				fmt.Sprintf("端口 %d 被占着或拉不到镜像 %s 时处理后重跑", e.dbPort, setupDBImage))
+		var step *pgdocker.StepError
+		if err := pg.Create(ctx, password); errors.As(err, &step) && step.Step == "volume" {
+			return e.fail("database", "建数据卷 "+e.dbVolume+" 失败："+step.Output, "看 docker 的报错，处理后重跑")
+		} else if err != nil {
+			why := err.Error()
+			if step != nil {
+				why = step.Output
+			}
+			return e.fail("database", "建数据库容器 "+e.dbContainer+" 失败："+why,
+				fmt.Sprintf("端口 %d 被占着或拉不到镜像 %s 时处理后重跑", e.dbPort, pgdocker.Image))
 		}
 		created = true
 	} else {
 		// The container is there but hub.json lost its address: the password it was made with is in its environment.
 		var err error
-		if password, err = e.containerPassword(ctx); err != nil {
+		if password, err = pg.Password(ctx); err != nil {
 			return e.fail("database", "已有数据库容器 "+e.dbContainer+"，但 hub.json 里没有它的地址，也读不出它的密码",
 				"把 database_url 写回 hub.json（postgres://jarvis:<密码>@127.0.0.1:"+strconv.Itoa(e.dbPort)+"/jarvis?sslmode=disable）再重跑")
 		}
@@ -577,7 +575,11 @@ func (e *setupEnv) database(ctx context.Context, cfg *setupConfig) error {
 	if err := e.startContainer(ctx, ""); err != nil {
 		return e.fail("database", "数据库容器 "+e.dbContainer+" 没准备好："+err.Error(), "运行 docker logs "+e.dbContainer+" 看原因")
 	}
-	dbURL := fmt.Sprintf("postgres://jarvis:%s@127.0.0.1:%d/jarvis?sslmode=disable", url.QueryEscape(password), e.containerPort(ctx))
+	port, err := pg.HostPort(ctx)
+	if err != nil {
+		port = e.dbPort // a container on the host's network (db.sh): its port is the one it was made with
+	}
+	dbURL := pgdocker.URL(password, port)
 	if err := editHubJSON(e.root, func(o *jsonObject) error { return o.set("database_url", dbURL) }); err != nil {
 		return e.fail("database", "写不了 "+e.hubJSON()+"："+err.Error(), "检查这个目录的权限")
 	}
@@ -624,65 +626,16 @@ func (e *setupEnv) startDockerHint() string {
 	return "运行 sudo systemctl start docker，再重跑"
 }
 
-func (e *setupEnv) containerExists(ctx context.Context) bool {
-	out, err := e.run(ctx, nil, "docker", "ps", "-a", "--filter", "name=^/"+e.dbContainer+"$", "--format", "{{.Names}}")
-	return err == nil && strings.TrimSpace(string(out)) == e.dbContainer
+// pg is the database container setup makes (jarvis-postgres unless a trial run named another).
+func (e *setupEnv) pg() *pgdocker.Container {
+	return &pgdocker.Container{Name: e.dbContainer, Volume: e.dbVolume, Port: e.dbPort, Run: e.run, Sleep: e.sleep, Wait: e.dbWait}
 }
 
-func (e *setupEnv) containerPassword(ctx context.Context) (string, error) {
-	out, err := e.run(ctx, nil, "docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", e.dbContainer)
-	if err != nil {
-		return "", err
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "POSTGRES_PASSWORD="); ok && v != "" {
-			return v, nil
-		}
-	}
-	return "", errors.New("no POSTGRES_PASSWORD")
-}
+func (e *setupEnv) containerExists(ctx context.Context) bool { return e.pg().Exists(ctx) }
 
-// containerPort is the host port the container's 5432 is published on (127.0.0.1:<port>), e.dbPort when unknown.
-func (e *setupEnv) containerPort(ctx context.Context) int {
-	out, err := e.run(ctx, nil, "docker", "port", e.dbContainer, "5432/tcp")
-	if err == nil {
-		for _, line := range strings.Split(string(out), "\n") {
-			if _, p, err := net.SplitHostPort(strings.TrimSpace(line)); err == nil {
-				if n, err := strconv.Atoi(p); err == nil && n > 0 {
-					return n
-				}
-			}
-		}
-	}
-	return e.dbPort
-}
-
-// startContainer starts the container and waits until Postgres in it answers (db.sh's 30 seconds). dbURL is
-// hub.json's database_url ("" when there is none yet): a container on the host's network (--network host, where
-// publishing a port does not work) listens on that URL's port inside, not 5432, as db.sh handles it.
+// startContainer starts the container and waits until Postgres in it answers (pgdocker.Container.Start).
 func (e *setupEnv) startContainer(ctx context.Context, dbURL string) error {
-	if out, err := e.run(ctx, nil, "docker", "start", e.dbContainer); err != nil {
-		return errors.New(setupFirstLine(string(out)))
-	}
-	inner := "5432"
-	if out, err := e.run(ctx, nil, "docker", "inspect", "-f", "{{.HostConfig.NetworkMode}}", e.dbContainer); err == nil &&
-		strings.TrimSpace(string(out)) == "host" && dbURL != "" {
-		if u, err := url.Parse(dbURL); err == nil && u.Port() != "" {
-			inner = u.Port()
-		}
-	}
-	deadline := time.Now().Add(e.dbWait)
-	for {
-		// Over TCP: while a new container initializes, its temporary server answers on the Unix socket only, then
-		// restarts; a socket check would pass in between.
-		if _, err := e.run(ctx, nil, "docker", "exec", e.dbContainer, "pg_isready", "-h", "127.0.0.1", "-p", inner, "-U", "jarvis", "-d", "jarvis"); err == nil {
-			return nil
-		}
-		if !time.Now().Before(deadline) || ctx.Err() != nil {
-			return fmt.Errorf("%d 秒内没有就绪", int(e.dbWait.Seconds()))
-		}
-		e.sleep(time.Second)
-	}
+	return e.pg().Start(ctx, dbURL)
 }
 
 // --- running it ---------------------------------------------------------------------------------------------------
@@ -940,10 +893,4 @@ func virtualInterfaceName(name string) bool {
 	return vpnInterface(name)
 }
 
-func setupFirstLine(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[:i]
-	}
-	return s
-}
+func setupFirstLine(s string) string { return pgdocker.FirstLine(s) }
