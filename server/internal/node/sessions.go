@@ -2190,13 +2190,18 @@ var launcherCache struct {
 	codex map[string][]string
 	// settings: the --settings a claude alias brings itself, as its words give it (launcher_settings.go).
 	settings map[string]string
+	// scripts: where each wrapper script on PATH is (pathlaunchers.go).
+	scripts map[string]string
 }
 
 // launcherScript lists the login shell's launchers in one go (sourcing ~/.zshrc takes a while): what the
 // `_claude_launchers` helper prints when ~/.zshrc has one, a GS byte, then every alias as its name and its words
 // as zsh itself splits and unquotes them (name US word US … RS), so quoting never has to be parsed here; then, each
-// after a GS byte, where codex and traex are on the PATH.
-const launcherScript = `_claude_launchers 2>/dev/null || true
+// after a GS byte, where codex, traex and omp are on the PATH, the names of the shell's functions and aliases (one a
+// line: they come before a file on PATH of the same name), and its PATH (for the wrapper scripts on it,
+// pathlaunchers.go).
+const launcherScript = `__jl_path=$PATH
+_claude_launchers 2>/dev/null || true
 printf '\035'
 if [ -n "$ZSH_VERSION" ]; then
   eval 'for __k __v in "${(@kv)aliases}"; do
@@ -2211,7 +2216,11 @@ if [ -n "$ZSH_VERSION" ]; then whence -p codex 2>/dev/null; else command -v code
 printf '\035'
 if [ -n "$ZSH_VERSION" ]; then whence -p traex 2>/dev/null; else command -v traex 2>/dev/null; fi
 printf '\035'
-if [ -n "$ZSH_VERSION" ]; then whence -p omp 2>/dev/null; else command -v omp 2>/dev/null; fi`
+if [ -n "$ZSH_VERSION" ]; then whence -p omp 2>/dev/null; else command -v omp 2>/dev/null; fi
+printf '\035'
+if [ -n "$ZSH_VERSION" ]; then eval 'print -rl -- ${(k)functions} ${(k)aliases}'; elif [ -n "$BASH_VERSION" ]; then compgen -A function; compgen -a; fi
+printf '\035'
+printf '%s' "$__jl_path"`
 
 // launchers lists the launchers of this machine's login shell: the `_claude_launchers` helper's (claude wrapper
 // functions), then every alias that runs claude (`alias dmcc="ANTHROPIC_BASE_URL=… claude …"`), by name. A name
@@ -2232,23 +2241,27 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 	if err != nil && len(out) == 0 {
 		return nil, fmt.Errorf("list launchers: %w", err)
 	}
-	list, codex, settings := mergeLaunchers(string(out))
+	list, codex, settings, scripts := mergeLaunchers(string(out))
 	launcherCache.Lock()
 	launcherCache.at, launcherCache.list, launcherCache.codex, launcherCache.settings = time.Now(), list, codex, settings
+	launcherCache.scripts = scripts
 	launcherCache.Unlock()
 	return list, nil
 }
 
-// mergeLaunchers is launcherScript's output as the launcher list: the helper's, then the aliases it does not name
-// (nothing at all: plain claude), then Codex's — plain codex when it is on the PATH, and the aliases that run it (how
-// each runs: codex) — then plain traex when it is on the PATH (started without Claude's flags, start_agent.go).
-// settings: the claude aliases' own --settings, by name (launcher_settings.go); an alias is what the shell runs for
-// its name even when the helper lists the name too.
-func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string, settings map[string]string) {
+// mergeLaunchers is launcherScript's output as the launcher list: the helper's, then the aliases it does not name,
+// then the wrapper scripts on PATH no function or alias shadows (nothing at all: plain claude), then Codex's — plain
+// codex when it is on the PATH, and the aliases that run it (how each runs: codex) — then plain traex when it is on the
+// PATH (started without Claude's flags, start_agent.go). settings: the claude aliases' and scripts' own --settings, by
+// name (launcher_settings.go); an alias is what the shell runs for its name even when the helper lists the name too.
+// scripts: where each wrapper script is.
+func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string, settings, scripts map[string]string) {
 	helper, rest, _ := strings.Cut(out, "\x1d")
 	aliases, rest, _ := strings.Cut(rest, "\x1d")
 	codexPath, rest, _ := strings.Cut(rest, "\x1d")
-	traexPath, ompPath, _ := strings.Cut(rest, "\x1d")
+	traexPath, rest, _ := strings.Cut(rest, "\x1d")
+	ompPath, rest, _ := strings.Cut(rest, "\x1d")
+	shellNames, pathVar, _ := strings.Cut(rest, "\x1d")
 	list = parseLaunchers(helper)
 	seen := map[string]bool{}
 	for _, l := range list {
@@ -2260,6 +2273,18 @@ func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]strin
 			list = append(list, l)
 		}
 	}
+	taken := maps.Clone(seen)
+	for _, name := range strings.Fields(shellNames) {
+		taken[name] = true
+	}
+	for _, rec := range strings.Split(aliases, "\x1e") {
+		if name, _, ok := strings.Cut(rec, "\x1f"); ok {
+			taken[name] = true
+		}
+	}
+	pathList, pathSettings, scripts := pathLaunchers(pathVar, taken)
+	list = append(list, pathList...)
+	maps.Copy(settings, pathSettings)
 	if len(list) == 0 {
 		list = []proto.Launcher{{Name: "claude", Model: "默认"}}
 	}
@@ -2281,7 +2306,7 @@ func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]strin
 	if strings.TrimSpace(ompPath) != "" && !seen["omp"] && codex["omp"] == nil {
 		list = append(list, proto.Launcher{Name: "omp", Model: "默认", Agent: "omp", Source: "zshrc"})
 	}
-	return list, codex, settings
+	return list, codex, settings, scripts
 }
 
 // cachedLaunchers never waits for the login shell: it returns the last list (possibly stale, nil before the first

@@ -1,7 +1,8 @@
 import Foundation
 // i18n-ignore-file: demo mode stand-in for the hub: its made-up replies and errors, as the hub words them
 
-/// Demo Mode's Settings › Model Providers (#2455): a provider kept in Persona, two from a made-up ~/.zshrc, and the wizard's and the
+/// Demo Mode's Settings › Model Providers (#2455): a provider kept in Persona, two from a made-up ~/.zshrc and a wrapper script on
+/// a machine's PATH (#5954), and the wizard's and the
 /// import's answers. Nothing reaches a gateway: Test Connection and Get Model List answer with made-up values, and no key is kept.
 @MainActor
 final class DemoProviders {
@@ -29,7 +30,16 @@ final class DemoProviders {
 
     private static let zshrc: [JSONValue] = [
         ["name": "cc_glm", "source": "zshrc", "base_url": "https://gateway.example.com", "model": "glm-5", "machines": ["macbook"]],
-        ["name": "cc_kimi", "source": "zshrc", "base_url": "https://kimi.example.com", "model": "kimi-k2", "machines": ["macbook", "studio"]]
+        ["name": "cc_kimi", "source": "zshrc", "base_url": "https://kimi.example.com", "model": "kimi-k2", "machines": ["macbook", "studio"]],
+        ["name": "claude-work", "source": "path", "base_url": "https://work.example.com", "model": "glm-5", "machines": ["macbook"],
+         "definitions": ["macbook": """
+            # ~/.local/bin/claude-work
+            #!/bin/sh
+            export ANTHROPIC_BASE_URL="https://work.example.com"
+            export ANTHROPIC_AUTH_TOKEN=•••
+            unset HTTP_PROXY HTTPS_PROXY
+            exec claude --settings "$HOME/.claude/work.json" "$@"
+            """]]
     ]
 
     /// The machine pickers' 「默认：…」 (agent.new's effective value).

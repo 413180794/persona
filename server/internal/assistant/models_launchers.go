@@ -277,6 +277,10 @@ func (s *Service) launcherParams(ctx context.Context, machine, name string, para
 	return params
 }
 
+// machineSource: a launcher a machine defines itself, a ~/.zshrc function or alias ("zshrc") or a wrapper script on
+// its PATH ("path", node/pathlaunchers.go); its page shows its text and what a probe found.
+func machineSource(source string) bool { return source == "zshrc" || source == "path" }
+
 // launcherViews is the whole list: managed first (newest last), then ~/.zshrc ones by name; hidden ones flagged.
 func (s *Service) launcherViews(ctx context.Context) []LauncherView {
 	return s.launcherViewsOf(ctx, s.zshrcLaunchers(ctx, false))
@@ -294,7 +298,7 @@ func (s *Service) launcherViewsOf(ctx context.Context, zshrc []zshrcLaunchers) [
 	var names []string
 	for _, m := range zshrc {
 		for _, l := range m.Launchers {
-			if managed[l.Name] || l.Name == "claude" || (l.Source != "" && l.Source != "zshrc" && l.Agent != "agy" && l.Agent != "omp") {
+			if managed[l.Name] || l.Name == "claude" || (l.Source != "" && !machineSource(l.Source) && l.Agent != "agy" && l.Agent != "omp") {
 				continue // a runtime's launcher without model configuration (DSH, node/runtimes.go) is not listed here
 			}
 			v := byName[l.Name]
@@ -699,7 +703,7 @@ func (s *Service) launcherRoutes() {
 			if v.Name != name {
 				continue
 			}
-			if v.Source == "zshrc" {
+			if machineSource(v.Source) {
 				// Every machine at once, the text and the probe apart: a launcher that fetches a token first is slow to
 				// probe (the node allows 15 s), and its text should still show.
 				v.Definitions, v.Details = map[string]string{}, map[string]proto.LauncherDetail{}

@@ -21,8 +21,8 @@
     <string name="settings_providers_managed">Managed by Persona</string>
     <string name="settings_providers_managed_empty">None yet. Tap + to add a gateway, key and default model, then pick it for each use in Model configuration.</string>
     <string name="settings_providers_managed_note">Keys are encrypted on the hub and handed to a computer only when it starts; they are never written to a file.</string>
-    <string name="settings_providers_zshrc">From ~/.zshrc</string>
-    <string name="settings_providers_zshrc_note">Functions in each computer\'s ~/.zshrc that call claude, read again each time this page opens; new ones show up on their own.</string>
+    <string name="settings_providers_zshrc">From ~/.zshrc and PATH</string>
+    <string name="settings_providers_zshrc_note">Functions in each computer\'s ~/.zshrc and wrapper scripts on its PATH that start claude, read again each time this page opens; new ones show up on their own.</string>
     <string name="settings_providers_hidden">Hidden</string>
     <string name="settings_providers_fold">Fold</string>
     <string name="settings_providers_unfold">Show</string>
@@ -40,6 +40,7 @@
     <string name="settings_providers_source">Source</string>
     <string name="settings_providers_source_managed">Managed by Persona</string>
     <string name="settings_providers_source_zshrc">A function in ~/.zshrc</string>
+    <string name="settings_providers_source_path">A script on PATH</string>
     <string name="settings_providers_kind">Access</string>
     <string name="settings_providers_kind_api">Direct API · %1$s</string>
     <string name="settings_providers_model">Model</string>
@@ -67,6 +68,7 @@
     <string name="settings_providers_check_failed">Failed</string>
     <string name="settings_providers_check_ms">%1$d ms</string>
     <string name="settings_providers_definition">Function</string>
+    <string name="settings_providers_definition_script">Script</string>
     <string name="settings_providers_definition_note">Values that look like keys or tokens are shown as •••.</string>
     <string name="settings_providers_import_intro">Pick a computer to see what its claude aliases come to, merged by gateway and key. The hub reads the keys on that computer itself, so none passes through this phone.</string>
     <string name="settings_providers_import_read">Read ~/.zshrc</string>

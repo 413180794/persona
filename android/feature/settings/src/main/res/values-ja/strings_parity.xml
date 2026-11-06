@@ -21,8 +21,8 @@
     <string name="settings_providers_managed">Persona が管理</string>
     <string name="settings_providers_managed_empty">まだありません。右上の + で接続方法、ゲートウェイ、キー、既定のモデルを追加し、「モデル構成」で用途ごとに選びます。</string>
     <string name="settings_providers_managed_note">キーは hub に暗号化して保存され、起動時にだけそのコンピューターに渡されます。ファイルには書き込まれません。</string>
-    <string name="settings_providers_zshrc">~/.zshrc から</string>
-    <string name="settings_providers_zshrc_note">各コンピューターの ~/.zshrc で claude を呼ぶ関数です。このページを開くたびに同期し、新しい関数は自動で表示されます。</string>
+    <string name="settings_providers_zshrc">~/.zshrc と PATH から</string>
+    <string name="settings_providers_zshrc_note">各コンピューターの ~/.zshrc にある関数と PATH 上のラッパースクリプトのうち claude を起動するもので、このページを開くたびに読み直します。追加したものは自動で表示されます。</string>
     <string name="settings_providers_hidden">非表示</string>
     <string name="settings_providers_fold">たたむ</string>
     <string name="settings_providers_unfold">表示</string>
@@ -40,6 +40,7 @@
     <string name="settings_providers_source">ソース</string>
     <string name="settings_providers_source_managed">Persona が管理</string>
     <string name="settings_providers_source_zshrc">~/.zshrc の関数</string>
+    <string name="settings_providers_source_path">PATH 上のスクリプト</string>
     <string name="settings_providers_kind">接続方法</string>
     <string name="settings_providers_kind_api">直接 API · %1$s</string>
     <string name="settings_providers_model">モデル</string>
@@ -67,6 +68,7 @@
     <string name="settings_providers_check_failed">失敗</string>
     <string name="settings_providers_check_ms">%1$d ms</string>
     <string name="settings_providers_definition">関数の本文</string>
+    <string name="settings_providers_definition_script">スクリプト</string>
     <string name="settings_providers_definition_note">キーやトークンらしい値は ••• に置き換えています。</string>
     <string name="settings_providers_import_intro">コンピューターを選ぶと、claude のエイリアスがゲートウェイとキーごとにまとめて表示されます。キーは hub がそのコンピューターで直接読むので、この端末を通りません。</string>
     <string name="settings_providers_import_read">~/.zshrc を読む</string>

@@ -9,7 +9,7 @@ Code: `server/internal/assistant/models_launchers.go` (owned by the manager; hub
 | Source | Defined in | Actions |
 | --- | --- | --- |
 | **Persona-managed** | Added in the app: name, Base URL, API Key, authentication method, model, small model, sub-Agent model, custom model option, extra arguments | Edit, delete |
-| **~/.zshrc** | Functions in each computer's `~/.zshrc`, synchronized when opening this page (node caches for 1 minute) | View each computer's function definition (Key / Token redacted), hide / restore in Persona |
+| **~/.zshrc** | Functions and aliases in each computer's `~/.zshrc`, and wrapper scripts on its PATH (`source: "path"`), synchronized when opening this page (node caches for 1 minute) | View each computer's function definition or script text (Key / Token redacted), hide / restore in Persona |
 
 - Scope is **one global set**: Persona-managed entries work on every computer; ~/.zshrc entries identify their source computers (same-name entries merge into one row). Offline computers use their last synchronized lists (settings `launchers.zshrc`).
 - Deleting a ~/.zshrc launcher **only hides it in Persona** (settings `launchers.hidden`), leaving the file unchanged; it disappears from new-chat and assistant pickers.
@@ -24,6 +24,18 @@ node gathers two things in one login-shell invocation (`zsh -ic`, loading `~/.zs
   They may have preceding variables (`alias dmcc="ANTHROPIC_BASE_URL=… ANTHROPIC_AUTH_TOKEN=… claude --dangerously-skip-permissions"`), pass through
   `env` (including `-u` / `-i`) / `command` / `exec` / `noglob`, use absolute paths, or run `export …;` first within the same alias. Gateway comes from `ANTHROPIC_BASE_URL`,
   model from `ANTHROPIC_MODEL`, or `--model` if absent. Sort by name (the shell does not preserve definition order); aliases already listed under the same name by `_claude_launchers` are not duplicated.
+- **Wrapper scripts on PATH** (#5954, macOS and Linux): an executable file on the login shell's PATH (`~/.local/bin/claude-work`: a few `export`s for the gateway and key,
+  then `exec claude … "$@"`), listed with `source: "path"` after the functions and aliases. node reads each file's first 40 lines (no `#!`, binary, or over 64 KB: skipped)
+  the way the shell would run them: assignments and `export`s (`$NAME` / `${NAME}` of a variable set earlier gets its value; any other `${…}` form, `$(…)` or a
+  single-quoted `$` leaves the value unknown, shown as nothing), `unset`, then the first command that is `claude` (by name or path, through `exec` / `env` / `command`).
+  It is a wrapper only when that command **passes the script's arguments on** (`"$@"`: Persona's starts add theirs after the name) and gives claude nothing but
+  flags of its own and their values: `-p`, a prompt or a subcommand (`claude mcp add`), a word after a flag that takes none, or claude in a pipeline, is a
+  script that uses claude for something. A top-level `exit` or an `exec` of another program before it ends the script. A here-document's text is skipped,
+  and so is a line node cannot follow (functions, groups). A claude inside an `if`, a `case` or a loop, or after `&&` / `||`, counts, but its probe is
+  "not seen"; a guard closed before it (`if …; then exit 1; fi`) does not matter. `env -i` / `env -` in front drops what the script exported.
+  Only the first file of a name on PATH counts, as for the shell; a name the shell has as a function or alias (both run before a file) is not a script launcher,
+  and neither is `claude` / `codex` / `omp` itself. The scan stats only regular files and links, reads two bytes before the rest, and gets 3 seconds (a hung
+  network mount): past them the last scan's scripts stand.
 - **Codex** (since 2026-11-02): If `codex` is on PATH, add `codex`, plus aliases running only one `codex` command, after the Claude entries, with `agent: "codex"`.
   See `docs/codex.md`, “Creating sessions from the phone,” for creating Codex sessions from the phone.
 - Not launchers: an alias named exactly `claude`, aliases running an internal Codex-fork CLI, Codex aliases doing other work (`cd x && codex`),
@@ -140,6 +152,14 @@ The page groups by computer (identical results merge into one group):
 - Context: window (`CLAUDE_CODE_MAX_CONTEXT_TOKENS`), auto-compaction window if different, thinking effort, request timeout
 - Startup arguments and other settings (`ANTHROPIC_*`, `CLAUDE_CODE_*`, proxies…; key / token-like values appear as •••)
 - Function text is collapsed; keys written directly in arguments (`_claude_proxy … sk-…`, `Bearer …`) are also redacted
+
+**Files are read, not run** (#5954): the stubs are shell functions, which a script (another process) does not see, so running one would start the real claude.
+So the probe asks the shell first what the name is (`whence -w` in zsh, `type -t` in bash): a file on PATH is reported with its path and not run, whether or not
+the list has it (a `_claude_launchers` helper still printing the name of a function since replaced by a script, a list not read yet). Its probe comes from the
+text instead (`scriptProbe`, `node/pathlaunchers.go`): claude, the script's arguments (expanded as above) with what the probe passes in place of `"$@"`, and
+what the script sets (a value it does not spell out is left out, never sent to a gateway as written), with its `--settings` env on top as above. A file that is
+no wrapper, or a claude in a branch, is "not seen". The page's text is the script's first 40 lines, keys redacted. What the page shows of a probe masks keys by
+form and by name: an inline `--settings '{…}'` is shown as `{…}`, a header value such as `x-api-key: …` and a proxy URL's user and password as •••.
 
 **Launchers that cannot be intercepted** (#1489): If a function calls another script that then `exec …/claude` by absolute path, stub functions cannot replace it, and the probe does not observe the Agent starting.
 - The page says “This launcher's gateway and model could not be detected… It still works normally,” rather than treating it as broken.

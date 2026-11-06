@@ -306,7 +306,7 @@ alias cxe='export OPENAI_BASE_URL=http://127.0.0.1:9; codex -c model="gpt-6-mini
 alias cdcx='cd /tmp && codex'
 alias dmcc='ANTHROPIC_BASE_URL=http://127.0.0.1:8 claude'
 `, launcherScript)
-	list, codex, _ := mergeLaunchers(out)
+	list, codex, _, _ := mergeLaunchers(out)
 	got := map[string]proto.Launcher{}
 	for _, l := range list {
 		got[l.Name] = l
@@ -331,7 +331,7 @@ alias dmcc='ANTHROPIC_BASE_URL=http://127.0.0.1:8 claude'
 		t.Errorf("own process: %q %q", codexOwnProcess(codex["cx"]), codexOwnProcess(codex["cxr"]))
 	}
 	// Plain codex on the PATH is a launcher of its own.
-	list, codex, _ = mergeLaunchers("\x1d\x1d/usr/local/bin/codex\n")
+	list, codex, _, _ = mergeLaunchers("\x1d\x1d/usr/local/bin/codex\n")
 	if len(list) != 2 || list[1].Name != "codex" || list[1].Agent != "codex" || len(codex["codex"]) != 1 {
 		t.Errorf("plain codex: %+v %v", list, codex)
 	}

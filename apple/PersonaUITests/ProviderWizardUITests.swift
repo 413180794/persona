@@ -134,6 +134,28 @@ final class ProviderWizardUITests: XCTestCase {
         shot("9-advanced-env")
     }
 
+    /// A wrapper script on a machine's PATH (#5954) is listed with the ~/.zshrc launchers, and its page says where it comes from.
+    @MainActor func testAScriptOnPathSaysWhereItComesFrom() {
+        app = XCUIApplication()
+        app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "YES", "-tab", "settings", "-dev.openChat", "", "-openModelLaunchers", "YES"]
+        app.launchPinned()
+        let row = app.staticTexts["claude-work"]
+        for _ in 0..<6 where !(row.exists && row.isHittable) { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "no claude-work:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "来自 ~/.zshrc 和 PATH")).firstMatch.exists, "\(app.debugDescription)")
+        shot("10-path-list")
+        row.tap()
+        // The row reads as one element, its title and value together.
+        let source = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "来源、PATH 上的脚本")).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 10), "no source:\n\(app.debugDescription)")
+        let text = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "脚本原文")).firstMatch
+        for _ in 0..<6 where !(text.exists && text.isHittable) { app.swipeUp() }
+        text.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "~/.local/bin/claude-work")).firstMatch.waitForExistence(timeout: 5),
+                      "no script text:\n\(app.debugDescription)")
+        shot("11-path-detail")
+    }
+
     @MainActor func testAnOutdatedNodeIsExplained() {
         launch("import")
         let mini = app.buttons["import.machine.mini"]

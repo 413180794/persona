@@ -22,7 +22,7 @@ alias two="claude --settings a.json --settings b.json --model m"
 alias plain="claude --model m"
 alias other="ls --settings x"
 `
-	_, _, settings := mergeLaunchers(asNode(t, defs, launcherScript))
+	_, _, settings, _ := mergeLaunchers(asNode(t, defs, launcherScript))
 	want := map[string]string{"work": "~/.claude/settings.work.json", "eqs": "$HOME/s.json", "two": "b.json"}
 	if len(settings) != len(want) {
 		t.Fatalf("settings %v, want %v", settings, want)

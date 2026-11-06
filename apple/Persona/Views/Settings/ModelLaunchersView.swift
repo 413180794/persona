@@ -63,8 +63,8 @@ struct ModelLaunchersView: View {
                 if !zshrc.isEmpty {
                     Section {
                         ForEach(zshrc) { row($0) }
-                    } header: { header(String(localized: "From ~/.zshrc"), zshrc.count) } footer: {
-                        Text("Functions in ~/.zshrc on your computers that call claude. They sync each time you open this page, and new ones show up automatically.")
+                    } header: { header(String(localized: "From ~/.zshrc and PATH"), zshrc.count) } footer: {
+                        Text("Functions in ~/.zshrc and wrapper scripts on PATH that start claude, on your computers. They sync each time you open this page, and new ones show up automatically.")
                     }
                 }
                 if !hidden.isEmpty {
@@ -305,7 +305,8 @@ struct ModelLauncherDetailView: View {
         SettingsForm {
             if let l = launcher {
                 Section {
-                    LabeledContent("Source", value: l.managed ? String(localized: "Managed by Persona") : String(localized: "Function in ~/.zshrc"))
+                    LabeledContent("Source", value: l.managed ? String(localized: "Managed by Persona")
+                                   : l.pathScript ? String(localized: "Script on PATH") : String(localized: "Function in ~/.zshrc"))
                     if l.kind == "api" { LabeledContent("Connection Type", value: String(localized: "Direct API · \(l.api == "responses" ? "Responses" : "Messages")")) }
                     // A ~/.zshrc launcher's gateway and models are in the sections it was probed into below.
                     if l.managed || (l.details ?? [:]).isEmpty {
@@ -354,7 +355,7 @@ struct ModelLauncherDetailView: View {
                                     Text(def).font(Theme.Font.code).textSelection(.enabled)
                                 }
                             }
-                        } label: { Label("Function Source", systemImage: Theme.Icon.agents).lineLimit(1) }
+                        } label: { Label(l.pathScript ? String(localized: "Script Source") : String(localized: "Function Source"), systemImage: Theme.Icon.agents).lineLimit(1) }
                     } footer: { Text("Values that look like keys or tokens are replaced with •••.") }
                 }
                 Section {

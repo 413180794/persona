@@ -276,11 +276,14 @@ func (n *Node) launcherEnv(name string) map[string]any {
 
 var secretValue = regexp.MustCompile(`(?i)((?:key|token|secret|password|passwd|auth)[A-Za-z0-9_]*\s*=\s*)("[^"]*"|'[^']*'|\S+)`)
 
-// launcherDefinition is a ~/.zshrc launcher's function body, for its page in "Settings › Model", with anything that looks like
-// a key or token replaced by •••.
+// launcherDefinition is a ~/.zshrc launcher's function body (a wrapper script's text, pathlaunchers.go), for its page
+// in "Settings › Model", with anything that looks like a key or token replaced by •••.
 func (n *Node) launcherDefinition(ctx context.Context, name string) (string, error) {
 	if !nameRe.MatchString(name) {
 		return "", fmt.Errorf("invalid launcher %q", name)
+	}
+	if path := n.scriptLauncher(ctx, name); path != "" {
+		return scriptText(path, n.home)
 	}
 	out, err := loginShell(ctx, "whence -f "+name+" 2>/dev/null || type "+name).Output()
 	if err != nil && len(out) == 0 {
@@ -307,7 +310,7 @@ func redactSecrets(s string) string {
 		}
 		return "•••"
 	})
-	return secretValue.ReplaceAllStringFunc(s, func(m string) string {
+	s = secretValue.ReplaceAllStringFunc(s, func(m string) string {
 		sub := secretValue.FindStringSubmatch(m)
 		v := sub[2]
 		// A value read from a file or another variable shows where it comes from, not a secret.
@@ -316,4 +319,43 @@ func redactSecrets(s string) string {
 		}
 		return sub[1] + "•••"
 	})
+	return maskNamed(s)
 }
+
+// maskNamed masks a value a name marks as secret in JSON ("ANTHROPIC_AUTH_TOKEN": "…", an inline --settings) and in
+// a header ("x-api-key: …"), and a URL's user and password (a proxy's).
+func maskNamed(s string) string {
+	s = secretJSON.ReplaceAllString(s, `$1$2"•••$2"`)
+	s = secretHeader.ReplaceAllString(s, "$1•••")
+	return urlUser.ReplaceAllString(s, "$1•••@")
+}
+
+// maskSecrets is redactSecrets without its guess by length: for values a page shows as they are (a launcher's
+// arguments and settings, where a long model id is no key). A key by its form (a known prefix, after Bearer) or by its
+// name (KEY=…, JSON, a header) is masked.
+func maskSecrets(s string) string {
+	s = knownToken.ReplaceAllStringFunc(s, func(m string) string {
+		sub := knownToken.FindStringSubmatch(m)
+		if strings.HasPrefix(sub[2], "Bearer") {
+			return sub[1] + "Bearer •••"
+		}
+		return sub[1] + "•••"
+	})
+	s = secretValue.ReplaceAllStringFunc(s, func(m string) string {
+		sub := secretValue.FindStringSubmatch(m)
+		if strings.Contains(sub[2], "$") || strings.Contains(sub[2], "<") {
+			return m
+		}
+		return sub[1] + "•••"
+	})
+	return maskNamed(s)
+}
+
+// knownToken: Bearer and a known key prefix, not inside a path or a name (settings.ak-prod.json, ~/work/sk-tools).
+var knownToken = regexp.MustCompile(`(^|[^A-Za-z0-9./_-])(Bearer\s+[^\s"']+|(?:sk|vk|at|ak|pk|rk|plat|trxp_ak|ghp|gho|xox[bp])[-_][A-Za-z0-9._+/=-]{8,})`)
+
+var urlUser = regexp.MustCompile(`(://)[^/@\s]+@`)
+
+var secretJSON = regexp.MustCompile(`(?i)(\\?"[A-Za-z0-9_-]*(?:key|token|secret|password|passwd|auth)[A-Za-z0-9_-]*\\?"\s*:\s*)(\\?)"[^"\\]*\\?"`)
+
+var secretHeader = regexp.MustCompile(`(?i)\b((?:x-)?[a-z0-9-]*(?:api-key|token|secret|password|authorization|auth)\s*:[ \t]*)([^\s"',;\\]+)`)

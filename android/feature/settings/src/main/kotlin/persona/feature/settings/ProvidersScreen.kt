@@ -223,7 +223,7 @@ internal fun ProviderDetailPage(providers: ProviderSetup?, name: String, machine
                     }
                 }
                 if (l.definitions.isNotEmpty()) {
-                    item("defs-header") { JSectionHeader(stringResource(R.string.settings_providers_definition)) }
+                    item("defs-header") { JSectionHeader(stringResource(if (l.pathScript) R.string.settings_providers_definition_script else R.string.settings_providers_definition)) }
                     l.definitions.toSortedMap().forEach { (id, text) ->
                         item("def-$id") {
                             Column(Modifier.padding(bottom = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
@@ -256,7 +256,11 @@ internal fun ProviderDetailPage(providers: ProviderSetup?, name: String, machine
 /** The provider's settings as label and value, in iOS's order; what it does not set is left out. */
 @Composable
 private fun providerFacts(l: HubLauncher, machineName: (String) -> String): List<Triple<String, String, Boolean>> = buildList<Pair<String, String>> {
-    add(stringResource(R.string.settings_providers_source) to stringResource(if (l.managed) R.string.settings_providers_source_managed else R.string.settings_providers_source_zshrc))
+    add(stringResource(R.string.settings_providers_source) to stringResource(when {
+        l.managed -> R.string.settings_providers_source_managed
+        l.pathScript -> R.string.settings_providers_source_path
+        else -> R.string.settings_providers_source_zshrc
+    }))
     if (l.isApi) add(stringResource(R.string.settings_providers_kind) to stringResource(R.string.settings_providers_kind_api, if (l.api == "responses") "Responses" else "Messages"))
     l.baseUrl?.takeIf { it.isNotBlank() }?.let { add("Base URL" to it) }
     l.model?.takeIf { it.isNotBlank() }?.let { add(stringResource(R.string.settings_providers_model) to it) }

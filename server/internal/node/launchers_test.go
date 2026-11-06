@@ -47,7 +47,7 @@ func asNodeIn(t *testing.T, dir, defs, script string) string {
 // listFrom is the node's launcher list for a ~/.zshrc made of defs.
 func listFrom(t *testing.T, defs string) []proto.Launcher {
 	t.Helper()
-	list, _, _ := mergeLaunchers(asNode(t, defs, launcherScript))
+	list, _, _, _ := mergeLaunchers(asNode(t, defs, launcherScript))
 	return list
 }
 
@@ -153,7 +153,7 @@ func TestCodexOnTheMachineIsALauncher(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, "codex"), []byte("#!/bin/sh\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	list, codex, _ := mergeLaunchers(asNodeIn(t, home, `alias ll="ls -l"`, launcherScript))
+	list, codex, _, _ := mergeLaunchers(asNodeIn(t, home, `alias ll="ls -l"`, launcherScript))
 	if len(list) != 2 || list[0].Name != "claude" || list[1].Name != "codex" || list[1].Agent != "codex" || len(codex["codex"]) != 1 {
 		t.Fatalf("got %v, codex %v", list, codex)
 	}

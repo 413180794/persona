@@ -49,6 +49,8 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     /// What a person reads: the display name, else the name.
     var title: String { displayName.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? name }
     var managed: Bool { source == "jarvis" }
+    /// A wrapper script on a computer's PATH (#5954) rather than a ~/.zshrc function.
+    var pathScript: Bool { source == "path" }
 
     enum CodingKeys: String, CodingKey {
         case name, source, model, args, machines, hidden, definitions, details, kind, api, auth, models, proxy, effort, origin

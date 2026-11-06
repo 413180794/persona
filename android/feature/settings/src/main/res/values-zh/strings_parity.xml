@@ -21,8 +21,8 @@
     <string name="settings_providers_managed">Persona 管理</string>
     <string name="settings_providers_managed_empty">还没有。点右上角 + 添加接入方式、网关、Key 和默认模型，再在「模型配置」里按用途选择。</string>
     <string name="settings_providers_managed_note">Key 加密存在 hub，启动时才交给那台电脑，不写进文件。</string>
-    <string name="settings_providers_zshrc">来自 ~/.zshrc</string>
-    <string name="settings_providers_zshrc_note">各台电脑 ~/.zshrc 里调用 claude 的函数，每次打开这页时同步；新加的函数会自动出现。</string>
+    <string name="settings_providers_zshrc">来自 ~/.zshrc 和 PATH</string>
+    <string name="settings_providers_zshrc_note">各台电脑 ~/.zshrc 里的函数和 PATH 上的包装脚本中启动 claude 的那些，每次打开这页时重新读取；新加的会自动出现。</string>
     <string name="settings_providers_hidden">已隐藏</string>
     <string name="settings_providers_fold">收起</string>
     <string name="settings_providers_unfold">展开</string>
@@ -40,6 +40,7 @@
     <string name="settings_providers_source">来源</string>
     <string name="settings_providers_source_managed">Persona 管理</string>
     <string name="settings_providers_source_zshrc">~/.zshrc 里的函数</string>
+    <string name="settings_providers_source_path">PATH 上的脚本</string>
     <string name="settings_providers_kind">接入方式</string>
     <string name="settings_providers_kind_api">直接 API · %1$s</string>
     <string name="settings_providers_model">模型</string>
@@ -67,6 +68,7 @@
     <string name="settings_providers_check_failed">不可用</string>
     <string name="settings_providers_check_ms">%1$d ms</string>
     <string name="settings_providers_definition">函数原文</string>
+    <string name="settings_providers_definition_script">脚本</string>
     <string name="settings_providers_definition_note">看起来像 Key、Token 的值已经换成 •••。</string>
     <string name="settings_providers_import_intro">选一台电脑，看它的 claude 别名合并成哪些供应商（按网关和 Key 合并）。Key 由 hub 自己去那台电脑上读，不经过这台手机。</string>
     <string name="settings_providers_import_read">读取 ~/.zshrc</string>

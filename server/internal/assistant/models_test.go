@@ -553,7 +553,7 @@ func TestLaunchersListHideRestoreDelete(t *testing.T) {
 	f.sessions["laptop"] = nil
 	f.devices = []Device{{ID: "server", Name: "server", Online: true}, {ID: "laptop", Name: "laptop", Online: true}}
 	f.zshrc = map[string][]proto.Launcher{"server": {{Name: "work", BaseURL: "https://gw.example.com"}, {Name: "claude"}},
-		"laptop": {{Name: "work"}, {Name: "alpha"}}}
+		"laptop": {{Name: "work"}, {Name: "alpha"}, {Name: "claude-demo", BaseURL: "https://gw2.example.com", Source: "path"}}}
 	f.mu.Unlock()
 	// No key: not what the API categories fall back to (that would keep it from being deleted).
 	if rec := request(s, "POST", "/api/v1/launchers", `{"name":"mine","base_url":"https://gw.example.com","model":"m","api_key":""}`); rec.Code != 200 {
@@ -573,14 +573,16 @@ func TestLaunchersListHideRestoreDelete(t *testing.T) {
 	for _, v := range list.Launchers {
 		names = append(names, v.Name+":"+v.Source+":"+strings.Join(v.Machines, "+"))
 	}
-	if strings.Join(names, " ") != "mine:jarvis: alpha:zshrc:laptop work:zshrc:server+laptop" {
+	// A wrapper script on the laptop's PATH (#5954) is one of its own launchers too, its source kept.
+	if strings.Join(names, " ") != "mine:jarvis: alpha:zshrc:laptop claude-demo:path:laptop work:zshrc:server+laptop" {
 		t.Fatalf("%v %s", names, rec.Body.String())
 	}
 	if rec := request(s, "DELETE", "/api/v1/launchers/alpha", ""); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"hidden":true`) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	picker, _ := s.machineLaunchers(ctx, "laptop")
-	if fmt.Sprint(picker) != fmt.Sprint([]proto.Launcher{{Name: "work", Source: "zshrc"}, {Name: "mine", BaseURL: "https://gw.example.com", Model: "m", Source: "jarvis"}}) {
+	if fmt.Sprint(picker) != fmt.Sprint([]proto.Launcher{{Name: "work", Source: "zshrc"}, {Name: "claude-demo", BaseURL: "https://gw2.example.com", Source: "path"},
+		{Name: "mine", BaseURL: "https://gw.example.com", Model: "m", Source: "jarvis"}}) {
 		t.Fatalf("picker: %+v", picker)
 	}
 	if rec := request(s, "POST", "/api/v1/launchers/alpha/restore", ""); rec.Code != 200 || slicesContain(s.hiddenLaunchers(ctx), "alpha") {

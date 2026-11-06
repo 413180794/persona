@@ -41911,24 +41911,24 @@
       },
       "extractionState": "manual"
     },
-    "From ~/.zshrc": {
+    "From ~/.zshrc and PATH": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "From ~/.zshrc"
+            "value": "From ~/.zshrc and PATH"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "~/.zshrcから"
+            "value": "~/.zshrc と PATH から"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "来自 ~/.zshrc"
+            "value": "来自 ~/.zshrc 和 PATH"
           }
         }
       },
@@ -42003,6 +42003,52 @@
       },
       "extractionState": "manual"
     },
+    "Script on PATH": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Script on PATH"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PATH上のスクリプト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PATH 上的脚本"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Script Source": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Script Source"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリプトの原文"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "脚本原文"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Function name or model": {
       "localizations": {
         "en": {
@@ -42026,24 +42072,24 @@
       },
       "extractionState": "manual"
     },
-    "Functions in ~/.zshrc on your computers that call claude. They sync each time you open this page, and new ones show up automatically.": {
+    "Functions in ~/.zshrc and wrapper scripts on PATH that start claude, on your computers. They sync each time you open this page, and new ones show up automatically.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Functions in ~/.zshrc on your computers that call claude. They sync each time you open this page, and new ones show up automatically."
+            "value": "Functions in ~/.zshrc and wrapper scripts on PATH that start claude, on your computers. They sync each time you open this page, and new ones show up automatically."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "各コンピューターの~/.zshrcにあるclaudeを呼び出す関数です。このページを開くたびに同期され、新しい関数は自動的に表示されます。"
+            "value": "各コンピューターの~/.zshrcにある関数と、PATH上のラッパースクリプトのうち、claudeを起動するものです。このページを開くたびに同期され、新しいものは自動的に表示されます。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "各台电脑 ~/.zshrc 里调用 claude 的函数，每次打开这页时同步；新加的函数会自动出现。"
+            "value": "各台电脑 ~/.zshrc 里的函数和 PATH 上的包装脚本中启动 claude 的那些，每次打开这页时同步；新加的会自动出现。"
           }
         }
       },

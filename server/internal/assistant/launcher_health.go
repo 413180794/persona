@@ -442,7 +442,7 @@ func (s *Service) healthLaunchers(ctx context.Context, machine string) ([]string
 	}
 	var out []string
 	for _, l := range list {
-		if l.Source == "" || l.Source == "zshrc" || l.Source == "jarvis" {
+		if l.Source == "" || machineSource(l.Source) || l.Source == "jarvis" {
 			out = append(out, l.Name)
 		}
 	}

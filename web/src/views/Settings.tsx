@@ -69,7 +69,8 @@ interface LauncherDetail {
 
 /** GET /api/v1/launchers' entry: a managed provider's fields (lib/providers.ts) plus the ~/.zshrc ones'. */
 interface LauncherView extends ProviderView {
-  source: "zshrc" | "jarvis" | "agy" | string;
+  /** zshrc: a ~/.zshrc function or alias; path: a wrapper script on the computer's PATH (#5954). */
+  source: "zshrc" | "path" | "jarvis" | "agy" | string;
   agent?: "claude" | "codex" | "agy" | string;
   machines?: string[];
   hidden?: boolean;
@@ -663,7 +664,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
       {l && (
         <div className="flex max-h-[62vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : t("settings.zshrc_function")}</Pill>
+            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : l.source === "path" ? t("settings.path_script") : t("settings.zshrc_function")}</Pill>
             {(l.machines ?? []).map((id) => (
               <Pill key={id}>{mname(id)}</Pill>
             ))}
@@ -671,7 +672,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
           </div>
 
           {/* how much is left comes before trying it, as in the app */}
-          {l.kind !== "api" && (l.source === "jarvis" || l.source === "zshrc") && <LauncherQuota name={l.name} />}
+          {l.kind !== "api" && (l.source === "jarvis" || l.source === "zshrc" || l.source === "path") && <LauncherQuota name={l.name} />}
 
           {Object.keys(checks).length > 0 && (
             <KV title={t("settings.availability")}>
@@ -734,7 +735,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
             <div>
               <button type="button" onClick={() => setShowDef((x) => !x)} className="flex items-center gap-1.5 text-[12px] font-medium text-ink-2 hover:text-ink">
                 <Icon name="chevron" size={10} stroke={2.4} style={{ transform: showDef ? "none" : "rotate(-90deg)", transition: "transform 150ms" }} />
-                {t("settings.function_source")}
+                {l.source === "path" ? t("settings.script_source") : t("settings.function_source")}
                 <span className="font-normal text-ink-3">{t("settings.function_source_note")}</span>
               </button>
               {showDef &&

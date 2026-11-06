@@ -31,7 +31,9 @@ const probeMarker = "__JARVIS_LAUNCHER_PROBE__"
 // passed as --model (launcherModelCheck), and its page says what cannot be seen.
 var errProbeUnseen = errors.New("看不出这个启动器的网关和模型：它没有直接调用 claude / codex（比如经过别的脚本、按绝对路径启动），试运行时截不到；照常能用")
 
-// probeScript runs launcher `name` with the agents stubbed. The stubs are defined with `function name {`: in the
+// probeScript runs launcher `name` with the agents stubbed, unless the shell finds a file for it (PATH): a script runs
+// in a process of its own, which the stubs do not reach, so it would start the real agent; it is reported ("file") and
+// read instead (pathlaunchers.go). The stubs are defined with `function name {`: in the
 // `name() {` form an alias of the same name (`alias claude="claude --…"`, common in ~/.zshrc) is expanded first and
 // the whole script fails to parse. Output: "<marker> base" and the shell's environment before
 // (NUL-separated KEY=VALUE on one line), "<marker> agent <name>", "<marker> arg <arg>" lines, then "<marker> env" and
@@ -73,15 +75,24 @@ function env {
   "$@"
 }
 printf '%%s' "%[1]s base "; __jp_env; printf '\n'
+__jp_file=
+if [ -n "$ZSH_VERSION" ]; then
+  case "$(whence -w %[3]s 2>/dev/null)" in *": command"|*": hashed") __jp_file=$(whence -p %[3]s 2>/dev/null) ;; esac
+elif [ "$(type -t %[3]s 2>/dev/null)" = file ]; then
+  __jp_file=$(type -P %[3]s 2>/dev/null)
+fi
+if [ -n "$__jp_file" ]; then printf '%%s\n' "%[1]s file $__jp_file"; exit 0; fi
 ( %[2]s ) </dev/null
-`, probeMarker, command)
+`, probeMarker, command, name)
 }
 
-// Probe is what a launcher would run: the agent, its arguments, the environment it sets.
+// Probe is what a launcher would run: the agent, its arguments, the environment it sets. File: the launcher is a file
+// on PATH, which the probe did not run (the stubs cannot reach into it): it is read instead (pathlaunchers.go).
 type Probe struct {
 	Agent string
 	Args  []string
 	Env   map[string]string
+	File  string
 }
 
 func parseProbe(out string) (Probe, bool) {
@@ -112,6 +123,8 @@ func parseProbe(out string) (Probe, bool) {
 			pairs(strings.TrimPrefix(rest, "base "), base)
 		case strings.HasPrefix(rest, "env "):
 			pairs(strings.TrimPrefix(rest, "env "), p.Env)
+		case strings.HasPrefix(rest, "file "):
+			p.File = strings.TrimPrefix(rest, "file ")
 		}
 	}
 	for k, v := range p.Env {
@@ -157,12 +170,27 @@ func (n *Node) launcherProbe(ctx context.Context, name string, args ...string) (
 	if !nameRe.MatchString(name) {
 		return Probe{}, fmt.Errorf("invalid launcher %q", name)
 	}
+	if path := n.scriptLauncher(ctx, name); path != "" {
+		// A wrapper script on PATH is read, not run: the stubs below would not reach into it (pathlaunchers.go).
+		p, err := scriptProbe(path, args)
+		if err != nil {
+			return Probe{}, err
+		}
+		return withSettingsEnv(p, n.home), nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	cmd := loginShell(ctx, probeScript(name, args...))
 	killGroupOnCancel(cmd)
 	out, _ := cmd.Output()
 	p, ok := parseProbe(string(out))
+	if p.File != "" { // a file on PATH the list does not have as a wrapper script (yet): read, never run
+		sp, err := scriptProbe(p.File, args)
+		if err != nil {
+			return Probe{}, err
+		}
+		return withSettingsEnv(sp, n.home), nil
+	}
 	if !ok {
 		return Probe{}, errProbeUnseen
 	}
@@ -224,13 +252,33 @@ func settingsArg(args []string) string {
 // secretEnv: variables whose values are never shown.
 var secretEnv = regexp.MustCompile(`(?i)(KEY|TOKEN|SECRET|PASSWORD|AUTH|COOKIE|CREDENTIAL)`)
 
+// shownArgs are a probe's arguments for the page: an inline --settings (JSON whose env can hold the key) as {…}, and
+// anything else that is a key by its form masked (maskSecrets).
+func shownArgs(args []string) []string {
+	if args == nil {
+		return nil
+	}
+	out := make([]string, len(args))
+	for i, a := range args {
+		switch {
+		case i > 0 && args[i-1] == "--settings" && strings.HasPrefix(strings.TrimSpace(a), "{"):
+			out[i] = "{…}"
+		case strings.HasPrefix(a, "--settings=") && strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(a, "--settings=")), "{"):
+			out[i] = "--settings={…}"
+		default:
+			out[i] = maskSecrets(a)
+		}
+	}
+	return out
+}
+
 // launcherEnvKeys: the variables that configure the agent (the rest of a shell's environment is noise).
 var launcherEnvKeys = regexp.MustCompile(`^(ANTHROPIC_|CLAUDE_|CLAUDE_CODE_|API_TIMEOUT_MS$|DISABLE_|MAX_THINKING_TOKENS$|MAX_MCP_OUTPUT_TOKENS$|BASH_|MCP_|OPENAI_|CODEX_|HTTPS?_PROXY$|https?_proxy$|NO_PROXY$|no_proxy$)`)
 
 // LauncherDetail turns a probe into the page's fields: agent, gateway, how it authenticates, every model tier, the
 // context window, effort, flags, and the other settings — secrets masked.
 func LauncherDetail(p Probe) proto.LauncherDetail {
-	d := proto.LauncherDetail{Agent: p.Agent, Args: p.Args}
+	d := proto.LauncherDetail{Agent: p.Agent, Args: shownArgs(p.Args)}
 	get := func(k string) string { return p.Env[k] }
 	d.BaseURL = firstNonEmpty(get("ANTHROPIC_BASE_URL"), get("OPENAI_BASE_URL"))
 	switch {
@@ -284,6 +332,7 @@ func LauncherDetail(p Probe) proto.LauncherDetail {
 		if secretEnv.MatchString(k) && v != "" {
 			v = "•••"
 		}
+		v = maskSecrets(v) // a key in a header (ANTHROPIC_CUSTOM_HEADERS), a proxy's password
 		d.Env = append(d.Env, proto.LauncherEnv{Key: k, Value: v})
 	}
 	return d
