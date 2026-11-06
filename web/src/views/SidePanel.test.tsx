@@ -19,7 +19,7 @@ vi.mock("./session/GitPanel", () => {
 });
 import { registerComposer } from "../lib/links";
 import { closePanel, openPanel } from "../lib/panel";
-import { SidePanel } from "./SidePanel";
+import { CHAT_MIN, panelWidth, SidePanel } from "./SidePanel";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -66,6 +66,25 @@ describe("侧边面板按需加载", () => {
     expect(alert?.textContent).toContain("重新加载");
     // the panel's frame (its resize handle) is still there: the error stays inside the panel
     expect(host.querySelector('aside [role="separator"]')).not.toBeNull();
+  });
+});
+
+// #5148: the panel never takes the conversation beside it under CHAT_MIN, whatever was dragged or remembered
+describe("侧边面板的宽度", () => {
+  it("keeps the width asked for when there is room", () => {
+    expect(panelWidth(600, 1440 - 284)).toBe(600);
+  });
+  it("leaves the conversation CHAT_MIN, at 1180 wide with the sidebar", () => {
+    const room = 1180 - 284;
+    expect(panelWidth(600, room)).toBe(room - CHAT_MIN);
+    expect(panelWidth(5000, room)).toBe(room - CHAT_MIN);
+  });
+  it("gives more once the sidebar folds", () => {
+    expect(panelWidth(600, 1180 - 56)).toBe(600);
+  });
+  it("is never under its own minimum", () => {
+    expect(panelWidth(100, 2000)).toBe(360);
+    expect(panelWidth(600, 700)).toBe(360);
   });
 });
 

@@ -1,7 +1,7 @@
 // The right-hand panel next to the page (docs/web.md "Side panel"): one at a time, chosen in lib/panel.ts. (A session's
 // terminal is not one: it is the agent page's own view, lib/session-view.ts.)
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
-import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { directoryPanelKey, closePanel, panelOpener, usePanel, type Panel } from "../lib/panel";
 import { activeComposer } from "../lib/links";
 import { returnFocus } from "../ui/overlay";
@@ -29,9 +29,16 @@ const MIN = 360;
 const DEFAULT_WIDTH = 600;
 /** How far one arrow key press moves the resize handle. */
 const KEY_STEP = 16;
+/** What the conversation next to the panel keeps at the least (#5148): its input box and header still fit. */
+export const CHAT_MIN = 440;
 
-function clampWidth(w: number) {
-  return Math.round(Math.max(MIN, Math.min(w, Math.max(MIN, innerWidth * 0.72))));
+/**
+ * The width the panel is drawn at: the one asked for (dragged, or remembered), within what leaves the page beside it
+ * CHAT_MIN. `room` is the page's width plus the panel's, the part of the shell the two share (the sidebar's is not in
+ * it), so a folded or hidden sidebar gives the panel more. Never under MIN.
+ */
+export function panelWidth(want: number, room: number) {
+  return Math.round(Math.max(MIN, Math.min(want, room - CHAT_MIN)));
 }
 
 export function SidePanel() {
@@ -40,8 +47,12 @@ export function SidePanel() {
   const maximized = useLayout().maximized;
   // narrow, it covers the page: Back closes it first (and stays on the conversation)
   useCloseOnBack(Boolean(panel), closePanel, useMedia(NARROW));
-  const [width, setWidth] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || DEFAULT_WIDTH));
-  const drag = useRef<{ x: number; w: number } | null>(null);
+  // the width asked for; what is drawn is `shown`, which also fits the room there is now (the window, the sidebar).
+  // Until the room is measured (or with no page beside it), the old cap: 72% of the window.
+  const [width, setWidth] = useState(() => Math.max(MIN, Number(localStorage.getItem(WIDTH_KEY)) || DEFAULT_WIDTH));
+  const [room, setRoom] = useState(() => innerWidth * 0.72 + CHAT_MIN);
+  const drag = useRef<{ x: number; w: number; room: number } | null>(null);
+  const shown = panelWidth(width, room);
   const id = useId();
   const aside = useRef<HTMLElement>(null);
   const open = Boolean(panel);
@@ -53,10 +64,25 @@ export function SidePanel() {
     return () => returnFocus(el, panelOpener(), mediaMatches(PHONE) ? undefined : () => activeComposer()?.focus());
   }, [open]);
 
+  // The page (<main>, the panel's sibling, App.tsx) and the panel share the room: measure it before paint, and again
+  // whenever the page's width changes (window resized, sidebar folded / hidden / back). Their sum does not change with
+  // the panel's own width, so this does not feed back on itself.
+  useLayoutEffect(() => {
+    const el = aside.current;
+    const main = el?.parentElement?.querySelector<HTMLElement>(":scope > main");
+    if (!el || !main) return;
+    const measure = () => setRoom(main.getBoundingClientRect().width + el.getBoundingClientRect().width);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(main);
+    return () => ro.disconnect();
+  }, [open]);
+
   useEffect(() => {
     const move = (e: PointerEvent) => {
       if (!drag.current) return;
-      setWidth(clampWidth(drag.current.w + (drag.current.x - e.clientX)));
+      setWidth(panelWidth(drag.current.w + (drag.current.x - e.clientX), drag.current.room));
     };
     const up = () => {
       if (!drag.current) return;
@@ -75,7 +101,7 @@ export function SidePanel() {
 
   if (!panel) return null;
   const resize = (w: number) => {
-    const next = clampWidth(w);
+    const next = panelWidth(w, room);
     setWidth(next);
     localStorage.setItem(WIDTH_KEY, String(next));
   };
@@ -100,7 +126,7 @@ export function SidePanel() {
         "fixed inset-x-0 top-(--kb-top) z-30 flex h-(--kb-h) flex-col bg-page shadow-overlay lg:relative lg:inset-auto lg:top-auto lg:z-auto lg:h-auto lg:w-(--panel-w) lg:shrink-0 lg:border-l lg:border-line lg:shadow-none",
         maximized && "lg:hidden",
       )}
-      style={{ "--panel-w": `${width}px`, animation: `slide-in-right 260ms ${EASE} both` } as React.CSSProperties}
+      style={{ "--panel-w": `${shown}px`, animation: `slide-in-right 260ms ${EASE} both` } as React.CSSProperties}
     >
       <div
         role="separator"
@@ -109,28 +135,29 @@ export function SidePanel() {
         title={t("sidepanel.resize_title")}
         aria-controls={id}
         aria-valuemin={MIN}
-        aria-valuemax={clampWidth(Infinity)}
-        aria-valuenow={width}
+        aria-valuemax={panelWidth(Infinity, room)}
+        aria-valuenow={shown}
         tabIndex={0}
         onKeyDown={(e) => {
           // the panel is on the right: Left widens it, like dragging the edge left
-          const to = { ArrowLeft: width + KEY_STEP, ArrowRight: width - KEY_STEP, Home: MIN, End: Infinity }[e.key];
+          const to = { ArrowLeft: shown + KEY_STEP, ArrowRight: shown - KEY_STEP, Home: MIN, End: Infinity }[e.key];
           if (to !== undefined) {
             e.preventDefault();
             resize(to);
           } else if (e.key === "Enter") {
             e.preventDefault();
-            setWidth(clampWidth(DEFAULT_WIDTH));
+            setWidth(DEFAULT_WIDTH);
             localStorage.removeItem(WIDTH_KEY);
           }
         }}
         onPointerDown={(e) => {
-          drag.current = { x: e.clientX, w: width };
+          // from the width drawn, so a drag starts where the edge is, not from a wider wish the room cut down
+          drag.current = { x: e.clientX, w: shown, room };
           document.body.style.cursor = "col-resize";
           document.body.style.userSelect = "none";
         }}
         onDoubleClick={() => {
-          setWidth(clampWidth(DEFAULT_WIDTH));
+          setWidth(DEFAULT_WIDTH);
           localStorage.removeItem(WIDTH_KEY);
         }}
         className="absolute inset-y-0 -left-1 z-10 hidden w-2 cursor-col-resize lg:block"
