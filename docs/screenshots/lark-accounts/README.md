@@ -1,37 +1,39 @@
-# 飞书多账号
+# Multiple Lark accounts
 
-关联 #1321 / #1399。全部截图来自隔离 mock（`MOCK_LARK_ACCOUNTS=1`，虚构的账号和会话），不包含真实飞书内容。
+Refs #1321 / #1399. Every screenshot comes from an isolated mock (`MOCK_LARK_ACCOUNTS=1`, made-up accounts and chats) and contains no real Lark content.
 
-2026-11-04 在 iPhone 18 Pro / iOS 27.2 模拟器上，浅色 / 深色 × 默认（液态玻璃）/ BeautifulUI 四轮，每轮 `LarkAccountsFlowTests` 两个流程都通过，截图逐张查看。
+On 2026-11-04, on an iPhone 18 Pro / iOS 27.2 simulator, four rounds: light / dark × default (Liquid Glass) / BeautifulUI. In every round both flows in `LarkAccountsFlowTests` passed, and each screenshot was checked one by one.
 
-| 截图 | 检查点 |
+The mock account names are Chinese fixture data and appear as-is in the screenshots: 我 ("Me", the default account) and 工作号 ("Work account").
+
+| Screenshot | What to check |
 |---|---|
-| `accounts-own` | 「消息」页顶部一排账号胶囊（带各账号未读数），选中默认账号「我」时列出它的会话；未登录的账号不出现 |
-| `accounts-second` | 切到「工作号」：只列出工作号自己的会话和置顶，默认账号的会话不混入 |
-| `accounts-second-chat` | 打开工作号的会话：消息按工作号读取，副标题「飞书 · 工作号」标明以哪个身份发送 |
-| `accounts-settings` | 设置 › 连接器 › 飞书 的「账号」：默认账号标记、未读数、未登录的账号标红 |
+| `accounts-own` | The Messages page has a row of account pills at the top (each with its unread count). With the default account 我 selected, it lists that account's chats; signed-out accounts do not appear |
+| `accounts-second` | Switched to 工作号: only that account's own chats and pinned items are listed; no chats from the default account mixed in |
+| `accounts-second-chat` | A 工作号 chat opened: messages are read as 工作号, and the subtitle 「飞书 · 工作号」 ("Lark · Work account") shows which identity sends |
+| `accounts-settings` | **Accounts** under Settings › Connectors › Lark: the default-account marker, unread counts, signed-out accounts in red |
 
-复现（替换设备 ID，先生成本机配置和 Xcode 项目）：
+To reproduce (substitute your device ID; generate the local config and the Xcode project first):
 
 ```sh
-MOCK_LARK_ACCOUNTS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
-xcrun simctl ui <simulator-id> appearance light      # 或 dark
-TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口> \
+MOCK_LARK_ACCOUNTS=1 PORT=<port> python3 scripts/mock/mock_hub.py
+xcrun simctl ui <simulator-id> appearance light      # or dark
+TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> \
 TEST_RUNNER_JARVIS_SHOTS=/tmp/lark-accounts \
-TEST_RUNNER_JARVIS_UI_STYLE=beautiful \               # 默认风格时去掉这一行
+TEST_RUNNER_JARVIS_UI_STYLE=beautiful \               # drop this line for the default style
 xcodebuild test -project apple/Persona.xcodeproj -scheme Persona \
   -destination 'platform=iOS Simulator,id=<simulator-id>' \
   -only-testing:PersonaUITests/LarkAccountsFlowTests
 ```
 
-## 网页
+## Web
 
-`web/` 连 `MOCK_LARK_ACCOUNTS=1` 的 mock，`scripts/test/web_lark_accounts_e2e.py --shots` 拍的（Playwright Chromium，宽 1280 浅色 / 深色，窄 390），截图逐张查看。
+`web/` connected to the `MOCK_LARK_ACCOUNTS=1` mock, shot with `scripts/test/web_lark_accounts_e2e.py --shots` (Playwright Chromium, 1280 wide in light / dark, 390 narrow); each screenshot checked one by one.
 
-| 截图（`web/`） | 检查点 |
+| Screenshot (`web/`) | What to check |
 |---|---|
-| `messages-second-*` | 搜索框下的账号按钮，切到工作号后只列工作号的会话和置顶 |
-| `messages-second-chat-*` | 工作号的会话按 `ol_account=2` 读取，会话头「群聊 · 工作号」 |
-| `inbox-second-*` | 收件箱里工作号的条目「飞书 · 工作号 · 群聊」，打开就是工作号的会话 |
-| `settings-accounts-*` | 设置 › 连接器 › 飞书的账号：默认、未读数、未登录 |
-| `messages-narrow-light` | 窄屏：账号按钮在列表上方 |
+| `messages-second-*` | The account buttons under the search box; after switching to 工作号, only its chats and pinned items are listed |
+| `messages-second-chat-*` | A 工作号 chat is read with `ol_account=2`; the chat header reads 「群聊 · 工作号」 ("Group chat · Work account") |
+| `inbox-second-*` | A 工作号 item in the Inbox reads 「飞书 · 工作号 · 群聊」 ("Lark · Work account · Group chat"); opening it opens the 工作号 chat |
+| `settings-accounts-*` | Accounts under Settings › Connectors › Lark: default, unread counts, signed out |
+| `messages-narrow-light` | Narrow screen: the account buttons sit above the list |

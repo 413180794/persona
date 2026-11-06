@@ -1,57 +1,57 @@
-# 工作区看板（#1646）
+# Workspace board (#1646)
 
-默认关闭，在网页的设置 › 通用 › Agent 里打开「工作流看板」后，侧边栏才出现入口，打开 `/workspace-board`（见下「开关」）。一张卡绑定一台电脑上的一个真实代码目录，可以关联该目录里的多个 Agent；没有运行 Agent 的目录也能保留卡片。
+Off by default. Only after you turn on **Workflow board** under Settings › General › Agents in the web app does the sidebar show an entry, which opens `/workspace-board` (see "Toggle" below). A card binds one real code folder on one computer and can link several Agents in that folder; folders with no running Agent can keep their cards too.
 
-## 使用
+## Usage
 
-默认列是「待办 → 进行中 → 待审查 → 已完成」。可以添加、改名、左右移动列；删除含卡片的列时，必须选择接收列，归档卡片也会迁入。
+The default columns are "To do → In progress → In review → Done". You can add, rename, and move columns left and right. Deleting a column that holds cards requires choosing a receiving column; archived cards move there too.
 
-列底部的「绑定工作空间」提供两种入口：从已有工作区选择，或在在线机器上浏览、输入已有目录。管理者会要求目录所在的 node 验证目录并解析符号链接；没有可信目录的空工作区可以显示在清单中，但需要先选择真实目录才能绑定。同机同目录不能重复绑定，归档后应恢复原卡。
+**Add workspace** at the bottom of a column offers two entry points: pick from existing workspaces, or browse / type an existing folder on an online machine. The manager asks the node that owns the folder to verify it and resolve symlinks. An empty workspace with no trusted folder can appear in the list, but you must pick a real folder before binding it. The same folder on the same machine cannot be bound twice; after archiving, restore the original card instead.
 
-卡片支持重命名、置顶、归档和恢复。拖拽可跨列移动或调整列内顺序，菜单也提供上下移动和「移到…」，触屏和键盘可以用菜单操作。窄屏通过列选择器切换，仅展示选中列。搜索匹配名称、目录、分支和机器 ID，机器筛选只影响显示。默认保持人工顺序，置顶卡片在本列前面；Agent 状态更新不会重新排序或迁列。
+Cards can be renamed, pinned, archived, and restored. Dragging moves a card across columns or reorders it within a column; the menu also offers move up / down and **Move to…**, so touch and keyboard users work through the menu. On narrow screens a column picker switches columns and shows only the selected one. Search matches name, folder, branch, and machine ID; the machine filter only affects what is shown. Manual order is kept by default, with pinned cards at the top of their column; Agent status updates never reorder or move cards.
 
-点击卡片查看目录和关联 Agent，打开对应机器的文件、Git，或用「新建 Agent」打开已有的新建流程并预填机器和目录。绑定、移动到「已完成」、置顶和归档都只更新看板元数据，不启动或关闭 Agent，不执行 Git、PR、发布或删除目录。启动 Agent 需要在新建流程中明确提交。
+Click a card to see its folder and linked Agents, open that machine's Files or Git, or use **New agent** to open the existing creation flow prefilled with the machine and folder. Binding, moving to Done, pinning, and archiving only update board metadata: they do not start or stop Agents, and do not run Git, PRs, releases, or delete folders. Starting an Agent requires an explicit submit in the creation flow.
 
-## 谁管看板
+## Who owns the board
 
-看板是管理者（`personad assistant`）的（2026-11-05 从 hub 挪过去，代码 `server/internal/assistant/workspace_board*.go`）：卡片绑的是电脑上的目录，而电脑是管理者连的（[machines.md](machines.md)「谁连电脑」），看板、开关和工作区发现都由它做，表和 settings 的 key 不变，不用迁移。hub 只转发：`/api/v1/workspace-board`、`/api/v1/workspaces`、`/api/v1/workspace-board/settings` 原样经总线 `http.request` 给管理者（`assistantwire` 的 `boardRoutes`），请求的设备角色随之带过去；`workspace_board`、`workspace_board_settings` 两个事件由管理者经 `ws.broadcast` 发，hub 原样推给各端，形状不变，客户端不用改。
+The board belongs to the manager (`personad assistant`) (moved from the hub on 2026-11-05; code in `server/internal/assistant/workspace_board*.go`). Cards bind folders on computers, and computers are connected by the manager ([machines.md](machines.md), "Who connects computers"), so the board, the toggle, and workspace discovery are all done there. Table and settings keys are unchanged, so no migration is needed. The hub only forwards: `/api/v1/workspace-board`, `/api/v1/workspaces`, and `/api/v1/workspace-board/settings` go as-is over the bus `http.request` to the manager (`boardRoutes` in `assistantwire`), carrying the requesting device's role. The `workspace_board` and `workspace_board_settings` events are sent by the manager via `ws.broadcast` and the hub pushes them unchanged to every client; their shape is the same, so clients need no changes.
 
-- **管理者不在时**（hub 刚起来、管理者在重启）：这几个接口回 `503 assistant_offline`「助手暂时连不上，稍后再试」，看板和快照都在 Postgres 里不丢；网页按读失败处理，管理者回来后下一次读取（可见时 10 秒一次的发现刷新）就恢复。
+- **When the manager is away** (the hub just started, the manager is restarting): these endpoints return `503 assistant_offline` ("Can’t reach the assistant right now. Try again later"). The board and snapshots live in Postgres and are not lost. The web app treats it as a read failure and recovers on the next read after the manager returns (the discovery refresh runs every 10 seconds while visible).
 
-## 开关（#2475）
+## Toggle (#2475)
 
-这个功能不是每个人都需要，所以默认关闭，由用户在设置 › 通用 › Agent 里打开。
+Not everyone needs this feature, so it is off by default and the user turns it on under Settings › General › Agents.
 
-- **存在哪**：hub 机器的 Postgres `settings` 表（管理者读写），key `workspace_board.settings`，值 `{"enabled": bool}`。hub 是一个人的，开关跟着 hub 走：换浏览器、换设备都一致，另一个浏览器改了经 WS `workspace_board_settings` 事件即时同步。接口见 [协议](protocol.md#工作区看板)。
-- **关闭时**：侧边栏不显示入口；直接打开 `/workspace-board` 显示「工作流看板未开启」和「去设置打开」按钮；网页不读看板、不轮询 `/api/v1/workspaces`（看板组件根本不挂载）。看板和工作区快照不删，接口照常可用，重新打开后原样恢复。
-- **兼容**：开关上线前看板对所有人显示，已经在用的人升级后不能突然看不到。没存过开关时管理者按「看板是否被改过」推断：`workspace_board.revision > 0`（绑过卡片、加过 / 改过 / 移过列等任何一次修改）算打开，否则关闭。不按「有没有这一行」判断：以前只要点开过页面，就会写一份 revision 0 的默认看板，按行算会让几乎所有点过一次的人都默认打开，开关就失去了意义；只点开过、什么都没改的人没有数据可丢。推断值不回写，用户第一次拨开关才存下明确的值，之后以它为准（关掉的不会因为看板有数据又自己打开）。
-- **原生端**：iOS、Mac、手表、安卓目前都没有看板入口，不受影响；以后加入口时同样读这个接口。
-- **为什么不做成扩展**：看板是可以拖拽的 React 页面，数据在 Postgres，还依赖 node 的 `workspaces.list` / `workspace.resolve` RPC，扩展的声明式 `nav_page` 承载不了。
+- **Where it is stored**: the `settings` table in Postgres on the hub machine (read and written by the manager), key `workspace_board.settings`, value `{"enabled": bool}`. A hub belongs to one person, so the toggle follows the hub: it is the same across browsers and devices, and a change in another browser syncs instantly via the WS `workspace_board_settings` event. Endpoints are in [the protocol](protocol.md#workspace-board).
+- **When off**: the sidebar shows no entry. Opening `/workspace-board` directly shows "Workflow board is off" and an **Open settings** button. The web app does not read the board or poll `/api/v1/workspaces` (the board component is not mounted at all). The board and workspace snapshots are not deleted and the endpoints keep working; turning it back on restores everything as it was.
+- **Compatibility**: before the toggle shipped, the board was shown to everyone, and people already using it must not lose it after upgrading. When no toggle value has been stored, the manager infers it from "has the board ever been changed": `workspace_board.revision > 0` (any change at all: bound a card, added / renamed / moved a column, and so on) counts as on, otherwise off. It does not go by "does the row exist": opening the page once used to write a default board at revision 0, so counting rows would turn it on for almost everyone who ever clicked in, and the toggle would be meaningless. People who only opened it and changed nothing have no data to lose. The inferred value is not written back; only the user's first flip of the toggle stores an explicit value, which wins from then on (a board turned off does not turn itself back on because it has data).
+- **Native clients**: iOS, Mac, watch, and Android have no board entry today and are unaffected; when they add one, they read the same endpoint.
+- **Why not an extension**: the board is a draggable React page, its data is in Postgres, and it depends on the node's `workspaces.list` / `workspace.resolve` RPCs. An extension's declarative `nav_page` cannot carry that.
 
-## 工作区与状态
+## Workspaces and status
 
-工作区发现独立于会话列表：node 枚举宿主提供的空间，包括没有终端的 Orca worktree、宿主能提供目录的空空间；管理者再补入当前会话目录和已绑定目录。宿主未提供目录时不按名称猜路径。发现错误显示在看板上，不能把 RPC 不支持或枚举失败当成空清单。
+Workspace discovery is independent of the session list. The node enumerates the spaces its host provides, including Orca worktrees with no terminal and empty spaces for which the host can provide a folder; the manager then adds the current session folders and the bound folders. When the host provides no folder, it does not guess a path from the name. Discovery errors show on the board; an unsupported RPC or a failed enumeration must not be treated as an empty list.
 
-卡片的列是人工工作流状态；「需要你」「工作中」等来自关联 Agent，仅用于展示。看过会话、Agent 退出或机器断线都不改变卡片所在列。「已完成」和「归档」是两个独立操作。
+A card's column is a manual workflow state. "Needs you", "Working", and so on come from the linked Agents and are display only. Viewing a session, an Agent exiting, or a machine disconnecting never changes a card's column. Done and Archive are two separate actions.
 
-机器离线时，清单使用 Postgres 中最后保存的发现快照并标记离线、不可用；卡片继续保留。机器在线但目录已消失时，卡片显示空间暂不可用。文件、Git 和启动等实时操作仍依赖机器连接和目录权限，失败会沿用已有接口报错。
+When a machine is offline, the list uses the last discovery snapshot saved in Postgres and marks it offline and unavailable; the cards stay. When the machine is online but the folder is gone, the card shows the space as temporarily unavailable. Live actions such as Files, Git, and starting an Agent still depend on the machine connection and folder permissions; failures report errors through the existing endpoints.
 
-卡片 ID、列和顺序独立于宿主空间 ID。工作区身份由机器、来源和来源 ID 限定，同名或同来源 ID 的跨机器工作区不会合并。机器的多条连接被识别为同一电脑后，响应使用当前可路由的机器身份，保留原卡片及其工作流；此前已各自保存的卡片不会被静默合并。网页数据来自当前 hub（经它转给它的管理者），不把切换到另一 hub 的看板存入本地共享状态。
+Card IDs, columns, and order are independent of host space IDs. A workspace's identity is scoped by machine, source, and source ID, so workspaces on different machines with the same name or the same source ID are never merged. Once several connections of a machine are recognized as the same computer, responses use the machine identity that is currently routable and keep the original cards and their workflow; cards that were saved separately before are not silently merged. Web data comes from the current hub (which forwards to its manager); a board from another hub you switch to is not stored in shared local state.
 
-## 持久化、权限与刷新
+## Persistence, permissions, and refresh
 
-看板存入 Postgres 的 `workspace_board`，工作区快照存入 `workspace_snapshots`，没有 JSON 文件或内存写入降级。迁移为 `server/internal/db/migrations/0302_workspace_board.sql`。每次修改携带 `revision`，数据库通过 CAS 原子比较并递增版本；并发冲突返回 HTTP 409，网页重新读取后提示重试，不覆盖另一端的修改。失败时恢复上一次服务端确认的看板。
+The board is stored in Postgres in `workspace_board`, workspace snapshots in `workspace_snapshots`. There is no fallback to JSON files or in-memory writes. The migration is `server/internal/db/migrations/0302_workspace_board.sql`. Every change carries a `revision`; the database does an atomic CAS compare-and-increment. A concurrent conflict returns HTTP 409, and the web app re-reads and asks you to retry instead of overwriting the other side's change. On failure it restores the last board the server confirmed.
 
-`full` 角色可以修改；`answer` 可以读取看板和工作区清单，响应的 `can_write` 为 false。`answer` 的文件、Git、启动等权限仍由已有接口的允许列表决定，读取看板不增加这些权限。
+The `full` role can make changes. `answer` can read the board and the workspace list, and the response has `can_write` false. `answer`'s permissions for Files, Git, starting Agents, and so on are still decided by the existing endpoints' allowlists; reading the board grants none of them.
 
-写入成功后推送 `workspace_board` 事件。开关关闭时网页不读取也不轮询。网页打开看板时读取数据，页面可见期间每 10 秒刷新发现清单，回到前台时刷新；隐藏期间停止轮询。会话状态刷新只影响卡内展示，不改变人工排序。
+A successful write pushes a `workspace_board` event. When the toggle is off, the web app neither reads nor polls. When the board is open, the web app reads the data, refreshes the discovery list every 10 seconds while the page is visible, and refreshes when it comes back to the foreground; polling stops while hidden. Session status refreshes only affect what is shown inside cards, never the manual order.
 
-## 升级与兼容
+## Upgrades and compatibility
 
-升级 hub 时应用上述 Postgres 迁移，并同步部署新版网页和各台电脑的 node。旧 node 不支持 `workspaces.list` 或 `workspace.resolve` 时会显示发现或绑定错误；已有会话目录仍可作为发现补充，绑定最终仍须新版 node 验证。旧 hub 返回 404 或不支持看板存储时返回 503，网页提示更新；管理者不在时同样是 503（`assistant_offline`）；已有原生客户端继续使用原接口。
+When upgrading the hub, apply the Postgres migration above, and deploy the new web app and the node on each computer at the same time. An old node that does not support `workspaces.list` or `workspace.resolve` shows a discovery or binding error; existing session folders still supplement discovery, but binding must ultimately be verified by a new node. An old hub returns 404, or 503 if it does not support board storage, and the web app asks you to update; when the manager is away it is also 503 (`assistant_offline`). Existing native clients keep using the original endpoints.
 
-Session 可选的 `workspace_cwd` 是 node 验证过的物理目录，供看板关联工作区使用；原始 `cwd` 保留运行时语义。旧 node 缺少该字段时回退 `cwd`，符号链接别名的关联需要升级 node。详细数据结构、错误和 RPC 见 [协议](protocol.md#工作区看板)。
+A Session's optional `workspace_cwd` is the physical folder verified by the node, used to link the board to workspaces; the raw `cwd` keeps its runtime meaning. When an old node lacks this field it falls back to `cwd`; linking through symlink aliases requires upgrading the node. Detailed data structures, errors, and RPCs are in [the protocol](protocol.md#workspace-board).
 
-## 来源与边界
+## Origins and boundaries
 
-交互模式参考 [Orca 开源项目](https://github.com/stablyai/orca) 的工作区看板：人工列与 Agent 状态分开，完成与归档分开。本实现未复制 Orca 的代码或 assets。普通目录绑定是 Persona 的适配；本期不管理 worktree 创建、删除或合并，不同步外部任务状态，也不包含自主任务执行引擎。
+The interaction model follows the workspace board in [the open-source Orca project](https://github.com/stablyai/orca): manual columns are separate from Agent status, and done is separate from archived. This implementation does not copy Orca's code or assets. Binding plain folders is Persona's adaptation. This phase does not manage creating, deleting, or merging worktrees, does not sync external task status, and includes no autonomous task execution engine.

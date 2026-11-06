@@ -1,40 +1,40 @@
-# Persona Link node 更新验收（#1158）
+# Persona Link node update acceptance (#1158)
 
-日期：2026-11-04。范围：经现有 node RPC 更新常驻 personad，覆盖主动 / 被动 Link 的 hub 编排，包含校验、空闲检查、原子替换、独立回滚与版本确认。设计和首次升级步骤见 [node-update.md](../node-update.md)。
+Date: 2026-11-04. Scope: updating the resident personad over the existing node RPC, covering hub orchestration for both active and passive Link: verification, idle check, atomic replacement, independent rollback, and version confirmation. Design and first-upgrade steps are in [node-update.md](../node-update.md).
 
-## 已验证
+## Verified
 
-| 项目 | 结果 |
+| Item | Result |
 | --- | --- |
-| 服务端全套 | 在 hub 测试机器使用真实 Postgres、隔离测试库执行 `go test -count=1 -p 1 ./...`，通过。最终小改后补跑更新器和两个命令入口测试，通过。 |
-| 静态检查 | `go vet ./...` 通过。早返回路径的 context 取消已补齐。 |
-| 并发检查 | hub 的更新 / 离线队列 / wire 测试，以及完整 `internal/nodeupdate` 包在 `-race` 下通过。 |
-| Web | 合入最新 master 后，47 个测试文件、583 个测试通过；生产构建通过。 |
-| 浏览器 | 匿名 HTTP / WS 夹具，列表、各更新阶段、旧 node 首次升级提示、失败恢复；浅色 / 深色及窄屏截图实际检查。一次点击只发送一个部署请求，无浏览器错误。 |
-| 隐私和文档 | 使用不含凭据的临时配置加载 20 个真实私有值，隐私扫描通过；文档路径检查通过。临时配置不入库。 |
+| Full server suite | Ran `go test -count=1 -p 1 ./...` on the hub test machine against real Postgres with an isolated test database: passed. After the final small changes, the updater and both command-entry tests were rerun: passed. |
+| Static checks | `go vet ./...` passed. Context cancellation on early-return paths is now complete. |
+| Concurrency checks | The hub's update / offline queue / wire tests and the whole `internal/nodeupdate` package passed under `-race`. |
+| Web | After merging the latest master, 47 test files and 583 tests passed; the production build passed. |
+| Browser | Anonymous HTTP / WS fixture: the list, each update stage, the first-upgrade prompt for old nodes, and failure recovery; light / dark and narrow screenshots actually checked. One click sends exactly one deploy request; no browser errors. |
+| Privacy and docs | A temporary config without credentials loaded 20 real private values; the privacy scan passed. The doc path check passed. The temporary config is not committed. |
 
-更新器单测覆盖损坏 / 截断 / 错误版本 / 错误平台与架构、分块重试和冲突、事务过期、并发 begin、忙碌与取消后重试、同版本拒绝、响应写出之前不重启、超时恢复、外部部署保护、软链接 / 自定义运行根，以及参数 / 环境 / 工作目录保持。
+Updater unit tests cover: corrupted / truncated / wrong-version / wrong platform and architecture, chunk retries and conflicts, transaction expiry, concurrent begin, retry after busy and after cancel, rejecting the same version, no restart before the response is written, timeout recovery, protection against external deploys, symlinks / custom run roots, and preserving arguments / environment / working directory.
 
-独立复核发现并修复了服务管理器启动替代进程与回滚重叠的竞态：恢复旧文件后保留回滚屏障；已经载入新代码的进程在打开服务 socket 前必须重新执行旧文件，只有旧版启动才清理屏障。确定性测试在新版已载入、进入更新管理器之前暂停进程，让恢复先发生，再验证同一 PID 执行旧版；关键忙碌 / 取消重试与重叠场景重复五次通过。
+An independent review found and fixed a race where the service manager starting a replacement process overlapped with rollback. After the old file is restored, a rollback barrier stays in place: a process that has already loaded the new code must re-exec the old file before opening the service socket, and only the old version clears the barrier when it starts. A deterministic test pauses the process after the new version is loaded and before it enters the update manager, lets the restore happen first, then verifies the same PID execs the old version. The key busy / cancel retry and overlap scenarios passed five times in a row.
 
-## 真实 Linux 用户服务
+## Real Linux user service
 
-在独立临时目录及独立 systemd 用户 unit 中，使用真正的 personad 和常驻 attach RPC，未触碰已有 node 服务、配对或生产配置：
+In a separate temporary directory with a separate systemd user unit, using the real personad and the resident attach RPC, without touching the existing node service, pairing, or production config:
 
-1. 原版 node 由 systemd 启动，上报远程更新能力。
-2. 经 RPC 分块发送另一个版本的真实 personad；新版完成替换、exec，重新连接后版本一致，并完成确认。
-3. 再发送一个 Go 测试程序：`node-update-check` 返回合法的目标版本 / 平台，实际服务启动立即失败。
-4. node 服务反复启动失败，独立 transient systemd 恢复服务仍然存活；确认超时后恢复上一版，原用户 unit 重新启动并正常提供 RPC。
-5. 恢复屏障由旧版启动清理，确认接口再次可用。测试结束停止专用 unit、删除临时目录，并确认没有遗留测试 unit 或临时根。
+1. The original node is started by systemd and reports the remote-update capability.
+2. A real personad of another version is sent in chunks over RPC; the new version is swapped in and exec'd, reconnects with a matching version, and is confirmed.
+3. Then a Go test program is sent: `node-update-check` returns a valid target version / platform, but actually starting the service fails immediately.
+4. The node service keeps failing to start while the independent transient systemd recovery service stays alive; after the confirmation timeout the previous version is restored, the original user unit restarts and serves RPC normally.
+5. The recovery barrier is cleared by the old version on startup, and the confirm endpoint works again. At the end the dedicated unit was stopped, the temporary directory deleted, and no leftover test unit or temporary root was confirmed.
 
-这轮实测直接验证常驻 node RPC 与 systemd 生命周期。主动 / 被动 Link 的传输复用已有字节流，其部署编排由 hub RPC 夹具及既有 Link 全套测试覆盖；没有把真实 Linux 用户服务测试写成真实公网 Link 链路验收。
+This round directly verifies the resident node RPC and the systemd lifecycle. Transport for active / passive Link reuses the existing byte stream; its deploy orchestration is covered by the hub RPC fixture and the existing full Link test suite. The real Linux user-service test is not written up as an acceptance of a real public-network Link connection.
 
-## 初轮失败和验证边界
+## First-round failures and verification boundaries
 
-- GitHub Actions 的多批任务持续排队，隐私检查 job 没有分配 runner；CI 未运行，不记为通过。按仓库的 runner 积压例外使用完整本地 / 隔离远端验证，并在 PR 记录环境异常。
-- 标准 `scripts/test/test-server.sh` 在 Docker 准备阶段因 SSH 用户没有 Docker socket 权限失败，测试没有启动。使用脚本同一个 `server_test_env.py`，连接已经运行的真实 Postgres、隔离运行，未改变 Docker 权限或生产服务；不能将原脚本写成通过。
-- 新增机器能力字段后，旧 wire golden 失败；更新夹具并查看 diff，仅增加部署能力与离线原因，回归通过。
-- 初轮 race 构建达到两分钟任务时限被停止；后续延长任务预算。原目标版本测试还依赖 80 ms 的传输耗时，在 race 下提前结束；改为提交事件驱动取消，仍验证旧版本不能确认成功，race 回归通过。
-- 首轮独立烟测客户端未完整处理大包写入与双向请求，未完成更新验收；修正客户端后重新完成上述真实用户服务验证。
-- macOS 更新器及关键进程夹具测试通过；本机完整 node 包中的既有 `CodexRemote*` 用例超时，没有记为通过。该包在隔离的 Linux / 真实 Postgres 全套中通过。
-- 没有安装真实 Mac LaunchAgent，没有在现有线上机器上执行首次升级，也没有发布 Mac App 或 TestFlight。本次不会把旧 node 自动变成认识新协议的版本，首次引导升级仍须遵循设计文档。
+- Several batches of GitHub Actions jobs stayed queued; the privacy check job never got a runner. CI did not run and is not counted as passed. Under the repository's runner-backlog exception, full local / isolated remote verification was used instead, and the environment problem is recorded in the PR.
+- The standard `scripts/test/test-server.sh` failed during Docker setup because the SSH user has no permission on the Docker socket; the tests never started. The same `server_test_env.py` the script uses was run against the already running real Postgres, isolated, without changing Docker permissions or production services. The original script is not reported as passing.
+- After adding the new machine capability field, the old wire golden failed. The fixture was updated and its diff reviewed: it only adds the deploy capability and the offline reason. The regression passed.
+- The first race build hit the two-minute task limit and was stopped; the task budget was extended afterwards. The original target-version test also depended on an 80 ms transfer time and finished early under race; it now cancels on a commit event and still verifies that the old version cannot confirm success. The race regression passed.
+- The first independent smoke-test client did not fully handle large writes and bidirectional requests, so the update acceptance did not complete. After fixing the client, the real user-service verification above was redone.
+- The macOS updater and key process fixture tests passed. The existing `CodexRemote*` cases in the full local node package timed out and are not counted as passed. That package passed in the isolated Linux / real Postgres full suite.
+- No real Mac LaunchAgent was installed, no first upgrade was run on existing live machines, and no Mac App or TestFlight build was released. This change does not automatically turn old nodes into versions that understand the new protocol; the first bootstrap upgrade must still follow the design doc.
