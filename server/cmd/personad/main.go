@@ -518,8 +518,6 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 	return nil
 }
 
-// runHook forwards a Claude Code hook event to the local node. Any failure exits 0 silently so claude carries on as usual.
-
 // sysmonMaxCount caps `sysmon [n]` at a day of 10-second samples: a bigger n never ends in practice, and the
 // largest ints overflowed n+1 in the summary.
 const sysmonMaxCount = 8640

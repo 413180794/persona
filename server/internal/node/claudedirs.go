@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -59,12 +60,7 @@ func newClaudeDirs() *claudeDirs {
 func (n *Node) defaultClaudeDir() string { return claudeDirOf(n.home) }
 
 // claudeDirOf is the node's own default Claude Code directory for home: $CLAUDE_CONFIG_DIR, else ~/.claude.
-func claudeDirOf(home string) string {
-	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
-		return d
-	}
-	return filepath.Join(home, ".claude")
-}
+func claudeDirOf(home string) string { return nodeclient.ClaudeDir(home) }
 
 // claudeConfigDirs lists every config directory in use, the default first, each once (by real path), existing only.
 func (n *Node) claudeConfigDirs() []string {

@@ -149,8 +149,11 @@ func ClaudeDir(home string) string {
 	return filepath.Join(home, ".claude")
 }
 
-// sessionIDRe is what a Claude Code session id looks like (a UUID; the node's validID).
+// sessionIDRe is what a Claude Code session id looks like (a UUID).
 var sessionIDRe = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
+
+// ValidSessionID says whether id looks like a Claude Code session id (the node's validID too).
+func ValidSessionID(id string) bool { return sessionIDRe.MatchString(id) }
 
 // ReadClaudeSessionID reads the session id out of a claude's sessions/<pid>.json ("" when missing or invalid).
 func ReadClaudeSessionID(path string) string {
@@ -161,7 +164,7 @@ func ReadClaudeSessionID(path string) string {
 	var f struct {
 		SessionID string `json:"sessionId"`
 	}
-	if json.Unmarshal(b, &f) != nil || !sessionIDRe.MatchString(f.SessionID) {
+	if json.Unmarshal(b, &f) != nil || !ValidSessionID(f.SessionID) {
 		return ""
 	}
 	return f.SessionID

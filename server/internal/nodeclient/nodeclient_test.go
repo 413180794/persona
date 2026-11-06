@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -22,21 +23,31 @@ func TestClientCommandsDoNotLinkTheNodeOrTheManager(t *testing.T) {
 	}
 	forbidden := []string{"internal/node", "internal/devices", "internal/assistant", "internal/hub", "internal/manager",
 		"internal/extmgr", "internal/db"}
-	for _, pkg := range []string{".", "../mcpserver", "../scriptcli", "../toolcli"} {
-		out, err := exec.Command(goBin, "list", "-deps", "-f", "{{.ImportPath}}", pkg).Output()
-		if err != nil {
-			t.Fatalf("go list -deps %s: %v", pkg, err)
-		}
-		for _, dep := range strings.Fields(string(out)) {
-			rel, ok := strings.CutPrefix(dep, modulePath)
-			if !ok {
-				continue
+	for _, target := range []string{"linux/amd64", "linux/arm64", "darwin/arm64", "darwin/amd64", "windows/amd64"} { // a platform's own files can import more
+		for _, pkg := range []string{".", "../mcpserver", "../scriptcli", "../toolcli"} {
+			cmd := exec.Command(goBin, "list", "-deps", "-f", "{{.ImportPath}}", pkg)
+			goos, goarch, _ := strings.Cut(target, "/")
+			cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch)
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("go list -deps %s (%s): %v", pkg, target, err)
 			}
-			for _, f := range forbidden {
-				if rel == f || strings.HasPrefix(rel, f+"/") {
-					t.Errorf("%s depends on %s: the node.sock commands reach the node only through internal/nodeclient "+
-						"(move what they need into it, or into a contract package)", pkg, dep)
-				}
+			checkDeps(t, pkg+" ("+target+")", string(out), forbidden)
+		}
+	}
+}
+
+func checkDeps(t *testing.T, pkg, out string, forbidden []string) {
+	t.Helper()
+	for _, dep := range strings.Fields(out) {
+		rel, ok := strings.CutPrefix(dep, modulePath)
+		if !ok {
+			continue
+		}
+		for _, f := range forbidden {
+			if rel == f || strings.HasPrefix(rel, f+"/") {
+				t.Errorf("%s depends on %s: the node.sock commands reach the node only through internal/nodeclient "+
+					"(move what they need into it, or into a contract package)", pkg, dep)
 			}
 		}
 	}

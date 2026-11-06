@@ -496,9 +496,7 @@ func newestFirst(paths []string) []string {
 	return paths
 }
 
-var idRe = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
-
-func validID(id string) bool { return idRe.MatchString(id) }
+func validID(id string) bool { return nodeclient.ValidSessionID(id) }
 
 func (n *Node) file(id string) (*transcript.File, error) {
 	n.mu.Lock()
