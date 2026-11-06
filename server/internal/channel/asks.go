@@ -302,7 +302,8 @@ func toolName(l i18n.Lang, ix proto.Interaction) string {
 	return i18n.T(l, "channel-asks.an_action")
 }
 
-// toolBrief is a tool call's input in a line or two: its command, file or URL when it has one.
+// toolBrief is a tool call's input in a line or two: its command, file or URL when it has one, else its first other
+// text argument, else the input with every argument named like a credential masked (#4734).
 func toolBrief(input json.RawMessage) string {
 	var m map[string]any
 	if json.Unmarshal(input, &m) != nil {
@@ -313,7 +314,10 @@ func toolBrief(input json.RawMessage) string {
 			return s
 		}
 	}
-	return Clip(string(input), 300)
+	if s := proto.ArgGist(input); s != "" {
+		return Clip(s, 300)
+	}
+	return Clip(proto.RedactArgs(input), 300)
 }
 
 // FirstLine is s's first line, clipped.

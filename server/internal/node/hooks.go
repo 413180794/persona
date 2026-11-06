@@ -660,8 +660,14 @@ func toolSummary(name string, input json.RawMessage) string {
 	if s := pick("description", "command", "path", "url", "query", "prompt"); s != "" {
 		return s
 	}
-	b, _ := json.Marshal(m)
-	return snippet(string(b))
+	// The summary is a push's body, shown on the lock screen: never an argument named like a credential (#4734).
+	if s := proto.ArgGist(input); s != "" {
+		return snippet(s)
+	}
+	if s := proto.RedactArgs(input); s != "" && s != "{}" && s != "null" {
+		return snippet(s)
+	}
+	return name
 }
 
 // HookPane is the pane a hook runs in, from its environment, as a stored PaneRef: herdr's HERDR_PANE_ID as it always

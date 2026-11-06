@@ -247,7 +247,7 @@ func TestToolSummary(t *testing.T) {
 		{"WebSearch", `{"query":"golang io.Pipe"}`, "golang io.Pipe"},
 		{"mcp__jarvis__mail_send", `{"description":"send mail"}`, "send mail"},
 		{"SomeTool", `{"description":"","path":"/p"}`, "/p"},
-		{"SomeTool", `{"other":"value"}`, `{"other":"value"}`},
+		{"SomeTool", `{"other":"value"}`, "other: value"},
 		{"Bash", ``, ""},
 	}
 	for _, c := range cases {
@@ -520,5 +520,33 @@ func TestQuickMetaActivityWhileOnlyToolsRun(t *testing.T) {
 	m = readQuickMeta(path, write())
 	if doing, at := m.activityOf(); doing != "" || at != nil || m.lastText != "测试过了" {
 		t.Fatalf("words come first again: %q %v %q", doing, at, m.lastText)
+	}
+}
+
+// The summary is a push's body, shown on the lock screen: an argument named like a credential never shows in it,
+// however deep it sits (#4734).
+func TestToolSummaryHidesCredentials(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{`{"api_key":"fake-key-123","repo":"demo"}`, "repo: demo"},
+		{`{"password":"fake-pass","user":"bob"}`, "user: bob"},
+		{`{"API_KEY":"fake-key-123","Repo":"demo"}`, "Repo: demo"},
+		{`{"zeta":"z","alpha":"a"}`, "zeta: z"},
+		{`{"token":"fake-token","count":3}`, `{"count":3,"token":"***"}`},
+		{`{"config":{"Authorization":"Bearer fake","region":"cn"},"n":1}`, `{"config":{"Authorization":"***","region":"cn"},"n":1}`},
+		{`{"items":[{"secret":"fake"},{"name":1}],"n":1}`, `{"items":[{"secret":"***"},{"name":1}],"n":1}`},
+		{`{"cookie":"fake-cookie"}`, `{"cookie":"***"}`},
+		{`{}`, "mcp__x__call"},
+	}
+	for _, c := range cases {
+		got := toolSummary("mcp__x__call", json.RawMessage(c.input))
+		if got != c.want {
+			t.Errorf("%s: got %q, want %q", c.input, got, c.want)
+		}
+		if strings.Contains(got, "fake") {
+			t.Errorf("%s: a credential shows: %q", c.input, got)
+		}
 	}
 }
