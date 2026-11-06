@@ -238,6 +238,27 @@ func TestScreenCardUpgradesWhenTheDialogShows(t *testing.T) {
 	}
 }
 
+// When a screen card is ended while upgradeScreenCard is polling, the replacement check
+// must not re-finish or recreate the card (#5013).
+func TestScreenCardUpgradeAbortedWhenCardEnded(t *testing.T) {
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	shortScreenUpgrade(s)
+	n.setScreen("  ✢ Percolating…\n")
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	got, _ := waitCards(s, 1, 2*time.Second)
+	if len(got) != 1 || got["scr_mac_s1"] == "" {
+		t.Fatalf("card before dialog: %v", got)
+	}
+	// Finish the card before the dialog is parsed.
+	s.finishInteraction("scr_mac_s1")
+	n.setScreen(pickModel)
+	time.Sleep(100 * time.Millisecond)
+	if list := s.pendingInteractions(); len(list) != 0 {
+		t.Fatalf("expected no replacement card created after card was ended, got: %+v", list)
+	}
+}
+
 // Another manager's upgrade loop is still running at the default timing, as one an earlier test leaves behind:
 // shortening this manager's timing touches nothing that loop reads, so -race has nothing to report (#4554), and this
 // manager's card still upgrades.

@@ -314,9 +314,15 @@ func (s *Service) upgradeScreenCard(machine, session, id string, p *pending) {
 		if err == nil && screen.ParseDialog(scr.Text) != nil {
 			s.fleet.mu.Lock()
 			same := s.fleet.interactions[id] == p
+			if same {
+				delete(s.fleet.interactions, id)
+				if p.orphaned != nil {
+					p.orphaned.Stop()
+				}
+			}
 			s.fleet.mu.Unlock()
 			if same {
-				s.finishInteraction(id)
+				s.finished(p)
 				s.createScreenInteraction(machine, cur)
 			}
 			return
