@@ -27,6 +27,53 @@ struct InboxEventsTests {
 
     // MARK: Decoding and sections
 
+    /// Fixtures/inbox-events-live.json: what a hub on master listed for a made-up connector source (e2einbox), taken
+    /// as it came: consecutive `handling` entries, `concluded`, bare source links, connector items.
+    nonisolated static let live: Data = {
+        let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        return (try? Data(contentsOf: here.appending(path: "Fixtures/inbox-events-live.json"))) ?? Data()
+    }()
+
+    @Test func decodesARealHubsListing() throws {
+        let list = try JSON.decoder.decode(InboxListing.self, from: Self.live).items
+        #expect(list.count == 6)
+        let by = Dictionary(list.map { ($0.title, $0) }, uniquingKeysWith: { a, _ in a })
+        for name in ["张三", "李四", "法务", "赵六"] { #expect(by[name]?.triage == .action, "\(name) needs you") }
+        #expect(by["王五"]?.triage == .working && by["王五"]?.tier == "action")
+        #expect(by["钱七"]?.triage == .fyi)
+        #expect(list.allSatisfy { $0.isEvent && !$0.isDone })
+
+        #expect(by["张三"]?.currentSuggestion?.kind == "reply" && by["张三"]?.suggestion?.version == 1)
+        #expect(by["法务"]?.currentSuggestion?.kind == "agent" && by["法务"]?.suggestion?.version == 1)
+        #expect(by["钱七"]?.currentSuggestion?.kind == "conclusion")
+        #expect(InboxEventText.mark(try #require(by["李四"])) == .preparing)
+        #expect(InboxEventText.mark(try #require(by["王五"])) == .working("等对方回复"))
+        #expect(InboxEventText.mark(try #require(by["赵六"])) == .failed("AI 处理失败"))
+        #expect(by["赵六"]?.handling?.error == "发送没有成功")
+
+        let kinds = Set(list.flatMap { ($0.chain ?? []).map(\.kind) })
+        #expect(kinds == ["received", "triaged", "handling", "confirmed", "sent", "failed", "concluded"])
+        for it in list {
+            let chain = try #require(it.chain)
+            // A bare source link opens the source page; on the Mac, where the source is beside it, nothing more.
+            #expect(InboxChainTarget.of(chain[0]) == .source(position: nil, uid: nil))
+            #expect(InboxChainTarget.of(chain[0], sourceShown: true).navigates == false)
+            // Every handling entry (two in a row once it suggests) opens the processing conversation.
+            for e in chain where e.kind == "handling" {
+                guard case .session(let key, manager: true) = InboxChainTarget.of(e) else { Issue.record("\(it.title): \(e.text)"); continue }
+                #expect(key == it.handling?.sessionKey)
+            }
+        }
+        // The badge counts Needs You only.
+        #expect(list.filter { !$0.isDone && $0.triage == .action }.count == 4)
+    }
+
+    @Test func aConcludedEntryWithoutALinkOpensInPlace() {
+        let e = InboxItem.ChainEntry(id: "c", kind: "concluded", text: "管理者的结论", detail: "不用回复")
+        #expect(InboxChainTarget.of(e) == .inline)
+        #expect(InboxEventText.symbol(e) == Theme.Icon.concluded)
+    }
+
     @Test func decodesEveryStateOfTheFixture() throws {
         let all = try items()
         let reply = try #require(all["lark:oc_demo1:100"])
