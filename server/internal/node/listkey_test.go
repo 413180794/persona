@@ -38,6 +38,7 @@ func listKeyFmt(list []proto.Session) string {
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
 		}
+		b.WriteString(fmt.Sprint(s.BackgroundWaiting) + "\n")
 		for _, w := range s.Workflows {
 			fmt.Fprintf(&b, "workflow:%s/%s/%q/%d/%d/%d/%d\n", w.TaskID, w.Status, w.Phase, w.AgentsDone, w.AgentsStarted, w.AgentsRunning, w.AgentsFailed)
 			for _, a := range w.Agents {
@@ -196,7 +197,8 @@ func listKeyVariants() (proto.Session, map[string]proto.Session) {
 		"subagent_at": func(s *proto.Session) {
 			s.Subagents = []proto.Subagent{{ID: "a1", Running: true, UpdatedAt: act.Add(9 * time.Second)}}
 		},
-		"subagent_new": func(s *proto.Session) { s.Subagents = append(s.Subagents, proto.Subagent{ID: "a2"}) },
+		"subagent_new":       func(s *proto.Session) { s.Subagents = append(s.Subagents, proto.Subagent{ID: "a2"}) },
+		"background_waiting": func(s *proto.Session) { s.BackgroundWaiting = !s.BackgroundWaiting }, // #6045
 		// a new call shows at once (#5602), not with the next 10 s of updated_at
 		"subagent_step": func(s *proto.Session) {
 			s.Subagents = []proto.Subagent{{ID: "a1", Running: true, UpdatedAt: at, Steps: 1, LastTool: &proto.WorkflowTool{ID: "toolu_1", Name: "Read"}}}

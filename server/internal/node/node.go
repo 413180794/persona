@@ -125,6 +125,7 @@ type Node struct {
 	hostSig   map[string]*watcherSignals // change signals of the registered watcher hosts, by host kind (herdrevents.go)
 	cdirs     *claudeDirs                // Claude Code config directories in use (claudedirs.go)
 	hooks     *hookTurns                 // per-session turn counters from Persona's hooks (hookturn.go)
+	bgWait    bgWatch                    // whether background commands only wait (bgwait.go)
 	codices   *codexRegistry
 	usageWin  usageWindowsState // subscription rate-limit windows (usagewindows.go, #2432)
 	machineID string

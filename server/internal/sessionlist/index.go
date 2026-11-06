@@ -29,10 +29,13 @@ const (
 type Item struct {
 	ID                                               string
 	Machine, Project, Group, State, Source, Provider string
-	UpdatedAt                                        time.Time
-	SearchText                                       string
-	Summary                                          any
-	Full                                             any
+	// BackgroundWaiting: a working row that only waits on background commands (#6045). It stays in State's count
+	// (older apps call it working) and is counted apart in Counts.BackgroundWaiting too.
+	BackgroundWaiting bool
+	UpdatedAt         time.Time
+	SearchText        string
+	Summary           any
+	Full              any
 }
 
 // Options selects a filtered full list or an incremental change list. Limit zero
@@ -58,12 +61,15 @@ type Page struct {
 // Counts describes the complete filtered membership, ignoring page size.
 // Empty attribute values are counted under the empty string key.
 type Counts struct {
-	Total    int            `json:"total"`
-	Machine  map[string]int `json:"machine"`
-	Project  map[string]int `json:"project"`
-	Group    map[string]int `json:"group"`
-	State    map[string]int `json:"state"`
-	Revision string         `json:"revision"`
+	Total   int            `json:"total"`
+	Machine map[string]int `json:"machine"`
+	Project map[string]int `json:"project"`
+	Group   map[string]int `json:"group"`
+	State   map[string]int `json:"state"`
+	// BackgroundWaiting: how many of State["working"] only wait in the background (#6045): a client that shows them
+	// apart takes them out of its Working count.
+	BackgroundWaiting int    `json:"background_waiting,omitempty"`
+	Revision          string `json:"revision"`
 }
 
 // Error lets adapters map invalid_query to HTTP 400 and cursor_expired or

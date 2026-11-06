@@ -68,7 +68,7 @@ func (h *Hub) indexSessionsLocked(mid string, list []proto.Session, encoded []se
 		summary, _ := json.Marshal(runtimeSummary(row))
 		items = append(items, sessionlist.Item{
 			ID: runtimeListID(mid, row.SessionID), Machine: mid, Project: project, Group: group,
-			State: row.State, Source: row.SourceKind, Provider: row.Agent, UpdatedAt: row.UpdatedAt,
+			State: row.State, BackgroundWaiting: row.BackgroundWaiting, Source: row.SourceKind, Provider: row.Agent, UpdatedAt: row.UpdatedAt,
 			SearchText: strings.Join([]string{row.Title, row.Cwd, row.RepoRoot, row.SpaceName, row.SlotName, row.AgentName, row.LastText}, "\n"),
 			Summary:    json.RawMessage(summary), Full: full[row.SessionID],
 		})
@@ -108,7 +108,7 @@ func runtimeSummary(s proto.Session) runtimeRowSummary {
 		Title: rowText(s.Title, 256), Cwd: s.Cwd, WorkspaceCwd: s.WorkspaceCwd, RepoRoot: s.RepoRoot,
 		Status: s.Status, State: s.State, UpdatedAt: s.UpdatedAt, StateSince: s.StateSince, SeenAt: s.SeenAt,
 		LastText: rowText(s.LastText, 180), Activity: rowText(s.Activity, 120), ActivityAt: s.ActivityAt,
-		AwaitsReply: s.AwaitsReply, BackgroundWorking: s.BackgroundWorking,
+		AwaitsReply: s.AwaitsReply, BackgroundWorking: s.BackgroundWorking, BackgroundWaiting: s.BackgroundWaiting,
 		Agent: s.Agent, AgentLabel: s.AgentLabel, AgentName: s.AgentName,
 		SourceKind: s.SourceKind, SourceThreadID: s.SourceThreadID, SourceInstanceID: s.SourceInstanceID,
 		ParentThreadID: s.ParentThreadID, ParentSessionID: s.ParentSessionID, RootSessionID: s.RootSessionID, IsSubagent: s.IsSubagent,

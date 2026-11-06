@@ -57,3 +57,28 @@ func TestFrozenCountsDetachedFromCurrentCounters(t *testing.T) {
 		t.Fatalf("current: %+v", current)
 	}
 }
+
+// Rows waiting in the background (#6045) stay in the working count, for older apps, and are counted apart too; the
+// count follows a row that starts or stops waiting, and filtered counts have it as well.
+func TestBackgroundWaitingCount(t *testing.T) {
+	var index Index
+	items := make([]Item, 4)
+	for n := range items {
+		items[n] = testItem(fmt.Sprintf("row-%d", n), n)
+	}
+	items[1].BackgroundWaiting, items[2].BackgroundWaiting = true, true
+	index.Replace("demo", items)
+	counts, err := index.Counts(Options{})
+	if err != nil || counts.State["working"] != 4 || counts.BackgroundWaiting != 2 {
+		t.Fatalf("counts: %+v %v", counts, err)
+	}
+	items[2].BackgroundWaiting = false
+	items[2].Full = testPayload{ID: items[2].ID, Title: "Its build started"}
+	index.Replace("demo", items)
+	if counts, _ = index.Counts(Options{}); counts.BackgroundWaiting != 1 {
+		t.Fatalf("after one started working: %+v", counts)
+	}
+	if counts, _ = index.Counts(Options{State: "working"}); counts.BackgroundWaiting != 1 || counts.Total != 4 {
+		t.Fatalf("filtered: %+v", counts)
+	}
+}

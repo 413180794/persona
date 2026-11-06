@@ -153,6 +153,9 @@ func emptyCounts(revision string) Counts {
 
 func addCount(c *Counts, v Item, delta int) {
 	c.Total += delta
+	if v.BackgroundWaiting {
+		c.BackgroundWaiting += delta
+	}
 	for _, pair := range []struct {
 		m   map[string]int
 		key string

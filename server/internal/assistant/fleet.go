@@ -926,6 +926,7 @@ func (s *Service) decorated(machine string) []proto.Session {
 		list[i].SeenAt = seen[list[i].SessionID]
 		localizeSession(lang, &list[i]) // the node's Chinese activity line… (fleet_text.go)
 		list[i].State, list[i].BackgroundWorking = stateWithBackground(agentState(list[i], list[i].SeenAt), list[i])
+		list[i].BackgroundWaiting = backgroundWaiting(list[i])
 		list[i].TurnError, list[i].TurnErrorKind = turnError(list[i])
 		list[i].TurnErrorCode = ""
 		if list[i].TurnError != "" {
@@ -1185,6 +1186,25 @@ func (s *Service) markStates(machine string, list []proto.Session, now time.Time
 			delete(s.fleet.hooked, k)
 		}
 	}
+}
+
+// backgroundWaiting (Session.BackgroundWaiting, #6045): working only because of background work, and that work only
+// waits: the node found its background commands waiting, and no subagent or workflow runs (those are work).
+func backgroundWaiting(sess proto.Session) bool {
+	if !sess.BackgroundWorking || !sess.BackgroundWaiting {
+		return false
+	}
+	for _, a := range sess.Subagents {
+		if a.Running {
+			return false
+		}
+	}
+	for _, w := range sess.Workflows {
+		if w.Running {
+			return false
+		}
+	}
+	return !slices.ContainsFunc(sess.Background, func(t proto.BackgroundTask) bool { return t.Kind == "agent" || t.Kind == "workflow" })
 }
 
 func backgroundRunning(sess proto.Session) bool {

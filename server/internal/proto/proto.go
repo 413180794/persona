@@ -857,7 +857,12 @@ type Session struct {
 	State string `json:"state"`
 	// BackgroundWorking: State is working only because of background work (#2935): its turn ended while its
 	// background commands, subagents, Monitors or workflows still run. Clients say "Working (background)". Set by the hub.
-	BackgroundWorking bool      `json:"background_working,omitempty"`
+	BackgroundWorking bool `json:"background_working,omitempty"`
+	// BackgroundWaiting: BackgroundWorking, and all that background work only waits (#6045): its background commands
+	// sleep, loop on a check or watch something, using next to no CPU; no subagent or workflow runs. Clients show
+	// "Waiting in the background" apart from Working (lighter, not in the Working count); State stays working, so an
+	// older app shows Working. The node says whether its background commands wait; the manager keeps it only so.
+	BackgroundWaiting bool      `json:"background_waiting,omitempty"`
 	SeenAt            time.Time `json:"seen_at,omitempty"`
 	// StateSince is when the agent entered its current state, as the hub saw it (the hub restarting resets it):
 	// lists sort "Working" by it, since updated_at moves on every step.

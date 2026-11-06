@@ -488,6 +488,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "asks":"Push it to beta?",   // what the last reply asks the user, read by the node off the whole reply (last_text is only its start); absent when it asks nothing (#5096, docs/agent-states.md "Awaiting your reply")
  "asks_read":true,            // the node read asks off the reply (empty asks then means it asks nothing or was answered); without it the hub reads last_text when it is whole
  "awaits_reply":true,         // stopped (unread / idle) on a question nobody answered, with no card, error or background work. Computed by the hub; clients list an idle one as "Awaiting your reply", not folded with the idle ones
+ "background_waiting":true,   // background_working, and all that background work only waits (#6045): its background commands sleep, loop on a check or watch something, using next to no CPU, and no subagent or workflow runs. Clients write "Waiting in the background", lighter than Working and not in its count; state stays working, so older apps show Working. Omitted when false
  "background_working":true,   // state is working only because of background work (this turn is over, workflows / background commands / Monitors / subagents are running, #2935): clients write "Working (Background)". Computed by the hub; omitted when false, so its absence means an old hub (before #3127) only when no run carries tool_use_id and no agent status: there, look for state=working with a running workflow
  // The user's latest manual compaction (assistant chats only, present only after POST …/compact): running → done | failed (error is a human-readable reason); the node keeps it until the next one
  "compaction":{"state":"running|done|failed","error":"…","started_at":"...","finished_at":"..."}}
@@ -1277,7 +1278,7 @@ Runtime summaries keep the existing snake_case names and decode as a `Session` w
 
 - Identity/ownership: `machine_id`, `session_id`, `manager`; source/runtime and hierarchy fields (`source_kind`, `source_thread_id`, `source_instance_id`, `parent_thread_id`, `parent_session_id`, `root_session_id`, `is_subagent`).
 - Display/grouping: `title`, `cwd`, `workspace_cwd`, `repo_root`, `agent`, `agent_label`, `agent_name`; space, parent-space, slot, pane, tab and workspace identifiers/names/indices; `todo {id,title}`.
-- State/freshness: `state`, `status`, `updated_at`, `state_since`, `seen_at`, `pending_interactions`, `rev`, `quiet`, `awaits_reply`, `background_working`, `starting`, `start_error`, turn-error fields.
+- State/freshness: `state`, `status`, `updated_at`, `state_since`, `seen_at`, `pending_interactions`, `rev`, `quiet`, `awaits_reply`, `background_working`, `background_waiting`, `starting`, `start_error`, turn-error fields.
 - Row content/progress: `last_text`, `activity`, `activity_at`, `model`, context-token/window counts; bounded `work` (phase/on/line/wait/then/wake/attempts/agent/deferred), `plan`, `goal`, and `loop` timing with its prompt omitted.
 - Routing/action safety: `capabilities`, `attached`, `can_fork`, `read_only_reason`, `started_by_jarvis`, `assistant`, `archived`, `space`, `origin`, `origin_ref`.
 - Additional scalar summaries: **`waiting`** (loop, running background tasks/subagents/workflows or an eligible hub wake), **`background_count`**, **`running_subagents`**, **`running_workflows`**. Counts of zero may be omitted; `waiting` is always a boolean. A summary-aware client uses these rather than inferring “none running” from missing arrays.
@@ -1301,9 +1302,12 @@ GET /api/v1/agents/sessions?counts=1&source=demo
   "project": {"/demo/app": 8000},
   "group": {"space-a": 8000},
   "state": {"working": 2000, "needs_you": 2000, "unread": 2000, "idle": 2000},
+  "background_waiting": 120,
   "revision": "<opaque checkpoint>"
 }
 ```
+
+`background_waiting` (#6045, omitted when 0) is how many of the `working` ones only wait in the background (`Session.background_waiting`); they stay in `state.working` for older apps, and a client that shows them apart takes them out of its Working count.
 
 Each map counts the complete filtered membership by that dimension; missing attributes use the empty-string key. `limit` does not truncate counts. With a matching `cursor`, counts refer to that frozen view; without one they refer to the current collection. `since`, if supplied, is validated but does not turn counts into counts of changes. Read counts separately when a group expands, rather than deriving totals from loaded pages. The maps do not contain preference-defined custom sections, per-user pins/mutes or computed repository trees.
 

@@ -846,6 +846,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				}
 				// Background shells keep running after the turn ends; background subagents are listed as subagents.
 				n.setBackground(&s, m)
+				s.BackgroundWaiting = n.backgroundWaits(&s) // bgwait.go (#6045)
 				s.Loop, s.Goal, s.Plan = m.loop, m.goal, m.plan
 				s.Subagents = n.subagents(id)
 			}
@@ -2081,6 +2082,7 @@ func listKeySized(list []proto.Session, size int) string {
 		for _, t := range s.Background {
 			w.str(t.ID, ',')
 		}
+		w.str(strconv.FormatBool(s.BackgroundWaiting), '\n')
 		// Workflow journals advance without changing the main transcript's rev, and so do its agents: each one's
 		// latest tool call (its name, and its calls to tell one Read from the next) goes out as often as the
 		// workflow cache reads them (workflowReadInterval). Tokens and the last text ride along.

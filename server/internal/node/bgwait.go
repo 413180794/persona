@@ -1,0 +1,280 @@
+package node
+
+// Background commands that only wait (#6045, docs/agent-states.md "Waiting in the background"). An agent whose turn
+// ended is Working while its background commands run (#2935); many of them only wait for something: a sleep, a loop
+// that checks CI every half minute, gh … --watch, tail -f. Those show apart from real work. Claude Code runs each
+// background command in a shell of its own under the session's claude, sourcing its shell snapshot
+// (shell-snapshots/snapshot-…); the processes under those shells say what the commands do.
+//
+// One ps of the whole process table, at most every bgWaitEvery and only while an agent with background commands has
+// ended its turn; CPU is what the processes used between two of them.
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+const (
+	bgWaitEvery = 20 * time.Second // one ps at most this often
+	// bgProbeAge: a process younger than this is a check a waiting loop runs now and then (gh pr checks, curl, ssh
+	// test -f …); a build or a download that goes on is seen at the next look.
+	bgProbeAge = 10 * time.Second
+	// bgBusyCPU: the share of one core the background commands may use between two looks and still be waiting.
+	bgBusyCPU = 0.02
+	// bgOutputQuiet: a process nothing here knows waits only when no background command wrote output for this long.
+	bgOutputQuiet = 2 * time.Minute
+)
+
+type bgVerdict int
+
+const (
+	bgUnknown bgVerdict = iota // no look to compare with yet, or no background command found: Working, as before
+	bgWorking
+	bgWaiting
+)
+
+// psRow is one process: its parent, the CPU it used so far, how long it has run, its command line.
+type psRow struct {
+	ppid int
+	cpu  time.Duration
+	age  time.Duration
+	args string
+}
+
+// bgWatch keeps the last two looks at the process table and whose claude each session is.
+type bgWatch struct {
+	mu        sync.Mutex
+	at        time.Time
+	now, prev map[int]psRow
+	window    time.Duration        // between prev and now
+	claudes   map[string]int       // session id → its claude's pid
+	ps        func() map[int]psRow // a variable for tests
+}
+
+// backgroundWaits says whether s, whose turn has ended, only waits on its background commands.
+func (n *Node) backgroundWaits(s *proto.Session) bool {
+	if s.Status == proto.StatusWorking || s.Status == proto.StatusBlocked || !waitableTasks(s.Background) {
+		return false
+	}
+	now, prev, window, pid := n.bgWait.look(s.SessionID, n.liveClaudes)
+	if pid == 0 || prev == nil {
+		return false
+	}
+	return judgeBackground(pid, now, prev, window, outputQuiet(s.Background, time.Now())) == bgWaiting
+}
+
+// waitableTasks: background commands or Monitors, the kinds that are processes here (agents and workflows are work).
+func waitableTasks(tasks []proto.BackgroundTask) bool {
+	return slices.ContainsFunc(tasks, func(t proto.BackgroundTask) bool { return t.Kind == "shell" || t.Kind == "monitor" })
+}
+
+// look takes a new look at the process table when the last one is bgWaitEvery old, and gives the last two and the
+// pid of the session's claude. A look much older than that has nothing to compare with.
+func (w *bgWatch) look(session string, claudes func() []claudeProc) (now, prev map[int]psRow, window time.Duration, pid int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if t := time.Now(); w.now == nil || t.Sub(w.at) >= bgWaitEvery {
+		take := w.ps
+		if take == nil {
+			take = psTable
+		}
+		w.prev, w.window = w.now, t.Sub(w.at)
+		if t.Sub(w.at) > 3*bgWaitEvery {
+			w.prev = nil
+		}
+		w.now, w.at = take(), t
+		w.claudes = map[string]int{}
+		for _, c := range claudes() {
+			if c.SessionID != "" {
+				w.claudes[c.SessionID] = c.pid
+			}
+		}
+	}
+	return w.now, w.prev, w.window, w.claudes[session]
+}
+
+// psTable is every process (ps -axo …); nil where there is no ps (Windows) or it fails.
+func psTable() map[int]psRow {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=,time=,etime=,args=").Output()
+	if err != nil {
+		return nil
+	}
+	return parsePS(out)
+}
+
+func parsePS(out []byte) map[int]psRow {
+	rows := map[int]psRow{}
+	for _, line := range bytes.Split(out, []byte("\n")) {
+		f := strings.Fields(string(line))
+		if len(f) < 5 {
+			continue
+		}
+		pid, err1 := strconv.Atoi(f[0])
+		ppid, err2 := strconv.Atoi(f[1])
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		rows[pid] = psRow{ppid: ppid, cpu: psDuration(f[2]), age: psDuration(f[3]), args: strings.Join(f[4:], " ")}
+	}
+	return rows
+}
+
+// psDuration reads ps's times: "[[dd-]hh:]mm:ss[.ff]" (CPU time on macOS is "m:ss.ff").
+func psDuration(s string) time.Duration {
+	var d time.Duration
+	if day, rest, ok := strings.Cut(s, "-"); ok {
+		n, _ := strconv.Atoi(day)
+		d, s = time.Duration(n)*24*time.Hour, rest
+	}
+	parts := strings.Split(s, ":")
+	unit := []time.Duration{time.Second, time.Minute, time.Hour}
+	for i := len(parts) - 1; i >= 0; i-- {
+		k := len(parts) - 1 - i
+		if k >= len(unit) {
+			break
+		}
+		v, _ := strconv.ParseFloat(parts[i], 64)
+		d += time.Duration(v * float64(unit[k]))
+	}
+	return d
+}
+
+// judgeBackground says what the background commands under the claude with that pid do: waiting when every process
+// there waits (or is a shell or a filter in their pipes) and they used next to no CPU between the two looks; working
+// when one is a known worker, or they used CPU, or one nothing here knows runs while their output still grows.
+func judgeBackground(claude int, now, prev map[int]psRow, window time.Duration, quiet bool) bgVerdict {
+	kids := map[int][]int{}
+	for pid, r := range now {
+		kids[r.ppid] = append(kids[r.ppid], pid)
+	}
+	var shells []int
+	for _, c := range kids[claude] {
+		if taskShell(now[c].args) {
+			shells = append(shells, c)
+		}
+	}
+	if len(shells) == 0 || window <= 0 {
+		return bgUnknown
+	}
+	var cpu time.Duration
+	unknown := false
+	for queue := shells; len(queue) > 0; {
+		pid := queue[0]
+		queue = append(queue[1:], kids[pid]...)
+		r := now[pid]
+		if p, ok := prev[pid]; ok && r.age >= p.age && r.cpu >= p.cpu {
+			cpu += r.cpu - p.cpu
+		} else if r.age <= window {
+			cpu += r.cpu // started since the last look
+		}
+		if r.age < bgProbeAge || slices.Contains(shells, pid) {
+			continue
+		}
+		switch processKind(r.args) {
+		case procWorker:
+			return bgWorking
+		case procOther:
+			unknown = true
+		}
+	}
+	if float64(cpu) > bgBusyCPU*float64(window) || unknown && !quiet {
+		return bgWorking
+	}
+	return bgWaiting
+}
+
+// taskShell: the shell Claude Code runs a command in (it sources its shell snapshot first).
+func taskShell(args string) bool {
+	return shellNames[procName(args)] && strings.Contains(args, "shell-snapshots/snapshot-")
+}
+
+type procKind int
+
+const (
+	procOther  procKind = iota // judged by its CPU and the output
+	procWait                   // waits: sleep, a watch
+	procPart                   // a shell, a wrapper or a filter in a pipe
+	procWorker                 // does work: builds, tests, downloads, copies
+)
+
+var (
+	shellNames = set("sh", "bash", "zsh", "dash", "ksh", "fish")
+	waitNames  = set("sleep", "gsleep", "watch", "inotifywait", "fswatch", "wait4path")
+	partNames  = set("timeout", "gtimeout", "nohup", "env", "nice", "stdbuf", "caffeinate", "xargs", "tee", "grep",
+		"egrep", "fgrep", "rg", "awk", "gawk", "mawk", "sed", "gsed", "cat", "head", "cut", "tr", "wc", "sort", "uniq",
+		"jq", "date", "true", "test", "pgrep", "ps")
+	workerNames = set("go", "cargo", "rustc", "make", "gmake", "cmake", "ninja", "bazel", "gcc", "g++", "cc", "c++",
+		"clang", "clang++", "ld", "swift", "swiftc", "swift-frontend", "swift-build", "xcodebuild", "gradle", "gradlew",
+		"mvn", "javac", "kotlinc", "tsc", "esbuild", "webpack", "rollup", "jest", "vitest", "pytest", "npm", "npx",
+		"pnpm", "yarn", "bun", "pip", "pip3", "uv", "poetry", "curl", "wget", "aria2c", "rsync", "scp", "sftp", "git",
+		"git-remote-https", "docker", "podman", "ffmpeg", "tar", "zip", "unzip", "xz", "gzip", "zstd", "brew", "apt",
+		"apt-get", "turbo")
+)
+
+func set(names ...string) map[string]bool {
+	m := make(map[string]bool, len(names))
+	for _, n := range names {
+		m[n] = true
+	}
+	return m
+}
+
+func procName(args string) string {
+	first, _, _ := strings.Cut(args, " ")
+	return strings.TrimPrefix(filepath.Base(first), "-")
+}
+
+func processKind(args string) procKind {
+	name := procName(args)
+	f := strings.Fields(args)
+	switch {
+	case waitNames[name]:
+		return procWait
+	case name == "tail": // follows a file, or a filter in a pipe
+		if slices.ContainsFunc(f[1:], func(a string) bool {
+			return a == "-f" || a == "-F" || a == "--follow" || strings.HasPrefix(a, "--follow=")
+		}) {
+			return procWait
+		}
+		return procPart
+	case name == "gh": // gh pr checks --watch, gh run watch
+		if slices.Contains(f, "--watch") || len(f) > 2 && f[1] == "run" && f[2] == "watch" {
+			return procWait
+		}
+		return procOther
+	case shellNames[name] || partNames[name]:
+		return procPart
+	case workerNames[name]:
+		return procWorker
+	}
+	return procOther
+}
+
+// outputQuiet: no background command wrote output for bgOutputQuiet (the files it writes to; true when none is known).
+func outputQuiet(tasks []proto.BackgroundTask, now time.Time) bool {
+	for _, t := range tasks {
+		if t.OutputFile == "" {
+			continue
+		}
+		if st, err := os.Stat(t.OutputFile); err == nil && now.Sub(st.ModTime()) < bgOutputQuiet {
+			return false
+		}
+	}
+	return true
+}

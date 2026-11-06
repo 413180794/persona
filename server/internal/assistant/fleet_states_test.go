@@ -245,6 +245,36 @@ func TestBackgroundState(t *testing.T) {
 	}
 }
 
+// Waiting in the background (#6045): working only because of background commands that the node found only waiting;
+// a running subagent or workflow, or a turn that goes on, is work.
+func TestBackgroundWaiting(t *testing.T) {
+	shell := []proto.BackgroundTask{{ID: "b1", Kind: "shell"}}
+	for _, c := range []struct {
+		name  string
+		state string // the agent's own state, before the background
+		s     proto.Session
+		want  bool
+	}{
+		{"its background commands only wait", proto.StateIdle, proto.Session{Background: shell, BackgroundWaiting: true}, true},
+		{"they work", proto.StateIdle, proto.Session{Background: shell}, false},
+		{"its turn goes on", proto.StateWorking, proto.Session{Background: shell, BackgroundWaiting: true}, false},
+		{"a subagent runs too", proto.StateUnread, proto.Session{Background: shell, BackgroundWaiting: true,
+			Subagents: []proto.Subagent{{ID: "a1", Running: true}}}, false},
+		{"a workflow runs too", proto.StateUnread, proto.Session{Background: shell, BackgroundWaiting: true,
+			Workflows: []proto.Workflow{{TaskID: "w", Running: true}}}, false},
+		{"needs you comes first", proto.StateNeedsYou, proto.Session{Background: shell, BackgroundWaiting: true}, false},
+	} {
+		s := c.s
+		s.State, s.BackgroundWorking = stateWithBackground(c.state, s)
+		if got := backgroundWaiting(s); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+		if got := backgroundWaiting(s); got && s.State != proto.StateWorking {
+			t.Errorf("%s: waiting in the background is a working state for older apps, got %s", c.name, s.State)
+		}
+	}
+}
+
 func TestMarkStates(t *testing.T) {
 	s := &Service{}
 	t0 := time.Now()
