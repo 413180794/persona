@@ -169,7 +169,9 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
     setError("");
     if (id !== choice) {
       const p = presets?.find((x) => x.id === id);
-      setPf((x) => ({ ...x, name: "", model: p ? presetDefaultModel(p) : "" }));
+      // The key belongs to the provider it was typed for: carried over, it would be tested against (and saved for)
+      // another provider's endpoint.
+      setPf((x) => ({ ...x, name: "", api_key: "", model: p ? presetDefaultModel(p) : "" }));
       setMore(false);
     }
     setChoice(id);

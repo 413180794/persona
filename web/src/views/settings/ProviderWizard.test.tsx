@@ -222,6 +222,21 @@ describe("ProviderWizard from presets", () => {
     expect(keyInput()).toBeNull();
   });
 
+  it("does not carry a provider's key to the next one picked after 换一家", async () => {
+    testAnswer = { ok: false, ms: 120, code: "region_blocked", error: "Anthropic 不对这个地区提供服务" };
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    act(() => button("换一家")!.click());
+    await flush();
+    act(() => button("示例网关")!.click());
+    expect(keyInput()!.value).toBe("");
+    await waitAutoTest();
+    const tests = calls.filter((c) => c.method === "POST" && c.path.endsWith("/launchers/test"));
+    expect(tests.map((c) => (c.body as { preset?: string }).preset)).toEqual(["builtin/glm"]);
+  });
+
   it("asks an older hub's preset for the name and sends no assign", async () => {
     Object.assign(getState(), { features: ["channels"] });
     await open();
