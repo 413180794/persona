@@ -280,7 +280,8 @@ func TestInboxRoundReadsTheSources(t *testing.T) {
 		t.Fatalf("the grouping connector: %+v", src)
 	}
 
-	// Switched off for the inbox: read with nothing; failing: left out; a full round reads mail too.
+	// Switched off for the inbox: read with nothing; failing: there with its read error and no things (the manager
+	// keeps what it had); a full round reads mail too.
 	_ = h.connectors.SetFeed("example", connector.FeedInbox, false)
 	g.failing = errors.New("示例：读不了")
 	if err := h.collectInbox(ctx, roundFull); err != nil {
@@ -290,8 +291,8 @@ func TestInboxRoundReadsTheSources(t *testing.T) {
 	if src, ok := sourceIn(r, "example"); !ok || len(src.Things) != 0 || src.Settles {
 		t.Fatalf("switched off: %+v", src)
 	}
-	if _, ok := sourceIn(r, "examplechat"); ok {
-		t.Fatal("a source that could not be read was handed over")
+	if src, ok := sourceIn(r, "examplechat"); !ok || src.ReadError != assistantwire.ReadFailed || len(src.Things) != 0 {
+		t.Fatalf("a source that could not be read: %+v (found %v)", src, ok)
 	}
 	if r.Mail == nil || len(r.Mail.Accounts) != 1 || r.Mail.Accounts[0].Email != "me@example.com" || len(r.Mail.Accounts[0].Messages) != 1 ||
 		r.Mail.Accounts[0].Messages[0].UID != 9 || r.Mail.Accounts[0].Messages[0].From.Name != "李四" {

@@ -1,3 +1,6 @@
 {
-  "behind": "Not triaged in this round"
+  "behind": "Not triaged in this round",
+  "read_timeout": "Not read this round: it timed out",
+  "read_rate_limited": "Not read this round: rate limited",
+  "read_failed": "Not read this round; the list may be incomplete"
 }

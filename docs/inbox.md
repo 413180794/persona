@@ -15,7 +15,7 @@ App 用的通用翻译（`docs/ios.md`「翻译」），以及 `/api/v1/inbox…
 
 **来源也是管理者的**（2026-11-05 随连接器挪进管理者，`server/internal/extmgr/inbox.go`，`docs/extensions.md`「谁管什么」；下面说「hub」的来源部分现在都在管理者里，和收件箱同一个进程，交接不再过总线）：连接器和插件怎么采（`inbox.collect`）、什么时候采（2 分钟一轮、连接器的
 `changed`、飞书事件、邮件 3 分钟一次），采到的原样交给管理者（总线调用 `inbox.collected`，一轮一次：每个来源读到的条目、它能做什么、
-邮件每个账号最新一页，最多 4 个账号同时读、按账号顺序交，读失败的跳过；每轮带 hub 这次运行的 `epoch` 和轮次 `seq`，路上耽搁了、比用过的旧的一轮管理者丢掉）；管理者要对来源做的事经
+邮件每个账号最新一页，最多 4 个账号同时读、按账号顺序交，读失败的跳过；连接器读失败的照样在这一轮里，`things` 为空、带 `read_error`（短代码，见下面「分拣状态」），管理者保留它原来的条目；每轮带 hub 这次运行的 `epoch` 和轮次 `seq`，路上耽搁了、比用过的旧的一轮管理者丢掉）；管理者要对来源做的事经
 `app.call inbox.*` 请 hub 做：读一封邮件的全文（翻译要的是保留段落和链接的文字）、发回复（邮件或经连接器 / 接飞书的插件）、
 `settle`、事件合成的 `group.tool` / `group.fallback` / `group.append`、读 hub 的分拣规则、AI 分身配置和插件提供了哪些连接器
 （`inbox.config`）、翻译模型现在是哪个（`inbox.translate_fingerprint`）。条目变了管理者发 `inbox.changed`，hub 在总线的读循环外
@@ -128,7 +128,9 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
   - 没有文字（`context` 为空）的条目不分拣，照旧直接进来，在界面上算「需要你」。
 - **分拣状态**：`GET /api/v1/inbox`（和下拉刷新的回包）带 `triage`：`{state, reason, waiting, sources?}`。`waiting` 是每个插件来源最近一次分拣因为分不了又没兜底、
   或没轮到而没进来的新条目数（hub 自己的来源从不扣下，不在里面）；`state` 是其中最要紧的原因：`unconfigured`（没有配置分拣模型）> `paused`（模型没有额度 / 并发已满）> `error`（模型出错）>
-  `timeout`（模型太慢）> `behind`（这一轮没分完）；`reason` 是给人看的原因；`sources: [{source, name, state, reason, waiting}]` 按来源分开。
+  `timeout`（模型太慢）> `behind`（这一轮没分完）；`reason` 是给人看的原因；`sources: [{source, name, state, reason, waiting, read_error?, read_reason?}]` 按来源分开。
+  `read_error` 是最近一轮这个来源没读到（`timeout` / `rate_limited` / `failed`，不认识的一律当 `failed`），`read_reason` 是给人看的一句（三种语言）；
+  它原来的条目留着，hub 扣下的那一轮如果还带着之前读到的东西，照样用上；下一轮读到了就清掉。只在内存里，hub 或管理者重启后要等下一轮才知道。
   只在内存里，每轮重新算（这一轮读过的来源重算，没读的保留到它不在了为止）；没有等着的是 `{"state": "ok", "waiting": 0}`。
   App 据此在收件箱顶上显示「等分拣的横幅」（下一条）。
 - **等分拣的横幅**（#1773，网页、iOS / Mac、安卓一致）：`triage.state` 不是 `ok` 且 `waiting > 0` 时，收件箱列表顶上、搜索和筛选下面、第一段上面一条警示色（橙）的横幅，不能关掉；

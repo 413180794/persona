@@ -298,7 +298,10 @@ type inboxBook struct {
 	admitting sync.Mutex
 	batch     *inboxBatch          // while a collection runs: the items it starts, which enter once triaged
 	held      map[string]inboxHeld // by source: the new items its last collection held back (inbox_admit.go)
-	grouping  inboxGrouping        // the batches being related to events (inbox_group.go)
+	// readErrs: the sources the last round could not read, by id, as a short code (assistantwire.ReadFailed…): the
+	// apps say which one is behind (InboxTriage.Sources). Memory only.
+	readErrs map[string]string
+	grouping inboxGrouping // the batches being related to events (inbox_group.go)
 
 	cfgMu sync.Mutex
 	cfg   assistantwire.InboxConfig // the hub's (InboxConfigMethod), as last read
@@ -531,9 +534,15 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 		changed = append(changed, s.collectMail(ctx, r.Mail)...)
 	}
 	for _, src := range r.Sources {
+		if src.ReadError != "" && len(src.Things) == 0 {
+			continue // not read, and nothing held for it: what it had stays, and so does its held-back count
+		}
+		// A failed source may still carry what an earlier round read while the manager was away (the hub's held round,
+		// mergeRounds): those things are applied; the failure is noted below either way.
 		changed = append(changed, s.collectSource(ctx, src)...)
 	}
 	b.mu.Lock()
+	readsChanged := b.recordReads(r)
 	batch := b.batch
 	b.batch = nil
 	batch.registered = r.Names
@@ -548,10 +557,37 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 	changed, todo := b.sortBatch(batch, changed, now)
 	b.mu.Unlock()
 	s.saveInbox(ctx, changed)
+	if readsChanged && len(changed) == 0 {
+		s.inboxChanged(ctx, nil) // nothing came in, but which sources could be read did (saveInbox tells otherwise)
+	}
 	s.triageInbox(ctx)
 	s.translateInbox(ctx)
 	s.admitInbox(ctx, batch, todo)
 	return nil
+}
+
+// recordReads keeps which of a round's sources could not be read, under b.mu: a source read now (or off) is cleared,
+// one that failed is marked, one the hub no longer has goes, the others keep theirs. It says whether that changed.
+func (b *inboxBook) recordReads(r assistantwire.InboxRound) bool {
+	next := map[string]string{}
+	for id, code := range b.readErrs {
+		if _, there := r.Names[id]; r.Names == nil || there {
+			next[id] = code
+		}
+	}
+	for _, src := range r.Sources {
+		if src.ReadError != "" {
+			next[src.ID] = src.ReadError
+		} else {
+			delete(next, src.ID)
+		}
+	}
+	changed := len(next) != len(b.readErrs)
+	for id, code := range next {
+		changed = changed || b.readErrs[id] != code
+	}
+	b.readErrs = next
+	return changed
 }
 
 // saveInbox persists changed items and tells the hub (it tells the extensions and the apps). It returns the ids

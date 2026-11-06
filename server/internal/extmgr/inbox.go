@@ -265,6 +265,9 @@ func mergeRounds(old, n assistantwire.InboxRound) assistantwire.InboxRound {
 			if _, have := n.Names[o.ID]; have {
 				out.Sources = append(out.Sources, o) // not read this time: what it had
 			}
+		case out.Sources[i].ReadError != "":
+			o.ReadError = out.Sources[i].ReadError // not read this time: what it had, and that it failed
+			out.Sources[i] = o
 		case !out.Sources[i].Off:
 			out.Sources[i].Things = mergeHeld(o.Things, out.Sources[i].Things, heldThingsMost, func(t connector.InboxThing) string {
 				key := t.Thread + "\x00" + t.ID
@@ -416,6 +419,8 @@ func (h *Manager) readConnectors(ctx context.Context) []assistantwire.InboxSourc
 		things, err := in.Collect(ctx)
 		if err != nil {
 			h.logf("inbox: %s: %v", c.ID(), err)
+			src.ReadError = readErrorOf(err) // the manager keeps what it had and the apps say it is behind
+			out = append(out, src)
 			continue
 		}
 		h.vetThings(c, things)
@@ -435,6 +440,18 @@ func (h *Manager) readConnectors(ctx context.Context) []assistantwire.InboxSourc
 		out = append(out, src)
 	}
 	return out
+}
+
+// readErrorOf is a failed Collect as a short code: its text may hold an address or a token, the code does not.
+func readErrorOf(err error) string {
+	var re *rpc.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return assistantwire.ReadTimeout
+	case errors.As(err, &re) && re.Code == "rate_limited":
+		return assistantwire.ReadRateLimited
+	}
+	return assistantwire.ReadFailed
 }
 
 func isMigrated(id string) bool { return slices.Contains(connector.MigratableConnectors, id) }

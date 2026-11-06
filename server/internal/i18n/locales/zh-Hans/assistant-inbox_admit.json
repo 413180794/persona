@@ -1,3 +1,6 @@
 {
-  "behind": "这一轮没分完"
+  "behind": "这一轮没分完",
+  "read_timeout": "这一轮没读到：超时了",
+  "read_rate_limited": "这一轮没读到：被限流了",
+  "read_failed": "这一轮没读到，列表可能不全"
 }

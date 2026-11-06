@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
@@ -223,19 +224,43 @@ type InboxTriageSource struct {
 	State   string `json:"state"`
 	Reason  string `json:"reason,omitempty"`
 	Waiting int    `json:"waiting"`
+	// ReadError: the last round could not read the source (assistantwire.ReadTimeout / ReadRateLimited /
+	// ReadFailed), so what it lists may be behind; ReadReason says so for people. Absent when it was read.
+	ReadError  string `json:"read_error,omitempty"`
+	ReadReason string `json:"read_reason,omitempty"`
 }
 
 func (s *Service) inboxTriage() InboxTriage {
+	l := s.lang(context.Background()) // before b.mu: it may read the settings
 	b := &s.inbox
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	out := InboxTriage{State: "ok"}
+	at := map[string]int{}
 	for src, x := range b.held {
 		out.Waiting += x.Waiting
+		at[src] = len(out.Sources)
 		out.Sources = append(out.Sources, InboxTriageSource{Source: src, Name: x.Name, State: x.State, Reason: x.Reason, Waiting: x.Waiting})
 		if out.State == "ok" || slices.Index(triageStates, x.State) < slices.Index(triageStates, out.State) {
 			out.State, out.Reason = x.State, x.Reason
 		}
+	}
+	if len(b.readErrs) > 0 {
+		b.srcMu.RLock()
+		for src, code := range b.readErrs {
+			i, ok := at[src]
+			if !ok {
+				i = len(out.Sources)
+				out.Sources = append(out.Sources, InboxTriageSource{Source: src, Name: b.names[src], State: "ok"})
+			}
+			switch code {
+			case assistantwire.ReadTimeout, assistantwire.ReadRateLimited, assistantwire.ReadFailed:
+			default:
+				code = assistantwire.ReadFailed // a code this build does not know: no raw i18n key shows
+			}
+			out.Sources[i].ReadError, out.Sources[i].ReadReason = code, i18n.T(l, "assistant-inbox_admit.read_"+code)
+		}
+		b.srcMu.RUnlock()
 	}
 	sort.Slice(out.Sources, func(i, j int) bool { return out.Sources[i].Source < out.Sources[j].Source })
 	return out

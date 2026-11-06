@@ -153,7 +153,17 @@ type InboxSource struct {
 	// Kinds are its kinds of things as it describes them, for the models.
 	Kinds  map[string]string      `json:"kinds,omitempty"`
 	Things []connector.InboxThing `json:"things"`
+	// ReadError: its Collect failed this round (Things is empty and means nothing; what it had stays): a short code,
+	// never the error's text (ReadTimeout, ReadRateLimited, ReadFailed). The apps say which source is behind.
+	ReadError string `json:"read_error,omitempty"`
 }
+
+// Why a source could not be read (InboxSource.ReadError).
+const (
+	ReadTimeout     = "timeout"
+	ReadRateLimited = "rate_limited"
+	ReadFailed      = "failed"
+)
 
 // InboxMailRead is a round's mail: each account's latest inbox page (an account that could not be read is left out).
 type InboxMailRead struct {
