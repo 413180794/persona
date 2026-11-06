@@ -264,11 +264,21 @@ class Notifier @Inject constructor(
     }
 
     /** Tags of the 做完了 notifications showing now, with when each was posted (#4088). Empty when the system cannot be asked. */
-    fun showingDone(): Map<String, Long> = runCatching {
+    fun showingDone(): Map<String, Long> = showing(StaleDoneNotifications.DONE_PREFIX)
+
+    /** Tags of the assistant notifications showing now, with when each was posted (#4805). */
+    fun showingAssistant(): Map<String, Long> = showing(SeenAssistantNotifications.PREFIX)
+
+    private fun showing(prefix: String): Map<String, Long> = runCatching {
         context.getSystemService(NotificationManager::class.java).activeNotifications
-            .filter { it.id == EVENT_ID && it.tag?.startsWith(StaleDoneNotifications.DONE_PREFIX) == true }
+            .filter { it.id == EVENT_ID && it.tag?.startsWith(prefix) == true }
             .associate { it.tag to it.postTime }
     }.getOrDefault(emptyMap())
+
+    /** Cancels an assistant notification only if the one showing was posted before [before] (#4805). */
+    fun retractAssistant(tag: String, before: Long) {
+        if (showingAssistant()[tag]?.let { it < before } == true) manager.cancel(tag, EVENT_ID)
+    }
 
     /** Cancels a 做完了 notification only if the one showing was posted before [before]: a fresh one under the same tag stays. */
     fun retractDone(tag: String, before: Long) {

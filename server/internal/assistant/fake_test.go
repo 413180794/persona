@@ -29,6 +29,7 @@ import (
 // and reported. settings are the assistant's own a test service starts with (newTestService…).
 type fakeHub struct {
 	mu            sync.Mutex
+	inboxHook     func(ctx context.Context) // runs first in InboxChanged, no lock held (#4924)
 	hello         Hello
 	settings      *Settings
 	launcherList  []proto.Launcher                   // the nodes' launchers.list (nil: the list fails, so it can't be told)
@@ -375,7 +376,13 @@ func (f *fakeHub) Broadcast(_ context.Context, b Broadcast) {
 	f.events = append(f.events, ev.Type)
 }
 
-func (f *fakeHub) InboxChanged(_ context.Context, c assistantwire.InboxChanged) {
+func (f *fakeHub) InboxChanged(ctx context.Context, c assistantwire.InboxChanged) {
+	f.mu.Lock()
+	hook := f.inboxHook
+	f.mu.Unlock()
+	if hook != nil {
+		hook(ctx)
+	}
 	if in := f.inbox; in != nil {
 		in.mu.Lock()
 		in.changed = append(in.changed, c)

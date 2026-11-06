@@ -11,6 +11,7 @@ import {
   fromTemplate, hm, blankTask, dayLabel, lastRunText, nextText, ruleText, runDays, runsWith, splitTasks, taskBody, taskTitle, TEMPLATES,
   untilLabel, upcoming, type Run, type Task,
 } from "../../lib/routines";
+import { isResumed } from "../../lib/reconnect";
 import { onHubEvent, useStore } from "../../lib/store";
 import { Button, cx, IconButton, Loading, Menu, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { contextMenuProps } from "../../ui/context-menu";
@@ -68,12 +69,16 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     void load();
     // the hub says when the list changed (a run, Persona scheduling something, another device)
     let timer: number | undefined;
-    const off = onHubEvent("assistant_schedule", () => {
+    const changed = () => {
       clearTimeout(timer);
       timer = window.setTimeout(() => void load(), 300);
-    });
+    };
+    const off = onHubEvent("assistant_schedule", changed);
+    // a reconnect the hub could not resume: the assistant_schedule pushes missed meanwhile are not replayed (#4954)
+    const offHello = onHubEvent("hello", (msg) => !isResumed(msg) && changed());
     return () => {
       off();
+      offHello();
       clearTimeout(timer);
     };
   }, [load]);

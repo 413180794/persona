@@ -172,30 +172,27 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 		}
 	}
 	b.mu.Unlock()
-	failed := s.saveInbox(ctx, changed)
-	if len(failed) > 0 {
-		// The writes that failed never happened in the database, so they must not happen in memory either: restore
-		// the state those items had and report them as failed instead of changed.
-		b.mu.Lock()
-		rolled := make(map[string]bool, len(failed))
-		kept := changed[:0]
+	// The writes that failed never happened in the database, so they must not happen in memory either: restore the
+	// state those items had (before the next save, saveInboxUndo) and report them as failed instead of changed.
+	failed := s.saveInboxUndo(ctx, changed, func(failed map[string]bool) {
 		for i, it := range changed {
-			if !failed[it.ID] {
-				kept = append(kept, it)
-				continue
-			}
 			// Replaced or forgotten while the writes were out: leave the newer item alone and let the client
 			// refresh. Same pointer but another state on it, or a same-valued concurrent request, means a concurrent
 			// file/reopen: its successful answer must not be rewound by our failed write. Otherwise restore the
 			// state our request overwrote.
-			if b.items[it.ID] == it && b.mark[it.ID] == gens[i] && it.DoneAt == applied[i].DoneAt && it.DoneBy == applied[i].DoneBy {
+			if failed[it.ID] && b.items[it.ID] == it && b.mark[it.ID] == gens[i] && it.DoneAt == applied[i].DoneAt && it.DoneBy == applied[i].DoneBy {
 				it.DoneAt, it.DoneBy = previous[i].DoneAt, previous[i].DoneBy
 			}
-			rolled[it.ID] = true
-			res.Failed = append(res.Failed, it.ID)
 		}
-		changed = kept
-		b.mu.Unlock()
+	})
+	if len(failed) > 0 {
+		rolled := make(map[string]bool, len(failed))
+		for _, it := range changed {
+			if failed[it.ID] {
+				rolled[it.ID] = true
+				res.Failed = append(res.Failed, it.ID)
+			}
+		}
 		slices.Sort(res.Failed)
 		res.Changed = slices.DeleteFunc(res.Changed, func(it InboxItem) bool { return rolled[it.ID] })
 	}

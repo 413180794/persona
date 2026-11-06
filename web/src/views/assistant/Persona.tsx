@@ -10,6 +10,7 @@ import {
   avatarFile, BUILTIN_PERSONA, CIRCUIT_PERSONA, dotFile, isBuiltinPersona, localized, lookPackages, MARK_PERSONA, PERSONA_STATES, personaFileURL,
   personaFiles, usablePersonas, withChosenReady, type LookCurrent, type LookView, type PersonaInfo, type PersonaState,
 } from "../../lib/persona";
+import { isResumed } from "../../lib/reconnect";
 import { onHubEvent } from "../../lib/store";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -154,6 +155,15 @@ function preload(p: PersonaInfo): Promise<boolean> {
 
 // The list changed (a tiered look moved, an extension with looks came or went): list again, the new files loaded first.
 onHubEvent("personas", () => void refreshPersonas());
+// A reconnect the hub could not resume: a `personas` or `look` push missed meanwhile is not replayed (#4954). The read
+// takes the hub's choice as a `look` push would; a page that has not read the looks yet reads them when it shows one.
+// A read already on its way left before the drop: another one follows it.
+onHubEvent("hello", (msg) => {
+  if (isResumed(msg) || !ps.loaded) return;
+  const again = () => void refreshPersonas();
+  if (loading) loading.then(again, again);
+  else again();
+});
 // Another device chose a look (or the hub went back to the default when its extension went).
 onHubEvent("look", (m) => {
   const id = typeof m.id === "string" ? m.id : "";

@@ -5,7 +5,8 @@
 // upgrading and removing are done on the hub's side (`personad extension` on its machine, or its admin UI at /admin).
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../lib/api";
-import { useStore } from "../../lib/store";
+import { isResumed } from "../../lib/reconnect";
+import { onHubEvent, useStore } from "../../lib/store";
 import { marketOf, extensionsRoute, routeSub } from "../../lib/extension-market";
 import { ago } from "../../lib/format";
 import { composing } from "../../lib/send-history";
@@ -120,6 +121,8 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
   useEffect(load, []);
   // a sign-in that changed (signed in, out, expired) shows at once
   useEffect(() => onAuthChange((id, auth) => setExtensions((cur) => cur?.map((x) => withAuth(x, id, auth)) ?? cur)), []);
+  // a reconnect the hub could not resume: the extension_auth pushes missed meanwhile are not replayed (#4954)
+  useEffect(() => onHubEvent("hello", (m) => !isResumed(m) && load()), []);
 
   return (
     <>
@@ -299,6 +302,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
     if (a) setDetail((cur) => (cur ? { ...cur, auth: a } : cur));
     else void getAuth(id).then((v) => setDetail((cur) => (cur ? { ...cur, auth: v } : cur)), () => {});
   };
+  // a reconnect the hub could not resume: an extension_auth push missed meanwhile is not replayed (#4954); only the
+  // sign-in is read again, so what is being typed into the settings stays
+  useEffect(() => onHubEvent("hello", (m) => !isResumed(m) && authChanged()), [id]);
 
   const problems = useMemo(() => numberProblems(typed), [typed]);
   const dirty = !!detail && (isDirty(draft, detail.config) || Object.keys(problems).length > 0);

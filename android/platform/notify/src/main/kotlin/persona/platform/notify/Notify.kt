@@ -110,6 +110,15 @@ class NotificationRuntime @Inject constructor(
             val seen = SeenSessions()
             sessions.sessions.collect { list -> seen.update(list).forEach(notifier::retractSeen) }
         }
+        // An assistant answer looked at on the web, iOS or a Mac: its seen_at moved past the notification (#4805).
+        scope.launch {
+            val seen = SeenAssistantNotifications()
+            sessions.sessions.collect { list ->
+                val moved = seen.update(list, System.currentTimeMillis())
+                if (moved.isNotEmpty()) SeenAssistantNotifications.stale(notifier.showingAssistant(), moved)
+                    .forEach { (tag, before) -> notifier.retractAssistant(tag, before) }
+            }
+        }
         scope.launch {
             pairing.isPaired.collect { paired ->
                 if (paired) {

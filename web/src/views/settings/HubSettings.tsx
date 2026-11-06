@@ -10,6 +10,7 @@ import {
   updateFinished, updateStateTitle, updateView, updateWorking, type HubUpdateRecord, type HubUpdateStatus,
 } from "../../lib/hub-update";
 import { navigate } from "../../lib/router";
+import { isResumed } from "../../lib/reconnect";
 import { onHubEvent, useStore } from "../../lib/store";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -33,14 +34,23 @@ export function HubSettings() {
   }, []);
 
   useEffect(() => {
-    hubUpdate()
-      .then((s) => {
-        apply(s);
-        setError("");
-        hubUpdateHistory().then(setHistory, () => {});
-      })
-      .catch((e) => (e instanceof ApiError && e.status === 404 ? setUnsupported(true) : setError(errorText(e))));
-    return onHubEvent("hub_update", (m) => m.update && apply(m.update as HubUpdateStatus));
+    const read = () =>
+      hubUpdate()
+        .then((s) => {
+          apply(s);
+          setError("");
+          hubUpdateHistory().then(setHistory, () => {});
+        })
+        .catch((e) => (e instanceof ApiError && e.status === 404 ? setUnsupported(true) : setError(errorText(e))));
+    void read();
+    const off = onHubEvent("hub_update", (m) => m.update && apply(m.update as HubUpdateStatus));
+    // a reconnect the hub could not resume (a restart into the new version, often): the hub_update pushes missed
+    // meanwhile (confirming, updated, rolled back) are not replayed (#4954)
+    const offHello = onHubEvent("hello", (m) => !isResumed(m) && void read());
+    return () => {
+      off();
+      offHello();
+    };
   }, [apply]);
 
   const check = async () => {

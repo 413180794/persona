@@ -15,6 +15,7 @@ import {
   type UIAction, type UIContext, type UIItem, type UIMore, type UIPage, type UIPlace, type UIPush, type UITabs, type UIView,
 } from "../../lib/extension-ui";
 import { navigate } from "../../lib/router";
+import { isResumed } from "../../lib/reconnect";
 import { onHubEvent } from "../../lib/store";
 import { wideView } from "../../lib/code-view";
 import { ViewSections } from "../extensions/ViewBody";
@@ -86,12 +87,15 @@ function useInvalidate(extension: string, ui: string, draw: () => void) {
       if (id && id !== ui) return;
       now();
     });
+    // a reconnect the hub could not resume: an invalidate missed meanwhile is not replayed (#4954)
+    const offHello = onHubEvent("hello", (msg) => !isResumed(msg) && now());
     const shown = () => {
       if (dirty && document.visibilityState === "visible") now();
     };
     document.addEventListener("visibilitychange", shown);
     return () => {
       off();
+      offHello();
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", shown);
     };

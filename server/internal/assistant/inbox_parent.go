@@ -148,13 +148,13 @@ func (s *Service) setInboxParent(ctx context.Context, id string, p *InboxParent)
 	gen := b.touched(id)
 	out := it.listed()
 	b.mu.Unlock()
-	if failed := s.saveInbox(ctx, []*InboxItem{it}); failed[id] {
-		b.mu.Lock()
+	failed := s.saveInboxUndo(ctx, []*InboxItem{it}, func(failed map[string]bool) {
 		// Restore only when no concurrent move (even a same-valued unlink) landed; otherwise leave it.
-		if b.items[id] == it && b.mark[id] == gen && it.Parent == p {
+		if failed[id] && b.items[id] == it && b.mark[id] == gen && it.Parent == p {
 			it.Parent = prevParent
 		}
-		b.mu.Unlock()
+	})
+	if failed[id] {
 		return InboxItem{}, http.StatusInternalServerError, errInboxNotPersisted
 	}
 	return out, http.StatusOK, nil

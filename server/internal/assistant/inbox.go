@@ -520,8 +520,15 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 }
 
 // saveInbox persists changed items and tells the hub (it tells the extensions and the apps). It returns the ids
-// whose rows could not be written (the in-memory state of those is the caller's to roll back).
+// whose rows could not be written (the in-memory state of those is the caller's to roll back: with saveInboxUndo).
 func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) map[string]bool {
+	return s.saveInboxUndo(ctx, changed, nil)
+}
+
+// saveInboxUndo is saveInbox with the rollback of what could not be written: undo runs with the failed ids, b.mu
+// held, before the next save may start. Undone after b.saving, a save queued behind the failed one (the store back
+// by then) would write the change first and the undo would leave memory behind the row until a restart (#4924).
+func (s *Service) saveInboxUndo(ctx context.Context, changed []*InboxItem, undo func(failed map[string]bool)) map[string]bool {
 	b := &s.inbox
 	if len(changed) == 0 {
 		return nil
@@ -554,6 +561,11 @@ func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) map[strin
 	var failed map[string]bool
 	if st := s.inboxDB(); st != nil {
 		failed = s.putInboxRows(ctx, st, rows)
+	}
+	if len(failed) > 0 && undo != nil {
+		b.mu.Lock()
+		undo(failed)
+		b.mu.Unlock()
 	}
 	b.saving.Unlock()
 	if len(failed) > 0 {
@@ -1202,14 +1214,14 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 	gen := b.touched(id)
 	out := it.listed()
 	b.mu.Unlock()
-	if failed := s.saveInbox(ctx, []*InboxItem{it}); failed[id] {
-		b.mu.Lock()
+	failed := s.saveInboxUndo(ctx, []*InboxItem{it}, func(failed map[string]bool) {
 		// Restore only when the item is still ours, still holds the state this request wrote and no same-valued
 		// mutation (a concurrent reopen) landed: a concurrent file/reopen must not be rewound by our failed write.
-		if b.items[id] == it && b.mark[id] == gen && it.DoneAt == newDoneAt && it.DoneBy == newDoneBy {
+		if failed[id] && b.items[id] == it && b.mark[id] == gen && it.DoneAt == newDoneAt && it.DoneBy == newDoneBy {
 			it.DoneAt, it.DoneBy = prevDoneAt, prevDoneBy
 		}
-		b.mu.Unlock()
+	})
+	if failed[id] {
 		return InboxItem{}, errInboxNotPersisted
 	}
 	return out, nil
