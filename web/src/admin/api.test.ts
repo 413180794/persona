@@ -124,6 +124,11 @@ describe("the center and connectors", () => {
 });
 
 describe("extensions", () => {
+  it("returns every uninstall warning without changing the successful result", async () => {
+    const warnings = ["清理 /tmp/example-one", "清理 /tmp/example-two", "清理 /tmp/example-one"];
+    stub(200, { ok: true, warnings });
+    expect(await uninstallExtension("example", false)).toEqual({ ok: true, warnings });
+  });
   it("uploads the package as it is, with the CSRF token and its name in the query", async () => {
     setCsrf("tok");
     const calls = stub(200, { preview_id: "p" });

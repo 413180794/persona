@@ -124,13 +124,18 @@ export const installPreview = (pv: MarketPreview) =>
   api<HubExtensionDetail>(`${M()}/install`, { method: "POST", json: previewConsent(pv) }).then(changed);
 export const upgradePreview = (id: string, pv: MarketPreview) =>
   api<HubExtensionDetail>(`${extRoot()}/${enc(id)}/-/upgrade`, { method: "POST", json: previewConsent(pv) }).then(changed);
+export interface ExtensionRemovalResult {
+  ok: boolean;
+  /** The extension is gone, but these files need manual cleanup. Older hubs omit this. */
+  warnings?: string[] | null;
+}
 /** Only one installed from a market (`origin` market:…); keepData leaves ~/.persona/extensions/data/<id>/. */
 export const uninstallExtension = (id: string, keepData = false, cascade = false, members = false) => {
   const q = new URLSearchParams();
   if (keepData) q.set("keep_data", "1");
   if (cascade) q.set("cascade", "1");
   if (members) q.set("members", "1");
-  return api<{ ok: boolean }>(`${extRoot()}/${enc(id)}/-/${q.size ? `?${q}` : ""}`, { method: "DELETE" }).then(changed);
+  return api<ExtensionRemovalResult>(`${extRoot()}/${enc(id)}/-/${q.size ? `?${q}` : ""}`, { method: "DELETE" }).then(changed);
 };
 
 // ── words and rules ─────────────────────────────────────

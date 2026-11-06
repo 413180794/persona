@@ -236,4 +236,18 @@ struct MacAttentionTests {
         #expect(!MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(121)))
         #expect(MacAttention.armed(connectedAt: at, now: now.addingTimeInterval(120 + MacAttention.settle + 0.1)))
     }
+
+    /// A 需要你 banner goes once the agent stops waiting on you, a card's banner once the card leaves the list
+    /// (#3513); the others stay.
+    @Test func settledBannersAreTakenBack() throws {
+        let old = [session("a", .needsYou), session("b", .needsYou), session("c", .needsYou), session("d", .working)]
+        let new = [session("a", .working), session("b", .needsYou), session("d", .unread)]
+        let ix1 = try interaction("ix1", session: "b"), ix2 = try interaction("ix2", session: "b")
+        let other = try interaction("ix1", session: "b", group: "g2")
+        #expect(MacAttention.withdrawn(old: old, new: new, oldInteractions: [ix1, ix2, other], newInteractions: [ix2, other])
+            == ["m/a#needs_you", "m/c#needs_you", "interaction/ix1"])
+        #expect(MacAttention.withdrawn(old: new, new: new, oldInteractions: [ix2], newInteractions: [ix2]).isEmpty)
+        #expect(MacAttention.identifier(session("a", .needsYou), .needsYou) == "m/a#needs_you")
+        #expect(MacAttention.identifier(other) == "interaction/g2|ix1")
+    }
 }

@@ -482,3 +482,73 @@ func TestAcceptanceReopenRound(t *testing.T) {
 		}
 	})
 }
+
+// A sweep reads each todo with the book unlocked; a new round's card that lands in that window (the task reopened and
+// deployed again) is not the card the sweep judged, so it stays (#4649).
+func TestAcceptanceSweepKeepsANewRound(t *testing.T) {
+	ctx := context.Background()
+	// setup deploys a task until its 请验收 card is out and returns a hook that, the first time it runs, asks the next
+	// round's card the way the next deploy does (after reopen, when given).
+	setup := func(t *testing.T, reopen bool) (*Service, func() []string, string, func(string)) {
+		s, f, posts := acceptService(t)
+		todo := startedTask(t, s, f)
+		agentTurn(s, f, proto.StatusWorking, "", 0)
+		agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+		waitAcceptCard(t, s, todo.ID, posts)
+		first := askOf(s, todo.ID)
+		fired := false
+		hook := func(id string) {
+			if fired || id != todo.ID {
+				return
+			}
+			fired = true
+			if reopen {
+				if err := s.reopenTodo(ctx, id); err != nil {
+					t.Errorf("reopen: %v", err)
+				}
+			}
+			s.askAcceptance(onlyTodo(s), first.MachineID, first.SessionID, deployedReply)
+		}
+		return s, posts, todo.ID, hook
+	}
+	newRound := func(t *testing.T, s *Service, id string, since time.Time) {
+		t.Helper()
+		if a := askOf(s, id); a == nil || a.MessageID == "" || !a.AskedAt.After(since) {
+			t.Fatalf("the new round's ask was dropped: %+v", a)
+		}
+	}
+
+	t.Run("reminder sweep, task closed manually then reopened", func(t *testing.T) {
+		s, posts, id, hook := setup(t, true)
+		done := time.Now()
+		s.todos.mu.Lock()
+		s.todos.todos[id].DoneAt, s.todos.todos[id].DoneBy, s.todos.todos[id].DoneReason = &done, "", ""
+		s.todos.mu.Unlock()
+		s.accept.mu.Lock()
+		s.accept.asks[id].AskedAt = time.Now().Add(-30 * time.Hour)
+		s.accept.mu.Unlock()
+		s.acceptSweepHook = hook
+		start := time.Now()
+		now := time.Now().In(s.location(ctx))
+		s.remindAcceptance(time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, s.location(ctx)))
+		newRound(t, s, id, start)
+		for _, p := range posts() {
+			if strings.Contains(p, "还没验收") {
+				t.Fatalf("the new round was reminded on the day it was asked: %q", p)
+			}
+		}
+	})
+
+	t.Run("snapshot sweep, card from before the reopen", func(t *testing.T) {
+		s, _, id, hook := setup(t, false)
+		s.autoDoneTodo(ctx, id, "做完了", time.Now().Add(-time.Minute))
+		s.reopenTodo(ctx, id)
+		s.acceptSweepHook = hook
+		start := time.Now()
+		s.snapshotUnaccepted(ctx, s.location(ctx))
+		newRound(t, s, id, start)
+		if _, total := s.snapshotUnaccepted(ctx, s.location(ctx)); total != 1 {
+			t.Fatalf("the new round is not listed: total=%d", total)
+		}
+	})
+}

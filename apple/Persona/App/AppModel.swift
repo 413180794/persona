@@ -118,7 +118,11 @@ final class AppModel {
     /// any machine drew the open chat again, and each call went through all the agents and sorted them.
     @ObservationIgnored private var spaceCells: [String: SpaceCell] = [:]
     /// Pending interactions by `uid` (the hub's id, with the group for another group).
-    private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
+    private(set) var interactions: [String: Interaction] = [:] {
+        didSet { saveSnapshot(); countBadges(); withdrawSettled(Set(oldValue.keys).subtracting(interactions.keys)) }
+    }
+    /// When each group's whole list of pending interactions was last asked for (NotificationWithdrawal.stale).
+    @ObservationIgnored var interactionsListedAt: [String: Date] = [:]
     /// Interactions ended locally (answered, cancelled or gone): snapshots will not restore them (#1688).
     @ObservationIgnored var endedInteractionIDs: Set<String> = []
     /// Cards being answered, and whether the hub ended them meanwhile: a failed answer puts back only the ones it did not.
@@ -1192,19 +1196,25 @@ final class AppModel {
         // Questions answered on the computer while the socket was down are gone from the hub: drop their cards.
         Task {
             defer { connection.caughtUp(Self.interactionsPart(group)) }
+            let asked = Date.now
             guard let ixs = try? await api(group)?.interactions() else { return }
-            replaceInteractions(group, ixs)
+            replaceInteractions(group, ixs, askedAt: asked)
             WatchSync.shared.push(summary: watchSummary())
         }
     }
 
-    /// One group's pending interactions (the other groups' stay).
-    func replaceInteractions(_ group: String, _ list: [Interaction]) {
+    /// One group's pending interactions (the other groups' stay). `askedAt`: when the hub was asked for this list; the
+    /// pushes delivered before then that it does not have are over (#3513).
+    func replaceInteractions(_ group: String, _ list: [Interaction], askedAt: Date? = nil) {
         var all = interactions.filter { $0.value.group != group }
         for ix in list where all[ix.uid] == nil && !endedInteractionIDs.contains(ix.id) {
             all[ix.uid] = ix
         }
         if all != interactions { interactions = all }
+        if let askedAt {
+            interactionsListedAt[group] = askedAt
+            withdrawStaleNotifications()
+        }
     }
 
     private static func catchUpPart(_ key: SessionKey) -> String { "chat:\(key.path)" }
@@ -2450,6 +2460,7 @@ final class AppModel {
     /// One group's machines, sessions and interactions.
     private func refresh(_ link: HubLink) async {
         let api = link.api, group = link.group
+        let asked = Date.now
         do {
             async let m = api.machines()
             async let s = api.sessions()
@@ -2470,7 +2481,7 @@ final class AppModel {
             }
             lists = seenOutbox.land(lists, at: Date())
             if lists != sessionsByMachine { sessionsByMachine = lists }
-            replaceInteractions(group, ixs)
+            replaceInteractions(group, ixs, askedAt: asked)
             link.live.ensureConnected()
         } catch {
             // The title says 等待网络 / 连接中…; with several groups one unreachable is not an error to show.

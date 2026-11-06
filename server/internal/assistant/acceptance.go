@@ -333,9 +333,11 @@ func (s *Service) remindAcceptance(now time.Time) {
 	b.mu.Lock()
 	s.loadAcceptLocked(ctx)
 	var due []string
+	seen := map[string]time.Time{} // each due card's AskedAt: the round the sweep judges
 	for id, a := range b.asks {
 		if a.MessageID != "" && a.AcceptedAt.IsZero() && a.AskedAt.Before(today) && a.RemindedAt.Before(today) {
 			due = append(due, id)
+			seen[id] = a.AskedAt
 		}
 	}
 	b.mu.Unlock()
@@ -348,9 +350,17 @@ func (s *Service) remindAcceptance(now time.Time) {
 	slices.Sort(due)
 	for _, id := range due {
 		t, ok := s.todoNow(id)
+		if f := s.acceptSweepHook; f != nil {
+			f(id)
+		}
 		b.mu.Lock()
 		a := b.asks[id]
-		if !ok || a == nil || acceptAskEnded(t) || acceptAskStale(a, t) {
+		if a == nil || !a.AskedAt.Equal(seen[id]) {
+			// Gone, or a new round asked while the book was unlocked (the todo read is from before it): not this card.
+			b.mu.Unlock()
+			continue
+		}
+		if !ok || acceptAskEnded(t) || acceptAskStale(a, t) {
 			// The todo is gone, it ended without the hub's auto-judge (the owner closed it or a review did), or the
 			// card is from before its latest reopen: it can never be passed, so stop asking and drop it.
 			delete(b.asks, id)
@@ -425,15 +435,18 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 	b.mu.Unlock()
 	sort.Slice(list, func(i, j int) bool { return list[i].a.AskedAt.Before(list[j].a.AskedAt) })
 	var out []prompts.SnapshotAccept
-	var ended []string
+	var ended []ask
 	total := 0
 	for _, x := range list {
 		t, ok := s.todoNow(x.id)
+		if f := s.acceptSweepHook; f != nil {
+			f(x.id)
+		}
 		if !ok {
 			continue
 		}
 		if acceptAskEnded(t) || acceptAskStale(&x.a, t) {
-			ended = append(ended, x.id) // closed by the owner or a review, or asked before the todo's latest reopen
+			ended = append(ended, x) // closed by the owner or a review, or asked before the todo's latest reopen
 			continue
 		}
 		total++
@@ -445,9 +458,10 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 	if len(ended) > 0 {
 		b.mu.Lock()
 		removed := false
-		for _, id := range ended {
-			if b.asks[id] != nil {
-				delete(b.asks, id)
+		for _, x := range ended {
+			// Only the card judged: a new round asked while the book was unlocked has another AskedAt and stays.
+			if cur := b.asks[x.id]; cur != nil && cur.AskedAt.Equal(x.a.AskedAt) {
+				delete(b.asks, x.id)
 				removed = true
 			}
 		}

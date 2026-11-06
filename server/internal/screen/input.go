@@ -344,10 +344,17 @@ func Choosing(plain string) bool {
 // left edge too (`❯ 1. 预览`, AskUserQuestion 2.1.316): isHistory leaves it out.
 var historyRE = regexp.MustCompile(`^(?:❯ |\s*[⏺⎿✻])`)
 
+// codexHistoryRE is the same on a Codex screen (#3214), which has no rule under its conversation: a row at the left
+// edge with the agent's or a status's • (`• Ran …`, `• Working (5s • esc to interrupt)`), the user's › (the input box
+// is one too: no dialog is open while it shows), an event's ✔ ✗ ■, or a finished turn's 「Worked for 2s • 9:41 PM」.
+// Codex indents its dialogs under them; the › at the edge on an approval's option is the cursor (selectedRE).
+var codexHistoryRE = regexp.MustCompile(`^(?:[•✔✗■] |› )|^\s*Worked for \d`)
+
 // isHistory leaves out the dialog's own cursor rows: a numbered choice (selectedRE) and a multi-select question's
 // Submit / Next row, which a ❯ puts at the left edge too (`❯    Submit`).
 func isHistory(line string) bool {
-	return historyRE.MatchString(line) && !selectedRE.MatchString(line) && !submitRE.MatchString(strings.TrimSpace(line))
+	return (historyRE.MatchString(line) || codexHistoryRE.MatchString(line)) &&
+		!selectedRE.MatchString(line) && !submitRE.MatchString(strings.TrimSpace(line))
 }
 
 // dialogTop is the first row of the dialog at the bottom of the screen, on a plain screen's lines: the first row under
@@ -362,6 +369,13 @@ func dialogTop(lines []string) int {
 		if isHistory(lines[i]) {
 			if start == top {
 				start = i + 1
+				// A Codex row goes on in the rows right under it, up to a blank line (a prompt wrapped at the pane's
+				// width, an answer's list): they are the conversation too (#3214).
+				if !historyRE.MatchString(lines[i]) {
+					for start < len(lines) && strings.TrimSpace(lines[start]) != "" {
+						start++
+					}
+				}
 			}
 			break
 		}

@@ -32,7 +32,7 @@ import UniformTypeIdentifiers
     /// Taken or dismissed: the same copy is not offered again.
     nonisolated static func image(_ provider: NSItemProvider) async -> UIImage? {
         await withCheckedContinuation { c in
-            _ = provider.loadDataRepresentation(for: .image) { data, _ in c.resume(returning: data.flatMap(UIImage.init(data:))) }
+            _ = provider.loadDataRepresentation(for: .image) { @Sendable data, _ in c.resume(returning: data.flatMap(UIImage.init(data:))) }
         }
     }
 

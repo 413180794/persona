@@ -259,7 +259,9 @@ const PERMISSION: Record<string, string> = { acceptEdits: t("assistant-tasks.per
 /** A task of a started plan that did not start: why, unless its task card right below says so already (#4145). */
 function PlanTaskFailed({ task, conversation }: { task: PlanTask; conversation: string }) {
   if (useTaskCardShown(conversation, task.todo_id)) return null;
-  return <span className="text-red">{t("assistant-tasks.plan_task_failed", { title: task.title, error: task.error ?? "" })}</span>;
+  // A blank reason from the hub would leave the sentence hanging after the colon (#4809).
+  const error = task.error?.trim() || t("assistant-tasks.unknown_reason");
+  return <span className="text-red">{t("assistant-tasks.plan_task_failed", { title: task.title, error })}</span>;
 }
 
 export function PlanCard({ plan }: { plan: TaskPlan }) {

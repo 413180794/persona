@@ -592,13 +592,18 @@ export function UninstallDialog({ id, name, pack, onClose, onDone }: { id: strin
   const [keep, setKeep] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [warnings, setWarnings] = useState<string[] | null>(null);
   const go = async () => {
+    if (busy || warnings) return;
     setBusy(true);
     setError("");
     try {
-      await uninstallExtension(id, keep, cascade, members);
-      toast(t("settings-extensionmarket.uninstalled", { name }), "ok");
-      onDone();
+      const result = await uninstallExtension(id, keep, cascade, members);
+      if (result.warnings?.length) setWarnings(result.warnings);
+      else {
+        toast(t("settings-extensionmarket.uninstalled", { name }), "ok");
+        onDone();
+      }
     } catch (e) {
       const deps = dependentError(e);
       if (deps) { setDependents(deps); setCascade(false); }
@@ -610,11 +615,11 @@ export function UninstallDialog({ id, name, pack, onClose, onDone }: { id: strin
   return (
     <Dialog
       open
-      onClose={() => !busy && onClose()}
+      onClose={() => !busy && (warnings ? onDone() : onClose())}
       width={440}
-      title={t("settings-extensionmarket.uninstall_title", { name })}
+      title={t(warnings ? "settings-extensionmarket.uninstalled" : "settings-extensionmarket.uninstall_title", { name })}
       footer={
-        <>
+        warnings ? <Button tone="primary" onClick={onDone}>{t("ui-atoms.close")}</Button> : <>
           <Button tone="quiet" onClick={onClose} disabled={busy}>
             {t("common.cancel")}
           </Button>
@@ -624,6 +629,12 @@ export function UninstallDialog({ id, name, pack, onClose, onDone }: { id: strin
         </>
       }
     >
+      {warnings ? <div role="status">
+        <p className="text-[12.5px] leading-relaxed text-ink-2">{t("settings-extensionmarket.uninstalled_warnings")}</p>
+        <ul className="mt-3 space-y-2">
+          {warnings.map((warning, index) => <li key={index} className="rounded-control bg-orange-tint px-3 py-2 text-[12.5px] leading-relaxed whitespace-pre-wrap break-all text-orange">{warning}</li>)}
+        </ul>
+      </div> : <>
       <p className="text-[12.5px] leading-relaxed text-ink-2">{t("settings-extensionmarket.uninstall_body")}</p>
       <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-control bg-inset px-3 py-2.5 shadow-hairline">
         <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="mt-0.5 size-3.5 shrink-0 accent-[var(--accent)]" />
@@ -635,6 +646,7 @@ export function UninstallDialog({ id, name, pack, onClose, onDone }: { id: strin
       {dependents && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} />{t("settings-extensionmarket.disable_dependents", { names: dependents.map((d) => d.name).join(t("settings-extensionmarket.list_separator")) })}</label>}
       {!!packMembers?.length && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={members} onChange={(e) => { setMembers(e.target.checked); setCascade(false); setDependents(null); }} />{t("settings-extensionmarket.uninstall_members", { names: packMembers.map((p) => p.id).join(t("settings-extensionmarket.list_separator")) })}</label>}
       {error && <p className="mt-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">{t("settings-extensionmarket.not_uninstalled", { error })}</p>}
+      </>}
     </Dialog>
   );
 }

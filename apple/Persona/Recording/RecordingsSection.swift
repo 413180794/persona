@@ -97,7 +97,7 @@ struct RecordingCaptureControls: View {
     @State private var capture = RecordingCapture.shared
     @State private var locale = "zh-CN"
     #if os(iOS)
-    @AppStorage(RecordingInput.storageKey) private var inputRaw = RecordingInput.phone.rawValue
+    @StoredValue(RecordingInput.storageKey) private var inputRaw = RecordingInput.phone.rawValue
     @State private var hasBluetooth = false
     #endif
 

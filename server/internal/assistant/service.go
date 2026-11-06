@@ -86,6 +86,9 @@ type Service struct {
 	health     healthBook    // launcher_health.go: each machine's launchers
 	trust      trustBook     // machine_trust.go: the computers waiting to be confirmed
 	ready      readinessBook // readiness.go: the main conversation's readiness
+
+	// acceptSweepHook, when set, runs in the acceptance sweeps' unlocked window, after a todo is read (tests).
+	acceptSweepHook func(id string)
 }
 
 var _ Handler = (*Service)(nil)

@@ -57,6 +57,7 @@
   "preview_valid_other": "This preview is valid for {count} minutes. Installing checks it again: it only installs if the permissions match what you see.",
   "not_done": "Didn't finish: {error}",
   "uninstalled": "Uninstalled \"{name}\"",
+  "uninstalled_warnings": "Uninstall completed. Follow the instructions below.",
   "uninstall_title": "Uninstall \"{name}\"",
   "uninstall_body": "Stops its program and deletes its package, config, and secrets, along with the connectors and other things it provides. To use it again, reinstall it from the marketplace.",
   "keep_data": "Keep its data",

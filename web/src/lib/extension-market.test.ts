@@ -86,6 +86,12 @@ describe("市场的规矩", () => {
 });
 
 describe("市场的接口", () => {
+  it("returns every uninstall warning without changing the successful result", async () => {
+    const warnings = ["清理 /tmp/example-one", "清理 /tmp/example-two", "清理 /tmp/example-one"];
+    vi.stubGlobal("localStorage", { getItem: () => "t" });
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ ok: true, warnings })));
+    expect(await uninstallExtension("example")).toEqual({ ok: true, warnings });
+  });
   it("calls the hub's market routes", async () => {
     const calls: string[] = [];
     vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });

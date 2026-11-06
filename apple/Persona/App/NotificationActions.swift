@@ -93,13 +93,13 @@ nonisolated enum NotificationActions {
     /// Takes the session's notifications out of Notification Center once it is on screen (#3449): its pushes carry
     /// `thread-id` = the session id, and `machine_id` tells two machines' sessions apart.
     static func clearDelivered(_ key: SessionKey) {
-        let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { delivered in
+        // Called back on the center's own queue: nothing in it needs the main actor.
+        UNUserNotificationCenter.current().getDeliveredNotifications { @Sendable delivered in
             let ids = delivered.filter {
                 $0.request.content.threadIdentifier == key.sessionID
                     && ($0.request.content.userInfo["machine_id"] as? String).map { $0 == key.machineID } != false
             }.map(\.request.identifier)
-            if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+            if !ids.isEmpty { UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids) }
         }
     }
 

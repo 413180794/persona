@@ -55,6 +55,7 @@
   "preview_valid_other": "这份预览 {count} 分钟内有效。装的时候会核对，权限和你看到的一模一样才装。",
   "not_done": "没有完成：{error}",
   "uninstalled": "已卸载「{name}」",
+  "uninstalled_warnings": "卸载已完成，请按以下提示处理。",
   "uninstall_title": "卸载「{name}」",
   "uninstall_body": "停掉它的程序，删掉它的包、配置和密钥；它提供的连接器等一起拿掉。要再用得从市场重新安装。",
   "keep_data": "保留它的数据",

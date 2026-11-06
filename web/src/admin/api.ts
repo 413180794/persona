@@ -2,7 +2,7 @@
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
 import { currentLanguage, t } from "../i18n";
 import { previewConsent } from "../lib/extension-model";
-import { catalogOf, catalogQuery, marketView, type Catalog, type Market } from "../lib/extension-market";
+import { catalogOf, catalogQuery, marketView, type Catalog, type Market, type ExtensionRemovalResult } from "../lib/extension-market";
 import type { AddedMachine, AdminExtension, AdminExtensions, AssistantCards, ConnectorRepair, ExtensionMetrics, ExtensionPreview, LinkPair, LogLine, LogsPage, MeshView, MetricsOverview, MetricsWindow, UsageSource, UsageSourceInput, UsageSources, UsageSourceType, UsageTestResult } from "./types";
 
 export class AdminError extends Error {
@@ -217,7 +217,7 @@ export const rollbackExtension = async (id: string) => adminApi<AdminExtension>(
 export const setExtensionEnabled = async (id: string, enabled: boolean) => adminApi<AdminExtension>(`${await extRoot()}/${enc(id)}/enabled`, "PUT", { enabled });
 
 export const uninstallExtension = async (id: string, keepData: boolean) =>
-  adminApi<{ ok: boolean }>(`${await extRoot()}/${enc(id)}`, "DELETE", { keep_data: keepData });
+  adminApi<ExtensionRemovalResult>(`${await extRoot()}/${enc(id)}`, "DELETE", { keep_data: keepData });
 
 // ── extension markets (docs/extensions.md「扩展市场」): the apps' routes under /extensions/-/, behind the admin session. Installing
 // and upgrading from a market's preview go through installExtension / upgradeExtension above (the preview's id and digest).

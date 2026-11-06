@@ -476,10 +476,16 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		if len(q) > 0 {
 			path += "?" + q.Encode()
 		}
-		if err := c.do(ctx, "DELETE", path, nil, nil); err != nil {
+		var out struct {
+			Warnings []string `json:"warnings"`
+		}
+		if err := c.do(ctx, "DELETE", path, nil, &out); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "卸载了 %s\n", positional[0])
+		for _, warning := range out.Warnings {
+			fmt.Fprintln(stderr, "警告："+warning)
+		}
 		return nil
 	}
 	if done, err := extensionModelCommand(ctx, c, args[0], positional, stdout); done {

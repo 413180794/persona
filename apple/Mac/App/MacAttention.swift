@@ -78,6 +78,22 @@ enum MacAttention {
         return n > 0 ? "\(n)" : nil
     }
 
+    /// The banner of one agent and state: one per session and state, so a second 做完了 for the same agent replaces
+    /// the first.
+    static func identifier(_ s: Session, _ state: AgentState) -> String { "\(s.machineID)/\(s.sessionID)#\(state.rawValue)" }
+
+    /// The banner of one card (`newInteractions`), named by its uid like the hub push's collapse id.
+    static func identifier(_ ix: Interaction) -> String { "interaction/\(ix.uid)" }
+
+    /// The banners to take back (#3513): the 需要你 one of an agent no longer waiting on you (answered here or
+    /// elsewhere, or gone from the list), and the one of each card that left the list.
+    static func withdrawn(old: [Session], new: [Session], oldInteractions: [Interaction], newInteractions: [Interaction]) -> [String] {
+        let now = Dictionary(new.map { ($0.key, $0.state) }, uniquingKeysWith: { a, _ in a })
+        let pending = Set(newInteractions.map(\.uid))
+        return old.filter { $0.state == .needsYou && now[$0.key] != .needsYou }.map { identifier($0, .needsYou) }
+            + oldInteractions.filter { !pending.contains($0.uid) }.map(identifier)
+    }
+
     static func text(_ s: Session, _ state: AgentState) -> (title: String, body: String) {
         let title = state == .needsYou ? String(localized: "\(s.displayTitle) 需要你") : String(localized: "\(s.displayTitle) 做完了")
         // No last text yet: name the speaker. The main conversation is Persona, not an agent.
@@ -167,6 +183,12 @@ extension MacAttention {
             last = sessions
             lastInteractions = interactions
         }
+        // Not only once armed: a banner from before is as stale as one posted now.
+        let over = MacAttention.withdrawn(old: last, new: sessions, oldInteractions: lastInteractions, newInteractions: interactions)
+        if !over.isEmpty {
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: over)
+            waiting.removeAll { over.contains($0.identifier) }
+        }
         let now = Date()
         let startingToConnect = connectedAt == nil && model.live.state == .connected
         connectedAt = MacAttention.connectedAt(connectedAt, state: model.live.state, now: now)
@@ -198,8 +220,7 @@ extension MacAttention {
         for key in metKeys { flippedAt[key] = nil }
         guard !ping.isEmpty || !cards.isEmpty else { return }
         var requests = ping.map { s, state in
-            // One per session and state: a second 做完了 for the same agent replaces the first.
-            UNNotificationRequest(identifier: "\(s.machineID)/\(s.sessionID)#\(state.rawValue)",
+            UNNotificationRequest(identifier: MacAttention.identifier(s, state),
                                   content: MacAttention.content(s, state, interaction: interactions.first { $0.sessionKey == s.key }),
                                   trigger: nil)
         }
@@ -207,7 +228,7 @@ extension MacAttention {
         // the card and a later card (a different uid) pings again, even for the same agent.
         requests += cards.compactMap { ix -> UNNotificationRequest? in
             guard let s = MacAttention.session(for: ix, in: sessions) else { return nil }
-            return UNNotificationRequest(identifier: "interaction/\(ix.uid)",
+            return UNNotificationRequest(identifier: MacAttention.identifier(ix),
                                          content: MacAttention.content(s, .needsYou, interaction: ix), trigger: nil)
         }
         waiting += requests

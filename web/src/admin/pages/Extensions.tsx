@@ -540,14 +540,18 @@ function UninstallDialog({ extension, onClose, onDone }: { extension: AdminExten
   const [keep, setKeep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => (setKeep(false), setError("")), [extension]);
+  const [warnings, setWarnings] = useState<string[] | null>(null);
+  useEffect(() => (setKeep(false), setError(""), setWarnings(null)), [extension]);
   const go = async () => {
-    if (!extension) return;
+    if (!extension || busy || warnings) return;
     setBusy(true);
     try {
-      await uninstallExtension(extension.id, keep);
-      toast(t("admin-pages-extensions.uninstalled", { name: extension.name }), "ok");
-      onDone();
+      const result = await uninstallExtension(extension.id, keep);
+      if (result.warnings?.length) setWarnings(result.warnings);
+      else {
+        toast(t("admin-pages-extensions.uninstalled", { name: extension.name }), "ok");
+        onDone();
+      }
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -557,11 +561,11 @@ function UninstallDialog({ extension, onClose, onDone }: { extension: AdminExten
   return (
     <Dialog
       open={Boolean(extension)}
-      onClose={onClose}
-      title={extension ? t("admin-pages-extensions.uninstall_title", { name: extension.name }) : ""}
+      onClose={() => !busy && (warnings ? onDone() : onClose())}
+      title={extension ? t(warnings ? "admin-pages-extensions.uninstalled" : "admin-pages-extensions.uninstall_title", { name: extension.name }) : ""}
       footer={
-        <>
-          <Button tone="quiet" onClick={onClose}>
+        warnings ? <Button tone="primary" onClick={onDone}>{t("ui-atoms.close")}</Button> : <>
+          <Button tone="quiet" onClick={onClose} disabled={busy}>
             {t("admin-parts.cancel")}
           </Button>
           <Button tone="danger" busy={busy} onClick={() => void go()}>
@@ -570,6 +574,12 @@ function UninstallDialog({ extension, onClose, onDone }: { extension: AdminExten
         </>
       }
     >
+      {warnings ? <div role="status">
+        <p className="text-[12.5px] leading-relaxed text-ink-2">{t("settings-extensionmarket.uninstalled_warnings")}</p>
+        <ul className="mt-3 space-y-2">
+          {warnings.map((warning, index) => <li key={index} className="rounded-control bg-orange-tint px-3 py-2 text-[12.5px] leading-relaxed whitespace-pre-wrap break-all text-orange">{warning}</li>)}
+        </ul>
+      </div> : <>
       <p className="text-[12.5px] leading-relaxed text-ink-2">
         {t("admin-pages-extensions.uninstall_detail")}
       </p>
@@ -583,6 +593,7 @@ function UninstallDialog({ extension, onClose, onDone }: { extension: AdminExten
         </span>
       </label>
       {error && <p className="mt-2 text-[12.5px] text-red">{error}</p>}
+      </>}
     </Dialog>
   );
 }

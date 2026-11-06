@@ -28,6 +28,9 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
   // a page a card or a section pushed opens here with the state it was pushed with (?state=)
   const state = useMemo(() => new URLSearchParams(location.search).get("state") ?? undefined, [extension, ui]);
   const title = place?.title || ui;
+  // the extension's name after the title, unless it only says the title again (「示例 示例」, #3115)
+  const name = place?.extension_name;
+  const showName = !!name && name.trim().toLowerCase() !== title.trim().toLowerCase();
   // a code review or a file browser (UI version 4) takes the page's whole width; everything else stays a column
   const [wide, setWide] = useState(false);
   return (
@@ -38,7 +41,7 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
           <Icon name={navIcon(place?.icon)} size={14} />
         </span>
         <h1 className="min-w-0 truncate text-[14px] font-semibold text-ink">{title}</h1>
-        {place?.extension_name && <span className="hidden min-w-0 truncate text-[12px] text-ink-3 sm:inline">{place.extension_name}</span>}
+        {showName && <span className="hidden min-w-0 truncate text-[12px] text-ink-3 sm:inline">{name}</span>}
         <span className="flex-1" />
         <IconButton icon="retry" label={t("extensions-extensionslots.redraw")} onClick={() => setN((x) => x + 1)} />
       </header>
