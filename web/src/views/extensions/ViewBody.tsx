@@ -14,8 +14,8 @@ import {
   blocks, imageURL, initials, isHttps, numberProblem, percent, rowIcon, tableRows, toneOf,
   type RowIcon, type UIAction, type UIItem, type UIMore, type UISection, type UITone, type UIView,
 } from "../../lib/extension-ui";
-import { presenceStyle, usePresence, type Present } from "./motion";
-import { Fading, Rolling } from "./Rolling";
+import { presenceStyle, usePresence, type Present } from "../../ui/motion";
+import { Fading, Rolling } from "../../ui/Rolling";
 import { t } from "../../i18n";
 import { Button, cx, EASE, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";

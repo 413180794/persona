@@ -6,7 +6,8 @@
 // - Once the exchange is done, the last words are the answer; everything before them folds into one "Worked Xs"
 //   whose inside is a timeline: the intermediate words, and each run of steps between them as its own inner group.
 // - Delivered prose (600 characters or more, a heading, a table, a list of three or more, an image) never folds, nor
-//   does a subagent still running, nor a plan card, nor a compaction divider.
+//   does a subagent's card (running or done, #5602), nor a workflow run's card (#3434: running or ended, while the hub
+//   lists the run), nor a plan card, nor a compaction divider.
 // - A gap of over 30 minutes between two steps (history that never loaded) splits the work: no group spans it.
 // - Durations: from the previous boundary (your message, the words before) when there is one, to the next words; else
 //   from the group's first step to the latest end among its steps (a tool ends at its result).
@@ -43,6 +44,8 @@ interface WorkGroupOptions {
   turnStart?: string;
   /** How a subagent call is going (ChatView knows the session's subagents). */
   agentStatus?: (step: ToolStep) => AgentStatus;
+  /** Whether a Workflow call draws its run's card (the hub lists the run): it stays in the open, running or ended. */
+  workflowCard?: (step: ToolStep) => boolean;
 }
 
 /** History that was never loaded between two steps: further apart than this, they do not share a group. */
@@ -57,8 +60,10 @@ const PLAN_TOOLS = new Set(["TodoWrite"]);
 
 export const isAgentStep = (s: Step): boolean => s.kind === "tool" && AGENT_TOOLS.has(s.use.tool_name ?? "");
 export const isPlanStep = (s: Step): boolean => s.kind === "tool" && PLAN_TOOLS.has(s.use.tool_name ?? "");
-/** A tool call drawn as an action row (not a subagent card, not a plan card). */
-export const isRowStep = (s: Step): s is ToolStep => s.kind === "tool" && !isAgentStep(s) && !isPlanStep(s);
+/** Claude Code's Workflow call (#3434): its run's card where the hub lists the run, else the row it always was. */
+export const isWorkflowStep = (s: Step): s is ToolStep => s.kind === "tool" && s.use.tool_name === "Workflow";
+/** A tool call drawn as an action row (not a subagent card, not a plan card, not a workflow's call). */
+export const isRowStep = (s: Step): s is ToolStep => s.kind === "tool" && !isAgentStep(s) && !isPlanStep(s) && !isWorkflowStep(s);
 const isCompactStep = (s: Step) => s.kind === "notice" && Boolean(s.item.compact);
 
 const HEADING = /^[ \t]{0,3}#{1,6}[ \t]+\S/m;
@@ -106,13 +111,15 @@ const boundaryTs = (s: Step | undefined): number | null => (s && (s.kind === "te
 
 const isAnswer = (s: Step) => s.kind === "text" && Boolean(s.item.text?.trim());
 
-function adapter(_opts: WorkGroupOptions) {
+function adapter(opts: WorkGroupOptions) {
   /** A step that folds into a run: tools, thoughts, notices, pictures, folded work. A subagent's card never does,
    *  running or done (#5602: it used to fold once done, so a run split around a running one joined up when it ended,
-   *  the group took another key and the card jumped into it). */
+   *  the group took another key and the card jumped into it), nor does a Workflow call that draws its run's card
+   *  (#3434), for as long as the hub lists the run. */
   const isActivity = (s: Step) => {
     if (s.kind === "text" || isCompactStep(s)) return false;
     if (isPlanStep(s) || isAgentStep(s)) return false;
+    if (isWorkflowStep(s) && opts.workflowCard?.(s)) return false;
     return true;
   };
   /** What a finished exchange may fold: the activities and the agent's words, except delivered ones. */
@@ -331,7 +338,8 @@ function explorationOf(s: ToolStep): { kind: ExplorationKind; key?: string } | u
   return undefined;
 }
 
-const directTools = (g: WorkGroupNode): ToolStep[] => g.children.flatMap((c) => (c.kind === "step" && isRowStep(c.step) ? [c.step] : []));
+// a workflow's call counts too: a group that launched one did more than read
+const directTools = (g: WorkGroupNode): ToolStep[] => g.children.flatMap((c) => (c.kind === "step" && (isRowStep(c.step) || isWorkflowStep(c.step)) ? [c.step] : []));
 
 /** "Read 3 files · searched 2 times" when a group did nothing but read and search (a file read twice counts once). */
 export function explorationSummary(g: WorkGroupNode): string {
@@ -389,6 +397,27 @@ export function groupsHolding(nodes: WorkNode[], call: string): string[] | null 
     if (inner) return [n.id, ...inner];
   }
   return null;
+}
+
+/** The runs of work the hub folded (fold_work) that hold the call of a workflow run it lists (#3434): its card belongs in
+ *  the open, so the chat fetches what those folds stand for. A fold names no calls, so it is told by time: the run's
+ *  start is its call's own time (the node takes it from the call's line), which falls within [fold.ts, fold.until] of
+ *  the fold holding it. Two folds can both hold that instant (the lines of one message split by its words): both are
+ *  fetched rather than the wrong one. `calls`: the runs' calls and start times (ms); a call among the steps needs nothing. */
+export function foldsHoldingCalls(steps: Step[], calls: ReadonlyMap<string, number>): Item[] {
+  if (!calls.size) return [];
+  const present = new Set(steps.flatMap((s) => (s.kind === "tool" && s.use.tool_use_id ? [s.use.tool_use_id] : [])));
+  const out: Item[] = [];
+  for (const [call, at] of calls) {
+    if (present.has(call) || !Number.isFinite(at)) continue;
+    for (const s of steps) {
+      if (s.kind !== "fold") continue;
+      const from = tsMs(s.item.ts);
+      const until = tsMs(s.item.fold?.until) ?? from;
+      if (from !== null && until !== null && at >= from && at <= until && !out.includes(s.item)) out.push(s.item);
+    }
+  }
+  return out;
 }
 
 /** Whether a live group opens: it holds more than its preview shows. A finished one always does. */

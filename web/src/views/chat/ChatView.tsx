@@ -53,6 +53,7 @@ import { RunningStatusBar } from "./RunningStatusBar";
 import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
 import { publishPlan } from "../../lib/plan-store";
 import { ChatContext, FreshWords, LiveClockContext, type ChatContextValue } from "./chat-context";
+import { backgroundLine, waitingOnWorkflow, workflowCalls, workflowCallsKey } from "../../lib/workflows";
 import { seekCall } from "./jump";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
@@ -626,7 +627,12 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, session, view]);
 
-  const lastLive = (readOnly ? Boolean(viewed?.running) : working) && !tr.loading;
+  // The hub says its turn is over and a workflow it launched keeps it working (#3434): the exchange is drawn finished
+  // (its work folded, the run's card in the open), and the running bar says the workflow, timed from its start, instead
+  // of the turn's "Working…" clock going on. Other background work (a command, a Monitor, a subagent) leaves the turn as
+  // it was. A message of yours on its way, or one it is answering, is a turn again.
+  const backgroundOnly = waitingOnWorkflow(session) && !tr.streaming && !outgoing && !awaiting;
+  const lastLive = (readOnly ? Boolean(viewed?.running) : working && !backgroundOnly) && !tr.loading;
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
   const isMain = Boolean(assistant && sid === mainConversation);
   // the main conversation's readiness: the card for what is missing, and the send button saying it (4.4)
@@ -690,9 +696,15 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     [mid, sid, follow, expandFold],
   );
   const jump = useCallback((call: string) => void jumpToCall(call), [jumpToCall]);
+  // its workflow runs by the Workflow call that launched each (#3434): rebuilt only when a run starts or goes, not with
+  // each push of a run's progress (the cards read that themselves), so the exchanges do not all render again
+  const runs = session?.workflows;
+  const wfKey = workflowCallsKey(runs);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const wfCalls = useMemo(() => workflowCalls(runs), [wfKey]);
   const ctx = useMemo<ChatContextValue>(
-    () => ({ tasks, subagents: assistant ? NO_SUBAGENTS : (subagents ?? NO_SUBAGENTS), scope: `${mid}/${sid}:`, jumpToCall: jump }),
-    [tasks, subagents, assistant, mid, sid, jump],
+    () => ({ tasks, subagents: assistant ? NO_SUBAGENTS : (subagents ?? NO_SUBAGENTS), scope: `${mid}/${sid}:`, jumpToCall: jump, workflowCalls: wfCalls }),
+    [tasks, subagents, assistant, mid, sid, jump, wfCalls],
   );
   // ── "Search in chat" (ChatSearch.tsx, Android ChatSearchState): where the reader was when it opened, going to a hit (the
   // rows that hold it open, search-reveal.ts), lit for HIT_MS, and "Back to where you were" ──
@@ -889,7 +901,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     <PlanPill todos={plan.todos} onClick={() => openPanel({ kind: "plan", mid, sid })} />
   ) : null;
   // Persona's own chats too (#3654), and from the moment the message is in, not from the hub's next push
-  const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} clock={barClock.current} agents={waitingOn} /> : null;
+  const background = useMemo(() => (readOnly ? null : backgroundLine(session)), [readOnly, session]);
+  const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} clock={barClock.current} agents={waitingOn} background={background} /> : null;
   const queue = session && queued.length > 0 ? <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} compact={short} /> : null;
   // with the plan's pill showing, "Jump to bottom" goes beside it (over the chat, they hid each other)
   const jumpInDock = Boolean(planPill) && !readOnly;
@@ -913,6 +926,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onToggleSidebar={onToggleSidebar}
           onInterrupt={interrupt}
           onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
+          onJumpToCall={jump}
           last={assistant ? tr.items[tr.items.length - 1] : undefined}
           onSearch={openSearch}
           topCenter={topCenter}
@@ -1290,6 +1304,7 @@ export function Header({
   onToggleSidebar,
   onInterrupt,
   onStopLoop,
+  onJumpToCall,
   last,
   onSearch,
   topCenter,
@@ -1308,6 +1323,8 @@ export function Header({
   onToggleSidebar?: () => void;
   onInterrupt: () => void;
   onStopLoop: () => void;
+  /** Brings the step with this tool_use_id into view (a workflow's "Show where it started", #2719). */
+  onJumpToCall?: (call: string) => void;
   last?: Item;
   /** "Search in chat" (ChatSearch.tsx). */
   onSearch?: () => void;
@@ -1485,7 +1502,7 @@ export function Header({
       {topCenter && <div className="flex min-w-0 flex-1 justify-center lg:hidden">{topCenter}</div>}
       <div className={headerSlot(Boolean(topCenter), "end")}>
       {session?.goal && !assistant && <GoalChip goal={session.goal} />}
-      {session && !assistant && <ActivityChips session={session} onStopLoop={onStopLoop} />}
+      {session && !assistant && <ActivityChips session={session} onStopLoop={onStopLoop} onJumpToCall={onJumpToCall} />}
       {others.length > 0 && (
         <button
           type="button"

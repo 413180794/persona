@@ -4,11 +4,14 @@ import { describe, expect, it } from "vitest";
 import { exchangeSteps, segments } from "./turns";
 import type { Item } from "./types";
 import {
+  foldsHoldingCalls,
   groupsHolding,
   explorationSummary,
   groupOpens,
   groupTitle,
   isDeliveryText,
+  isRowStep,
+  isWorkflowStep,
   planProgress,
   planSteps,
   planTodos,
@@ -309,5 +312,68 @@ describe("groupsHolding (#2719: a background task's notice → the call that sta
       .find((n) => n.kind === "step" && n.step.kind === "tool" && n.step.use.tool_use_id === "tu-bg")!;
     const tree = [g("outer", [g("inner-1", []), g("inner-2", [step])])];
     expect(groupsHolding(tree, "tu-bg")).toEqual(["outer", "inner-2"]);
+  });
+});
+
+// #3434: a Workflow call is its run's card, not a row; while the hub lists the run (running or ended) it stays out of the
+// folded work
+describe("workflow calls", () => {
+  const launch = () => [
+    user("u1", 0),
+    ...tool("grep", "Grep", 1000, 2000, { pattern: "x" }),
+    ...tool("wf", "Workflow", 3000, 3000, { name: "parity-audit" }, "Workflow launched in background"),
+    say("ans", "Started it in the background.", 4000),
+  ];
+
+  it("is not an ordinary row, and a group that launched one did more than read", () => {
+    const [seg] = segments(launch());
+    const wf = exchangeSteps(seg).find((s) => s.kind === "tool" && s.use.tool_name === "Workflow")!;
+    expect(isWorkflowStep(wf)).toBe(true);
+    expect(isRowStep(wf)).toBe(false);
+    const g = groups(blocks(launch()))[0];
+    expect(explorationSummary(g)).toBe("");
+  });
+
+  it("stays in the open while the hub lists its run, running or ended; folds like any step once it does not", () => {
+    const seg = segments(launch())[0];
+    const steps = planSteps(exchangeSteps(seg));
+    const card = workBlocks(steps, { live: false, turnStart: seg.user?.ts, workflowCard: () => true });
+    expect(folded(card, "wf")).toBe(false);
+    expect(topSteps(card)).toEqual(["wf", "ans"]);
+    expect(folded(card, "grep")).toBe(true);
+    // in a live exchange too: the work before it folds, the card stays
+    const live = workBlocks(steps.slice(0, -1), { live: true, turnStart: seg.user?.ts, workflowCard: () => true });
+    expect(folded(live, "wf")).toBe(false);
+    const row = workBlocks(steps, { live: false, turnStart: seg.user?.ts, workflowCard: () => false });
+    expect(folded(row, "wf")).toBe(true);
+  });
+
+  it("finds the hub's fold that holds a run's call: the one whose span holds when it started", () => {
+    const fold = mk("assistant", "fold", 1000, { id: "fold:x", fold: { items: 4, tools: 2, thoughts: 0, until: iso(3000), through_seq: 9, through_id: "x" } });
+    const seg = segments([user("u2", 0), fold, say("ans2", "Started.", 4000)])[0];
+    const steps = exchangeSteps(seg);
+    expect(foldsHoldingCalls(steps, new Map([["tu-wf", T0 + 3000]])).map((f) => f.id)).toEqual(["fold:x#0"]);
+    expect(foldsHoldingCalls(steps, new Map([["tu-wf", T0 + 60_000]]))).toEqual([]); // started after it
+    expect(foldsHoldingCalls(steps, new Map([["tu-wf", NaN]]))).toEqual([]); // the hub does not say when
+    expect(foldsHoldingCalls(steps, new Map())).toEqual([]);
+    // the call is already among the steps: nothing to fetch
+    const open = exchangeSteps(segments(launch())[0]);
+    expect(foldsHoldingCalls(open, new Map([["tu-wf", T0 + 3000]]))).toEqual([]);
+  });
+
+  it("does not take a fold that ended just before the call for the one holding it", () => {
+    // the call at 3.0 s and its result at 3.8 s, in the second fold; the first ended at 2.5 s, within a second of it
+    const first = mk("assistant", "fold", 1000, { id: "fold:a", fold: { items: 3, tools: 1, thoughts: 1, until: iso(2500), through_seq: 3, through_id: "a" } });
+    const words = say("mid", "Now the workflow.", 2600);
+    const second = mk("assistant", "fold", 3000, { id: "fold:b", fold: { items: 4, tools: 2, thoughts: 0, until: iso(3800), through_seq: 9, through_id: "b" } });
+    const steps = exchangeSteps(segments([user("u3", 0), first, words, second, say("ans3", "Started.", 4000)])[0]);
+    expect(foldsHoldingCalls(steps, new Map([["tu-wf", T0 + 3000]])).map((f) => f.id)).toEqual(["fold:b#0"]);
+    // two folds that both hold the instant (one message's lines split by its words): both, not the wrong one
+    const u4 = user("u4", 0);
+    const tie = mk("assistant", "fold", 1000, { id: "fold:c", fold: { items: 3, tools: 1, thoughts: 1, until: iso(3000), through_seq: 5, through_id: "c" } });
+    const mid2 = say("mid2", "Now the workflow.", 3000);
+    const holding = mk("assistant", "fold", 3000, { id: "fold:d", fold: { items: 4, tools: 2, thoughts: 0, until: iso(3800), through_seq: 99, through_id: "d" } });
+    const both = exchangeSteps(segments([u4, tie, mid2, holding, say("ans4", "Started.", 4000)])[0]);
+    expect(foldsHoldingCalls(both, new Map([["tu-wf", T0 + 3000]])).map((f) => f.id)).toEqual(["fold:c#0", "fold:d#0"]);
   });
 });

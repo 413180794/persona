@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """End-to-end check of how the web shows a background workflow (#2935): the agent's row in the sidebar says which run
-it waits for and how far it got, the chat's "Background" chip opens a card per run (phases, agents done, the stopped one's
-error), the card opens its agents with their last words, and an agent opens read-only in the side panel; the task card
-says the same in a line. With MOCK_WORKFLOWS=legacy (a hub without the workflows field) the row only says "Running in the background".
+it waits for and how far it got, the chat's "Background" chip opens a card per run (#3434: counts, a progress bar, one block
+per phase, the stopped one's error), the running phase's block lists its agents, another phase opens on a click, and an
+agent opens read-only in the side panel; the task card says the same in a line. These runs carry no phase_stats (an older
+hub): the blocks come from the agents listed. With MOCK_WORKFLOWS=legacy (a hub without the workflows field) the row only
+says "Running in the background". The cards in the chat itself: scripts/test/web_workflow_cards_e2e.py.
 
     MOCK_WORKFLOWS=1 MOCK_TASKS=1 PORT=18835 python3 scripts/mock/mock_hub.py &
     (cd web && PERSONA_HUB_URL=http://127.0.0.1:18835 npx vite --port 5335 --strictPort &)
@@ -57,7 +59,7 @@ def run(browser, base, token, size, theme, shots, legacy):
     else:
         expect(line).to_contain_text("widget-audit")
         expect(line).to_contain_text("Verify 2/2")
-        expect(line).to_contain_text("4/6")
+        expect(line).to_contain_text("4/6+")
     ok(f"{tag}: the task card says the run")
     card.scroll_into_view_if_needed()
     shot("task")
@@ -67,7 +69,7 @@ def run(browser, base, token, size, theme, shots, legacy):
     page.goto(base + WIDGET)
     if size == "wide":
         row = page.locator("nav a[aria-current=page], aside a[aria-current=page]").first
-        expect(row.locator("[data-workflow-line]")).to_contain_text("后台运行中" if legacy else "4/6 · widget-audit")
+        expect(row.locator("[data-workflow-line]")).to_contain_text("后台运行中" if legacy else "4/6+ · widget-audit")
         ok(f"{tag}: the sidebar row says it waits for the run")
     chip = page.get_by_role("button", name="后台任务", exact=False).first
     expect(chip).to_be_visible()
@@ -83,16 +85,22 @@ def run(browser, base, token, size, theme, shots, legacy):
     else:
         running = dialog.locator('[data-workflow-card="running"]')
         expect(running).to_contain_text("widget-audit")
-        expect(running).to_contain_text("4/6 个 agent 完成")
-        expect(running).to_contain_text("2 个在跑")
+        expect(running.locator("[data-workflow-counts]")).to_have_text("4/6+")
+        expect(running.locator('[data-tally="running"]')).to_have_text("2 在跑")
         expect(dialog.locator('[data-workflow-card="killed"]')).to_contain_text("Error: Workflow aborted")
         expect(dialog).to_contain_text("跑小组件快照测试")  # the shell task still listed
         ok(f"{tag}: one card per run, the stopped one with its error")
         shot("dialog")
-        running.get_by_role("button", name="展开 6 个 agent").click()
-        expect(running.locator("ul > li")).to_have_count(6)
-        expect(running.locator("ul > li").first).to_contain_text("verify:")  # running ones first
-        expect(running).to_contain_text("降雨概率在 0.5% 以下时显示成 0%")
+        # the phase it is in is open, in start order; the one before it folded until clicked
+        verify = running.locator('[data-phase="Verify"]')
+        expect(verify).to_have_attribute("data-phase-current", "true")
+        expect(verify.locator("[data-agent]")).to_have_count(3)
+        expect(verify.locator("[data-agent]").first).to_contain_text("verify:rain#0")
+        audit = running.locator('[data-phase="Audit"]')
+        expect(audit.locator("[data-agent]")).to_have_count(0)
+        audit.get_by_role("button").first.click()
+        expect(audit.locator("[data-agent]")).to_have_count(3)
+        expect(audit.locator('[data-agent="wa2"] button')).to_have_attribute("title", "降雨概率在 0.5% 以下时显示成 0%，和 App 里不一致。")
         if page.evaluate(OVERFLOW) > 0:
             fail(f"{tag}: the page scrolls sideways (agents open)")
         ok(f"{tag}: the card opens its agents with their last words")

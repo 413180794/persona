@@ -14,7 +14,7 @@ vi.hoisted(() => {
   })) as unknown as typeof window.matchMedia;
 });
 import { INERT, ViewSections } from "./ViewBody";
-import { bezier, formatParts, numberParts, TWEEN_MS } from "./motion";
+import { bezier, formatParts, numberParts, TWEEN_MS } from "../../ui/motion";
 import type { UIItem, UIView } from "../../lib/extension-ui";
 import { preloadPages } from "../../lib/lazy-page";
 

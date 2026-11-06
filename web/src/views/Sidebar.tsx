@@ -45,6 +45,7 @@ import { StatusMark, StateTally } from "../ui/StatusMark";
 import { foldedCounts, hasFoldedCounts } from "../lib/folded-counts";
 import { runningWorkflows, workflowLine, workflowShortLine } from "../lib/workflows";
 import { ultracodeOn } from "../lib/ultracode";
+import { Rolling } from "../ui/Rolling";
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { HerdrNotices } from "./agents/HerdrNotices";
@@ -2008,9 +2009,10 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
           )}
           {/* one line high: a piece that does not fit wraps out of sight instead of squeezing the others */}
           {workflow && (
-            <span data-workflow-line title={workflowTitle} aria-label={workflowTitle} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-orange">
-              <Icon name="layers" size={10} stroke={2.2} className="shrink-0" />
-              <span className="truncate tabular-nums">{workflow}</span>
+            <span data-workflow-line title={workflowTitle} aria-label={workflowTitle} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-ai">
+              <Icon name="workflow" size={10} stroke={2.2} className="shrink-0" />
+              {/* its count rolls to the new one (#3434); the name and phase fade in when they change */}
+              <span className="truncate tabular-nums"><Rolling value={workflow} /></span>
             </span>
           )}
           {detail.length > 0 && <span className="flex h-4 min-w-0 flex-wrap gap-x-1 overflow-hidden whitespace-nowrap text-[11px] leading-4 text-ink-3">

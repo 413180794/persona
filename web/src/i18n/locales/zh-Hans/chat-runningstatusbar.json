@@ -2,5 +2,7 @@
   "running": "运行中",
   "thinking": "思考中",
   "agents_working_other": "{count} 个子 Agent 在工作",
-  "agents_more_other": "还有 {count} 个"
+  "agents_more_other": "还有 {count} 个",
+  "background_workflow": "后台 workflow",
+  "more_workflows_other": "还有 {count} 个"
 }

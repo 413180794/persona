@@ -63,7 +63,7 @@ export function extensionThemeTokens(t: ExtensionTheme, scheme: "light" | "dark"
   for (const [role, color] of Object.entries(t[scheme])) {
     const token = ROLES[role as keyof typeof ROLES];
     out[`--${token}`] = color;
-    if (role !== "ai") out[`--${token}-tint`] = `color-mix(in srgb, ${color} ${TINT[scheme]}%, var(--surface))`;
+    out[`--${token}-tint`] = `color-mix(in srgb, ${color} ${TINT[scheme]}%, var(--surface))`;
     if (role === "accent") out["--accent-ink"] = readableAccent(color, scheme);
     if (role === "ai") out["--thinking-ink"] = color;
   }

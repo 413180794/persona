@@ -242,6 +242,9 @@ export interface Session {
   background?: BackgroundTask[];
   /** Claude Code workflow runs it launched in the last day, newest first (#2935); older hubs leave it out. */
   workflows?: Workflow[];
+  /** Working only because of background work: its turn is over, workflows / background commands / subagents run on
+   *  (#2935). Older hubs leave it out. */
+  background_working?: boolean;
   rev?: number;
   suggestion?: string;
   /** An assistant conversation moved out of the list (docs/assistant.md "Managing its own conversations"). */
@@ -347,14 +350,34 @@ export interface Workflow {
   phase?: string;
   /** Phase's 1-based place in phases; 0 or absent: not known. */
   phase_index?: number;
+  phase_count?: number;
+  /** Per-phase counts over all its agents (not only the 60 listed), in `phases` order then undeclared ones; title ""
+   *  is agents whose phase is not known. Older hubs leave it out. */
+  phase_stats?: WorkflowPhaseStats[];
+  /** The Workflow call that launched it: its card goes in the chat in that call's place (#3434). */
+  tool_use_id?: string;
   agents_started?: number;
   agents_done?: number;
   agents_running?: number;
+  /** Agents that failed (counted apart from done); hubs before #5511 count them as done and leave this out. */
+  agents_failed?: number;
+  /** Sums over all its agents: each agent's latest usage (not cumulative spend), and its tool calls. */
+  tokens?: number;
+  calls?: number;
   started_at?: string;
   ended_at?: string;
   updated_at?: string;
   error?: string;
   agents?: WorkflowAgent[];
+}
+
+/** One phase's counts (proto.WorkflowPhaseStats); `failed` only from hubs with #5511. */
+export interface WorkflowPhaseStats {
+  title: string;
+  started: number;
+  done: number;
+  running: number;
+  failed?: number;
 }
 
 /** One agent of a workflow run; its conversation reads like a subagent's (session_id "<parent>@<id>"). */
@@ -364,9 +387,17 @@ export interface WorkflowAgent {
   label?: string;
   phase?: string;
   running: boolean;
+  /** running | done | stopped (it had not come back when the run ended) | failed (#5511); older hubs leave it out. */
+  status?: string;
   started_at?: string;
+  ended_at?: string;
   updated_at?: string;
   last_text?: string;
+  model?: string;
+  /** Its latest tool call, kept after its last words. */
+  latest_tool?: { name: string; summary?: string };
+  tokens?: number;
+  calls?: number;
 }
 
 /** What a background task's notice says (proto.TaskNote). */

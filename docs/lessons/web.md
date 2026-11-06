@@ -1,5 +1,13 @@
 # Lessons: web UI and interactions
 
+## A live card inside work the hub folded (2026-11-06, #3434)
+
+- **`fold_work` hides the step a card hangs on**: a chat opened (or reloaded) while a workflow runs gets the turn's work as one `fold` item, the Workflow call inside it, so "the run's card stays in the open" never sees the call. Pulling the step out of the client's groups is not enough: find the folds whose `[ts, fold.until]` holds the run's `started_at` exactly (the node sets it from the call's own line; a tolerance picks the fold that ended just before the call) and fetch them (`foldsHoldingCalls`, `SegmentView`). Remember what was asked per mounted exchange, not per page: `useTranscript` keeps no cache, so another chat and back (or a rewrite) brings the same fold id back, and a page-wide "asked" set left the card buried for good. Check with the mock hub's `fold_work` on, not only with live pushes, which are never folded.
+- **A card that only stays out of the fold while running vanishes when it ends**: the step becomes an activity, folds into "Worked Xs" and remounts there folded, so its end (the chip turning, the summary, a failed run's error) is never seen where the reader was looking. Keep it out of the fold for as long as it is a card (the hub lists the run), and let it fold itself in place.
+- **The hub's newest-60 cap shifts a block shown from its first rows**: each new agent anywhere in the run drops the oldest listed one, so a block that shows its first 12 loses its top row each time. A block the cap cut into shows its last rows, with what is hidden (and what is not listed) above them.
+- **Progress pushed every ~1.5 s must not reach every exchange**: putting `session.workflows` in the chat context rendered the whole chat on each push. The context carries only which calls have a run and which still run (`workflowCallsKey`), and each card reads its own run from the store.
+- **Element screenshots of a card taller than the window** come out clipped under the sticky header: make the window tall enough for the card, shoot, and size it back (`web_workflow_cards_e2e.py`).
+
 ## Working marks on assistant conversation rows (2026-11-06, #5862)
 
 - Assistant conversation rows use `showState={false}` to retain their chat / pin icon and timestamp rather than the full Agent-row presentation. That must not suppress the working `StatusMark`: use the existing status token while working, restore the idle icon when work ends, and leave the timestamp and layout alone.

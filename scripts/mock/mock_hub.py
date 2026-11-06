@@ -2124,6 +2124,150 @@ ITEMS[WIDGET] = (
            "Test Suite 'All tests' passed.\n    Executed 48 tests, with 0 failures (0 unexpected) in 6.214 seconds", 3)
     + [it("assistant", "text", 0, text="小组件的时间线已经能按小时刷新了。测试全部通过（48 个），接下来把中号布局的降雨条做成和 App 里一样的样式。")]
 )
+
+# MOCK_WORKFLOW_CARDS=1 (#3434): an agent whose chat launched four workflow runs (Claude Code's Workflow tool), each drawn
+# as its run's card where its call was: one completed, one failed (two agents failed, #5511's agents_failed), a long
+# one of 185 agents (the hub lists 60) and a small one running (models, latest tools, phase_stats). An older call whose
+# run the hub no longer lists stays a plain row. GET /mock/workflow?step=0..3 moves the small run on (an agent done, a
+# new one, the next phase, completed) and pushes the session, for the screenshots of a change.
+WFCARDS = "a1f3c2d4-0000-4000-8000-0000000000e1"
+MOCK_WORKFLOW_CARDS = os.environ.get("MOCK_WORKFLOW_CARDS") == "1"
+WF_STEP = {"n": 0}
+
+
+def wf_agent(aid, label, phase, state, start_min, end_min=None, model="claude-sonnet-4-5", tool_name=None, tool_summary=None, tokens=0, calls=0, text=None):
+    a = {"id": aid, "session_id": f"{WFCARDS}@{aid}", "label": label, "phase": phase, "running": state == "running",
+         "status": state, "started_at": ago(minutes=start_min), "model": model, "tokens": tokens, "calls": calls}
+    if state != "running":
+        a["ended_at"] = ago(minutes=end_min if end_min is not None else max(start_min - 2, 0))
+    a["updated_at"] = a.get("ended_at") or ago(minutes=0)
+    if tool_name:
+        a["latest_tool"] = {"name": tool_name, "summary": tool_summary or tool_name}
+    if text:
+        a["last_text"] = text
+    return a
+
+
+def wf_small(step):
+    """widget-review at a step: 0 in Verify, 1 an agent done and a new one, 2 in Report, 3 completed."""
+    scan = [wf_agent("s%d" % (i + 1), "scan:" + area, "Scan", "done", 9 - i * 0.2, 7 - i * 0.2, tool_name="Read",
+                     tool_summary="读 WeatherWidget/%s.swift" % area.title(), tokens=18000 + i * 900, calls=6 + i,
+                     text="%s 这一块看完了。" % area)
+            for i, area in enumerate(("timeline", "rain", "locale", "sizes"))]
+    verify_areas = ["timeline", "rain", "locale", "sizes", "a11y"] + (["dark-mode"] if step >= 1 else [])
+    done_upto = {0: 2, 1: 4, 2: 6, 3: 6}[step]
+    verify = []
+    for i, area in enumerate(verify_areas):
+        state = "done" if i < done_upto else "running"
+        verify.append(wf_agent("v%d" % (i + 1), "verify:" + area, "Verify", state, 6 - i * 0.4, 2 - i * 0.2 if state == "done" else None,
+                               tool_name="Grep" if i % 2 else "Bash", tool_summary="在核对 %s 的格式化" % area if i % 2 else "跑 %s 的快照测试" % area,
+                               tokens=24000 + i * 1500, calls=9 + i * 2))
+    report = [wf_agent("r1", "report:summary", "Report", "done" if step >= 3 else "running", 1, 0, model="claude-opus-4-1",
+                       tool_name="Write", tool_summary="写 docs/widget-review.md", tokens=41000, calls=5)] if step >= 2 else []
+    agents = scan + verify + report
+    phase = "Report" if step >= 2 else "Verify"
+    stats = [{"title": t, "started": len(xs), "done": sum(a["status"] == "done" for a in xs), "running": sum(a["running"] for a in xs)}
+             for t, xs in (("Scan", scan), ("Verify", verify), ("Report", report))]
+    ended = step >= 3
+    return {"task_id": "wfrun", "run_id": "wf_run", "name": "widget-review", "summary": "逐块审一遍小组件，再核对每个发现",
+            "status": "completed" if ended else "running", "running": not ended, "phases": ["Scan", "Verify", "Report"],
+            "phase": phase, "phase_index": 3 if step >= 2 else 2, "phase_count": 3, "phase_stats": stats, "tool_use_id": "toolu_wf_run",
+            "agents_started": len(agents), "agents_done": sum(a["status"] == "done" for a in agents),
+            "agents_running": sum(a["running"] for a in agents), "tokens": sum(a["tokens"] for a in agents),
+            "calls": sum(a["calls"] for a in agents), "started_at": ago(minutes=9), "updated_at": ago(minutes=0),
+            **({"ended_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")} if ended else {}), "agents": agents}
+
+
+def wf_runs(step):
+    # parity-audit: 185 agents, the hub lists the newest 60 (Audit #126–180, Verify 1–5)
+    long_agents = [wf_agent("p%03d" % n, "audit:area-%03d" % n, "Audit", "running" if n > 169 else "done", 50 - n * 0.2,
+                            40 - n * 0.2 if n <= 169 else None, tool_name="Read", tool_summary="读 area-%03d 的三端实现" % n,
+                            tokens=15000 + n * 37, calls=4 + n % 7) for n in range(126, 181)]
+    long_agents += [wf_agent("q%d" % n, "verify:batch-%d" % n, "Verify", "running", 6 - n * 0.5, tool_name="Grep",
+                             tool_summary="在核对第 %d 批的发现" % n, tokens=22000, calls=8) for n in range(1, 6)]
+    failed_agents = [wf_agent("f%d" % (i + 1), "snapshot:" + name, "Snapshot", state, 70 - i * 0.5, 63 - i * 0.2, tool_name="Bash",
+                              tool_summary="跑 %s 的快照" % name, tokens=12000 + i * 500, calls=3 + i)
+                     for i, (name, state) in enumerate((("light-small", "done"), ("light-large", "done"), ("dark-small", "done"),
+                                                       ("dark-large", "failed"), ("ja-small", "failed"), ("en-small", "done")))]
+    done_agents = [wf_agent("c%d" % (i + 1), label, phase, "done", 150 - i * 2, 146 - i * 2, tool_name="Edit" if phase == "Fix" else "Read",
+                            tool_summary=("改 " if phase == "Fix" else "读 ") + "Settings/%s.strings" % label.split(":")[1], tokens=9000 + i * 400, calls=4 + i)
+                   for i, (label, phase) in enumerate((("read:general", "Read"), ("read:privacy", "Read"), ("read:about", "Read"),
+                                                       ("fix:general", "Fix"), ("fix:privacy", "Fix"), ("fix:about", "Fix"),
+                                                       ("check:zh", "Check"), ("check:en", "Check")))]
+    return [
+        wf_small(step),
+        {"task_id": "wflong", "run_id": "wf_long", "name": "parity-audit", "summary": "和 App 的功能差异全量审计，每条发现再核对一遍",
+         "status": "running", "running": True, "phases": ["Audit", "Verify"], "phase": "Verify", "phase_index": 2, "phase_count": 2,
+         "phase_stats": [{"title": "Audit", "started": 180, "done": 169, "running": 11}, {"title": "Verify", "started": 5, "done": 0, "running": 5}],
+         "tool_use_id": "toolu_wf_long", "agents_started": 185, "agents_done": 169, "agents_running": 16, "tokens": 3120000, "calls": 1420,
+         "started_at": ago(minutes=52), "updated_at": ago(minutes=0), "agents": long_agents},
+        {"task_id": "wffail", "run_id": "wf_fail", "name": "snapshot-sweep", "summary": "小组件各尺寸、深浅色、三种语言的快照对比",
+         "status": "failed", "running": False, "phases": ["Snapshot", "Compare"], "phase": "Snapshot", "phase_index": 1, "phase_count": 2,
+         "phase_stats": [{"title": "Snapshot", "started": 6, "done": 4, "running": 0, "failed": 2}, {"title": "Compare", "started": 0, "done": 0, "running": 0}],
+         "tool_use_id": "toolu_wf_failed", "agents_started": 6, "agents_done": 4, "agents_running": 0, "agents_failed": 2,
+         "tokens": 81000, "calls": 27, "started_at": ago(minutes=70), "ended_at": ago(minutes=62),
+         "error": "Error: 2 agents failed: snapshot:dark-large, snapshot:ja-small", "agents": failed_agents},
+        {"task_id": "wfdone", "run_id": "wf_done", "name": "copy-audit", "summary": "设置页的文案逐页审一遍，改掉说法不一致的地方",
+         "status": "completed", "running": False, "phases": ["Read", "Fix", "Check"], "phase": "Check", "phase_index": 3, "phase_count": 3,
+         "phase_stats": [{"title": "Read", "started": 3, "done": 3, "running": 0}, {"title": "Fix", "started": 3, "done": 3, "running": 0},
+                         {"title": "Check", "started": 2, "done": 2, "running": 0}],
+         "tool_use_id": "toolu_wf_done", "agents_started": 8, "agents_done": 8, "agents_running": 0, "tokens": 96000, "calls": 52,
+         "started_at": ago(minutes=150), "ended_at": ago(minutes=128), "agents": done_agents},
+    ]
+
+
+def wf_call(tid, name, ts_min):
+    return [it("assistant", "tool_use", ts_min, tool_use_id=tid, tool_name="Workflow", tool_input={"name": name}),
+            it("user", "tool_result", ts_min, tool_use_id=tid, text="Workflow launched in background: %s" % name)]
+
+
+def set_wf_step(step):
+    """GET /mock/workflow?step=n: the small run at that step, pushed as the hub would."""
+    WF_STEP["n"] = max(0, min(3, step))
+    for s in SESSIONS:
+        if s["session_id"] == WFCARDS:
+            runs = wf_runs(WF_STEP["n"])
+            s.update(workflows=runs, rev=(s.get("rev") or 0) + 1, updated_at=ago(minutes=0),
+                     background=[{"id": w["task_id"], "kind": "workflow", "description": w["name"], "run_id": w["run_id"],
+                                  "started_at": w["started_at"]} for w in runs if w["running"]])
+            push_machine(s["machine_id"])
+            return {"step": WF_STEP["n"], "counts": "%d/%d" % (runs[0]["agents_done"], runs[0]["agents_started"])}
+    return {"error": "MOCK_WORKFLOW_CARDS is off"}
+
+
+if MOCK_WORKFLOW_CARDS:
+    _runs = wf_runs(0)
+    SESSIONS.append(sess("macbook", WFCARDS, "审一遍小组件和设置页", "/Users/me/code/weather", "done", "working", "weather", 1, "audit", 5, 0,
+                         "已在后台启动 widget-review，结果回来后我再继续。", state_since=ago(minutes=9), background_working=True,
+                         background=[{"id": w["task_id"], "kind": "workflow", "description": w["name"], "run_id": w["run_id"],
+                                      "started_at": w["started_at"]} for w in _runs if w["running"]],
+                         workflows=_runs))
+    ITEMS[WFCARDS] = (
+        # two days ago: its run is no longer listed, so the call stays a row
+        [it("user", "text", 60 * 48, text="上次的文案审计再跑一遍")]
+        + wf_call("toolu_wf_gone", "copy-audit", 60 * 48)
+        + [it("assistant", "text", 60 * 48 - 1, text="已经在后台重新跑了。")]
+        + [it("user", "text", 150, text="把设置页的文案过一遍，说法不一致的直接改")]
+        + tool("Grep", {"pattern": "NSLocalizedString", "path": "Settings"}, "Settings/General.swift:12\nSettings/Privacy.swift:8", 150)
+        + tool("Read", {"file_path": "/Users/me/code/weather/Settings/General.strings"}, "1\t\"title\" = \"通用\";", 150)
+        + wf_call("toolu_wf_done", "copy-audit", 150)
+        + [it("assistant", "text", 150, text="文案审计交给 workflow 在后台跑了：先读、再改、最后按语言核对。")]
+        + [it("user", "text", 70, text="小组件的快照对比也跑一遍")]
+        + wf_call("toolu_wf_failed", "snapshot-sweep", 70)
+        + [it("assistant", "text", 70, text="快照对比也放到后台了。")]
+        + [it("user", "text", 52, text="和 App 的功能差异全量审一遍")]
+        + tool("Grep", {"pattern": "struct .*View", "path": "Sources"}, "Sources/Weather/HomeView.swift:3\nSources/Weather/RainView.swift:5", 52)
+        + wf_call("toolu_wf_long", "parity-audit", 52)
+        + [it("assistant", "text", 52, text="全量审计已在后台启动，分两个阶段：先审，再核对每条发现。")]
+        + [it("user", "text", 9, text="小组件也逐块审一下")]
+        + tool("Read", {"file_path": "/Users/me/code/weather/WeatherWidget/Provider.swift"}, "1\timport WidgetKit", 9)
+        + wf_call("toolu_wf_run", "widget-review", 9)
+        + [it("assistant", "text", 9, text="已在后台启动 widget-review，结果回来后我再继续。")]
+    )
+    for _w in _runs:  # each agent's own conversation, read as a subagent's
+        for _a in _w["agents"]:
+            ITEMS[_a["session_id"]] = [it("user", "text", 9, text="%s：审这一块，列出问题" % _a["label"]),
+                                       it("assistant", "text", 8, text=_a.get("last_text") or "这一块看完了，没有发现问题。")]
 ITEMS[TESTS] = (
     [it("user", "text", 5, text="给网络层补单元测试，覆盖重试和超时")]
     + tool("Glob", {"pattern": "Sources/Weather/API/*.swift"}, "Sources/Weather/API/Client.swift\nSources/Weather/API/Retry.swift\nSources/Weather/API/Forecast.swift", 4)
@@ -5044,7 +5188,7 @@ if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
     split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
     inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
     inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
     legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
     reply = _lm("214", "我", "好的", mine=True, mins=36)
     reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
@@ -11374,6 +11518,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/session_close":
             if "fail" in q: SESSION_CLOSE["fail"] = q["fail"][0] == "1"
             return self.send_json({k: SESSION_CLOSE[k] for k in ("fail", "attempts", "closed")})
+        if p == "/mock/workflow" and MOCK_WORKFLOW_CARDS:  # MOCK_WORKFLOW_CARDS: the small run at ?step=0..3
+            return self.send_json(set_wf_step(int(q.get("step", ["0"])[0] or 0)))
         if p == "/mock/session_state":
             body, status = set_session_state(q)
             return self.send_json(body, status)

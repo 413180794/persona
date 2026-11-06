@@ -3,19 +3,20 @@
 // time the count moves (output, not just time passing); when the turn ends it stays a second, then fades out. Without
 // a status line (another agent, an older hub) it says "Running" and counts from when the turn started. While the chat's live
 // work line ("Working…") ticks, the bar leaves the time to it (#3534: the same clock twice; iOS shows it there only).
+// Once the turn is over and a workflow keeps the agent working (#3434, `background_working`), it says what runs:
+// "Background workflow · Verify · 169/185+", timed from the workflow's start (the turn's own time read as if the agent
+// were still at it). The count stays whole on a narrow screen: the words before it give way first.
 import { useEffect, useRef, useState } from "react";
 import { duration } from "../../lib/format";
 import { useSessionLive } from "../../lib/live";
 import type { SessionLive } from "../../lib/types";
+import { workflowCounts, type BackgroundLine } from "../../lib/workflows";
 import { useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
-import { prefersReducedMotion } from "../../ui/stream/motion";
+import { FADE_OUT_MS, LINGER_MS, useBreath, useCountUp } from "../../ui/motion";
+import { Rolling } from "../../ui/Rolling";
 import "../../ui/stream/stream.css";
 import { t } from "../../i18n";
-
-const LINGER_MS = 1000;
-const FADE_OUT_MS = 400;
-const TWEEN_MS = 400;
 
 /** 22.8k, 1.2k, 950: thousands with one decimal (the reference client's formatRunningTokenCount; not lib/compaction's ten-thousand units). */
 export function tokenCount(n: number): string {
@@ -41,45 +42,82 @@ export function statusText(live: SessionLive | null, agents?: AgentsWorking | nu
   return live.verb ? `${live.verb}…` : t("chat-runningstatusbar.running");
 }
 
-export function RunningStatusBar({ mid, sid, working, startedAt, clock, agents }: { mid: string; sid: string; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null }) {
+export function RunningStatusBar({ mid, sid, working, startedAt, clock, agents, background }: { mid: string; sid: string; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null; background?: BackgroundLine | null }) {
   const live = useSessionLive(mid, sid);
-  return <RunningStatusView live={live} working={working} startedAt={startedAt} clock={clock} agents={agents} />;
+  return <RunningStatusView live={live} working={working} startedAt={startedAt} clock={clock} agents={agents} background={background} />;
+}
+
+/** Whether the bar speaks of the background workflow: the hub says the turn is over, or (a hub from before
+ *  background_working) a workflow runs and no turn of the agent's own shows: no status line, no live work line ticking
+ *  (`clock`: the bar has the time), no subagent it is waiting on (`agents`, its call not answered yet). */
+function inBackground(background: BackgroundLine | null | undefined, live: SessionLive | null, clock: boolean, agents: AgentsWorking | null | undefined): background is BackgroundLine {
+  return Boolean(background && (!background.guessed || (clock && !agents && !(live?.verb || live?.thinking))));
+}
+
+/** The words for it: "Background workflow · Verify · 169/185+ · 1 more". Only the words before the count shrink (the
+ *  name for it first, then the phase), so a narrow bar keeps the count and the other runs whole. */
+function BackgroundWords({ line }: { line: BackgroundLine }) {
+  const w = line.run;
+  return (
+    <span className="flex min-w-0 items-center whitespace-pre tabular-nums" data-running-verb>
+      <span className="min-w-0 truncate">{t("chat-runningstatusbar.background_workflow")}</span>
+      {/* not `truncate`: its nowrap would drop the space the piece starts with */}
+      {w.phase && <span className="max-w-[40%] shrink-0 overflow-hidden text-ellipsis">{` · ${w.phase}`}</span>}
+      <span className="shrink-0" data-running-counts>
+        {" · "}
+        <Rolling value={workflowCounts(w)} />
+      </span>
+      {line.more > 0 && <span className="shrink-0" data-running-more>{` · ${t("chat-runningstatusbar.more_workflows", { count: line.more })}`}</span>}
+    </span>
+  );
 }
 
 type Phase = "on" | "linger" | "fading" | "off";
 
 /** The bar for a given status line (RunningStatusBar subscribes; tests render this). `clock: false`: no time, the
  *  chat's live work line shows it. */
-export function RunningStatusView({ live, working, startedAt, clock = true, agents }: { live: SessionLive | null; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null }) {
+export function RunningStatusView({ live, working, startedAt, clock = true, agents, background }: { live: SessionLive | null; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null; background?: BackgroundLine | null }) {
   const phase = usePhase(working);
   // after the turn: what it last said, while it lingers and fades
   const last = useRef(live);
   if (working) last.current = live;
   const shown = working ? live : last.current;
+  const lastBackground = useRef(background);
+  if (working) lastBackground.current = background;
+  const bg = working ? background : lastBackground.current;
   // and whether it had the time: the work line's clock goes with the turn, the bar does not take it up as it fades
   const hadClock = useRef(clock);
   if (working) hadClock.current = clock;
-  const showClock = working ? clock : hadClock.current;
+  const ownClock = working ? clock : hadClock.current;
+  const behind = inBackground(bg, shown, ownClock, working ? agents : null);
+  // The workflow has a clock of its own, which no work line shows (the hub says the turn is over: it is drawn finished)
+  const showClock = behind || ownClock;
   const now = useNow(1000, phase === "on");
-  const elapsed = useElapsed(shown, startedAt, now);
-  const tokens = useTween(shown?.tokens_down ?? 0, TWEEN_MS);
+  // from the run's start; a run that does not say when it started, from the turn's (not from when the bar appeared)
+  const elapsed = useElapsed(behind ? null : shown, behind ? (bg.since ?? startedAt) : startedAt, now);
+  const tokens = useCountUp(shown?.tokens_down ?? 0);
   const breath = useBreath(shown?.tokens_down, phase === "on");
   if (phase === "off") return null;
   return (
     <div
       data-running-status={phase}
+      data-running-background={behind ? "workflow" : undefined}
       className="flex select-none items-center justify-between gap-3 px-2 py-1.5 text-[13px] font-medium"
       style={{ opacity: phase === "fading" ? 0 : 1, transition: `opacity ${FADE_OUT_MS}ms ease-out` }}
     >
-      <div key={breath.cycle} onAnimationEnd={breath.ended} className={`flex min-w-0 items-center gap-1.5 text-status-accent ${breath.cycle ? "status-breath" : ""}`}>
-        <Icon name="sparkles" size={14} className="shrink-0 -translate-y-px" />
-        <span className="truncate" data-running-verb>
-          {statusText(shown, working ? agents : null)}
-        </span>
+      <div key={breath.cycle} onAnimationEnd={breath.ended} className={`flex min-w-0 items-center gap-1.5 ${behind ? "text-ai" : "text-status-accent"} ${breath.cycle ? "status-breath" : ""}`}>
+        <Icon name={behind ? "workflow" : "sparkles"} size={14} className="shrink-0 -translate-y-px" />
+        {behind ? (
+          <BackgroundWords line={bg} />
+        ) : (
+          <span className="truncate" data-running-verb>
+            {statusText(shown, working ? agents : null)}
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-ink-3 tabular-nums">
         {showClock && <span data-running-elapsed>{duration(elapsed * 1000)}</span>}
-        {shown?.tokens_down !== undefined && (
+        {!behind && shown?.tokens_down !== undefined && (
           <>
             {showClock && <span aria-hidden>·</span>}
             <span data-running-tokens>↓ {tokenCount(tokens)} tokens</span>
@@ -122,64 +160,4 @@ function useElapsed(live: SessionLive | null, startedAt: string | undefined, now
   if (base.current) return base.current.s + Math.max(0, Math.floor((now - base.current.at) / 1000));
   const from = startedAt ? Date.parse(startedAt) : NaN;
   return Math.max(0, Math.floor((now - (Number.isNaN(from) ? mounted.current : from)) / 1000));
-}
-
-/** A number easing to `target` over `ms` (cindy's useAnimatedNumber); a drop (a new turn) snaps. */
-function useTween(target: number, ms: number): number {
-  const [shown, setShown] = useState(target);
-  const ref = useRef(target);
-  ref.current = shown;
-  useEffect(() => {
-    const from = ref.current;
-    if (from === target) return;
-    if (target < from || prefersReducedMotion() || typeof requestAnimationFrame !== "function") {
-      setShown(target);
-      return;
-    }
-    const start = performance.now();
-    let raf = 0;
-    const step = (t: number) => {
-      const k = Math.min(1, (t - start) / ms);
-      setShown(from + (target - from) * (1 - (1 - k) ** 3));
-      if (k < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [target, ms]);
-  return shown;
-}
-
-/**
- * One breath (1.5 s) each time `value` moves while `on`: a new key replays the one-shot animation. A change during a
- * breath queues one more, so steady output breathes continuously and silence (a long think, a tool) stays still.
- */
-function useBreath(value: number | undefined, on: boolean): { cycle: number; ended: () => void } {
-  const [cycle, setCycle] = useState(0);
-  const playing = useRef(false);
-  const pending = useRef(false);
-  const seen = useRef(value);
-  useEffect(() => {
-    if (!on) {
-      playing.current = pending.current = false;
-      seen.current = value;
-      return;
-    }
-    if (value === seen.current) return;
-    seen.current = value;
-    if (value === undefined || prefersReducedMotion()) return; // reduced: the animation never ends
-    if (playing.current) {
-      pending.current = true;
-      return;
-    }
-    playing.current = true;
-    setCycle((n) => n + 1);
-  }, [value, on]);
-  const ended = () => {
-    playing.current = false;
-    if (!pending.current) return;
-    pending.current = false;
-    playing.current = true;
-    setCycle((n) => n + 1);
-  };
-  return { cycle, ended };
 }

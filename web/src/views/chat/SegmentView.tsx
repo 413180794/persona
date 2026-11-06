@@ -1,12 +1,13 @@
-import { Fragment, memo, type ReactNode, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clock } from "../../lib/format";
 import { getSession, getState } from "../../lib/store";
 import { agentStatus, subagentFor } from "../../lib/tasks";
 import { turnImages } from "../../lib/turn-images";
 import { TurnImages } from "./TurnImages";
-import { exchangeSteps, isLoopTick, isOwnMessage, type Segment, type UserMessage } from "../../lib/turns";
+import { exchangeSteps, isLoopTick, isOwnMessage, type Segment, type Step, type UserMessage } from "../../lib/turns";
 import type { Item } from "../../lib/types";
-import { planSteps, thinkingDurations, workBlocks, type ToolStep } from "../../lib/work-groups";
+import { foldsHoldingCalls, planSteps, thinkingDurations, workBlocks, type ToolStep } from "../../lib/work-groups";
+import { NO_WORKFLOW_CALLS } from "../../lib/workflows";
 import { channelOf, useChannels } from "../../lib/channels";
 import { splitQuotes } from "../../lib/drafts";
 import { EASE } from "../../ui/atoms";
@@ -196,16 +197,20 @@ export const SegmentView = memo(function SegmentView({
   /** Drawn between the work and the agent's last words (the wakes chip, #3783); above the work while it is live. */
   beforeWords?: ReactNode;
 }) {
-  const { subagents, scope } = useChatContext();
+  const { subagents, scope, workflowCalls = NO_WORKFLOW_CALLS } = useChatContext();
   const steps = useMemo(() => planSteps(exchangeSteps(seg)), [seg]);
   const turnStart = seg.user?.ts ?? seg.start;
   const thinking = useMemo(() => thinkingDurations(steps, turnStart), [steps, turnStart]);
   const p = useMemo<WorkProps>(() => {
     const agent = (s: ToolStep) => agentStatus(s.result, subagentFor(subagents, s.use), live);
-    return { mid, sid, scope, expandFold, agentStatus: agent, thinking, segment: seg.id };
-  }, [mid, sid, scope, expandFold, subagents, live, thinking, seg.id]);
-  const nodes = useMemo(() => workBlocks(steps, { live, turnStart, agentStatus: p.agentStatus }), [steps, live, turnStart, p.agentStatus]);
+    return { mid, sid, scope, expandFold, agentStatus: agent, thinking, segment: seg.id, workflowCalls };
+  }, [mid, sid, scope, expandFold, subagents, live, thinking, seg.id, workflowCalls]);
+  const nodes = useMemo(
+    () => workBlocks(steps, { live, turnStart, agentStatus: p.agentStatus, workflowCard: (s) => workflowCalls.known.has(s.use.tool_use_id ?? "") }),
+    [steps, live, turnStart, p.agentStatus, workflowCalls],
+  );
   useCallSeeker(scope, nodes);
+  useWorkflowFolds(steps, workflowCalls.startedAt, expandFold);
   // the pictures the agent looked at this turn, between its work and its last words
   const images = useMemo(() => turnImages(seg, getState().machines.find((m) => m.id === mid)?.name), [seg, mid]);
   // a finished exchange's last words (the run of them at its end) come after those pictures
@@ -228,3 +233,34 @@ export const SegmentView = memo(function SegmentView({
     </section>
   );
 });
+
+/** After a fold failed to come, the next try waits this long, doubling up to WORKFLOW_FOLD_RETRY_MAX_MS. */
+const WORKFLOW_FOLD_RETRY_MS = 5000;
+const WORKFLOW_FOLD_RETRY_MAX_MS = 60_000;
+
+/** A workflow run's call the hub folded into this exchange's work (the page counted back from the end, #3434): its steps
+ *  are fetched, so the run's card comes out of the fold and stays in the open. Kept by this exchange as drawn now, not
+ *  for the page: a transcript loaded again (another chat and back, a rewrite) mounts it afresh and brings the same fold
+ *  back, which is fetched again. A fold that came is gone from the steps; one that failed is asked for again later. */
+function useWorkflowFolds(steps: Step[], calls: ReadonlyMap<string, number>, expandFold: (f: Item) => Promise<void>) {
+  const folds = useMemo(() => foldsHoldingCalls(steps, calls), [steps, calls]);
+  // asked for (on its way, or come: one that came back empty stays among the steps and is not asked for again)
+  const asked = useRef(new Set<string>());
+  const wait = useRef(WORKFLOW_FOLD_RETRY_MS);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    for (const f of folds) {
+      if (asked.current.has(f.id)) continue;
+      asked.current.add(f.id);
+      expandFold(f).then(
+        () => void (wait.current = WORKFLOW_FOLD_RETRY_MS),
+        () => {
+          asked.current.delete(f.id);
+          const ms = wait.current;
+          wait.current = Math.min(ms * 2, WORKFLOW_FOLD_RETRY_MAX_MS);
+          window.setTimeout(() => setRetry((n) => n + 1), ms);
+        },
+      );
+    }
+  }, [folds, expandFold, retry]);
+}

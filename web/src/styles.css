@@ -29,8 +29,10 @@
   --orange-tint: #fdf1e5;
   --red: #e3474c;
   --red-tint: #fcecec;
-  /* The AI role (iOS Theme.ai): marks of what the agent runs on its own, as ultracode's workflow icon (#3428). */
+  /* The AI role (iOS Theme.ai): what the AI runs on its own, such as ultracode's workflow icon (#3428) and a
+     workflow run (#3434). */
   --ai: #5b4fd6;
+  --ai-tint: #efedfb;
   /* where an agent was opened (#2526): a Feishu group's topic (botmux) or a terminal pane (herdr) */
   --source-feishu: #1d5fd6;
   --source-feishu-tint: #e6eefc;
@@ -80,6 +82,7 @@
   --red: #ee5c61;
   --red-tint: #ee5c6124;
   --ai: #9c94ff;
+  --ai-tint: #9c94ff24;
   --source-feishu: #82aaff;
   --source-feishu-tint: #4d7cff2e;
   --source-terminal: #bea3ff;
@@ -125,6 +128,7 @@
   --color-red: var(--red);
   --color-red-tint: var(--red-tint);
   --color-ai: var(--ai);
+  --color-ai-tint: var(--ai-tint);
   --color-source-feishu: var(--source-feishu);
   --color-source-feishu-tint: var(--source-feishu-tint);
   --color-source-terminal: var(--source-terminal);

@@ -5,7 +5,8 @@ import { memo, useContext, useEffect, useLayoutEffect, useMemo, useState } from 
 import { useSessionLive } from "../../lib/live";
 import { subagentFor } from "../../lib/tasks";
 import type { Item } from "../../lib/types";
-import { groupOpens, groupTitle, isAgentStep, isPlanStep, isRowStep, planTodos, previewSteps, workDuration, type AgentStatus, type ToolStep, type WorkGroupNode, type WorkNode } from "../../lib/work-groups";
+import { groupOpens, groupTitle, isAgentStep, isPlanStep, isRowStep, isWorkflowStep, planTodos, previewSteps, workDuration, type AgentStatus, type ToolStep, type WorkGroupNode, type WorkNode } from "../../lib/work-groups";
+import type { WorkflowCalls } from "../../lib/workflows";
 import type { Step } from "../../lib/turns";
 import { Collapse, cx, Spinner, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -18,6 +19,7 @@ import { PlanCard } from "./PlanCard";
 import { Answer } from "./SegmentView";
 import { NoticeRow, Thumb } from "./Steps";
 import { SubagentCard } from "./SubagentCard";
+import { WorkflowCallCard } from "./WorkflowCard";
 import { ThinkingCard, ThinkingLine } from "./ThinkingCard";
 import { t } from "../../i18n";
 
@@ -29,11 +31,19 @@ export interface WorkProps {
   expandFold: (f: Item) => Promise<void>;
   agentStatus: (s: ToolStep) => AgentStatus;
   thinking: Map<string, number>;
+  /** The Workflow calls whose run the hub lists (#3434): those draw the run's card. */
+  workflowCalls?: WorkflowCalls;
   /** Inside an open group (a finished timeline's inner groups stay folded). */
   nested?: boolean;
   /** The exchange these steps are of (its segment's id): what of it the reader opened is kept under it. */
   segment?: string;
 }
+
+/** A Workflow call that draws its run's card (the hub lists the run); one that does not is the row it always was. */
+const workflowCard = (s: ToolStep, p: WorkProps) => isWorkflowStep(s) && Boolean(s.use.tool_use_id && p.workflowCalls?.known.has(s.use.tool_use_id));
+
+/** A step drawn as an action row, sitting with the rows next to it. */
+const drawnAsRow = (s: Step, p: WorkProps): s is ToolStep => isRowStep(s) || (isWorkflowStep(s) && !workflowCard(s, p));
 
 /** Every fold under a group, nested ones too: opening it fetches their steps. */
 function foldsOf(g: WorkGroupNode): Item[] {
@@ -149,7 +159,7 @@ export function WorkNodes({ nodes, p, live, fade }: { nodes: WorkNode[]; p: Work
   const runs: (WorkNode | ToolStep[] | AgentRun)[] = [];
   for (const n of nodes) {
     const last = runs[runs.length - 1];
-    if (n.kind === "step" && isRowStep(n.step)) {
+    if (n.kind === "step" && drawnAsRow(n.step, p)) {
       if (Array.isArray(last)) last.push(n.step);
       else runs.push([n.step]);
     } else if (n.kind === "step" && isAgentStep(n.step)) {
@@ -226,6 +236,7 @@ export const StepView = memo(function StepView({ step, p, live, fade }: { step: 
     case "tool":
       if (isAgentStep(step)) return <SubagentCard step={step} status={p.agentStatus(step)} mid={p.mid} scope={p.scope} />;
       if (isPlanStep(step)) return <PlanCard id={step.id} todos={planTodos(step)} live={live} mid={p.mid} sid={p.sid} />;
+      if (workflowCard(step, p)) return <WorkflowCallCard step={step} mid={p.mid} sid={p.sid} scope={p.scope} />;
       return <ActionRow step={step} running={live && !step.result} mid={p.mid} sid={p.sid} />;
     case "thinking":
       return <ThinkingCard item={step.item} durationMs={p.thinking.get(step.id)} scope={p.scope} />;

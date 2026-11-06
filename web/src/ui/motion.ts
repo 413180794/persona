@@ -1,14 +1,25 @@
-// How an extension's view moves when the extension draws it again (#2757): a number that changed counts to its new
-// value, the marks of a chart go to their new place. Nothing moves the first time something is drawn, and nothing at all
-// with reduced motion; at rest what is shown is exactly what the extension sent.
+// How things on the page move when their values change (#2757, #3434): a number that changed counts to its new value,
+// a chart's marks go to their new place, a new row fades in, a bar's fill moves. Nothing moves the first time something
+// is drawn, and nothing at all with reduced motion; at rest what is shown is exactly the value. Every duration here is
+// the one place it is set (the CSS that goes with one names it).
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { EASE } from "../../ui/atoms";
-import { prefersReducedMotion } from "../../ui/stream/motion";
+import { EASE } from "./atoms";
+import { prefersReducedMotion } from "./stream/motion";
 
 /** How long a number takes to count to its new value, and a chart's marks to move. */
 export const TWEEN_MS = 600;
 /** How long a row takes to come in or go (and a text that changed to fade in). */
 export const ENTER_MS = 240;
+/** A fill, a highlight or a color going to its new place or value (a workflow's progress bar, its current phase, a
+ *  status chip turning green). */
+export const MOVE_MS = 300;
+/** The running bar's token count easing up to the new one (cindy's useAnimatedNumber). */
+export const COUNT_MS = 400;
+/** The running bar after its turn: how long it stays as it was, then how long it fades out. */
+export const LINGER_MS = 1000;
+export const FADE_OUT_MS = 400;
+/** One breath of the running bar (`.status-breath` in ui/stream/stream.css runs this long). */
+export const BREATH_MS = 1500;
 
 /** `cubic-bezier(x1, y1, x2, y2)` as a function of the progress (0…1), so JS moves with the same curve as CSS. */
 export function bezier(css: string): (p: number) => number {
@@ -50,12 +61,24 @@ export const reducedMotion = () => prefersReducedMotion();
 
 const same = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 
+/** The running bar's curve: fast, then settling (1 − (1 − p)³). */
+export const easeOutCubic = (p: number) => 1 - (1 - p) ** 3;
+
+export interface TweenOptions {
+  /** How long a move takes (TWEEN_MS). */
+  ms?: number;
+  /** The curve, progress (0…1) to how far along (the design system's EASE). */
+  curve?: (p: number) => number;
+  /** Jump instead of moving from what is shown to the new values (the running bar's count going down: a new turn). */
+  jump?: (from: number[], to: number[]) => boolean;
+}
+
 /**
  * Numbers on their way to `to`: null at rest (draw `to` itself), otherwise the values for this frame (as many as `to`
  * has). They move only when `to` changes with the same `shape` (the same kind of thing with new values); a new shape,
  * the first draw and reduced motion jump. A change while moving goes on from where it is.
  */
-export function useTween(to: number[], shape: string, ms = TWEEN_MS): number[] | null {
+export function useTween(to: number[], shape: string, { ms = TWEEN_MS, curve = ease, jump }: TweenOptions = {}): number[] | null {
   // the frame is for one `id` (shape and target): on the render where `to` has just changed it is the old one's frame
   // (possibly another length), so it is not returned until the effect below has started the new move
   const [now, setNow] = useState<{ id: string; v: number[] } | null>(null);
@@ -65,12 +88,12 @@ export function useTween(to: number[], shape: string, ms = TWEEN_MS): number[] |
   useLayoutEffect(() => {
     const prev = last.current;
     last.current = { to, shape };
-    if (prev.shape !== shape || same(prev.to, to) || reducedMotion() || typeof requestAnimationFrame !== "function") {
+    const from = shown.current.length === to.length ? shown.current : prev.to;
+    if (prev.shape !== shape || same(prev.to, to) || reducedMotion() || typeof requestAnimationFrame !== "function" || jump?.(from, to)) {
       shown.current = to;
       setNow(null);
       return;
     }
-    const from = shown.current.length === to.length ? shown.current : prev.to;
     let start: number | undefined;
     let frame = 0;
     const step = (t: number) => {
@@ -81,7 +104,7 @@ export function useTween(to: number[], shape: string, ms = TWEEN_MS): number[] |
         setNow(null);
         return;
       }
-      const e = ease(p);
+      const e = curve(p);
       const v = from.map((f, i) => f + (to[i] - f) * e);
       shown.current = v;
       setNow({ id, v });
@@ -95,6 +118,49 @@ export function useTween(to: number[], shape: string, ms = TWEEN_MS): number[] |
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   return now && now.id === id && now.v.length === to.length ? now.v : null;
+}
+
+const goesDown = (from: number[], to: number[]) => to[0] < from[0];
+
+/** One number easing up to `target` over `ms` (the running bar's tokens, cindy's useAnimatedNumber): a drop (a new
+ *  turn) snaps, and so does everything with reduced motion. */
+export function useCountUp(target: number, ms = COUNT_MS): number {
+  return useTween([target], "count", { ms, curve: easeOutCubic, jump: goesDown })?.[0] ?? target;
+}
+
+/**
+ * One breath (BREATH_MS) each time `value` moves while `on`: a new key replays the one-shot animation. A change during a
+ * breath queues one more, so steady output breathes continuously and silence (a long think, a tool) stays still.
+ */
+export function useBreath(value: number | undefined, on: boolean): { cycle: number; ended: () => void } {
+  const [cycle, setCycle] = useState(0);
+  const playing = useRef(false);
+  const pending = useRef(false);
+  const seen = useRef(value);
+  useEffect(() => {
+    if (!on) {
+      playing.current = pending.current = false;
+      seen.current = value;
+      return;
+    }
+    if (value === seen.current) return;
+    seen.current = value;
+    if (value === undefined || reducedMotion()) return; // reduced: the animation never ends
+    if (playing.current) {
+      pending.current = true;
+      return;
+    }
+    playing.current = true;
+    setCycle((n) => n + 1);
+  }, [value, on]);
+  const ended = () => {
+    playing.current = false;
+    if (!pending.current) return;
+    pending.current = false;
+    playing.current = true;
+    setCycle((n) => n + 1);
+  };
+  return { cycle, ended };
 }
 
 // A number in a value: 1,234.5 or 12 or 0.75 (a sign, a currency, a unit and the rest stay as they are)
@@ -168,6 +234,46 @@ export function useFlash(id: string, ms = ENTER_MS): number {
   }, [id, ms]);
   return n;
 }
+
+/**
+ * The keys that joined `keys` since the last draw, each for `ms` (the rows that fade in): none on the first draw, none
+ * with reduced motion. Keys that leave are simply gone (nothing slides or is kept in their place).
+ */
+export function useArrivals(keys: string[], ms = ENTER_MS): ReadonlySet<string> {
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(NONE);
+  const prev = useRef<Set<string> | null>(null);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const joined = keys.join("\n");
+  useLayoutEffect(() => {
+    const before = prev.current;
+    const now = new Set(keys);
+    prev.current = now;
+    if (!before || reducedMotion()) return;
+    const came = keys.filter((k) => !before.has(k));
+    if (!came.length) return;
+    setFresh((f) => new Set([...[...f].filter((k) => now.has(k)), ...came]));
+    const t = setTimeout(() => {
+      timers.current.delete(t);
+      setFresh((f) => {
+        const next = new Set(f);
+        came.forEach((k) => next.delete(k));
+        return next.size ? next : NONE;
+      });
+    }, ms + 40);
+    timers.current.add(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joined]);
+  useEffect(() => {
+    const ts = timers.current;
+    return () => ts.forEach(clearTimeout);
+  }, []);
+  return fresh;
+}
+
+const NONE: ReadonlySet<string> = new Set();
+
+/** A thing that just came in or changed: it fades in (opacity only, nothing moves). */
+export const fadeInStyle = (ms = ENTER_MS): React.CSSProperties => ({ animation: `fade-in ${ms}ms ${EASE} both` });
 
 /** One thing in a list, by its key; `draw` draws it with the style that brings it in or takes it out. */
 export interface Present {

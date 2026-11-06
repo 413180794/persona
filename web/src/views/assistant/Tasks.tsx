@@ -449,8 +449,8 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
             </span>
           )}
           {workflow && (
-            <span data-workflow-line className="flex min-w-0 items-center gap-1 text-[12px] text-orange">
-              <Icon name="layers" size={11} stroke={2.2} className="shrink-0" />
+            <span data-workflow-line className="flex min-w-0 items-center gap-1 text-[12px] text-ai">
+              <Icon name="workflow" size={11} stroke={2.2} className="shrink-0" />
               <span className="truncate tabular-nums">{workflow}</span>
             </span>
           )}

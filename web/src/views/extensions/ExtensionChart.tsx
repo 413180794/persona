@@ -7,7 +7,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { barSpans, chartExtent, compactNumber, edgeLabels, labelWidth, linear, niceTicks, pointText, seriesColors, thinLabels, type UIItem } from "../../lib/extension-ui";
 import { t } from "../../i18n";
 import { chartKind, ChartFrame, LABEL_H, plotHeight } from "./ChartFrame";
-import { useTween } from "./motion";
+import { useTween } from "../../ui/motion";
 
 const FONT = 10.5; // axis text, px
 const TOP = 6;

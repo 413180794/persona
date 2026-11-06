@@ -1,6 +1,33 @@
 import { describe, expect, it } from "vitest";
-import type { Session, Workflow } from "./types";
-import { workflowShortLine, backgroundCount, backgroundRunning, otherBackground, workflowAgentFor, workflowAgents, workflowElapsed, workflowLine, workflowPhase, workflowStatus } from "./workflows";
+import type { Session, Workflow, WorkflowAgent } from "./types";
+import {
+  agentDetail,
+  agentElapsed,
+  agentRunState,
+  backgroundCount,
+  backgroundLine,
+  backgroundRunning,
+  otherBackground,
+  phaseCount,
+  phaseRows,
+  phaseTitle,
+  recentWorkflows,
+  tallyParts,
+  workflowAgentFor,
+  workflowCalls,
+  workflowCallsKey,
+  workflowCounts,
+  workflowCurrent,
+  workflowElapsed,
+  workflowLine,
+  workflowPhase,
+  workflowPhaseBlocks,
+  workflowShortLine,
+  workflowStatus,
+  workflowTally,
+  waitingOnWorkflow,
+  WORKFLOW_KEEP_MS,
+} from "./workflows";
 
 const start = Date.parse("2026-11-05T13:46:57Z");
 const run: Workflow = {
@@ -27,9 +54,9 @@ const session = (over: Partial<Session>): Session => ({ machine_id: "m", session
 describe("workflows (#2935)", () => {
   it("sums up a running run in one line", () => {
     const s = session({ workflows: [run], background: [{ id: "wdp5zxh37", kind: "workflow", run_id: run.run_id }] });
-    expect(workflowLine(s, start + 14 * 60_000)).toBe("后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分");
+    expect(workflowLine(s, start + 14 * 60_000)).toBe("后台 workflow「parity-audit」 · Verify 2/2 · 169/185+ · 14 分");
     expect(workflowPhase(run)).toBe("Verify 2/2");
-    expect(workflowShortLine(s)).toBe("169/185 · parity-audit · Verify");
+    expect(workflowShortLine(s)).toBe("169/185+ · parity-audit · Verify");
   });
 
   it("counts a run once, not also as its background task", () => {
@@ -61,9 +88,194 @@ describe("workflows (#2935)", () => {
     expect(workflowLine(s, start + 60_000)).toContain("（共 2 个）");
   });
 
-  it("lists running agents first, then the latest", () => {
-    expect(workflowAgents(run).map((a) => a.id)).toEqual(["a2", "a3", "a1"]);
+  it("finds an agent among its runs, for the side panel's title", () => {
     expect(workflowAgentFor(session({ workflows: [run] }), "s1@a3")?.agent.label).toBe("verify:chat#1");
     expect(workflowAgentFor(session({ workflows: [run] }), "s1@zz")).toBeNull();
+  });
+});
+
+// #3434: the run's card — counts with "+", blocks per phase, rows in start order folded past 12, the bar's parts
+describe("the run's card (#3434)", () => {
+  const agent = (i: number, phase: string, over: Partial<WorkflowAgent> = {}): WorkflowAgent => ({
+    id: `a${i}`,
+    session_id: `s1@a${i}`,
+    label: `${phase.toLowerCase()}:${i}`,
+    phase,
+    running: false,
+    status: "done",
+    started_at: new Date(start + i * 1000).toISOString(),
+    ended_at: new Date(start + i * 1000 + 90_000).toISOString(),
+    ...over,
+  });
+  const stats: Workflow = {
+    ...run,
+    phases: ["Audit", "Verify", "Report"],
+    phase_stats: [
+      { title: "Audit", started: 180, done: 169, running: 11 },
+      { title: "Verify", started: 5, done: 0, running: 5 },
+      { title: "Report", started: 0, done: 0, running: 0 },
+    ],
+    agents: [agent(1, "Audit"), agent(2, "Audit", { running: true, status: "running" }), agent(3, "Verify", { running: true, status: "running" })],
+  };
+
+  it("counts done of started, with + only while it runs", () => {
+    expect(workflowCounts(run)).toBe("169/185+");
+    expect(workflowCounts({ ...run, running: false, status: "completed" })).toBe("169/185");
+    expect(workflowCounts({ task_id: "x", status: "running", running: true })).toBe("0/0+");
+  });
+
+  it("draws one block per phase from phase_stats, in their order, the run's phase lit", () => {
+    const blocks = workflowPhaseBlocks(stats);
+    expect(blocks.map((b) => [b.title, b.state, b.current, phaseCount(b)])).toEqual([
+      ["Audit", "current", false, "169/180+"],
+      ["Verify", "current", true, "0/5+"],
+      ["Report", "next", false, "0/0"],
+    ]);
+    expect(blocks[0].agents.map((a) => a.id)).toEqual(["a1", "a2"]);
+    expect(blocks[1].agents.map((a) => a.id)).toEqual(["a3"]);
+  });
+
+  it("drops the + once the run ends, and marks phases that did not finish", () => {
+    const ended: Workflow = {
+      ...stats,
+      running: false,
+      status: "killed",
+      phase_stats: [
+        { title: "Audit", started: 4, done: 4, running: 0 },
+        { title: "Verify", started: 3, done: 1, running: 0 },
+      ],
+    };
+    const blocks = workflowPhaseBlocks(ended);
+    expect(blocks.map((b) => [b.state, phaseCount(b), b.current])).toEqual([
+      ["done", "4/4", false],
+      ["stopped", "1/3", false],
+    ]);
+  });
+
+  it("counts failures apart when the hub sends them (#5511), and reads without them", () => {
+    const failed: Workflow = { ...stats, phase_stats: [{ title: "Audit", started: 6, done: 4, running: 0, failed: 2 }], phase: "Audit" };
+    const [b] = workflowPhaseBlocks(failed);
+    expect(b.failed).toBe(2);
+    expect(b.state).toBe("current"); // the run is in it
+    expect(workflowPhaseBlocks({ ...failed, phase: undefined })[0].state).toBe("done"); // all back, two failed
+  });
+
+  it("derives blocks from the agents on a hub without phase_stats", () => {
+    const old: Workflow = { ...run, phase_stats: undefined };
+    const blocks = workflowPhaseBlocks(old);
+    expect(blocks.map((b) => [b.title, b.started, b.done, b.running, b.state])).toEqual([
+      ["Audit", 1, 1, 0, "done"],
+      ["Verify", 2, 1, 1, "current"],
+    ]);
+    // no phases at all: one block of its agents under a name of its own; none at all: nothing
+    const plain: Workflow = { task_id: "p", status: "running", running: true, agents: [agent(1, ""), agent(2, "", { running: true })] };
+    const [only] = workflowPhaseBlocks(plain);
+    expect([phaseTitle(only), only.started, only.agents.length]).toEqual(["未分阶段", 2, 2]);
+    expect(workflowPhaseBlocks({ task_id: "e", status: "running", running: true })).toEqual([]);
+    // an ended run the hub lists no agents of: the phases before where it stopped passed, that one stopped
+    const killed: Workflow = { ...old, running: false, status: "killed", phases: ["Scan", "Fix", "Check"], phase: "Fix", agents: [] };
+    expect(workflowPhaseBlocks(killed).map((b) => b.state)).toEqual(["done", "stopped", "next"]);
+  });
+
+  it("keeps rows in start order, at most 12, the quiet tail folded where it is left out, running ones never", () => {
+    const agents = Array.from({ length: 20 }, (_, i) => agent(i + 1, "Audit", i === 15 ? { running: true, status: "running" } : {}));
+    const w: Workflow = { ...run, phase: "Audit", phase_stats: [{ title: "Audit", started: 20, done: 19, running: 1 }], agents };
+    const [b] = workflowPhaseBlocks(w);
+    const { rows, folded, breakAt, unlisted } = phaseRows(b);
+    expect(rows.map((a) => a.id)).toEqual([...Array.from({ length: 12 }, (_, i) => `a${i + 1}`), "a16"]);
+    expect(folded).toBe(7); // a13–a15, a17–a20: what "n more" opens
+    expect(breakAt).toBe(12); // the first of them comes after a12
+    expect(unlisted).toBe(0);
+    const open = phaseRows(b, true);
+    expect(open.rows).toHaveLength(20);
+    expect(open.folded).toBe(0);
+  });
+
+  it("anchors a block the hub's cap cut into to its end, so the cap moving on shifts nothing", () => {
+    // started 180 in Audit, the hub lists #126–180 (its newest 60 are these and 5 more elsewhere); #170 on still run
+    const listed = (from: number) =>
+      Array.from({ length: 181 - from }, (_, i) => agent(from + i, "Audit", from + i >= 170 ? { running: true, status: "running" } : {}));
+    const block = (from: number) => workflowPhaseBlocks({ ...run, phase: "Verify", phase_stats: [{ title: "Audit", started: 180, done: 169, running: 11 }], agents: listed(from) })[0];
+    const before = phaseRows(block(126));
+    expect(before.rows.map((a) => a.id)).toEqual(Array.from({ length: 12 }, (_, i) => `a${169 + i}`));
+    expect([before.folded, before.breakAt, before.unlisted]).toEqual([43, 0, 125]); // all that is hidden comes first
+    // an agent starts elsewhere in the run: the hub drops #126; the rows are the same
+    const after = phaseRows(block(127));
+    expect(after.rows.map((a) => a.id)).toEqual(before.rows.map((a) => a.id));
+    expect([after.folded, after.unlisted]).toEqual([42, 126]);
+    // a running one before the window stays, the break after it
+    const early = workflowPhaseBlocks({ ...run, phase_stats: [{ title: "Audit", started: 30, done: 28, running: 2 }], agents: Array.from({ length: 20 }, (_, i) => agent(i + 11, "Audit", i === 0 || i === 19 ? { running: true, status: "running" } : {})) })[0];
+    const e = phaseRows(early);
+    expect(e.rows.map((a) => a.id)).toEqual(["a11", ...Array.from({ length: 12 }, (_, i) => `a${19 + i}`)]);
+    expect([e.folded, e.breakAt, e.unlisted]).toEqual([7, 1, 10]);
+  });
+
+  it("splits the bar into done, running, failed and stopped, stopped only once it ended", () => {
+    expect(workflowTally(run)).toEqual({ started: 185, done: 169, running: 16, failed: 0, stopped: 0 });
+    const killed: Workflow = { ...run, running: false, status: "killed", agents_running: 3, agents_failed: 2 };
+    expect(workflowTally(killed)).toEqual({ started: 185, done: 169, running: 0, failed: 2, stopped: 14 });
+    const parts = tallyParts(workflowTally(killed));
+    expect(parts.map((p) => p.key)).toEqual(["done", "running", "failed", "stopped"]);
+    expect(parts[2].from).toBeCloseTo(169 / 185);
+    expect(parts.reduce((n, p) => n + p.size, 0)).toBeCloseTo(1);
+    expect(tallyParts(workflowTally({ task_id: "z", status: "running", running: true })).every((p) => p.size === 0)).toBe(true);
+  });
+
+  it("says where it is now: the phase and its newest running agent", () => {
+    expect(workflowCurrent(run)).toEqual({ phase: "Verify", agent: "verify:chat#0" });
+    expect(workflowCurrent({ ...run, running: false })).toBeNull();
+    expect(workflowCurrent({ ...run, phase: undefined, agents: [] })).toBeNull();
+  });
+
+  it("reads an agent's state, time and detail", () => {
+    const a = agent(1, "Audit", { model: "claude-example", latest_tool: { name: "Read", summary: "Reading example.go" } });
+    expect(agentRunState(a)).toBe("done");
+    expect(agentRunState({ ...a, status: "stopped" })).toBe("stopped");
+    expect(agentRunState({ ...a, status: "failed" })).toBe("failed");
+    expect(agentRunState({ ...a, running: true })).toBe("running");
+    expect(agentElapsed(a, start)).toBe("1 分");
+    expect(agentElapsed({ ...a, running: true }, start + 1000 + 30_000)).toBe("30 秒");
+    expect(agentElapsed({ ...a, started_at: undefined }, start)).toBe("");
+    expect(agentDetail(a)).toBe("claude-example · Reading example.go");
+    expect(agentDetail({ ...a, latest_tool: { name: "Grep" }, model: undefined })).toBe("Grep");
+  });
+
+  it("keeps an ended run (and the Background chip) for a day after it ended", () => {
+    const ended: Workflow = { ...run, running: false, status: "completed", ended_at: new Date(start).toISOString() };
+    const s = session({ workflows: [run, ended] });
+    expect(recentWorkflows(s, start + WORKFLOW_KEEP_MS - 1000)).toHaveLength(2);
+    expect(recentWorkflows(s, start + WORKFLOW_KEEP_MS + 1000).map((w) => w.running)).toEqual([true]);
+  });
+
+  it("knows the Workflow calls with a run and when each started", () => {
+    const a: Workflow = { ...run, tool_use_id: "tu1" };
+    const b: Workflow = { ...run, task_id: "w2", tool_use_id: "tu2", running: false, status: "completed", started_at: undefined };
+    const calls = workflowCalls([a, b, { ...run, task_id: "w3" }]);
+    expect([...calls.known]).toEqual(["tu1", "tu2"]);
+    expect(calls.startedAt.get("tu1")).toBe(start);
+    expect(calls.startedAt.get("tu2")).toBeNaN();
+    // progress and a run ending do not change the key (the cards read those); a new run does
+    expect(workflowCallsKey([{ ...a, agents_done: 170 }, b])).toBe(workflowCallsKey([a, b]));
+    expect(workflowCallsKey([{ ...a, running: false }, b])).toBe(workflowCallsKey([a, b]));
+    expect(workflowCallsKey([a])).not.toBe(workflowCallsKey([a, b]));
+  });
+
+  it("tells the running bar the workflow the agent waits for, and only that", () => {
+    const s = session({ workflows: [{ ...run, tool_use_id: "tu1" }, { ...run, task_id: "w2", tool_use_id: "tu2" }], background_working: true });
+    expect(backgroundLine(s)).toMatchObject({ run: { task_id: run.task_id }, more: 1, since: run.started_at, guessed: false });
+    expect(waitingOnWorkflow(s)).toBe(true);
+    // other background work (a command, a subagent) leaves the bar and the turn as they were
+    const shell = session({ background_working: true, background: [{ id: "b1", kind: "shell", started_at: "2026-11-05T13:00:00Z" }], subagents: [{ id: "x", session_id: "s1@x", running: true }] });
+    expect(backgroundLine(shell)).toBeNull();
+    expect(waitingOnWorkflow(shell)).toBe(false);
+    expect(waitingOnWorkflow(session({ workflows: [{ ...run, running: false, status: "completed" }], background_working: true }))).toBe(false);
+    // the hub says the turn is live: nothing
+    expect(backgroundLine(session({ workflows: [run], background_working: false }))).toBeNull();
+    // a hub from before background_working (#3127): guessed from a running workflow
+    expect(backgroundLine(session({ workflows: [run] }))?.guessed).toBe(true);
+    expect(backgroundLine(session({ workflows: [run], state: "idle" }))).toBeNull();
+    // a current hub leaves background_working out when it is false (a turn of its own): no guess
+    expect(backgroundLine(session({ workflows: [{ ...run, tool_use_id: "tu1" }] }))).toBeNull();
+    expect(backgroundLine(session({ workflows: [{ ...run, agents: [{ ...run.agents![1], status: "running" }] }] }))).toBeNull();
   });
 });
