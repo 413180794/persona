@@ -23,6 +23,10 @@ const msg = (id: string, extra: Partial<LarkMessage> = {}): LarkMessage => ({
   id, position: id.replace(/\D/g, "") || "1", sender_name: "示例同事", created_at: "2026-11-01T09:00:00Z", text: `消息 ${id}`, ...extra,
 });
 
+// The production debounces the waits below run out (not LarkThread's 450 ms mark-read flush, which no test here reads).
+const DRAFT_SAVE_MS = 300;
+const MEMBER_LOOKUP_MS = 140;
+
 let host: HTMLDivElement;
 let root: Root;
 const flush = async (n = 8) => {
@@ -155,11 +159,13 @@ describe("飞书会话页的交互", () => {
     expect(quoteBar()).toBeDefined();
     expect(localStorage.getItem(draftKey("f1", undefined))).not.toBeNull();
 
+    // the emptied box's draft is saved after its debounce (LarkComposer: 300 ms): fake timers run it out at once
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     await act(async () => byText("发送")!.click());
     await flush();
     const sent = calls.find((c) => c.method === "POST" && c.url.includes("/messages/m1/replies"));
     expect(sent?.body).toMatchObject({ text: "还没写完" });
-    await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(DRAFT_SAVE_MS); });
     expect(localStorage.getItem(draftKey("f1", undefined))).toBeNull();
   });
 
@@ -173,8 +179,10 @@ describe("飞书会话页的交互", () => {
     await render({ feed: "g1", title: "群", group: true });
     const box = host.querySelector<HTMLTextAreaElement>("textarea")!;
     await act(async () => box.focus());
+    // the members are looked up after the @ list's debounce (LarkPeoplePicker: 140 ms): fake timers run it out at once
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     await act(async () => typeInto(box, "@"));
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(MEMBER_LOOKUP_MS); });
     await flush();
     const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')].map((o) => o.textContent ?? "");
     expect(options.length).toBeGreaterThanOrEqual(2);

@@ -15,12 +15,19 @@ import { Markdown } from "./Markdown";
 import { getPanel, closePanel } from "../lib/panel";
 import { openPathRef, PathText, textPaths, writtenText } from "./PathLinks";
 
-const settle = () => new Promise((r) => setTimeout(r, 120));
+// lib/path-presence.ts batches what is shown together for WAIT (60 ms) before it asks; the fake timers run that out at
+// once, then the faked api's answer only needs the microtasks after it.
+const PRESENCE_WAIT_MS = 60;
+const settle = async () => {
+  await vi.advanceTimersByTimeAsync(PRESENCE_WAIT_MS);
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+};
 
 // The machine has these (relative paths in /repo).
 const there: Record<string, string> = { "/tmp/jarvis-tasks/1664-lark-test.md": "file", "src/a.ts": "file", "~/notes/": "dir" };
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   resetPathPresence();
   api.mockReset();
   api.mockImplementation(async (url: string) => {
@@ -28,7 +35,10 @@ beforeEach(() => {
     return { stats: q.get("paths")!.split("\n").map((p) => ({ path: p, kind: there[p] ?? "missing", size: 10 })) };
   });
 });
-afterEach(() => resetPathPresence());
+afterEach(() => {
+  resetPathPresence();
+  vi.useRealTimers();
+});
 
 describe("path presence", () => {
   it("asks once per machine and directory for the paths shown together, and remembers", async () => {

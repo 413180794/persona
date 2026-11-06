@@ -60,12 +60,20 @@ function type(input: HTMLInputElement, value: string) {
   });
 }
 const keyInput = () => document.body.querySelector<HTMLInputElement>('input[type="password"]')!;
+// The key auto-test debounce (AUTO_TEST_MS in ProviderWizard.tsx); timers are fake, so this costs no real time.
+const AUTO_TEST_MS = 700;
+const advance = async (ms: number) => {
+  await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+};
+const keyTests = () => calls.filter((c) => c.path.endsWith("/launchers/test"));
 const waitAutoTest = async () => {
-  await act(async () => { await new Promise((r) => setTimeout(r, 800)); });
+  await advance(AUTO_TEST_MS);
   await flush();
 };
 
 beforeEach(() => {
+  // only timers are faked: promises, fetch and React's scheduling keep running for real
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   Object.assign(getState(), { features: ["builtin_presets"] });
   calls = [];
   testOK = true;
@@ -82,6 +90,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 async function open() {
@@ -113,7 +122,7 @@ describe("ProviderWizard from presets", () => {
 
     type(keyInput(), "sk-test-123456");
     await waitAutoTest();
-    const tests = calls.filter((c) => c.path.endsWith("/launchers/test"));
+    const tests = keyTests();
     expect(tests).toHaveLength(1);
     expect(tests[0]!.body).toEqual({ preset: "builtin/glm", api_key: "sk-test-123456", auth: "bearer" });
     expect(text()).toContain("Key 能用");
@@ -126,6 +135,24 @@ describe("ProviderWizard from presets", () => {
     expect(text()).toContain("智谱 GLM 接好了");
     expect(text()).toContain("现在用它：主对话");
     expect(text()).toContain("新开的 Agent：没有改");
+  });
+
+  it("tests the key only once it has stopped changing for the whole debounce", async () => {
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    type(keyInput(), "sk-test-1234");
+    await advance(AUTO_TEST_MS - 1);
+    expect(keyTests()).toHaveLength(0);
+    // another keystroke starts the wait over
+    type(keyInput(), "sk-test-123456");
+    await advance(AUTO_TEST_MS - 1);
+    expect(keyTests()).toHaveLength(0);
+    // the last millisecond of the wait sends it
+    await advance(1);
+    await flush();
+    expect(keyTests()).toHaveLength(1);
+    expect(keyTests()[0]!.body).toMatchObject({ api_key: "sk-test-123456" });
+    expect(text()).toContain("Key 能用");
   });
 
   it("says why a key failed and leaves assign out when turned off", async () => {
@@ -166,7 +193,7 @@ describe("ProviderWizard from presets", () => {
     act(() => button("示例 Responses")!.click());
     type(keyInput(), "sk-test-123456");
     await waitAutoTest();
-    expect(calls.filter((c) => c.path.endsWith("/launchers/test"))).toHaveLength(0);
+    expect(keyTests()).toHaveLength(0);
     expect(text()).toContain("Responses 协议的 Key 没法在这里测试");
     expect(text()).not.toContain("重新测试");
     expect(button("保存")!.disabled).toBe(false);
@@ -209,7 +236,10 @@ describe("ProviderWizard from presets", () => {
     expect(document.body.querySelector('button[role="switch"]')).toBeNull();
     expect(text()).toContain("正在看主对话现在能不能用");
     type(keyInput(), "sk-test-123456");
+    // the key test runs and saving is asked for while the readiness is still out: only the gate releases it
     await waitAutoTest();
+    expect(keyTests()).toHaveLength(1);
+    expect(document.body.querySelector('button[role="switch"]')).toBeNull();
     await act(async () => button("保存")!.click());
     await flush();
     expect(calls.some((c) => c.method === "POST" && c.path.endsWith("/launchers"))).toBe(false);

@@ -70,12 +70,16 @@ const flush = async () => {
 };
 const hello = async (resumed: boolean) => {
   await act(async () => hub.listeners.get("hello")?.forEach((l) => l({ type: "hello", resumed })));
-  await act(async () => { await new Promise((r) => setTimeout(r, 450)); }); // past a page's push debounce
+  // past a page's push debounce (300 ms), on fake timers rather than the clock
+  await act(async () => { await vi.advanceTimersByTimeAsync(450); });
   await flush();
 };
 const count = (path: string | RegExp) => hub.reads.filter((p) => (typeof path === "string" ? p === path : path.test(p))).length;
 
 beforeEach(() => {
+  // only the debounces' timers: Date stays real (an extension view's at-most-once-a-second check), and promises,
+  // microtasks (the Image stub) and intervals run as before
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   hub.reads = [];
   host = document.createElement("div");
   document.body.append(host);
@@ -84,6 +88,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 describe("reads again after a hello the hub could not resume", () => {

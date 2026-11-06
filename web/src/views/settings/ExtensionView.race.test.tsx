@@ -53,6 +53,8 @@ const page = (word: string, state = word) => ({
   }],
 });
 
+const SEARCH_DEBOUNCE_MS = 300;
+
 let host: HTMLDivElement;
 let root: Root;
 const settle = async () => {
@@ -74,6 +76,17 @@ const invalidate = async () => {
   await act(async () => hub.listeners.get("extension_ui")?.forEach((l) => l({ type: "extension_ui", extension: "demo", invalidate: true })));
   await settle();
 };
+/** Types `v` into the search box and lets its debounce (ExtensionView: asked 300 ms after the last key) run out. */
+const type = async (v: string) => {
+  const box = host.querySelector("input")!;
+  await act(async () => {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    set.call(box, v);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS); });
+  await settle();
+};
 const button = (text: string) => [...host.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
 beforeEach(async () => {
@@ -91,6 +104,7 @@ beforeEach(async () => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 describe("ExtensionUI answers out of order", () => {
@@ -127,16 +141,8 @@ describe("ExtensionUI answers out of order", () => {
   });
 
   it("an earlier search answered last does not replace a later one's results", async () => {
-    const box = host.querySelector("input")!;
-    const type = async (v: string) => {
-      await act(async () => {
-        const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-        set.call(box, v);
-        box.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-      await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
-      await settle();
-    };
+    // fake only the timers: the search debounce runs out at once instead of sleeping in real time
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     await type("x");
     const first = hub.asked.shift();
     expect(first?.values?.q).toBe("x");
@@ -149,16 +155,7 @@ describe("ExtensionUI answers out of order", () => {
   });
 
   it("an earlier search that fails as unsupported does not take away the view a later one drew", async () => {
-    const box = host.querySelector("input")!;
-    const type = async (v: string) => {
-      await act(async () => {
-        const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-        set.call(box, v);
-        box.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-      await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
-      await settle();
-    };
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     await type("x");
     const first = hub.asked.shift();
     await type("xy");
