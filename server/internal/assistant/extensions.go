@@ -72,6 +72,9 @@ func (b *BusHub) TellLocal(event string, params json.RawMessage) { b.queueEvent(
 type ExtensionTools interface {
 	AgentTools(ctx context.Context, assistant bool) (agents, assistantOnly []proto.Tool)
 	CallTool(ctx context.Context, machine, session, name string, args json.RawMessage, assistant bool) (proto.ToolResult, bool)
+	// ConnectorTool says whether name is a connector's tool (an extension's), not Cua's or ego's: what a guest
+	// conversation may be given (guest.go).
+	ConnectorTool(name string) bool
 	AssistantSummary(ctx context.Context, tool, summary string) (string, bool)
 	AssistantLark(ctx context.Context) (proto.AssistantLark, error)
 	// AnswerComputerElicit answers the node's computer.elicit (LCU runtime confirmations on the phone/web cards).

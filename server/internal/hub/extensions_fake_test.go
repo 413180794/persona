@@ -257,6 +257,8 @@ func (f *fakeExt) CallTool(_ context.Context, machine, session, name string, arg
 
 func (f *fakeExt) AssistantSummary(context.Context, string, string) (string, bool) { return "", false }
 
+func (f *fakeExt) ConnectorTool(string) bool { return false }
+
 func (f *fakeExt) AssistantLark(context.Context) (proto.AssistantLark, error) {
 	return proto.AssistantLark{}, nil
 }

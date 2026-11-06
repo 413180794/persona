@@ -206,6 +206,9 @@ const (
 	AssistantID              = assistantwire.AssistantID
 )
 
+// DeviceAssistantGuestPrepare makes a guest conversation's directory (guest.go).
+const DeviceAssistantGuestPrepare = assistantwire.DeviceAssistantGuestPrepare
+
 var (
 	ErrNoDevice      = assistantwire.ErrNoDevice
 	ErrStaleSnapshot = assistantwire.ErrStaleSnapshot

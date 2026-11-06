@@ -539,6 +539,20 @@ App 的 `PUT /api/v1/assistant/tasks/{id}` 请求体里没有 `push` 时保留�
   App 给它改标题返回 400「主对话没有标题可以改」（`conversation_rename` 本来就拒绝）。各端顶栏在主对话上显示形象：iOS / Mac / 安卓是形象名（默认「Persona」），网页是「Persona」。
 - App：抽屉的对话行里 `MMDD | 类型 | ` 用次要色、主题用主色，窄的时候从主题末尾截断（`ConversationTitle`）；别的标题照旧。
 
+## 访客对话（2026-11-06，#5195）
+
+扩展替用户回答**别人**时（飞书扩展的「别人 @我 时 AI 代答」）开的对话：别人写的消息进到对话里，回答又以用户的身份发出去，所以它不能有助手的任何本事。
+普通的扩展对话就是助手对话（助手目录、CLAUDE.md 和记忆、`mcp__jarvis` 全部预先放行，`agent_start` / `agent_send` 只在健康空间问手机），挡别人消息里的指令只能靠提示词，所以单独做了这一种。
+
+- **怎么开**：`POST /api/v1/assistant/conversations` 带 `guest: {"tools": ["lark_agent_reply"]}`。`tools` 是 1–8 个**连接器**的工具（扩展的；助手自己的、手机的、Cua 和 ego 的都不行，400），不能和 `main`、`space` 一起用；`report_tasks` 忽略（它派不出任务）。
+  不带 `guest` 的对话和以前完全一样。扩展先 `GET /api/v1/assistant/capabilities`（`{"guest_conversations": true}`）确认 hub 认识它：老 hub 不认识 `guest` 会把它当普通对话开，所以 404 时扩展就不开。
+- **目录**：hub 经 node 的 `assistant.guest_prepare` 在 `.jarvis/guest` 写一份只有访客说明的 CLAUDE.md / AGENTS.md（`prompts/assistant/guest_claude_md.md`），不碰助手的连接器、命令行和 skill；node 不认识这个方法（版本太旧）就回 400，不开。
+- **node**（`node/assistant_guest.go`）：只在 Claude Code 的命令行上跑（Codex、Agent SDK、DSH 等运行时都拒绝：它们的内置工具关不掉），不用预热的进程；
+  每次起进程（新开、恢复、压缩、换模型）都是 `--tools ""`（没有任何内置工具）、`--strict-mcp-config`（只有 Persona 自己的 MCP 服务，不挂用户的和扩展的）、`--allowedTools` 只写它的工具。
+  访客标记和工具存在会话状态（`sessionState.Guest`）里，分支跟着走；后面的消息换启动器、运行时都不理，照它开的时候的跑。不带实时快照，也不给闸门代理的地址。
+- **hub**（`assistant/guest.go`，settings `assistant.guests`，留 30 天）：`mcp.tools` 只列它的工具，`mcp.call` 只放行它的工具；`assistant.context` 给它空快照；`SendParams` 去掉消息里挑的启动器、模型、运行时和权限模式。
+  读不到这份记录时它的调用一律拒绝；node 的 MCP 服务也带着 `guest: true`，hub 不认识的「访客」什么工具都没有。
+
 ## 对话的来源（#3264，2026-11-06）
 
 用户反馈：侧边栏「最近」里一大串收件箱 AI 分身开的对话淹没了自己的对话，要给自动开的对话打上来源标签、默认收起，但要能点进去看。

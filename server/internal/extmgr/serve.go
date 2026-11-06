@@ -572,6 +572,11 @@ func (h *Manager) CallTool(ctx context.Context, machine, session, name string, a
 	return proto.ToolResult{}, false
 }
 
+// ConnectorTool says whether name is a registered connector's tool (not Cua's or ego's).
+func (h *Manager) ConnectorTool(name string) bool {
+	return h.connectors != nil && h.connectors.Offers(name)
+}
+
 // AssistantSummary is the text a gated command's card shows, as its extension names what the ids are; false: none.
 func (h *Manager) AssistantSummary(ctx context.Context, tool, summary string) (string, bool) {
 	if !h.ready(ctx) || h.extensions == nil {

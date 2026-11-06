@@ -49,6 +49,8 @@ type fakeHub struct {
 	made          int              // conversations started, for the next id
 	sends         []map[string]any // assistant.send params, and {"rename": params}
 	prepared      []map[string]any // assistant.prepare params
+	guestPrepared []map[string]any // assistant.guest_prepare params
+	noGuest       bool             // the node is older than guest conversations: assistant.guest_prepare is unknown
 	larkCLI       bool
 	slowSnapshots time.Duration // the connectors' live states come this late (nothing: there are none)
 	replies       []string      // the model's answers, in turn (the last one again when they run out)
@@ -246,6 +248,12 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 	case DeviceAssistantPrepare:
 		f.prepared = append(f.prepared, a)
 		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/assistant"})
+	case DeviceAssistantGuestPrepare:
+		if f.noGuest {
+			return nil, fmt.Errorf("unknown method %s", p.Method)
+		}
+		f.guestPrepared = append(f.guestPrepared, a)
+		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/guest"})
 	case DeviceSessionStart:
 		if f.offline[p.Device] {
 			return nil, fmt.Errorf("%s: %w", p.Device, apierr.ErrOffline)

@@ -65,6 +65,7 @@ var RouteScopes = map[string]string{
 	"GET /api/v1/machines/{mid}/stat":                    extension.ScopeMachinesRead,
 	"POST /api/v1/notify":                                extension.ScopeNotify,
 	"GET /api/v1/assistant":                              extension.ScopeAssistantAsk,
+	"GET /api/v1/assistant/capabilities":                 extension.ScopeAssistantAsk,
 	"POST /api/v1/assistant/conversations":               extension.ScopeAssistantAsk,
 	"GET /api/v1/assistant/conversations/{id}/feed":      extension.ScopeAssistantAsk,
 	"POST /api/v1/assistant/conversations/{id}/stop":     extension.ScopeAssistantAsk, // /agent's /stop (#3308)

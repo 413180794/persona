@@ -78,7 +78,8 @@ func (n *Node) fork(ctx context.Context, id, at string) (string, error) {
 		return "", refusal("fork_turn_running", "这一轮还没做完，等它停下再分支", nil)
 	}
 	if st, ok := n.state.get(id); ok { // resumed with what the original ran on: launcher, directory, model
-		n.state.put(newID, sessionState{Launcher: st.Launcher, Cwd: st.Cwd, Model: st.Model, ModelFingerprint: st.ModelFingerprint, ModelEffort: st.ModelEffort})
+		// A guest conversation's branch is one too (assistant_guest.go).
+		n.state.put(newID, sessionState{Launcher: st.Launcher, Cwd: st.Cwd, Model: st.Model, ModelFingerprint: st.ModelFingerprint, ModelEffort: st.ModelEffort, Guest: st.Guest})
 	}
 	n.setGuessedPath(newID, dst)
 	n.mu.Lock()

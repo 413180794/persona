@@ -118,12 +118,22 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 	if p.Space != "" && p.Space != SpaceHealth {
 		return proto.Session{}, badRequest(fmt.Errorf("space %q: health or none", p.Space))
 	}
-	cwd, err := s.prepareSpace(ctx, machine, p.Space)
+	var cwd string
+	var err error
+	if p.GuestTools != nil {
+		cwd, err = s.guestPrepare(ctx, machine) // its own directory: none of the assistant's instructions, memory or skills
+	} else {
+		cwd, err = s.prepareSpace(ctx, machine, p.Space)
+	}
 	if err != nil {
 		return proto.Session{}, err
 	}
 	params := map[string]any{"cwd": cwd, "launcher": p.Launcher, "text": p.Text, "images": p.Images, "permission_mode": p.PermissionMode,
 		"effort": p.Effort}
+	if p.GuestTools != nil {
+		// The node starts it with no built-in tools and only these of Persona's (node/assistant_guest.go).
+		params["guest"] = map[string]any{"tools": p.GuestTools}
+	}
 	purpose := p.Purpose
 	if purpose == "" {
 		purpose = "assistant"
@@ -154,6 +164,9 @@ func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, erro
 	if p.Main && p.Space != "" {
 		return proto.Session{}, badRequest(errors.New("the health space has no main conversation"))
 	}
+	if p.GuestTools != nil && (p.Main || p.Space != "") {
+		return proto.Session{}, badRequest(errors.New("a guest conversation is neither the main one nor in a space"))
+	}
 	if p.Main {
 		return s.startMain(ctx, p)
 	}
@@ -167,6 +180,12 @@ func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, erro
 	}
 	if err != nil {
 		return sess, err
+	}
+	if p.GuestTools != nil {
+		if err := s.guestSet(ctx, sess.MachineID, sess.SessionID, p.GuestTools); err != nil {
+			// The node runs it restricted either way; here its calls are refused until the store is readable again.
+			s.logf("assistant: note guest conversation %s: %v", short(sess.SessionID), err)
+		}
 	}
 	sess.Origin, sess.OriginRef = firstNonEmpty(p.Origin, OriginUser), p.OriginRef
 	s.originSet(ctx, sess.MachineID, sess.SessionID, sess.Origin, sess.OriginRef)
@@ -412,6 +431,8 @@ func (s *Service) startRoutes() {
 			// ReportTasks: the tasks it opens are told back to it, as the main conversation's quiet ones are (#3192,
 			// reporters.go); a plugin's /agent hands their results on.
 			ReportTasks bool `json:"report_tasks"`
+			// Guest: a guest conversation (guest.go): only these connector tools, nothing of the assistant's.
+			Guest *GuestSpec `json:"guest"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
@@ -439,10 +460,23 @@ func (s *Service) startRoutes() {
 				return
 			}
 		}
+		if in.Guest != nil && (in.Main || in.Space != "") {
+			apierr.Write(w, http.StatusBadRequest, errors.New("a guest conversation is neither the main one nor in a space"))
+			return
+		}
+		if err := s.checkGuest(ctx, in.Guest); err != nil {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		var guestTools []string
+		if in.Guest != nil {
+			guestTools, in.ReportTasks = in.Guest.Tools, false // it hands nothing out
+		}
 		origin, ref := requestOrigin(r, in.Purpose)
 		// The main conversation is the assistant's, on its machine.
 		sess, err := s.Start(ctx, StartParams{Text: in.Prompt, Images: in.Images, Launcher: in.Launcher, PermissionMode: in.PermissionMode,
-			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main, Space: in.Space, Origin: origin, OriginRef: ref})
+			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main, Space: in.Space, Origin: origin, OriginRef: ref,
+			GuestTools: guestTools})
 		if err != nil {
 			apierr.Call(w, err)
 			return
@@ -451,6 +485,11 @@ func (s *Service) startRoutes() {
 			s.markReporter(ctx, sess.MachineID, sess.SessionID)
 		}
 		apierr.WriteJSON(w, map[string]any{"session": sess})
+	})
+	// What this hub's assistant can do that an extension asks before relying on it: an older hub answers 404 and
+	// would ignore what it does not know (a guest conversation started as an ordinary one).
+	s.handle("GET /api/v1/assistant/capabilities", func(w http.ResponseWriter, r *http.Request) {
+		apierr.WriteJSON(w, map[string]any{"guest_conversations": true})
 	})
 	s.handle("POST /api/v1/assistant/conversations/{id}/compact", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -516,6 +555,14 @@ func (s *Service) SendParams(ctx context.Context, p SendParams) (map[string]any,
 	params := p.Params
 	if params == nil {
 		params = map[string]any{}
+	}
+	if s.isGuest(ctx, p.MachineID, p.SessionID) {
+		// A guest conversation keeps what it started on: no launcher, model, runtime or mode picked for a message
+		// (the node refuses a change too, node/assistant_guest.go).
+		for _, k := range []string{"launcher", "model", "effort", "model_fingerprint", "runtime", "permission_mode"} {
+			delete(params, k)
+		}
+		return params, nil
 	}
 	cfg := s.settings(ctx)
 	main := cfg.Main != "" && cfg.Main == p.SessionID && cfg.MachineID == p.MachineID

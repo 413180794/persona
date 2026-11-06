@@ -431,6 +431,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		AtItemID       string          `json:"at_item_id"` // session.fork: the reply to branch off at
 		Refresh        bool            `json:"refresh"`    // launchers.models: ask again, not the kept list
 		Configured     bool            `json:"configured"` // launchers.models, .probe, .http, .model.check: hub.json names this launcher
+		Guest          *guestParams    `json:"guest"`      // assistant.send: a new guest conversation (assistant_guest.go)
 		Raw            json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -694,8 +695,20 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if p.ResumeOnly && !n.assistantResumable(p.SessionID) {
 			return nil, fmt.Errorf("conversation %s is gone", p.SessionID)
 		}
-		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Runtime: assistantRuntimeOf(p.Runtime)})
+		sctx := ctx
+		if p.Guest != nil {
+			if p.SessionID != "" {
+				return nil, errors.New("only a new conversation can be started as a guest")
+			}
+			if err := checkGuestTools(p.Guest.Tools); err != nil {
+				return nil, err
+			}
+			sctx = withGuest(ctx, p.Guest.Tools)
+		}
+		id, err := n.assistantSend(sctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Runtime: assistantRuntimeOf(p.Runtime)})
 		return map[string]any{"session_id": id}, err
+	case "assistant.guest_prepare": // a guest conversation's directory (assistant_guest.go)
+		return n.assistantGuestPrepare(params)
 	case "session.modes":
 		return ok(n.setModelAndModes(ctx, p.SessionID, p.Model, p.PermissionMode, p.Effort)) // model: model_switch.go
 	case "assistant.compact": // the user compacting an assistant conversation (assistant_compact.go)

@@ -1,5 +1,6 @@
 {
   "rename_main": "主对话没有标题可以改",
   "main_changed": "主对话已经换过了，刷新后再试",
-  "main_busy": "主对话正在回答或压缩，等它停下再新建"
+  "main_busy": "主对话正在回答或压缩，等它停下再新建",
+  "guest_node_too_old": "这台电脑上的 personad 版本太旧，不支持访客对话；更新后再试。"
 }

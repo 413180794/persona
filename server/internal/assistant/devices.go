@@ -83,7 +83,11 @@ func (s *Service) NodeAnswer(ctx context.Context, machine, method string, params
 		return out, true, err
 	case "assistant.context":
 		_ = json.Unmarshal(params, &p)
-		// The machine is the connection's, not anything in params.
+		// The machine is the connection's, not anything in params. A guest conversation gets no snapshot: it is the
+		// user's state (guest.go).
+		if s.isGuest(ctx, machine, p.SessionID) {
+			return map[string]any{}, true, nil
+		}
 		return s.Context(ctx, ContextParams{SessionID: p.SessionID, MachineID: machine, Ack: p.Ack}), true, nil
 	}
 	return nil, false, nil

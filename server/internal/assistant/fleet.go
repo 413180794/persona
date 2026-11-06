@@ -400,19 +400,25 @@ func (s *Service) NodeRequest(ctx context.Context, machine, method string, param
 		return out, true, err
 	case "mcp.tools":
 		var p struct {
-			Assistant bool `json:"assistant"`
+			Assistant bool   `json:"assistant"`
+			SessionID string `json:"session_id"`
+			Guest     bool   `json:"guest"` // the node's word that it is a guest conversation (guest.go)
 		}
 		_ = json.Unmarshal(params, &p)
-		return map[string]any{"tools": s.mcpTools(ctx, p.Assistant)}, true, nil
+		return map[string]any{"tools": s.sessionMCPTools(ctx, machine, p.SessionID, p.Assistant, p.Guest)}, true, nil
 	case "mcp.call":
 		var p struct {
 			Name      string          `json:"name"`
 			Args      json.RawMessage `json:"args"`
 			SessionID string          `json:"session_id"`
 			Assistant bool            `json:"assistant"`
+			Guest     bool            `json:"guest"`
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, true, err
+		}
+		if res, refused := s.guestRefuses(ctx, machine, p.SessionID, p.Name, p.Guest); refused {
+			return res, true, nil
 		}
 		return s.mcpCall(ctx, machine, p.SessionID, p.Name, p.Args, p.Assistant), true, nil
 	}

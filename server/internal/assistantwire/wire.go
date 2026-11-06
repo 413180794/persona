@@ -644,6 +644,7 @@ var Routes = []string{
 	"GET /api/v1/assistant/memory",
 	"PUT /api/v1/assistant/memory/{name}",
 	"DELETE /api/v1/assistant/memory/{name}",
+	"GET /api/v1/assistant/capabilities",
 	"POST /api/v1/assistant/conversations",
 	"POST /api/v1/assistant/conversations/{id}/compact",
 	"POST /api/v1/assistant/main/new",
@@ -707,6 +708,10 @@ const (
 const (
 	// DeviceAssistantPrepare: {dir, claude_md, connectors, clis, plugin_skills} → {cwd, plugin_skills_need}.
 	DeviceAssistantPrepare = "assistant.prepare"
+	// DeviceAssistantGuestPrepare: {dir, claude_md} → {cwd}: a guest conversation's directory (assistant/guest.go), only
+	// its CLAUDE.md / AGENTS.md written; the assistant's connectors, CLIs and skills are left as they are. A node without
+	// it answers "unknown method": no guest conversation starts there.
+	DeviceAssistantGuestPrepare = "assistant.guest_prepare"
 	// DeviceAssistantWarm: {cwd, launcher, …model} → {}: a process ready for the next new conversation.
 	DeviceAssistantWarm = "assistant.warm"
 	// DeviceAssistantMemory: {op, cwd, name?, content?} → the memory files (op list) or {}.
@@ -741,6 +746,9 @@ type StartParams struct {
 	// Origin and OriginRef: who opens it (SessionView.Origin); "" is the user's.
 	Origin    string `json:"origin,omitempty"`
 	OriginRef string `json:"origin_ref,omitempty"`
+	// GuestTools: a guest conversation (assistant/guest.go) that may use only these connector tools; nil is an
+	// ordinary one.
+	GuestTools []string `json:"guest_tools,omitempty"`
 }
 
 // SendParams is assistant.send_params's params: Params are the node's assistant.send / session.send params.

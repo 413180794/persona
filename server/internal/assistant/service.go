@@ -57,6 +57,7 @@ type Service struct {
 	main       mainBook          // start.go
 	archived   archiveBook       // conversations.go
 	origins    originBook        // origins.go
+	guests     guestBook         // guest.go
 	relays     relayBook         // conversations.go
 	quiet      quietBook         // quiet.go
 	supervise  superviseBook     // supervise.go

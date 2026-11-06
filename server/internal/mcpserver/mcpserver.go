@@ -157,7 +157,7 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		// pane: an agent's MCP server has no session id of its own; the node knows the session in its pane
 		// (report_to_supervisor needs to know whose report it is).
 		line, err := callNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
-			"session_id": sessionID(), "assistant": isAssistant(), "pane": node.HookPane(os.Getenv)})
+			"session_id": sessionID(), "assistant": isAssistant(), "guest": isGuest(), "pane": node.HookPane(os.Getenv)})
 		if err != nil {
 			return toolResult(proto.TextResult(fmt.Sprintf("Persona node is not reachable (%v). Is the hub connected to this machine?", err), true)), nil
 		}
@@ -214,7 +214,7 @@ func listTools(ctx context.Context) ([]map[string]any, error) {
 }
 
 func listToolsOnce(ctx context.Context) ([]map[string]any, error) {
-	line, err := dialNode(ctx, map[string]any{"kind": "mcp.tools", "assistant": isAssistant(), "session_id": sessionID()})
+	line, err := dialNode(ctx, map[string]any{"kind": "mcp.tools", "assistant": isAssistant(), "session_id": sessionID(), "guest": isGuest()})
 	if err != nil {
 		return nil, fmt.Errorf("Persona node is not reachable: %w", err)
 	}
@@ -242,6 +242,10 @@ func listToolsOnce(ctx context.Context) ([]map[string]any, error) {
 // The assistant's processes start this server with JARVIS_ASSISTANT / JARVIS_SESSION_ID (node/assistant.go):
 // they get the assistant-only tools, and the hub knows which conversation a call (e.g. ask_user) belongs to.
 func isAssistant() bool { return identity.Getenv("JARVIS_ASSISTANT") == "1" }
+
+// isGuest: a guest conversation's process (node/assistant_guest.go). The hub knows its guests itself; this is its word
+// for one the hub cannot tell about, which then gets nothing.
+func isGuest() bool { return identity.Getenv("JARVIS_GUEST") == "1" }
 
 func sessionID() string {
 	if id := identity.Getenv("JARVIS_SESSION_ID"); id != "" {

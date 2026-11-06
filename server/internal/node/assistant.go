@@ -340,6 +340,21 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	resume := id != ""
 	st, _ := n.state.get(id)
+	// A guest conversation (assistant_guest.go): a new one asked for, or one that is.
+	guest := st.Guest
+	if !resume {
+		guest = guestFrom(ctx)
+	}
+	if guest != nil {
+		if resume {
+			launcher, options = "", nil // it keeps what it started on (the hub sends none either)
+		}
+		for i := range options {
+			if options[i].Runtime != "" {
+				return "", errGuestAgent
+			}
+		}
+	}
 	if own, switched := n.assistantResumeLauncher(ctx, id, launcher, st); switched {
 		n.logger.Printf("assistant %s: resumes on %s, the kind of agent it was started on, not on %s", short(id), launcherOr(own, st.Launcher), launcher)
 		launcher, options = own, nil // the model picked for the other launcher is not this one's
@@ -347,7 +362,9 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	// An agent runtime's launcher, or a conversation one runs (assistant_runtime.go): it keeps its model; the node
 	// keeps the conversation's state, snapshot, mode and memory.
 	rl := launcherOr(launcher, st.Launcher)
-	if onRuntime, runs := n.assistantRuntime(rl), n.runtimeAssistant(id); onRuntime != nil || runs {
+	if onRuntime, runs := n.assistantRuntime(rl), n.runtimeAssistant(id); guest != nil && (onRuntime != nil || runs) {
+		return "", errGuestAgent
+	} else if onRuntime != nil || runs {
 		if id != "" && (onRuntime == nil || !runs) && !(runs && launcher == "") { // another kind of agent than its own
 			return "", errors.New("换到另一种 Agent 需要新建对话")
 		}
@@ -384,8 +401,15 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if err != nil {
 		return "", err
 	}
+	if guest != nil && (agent != "claude" || execution.Runtime != "") {
+		return "", errGuestAgent
+	}
 	var p *assistantProc
-	if id == "" {
+	if id == "" && guest != nil {
+		// Never the warm spare: it was started with the assistant's tools. Its process reads Guest from the state.
+		id = newUUID()
+		n.state.put(id, sessionState{Launcher: launcher, Cwd: cwd, Guest: guest})
+	} else if id == "" {
 		// The spare was started without --permission-mode, and bypassPermissions can't be switched to later.
 		if p = n.adoptSpareFor(cwd, launcher, mode, execution); p != nil {
 			id, launcher, cwd = p.id, p.launcher, p.cwd
@@ -402,7 +426,11 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	// The live snapshot the message starts with, asked for while the process starts (assistant_context.go). A new
 	// Codex conversation has no id yet: it can't be the main one.
 	snapc := make(chan contextAnswer, 1)
-	go func(id string) { snapc <- n.assistantContext(id) }(id)
+	if guest != nil {
+		snapc <- contextAnswer{} // the user's state is not a guest's (the hub gives it none either)
+	} else {
+		go func(id string) { snapc <- n.assistantContext(id) }(id)
+	}
 	if id == "" { // a new Codex conversation: the thread's id is Codex's to pick
 		if p, err = n.spawnCodex("", cwd, launcher, false, false, execution); err != nil {
 			return "", err
@@ -615,6 +643,9 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool, opti
 }
 
 func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolFlags []string) {
+	if guest := n.guestOf(id); guest != nil { // assistant_guest.go: nothing else of the below
+		return n.guestMCPAndTools(id, guest)
+	}
 	// Per-process MCP config: the assistant-only tools (ask_user, agents_*, lark_*…) and the conversation they act for.
 	servers := map[string]any{"jarvis": map[string]any{
 		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
@@ -676,7 +707,15 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	}
 	// Persona's own tools are few and used all the time: load them up front instead of behind ToolSearch.
 	env := identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
+	guest := n.guestOf(id) != nil
+	if guest && execution.Runtime == proto.AssistantRuntimeAgentSDK {
+		return nil, errGuestAgent // the bridge takes no --tools (assistant_guest.go)
+	}
 	gateEnv, releaseGates := n.assistantLarkEnv(cwd) // its addresses at the gate proxy go with the process
+	if guest {
+		releaseGates()
+		gateEnv, releaseGates = nil, func() {} // no commands to gate: it has no Bash
+	}
 	started := false
 	defer func() {
 		if !started {

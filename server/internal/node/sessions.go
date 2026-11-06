@@ -53,6 +53,9 @@ type sessionState struct {
 	Tasks []string `json:"tasks,omitempty"`
 	// Compaction: the last compaction the user asked for (assistant_compact.go).
 	Compaction *proto.Compaction `json:"compaction,omitempty"`
+	// Guest: a guest conversation's tools (assistant_guest.go): every process it runs in has no built-in tools and
+	// only these of Persona's. Nil is an ordinary conversation.
+	Guest []string `json:"guest,omitempty"`
 }
 
 func newState() *stateFile { return &stateFile{Sessions: map[string]sessionState{}} }

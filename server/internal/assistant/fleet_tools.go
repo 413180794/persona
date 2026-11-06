@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -40,6 +41,39 @@ func (s *Service) mcpTools(ctx context.Context, assistant bool) []proto.Tool {
 		tools = append(tools, assistantOnly...)
 	}
 	return tools
+}
+
+// sessionMCPTools are machine's conversation session's tools: a guest conversation's only its own (guest.go; the
+// node saying it is one, the hub not knowing it or not able to tell: none), any other's mcpTools.
+func (s *Service) sessionMCPTools(ctx context.Context, machine, session string, assistant, guestHint bool) []proto.Tool {
+	allowed, guest, err := s.guestOf(ctx, machine, session)
+	if err != nil {
+		s.logf("mcp tools: %v", err)
+		return []proto.Tool{}
+	}
+	if !guest {
+		if guestHint {
+			return []proto.Tool{}
+		}
+		return s.mcpTools(ctx, assistant)
+	}
+	return guestTools(s.mcpTools(ctx, assistant), allowed)
+}
+
+// guestRefuses refuses a guest conversation's call of a tool it was not given (and any call of one the hub cannot
+// tell about, or that the node says is a guest the hub does not know).
+func (s *Service) guestRefuses(ctx context.Context, machine, session, name string, guestHint bool) (proto.ToolResult, bool) {
+	allowed, guest, err := s.guestOf(ctx, machine, session)
+	switch {
+	case err != nil:
+		s.logf("mcp call %s: %v", name, err)
+		return proto.TextResult("tool unavailable for the moment: "+name, true), true
+	case !guest && guestHint:
+		return proto.TextResult("unknown tool "+name, true), true
+	case guest && !slices.Contains(allowed, name):
+		return proto.TextResult("unknown tool "+name, true), true
+	}
+	return proto.ToolResult{}, false
 }
 
 // mcpCall runs one: a connector's, Cua's or ego's at the hub (it says whether it is one of them), else the
