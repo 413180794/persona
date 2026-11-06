@@ -79,6 +79,8 @@
   "event_agent_finished": "An agent finished (computer, session, title)",
   "error_reports_title": "Receive error and crash reports",
   "error_reports_detail": "Errors and crashes of the hub and your devices, scrubbed first: no message text, tokens, user names, machine names or IP addresses. It decides where they go (for example an error tracker)",
+  "auth_relay_title": "Complete sign-in links for your Agents",
+  "auth_relay_detail": "When an Agent on one of your computers stops at an authorization link it names (one its own command printed), it is handed the link and completes it with the account it is signed in with, so you are not asked. Other links still come to you",
   "network_config_title": "Reach the address you enter in its settings",
   "network_config_detail": "The address in the “{field}” setting (now: {host}): that one host and port only, https only",
   "network_config_detail_http": "The address in the “{field}” setting (now: {host}): that one host and port only; unencrypted http allowed",

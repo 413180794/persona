@@ -62,6 +62,10 @@ func TestMain(m *testing.M) {
 		serveErrorsExtensionForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "relay" {
+		serveAuthRelayExtensionForTest()
+		return
+	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "ui" {
 		serveUIExtensionForTest()
 		return

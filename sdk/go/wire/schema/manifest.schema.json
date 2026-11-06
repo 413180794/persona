@@ -11,6 +11,7 @@
       "type": "string", "maxLength": 253,
       "pattern": "^(\\*\\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
     },
+    "ExactHost": {"description": "A host name, lowercase, no scheme, port, path or wildcard.", "type": "string", "maxLength": 253, "pattern": "^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
     "NetworkEntry": {
       "description": "A host name as Host, or config:<field> (config:<field>:http) for the address the user writes in configuration field <field> (format uri): https only unless :http.",
       "type": "string", "maxLength": 253,
@@ -250,7 +251,8 @@
         "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."},
         "usage_gateways": {"type": "boolean", "description": "It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts): accounts, status and quota windows, never a key."},
         "agent_runtimes": {"type": "boolean", "description": "Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime."},
-        "error_reports": {"type": "boolean", "description": "It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user names, machine names or IP addresses). Needed by contributes.error_reports."}
+        "error_reports": {"type": "boolean", "description": "It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user names, machine names or IP addresses). Needed by contributes.error_reports."},
+        "auth_relay": {"type": "boolean", "description": "It is handed the authorization links the user's Agents stop at (only links its contributes.auth_relay names, printed by the Agent's own command) to complete them with the account it is signed in with. Needed by contributes.auth_relay."}
       }
     },
     "Contributes": {
@@ -281,6 +283,7 @@
         "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
         "tunnels": {"type": "array", "items": {"$ref": "#/$defs/TunnelItem"}},
         "error_reports": {"type": "array", "items": {"$ref": "#/$defs/ErrorReportsItem"}},
+        "auth_relay": {"type": "array", "items": {"$ref": "#/$defs/AuthRelayItem"}},
         "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
@@ -441,6 +444,19 @@
         "text": {"type": "string", "minLength": 1, "maxLength": 4000}
       },
       "required": ["id", "title", "text"]
+    },
+    "AuthRelayItem": {
+      "description": "Authorization links it completes for the user's Agents (auth_relay.complete): links on these hosts and paths, https only. Needs the program to speak the protocol and permissions.auth_relay.",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 80, "description": "What it completes, in a few words (shown in the extension's details)."},
+        "hosts": {"type": "array", "description": "The pages' exact host names.", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ExactHost"}},
+        "paths": {"type": "array", "description": "The pages' exact paths (a trailing / is ignored).", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": {"type": "string", "maxLength": 256, "pattern": "^/[^?#\\s]*$"}}
+      },
+      "required": ["id", "hosts", "paths"]
     },
     "ErrorReportsItem": {
       "description": "It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the program to speak the protocol, on_startup and permissions.error_reports.",

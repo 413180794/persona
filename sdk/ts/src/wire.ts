@@ -254,6 +254,12 @@ export interface Permissions {
    * user names, machine names or IP addresses). Needed by contributes.error_reports.
    */
   error_reports?: boolean;
+  /**
+   * It is handed the authorization links the user's Agents stop at (only links its contributes.auth_relay names,
+   * printed by the Agent's own command) to complete them with the account it is signed in with. Needed by
+   * contributes.auth_relay.
+   */
+  auth_relay?: boolean;
 }
 
 /**
@@ -282,6 +288,7 @@ export interface Contributes {
   agent_filters?: AgentFilterItem[];
   tunnels?: TunnelItem[];
   error_reports?: ErrorReportsItem[];
+  auth_relay?: AuthRelayItem[];
   messaging?: MessagingItem[];
   /** Extra keys are opaque JSON; declared properties keep their own types. */
   [key: string]: unknown;
@@ -440,6 +447,20 @@ export interface TriageTemplateItem {
   id: string;
   title: string;
   text: string;
+}
+
+/**
+ * Authorization links it completes for the user's Agents (auth_relay.complete): links on these hosts and paths, https
+ * only. Needs the program to speak the protocol and permissions.auth_relay.
+ */
+export interface AuthRelayItem {
+  id: string;
+  /** What it completes, in a few words (shown in the extension's details). */
+  name?: string;
+  /** The pages' exact host names. */
+  hosts: string[];
+  /** The pages' exact paths (a trailing / is ignored). */
+  paths: string[];
 }
 
 /**
@@ -1137,6 +1158,43 @@ export interface ErrorReport {
 export interface ErrorReportsDeliver {
   contribution: string;
   reports: ErrorReport[];
+}
+
+/**
+ * auth_relay.complete's parameters: an authorization link one of the user's Agents stopped at, on a host and path the
+ * contribution names. The manager has checked that the Agent's own command printed it on one of the user's computers.
+ * The link is a secret while it lives: never log it.
+ */
+export interface AuthRelayCompleteParams {
+  contribution: string;
+  url: string;
+}
+
+/**
+ * How auth_relay.complete ended: done (authorized, the Agent can go on), manual (not one it completes: the user's),
+ * failed (one it completes, but it did not go through).
+ */
+export type AuthRelayStatus = "done" | "manual" | "failed" | (string & {});
+export const AUTH_RELAY_STATUSES = ["done", "manual", "failed"] as const;
+
+/**
+ * Why it was not done: not_handled (not a link it completes), not_signed_in (its account is not signed in for the
+ * page), new_permissions (the page asks for more than was granted before), app_not_allowed (the extension's own
+ * settings leave this app to the user), unknown_page (not the page it knows), unavailable (what it completes them
+ * with can't be reached), not_confirmed (it clicked, the page never said it was done), expired (the link is no longer
+ * valid).
+ */
+export type AuthRelayReason = "not_handled" | "not_signed_in" | "new_permissions" | "app_not_allowed" | "unknown_page" | "unavailable" | "not_confirmed" | "expired" | (string & {});
+export const AUTH_RELAY_REASONS = ["not_handled", "not_signed_in", "new_permissions", "app_not_allowed", "unknown_page", "unavailable", "not_confirmed", "expired"] as const;
+
+/**
+ * What auth_relay.complete answers. Never the link, a token or a page's text.
+ */
+export interface AuthRelayResult {
+  status: AuthRelayStatus;
+  /** The app the page authorized (or asked to), as the page names it. */
+  app?: string;
+  reason?: AuthRelayReason;
 }
 
 /**

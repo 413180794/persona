@@ -122,12 +122,22 @@ func (m *Manifest) offByDefaultProblems() []string {
 	return out
 }
 
+// alwaysOff are the points whose contributions start switched off whatever the manifest says: the user turns each
+// on (auth_relay acts with the user's account on links Agents give, docs/auth-relay.md).
+var alwaysOff = []string{"auth_relay"}
+
 // StartsOff is what a new install (prev nil) or an upgrade from prev switches off before it runs: the manifest's
-// OffByDefault, at an upgrade only the ones prev did not contribute (the user chose about the others already), added
-// to disabled (sorted, once each).
+// OffByDefault and the contributions to alwaysOff, at an upgrade only the ones prev did not contribute (the user chose
+// about the others already), added to disabled (sorted, once each).
 func (m *Manifest) StartsOff(prev *Manifest, disabled []string) []string {
 	out := slices.Clone(disabled)
-	for _, key := range m.OffByDefault {
+	keys := slices.Clone(m.OffByDefault)
+	for _, point := range alwaysOff {
+		for _, id := range m.Items(point) {
+			keys = append(keys, ContributionKey(point, id))
+		}
+	}
+	for _, key := range keys {
 		point, id, _ := strings.Cut(key, "/")
 		if prev != nil && slices.Contains(prev.Items(point), id) {
 			continue

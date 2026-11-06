@@ -168,16 +168,17 @@ Apply in order; on a match, do not call the model:
 - Normal selections (or typing an "Other answer") reach the manager through `manager.action`, which formats them as a message (`prompts/agents/answer.md`: `关于你上面的问题：Q → A`, "Regarding your question above: Q → A"), and sends it to that Agent with `session.send`.
 - Triage cards advertise `can_cancel:true`. Closing one commits its turn as deferred and clears its scheduled wakeup without sending an Agent message or interrupting the task. A model-generated single-choice option with `action:"defer"` has the same effect when selected; its label remains the answer stored in interaction history. Only options actually offered on the card carry this intent, not arbitrary free text. Legacy persisted pause labels have a narrow compatibility path.
 - A deferred turn stays quiet after refresh, reconnect, and manager restart; a genuinely new turn can ask a new question. Repeated owner snapshots replay the original terminal outcome instead of registering the same question again. Persistence failures remain retryable rather than acknowledging a durable close.
-- For authorization links (`link`), the card's first question contains the link and validity period, with options "Authorized, continue" / "Not now". Push as soon as triage finishes (15 seconds after the turn stops plus a second or two for the model), not after the 60-second "Completed" push delay.
+- For authorization links (`link`), the auth relay goes first ([auth-relay.md](auth-relay.md)): when an extension's `auth_relay` contribution names the link and it was printed by the Agent's own command on one of your computers, the extension completes it with the account it is signed in with, the Agent is told to go on and no card goes up. Otherwise the card's first question contains the link and validity period (plus one line on why Persona didn't do it, when it tried), with options "Authorized, continue" / "Not now". Push as soon as triage finishes (15 seconds after the turn stops plus a second or two for the model), not after the 60-second "Completed" push delay.
 - Remove a card (without sending anything) when the Agent resumes work (you replied directly on the computer or in the App), a new turn starts, the session disappears, or 24 hours pass without an answer.
 
 ## Safety boundary
 
-Persona **sends to Agents on its own** only three kinds of message, none introducing new intent:
+Persona **sends to Agents on its own** only four kinds of message, none introducing new intent:
 
 1. Continuation after a transient error: like "Retry" on the App's error card, it resumes the interrupted task;
 2. A wakeup after a registered wait: asks only whether the awaited event is ready, and explicitly says `接下来要推代码、部署、给别人发消息、合并或改别人的 MR 时先停下来问用户，不要自己做` ("Before pushing code, deploying, messaging others, or merging / modifying someone else's MR, stop and ask the user; do not do it yourself");
-3. The answer the user selected on a card.
+3. The answer the user selected on a card;
+4. After the auth relay completed the authorization link it stopped at ([auth-relay.md](auth-relay.md)): go on with what it was doing.
 
 Any next step involving **pushing code, deploying / releasing, messaging others, or touching someone else's MR / PR** can only become "Waiting for your decision":
 

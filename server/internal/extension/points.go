@@ -652,6 +652,31 @@ var Points = map[string]Point{
 		}
 		return e.ID, nil
 	}},
+	// auth_relay: the authorization links the user's Agents stop at, on the hosts and paths it names, completed with
+	// the account it is signed in with (auth_relay.complete, docs/auth-relay.md).
+	"auth_relay": {Name: "auth_relay", Namespace: "auth_relay", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var a AuthRelayItem
+		if err := strict(raw, &a); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(a.ID) {
+			return a.ID, fmt.Errorf("auth_relay id %q: a-z0-9_-", a.ID)
+		}
+		if len(a.Hosts) == 0 || len(a.Paths) == 0 {
+			return a.ID, fmt.Errorf("auth_relay %s: hosts and paths are required", a.ID)
+		}
+		for _, h := range a.Hosts {
+			if strings.HasPrefix(h, "*.") || !hostPattern.MatchString(h) {
+				return a.ID, fmt.Errorf("auth_relay %s: host %q: an exact lowercase host name", a.ID, h)
+			}
+		}
+		for _, p := range a.Paths {
+			if !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "?# \t\n") {
+				return a.ID, fmt.Errorf("auth_relay %s: path %q: a path starting with /, no query", a.ID, p)
+			}
+		}
+		return a.ID, nil
+	}},
 	"voice": {Name: "voice", Namespace: "voice", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
 		var v VoiceItem
 		if err := strict(raw, &v); err != nil {

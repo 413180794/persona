@@ -220,6 +220,9 @@ type EventsItem struct {
 // none: all).
 type ErrorReportsItem = wire.ErrorReportsItem
 
+// AuthRelayItem is a contribution to auth_relay: the authorization links (hosts and paths) it completes.
+type AuthRelayItem = wire.AuthRelayItem
+
 // Events this hub has.
 var (
 	EventTopics = map[string]string{

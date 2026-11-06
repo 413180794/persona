@@ -32,5 +32,14 @@
   "you_skipped": "你说先不管",
   "waiting_on": "等「{wait}」",
   "reply_title": "{agent} 还在等你回复",
-  "reply_body": "它停下来问了你一个问题，还没有回答"
+  "reply_body": "它停下来问了你一个问题，还没有回答",
+  "relayed_line": "已用你的账号授权「{app}」，它接着做",
+  "relay_app_unknown": "授权页上的应用",
+  "relay_why_new_permissions": "\n（它要新的权限，Persona 不替你授权）",
+  "relay_why_app_not_allowed": "\n（这个应用不在扩展自动授权的范围里）",
+  "relay_why_not_signed_in": "\n（扩展的账号打开授权页时要求登录）",
+  "relay_why_expired": "\n（链接已经过期，让它重新生成一个）",
+  "relay_why_not_in_session": "\n（这个链接不是它自己的命令打印出来的，Persona 不替你授权）",
+  "relay_why_failed": "\n（Persona 试着替你授权，没有成功）",
+  "relay_why_done": "\n（Persona 已经替你授权了，但没能告诉它：点「已授权，继续」）"
 }

@@ -42,6 +42,9 @@ type Permissions struct {
 	// ErrorReports: it is given the error and crash reports of the hub and the user's devices, scrubbed first
 	// (contributes.error_reports, docs/extensions.md "Error reports").
 	ErrorReports bool `json:"error_reports,omitempty"`
+	// AuthRelay: it is handed the authorization links the user's Agents stop at, the ones its contributes.auth_relay
+	// names, to complete them with the account it is signed in with (docs/auth-relay.md).
+	AuthRelay bool `json:"auth_relay,omitempty"`
 }
 
 var hostPattern = regexp.MustCompile(`^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -80,7 +83,8 @@ func (p Permissions) FullHub() bool { return p.HubAPI && len(p.Hub) == 0 }
 // covers every scope; scopes never cover the full token.
 func (p Permissions) Covers(q Permissions) bool {
 	if q.FullHub() && !p.FullHub() || q.LauncherKeys && !p.LauncherKeys || q.GhLogin && !p.GhLogin ||
-		q.UsageGateways && !p.UsageGateways || q.AgentRuntimes && !p.AgentRuntimes || q.ErrorReports && !p.ErrorReports {
+		q.UsageGateways && !p.UsageGateways || q.AgentRuntimes && !p.AgentRuntimes || q.ErrorReports && !p.ErrorReports ||
+		q.AuthRelay && !p.AuthRelay {
 		return false
 	}
 	for _, s := range q.Hub {
@@ -311,6 +315,9 @@ func ExplainWith(l i18n.Lang, m *Manifest, config json.RawMessage) []PermissionL
 	if m.Permissions.ErrorReports {
 		out = append(out, permissionLine(l, "error_reports"))
 	}
+	if m.Permissions.AuthRelay {
+		out = append(out, permissionLine(l, "auth_relay"))
+	}
 	if to := m.ContributesTo(); len(to) > 0 {
 		out = append(out, PermissionLine{Key: "contributes_to", Title: permissionText(l, "contributes_title"),
 			Detail: permissionText(l, "contributes_detail", i18n.Args{"names": strings.Join(to, permissionText(l, "list_separator"))})})
@@ -417,6 +424,9 @@ func AddedIn(l i18n.Lang, old, m *Manifest) []PermissionLine {
 	}
 	if m.Permissions.ErrorReports && !old.Permissions.ErrorReports {
 		out = append(out, permissionLine(l, "error_reports"))
+	}
+	if m.Permissions.AuthRelay && !old.Permissions.AuthRelay {
+		out = append(out, permissionLine(l, "auth_relay"))
 	}
 	var to []string
 	for _, owner := range m.ContributesTo() {

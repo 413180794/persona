@@ -32,5 +32,14 @@
   "you_skipped": "You said to leave it",
   "waiting_on": "Waiting for “{wait}”",
   "reply_title": "{agent} is still waiting for your answer",
-  "reply_body": "It stopped to ask you something and has no answer yet"
+  "reply_body": "It stopped to ask you something and has no answer yet",
+  "relayed_line": "Authorized “{app}” with your account; it goes on",
+  "relay_app_unknown": "the app on the page",
+  "relay_why_new_permissions": "\n(It asks for new permissions: Persona doesn't grant those for you)",
+  "relay_why_app_not_allowed": "\n(This app isn't one the extension authorizes by itself)",
+  "relay_why_not_signed_in": "\n(The extension's account wasn't signed in for this page)",
+  "relay_why_expired": "\n(The link has expired: ask it for a new one)",
+  "relay_why_not_in_session": "\n(None of its own commands printed this link: Persona doesn't authorize it for you)",
+  "relay_why_failed": "\n(Persona tried to authorize it for you and couldn't)",
+  "relay_why_done": "\n(Persona authorized it but couldn't tell the agent: tap “Authorized, go on”)"
 }

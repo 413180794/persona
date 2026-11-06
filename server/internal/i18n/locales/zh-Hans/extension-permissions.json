@@ -79,6 +79,8 @@
   "event_agent_finished": "有 Agent 做完了（哪台电脑、哪个会话、标题）",
   "error_reports_title": "接收错误和崩溃报告",
   "error_reports_detail": "hub 和你各台设备上的错误和崩溃，先脱敏：不含消息正文、token、用户名、机器名和 IP 地址；发到哪里由它决定（比如错误追踪服务）",
+  "auth_relay_title": "替你的 Agent 完成授权链接",
+  "auth_relay_detail": "你电脑上的 Agent 停在它声明的授权链接上时（链接是 Agent 自己的命令打印出来的），会把链接交给它，由它用已登录的账号完成授权，不用再问你；其他链接仍然交给你",
   "network_config_title": "访问你在设置里填的地址",
   "network_config_detail": "设置「{field}」里填的地址（当前：{host}），只连这一个主机和端口，只用 https",
   "network_config_detail_http": "设置「{field}」里填的地址（当前：{host}），只连这一个主机和端口；允许不加密的 http",

@@ -938,8 +938,15 @@ func (s *Service) actOn(ctx context.Context, v *workView, machine string, c prot
 	if len(w.Questions) == 0 {
 		w.Questions = []proto.Question{{Question: w.Line, Options: []proto.QuestionOption{{Label: answerLabel(l, answerOK)}, {Label: answerLabel(l, answerSkip)}}}}
 	}
+	why := ""
 	if w.Link != nil {
-		w.Questions = append([]proto.Question{{Question: linkQuestion(w, s.location(ctx), l), Header: workT(l, "header_auth"),
+		var done bool
+		if done, why = s.relayAuth(ctx, machine, c, w); done {
+			return // authorized with the user's account, and the agent told (agents_auth_relay.go)
+		}
+	}
+	if w.Link != nil {
+		w.Questions = append([]proto.Question{{Question: linkQuestion(w, s.location(ctx), l) + why, Header: workT(l, "header_auth"),
 			Options: []proto.QuestionOption{{Label: answerLabel(l, answerAuthed)}, {Label: answerLabel(l, answerNotNow)}}}}, w.Questions...)
 		if len(w.Questions) > 4 {
 			w.Questions = w.Questions[:4]

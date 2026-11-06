@@ -261,3 +261,7 @@ func renderDelegatedAnswer(items []agentAnswerItem, reason string) string {
 	}
 	return prompts.RenderAgentAnswer(a)
 }
+
+func renderAuthRelayed(app string) string {
+	return prompts.RenderAgentAuthRelayed(prompts.AgentAuthRelayed{App: app})
+}

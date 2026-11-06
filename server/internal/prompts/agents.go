@@ -56,6 +56,14 @@ type AgentAnswerItem struct {
 
 func RenderAgentAnswer(a AgentAnswer) string { return render("agents/answer", a) }
 
+// AgentAuthRelayed tells an agent an extension authorized the link it stopped at with the user's account
+// (agents/auth_relayed, docs/auth-relay.md).
+type AgentAuthRelayed struct {
+	App string // the app, as the authorization page names it; "" when it was not read
+}
+
+func RenderAgentAuthRelayed(a AgentAuthRelayed) string { return render("agents/auth_relayed", a) }
+
 // LauncherRepair is the first message of the agent that repairs a machine's launchers (agents/launcher_repair,
 // docs/launcher-health.md).
 type LauncherRepair struct {

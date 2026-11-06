@@ -631,8 +631,12 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
     /// It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens,
     /// user names, machine names or IP addresses). Needed by contributes.error_reports.
     var errorReports: Bool?
+    /// It is handed the authorization links the user's Agents stop at (only links its contributes.auth_relay names,
+    /// printed by the Agent's own command) to complete them with the account it is signed in with. Needed by
+    /// contributes.auth_relay.
+    var authRelay: Bool?
 
-    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil, agentRuntimes: Bool? = nil, errorReports: Bool? = nil) {
+    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil, agentRuntimes: Bool? = nil, errorReports: Bool? = nil, authRelay: Bool? = nil) {
         self.network = network
         self.hubApi = hubApi
         self.hub = hub
@@ -641,6 +645,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         self.usageGateways = usageGateways
         self.agentRuntimes = agentRuntimes
         self.errorReports = errorReports
+        self.authRelay = authRelay
     }
 
     enum CodingKeys: String, CodingKey {
@@ -652,6 +657,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         case usageGateways = "usage_gateways"
         case agentRuntimes = "agent_runtimes"
         case errorReports = "error_reports"
+        case authRelay = "auth_relay"
     }
 
     init(from decoder: Decoder) throws {
@@ -664,6 +670,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         self.usageGateways = try? c.decodeIfPresent(Bool.self, forKey: .usageGateways)
         self.agentRuntimes = try? c.decodeIfPresent(Bool.self, forKey: .agentRuntimes)
         self.errorReports = try? c.decodeIfPresent(Bool.self, forKey: .errorReports)
+        self.authRelay = try? c.decodeIfPresent(Bool.self, forKey: .authRelay)
     }
 }
 
@@ -691,11 +698,12 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     var agentFilters: [ExtensionAgentFilterItem]?
     var tunnels: [ExtensionTunnelItem]?
     var errorReports: [ExtensionErrorReportsItem]?
+    var authRelay: [ExtensionAuthRelayItem]?
     var messaging: [ExtensionMessagingItem]?
     /// Extra keys stay at this object's level on the wire; declared fields always win.
     var additionalProperties: [String: JSONValue]
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, mcpServers: [ExtensionMCPServerItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, looks: [ExtensionLookItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, tunnels: [ExtensionTunnelItem]? = nil, errorReports: [ExtensionErrorReportsItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, mcpServers: [ExtensionMCPServerItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, looks: [ExtensionLookItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, tunnels: [ExtensionTunnelItem]? = nil, errorReports: [ExtensionErrorReportsItem]? = nil, authRelay: [ExtensionAuthRelayItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -718,6 +726,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.agentFilters = agentFilters
         self.tunnels = tunnels
         self.errorReports = errorReports
+        self.authRelay = authRelay
         self.messaging = messaging
         self.additionalProperties = additionalProperties
     }
@@ -745,6 +754,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         case agentFilters = "agent_filters"
         case tunnels
         case errorReports = "error_reports"
+        case authRelay = "auth_relay"
         case messaging
     }
 
@@ -772,13 +782,14 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.agentFilters = ExtensionWireJSON.decode([ExtensionAgentFilterItem].self, from: raw["agent_filters"])
         self.tunnels = ExtensionWireJSON.decode([ExtensionTunnelItem].self, from: raw["tunnels"])
         self.errorReports = ExtensionWireJSON.decode([ExtensionErrorReportsItem].self, from: raw["error_reports"])
+        self.authRelay = ExtensionWireJSON.decode([ExtensionAuthRelayItem].self, from: raw["auth_relay"])
         self.messaging = ExtensionWireJSON.decode([ExtensionMessagingItem].self, from: raw["messaging"])
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "auth_relay", "messaging"]
         additionalProperties = raw.filter { !known.contains($0.key) }
     }
 
     func encode(to encoder: Encoder) throws {
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "auth_relay", "messaging"]
         var fields = additionalProperties.filter { !known.contains($0.key) }
         if let value = connectors { fields["connectors"] = try ExtensionWireJSON.encode(value) }
         if let value = voice { fields["voice"] = try ExtensionWireJSON.encode(value) }
@@ -802,6 +813,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         if let value = agentFilters { fields["agent_filters"] = try ExtensionWireJSON.encode(value) }
         if let value = tunnels { fields["tunnels"] = try ExtensionWireJSON.encode(value) }
         if let value = errorReports { fields["error_reports"] = try ExtensionWireJSON.encode(value) }
+        if let value = authRelay { fields["auth_relay"] = try ExtensionWireJSON.encode(value) }
         if let value = messaging { fields["messaging"] = try ExtensionWireJSON.encode(value) }
         var container = encoder.singleValueContainer()
         try container.encode(fields)
@@ -1235,6 +1247,40 @@ nonisolated struct ExtensionTriageTemplateItem: Codable, Hashable, Sendable {
         self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
         self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+    }
+}
+
+/// Authorization links it completes for the user's Agents (auth_relay.complete): links on these hosts and paths,
+/// https only. Needs the program to speak the protocol and permissions.auth_relay.
+nonisolated struct ExtensionAuthRelayItem: Codable, Hashable, Sendable {
+    var id: String
+    /// What it completes, in a few words (shown in the extension's details).
+    var name: String?
+    /// The pages' exact host names.
+    var hosts: [String]
+    /// The pages' exact paths (a trailing / is ignored).
+    var paths: [String]
+
+    init(id: String = "", name: String? = nil, hosts: [String] = [], paths: [String] = []) {
+        self.id = id
+        self.name = name
+        self.hosts = hosts
+        self.paths = paths
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case hosts
+        case paths
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.name = try? c.decodeIfPresent(String.self, forKey: .name)
+        self.hosts = (try? c.decodeIfPresent([String].self, forKey: .hosts)) ?? []
+        self.paths = (try? c.decodeIfPresent([String].self, forKey: .paths)) ?? []
     }
 }
 
@@ -3373,6 +3419,83 @@ nonisolated struct ExtensionErrorReportsDeliver: Codable, Hashable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.contribution = (try? c.decodeIfPresent(String.self, forKey: .contribution)) ?? ""
         self.reports = (try? c.decodeIfPresent([ExtensionErrorReport].self, forKey: .reports)) ?? []
+    }
+}
+
+/// auth_relay.complete's parameters: an authorization link one of the user's Agents stopped at, on a host and path
+/// the contribution names. The manager has checked that the Agent's own command printed it on one of the user's
+/// computers. The link is a secret while it lives: never log it.
+nonisolated struct ExtensionAuthRelayCompleteParams: Codable, Hashable, Sendable {
+    var contribution: String
+    var url: String
+
+    init(contribution: String = "", url: String = "") {
+        self.contribution = contribution
+        self.url = url
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case contribution
+        case url
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.contribution = (try? c.decodeIfPresent(String.self, forKey: .contribution)) ?? ""
+        self.url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
+    }
+}
+
+/// How auth_relay.complete ended: done (authorized, the Agent can go on), manual (not one it completes: the user's),
+/// failed (one it completes, but it did not go through).
+nonisolated enum ExtensionAuthRelayStatus {
+    static let done = "done"
+    static let manual = "manual"
+    static let failed = "failed"
+    static let all = ["done", "manual", "failed"]
+}
+
+/// Why it was not done: not_handled (not a link it completes), not_signed_in (its account is not signed in for the
+/// page), new_permissions (the page asks for more than was granted before), app_not_allowed (the extension's own
+/// settings leave this app to the user), unknown_page (not the page it knows), unavailable (what it completes them
+/// with can't be reached), not_confirmed (it clicked, the page never said it was done), expired (the link is no
+/// longer valid).
+nonisolated enum ExtensionAuthRelayReason {
+    static let notHandled = "not_handled"
+    static let notSignedIn = "not_signed_in"
+    static let newPermissions = "new_permissions"
+    static let appNotAllowed = "app_not_allowed"
+    static let unknownPage = "unknown_page"
+    static let unavailable = "unavailable"
+    static let notConfirmed = "not_confirmed"
+    static let expired = "expired"
+    static let all = ["not_handled", "not_signed_in", "new_permissions", "app_not_allowed", "unknown_page", "unavailable", "not_confirmed", "expired"]
+}
+
+/// What auth_relay.complete answers. Never the link, a token or a page's text.
+nonisolated struct ExtensionAuthRelayResult: Codable, Hashable, Sendable {
+    var status: String
+    /// The app the page authorized (or asked to), as the page names it.
+    var app: String?
+    var reason: String?
+
+    init(status: String = "", app: String? = nil, reason: String? = nil) {
+        self.status = status
+        self.app = app
+        self.reason = reason
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case app
+        case reason
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.status = (try? c.decodeIfPresent(String.self, forKey: .status)) ?? ""
+        self.app = try? c.decodeIfPresent(String.self, forKey: .app)
+        self.reason = try? c.decodeIfPresent(String.self, forKey: .reason)
     }
 }
 

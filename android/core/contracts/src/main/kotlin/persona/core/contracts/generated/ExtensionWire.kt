@@ -324,6 +324,12 @@ data class ExtensionPermissions(
      * user names, machine names or IP addresses). Needed by contributes.error_reports.
      */
     @SerialName("error_reports") val errorReports: Boolean? = null,
+    /**
+     * It is handed the authorization links the user's Agents stop at (only links its contributes.auth_relay names,
+     * printed by the Agent's own command) to complete them with the account it is signed in with. Needed by
+     * contributes.auth_relay.
+     */
+    @SerialName("auth_relay") val authRelay: Boolean? = null,
 )
 
 /**
@@ -353,6 +359,7 @@ data class ExtensionContributes(
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
     val tunnels: List<ExtensionTunnelItem>? = null,
     @SerialName("error_reports") val errorReports: List<ExtensionErrorReportsItem>? = null,
+    @SerialName("auth_relay") val authRelay: List<ExtensionAuthRelayItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
     /** Extra keys stay at this object's level on the wire; declared fields always win. */
     val additionalProperties: Map<String, JsonElement> = emptyMap(),
@@ -382,12 +389,13 @@ private data class ExtensionContributesKnown(
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
     val tunnels: List<ExtensionTunnelItem>? = null,
     @SerialName("error_reports") val errorReports: List<ExtensionErrorReportsItem>? = null,
+    @SerialName("auth_relay") val authRelay: List<ExtensionAuthRelayItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
 )
 
 object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
     private val known = ExtensionContributesKnown.serializer()
-    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging")
+    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "auth_relay", "messaging")
     override val descriptor: SerialDescriptor = known.descriptor
 
     override fun deserialize(decoder: Decoder): ExtensionContributes {
@@ -418,6 +426,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             agentFilters = fields.agentFilters,
             tunnels = fields.tunnels,
             errorReports = fields.errorReports,
+            authRelay = fields.authRelay,
             messaging = fields.messaging,
             additionalProperties = obj.filterKeys { it !in keys },
         )
@@ -448,6 +457,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             agentFilters = value.agentFilters,
             tunnels = value.tunnels,
             errorReports = value.errorReports,
+            authRelay = value.authRelay,
             messaging = value.messaging,
         )
         val obj = output.json.encodeToJsonElement(known, fields) as JsonObject
@@ -681,6 +691,27 @@ data class ExtensionTriageTemplateItem(
     val id: String = "",
     val title: String = "",
     val text: String = "",
+)
+
+/**
+ * Authorization links it completes for the user's Agents (auth_relay.complete): links on these hosts and paths, https
+ * only. Needs the program to speak the protocol and permissions.auth_relay.
+ */
+@Serializable
+data class ExtensionAuthRelayItem(
+    val id: String = "",
+    /**
+     * What it completes, in a few words (shown in the extension's details).
+     */
+    val name: String? = null,
+    /**
+     * The pages' exact host names.
+     */
+    val hosts: List<String> = emptyList(),
+    /**
+     * The pages' exact paths (a trailing / is ignored).
+     */
+    val paths: List<String> = emptyList(),
 )
 
 /**
@@ -1581,6 +1612,60 @@ data class ExtensionErrorReport(
 data class ExtensionErrorReportsDeliver(
     val contribution: String = "",
     val reports: List<ExtensionErrorReport> = emptyList(),
+)
+
+/**
+ * auth_relay.complete's parameters: an authorization link one of the user's Agents stopped at, on a host and path the
+ * contribution names. The manager has checked that the Agent's own command printed it on one of the user's computers.
+ * The link is a secret while it lives: never log it.
+ */
+@Serializable
+data class ExtensionAuthRelayCompleteParams(
+    val contribution: String = "",
+    val url: String = "",
+)
+
+/**
+ * How auth_relay.complete ended: done (authorized, the Agent can go on), manual (not one it completes: the user's),
+ * failed (one it completes, but it did not go through).
+ */
+object ExtensionAuthRelayStatus {
+    const val DONE = "done"
+    const val MANUAL = "manual"
+    const val FAILED = "failed"
+    val ALL = listOf("done", "manual", "failed")
+}
+
+/**
+ * Why it was not done: not_handled (not a link it completes), not_signed_in (its account is not signed in for the
+ * page), new_permissions (the page asks for more than was granted before), app_not_allowed (the extension's own
+ * settings leave this app to the user), unknown_page (not the page it knows), unavailable (what it completes them
+ * with can't be reached), not_confirmed (it clicked, the page never said it was done), expired (the link is no longer
+ * valid).
+ */
+object ExtensionAuthRelayReason {
+    const val NOT_HANDLED = "not_handled"
+    const val NOT_SIGNED_IN = "not_signed_in"
+    const val NEW_PERMISSIONS = "new_permissions"
+    const val APP_NOT_ALLOWED = "app_not_allowed"
+    const val UNKNOWN_PAGE = "unknown_page"
+    const val UNAVAILABLE = "unavailable"
+    const val NOT_CONFIRMED = "not_confirmed"
+    const val EXPIRED = "expired"
+    val ALL = listOf("not_handled", "not_signed_in", "new_permissions", "app_not_allowed", "unknown_page", "unavailable", "not_confirmed", "expired")
+}
+
+/**
+ * What auth_relay.complete answers. Never the link, a token or a page's text.
+ */
+@Serializable
+data class ExtensionAuthRelayResult(
+    val status: String = "",
+    /**
+     * The app the page authorized (or asked to), as the page names it.
+     */
+    val app: String? = null,
+    val reason: String? = null,
 )
 
 /**

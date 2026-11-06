@@ -32,5 +32,14 @@
   "you_skipped": "放置するよう指示されました",
   "waiting_on": "「{wait}」を待機中",
   "reply_title": "{agent} があなたの返事を待っています",
-  "reply_body": "質問したまま、まだ返事がありません"
+  "reply_body": "質問したまま、まだ返事がありません",
+  "relayed_line": "あなたのアカウントで「{app}」を認可しました。続行します",
+  "relay_app_unknown": "ページのアプリ",
+  "relay_why_new_permissions": "\n（新しい権限を求めているため、Persona は代わりに認可しません）",
+  "relay_why_app_not_allowed": "\n（このアプリは拡張機能が自動で認可する対象ではありません）",
+  "relay_why_not_signed_in": "\n（拡張機能のアカウントがこのページでサインインを求められました）",
+  "relay_why_expired": "\n（リンクの有効期限が切れています。新しいリンクを出してもらってください）",
+  "relay_why_not_in_session": "\n（このリンクはエージェント自身のコマンドが表示したものではないため、Persona は代わりに認可しません）",
+  "relay_why_failed": "\n（Persona が代わりに認可しようとしましたが、できませんでした）",
+  "relay_why_done": "\n（Persona は認可しましたが、エージェントに伝えられませんでした：「認可済み、続行」を押してください）"
 }

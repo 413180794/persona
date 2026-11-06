@@ -470,6 +470,9 @@ func (m *Manifest) Validate() error {
 		if name == "error_reports" && !m.Permissions.ErrorReports {
 			bad("contributes.error_reports needs permissions.error_reports (the user agrees that it gets the error and crash reports)")
 		}
+		if name == "auth_relay" && !m.Permissions.AuthRelay {
+			bad("contributes.auth_relay needs permissions.auth_relay (the user agrees that it completes the authorization links their Agents stop at)")
+		}
 		if name == "error_reports" && !slices.Contains(m.Activation(), OnStartup) {
 			bad("contributes.error_reports: reports are given to a plugin that runs: activation_events on_startup")
 		}
@@ -827,6 +830,13 @@ func (m *Manifest) Events() []EventsItem {
 func (m *Manifest) ErrorReports() []ErrorReportsItem {
 	var out []ErrorReportsItem
 	_ = json.Unmarshal(m.Contributes["error_reports"], &out)
+	return out
+}
+
+// AuthRelays are the manifest's contributions to auth_relay.
+func (m *Manifest) AuthRelays() []AuthRelayItem {
+	var out []AuthRelayItem
+	_ = json.Unmarshal(m.Contributes["auth_relay"], &out)
 	return out
 }
 

@@ -219,6 +219,10 @@ type Permissions struct {
 	// It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user
 	// names, machine names or IP addresses). Needed by contributes.error_reports.
 	ErrorReports bool `json:"error_reports,omitempty"`
+	// It is handed the authorization links the user's Agents stop at (only links its contributes.auth_relay names,
+	// printed by the Agent's own command) to complete them with the account it is signed in with. Needed by
+	// contributes.auth_relay.
+	AuthRelay bool `json:"auth_relay,omitempty"`
 }
 
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
@@ -246,6 +250,7 @@ type Contributes struct {
 	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
 	Tunnels         []TunnelItem         `json:"tunnels,omitempty"`
 	ErrorReports    []ErrorReportsItem   `json:"error_reports,omitempty"`
+	AuthRelay       []AuthRelayItem      `json:"auth_relay,omitempty"`
 	Messaging       []MessagingItem      `json:"messaging,omitempty"`
 	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
 	AdditionalProperties map[string]json.RawMessage `json:"-"`
@@ -257,7 +262,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "auth_relay", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -289,7 +294,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "auth_relay", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -479,6 +484,18 @@ type TriageTemplateItem struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Text  string `json:"text"`
+}
+
+// AuthRelayItem: authorization links it completes for the user's Agents (auth_relay.complete): links on these hosts
+// and paths, https only. Needs the program to speak the protocol and permissions.auth_relay.
+type AuthRelayItem struct {
+	ID string `json:"id"`
+	// What it completes, in a few words (shown in the extension's details).
+	Name string `json:"name,omitempty"`
+	// The pages' exact host names.
+	Hosts []string `json:"hosts"`
+	// The pages' exact paths (a trailing / is ignored).
+	Paths []string `json:"paths"`
 }
 
 // ErrorReportsItem: it is given the error and crash reports of the hub and the user's devices
@@ -1164,6 +1181,52 @@ type ErrorReport struct {
 type ErrorReportsDeliver struct {
 	Contribution string        `json:"contribution"`
 	Reports      []ErrorReport `json:"reports"`
+}
+
+// AuthRelayCompleteParams: auth_relay.complete's parameters: an authorization link one of the user's Agents stopped
+// at, on a host and path the contribution names. The manager has checked that the Agent's own command printed it on
+// one of the user's computers. The link is a secret while it lives: never log it.
+type AuthRelayCompleteParams struct {
+	Contribution string `json:"contribution"`
+	URL          string `json:"url"`
+}
+
+// AuthRelayStatus: how auth_relay.complete ended: done (authorized, the Agent can go on), manual (not one it
+// completes: the user's), failed (one it completes, but it did not go through).
+const (
+	AuthRelayStatusDone   = "done"
+	AuthRelayStatusManual = "manual"
+	AuthRelayStatusFailed = "failed"
+)
+
+// AuthRelayStatuses are the values of AuthRelayStatus, in order.
+var AuthRelayStatuses = []string{"done", "manual", "failed"}
+
+// AuthRelayReason: why it was not done: not_handled (not a link it completes), not_signed_in (its account is not
+// signed in for the page), new_permissions (the page asks for more than was granted before), app_not_allowed (the
+// extension's own settings leave this app to the user), unknown_page (not the page it knows), unavailable (what it
+// completes them with can't be reached), not_confirmed (it clicked, the page never said it was done), expired (the
+// link is no longer valid).
+const (
+	AuthRelayReasonNotHandled     = "not_handled"
+	AuthRelayReasonNotSignedIn    = "not_signed_in"
+	AuthRelayReasonNewPermissions = "new_permissions"
+	AuthRelayReasonAppNotAllowed  = "app_not_allowed"
+	AuthRelayReasonUnknownPage    = "unknown_page"
+	AuthRelayReasonUnavailable    = "unavailable"
+	AuthRelayReasonNotConfirmed   = "not_confirmed"
+	AuthRelayReasonExpired        = "expired"
+)
+
+// AuthRelayReasons are the values of AuthRelayReason, in order.
+var AuthRelayReasons = []string{"not_handled", "not_signed_in", "new_permissions", "app_not_allowed", "unknown_page", "unavailable", "not_confirmed", "expired"}
+
+// AuthRelayResult: what auth_relay.complete answers. Never the link, a token or a page's text.
+type AuthRelayResult struct {
+	Status string `json:"status"`
+	// The app the page authorized (or asked to), as the page names it.
+	App    string `json:"app,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // ExtensionNotification: extension_notification in an extension's alert push: whose it is, the page a tap opens (ui
@@ -4044,6 +4107,7 @@ var newDef = map[string]func() any{
 	"LookDot":                      func() any { return new(LookDot) },
 	"LookItem":                     func() any { return new(LookItem) },
 	"TriageTemplateItem":           func() any { return new(TriageTemplateItem) },
+	"AuthRelayItem":                func() any { return new(AuthRelayItem) },
 	"ErrorReportsItem":             func() any { return new(ErrorReportsItem) },
 	"TunnelItem":                   func() any { return new(TunnelItem) },
 	"AgentFilterItem":              func() any { return new(AgentFilterItem) },
@@ -4103,6 +4167,8 @@ var newDef = map[string]func() any{
 	"ErrorBreadcrumb":              func() any { return new(ErrorBreadcrumb) },
 	"ErrorReport":                  func() any { return new(ErrorReport) },
 	"ErrorReportsDeliver":          func() any { return new(ErrorReportsDeliver) },
+	"AuthRelayCompleteParams":      func() any { return new(AuthRelayCompleteParams) },
+	"AuthRelayResult":              func() any { return new(AuthRelayResult) },
 	"ExtensionNotification":        func() any { return new(ExtensionNotification) },
 	"View":                         func() any { return new(View) },
 	"Section":                      func() any { return new(Section) },
