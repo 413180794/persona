@@ -710,3 +710,7 @@ A timeout or disconnected stream may happen after input reached the node. Transl
   `launch` calls the `stop` from `signal.NotifyContext` first: with no channel left for the signal, Go puts back the handling the process inherited at start (normally terminate; ignored stays ignored), then waits.
 - Socket reads on the local node get a deadline (`launchNodeWait`, 10 s for `launch`): a node that accepts and never answers (restarting, stuck, a stale socket held by another process) otherwise blocks forever. Say which socket timed out and point at `personad node doctor`.
 - Test a signal while the child is actually waiting: signal only after the fake node has read the request, not after a fixed sleep. A child inherits an ignored SIGINT (tests run in the background), so skip when `signal.Ignored` reports it (`cmd/personad/launch_test.go`).
+
+## An empty Git file list is still authoritative (#6056)
+
+A successful `git ls-files` can return no files when the requested directory contains only ignored output. Falling back to a filesystem walk on an empty result discards Git's ignore rules and lists that output. Use the result's availability, not its length, to choose the fallback; test an ignored directory that actually contains a file.

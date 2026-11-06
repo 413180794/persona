@@ -91,6 +91,27 @@ func TestFindFilesInRepo(t *testing.T) {
 	}
 }
 
+func TestFindFilesKeepsEmptyGitResult(t *testing.T) {
+	resetFinds(t)
+	gitEnv(t)
+	root := t.TempDir()
+	n := &Node{home: root}
+	repo := filepath.Join(root, "repo")
+	putFiles(t, repo, "generated/bundle.js")
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte("generated/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runPullGit(t, root, "init", "--initial-branch=main", repo)
+
+	res, err := n.findFiles(context.Background(), filepath.Join(repo, "generated"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Source != "git" || len(res.Files) != 0 || res.Truncated {
+		t.Fatalf("ignored directory = %+v, want an empty Git result", res)
+	}
+}
+
 func TestFindFilesWalksWhatIsNotARepo(t *testing.T) {
 	resetFinds(t)
 	root := t.TempDir()

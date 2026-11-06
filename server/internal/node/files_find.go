@@ -148,7 +148,7 @@ func evictFinds(keep string) {
 }
 
 func (n *Node) listFiles(ctx context.Context, real string, limit int) (*FindResult, error) {
-	if res := n.gitFiles(ctx, real, limit); res != nil && len(res.Files) > 0 {
+	if res := n.gitFiles(ctx, real, limit); res != nil {
 		return res, nil
 	}
 	return n.walkFiles(ctx, real, limit), nil
