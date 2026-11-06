@@ -401,6 +401,7 @@ func (h *Hub) assistantHello(ctx context.Context) assistantwire.Hello {
 // assistantHelloFor is assistantHello for manager id.
 func (h *Hub) assistantHelloFor(ctx context.Context, id string) assistantwire.Hello {
 	hello, _ := assistantLink{h}.Hello(ctx)
+	hello.Mutes = h.mutesFor(id, assistantwire.FleetMutes{Mutes: hello.Mutes}).Mutes // its own machines' only, as fleet.mutes (fleet_link.go)
 	raw, _ := json.Marshal(updatedHello(hello))
 	a := h.assistantOf(id)
 	a.helloMu.Lock()

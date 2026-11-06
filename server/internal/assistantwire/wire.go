@@ -39,8 +39,9 @@ type Hello struct {
 	// Locale is the user's language (zh-Hans / en / ja, docs/i18n.md): the assistant answers in it. "" (an older hub)
 	// is zh-Hans.
 	Locale string `json:"locale,omitempty"`
-	// Mutes are the muted spaces / agents (the hub's settings mutes), so a manager has them before anything it
-	// pushes; nil from an older hub or while the hub cannot read them (fleet.mutes brings them later).
+	// Mutes are the muted spaces / agents (the hub's settings mutes) of the manager's own machines only (as
+	// fleet.mutes), so a manager has them before anything it pushes; nil from an older hub or while the hub cannot
+	// read them (fleet.mutes brings them later).
 	Mutes *Mutes `json:"mutes,omitempty"`
 	// Notify is hub.json's notify and hook_timeout_minutes: the finished push's timings and how long a hook's card
 	// waits by default (the interactions and the pushes are the manager's, fleet.go).

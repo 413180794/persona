@@ -158,7 +158,7 @@ func TestMutesGoAgainAfterTheHandshake(t *testing.T) {
 	// Another manager: the mutes in its hello's answer, and once after its first word, of its own machines only (it
 	// has none: m is the carrier's).
 	d := connectMutesManager(t, h, srv, "desk", nil)
-	if d.hello == nil || !slices.Equal(d.hello.Spaces, []string{"m/app"}) {
+	if d.hello == nil || len(d.hello.Spaces) != 0 || d.hello.Spaces == nil {
 		t.Fatalf("a non-default manager's hello: %+v", d.hello)
 	}
 	d.say(t)

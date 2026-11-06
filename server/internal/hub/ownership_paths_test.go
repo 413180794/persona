@@ -388,3 +388,20 @@ func TestOwnershipRacesAndLeftovers(t *testing.T) {
 	}
 	_ = b
 }
+
+// Each manager's hello carries the mutes of its own machines only, as its fleet.mutes do.
+func TestEachManagersHelloHasItsOwnMutes(t *testing.T) {
+	h, _, _ := pathsHub(t, quiet, quiet)
+	h.mutesMu.Lock()
+	h.mutes = &Pins{Spaces: []string{"ma/sa", "mb/sb", "mz/gone"}, Sessions: []string{"ma/s3", "mb/b1"}, Allowed: []string{"ma/x", "mb/y"}}
+	h.mutesMu.Unlock()
+	for id, want := range map[string]assistantwire.Mutes{ // mz is nobody's: the carrier's (the built-in manager's)
+		assistantwire.AssistantID: {Spaces: []string{"ma/sa", "mz/gone"}, Sessions: []string{"ma/s3"}, Allowed: []string{"ma/x"}},
+		"m-0b0b0b":                {Spaces: []string{"mb/sb"}, Sessions: []string{"mb/b1"}, Allowed: []string{"mb/y"}},
+	} {
+		got := h.assistantHelloFor(context.Background(), id).Mutes
+		if got == nil || !slices.Equal(got.Spaces, want.Spaces) || !slices.Equal(got.Sessions, want.Sessions) || !slices.Equal(got.Allowed, want.Allowed) {
+			t.Errorf("%s's hello: %+v, want %+v", id, got, want)
+		}
+	}
+}
