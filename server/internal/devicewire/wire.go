@@ -131,6 +131,9 @@ type Config struct {
 	LinkPingTimeoutMS int `json:"link_ping_timeout_ms,omitempty"`
 	// Mesh is the group this hub is in (nil: none).
 	Mesh *Mesh `json:"mesh,omitempty"`
+	// Pending are the machines waiting for the user to confirm them (machine_trust), sorted: their Persona Link is
+	// told so (link.Message.Pending).
+	Pending []string `json:"pending,omitempty"`
 }
 
 // LinkEndpoint is one address Persona Link may use (internal/link.Endpoint).

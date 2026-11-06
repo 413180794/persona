@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -92,6 +93,7 @@ func (h *Hub) loadMachineTrust(ctx context.Context) bool {
 	}
 	t.unknown = false
 	t.mu.Unlock()
+	h.devicesConfigChanged() // the manager tells their Persona Link
 	if was {
 		h.logf("machines: the pending computers read again (%d)", len(list))
 		h.broadcastMachines()
@@ -154,18 +156,31 @@ func (h *Hub) fleetLeft(in func(id string) bool) {
 	}
 }
 
+// setPendingLocal records the change and hands it to the manager: the computer's Persona Link shows it.
 func (h *Hub) setPendingLocal(id string, since time.Time, on bool) {
 	t := &h.trust
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	if !on {
 		delete(t.pending, id)
-		return
+	} else {
+		if t.pending == nil {
+			t.pending = map[string]time.Time{}
+		}
+		t.pending[id] = since
 	}
-	if t.pending == nil {
-		t.pending = map[string]time.Time{}
+	t.mu.Unlock()
+	h.devicesConfigChanged()
+}
+
+// pendingMachineIDs are the computers waiting to be confirmed, sorted (the manager's handover).
+func (h *Hub) pendingMachineIDs() []string {
+	t := &h.trust
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.pending) == 0 {
+		return nil
 	}
-	t.pending[id] = since
+	return slices.Sorted(maps.Keys(t.pending))
 }
 
 // markMachinePending makes a computer pending (one a signed-in device added; actor is who).

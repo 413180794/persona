@@ -1747,9 +1747,9 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 
 2026-11-04 起电脑是带着它们的管理者连的（现在是首席管理者 `assistant`，[machines.md](machines.md)「谁连电脑」），消息在 `server/internal/devicewire`。hub 那头 `hub/devices_link.go`、`devices_relay.go`，管理者那头 `internal/devices`。
 
-- 握手的回答多一个 `devices`（只给带着电脑的那个管理者）：`{machines:[hub.json 的条目，原样], hub_id, hub_name, hub_version, endpoints?, mesh_hubs?, tailcat_derp_map_url?, link_ping_ms?, link_ping_timeout_ms?, mesh?}`，
+- 握手的回答多一个 `devices`（只给带着电脑的那个管理者）：`{machines:[hub.json 的条目，原样], hub_id, hub_name, hub_version, endpoints?, mesh_hubs?, tailcat_derp_map_url?, link_ping_ms?, link_ping_timeout_ms?, mesh?, pending?}`，
   `link_ping_ms`、`link_ping_timeout_ms` 是 hub.json `link` 一节的心跳（没设时不发，管理者用 10 秒 / 5 秒），管理者照它 ping 连接器的流，并告诉 Persona Link（`endpoints`、`X-Persona-Ping`）；
-  `mesh` 是 `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`；变了（管理界面加了电脑、互联组、hub 的地址和名字）hub 发 `devices.config`，参数同上（合并 200 毫秒）。
+  `pending` 是待用户确认的机器 id（排好序），管理者告诉它们的 Persona Link（`endpoints` 的 `pending`，[link.md](link.md)「待确认」）；`mesh` 是 `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`；变了（管理界面加了电脑、互联组、hub 的地址和名字）hub 发 `devices.config`，参数同上（合并 200 毫秒）。
 - 管理者 → hub：
   - 事件 `devices.state {machines:[{machine, config, info, connected?, connected_at?, warm_until?, derived?, paths?}], absorbed?:{条目 id: 机器 id}, entries?:[{id, kind, avail?, rtt_ms?}]}`：
     全部机器，按 App 列的顺序；`machine` 是 App 看到的那份（带监控的 `system`，除了 hub 加的 `computer`、`browser`；它的 `online` 把管理者重启后的暖启动也算上），`connected` 是 node 现在真连着、调用能到（hub 的自更新等的、更新 node 发给的都是这个），`connected_at` 变了是 node 重连了，`warm_until` 之前是暖启动；`entries` 是 hub 记录里自己的电脑。变了才发（合并 50 毫秒，`last_seen` 单独变不算），每次握手后发一次整份。

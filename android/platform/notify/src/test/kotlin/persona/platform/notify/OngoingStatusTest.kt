@@ -64,6 +64,18 @@ class OngoingStatusTest {
         assertNull(OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 1, items = listOf(question))).action)
     }
 
+    @Test fun theBodyAboveTheButtonsIsTheRequestTheySettle() {
+        // The hub puts the oldest request first: an older question must not stand above another agent's 拒绝 / 允许.
+        val fleet = FleetState("needsYou", needsYou = 2, items = listOf(question, permission))
+        val status = OngoingStatus.from(ConnectionState.Online, fleet, details = true)
+        assertEquals("ix_build", status.action!!.interaction)
+        assertEquals("补齐网络层的单元测试 · 授权：Bash: swift test", status.text)
+        val private = OngoingStatus.from(ConnectionState.Online, fleet)
+        assertEquals("ix_build", private.action!!.interaction)
+        assertEquals("有个授权等你", private.text)
+        assertTrue(private.publicText!!.startsWith("有个授权等你"))
+    }
+
     @Test fun onlyWorkingRunsTheClockAndQuietOrEmptyFallsBackToTheConnectionLine() {
         val fleet = FleetState("working", working = 1, items = listOf(working), workingSince = 1_700.0)
         val status = OngoingStatus.from(ConnectionState.Online, fleet, details = true)

@@ -6,6 +6,17 @@ import Testing
 /// groups whose link is down unless none is up.
 @MainActor
 struct HubFanOutTests {
+    /// Called from outside the main actor (a detached task, as a background refresh might): the answers still come on
+    /// the main actor (#4777: they came on a pool thread, and the app stopped at launch).
+    @Test func answersComeOnTheMainActorFromAnyCaller() async {
+        let onMain = await Task.detached { () -> Bool in
+            var all = true
+            await HubFanOut.run(["", "work"], fetch: { $0 }) { _, _ in all = all && Thread.isMainThread }
+            return all
+        }.value
+        #expect(onMain)
+    }
+
     @Test func aPollAsksOnlyTheGroupsThatAreUp() {
         #expect(HubFanOut.asked(["", "work", "lab"], up: { $0 != "work" }) == ["", "lab"])
     }
@@ -27,6 +38,7 @@ struct HubFanOutTests {
             }
             return g.count
         }) { g, result in
+            MainActor.assertIsolated() // AppModel and views read in here (#4777)
             order.append(g)
             if case .failure = result { failed.append(g) }
         }
@@ -44,6 +56,7 @@ struct HubFanOutTests {
             if g == "slow" { try await Task.sleep(for: .milliseconds(800)) }
             return g
         }) { g, _ in
+            MainActor.assertIsolated()
             if g == "fast" { firstAt = .now }
         }
         #expect(firstAt.map { $0.timeIntervalSince(started) < 0.6 } == true)

@@ -44,10 +44,14 @@ class Notifier @Inject constructor(
     init {
         scope.launch {
             var previous: persona.core.contracts.api.DeviceNotificationPreferences? = null
+            // null is "not known yet" (startup, every reconnect while the route is re-picked), not "off" (#4699);
+            // unpairing clears through NotificationRuntime instead.
             preferences.preferences.collect { current ->
-                if (current == null || previous?.lockDetails == true && !current.lockDetails ||
-                    previous?.input == true && !current.input ||
-                    previous?.done != DoneNotification.Off && current.done == DoneNotification.Off) clear()
+                if (current == null) return@collect
+                val before = previous
+                if (before != null && (before.lockDetails && !current.lockDetails ||
+                    before.input && !current.input ||
+                    before.done != DoneNotification.Off && current.done == DoneNotification.Off)) clear()
                 previous = current
             }
         }

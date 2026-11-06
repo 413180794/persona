@@ -415,7 +415,7 @@ func TestLinkTellsWhatTheHubIsCalled(t *testing.T) {
 	token, _ := linkToken(t, h, "laptop")
 	statuses, path, _ := runLink(t, linkConfig(h, srv, token), fakeResidentNode(t))
 	st := waitStatus(t, statuses, "the hub's name", func(s link.Status) bool { return s.State == "connected" && s.HubName != "" })
-	if st.HubName != "家里" || st.MeshHubs != 1 {
+	if st.HubName != "家里" || st.MeshHubs != 1 || st.Pending {
 		t.Fatalf("status %+v", st)
 	}
 	eventually(t, 5*time.Second, "the name kept in link.json", func() bool {
@@ -424,6 +424,41 @@ func TestLinkTellsWhatTheHubIsCalled(t *testing.T) {
 	})
 	if m := h.linkEndpoints(); m.Type != "endpoints" || m.HubName != "家里" || m.MeshHubs != 1 || len(m.Endpoints) != 1 {
 		t.Fatalf("endpoints message %+v", m)
+	}
+}
+
+// A computer waiting to be confirmed is told so on its link, and told again once confirmed (#4655): Persona Link shows
+// 「等你在手机上确认」 until then. A confirmed one is never told it is pending, and the others' links are not.
+func TestLinkTellsItIsPending(t *testing.T) {
+	h, _, srv := newLinkHub(t)
+	h.setPendingLocal("laptop", time.Now(), true) // as markMachinePending does, without the database
+	eventually(t, 5*time.Second, "the manager has the pending computer", func() bool {
+		h.devices.mu.Lock()
+		defer h.devices.mu.Unlock()
+		return strings.Contains(string(h.devices.sent), `"pending":["laptop"]`)
+	})
+	token, _ := linkToken(t, h, "laptop")
+	statuses, _, _ := runLink(t, linkConfig(h, srv, token), fakeResidentNode(t))
+	waitStatus(t, statuses, "pending", func(s link.Status) bool { return s.State == "connected" && s.Pending })
+
+	h.setPendingLocal("laptop", time.Time{}, false) // confirmed
+	st := waitStatus(t, statuses, "confirmed", func(s link.Status) bool { return s.State == "connected" && !s.Pending })
+	if b, _ := json.Marshal(st); strings.Contains(string(b), "pending") {
+		t.Fatalf("a confirmed computer's status still says pending: %s", b)
+	}
+	// Another computer pending: this link is not told it is.
+	h.setPendingLocal("elsewhere", time.Now(), true)
+	eventually(t, 5*time.Second, "the manager has the other pending computer", func() bool {
+		h.devices.mu.Lock()
+		defer h.devices.mu.Unlock()
+		return strings.Contains(string(h.devices.sent), `"pending":["elsewhere"]`)
+	})
+	select {
+	case s := <-statuses:
+		if s.Pending {
+			t.Fatalf("told another computer's pending: %+v", s)
+		}
+	case <-time.After(500 * time.Millisecond):
 	}
 }
 

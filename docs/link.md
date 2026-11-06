@@ -80,8 +80,8 @@ jarvis-link 和常驻 node、退出了重启，两个都在一个任务里（没
 ```text
 jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_listen）
   → hello {machine, version, address}          第一条消息；机器 id 和凭据对不上时 hub 以 4003 关闭
-  ← endpoints {endpoints, hub_name, mesh_hubs, ping_ms?, ping_timeout_ms?}
-                                               连上就发，hub 的地址、互联组或心跳变了再发
+  ← endpoints {endpoints, hub_name, mesh_hubs, ping_ms?, ping_timeout_ms?, pending?}
+                                               连上就发，hub 的地址、互联组、心跳或这台待不待确认变了再发
   ← open {id}                                  hub 要连 node 了
       jarvis-link 先连 ~/.persona/node-attach.sock，再开 WSS /api/v1/link/stream?id=<id>，两边原样转发字节
   → open_failed {id, error}                    开不了（常驻 node 没在跑等），hub 把原因记成这台的错误
@@ -100,6 +100,12 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 - jarvis-link 把名字记进 link.json 的 `hub_name`，断开时也知道自己连的是哪台；状态里带 `hub_name`，连着时带 `mesh_hubs`。
 - 名字只留一行可打印的文字（控制字符换成空格），最多 80 个字。
 - 旧 hub 两个都不发：状态里没有这两项，Mac 菜单照旧，`jarvis-link status` 显示 hub id。只带名字、不带地址的 `endpoints` 不会清掉候选地址。
+
+**待确认**（#4655）
+- 从手机 / 网页「添加电脑」加的电脑在用户点「是我的电脑」之前是待确认（`hub/machine_trust.go`）。hub 把待确认的机器 id 交给管理者（`devices.config` 的 `pending`），
+  管理者给这台的链路发的 `endpoints` 带 `pending: true`；确认了（或者被拒、过期）hub 重新交接，管理者再发一次 `endpoints`，不带 `pending`。
+- `endpoints` 是按机器发的：每一条都说这台现在的样子，没有 `pending` 就是已确认。jarvis-link 收到就照着改状态行的 `pending`。
+- 旧 hub 不发：状态里没有 `pending`，按已确认显示（Persona Link 的状态页 #4198 已经这样处理）。被动模式（hub 连电脑）还没有这一项。
 
 **TLS**
 - 按配对时拿到的 hub 公钥指纹（SubjectPublicKeyInfo 的 SHA-256）钉扎，内网也走 TLS。
@@ -420,6 +426,7 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 - `node`：`online` / `offline` / `unknown`，原因在 `node_error`。
 - `waiting` / `refused` 时带 `error`（多个候选的失败用「；」隔开）和 `retry`（下次尝试的时间）。
 - `hub_name`、`mesh_hubs`：见「hub 的名字和互联组」，旧 hub 时没有。
+- `pending`：只在 `connected` 时有意义，`true` 是 hub 还在等用户确认这台电脑（见「待确认」）；没有这一项或 `false` 按已确认处理。
 - `trust`：主动模式按系统 CA 校验 hub（在反向代理后面，没有指纹）时是 `system`，钉扎时没有这一项。
 - 不带凭据。
 - 每一行同时写进 `~/.persona/link.status.json`（加上 `pid`、`version`、`updated`；正常退出时写 `"state":"stopped"`），给

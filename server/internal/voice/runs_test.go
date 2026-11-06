@@ -613,3 +613,43 @@ func TestVoiceMessageIDs(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+// The voice message waits behind a long turn and still has not reached the conversation past QueuedMost, while the
+// transcript ends with the previous turn's closing words: the model is told it was not delivered, never those words
+// (the old fallback read the whole tail and answered with them, #4513).
+func TestQueuedPastMostIsNotAnsweredWithThePreviousTurn(t *testing.T) {
+	setVar(t, &lookEvery, 100*time.Millisecond)
+	setVar(t, &readEvery, 100*time.Millisecond)
+	var skew atomic.Int64
+	setVar(t, &clock, func() time.Time { return time.Now().Add(time.Duration(skew.Load())) })
+	hub := newFakeHub(t)
+	hub.manual = true
+	hub.add("main1", proto.Item{Role: "user", Kind: proto.KindText, Text: "上一轮的问题"})
+	hub.status("main1", "working") // a long turn in progress
+	var sent atomic.Bool
+	hub.onSend = func(sentMsg) (int, string) { // accepted, queued: never in the transcript
+		sent.Store(true)
+		return http.StatusOK, `{}`
+	}
+	up := delegatingUpstream(t)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, map[string]any{"type": "start"})
+	a.until(ofType("ready"))
+	a.send(map[string]any{"type": "text", "text": "明天有什么会"})
+	waitFor(t, "the send", sent.Load)
+	hub.add("main1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "上一轮的收尾话"}) // after the run's base
+	hub.end("main1")
+	time.Sleep(400 * time.Millisecond)
+	if n := up.count(func(f map[string]any) bool { return f["delegation_id"] == "dlg1" }); n != 0 {
+		t.Fatal("answered before QueuedMost")
+	}
+	skew.Store(int64(channel.QueuedMost + time.Minute))
+	got := content(up.nextMatch(on("dlg1")))
+	if strings.Contains(got, "上一轮的收尾话") {
+		t.Fatalf("answered with the previous turn's words: %s", got)
+	}
+	if !strings.Contains(got, i18n.T(i18n.ZhHans, "voice-runs.not_delivered")) {
+		t.Fatalf("result: %s", got)
+	}
+	a.until(func(f map[string]any) bool { return f["type"] == "tool" && f["id"] == "d1" && f["done"] == true })
+}

@@ -87,6 +87,9 @@ type Message struct {
 	// pong, in milliseconds; Persona Link keeps this link's to them (PingTimes). Without them it keeps its own.
 	PingMS        int `json:"ping_ms,omitempty"`
 	PingTimeoutMS int `json:"ping_timeout_ms,omitempty"`
+	// endpoints: this computer waits for the user to confirm it (a signed-in device added it, docs/onboarding.md
+	// 4.2). Every endpoints message says how it is now, so a confirmed one (and an older hub) leaves it out.
+	Pending bool `json:"pending,omitempty"`
 	// node (hub → jarvis-link): whether the hub got through to the resident node.
 	Online bool `json:"online,omitempty"`
 	// open (hub → jarvis-link) asks for stream ID; open_failed answers that it could not be opened.

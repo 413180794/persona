@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.flow
 internal data class OngoingStatus(
     /** The fleet's headline; empty when [titleRes] says the connection's state instead. */
     val title: String,
-    /** The first agent: 「名字 · 在做什么」; without lock screen details only 「有个授权等你」. */
+    /** The first agent, or the request [action] settles: 「名字 · 在做什么」; without lock screen details only 「有个授权等你」. */
     val text: String? = null,
     /** The other counts: 「3 个在工作 · 1 个做完了」. */
     val subText: String? = null,
@@ -67,8 +67,12 @@ internal data class OngoingStatus(
             val working = fleet.working.coerceAtLeast(0)
             val unread = fleet.unread.coerceAtLeast(0)
             val shown = fleet.items.take(MAX_ITEMS)
-            val first = shown.firstOrNull()
-            val firstRequest = shown.firstOrNull(FleetSummary::needsYou)?.let(FleetText::anonymous)?.shown
+            val actionable = FleetSummary.firstActionable(fleet)
+            val action = actionable?.let { OngoingAction.of(it.kind, it.interaction.orEmpty(), FleetSummary.key(it)) }
+            // With buttons, the body is the request they settle (like iOS), not an older question above it.
+            val first = if (action != null) actionable else shown.firstOrNull()
+            val firstRequest = (if (action != null) actionable else shown.firstOrNull(FleetSummary::needsYou))
+                ?.let(FleetText::anonymous)?.shown
             val text: String?
             val lines: String?
             if (details) {
@@ -99,9 +103,7 @@ internal data class OngoingStatus(
                 workingSince = fleet.workingSince?.takeIf { FleetSummary.phase(fleet) == FleetSummary.WORKING && it > 0 }
                     ?.let { (it * 1000).toLong() },
                 open = FleetSummary.single(fleet),
-                action = FleetSummary.firstActionable(fleet)?.let { item ->
-                    OngoingAction.of(item.kind, item.interaction.orEmpty(), FleetSummary.key(item))
-                },
+                action = action,
             )
         }
 

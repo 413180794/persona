@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -88,8 +89,9 @@ func (s *linkSet) list() []*mgrLink {
 }
 
 // sendEndpoints tells every link where the hub can be found now and what its mesh is.
-func (s *linkSet) sendEndpoints(msg link.Message) {
+func (s *linkSet) sendEndpoints(msgFor func(machine string) link.Message) {
 	for _, l := range s.list() {
+		msg := msgFor(l.m.cfg.ID)
 		go func() { _ = l.send(msg) }()
 	}
 }
@@ -135,7 +137,7 @@ func (d *Devices) acceptLink(conn *websocket.Conn, a devicewire.Accept) {
 		old.close(link.CloseReplaced, "a newer link of this machine connected")
 	}
 	d.logf("[%s] link up: Persona Link %s via %s from %s", m.cfg.ID, l.version, l.address, a.Source)
-	_ = l.send(d.linkEndpoints())
+	_ = l.send(d.linkEndpoints(m.cfg.ID))
 	// The read loop is not bound to l.ctx: a link closed with a reason (replaced) still sends its close frame.
 	for {
 		_, data, err := conn.Read(context.Background())
@@ -257,11 +259,12 @@ func (l *mgrLink) info() *proto.MachineLink {
 	return &proto.MachineLink{Version: l.version, Address: l.address, Since: l.since}
 }
 
-// linkEndpoints is where the hub can be found, and what it is called and how many hubs its mesh has (the Mac menu
-// bar shows both, docs/link.md); and the heartbeat, when hub.json sets one: Persona Link pings as the hub does.
-func (d *Devices) linkEndpoints() link.Message {
+// linkEndpoints is what machine's Persona Link is told: where the hub can be found, and what it is called and how
+// many hubs its mesh has (the Mac menu bar shows both, docs/link.md); the heartbeat, when hub.json sets one: Persona
+// Link pings as the hub does; and whether the computer still waits for the user to confirm it.
+func (d *Devices) linkEndpoints(machine string) link.Message {
 	cfg := d.config()
-	msg := link.Message{Type: "endpoints", HubName: cfg.HubName, MeshHubs: cfg.MeshHubs}
+	msg := link.Message{Type: "endpoints", HubName: cfg.HubName, MeshHubs: cfg.MeshHubs, Pending: slices.Contains(cfg.Pending, machine)}
 	for _, e := range cfg.Endpoints {
 		msg.Endpoints = append(msg.Endpoints, link.Endpoint{URL: e.URL, Kind: e.Kind})
 	}

@@ -11,12 +11,15 @@ nonisolated enum HubFanOut {
         return live.isEmpty ? groups : live
     }
 
-    /// `fetch` for each group at once; `each` gets every answer as it comes, on the caller's actor, in no fixed order.
-    /// A failed group's answer is its error. Cancelling the caller cancels them all.
-    static func run<T: Sendable>(_ groups: [String], isolation: isolated (any Actor)? = #isolation,
-                                 fetch: @escaping @Sendable (String) async throws -> T,
+    /// `fetch` for each group at once; `each` gets every answer as it comes, on the main actor, in no fixed order. A
+    /// failed group's answer is its error. Cancelling the caller cancels them all.
+    ///
+    /// On the main actor by name, not by the caller's `#isolation`: the answers came back on a pool thread that way,
+    /// and the callers' AppModel reads stopped the app at launch (#4777).
+    @MainActor
+    static func run<T: Sendable>(_ groups: [String], fetch: @escaping @Sendable (String) async throws -> T,
                                  each: (String, Result<T, Error>) -> Void) async {
-        await withTaskGroup(of: (String, Result<T, Error>).self) { tasks in
+        await withTaskGroup(of: (String, Result<T, Error>).self, isolation: MainActor.shared) { tasks in
             for g in groups {
                 tasks.addTask {
                     do { return (g, .success(try await fetch(g))) } catch { return (g, .failure(error)) }

@@ -222,8 +222,9 @@ type Result struct {
 	Stopped string
 }
 
-// Decide is, after reading, whether the run is answered: nil to keep waiting. found false past QueuedMost reads the
-// conversation's last words instead: the caller reads again without the message (Reading of the whole tail).
+// Decide is, after reading, whether the run is answered: nil to keep waiting. A message not found past QueuedMost
+// never gets here: the caller gives up and asks for it again (reading the whole tail would answer with the previous
+// turn's words).
 func (r *Run) Decide(rd Reading, l Look) *Result {
 	age := l.Now.Sub(r.Started)
 	held := l.Background > 0

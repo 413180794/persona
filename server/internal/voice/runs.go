@@ -303,12 +303,12 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 			t.notSent(r, sendFail{state: runUnknown, code: "unknown", prompt: "unknown"})
 			return
 		}
-		t.c.pl.logf("run %s: its message never showed in the conversation: answering with its last words", r.ID)
-		snap := r.Run
-		snap.MsgIDs, snap.Probe = nil, ""
-		if rd, err = channel.ReadTurn(ctx, src, &snap); err != nil {
-			return
-		}
+		// The message never reached the conversation even past QueuedMost. Reading the whole tail would answer with
+		// the previous turn's last words, and dropping the run would leave the real answer unclaimed: give up and
+		// ask the user to say it again instead (#4513, as the assistant's channels do since #4455).
+		t.c.pl.logf("run %s: its message never showed in the conversation: asking to say it again", r.ID)
+		t.finish(r, &channel.Result{Note: i18n.T(look.Lang, "voice-runs.not_delivered"), End: channel.EndGaveUp}, look)
+		return
 	}
 	if rd.Stopped == "" && !look.Working && sess != nil {
 		rd.Stopped = channel.StopReason(sess.TurnError) // a Codex turn the model service failed writes no line of it

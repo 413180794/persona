@@ -198,6 +198,7 @@ func (h *Hub) devicesConfig() devicewire.Config {
 		out.Endpoints = append(out.Endpoints, devicewire.LinkEndpoint{URL: e.URL, Kind: e.Kind})
 	}
 	out.Mesh = h.devicesMesh()
+	out.Pending = h.pendingMachineIDs()
 	return out
 }
 

@@ -217,8 +217,9 @@ func (d *Devices) Configure(cfg devicewire.Config) {
 		d.startMachines(ctx)
 	}
 	d.fleetRegroup()
-	if was := linkSays(old); was != linkSays(cfg) { // where the hub is, what it is called: Persona Link shows them
-		d.links.sendEndpoints(d.linkEndpoints())
+	// Where the hub is, what it is called, whether the computer waits to be confirmed: Persona Link shows them.
+	if was := linkSays(old); was != linkSays(cfg) {
+		d.links.sendEndpoints(d.linkEndpoints)
 	}
 	if member := cfg.Mesh != nil && cfg.Mesh.Member; member != wasMember {
 		// The hub joined a group (its computers are the center's to connect now: let them go at once) or became its
@@ -236,7 +237,7 @@ func (d *Devices) Configure(cfg devicewire.Config) {
 
 // linkSays is what the links are told of the hub in cfg (linkEndpoints): with its heartbeat, which they follow.
 func linkSays(cfg devicewire.Config) string {
-	b, _ := json.Marshal([]any{cfg.HubName, cfg.MeshHubs, cfg.Endpoints, cfg.LinkPingMS, cfg.LinkPingTimeoutMS})
+	b, _ := json.Marshal([]any{cfg.HubName, cfg.MeshHubs, cfg.Endpoints, cfg.LinkPingMS, cfg.LinkPingTimeoutMS, cfg.Pending})
 	return string(b)
 }
 

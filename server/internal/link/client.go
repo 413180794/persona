@@ -82,6 +82,9 @@ type Status struct {
 	// connected: how many hubs its mesh has, itself included. Both missing with older hubs.
 	HubName  string `json:"hub_name,omitempty"`
 	MeshHubs int    `json:"mesh_hubs,omitempty"`
+	// Pending, while connected: the hub waits for the user to confirm this computer (「是我的电脑」 in the app);
+	// missing once confirmed, and with older hubs.
+	Pending bool `json:"pending,omitempty"`
 	// connected: the hub URL in use, its kind (lan | ipv6 | name | ipv4) and since when.
 	Address string     `json:"address,omitempty"`
 	Kind    string     `json:"kind,omitempty"`
@@ -962,6 +965,7 @@ func (l *link) endpoints(m Message, c *Config, o Options, rep *reporter) {
 		if m.MeshHubs > 0 {
 			s.MeshHubs = min(m.MeshHubs, 999)
 		}
+		s.Pending = m.Pending
 	})
 }
 
