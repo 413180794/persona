@@ -95,9 +95,33 @@ let state: State = {
 
 const listeners = new Set<() => void>();
 
+// What a hub push changes is in `state` at once (getState, the code after it), but the views hear of it once per
+// animation frame: a busy hub sends a burst of frames each tick (machines, every machine's sessions, each pending
+// card), and telling the views after each one rendered the page that many times. Everything else (a click, an answer
+// coming back) still tells them at once: an optimistic update is on screen before the code after it reads the page.
+let pushing = false;
+let notifyFrame: number | undefined;
+let notifyTimer: ReturnType<typeof setTimeout> | undefined;
+// a hidden tab runs no animation frames: the timer tells the views in the end anyway
+const NOTIFY_FALLBACK_MS = 100;
+
+function notify() {
+  if (notifyFrame !== undefined) cancelAnimationFrame(notifyFrame);
+  clearTimeout(notifyTimer);
+  notifyFrame = notifyTimer = undefined;
+  listeners.forEach((l) => l());
+}
+
+function notifySoon() {
+  if (notifyTimer !== undefined) return;
+  notifyTimer = setTimeout(notify, NOTIFY_FALLBACK_MS);
+  if (typeof requestAnimationFrame === "function") notifyFrame = requestAnimationFrame(notify);
+}
+
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
-  listeners.forEach((l) => l());
+  if (pushing) notifySoon();
+  else notify();
 }
 
 export function getState() {
@@ -288,7 +312,12 @@ export function connect() {
     } catch {
       return;
     }
-    onMessage(msg);
+    pushing = true;
+    try {
+      onMessage(msg);
+    } finally {
+      pushing = false;
+    }
   };
   sock.onclose = (ev) => {
     if (ws !== sock) return;
@@ -423,8 +452,7 @@ function onMessage(msg: Record<string, unknown>) {
       sessionsChanged(mid);
       // A delta hub's list has no Codex history (the page has that from GET /sessions): keep what it already has.
       const list = sessionSnapshot((msg.sessions as Session[]) ?? [], state.sessions[mid] ?? [], deltaOn());
-      set({ sessions: { ...state.sessions, [mid]: list } });
-      syncAssistant(mid, list);
+      set({ sessions: { ...state.sessions, [mid]: list }, ...syncAssistant(mid, list) });
       break;
     }
     case "sessions_delta": {
@@ -435,8 +463,7 @@ function onMessage(msg: Record<string, unknown>) {
         (msg.upsert as Session[]) ?? [],
         (msg.remove as string[]) ?? [],
       );
-      set({ sessions: { ...state.sessions, [mid]: list } });
-      syncAssistant(mid, list);
+      set({ sessions: { ...state.sessions, [mid]: list }, ...syncAssistant(mid, list) });
       break;
     }
     case "session": {
@@ -554,14 +581,14 @@ export function upsertSession(s: Session) {
   const list = state.sessions[s.machine_id] ?? [];
   const i = list.findIndex((x) => x.session_id === s.session_id);
   const next = i < 0 ? [...list, s] : list.map((x, j) => (j === i ? { ...x, ...s } : x));
-  set({ sessions: { ...state.sessions, [s.machine_id]: next } });
-  syncAssistant(s.machine_id, [s]);
+  set({ sessions: { ...state.sessions, [s.machine_id]: next }, ...syncAssistant(s.machine_id, [s]) });
 }
 
-// The assistant's conversations are sessions on its machine too: keep the copy in `assistant` current.
-function syncAssistant(mid: string, list: Session[]) {
+// The assistant's conversations are sessions on its machine too: the change that keeps the copy in `assistant`
+// current, to go with the sessions' own (one update, not two).
+function syncAssistant(mid: string, list: Session[]): Partial<State> {
   const a = state.assistant;
-  if (!a || a.machine_id !== mid) return;
+  if (!a || a.machine_id !== mid) return {};
   let changed = false;
   const convs = a.conversations.map((c) => {
     const s = list.find((x) => x.session_id === c.session_id);
@@ -569,7 +596,7 @@ function syncAssistant(mid: string, list: Session[]) {
     changed = true;
     return { ...c, ...s };
   });
-  if (changed) set({ assistant: { ...a, conversations: convs } });
+  return changed ? { assistant: { ...a, conversations: convs } } : {};
 }
 
 // ── pending interactions ───────────────
@@ -585,6 +612,9 @@ function changeInteraction(id: string, ix: Interaction | null) {
   ixChanges.delete(id); // re-inserted: the oldest are dropped first
   ixChanges.set(id, { rev: ++ixRev, ix });
   if (ixChanges.size > IX_CHANGES_KEPT) ixChanges.delete(ixChanges.keys().next().value!);
+  // the hub sends every pending card again now and then: one that says what the page has already changes nothing
+  const old = ix && state.interactions.find((i) => i.id === id);
+  if (old && JSON.stringify(old) === JSON.stringify(ix)) return;
   const interactions = state.interactions.filter((i) => i.id !== id);
   if (ix) interactions.push(ix);
   else dropElicitationDraft(id); // over here or elsewhere: what was typed into it goes with it

@@ -1103,6 +1103,11 @@ Conventions (languages, fallback, glossary) are in [i18n.md](i18n.md). How the w
   When collapsing from "Collapse N steps" at the bottom of a work row, it pins that row's bottom edge, so the group header lands where the button was. When at the latest position it keeps following the latest as before; it only stops following and pins the row instead when following would push the row off the top, or would move more than 64px in one frame (folded steps fetched all at once).
   Wheel, touch, and keys all release it. The scroll view itself still has `overflow-anchor: none` (an anchor the browser picks may sit below the expanded row and push the tapped row away instead).
 - Results of `useStore(selector)` are reused by shallow comparison: a selector can return a new array, and if nothing changed there is no re-render (otherwise `useSyncExternalStore` loops forever).
+- **Hub pushes render once per frame** (`set` in `lib/store.ts`): when a WebSocket message changes the store, the state changes at once (`getState()` and the code after it read the new one),
+  but the views are told at the next animation frame (after 100 ms in a background tab, which runs no frames). A busy hub sends a burst every tick (machines, each machine's sessions, each pending card),
+  and each one used to render the page again. What the user does (clicks, optimistic updates after a reply) still notifies at once and hands over any push not yet told;
+  code that must see the page right after a push does not belong on the push path. A sessions push and the assistant's copy of its conversations change in one update (`syncAssistant` returns a patch),
+  and a pending card pushed again unchanged leaves the list (and its order) alone.
 
 ## Theme color and text size
 
