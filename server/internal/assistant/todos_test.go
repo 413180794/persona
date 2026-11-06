@@ -397,6 +397,104 @@ func (f *failingStore) ListTodos(ctx context.Context) ([]db.TodoRow, error) {
 	return f.DB.ListTodos(ctx)
 }
 
+// gatedTodoStore holds the first UpdateTodo after armed is set, once it has committed, until release is closed: a
+// second device's write can then commit while the first one has not reached memory yet.
+type gatedTodoStore struct {
+	*db.DB
+	armed     atomic.Bool
+	committed chan struct{}
+	release   chan struct{}
+}
+
+func newGatedTodoStore(database *db.DB) *gatedTodoStore {
+	return &gatedTodoStore{DB: database, committed: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (g *gatedTodoStore) UpdateTodo(ctx context.Context, id string, title, notes *string, done *bool, at time.Time) (*db.TodoRow, error) {
+	row, err := g.DB.UpdateTodo(ctx, id, title, notes, done, at)
+	if g.armed.CompareAndSwap(true, false) {
+		close(g.committed)
+		<-g.release
+	}
+	return row, err
+}
+
+// raceTodoWrites runs first, held by g once its write committed, against second, which starts only then. Without
+// the ordering second lands in memory before first does; with it, second waits for first. first is let go once
+// second finished or had a second to (the wait only bounds how long the ordering is given to show; the result
+// asserted does not depend on it).
+func raceTodoWrites(g *gatedTodoStore, first, second func()) {
+	g.armed.Store(true)
+	firstDone, secondDone := make(chan struct{}), make(chan struct{})
+	go func() { defer close(firstDone); first() }()
+	<-g.committed
+	go func() { defer close(secondDone); second() }()
+	select {
+	case <-secondDone:
+	case <-time.After(time.Second):
+	}
+	close(g.release)
+	<-firstDone
+	<-secondDone
+}
+
+// todoDoneBoth is whether todo id is done in memory (as the apps list it) and in the store.
+func todoDoneBoth(t *testing.T, e *todoEnv, database *db.DB, id string) (mem, row bool) {
+	t.Helper()
+	got := e.get(id)
+	if got == nil {
+		t.Fatalf("todo %s not listed", id)
+	}
+	rows, err := database.ListTodos(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ID == id {
+			return got.DoneAt != nil, r.DoneAt != nil
+		}
+	}
+	t.Fatalf("todo %s not in the store", id)
+	return false, false
+}
+
+// Two devices: A's PATCH {done:true} commits, B's {done:false} commits after it. Memory ends as the store does
+// (open), not with A's older row applied last.
+func TestTodoPatchOrder(t *testing.T) {
+	g := newGatedTodoStore(todoTestDB(t))
+	e := newTodoEnv(t, g)
+	todo := e.create("two devices")
+	var a, b int
+	raceTodoWrites(g,
+		func() { a = e.do("PATCH", "/api/v1/todos/"+todo.ID, `{"done":true}`).Code },
+		func() { b = e.do("PATCH", "/api/v1/todos/"+todo.ID, `{"done":false}`).Code })
+	if a != http.StatusOK || b != http.StatusOK {
+		t.Fatalf("PATCH codes: %d %d", a, b)
+	}
+	if mem, row := todoDoneBoth(t, e, g.DB, todo.ID); mem || row {
+		t.Fatalf("done in memory %v, in the store %v; want both open", mem, row)
+	}
+}
+
+// reopenTodo (a rejected acceptance) against the user's PATCH {done:true} committed after it: memory ends done.
+func TestTodoReopenOrder(t *testing.T) {
+	g := newGatedTodoStore(todoTestDB(t))
+	e := newTodoEnv(t, g)
+	todo := e.create("reopened")
+	e.must("PATCH", "/api/v1/todos/"+todo.ID, `{"done":true}`)
+	var reopenErr error
+	var b int
+	raceTodoWrites(g,
+		func() { reopenErr = e.s.reopenTodo(context.Background(), todo.ID) },
+		func() { b = e.do("PATCH", "/api/v1/todos/"+todo.ID, `{"done":true}`).Code })
+	if reopenErr != nil || b != http.StatusOK {
+		t.Fatalf("reopen %v, PATCH %d", reopenErr, b)
+	}
+	if mem, row := todoDoneBoth(t, e, g.DB, todo.ID); !mem || !row {
+		t.Fatalf("done in memory %v, in the store %v; want both done", mem, row)
+	}
+}
+
 // The todos not read yet (the store failing) are no empty list: the routes answer 503 and the report is left out
 // (the hub keeps the last one); once the store answers they are read.
 func TestTodosCacheReliability(t *testing.T) {
@@ -679,5 +777,142 @@ func TestAgentDecisionToolsNeedTheStore(t *testing.T) {
 	e := newTodoEnv(t, nil)
 	if res := e.s.agentTool(context.Background(), "box", "s1", "todo_decisions", json.RawMessage(`{}`)); !res.IsError {
 		t.Fatalf("without a store: %+v", res)
+	}
+}
+
+// pausingAutoDoneStore closes the todo in the database, then tells the test and waits for it before answering, the
+// way a slow round trip leaves room for other writers between the store's write and memory's.
+type pausingAutoDoneStore struct {
+	*db.DB
+	stored, release chan struct{}
+}
+
+func (p *pausingAutoDoneStore) AutoDoneTodo(ctx context.Context, id, reason string, at, workSince time.Time) (*db.TodoRow, bool, error) {
+	r, ok, err := p.DB.AutoDoneTodo(ctx, id, reason, at, workSince)
+	p.stored <- struct{}{}
+	<-p.release
+	return r, ok, err
+}
+
+// The database closed the todo: memory follows it even when something that does not touch done (an agent's title
+// synced, a link) bumped the todo's updated time while the store was writing.
+func TestAutoDoneFollowsTheStoreAfterAnUnrelatedBump(t *testing.T) {
+	database := todoTestDB(t)
+	st := &pausingAutoDoneStore{DB: database, stored: make(chan struct{}), release: make(chan struct{})}
+	e := newTodoEnv(t, st)
+	todo := e.create("修")
+	type result struct {
+		ok  bool
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		ok, err := e.s.autoDoneTodo(context.Background(), todo.ID, "做完了", time.Now().Add(-time.Minute))
+		done <- result{ok, err}
+	}()
+	<-st.stored
+	e.s.todos.mu.Lock() // as updateTodoAgentSnapshots does (todo_sessions.go)
+	e.s.todos.todos[todo.ID].UpdatedAt = time.Now().Add(time.Second)
+	e.s.todos.mu.Unlock()
+	close(st.release)
+	if r := <-done; !r.ok || r.err != nil {
+		t.Fatalf("autoDoneTodo = %v %v, want closed", r.ok, r.err)
+	}
+	if got := e.get(todo.ID); got.DoneAt == nil || got.DoneBy != db.DoneByAuto || got.DoneReason != "做完了" {
+		t.Fatalf("memory = %+v, want done by auto", got)
+	}
+	rows, err := database.ListTodos(context.Background())
+	if err != nil || len(rows) != 1 || rows[0].DoneAt == nil || rows[0].DoneBy != db.DoneByAuto {
+		t.Fatalf("store = %+v %v", rows, err)
+	}
+}
+
+// The user's reopen that reached the database first stands: the store refuses the stale judgment and memory stays
+// open, as the database has it.
+func TestAutoDoneRefusedByTheStoreLeavesItOpen(t *testing.T) {
+	database := todoTestDB(t)
+	e := newTodoEnv(t, database)
+	todo := e.create("修")
+	before := time.Now().Add(-time.Minute)
+	e.must("PATCH", "/api/v1/todos/"+todo.ID, `{"done":true}`)
+	e.must("PATCH", "/api/v1/todos/"+todo.ID, `{"done":false}`)
+	if ok, err := e.s.autoDoneTodo(context.Background(), todo.ID, "做完了", before); ok || err != nil {
+		t.Fatalf("a stale judgment closed it: %v %v", ok, err)
+	}
+	if got := e.get(todo.ID); got.DoneAt != nil || got.ReopenedAt == nil {
+		t.Fatalf("memory = %+v, want open", got)
+	}
+	rows, err := database.ListTodos(context.Background())
+	if err != nil || len(rows) != 1 || rows[0].DoneAt != nil {
+		t.Fatalf("store = %+v %v", rows, err)
+	}
+}
+
+// raceAutoDone holds autoDoneTodo once its store write committed and runs other meanwhile (given a second to finish),
+// then lets the judgment reach memory: a writer that committed after it must not be undone by its older row.
+func raceAutoDone(t *testing.T, e *todoEnv, st *pausingAutoDoneStore, id string, other func()) {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		ok, err := e.s.autoDoneTodo(context.Background(), id, "做完了", time.Now().Add(-time.Minute))
+		if err == nil && !ok {
+			err = errors.New("autoDoneTodo did not close it")
+		}
+		done <- err
+	}()
+	<-st.stored
+	otherDone := make(chan struct{})
+	go func() { defer close(otherDone); other() }()
+	select {
+	case <-otherDone:
+	case <-time.After(time.Second):
+	}
+	close(st.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	<-otherDone
+}
+
+// A retitle committed after the judgment's close: memory keeps the new title, as the store has it.
+func TestAutoDoneThenRetitleKeepsTheNewTitle(t *testing.T) {
+	database := todoTestDB(t)
+	st := &pausingAutoDoneStore{DB: database, stored: make(chan struct{}), release: make(chan struct{})}
+	e := newTodoEnv(t, st)
+	todo := e.create("old title")
+	var retitled bool
+	var retitleErr error
+	raceAutoDone(t, e, st, todo.ID, func() {
+		_, retitled, retitleErr = e.s.retitleTodo(context.Background(), todo.ID, "old title", "new title")
+	})
+	if !retitled || retitleErr != nil {
+		t.Fatalf("retitleTodo = %v %v", retitled, retitleErr)
+	}
+	rows, err := database.ListTodos(context.Background())
+	if err != nil || len(rows) != 1 || rows[0].Title != "new title" {
+		t.Fatalf("store = %+v %v", rows, err)
+	}
+	if got := e.get(todo.ID); got.Title != "new title" || got.DoneAt == nil {
+		t.Fatalf("memory title %q done %v; want the store's %q, done", got.Title, got.DoneAt != nil, rows[0].Title)
+	}
+}
+
+// A failed start recorded after the judgment's close: memory keeps its start error, as the store has it.
+func TestAutoDoneThenFailKeepsTheStartError(t *testing.T) {
+	database := todoTestDB(t)
+	st := &pausingAutoDoneStore{DB: database, stored: make(chan struct{}), release: make(chan struct{})}
+	e := newTodoEnv(t, st)
+	todo := e.create("修")
+	var failErr error
+	raceAutoDone(t, e, st, todo.ID, func() { failErr = e.s.failTodo(context.Background(), todo.ID, "agent did not start") })
+	if failErr != nil {
+		t.Fatal(failErr)
+	}
+	rows, err := database.ListTodos(context.Background())
+	if err != nil || len(rows) != 1 || rows[0].StartError != "agent did not start" {
+		t.Fatalf("store = %+v %v", rows, err)
+	}
+	if got := e.get(todo.ID); got.StartError != "agent did not start" {
+		t.Fatalf("memory start error %q; want the store's %q", got.StartError, rows[0].StartError)
 	}
 }

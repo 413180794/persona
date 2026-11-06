@@ -24,6 +24,12 @@ struct VNCPage: View {
     /// within `returnWindow` is the suspension's, so it reconnects once by itself (#4243).
     @State private var returnedAt: Date?
     private static let returnWindow: TimeInterval = 5
+    /// When the app came back with the connection still saying live, and which connection was asked: the whole screen
+    /// is asked for, and no frame within `frameWait` means it died quietly while suspended, so it reconnects once (#4380).
+    @State private var askedFrameAt: Date?
+    @State private var askedConnection = 0
+    /// Long enough for a whole Retina frame over the hub's relay on a slow network: a healthy connection is not dropped.
+    private static let frameWait: Duration = .seconds(10)
     #endif
 
     private var name: String { model.machine(ref)?.name ?? ref.id }
@@ -86,7 +92,21 @@ struct VNCPage: View {
                 s.start()
             } else {
                 returnedAt = .now
+                if case .live = s.phase {
+                    askedConnection = s.connection
+                    askedFrameAt = .now
+                    s.refresh()
+                }
             }
+        }
+        .task(id: askedFrameAt) {
+            guard let at = askedFrameAt else { return }
+            try? await Task.sleep(for: Self.frameWait)
+            guard !Task.isCancelled else { return }
+            defer { askedFrameAt = nil }
+            // Only the connection that was asked, still saying live: one started since (a reconnect, a sign-in) is new.
+            guard let s = session, s.connection == askedConnection, case .live = s.phase else { return }
+            if (s.lastFrame ?? .distantPast) < at { s.reconnect() }
         }
         #endif
         .sheet(isPresented: $help) { VNCHelp() }

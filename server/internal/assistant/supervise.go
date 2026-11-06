@@ -1005,17 +1005,20 @@ type reviewFeedBody struct {
 // accepted task's outcome is recorded, as when it closes by itself or the user closes it (todo_outcome.go, #2820); a
 // cancelled one came to nothing and records none.
 func (s *Service) reviewDoneTodo(ctx context.Context, id, reason string, accepted bool) (bool, error) {
+	s.todos.writing.Lock() // memory takes the rows in the order the store committed them (todoBook.writing)
 	now := time.Now().UTC()
 	var row db.TodoRow
 	if st := s.supervisionDB(); st != nil && s.todoDB() != nil {
 		r, ok, err := st.ReviewDoneTodo(ctx, id, reason, now)
 		if err != nil || !ok {
+			s.todos.writing.Unlock()
 			return false, err
 		}
 		row = *r
 	} else {
 		t, ok := s.todoNow(id)
 		if !ok {
+			s.todos.writing.Unlock()
 			return false, db.ErrTodoNotFound
 		}
 		row = db.TodoRow{ID: t.ID, Title: t.Title, Notes: t.Notes, CreatedAt: t.CreatedAt, Origin: t.Origin, PlanID: t.PlanID,
@@ -1023,13 +1026,17 @@ func (s *Service) reviewDoneTodo(ctx context.Context, id, reason string, accepte
 		row.DoneAt, row.DoneBy, row.DoneReason, row.UpdatedAt = &now, db.DoneByReview, reason, now
 	}
 	var before Todo
-	_, ok := s.applyTodoRow(ctx, id, row, func(t *Todo) bool {
+	_, doneKeys, ok := s.setTodoRow(id, row, func(t *Todo) bool {
 		if t.DoneAt == nil || s.supervisionDB() != nil {
 			before = copyTodoLocked(t) // its agents as they worked on it, before done releases them
 			return true
 		}
 		return false
 	})
+	s.todos.writing.Unlock()
+	if ok {
+		s.todoRowSet(ctx, doneKeys)
+	}
 	if ok && accepted && row.DoneAt != nil {
 		s.goRecordTaskOutcome(before, *row.DoneAt)
 	}

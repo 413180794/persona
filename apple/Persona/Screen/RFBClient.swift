@@ -179,6 +179,13 @@ nonisolated final class RFBClient: @unchecked Sendable {
         send([6, 0, 0, 0] + RFBAuth.be32(UInt32(bytes.count)) + bytes)
     }
 
+    /// Asks for the whole screen again (a non-incremental update): the Mac answers even when nothing changed, so a
+    /// connection that went away without saying so shows up as no frame (#4380).
+    func refresh() {
+        let (w, h) = withFramebuffer { (UInt16($0.width), UInt16($0.height)) }
+        send([3, 0, 0, 0, 0, 0, UInt8(w >> 8), UInt8(w & 0xff), UInt8(h >> 8), UInt8(h & 0xff)])
+    }
+
     private func send(_ bytes: [UInt8]) { outbox.continuation.yield(bytes) }
 
     // MARK: In

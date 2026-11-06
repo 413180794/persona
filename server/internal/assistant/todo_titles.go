@@ -179,24 +179,31 @@ func (s *Service) retitleTodo(ctx context.Context, id, from, to string) (Todo, b
 		return Todo{}, false, err
 	}
 	still := func(t *Todo) bool { return t.Title == from }
+	s.todos.writing.Lock() // memory takes the rows in the order the store committed them (todoBook.writing)
 	now := time.Now().UTC()
 	var row db.TodoRow
 	if st := s.todoDB(); st != nil {
 		r, ok, err := st.RetitleTodo(ctx, id, from, to, now)
 		if err != nil || !ok {
+			s.todos.writing.Unlock()
 			return Todo{}, false, err
 		}
 		row = *r
 	} else {
 		cur, ok := s.todoNow(id)
 		if !ok || cur.Title != from {
+			s.todos.writing.Unlock()
 			return Todo{}, false, nil
 		}
 		row = db.TodoRow{ID: cur.ID, Title: to, Notes: cur.Notes, DoneAt: cur.DoneAt, CreatedAt: cur.CreatedAt, UpdatedAt: now,
 			Origin: cur.Origin, PlanID: cur.PlanID, StartError: cur.StartError, DoneBy: cur.DoneBy, DoneReason: cur.DoneReason,
 			ReopenedAt: cur.ReopenedAt, Quiet: cur.Quiet}
 	}
-	t, ok := s.applyTodoRow(ctx, id, row, still)
+	t, doneKeys, ok := s.setTodoRow(id, row, still)
+	s.todos.writing.Unlock()
+	if ok {
+		s.todoRowSet(ctx, doneKeys)
+	}
 	return t, ok, nil
 }
 

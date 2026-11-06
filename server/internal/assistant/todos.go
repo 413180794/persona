@@ -116,7 +116,15 @@ func (s *Service) todoDB() todoStore {
 
 // todoBook is the todos as the assistant has them: loaded from the store once, then kept as it writes them.
 type todoBook struct {
-	mu              sync.RWMutex
+	mu sync.RWMutex
+	// writing is held across a todo's store write and putting the row it returns into memory (PATCH, reopening,
+	// linking and unlinking an agent by hand, closing it on a judgment or a review, a failed start, a retitle), so
+	// memory takes the rows in the order the store committed them: two devices writing the same todo at once
+	// otherwise leave memory with whichever finished last, not the newer row. Every writer that puts a stored row
+	// into memory takes it; DELETE does not need it (it drops the todo from memory, and a write that lands after
+	// finds it gone). Writes that put no row into memory (agent snapshots, space and automatic links) change only what
+	// a row does not carry (agents, spaces, an updated_at bump) and do not take it. Taken before mu, never while it is held; nothing that runs under it writes a todo.
+	writing         sync.Mutex
 	loaded          bool
 	todos           map[string]*Todo
 	activeBySession map[[2]string]string  // (machine_id, session_id) -> the open todo it works for
@@ -569,12 +577,14 @@ func (s *Service) todoRoutes() {
 			in.Title = &t
 		}
 
+		s.todos.writing.Lock()
 		now := time.Now().UTC()
 		var updatedRow *db.TodoRow
 		if st := s.todoDB(); st != nil {
 			var err error
 			updatedRow, err = st.UpdateTodo(r.Context(), id, in.Title, in.Notes, in.Done, now)
 			if err != nil {
+				s.todos.writing.Unlock()
 				if errors.Is(err, db.ErrTodoNotFound) {
 					apierr.Write(w, http.StatusNotFound, err)
 				} else {
@@ -607,7 +617,11 @@ func (s *Service) todoRoutes() {
 			}
 		}
 
-		resTodo, _ := s.applyTodoRow(r.Context(), id, *updatedRow, nil)
+		resTodo, doneKeys, applied := s.setTodoRow(id, *updatedRow, nil)
+		s.todos.writing.Unlock()
+		if applied {
+			s.todoRowSet(r.Context(), doneKeys)
+		}
 		if cur.DoneAt == nil && updatedRow.DoneAt != nil {
 			// Done by the user: what the task came to goes in its decisions and its projects' timelines (#2820). cur
 			// still has the agents that were working on it.
@@ -787,8 +801,10 @@ func (s *Service) todoRoutes() {
 			return
 		}
 
+		s.todos.writing.Lock()
 		if st := s.todoDB(); st != nil {
 			if err := st.UnlinkTodoAgent(r.Context(), todoID, mid, sid); err != nil {
+				s.todos.writing.Unlock()
 				todoErr(w, err)
 				return
 			}
@@ -810,6 +826,7 @@ func (s *Service) todoRoutes() {
 			delete(s.todos.activeBySession, [2]string{mid, sid})
 		}
 		s.todos.mu.Unlock()
+		s.todos.writing.Unlock()
 
 		s.linksChanged(r.Context())
 		s.todosChanged(r.Context())
@@ -931,11 +948,22 @@ func (s *Service) linkTodoSpace(ctx context.Context, todoID, mid, space string) 
 // the nodes' persona_todo tokens follow), and the apps refetch. guard, when given, is checked under the lock first
 // (false: nothing changes); false also when the todo is gone.
 func (s *Service) applyTodoRow(ctx context.Context, id string, row db.TodoRow, guard func(*Todo) bool) (Todo, bool) {
+	out, doneKeys, ok := s.setTodoRow(id, row, guard)
+	if ok {
+		s.todoRowSet(ctx, doneKeys)
+	}
+	return out, ok
+}
+
+// setTodoRow is applyTodoRow's change to memory, without telling anyone: the todo as it is now and the agents done
+// releases (their pending work is retired); not ok when the guard refused or the todo is gone. A writer holding
+// todoBook.writing calls it before letting go, and todoRowSet after.
+func (s *Service) setTodoRow(id string, row db.TodoRow, guard func(*Todo) bool) (Todo, [][2]string, bool) {
 	s.todos.mu.Lock()
 	t, ok := s.todos.todos[id]
 	if !ok || guard != nil && !guard(t) {
 		s.todos.mu.Unlock()
-		return Todo{}, false
+		return Todo{}, nil, false
 	}
 	t.Title = row.Title
 	t.Notes = row.Notes
@@ -960,13 +988,17 @@ func (s *Service) applyTodoRow(ctx context.Context, id string, row db.TodoRow, g
 	}
 	out := formatTodo(copyTodoLocked(t))
 	s.todos.mu.Unlock()
+	return out, doneKeys, true
+}
 
+// todoRowSet tells everyone what setTodoRow changed: the hub and the herdr marks, the apps, and the done agents'
+// pending work withdrawn.
+func (s *Service) todoRowSet(ctx context.Context, doneKeys [][2]string) {
 	s.linksChanged(ctx)
 	s.todosChanged(ctx)
 	if len(doneKeys) > 0 {
 		s.retireTodoWork(doneKeys...)
 	}
-	return out, true
 }
 
 // unlinkTodoSpace unlinks a space from todoID and physically deletes source=space agents linked via this space.
@@ -1141,6 +1173,7 @@ func (s *Service) linkTodoAgentWithSourceAllowingDone(ctx context.Context, todoI
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return err
 	}
+	s.todos.writing.Lock()
 	now := time.Now().UTC()
 
 	if st := s.todoDB(); st != nil {
@@ -1149,14 +1182,17 @@ func (s *Service) linkTodoAgentWithSourceAllowingDone(ctx context.Context, todoI
 			link = st.LinkTodoAgentOfDoneTask
 		}
 		if _, err := link(ctx, todoID, mid, sid, title, cwd, agent, startError, source, via, now); err != nil {
+			s.todos.writing.Unlock()
 			return err
 		}
 	} else {
 		t, ok := s.todoNow(todoID)
 		if !ok {
+			s.todos.writing.Unlock()
 			return db.ErrTodoNotFound
 		}
 		if t.DoneAt != nil && !allowDone {
+			s.todos.writing.Unlock()
 			return db.ErrTodoCompleted
 		}
 	}
@@ -1209,6 +1245,7 @@ func (s *Service) linkTodoAgentWithSourceAllowingDone(ctx context.Context, todoI
 		}
 	}
 	s.todos.mu.Unlock()
+	s.todos.writing.Unlock()
 
 	s.linksChanged(ctx)
 	s.todosChanged(ctx)
@@ -1220,11 +1257,13 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return err
 	}
+	s.todos.writing.Lock() // memory takes the rows in the order the store committed them (todoBook.writing)
 	now := time.Now().UTC()
 	doneAt := now
 	if st := s.todoDB(); st != nil {
 		row, err := st.FailTodo(ctx, id, reason, now)
 		if err != nil {
+			s.todos.writing.Unlock()
 			return err
 		}
 		if row.DoneAt != nil {
@@ -1249,6 +1288,7 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 		}
 	}
 	s.todos.mu.Unlock()
+	s.todos.writing.Unlock()
 	if t == nil {
 		return db.ErrTodoNotFound
 	}
@@ -1266,6 +1306,15 @@ func (s *Service) autoDoneTodo(ctx context.Context, id, reason string, work time
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return false, err
 	}
+	s.todos.writing.Lock() // no other store write lands between the store's close and memory's
+	unlocked := false
+	unlock := func() {
+		if !unlocked {
+			unlocked = true
+			s.todos.writing.Unlock()
+		}
+	}
+	defer unlock()
 	now := time.Now().UTC()
 	var row db.TodoRow
 	st := s.todoDB()
@@ -1288,17 +1337,23 @@ func (s *Service) autoDoneTodo(ctx context.Context, id, reason string, work time
 		row.DoneAt, row.DoneBy, row.DoneReason, row.UpdatedAt = &now, db.DoneByAuto, reason, now
 	}
 	var before Todo
-	_, ok := s.applyTodoRow(ctx, id, row, func(t *Todo) bool {
-		if t.UpdatedAt.After(row.UpdatedAt) { // the user changed it after the store did: theirs stands
+	_, doneKeys, ok := s.setTodoRow(id, row, func(t *Todo) bool {
+		// With a store its conditional write decided it (open, not reopened since work began) and, writing held, no
+		// writer that stores a row committed after it (all of them take writing): memory takes the stored row even
+		// when an in-memory bump (an agent's title synced) moved updated_at past it. Memory alone has only its own
+		// state to judge by.
+		if st == nil && (t.UpdatedAt.After(row.UpdatedAt) || t.DoneAt != nil || t.ReopenedAt != nil && !t.ReopenedAt.Before(work)) {
 			return false
 		}
-		if st != nil || t.DoneAt == nil && (t.ReopenedAt == nil || t.ReopenedAt.Before(work)) {
-			before = copyTodoLocked(t) // its agents as they worked on it, before done releases them
-			return true
-		}
-		return false
+		before = copyTodoLocked(t) // its agents as they worked on it, before done releases them
+		return true
 	})
-	if ok && row.DoneAt != nil {
+	unlock() // the notifications run without writing, as for the other writers
+	if !ok {
+		return false, nil
+	}
+	s.todoRowSet(ctx, doneKeys)
+	if row.DoneAt != nil {
 		s.goRecordTaskOutcome(before, *row.DoneAt) // what the task came to (todo_outcome.go, #2820)
 	}
 	return ok, nil
@@ -1317,6 +1372,7 @@ func (s *Service) reopenTodo(ctx context.Context, id string) error {
 	if cur.DoneAt == nil {
 		return nil
 	}
+	s.todos.writing.Lock()
 	now := time.Now().UTC()
 	row := &db.TodoRow{ID: cur.ID, Title: cur.Title, Notes: cur.Notes, CreatedAt: cur.CreatedAt, UpdatedAt: now,
 		Origin: cur.Origin, PlanID: cur.PlanID, ReopenedAt: &now, Quiet: cur.Quiet}
@@ -1324,11 +1380,16 @@ func (s *Service) reopenTodo(ctx context.Context, id string) error {
 		open := false
 		r, err := st.UpdateTodo(ctx, id, nil, nil, &open, now)
 		if err != nil {
+			s.todos.writing.Unlock()
 			return err
 		}
 		row = r
 	}
-	s.applyTodoRow(ctx, id, *row, nil)
+	_, doneKeys, applied := s.setTodoRow(id, *row, nil)
+	s.todos.writing.Unlock()
+	if applied {
+		s.todoRowSet(ctx, doneKeys)
+	}
 	return nil
 }
 
@@ -1342,21 +1403,28 @@ func (s *Service) reopenFailedTodo(ctx context.Context, id string) (Todo, bool, 
 	if !ok {
 		return Todo{}, false, db.ErrTodoNotFound
 	}
+	s.todos.writing.Lock()
 	now := time.Now().UTC()
 	row := db.TodoRow{ID: cur.ID, Title: cur.Title, Notes: cur.Notes, CreatedAt: cur.CreatedAt, UpdatedAt: now,
 		Origin: cur.Origin, PlanID: cur.PlanID, ReopenedAt: &now}
 	if st := s.todoDB(); st != nil {
 		r, ok, err := st.RetryTodo(ctx, id, now)
 		if err != nil {
+			s.todos.writing.Unlock()
 			return Todo{}, false, err
 		}
 		if !ok {
+			s.todos.writing.Unlock()
 			cur, _ := s.todoNow(id)
 			return formatTodo(cur), false, nil
 		}
 		row = *r
 	}
-	out, _ := s.applyTodoRow(ctx, id, row, nil)
+	out, doneKeys, applied := s.setTodoRow(id, row, nil)
+	s.todos.writing.Unlock()
+	if applied {
+		s.todoRowSet(ctx, doneKeys)
+	}
 	return out, true, nil
 }
 

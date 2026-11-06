@@ -280,7 +280,7 @@ type inboxBook struct {
 	replies     sync.Map   // item id -> *inboxReply: replies to one item, one at a time (inbox_triage.go)
 	mutes       []InboxMute
 	mutesMu     sync.Mutex // one read-change-save of the kept mutes at a time
-	cardSends   sync.Map   // a message card's id → the lock its "Send" holds (sendFromCard)
+	cardSends   cardLocks  // a message card's id → the lock its "Send" holds (sendFromCard)
 	// translations are the translations made, by model, text or mail and language (inbox_translate.go).
 	translations translateCache
 

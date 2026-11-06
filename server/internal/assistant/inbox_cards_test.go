@@ -425,3 +425,76 @@ func TestMessageCardSaysFiled(t *testing.T) {
 		t.Fatalf("sent: feed = %s", got[0].Body)
 	}
 }
+
+// cardLockCount is how many message cards have a "Send" lock kept (sendFromCard).
+func cardLockCount(h *inboxHub) int {
+	return h.inbox.cardSends.len()
+}
+
+// A card's "Send" lock is let go once its send is over: the long-running assistant keeps none for the cards it
+// sent.
+func TestCardSendLockReleased(t *testing.T) {
+	h, rc, _ := cardHub(t)
+	draft(t, h, "在修了")
+	card := cards(t, h, time.Time{})[0]
+	body, _ := json.Marshal(map[string]string{"text": "在修了", "card": card.ID})
+	if code, _ := inboxCall(t, h.routes(), "POST", "/api/v1/inbox/example:1/reply", string(body)); code != 200 || len(rc.got) != 1 {
+		t.Fatalf("send: %d %+v", code, rc.got)
+	}
+	if n := cardLockCount(h); n != 0 {
+		t.Fatalf("%d card locks kept after the send", n)
+	}
+}
+
+// Letting a card's lock go does not let a second send through: a tap waiting on the first send, and one that comes
+// after it is over, both find the card sent. One reply goes out and no lock is kept.
+func TestCardSendLockReleasedSendsOnce(t *testing.T) {
+	h, rc, it := cardHub(t)
+	draft(t, h, "在修了")
+	card := cards(t, h, time.Time{})[0]
+	release := make(chan struct{})
+	entered := make(chan struct{}, 3)
+	send := func(wait bool) func() (InboxItem, error) {
+		return func() (InboxItem, error) {
+			entered <- struct{}{}
+			if wait {
+				<-release
+			}
+			return h.replyInboxChecked(context.Background(), it.ID, "在修了", "", true, nil, nil)
+		}
+	}
+	type result struct {
+		already bool
+		err     error
+	}
+	first, second := make(chan result, 1), make(chan result, 1)
+	go func() {
+		_, already, err := h.sendFromCard(context.Background(), card.ID, it.ID, send(true))
+		first <- result{already, err}
+	}()
+	<-entered // the first send holds the card's lock
+	go func() {
+		_, already, err := h.sendFromCard(context.Background(), card.ID, it.ID, send(false))
+		second <- result{already, err}
+	}()
+	for h.inbox.cardSends.waiting(card.ID) < 2 { // the second tap waits on the card's lock
+		time.Sleep(time.Millisecond)
+	}
+	close(release)
+	if r := <-first; r.err != nil || r.already {
+		t.Fatalf("first send: already=%v err=%v", r.already, r.err)
+	}
+	_, already, err := h.sendFromCard(context.Background(), card.ID, it.ID, send(false))
+	if err != nil || !already {
+		t.Fatalf("a tap after the send: already=%v err=%v", already, err)
+	}
+	if r := <-second; r.err != nil || !r.already {
+		t.Fatalf("a tap waiting on the send: already=%v err=%v", r.already, r.err)
+	}
+	if len(entered) != 0 || len(rc.got) != 1 {
+		t.Fatalf("sent %d times (%d extra sends tried)", len(rc.got), len(entered))
+	}
+	if n := cardLockCount(h); n != 0 {
+		t.Fatalf("%d card locks kept after the sends", n)
+	}
+}

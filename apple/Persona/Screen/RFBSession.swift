@@ -30,6 +30,10 @@ import SwiftUI
     private(set) var latency: Double?
     /// A frame of this connection has been shown: the small window shows it instead of its card (VNCPiPCard).
     private(set) var pictured = false
+    /// When the last frame of this connection was copied out (not observed: read when it matters), and which
+    /// connection this is (a new one each run): a check made on one connection is not answered by the next (#4380).
+    @ObservationIgnored private(set) var lastFrame: Date?
+    @ObservationIgnored private(set) var connection = 0
 
     @ObservationIgnored private var client: RFBClient?
     @ObservationIgnored private let sink = RFBFrameSink()
@@ -65,15 +69,20 @@ import SwiftUI
         c.onCursor = { [weak self] cursor in Task { @MainActor in self?.cursor = cursor } }
         c.onResize = { [weak self] w, h in Task { @MainActor in self?.resized(width: w, height: h) } }
         sink.attach(c) { [weak self] fps, latency in
+            // Stamped here, when the frame was copied: a report still queued from before a suspension keeps its time.
+            let at = Date.now
             Task { @MainActor in
                 self?.fps = fps
                 self?.latency = latency
+                self?.lastFrame = at
                 if self?.pictured == false { self?.pictured = true }
             }
         }
         client = c
         phase = .connecting
         pictured = false
+        lastFrame = nil
+        connection += 1
         c.start()
     }
 
@@ -117,6 +126,12 @@ import SwiftUI
             restart()
         }
     }
+
+    /// The whole screen asked for again: a live connection answers with a frame (#4380).
+    func refresh() { client?.refresh() }
+
+    /// A new connection in place of this one, even while it still says live (it went quiet, #4380).
+    func reconnect() { restart() }
 
     private func restart() {
         sink.detach()
