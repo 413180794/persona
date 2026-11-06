@@ -10,7 +10,7 @@ import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf,
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { keyedRefs } from "../lib/keyed-refs";
 import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
-import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
+import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, refreshAgentSessions, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, handleUnauthorized, setToken } from "../lib/api";
 import { TOKEN_ID_KEY } from "../lib/auth";
 import { useInboxBadge } from "../lib/inbox";
@@ -1880,6 +1880,16 @@ function agentRowItems(s: AgentSession, p: AgentPrefs): MenuItem[] {
 
 function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
   const { sessions, loaded, error } = useAgentList();
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await refreshAgentSessions();
+    } finally {
+      setRetrying(false);
+    }
+  };
   const prefs = useAgentPrefs();
   const [folded, toggle] = useFolded("personal-agents", false, { holds: activeKey.startsWith("a:") });
   const [q, setQ] = useState("");
@@ -1923,7 +1933,12 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
       }
     >
       {!loaded && <p className="px-2 py-1 text-[12px] text-ink-3">{t("sidebar.loading")}</p>}
-      {error && <p className="px-2 py-1 text-[12px] text-red" title={error}>{t("sidebar.personal_failed")}</p>}
+      {error && <div className="relative z-10 px-2 py-1">
+        <p role="alert" className="text-[12px] break-words text-red">{t("sidebar.personal_failed", { reason: error })}</p>
+        <button type="button" disabled={retrying} onClick={() => void retry()} className="touch-hit mt-1 rounded-control px-2 py-1 text-xs leading-normal whitespace-nowrap text-accent-ink hover:bg-hover disabled:cursor-wait disabled:opacity-50">
+          {t(retrying ? "sidebar.loading" : "sidebar.retry")}
+        </button>
+      </div>}
       {(searching || q) && (
         <input
           autoFocus

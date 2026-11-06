@@ -2,7 +2,7 @@
 // "<source>:<sessionKey>" and bridge keys contain "/", so the whole id is percent-encoded in paths.
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
-import { api } from "./api";
+import { api, errorText } from "./api";
 
 export interface AgentSession {
   id: string;
@@ -189,7 +189,7 @@ export function refreshAgentSessions(): Promise<void> {
   }
   inflight = Promise.all([fetchSessions(), fetchSources().catch(() => null)])
     .then(([sessions, sources]) => emit({ sessions, loaded: true, error: "", ...(sources ? { hints: setupHints(sources) } : {}) }))
-    .catch((e) => emit({ loaded: true, error: e instanceof Error ? e.message : String(e) }))
+    .catch((e) => emit({ loaded: true, error: errorText(e) }))
     .finally(() => (inflight = null));
   return inflight;
 }

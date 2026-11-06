@@ -313,3 +313,8 @@
 ## 词条名别以复数后缀结尾（2026-11-05）
 
 - 网页的词条 key 以 `_zero` / `_one` / `_two` / `_few` / `_many` / `_other` 结尾会被当成复数形式（`catalog.test.ts`、`t()` 的 `pluralKey`）：起名 `kind_other` 的「其它」词条，检查会报「key 不存在」（它只认去掉后缀的 `kind`）。「其它 / 通用」用 `_generic` 这类名字。
+
+## Personal-Agent sidebar failures (#5175)
+
+- A hover-only title does not explain a failed request on touch devices. Render the shared error explanation in the sidebar and keep an explicit retry action there.
+- Reuse the list store's refresh path and disable the local retry action until its promise settles. A failed retry stays retryable; a successful one clears the error. Preserve the last successful session list while requests fail. Test these transitions through the actual sidebar and mocked HTTP responses.
