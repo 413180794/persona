@@ -1,347 +1,347 @@
-# 经验：网页界面与交互
+# Lessons: web UI and interactions
 
-## 知识库的条数会改变胶囊折行（2026-11-06，#4047）
+## Knowledge counts change pill wrapping (2026-11-06, #4047)
 
-- **先画分类、再补计数也会让首屏跳**：窄屏下，选中分类多出的一个数字就可能把最后一个胶囊挤到下一行。不要猜数字宽度或给加载完成的胶囊加固定宽度；没有列表缓存时，搜索框下只画已有的 `Loading`，列表回来后把筛选和内容一起挂载。加载提示也放在这个分支里，不能让新插入的筛选行把它往下推（沿用 #4029 的一次显示思路）。
-- **加载门槛要区分空列表和失败**：空列表对象也是已加载，缓存可立即显示；首次失败仍要让用户切分类或重试。搜索独立于分类列表，不应被这个门槛挡住。
-- **验证要覆盖真实布局**：jsdom 只能验证出现时机，折行用 Playwright + 假 hub 在 390 宽下量导航后 4 秒的 `layout-shift`（排除 `hadRecentInput`），每组重复 3 次。另延后列表响应，截深浅色的加载中与加载后画面；前后固定时间和动画帧，核对加载后的像素，避免把计时文案或动画差异当成布局变化。
+- **Rendering categories before counts still shifts the first screen**: on a narrow screen, one extra digit in the selected category can wrap the final pill onto another line. Do not guess digit width or fix the width of loaded pills. Without a cached list, show only the existing `Loading` below search, then mount filters and content together when the list arrives. Keep the loading notice in that branch too, so newly inserted filters cannot push it down (following #4029's one-time display approach).
+- **Loading gates distinguish empty lists from failures**: an empty list object is loaded and cached data can display immediately; a first-load failure must still allow category switching or retry. Search is independent of category lists and must not be blocked by this gate.
+- **Validate real layout**: jsdom checks timing only. Measure wrapping with Playwright + mock hub at width 390, using `layout-shift` over 4 seconds after navigation, excluding `hadRecentInput`, with 3 repetitions per group. Also delay list responses and capture light / dark loading and loaded states. Pin time and animation frames for before / after comparisons, checking loaded pixels rather than mistaking timers or animation for layout changes.
 
-## 总览的无电脑状态（2026-11-06，#3729）
+## Overview with no computers (2026-11-06, #3729)
 
-- 没有待处理的 Agent 不代表已经具备启动 Agent 的条件。总览的空闲摘要和卡片要同时区分「没有电脑」与「已有电脑但没有任务」，顶栏也不能继续引导新建 Agent；判断用全部电脑数量，不能把离线电脑当成尚未接入。
-- `loaded` 表示首次刷新已结束，不代表每个接口都成功；初始空数组在加载期间不能用来显示接入引导。回归覆盖加载中、零电脑、已有在线 / 离线电脑，并在浏览器里确认按钮进入同一标签页的机器页。共用 `Button` 的 `href` 会打开新标签页，站内跳转用 `navigate`。
+- No pending Agent does not mean an Agent can be started. Overview's idle summary and cards distinguish "No computers" from "Computers exist, no tasks"; the header must not keep suggesting New Agent. Use the total computer count, not treating offline computers as never connected.
+- `loaded` means the first refresh finished, not that every endpoint succeeded. Initial empty arrays must not trigger setup guidance while loading. Regress loading, zero computers, and existing online / offline computers; verify in-browser that buttons open Machines in the same tab. Shared `Button` `href` opens a new tab; use `navigate` for in-app routing.
 
-## 设置标题与提示路径（2026-11-06，#3595）
+## Settings titles and paths in help text (2026-11-06, #3595)
 
-- 分组标题先说用途，内部叫法需要保留时放括号里；只写「风灵月影」看不出是在管消息显示。改标题时同时查找提示文案里的设置路径，按语言核对，不能只检查词条的 key 和占位符一致。回归断言提示包含同语言的实际标题，避免标题改了、错误提示还指向旧名字。
+- Group titles state their purpose first, keeping any necessary nickname in parentheses; a nickname alone does not explain that the section controls message display. When changing a title, also find Settings paths in help text and check each language, not just catalog keys and placeholders. Assert that help contains the actual title in the same language, avoiding errors pointing to the old name after a rename.
 
-## 设置读取失败的重试（2026-11-06，#4493）
+## Retrying failed Settings reads (2026-11-06, #4493)
 
-- hub、助手的首次读取原来内联在 `useEffect` 里，补重试前先抽成可复用的 `load`，首次打开和按钮走同一条路径。助手重读状态、定时任务和记忆；形象走已有的 `refreshPersonas`，沿用共用请求的去重。
-- 重试成功要清掉旧错误，请求中禁用按钮或切到加载状态。读取失败的重试只接读取操作，尤其 hub 的「检查更新」「更新 hub」是另外的写操作，不能拿它们充当重新读取。
-- `npm ci` 会重建 `node_modules`，不能和依赖它的 Vite 截图验证同时跑，否则临时服务可能报模块不存在。先完成安装，再启动自己的临时服务取图；重装过依赖就按端口停掉、重新启动自己的 Vite。
+- Initial hub / assistant reads were inline in `useEffect`; extract a reusable `load` before adding Retry, so first open and button use the same path. Assistant reloads status, scheduled tasks, and memory; avatars use existing `refreshPersonas` with shared-request deduplication.
+- Successful retries clear old errors; disable the button or show loading while in flight. Read retries only repeat reads: hub "Check for updates" / "Update hub" are separate write operations, not substitutes for rereading.
+- `npm ci` rebuilds `node_modules`; never run it alongside Vite screenshots that depend on them, or temporary services may report missing modules. Finish installation before starting your temporary service; after reinstalling dependencies, stop and restart only your own Vite by port.
 
-## 无会话工作区的面板身份（2026-11-04，#1646）
+## Panel identity for workspaces without sessions (2026-11-04, #1646)
 
-- **文件和 Git 面板的 key 必须包含目录**：工作区没有 Agent 时 `sid` 为空，同机器的两张空工作区卡会得到同一个 `mid/sid` key。先在 A 打开文件或 commit，再从 B 打开同类面板，React 保留 A 的文件预览或 Git 子视图，造成跨目录串状态。用机器、会话和目录共同生成稳定 key；回归要覆盖同机、空 sid、不同 cwd，不能只测卡片静态 HTML。
-- **工作流状态与 Agent 展示分开**：会话刷新只重算卡内 Agent 数和状态，不能生成卡片顺序或列。看板写入按 revision 提交，冲突时恢复并重读；前台轮询和恢复可见时刷新负责发现变化，隐藏页面不继续轮询。
+- **File and Git panel keys must include the directory**: without an Agent, `sid` is empty, so two empty workspace cards on one machine share the same `mid/sid` key. Open files or a commit in A, then the same panel type from B, and React retains A's preview or Git subview, leaking state across directories. Generate stable keys from machine, session, and directory. Regression tests must cover same machine, empty sid, different cwd, not just static card HTML.
+- **Separate workflow state from Agent presentation**: session refreshes recalculate only Agent count and state inside a card, never card order or columns. Board writes use revisions; on conflicts, restore and refetch. Foreground polling and refresh on visibility recovery discover changes; hidden pages stop polling.
 
-## 弹出菜单
+## Popup menus
 
-- React 事件的 `currentTarget` 只在事件处理期间有效。不要在 `setState` 的函数更新器里读取 `e.currentTarget`：更新器延后执行时会读到 `null`，菜单第一次能打开、关闭后再点却打不开（2026-11-02，同空间菜单的浏览器验证发现）。先在处理器内保存目标元素，再让更新器使用保存的值；回归覆盖延后执行更新器和连续打开、关闭、再打开。
-- 给菜单加状态标签后，标题保留单行截断、标签不收缩，并为长标题提供完整提示。菜单的实际宽度先限制到视口减两侧留白，再按实际宽度计算位置，不能只移动左边界：桌面宽度固定的菜单会溢出窄屏。
-- 浏览器测试关闭菜单时等节点移除（`detached`），不只等 `hidden`；菜单还在隐藏的初始定位阶段时，`hidden` 会提前通过。断言菜单内容前等待具体行和状态文字出现，避免把渲染尚未完成误报成缺状态。
-- 卡片为了画圆角带 `overflow-hidden`（设置页的 `Group`），卡片里的行往外弹的浮层会被裁掉：最后一行的「确认删除」「确认撤销」只露出一条边，点按钮中间点到的是卡片下面的说明（2026-11-04，#1504）。`z-index` 挡不住裁切。行上的操作在行内确认（`RowConfirm`），真要浮层就放到卡片外（portal）；验证要量最后一行，只看第一行看不出来。
+- React event `currentTarget` is valid only during event handling. Do not read `e.currentTarget` in a functional `setState` updater: deferred execution can see `null`, making the menu open once but fail after closing (found in browser validation of the same-space menu, 2026-11-02). Save the target element in the handler, then use it in the updater. Test deferred updater execution and open / close / reopen.
+- After adding status labels, keep titles single-line with truncation, prevent labels from shrinking, and provide full-title tooltips. Constrain actual menu width to viewport minus side margins before positioning by that width, rather than merely moving the left edge; desktop fixed-width menus overflow narrow screens.
+- Browser tests closing a menu must wait for removal (`detached`), not just `hidden`; its hidden initial-positioning phase can satisfy `hidden` too early. Wait for specific rows and status text before assertions, avoiding false "missing state" reports before rendering finishes.
+- Cards use `overflow-hidden` for rounded corners (`Group` in Settings), clipping overlays opened from rows: the last row's "Confirm delete" / "Confirm revoke" shows only an edge; clicking the button center hits the description below the card (2026-11-04, #1504). `z-index` cannot defeat clipping. Confirm row actions inline (`RowConfirm`), or put real overlays outside the card (portal). Measure the last row; the first row cannot reveal this.
 
-## 新建会话与多模态
+## New sessions and multimodal input
 
-- 2026-11-02 新建 Agent 不该把跳转放在创建 HTTP 请求之后。先生成本地临时 ID、保留文字和附件、关闭弹窗并展示本地会话；网络创建、图片编码、文件上传在后续任务里做。临时 ID 不发给后端取 transcript；真实会话创建成功后才调用 `/messages`。
-- 普通 Agent 创建用 `async:true` 与 `name_hint`，首条内容只在 `/messages` 发一次；创建的 `prompt` 只有字符串，不能靠额外 `images` 字段实现多模态。消息重试保持同一 `client_msg_id`，已创建的会话不可再创建；创建没有幂等，结果不确定要让用户先检查列表。
-- 统一默认启动器可能是 Codex，不能按启动器名字猜 Agent。仅在创建明确返回 `codex_needs_prompt` 时走原来的文字同步创建；首条附件不能偷偷变成后续 steer 或伪造初始化消息。失败内容要可修改、移除附件并重试。
-- 图片单个 8 MB 仍可能多张累计超过 `/messages` 的 32 MiB JSON 上限；发送前考虑 base64 膨胀检查总量。乐观气泡需要把图一起带过真实会话跳转，收到 transcript 的文字和图片后再清理。
-- 浏览器回归用延后返回的创建 / 发送请求，证明弹窗已关闭、本地会话已打开但后端尚未完成；图片选择、移除、草稿冲突同 ID 重试、切页不抢焦点都要检查。截图里的图片不能用透明像素占位；验证 `naturalWidth` 并用可见的演示图。
+- 2026-11-02: New Agent navigation must not wait for the creation HTTP request. Generate a local temporary ID, preserve text / attachments, close the dialog, and show the local session first. Create remotely, encode images, and upload files in subsequent tasks. Never fetch transcript using the temporary ID; call `/messages` only after real session creation succeeds.
+- Ordinary Agent creation uses `async:true` and `name_hint`; send initial content only once through `/messages`. Creation `prompt` is string-only; an extra `images` field cannot make it multimodal. Retry messages with the same `client_msg_id`; never recreate an already-created session. Creation is not idempotent, so uncertain results require checking the list first.
+- The unified default launcher may be Codex; do not infer Agent type from launcher name. Use the old synchronous text creation only when creation explicitly returns `codex_needs_prompt`. Never silently turn initial attachments into later steer messages or fake initialization messages. Failed content must be editable, with attachment removal and retry.
+- Multiple images of 8 MB each may exceed `/messages`' 32 MiB JSON limit in aggregate; account for base64 expansion before sending. Carry images in optimistic bubbles across real-session navigation, clearing only after transcript text and images arrive.
+- Browser regression tests delay creation / sending to prove the dialog closes and local session opens before backend completion. Check image selection, removal, same-ID draft-conflict retry, and navigation without focus theft. Screenshot images cannot be transparent-pixel placeholders; verify `naturalWidth` and use visible demo images.
 
-## 管理界面的独立入口（web/admin，docs/admin.md）
+## Separate admin entry point (web/admin, docs/admin.md)
 
-- Vite 多页面：`build.rollupOptions.input` 加 `admin/index.html` 后，dev server 的 SPA 回退仍然给根 `index.html`，`/admin/machines`
-  这类前端路由会打开普通网页；`vite.config.ts` 里一个只在 dev 生效的小插件把 `/admin/*` 改写到 `/admin/index.html`。
-- 只给管理界面用的代码要输出到 `admin/assets/`（`entryFileNames` / `chunkFileNames` 按模块路径分），hub 才能整个前缀按访问范围拦；
-  构建后检查 `dist/assets/` 里没有 `/api/v1/admin` 之类的字符串。
-- 无头 Chrome（`--headless=new`）的窗口最小 500 宽，拍 390 宽的窄屏用 CDP 的 `Emulation.setDeviceMetricsOverride`；深色用
-  `Emulation.setEmulatedMedia` 设 `prefers-color-scheme`。
+- Vite multi-page builds: after adding `admin/index.html` to `build.rollupOptions.input`, dev-server SPA fallback still returns root `index.html`, so routes such as `/admin/machines`
+  open the ordinary app. A dev-only plugin in `vite.config.ts` rewrites `/admin/*` to `/admin/index.html`.
+- Admin-only code must output to `admin/assets/` (`entryFileNames` / `chunkFileNames` by module path), letting hub gate the entire prefix by access scope.
+  After building, check `dist/assets/` contains no strings such as `/api/v1/admin`.
+- Headless Chrome (`--headless=new`) has a minimum window width of 500. For 390-wide captures, use CDP `Emulation.setDeviceMetricsOverride`; set dark mode via
+  `Emulation.setEmulatedMedia` with `prefers-color-scheme`.
 
-## 对齐手机端这一轮（#297，2026-11-02）
+## This round of mobile parity (#297, 2026-11-02)
 
-### 依赖和开发环境
+### Dependencies and development environment
 
-- `npm ci` 会重建 `node_modules`；先停自己端口的 Vite，安装完成后再启动并截图，避免开发服务器还持有旧模块、截图被 Vite 错误覆盖层挡住。截图脚本除检查页面异常外，还要断言没有 `vite-error-overlay`：标题节点存在、可见，不代表画面没被盖住（2026-11-06，#3595）。
-- 这台开发机的 npm 默认源是公司内部的镜像：`npm i` 会把内部域名写进 `package-lock.json` 的 `resolved`（隐私扫描要拦的东西）。加依赖一律带
-  `--registry=https://registry.npmjs.org/`，加完 `grep -o '"resolved": "https://[^/]*' web/package-lock.json | sort | uniq -c` 只能有 registry.npmjs.org。
-- 从仓库外跑生产预览时，`npm --prefix <web> exec -- vite preview` 不会把当前目录切到网页根（2026-11-05，#2196）：端口能起来，但 `/settings` 是 404。给 Vite 显式传根目录（`node <web>/node_modules/vite/bin/vite.js preview <web> …`），并先用 HTTP 检查实际页面，不能只看端口在监听。
-- xterm 只在打开终端时动态 import：Vite dev 第一次遇到它时才预构建依赖、重新载入页面，那一次面板卡在「正在连接终端」。`vite.config.ts` 的 `optimizeDeps.include` 先把它预构建好（只影响 dev，构建产物没事）。
+- `npm ci` rebuilds `node_modules`; stop only your own Vite port first, then restart and capture screenshots after installation, avoiding stale modules or screenshots covered by the Vite error overlay. Screenshot scripts must check not only page exceptions but also absence of `vite-error-overlay`: an existing visible title does not prove the screen is unobscured (2026-11-06, #3595).
+- This development machine defaults to an internal npm mirror: `npm i` writes its internal domain into `resolved` in `package-lock.json` (which privacy checks must reject). Always add dependencies with
+  `--registry=https://registry.npmjs.org/`; afterwards, `grep -o '"resolved": "https://[^/]*' web/package-lock.json | sort | uniq -c` must show only registry.npmjs.org.
+- Running production preview outside the repository with `npm --prefix <web> exec -- vite preview` does not change cwd to the web root (2026-11-05, #2196): the port starts, but `/settings` returns 404. Pass Vite's root explicitly (`node <web>/node_modules/vite/bin/vite.js preview <web> …`) and check the actual page over HTTP, not just a listening port.
+- xterm is dynamically imported only when Terminal opens. On first encounter, Vite dev prebundles dependencies and reloads the page, leaving that panel at "Connecting to terminal." Prebundle it with `optimizeDeps.include` in `vite.config.ts` (dev only; production bundles are fine).
 
 ### xterm.js
 
-- 回滚行数为 0 时 xterm 把滚轮翻成 ↑ / ↓ 经 `onData` 发出去：要 `attachCustomWheelEventHandler` 自己处理滚轮，而且接管、只看都返回 false。
-- 自定义按键处理返回 false 时 xterm 不阻止冒泡，要自己 `preventDefault` + `stopPropagation`（Shift+Enter）；xterm 自己处理的键（含 Esc）已经阻止冒泡，
-  所以终端里按 Esc 不会触发对话页的「Esc 中断」。
-- xterm 6 的滚动层把画面裁成外层元素的大小：只看时把 `.xterm` 的宽高设成 `.xterm-screen` 的，外层 `overflow:auto` 才能横向滚；FitAddon 量父元素，父元素保持面板大小，接管时算出的行列才对。
-- DOM 渲染器不会把中文字撑满两格，中文字之间有空隙。
+- With 0 scrollback, xterm translates the wheel into ↑ / ↓ through `onData`. Handle wheels with `attachCustomWheelEventHandler`, returning false in both control and view-only modes.
+- Returning false from a custom key handler does not stop propagation; call `preventDefault` + `stopPropagation` yourself (Shift+Enter). Keys xterm handles itself (including Esc) already stop propagation,
+  so Esc in Terminal does not trigger chat's "Esc interrupts."
+- xterm 6's scrolling layer clips to its outer element. For view-only, set `.xterm` dimensions to `.xterm-screen`, enabling horizontal scrolling through outer `overflow:auto`. FitAddon measures the parent; keep that parent at panel dimensions so takeover computes correct rows / columns.
+- The DOM renderer does not fill both cells with a Chinese glyph, leaving gaps between characters.
 
-### 渲染和组件
+### Rendering and components
 
-- 设备图标要验实际设备行，不只验图标表（2026-11-06，#3596）：`IconName` 来自字符串索引的表，缺少图形时仍可能渲染空 SVG；图形存在也不能证明设备种类映射正确。回归同时检查手机 / 手表的可见轮廓、在用与已撤销两组、网页与未知种类的回退。
-- react-markdown 不渲染原始 HTML（README 里的 `<img>`、飞书导出表格里的 `<br>` 会原样显示成字），默认的 URL 过滤会把 `data:` / `blob:` / `jarvis:` 链接清成空：
-  先把 HTML 转成 Markdown / 占位字符，自定义 `urlTransform` 放行需要的协议。
-- `pop-in` 这类关键帧动画的是 `transform`，会盖掉行内的 `transform: translate(...)`：浮层定位用 CSS 的 `translate` 属性。
-- 只渲染看得见的行的列表，行数变少（JSON 从格式化切回原文）时窗口会落后一帧：先把窗口截到行数以内，否则越界。
-- 只在悬停时出现的行内按钮在触屏上要整个藏掉（`@media (hover:hover)`），否则是看不见、一碰就触发的区域。
-- 两栏的页（收件箱、知识库）按页面自己的宽度切单栏（Tailwind v4 的 `@container` / `@3xl:`，#1996 起；消息页仍是 `@4xl:`），不按窗口：右侧面板一开，主区变窄，按窗口判断会挤坏。
-- SVG 曲线按真实像素宽度画（ResizeObserver），不用 `preserveAspectRatio="none"`：坐标轴上的字会被拉伸。
-- 重连后整份重列的 store 不能直接用回答替换（#4574）：hub 不重放的推送（如 `extension_operation`，不进事件日志）在 GET 在途时先到，回答是推送之前读的，最后一次 `succeeded` 被旧的 `running` 盖掉就再也不会更新；在途期间刚开始的操作也会被删掉。给列表请求编号、只用最后一个，在途期间 `track` 过的按 `updated_at` 取新的那份。
-- 订阅模块级 store、第一次拉取要放 `useEffect`，不能在 render 里做：React 会报「渲染中更新别的组件」。
-- `JSON.parse` 会把像整数的键排到最前、让 64 位数字丢精度：只是给人看的格式化，就只重新缩进，不解析值。
+- Validate device icons in actual device rows, not just the icon table (2026-11-06, #3596). `IconName` comes from a string-indexed table; a missing glyph can still produce an empty SVG, and an existing glyph does not prove device-type mapping is correct. Regress visible phone / Watch outlines, active / revoked groups, and web / unknown-type fallbacks.
+- react-markdown does not render raw HTML (README `<img>`, `<br>` in exported Lark tables appear literally); default URL filtering clears `data:` / `blob:` / `jarvis:` links.
+  Convert HTML to Markdown / placeholder characters first, and allow required schemes through custom `urlTransform`.
+- Keyframes such as `pop-in` animate `transform`, overriding inline `transform: translate(...)`; position overlays with CSS `translate` instead.
+- Virtualized lists lag one frame when row count decreases (formatted JSON switched to raw). Clamp the window to the new row count first to avoid out-of-bounds access.
+- Hide hover-only row buttons entirely on touchscreens (`@media (hover:hover)`), or they become invisible touch targets.
+- Two-pane pages (Inbox, Knowledge) switch to single-pane by their own width (Tailwind v4 `@container` / `@3xl:` since #1996; Messages still `@4xl:`), not window width. A right panel narrows the main area; window-based checks crush it.
+- Draw SVG curves using actual pixel width (ResizeObserver), not `preserveAspectRatio="none"`, which stretches axis labels.
+- Stores that fully reload after reconnect cannot replace state with the response directly (#4574): pushes not replayed by hub (`extension_operation`, outside the event log) may arrive while GET is in flight; the response was read before the push. Old `running` then overwrites final `succeeded` forever; operations started during the request are also removed. Number list requests, accept only the latest, and retain the newer `updated_at` for entries `track`ed during the request.
+- Subscribe to module-level stores and start initial fetches in `useEffect`, never render, or React reports "Updating another component while rendering."
+- `JSON.parse` moves integer-like keys first and loses 64-bit precision. For display formatting alone, reindent without parsing values.
 
-### 和 hub 打交道
+### Talking to hub
 
-- **统一翻译错误前要查提示的消费者**（#3728）：`errorText` 除了显示，还被登录、worktree 兼容判断、会话缺失提示和离线 toast 合并逻辑使用。给 5xx 加说明后，`^unsupported` 不再匹配翻译后的开头；兼容判断改读 `ApiError.message`。显示仍保留完整原文和 HTTP 状态码，让会话专用解释、502 / 503 / 504 的离线提示合并继续生效；401 的 `invalid token` 保持原样。
+- **Check error-text consumers before localizing shared errors** (#3728): besides display, `errorText` drives login, worktree compatibility checks, missing-session explanations, and offline-toast coalescing. After adding explanations to 5xx errors, `^unsupported` no longer matches the localized prefix; compatibility checks use `ApiError.message` instead. Display retains full original text and HTTP status, preserving session-specific explanations and coalesced 502 / 503 / 504 offline notices. Keep 401 `invalid token` unchanged.
 
-- 同一页用 `Promise.allSettled` 并行读取多个区域时，每个区域都要处理自己的失败（2026-11-06，#4494）：只保留 `null` 表示首次加载、却漏掉运行记录的 rejected 分支，会把已失败的请求永远画成「加载中」。分别记录错误，成功时清掉；重试沿用同一个加载入口和请求序号，旧请求的失败不能盖掉新结果。
-- `api()` 没显式传 token 时任何 401 都会把浏览器登出；飞书网关掉了飞书登录也回 401。`/lark/raw`、`/lark/moments` 这类代理的请求显式传 `token: getToken()`。
-- `PUT /assistant/tasks/{id}` 整体替换字段（不带 `session_id` 就清空），连只切开关也要带完整任务；Go 的零时间是 `0001-01-01T00:00:00Z`，`at` 没有就省掉，不能发空串。
-- 文件分页：后续页用最初请求的 `path` + `cwd` 取，不能用服务端规范化后的 `path`；第一页的 `truncated` 一直是 true，「只显示了开头」看第一页有没有 `next`。
-- 收件箱的件 id 含 `:`；「飞书」筛选看 `source`，不看 `account`（真实 hub 的飞书条目 account 是 `feishu`，假 hub 是 `lark`）。
-- 邮件 HTML 的 iframe：`sandbox="allow-same-origin"`、不给 `allow-scripts`，能量高度、拦链接，脚本跑不了。
-- 知识库打标传空的标签数组 hub 不改（`omitempty`），清不空标签，iOS 一样。
-- 别的页面写的 `<jarvis-context>` 属性按 `kind`、`title`、`url` 的顺序：iOS 的解析正则要求三个都在、按这个顺序。
+- When one page fetches multiple areas through `Promise.allSettled`, handle each area's failure separately (2026-11-06, #4494). Keeping `null` for first load but omitting a run-history rejected branch leaves a failed request permanently at "Loading." Record errors individually and clear on success; retries reuse the same loader and request sequence, so old failures cannot overwrite newer results.
+- Any 401 logs the browser out when `api()` has no explicit token; losing Lark gateway login also returns 401. Proxy requests such as `/lark/raw` / `/lark/moments` explicitly pass `token: getToken()`.
+- `PUT /assistant/tasks/{id}` replaces all fields (omitting `session_id` clears it), so even toggles must send the full task. Go zero time is `0001-01-01T00:00:00Z`; omit absent `at`, never send an empty string.
+- File pagination: later pages use the original request's `path` + `cwd`, not the server-normalized `path`. First-page `truncated` is always true; determine "Only the beginning shown" by whether the first page has `next`.
+- Inbox item IDs contain `:`; filter Lark by `source`, not `account` (real-hub Lark items use account `feishu`, mock hub `lark`).
+- Email HTML iframe: `sandbox="allow-same-origin"`, without `allow-scripts`, allows height measurement and link interception but no scripts.
+- Sending an empty tag array to Knowledge tagging does not change hub tags (`omitempty`), so they cannot be cleared; same on iOS.
+- Other pages write `<jarvis-context>` attributes in `kind`, `title`, `url` order: iOS parsing regex requires all three in that order.
 
-### 浏览器里验证
+### Browser validation
 
-- Vite 的导入错误遮罩不一定触发 `pageerror`（2026-11-06，#3596）：下面的设备行仍在 DOM 中、几何断言也能通过，但截图整页被遮住。截图前还要检查 `vite-error-overlay` 不存在，并实际打开图片；依赖故障先在未改的主线确认，不把被遮挡的截图当作验收证据。
-- 2026-11-05（#1854）安装确认的截图必须等 `role=dialog` 节点存在，再等它的动画结束；仅等「一起安装」这类文字会被背景说明提前满足。空节点集合的 `every` 也会立刻返回 true，导致拍到弹窗动画前的背景，不能当成截图验收。
-- 2026-11-05（#1854）调色板像素回归要固定字体、动画、焦点和悬停；「没有主题」对「新增但未选中主题」应严格零差异，颜色切换往返另验 token 精确恢复和截图，不能把选择器焦点框或光栅边缘噪声算作默认配色改变，也不能把有差异写成零。Vite 热更新偶尔会缓存混合的新旧模块（类型检查过了、页面仍引用已删常量），先比对磁盘与实际返回的模块；只重启自己端口的 Vite，测试页面绕过缓存，不能拿旧页面的截图验新代码。
-- 截图和点按用 Playwright（`playwright-core` + 本机 Chrome，`channel: "chrome"`），脚本放仓库外。`page.routeWebSocket` 能改 WS 消息：
-  假 hub 没有互联字段时，把 `machines` 推送和 `/machines` 加上两个 `hub_id` 就能看互联的样子，不用改 `mock_hub.py`。
-- 多人共用一个假 hub 时，写接口（`/reply`、`/doc/status`、`/reconnect`、改 Claude 设置、打标）会改共享状态：用 `page.route` 拦下来验证请求体，或者测完改回去。
-  假 hub 的 `/reconnect` 会真的把离线机器改成在线。
-- `page.evaluate(() => import("/src/lib/x.ts"))` 拿到的不一定是页面在用的模块实例（改过文件后 Vite 给导入方加 `?t=`）：从 `performance.getEntriesByType("resource")` 找带 `?t=` 的地址。
+- Vite import-error overlays do not necessarily trigger `pageerror` (2026-11-06, #3596). Device rows remain in the DOM and geometry assertions can pass while the overlay covers the whole screenshot. Also check that `vite-error-overlay` is absent and actually open the image. Confirm dependency failures on unchanged mainline first; obscured screenshots are not acceptance evidence.
+- 2026-11-05 (#1854): installation-confirmation screenshots must wait for a `role=dialog` node, then its animation completion. Waiting only for text such as "Install together" may match the background explanation early. `every` on an empty node collection also returns true immediately, producing a pre-dialog background capture that is not screenshot acceptance.
+- 2026-11-05 (#1854): palette pixel regressions must pin fonts, animations, focus, and hover. "No theme" versus "new theme added but not selected" must have exactly zero difference. Separately verify exact token restoration and screenshots after switching colors back and forth. Do not count selector focus outlines or raster-edge noise as default-palette changes, or report a nonzero difference as zero. Vite HMR occasionally caches mixed old / new modules (type check passes, page still references a removed constant); compare disk and served modules first. Restart only Vite on your own port and bypass cache on test pages; old-page screenshots do not validate new code.
+- Screenshots and clicks use Playwright (`playwright-core` + local Chrome, `channel: "chrome"`), with scripts outside the repository. `page.routeWebSocket` can modify WS messages:
+  if mock hub lacks linked-hub fields, add two `hub_id`s to `machines` pushes and `/machines` to preview linked hubs without changing `mock_hub.py`.
+- When multiple people share mock hub, write endpoints (`/reply`, `/doc/status`, `/reconnect`, Claude settings, tags) mutate shared state. Intercept with `page.route` to verify bodies, or restore after testing.
+  Mock `/reconnect` really changes offline machines to online.
+- `page.evaluate(() => import("/src/lib/x.ts"))` may not return the module instance used by the page (Vite adds `?t=` to importers after edits); find the `?t=` URL in `performance.getEntriesByType("resource")`.
 
-## 补齐差距第二轮（#433，2026-11-03）
+## Second parity round (#433, 2026-11-03)
 
-六条车道并行（对话展示、消息操作、Agents 列表和机器页、终端、助手、收件箱和翻译），合进一个分支后统一在浏览器里验证。
+Six parallel lanes (chat rendering, message actions, Agents list / Machines, Terminal, assistant, Inbox / translation), merged into one branch for unified browser validation.
 
-### 合并和验证
+### Merging and validation
 
-- 并行改同一个对话页，冲突集中在 `ChatView.tsx` 的几处：发送中的气泡（本地 `pending`、排队消息要藏掉的、跨页的 `outbox`）各车道各加了一份判断。合并时统一成一个
-  「还在路上的」数（`outgoing` = 没进队列的本地气泡 + 没失败的 outbox），「最后一行是不是 live」「能不能重试」都看它，不然排队消息会让最后一段一直转圈。
-- 新建 Agent 带预设打开时，「当前电脑不在线就选第一台在线的」那个 effect 和预设的 `setMid` 在同一次提交里先后执行，后一个赢：预设没生效、还看不出来（默认就是第一台）。
-  预设待生效时那个 effect 要让路。
-- 查看器里的图按 `max-w-full max-h-full` 放，小图（截图缩略、36 px 的图标）就比对话里的缩略图还小：按容器大小算适配尺寸（`fitRect`，允许放大），双击才看原始大小。
-- 浏览器验证用 Playwright 的 `locator.click({ button: "right" })` 能测右键菜单；`text=` 选择器会先命中侧边栏里同名的会话（「韩梅梅」），限定在 `main` 里找。
-- 假 hub 的终端推送线程在浏览器关掉后写已关闭的 socket 会打一段 `Bad file descriptor` 的栈，同一时刻代理过去的请求可能回 500：看到偶发的 500 先看是不是这个，不是网页的问题。
+- Parallel chat changes concentrated conflicts in `ChatView.tsx`: each lane added its own conditions for sending bubbles (local `pending`, queued messages to hide, cross-page `outbox`). Merge into one
+  "Still in flight" count (`outgoing` = local bubbles not queued + nonfailed outbox). Both "Is the last row live?" and "Can retry?" use it; otherwise queued messages keep the last section spinning.
+- When New Agent opens with a preset, the effect "if current computer is offline, select first online" and the preset `setMid` execute in the same commit, with the latter winning: the preset fails silently (the default is already the first computer).
+  Yield that effect while the preset is pending.
+- Viewer images using `max-w-full max-h-full` make small images (screenshot thumbnails, 36 px icons) smaller than chat thumbnails. Compute fitted dimensions from the container (`fitRect`, allow upscaling); show original size only on double-click.
+- Playwright `locator.click({ button: "right" })` tests context menus. `text=` first matches the same-named sidebar session (`韩梅梅`, a sample contact name); scope to `main`.
+- Mock hub's terminal push thread writes to a closed socket after browser closure, producing a `Bad file descriptor` stack; concurrent proxied requests may return 500. Check this first for occasional 500s; it is not a web bug.
 
-### 对话页
+### Chat page
 
-- 闭包里改的 `let` 变量，TypeScript 在外面的循环里仍按初值收窄（`let x: T | null = null` 在循环里一直是 `null`，`x.id` 报 `never`）：放进一个对象（`const last = { raw: null as T | null }`）。
-- `encodeURIComponent` 会把子 Agent 会话 id 里的 `@` 编成 `%40`：真实 hub（Go 的 `PathValue`）会解码，假 hub 的路由要自己 `unquote`。
-- 列表每行都传同一个 `now` / `streaming` 会让每秒 / 每个 delta 所有行的 `memo` 都失效：只给正在进行的那一行传。
-- 触屏长按要自己计时（iOS Safari 长按不发 `contextmenu`，安卓约 500 ms 后再发一个）：`pointerType === "touch"` 的 `pointerdown` 起 450 ms 计时，移动超过 8 px 取消，开过之后 1 秒内的
-  `contextmenu` 只 `preventDefault`。消息加 `select-none` + `-webkit-touch-callout:none`，所以菜单里要有「选择文本」。
-- `Menu` 只认元素做锚点：在点击处临时放一个 `position:fixed`、0×0 的 span，关的时候删掉（别在 setState 的更新器里做删除这种副作用）。
-- 自己的消息气泡下面原来没有操作行，加一行会改整段对话的间距：悬停条用 `absolute right-full` 放在气泡左边（本来就有 12% 的留白）。
-- 浏览器不让顶层导航到 `data:` 地址：先 `fetch(dataURL).blob()` 再 `URL.createObjectURL`。写图片到剪贴板（`ClipboardItem`）只在安全上下文里可用，明文 HTTP 的 hub 上要藏掉按钮。
-- 查看器、编辑器里的 Esc 要在 window 的捕获阶段处理并 `stopPropagation`，否则对话页的「Esc 中断」会一起触发。
+- TypeScript still narrows a closure-mutated `let` to its initial value in an outer loop (`let x: T | null = null` remains `null`, so `x.id` reports `never`); wrap in an object (`const last = { raw: null as T | null }`).
+- `encodeURIComponent` encodes `@` in sub-Agent session IDs as `%40`; real hub (Go `PathValue`) decodes it, but mock routing must `unquote` explicitly.
+- Passing the same `now` / `streaming` to every row invalidates all row `memo`s every second / delta; pass them only to the active row.
+- Implement touch long-press timing ourselves (iOS Safari sends no `contextmenu`; Android sends another after about 500 ms). On `pointerType === "touch"` `pointerdown`, start 450 ms; cancel after movement over 8 px. For 1 second after opening,
+  `contextmenu` only `preventDefault`s. Messages use `select-none` + `-webkit-touch-callout:none`, so the menu needs "Select text."
+- `Menu` anchors only to elements: temporarily place a `position:fixed`, 0×0 span at the click point; delete on close (not as a side effect in a setState updater).
+- Own message bubbles originally had no action row; adding one changes chat spacing. Put an `absolute right-full` hover bar left of the bubble (already 12% margin there).
+- Browsers prohibit top-level navigation to `data:`; use `fetch(dataURL).blob()` then `URL.createObjectURL`. Image clipboard writes (`ClipboardItem`) require a secure context; hide the button on plaintext-HTTP hubs.
+- Viewer / editor Esc handlers must run in window capture phase and `stopPropagation`, or chat's Esc interrupt fires too.
 
-### 侧边栏、机器页
+### Sidebar and Machines
 
-- 链接行里不能嵌按钮：行的 ⋯ 做成 `<a>` 的兄弟节点，绝对定位、`group-hover/row:flex`（Tailwind v4 的 `group-hover` 本来就只在 `@media (hover:hover)` 生效）；悬停时行尾的提示和角标
-  `group-hover/row:invisible` 让开，否则被 ⋯ 盖住一半。右键 / 菜单键走 `<a>` 的 `onContextMenu`。
-- `Icon` 是 `aria-hidden` 的、不收 `aria-label`（TS 不检查带连字符的 JSX 属性，传了也不报错）：要读出来就在外面包 `<span title>` + `sr-only` 文字。
-- 会话行 `SessionRow` 是 `memo` 的（#3026）：没变的会话推送后还是同一个对象（`lib/sessions-delta.ts`），只有自己的会话变了的那行重渲染。给它的函数要稳定（`useGo`、`onRowMenu` 用 `useCallback`），
-  `prefix` 传字符串不传 JSX，路由按 `routePath` 比；新加一个每次渲染都新建的 prop（行内箭头、对象、元素）就又是每次推送整列表重渲染（mock 下 /agents 20 秒 580 次 vs 100 次）。
-  行里按 `Date.now()` 算的「N 分钟前」（离线行行尾、详情行）不再跟着别人的推送更新：显示年龄的行自己 `useNow(60_000)` 每分钟重渲染一次。
-- 侧边栏宽约 280 px，四个筛选胶囊（带圆点和件数）按 `px-2 gap-1` 会折成两行：收紧到 `px-[7px] gap-0.5`。
-- 曲线图上的参考线标签（负载图的「N 核」）画在线条下面会被数据线穿过：画在线条之后，加一圈页面底色的描边（`paint-order: stroke`）。
-- 机器详情的监控小格一行三格，390 宽下副标题只有约 94 px，「56.5 GB / 64.0 GB」要 92 px（2026-11-06，#3637）：无头 Chrome 在 390 下刚好放得下、截图看不出截断，窄 15 px（桌面浏览器的滚动条）或字体稍宽就切掉总量。量文字的自然宽度（`Range.getBoundingClientRect`）和格子的 `clientWidth` 比，别只看 390 的截图；同单位只写一次（`usedOfTotal`，「56.5 / 64.0 GB」74 px）。
+- Never nest buttons in link rows: make row ⋯ a sibling of `<a>`, absolutely positioned with `group-hover/row:flex` (Tailwind v4 `group-hover` already works only under `@media (hover:hover)`). Row-end hints / badges yield on hover with
+  `group-hover/row:invisible`, or ⋯ covers half of them. Right-click / menu key uses `<a>`'s `onContextMenu`.
+- `Icon` is `aria-hidden` and does not accept `aria-label` (TS does not check hyphenated JSX attributes, so it gives no error). For announcements, wrap with `<span title>` + `sr-only` text.
+- `SessionRow` is `memo`ized (#3026): unchanged sessions retain object identity after pushes (`lib/sessions-delta.ts`), so only the changed session's row rerenders. Functions must be stable (`useGo`, `onRowMenu` use `useCallback`);
+  pass `prefix` as a string, not JSX; compare routes by `routePath`. Adding a freshly created prop per render (inline arrow, object, element) rerenders the whole list on every push again (/agents under mock: 580 renders in 20 seconds vs 100).
+  Rows calculating "N minutes ago" from `Date.now()` (offline row suffix, detail row) no longer update on other sessions' pushes; age-displaying rows use their own `useNow(60_000)` to rerender every minute.
+- A roughly 280 px sidebar wraps four filter pills (dots and counts) with `px-2 gap-1`; tighten to `px-[7px] gap-0.5`.
+- Reference-line labels on charts ("N cores" on load) get crossed by data lines when drawn underneath. Draw after the lines, with a page-background outline (`paint-order: stroke`).
+- Machine details has three monitoring cells per row; at 390 width a subtitle gets about 94 px, while "56.5 GB / 64.0 GB" takes 92 px (2026-11-06, #3637). Headless Chrome at 390 just fits and hides truncation in screenshots; 15 px narrower (desktop scrollbar), or a slightly wider font, cuts the total. Measure natural text width (`Range.getBoundingClientRect`) against cell `clientWidth`, not just 390-wide screenshots. Show a shared unit once (`usedOfTotal`, "56.5 / 64.0 GB", 74 px).
 
-### 终端（xterm.js）
+### Terminal (xterm.js)
 
-- DOM 渲染器的中文空隙来自 `DomRendererRowFactory`：`spacing = width * cellWidth - 量出来的字宽`，写成 `letter-spacing`。让中文字体量出来正好两格就没有空隙：`FontFace` 的 `size-adjust`
-  只缩放这一个回退字体，`unicode-range` 限定中日韩，不影响英文的格宽。
-- xterm 6 的公开 API 没有「光标是否隐藏」（DECTCEM）：页面自己画屏幕时从 `_core.coreService.isCursorHidden` 读，读不到就不画光标。
-- 读历史时要停住画面就不能往 xterm 写（没法「先不显示」），帧要自己攒着；`FrameOrder` 照常前进，攒太多就丢掉、回来时不带 epoch 整帧重订，否则会从没画过的 seq 往后接。
-- 在 xterm 上方插入历史后要自己保持滚动位置，并关掉浏览器的滚动锚定（`overflow-anchor: none`），否则两边都加一次会跳。
+- DOM-renderer Chinese gaps come from `DomRendererRowFactory`: `spacing = width * cellWidth - measured glyph width`, written as `letter-spacing`. Make Chinese glyphs measure exactly two cells to eliminate gaps. `FontFace` `size-adjust`
+  scales only this fallback font; restrict `unicode-range` to CJK, leaving English cell width unchanged.
+- xterm 6 public API has no cursor-hidden state (DECTCEM). When drawing the screen ourselves, read `_core.coreService.isCursorHidden`; if unavailable, draw no cursor.
+- Freezing while reading history means not writing to xterm (cannot write without displaying); buffer frames ourselves. `FrameOrder` still advances. If too many accumulate, discard and resubscribe for a full frame without epoch on return, rather than continuing from a never-rendered seq.
+- After prepending history above xterm, maintain scroll position and disable browser scroll anchoring (`overflow-anchor: none`), or both add offsets and cause a jump.
 
-### 助手、收件箱
+### Assistant and Inbox
 
-- 动的形象就是 APNG：`<img>` 自己会播，但 `prefers-reduced-motion` 管不到它（不是 CSS 动画），要停只能画到 canvas 上（`drawImage` 取第一帧）。
-- 别的页面替会话发消息，等 HTTP 返回再跳的话，跳过去以后要等记录推回来才看到这条：先跳，气泡放 store 里（按 `mid/sid`）。新开的助手对话 `POST /assistant/conversations`
-  要等对话起来才返回（hub 超时 110 秒），这一段只能在原页面转圈；返回后把提示词记成「已送达」的气泡再跳。
-- 对话框里写的东西不能只在 `onClose` 时保存（#4563）：手写邮件回复时同一线程来了新邮件，`MailBody` 换读最新一封、读的时候只画「正在读取」，对话框被卸载，`onClose` 根本不会触发，字就丢了。对话框要画在加载态之外、模板在打开时定下（否则 `dirty` 拿新邮件的模板比，永远是改过）；卸载时也按关闭的规则保存，键按条目（线程）而不是会变的最新 uid；点发送时就算「已处理」，失败再放回，否则发送在途时卸载会把已发出的存回去。
-- hub 的 `/mail/send` 的 `references` 是**字符串**（`mail.SendRequest`），iOS 的 `SendMail.references` 是 `[String]`：iOS 带 References 的手动回复会被 hub 以 400 拒掉（看代码推断，没实测）。网页按字符串发。
-- 可见即读要有「重新看一眼」的时机：IntersectionObserver 只在交叉比例跨过阈值时回调，页面在后台 / 有对话框时进来的消息，回到前台、对话框关掉后不会再回调。记下当前在视口里的位置，
-  `visibilitychange`、`<body>` 子节点变化（对话框是 portal 进 body 的）时再按门禁看一遍；阈值要密（每 0.1），比列表还高的消息才能达到「占列表一半高」。
-- 话题回复（展开的 thread）里的消息位置不是会话的位置：只给列表顶层的消息加 `data-seen-pos`。
+- Animated avatars are APNG: `<img>` plays automatically, but `prefers-reduced-motion` cannot stop it (not CSS animation). To stop, draw to canvas (`drawImage` captures the first frame).
+- When another page sends to a session, waiting for HTTP before navigation means the bubble appears only after pushed history returns. Navigate first and store the bubble by `mid/sid`. New assistant `POST /assistant/conversations`
+  returns only once the chat starts (hub timeout 110 seconds), so that phase can only spin on the original page; after response, record the prompt as a "Delivered" bubble and navigate.
+- Dialog text cannot save only in `onClose` (#4563): while manually replying to email, a new message in the same thread makes `MailBody` load the latest email, rendering only "Loading." The dialog unmounts without `onClose`, losing text. Render outside loading state, fix the template on open (otherwise `dirty` compares with the new email template and is always true), and save on unmount using close rules. Key by item/thread, not changing latest uid. Mark handled on Send, restoring on failure, or an in-flight unmount saves already-sent text back as a draft.
+- Hub `/mail/send` `references` is a **string** (`mail.SendRequest`), while iOS `SendMail.references` is `[String]`; iOS manual replies with References get hub 400 (inferred from code, not tested). Web sends a string.
+- Visible-means-read needs a recheck trigger: IntersectionObserver callbacks occur only when intersection ratios cross thresholds. Messages arriving while backgrounded / behind a dialog get no callback upon return or close. Track current in-viewport positions,
+  then reapply gates on `visibilitychange` and `<body>` child changes (dialogs portal into body). Use dense thresholds (every 0.1) so taller-than-list messages can meet "occupies half the list height."
+- Expanded-thread reply positions are not conversation positions; add `data-seen-pos` only to top-level list messages.
 
-## 待发气泡和对话记录（2026-11-03，#950）
+## Pending bubbles and transcript echoes (2026-11-03, #950)
 
-- 发出去的消息在对话记录里认，不能按全等、不看时间：最近几条里有一条同样的「继续」，新发的气泡立刻被收掉（随后发送失败的话失败也看不到），两条一样的被一条收掉。规则和 iOS / Android 一样（`lib/echo.ts`：归一化、电脑时钟最多慢 2 分钟、截断的按开头、一条对话记录只认一条，已经认过的记在 `claimed` 里）。
+- Match sent messages in the transcript with more than exact equality and no time check: an older identical "Continue" among recent entries immediately removes a new bubble (hiding later send failure); one entry can also remove two identical bubbles. Match iOS / Android rules (`lib/echo.ts`: normalization, computer clock at most 2 minutes behind, prefix matching for truncated text, one transcript entry claims only one bubble, recorded in `claimed`).
 
-## 输入框等消息送到才清空（#1176）
+## Composer cleared only after delivery (#1176)
 
-- 对话页先画「发送中」的气泡、再等 `POST …/messages`（hub 把消息交给那台电脑上的 Agent，冷启动要好几秒），输入框以前等它成功才清空，于是同一段字在气泡和输入框里同时挂着，像没发出去。
-  现在点发送就清空（文字、图片、上下文），失败才放回；等待期间又打的字接在放回的那段下面（`withUnsent`）。
-- 防抖保存的草稿在输入框卸载、换会话、`pagehide` 时要立即写掉还没到点的那份（#4591）：清理函数只 `clearTimeout` 的话，打完字 250 毫秒内切会话，最后的字就丢了（对话页按会话 `key` 重新挂载）。换 `draftKey` 的那一次渲染里输入框还是旧的字、键已经是新的，只写键对得上的那份；发送清空时把待写的那份也清掉。
-- 本地复现慢送达和失败：假 hub 的 `MOCK_SEND_DELAY_MS=<毫秒>`、`MOCK_SEND_FAIL=1`。
-- 失败放回要看输入框此时还是不是这个会话的（#4551）：发送还在路上时用户切走，对话页按会话重新挂载，旧输入框的 `setDraft` 不再生效、草稿已经删了，字就丢了；输入框只换 `draftKey` 时字会进别的会话。放回的字走 `sendDraft(key, { type: "unsent" })`：这个会话有打开的输入框就放进它，没有就写进保存的草稿。图片、上下文、引用早就按这个分开了，只有文字漏了。
+- Chat first shows a Sending bubble, then waits for `POST …/messages` (hub delivers to the Agent on that computer; cold start takes seconds). Previously the composer cleared only on success, leaving the same text in bubble and composer, looking unsent.
+  Now clear text, images, and context on Send; restore only on failure. Text typed while waiting appends below restored text (`withUnsent`).
+- Debounced drafts must flush pending writes on composer unmount, session change, and `pagehide` (#4591). Cleanup with only `clearTimeout` loses final text when switching within 250 milliseconds (chat remounts by session `key`). On the render changing `draftKey`, text is still old but key is new; write only when keys match. Clearing on send also clears the pending write.
+- Reproduce slow delivery / failure locally with mock hub `MOCK_SEND_DELAY_MS=<milliseconds>`, `MOCK_SEND_FAIL=1`.
+- Restoration must check whether the composer still belongs to that session (#4551): switching away during send remounts chat, making old `setDraft` ineffective after the saved draft was deleted; changing only `draftKey` instead puts text into another session. Restore through `sendDraft(key, { type: "unsent" })`: use that session's open composer, otherwise saved draft. Images, context, and references already followed this separation; text was missed.
 
-## 展开 / 折叠不卡、不跳（2026-11-04，#1124）
+## Smooth, stable expansion / collapse (2026-11-04, #1124)
 
-- 量出来的「跳」几乎都在最新处：内容一挂上就卸载（`{open && …}` 包在 `Collapse` 里），折叠那一帧高度直接塌掉、滚动被夹住，被点的行一帧挪 88px；视口中部、上方展开折叠本来就是 0px（变的都在被点的行下面）。
-  量的时候要把「点击前的位置 → 第一帧」也算进单帧位移，只比相邻两帧会漏掉第一帧的跳。
-- 长轨迹（650 步）第一次挂上要排版一百多毫秒（4× 降速）：和 `0fr → 1fr` 放在同一帧，过渡的时钟从这一帧算，下一帧就开到大半；先在 `0fr` 下挂上、下一帧再开。
-- 合上时给整棵子树加 `inert` 是一次全量样式计算（650 步 34ms，不降速），放在过渡结束、内容卸载之前做，不要和折叠的第一帧挤在一起。
-- 补滚动放在 ResizeObserver 回调里（排版后、绘制前），在 rAF 里补会晚一帧、行会抖一下。浏览器自带的滚动锚定（`overflow-anchor`）挑的是视口里的某个元素，常常在展开的内容下面，反而把被点的行推走，所以对话页关着它、自己按住被点的行。
-- 跟随最新处时，折叠的步骤取回来会一帧长几千像素：照样贴底就把组头一下子甩到顶上。一帧里要挪超过 64px 就停止跟随、按住这一行。
-- 验证：Playwright（`playwright-core` + 缓存的 Chrome for Testing）+ CDP 的 `Emulation.setCPUThrottlingRate`、`long-animation-frame`、`Page.startScreencast` 录帧；Playwright 自带的 ffmpeg 只解 MJPEG，录帧用 jpeg，没有管道就先拼成一个文件再读。
-  `recordVideo` 在这台机器上不出文件（ffmpeg 版本号对不上时报错，链过去之后静默）。量开发版（`vite`）没意义：React 开发模式一次展开 700ms，生产构建才是用户看到的。
+- Measured jumps mostly occur at the latest edge: content immediately unmounts (`{open && …}` inside `Collapse`), collapsing height in one frame and clamping scroll, moving the clicked row 88px. Mid-viewport / above-viewport expansion already moves 0px (changes occur below the clicked row).
+  Include "position before click → first frame" in per-frame displacement; comparing adjacent frames misses the initial jump.
+- First mounting a long 650-step trace takes over 100 ms to layout (4× CPU slowdown). If combined with `0fr → 1fr` in one frame, transition timing starts there and the next frame is already mostly open. Mount at `0fr`, then open next frame.
+- Setting `inert` on the whole subtree during collapse triggers a full style calculation (34ms for 650 steps, unthrottled). Do it after the transition, before unmount, not alongside the first collapse frame.
+- Correct scroll in ResizeObserver (after layout, before paint); rAF is one frame late and causes jitter. Browser `overflow-anchor` often chooses an element below expanded content and pushes the clicked row away; disable it for chat and anchor the clicked row ourselves.
+- Fetching folded steps while following latest can add thousands of pixels in one frame; staying bottom-pinned throws the group header to the top. If movement exceeds 64px in a frame, stop following and hold this row.
+- Validation: Playwright (`playwright-core` + cached Chrome for Testing), CDP `Emulation.setCPUThrottlingRate`, `long-animation-frame`, and `Page.startScreencast` frames. Playwright's bundled ffmpeg decodes only MJPEG; record JPEG frames, combining into a file before reading if no pipe.
+  `recordVideo` produces no file on this machine (ffmpeg version mismatch errors, then silent after symlinking). Measuring dev Vite is meaningless: React dev expansion takes 700ms; production builds are what users see.
 
-## 打开、刷新对话停在最新处（2026-11-04，#1340）
+## Opening and refreshing chats stays at latest (2026-11-04, #1340)
 
-- 「是不是还跟着最新处」不能只看滚动事件那一刻离底多远：自己 `scrollTop = scrollHeight` 产生的滚动事件要到下一帧才派发，
-  中间又进来内容（图片一张张解码、任务卡、今天卡、一页历史）时，这个事件读到离底几百像素，以前就当成「用户往上翻了」停止跟随，
-  刷新后长对话（主对话最明显）就停在最新消息上面。假 hub 的数据同步就排好版，自然刷新复现不了，要让内容一块块进来（每块一个任务、比一帧快）才稳定复现。
-- 「滚动位置往上走了」也不等于是用户：输入框重新量高度时先塌一下，视口变高，浏览器把 `scrollTop` 往上夹几像素，事件同样晚一帧到。
-  所以只有用户在滚（滚轮向上、手指、滚动键、拖滚动条，之后 700ms 内）且位置往上走，才停止跟随（`followsAfterScroll`）。
-- 列表下面的东西（输入框、任务坞、提问卡）变高时内容没变、只是视口变矮，ResizeObserver 要连视口一起观察，否则最新一行被盖住。
-- 回归检查：`scripts/test/web_chat_scroll_e2e.py`（说明见 `docs/web.md`「怎么跑」）。
+- Do not determine latest-following solely from distance to bottom at scroll-event time. Events caused by our `scrollTop = scrollHeight` arrive next frame;
+  meanwhile new content (incrementally decoded images, task cards, Today cards, history pages) makes that event see hundreds of pixels from bottom. Previously interpreted as user scrolling upward, it stopped following,
+  leaving refreshed long chats (especially main chat) above the latest message. Mock hub lays out synchronously, so ordinary refresh does not reproduce it; inject chunks faster than one frame, one task per chunk, for reliable reproduction.
+- Upward scroll position does not necessarily mean user action: composer height remeasurement briefly collapses it, growing the viewport and causing the browser to clamp `scrollTop` upward a few pixels; again, the event arrives late.
+  Stop following only when the user is scrolling (upward wheel, touch, scroll keys, scrollbar drag, and within 700ms afterward) and position moves upward (`followsAfterScroll`).
+- When content below the list (composer, task dock, question card) grows, content stays unchanged but viewport shrinks. ResizeObserver must observe the viewport too, or the latest row is covered.
+- Regression: `scripts/test/web_chat_scroll_e2e.py` (usage in `docs/web.md`, "How to run").
 
-## 表格查看器（2026-11-04，#1310）
+## Spreadsheet viewer (2026-11-04, #1310)
 
-- **npm 上的 `xlsx` 是停更的旧版**：SheetJS 2023 年起只从自己的 CDN 发新版，npm 的 0.18.5 有公开漏洞（读不可信文件时的原型污染、ReDoS）。仓库的隐私扫描和 Dockerfile 都只认 registry.npmjs.org，直接 `npm i https://cdn.sheetjs.com/…` 会被 `prebuild` 拦下（`unapproved npm source`）。做法是把 tarball 放进 `web/vendor/`，用 `file:` 相对路径装，Dockerfile 的检查放行 `file:vendor/`。
-- **拖选格子会把表格横着滚走**：格子是普通文字，按下拖动时浏览器在做文字选择，碰到边缘就自动滚动滚动容器。按下时 `preventDefault()` 加 `select-none`。
-- **半透明的选中底色会透出下面的格子**：行号列是 sticky 的，横向滚动时格子从它下面滑过，选中行号用 `bg-accent/12` 时被盖住的格子文字透了出来。sticky 的那层要不透明：`color-mix(in srgb, var(--accent) 14%, var(--inset))`。
-- **估列宽别按平均字宽**：12.5px 的数字和大写字母比平均宽，按 7.2px 一个字符算，`SO-260000`、`2026-08-04` 这类定长值被截成省略号；按 8px 算才放得下。文件里设的列宽（Excel 的字符宽）常常也偏窄，取两者中大的。
+- **npm `xlsx` is an unmaintained old release**: since 2023, SheetJS distributes new versions only through its own CDN. npm 0.18.5 has public prototype-pollution / ReDoS vulnerabilities when reading untrusted files. Repository privacy checks and Dockerfile accept only registry.npmjs.org, so `npm i https://cdn.sheetjs.com/…` is blocked by `prebuild` (`unapproved npm source`). Put the tarball in `web/vendor/`, install with relative `file:`, and allow `file:vendor/` in Dockerfile checks.
+- **Dragging cell selection scrolls the table horizontally**: cells are ordinary text, so the browser selects text and autoscrolls near the edge. Use `preventDefault()` on pointer-down plus `select-none`.
+- **Translucent selection backgrounds reveal cells underneath**: sticky row numbers cover horizontally scrolled cells, whose text shows through selected `bg-accent/12`. Sticky layers must be opaque: `color-mix(in srgb, var(--accent) 14%, var(--inset))`.
+- **Do not estimate column width by average glyph width**: 12.5px digits / uppercase letters are wider; 7.2px per character truncates fixed-length values such as `SO-260000`, `2026-08-04`. They fit at 8px. Excel character widths are often too narrow too; take the larger estimate.
 
-## 打开时创建、关掉时 stop() 的模型（#1327 飞书 Pin 列表）
+## Models created on open and stop()ped on close (#1327, Lark Pins)
 
-- 用 `useState(() => new XxxModel())` 建、在 effect 里 `refresh()`、清理时 `stop()` 的模型，开发版的 StrictMode 会「挂上 → 清理 → 再挂上」：第二次挂上时模型已经 stop 了，
-  列表永远是空的，生产构建却正常。effect 里先 `start()` 再读；被作废的那次读取回来时不能直接 `return`，要接着跑排队的那次刷新，否则 `loading` 一直卡住。
-- 无头 Chromium 截中文是方块：这台机器没装中文字体。拿一个 Noto Sans CJK 放进临时目录，写一份 `fonts.conf`（include 系统的再加这个目录），`FONTCONFIG_FILE=…` 启动浏览器。
+- A model created with `useState(() => new XxxModel())`, refreshed in an effect, and `stop()`ped in cleanup encounters dev StrictMode's "mount → cleanup → remount." It is already stopped on the second mount,
+  so the list stays empty despite working in production. Call `start()` before reading in the effect. When an invalidated read returns, do not simply `return`; run the queued refresh or `loading` stays stuck.
+- Headless Chromium renders Chinese as squares when this machine lacks Chinese fonts. Put Noto Sans CJK in a scratch directory, create `fonts.conf` including system fonts and that directory, and launch with `FONTCONFIG_FILE=…`.
 
-## Office 预览（2026-11-04，#1345）
+## Office previews (2026-11-04, #1345)
 
-- **沙盒 iframe 里跑不了网页自己的 JS**：`sandbox="allow-scripts"` 不带 `allow-same-origin` 时 iframe 是不透明源，模块脚本按 CORS 取，hub 不给 `Access-Control-Allow-Origin` 就加载失败。所以不在 iframe 里跑渲染库，而是在本页的游离节点里渲染，再把结果（data URL 的图、转义过的文字）放进不带脚本的 `srcdoc` iframe。
-- **游离节点里的 `innerHTML` 也会执行事件属性**：`<img src=x onerror=…>` 写进一个没挂到文档上的 div，图片照样加载、`onerror` 照样跑。所以不能用在本页里拿文件内容拼 `innerHTML` 的库（pptx-preview 就是，且源码不公开）；docx-preview 用 `createElement` 建节点，图片从包里读，不联网。
-- **中文的「发粗宋体」是字体回退**：docx 点名的字体（Calibri、等线）本机没有时，浏览器退到自己的默认字体，中文是宋体。不能只给外层设无衬线：docx-preview 在样式表和元素上都直接写了 `font-family`，要给每一处补上回退列表；衬线只跟着文档点名的衬线字体。
-- **iWork 文件是 zip，预览在里面**：新格式（2013 以后）有 `preview.jpg` 等第一页的图，旧一点的有 `QuickLook/Preview.pdf`（每一页）。zip 的目录在文件末尾，按 Range 读末尾 64 KiB 找到中央目录、再读那一项，不用下载整个文件；预览一般是不压缩存的。
-- **Playwright 的 `addInitScript` 会注入每个 frame**，包括沙盒 iframe：截图日志里的「document is sandboxed and lacks the allow-same-origin flag」是测试脚本自己读 localStorage 报的，不是页面的错。
+- **Our own JS cannot run in a sandbox iframe**: `sandbox="allow-scripts"` without `allow-same-origin` makes an opaque origin, so module scripts use CORS and fail without hub `Access-Control-Allow-Origin`. Render through a detached node in the current page instead, placing results (data-URL images, escaped text) in a scriptless `srcdoc` iframe.
+- **`innerHTML` event attributes execute even in detached nodes**: `<img src=x onerror=…>` in a detached div still loads and runs `onerror`. Never use libraries assembling file content into in-page `innerHTML` (pptx-preview does, and its source is not public). docx-preview uses `createElement`, reads images from the package, and does not network.
+- **Heavy-looking Chinese serif text is font fallback**: if named docx fonts (Calibri, DengXian) are missing, the browser falls back to its default, a Chinese serif. Setting sans-serif only on the outer wrapper is insufficient: docx-preview writes `font-family` in stylesheets and elements. Add fallback lists everywhere; use serif only when the document explicitly names a serif font.
+- **iWork files are ZIPs with embedded previews**: new formats (after 2013) contain first-page images such as `preview.jpg`; older ones have `QuickLook/Preview.pdf` (all pages). ZIP directory is at the end; Range-read the final 64 KiB to find the central directory, then fetch that entry without downloading the whole file. Previews are usually stored uncompressed.
+- **Playwright `addInitScript` injects every frame**, including sandbox frames. Screenshot-log "document is sandboxed and lacks the allow-same-origin flag" comes from the test script reading localStorage, not the page.
 
-## 不在 layer 里的全局样式压过所有 Tailwind 工具类（2026-11-04，#1381）
+## Unlayered global styles override all Tailwind utilities (2026-11-04, #1381)
 
-- `styles.css` 里写在 `@layer` 外面的规则，按层叠规则排在所有 layer 之后，选择器再弱也压过 Tailwind v4 的工具类（都在 `@layer utilities` 里）。
-  以前全局的 `* { scrollbar-width: thin }` 就这样让每个 `[scrollbar-width:none]` 都失效：任务坞、子 Agent 标签、终端按键栏的横向滚动行一直画着细滚动条。
-  macOS 默认滚动条是浮层、不占地方，开发时看不出来；Linux / Windows 和设成「始终显示滚动条」的 Mac 上，它占了几像素高度，把胶囊往上顶，旁边居中的「全部」就低了一截。
-- 全局的元素样式放进 `@layer base`；横着滚、不要滚动条的行用 `scrollbar-none`（`@utility`，带 WebKit 18.2 之前要的 `::-webkit-scrollbar`）。
-- 无头 Chrome 默认带 `--hide-scrollbars`，截图里永远没有滚动条：要看滚动条的情形，Playwright 启动时 `ignore_default_args=["--hide-scrollbars"]`（Linux 上就是常显的经典滚动条）。
-- 无头 Chrome 不理 CDP 的 `Input.synthesizeScrollGesture`，测触摸横滑用 `Input.dispatchTouchEvent` 发 touchStart / touchMove / touchEnd。
-- 没有桌面库的 Linux 开发机上 Playwright 的 WebKit 缺一堆系统库跑不了，WebKit 的检查放到 Mac 上跑（`ssh -R` 把网页端口转过去）。
+- Rules outside `@layer` in `styles.css` cascade after every layer and override Tailwind v4 utilities (all in `@layer utilities`) regardless of weak selectors.
+  Global `* { scrollbar-width: thin }` defeated every `[scrollbar-width:none]`, leaving thin bars on horizontal task dock, sub-Agent labels, and terminal key rows.
+  macOS defaults to overlay scrollbars with no layout space, hiding this during development; Linux / Windows and Macs with "Always show scrollbars" reserve pixels and push pills upward, making centered "All" beside them look lower.
+- Put global element styles in `@layer base`; horizontal rows without scrollbars use `scrollbar-none` (`@utility`, including `::-webkit-scrollbar` needed before WebKit 18.2).
+- Headless Chrome defaults to `--hide-scrollbars`, so captures never show them. Launch Playwright with `ignore_default_args=["--hide-scrollbars"]` to inspect scrollbar cases (always-visible classic bars on Linux).
+- Headless Chrome ignores CDP `Input.synthesizeScrollGesture`; simulate touch horizontal swipes with `Input.dispatchTouchEvent` touchStart / touchMove / touchEnd.
+- Playwright WebKit cannot run on a Linux development machine missing desktop system libraries; run checks on Mac (`ssh -R` forwards the web port).
 
-## Mermaid（2026-11-04，#1376）
+## Mermaid (2026-11-04, #1376)
 
-- **Mermaid 有全局状态，同时画两张会互相踩**：`initialize` 是全局的，`render` 期间往 body 里塞临时节点。所有渲染排进一个队列一张张画，主题变了才重新 `initialize`。
-- **先 `parse` 再 `render`，并开 `suppressErrorRendering`**：不然语法错误时 Mermaid 会在页面底部留下一个「Syntax error」的炸弹图。
-- **默认主题的饼图不能用**：dark 主题的扇区接近黑色，default 主题是粉彩，且默认 `pieOpacity` 0.7 在白底上发白。用 `themeVariables` 的 `pie1…pie8` 和 `pieOpacity: "1"`。
-- **`ui/Markdown.tsx` 不能 import `views/` 里的组件**：`views/chat/Steps.tsx` 反过来 import Markdown，循环依赖在模块初始化时会拿到 undefined；Mermaid 的放大层自己写了一个。
+- **Mermaid has global state; concurrent diagrams interfere**: `initialize` is global, and `render` inserts temporary body nodes. Queue every render sequentially; reinitialize only when the theme changes.
+- **`parse` before `render`, with `suppressErrorRendering`**: otherwise syntax errors leave a "Syntax error" bomb diagram at the page bottom.
+- **Default pie-chart themes are unusable**: dark sectors are nearly black; default is pastel, and `pieOpacity` 0.7 washes out on white. Set `pie1…pie8` in `themeVariables`, with `pieOpacity: "1"`.
+- **`ui/Markdown.tsx` must not import `views/` components**: `views/chat/Steps.tsx` imports Markdown, so a cycle returns undefined during initialization. Mermaid has its own zoom overlay.
 
-## Jupyter 笔记本（2026-11-04，#1407）
+## Jupyter notebooks (2026-11-04, #1407)
 
-- **react-markdown 默认滤掉 data: URL**（`defaultUrlTransform` 只放常见协议），笔记本单元附件 `attachment:x.png` 直接换成 data URL 会变成空 src：先改写成 `#nb-attachment=名字` 这种它放行的片段地址，渲染后在 layout effect 里换成真图。
-- **traceback 里全是 ANSI 颜色码**，而且按终端宽度排好了列：去掉颜色码后用 `white-space: pre` 横向滚动，折行（pre-wrap）会把 Traceback 那一行拆得乱七八糟。
+- **react-markdown filters data: URLs by default** (`defaultUrlTransform` accepts common schemes only); replacing notebook cell `attachment:x.png` directly with a data URL yields empty src. Rewrite first to an allowed fragment such as `#nb-attachment=<name>`, replacing with the real image in a layout effect after rendering.
+- **Tracebacks contain ANSI color codes** and terminal-width-aligned columns. Strip codes, use `white-space: pre` and horizontal scrolling; wrapping (`pre-wrap`) mangles the Traceback line.
 
-## HTML 预览（2026-11-04，#1413）
+## HTML previews (2026-11-04, #1413)
 
-- **CSP 的 meta 要放在 doctype 后面**：放在 `<!DOCTYPE html>` 前面，页面进怪异模式（布局变样）；放在它后面、`<html>` 前面就行，解析器会把开头的 `<meta>` 收进隐式的 `<head>`，排在页面自己加载的任何资源前面。
-- **srcdoc 沙盒里只能靠 CSP 断网**：sandbox 没有「禁止联网」的开关，不给脚本也照样加载 `<img src="https://…">`（跟踪像素）。要断网就得注入 `default-src 'none'`。
+- **CSP meta must follow doctype**: putting it before `<!DOCTYPE html>` enables quirks mode and changes layout. Place after doctype, before `<html>`; the parser puts initial `<meta>` into implicit `<head>`, before any page resources.
+- **CSP is the only way to disable networking in a srcdoc sandbox**: sandbox has no network-off switch; even without scripts, `<img src="https://…">` tracking pixels load. Inject `default-src 'none'`.
 
-- **沙盒里的页面要用同目录的文件，就由外面读好塞进去**（#1413）：srcdoc 框没有地址，`<img src="chart.png">` 解析到 `about:srcdoc` 下面，必然 404；放开联网也没用。外层页面（同源、带 token）经 `file/download` 读，转成 data URL / 内联样式和脚本再交给框；样式表里的 `url()` 要按样式表自己的目录解析，`@import` 递归拉进来。内联脚本里的 `</script` 要转义，不然提前结束元素。
+- **Read same-directory resources outside the sandbox and inject them** (#1413): srcdoc has no URL, so `<img src="chart.png">` resolves under `about:srcdoc` and returns 404, even with networking allowed. The outer page (same-origin, authenticated) fetches through `file/download`, converting to data URLs / inline styles / scripts. Resolve stylesheet `url()` relative to that stylesheet's own directory, recursively fetch `@import`. Escape `</script` inside inline scripts to avoid premature element closure.
 
-## 网页媒体（2026-11-04，#1422）
+## Web media (2026-11-04, #1422)
 
-- **`<video>` / `<audio>` 直接用 `file/download` 的地址就能拖动**：hub 用 `http.ServeContent` 回 Range，浏览器自己按需取；不要先 fetch 成 blob（大视频要等下完、占满内存）。地址里带 `?token=`，因为媒体元素发不了 Authorization 头。
-- **HEIC 只有 Safari 认**：Chrome / Firefox 的 `<img>` 直接报错。解码库 libheif 是 LGPL，不在可用许可证里，所以退到那台电脑画的缩略图（Mac 上 Quick Look 能读 HEIC）。
+- **`<video>` / `<audio>` can seek with direct `file/download` URLs**: hub uses `http.ServeContent` Range responses, and the browser fetches on demand. Do not fetch to blob first (large video must fully download and fills memory). Include `?token=` because media elements cannot send Authorization headers.
+- **Only Safari supports HEIC**: Chrome / Firefox `<img>` fails. libheif is LGPL, outside allowed licenses, so fall back to a thumbnail generated by that computer (Mac Quick Look reads HEIC).
 
-## 文档对比（2026-11-04，#1437）
+## Document comparison (2026-11-04, #1437)
 
-- **旧版本不要经 JSON 传**：node 把 `git cat-file blob` 的内容写进缓存（按 blob id 命名，带原扩展名，内容不变名字就不变），回一个路径，客户端用已有的 `file/download` 按 Range 读，查看器、PDF、Office 渲染全都能直接复用。
-- **pdf.js 6 的接口变了**：`getDocument` 没有 `isEvalSupported` 了，释放用 loading task 的 `destroy()`（文档对象上没有）；worker 用 `pdfjs-dist/build/pdf.worker.min.mjs?url` 交给 Vite 出地址。
+- **Do not send old versions through JSON**: node writes `git cat-file blob` to cache (blob-ID filename with original extension; stable name for unchanged content) and returns a path. Clients Range-read through existing `file/download`, reusing viewer, PDF, and Office rendering directly.
+- **pdf.js 6 changed APIs**: `getDocument` no longer has `isEvalSupported`; release through loading task `destroy()` (not document object). Let Vite resolve worker `pdfjs-dist/build/pdf.worker.min.mjs?url`.
 
 
-## 会话里的文件链接（2026-11-04，#1555）
+## File links in sessions (2026-11-04, #1555)
 
-- Markdown 的 `/workspace/report.md` 是 Agent 所在电脑的路径，不能让浏览器把它当成 hub 的站内网页：答案（含流式文字）和执行过程文字向 Markdown 传入机器与工作目录，普通点击复用文件侧栏；相对路径按会话目录解析。链接的真实 href 走机器的文件下载接口，修饰键 / 中键打开也不会落到站内 404。
-- `new URL()` 接受路径里不完整的 `%` 转义，后续 `decodeURIComponent()` 仍会抛 `URIError`。模型输出的 `persona://session/…` / `jarvis://session/…` 在渲染期经过链接分类，解码失败要当作无效链接，不能让整个对话白屏；回归用真实 Markdown 渲染覆盖这个边界。
+- Markdown `/workspace/report.md` is a path on the Agent computer, not a hub web page. Pass machine and working directory into Markdown for answers (including streaming) and execution text; normal clicks reuse the file sidebar, with relative paths resolved from the session directory. Real href uses machine file download, so modifier / middle-click does not produce site 404.
+- `new URL()` accepts incomplete `%` escapes, but later `decodeURIComponent()` still throws `URIError`. Model-produced `persona://session/…` / `jarvis://session/…` links are classified during rendering; decoding failures must become invalid links, not blank the whole chat. Regress through real Markdown rendering.
 
-## 提问卡片回答后不消失（2026-11-04，#1673）
+## Question cards remain after answering (2026-11-04, #1673)
 
-- **`refresh()` 的快照会把刚结束的卡片盖回来**：它并发拉 `/sessions`（忙的 hub 上要几秒）和 `/interactions`，全部回来后整体写回。中间到的 `interaction_resolved` 先删了卡片，旧快照随后又把它放回来，卡片还能点，再点就是 410「no longer pending」。待处理卡片的每次变化都编号（`store.ts` 的 `changeInteraction`），快照只补发请求之前的状态；安卓的 `HubInteractionCenter` 用的是同一个办法。
-- **提交成功就在本地收起卡片**，不要只等 WebSocket 的事件（可能晚到，也可能随断掉的连接丢了）；iOS、安卓本来就这样。hub 对已经回答过的卡片幂等回 200 和当时的答案（`already`），只有过期、撤回、交回电脑才回 410，见 `docs/protocol.md`。
+- **`refresh()` snapshots restore just-resolved cards**: it concurrently fetches `/sessions` (seconds on busy hub) and `/interactions`, replacing state when all finish. An intervening `interaction_resolved` removes the card; the old snapshot restores it, still clickable, and another click gets 410 "no longer pending." Number every pending-card change (`changeInteraction` in `store.ts`); snapshots update only state predating the request. Android `HubInteractionCenter` uses the same approach.
+- **Collapse cards locally on successful submission**, not only on WS events (late or lost on disconnection); iOS / Android already do this. Hub idempotently returns 200 with the original answer (`already`) for answered cards; 410 only for expiry, withdrawal, or hand-back to computer. See `docs/protocol.md`.
 
-## 对话渲染对齐 cindy（2026-11-05，#1963）
+## Chat rendering aligned with a reference client (2026-11-05, #1963)
 
-- **herdr 里的 Claude Code 没有 token 流**：transcript 只写完整的块，thinking 块大多是空的（实测 5 个会话、2066 块里 1698 块正文为空）；屏幕上的正文也是整段出现（每 0.4 s 读屏一次，连读 20 次核对过）。只有底部状态行每秒在变，所以实时信息走 node 读状态行的 `live` 推送，回复只能「整块到了再逐词淡入」。助手主对话才有真正的 delta。
-- **浮动滚动条按在视图里面**：macOS、iOS 的滚动条盖在内容上，按下时 `offsetX < clientWidth`。用「按下的是滚动视图本身、不是里面的内容」判断在拖滚动条，不要比较 `offsetX` 和 `clientWidth`，否则拖滚动条永远停不下跟随。
-- **e2e 别在带 token 的链接换完凭据之前离开**：`/overview?token=…` 打开后立刻 `goto` 别处，会落在登录页上，看起来像「列表一直不稳定」。先等侧栏（`aside`）出现再跳。
+- **Claude Code in herdr has no token stream**: transcript writes only complete blocks; thinking blocks are mostly empty (5 tested sessions, 1698 of 2066 blocks with empty bodies). Screen text also appears in whole chunks (20 consecutive reads every 0.4 s verified). Only the bottom status line changes each second, so real-time information uses node status-line `live` pushes; replies can only "fade in word by word after a whole block arrives." Only assistant main chat has true deltas.
+- **Overlay scrollbars are pressed inside the view**: macOS / iOS scrollbars overlay content, so `offsetX < clientWidth` on pointer-down. Detect "pressed the scroll view itself, not its content" for scrollbar dragging; comparing `offsetX` to `clientWidth` never stops following.
+- **E2E must not leave token-bearing URLs before credential exchange finishes**: opening `/overview?token=…` then immediately navigating lands at Login, resembling "The list never stabilizes." Wait for sidebar `aside` before navigating.
 
-## 手机版（2026-11-05，#1996）
+## Mobile web (2026-11-05, #1996)
 
-- **图标格的标签要量真实字宽**（#3579）：手机抽屉五列时，标签可用宽度约 47 px；英文 Overview / Scheduled tasks / Knowledge / Machines、日文受信トレイ / ヘルスケア / 定期タスク都会被 `truncate` 截断，中文正常并不能代表其他语言。连备选短名 Routines 也有约 47.7 px，仍被截断，定时任务最终用 Tasks。用独立的 `nav_*_short` 词条提供格子短名，完整名称留给提示和无障碍；浏览器里用文本 Range 的宽度对照标签 `clientWidth`，并检查选中时的字重。截图要检查各语言的整组导航，不能只盯住英文报错的几个入口，否则会漏掉日文收件箱和健康。jsdom 不做布局，只能验证词条、链接和无障碍语义。
-- **没分层的全局样式会盖过 utility**：`.prose-j { font-size:14px }` 写在 `@layer` 外面，所以回答外层的 `[&_.prose-j]:text-[15px]` 一直没生效。#1990 设定的 15 / 1.6 实际显示的是 14 / 1.7，桌面上也一样，要在构建后的 CSS 或 computed style 里核对才看得出来。现在暂时在 Answer 上加 `!`，以后应该把 `.prose-*` 放进 `@layer components`。
-- **StrictMode 让「打开时 pushState、关闭时 back()」的浮层一打开就关掉**：dev 环境下 effect 会跑两次，cleanup 里的 `history.back()` 是异步的，等它真正执行时，退掉的是新压进去的那条记录，结果触发 popstate，浮层被关上。`lib/back-close.ts` 的做法是关闭时推迟一个 tick 再退，紧接着又打开时复用同一条记录（replaceState）。生产构建不会这样，所以只拿生产构建测会漏掉。
+- **Measure actual text widths for icon-grid labels** (#3579): a five-column phone drawer gives labels about 47 px. English Overview / Scheduled tasks / Knowledge / Machines and Japanese 受信トレイ / ヘルスケア / 定期タスク (Inbox / Healthcare / Scheduled tasks) are truncated; fitting Chinese does not prove other languages fit. Even the proposed short label Routines measures about 47.7 px and truncates, so scheduled tasks use Tasks. Give grid labels separate `nav_*_short` entries, retaining full names for hints and accessibility. In-browser, compare text Range width with label `clientWidth`, including selected-state font weight. Inspect the whole navigation group in every language, not just the initially failing English entries, or Japanese Inbox / Health issues are missed. jsdom does not layout; it checks only entries, links, and accessibility semantics.
+- **Unlayered global styles override utilities**: `.prose-j { font-size:14px }` outside `@layer` defeated answer-wrapper `[&_.prose-j]:text-[15px]`. #1990's intended 15 / 1.6 rendered as 14 / 1.7, desktop too; only built CSS or computed style reveals it. Temporarily add `!` on Answer; later put `.prose-*` in `@layer components`.
+- **StrictMode immediately closes "pushState on open, back() on close" overlays**: dev effects run twice; cleanup `history.back()` is asynchronous and removes the newly pushed record when it executes, triggering popstate and closing. `lib/back-close.ts` delays back one tick on close, reusing the record (`replaceState`) if reopened immediately. Production alone misses this.
 - **A reload keeps the overlay's history entry, not the overlay** (#5134): `history.state` and the stack survive a reload, so a panel opened over a chat leaves a same-URL entry on top and the first Back only lands on the copy under it. Rewriting the marker with `replaceState` is not enough (the two entries stay); the first load has to `history.back()` off it before the app renders (`settleOverlayEntry` in `lib/back-close.ts`, which records the address the overlay opened on so a page that moved under it is not navigated away from). Reproduce with `scripts/test/web_overlay_reload_e2e.py`.
-- **iOS 键盘弹起时 `vh` 不变，fixed 浮层还是按布局视口定位**：被键盘挡住的部分照样算在高度里。用 visualViewport 算出可见区域写成 CSS 变量（`--kb-top` / `--kb-h`），浮层按它定位；`max-h-[40vh]` 这类写法在手机上不可信。
-- **iOS Safari 长按不会触发 `contextmenu`，长按链接还会弹系统预览**：只挂在右键菜单上的操作，在手机上等于没有，要同时放进 ⋯ 菜单。菜单用 `mousedown` 判断点到外面的话，长按松手时合成的 mousedown 会把刚打开的菜单关掉，要改用 `pointerdown` 并跳过触摸。
-- **CDP 模拟触摸**：同一个手势的 `Input.dispatchTouchEvent`（start / move / end）要在同一个 CDP session 里发，否则页面收到的是几段互不相干的触摸。
+- **iOS keyboard opening does not change `vh`; fixed overlays use layout viewport**: keyboard-covered space still counts toward height. Derive visible area from visualViewport into CSS variables (`--kb-top` / `--kb-h`) and position overlays with them; `max-h-[40vh]` is unreliable on phones.
+- **iOS Safari long-press sends no `contextmenu` and previews links**: right-click-only actions are absent on phones; also expose in ⋯ menus. Outside-click `mousedown` closes a newly opened menu when long-press release synthesizes mousedown; use `pointerdown` and skip touch.
+- **CDP touch simulation**: dispatch a gesture's `Input.dispatchTouchEvent` start / move / end on the same CDP session, or the page receives unrelated touches.
 
-## 主屏 App 顶部状态栏是一条灰条（2026-11-05，#2102）
+## Home-screen app status bar becomes a gray strip (2026-11-05, #2102)
 
-- **iOS 用页面顶部全屏 fixed 元素的背景色当状态栏颜色，不看它的 opacity**。#1996 为了让抽屉遮罩（`bg-black/20`）能淡出，让它关着时也留在页面上（`opacity: 0`）。结果主屏 App 的状态栏一直是页面色压暗 20% 的颜色：浅色主题下是 #FAFAFB × 0.8 = #C8C8C8。浮层关上以后，必须真正离开页面（`display: none` 或者卸载），淡出要在离开之前做完（`useLingers`）。模拟器里的 Safari 浏览器看不出这个问题，要在真机的主屏 App 上才看得到。`web_mobile_shell_e2e.py` 会检查：没有浮层打开时，顶部不能有带背景色的全屏 fixed 元素。
+- **iOS uses the background of a full-screen fixed element at the page top as status-bar color, ignoring opacity**. #1996 kept a closed drawer mask (`bg-black/20`) mounted at `opacity: 0` to fade out. Home-screen status bars therefore stayed 20% darker than page color: light theme #FAFAFB × 0.8 = #C8C8C8. Closed overlays must truly leave the page (`display: none` or unmount), finishing fade-out beforehand (`useLingers`). Simulator Safari does not show this; only a real-device home-screen app does. `web_mobile_shell_e2e.py` checks that no background-colored full-screen fixed element remains at the top with all overlays closed.
 
-## 输入框的回车先让给输入法（2026-11-05，#2733）
+## Composer Enter yields to the IME first (2026-11-05, #2733)
 
-- **每个 `onKeyDown` 里处理回车 / Esc 的输入框，开头都要先 `if (composing(e.nativeEvent)) return;`**（`lib/send-history.ts`，判断 `isComposing || keyCode === 229`）。日文变换、拼音上屏英文时按的回车，浏览器也会照常发给页面，不判断的话就会拿还没上屏的半截字去新建待办、保存标题、添加列表项。Esc 也一样：取消组字的同时把整行关掉了。jsdom 里用 `new KeyboardEvent("keydown", { key: "Enter", isComposing: true })` 就能测（`views/ime-enter.test.tsx`）。
+- **Every composer `onKeyDown` handling Enter / Esc must start with `if (composing(e.nativeEvent)) return;`** (`lib/send-history.ts`, checks `isComposing || keyCode === 229`). Browsers still deliver Enter used to confirm Japanese conversion or commit English through Pinyin. Without a composition check, incomplete text creates to-dos, saves titles, or adds list items. Esc likewise cancels composition and closes the whole row. Test in jsdom with `new KeyboardEvent("keydown", { key: "Enter", isComposing: true })` (`views/ime-enter.test.tsx`).
 
-## 推送是尽力而为，页面要有自己的兜底（2026-11-05，#3139）
+## Pushes are best-effort; pages need their own fallback (2026-11-05, #3139)
 
-页面靠 WebSocket 推送跟着对话；队列满、连接看着开着其实断了、服务端的 bug 都会让一条推送丢掉，而 Agent 停了就没有下一批来露馅。会话列表照样在推（`sessions_delta`），所以页面能自己发现：列表的 `updated_at` 比手上最新 item 的 `ts` 新、又一阵没收到 items，就按 `after_seq` 拉一次（`lib/stale-page.ts`，节流 10 秒、前台才拉）。比较的是「文件改过」和「页面有的」，不是「推送到没到」，所以不依赖任何一条推送路径是好的；拉到东西就静默合并，反复需要才说「不是实时的」。
-写这类检查时注意：没有 item 的写入（标题、模式）也会让 `updated_at` 前进，拉回来是空的，要记下「这个 `updated_at` 已经查过」，别每 10 秒重拉；拉回来的 item 要和同时到的推送去重（只数 `seq` 大于 `covered` 的），否则健康的流也会被算成丢了。
+Pages follow chats through WebSocket pushes. Full queues, apparently-open dead connections, or server bugs can lose a push; after the Agent stops, no next batch exposes it. Session lists still push (`sessions_delta`), so pages can detect stale content: list `updated_at` newer than latest item's `ts`, with no items for a while, triggers an `after_seq` fetch (`lib/stale-page.ts`, 10-second throttle, foreground only). Compare "file changed" with "page content," not "push arrived," avoiding dependence on any particular healthy push path. Merge retrieved data silently; label "Not real-time" only if fallback repeats.
+Writes without items (titles, modes) also advance `updated_at`, returning empty fetches. Record "Already checked this `updated_at`" to avoid refetching every 10 seconds. Deduplicate fetched items against concurrent pushes (count only `seq` above `covered`), or healthy streams appear to lose data.
 
-## 脚本滚动不看减弱动态效果（2026-11-05，#2664）
+## Scripted scrolling ignores reduced motion (2026-11-05, #2664)
 
-- `styles.css` 里 `prefers-reduced-motion` 的全局规则只把 CSS 动画、过渡压到 1 ms，管不到 JS 里显式传的 `scrollTo({ behavior: "smooth" })` / `scrollIntoView({ behavior: "smooth" })`，照样动画滚过去。
-  脚本滚动一律传 `scrollBehavior()`（`src/ui/stream/motion.ts`，复用 `prefersReducedMotion`），别再各写一遍 `matchMedia` 字符串。
+- Global `prefers-reduced-motion` rules in `styles.css` reduce CSS animation / transition duration to 1 ms, but cannot control explicit JS `scrollTo({ behavior: "smooth" })` / `scrollIntoView({ behavior: "smooth" })`.
+  All scripted scrolling must use `scrollBehavior()` (`src/ui/stream/motion.ts`, reuses `prefersReducedMotion`), not duplicate `matchMedia` strings.
 
-## 减弱动态与忙碌指示（2026-11-05，#3475）
+## Reduced motion and busy indicators (2026-11-05, #3475)
 
-- **全局「动画压到 1ms × 1 次」会把转圈和呼吸圆点一起冻住**，用户看不出还在忙。忙碌指示（转圈、工作中 / 连接中的圆点、加载的流光和像素格、骨架脉动）带 `busy-motion` 类，样式里用类选择器压过 `*` 的 `!important`（两边都是 `!important`，看选择器优先级），放慢到 2.4 秒循环；`breathe` 在减弱动态下重定义成只有透明度。`phaseTone().color` 带着这个类，所以不改 `Sidebar.tsx` 的两处圆点也生效。
-- **Tailwind 靠扫源码找类名**：`group-hover/sec:invisible` 这类变体要整串写在源码里，不能用 `replaceAll` 拼，拼出来的不会进 CSS。
-- **一排计数要对齐，就别给右边的按钮留宽度**：机器行没有 ⋯，工作区行有，留了宽度的那行计数就左移 24px。⋯ 改成绝对定位叠在行尾，悬停 / 键盘焦点时计数 `invisible`；触屏的 ⋯ 一直在，整个树的标题行一起留出 44px（和会话行一样），右缘照样对齐。
+- **Globally reducing animations to 1ms × 1 iteration freezes spinners and breathing dots**, hiding ongoing work. Busy indicators (spinners, Working / Connecting dots, loading shimmer / pixel grids, skeleton pulses) use `busy-motion`; its class selector overrides `*` `!important` by specificity (both important), slowing cycles to 2.4 seconds. Redefine `breathe` as opacity-only under reduced motion. `phaseTone().color` includes the class, so both `Sidebar.tsx` dots inherit it without changes.
+- **Tailwind scans source for class names**: variants such as `group-hover/sec:invisible` must appear as complete literal strings, not assembled with `replaceAll`, or CSS omits them.
+- **Aligned count rows must not reserve space for right-side buttons**: machine rows have no ⋯, workspace rows do, shifting counts 24px left. Absolutely position ⋯ over the row end; hide counts on hover / keyboard focus with `invisible`. Touch ⋯ is always visible; all tree heading rows reserve 44px (like session rows), preserving right alignment.
 
-## 上下文块的正文不能留下能闭合它的标签（2026-11-06，#3676）
+## Context bodies must not retain closing tags (2026-11-06, #3676)
 
-- 拼 `<jarvis-context>` / `<persona-context>` 块时，正文里的结束标签只 `replace` 一遍挡不住嵌套写法：`</jarvis-</jarvis-context>context>` 删完正好剩一个结束标签，块提前闭合，后面的外部内容（收件箱交给助手的邮件、消息）变成用户自己打的字，模型也当成用户的指示。「删到不变」能挡住，但轮数等于嵌套深度，恶意正文几百 KB 就让主线程卡几秒。网页拼块一律经 `lib/context-body.ts` 的 `contextBody`：先删一遍，删出来的再把 `<` 写成 `&lt;`（不删字符就拼不出新标签），两遍、线性；匹配口径对齐 hub 的 `closingTag`（大小写、斜杠两边和 `>` 前的空白）。回归要用 `parseUserText` 解析生成的整条消息，看块外只剩用户写的话。
+- A single `replace` stripping closing tags from `<jarvis-context>` / `<persona-context>` bodies fails on nesting: removing from `</jarvis-</jarvis-context>context>` leaves another closing tag. The block ends early, making external email / message content handed from Inbox to assistant look like user-written instructions. Repeating until stable blocks this, but iterations equal nesting depth, so malicious hundreds-of-KB bodies block the main thread for seconds. Always assemble through `contextBody` in `lib/context-body.ts`: strip once, then escape newly formed `<` as `&lt;` (without deleting characters, no new tags can form). Two linear passes; matching agrees with hub `closingTag` (case and whitespace around slash / before `>`). Regression parses the whole generated message with `parseUserText`, verifying only the user's own text remains outside blocks.
 
-## 无限循环的 CSS 动画在空闲时也贵（2026-11-06，#4065）
+## Infinite CSS animations cost resources even while idle (2026-11-06, #4065)
 
-- **React 在根节点监听 `animationiteration` 等动画事件**，所以页面上每个 `infinite` 的 CSS 动画每转一圈都派发一次事件，跟着一次整页样式重算（SVG 里的还多一次布局），哪怕没人在看、元素在视口外。实测（生产构建，Chrome，空闲 30 秒）：`/` 上 6 个转圈的工作中标记 TaskDuration 0.64 s、重算 668 次；`/settings` 形象选择器的五个团子 1.68 s、重算和布局各 646 次。
-- **转圈**：关键帧 `spin-long` 一个周期转 100 圈、时长乘 100（`lib/busy-motion.ts` 的 `SPIN_TURNS` / `spinStyle(ms)`，状态标记在 `styles.css` 里同样写），看起来一样快，事件少 100 倍；减弱动态下用 `--busy-cycles`（`@property`，不继承）把 2.4 秒乘回去，仍是每圈 2.4 秒。别再写 `spin 700ms linear infinite`，`busy-motion.test.ts` 会拦。
-- **非线性的循环**（团子的眨眼、摇摆、脉冲）没法这样拉长：改用 Web Animations（`el.animate(…, { iterations: Infinity })`，`views/assistant/face-motion.ts`），它不派发 CSS 动画事件，重算和布局降到 0。关键帧的缓动要写在每个关键帧上（CSS 的 `animation-timing-function` 是逐段的，WAAPI 的整体 `easing` 不是），在 `useLayoutEffect` 里启动，首帧才和 CSS 一致。
-- 验证「看起来没变」：两边都把 `document.getAnimations()` 暂停到同一个 `currentTime` 再截图，逐字节比较；量开销用 CDP `Performance.getMetrics` 的 TaskDuration / RecalcStyleCount / LayoutCount 差值。
+- **React listens for `animationiteration` and other animation events at the root**, so every `infinite` CSS animation emits an event each cycle, triggering whole-page style recalculation (and layout for SVG), even offscreen or unwatched. Measured in production Chrome over 30 idle seconds: 6 spinning Working markers on `/` used 0.64 s TaskDuration and 668 recalculations; five avatars in `/settings` used 1.68 s, 646 recalculations and layouts each.
+- **Spinners**: `spin-long` turns 100 rotations per cycle, duration ×100 (`SPIN_TURNS` / `spinStyle(ms)` in `lib/busy-motion.ts`; state markers do the same in `styles.css`). Same visual speed, 100× fewer events. Reduced motion uses `--busy-cycles` (noninherited `@property`) to scale 2.4 seconds back up, keeping 2.4 seconds per rotation. Do not add `spin 700ms linear infinite`; `busy-motion.test.ts` rejects it.
+- **Nonlinear loops** (avatar blinks, sways, pulses) cannot be stretched this way. Use Web Animations (`el.animate(…, { iterations: Infinity })`, `views/assistant/face-motion.ts`), which emits no CSS animation events, dropping style / layout counts to 0. Put easing on each keyframe (CSS timing applies segment by segment; WAAPI overall `easing` does not). Start in `useLayoutEffect` for the same initial frame.
+- Verify unchanged appearance by pausing both versions' `document.getAnimations()` at the same `currentTime`, taking screenshots, and comparing byte-for-byte. Measure cost through CDP `Performance.getMetrics` differences in TaskDuration / RecalcStyleCount / LayoutCount.
 
-## 横排的一行放不下时折行，不靠横向滚动（#3594）
+## Wrap horizontal rows when they do not fit; do not rely on horizontal scrolling (#3594)
 
-滚动条全局隐藏，鼠标滚轮只能竖着滚：横向滚动的一行（设置的分类条）放不下时，后面的项鼠标用户既看不到也滚不到。放不下就折行（按钮文字仍单行）或收进菜单。
-顶栏因此变高时，叠在顶栏下面的东西（App.tsx 的连接状态胶囊）不能按 56px 算：设置页把顶栏实际高度写到 `<main>` 的 `--page-header`。
+Scrollbars are globally hidden, and mouse wheels scroll vertically only. Overflowing horizontal rows (Settings categories) hide later items from mouse users, who cannot scroll to them. Wrap the row (button text stays single-line) or use a menu.
+If the header grows, elements below it (App.tsx connection-status pill) cannot assume 56px; Settings writes actual header height to `<main>` `--page-header`.
 
-## 回复重新挂载时别再淡入一遍（2026-11-06，#4107）
+## Do not fade answers in again after remounting (2026-11-06, #4107)
 
-- **对话里的回复会整个重新挂载**：流式结束时 item 的 `Answer` 接替流式的那份；下一条回复进同一段时，`SegmentView` 按 `live` 切的 `cut` 变了，原来的回答从一组 `WorkNodes` 挪到另一组。带 `fade` 的 `Markdown` 重新挂载就是新的时间线：已经显示的整段字淡出再淡入（肉眼看得见），每个字一个 span，0.35 s 后再整块换回普通 Markdown。CPU profile 看到的「开始和结束各一个长帧」就是它，一段里推来的回复越多越慢。现在按文字记住最近的时间线（`wordFade.ts` 的 `rememberShown` / `shownBefore`），重新挂载的接着用，淡完的字直接是普通文字。
-- **量这种帧先上 2× CPU 降速**：本机不降速时淡入开 / 关的最长帧都在 50–100 ms，被别的进程的噪声盖住；2× 下差别稳定。每组测量前重启假 hub：`/mock/say` 的回复都进同一段，越跑越长。
-- **`useSyncExternalStore` 的更新总是同步的**，包在 `startTransition` 里也一样：按需加载的插件到了要让一批回复在 transition 里重画，用 `useState` + 订阅。另外插件是函数，`useState(plugin)` / `setState(plugin)` 会把它当初始化函数 / 更新函数调用，要写成 `() => plugin`。
+- **Chat answers remount wholesale**: when streaming ends, item `Answer` replaces the streaming version. When another answer joins the same segment, `SegmentView`'s live-dependent `cut` changes and moves the old answer between `WorkNodes` groups. Remounting `Markdown` with `fade` creates a new timeline: already-visible text visibly fades out / in, one span per word, then switches back to ordinary Markdown after 0.35 s. This explains CPU-profile long frames at both start and end; more answers in a segment make it slower. Now remember recent timelines by text (`rememberShown` / `shownBefore` in `wordFade.ts`); remounts reuse them, and finished words render normally.
+- **Measure these frames with 2× CPU throttling first**: unthrottled, longest frames with fade on / off both lie at 50–100 ms, obscured by other processes; 2× gives stable differences. Restart mock hub before each measurement group; `/mock/say` appends replies to the same ever-growing segment.
+- **`useSyncExternalStore` updates are always synchronous**, even within `startTransition`. To redraw answers in a transition after a lazy-loaded plugin arrives, use `useState` + subscription. Plugins are functions: `useState(plugin)` / `setState(plugin)` calls them as initializer / updater, so use `() => plugin`.
 
-## 卸载成功后的清理警告（#4757）
+## Cleanup warnings after successful uninstall (#4757)
 
-- 成功响应也可能带用户必须处理的 warning，不能只 toast「已卸载」就丢弃。多条目录清理提示需要完整留在结果对话框，确认后再关闭和刷新；短时 toast 有容量和时限，不适合承载它。
-- 结果阶段不再提供卸载按钮，避免把已经成功的操作重试成「没有这个扩展」。无警告仍走原成功路径，真实错误仍保留原重试语义。用真正会在 onDone 卸载子组件的父组件测警告是否仍可见，避免浅层模型测试漏掉生命周期。
+- Success responses may include warnings requiring user action; do not discard them behind an "Uninstalled" toast. Keep all directory-cleanup notices in the result dialog until confirmation, then close and refresh. Short-lived toasts lack the space and duration for this.
+- No uninstall button in the result phase, avoiding retry of a successful operation into "Extension not found." No-warning success follows the original path; real errors retain retry semantics. Test with a parent that truly unmounts the child in onDone, proving warnings stay visible beyond shallow model tests.
 
-## service worker 和页面别共用有值的模块（2026-11-06，#4464）
+## Service workers and pages must not share modules with runtime values (2026-11-06, #4464)
 
-- `sw.js` 是 `vite.config.ts` 里的一个入口，按 classic script 注册：页面也 import 了 `sw.ts` 依赖的某个模块的值（常量、函数）时，Rollup 把它拆成共享 chunk，`sw.js` 开头变成 `import … from "./assets/…"`，classic worker 一加载就语法错，整个 service worker 装不上（离线外壳、通知点击都没了），`tsc` 和单测都看不出来。
-  页面要用的常量自己再写一份（单测里比对两份一样），只 `import type`。`npm run build` 会查（`vite.config.ts` 的 `classic-worker`，#5070）：`sw.js` 里有 import 就构建失败并说明原因。
+- `sw.js` is a `vite.config.ts` entry registered as a classic script. If a page imports runtime values (constants, functions) from a module also used by `sw.ts`, Rollup extracts a shared chunk, and `sw.js` starts with `import … from "./assets/…"`. The classic worker fails with a syntax error, preventing the whole service worker from installing (offline shell and notification clicks stop working); `tsc` and unit tests do not catch this.
+  Duplicate page-needed constants locally (unit-test that both copies agree), with only `import type` shared. `npm run build` checks this (`classic-worker` in `vite.config.ts`, #5070): an import in `sw.js` fails the build with an explanation.
 
-## 词条名别以复数后缀结尾（2026-11-05）
+## Catalog keys must not end in plural suffixes (2026-11-05)
 
-- 网页的词条 key 以 `_zero` / `_one` / `_two` / `_few` / `_many` / `_other` 结尾会被当成复数形式（`catalog.test.ts`、`t()` 的 `pluralKey`）：起名 `kind_other` 的「其它」词条，检查会报「key 不存在」（它只认去掉后缀的 `kind`）。「其它 / 通用」用 `_generic` 这类名字。
+- Web keys ending `_zero` / `_one` / `_two` / `_few` / `_many` / `_other` are treated as plural forms (`catalog.test.ts`, `t()` `pluralKey`). An "Other" entry named `kind_other` fails "Key does not exist" because only suffix-free `kind` is recognized. Use names such as `_generic` for Other / General.
 
 ## Personal-Agent sidebar failures (#5175)
 
@@ -350,12 +350,12 @@
 
 ## Back lands where the page was scrolled (2026-11-06, #5133)
 
-- Pages scroll in their own `overflow-y-auto` box under `<main>`, not the window, so the browser's scroll restoration does nothing for them. 总览 unmounts when a card opens a conversation, and 设置's phone list shares one scroller with every category (the category's shorter content clamps `scrollTop`), so Back landed at the top. The inbox never had the problem: its list stays mounted, hidden, under the opened item.
+- Pages scroll in their own `overflow-y-auto` box under `<main>`, not the window, so the browser's scroll restoration does nothing for them. Overview unmounts when a card opens a conversation, and Settings' phone list shares one scroller with every category (the category's shorter content clamps `scrollTop`), so Back landed at the top. The inbox never had the problem: its list stays mounted, hidden, under the opened item.
 - `useScrollMemory(ref, key)` (`lib/scroll-memory.ts`) remembers `scrollTop` per key and restores it only when the router saw Back / Forward land on the current address (`takeReturn`); a link or a tap starts at the top. Decide the target once per key: React's StrictMode runs the layout effect twice in development, and the second run would find the return already taken.
 - Checking it in a browser: an edit made while Vite is running can keep serving the old module (the "negative control" passed with the hook disabled). Restart Vite with `--force` and fetch the module to confirm before trusting a before/after comparison.
 
-## 输入框长高后对话停在最新一行上面（2026-11-06，#5375）
+## Growing composer leaves chat above the latest row (2026-11-06, #5375)
 
-- 自动长高的 textarea 每次测量都先 `height: 0` 再读 `scrollHeight`：这一次布局里坞变矮、对话区变高，浏览器把对话的 `scrollTop` 夹到更高的视图里，输入框恢复高度后对话就停在最新一行上面（差的正好是输入框的高度）。没到上限时对话区每次都变矮，ResizeObserver 把它拉回底部，看不出来；到了上限（240px）对话区高度不再变，ResizeObserver 不触发，每按一个键都留下这段差。测量时让 textarea 的父元素用 `min-height` 撑住原高度。
-- 坞（`[data-chat-dock]`）在所有宽度下都限高 `DOCK_MAX`，输入框以上的东西放进能缩、能自己滚动的 `[data-chat-dock-above]`：原来只有窄屏 / 侧边面板限高，宽屏矮窗口里主对话的任务提问 + 卡片 + 输入框比可用高度还高，对话区被挤成 0；窄屏限高后坞内容又从顶边溢出、画在对话上面。
-- 验证要打到上限以上（二三十行），量「对话区底边 = 坞顶边」和 `scrollHeight - scrollTop - clientHeight`；只打六行的 e2e 测不出来。
+- Autosizing textareas set `height: 0` before reading `scrollHeight`. In that layout, the dock shrinks and chat grows; the browser clamps chat `scrollTop` to the larger viewport, so restoring composer height leaves chat above the latest row by exactly that height. Below the cap, chat keeps shrinking and ResizeObserver restores the bottom, hiding the issue. At the 240px cap, chat height no longer changes, ResizeObserver does not fire, and every keystroke leaves the gap. Hold the textarea parent's original height with `min-height` during measurement.
+- Cap the dock (`[data-chat-dock]`) at `DOCK_MAX` at every width, putting content above the composer in a shrinkable, independently scrolling `[data-chat-dock-above]`. Previously only narrow screens / side panels were capped; in short wide windows, main-chat task questions + cards + composer exceeded available height and squeezed chat to 0. On capped narrow screens, dock contents overflowed upward over chat.
+- Test beyond the cap (20–30 lines), measuring "chat bottom = dock top" and `scrollHeight - scrollTop - clientHeight`. An e2e test typing only 6 lines cannot expose it.

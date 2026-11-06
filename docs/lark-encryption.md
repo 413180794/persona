@@ -1,60 +1,60 @@
-# 飞书加密消息迁移（#689）
+# Lark encrypted-message migration (#689)
 
-## 已接入：读取展示
+## Integrated: reading and display
 
-飞书网关的 Agent 接口保留旧 `parts` / `textPreview`，新增版本化的 `olk` 展示投影。Hub 转发此字段，改写其中的媒体 URL；iOS 在成功解密时区分正文、对外展示和群密钥分发提示。无法解密时显示公开内容，并标注「加密消息 · 对外展示」；缓存未重新校验时标注「加密消息 · 仅显示公开内容」，不将外显误呈现为正文；普通文字即使含有「加密群密钥分发消息」也不会被误判为系统提示。
+The Lark gateway Agent API retains old `parts` / `textPreview`, adding a versioned `olk` display projection. Hub forwards it and rewrites media URLs; iOS distinguishes decrypted body, public display content, and group-key distribution notices. If decryption fails, show public content labeled "Encrypted message · Public display"; before cache revalidation, label "Encrypted message · Public content only," never presenting public display as the body. Ordinary text containing `加密群密钥分发消息` (encrypted group-key distribution message) is not mistaken for a system notice.
 
-使用现有密钥库及 Agent 明文访问授权，不新增解密权限。授权中途撤销或账号变化时，上游不返回明文展示字段。未知或缺失协议版本不使用明文字段。缺失 / null 的公开内容统一视为空数组；单条可选加密投影不完整不阻断整页普通消息。图片仍沿用上游封面，本阶段不接加密图片的密钥或解密下载。
+Uses existing vault and Agent plaintext-access authorization, no new decryption permission. If authorization is revoked or account changes, upstream omits plaintext display fields. Unknown / missing protocol versions never use plaintext fields. Missing / null public content becomes an empty array; an incomplete optional projection in one message does not block an entire ordinary-message page. Images still use upstream covers; encrypted-image keys / decrypting downloads are out of scope here.
 
-引用消息携带相同的展示信息；聊天引用与输入框引用在锁定、离线缓存、恢复草稿时均标明「对外展示」或「仅显示公开内容」，不会把外显当作被引用的原文。复制只取当前可见正文；加密消息不进入自动翻译。iOS 的消息和引用编码落盘时仅保留公开内容，清除旧文本字段、正文 parts 及结构化投影里的明文；重新打开后由服务器重新验证权限再读取。**此保护只覆盖 iOS 消息快照及引用草稿的编码路径**，不表示所有存储均已清除明文。收件箱的飞书来源和 Agent 上下文管线仍可能把旧 `textPreview` 压平后保存为正文（当时在 hub 的 lark*.go 和 lark_agent.go，#1571 起这两条链路都在接飞书的插件里，开源仓库的 server 代码不再读 `textPreview`）；其他消费方需要单独审计。此保护适用于带新投影的消息，无法从旧服务器已经压平的普通文字反推出加密属性。
+Quoted messages carry the same display information. Chat / composer quotes label "Public display" or "Public content only" while locked, offline-cached, or restoring drafts, never treating public display as quoted original text. Copy uses only currently visible body; encrypted messages do not auto-translate. When iOS persists messages / quotes, encoding retains only public content, clearing old text fields, body parts, and plaintext inside structured projections. Reopening rechecks permission on the server before reading. **This protects only iOS message-snapshot and quote-draft encoding paths**, not a claim that all storage is plaintext-free. Lark Inbox sources and Agent context pipelines may still flatten old `textPreview` into persisted bodies (formerly hub lark*.go / lark_agent.go; since #1571 both paths live in the Lark extension, and open-source server code no longer reads `textPreview`). Audit other consumers separately. This applies to messages carrying new projections; encryption cannot be inferred from plain text already flattened by old servers.
 
-## 验证
+## Validation
 
-- 2026-11-03 最新审查修复后：加密、持久化、附件、发件箱、分页共 71 项单元测试 / 5 个 suite 通过；包括锁定、未授权、缺钥匙、未知版本、引用草稿与消息快照不保存解密正文，以及引用外显的明确标记；纯图片或表情外显的引用只保留一个状态标签，不再重复“加密消息”。
-- iPhone 18 Pro：浅色液态玻璃、深色 BeautifulUI 各一次实际聊天流程，检查正文、引用、对外展示、单独／附带的密钥提示、锁定公开内容及普通同文消息。截图 [light](screenshots/lark-encryption/light.png)、[dark](screenshots/lark-encryption/dark.png) 均已逐张检查；新增 [浅色引用](screenshots/lark-encryption/light-quote.png) / [深色引用](screenshots/lark-encryption/dark-quote.png)，UI 测试验证聊天引用与输入框引用的公开内容标记。
-- Xcode 26.0：同步 #713 合入后的主线及本轮修复后，iOS（含 Watch / 扩展）及 Mac 构建通过；Mac 关闭签名，仅验证兼容编译。
-- Hub：`go test ./internal/lark`，覆盖投影、引用及媒体 URL 转发；关闭状态或未知版本丢弃意外正文。
-- 上游独立分支同步主线后：读取与实际路由目录 30 项测试通过；部署用旧版本补丁另有 18 项读取测试。格式、lint、类型检查通过。
-- UI 数据和密钥结果均为 mock；不向真实会话发送测试消息。真实账号仅做读取核验。
+- After latest review fixes on 2026-11-03: 71 unit tests / 5 suites covering encryption, persistence, attachments, outbox, pagination passed. Includes locked / unauthorized / missing key / unknown version, no decrypted bodies in quote drafts or snapshots, explicit public-display quote labels. Image-only / emoji-only public-display quotes retain one status label, without repeating "Encrypted message."
+- iPhone 18 Pro: real chat flows once in light Liquid Glass and dark BeautifulUI, inspecting bodies, quotes, public display, standalone / accompanying key notices, locked public content, and identical ordinary text. [Light](screenshots/lark-encryption/light.png) / [dark](screenshots/lark-encryption/dark.png) screenshots inspected individually; added [light quote](screenshots/lark-encryption/light-quote.png) / [dark quote](screenshots/lark-encryption/dark-quote.png), with UI tests verifying public-content labels in chat / composer quotes.
+- Xcode 26.0: iOS (Watch / extensions included) and Mac built after syncing mainline with #713 and these fixes. Mac signing disabled; compilation compatibility only.
+- Hub: `go test ./internal/lark`, covering projection, quotes, media URL forwarding; disabled state / unknown versions discard unexpected bodies.
+- Upstream independent branch after mainline sync: 30 reading / actual-route tests passed; old-version deployment patch has another 18 reading tests. Format, lint, type checks passed.
+- UI data and key results are mocks; no test messages sent to real chats. Real account used only for read verification.
 
-审查补充：Go 与 Swift 均测试了缺失、null、错误类型的可选投影，以及正常消息与异常投影共存的整页解码。单条异常投影按关闭状态展示；不回退到旧字段中的明文。
+Review addition: Go / Swift test missing, null, and wrong-type optional projections, plus full-page decoding with normal messages alongside invalid projections. Invalid individual projections display as disabled; never fall back to old-field plaintext.
 
-## 手机解锁与加密文字发送（#689）
+## Phone vault unlock and encrypted text sending (#689)
 
-仅从首页「消息」进入的聊天增加「普通消息 / 加密消息」选择。选择加密后，再选一段历史内容作为对外展示；候选与飞书网关网页相同（两周前一天内的历史文字）。没有候选时保留草稿，不偷偷换成固定占位。首次发送遇到密钥库锁定，手机输入密码解锁；已开启统一密码时使用飞书网关登录密码，否则使用密钥库密码。密码只在解锁请求中短暂传递，不进入草稿、发件箱、日志或配置。
+Only chats entered through home Messages gain "Ordinary / Encrypted message" selection. After choosing encryption, select historical content for public display; candidates match the Lark gateway web UI (historical text within one day two weeks earlier). Without candidates, retain the draft, never silently substitute a fixed placeholder. If the vault is locked on first send, enter a password on phone: gateway login password when unified password is enabled, otherwise vault password. Password exists only briefly in the unlock request, never drafts, outbox, logs, configuration.
 
-收件箱仍使用原输入区。两处共用同一个草稿和发件箱；若从收件箱打开尚未发出的加密草稿，保留草稿并引导回「消息」，不会按普通文字发出。首版支持普通私聊/群聊里的文字及引用回复；加密附件、话题群和线程输入区继续留在后续范围。
+Inbox keeps the original composer. Both entries share drafts / outbox; opening an unsent encrypted draft from Inbox retains it and guides back to Messages, never sending plaintext. First version supports text / quoted replies in ordinary private and group chats; encrypted attachments, topic groups, thread composers remain future scope.
 
-### 部署与授权
+### Deployment and authorization
 
-需要同时升级支持原生加密接口的飞书网关及 Persona Hub；仅安装新 App 不会启用此能力。部署状态需单独核验，不能用 App 已安装或 PR 已合入代替。
+Upgrade both the Lark gateway with native encryption APIs and Persona Hub; a new app alone does not enable it. Verify deployment separately, not from app installation or merged PRs.
 
-1. 在飞书网关的网页创建密钥库；读取解密正文的 Agent 授权仍沿用网页现有设置，原生发送授权不会开启它。
-2. 在飞书网关的部署环境设置独立的原生加密凭据和账号（变量名见接飞书的扩展的说明）。凭据使用新生成的 43–128 位 base64url 字符，不能复用普通 Agent token；账号是实际飞书用户 ID，不是网关的账号槽位编号。
-3. 在接飞书插件的设置里把密钥 `native_olk_token` 设为同一个独立凭据（#1571 起 hub 不再读 `hub.json` 的 `lark.native_olk_token`，见 `docs/config.md`）；`lark.account` 仍选择网关上已登录的账号槽位。重启两侧服务使配置生效。不要把凭据放进 App、仓库、PR、助手环境或二维码。
-4. 撤销时移除或轮换网关的原生凭据并重启；旧 Hub 无法继续原生解锁、准备密文或提交新的加密发送。已经被上游接受的消息不受撤销影响。普通 Agent 访问及读取解密授权互相独立。
+1. Create a vault in the gateway web UI. Agent authorization for decrypted-body reads stays in existing web settings; native-send authorization does not enable it.
+2. Set independent native-encryption credentials / account in gateway deployment (variable names in the Lark extension docs). Generate new 43–128-character base64url credentials; never reuse ordinary Agent tokens. Account is the actual Lark user ID, not a gateway slot number.
+3. Set extension secret `native_olk_token` to the same independent credential (since #1571 hub no longer reads `lark.native_olk_token` from `hub.json`; see `docs/config.md`). `lark.account` still selects a logged-in gateway slot. Restart both services. Never put credentials in app, repository, PR, assistant environment, or QR codes.
+4. Revoke by removing / rotating gateway native credentials and restarting. Old hubs can no longer unlock, prepare ciphertext, or submit new encrypted sends. Upstream-accepted messages are unaffected. Ordinary Agent access and decrypted-reading authorization are independent.
 
-没有独立授权、账号已变化、旧版本没有接口、密码错误或加密失败，都明确失败并保留输入，不回退明文。首次创建、密码重置后恢复以及授权配置仍在网页/部署端完成；手机负责解锁和发送，不导出私钥。公网沿用 Hub TLS 要求。
+Missing independent authorization, account changes, unsupported interfaces, wrong passwords, or encryption failures explicitly fail and retain input, never fallback to plaintext. Vault creation, recovery after password resets, authorization configuration remain web / deployment tasks. Phone only unlocks / sends, never exports private keys. Public access follows Hub TLS requirements.
 
-### 版本不支持时
+### Unsupported versions
 
-选择加密或打开历史外显前先读取原生加密状态，使用当前会话的 Hub 与账号，不比较版本字符串。Hub 在握手中声明 `lark_native_encryption`，客户端仍实际请求状态，以兼容已支持接口但尚未声明能力的版本。Hub 缺少接口时提示升级 Hub；Hub 已支持但飞书网关缺少接口时返回 `lark_gateway_upgrade_required`（426），提示升级飞书网关；独立授权缺失仍是 `OLK_VAULT_NATIVE_NOT_AUTHORIZED`（403），不是版本错误。网络、登录和会话错误不冒充需要升级。
+Before selecting encryption or opening historical public-display content, fetch native encryption state for the current chat's hub / account, without version-string comparison. Hub advertises `lark_native_encryption` in handshake, but clients still request state for versions supporting the endpoint without advertising it. Missing hub endpoint prompts a Hub upgrade; supported hub with missing gateway endpoint returns `lark_gateway_upgrade_required` (426), prompting a gateway upgrade. Missing authorization remains `OLK_VAULT_NATIVE_NOT_AUTHORIZED` (403), not a version error. Network / login / session errors do not masquerade as upgrade requirements.
 
-提示提供「重新检查」。选择加密的意图与原有输入继续保存，失败不清空草稿，也不会偷偷切回普通发送。正常发送依然重新检查账号与授权。历史候选、解锁、准备密文、提交密文的旧接口错误也统一转换为可读提示，避免恢复旧草稿或部署切换时再次出现 `not found`。
+Offer "Check again." Preserve encryption intent and input; failures never clear drafts or silently switch to ordinary sending. Normal sending rechecks account / authorization too. Old-interface errors in historical candidates, unlock, ciphertext preparation / submission all map to readable notices, avoiding `not found` when restoring old drafts or switching deployments.
 
-### 重试与本机存储
+### Retries and local storage
 
-先由密钥库生成密文，再原子保存草稿清空与待发送记录，然后提交。每条密文有稳定 UUID；一个逻辑消息可能含先行的群密钥分发消息，最后一条使用原消息 UUID，前序 ID 从该 UUID 确定性派生。中断后重试使用相同密文和 ID，不重新加密，避免重复发出。发送边界再次校验账号，飞书网关使用 `expectedSenderId` 抵御登录切换；收件箱普通发送没有改变。
+Generate ciphertext in the vault, atomically persist draft clearing and pending-send record, then submit. Each ciphertext has a stable UUID. A logical message may include preceding group-key distribution; the final message uses the original UUID and preceding IDs derive deterministically from it. Retry after interruption with identical ciphertext / IDs, never reencrypting and duplicating. Recheck account at send boundary; gateway `expectedSenderId` guards login switches. Ordinary Inbox sending unchanged.
 
-包含加密草稿或加密待发送记录时，整份本机发件箱快照使用 AES-GCM 保存，密钥仅在设备钥匙串；钥匙串暂不可读时不能覆盖旧快照。普通草稿继续兼容原格式。此处保护用户自己输入的待发送正文，不能据此宣称服务端所有消费路径都不保存明文（读取展示边界见上文）。加密发送只根据服务端消息 ID 或 client ID 合并回显，不靠正文相同或超时删除。
+If any encrypted draft / pending send exists, encrypt the entire local outbox snapshot with AES-GCM, key only in device keychain. Temporarily unreadable keychain must not overwrite an old snapshot. Ordinary drafts retain old-format compatibility. This protects user-entered pending bodies, not all server consumers (reading boundaries above). Encrypted-send echo merging uses only server message ID / client ID, never same-body matching or timeout removal.
 
-### 原生发送验证
+### Native sending validation
 
-- 62 项 Swift 测试 / 8 个 suite 通过，覆盖设备密钥不可用、整份快照加密、旧草稿兼容、多条密文稳定 ID / 引用位置、账号和会话变化拒绝、回显不按超时消失，以及字号、图标和设计 token 检查。
-- `go test ./internal/lark ./internal/hub -count=1` 在隔离 Postgres 中通过；包含原生授权、禁止凭据重定向、错误不回显密码、只读角色拒绝写入、没有明文降级、Hub 重建后幂等回执和账号变化拒绝。`go vet` 与服务端编译通过。
-- 额外整包 `-race` 检查未全绿：5 个已有 Link / Update 测试报告竞争；在未改动的基线 `7a519db7` 上逐一复现。本功能的定向测试通过，不把整包 race 写成通过。macOS 临时路径过长导致的 Unix socket 问题通过隔离测试运行器使用短临时目录排除，没有修改产品路径。
-- Xcode 26.0 iOS（含 Watch / 扩展）和 Mac 构建通过；Mac 关闭签名。所有发送、解锁和密码均来自隔离 mock，不向真实会话发消息；部署和真实端到端加密发送尚未验证。
+- 62 Swift tests / 8 suites passed: unavailable device key, whole-snapshot encryption, old drafts, stable multi-ciphertext IDs / quote positions, account / session-change rejection, no timeout-based echo disappearance, type scale, icons, design tokens.
+- `go test ./internal/lark ./internal/hub -count=1` passed against isolated Postgres: native authorization, no credential redirects, no password echoes in errors, read-only write rejection, no plaintext fallback, idempotent receipts after Hub reconstruction, account-change rejection. `go vet` and server build passed.
+- Additional whole-package `-race` was not fully green: 5 existing Link / Update tests reported races, reproduced individually on unchanged baseline `7a519db7`. Targeted feature tests passed; do not report whole-package race success. macOS Unix-socket failure from long temporary paths was ruled out with short isolated-runner scratch paths, without product-path changes.
+- Xcode 26.0 iOS (Watch / extensions included) / Mac built, Mac signing disabled. All sends, unlocks, passwords used isolated mocks, no real-chat sends; deployment and real end-to-end encrypted sending remain unverified.
 
-- iPhone 18 Pro 浅、深色各 3 个 UI 流程通过；[16 张最终截图](screenshots/lark-native-encryption/README.md) 已逐张检查。覆盖解锁失败再成功、失败重试、跨入口与强退恢复，以及普通收件箱保持原输入区。
+- iPhone 18 Pro: 3 UI flows each in light / dark passed; [16 final screenshots](screenshots/lark-native-encryption/README.md) inspected individually. Covers unlock failure then success, retry, cross-entry / force-quit recovery, ordinary Inbox composer unchanged.
 
-版本兼容回归（#1131）：7 项 Swift 测试（旧路由覆盖 404 / 405 与 4 种错误码表示）通过；4 个 UI 流程在浅、深色通过，新入口的 [8 张截图](screenshots/lark-encryption-compatibility/README.md) 已逐张检查。Go 的 lark / proto 测试、隔离 Postgres 下原生加密与握手测试及对应 `go vet` 通过。首次 UI 回归发现 mock 的通用 `not_found` 错误码未被转换，已补充产品处理和参数化用例；再次运行通过。
+Version compatibility regression (#1131): 7 Swift tests passed (old routes 404 / 405 and 4 error-code representations); 4 UI flows passed light / dark, with [8 screenshots](screenshots/lark-encryption-compatibility/README.md) individually inspected. Go lark / proto tests, isolated-Postgres native-encryption / handshake tests, and matching `go vet` passed. Initial UI regression found mock generic `not_found` unconverted; added product handling and parameterized cases, rerun passed.

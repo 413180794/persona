@@ -1,204 +1,204 @@
-# 引擎：herdr、Herdr App、Orca、Paseo
+# Engines: herdr, Herdr App, Orca, Paseo
 
-**一机一引擎**：Persona 通过「引擎」看到并驱动电脑上的 Claude Code / Codex。每台电脑选一个引擎，Agents 里只显示这个引擎里开着的会话；
-别处开的会话（其他引擎、普通终端）只显示成「未运行」的对话记录。默认是 herdr，以前的机器不选也照旧工作。
+**One engine per computer**: Persona sees and drives Claude Code / Codex through an engine. Each computer selects one; Agents shows live sessions only from it.
+Sessions elsewhere (other engines, ordinary terminals) appear only as "Not running" history. Default herdr preserves existing machines without an explicit choice.
 
-例外是 **「herdr + Herdr App（并列）」**：一台电脑同时在用经典 herdr 和 Herdr App（典型场景：人在电脑本地用终端里的 herdr，
-另一台电脑上的 Herdr App 通过 remote 连到这台机器开终端）时选它，两边的会话合并显示。下文「并列」一节有它的边界。
+Exception: **"herdr + Herdr App (side by side)"**. Choose this when both classic herdr and Herdr App operate on one computer (typically local terminal herdr,
+plus Herdr App on another computer opening terminals through remote). Sessions merge; boundaries are in "Side by side" below.
 
-另外，装了 **botmux** 的电脑上，botmux 里的会话会和所选引擎里的会话一起显示（下文「botmux」一节）：botmux 不占引擎选项，也不用选。
+On computers with **botmux**, its sessions appear alongside the selected engine ("botmux" below). It is not an engine option and needs no selection.
 
-**Paseo** 是不带终端的那个：它的 Agent 由 Paseo 通过各家的 SDK 来跑，node 经一个桥接上它，见 `docs/paseo.md`。
+**Paseo** is terminal-free: it runs Agents through provider SDKs, with node connected through a bridge; see `docs/paseo.md`.
 
-下文的「引擎」都指这个选择；接口、存储和 node 怎么切换见 `docs/protocol.md`「引擎」，设计和取舍见 `docs/plan-orca-support.md`。
+"Engine" below means this choice. APIs, storage, and node switching: `docs/protocol.md` ("Engines"); design / trade-offs: `docs/plan-orca-support.md`.
 
-## 引擎
+## Engines
 
-| 引擎 | 在 App 里叫 | 你的 Claude 开在哪 | 怎么认出来 |
+| Engine | App name | Where Claude runs | Detection |
 | --- | --- | --- | --- |
-| `herdr` | herdr | 终端里运行 `herdr`，在它的窗格里开 `claude` / `codex`（没在运行时 node 按需拉起，见「herdr 没在运行时」） | herdr 的 socket 能连上，或装了 `herdr` 命令 |
-| `herdr-core` | Herdr App | Herdr 桌面 App 里开的终端（App 背后的 herdr-core） | herdr-core 的 socket 有回应 |
-| `herdr-both` | herdr + Herdr App | 上面两个同时在用 | 两个运行时都检测得到 |
-| `orca` | Orca | Orca 桌面 App 里开的终端和 Orca 自己的 Claude 聊天（结构化会话），或另一台电脑上的 Orca 经 SSH 在这台起的远程 runtime 里的这些 | Orca（桌面 App 或远程 runtime）在运行，而且它的版本 Persona 认得 |
-| `paseo` | Paseo | Paseo 里的 Agent（它的桌面 App、`paseo` 命令开的；Claude Code、Codex、ACP 都算） | Paseo 的 daemon 在运行：它 home 里的 `paseo.pid` 写的地址有回应 |
+| `herdr` | herdr | Run `herdr` in a terminal, then `claude` / `codex` in its panes (node starts it on demand if absent; see "When herdr is not running") | Connectable herdr socket or installed `herdr` command |
+| `herdr-core` | Herdr App | Terminals opened in Herdr desktop app (herdr-core behind it) | Responsive herdr-core socket |
+| `herdr-both` | herdr + Herdr App | Both above | Both runtimes detected |
+| `orca` | Orca | Terminals and native Claude chats (structured sessions) in Orca desktop app, or its remote runtime launched here over SSH by Orca on another computer | Orca desktop / remote runtime running, with a Persona-compatible version |
+| `paseo` | Paseo | Paseo Agents (desktop app, `paseo` command; Claude Code, Codex, ACP all count) | Paseo daemon running; address in its home's `paseo.pid` responds |
 
-herdr 和 Herdr App 是同一家的两个产品，但互不相通：在 Herdr App 里开的会话 herdr 看不到，反过来也一样。只装 / 只用一个时按实际选；
-两个都在用、想在手机上同时看到，选「herdr + Herdr App（并列）」。
+herdr and Herdr App are from the same developer but separate: neither sees the other's sessions. If using only one, select it;
+if both are used and should appear on the phone, choose "herdr + Herdr App (side by side)."
 
-## 怎么切换
+## Switching
 
-1. **配对时**：扫码或手动配对成功后，会问「这台电脑用哪个引擎」（hub 所在的那台）。每个选项旁边写着「检测到可用」或「没检测到」，
-   必须选一个，默认选中 herdr（之前选过就是之前那个），确认就切过去；没有「跳过」。
-2. **以后随时改**：设置 › 机器 › 点进那台电脑 › 「引擎」，选另一个。每台电脑单独选，一台用 herdr、另一台用 Orca 也可以。
-3. **机器离线时**也能改，连上后才生效。
+1. **During pairing**: after QR / manual pairing, asks "Which engine does this computer use?" (the hub machine). Each option says "Available" or "Not detected."
+   Select one; herdr is default (or previous choice), confirmation switches; no Skip.
+2. **Anytime later**: **Settings › Machines › computer › Engine**, select another. Choices are per computer; one can use herdr, another Orca.
+3. **Offline computers** can change too, taking effect when connected.
 
-iOS 和 Android App 都有这两处入口（Android 的机器页在 Agents：列表设置 › 机器监控 › 点进那台电脑，或树里电脑栏头的仪表按钮，页面上「引擎与连接」一组的「引擎」）；网页版在机器页（侧边栏「机器」› 点进那台电脑）的「引擎」一节里直接选（#2071）。选择存在 hub 上（不在手机里），换手机、网页版、Android 看到的都一样。
+iOS / Android have both entry points (Android Machines is under Agents: **List settings › Machine monitoring › computer**, or tree computer-header dashboard button, then **Engine and connection › Engine**). Web selects directly in Machines (**sidebar Machines › computer**, Engine section, #2071). Choice is stored on hub, not phone, and matches across phones, web, and Android.
 
-## 切换后会怎样
+## After switching
 
-- Agents 里马上换成新引擎里的会话；旧引擎里的会话变成「未运行」，对话记录还在。
-- 正在看的实时终端画面、手机接管的终端会断开，要在新引擎的会话里重新打开。
-- 不会关掉、也不会改动任何引擎里正在跑的 Claude。
+- Agents immediately shows new-engine sessions; old-engine sessions become Not running, with history retained.
+- Live terminal / phone takeover disconnects; reopen in a new-engine session.
+- No running Claude in any engine is closed or modified.
 
-## 各引擎能做什么
+## Capabilities by engine
 
-| 能力 | herdr | Herdr App | Orca | Paseo |
+| Capability | herdr | Herdr App | Orca | Paseo |
 | --- | --- | --- | --- | --- |
-| 列出会话、显示状态（需要你 / 工作中 / 完成未看） | ✅ | ✅ | ✅（每秒查一次） | ✅（Paseo 推送变化） |
-| 发消息（多行也是一整条） | ✅ | ✅ | ✅ | ✅（工作中发的插进这一轮） |
-| 按键（回车、Esc、方向键……）、打断 | ✅ | ✅ | ✅ | 只有打断 |
-| 回答对话框（权限确认、选项） | ✅ | ✅（读屏回答） | ✅（读屏回答） | ✅（卡片，Paseo App 也能答） |
-| 从手机关闭会话 | ✅ | ✅ | ✅ | 后端支持（在 Paseo 里归档），App 的按钮暂时只给有终端的会话 |
-| 从手机新建会话、继续未运行的会话 | ✅ | ❌ | ✅（新建；继续未运行需在电脑上重新打开） | ✅（Paseo 的每个 provider 是一个启动器） |
-| 从工作区新建 worktree（[terminal.md](terminal.md)「23. New worktree…」） | ✅（herdr 0.9 自己建；旧版退回 git） | ❌ | ✅（Orca 自己建，挂在原工作区下；检出目录归 Orca） | ❌ |
-| 给空间 / 标签页改名 | ✅ | ❌ | ❌ | ❌（会话名后端能改，App 的按钮暂时只给有终端的会话） |
-| 实时终端画面、手机接管终端 | ✅ | ❌ | ❌ | ❌（没有终端） |
-| 带颜色的读屏、草稿识别 | ✅ | ❌（纯文本，只查对话框） | ❌（纯文本，只查对话框） | ❌（没有终端） |
-| 切权限模式 / 思考强度 | ✅ | 支持，未实测 | 支持，未实测 | ✅（端到端实测） |
+| List sessions, show state (Needs you / Working / Unread) | Yes | Yes | Yes (polls each second) | Yes (Paseo pushes changes) |
+| Send messages (multiline as one message) | Yes | Yes | Yes | Yes (while working, injects into current turn) |
+| Keys (Enter, Esc, arrows…), interrupt | Yes | Yes | Yes | Interrupt only |
+| Answer dialogs (permissions, options) | Yes | Yes (screen-based) | Yes (screen-based) | Yes (cards, also answerable in Paseo app) |
+| Close sessions from phone | Yes | Yes | Yes | Backend supports archiving in Paseo; app button currently only for terminal sessions |
+| Create / continue Not running sessions from phone | Yes | No | Yes (create; reopen Not running on computer) | Yes (each Paseo provider is a launcher) |
+| Create a worktree from a workspace ([terminal.md](terminal.md), "23. New worktree…") | Yes (herdr 0.9 creates it; older versions fall back to git) | No | Yes (Orca creates it under the original workspace and owns the checkout directory) | No |
+| Rename spaces / tabs | Yes | No | No | No (backend supports session names; app button currently only for terminal sessions) |
+| Live terminal, phone takeover | Yes | No | No | No (no terminal) |
+| Colored screen reads, draft detection | Yes | No (plain text, dialogs only) | No (plain text, dialogs only) | No (no terminal) |
+| Change permission mode / thinking effort | Yes | Supported, untested | Supported, untested | Yes (end-to-end tested) |
 
-Windows：herdr 0.9.5 起有原生 Windows 版，herdr 引擎在 Windows 上除实时终端外和上表一样；Orca 也能用。见 [windows.md](windows.md)「herdr」。
+Windows: herdr has native Windows support since 0.9.5; except live terminal, capabilities match above. Orca works too. See [windows.md](windows.md), "herdr."
 
-Orca 自己的 Claude 聊天（结构化会话，没有终端）经 node 里的桥接进来：能列出、显示状态、发消息（文字和图片）、打断、关闭、
-回答审批和提问卡片、切权限模式和思考强度（没有 plan 模式），没有读屏、按键和实时终端；还没发过第一条消息的聊天要发过之后才出现，
-Codex 的聊天这一版不列。见 `docs/plan-orca-support.md`「结构化会话」。
+Orca's native Claude chats (structured, no terminal) connect through node's bridge: list, state, send text / images, interrupt, close,
+answer approvals / questions, change permission / thinking (no plan mode); no screen reads, keys, or live terminal. Chats appear only after their first message;
+Codex chats not listed in this version. See `docs/plan-orca-support.md` ("Structured sessions").
 
-做不到的操作会直接提示，不会只做一半。Herdr App 和 Orca 里，Claude 不在前台（被挂起、已退出）时发消息会被拒绝、什么都不输入，
-提示「Claude 不在前台（可能被挂起），没有发送」或者要你在电脑上重新打开那个会话。
+Unsupported actions explain failure instead of partially acting. Herdr App / Orca rejects sending without entering anything when Claude is not foregrounded (suspended / exited),
+saying "Claude is not in foreground (possibly suspended); nothing sent," or asking to reopen on the computer.
 
-Orca 的「新建 Agent」支持在已打开的 Orca 工作区或其子目录中新建终端，并进入所选目录启动。未在 Orca 中打开的目录如果属于 Git 仓库会尝试自动登记，否则拒绝。它不会接管现有终端。
-恢复请求只会返回已在运行的会话；已退出或挂起的旧会话仍须在电脑上恢复，不会另开终端运行同一会话。
+Orca New Agent creates terminals inside already-open Orca workspaces or subdirectories, starting in the selected directory. Unopened Git-repository directories attempt automatic registration; other unopened directories are rejected. It never takes over an existing terminal.
+Resume returns only already-running sessions; exited / suspended sessions require computer-side recovery, never another terminal running the same session.
 
-选 `herdr-both` 后，node 同时挂 herdr 和 herdr-core 两个宿主：
+Selecting `herdr-both` attaches both herdr and herdr-core hosts:
 
-- Agents 合并两边的会话；空间 / 标签页、状态、读屏、发消息、按键、关闭都按会话所在的窗格各走各的宿主，和单选那个引擎时一样。
-- **从手机新建会话、继续未运行的会话、空间改名走经典 herdr**（能力完整的那个）。在 Herdr App 里退出的会话从手机「接着」时，
-  会在 herdr 里开一个新窗格 `--resume`（同一个 Claude 会话 id，对话记录连续，只是换了窗口）；herdr-core 窗格里的实时终端画面、手机接管仍不可用。
-- 两边互不拖慢：两个宿主的快照并行拉取（各自有自己的超时，一个卡住不挡另一个）；herdr-core 的事件只刷 herdr-core，
-  herdr 的事件只刷 herdr；一边挂了只清自己一边的在线状态。
-- 检测：只有 herdr 和 herdr-core 都「检测到可用」时这个选项才标可用（也可以在离线机器上预选，连上后生效；只有一边在时，
-  在的一边照常工作，另一边的会话为空）。
-- Orca 不进并列（它每秒轮询、开销最大），要和 Orca 并用以后再做。
+- Agents merges sessions; spaces / tabs, state, screen reads, messages, keys, closing route to the pane's own host, as when selected alone.
+- **Phone create / continue Not running / space rename use classic herdr** (complete capabilities). Continuing an exited Herdr App session from phone
+  opens a new herdr pane with `--resume` (same Claude session ID, continuous history, different window). herdr-core live terminal / phone takeover remain unavailable.
+- Neither slows the other: snapshots fetched concurrently with separate timeouts; herdr-core events refresh only herdr-core,
+  herdr events only herdr; a failed side clears only its own online state.
+- Available only when both herdr and herdr-core are detected (can preselect offline, effective on reconnect; if only one exists,
+  it works normally while the other list is empty).
+- Orca excluded from combined mode (per-second polling, highest overhead); concurrent Orca support is future work.
 
 ## botmux
 
-[botmux](https://github.com/deepcoldy/botmux) 把每个飞书话题接成一个 Claude Code / Codex / TRAEX 等 CLI 的会话，跑在它自己的 tmux 里。它不是引擎：
-node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之外再挂一个 botmux 宿主（`server/internal/node/hostbotmux.go`），
-典型场景是工作的 Agent 在 botmux、个人的在 herdr，两边一起看。
+[botmux](https://github.com/deepcoldy/botmux) maps each Lark topic to a Claude Code / Codex / compatible CLI session in its own tmux. It is not an engine:
+when `botmux` is on the computer's PATH, node adds a botmux host alongside the selected engine host (`server/internal/node/hostbotmux.go`).
+Typical use: work Agents in botmux, personal Agents in herdr, viewed together.
 
-- **列出和状态**：每次刷新一次 `botmux observe --include-raw`（所有 daemon 的所有会话，结果 5 秒内复用，发出消息后马上重看；本机约 500 个会话时 0.3–0.9 秒；observe 偶尔失败时沿用上一次的列表）。
-  列 Claude Code、Codex、TRAEX 的会话（`cli.id` 为 `claude-code` / `codex` / `traex`），状态三家一样：在跑的按 botmux 的状态（对话框 `tuiPromptActive` 或 botmux 的「需要你」→ 需要你，`working` / `starting` / `analyzing` → 工作中，
-  其余 → 做完）；挂起的（`not_running`、没关闭、7 天内动过）显示成「未运行」。Claude Code：botmux 会话 id 就是 Claude 会话 id（botmux 用它拉起 claude），对话记录照旧。
-  Codex / TRAEX：observe 不给 CLI 自己的会话 id（botmux 存在自己的库里），但 botmux 发给这两种 CLI 的每条提示都以 `<session_id>botmux 会话 id</session_id>` 开头，
-  node 就在同一工作目录的 rollout 开头（前 512 KB，每个文件读到这个标记后不再读）里找这个 id，找到的 rollout 就是这个会话的线程（fork 出来的几份取最近写过的），
-  会话按线程 id 列、对话记录按 rollout 读（`docs/codex.md`），标题优先用线程名、没有就用 botmux 的话题标题（`botmuxThreads`）。
-  找不到 rollout 的不列：刚开、第一条提示还没写进 rollout 的（下一次刷新就有），以及 botmux 给 bot 单独设了 `CODEX_HOME` / `TRAE_HOME`、node 不认识的目录里的
-  （Codex 读 node 已知的各个 Codex home，TRAEX 只读 `~/.trae/cli`）。`codex-app`（botmux 走 app-server 驱动 Codex，提示里不带会话 id）和其他 CLI 不列。
-  空间是工作目录（和 Herdr App 没放进空间的终端一样；去掉结尾的 `/`，同一目录不拆成两个），名字是目录最后一段；和上一级目录同名（不分大小写）时带上上一级（`Botmux/botmux`，#1836），只看自己的路径，不随别的会话在不在列变化，置顶、屏蔽、整组挂按名字认的不会来回失效。
-- **发消息**：三家一样，交给 botmux 投递（它的 dashboard 的 `POST /api/trigger`，目标是这个会话），不往终端里打字：会话忙时 botmux 排队，
-  挂起的会话 botmux 自己续上（不会在 herdr 里另起一个 `claude --resume`；挂起超过 7 天、不在列表里的也一样），回答照常发回飞书话题。
-  dashboard 的 token 由 node 跑 `botmux dashboard current` 取，只存在内存里，只连本机 127.0.0.1。消息在 Claude 那边带着 botmux 的任务标签和一段「外部事件」说明。
-- **做不到**：读屏、按键、回答对话框（在飞书里答）、关闭、改名、新建、实时终端；App 按能力隐藏或提示。
-- **为什么等你、在飞书打开**：botmux 举手（`botmux send --attention`）时带的原因，会话在「需要你」时放进 `attention_reason`，
-  App 在列表行和对话页顶上显示；observe 原始数据里的话题链接（`feishuThreadLink`，只认 https）放进 `external_url`，对话页的「在飞书打开」用它。
-  两个都是 botmux 的原始字段，不是稳定接口：没有就不显示。
-- **摘要（`last_text`）**：会话不在工作中、不在「需要你」、botmux 已经回了最新一条消息（`previewBotState` 是 `replied`）时，用 botmux 记下的最后一条回复（`previewBotFullText`，没有就用 `previewBotText`；卡片记成「[卡片: 标题]」，去掉标签只留标题）：
-  Agent 的回答走 `botmux send` 发到飞书，对话记录的最后一句常常只是 `BOTMUX_NOTHING_TO_SEND`。工作中、还没回、「需要你」（话题里的回复常常就是等你的原因），或者对话记录里在这条回复 10 分钟之后还有文字（在 botmux 之外接着做了）的，照旧取对话记录的最后一段文字。
-  对话记录里单独一行的 `BOTMUX_NOTHING_TO_SEND` 不算文字（任何会话都一样）：整轮只有它时，保留之前的文字；只说过它的对话记录也算说过话，挂起超过 7 天后照样按「未运行」列出。
-- **执行失败**：botmux 自己发的失败通知（以 ⚠️ 开头，且说的是它停掉了自动续跑 / 自动恢复 / 自动重启 / 自动处理）不是在等你回答，不算「需要你」：
-  状态按 botmux 的 turn 来（通常是做完），原因放进 `failure_reason`，App 在对话里显示红色的出错提示，带「重试」（给会话发一条「继续」，走 botmux 投递）和「在飞书打开」。
-  Agent 自己用 `botmux send --attention` 举的手照旧是「需要你」，原因以 ⚠️ 开头也一样。
-- **过期的举手**：botmux 只在消息经过它（飞书、投递）时清掉举手和失败通知；在终端等别的途径发的消息不会清。
-  对话记录里在举手 / 失败通知之后又有新的用户消息，就当它已经过期：不再显示「需要你」和原因，状态按 turn 来。
-  斜杠命令、`! cmd`、别的 Agent 的汇报不算新消息。只看对话记录最后 384 KB：那条消息之后一轮写了更多内容时看不到它，就照旧显示（偏保守，不会误清）。
-- **不重复**：botmux 用 herdr 后端时，它的会话本来就是 herdr 的窗格，botmux 宿主不再列。botmux 的 Codex 会话同时出现在 Codex 历史或 Codex 桌面版的列表里时（同一份 rollout），
-  只留 botmux 的那一行（能经 botmux 发消息，不是只读的历史）。botmux 的 Codex / TRAEX 会话不接 app-server（不 `thread/resume`）、不读屏幕出提问 / 审批卡片、发消息前不查输入框：
-  这些和它的 Claude Code 会话一样留在飞书和电脑上。挂起超过 7 天、botmux 不再列的 Codex 会话按 Codex 历史只读显示，去飞书里回。
-- **同一个会话两边都有**：它也开在 herdr 等引擎的窗格里（以前从手机 `--resume` 过）时，以在跑的窗格为准，botmux 的挂起记录让开。
-- **检测时机**：node 连上 hub、知道这台要不要列 botmux 时（见下一条），以及切换引擎时找 `botmux`：PATH 上的，没有就是 botmux 安装时写的 `~/.botmux/bin/botmux`（launchd 常驻的 node 只有系统的 PATH）；之后才装 botmux 的，重启那台电脑的 personad 才会显示。
-- **关掉**：机器详情「引擎」下的开关「同时显示 botmux 会话」（网页、iOS，#2575；Android 在机器页「引擎与连接」里、紧挨引擎那一行，点一下就存，#2899），默认开，改了马上发 `node.configure {"botmux": …}`，存在 hub 的 settings；
-  hub.json 那台电脑的 `machines[]` 里写 `"botmux": false` 是没设过开关时的默认值（`docs/config.md`；老 node 不认这一项）：不再跑 `botmux observe`、`botmux dashboard current`（正在跑的那次跑完作废），Agents 里没有 `botmux:` 窗格的会话。
-  hub 连上时在 `node.configure` 里说开不开；说之前 node 不挂 botmux，装了 botmux 的电脑也先不推会话列表（免得 botmux 的会话先消失再回来）；老 hub 不说，来要会话列表时照旧挂上。
-  关掉后，botmux 用 tmux 跑的会话照旧凭对话记录按「未运行」列出，在手机上回它会在引擎里 `claude --resume`，可能和 botmux 自己的那个撞上：这类会话去飞书里回。
-- **待办**：按会话 id 挂，和别的会话一样；按项目整组挂时，项目是 botmux 会话的工作目录。
-- 实测：`go test -tags botmuxlive -run BotmuxLive ./internal/node/ -v`（只读列表，加一次 dry run 投递：botmux 校验并渲染，不派发）。
+- **Listing and state**: each refresh runs `botmux observe --include-raw` (all sessions from all daemons, reused within 5 seconds, immediately reread after sending; 0.3–0.9 seconds for about 500 local sessions; occasional observe failures retain the previous list).
+  Lists Claude Code, Codex, and the compatible Codex fork (`cli.id: claude-code / codex / traex`), with identical state rules: running sessions use botmux state (dialog `tuiPromptActive` or botmux Needs you → Needs you; `working` / `starting` / `analyzing` → Working;
+  others → Done). Suspended (`not_running`, not closed, active within 7 days) appear Not running. For Claude Code, botmux session ID is the Claude ID used to start it, so transcript handling is unchanged.
+  For Codex / the compatible fork, observe omits CLI session ID (stored in botmux database), but every prompt starts with `<session_id><botmux-session-id></session_id>`.
+  Node searches rollout beginnings in the same working directory (first 512 KB, stopping each file after finding the marker). Matching rollout is the thread (newest-written among forks),
+  listed by thread ID and read as rollout history (`docs/codex.md`); title prefers thread name, otherwise botmux topic title (`botmuxThreads`).
+  Without matching rollout, omit: newly opened sessions before initial prompt enters rollout (next refresh finds them), or custom bot-specific `CODEX_HOME` / `TRAE_HOME` directories unknown to node
+  (Codex reads known homes, compatible fork only `~/.trae/cli`). `codex-app` (botmux drives Codex through app-server, without session-ID prompts) and other CLIs omitted.
+  Space is cwd (like Herdr App terminals outside spaces; trim trailing `/` to avoid duplicates), named by final directory component. If it matches parent case-insensitively, include parent (`Botmux/botmux`, #1836). Derive only from its own path, not other listed sessions, so name-based pin / mute / group-to-do bindings stay stable.
+- **Sending**: same for all three, delivered through botmux dashboard `POST /api/trigger` targeting the session, not terminal input. Botmux queues while busy,
+  resumes suspended sessions itself (no separate herdr `claude --resume`, also for suspended beyond 7 days / unlisted), and sends replies back to Lark topics.
+  Node gets dashboard token through `botmux dashboard current`, memory-only, connecting only to local 127.0.0.1. Claude receives botmux task tags and an external-event explanation.
+- **Unsupported**: screen reads, keys, dialogs (answer in Lark), close, rename, create, live terminal; app hides or explains by capabilities.
+- **Why it needs you / open in Lark**: reason from `botmux send --attention` goes into `attention_reason` while Needs you;
+  app shows it in list rows / chat top. Raw observe topic link (`feishuThreadLink`, HTTPS only) becomes `external_url` for "Open in Lark."
+  Both are raw botmux fields, not stable APIs; omit if absent.
+- **Summary (`last_text`)**: when not Working / Needs you and botmux replied to the latest message (`previewBotState: replied`), use its last reply (`previewBotFullText`, otherwise `previewBotText`; cards stored as `[卡片: 标题]`, "card: title", strip wrapper, keep title).
+  Agent answers go to Lark through `botmux send`, so transcript often ends only with `BOTMUX_NOTHING_TO_SEND`. While working, unreplied, Needs you (topic reply often explains the wait), or transcript has text over 10 minutes newer than this reply (work continued outside botmux), retain transcript's last text.
+  Standalone `BOTMUX_NOTHING_TO_SEND` never counts as text in any session: retain earlier text if alone in a turn. A transcript containing only that still counts as spoken; after over 7 suspended days it is listed Not running.
+- **Execution failures**: botmux failure notices (warning-symbol prefix, saying it stopped automatic continuation / recovery / restart / handling) are not questions and do not mean Needs you.
+  State follows botmux turn (usually Done); reason in `failure_reason`; app shows a red error with Retry (send "Continue" through botmux) and Open in Lark.
+  Agent-issued `botmux send --attention` still means Needs you, even with a warning prefix.
+- **Stale attention**: botmux clears attention / failure notices only for messages passing through it (Lark, delivery), not terminal or other channels.
+  A newer transcript user message after the attention / failure makes it stale: hide Needs you / reason, use turn state.
+  Slash commands, `! cmd`, and other Agent reports do not count. Read only the final 384 KB; if a turn wrote more after that message, it may be invisible, conservatively retaining attention rather than falsely clearing.
+- **No duplicates**: botmux sessions using herdr backend already are herdr panes, so botmux host omits them. If botmux Codex also appears in Codex history / desktop lists (same rollout),
+  keep only botmux's actionable row, not read-only history. Botmux Codex / compatible-fork sessions do not attach app-server (`thread/resume`), read screens for question / approval cards, or inspect composer before sending;
+  like botmux Claude Code, those actions stay in Lark / on computer. Codex suspended beyond 7 days and absent from botmux appears as read-only Codex history; reply in Lark.
+- **Same session on both sides**: if also running in an engine pane (previously resumed from phone), the live pane wins and botmux's suspended record yields.
+- **Detection**: find `botmux` when node connects and learns whether to list it (next item), and on engine switches: PATH first, then installer path `~/.botmux/bin/botmux` (launchd node has only system PATH). Installing later requires restarting that computer's personad.
+- **Disable**: "Also show botmux sessions" below Engine in machine details (web / iOS #2575; Android next to Engine in Engine and connection, saved on tap, #2899), default on. Changes immediately send `node.configure {"botmux": …}`, stored in hub settings.
+  `"botmux": false` in the machine's `machines[]` hub.json entry is only its unset-setting default (`docs/config.md`; old nodes ignore). Stops `botmux observe` / `botmux dashboard current` (in-flight results discarded); Agents has no `botmux:` panes.
+  Hub specifies the setting in `node.configure` on connection; node does not attach botmux or push lists before that (preventing sessions briefly disappearing / returning). Old hubs omit it; attach as before when asked for sessions.
+  After disabling, tmux botmux sessions still appear as Not running history. Replying on phone launches engine `claude --resume`, potentially colliding with botmux's instance; reply to these in Lark.
+- **To-dos**: attach by session ID as usual; project-wide grouping uses botmux session cwd.
+- Live test: `go test -tags botmuxlive -run BotmuxLive ./internal/node/ -v` (read-only listing plus one dry-run delivery: validation / rendering, no dispatch).
 
-## herdr 没在运行时
+## When herdr is not running
 
-电脑重启后 launchd / systemd 会拉起 node，但没人打开终端运行 `herdr`，经典 herdr 的 server 不在（#1879）。node 会在需要时自己把它拉起来：
+After reboot, launchd / systemd starts node, but no terminal has started classic `herdr` server (#1879). Node starts it on demand:
 
-- **什么时候**：node 启动时（等 hub 在 `node.configure` 里说了开关，旧 hub 不说就等 10 秒后当作开），以及从手机新建会话、继续未运行的会话之前。
-  只在引擎是 herdr 或 herdr + Herdr App（并列）时，只拉经典 herdr；Herdr App 的 herdr-core 有自己的生命周期，不碰。node 不在轮询里拉：
-  拉起只发生在上面这两个时机。
-- **怎么起**：`herdr server`（v0.9.5 的 headless server，前台运行），node 把它放进单独的会话（`setsid`）里，node 重启不会带走它；
-  Linux 上 node 在 systemd 用户实例下时改用 `systemd-run --user --unit=persona-herdr-server`（停 node 的单元会杀整个 cgroup）。
-  等 socket 能连上（最多 20 秒）再接着新建 / 继续。
-- **环境要干净**：herdr server 的环境会传给每个窗格和里面的 claude。node 用 `env -i` 只带 `HOME`、`USER`、`LOGNAME`、`TMPDIR`、语言、
-  `XDG_*`、`HERDR_SOCKET_PATH`，再用用户的登录 shell（`$SHELL -l -c 'exec herdr server'`，launchd 下没有 `SHELL` 时读账户的登录 shell）起：
-  PATH 是登录 shell 的，node 和启动器的 `ANTHROPIC_*`、代理变量一个都不带。herdr 命令先在 node 的 PATH 里找，找不到再问登录 shell。
-- **只起一个**：node 内一把锁，外加对 herdr 配置目录的 `flock`（同一账户上另一个 node），拿到锁后再确认一次 socket。
-- **开关**：按机器存，「设置 › 机器 › 引擎」下的「需要时自动启动 herdr」改的就是它。hub.json 的
-  `machines[].herdr_autostart` 只是这台机器还没选过时的默认值（不写是开）：用户选了之后存在 hub 的 settings
-  （`herdr_autostart/<机器 id>`），连上、改了都会经 `node.configure` 下发。关掉后手动 `herdr server stop` 就一直停着，
-  node 不再自己拉起。接口 `GET /api/v1/machines/{mid}/herdr`（`{autostart, running, known}`）和
-  `PUT`（`{"autostart": bool}`），只对引擎是 herdr / herdr-both 的机器有这一行。客户端界面待接（#1915）。
-- **手动启动**：`node.info` 带上 `herdr_running` / `herdr_running_known`（老 node 两个都不带，hub 据此区分「没在跑」和
-  「不清楚」）。`POST /api/v1/machines/{mid}/herdr/start` 转成 node 的 `herdr.server.start`，**不受自动启动开关约束**——
-  开关说的是 node 能不能自己拉，用户点「启动」是他自己要求的。起不来时原因同下（`engine_missing` 那一套）。
-- **现在跑没跑**：`node.info` 只在 node 连上时问一次。重启后 node 要等 hub 的 `node.configure`（在 `node.info` 之后）才自己拉起 herdr，
-  只按 `node.info` 的话，提示会在 herdr 已经起来之后还一直挂着，直到 node 重连；之后的手动「启动」、电脑上的 `herdr server stop` 也一样（#1916）。
-  所以 `GET …/herdr` 现问 node 的 `herdr.server.status`（只连一下 socket，`{running, known}`），3 秒内的再读用刚问到的；
-  `herdr/start` 成功后也把结果记下。老 node 没有这个方法，就还是 `node.info` 的值，3 秒内不再问。
-  Android 的 Agents 列表已接提示行和「启动」按钮（#1916）：在线且状态已知为未运行时显示，点按显式启动。
-  iOS / Mac 同样（`HerdrNotice.swift`）：Agents 列表在前台、没被对话盖住时每 10 秒读一次，提示行在列表最上面，一台机器一行，跟着机器筛选和 hub 分组；
-  读失败一次不撤掉已有的提示行，hub 没有这个接口（404）就不再问这台。点了「启动」显示「正在启动…」，失败时在行里用中文写原因（认得的几种：起来后马上退出 / 被结束、没装、没应答、node 太旧、离线、超时，`HerdrFailure.says`；认不出的保留原文），按钮还在；hub 的原文、状态码和请求 id 在长按 / 右键的「复制详情」里，不占正文；
-  成功后这台在本次运行里按 POST 的结果算，直到 hub 也说在跑（hub 更新前 `GET` 还是连上时的值）。网页同样（`web/src/lib/herdr-notice.ts`、`views/agents/HerdrNotices.tsx`）：侧边栏和手机 Agents 页的 Agents 块里、筛选条下面，页面可见时每 10 秒读一次，
-  规则、失败的中文原因和上面一样，hub 原文、状态码和请求 id（`X-Request-Id`）在「复制详情」按钮和右键菜单里。
-- **起不来**：仍然是 `engine_missing`。没装 herdr 时文案和以前一样；装了但起不来时说「自动启动也没成功」，原因（herdr 的退出码和输出的最后几行，
-  输出在 `$TMPDIR/persona-herdr-server.log`）放在详情里，也写进 node 的日志。Windows 上不拉，行为和以前一样。
+- **When**: node startup (after hub specifies settings in `node.configure`; old hubs omit them, so assume enabled after 10 seconds), and before phone create / continue Not running.
+  Only with herdr or herdr + Herdr App, only classic herdr; herdr-core has its own lifecycle and is untouched. Not from polling,
+  only those two occasions.
+- **How**: `herdr server` (v0.9.5 headless foreground server), in a separate session (`setsid`) so node restarts do not kill it.
+  Linux systemd-user nodes instead use `systemd-run --user --unit=persona-herdr-server` (stopping the node unit kills its whole cgroup).
+  Wait for connectable socket (at most 20 seconds) before create / continue.
+- **Clean environment**: herdr server passes its environment to every pane and claude. Node uses `env -i` with only `HOME`, `USER`, `LOGNAME`, `TMPDIR`, language,
+  `XDG_*`, `HERDR_SOCKET_PATH`, then user's login shell (`$SHELL -l -c 'exec herdr server'`; if launchd has no `SHELL`, read account login shell).
+  PATH comes from that shell; no node / launcher `ANTHROPIC_*` or proxy variables. Find herdr on node PATH first, then ask login shell.
+- **Only one**: in-node mutex plus `flock` on herdr configuration directory (another node for the same account); recheck socket after locking.
+- **Switch**: per machine, "Automatically start herdr when needed" below **Settings › Machines › Engine**. hub.json
+  `machines[].herdr_autostart` is only the machine's unset-choice default (omitted means enabled). User choices live in hub settings
+  (`herdr_autostart/<machine-id>`), sent through `node.configure` on connect / changes. Once disabled, manual `herdr server stop` stays stopped,
+  and node does not restart it. `GET /api/v1/machines/{mid}/herdr` (`{autostart, running, known}`),
+  `PUT` (`{"autostart": bool}`); row exists only for herdr / herdr-both. Client UI pending (#1915).
+- **Manual start**: `node.info` includes `herdr_running` / `herdr_running_known` (old nodes omit both, distinguishing stopped from
+  unknown). `POST /api/v1/machines/{mid}/herdr/start` forwards to node `herdr.server.start`, **independent of autostart**:
+  that switch controls node-initiated starts; a user's Start tap explicitly requests it. Failure reasons below (`engine_missing`).
+- **Current status**: `node.info` is requested only once on node connection. After reboot, node waits for `node.configure` (after `node.info`) to start herdr,
+  so relying on `node.info` leaves stale notices until node reconnects; same after manual Start / computer-side `herdr server stop` (#1916).
+  `GET …/herdr` therefore asks `herdr.server.status` live (one socket connection, `{running, known}`), reused for 3 seconds;
+  successful `herdr/start` also records result. Old nodes without the method retain `node.info` values and avoid reasking within 3 seconds.
+  Android Agents has the notice / Start button (#1916), shown when online and known stopped; tap explicitly starts.
+  iOS / Mac too (`HerdrNotice.swift`): poll every 10 seconds while Agents is foregrounded and not covered by chat. One notice per machine atop list, respecting machine filters / hub groups.
+  One read failure does not remove existing notices; endpoint 404 stops polling that machine. Start shows "Starting…"; failures show localized known reasons inline (immediate exit / killed, missing, no response, old node, offline, timeout, `HerdrFailure.says`; unknown reasons remain raw). Keep button; raw hub text, status, request ID under long-press / context-menu Copy details, not body.
+  After success, use POST result for that machine during this run until hub also reports running (GET may still use connection-time value). Web same (`web/src/lib/herdr-notice.ts`, `views/agents/HerdrNotices.tsx`), below filters in sidebar / mobile Agents section, polling every 10 seconds while visible,
+  same rules / localized failures, with raw hub text, status, request ID (`X-Request-Id`) in Copy details button / context menu.
+- **Failure**: still `engine_missing`. Missing herdr copy unchanged; installed-but-failed says "Automatic start also failed." Details include exit code / final output lines,
+  output in `$TMPDIR/persona-herdr-server.log`, also node logs. No autostart on Windows; behavior unchanged.
 
-### 没装 herdr 时
+### When herdr is not installed
 
-新接入的电脑常常还没装 herdr（#2847）：以前「启动」只能回「没装 herdr」，得有人登上那台电脑去装。现在 node 自己装（`node/herdrinstall.go`）：
+New computers often lack herdr (#2847); previously Start only said "herdr not installed," requiring someone to log in and install it. Node now installs it (`node/herdrinstall.go`):
 
-- **装什么**：herdr 官方 release 里这台电脑系统 / CPU 的二进制（linux / macos × x86_64 / aarch64），**版本写死**成和其他电脑一致的
-  （现在是 0.8.0，不跟 `latest.json`），下载后按代码里写死的 sha256 校验，不对就不装。装到 `~/.local/bin/herdr`（不用 sudo，node 的 PATH 里有它），
-  先写临时文件、校验过才改名，下载断了不会留下半个 herdr。Windows 和别的架构没有包：直接说要手动装。升级 herdr 版本时同时改版本号和四个 sha256。
-- **什么时候装**：用户点「启动」时总会装；node 自己拉起（启动时、新建 / 继续会话前）只在 hub.json 的 `machines[].herdr_autoinstall` 为 `true` 时装，
-  不写就和以前一样只说没装。同一时间只装一次，几个请求一起等它。
-- **慢的时候**：下载在后台跑（最多 15 分钟），「启动」最多等 15 秒：装好了就接着启动，答 `running`；还没装好就回「正在安装 herdr 0.8.0…装好后会自动启动」
-  （客户端照原文显示在「没启动：」后面），装好后 node 自己把 server 拉起来，Agents 列表下一次读到在跑，提示行就消失。
-  `herdr.server.status` 和 `GET /api/v1/machines/{mid}/herdr` 多带 `installing`、`install_error`（上次没装上的原因），客户端可据此显示「正在安装…」（还没接）。
-- **装不上**：连不上 GitHub、超时、HTTP 错误、校验不对都回一句中文原因；网络不通时提示「可能要走代理：给 node 设 `HTTPS_PROXY` 后重启它」
-  （下载走 Go 的 `ProxyFromEnvironment`）。原因也写进 node 的日志。
+- **What**: official herdr release binary for OS / CPU (linux / macos × x86_64 / aarch64), **version pinned** to match other computers
+  (currently 0.8.0, not `latest.json`). Verify hardcoded sha256 before installing to `~/.local/bin/herdr` (no sudo, on node PATH).
+  Write temporary file and rename only after verification, avoiding partial binaries on interruption. Windows / other architectures have no package and require manual install. Version upgrades update the version and all four sha256s.
+- **When**: always install on user Start. Node-initiated starts (startup, before create / continue) install only if `machines[].herdr_autoinstall: true` in hub.json;
+  omitted preserves "Not installed." One install at a time; concurrent requests share it.
+- **Slow downloads**: background download up to 15 minutes; Start waits at most 15 seconds. If ready, start and return `running`; otherwise return "Installing herdr 0.8.0… It will start automatically when ready"
+  (client shows original text after "Not started:"). Node starts server when done; next Agents poll sees running and removes notice.
+  `herdr.server.status` / `GET /api/v1/machines/{mid}/herdr` add `installing`, `install_error` (last failure); client can show Installing, not wired yet.
+- **Install failure**: GitHub unreachable, timeout, HTTP error, checksum mismatch all give a localized reason. Network failures say "A proxy may be needed: set node HTTPS_PROXY and restart it"
+  (downloads use Go `ProxyFromEnvironment`). Also log reason on node.
 
-### 重启后续上 Persona 起的会话
+### Resuming Persona-started sessions after restart
 
-herdr server 重启后会恢复工作区、标签页、窗格，**客户端 attach 之后**再用它内置的命令续上 agent（`session.resume_agents_on_restore`，默认开），
-对 Claude Code 就是裸的 `claude --resume <id>`。Persona 起的 Claude 用的是启动器（`jarvisd launch <名字>`、~/.zshrc 里的函数）加
-`--settings`、`--mcp-config`、Persona 的 hooks，裸 `claude --resume` 把这些全丢了：网关换成了用户自己的订阅，Persona 的 MCP 和 hooks 也没了。
+herdr restores workspaces, tabs, panes after server restart, then **after a client attaches** resumes Agents using built-in commands (`session.resume_agents_on_restore`, default on),
+for Claude Code plain `claude --resume <id>`. Persona-created Claude uses launchers (`jarvisd launch <name>`, ~/.zshrc functions),
+`--settings`, `--mcp-config`, Persona hooks; plain resume loses all of these, switching gateway to user's subscription and dropping MCP / hooks.
 
-所以 Persona 在 herdr 里起 Claude 时，给那个窗格报一个自己的恢复命令（herdr 的 `resume_argv`，只对这个窗格生效）：
-`eval "<Persona 起它时的那条命令，--resume <id>>"`。herdr 恢复时把它敲进窗格的 shell，~/.zshrc 的启动器照样能用。
+Persona therefore reports its own recovery command for each Claude pane (`resume_argv`, only this pane):
+`eval "<Persona's original launch command, --resume <id>>"`. herdr types it into the pane shell during restore, retaining ~/.zshrc launchers.
 
-- 用户在终端里自己开的 claude 不报，herdr 照原样恢复；用户的 herdr 配置（`config.toml`）不改。
-- 这一版之前起的、node 重启前起的 Persona 会话（node 的会话记录里有它的启动器）：node 刷新时看到它在 herdr 里跑，就补报一次。
-- Claude 在窗格里换了会话（`/clear`），Persona 的 SessionStart hook 到时重报一次新 id：herdr 不会自己跟着改（v0.9.5 实测）。
-- 恢复命令不带权限模式、思考强度；路径里有单引号的（herdr 不收带 `'` 的参数）不报，退回 herdr 自己的恢复。
-- node 拉起的 headless server 没有客户端 attach，herdr 不会自己续 agent：要等有人 attach（电脑上打开 herdr）。从手机「继续」一个未运行的会话照常可用。
-- **被重启中断**（#1917）：重启前在跑的会话，重启后列成 `interrupted`（`docs/agent-states.md`），带「继续」。判定是 node 记着「这个会话在哪个窗格里起过、
-  什么时候起的」（hub 的 settings 里的会话记录），而那个时刻早于本次 node 启动、现在又没有活着的 agent。node 自己开的会话（启动时刻晚于本次启动）不算，
-  用户的终端里自己开的也不算（记录里没有窗格）。默认不自动续：重启可能落在一次工具调用的中间，接不接着跑由用户决定。点「继续」走的是普通的
-  `session.start {resume}`，在新的窗格里用启动器 `--resume` 起来。
-- 一次「全部继续」还没有（要按机器批量起，客户端那一半）。
+- User-started terminal claude is not reported; herdr restores normally; user `config.toml` untouched.
+- Older Persona sessions / sessions predating node restart (launcher in node session records): report once on refresh if running in herdr.
+- Claude changes sessions in a pane (`/clear`): report new ID when Persona SessionStart hook arrives; herdr does not track it automatically (v0.9.5 tested).
+- Resume command omits permission / thinking settings; paths with single quotes are not reported (herdr rejects `'` arguments), falling back to built-in restore.
+- Node-started headless server has no attached client, so herdr does not resume Agents until someone opens herdr on the computer. Phone Continue on a Not running session still works.
+- **Interrupted by restart** (#1917): sessions running before restart appear `interrupted` afterward (`docs/agent-states.md`), with Continue. Node records the pane and
+  launch time (session records in hub settings); if launch predates current node startup and no Agent is alive, it is interrupted. Sessions launched after this node startup do not count,
+  nor user-started terminal sessions (no recorded pane). No automatic continuation: restart may interrupt a tool call, so the user decides. Continue uses ordinary
+  `session.start {resume}`, launcher `--resume` in a new pane.
+- No "Continue all" yet (machine-wide batch start, client half).
 
-## 选不了某个引擎时
+## When an engine cannot be selected
 
-- **显示「没检测到」**：这个引擎在那台电脑上没运行。herdr 要先在终端里运行一次 `herdr`；Herdr App、Orca 要打开 App。打开后过一会儿，
-  或者在 App 里对那台机器「重新连接」，检测结果会刷新。
-- **「herdr + Herdr App」显示「没检测到」**：两个运行时没有都在跑（herdr 要在终端里运行过，Herdr App 要打开、它的 remote 要连着这台机器）。
-  只有一边在用时直接选那一边就行。
-- **Orca 显示「这个版本的 Orca 和 Persona 不兼容」**：Orca 和 personad 的版本对不上，把两边都更新到最新版。
-- **Paseo 显示「没检测到」**：打开 Paseo 的桌面 App，或者运行 `paseo daemon start`。Paseo 用了自定义 home 时，给 personad 设 `PASEO_HOME`。
-  显示可用、下面却写着连不上的原因时，见 `docs/paseo.md`「排错」。
-- **选了引擎却看不到会话**：确认 Claude 真的开在这个引擎里（比如开在普通终端或另一个 App 里，Persona 只会把它显示成「未运行」）。
-- **hub 机器上的 node 是旧版本**（机器信息里提示版本不一致）：旧 node 不认识引擎切换，照旧只用 herdr；先更新那台电脑的 personad。
+- **"Not detected"**: engine is not running on that computer. Start `herdr` once in a terminal; open Herdr App / Orca. After a short wait,
+  or Reconnect for that machine, detection refreshes.
+- **"herdr + Herdr App" not detected**: both runtimes are not running (herdr started in terminal, Herdr App open with remote connected to this machine).
+  If only one is used, select it directly.
+- **Orca says "This Orca version is incompatible with Persona"**: Orca / personad versions mismatch; update both.
+- **Paseo not detected**: open Paseo desktop app or run `paseo daemon start`. For a custom home, set personad `PASEO_HOME`.
+  If available but a connection failure appears below, see `docs/paseo.md` ("Troubleshooting").
+- **Engine selected, no sessions**: verify Claude actually runs in that engine; ordinary-terminal / other-app sessions appear only Not running.
+- **Old node on hub machine** (version mismatch in machine info): old node does not understand switching and uses only herdr; update personad on that computer.

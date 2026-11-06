@@ -44,7 +44,7 @@ struct IslandSettingsView: View {
                                 Text(preset.title).foregroundStyle(.primary).lineLimit(1)
                                 Text(Self.summary(preset)).font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
-                            Spacer(minLength: 8)
+                            Spacer(minLength: Theme.Space.s)
                             if island.preset == preset {
                                 Image(systemName: Theme.Icon.done).font(Theme.Font.heading).foregroundStyle(Theme.accent)
                             }

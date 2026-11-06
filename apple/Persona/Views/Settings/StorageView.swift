@@ -289,7 +289,7 @@ struct StorageView: View {
                 Text(kind.title).lineLimit(1)
                 Text(kind.detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.Space.s)
             if clearing == kind {
                 ProgressView()
             } else {

@@ -1,392 +1,392 @@
-# 新用户上手（onboarding）
+# New-user onboarding
 
-给不会命令行的普通用户设计的上手路径：看了广告、下了 App（手机、电脑或网页），怎么装好、连上、接上模型、说上第一句话。关联 #287。
+An onboarding path for ordinary users who do not know the command line: after seeing an ad and downloading the app (phone, computer, or web), how do they install it, connect, add a model, and get an answer to their first message? Related to #287.
 
-代码依据：origin/master `59e8bae9a`，文中 `路径:行` 都在这个提交上核过。现状调研是 2026-11-06 一轮从零的走查（读代码 + 隔离测试 hub 实测 + 网页截图），结论在第 2 节，原始记录不进仓库。
+Code baseline: origin/master `59e8bae9a`. All `path:line` references in this document were checked against that commit. The current-state research was a fresh walkthrough on 2026-11-06 (code reading + testing an isolated hub + web screenshots). Conclusions are in section 2; raw records are not committed.
 
-## 1. 一句话和心智模型
+## 1. One sentence and the mental model
 
-**一句话**：今天第一屏就要求「在 hub 所在的机器上运行 `personad hub pair`」，普通人走不下去；目标是「装一个东西、扫一次码、点几下，第一句话就有回答」，而且任何一步缺了，界面上都是一张「还差什么、点这里」的卡片，不是英文报错，也不是空白。
+**In one sentence**: today's first screen asks users to "Run `personad hub pair` on the hub machine," which ordinary users cannot get past. The goal is "install one thing, scan one code, tap a few times, and get an answer to your first message." If anything is missing, the UI shows a card saying "What's missing; tap here," not a technical error in English or a blank screen.
 
-给用户看的说法（首屏「这是怎么回事？」、官网、安装器、文档用同一段）：
+User-facing explanation (use the same passage on the first screen's "How does this work?", the website, installer, and documentation):
 
-> **Persona 有三部分。**
-> - **hub**：家里的总机。装在一台一直开着的电脑或 NAS 上，你的消息、设置、记忆都存在这里，只存在你自己的机器上。全家只要一台。
-> - **你的电脑**：Persona 干活的地方，在上面读文件、跑程序、写代码。hub 所在的那台电脑自动算一台。
-> - **手机 / 网页**：遥控器。看它在做什么，在它动手前点「允许」。扫一次码就连上，以后自动连。
+> **Persona has three parts.**
+> - **hub**: your home switchboard. Install it on a computer or NAS that stays on. Your messages, settings, and memory live here, only on your own machine. One is enough for the whole household.
+> - **Your computers**: where Persona does the work—reading files, running programs, and writing code. The hub computer automatically counts as one.
+> - **Phone / web**: the remote control. See what it is doing and tap "Allow" before it acts. Scan once to connect; it reconnects automatically after that.
 >
-> 还要接一个**模型**，它是 Persona 的大脑：已经在用 Claude Code 的直接用；有 API Key 的粘贴进来；什么都没有的，告诉你去哪开通。
+> You also need a **model**, Persona's brain. If you already use Claude Code, use it directly; if you have an API key, paste it in; if you have neither, we show you where to get one.
 
 ```
-   手机 / 网页 ──扫码一次──▶  hub（一直开着的那台）  ◀──Persona Link── 你的笔记本
-   （遥控器）                 存东西、收消息、调度          （干活的地方）
-                                    │
-                               这台自己也算一台电脑
-                                    │
-                              模型（Claude Code 或 API Key）
+   Phone / web ──scan once──▶ hub (always-on machine) ◀──Persona Link── Your laptop
+   (remote control)          storage, messages, dispatch                (does the work)
+                                      │
+                            This also counts as a computer
+                                      │
+                            Model (Claude Code or API key)
 ```
 
-用词规则（第 8.1 节的文案守门测试会查）：
+Terminology rules (enforced by the copy guard tests in section 8.1):
 
-- 引导、空状态、错误卡片里不出现 node、herdr、launcher、TLS、token、hub.json、zsh、端口、IPv6、`~/.` 路径、命令名。需要时放进「详情」或「高级」。
-- 「启动器 / 供应商」对普通用户统一叫「模型」（谁家的、哪个 Key）；运行方式、kind、协议、Bearer / x-api-key 收进「高级」。
-- hub 在界面里叫什么（「hub」「主机」「中枢」）由用户拍板（第 6.3 节拍板 13）；定之前保留「hub」，第一次出现时带一句「家里的总机」。
+- Onboarding, empty states, and error cards must not mention node, herdr, launcher, TLS, token, hub.json, zsh, ports, IPv6, `~/.` paths, or command names. Put them in "Details" or "Advanced" when needed.
+- For ordinary users, call launchers / providers "models" (which provider, which key). Put run mode, kind, protocol, and Bearer / x-api-key in "Advanced".
+- The user decides what hub is called in the UI ("hub", "host", "center"; decision 13 in section 6.3). Until then, keep "hub" and explain it as "your home switchboard" on first use.
 
-## 2. 现状：新用户今天要走的路
+## 2. Current state: the path new users face today
 
-| 步 | 今天要做什么 | 卡在哪 | 依据 |
+| Step | What users must do today | Where they get stuck | Evidence |
 | --- | --- | --- | --- |
-| 拿到 App | iOS 只有 TestFlight，要 iOS 26+；安卓要侧载 APK；官网 FAQ 写「想试用请写信给我们」 | 第一步就筛掉大部分人 | `site/public/index.html`、README「平台」 |
-| 装 hub | `install.sh --hub` 只放一个二进制，不建 Postgres、不装服务、不启动，结尾是英文 `jarvisd hub run … then jarvisd hub pair` | 空目录启动直接退出：`database_url is empty (run scripts/deploy/deploy.sh …)`，指向用户手里没有的仓库脚本 | `scripts/deploy/install.sh:421`、`server/internal/db/db.go:37` |
-| 第一个配对码 | 四端首屏都写「运行 `personad hub pair`」；网页登录页还教 `jq -r .token ~/.persona/hub.json` | 没有终端的人停在这里。`/admin` 能出码，但本机设密码要日志里的一次性设置码 | `web/src/views/Login.tsx:45-48`、`server/internal/hub/admin_setupcode.go:51-52,75-79` |
-| 二维码里的地址 | 默认 `public_url` 是 `http://<完整主机名>:18660` | 手机常常解析不了主机名；改了端口它也不跟着变 | `server/internal/hub/config.go:215` |
-| 接电脑 | 只能在 `/admin` 添加；手机被明确禁止给电脑出码；新 hub 不开 TLS，「电脑来连」必然 409 `tls_required`；Mac 的 Persona Link 只能从源码构建 | 普通用户基本停在这里 | `hub/pairing.go:132-135`、`hub/admin_machines.go:307-310`、`docs/persona-link-install.md` |
-| 主对话 | 首屏看着能用；发第一句才失败 | 没电脑：502 `{"code":"internal","error":"assistant machine is not configured"}`，网页弹一个几秒就消失的 toast；没装 claude：约 6 秒后出 `zsh:1: command not found: claude`；没登录：一条普通英文气泡「Not logged in · Please run /login」 | `assistant/start.go:29,157-158`、`web/src/views/PersonaAssistant.tsx:65`、`assistantwire/wire.go:383-384` |
-| 模型 | 供应商、启动器、用途、kind、协议、Bearer / x-api-key 全露在外面；全新 hub 没有任何预设（`{"presets":[]}`）；名字只能用英文；加完带 Key 的供应商，主对话和 Agents 还是「Claude Code 默认」 | 加了 Key 也接不上；「从 ~/.zshrc 导入」零电脑时一直转圈 | `assistant/models_presets.go:20-28`、`assistant/models_launchers.go:98` |
-| 空状态 | 零电脑时总览说「一切就绪」，机器页说「hub 连上后……」却没有「添加电脑」，助手设置渲染成「每段对话在 的 里后台运行」 | 误导，且没有下一步按钮 | `web/src/i18n/locales/zh-Hans/home.json:31`、`machines.json:25` |
+| Get the app | iOS is TestFlight-only and requires iOS 26+; Android requires sideloading an APK; the website FAQ says "Write to us if you'd like to try it" | The first step excludes most people | `site/public/index.html`, README "Platforms" |
+| Install hub | `install.sh --hub` only installs a binary; it does not create Postgres, install a service, or start it. It ends with the English instruction `jarvisd hub run … then jarvisd hub pair` | Starting in an empty directory exits immediately: `database_url is empty (run scripts/deploy/deploy.sh …)`, pointing to a repository script the user does not have | `scripts/deploy/install.sh:421`, `server/internal/db/db.go:37` |
+| First pairing code | All four platforms' first screens say "Run `personad hub pair`"; the web login page also teaches `jq -r .token ~/.persona/hub.json` | Users without a terminal stop here. `/admin` can generate a code, but setting its password locally requires a one-time setup code from the logs | `web/src/views/Login.tsx:45-48`, `server/internal/hub/admin_setupcode.go:51-52,75-79` |
+| Address in the QR code | The default `public_url` is `http://<full-hostname>:18660` | Phones often cannot resolve the hostname; changing the port does not update it either | `server/internal/hub/config.go:215` |
+| Add a computer | Only possible in `/admin`; phones are explicitly prohibited from generating computer codes. New hubs do not enable TLS, so "computer connects to hub" always returns 409 `tls_required`. Mac Persona Link must be built from source | Ordinary users mostly stop here | `hub/pairing.go:132-135`, `hub/admin_machines.go:307-310`, `docs/persona-link-install.md` |
+| Main chat | The first screen looks usable; failure comes only after sending the first message | No computer: 502 `{"code":"internal","error":"assistant machine is not configured"}`, with a web toast that disappears after a few seconds. No claude installed: `zsh:1: command not found: claude` after about 6 seconds. Not logged in: an ordinary English bubble, "Not logged in · Please run /login" | `assistant/start.go:29,157-158`, `web/src/views/PersonaAssistant.tsx:65`, `assistantwire/wire.go:383-384` |
+| Model | Providers, launchers, purposes, kind, protocol, and Bearer / x-api-key are all exposed. A fresh hub has no presets (`{"presets":[]}`). Names must be English. After adding a keyed provider, main chat and Agents still use "Claude Code default" | Adding a key does not connect it; "Import from ~/.zshrc" spins forever with zero computers | `assistant/models_presets.go:20-28`, `assistant/models_launchers.go:98` |
+| Empty states | With zero computers, Overview says "Everything is ready"; Machines says "Once hub connects…" but offers no "Add computer". Assistant settings render as "Each chat runs in the background in [blank] on [blank]" | Misleading, with no next-step button | `web/src/i18n/locales/zh-Hans/home.json:31`, `machines.json:25` |
 
-几条决定设计的事实：
+Facts that determine the design:
 
-- **主对话离不开一台在线、装好并登录了 Claude Code 的电脑。** 直接 API 的供应商当主对话时，也是在电脑上用 claude 连它的网关（`assistant/models.go:950-982` `finishModel` 只认 `launcher.<名字>`）。Docker 镜像没有 claude，也没有本机电脑（`Dockerfile:79-81` `JARVIS_LOCAL_NODE=0`），所以 NAS / Docker 用户一开始主对话一定跑不了。
-- **今天没有一个接口回答「主对话现在能不能用、缺什么」**。`POST /api/v1/assistant/warm` 不论成败都回 `{ok:true}`（`assistant/profile.go:283-289`）。启动器健康检查默认关（`assistant/launcher_health.go:136`），不能拿来做新手判断。
-- **零件大多已经有**：一次性配对码和 hub 画好的二维码（`hub/pairing.go:97`，10 分钟、兑换一次）、网页和 iOS 的「连接新设备」、`/admin` 的添加电脑（运行中生效，`hub/devices_link.go:314` `addMachineLive`）、自签 TLS、启动器一词测试（`assistant/models_launchers.go:748`）、未保存就能测的连接测试（`assistant/models_probe.go:358`）、从预设添加（`presetFill`）、改用途（`assistant/models.go:821`）、Android 的准备清单（`ReadinessRecords.kt`）。缺的是把它们串起来、让已登录的 App 能用它们、给出机器能读的错误码。
-- **iOS 的 `"ccc"` 兜底**（`AssistantView.swift:738,921`）只在读 `GET /api/v1/assistant` 失败时出现，不是常规卡点，顺手改。
-- **官方扩展市场读不到**：调研时的 403 多半是开发机网络造成的，要改的是「读不到时的降级」，不是「默认报错」。
+- **Main chat requires an online computer with Claude Code installed and logged in.** Even a direct-API provider used for main chat runs claude on a computer against its gateway (`assistant/models.go:950-982`: `finishModel` accepts only `launcher.<name>`). The Docker image has neither claude nor a local computer (`Dockerfile:79-81`, `JARVIS_LOCAL_NODE=0`), so main chat cannot initially run for NAS / Docker users.
+- **No endpoint currently answers "Can main chat work now, and what is missing?"** `POST /api/v1/assistant/warm` returns `{ok:true}` whether it succeeds or fails (`assistant/profile.go:283-289`). Launcher health checks default to off (`assistant/launcher_health.go:136`), so they cannot assess readiness for new users.
+- **Most parts already exist**: one-time pairing codes and hub-rendered QR codes (`hub/pairing.go:97`, 10 minutes, single-use), "Connect new device" on web and iOS, `/admin`'s add-computer flow (takes effect live, `hub/devices_link.go:314`, `addMachineLive`), self-signed TLS, one-word launcher tests (`assistant/models_launchers.go:748`), connection tests before saving (`assistant/models_probe.go:358`), adding from presets (`presetFill`), changing purposes (`assistant/models.go:821`), and Android's readiness checklist (`ReadinessRecords.kt`). What is missing is connecting them, making them available to logged-in apps, and providing machine-readable error codes.
+- **The iOS `"ccc"` fallback** (`AssistantView.swift:738,921`) appears only when reading `GET /api/v1/assistant` fails. It is not a normal blocker; fix it alongside the work.
+- **The official extension marketplace is inaccessible**: the research-time 403 was probably caused by the development machine's network. Fix graceful degradation when it cannot be read, rather than treating failure as the default.
 
-## 3. 目标路径
+## 3. Target path
 
-### 3.1 理想的最短路径（往这个方向做）
+### 3.1 Ideal shortest path (the direction to work toward)
 
-前提：签名公证过的一个 Mac 下载（hub + 本机电脑 + 数据库都在里面），见第 6.3 节拍板 1、2。
+Prerequisite: a signed and notarized Mac download containing hub + local computer support + database; see decisions 1 and 2 in section 6.3.
 
-| # | 用户做的 | Persona 做的 |
+| # | User action | Persona action |
 | --- | --- | --- |
-| 1 | 官网点「下载 Mac 版」，拖进「应用程序」，打开 | — |
-| 2 | 首屏「让这台 Mac 当 hub」点「开始」 | 建数据库、写 hub.json（新默认见 4.1）、装 LaunchAgent；本机自动算一台电脑（`kind: local`，`hub/config.go:208`）；检测本机 Claude Code |
-| 3 | 系统弹「允许查找本地网络」点「允许」 | 局域网广播（mDNS，开了 TLS 才发，`hub/mesh_discovery.go:26`） |
-| 4 | 用 iPhone 相机扫屏幕上的二维码 | 一次性配对码；没装 App 的落到官网下载页 |
-| 5 | App 打开，自动连上 | 深链接配对（三端已接） |
-| 6 | 「接一个模型」：检测到已登录的 Claude Code 时只有「就用它」一个按钮；否则选一家、粘 Key | 第 4.3 节 |
-| 7 | 点「试一句」 | 真跑一轮主对话；成功后本地显示欢迎和三个可点的小任务 |
+| 1 | Click "Download for Mac" on the website, drag into Applications, and open | — |
+| 2 | On the first screen, choose "Use this Mac as hub" and tap "Start" | Create the database, write hub.json (new defaults in 4.1), and install a LaunchAgent. Automatically count this machine as a computer (`kind: local`, `hub/config.go:208`); detect local Claude Code |
+| 3 | Tap "Allow" when the system asks for local network access | LAN broadcast (mDNS, only with TLS enabled, `hub/mesh_discovery.go:26`) |
+| 4 | Scan the on-screen QR code with the iPhone camera | One-time pairing code; if the app is not installed, land on the website download page |
+| 5 | The app opens and connects automatically | Deep-link pairing (already wired on three platforms) |
+| 6 | "Connect a model": if logged-in Claude Code is detected, show only "Use this"; otherwise choose a provider and paste a key | Section 4.3 |
+| 7 | Tap "Try a message" | Run one real main-chat turn; on success, locally display a welcome and three small tappable tasks |
 
-大约 8 次点按，不碰命令行。
+About 8 taps, without the command line.
 
-### 3.2 按「我有什么」分的开局
+### 3.2 Starting points by "What do I have?"
 
-| 我有什么 | 推荐的 hub 位置 | 本期能走到哪 | 卡在什么上 |
+| What I have | Recommended hub location | How far this round gets | Blocker |
 | --- | --- | --- | --- |
-| 只有一台 Mac + 手机 | 这台 Mac | 体验模式 +「还没有 hub？」页如实说明；有 Docker Desktop / OrbStack 的可以粘一行命令走 `personad hub setup` | Developer ID 公证、无 Docker 时的数据库（拍板 1、2） |
-| Mac + 常开的 Linux / NAS | Linux 或 NAS | 粘一行命令（Linux）或下载 compose（NAS）→ 扫码 → App 里「添加电脑」→ Mac 上装 Persona Link（暂时源码构建）→ 接模型 | Persona Link 安装包（拍板 1） |
-| 只有手机，想先看看 | 不装 | 体验模式（iOS / Mac / Android 已有）；退出时落到「还没有 hub？」页，不回到配对页原地 | — |
-| 公司电脑（装不了东西、电脑受管控） | 家里的 Linux / NAS 或云服务器 | hub 能装好、手机能连；主对话要一台能装 Claude Code 的电脑，否则只能等「只聊天」模式 | 「只聊天」模式（拍板 9）；云模板（拍板 6） |
-| 已经在用 Claude Code、有常开 Linux 的研发 | 那台 Linux | 一行命令 → 扫码 → 自动认出已登录的 Claude Code，直接能聊；`~/.zshrc` 启动器照旧 | — |
+| One Mac + phone only | That Mac | Demo mode + an honest "No hub yet?" page; users with Docker Desktop / OrbStack can paste one command and run `personad hub setup` | Developer ID notarization; database without Docker (decisions 1, 2) |
+| Mac + always-on Linux / NAS | Linux or NAS | Paste one command (Linux) or download compose (NAS) → scan code → "Add computer" in the app → install Persona Link on Mac (currently built from source) → connect a model | Persona Link installer (decision 1) |
+| Phone only; wants a preview | No installation | Demo mode (already on iOS / Mac / Android); exiting lands on "No hub yet?", not back at the pairing screen | — |
+| Work computer (cannot install software; managed computer) | Home Linux / NAS or cloud server | Hub can be installed and phone connected; main chat needs a computer that can install Claude Code, otherwise wait for "Chat only" mode | "Chat only" mode (decision 9); cloud templates (decision 6) |
+| Developer already using Claude Code, with always-on Linux | That Linux machine | One command → scan code → automatically recognize logged-in Claude Code and chat immediately; `~/.zshrc` launchers still work | — |
 
-### 3.3 hub 放哪：取舍
+### 3.3 Where hub lives: trade-offs
 
-| 位置 | 好处 | 代价（写在选项下面，大白话） |
+| Location | Benefit | Cost (plain-language text under the option) |
 | --- | --- | --- |
-| 常开的 Linux 台式机 / 小主机 | 24 小时在线；它自己就是第一台电脑，用户不用「添加电脑」 | 这台关机，手机就连不上 |
-| NAS（Docker） | 家里已有、常开 | Docker 镜像里没有 claude，AI 不在 NAS 上干活，一定要再加一台电脑 |
-| 用户自己的 Mac | 只有一台电脑的人不用另找机器；干活的电脑就是它 | 合上盖子 Persona 也休息，醒来后补收消息、补跑定时任务；推送照常走中继（`docs/push-relay.md`） |
-| 云服务器 | 随时随地能连 | 要买服务器，数据在云上；没有电脑时只能等「只聊天」 |
-| Windows | — | 不能当 hub（#1179）；Windows 电脑只能当「你的电脑」 |
+| Always-on Linux desktop / mini PC | Online 24 hours; it is the first computer, so users do not need to "Add computer" | When it shuts down, the phone cannot connect |
+| NAS (Docker) | Already at home and always on | The Docker image does not include claude. AI does not do work on the NAS; another computer must be added |
+| User's own Mac | People with only one computer do not need another machine; it is also the work computer | Closing the lid puts Persona to sleep too. On wake, catch up on messages and scheduled tasks; push notifications still use the relay (`docs/push-relay.md`) |
+| Cloud server | Connect from anywhere, any time | Requires buying a server; data lives in the cloud. Without a computer, wait for "Chat only" |
+| Windows | — | Cannot be hub (#1179); a Windows computer can only be one of "your computers" |
 
-建议写进官网和安装器：**有常开的电脑就装在它上面**。笔记本当 hub 能用，安装器要直说合盖的后果。
+Recommendation for the website and installer: **if you have an always-on computer, install hub there**. A laptop can be hub, but the installer must explain what happens when the lid closes.
 
-出门在外：第一版不打洞、不做中继隧道（拍板 7）。配对后做一次「出门能不能连」的检查（安卓的蜂窝网络测试已有），连不上时说「在家里 Wi-Fi 下能用；出门要用 VPN，或者让路由器打开 IPv6（图文说明）」。
+Away from home: no hole punching or relay tunnels in the first version (decision 7). After pairing, run one "Can you connect away from home?" check (Android already has a cellular-network test). If it fails, say "You can use it on your home Wi-Fi. Away from home, use a VPN or enable IPv6 on your router (illustrated instructions)."
 
-## 4. 设计
+## 4. Design
 
-### 4.1 安装器：`personad hub setup`
+### 4.1 Installer: `personad hub setup`
 
-和 `hub pair`、`hub admin` 同一个命名空间。Go 实现，不依赖仓库和 python。`install.sh --hub` 装完二进制后调它（换掉 `install.sh:421-423` 的英文）。
+Same namespace as `hub pair` and `hub admin`. Implemented in Go, with no dependency on the repository or Python. `install.sh --hub` calls it after installing the binary (replacing the English text at `install.sh:421-423`).
 
 ```
 personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service] [--json]
 ```
 
-按顺序做，每步一行中文结论；失败给下一步，不往下走：
+Run in order, printing one localized conclusion per step; on failure, provide the next action and stop:
 
-1. **hub.json**：文件不存在时写一份完整的新文件（新默认见下）；已存在时只补 `token` 这类缺了就跑不起来的字段，**已有值一律不改**。
-2. **数据库**：`database_url` 为空时，有 Docker 就照 `scripts/deploy/db.sh` 建容器（同名 `jarvis-postgres`、同镜像、同卷，之后 `deploy.sh` 照样认），生成密码写进 hub.json；没有 Docker 就探测本机 Postgres（#321 的做法）；都没有就停下，打印「这台电脑还缺数据库：装 Docker Desktop 或 OrbStack 后重跑这条命令」。`db/db.go:37` 的报错同步改成「先运行 personad hub setup」。
-3. **常驻**：Linux 照 `hub-systemd.sh` 装 socket activation 单元（同一套单元，不另起），`loginctl enable-linger` 要 sudo 时问一次并说明为什么；macOS 写 LaunchAgent（新写，`hub-systemd.sh` 现在只找已有的）。端口被另一个 hub 占着时自动换一个并写回。
-4. **启动并自检**：等 `/api/v1/health`，跑一遍 doctor，只打「有问题」的项，排除的虚拟网卡不打。
-5. **结尾**（中文）：手机扫的配对二维码（复用 `hub pair` 的终端二维码）；「用手机浏览器打开 `http://<局域网 IP>:18660/admin#setup=<设置码>` 设管理员密码」；设置码由安装器经回环 + 主 token 调 `POST /api/v1/admin/setup-code` 取（`admin_setupcode.go:94-99`），用户不用翻 journalctl。`#setup=` 是片段，不发到服务器，管理页读到后预填。
+1. **hub.json**: if missing, write a complete new file (new defaults below). If present, add only fields such as `token` that are required to run. **Never change existing values**.
+2. **Database**: if `database_url` is empty and Docker is available, create a container following `scripts/deploy/db.sh` (same `jarvis-postgres` name, image, and volume, still recognized by `deploy.sh`), generate a password, and write it to hub.json. Without Docker, probe local Postgres (the #321 approach). If neither exists, stop and print "This computer still needs a database: install Docker Desktop or OrbStack, then rerun this command." Also change the error at `db/db.go:37` to "Run personad hub setup first."
+3. **Persistent service**: on Linux, install socket-activation units following `hub-systemd.sh` (the same units, not a second set). If `loginctl enable-linger` needs sudo, ask once and explain why. On macOS, write a LaunchAgent (new implementation; `hub-systemd.sh` currently only finds existing ones). If another hub occupies the port, automatically choose another and save it.
+4. **Start and self-check**: wait for `/api/v1/health`, run doctor, and print only problematic items; do not print excluded virtual network interfaces.
+5. **Finish** (localized): a pairing QR code for the phone (reuse `hub pair`'s terminal QR code); "Open `http://<LAN-IP>:18660/admin#setup=<setup-code>` in your phone browser to set the administrator password." The installer obtains the setup code through loopback + the main token with `POST /api/v1/admin/setup-code` (`admin_setupcode.go:94-99`), without asking the user to inspect journalctl. `#setup=` is a fragment, not sent to the server; the admin page reads and prefills it.
 
-**新安装的默认值只写进新文件，绝不加到 `defaultConfig()`。** `LoadConfig` 把已有的 hub.json 反序列化到 `defaultConfig()` 上（`hub/config.go:241-278`），`Public` 是值类型（`config.go:169`），往 `defaultConfig` 里加 `TLSListen` 会让每一份没写 `public` 的老 hub.json 都开 TLS。另外 `db.sh` 在 hub 第一次运行前就写了只有 `database_url` 的 hub.json，所以 deploy.sh 路线上文件早就存在。做法：`hub setup` 新建文件时显式写这些字段，或只在 `LoadConfig` 的 `os.IsNotExist` 分支写；两处共用一个 `newInstallConfig()`，有 golden 测试证明老文件加载后的结果不变。
+**Write new-install defaults only into new files; never add them to `defaultConfig()`.** `LoadConfig` deserializes an existing hub.json over `defaultConfig()` (`hub/config.go:241-278`). `Public` is a value type (`config.go:169`), so adding `TLSListen` to `defaultConfig` would enable TLS for every old hub.json that omits `public`. Also, `db.sh` writes a hub.json containing only `database_url` before hub's first run, so the file already exists in the deploy.sh path. Approach: explicitly write these fields when `hub setup` creates a file, or only in `LoadConfig`'s `os.IsNotExist` branch. Both share `newInstallConfig()`, with a golden test proving that loading old files gives the same result.
 
-新文件写的字段：
+Fields written to a new file:
 
-| 字段 | 新安装 | 为什么 |
+| Field | New installation | Why |
 | --- | --- | --- |
-| `public.tls_listen` | 默认只绑局域网 IPv4：`"<局域网 IP>:18662"`；`--outside` 或之后在 App 里打开「出门也要用」才改成 `":18662"`（拍板 8） | Persona Link 只走 TLS（`linkPairable`），mDNS 要 TLS 才广播；只绑 IPv4 局域网地址可以不把端口暴露到公网 IPv6。`tls_listen` 认带地址的写法（`public.go:84` 用 `listenTCP`，`mesh_discovery.go:39` 解析 host）。局域网地址会随 DHCP 变，hub 启动时绑不上要回退并在 App 里提示，实现时补这条 |
-| `public_url` | `http://<局域网 IPv4>:<listen 端口>`，多网卡时选默认路由那块 | 今天是完整主机名（`config.go:215`），手机常解析不了 |
-| `admin.first_setup` | `"code"`：局域网来源设第一个管理员密码也要设置码 | 今天只有回环要码（`admin_setupcode.go:52`），共享局域网里别人能抢先设密码。老 hub.json 没这个字段，行为不变 |
-| `machines` | 有 herdr 或 claude 时保留本机 `kind: local`；Docker 里照旧为空 | 和现在一致 |
+| `public.tls_listen` | Bind only the LAN IPv4 address by default: `"<LAN-IP>:18662"`; change to `":18662"` only with `--outside` or when "Use away from home" is enabled later in the app (decision 8) | Persona Link requires TLS (`linkPairable`); mDNS broadcasts only with TLS. Binding only the IPv4 LAN address avoids exposing the port on public IPv6. `tls_listen` accepts an address (`public.go:84` uses `listenTCP`; `mesh_discovery.go:39` parses host). DHCP may change the LAN address; if binding fails at startup, hub must fall back and notify the app. Add this during implementation |
+| `public_url` | `http://<LAN-IPv4>:<listen-port>`; for multiple interfaces, choose the default-route interface | Currently uses the full hostname (`config.go:215`), which phones often cannot resolve |
+| `admin.first_setup` | `"code"`: setting the first administrator password from the LAN also requires a setup code | Currently only loopback requires a code (`admin_setupcode.go:52`), so someone else on a shared LAN could set the password first. Old hub.json files omit this field and keep their behavior |
+| `machines` | Keep local `kind: local` if herdr or claude exists; remain empty in Docker | Same as today |
 
-实现（#3349）：`server/internal/hub/setup.go`、`setup_service.go`。新默认值只由 `hub setup` 写（`LoadConfig` 首次运行写的仍是 `defaultConfig()`，Docker 镜像首启另由 `deploy/docker/entrypoint.sh` 写容器用的默认值，见下面「实现（#4045）」）；「新文件」指还没有 `token` 的 hub.json（不存在，或 `db.sh` / `hub admin access` 先写的），缺的字段按 `newInstallConfig()` 补上、已有的不动；`--outside` 是唯一会改已有值的（`public.tls_listen` 改成 `:端口`）。没有 Docker 时看 5432 端口上有没有 Postgres，有就提示把地址写进 `database_url`（只看端口；像 #321 那样连本机 Postgres、建 jarvis 用户和库留到后续）。默认端口被占时新装改用 +100 的一对（18760 / 18762）。`tls_listen` 绑的局域网地址不在了时 hub 不开 TLS 照常启动并记一行日志，socket 单元带 `FreeBind=true`（`hub-systemd.sh` 同步），所以 socket activation 下监听照样起来，hub 发现这个地址不是本机的就记一行日志（App 里的提示留到后续）。Mac 的 LaunchAgent 是 `com.jarvis.hub`，已有别的 agent 在跑 `<root>/bin/jarvisd hub` 时用那个（和 `hub-systemd.sh` 一样按 `ProgramArguments` 解析软链和 `~` 比较，`~/.jarvis` 指向 `~/.persona` 时也认得）；没有 agent 而 hub 已经在跑（比如开在终端里）时不再装一个抢不到端口的 agent，提示先停掉。`bin/jarvisd` 和上次起服务时不一样（`install.sh --hub` 升级换了它，记在 `bin/.jarvisd.setup-sha256`）时重启 hub（Linux `restart jarvisd`，端口在 socket 上无感；Mac `launchctl kickstart -k`）。
+Implementation (#3349): `server/internal/hub/setup.go`, `setup_service.go`. Only `hub setup` writes the new defaults (`LoadConfig` still writes `defaultConfig()` on first run; Docker image startup uses `deploy/docker/entrypoint.sh` to write container defaults separately—see "Implementation (#4045)" below). A "new file" means a hub.json without `token` (missing, or prewritten by `db.sh` / `hub admin access`); fill missing fields from `newInstallConfig()` and leave existing fields alone. `--outside` is the only option that changes an existing value (`public.tls_listen` becomes `:<port>`). Without Docker, check for Postgres on port 5432; if present, ask the user to put its address in `database_url` (port check only; connecting to local Postgres and creating the jarvis user and database as in #321 is follow-up work). If the default ports are occupied, a new installation uses the pair +100 (18760 / 18762). If the LAN address bound by `tls_listen` disappears, hub starts normally without TLS and logs a line. The socket unit has `FreeBind=true` (also updated in `hub-systemd.sh`), so listening still starts under socket activation; hub logs a line if the address is not local (the app notice is follow-up work). The Mac LaunchAgent is `com.jarvis.hub`; if another agent already runs `<root>/bin/jarvisd hub`, use it (like `hub-systemd.sh`, resolve symlinks and `~` in `ProgramArguments` for comparison; also recognize `~/.jarvis` pointing to `~/.persona`). If hub is already running without an agent (for example, in a terminal), do not install an agent that cannot acquire the port; ask the user to stop it first. Restart hub when `bin/jarvisd` differs from the binary used to start the service last time (`install.sh --hub` replaced it on upgrade; recorded in `bin/.jarvisd.setup-sha256`): Linux uses `restart jarvisd`, seamless because the socket owns the port; Mac uses `launchctl kickstart -k`.
 
-**Docker / NAS**：不走 `hub setup`。compose 照旧，另一个小 PR 让入口脚本首次生成 `.env` 缺的值（随机库密码、PUID / PGID），`compose.yaml` 映射 TLS 端口（镜像现在只 `EXPOSE 18660`，`Dockerfile:83`）。NAS 的说明里直说「还要再加一台电脑」。
+**Docker / NAS**: does not use `hub setup`. Keep compose; a separate small PR makes the entrypoint generate missing `.env` values on first run (random database password, PUID / PGID) and maps the TLS port in `compose.yaml` (the image currently only has `EXPOSE 18660`, `Dockerfile:83`). NAS instructions must explicitly say "You also need to add a computer."
 
-实现（#4481、#4484）：结尾的管理界面地址按 hub 实际的 `listen` 选：只监听回环（`127.0.0.1` / `localhost` / `::1`）时打印回环地址，说明「只能在这台电脑上打开」和怎么改成手机也能开（提示里写出 hub.json 的实际路径，把其中的 `listen` 改成 `:端口` 后重跑 `hub setup`），`--json` 的最后一行多一个 `admin_local_only: true`；绑某一个地址时用那个地址；监听全部地址时才用局域网 IP。重跑时 `--listen` / `--tls` 只在显式给了、而且和 hub.json 里的不一样时才说「已有的不改」，两边的值都写出来；`--tls :端口` 和新装写下的「局域网 IP:端口」算同一个。管理界面、hub 日志、`hub doctor`、`hub admin` / `hub peer` 的用法和报错里的命令一律写 `personad`（`jarvisd` 别名照样能用，服务端 `command_name_test.go`、网页 `web/src/admin/command-name.test.ts` 守着）；systemd 单元名照旧是 `jarvisd`，管理界面提到 `journalctl --user -u jarvisd` 的地方说明「服务名沿用旧名」。管理界面的扩展页和「设置 › 扩展」一样：官方市场读不到时灰字「暂时读不到官方扩展，稍后再试。」（原因悬停可见），市场读不到时目录不说「这里还没有扩展」。
+Implementation (#4481, #4484): select the final admin UI address from hub's actual `listen`. If it listens only on loopback (`127.0.0.1` / `localhost` / `::1`), print a loopback address, explain "Only accessible on this computer," and show how to make it accessible from the phone (include the actual hub.json path, change its `listen` to `:<port>`, and rerun `hub setup`); the final `--json` line adds `admin_local_only: true`. If bound to a specific address, use that address; use the LAN IP only when listening on all addresses. On reruns, explain "Existing values are not changed" for `--listen` / `--tls` only if explicitly supplied and different from hub.json, showing both values. `--tls :<port>` and the new-install `LAN-IP:<port>` count as equivalent. Commands in the admin UI, hub logs, `hub doctor`, and usage / errors for `hub admin` / `hub peer` all use `personad` (the `jarvisd` alias still works; guarded by server `command_name_test.go` and web `web/src/admin/command-name.test.ts`). The systemd unit remains `jarvisd`; where the admin UI mentions `journalctl --user -u jarvisd`, explain "The service retains its old name." The admin extension page matches **Settings › Extensions**: when the official marketplace is unreadable, show muted text "Official extensions are temporarily unavailable. Try again later." (reason on hover). When the marketplace is unreadable, the catalog must not say "No extensions here yet."
 
-实现（#4045）：生成的值**不回写 `.env`**：`.env` 是 compose 在宿主机上读的，容器起来时已经读完了。改成 compose 不再强制 `JARVIS_DB_PASSWORD`、`JARVIS_PUBLIC_URL`、`PUID` / `PGID`（只剩 `JARVIS_IMAGE`）：没设库密码时 postgres 的入口（compose 里包的一层）第一次启动随机生成，存 `data/docker/db-password`（postgres 只挂这个子目录），镜像里的 `jarvisd` 包装脚本每次运行（含 `docker compose exec`）读它补进数据库地址；没设 `PUID` / `PGID` 时取 `data/` 的属主（归 root 时用 1000）。`data/` 里还没有 `hub.json` 时入口脚本写一份容器用的新安装默认值（`public_url: ""`、`public.tls_listen: ":18662"`、`admin.first_setup: "code"`、`machines: []`，不带 token，hub 首次读到时补），没走 `newInstallConfig()`：容器里拿不到 NAS 的局域网地址，`public_url` 只认 `JARVIS_PUBLIC_URL`，空着时入口脚本和 `hub pair` 都直说要设它。compose 映射 `${JARVIS_TLS_PORT:-18662}:18662`，镜像 `EXPOSE 18660 18662`。已有 `.env` / `hub.json` 的部署行为不变（`scripts/test/test_docker_entrypoint.py`）。见 `docs/docker.md`「装」。
+Implementation (#4045): generated values are **not written back to `.env`**. Compose reads `.env` on the host before the container starts. Instead, compose no longer requires `JARVIS_DB_PASSWORD`, `JARVIS_PUBLIC_URL`, or `PUID` / `PGID` (only `JARVIS_IMAGE` remains required). If no database password is set, the postgres entrypoint (a wrapper in compose) generates one on first startup and stores it in `data/docker/db-password` (postgres mounts only this subdirectory). The image's `jarvisd` wrapper reads it on every invocation (including `docker compose exec`) and fills it into the database URL. Without `PUID` / `PGID`, use the owner of `data/` (1000 if owned by root). When `data/` has no `hub.json`, the entrypoint writes container-specific new-install defaults (`public_url: ""`, `public.tls_listen: ":18662"`, `admin.first_setup: "code"`, `machines: []`, without a token, which hub fills on first read). It does not use `newInstallConfig()`: the container cannot obtain the NAS's LAN address. `public_url` only recognizes `JARVIS_PUBLIC_URL`; when empty, both the entrypoint and `hub pair` explicitly ask for it. Compose maps `${JARVIS_TLS_PORT:-18662}:18662`; the image has `EXPOSE 18660 18662`. Deployments with existing `.env` / `hub.json` retain their behavior (`scripts/test/test_docker_entrypoint.py`). See `docs/docker.md` ("Install").
 
-**Mac 一体化**（拍板 1、2 之后）：Persona Link 加「把这台 Mac 设成 hub」，内部调 `personad hub setup`，装好后本机是 `kind: local`，窗口里直接显示 `pair-codes` 返回的 `qr.rows`。和 Mac App `PersonaMac` 合不合成一个下载另行拍板（拍板 3）。
+**All-in-one Mac** (after decisions 1 and 2): add "Use this Mac as hub" to Persona Link, calling `personad hub setup` internally. After installation, the local machine is `kind: local`, and the window displays `qr.rows` returned by `pair-codes` directly. Whether to combine it with Mac app `PersonaMac` into one download is a separate decision (decision 3).
 
-### 4.2 配对
+### 4.2 Pairing
 
-**原则**：首次信任只来自用户亲眼看到的通道：扫屏幕上的二维码、粘贴自己复制的链接、hub 本机终端。不把长期凭据放进任何二维码、链接或日志；只用一次性码（`jp_…`，10 分钟、兑换一次）。
+**Principle**: initial trust comes only from a channel the user sees firsthand: scanning the on-screen QR code, pasting a link they copied themselves, or the hub's local terminal. Never put long-term credentials in a QR code, link, or log; use only one-time codes (`jp_…`, 10 minutes, single-use).
 
-#### 手机 / 网页 ↔ hub
+#### Phone / web ↔ hub
 
-| 场景 | 第一个码从哪来 |
+| Scenario | Source of the first code |
 | --- | --- |
-| 刚跑完 `hub setup` | 终端里的二维码；或手机浏览器打开安装器打印的 `/admin#setup=…`，设密码后「配对手机」 |
-| 已有一台登录好的设备 | 那台设备「设置 › 设备 › 连接新设备」（网页、iOS 已有；Android 本期补） |
-| 同一局域网、hub 开了 TLS（P1） | App 首屏「在附近找 hub」，浏览 `_jarvis-hub._tcp` 列出「家里的 hub『xxx』」。**mDNS 只做发现、不做信任**：广播的 `fp` 不能建立首次信任（`docs/network.md:75`），找到后仍要一次性码，价值是告诉用户「hub 已经装好了，去哪出码」 |
+| Just ran `hub setup` | Terminal QR code; or open the printed `/admin#setup=…` in a phone browser, set a password, then "Pair phone" |
+| Already has a logged-in device | **Settings › Devices › Connect new device** on that device (already on web and iOS; Android added this round) |
+| Same LAN, hub has TLS enabled (P1) | "Find nearby hubs" on the app's first screen browses `_jarvis-hub._tcp` and lists "Home hub 'xxx'". **mDNS provides discovery, not trust**: broadcast `fp` cannot establish initial trust (`docs/network.md:75`). A one-time code is still required after discovery; the benefit is telling the user "Hub is installed; here is where to get a code" |
 
-网页登录页（`Login.tsx:45-48`）首选「用已登录的手机扫码登录」（现有 `#token=jp_…` 网页登录码），其次「粘贴配对链接」；贴主 token 的框和 `jq` / `--legacy` 收进「高级」，标注「这是 hub 的总钥匙」。同一浏览器重新登录时复用或替换旧设备，设备名带日期，不再累积一串同名的「网页（Chrome · Linux）」。做法（#3356）：网页换凭据时带 `replaces`（上次那台的 id），hub 只撤销 `kind: web` 的那台（`docs/protocol.md`「鉴权」）；「还没有 hub？」是页内说明，网页拿不到官网地址。
+The web login page (`Login.tsx:45-48`) prefers "Scan with a logged-in phone to sign in" (existing `#token=jp_…` web login code), followed by "Paste pairing link". Put the main-token field and `jq` / `--legacy` in "Advanced," labeled "This is hub's master key." When signing in again in the same browser, reuse or replace the old device, with a date in the device name, rather than accumulating identically named "Web (Chrome · Linux)" entries. Implementation (#3356): web sends `replaces` (the previous device ID) when exchanging credentials; hub revokes only that `kind: web` device (`docs/protocol.md`, "Authentication"). "No hub yet?" is an explanation within the page; web cannot obtain the website URL.
 
-#### 你的电脑 ↔ hub
+#### Your computers ↔ hub
 
-本期目标：**在 App 里点「添加电脑」就够了**，不进 `/admin`、不先开 TLS、不先手动添加。
+This round's goal: **"Add computer" in the app is enough**, without `/admin`, enabling TLS first, or manually adding it beforehand.
 
-1. 已登录的 full 设备调 `POST /api/v1/auth/pair-codes` 带 `add`（第 5.3 节）。hub 照 `/admin` 添加电脑的同一段逻辑加一条 `kind: link`（抽出函数两边共用，`addMachineLive` 不用重启），返回电脑的配对链接。
-2. 这台电脑处于 **待确认（pending）**，直到用户在 App 里点「是我的电脑」。理由：今天 Persona 管理的 API Key 是「给每一个 node」（`assistant/models_launchers.go:25-29`，`pushManaged` 推给每台在线机器，`:166-177`）；Docker hub 没有本机电脑时，`defaultAssistantMachine` 会兜底选第一台机器（`hub/assistant_profile.go:117-118`）。不加确认就放开，一条被转发或截图的链接就等于 Key 外泄、主对话跑在别人的电脑上。pending 的电脑：
-   - 不收任何 Persona 管理的 Key（`pushManaged` 过滤）；
-   - 不参与助手机器的选择（`defaultAssistantMachine` 跳过它，助手的 `effective()` 也不认它，`assistant/profile.go:139-142`）；
-   - 不出现在新建 Agent、派发、待办的电脑列表里；
-   - 24 小时没确认自动删除（hub.json 条目和 Postgres 记录一起）。
-   确认就在「等这台电脑连上来」那一屏里：连上以后显示「有一台电脑想加入：<名字>（macOS），是你的吗？」，一个按钮，不多一屏。
-3. **兼容**：信任状态存 Postgres 新表，**没有记录 = 已确认**，所以升级时已有的机器、`/admin` 加的、回环 + 主 token（`hub pair --machine`）加的都直接是已确认，行为不变。老 App 看到 pending 机器时，机器的 `error` 写「等你在新版 App 或网页里确认」。
-4. **看得见的回执**：设备出了电脑码、新设备兑换了 App 码、新电脑接入，都给其他已配对设备推一条通知，带「不是你？撤销」（撤销接口已有）。今天只写 hub 日志（`pairing.go:187`）。
-5. 链接交给那台电脑，按系统给一屏：
-   - **Linux**：一行命令，链接嵌在里面（`install.sh --node --pair '<链接>'`，已有），「拷贝」+「在那台电脑上打开终端，粘贴，回车」。
-   - **Mac**：「下载 Persona Link」（拍板 1 之前链接到 `docs/persona-link-install.md`，如实写「目前要自己编译」）+「把这条链接发给那台电脑」（系统分享）。Persona Link 注册 `jarvis` 和 `persona` 两个 URL scheme，点链接直接打开配对窗口并预填（今天 `apple/PersonaLink/Info.plist` 没有 URL scheme）。hub 照旧发 `jarvis://link?…`（`pairing.go:57`），老 Persona Link 和 node 都认。
-   - **Windows**：照 `docs/windows.md` 给命令，说明托盘程序还在做（#299）。
-6. `personad hub pair --machine <id>`：没有这台时加 `--add [--name]` 自动添加，不带时提示「加 --add」，不再回 400 `hub.json has no machine …`。Persona Link 配对窗口、`install.sh` 的提示照这个改。
-7. 没开 TLS 的老 hub：409 `tls_required` + 动作 `enable_tls`，App 说「hub 还没打开安全连接，电脑接不进来」，受监管时一键打开并重启。
-8. **互联里的成员 hub**：App 的码今天会转给中心（`pairing.go:161-164`），电脑怎么办没定。本期成员 hub 上设备发起的添加电脑回 409 `mesh_member`「在中心 hub 上添加」，新手不会走到这里。
+1. A logged-in full device calls `POST /api/v1/auth/pair-codes` with `add` (section 5.3). Hub adds a `kind: link` entry using the same logic as `/admin` (extract a shared function; `addMachineLive` needs no restart), and returns the computer pairing link.
+2. The computer stays **pending** until the user taps "This is my computer" in the app. Why: Persona-managed API keys currently go to "every node" (`assistant/models_launchers.go:25-29`; `pushManaged` sends to every online machine, `:166-177`). When a Docker hub has no local computer, `defaultAssistantMachine` falls back to the first machine (`hub/assistant_profile.go:117-118`). Without confirmation, a forwarded or screenshotted link would leak keys and run main chat on someone else's computer. A pending computer:
+   - receives no Persona-managed keys (`pushManaged` filters it);
+   - is excluded from assistant-machine selection (`defaultAssistantMachine` skips it; assistant `effective()` rejects it too, `assistant/profile.go:139-142`);
+   - is absent from computer pickers for new Agents, dispatch, and to-dos;
+   - is automatically deleted after 24 hours without confirmation (both hub.json entry and Postgres record).
+   Confirmation belongs on the "Waiting for this computer to connect" screen. Once connected, show "A computer wants to join: <name> (macOS). Is it yours?" with one button, not another screen.
+3. **Compatibility**: store trust state in a new Postgres table; **no record = confirmed**. Existing machines, ones added through `/admin`, and ones added through loopback + main token (`hub pair --machine`) therefore remain confirmed on upgrade, with no behavior change. For old apps, a pending machine's `error` says "Confirm in a newer app or on the web."
+4. **Visible receipts**: when a device generates a computer code, a new device redeems an app code, or a new computer connects, notify other paired devices with "Not you? Revoke" (revocation endpoint already exists). Today this only appears in hub logs (`pairing.go:187`).
+5. Send the link to that computer, with a screen for its OS:
+   - **Linux**: a single command containing the link (`install.sh --node --pair '<link>'`, already exists), "Copy" + "Open a terminal on that computer, paste, and press Enter."
+   - **Mac**: "Download Persona Link" (before decision 1, link to `docs/persona-link-install.md` and honestly say "Currently requires building it yourself") + "Send this link to that computer" (system share). Persona Link registers both `jarvis` and `persona` URL schemes; opening a link shows and prefills the pairing window (today `apple/PersonaLink/Info.plist` has no URL scheme). Hub still sends `jarvis://link?…` (`pairing.go:57`), recognized by old Persona Link and node.
+   - **Windows**: provide commands from `docs/windows.md`; explain the tray app is still in development (#299).
+6. `personad hub pair --machine <id>`: if the machine does not exist, `--add [--name]` adds it automatically; without it, ask "Add --add," rather than returning 400 `hub.json has no machine …`. Update Persona Link's pairing window and `install.sh` instructions accordingly.
+7. Old hubs without TLS: 409 `tls_required` + action `enable_tls`; the app says "Hub has not enabled secure connections, so computers cannot join." If managed, enable and restart in one tap.
+8. **Member hubs in linked hubs**: app codes are currently forwarded to the primary hub (`pairing.go:161-164`); the computer flow is undecided. This round, adding a computer from a member-hub device returns 409 `mesh_member`, "Add it on the primary hub." New users will not reach this.
 
-P1：**电脑发起、手机允许**。Persona Link 首屏显示一个二维码（含它的一次性公钥和局域网地址），手机扫后经局域网把完整链接交给电脑，不搬长链接。不做「手机出 6 位短码、电脑输入」：短码要靠局域网发现找 hub，mDNS 能被同网段的人伪造。
+P1: **computer initiates, phone allows**. Persona Link's first screen shows a QR code with its one-time public key and LAN address. The phone scans it and sends the full link to the computer over LAN, avoiding manual transfer of a long link. Do not implement "phone shows a 6-digit code; computer enters it": a short code needs LAN discovery to find hub, and mDNS can be spoofed by someone on the same network.
 
-### 4.3 模型接入
+### 4.3 Connecting a model
 
-#### 不依赖 zsh
+#### No dependency on zsh
 
-- 引导里不出现「~/.zshrc」。「从 ~/.zshrc 导入」挪进 设置 › 模型供应商 的「高级」，零电脑时禁用并说明（今天会一直转圈）。
-- 研发用户已有的 alias / 函数照旧被发现、照旧可选（`node/sessions.go:1897` `mergeLaunchers`），新手向导不依赖它们。
-- 默认启动器 `claude` 今天一律经 `zsh -ic` 起（`node/assistant.go:636-638`），PATH 写在 `.zprofile` 的人会 `command not found`。改成优先用 `claudeExecutable()`（`node/managed.go:104`）找到的绝对路径，找不到再走 shell。这块和 #2854（bash 启动器 / 内置 claude，别人认领中）重叠，先在 #2854 下协调，不重复做。
+- Do not mention "~/.zshrc" in onboarding. Move "Import from ~/.zshrc" to "Advanced" in **Settings › Model providers**; disable it with an explanation when there are no computers (today it spins forever).
+- Existing developer aliases / functions are still discovered and selectable (`node/sessions.go:1897`, `mergeLaunchers`); the onboarding wizard does not depend on them.
+- The default `claude` launcher currently always starts through `zsh -ic` (`node/assistant.go:636-638`), causing `command not found` for users whose PATH is in `.zprofile`. Prefer the absolute path found by `claudeExecutable()` (`node/managed.go:104`), then fall back to the shell. This overlaps with #2854 (bash launchers / bundled claude, claimed by someone else); coordinate in #2854 first rather than duplicating the work.
 
-#### 先检测，再问
+#### Detect first, then ask
 
-配对成功后（或主对话首屏缺模型时）先看就绪度（第 5.1 节），用户看到的是结论：
+After pairing (or when main chat's first screen lacks a model), check readiness first (section 5.1). Users see conclusions:
 
-| 检测到 | 用户看到 | 按钮 |
+| Detected | User sees | Button |
 | --- | --- | --- |
-| 有在线电脑，Claude Code 已装且登录了 | 「你的 MacBook 上的 Claude Code 能用」 | 「就用它」→ 试一句 |
-| 已装、没登录 | 「Claude Code 还没登录」 | 「我有 API Key」/「怎么登录」（图文：在那台电脑上打开「终端」，输入 claude，按提示登录。本期唯一还要终端的一步） |
-| 有电脑，没装 Claude Code | 「这台电脑还没装 Claude Code」 | 「怎么装」（官方说明页）；P1「帮我装」 |
-| 没有电脑 | 「先添加一台电脑；接上以后它就能动手」 | 「添加电脑」；P1 有 Key 时「先只聊天」 |
-| 已有能用的带 Key 供应商 | 跳过这步 | — |
+| Online computer, Claude Code installed and logged in | "Claude Code on your MacBook is ready" | "Use this" → try a message |
+| Installed, not logged in | "Claude Code is not logged in yet" | "I have an API key" / "How to sign in" (illustrated: open Terminal on that computer, enter claude, and follow the sign-in instructions; the only step this round still requiring a terminal) |
+| Computer exists, Claude Code not installed | "This computer does not have Claude Code yet" | "How to install" (official instructions); P1 "Install for me" |
+| No computer | "Add a computer first; once connected, it can do the work" | "Add computer"; P1 "Chat only for now" if a key is available |
+| A working keyed provider already exists | Skip this step | — |
 
-「登录了吗」的免费检测：node 新增一个 RPC，跑 `claude auth status --json`（不发模型请求）。两条注意：
+Free sign-in detection: add a node RPC running `claude auth status --json` (no model request). Two caveats:
 
-- 必须在**那个启动器真实的环境里**跑：默认启动器经同一个 shell（`zsh -ic`）或绝对路径，Persona 管理的启动器经 `personad launch <名字>` 的环境。实测在空 HOME 下，环境里的 API Key 会让它报 `loggedIn: true, authMethod: api_key`；不在真实环境里跑会得到假的「能用」或假的「没登录」。
-- node 里今天没有任何地方用它。按版本判断，老版本没有这个子命令、或输出读不懂时报 `unknown`，不当失败。`authMethod: api_key` 时显示「用的是环境里的 Key」，状态记「未验证」，等试一句。
+- It must run in **the launcher's actual environment**: the default launcher uses the same shell (`zsh -ic`) or absolute path; Persona-managed launchers use the environment of `personad launch <name>`. Testing with an empty HOME showed that an environment API key makes it report `loggedIn: true, authMethod: api_key`. Running outside the actual environment can falsely report "ready" or "not logged in."
+- Node does not currently use this command anywhere. Check versions; an old version without the subcommand, or unreadable output, reports `unknown`, not failure. With `authMethod: api_key`, display "Using a key from the environment," record the status as "Unverified," and wait for a test message.
 
-#### 三条路
+#### Three routes
 
-**A. 已经有 Claude Code**：不改配置（默认就是 `claude`，`assistant/profile.go:148-150`），直接试一句。P1：由 node 代跑 `claude setup-token` 之类的无头登录，把登录链接推到手机打开，要先实测，并确认订阅登录这样用符合 Anthropic 条款（拍板 10）。
+**A. Already has Claude Code**: do not change configuration (the default is `claude`, `assistant/profile.go:148-150`); try a message directly. P1: node runs a headless sign-in command such as `claude setup-token` and pushes the sign-in link to open on the phone. Test this first and confirm this use of subscription sign-in complies with Anthropic's terms (decision 10).
 
-**B. 只有 API Key**：
+**B. API key only**:
 
-1. 选一家（内置预设，见下），只粘 Key；名字自动生成，显示名可以是中文。
-2. 自动测试（`POST /api/v1/launchers/test`，没填模型时用预设的默认模型，不再报「要填模型」）。失败沿用已有的大白话（401 / 403 / 404 / 429 / 超时，`server/internal/i18n/locales/zh-Hans/assistant-models_probe.json`），加一个「Key 从哪拿」链接。测试会花一点钱，保留现有提示。
-3. 保存时带 `assign`（第 5.4 节）：**只有主对话 / Agents 还是默认值（没人改过）时才改**，返回 `assigned`。向导最后一屏写明「主对话和新开的 Agent 都用它」；就绪度显示已有能用的 Claude Code 时，这个开关默认关，不悄悄换掉一个能用的默认。
-4. 有电脑但没装 Claude Code：如实说「Key 存好了；还要在电脑上装 Claude Code，主对话才能用它」，因为 `finishModel` 仍然在电脑上起 claude。P1：node 的 `claude.install`（照 `herdrinstall.go` 的下载、校验、装到 `~/.local/bin`、进度回传），只由用户点按钮触发，下载地址只认官方域名，国内网络下载失败报 `download_blocked`。
-5. 没有电脑：P1「只聊天」模式（4.4）直接用这个 Key。
+1. Choose a provider (built-in presets below), paste only the key; generate the name automatically, allowing a Chinese display name.
+2. Test automatically (`POST /api/v1/launchers/test`; if no model is supplied, use the preset's default rather than requiring a model). On failure, retain the existing plain-language explanations (401 / 403 / 404 / 429 / timeout, `server/internal/i18n/locales/zh-Hans/assistant-models_probe.json`) and add a "Where to get a key" link. Testing costs a little money; keep the existing notice.
+3. Include `assign` on save (section 5.4): **change main chat / Agents only if they are still at their untouched defaults**, and return `assigned`. The wizard's final screen explicitly says "Main chat and new Agents will use this." If readiness reports working Claude Code, default this switch to off; do not silently replace a working default.
+4. Computer exists, Claude Code missing: say honestly "Your key is saved. Install Claude Code on the computer before main chat can use it," because `finishModel` still starts claude on a computer. P1: node's `claude.install` (follow `herdrinstall.go` for download, verification, installation to `~/.local/bin`, and progress reporting), triggered only by the user's button tap. Accept download URLs only on official domains; report `download_blocked` if downloading fails on networks in China.
+5. No computer: P1 "Chat only" mode (4.4) uses this key directly.
 
-实现（#4482，`assistant/models_probe.go`）：403 里单独认出 Anthropic 的地区拦截（返回体 `message` 是 `Request not allowed`、`error.type` 是 `forbidden`，在看 Key 之前就拦下；`error.type` 为空的只在地址就是 Anthropic 官方时才算，别的网关的同一句泛泛的话照旧当普通 403），文案改成「Anthropic 官方不对你现在的网络所在地区开放，换 Key 也没用」，后面列出内置预设里不是只面向海外的几家（按请求的语言写名字），不再带网关的原话；测试和获取模型的回答多一个 `code: "region_blocked"`，三端目前只显示文案（向导本来就能返回上一步换一家），按码给切换入口留到后续（#4526）。Anthropic 的 `permission_error` 和别家的 403 仍是原来的「没有权限（403）」加原话。
+Implementation (#4482, `assistant/models_probe.go`): distinguish Anthropic regional blocking within 403 responses (response `message` is `Request not allowed`, `error.type` is `forbidden`; blocking happens before the key is checked. If `error.type` is empty, count it only when the address is the official Anthropic endpoint; the same generic phrase from another gateway remains an ordinary 403). Change the copy to "Anthropic's official service is unavailable in your current network's region; changing your key will not help," followed by the built-in providers not limited to overseas service (names in the request language), without quoting the gateway's raw wording. Test and model-list responses add `code: "region_blocked"`; the three clients currently only show the copy (the wizard already lets users go back and choose another provider). A code-based switching entry point is follow-up work (#4526). Anthropic `permission_error` and other providers' 403s retain "No permission (403)" plus the original message.
 
-网页的实现（#4037，`views/settings/ProviderWizard.tsx`）：「已有能用的 Claude Code」按就绪度的电脑、Claude Code、模型三步都是 `ok` 算（模型从没验证过的 `unknown` 不算，新 Key 照常默认接上）；第一次结果回来之前开关不出现，保存也等结果回来再决定带不带 `assign`。
-第 4 步的提示看保存前和保存后重拉的就绪度：任一次 Claude Code 那一步是 `claude_missing`、且保存后没变成 `ok` 就提示。只看保存后不够，主对话换成 Persona 管理的供应商以后，hub 对这一步回 `unknown`（`readiness.go` 只在默认的 `claude` 启动器上断定缺失）。
+Web implementation (#4037, `views/settings/ProviderWizard.tsx`): "Working Claude Code already exists" requires `ok` for all three readiness steps: computer, Claude Code, and model (an untested `unknown` model does not count; a new key still defaults to assignment). Hide the switch until the first result arrives; saving also waits for it before deciding whether to include `assign`.
+For the step 4 notice, check readiness both before saving and after refetching: show it if Claude Code was `claude_missing` in either result and is not `ok` after saving. Checking only after saving is insufficient: once main chat switches to a Persona-managed provider, hub returns `unknown` for this step (`readiness.go` asserts absence only for the default `claude` launcher).
 
-**C. 什么都没有**：一屏「去哪弄一个模型」，内置预设按请求语言排序（中文先列国内能直接开通的，其他语言先列 Anthropic），每家一句说明和「去开通」（App 内浏览器打开 `signup_url`），回来进 B。旁边是「先体验一下」。不放推广链接，推荐谁和顺序是拍板 11。
+**C. Has neither**: one screen, "Where to get a model." Sort built-in presets by request language (Chinese lists providers available directly in China first; other languages list Anthropic first). Give each a one-sentence explanation and "Sign up" (open `signup_url` in the in-app browser); on return, proceed to B. Beside it, offer "Try demo first." No affiliate links; recommendations and order are decision 11.
 
-Android 的实现（#4297，细节见 `docs/android.md`「新手：模型、设备、电脑」）：hub 有 `builtin_presets` 时同网页的三步；和网页不同的地方：「Key 从哪拿」用系统浏览器打开 `signup_url`（设置页里没有 App 内浏览器）；就绪度没回来时开关处显示「正在看…」，保存会等它回来；旧 hub 照旧是「自己填写 / 从扩展添加」，测试连接和获取模型列表只在自定义网关的表单里。
+Android implementation (#4297; details in `docs/android.md`, "Onboarding: models, devices, computers"): when hub has `builtin_presets`, use the same three steps as web. Differences: "Where to get a key" opens `signup_url` in the system browser (Settings has no in-app browser); while readiness is pending, the switch area says "Checking…" and saving waits for the result. Old hubs retain "Enter manually / Add from extension"; connection tests and fetching model lists exist only in the custom-gateway form.
 
-#### 内置预设
+#### Built-in presets
 
-- 在 `server/internal/assistant/` 里新放一个嵌入的 presets_builtin.json，结构就是 `assistantwire.LauncherPreset`（`assistantwire/models.go:61-75`），`plugin` 写 `"builtin"`，id 是 `builtin/<厂商>`。加两个可选字段：`signup_url`、`name_zh`（或按 i18n 键）。
-- `launcherPresets()`（`models_presets.go:20`）返回「内置 + 插件」，插件同 id 盖过内置；`presetFill` 不改。
-- 首批候选：Anthropic 官方、DeepSeek、Kimi（Moonshot）、智谱 GLM、阿里百炼、MiniMax 的 Anthropic 兼容入口。**地址和模型名写稿时没核**，实现时逐家对官方文档、一词请求实测通过才进列表，PR 里附来源；只放厂商公开地址，不放中转站和公司网关。测试保证每项字段齐全。
-- 三端向导第一步直接列预设，「自定义兼容网关」放最后；Base URL、鉴权方式只在自定义里出现。向导里写死在客户端的「Anthropic 官方」（`web/src/lib/providers.ts`、`ProviderWizardModel.swift`）改读预设。Android 补「测试连接」「获取模型列表」（今天不调 `/launchers/test`、`/discover`）。
+- Add an embedded presets_builtin.json under `server/internal/assistant/`, using `assistantwire.LauncherPreset` (`assistantwire/models.go:61-75`), `plugin: "builtin"`, and IDs `builtin/<vendor>`. Add two optional fields: `signup_url`, `name_zh` (or an i18n key).
+- `launcherPresets()` (`models_presets.go:20`) returns "built-in + plugins"; a plugin overrides a built-in with the same ID. Leave `presetFill` unchanged.
+- Initial candidates: official Anthropic, DeepSeek, Kimi (Moonshot), Zhipu GLM, Alibaba Bailian, and MiniMax's Anthropic-compatible endpoints. **Addresses and model names were not verified while drafting**. Before adding any provider, check its official documentation and pass a one-word request test, with sources in the PR. Include only vendors' public addresses, not relay services or company gateways. Tests ensure every entry has all required fields.
+- The first wizard step on all three clients lists presets directly, with "Custom compatible gateway" last. Base URL and authentication method appear only in the custom flow. Replace hardcoded "Official Anthropic" in client wizards (`web/src/lib/providers.ts`, `ProviderWizardModel.swift`) with preset data. Add "Test connection" and "Get model list" on Android (currently does not call `/launchers/test` or `/discover`).
 
-### 4.4 主对话的就绪度和降级
+### 4.4 Main-chat readiness and degradation
 
-主对话的状态由 hub 算（`GET /api/v1/assistant/readiness` 的 `mode`，第 5.1 节），四端同一套表现：
+Hub computes main-chat status (`mode` in `GET /api/v1/assistant/readiness`, section 5.1); all four platforms present it consistently:
 
-| `mode` | 条件 | 首屏 | 发送 |
+| `mode` | Conditions | First screen | Sending |
 | --- | --- | --- | --- |
-| `full` | 有确认过的在线电脑 + Claude Code 能起 + 模型没报错 | 今天的样子；示例问题按已接上的能力给 | 正常 |
-| `setup` | 缺电脑、电脑离线、没装 Claude Code、没登录、Key 无效之一 | 问候照常；输入框上方一张卡片，只画第一个缺的那一步（标题 + 一句原因 + 一个按钮）；示例问题换成「Persona 能做什么」「怎么接模型」，点了打开本地帮助，不发给模型；不再说「也能到各台电脑上动手」 | 输入框能打字、草稿保留；发送按钮变成「先接上模型」（或「先添加电脑」），点了进对应那一步。**不排队发送**，免得接好以后冒出一堆迟到的回答 |
-| `chat_only`（P1，拍板 9） | 有 hub 能直接调的带 Key 供应商，但没有可用电脑 | 顶部一条常驻提示「现在只能聊天；接上你的电脑后能替你动手」+「添加电脑」 | hub 直接调 API 回答 |
+| `full` | Confirmed online computer + Claude Code can start + no model error | Current appearance; example questions reflect connected capabilities | Normal |
+| `setup` | Missing computer, offline computer, missing Claude Code, not logged in, or invalid key | Keep the greeting. Above the composer, show one card for only the first missing step (title + one-sentence reason + one button). Replace example questions with "What can Persona do?" and "How do I connect a model?"; taps open local help, not a model request. Stop saying it "can also do work on your computers" | Allow typing and preserve the draft. Replace Send with "Connect a model first" (or "Add a computer first"), opening that step. **Do not queue messages**, avoiding a flood of late answers once setup finishes |
+| `chat_only` (P1, decision 9) | A keyed provider hub can call directly, but no usable computer | Persistent top notice: "Chat only for now. Connect your computer so Persona can do the work" + "Add computer" | Hub answers through the API directly |
 
-本期 hub 只回 `full` / `setup`；`chat_only` 先写进协议，客户端现在就按「顶部提示 + 照常发送」处理，P1 落地时不用再发版。
+This round, hub returns only `full` / `setup`. Add `chat_only` to the protocol now; clients handle it as "top notice + normal sending" so P1 will not require another app release.
 
-失败不再弹 toast，一律是卡片：
+Failures are cards, never toasts:
 
-- **发出去才发现失败**（就绪度过时）：卡片钉在那条消息下面（第 4.6 节的文案 + 按钮 +「详情」），消息可「重试」。
-- **电脑睡着 / 离线**：「小林的 MacBook 现在不在线，可能睡着了。打开盖子就能继续。」不说成连不上 hub（安卓今天会这样说）。
-- **模型出错**：「Not logged in」「Invalid API key」这类 Claude Code 合成的回答，不再显示成普通气泡，显示成「模型没接好：没登录 / Key 不对」卡片 +「去修」。要把 `Not logged in` 加进 `APIErrorMarkers`（`assistantwire/wire.go:383-384`），`turn_error_kind` 归现有的 `user`（`proto/proto.go:822-823`，`auth` 是健康检查的分类，不是轮次的 kind）。`CutOff` 同时驱动 hub 会话列表的 `TurnError`、定时任务和待办的处理（`wire.go:380-382` 的注释），所以这个 PR 要带定时任务和待办的测试，不只是主对话的卡片。
+- **Failure discovered after sending** (stale readiness): pin a card below that message (copy from 4.6 + button + "Details"); offer "Retry" on the message.
+- **Computer asleep / offline**: "Your MacBook is offline, possibly asleep. Open the lid to continue." Do not describe this as failure to connect to hub (Android currently does).
+- **Model errors**: Claude Code's synthesized replies such as "Not logged in" and "Invalid API key" no longer appear as ordinary bubbles. Show a "Model not connected: not logged in / incorrect key" card + "Fix it." Add `Not logged in` to `APIErrorMarkers` (`assistantwire/wire.go:383-384`); use the existing `user` for `turn_error_kind` (`proto/proto.go:822-823`; `auth` is a health-check category, not a turn kind). `CutOff` also drives `TurnError` in hub's session list and scheduled-task / to-do handling (comment at `wire.go:380-382`), so this PR needs scheduled-task and to-do tests, not just a main-chat card.
 
-**定时任务**：新 hub 默认开着工作日 09:00 的早报（`assistant/schedule.go:212`），零电脑时到点必然失败。改成：就绪度不是 `full` 时跳过，记为「跳过：还没接好电脑或模型」，不推失败通知；就绪后第一次跑之前在主对话里提一句。默认值本身不改，老 hub 不受影响。
+**Scheduled tasks**: new hubs enable a weekday 09:00 morning briefing by default (`assistant/schedule.go:212`); with zero computers, it will always fail. Change this to skip while readiness is not `full`, record "Skipped: computer or model setup is incomplete," and send no failure notification. Mention it in main chat before the first run after setup. Do not change the default itself; old hubs are unaffected.
 
-实现（#4253，`assistant/schedule_ready.go`）和上面不同或补充的地方：
+Differences and additions in the implementation (#4253, `assistant/schedule_ready.go`):
 
-- 不是「`mode` 不是 `full` 就跳过」，而是挡住 `mode` 的那一步这次运行也要用才跳过：发进另一台电脑上的对话的跟进不等助手的电脑；用了别的启动器的任务只等电脑，不等主对话的 Claude Code 和模型。这样 `mode` 是 `setup` 时也照常能跑的任务不会被拦（以前能跑的现在还能跑）。
-- 运行记录的 `status` 是 `skipped`，`error` 是「还没接好电脑或模型，这次跳过」（和「上一轮还在运行，这次跳过」一个说法）；不推送，也不 3 分钟后重试。「立即运行」不拦；一次性的任务（提醒、助手给自己定的跟进）不拦：它到点就关掉，跳过就丢了，所以照旧发，失败照旧推送「定时任务失败」并重试一次。
-- 就绪度用不 probe 的那条路（node 的两个问题有缓存），等 node 最多 12 秒，不花 token。
-- 「提一句」是主对话对话动态里一条新的 `notice` 条目（`{"text"}`，`docs/protocol.md`「任务和对话动态」），hub 写好文字，不花模型的钱；因为要用户去接、去修的那一步（`todo`，或登录、Key、模型这类问题）跳过过才写，写一次（标记 `routines_waiting` 存在 `assistant.readiness`，重启也在）；电脑只是睡着、离线（`node_unreachable`）照样跳过，但不记标记，免得每次醒来都说一句「接好了」。现在四端还不画 `notice`（不认识的条目跳过），要各端补一行居中小字；没补之前用户只在运行记录里看得到跳过和恢复。
+- Rather than "skip whenever `mode` is not `full`," skip only if the step blocking `mode` is needed by this run. A follow-up sent to a chat on another computer does not wait for the assistant's computer. A task using another launcher waits only for its computer, not main chat's Claude Code or model. This preserves tasks that can run even in `setup` mode (anything that ran before can still run).
+- The run record has `status: skipped` and an `error` saying "Computer or model setup is incomplete; skipping this run" (same phrasing as "The previous turn is still running; skipping this run"). No push notification or retry after 3 minutes. Do not block "Run now" or one-time tasks (reminders and assistant-created follow-ups): they disable themselves at their due time, so skipping would lose them. Send as before, and on failure push "Scheduled task failed" and retry once.
+- Use the non-probing readiness path (node's two checks are cached), wait at most 12 seconds for node, and spend no tokens.
+- The "mention" is a new `notice` entry in main chat's activity feed (`{"text"}`, `docs/protocol.md`, "Tasks and chat activity"). Hub writes the copy without model cost. Emit it only after a skip caused by a step requiring user setup or repair (`todo`, login, key, or model problems), and only once (persist `routines_waiting` in `assistant.readiness`, surviving restarts). Sleeping / offline computers (`node_unreachable`) still cause skips, but do not set the flag, avoiding "Setup complete" on every wake. None of the four clients renders `notice` yet (unknown entries are skipped); each needs one centered line of small text. Until then, users can see skips and recovery only in run history.
 
-**接好以后**：「试一句」成功时，主对话里出一条本地写好的欢迎（不花模型的钱）和三个可点的小任务，按已接上的能力挑：「看看这台电脑上最大的几个文件夹」「今天有什么安排」（点的时候才弹手机日历授权）「教我接邮箱」。
+**After setup**: when "Try a message" succeeds, main chat shows a locally written welcome (no model cost) and three small tappable tasks, chosen from connected capabilities: "Find the largest folders on this computer," "What's on my calendar today?" (request phone calendar permission only on tap), and "Help me connect email."
 
-网页的实现（#3847，细节见 `docs/web.md`「主对话还缺什么」）和上面不同的地方：发送失败的卡片不带「重试」，没发出去的话回到输入框里，再点发送就是重试；`add_computer` 在 hub 有 `machines_add` 时就地打开机器页的添加流程，老 hub 是一个说明弹窗加「打开管理界面」（hub 的 `/admin/machines`）；`confirm_computer` 就地打开那台待确认电脑的确认界面（#4037）；总览零电脑的空状态由 #3729 单独做。
+Web implementation (#3847; details in `docs/web.md`, "What main chat still needs") differs as follows: failed-send cards do not include "Retry". Unsent text returns to the composer; pressing Send again retries. `add_computer` opens the Machines page's add flow in place when hub has `machines_add`; old hubs show an explanatory dialog with "Open admin UI" (hub's `/admin/machines`). `confirm_computer` opens that pending computer's confirmation UI in place (#4037). The zero-computer Overview empty state is separate work in #3729.
 
-Android 的实现（#4032，细节见 `docs/android.md`「主对话还缺什么」）和上面不同的地方：发送失败只在开主对话被拒（409 `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` / `not_logged_in` / `auth_failed`）时出卡片：那条消息停在「没有发出」、卡片钉在它下面，带那一步的按钮和「重试」（重试前先重拉就绪度，还缺就打开那一步，不再发）；以前这种消息会一直排着等，hub 拒绝后也不再重试创建。`add_computer` 在 7.2 第 16 项合进来之前是说明弹窗，指到网页版的「机器 › 添加电脑」（#4297 起打开 App 里的添加电脑页，`confirm_computer` 打开那台电脑的确认，见下面 5.3 后的「Android 的实现」）；「试一句」和网页一样跑 `?probe=1`，不真开一轮主对话；首次配对后的整页清单没有导航，`connect_model` / `edit_provider` 打开「怎么接模型」的说明（说明里不再给「接上模型」「改用 API Key」，只有「知道了」），`confirm_computer` 不画按钮；只有「跳过未完成项」才 `dismiss`，「完成」不发。
+Android implementation (#4032; details in `docs/android.md`, "What main chat still needs") differs as follows: failed-send cards appear only when starting main chat is rejected (409 `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` / `not_logged_in` / `auth_failed`). The message remains "Not sent," with a card pinned below, the step's button, and "Retry" (refetch readiness first; if still incomplete, open that step without resending). These messages previously stayed queued forever; after hub rejects them, creation is no longer retried. Before item 16 in 7.2 merges, `add_computer` shows an explanation pointing to web **Machines › Add computer** (from #4297 it opens the in-app add-computer page, and `confirm_computer` opens that computer's confirmation; see "Android implementation" after 5.3 below). "Try a message" uses `?probe=1`, like web, without opening a real main-chat turn. The full-page checklist after first pairing has no navigation; `connect_model` / `edit_provider` opens a "How to connect a model" explanation (no "Connect model" or "Use an API key" buttons, only "Got it"); `confirm_computer` has no button. Only "Skip unfinished items" sends `dismiss`; "Done" does not.
 
-#### 「只聊天」模式（P1，单独一个 issue，拍板 9）
+#### "Chat only" mode (P1, a separate issue, decision 9)
 
-只有 API Key、没有电脑（Docker / NAS / 公司电脑不让装）的人，今天主对话永远是空的。本期给引导卡，不给死胡同里的空白；P1 做一个受限的模式：
+For people with only an API key and no computer (Docker / NAS / work computers that prohibit installation), main chat is permanently empty today. This round provides a guidance card rather than a blank dead end; P1 adds a limited mode:
 
-- 基于 hub 已有的直接调模型的客户端（`server/internal/ai/ai.go:110` `Complete`，信息处理 / 筛选在用），供应商按 `fallbackAPIProvider` 的规则挑（`assistant/models.go:370`），只用 Messages 协议。
-- 纯文本对话，加 hub 本地就能答的只读上下文（接入状态、知识库摘要、收件箱计数）。不调电脑上的工具、不碰手机写操作、不做工具调用循环。
-- 对话存 Postgres 自己的表（迁移号实现时看所有 worktree），和 node 上的主对话分开；界面上常驻提示「现在只能聊天」。接上电脑后切回正常主对话，把这段的摘要带进新进程的第一条上下文。
-- 提示词放 `server/internal/prompts/` 下新建的 assistant/chat_only 目录，有 golden 测试；被要求做事时回答「接上电脑后我就能做」。
+- Build on hub's existing direct-model client (`server/internal/ai/ai.go:110`, `Complete`, used for information processing / filtering). Select a provider using `fallbackAPIProvider` rules (`assistant/models.go:370`); support only the Messages protocol.
+- Plain-text chat, with read-only context hub can answer locally (connection status, knowledge base summaries, Inbox counts). No computer tools, phone writes, or tool-call loop.
+- Store chats in a dedicated Postgres table (check all worktrees for migration numbers during implementation), separate from main chat on node. Show a persistent "Chat only for now" notice. After connecting a computer, switch back to normal main chat and include a summary of this segment in the new process's first context message.
+- Put prompts in a new assistant/chat_only directory under `server/internal/prompts/`, with golden tests. When asked to act, answer "I can do that once you connect a computer."
 
-风险（为什么要拍板）：记忆、transcript、权限会分成两份；工作量在存储、流式、客户端渲染。
+Risks (why a decision is needed): memory, transcript, and permissions split into two systems; the work lies in storage, streaming, and client rendering.
 
-### 4.5 各端首启引导和空状态
+### 4.5 First-launch onboarding and empty states by platform
 
-#### 首屏（还没配对）
+#### First screen (not paired yet)
 
-四端同一结构：
+Same structure on all four platforms:
 
 ```
 Persona
-把你的电脑和手机连在一起，交给 AI 去做事。
+Connect your computers and phone, and let AI do the work.
 
-[ 扫码连接 hub ]                ← 主按钮
-在附近找 hub                    ← P1，mDNS
-还没有 hub？                    ← App 内浏览器打开「开始使用」（3.3 的选择题）
-先体验一下（数据都是编造的）       ← 网页没有体验模式，这一行不显示
-其他方式                        ← 手动输入、SSH 隧道、粘贴链接、命令行写法
+[ Scan to connect to hub ]       ← Primary button
+Find nearby hubs                ← P1, mDNS
+No hub yet?                     ← In-app browser opens "Get started" (choices in 3.3)
+Try demo first (all data is fictional) ← Hidden on web, which has no demo mode
+Other ways                      ← Manual entry, SSH tunnel, paste link, command-line instructions
 ```
 
-- 主按钮下的小字从「在 hub 所在的机器上运行 `personad hub pair`」改成「装好 hub 时屏幕上会出二维码；也可以在已经连上的设备里打开 设置 › 设备 › 连接新设备」。
-- 网页：能打开网页说明 hub 已经在了，只有「用手机扫码登录」「粘贴配对链接」两项，加「还没有 hub？」链接。
-- Android：欢迎页去掉 `JCodeBlock("personad hub pair")`，失败文案里「重新运行 personad hub pair」改成「在已登录的设备上重新出一个码」。
-- 体验模式退出时落到「还没有 hub？」页。
+- Replace the small text below the primary button, "Run `personad hub pair` on the hub machine," with "A QR code appears when hub is installed. You can also open Settings › Devices › Connect new device on an already connected device."
+- Web: if the page opens, hub already exists; show only "Scan with your phone to sign in" and "Paste pairing link," plus a "No hub yet?" link.
+- Android: remove `JCodeBlock("personad hub pair")` from the welcome page. Replace "Run personad hub pair again" in failure copy with "Generate a new code on a logged-in device."
+- Exiting demo mode lands on "No hub yet?".
 
-#### 配对之后：一张清单
+#### After pairing: one checklist
 
-照 Android 准备清单（`ReadinessScreen` / `ReadinessRecords.kt`，可跳过、可回来、记住决定）扩到四端，在手机侧项目前面加四项，全部读就绪度接口：
+Extend Android's readiness checklist (`ReadinessScreen` / `ReadinessRecords.kt`, skippable, revisitable, remembers choices) to all four platforms. Add four items before the phone-side items, all reading the readiness endpoint:
 
-1. **电脑**：有确认过的在线电脑就 ✓；hub 自己就是电脑时自动 ✓；没有显示「添加电脑」；pending 显示「确认是我的电脑」。
-2. **Claude Code**：装了没有。
-3. **模型**：登录了没有 / Key 能不能用（4.3 的检测结果和三条路）。
-4. **试一句**：真跑一轮主对话（发「你好」，走正常的新建主对话），显示回答；失败显示原因和修法。
-5. 手机侧（通知、后台、本地网络、蜂窝网络测试……，已有）。
+1. **Computer**: ✓ for a confirmed online computer; automatically ✓ if hub itself is a computer. If none, show "Add computer"; if pending, "Confirm this is my computer."
+2. **Claude Code**: installed or not.
+3. **Model**: logged in / key works (detection and three routes in 4.3).
+4. **Try a message**: run a real main-chat turn (send "Hello" through normal main-chat creation), and display its reply; on failure, show the reason and fix.
+5. Phone-side items (notifications, background activity, local network, cellular-network test…; already exist).
 
-清单不阻塞：用户随时进主界面，主对话的引导卡就是清单的缩略版。用户点「以后再说」存 Postgres（第 5.1 节 dismiss），之后不再弹整页清单，但就绪度变差时卡片照常出现。
+The checklist does not block entry: users can enter the main UI at any time, and the main-chat guidance card is a compact version of it. "Later" persists in Postgres (dismiss in 5.1); the full-page checklist then stops appearing, but the card still returns if readiness worsens.
 
-#### 空状态改写
+#### Rewriting empty states
 
-| 位置 | 今天 | 改成 |
+| Location | Today | Replace with |
 | --- | --- | --- |
-| 总览（`home.json:31` `all_set`） | 零电脑时「一切就绪」 | 「还差一步：添加你的电脑」+ 按钮 |
-| 机器页（`machines.json:25`、`MachinesView.swift:98`、Android 同义句） | 「hub 连上后，这里会显示…」 | 「还没有电脑。添加一台，Persona 就能在上面替你干活」+「添加电脑」 |
-| Agents | 「在任意一台电脑的 herdr 里启动 Claude…」 | 零电脑时同机器页；有电脑时「新建会话」 |
-| 新建 Agent | 电脑一栏空着、「启动」灰着不说为什么 | 说为什么 + 入口 |
-| 收件箱（iOS、网页） | 什么都没接也说「都处理完了」 | 「还没接入消息来源」+ 只列点几下就能接的（邮箱、微信） |
-| 助手设置「运行在」 | 「每段对话在 的 里后台运行」 | 机器为空时「还没选在哪台电脑上运行」 |
-| 模型配置 | 露出 `legacy.kb` / `legacy.triage` | 只显示中文名 |
-| 官方扩展市场读不到 | 红字 +「填 token」 | 灰字「暂时读不到官方扩展，稍后再试」，不让新手在这里填 token；没 token 时下面一行不显眼的链接通到「管理市场」（那里能填），hub 被 GitHub 限流时自己先从备用地址读（extensions.md「GitHub 限流」） |
-| 形象空状态（网页） | 「形象包放在 hub 机器的 ~/.persona/personas/ 下」 | 去掉路径 |
-| iOS 启动器兜底 | 读不到配置时用 `"ccc"` | 显示「正在读取 / 读不到设置」，不显示一个不存在的名字 |
+| Overview (`home.json:31`, `all_set`) | "Everything is ready" with zero computers | "One step left: add your computer" + button |
+| Machines (`machines.json:25`, `MachinesView.swift:98`, equivalent Android text) | "Once hub connects, this will show…" | "No computers yet. Add one so Persona can do work for you on it" + "Add computer" |
+| Agents | "Start Claude in herdr on any computer…" | With zero computers, same as Machines; otherwise "New session" |
+| New Agent | Empty computer field; disabled "Start" with no reason | Explain why + entry point |
+| Inbox (iOS, web) | "All done" even with no sources connected | "No message sources connected yet" + only sources that take a few taps to connect (email, WeChat) |
+| Assistant settings "Runs on" | "Each chat runs in the background in [blank] on [blank]" | If no machine, "No computer selected to run on yet" |
+| Model configuration | Exposes `legacy.kb` / `legacy.triage` | Show only localized names |
+| Official extension marketplace unreadable | Red text + "Enter token" | Muted "Official extensions are temporarily unavailable. Try again later." Do not ask beginners for a token here. With no token, a subtle link below leads to "Manage marketplaces" (where it can be entered). When GitHub rate-limits hub, try a fallback address first (extensions.md, "GitHub rate limits") |
+| Avatar empty state (web) | "Avatar packages belong in ~/.persona/personas/ on the hub machine" | Remove the path |
+| iOS launcher fallback | Uses `"ccc"` if configuration cannot be read | Show "Loading / Settings unavailable," not a nonexistent name |
 
-网页的实现（#4485、#4480，细节见 `docs/web.md`「零电脑、零来源」）和上表不同或补充的地方：
+Web implementation (#4485, #4480; details in `docs/web.md`, "Zero computers, zero sources") differs from or adds to the table:
 
-- Agents 页零电脑、也没有 Agent 和正在启动的时候整页换成机器页同款的「还没有电脑」+「添加电脑」；侧边栏的 Agents 一段不变。新建 Agent 没有电脑时只剩「电脑」一栏，写明原因和「添加电脑」（先关掉新建 Agent，再打开添加电脑，不叠两层弹窗）。
-- 收件箱「还没接入消息来源」的判断：从没进过条目、也没在搜索或筛选，并且 hub 没有邮箱账号、飞书没设置（hub 有 `lark` 时问 `/lark/status`）、没有已登录且进收件箱的连接器；有一样读不到就照旧说「都处理完了」。列的来源：邮箱、飞书（hub 有 `lark` 且没设置时）、最多三个能在这里登录的连接器（`login` 能力、带数据、还没登录），都打开「设置 › 连接器」。
-- 设置 › 通用的那句只说电脑名，不再带工作目录（路径留在「设置 › 助手」）；助手资料页的副标题同理，没电脑时说「还没接上电脑」。
-- 主对话被就绪度挡着时按回车：输入框里一行「还没发出去：先添加电脑。写的字会留在这里。」（4 秒后消失），发送键的替身抖一下，就绪卡亮一圈再抖一下；触屏的回车本来就是换行，不提示。「怎么接模型？」末尾写明今天主对话还要在一台电脑上运行、只填 Key 开始不了；零电脑（那一步的动作是 `add_computer`）时主按钮换成「添加电脑」；电脑在、但离线 / 待确认 / 版本旧时主按钮用那一步自己的动作（唤醒 / 确认 / 更新），写「你的电脑还没准备好，先处理它：…」，不叫人再加一台。空输入框或只有附件时按回车也同样提示。
-- 加第 4 台电脑被 `too_many_pending` 拒绝时，添加对话框列出挡着的那几台：都没连上来过就说「都还没连上来过，删掉用不上的」，每台带「删掉」，删掉一台回到表单；hub 的 `too_many_pending` 文字也不再说「等你确认」。从没连上来过的电脑（`error_code: never_connected`，或待确认且没有 `last_seen`）在侧边栏和机器卡片上显示「还没连上」，不是「离线」。
-- 深色下禁用的次要按钮去掉描边和亮字（浅色不变）。扩展市场里看的市场都读不到时，列表处说「读到以后，扩展会显示在这里」，不再同时说「这个市场还没有扩展」；有多个市场、没选某一个时（其中有的读不到）说「读到的市场里还没有扩展」。
+- When there are zero computers, no Agents, and none starting, replace the entire Agents page with the Machines-style "No computers yet" + "Add computer"; keep the sidebar Agents section unchanged. With no computers, New Agent contains only the Computer field, the reason, and "Add computer" (close New Agent before opening Add computer; do not stack dialogs).
+- Show "No message sources connected yet" in Inbox only if it has never received any items, is neither searching nor filtering, and hub has no email accounts, Lark is unconfigured (ask `/lark/status` if hub has `lark`), and no logged-in connector contributes to Inbox. If any check cannot be read, retain "All done." List email, Lark (when hub has `lark` but is unconfigured), and up to three connectors that can log in here (`login` capability, supply data, not logged in); all open **Settings › Connectors**.
+- The sentence in **Settings › General** gives only the computer name, not the working directory (the path remains in **Settings › Assistant**). Likewise for the assistant profile subtitle; with no computer, say "No computer connected yet."
+- Pressing Enter while readiness blocks main chat shows one line in the composer: "Not sent: add a computer first. Your text will stay here." (disappears after 4 seconds). The Send replacement shakes, and the readiness card flashes a border then shakes. Touchscreen Enter already inserts a newline, so no notice. "How do I connect a model?" ends by explaining that main chat still runs on a computer today; entering a key alone is not enough. With zero computers (step action `add_computer`), the primary button becomes "Add computer." If a computer exists but is offline / pending / outdated, use that step's own action (wake / confirm / update) and say "Your computer is not ready yet; fix this first: …," rather than asking users to add another. Enter with an empty composer or only attachments gives the same notice.
+- If adding a 4th computer is rejected with `too_many_pending`, the dialog lists the blocking computers. If none has ever connected, say "None has connected yet. Delete the ones you do not need," with "Delete" on each; deleting one returns to the form. Hub's `too_many_pending` text also stops saying "Waiting for confirmation." Computers that have never connected (`error_code: never_connected`, or pending without `last_seen`) show "Not connected yet" in the sidebar and machine cards, not "Offline."
+- Disabled secondary buttons lose their border and bright text in dark mode (light mode unchanged). If all viewed marketplaces are unreadable, the extension list says "Extensions will appear here once loaded," not also "This marketplace has no extensions yet." With multiple marketplaces and none selected individually (some unreadable), say "No extensions in the loaded marketplaces yet."
 
-### 4.6 出错文案
+### 4.6 Error copy
 
-原则：
+Principles:
 
-1. 每个失败 = 错误码 + 一句人话 + 一个按钮。原文和请求 id 收进可展开的「详情」，方便截图求助。
-2. 客户端按 `code` 出自己的文案和按钮，四端不各写一套原文匹配；hub 的 `error` 字段也给按请求语言本地化的人话，老客户端至少能看懂。
-3. 说是哪台电脑、缺什么、点哪里；不说「操作未完成，请重试」，也不把电脑离线说成连不上 hub。
-4. 能自己好的（助手进程重启）自动重试，不打扰。
+1. Every failure = an error code + one plain-language sentence + one button. Put original text and request ID in expandable "Details" for screenshots when asking for help.
+2. Clients use `code` for their own copy and buttons; do not implement four separate literal-text matchers. Hub's `error` also provides plain-language text localized to the request language, so old clients can at least understand it.
+3. Say which computer, what is missing, and where to tap. Do not say "Operation failed, please retry," or describe an offline computer as inability to connect to hub.
+4. Automatically retry self-healing failures (assistant process restart) without interruption.
 
-| code | 什么时候 | 大白话 | 动作 |
+| code | When | Plain-language copy | Action |
 | --- | --- | --- | --- |
-| `no_machine` | 主对话没有可用的电脑（今天 502 `internal`，`assistant/start.go:29,157-158`；`profile.go:465` 的 memory 用同一句英文） | 「Persona 要在你的一台电脑上干活，现在还没接上电脑。」 | `add_computer` |
-| `node_unreachable`（已有） | 电脑离线 | 「<电脑名> 现在不在线，可能睡着了或 Persona Link 没开。」 | `wake_computer`（说明页） |
-| `assistant_offline`（已有，503） | 助手进程刚重启 | 「助手正在重启，几秒后会自己好。」 | 自动重试 |
-| `machine_pending` | 向待确认的电脑派活或选它当助手机器 | 「这台电脑还没确认是你的。」 | `confirm_computer` |
-| `claude_missing` | 退出码 127 且命令是 `claude`，或 `claudeExecutable` 找不到 | 「<电脑名> 上还没装 Claude Code。」 | `install_claude`（本期是说明页）/ `connect_model` |
-| `launcher_missing` | 127，缺的是 `~/.zshrc` 里的自定义启动器 | 「在 <电脑名> 上找不到「<名字>」这个模型入口，可能被删了。」 | `connect_model` |
-| `not_logged_in` | `auth status` 没登录，或回答以「Not logged in」开头 | 「<电脑名> 上的 Claude Code 还没登录。」 | `login_claude`（图文）/ `connect_model` |
-| `auth_failed` | 「Invalid API key」「Failed to authenticate」等（已在 markers 里） | 「模型的 Key 不对或过期了。」 | `edit_provider` |
-| `model_route` / `rate_limited` | 模型名不对 / 429（健康检查已有分类） | 「这个模型现在用不了 / 用得太快了，稍后会重试。」 | `connect_model` |
-| `tls_required`（已有） | 加电脑但 hub 没开 TLS | 「hub 还没打开安全连接，电脑接不进来。」 | `enable_tls` |
-| `mesh_member` | 成员 hub 上从设备添加电脑 | 「这台 hub 是组里的成员，到中心 hub 上添加电脑。」 | — |
-| `pair_code_expired` / `pair_code_used` | 配对码过期 / 用过（iOS 今天显示英文 `invalid token`） | 「这个码过期了 / 已经用过了，再出一个。」 | 重新出码 |
-| `hub_identity_changed` | 钉扎的指纹不符 | 「hub 换了身份（重装或换了电脑）。如果是你重装的，重新扫一次码。」不提供「忽略并继续」 | 重新扫码 |
-| `node_service_down`（机器的 `error_code`） | 链路通、常驻 node 没在跑（今天原文 `…node-attach.sock 连不上：jarvis-link node install…`） | 「这台电脑上的 Persona 后台服务没在运行。打开 Persona Link，让它重新装一次。」 | — |
-| `link_offline`（机器的 `error_code`） | Persona Link 断开（今天原文 `link closed: failed to get reader…`） | 「这台电脑离线了：Persona Link 没在运行，或者电脑睡着了。」 | — |
-| `db_missing`（命令行） | `database_url` 为空 | 「hub 的数据库还没装好。运行 personad hub setup，它会帮你建好。」 | — |
-| `port_in_use`（命令行） | 端口被别的程序占着（今天 `hub pair` 会打到另一个 hub 上，回 401） | 「端口 <n> 被别的程序占着，可能是另一个 Persona。」 | 安装器自动换端口 |
+| `no_machine` | Main chat has no usable computer (currently 502 `internal`, `assistant/start.go:29,157-158`; memory at `profile.go:465` uses the same English sentence) | "Persona needs one of your computers to do work. No computer is connected yet." | `add_computer` |
+| `node_unreachable` (existing) | Computer offline | "<computer-name> is offline, possibly asleep or with Persona Link closed." | `wake_computer` (instructions page) |
+| `assistant_offline` (existing, 503) | Assistant process just restarted | "The assistant is restarting. It will recover in a few seconds." | Automatic retry |
+| `machine_pending` | Dispatching work to a pending computer or selecting it as the assistant machine | "You have not confirmed this computer is yours yet." | `confirm_computer` |
+| `claude_missing` | Exit code 127 with command `claude`, or `claudeExecutable` cannot find it | "Claude Code is not installed on <computer-name> yet." | `install_claude` (instructions page this round) / `connect_model` |
+| `launcher_missing` | 127 for a missing custom launcher from `~/.zshrc` | "The model launcher '<name>' was not found on <computer-name>. It may have been deleted." | `connect_model` |
+| `not_logged_in` | `auth status` reports no login, or the reply begins "Not logged in" | "Claude Code on <computer-name> is not logged in yet." | `login_claude` (illustrated) / `connect_model` |
+| `auth_failed` | "Invalid API key", "Failed to authenticate", etc. (already in markers) | "The model's key is incorrect or expired." | `edit_provider` |
+| `model_route` / `rate_limited` | Wrong model name / 429 (health-check categories already exist) | "This model is currently unavailable / Requests are too frequent. It will retry later." | `connect_model` |
+| `tls_required` (existing) | Adding a computer when hub has no TLS | "Hub has not enabled secure connections, so computers cannot join." | `enable_tls` |
+| `mesh_member` | Adding a computer from a device on a member hub | "This hub is a group member. Add the computer on the primary hub." | — |
+| `pair_code_expired` / `pair_code_used` | Pairing code expired / used (iOS currently shows English `invalid token`) | "This code expired / has already been used. Generate another." | Generate a new code |
+| `hub_identity_changed` | Pinned fingerprint mismatch | "Hub's identity changed (reinstalled or moved to another computer). If you reinstalled it, scan a new code." No "Ignore and continue" option | Scan again |
+| `node_service_down` (machine `error_code`) | Link works, persistent node is not running (current source text `…node-attach.sock 连不上：jarvis-link node install…`, meaning cannot connect to node-attach.sock) | "Persona's background service is not running on this computer. Open Persona Link and let it reinstall the service." | — |
+| `link_offline` (machine `error_code`) | Persona Link disconnected (current text `link closed: failed to get reader…`) | "This computer is offline: Persona Link is not running, or the computer is asleep." | — |
+| `db_missing` (CLI) | Empty `database_url` | "Hub's database is not set up yet. Run personad hub setup to create it." | — |
+| `port_in_use` (CLI) | Another program occupies the port (today `hub pair` may hit another hub and return 401) | "Port <n> is in use by another program, possibly another Persona." | Installer chooses another port automatically |
 
-HTTP 状态：新码走 `rpc.Error{Code}`，`apierr.Call` 对 `internal` / `node_unreachable` / `timeout` 以外的码回 409（`apierr/apierr.go:117-131`），所以 `no_machine` 等不能复用这三个名字。注意已有的 `node_unreachable` 带码时是 502，只有 `ErrOffline` 是 503。
+HTTP status: new codes use `rpc.Error{Code}`. `apierr.Call` returns 409 for codes other than `internal` / `node_unreachable` / `timeout` (`apierr/apierr.go:117-131`), so `no_machine` and similar errors must not reuse those three names. Note that existing coded `node_unreachable` is 502; only `ErrOffline` is 503.
 
-### 4.7 预设
+### 4.7 Defaults
 
-| 项 | 今天 | 新手默认 |
+| Item | Today | Beginner default |
 | --- | --- | --- |
-| 主对话模型 | App 存的 > hub.json `assistant.launcher` > `claude`（`assistant/profile.go:139-150`） | 不变。检测到能用的 Claude Code 就用它；引导里接上的 Key 经 `assign` 只在还是默认值时接过去 |
-| 主对话权限 | 默认模式：Bash 等工具每次在手机上批准；Persona 自己的工具已用 `--allowedTools` 放行（`docs/assistant.md`「不用批准的工具」） | 不变。改善审批卡片的说明文字，引导里加一句「它在电脑上做事前会先问你」。「读东西不用问」这一档在 Bash 上没法安全表达（只读命令分辨不出来），先在接好电脑的实测里数一下新手第一次会弹几次审批，再决定（拍板 14） |
-| 替用户出面的写操作 | 发邮件、手机写、飞书写都由 hub 先问 | 不变（硬边界） |
-| Agents 新会话 | 用户选 | 默认「手动确认」；「全部放行」不进任何新手预设 |
-| 启动器健康检查 | 默认关；开了以后每 30 分钟真跑一次请求（`launcher_health.go:58`，花钱），修复 Agent 默认 bypass（`:68`，2026-11-05 用户决定） | 不变。就绪度只用免费的检查，不依赖健康检查 |
-| 定时任务 | 早报默认开 | 就绪前跳过（4.4） |
-| 示例问题 | 网页 4 个、iOS 6 个，各写各的 | hub 在就绪度里给一份（`suggestions`），按已接上的能力挑，四端只渲染 |
-| 内置供应商 | 无 | 4.3 的内置预设 |
+| Main-chat model | App-stored value > hub.json `assistant.launcher` > `claude` (`assistant/profile.go:139-150`) | Unchanged. Use working Claude Code when detected; a key connected during onboarding is assigned through `assign` only while the choice is still default |
+| Main-chat permissions | Default mode: approve Bash and similar tools on the phone each time; Persona's own tools are already allowed through `--allowedTools` (`docs/assistant.md`, "Tools that need no approval") | Unchanged. Improve approval-card explanations; onboarding says "It will ask before doing work on your computer." "Read without asking" cannot safely be expressed for Bash (read-only commands cannot be distinguished). First count approvals during a real beginner setup, then decide (decision 14) |
+| Writes on the user's behalf | Hub asks first for email sending, phone writes, and Lark writes | Unchanged (hard boundary) |
+| New Agent sessions | User-selected | Default "Manual approval"; no beginner preset uses "Allow all" |
+| Launcher health checks | Off by default; when enabled, makes a real request every 30 minutes (`launcher_health.go:58`, costs money). Repair Agents default to bypass (`:68`, user decision 2026-11-05) | Unchanged. Readiness uses only free checks, independent of health checks |
+| Scheduled tasks | Morning briefing enabled by default | Skip before readiness (4.4) |
+| Example questions | Web has 4, iOS 6, maintained separately | Hub supplies one set in readiness (`suggestions`), selected by connected capabilities; all four clients only render it |
+| Built-in providers | None | Built-in presets in 4.3 |
 
-## 5. 协议（各端的契约，iOS / macOS 照这个实现）
+## 5. Protocol (client contract; iOS / macOS implement this)
 
-总规矩：
+General rules:
 
-- 新字段都可选，老客户端忽略；新接口在 `hello` / `GET /api/v1/health` 的 `features` 里登记（`proto/proto.go` 的 `Features`，hub 在 `hub/extensions_link.go` 的 `features` 里再加上扩展的），客户端看到才走新流程，连老 hub 时退回现在的页面。本节新登记：`assistant_readiness`、`machines_add`、`machine_trust`、`builtin_presets`。
-- 枚举都是封闭的：客户端不认识的 `state` 按「还差一步 + `title`」显示；不认识的 `action.id` 只显示文字、不画按钮；不认识的 `code` 显示 `error`。
-- `title` / `detail` / `error` 由服务端按 `Accept-Language` 本地化（`server/internal/i18n/locales/`）。客户端可以用自己的文案覆盖，但必须能只靠服务端的字运行。
-- 不放任何密钥；Key 只回 `has_key`。
+- All new fields are optional and ignored by old clients. Register new endpoints in `features` of `hello` / `GET /api/v1/health` (`Features` in `proto/proto.go`; hub adds extension features in `hub/extensions_link.go`). Clients enter new flows only when advertised; on old hubs, fall back to current pages. New registrations in this section: `assistant_readiness`, `machines_add`, `machine_trust`, `builtin_presets`.
+- Enums are closed: unknown `state` displays "One step left + `title`"; unknown `action.id` displays text without a button; unknown `code` displays `error`.
+- The server localizes `title` / `detail` / `error` using `Accept-Language` (`server/internal/i18n/locales/`). Clients may override with their own copy, but must work using server text alone.
+- Never include secrets; keys return only `has_key`.
 
-### 5.1 主对话就绪度
+### 5.1 Main-chat readiness
 
 ```
-GET /api/v1/assistant/readiness            已登录的完整设备（只能作答的手表、扩展的 token 不开放）
-GET /api/v1/assistant/readiness?probe=1    同上，另外真跑一次一词检查（花钱，30 秒内重复调用直接回上次结果）
+GET /api/v1/assistant/readiness            Logged-in full device (not answer-only watches or extension tokens)
+GET /api/v1/assistant/readiness?probe=1    Same, plus a real one-word check (costs money; repeated calls within 30 seconds return the previous result)
 ```
 
-挂在助手服务下：它已经知道机器、启动器和模型配置（`assistant/profile.go`、`models.go`），hub 只是转发 `/api/v1/assistant/*`。助手进程没连着时和其他助手接口一样回 503 `assistant_offline`。
+Lives under the assistant service, which already knows machine, launcher, and model configuration (`assistant/profile.go`, `models.go`); hub only forwards `/api/v1/assistant/*`. If the assistant process is disconnected, return 503 `assistant_offline`, like other assistant endpoints.
 
 ```json
 {
@@ -394,19 +394,19 @@ GET /api/v1/assistant/readiness?probe=1    同上，另外真跑一次一词检�
   "mode": "setup",
   "ready": false,
   "next": "model",
-  "machine": {"id": "mbp", "name": "小林的 MacBook"},
+  "machine": {"id": "mbp", "name": "Your MacBook"},
   "launcher": "claude",
   "steps": [
     {"id": "computer", "state": "ok", "machine": "mbp"},
     {"id": "claude", "state": "ok", "version": "2.1.308"},
     {"id": "model", "state": "problem", "code": "not_logged_in", "machine": "mbp", "launcher": "claude",
-     "title": "Claude Code 还没登录", "detail": "在小林的 MacBook 上登录一次，或者改用 API Key。",
+     "title": "Claude Code is not logged in yet", "detail": "Sign in on your MacBook, or use an API key.",
      "action": {"id": "connect_model"}, "alt_actions": [{"id": "login_claude"}]},
     {"id": "first_message", "state": "todo", "action": {"id": "test_assistant"}}
   ],
   "suggestions": [
-    {"id": "what_can_you_do", "title": "你能帮我做什么？", "local": true},
-    {"id": "today", "title": "今天有什么安排", "prompt": "今天有什么安排？", "needs": ["phone_calendar"]}
+    {"id": "what_can_you_do", "title": "What can you help me with?", "local": true},
+    {"id": "today", "title": "What's on today", "prompt": "What's on my calendar today?", "needs": ["phone_calendar"]}
   ],
   "probe": {"ok": false, "millis": 2140, "error": "…"},
   "dismissed": false,
@@ -414,131 +414,131 @@ GET /api/v1/assistant/readiness?probe=1    同上，另外真跑一次一词检�
 }
 ```
 
-| 字段 | 取值 |
+| Field | Values |
 | --- | --- |
-| `mode` | `full` / `setup` / `chat_only`（P1 才会出现） |
+| `mode` | `full` / `setup` / `chat_only` (only appears in P1) |
 | `ready` | `mode == "full"` |
-| `next` | 第一个不是 `ok` / `skipped` 的步骤 id；都好了为 `null` |
-| `machine` | 主对话要用的电脑；没有时 `null`。pending 的电脑永远不会出现在这里 |
-| `launcher` | 生效的启动器名（`effective()` 之后再盖上模型配置的主对话用途） |
-| `steps[].id` | 固定顺序：`computer`、`claude`、`model`、`first_message` |
+| `next` | ID of the first step not `ok` / `skipped`; `null` if all ready |
+| `machine` | Computer main chat will use; `null` if none. Pending computers never appear here |
+| `launcher` | Effective launcher name (after `effective()`, overridden by main-chat purpose in model configuration) |
+| `steps[].id` | Fixed order: `computer`, `claude`, `model`, `first_message` |
 | `steps[].state` | `ok` / `todo` / `problem` / `checking` / `unknown` / `skipped` |
-| `steps[].code` | `state` 是 `todo` / `problem` 时给，取第 4.6 节的码。`computer`：`no_machine`、`node_unreachable`、`machine_pending`、`node_outdated`；`claude`：`claude_missing`、`launcher_missing`；`model`：`not_logged_in`、`auth_failed`、`model_route`、`rate_limited`、`model_unverified`；`first_message`：`never_tried`，或失败时的码 |
-| `steps[].action.id` / `alt_actions[].id` | `add_computer`、`confirm_computer`、`wake_computer`、`install_claude`、`login_claude`、`connect_model`、`edit_provider`、`test_assistant`、`enable_tls`、`open_admin` |
-| `suggestions[]` | `local: true` 的由客户端打开本地帮助、不发给模型；`needs` 是点了以后才会弹的系统授权（客户端提前说一句） |
-| `probe` | 只有 `?probe=1` 时有，即 `POST /api/v1/launchers/{name}/check` 的 `{ok, model, answer, millis, error}`（`assistant/models_launchers.go:748`） |
-| `dismissed` | 用户点过「以后再说」 |
+| `steps[].code` | Supplied for `todo` / `problem`, using codes in 4.6. `computer`: `no_machine`, `node_unreachable`, `machine_pending`, `node_outdated`; `claude`: `claude_missing`, `launcher_missing`; `model`: `not_logged_in`, `auth_failed`, `model_route`, `rate_limited`, `model_unverified`; `first_message`: `never_tried`, or the failure code |
+| `steps[].action.id` / `alt_actions[].id` | `add_computer`, `confirm_computer`, `wake_computer`, `install_claude`, `login_claude`, `connect_model`, `edit_provider`, `test_assistant`, `enable_tls`, `open_admin` |
+| `suggestions[]` | `local: true` opens client-local help without sending to a model; `needs` lists system permissions requested only on tap (client explains beforehand) |
+| `probe` | Present only with `?probe=1`; the `{ok, model, answer, millis, error}` from `POST /api/v1/launchers/{name}/check` (`assistant/models_launchers.go:748`) |
+| `dismissed` | User tapped "Later" |
 
-判断顺序和数据来源（全是已有的，加一处新的 node RPC）：
+Evaluation order and data sources (all existing, plus one new node RPC):
 
-1. `computer`：设备列表和在线状态、信任状态（5.3）。电脑 `ok` 之前，后面的步骤是 `unknown`。
-2. `claude`：node 自检的 `claude-version`（`node/doctor.go:454`），助手服务缓存 10 分钟。
-3. `model`：新 node RPC `claude.auth_status`（4.3，在启动器真实环境里跑 `claude auth status --json`，缓存 10 分钟）；最近一次 `?probe=1` 或「试一句」的结果；主对话最近一轮的 `turn_error_kind`。默认**不主动花 token**；从没验证过时是 `unknown` + `model_unverified`，不算 `problem`，`mode` 照样可以是 `full`。
-4. `first_message`：主对话里有没有过一轮成功的回答。它是 `todo` 不影响 `mode`。
+1. `computer`: device list, online status, trust state (5.3). Later steps are `unknown` until the computer is `ok`.
+2. `claude`: `claude-version` from node self-check (`node/doctor.go:454`), cached by the assistant service for 10 minutes.
+3. `model`: new node RPC `claude.auth_status` (4.3, runs `claude auth status --json` in the launcher's actual environment, cached 10 minutes); the most recent `?probe=1` or "Try a message" result; `turn_error_kind` of main chat's last turn. **No proactive token spending** by default. If never verified, use `unknown` + `model_unverified`, not `problem`; `mode` can still be `full`.
+4. `first_message`: whether main chat has ever had a successful reply. `todo` does not affect `mode`.
 
-存储：最近一次检查结果和 `dismissed` 存 Postgres 的 settings（一个键 `assistant.readiness`），不写文件。
+Storage: the latest check result and `dismissed` live in Postgres settings (one key, `assistant.readiness`), not files.
 
 ```
 POST /api/v1/assistant/readiness/dismiss   {"dismissed": true}  →  {"ok": true}
 ```
 
-`POST /api/v1/assistant/warm` 保持回 `{"ok": true}`，另外带 `readiness` 字段（同一结构，不 probe）。客户端什么时候重拉：进 Persona tab、配对成功、添加 / 确认电脑之后、保存供应商之后、收到 `machines` 变化时。第一版不加新的推送事件。
+`POST /api/v1/assistant/warm` keeps returning `{"ok": true}` and adds `readiness` (same structure, no probe). Clients refetch on entering the Persona tab, successful pairing, adding / confirming a computer, saving a provider, and receiving a `machines` change. No new push event in the first version.
 
-老 hub 上这个接口 404：客户端退回现在的行为（首屏不画卡片，失败时按 `code` 出卡片）。
+On old hubs, this endpoint returns 404: clients fall back to current behavior (no first-screen card; failures show cards by `code`).
 
-实现（#3710，`server/internal/assistant/readiness.go`；接口细节以 `docs/protocol.md`「主对话就绪度」为准），和上面不同或补充的地方：
+Implementation (#3710, `server/internal/assistant/readiness.go`; endpoint details are authoritative in `docs/protocol.md`, "Main-chat readiness") differs from or adds to the design:
 
-- 只给 `full` 设备：probe 要花钱，hub 的规矩是能跑启动器的接口不给只能作答的设备；手表现在用不到它。
-- `model` 看最近一次 probe、主对话最近一轮、启动器健康检查的记录和 `claude.auth_status`（#4048），取最新的一条；失败但认不出原因时也是 `unknown` + `model_unverified`，不算 `problem`。
-- `claude.auth_status`（#4048）：node 用开对话同一条命令（`launcherCommand`：默认启动器就是登录 shell 里的 `claude`，带这台电脑的 `claude_start_dir`；Persona 管理的经 `personad launch <名字>`）和同一份 `--settings`（管理的启动器的网关盖过用户全局 settings 的 env）跑 `claude auth status --json`。`--settings` 放在子命令前面（`auth status` 自己不认它）。版本门是 2.1.41（`claude auth` 从这版才有），更老的不跑；跑 Codex / runtime 的启动器、读不出 JSON、20 秒没答完都回 `unknown` + `reason`。只回 `state`、`auth_method`、`api_provider`、Key 来源的变量名，账号的邮箱、组织不出这台电脑。默认启动器怎么找 claude 没改（#2854）。
-- 就绪度怎么用它：没登录是 `problem` + `not_logged_in`；`claude.ai` 登录只推翻「没登录」：没有别的证据、或最新的一条说没登录时才算模型能用（`ok`），主对话、probe、健康检查认出的 `auth_failed` / `model_route` / `rate_limited` 不会被它盖掉（登录了不代表令牌没过期、套餐里有这个模型）；Key、网关的令牌、Bedrock / Vertex（`api_key`、`api_key_helper`、`oauth_token`、`third_party`）不算证据，仍是 `unknown` + `model_unverified`，`detail` 换成「用的是配好的账号或 Key，还没试过」。和设计不同：登录了的结果缓存 10 分钟，没登录或没答上（问失败、`timeout`、`unreadable`）的只缓存 1 分钟，老 node 的 `unknown method` 缓存 10 分钟、不记日志（`setup` 时发送按钮被换掉，没有别的事会说用户已经登录了）；和版本自检同时问、共用 GET 的 12 秒 / warm 的 2 秒，没答完照样缓存给下一次。老 node 没有这个方法时和以前一样。
-- `rate_limited` 是 `problem`，但不让 `mode` 变成 `setup`（会自己好，不该把发送按钮换掉）。
-- `claude` 还读两样：上一次开对话被拒的码（`claude_missing` / `launcher_missing`，开成功一次、被拒之后的自检读到版本、或启动器又在了就清掉：`setup` 时发不出消息，不能只靠开成功来清），和启动器在这台电脑上还在不在；跑 Codex 或 runtime 的启动器这一步是 `skipped`。node 自检没在时限内答完是 `checking`。
-- `node_outdated` 只看 node 认不认模型配置：主对话每次开都带 `model_fingerprint`（`finishModel`），老 node 一定开不了。
-- warm 里的就绪度最多算 2.5 秒，算不完回上一次记下的（从没记过就不带 `readiness`），剩下的在后台算完照样记下；打开 tab 不因此变慢。
-- `machine_pending` 等「确认电脑」（5.3、7.2 第 9 项）合进来后再出；`node_outdated`（node 不认模型配置）没有按钮。
-- 电脑不是 `ok` 时 `?probe=1` 不跑，回答里没有 `probe`；电脑没答（离线、超时）的 probe 只回 `error`，不记、不当作证据。
-- `dismiss` 的 body 可以是 `{"dismissed": false}`（撤销），空 body 等于 `true`。
-- `first_message` 答过一次就一直 `ok`（记在 `assistant.readiness`；换过主对话也算）。
+- Full devices only: probing costs money, and hub does not expose launcher-running endpoints to answer-only devices; Watch does not need this currently.
+- `model` takes the newest evidence from the last probe, main chat's last turn, launcher health records, and `claude.auth_status` (#4048). An unclassified failure is also `unknown` + `model_unverified`, not `problem`.
+- `claude.auth_status` (#4048): node runs `claude auth status --json` with the same command as chat creation (`launcherCommand`: the default is `claude` in the login shell, with this computer's `claude_start_dir`; Persona-managed launchers use `personad launch <name>`) and the same `--settings` (a managed launcher's gateway overrides env in the user's global settings). Put `--settings` before the subcommand (`auth status` itself does not accept it). Version gate: 2.1.41, when `claude auth` first appeared; do not run on older versions. Codex / runtime launchers, unreadable JSON, or no answer within 20 seconds return `unknown` + `reason`. Return only `state`, `auth_method`, `api_provider`, and the variable name identifying the key source; account email and organization never leave the computer. Default-launcher claude discovery is unchanged (#2854).
+- Readiness interpretation: no login means `problem` + `not_logged_in`. A `claude.ai` login only disproves "not logged in": mark the model `ok` only with no other evidence or if the latest evidence said not logged in. It does not override main-chat, probe, or health-check `auth_failed` / `model_route` / `rate_limited` (being logged in does not mean the token is unexpired or the plan includes the model). Keys, gateway tokens, and Bedrock / Vertex (`api_key`, `api_key_helper`, `oauth_token`, `third_party`) are not proof; keep `unknown` + `model_unverified`, with `detail` saying "Using a configured account or key; not tested yet." Unlike the design, logged-in results cache for 10 minutes; not-logged-in or unanswered results (RPC failure, `timeout`, `unreadable`) cache only 1 minute. Old-node `unknown method` caches 10 minutes without logging (in `setup`, Send is replaced, so no other action will reveal that the user has signed in). Request alongside version self-check, sharing GET's 12-second / warm's 2-second budget; incomplete work still caches for the next request. Old nodes without this method behave as before.
+- `rate_limited` is `problem`, but does not change `mode` to `setup` (self-healing; should not replace Send).
+- `claude` also reads two things: the code from the last rejected chat creation (`claude_missing` / `launcher_missing`, cleared after one successful open, a post-rejection self-check finds the version, or the launcher reappears—`setup` prevents sending, so clearing cannot depend only on success), and whether the launcher still exists on this computer. Codex or runtime launchers use `skipped` for this step. If node self-check does not finish in time, use `checking`.
+- `node_outdated` checks only whether node understands model configuration: every main-chat creation includes `model_fingerprint` (`finishModel`), which old nodes cannot open.
+- Warm computes readiness for at most 2.5 seconds; on timeout, return the last recorded result (omit `readiness` if none), and finish / persist in the background. Opening the tab does not slow down for this.
+- `machine_pending` appears after "Confirm computer" (5.3, item 9 in 7.2) merges; `node_outdated` (node does not understand model configuration) has no button.
+- `?probe=1` does not run unless computer is `ok`, and the response omits `probe`. A probe with no computer reply (offline, timeout) returns only `error`, is not recorded, and is not evidence.
+- `dismiss` accepts `{"dismissed": false}` to undo; an empty body means `true`.
+- Once `first_message` succeeds, it stays `ok` (stored in `assistant.readiness`, even after main chat changes).
 
-### 5.2 主对话的结构化错误
+### 5.2 Structured main-chat errors
 
-`POST /api/v1/assistant/conversations` 和会话发送接口失败时：
+On failure from `POST /api/v1/assistant/conversations` or a session-send endpoint:
 
 ```json
-{"code": "no_machine", "error": "Persona 要在你的一台电脑上干活，现在还没接上电脑。",
+{"code": "no_machine", "error": "Persona needs one of your computers to do work. No computer is connected yet.",
  "detail": "assistant machine is not configured", "action": "add_computer", "request_id": "…"}
 ```
 
-- `no_machine`、`claude_missing`、`launcher_missing`、`machine_pending` 回 409；`node_unreachable` 不变（带码 502，`ErrOffline` 503）；`assistant_offline` 不变（503）。
-- `detail` 是原文，客户端只放进「详情」。
-- `turn_error_kind: "user"` 的轮次，会话上另带 `turn_error_code`（`not_logged_in` / `auth_failed` / `model_route` / `rate_limited`），客户端据此画卡片。
-- `errNoAssistantMachine`（`start.go:29`）和 `memory()`（`profile.go:465`）用同一个码，别让两处分开漂移；语音提示词的 golden（`server/internal/voice/testdata/prompts/refused.failed.*.golden`，三种语言）跟着更新。
-- 老客户端照旧显示 `error`，只是从英文变成中文。iOS 的 `isQuiet` 判断要确认不把 409 当成静默错误。
+- `no_machine`, `claude_missing`, `launcher_missing`, and `machine_pending` return 409; `node_unreachable` is unchanged (coded 502, `ErrOffline` 503); `assistant_offline` is unchanged (503).
+- `detail` contains the original text; clients show it only in "Details."
+- For turns with `turn_error_kind: "user"`, sessions also carry `turn_error_code` (`not_logged_in` / `auth_failed` / `model_route` / `rate_limited`), which clients use to render cards.
+- `errNoAssistantMachine` (`start.go:29`) and `memory()` (`profile.go:465`) use the same code; do not let them drift apart. Update voice-prompt goldens (`server/internal/voice/testdata/prompts/refused.failed.*.golden`, all three languages) too.
+- Old clients still display `error`, now localized rather than raw English. Check that iOS `isQuiet` does not treat 409 as a silent error.
 
-### 5.3 已登录设备添加电脑、确认电脑
+### 5.3 Logged-in devices add and confirm computers
 
-扩展现有的配对码接口，不另开一套：
+Extend the existing pairing-code endpoint, rather than creating another system:
 
 ```
-POST /api/v1/auth/pair-codes      full 设备（不是由配对码临时身份发起的），或回环 + 主 token
-{"add": {"name": "小林的 MacBook", "os": "mac", "icon": "laptop"}}
-或 {"machine": "example-machine"}            已存在的 link 电脑重出码
+POST /api/v1/auth/pair-codes      Full device (not a temporary pairing-code identity), or loopback + main token
+{"add": {"name": "Your MacBook", "os": "mac", "icon": "laptop"}}
+or {"machine": "example-macbook"}            Regenerate a code for an existing link computer
 ```
 
 ```json
 {
   "token": "jp_…", "expires_at": "…",
-  "machine": "example-machine", "trust": "pending",
-  "pair_url": "jarvis://link?url=…&token=…&machine=example-machine&hub=…&fp=…&tls=…",
+  "machine": "example-macbook", "trust": "pending",
+  "pair_url": "jarvis://link?url=…&token=…&machine=example-macbook&hub=…&fp=…&tls=…",
   "command": "jarvis-link pair '<pair_url>'",
-  "install": {"linux": "curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<pair_url>'"}
+  "install": {"linux": "curl -fsSL <site>/install.sh | sh -s -- --node --pair '<pair_url>'"}
 }
 ```
 
-- `add.name` 可以是中文；id 由名字生成（ASCII 化 + 去重，满足 `/admin` 的 id 规则），用户不填「之后不能改」的 id。`add.os` 只决定客户端显示哪种安装说明。
-- `add` 时 hub 照 `POST /api/v1/admin/machines` 的 link 分支写 hub.json 并 `addMachineLive`，同时在 Postgres 写信任记录 `pending`。回环 + 主 token 发起的写 `confirmed`（或不写记录）。
-- 已存在、从没连上过的同名 link 电脑：复用它，重出码。
-- `<站点>` 来自配置，不写死。
-- 错误：403（不是 full 设备，或是配对码换来、还没确认的设备）；409 `tls_required`（`action: "enable_tls"`）；409 `mesh_member`；429 `too_many_pending`（同时最多 3 台未兑换或待确认的电脑）。
-- 去掉 `pairing.go:132-135` 对设备的限制，但只放开 `add` / 已存在的 link 电脑这两种。
-- 实现（#3735）和上面的出入，以 `docs/protocol.md`「电脑的配对码」为准：设备只能给**待确认**的电脑出码（`machine` 或同名复用），已确认的回 409 `not_pending`，
-  这样设备出的码都走「待确认 → 确认」，重新配对已确认的电脑在管理界面或 hub 机器上做（客户端 M3 不能在 App 里给已确认的电脑重新出码）。这不是安全边界：full 设备本来就能用
-  `POST /api/v1/auth/tokens`（`kind: link`）直接给任何 link 电脑签凭据，要收紧得另做。设备给待确认的电脑重新出码时，先吊销它已有的 Persona Link 凭据（上一个码换到的不能跟着被确认）；`add` 可带 `id`（给 `hub pair --machine <id> --add` 用）；响应的 `trust` 总是给出
-  （`pending` / `confirmed`），另有 `name`、`added`；hub 不知道自己的发布站点时（本地构建、Docker 镜像）不给 `install`；主 token 带不存在的 `machine` 回 400 `unknown_machine`；
-  回执推送的文字带上电脑的名字：「<设备> 给电脑「<名字>」出了一个配对码」。通知上的「不是你？撤销」按钮还没做（要各端的通知分类）。
+- `add.name` may be Chinese; generate the ID from the name (ASCII conversion + deduplication, satisfying `/admin` ID rules). Do not ask users for an ID that "cannot be changed later." `add.os` only determines which installation instructions the client shows.
+- With `add`, hub writes hub.json and calls `addMachineLive` using the link branch of `POST /api/v1/admin/machines`, while writing a `pending` trust record to Postgres. Loopback + main token writes `confirmed` (or no record).
+- Reuse an existing same-name link computer that has never connected, generating a new code.
+- `<site>` comes from configuration, not a hardcoded value.
+- Errors: 403 (not a full device, or a device obtained from a pairing code and not yet confirmed); 409 `tls_required` (`action: "enable_tls"`); 409 `mesh_member`; 429 `too_many_pending` (at most 3 computers with unredeemed codes or pending confirmation at once).
+- Remove the device restriction at `pairing.go:132-135`, but allow only `add` / existing link computers.
+- Implementation (#3735) differs from the design; `docs/protocol.md` ("Computer pairing codes") is authoritative. Devices may generate codes only for **pending** computers (`machine` or same-name reuse); confirmed ones return 409 `not_pending`.
+  Thus device-generated codes always go through "pending → confirmed." Re-pair confirmed computers in the admin UI or on the hub machine (client M3 cannot regenerate codes for confirmed computers in the app). This is not a security boundary: full devices can already use
+  `POST /api/v1/auth/tokens` (`kind: link`) to issue credentials for any link computer; tightening that is separate work. Before regenerating a pending computer's code, revoke its existing Persona Link credentials (credentials redeemed from the old code must not become confirmed alongside the new ones). `add` may include `id` (for `hub pair --machine <id> --add`). The response always includes `trust`
+  (`pending` / `confirmed`), plus `name` and `added`. If hub does not know its release website (local build, Docker image), omit `install`. A main-token request with nonexistent `machine` returns 400 `unknown_machine`.
+  Receipt notification text includes the computer name: "<device> generated a pairing code for computer '<name>'." The notification's "Not you? Revoke" button is not implemented yet (requires notification categories on each client).
 
-- Android 的实现（#4297）：照网页的添加电脑，确认在「等它连上来」那一屏；加电脑走选中的那组 hub，重出码、确认、拒绝按机器 id 去它那组；hub 没有 `machines_add` 时添加电脑页只说去网页或管理界面加（不再是弹窗）。设置 › 设备 › 连接新设备的网页登录地址取这台手机连 hub 用的地址。「重新出链接」只给 `error_code` 是 `never_connected` 的电脑（重出会作废那台电脑现有的配对，睡着的电脑只要叫醒）；从「确认电脑」进来却没有等确认的电脑时显示「没有等待确认的电脑」，不落到添加表单；机器页的「+」和空状态的「添加电脑」只在有 `machines_add` 时打开添加页，旧 hub 仍是说明弹窗。码的 `expires_at` 读不出、或和手机时钟差到已过期 / 超过 10 分钟时，按手机时间从现在起算 10 分钟。
+- Android implementation (#4297): follow web's add-computer flow, with confirmation on the "Waiting for it to connect" screen. Add through the selected hub group; regenerate, confirm, and reject through the machine's group by machine ID. Without `machines_add`, the add-computer page only explains how to add on web or in the admin UI (no longer a dialog). The web login URL in **Settings › Devices › Connect new device** uses the address this phone uses to connect to hub. "Regenerate link" is available only for computers with `error_code: never_connected` (regeneration invalidates existing pairing; sleeping computers only need waking). Entering from "Confirm computer" with none awaiting confirmation shows "No computers awaiting confirmation," not the add form. The Machines "+" and empty-state "Add computer" open the add page only with `machines_add`; old hubs retain the explanation dialog. If `expires_at` is unreadable, already expired relative to the phone clock, or more than 10 minutes ahead, count 10 minutes from now using the phone clock.
 
-- iOS / macOS 的实现（#4196）：照网页的流程和文案，确认也在「等它连上来」那一屏；「重新出链接」同样只给从没连上过的待确认电脑。没有 `machines_add` 时不显示任何添加入口（机器页的空状态还是原来的话），没有 `machine_trust` 时不显示确认、拒绝按钮。别的页面（就绪度卡片的 `add_computer` / `confirm_computer`）经 `AppModel.openAddComputer()` / `openConfirmComputer(_:)` 打开，见 `docs/ios.md`「添加电脑、确认电脑」。
+- iOS / macOS implementation (#4196): follow web's flow and copy, with confirmation on the same waiting screen. "Regenerate link" likewise appears only for pending computers that have never connected. Without `machines_add`, show no add entry point (Machines retains its original empty-state copy); without `machine_trust`, show no confirm / reject buttons. Other pages (readiness-card `add_computer` / `confirm_computer`) open through `AppModel.openAddComputer()` / `openConfirmComputer(_:)`; see `docs/ios.md` ("Adding and confirming computers").
 
-机器列表（`GET /api/v1/machines` 和 hello 里的机器）每台加两个可选字段：
+Add two optional fields to every machine in the list (`GET /api/v1/machines` and hello machines):
 
-| 字段 | 取值 |
+| Field | Values |
 | --- | --- |
-| `trust` | `pending` / 省略（= 已确认） |
-| `error_code` | `node_service_down`、`link_offline`、`never_connected`、`node_outdated`；`error` 原文保留 |
+| `trust` | `pending` / omitted (= confirmed) |
+| `error_code` | `node_service_down`, `link_offline`, `never_connected`, `node_outdated`; retain original `error` text |
 
 ```
-POST /api/v1/machines/{id}/confirm    full 设备   →  {"ok": true}       pending → confirmed，随后推送 Key
-POST /api/v1/machines/{id}/reject     full 设备   →  {"ok": true}       删掉 hub.json 条目和记录，吊销它的 link 凭据
+POST /api/v1/machines/{id}/confirm    Full device   →  {"ok": true}       pending → confirmed, then push keys
+POST /api/v1/machines/{id}/reject     Full device   →  {"ok": true}       Delete hub.json entry and record; revoke link credentials
 ```
 
-pending 的电脑：`pushManaged` 跳过；`defaultAssistantMachine` 和助手的机器候选跳过；新建 Agent、派发、待办的电脑列表不列；24 小时未确认自动 reject。出码、兑换、确认、拒绝、超时删除都写审计（Postgres），并给其他已配对设备推送（「<设备> 给电脑出了一个配对码」「新电脑 <名字> 想加入」）。
+Pending computers: skipped by `pushManaged`, `defaultAssistantMachine`, and assistant machine candidates; absent from computer pickers for new Agents, dispatch, and to-dos; automatically rejected after 24 hours without confirmation. Code generation, redemption, confirmation, rejection, and expiry deletion all create Postgres audit records and notify other paired devices ("<device> generated a computer pairing code," "New computer <name> wants to join").
 
-`personad hub pair --machine <id> [--add] [--name <名字>]`：走回环 + 主 token，`--add` 时没有就添加，加的直接是已确认。
+`personad hub pair --machine <id> [--add] [--name <name>]`: uses loopback + main token; `--add` creates a missing computer directly as confirmed.
 
-### 5.4 供应商：预设添加和 `assign`
+### 5.4 Providers: adding from presets and `assign`
 
-`GET /api/v1/launchers/presets`：返回「内置 + 插件」，按请求语言排序。`LauncherPreset` 加可选字段：
+`GET /api/v1/launchers/presets`: returns "built-in + plugins," sorted by request language. Add optional fields to `LauncherPreset`:
 
-| 字段 | 说明 |
+| Field | Description |
 | --- | --- |
-| `plugin` | 内置的是 `"builtin"` |
-| `signup_url` | 开通 / 买 Key 的页面，客户端用 App 内浏览器打开（只给内置预设填） |
-| `display_name` | 本地化的显示名（中文环境「智谱 GLM」之类） |
+| `plugin` | `"builtin"` for built-ins |
+| `signup_url` | Page for signing up / buying a key; clients open it in the in-app browser (set only for built-in presets) |
+| `display_name` | Localized display name (such as Zhipu GLM in Chinese) |
 
-`POST /api/v1/launchers`（已有）加两处：
+Two additions to existing `POST /api/v1/launchers`:
 
 ```json
 {"preset": "builtin/deepseek", "api_key": "…", "name": "", "display_name": "",
@@ -547,178 +547,178 @@ pending 的电脑：`pushManaged` 跳过；`defaultAssistantMachine` 和助手�
    "assigned": ["assistant"], "kept": [{"purpose": "agent.new", "reason": "customized"}]}
 ```
 
-- 带 `preset` 时 `name` 可以空：用厂商 slug，重名加 `-2`，满足 `managedLauncherName`（`models_launchers.go:98`，只认 ASCII）；`display_name` 空时用预设的。没有 `preset` 时 `display_name` 也可以填中文。
-- `assign`：保存后对列出的用途各 PATCH 一次，**只在该用途还是默认值（没人改过）时生效**，结果分到 `assigned` 和 `kept`。客户端不用自己「先读 revision 再 PATCH」。
-- `POST /api/v1/launchers/test`（已有）带 `preset` 时，没填 `model` 就用预设的默认模型。
+- With `preset`, `name` may be empty: use the vendor slug, adding `-2` on collision, satisfying `managedLauncherName` (`models_launchers.go:98`, ASCII only). If `display_name` is empty, use the preset's value. Without `preset`, `display_name` may also be Chinese.
+- `assign`: after saving, PATCH each listed purpose, **only if that purpose remains at its untouched default**. Split results into `assigned` and `kept`. Clients do not need their own "read revision, then PATCH" sequence.
+- With `preset`, existing `POST /api/v1/launchers/test` uses the preset's default model if `model` is omitted.
 
-### 5.5 命令行
+### 5.5 Command line
 
-| 命令 | 输出 |
+| Command | Output |
 | --- | --- |
-| `personad hub setup [--json]` | 每步一行中文；`--json` 时一行一个 `{"step","ok","detail","next"}`，最后一行 `{"done":true,"pair_url","admin_url","admin_local_only","setup_code","expires_at"}`，给 Persona Link / Mac 一体化调用 |
-| `personad hub pair --machine <id> --add` | 同现在，多一行「已添加：<名字>」 |
+| `personad hub setup [--json]` | One localized line per step; with `--json`, one `{"step","ok","detail","next"}` per line, followed by `{"done":true,"pair_url","admin_url","admin_local_only","setup_code","expires_at"}` for Persona Link / all-in-one Mac callers |
+| `personad hub pair --machine <id> --add` | Same as today, with an extra "Added: <name>" line |
 
-## 6. 做 / 暂不做 / 要拍板
+## 6. Do / defer / decisions needed
 
-### 6.1 本期做
+### 6.1 In this round
 
-- 服务端：主对话的结构化错误码和中文文案；`Not logged in` 进 `APIErrorMarkers`；就绪度接口和 warm 带就绪度；node 上报 Claude Code 装没装、登录没有；内置预设、中文显示名、预设添加名字可空、`assign`；pending 电脑 + Key 只发确认过的 + 回执推送；已登录设备添加电脑、`hub pair --machine --add`；机器的 `error_code`；就绪前跳过定时任务；`personad hub setup`（新文件写 TLS、局域网 `public_url`、`admin.first_setup`）；`db.go`、`install.sh` 结尾、启动日志的中文下一步；扩展市场读不到时降级。
-- 网页：主对话引导卡和失败卡片；登录页去命令行、设备去重；空状态；配对后清单；模型向导从预设开始；添加和确认电脑。
-- Android：同网页；补连接新设备、测试连接、获取模型列表、内置预设；`operationFeedback` 按 code 出文案（今天全落成「操作未完成」）。
-- 部署：Docker 首次启动补 `.env`、映射 TLS 端口。
-- 文档和官网：本文；给普通用户的「开始使用」一页（官网 + App 内打开，截图用体验模式）；README 顶部分「我想用」「我想开发」；`persona-link-install.md`、`link.md` 的配对步骤按「App 里添加电脑」改写；官网首屏放真实的获取方式，curl 收进「命令行安装」。
-- iOS / macOS / Persona Link：开 issue（第 7.3 节），协议见第 5 节。
+- Server: structured main-chat error codes and localized copy; add `Not logged in` to `APIErrorMarkers`; readiness endpoint and readiness in warm; node reports Claude Code installation / login; built-in presets, localized display names, empty names when adding from presets, `assign`; pending computers + keys only to confirmed ones + receipt notifications; logged-in devices add computers, `hub pair --machine --add`; machine `error_code`; skip scheduled tasks before readiness; `personad hub setup` (TLS, LAN `public_url`, `admin.first_setup` in new files); localized next steps in `db.go`, the end of `install.sh`, and startup logs; degradation when the extension marketplace is unreadable.
+- Web: main-chat guidance and failure cards; command-free login, device deduplication; empty states; post-pairing checklist; model wizard starts from presets; add and confirm computers.
+- Android: same as web; add Connect new device, Test connection, Get model list, built-in presets; `operationFeedback` chooses copy by code (today everything becomes "Operation failed").
+- Deployment: fill `.env` at Docker first startup; map the TLS port.
+- Documentation and website: this document; a "Get started" page for ordinary users (website + in-app, demo-mode screenshots); split the README top into "I want to use it" and "I want to develop"; rewrite pairing steps in `persona-link-install.md` and `link.md` around "Add computer in the app"; put actual download options on the website's first screen, moving curl into "Command-line installation."
+- iOS / macOS / Persona Link: open issues (7.3), with protocol in section 5.
 
-文档的实现（#4046）：「开始使用」是仓库里的 `docs/getting-started.md`，README 顶部分「我想用」「我想开发」，`persona-link-install.md`、`link.md` 的配对步骤以网页「机器 › 添加电脑」为主、管理界面和命令行收进「高级」。
-和上面不同的地方：没有改官网（官网首屏和 FAQ 等拍板 15），App 里也还没有打开这一页的入口；文中没有放截图，体验模式的截图等官网那一版一起做；
-iOS、Android 的添加电脑、预设向导和就绪卡片没合进来之前，文中如实写「现在先用网页」，那几项合进来后同步改这一页。
-`hub setup` 只在第一次写 hub.json 时看本机有没有 claude / herdr，所以文中要求「想让 hub 这台干活，先装 Claude Code 再装 hub」，补装的在「高级」里手动加 `kind: local`；让重跑 setup 补上本机见 #4083。
+Documentation implementation (#4046): "Get started" lives in `docs/getting-started.md`. The README top is split into "I want to use it" and "I want to develop"; pairing in `persona-link-install.md` and `link.md` primarily uses web **Machines › Add computer**, with admin UI and command line under "Advanced."
+Differences from the plan: the website was not changed (first screen and FAQ await decision 15), and the app still has no entry point to this page. No screenshots were added; demo-mode screenshots will accompany the website version.
+Until iOS / Android add-computer, preset wizard, and readiness cards merge, the page honestly says "Use the web for now"; update it as those items merge.
+`hub setup` checks for local claude / herdr only when first writing hub.json, so the document says "If this hub computer should do work, install Claude Code before hub." If installed later, manually add `kind: local` under "Advanced"; #4083 covers adding the local machine on setup reruns.
 
-### 6.2 暂不做
+### 6.2 Deferred
 
-| 项 | 原因 |
+| Item | Reason |
 | --- | --- |
-| 「只聊天」模式 | P1 单独 issue：新的运行方式，和 node 上的主对话分成两份记忆和权限，要拍板 9 |
-| App 里一键装 Claude Code | P1：在用户电脑上执行下载来的安装脚本，要带确认、校验和国内网络的降级 |
-| 不开终端登录 Claude 订阅 | 先 spike `claude setup-token` / `claude auth login` 能否无终端完成，结论写进 `docs/lessons/agents.md`；还要拍板 10 |
-| App 里 mDNS 发现 hub | P1：排在默认 TLS 之后；只做发现，首次信任仍靠一次性码 |
-| 电脑发起、手机允许的配对 | P1：安全设计单独评审；本期复制 / 分享链接够用 |
-| 手机出短码、电脑输入 | mDNS 能被同网段伪造，短码会被骗走 |
-| Mac 一体化包、Persona Link 安装包 | 要 Developer ID（拍板 1） |
-| 内嵌 Postgres / SQLite | 状态都在 Postgres 是仓库约定；打包第三方 Postgres 二进制要评估（拍板 2） |
-| 新手默认开健康检查 / 自动修复 | 每 30 分钟真跑请求要花钱；修复 Agent 默认 bypass 是 2026-11-05 的用户决定，不在新手路径里改 |
-| 新手预设里的「全部放行」「读东西不用问」 | 前者风险不可接受；后者在 Bash 上没法安全表达（拍板 14） |
-| Windows 当 hub、Windows 托盘 | #1179、#299 另有人跟 |
-| 云一键模板、出门直连的中继隧道 | 要注册外部服务或运营基础设施（拍板 6、7） |
-| hub 迁移工具（Mac 挪到 NAS） | 先让第一次装好 |
-| 网页体验模式 | `docs/web.md` 已定不做，网页本身由 hub 托管 |
-| 引导里出现互联、被动模式（hub 来连）、ssh、飞书接入 | 新手永远只有一台 hub；飞书对普通用户今天走不通 |
-| Gmail 发布方 OAuth | 要 Google 受限 scope 验证（拍板 12）；引导里只推荐 IMAP / 应用专用密码 |
+| "Chat only" mode | Separate P1 issue: a new run mode with memory and permissions separate from main chat on node; needs decision 9 |
+| One-tap Claude Code installation in the app | P1: executes a downloaded installer on the user's computer; needs confirmation, verification, and fallback for networks in China |
+| Claude subscription sign-in without a terminal | First spike whether `claude setup-token` / `claude auth login` can finish without a terminal; write conclusions in `docs/lessons/agents.md`; also needs decision 10 |
+| mDNS hub discovery in the app | P1: after default TLS; discovery only, initial trust still requires a one-time code |
+| Computer-initiated, phone-approved pairing | P1: separate security review; copying / sharing links is sufficient this round |
+| Phone displays a short code, computer enters it | mDNS can be spoofed on the same network, allowing code theft |
+| All-in-one Mac package, Persona Link installer | Requires Developer ID (decision 1) |
+| Embedded Postgres / SQLite | Repository policy puts all state in Postgres; bundling third-party Postgres binaries needs evaluation (decision 2) |
+| Health checks / automatic repair enabled for beginners | Real requests every 30 minutes cost money; repair-Agent bypass is the user's 2026-11-05 decision, not changed in onboarding |
+| "Allow all" / "Read without asking" in beginner presets | The former's risk is unacceptable; the latter cannot safely be expressed for Bash (decision 14) |
+| Windows hub, Windows tray app | #1179, #299 tracked by others |
+| One-click cloud templates, relay tunnels for away-from-home connections | Requires external service accounts or operated infrastructure (decisions 6, 7) |
+| Hub migration tool (Mac to NAS) | Make first installation work first |
+| Web demo mode | `docs/web.md` already decides against it; hub hosts the web app itself |
+| Linked hubs, passive mode (hub connects), ssh, or Lark setup in onboarding | Beginners always have one hub; Lark setup does not work for ordinary users today |
+| Publisher-provided Gmail OAuth | Requires Google restricted-scope verification (decision 12); onboarding recommends only IMAP / app passwords |
 
-### 6.3 需要用户拍板
+### 6.3 User decisions needed
 
-| # | 事项 | 为什么要拍板 | 不拍板时的退路 |
+| # | Decision | Why it needs a decision | Fallback without a decision |
 | --- | --- | --- | --- |
-| 1 | Developer ID 签名 + 公证：Persona Link，以及将来的 Mac 一体化包 | 付费开发者账号和公证流程 | Mac 电脑只能从源码装；官网如实写，B 档验收（8.3）做不到 |
-| 2 | 不装 Docker 的机器上的数据库：随包带 Postgres 二进制或 embedded-postgres | 新依赖、包体积（几十 MB）、升级要管数据目录 | 要求装 Docker Desktop / OrbStack，或本机 Postgres |
-| 3 | Mac App（`PersonaMac`）和 Persona Link 合成一个下载 | 产品形态 | 两个 App，首屏讲清区别 |
-| 4 | Docker 镜像（ghcr）改公开 | 对外发布口径 | NAS 用户要 `docker login` |
-| 5 | Android 公开的签名 APK 下载页，或上 Google Play | 签名密钥、商店注册费 | hub 托管 APK（`hub pair --android`） |
-| 6 | 云服务器一键模板 | 要注册云厂商的市场账号 | 云服务器上跑同一行命令 |
-| 7 | 出门直连：发布方运营的中继隧道 | 新的流量成本和运维 | 局域网能用；出门靠 VPN 或 IPv6 |
-| 8 | 新安装默认 TLS 只绑局域网 IPv4（推荐），还是 `:18662` 全开 | 有公网 IPv6 的机器全开时端口直接暴露到公网（有设备 token 和限流兜底，`docs/network.md`） | 按推荐：只绑局域网，引导最后问「出门也要用吗」 |
-| 9 | 做不做「只聊天」模式（P1） | 产品决定：Docker / NAS、只有 Key 的人不再是空白；代价是两套主对话 | 这些用户只看到引导卡，必须加一台电脑 |
-| 10 | Claude 订阅的无头登录由 node 代跑并把 token 存进 hub | 是否符合 Anthropic 条款 | 只走 API Key 一条免终端的路 |
-| 11 | 「去哪弄模型」推荐哪几家、排序、要不要推广链接；Anthropic 官方放不放第一位（国内可能直连不了） | 商业和合规判断 | 按语言排序列几家，不写推荐语和价格 |
-| 12 | Gmail 由发布方提供经验证的 OAuth 客户端 | Google 受限 scope 验证 / CASA，可能付费 | 只推荐 IMAP / 应用专用密码 |
-| 13 | 界面里 hub 的叫法：保留「hub」、「主机」还是「中枢」 | 全局术语 | 保留「hub」，首次出现带一句解释 |
-| 14 | 新手要不要一个「读东西不用问」的权限档 | 放宽安全默认；Bash 上分辨不了只读命令 | 默认模式，先在实测里数审批次数 |
-| 15 | 官网、TestFlight 说明改成面向普通用户（FAQ 去掉「写信给我们」，放公开链接） | 对外口径 | 只改 README 和文档 |
-| 16 | 真人测试：谁去招人、录屏同意书模板 | 要找外部的人 | 只做自动化和内部走查 |
+| 1 | Developer ID signing + notarization for Persona Link and the future all-in-one Mac package | Paid developer account and notarization process | Mac installation only from source; say so on the website; acceptance tier B (8.3) is unavailable |
+| 2 | Database on machines without Docker: bundled Postgres binary or embedded-postgres | New dependency, package size (tens of MB), data-directory management during upgrades | Require Docker Desktop / OrbStack or local Postgres |
+| 3 | Combine Mac app (`PersonaMac`) and Persona Link into one download | Product form | Two apps, with the difference explained on the first screen |
+| 4 | Make the Docker image (ghcr) public | Public release policy | NAS users need `docker login` |
+| 5 | Public signed Android APK download page, or Google Play | Signing key, store registration fee | Hub-hosted APK (`hub pair --android`) |
+| 6 | One-click cloud-server templates | Cloud marketplace account registration | Run the same one-line command on a cloud server |
+| 7 | Away-from-home direct connection: publisher-operated relay tunnels | New traffic costs and operations | LAN works; use VPN or IPv6 away from home |
+| 8 | New-install TLS binds only LAN IPv4 (recommended), or opens all addresses at `:18662` | On machines with public IPv6, all-address binding directly exposes the port publicly (device tokens and rate limits provide protection, `docs/network.md`) | Follow the recommendation: LAN only; ask "Use away from home too?" at the end of onboarding |
+| 9 | Whether to build "Chat only" mode (P1) | Product decision: Docker / NAS and key-only users no longer get a blank screen; cost is two main-chat systems | These users see only a guidance card and must add a computer |
+| 10 | Node performs headless Claude subscription sign-in and stores the token in hub | Compliance with Anthropic terms | API key is the only terminal-free path |
+| 11 | Which providers "Where to get a model" recommends, their order, affiliate links, and whether official Anthropic is first (may be unreachable directly in China) | Business and compliance judgment | List providers by language, without endorsements or prices |
+| 12 | Publisher-provided verified Gmail OAuth client | Google restricted-scope verification / CASA, potentially paid | Recommend only IMAP / app passwords |
+| 13 | Hub's UI name: "hub", "host", or "center" | Global terminology | Keep "hub," explaining it on first use |
+| 14 | Whether beginners get a "Read without asking" permission tier | Looser security default; read-only Bash commands cannot be distinguished | Default mode; count approvals in real testing first |
+| 15 | Reorient the website and TestFlight description toward ordinary users (remove "Write to us" from FAQ, publish links) | Public positioning | Change only README and documentation |
+| 16 | Real-user testing: who recruits, screen-recording consent template | Requires external participants | Automated tests and internal walkthroughs only |
 
-## 7. 分工和分步计划
+## 7. Ownership and staged plan
 
-### 7.1 各端分工
+### 7.1 Platform ownership
 
-| 端 | 本期内容 | 在哪做 |
+| Platform | Work this round | Where |
 | --- | --- | --- |
-| 服务端 | 错误码、就绪度、node 的 Claude Code 状态、预设和 `assign`、pending 电脑和 Key 过滤、添加电脑、回执推送、定时任务门槛、`hub setup`、命令行文案 | Linux 开发机，连真实 Postgres 跑测试 |
-| 网页 | 引导卡、失败卡片、空状态、登录页、设备去重、清单、模型向导、添加 / 确认电脑 | Linux 开发机，Playwright 截图 |
-| Android | 清单加四项、按 code 出文案、首屏、连接新设备、测试连接、内置预设、添加 / 确认电脑 | Linux 开发机；没有 KVM 时 PR 里写明未截图 |
-| iOS / macOS / Persona Link | 第 7.3 节的 issue | Mac |
-| 部署 | Docker 入口脚本和 compose | Linux 开发机 |
-| 文档 / 官网 | 开始使用、README、Persona Link 配对步骤、官网首屏和 FAQ（FAQ 等拍板 15） | Linux 开发机，发布按 `docs/site.md` |
+| Server | Error codes, readiness, node Claude Code status, presets and `assign`, pending computers and key filtering, add computers, receipt notifications, scheduled-task gating, `hub setup`, CLI copy | Linux development machine, tests against real Postgres |
+| Web | Guidance cards, failure cards, empty states, login page, device deduplication, checklist, model wizard, add / confirm computer | Linux development machine, Playwright screenshots |
+| Android | Four checklist items, coded copy, first screen, Connect new device, Test connection, built-in presets, add / confirm computer | Linux development machine; state in the PR when screenshots were not taken due to lack of KVM |
+| iOS / macOS / Persona Link | Issues in 7.3 | Mac |
+| Deployment | Docker entrypoint and compose | Linux development machine |
+| Documentation / website | Get started, README, Persona Link pairing steps, website first screen and FAQ (FAQ awaits decision 15) | Linux development machine; publish per `docs/site.md` |
 
-### 7.2 PR 顺序
+### 7.2 PR order
 
-每个 PR 先建 issue（`Refs #287`），一个 PR 一个 issue，按下面的顺序；前面的单独合进去就有用。
+Create an issue for each PR first (`Refs #287`), one issue per PR, in the order below. Earlier PRs are useful independently.
 
-| # | 标题（PR 用） | 端 | 内容 | 单独合进去的价值 |
+| # | Title (for PR) | Platform | Content | Value when merged alone |
 | --- | --- | --- | --- | --- |
-| 1 | fix(assistant): say why the main conversation can't start, with a code | server | 5.2 的码和中文；`Not logged in` 进 markers 归 `user`，带定时任务和待办的测试；`start.go` 和 `memory()` 统一；golden 更新 | 老客户端立刻从英文 502 变成中文 409；后面各端按码出卡片 |
-| 2 | test: guard onboarding copy and add readiness scenarios to the mock hub | scripts, mock | 8.1 的文案守门测试；`mock_hub.py` / `mock_scenarios.py` 加七种就绪状态和每个错误码的场景 | 之后每个界面 PR 都有守门和截图数据 |
-| 3 | feat(node): report whether Claude Code is installed and signed in | server (node) | `claude.auth_status` RPC（启动器真实环境、版本判断、`unknown` 兜底）；默认启动器优先用绝对路径（先在 #2854 协调） | 就绪度能免费判断登录 |
-| 4 | feat(assistant): readiness of the main conversation | server | 5.1 全部；warm 带 `readiness`；`features` 登记；`docs/protocol.md` 补接口 | 四端和 iOS issue 的唯一数据源 |
-| 5 | feat(web): show what the main conversation still needs | web | 引导卡、发送按钮、失败卡片代替 toast、4.5 的空状态 | 网页新用户第一次不再「看着能用、发了才错」 |
-| 6 | fix(web): sign in without commands and keep one device per browser | web | 登录页改写；重新登录复用 / 替换旧设备 | 网页第一屏不再教 `jq` |
-| 7 | feat(assistant): built-in provider presets and assign-if-default | server | `presets_builtin.json`（逐家实测）、`signup_url`、`display_name`、名字可空、`assign`、test 带默认模型 | 「只有 Key」三步接上 |
-| 8 | feat(web): provider wizard starts from presets | web | 向导第一步列厂商、只粘 Key、自动测试、`assign`；「从 ~/.zshrc 导入」挪进高级 | 网页模型向导对新手可用 |
-| 9 | feat(hub): pending machines get no keys until confirmed | server | 信任表（没有记录 = 已确认）、`pushManaged` / 助手机器 / Agent 列表过滤、confirm / reject、24 小时清理、机器的 `trust` / `error_code` | 放开设备添加电脑之前的安全前提；单独合也没有行为变化 |
-| 10 | feat(hub): a signed-in device can add a computer | server | pair-codes 的 `add`（抽出 admin 的添加函数）、`hub pair --machine --add`、回执推送、`mesh_member`、`too_many_pending` | 加电脑不再需要 /admin 和设置码 |
-| 11 | feat(web): add and confirm a computer from the machines page | web | 4.2 的页面，复用 `connect-device.ts` 的倒计时和轮询；确认在「等它连上来」那一屏 | 网页用户全程不碰 /admin |
-| 12 | feat(assistant): routines wait until the main conversation is ready | server | 就绪前跳过、记「跳过」、不推失败 | 零电脑的新 hub 不再到点报错 |
-| 13 | feat(hub): personad hub setup | server, scripts | 4.1 全部；`install.sh --hub` 调它；`db.go:37` 改文案；`newInstallConfig()` 和老文件加载的 golden | 官网「一行命令」第一次真的能装好 hub。可以和 5–12 并行 |
-| 14 | feat(docker): first start fills .env and maps the TLS port | deploy | 入口脚本、compose | NAS 少两步手工 |
-| 15 | feat(android): onboarding checklist, coded errors and first screen | Android | 清单加四项、`operationFeedback` 按码、首屏去命令、空状态、引导卡 | Android 和网页对齐 |
-| 16 | feat(android): presets, connection test, connect a device, add a computer | Android | 模型向导、连接新设备、添加 / 确认电脑 | 同上 |
-| 17 | docs: getting started for people who don't use a terminal | docs, site | 开始使用、README、Persona Link 配对步骤、官网首屏 | 广告进来的人有一页看得懂的说明 |
+| 1 | fix(assistant): say why the main conversation can't start, with a code | server | Codes and localized copy from 5.2; add `Not logged in` to markers as `user`, with scheduled-task / to-do tests; unify `start.go` and `memory()`; update goldens | Old clients immediately get a localized 409 instead of raw English 502; later clients show cards by code |
+| 2 | test: guard onboarding copy and add readiness scenarios to the mock hub | scripts, mock | Copy guard from 8.1; seven readiness states and scenarios for every error code in `mock_hub.py` / `mock_scenarios.py` | Every later UI PR has copy guards and screenshot data |
+| 3 | feat(node): report whether Claude Code is installed and signed in | server (node) | `claude.auth_status` RPC (actual launcher environment, version check, `unknown` fallback); prefer absolute paths for default launcher (coordinate in #2854 first) | Readiness can detect login for free |
+| 4 | feat(assistant): readiness of the main conversation | server | All of 5.1; `readiness` in warm; `features` registration; endpoint in `docs/protocol.md` | Single data source for all four clients and iOS issues |
+| 5 | feat(web): show what the main conversation still needs | web | Guidance card, Send button, failure cards instead of toasts, empty states in 4.5 | New web users no longer see "looks ready, fails only after sending" |
+| 6 | fix(web): sign in without commands and keep one device per browser | web | Rewrite login page; reuse / replace old device on sign-in | Web's first screen stops teaching `jq` |
+| 7 | feat(assistant): built-in provider presets and assign-if-default | server | `presets_builtin.json` (test every provider), `signup_url`, `display_name`, empty names allowed, `assign`, default model for tests | Key-only users connect in three steps |
+| 8 | feat(web): provider wizard starts from presets | web | Provider list first, paste only a key, automatic test, `assign`; move "Import from ~/.zshrc" into Advanced | Web model wizard becomes usable for beginners |
+| 9 | feat(hub): pending machines get no keys until confirmed | server | Trust table (no record = confirmed), `pushManaged` / assistant-machine / Agent-list filters, confirm / reject, 24-hour cleanup, machine `trust` / `error_code` | Security prerequisite for allowing devices to add computers; no behavior change when merged alone |
+| 10 | feat(hub): a signed-in device can add a computer | server | `add` in pair-codes (extract admin add function), `hub pair --machine --add`, receipt notifications, `mesh_member`, `too_many_pending` | Adding computers no longer requires /admin or a setup code |
+| 11 | feat(web): add and confirm a computer from the machines page | web | Pages in 4.2, reuse countdown and polling from `connect-device.ts`; confirmation on the waiting screen | Web users never need /admin |
+| 12 | feat(assistant): routines wait until the main conversation is ready | server | Skip before readiness, record "Skipped," no failure push | New hubs with zero computers stop failing at scheduled times |
+| 13 | feat(hub): personad hub setup | server, scripts | All of 4.1; called by `install.sh --hub`; copy at `db.go:37`; `newInstallConfig()` and old-file loading goldens | Website's "one command" actually installs hub for the first time; can run alongside 5–12 |
+| 14 | feat(docker): first start fills .env and maps the TLS port | deploy | Entrypoint, compose | Two fewer manual steps for NAS |
+| 15 | feat(android): onboarding checklist, coded errors and first screen | Android | Four checklist items, coded `operationFeedback`, remove first-screen commands, empty states, guidance card | Android matches web |
+| 16 | feat(android): presets, connection test, connect a device, add a computer | Android | Model wizard, Connect new device, add / confirm computer | Same |
+| 17 | docs: getting started for people who don't use a terminal | docs, site | Get started, README, Persona Link pairing, website first screen | A readable explanation for people arriving from an ad |
 
-P1 各开一个 issue：「只聊天」模式（拍板 9 之后）、node 的 `claude.install`、无头登录 spike、App 内 mDNS 发现、电脑发起的配对、Mac 一体化（拍板 1、2 之后）。
+Separate P1 issues: "Chat only" mode (after decision 9), node `claude.install`, headless sign-in spike, in-app mDNS discovery, computer-initiated pairing, all-in-one Mac (after decisions 1 and 2).
 
-### 7.3 派到 Mac 上做的 iOS / macOS 工作项
+### 7.3 iOS / macOS work assigned to a Mac
 
-每个 issue 引用第 5 节的协议，写明「Linux 开发机 编不了 Swift；Xcode 26.0 未验证时在 PR 里注明」。界面只用设计系统（`.surface`、`EmptyStateView(action:)`、`Theme.*`），`TokenRatchetTests` 不升基线；按钮单行；深浅色截图。
+Each issue references the protocol in section 5 and states "The Linux development machine cannot compile Swift; note in the PR if Xcode 26.0 was not verified." UI uses only the design system (`.surface`, `EmptyStateView(action:)`, `Theme.*`); do not raise the `TokenRatchetTests` baseline. Single-line buttons; light and dark screenshots.
 
-| # | 标题 | 改什么 | 验收 |
+| # | Title | Changes | Acceptance |
 | --- | --- | --- | --- |
-| M1 | iOS / Mac：主对话按就绪度显示缺什么，失败用卡片 | 读 `GET /api/v1/assistant/readiness`（依赖 PR 4，看 `features` 的 `assistant_readiness`）；输入框上方的引导卡、发送按钮「先接上模型」、草稿保留不排队；5.2 的错误码画卡片，原文进「详情」；`turn_error_code` 的气泡换成卡片；去掉 `"ccc"` 兜底 | 零电脑、电脑离线、pending、没装 Claude Code、没登录、Key 错、一切正常七种状态（mock hub 场景）各截深浅色；首屏不出现英文原文；409 不被 `isQuiet` 吞掉；`AssistantView` 的模型有 FakeHub 单元测试；老 hub（404）上行为和现在一样 |
-| M2 | iOS / Mac：首屏和配对后清单 | WelcomeView 改成 4.5 的结构，命令行收进「其他方式」；配对成功后复用 `pairingEngineMachine` 的插入机制加电脑 / Claude Code / 模型 / 试一句四项，可跳过、可回来，「以后再说」调 dismiss；体验模式退出落到「还没有 hub？」 | 首屏和清单里不出现 `personad`、token、hub.json（文案守门测试覆盖 iOS 字符串）；四项各状态截图；跳过后设置顶部有「还有 N 步」；Mac 上粘贴链接照常配对 |
-| M3 | iOS / Mac：添加和确认电脑 | 机器页、Agents 空状态、清单的「添加电脑」→ 选系统 → 名字（可中文）→ 调 pair-codes 带 `add`（依赖 PR 10）→ Linux 命令拷贝 / Mac 分享链接 → 倒计时等上线 → 同一屏「是我的电脑」调 confirm；机器列表显示 `trust` 和 `error_code` 的中文；收到「新电脑想加入」推送能直接确认或拒绝 | 从 0 台到 1 台已确认在线全程不出现 hub.json、TLS、node；过期能重出码；pending 电脑不出现在新建 Agent 里；拒绝后列表里消失；老 hub（不支持 `add`）上入口不显示 |
-| M4 | iOS / Mac：模型向导从预设开始 | ProviderWizard 第一步读 `GET /api/v1/launchers/presets` 的厂商列表（去掉写死的「Anthropic 官方」），只粘 Key，自动测试，保存带 `assign`；就绪度显示有能用的 Claude Code 时「设为主对话」开关默认关；「我已经在用 Claude Code」走 `?probe=1`；「去哪弄模型」用 App 内浏览器开 `signup_url` | 三条路各截图；测试失败的 401 / 403 / 404 / 429 / 超时文案对照 `assistant-models_probe.json`；中文显示名保存成功；已改过主对话模型时保存后不被覆盖（`kept` 里有它） |
-| M5 | Persona Link：点链接就能配对，不再要求运行命令 | 注册 `jarvis` 和 `persona` URL scheme，点 `jarvis://link?…` 打开配对窗口并预填；配对窗口文案改成「在手机 App 的添加电脑里拷贝这一段」；首屏状态页：未配对 / 已连上 / 等你在手机上确认 / 后台服务没在跑（大白话） | 从备忘录、AirDrop、邮件点链接能拉起配对；pending 时显示「在手机上点确认」；未签名构建上的行为在 PR 里写明 |
-| M6 | iOS / Mac：配对和接入的回执通知 | 「<设备> 出了一个配对码」「新设备 / 新电脑接入」通知（依赖 PR 10 的推送），带「不是你？撤销」 | 推送到达后点撤销能吊销对应设备或拒绝电脑；通知文案不含 id 和地址 |
+| M1 | iOS / Mac: show missing main-chat setup by readiness, use cards for failures | Read `GET /api/v1/assistant/readiness` (depends on PR 4; check `assistant_readiness` in `features`); guidance card above composer, "Connect a model first" Send replacement, preserve drafts without queueing; cards for 5.2 codes, original text in "Details"; replace `turn_error_code` bubbles with cards; remove `"ccc"` fallback | Light / dark screenshots for seven states (mock hub): zero computers, offline, pending, missing Claude Code, not logged in, wrong key, all ready. No raw English errors on first screen; 409 not swallowed by `isQuiet`; `AssistantView` model has FakeHub unit tests; old hub (404) behaves as before |
+| M2 | iOS / Mac: first screen and post-pairing checklist | WelcomeView uses 4.5 structure, command line under "Other ways"; after pairing, reuse `pairingEngineMachine` insertion to add computer / Claude Code / model / test message, skippable and revisitable; "Later" calls dismiss; exiting demo goes to "No hub yet?" | No `personad`, token, hub.json on first screen or checklist (copy guard includes iOS strings); screenshots of each state for all four items; "N steps left" at top of Settings after skipping; Mac paste-link pairing still works |
+| M3 | iOS / Mac: add and confirm computers | Machines, Agents empty state, checklist "Add computer" → choose OS → name (may be Chinese) → pair-codes with `add` (depends on PR 10) → copy Linux command / share Mac link → countdown waiting for online → "This is my computer" calls confirm on the same screen. Machine list shows localized `trust` and `error_code`; "New computer wants to join" push allows direct confirm / reject | 0 to 1 confirmed online computer without hub.json, TLS, or node; regenerate expired codes; pending computers absent from New Agent; rejection removes it from list; no entry point on old hubs without `add` |
+| M4 | iOS / Mac: model wizard starts from presets | ProviderWizard first step reads vendors from `GET /api/v1/launchers/presets` (remove hardcoded "Official Anthropic"), key only, automatic test, save with `assign`; "Use for main chat" defaults off when readiness finds working Claude Code; "I already use Claude Code" uses `?probe=1`; "Where to get a model" opens `signup_url` in-app | Screenshots for all three routes; 401 / 403 / 404 / 429 / timeout copy matches `assistant-models_probe.json`; Chinese display name saves; customized main-chat model is not overwritten on save (listed in `kept`) |
+| M5 | Persona Link: pair by opening a link, no command required | Register `jarvis` and `persona` URL schemes; `jarvis://link?…` opens and prefills pairing window; pairing copy becomes "Copy this from Add computer in the phone app"; first-screen plain-language states: unpaired / connected / waiting for phone confirmation / background service not running | Links from Notes, AirDrop, email open pairing; pending shows "Confirm on your phone"; document unsigned-build behavior in the PR |
+| M6 | iOS / Mac: pairing and connection receipt notifications | "<device> generated a pairing code" and "New device / computer connected" notifications (depends on PR 10 pushes), with "Not you? Revoke" | Tapping Revoke after arrival revokes the device or rejects the computer; notification text contains no IDs or addresses |
 
-## 8. 验证
+## 8. Validation
 
-### 8.1 自动化
+### 8.1 Automation
 
-- **服务端单测**（Linux 开发机 连真实 Postgres，`go test -p 1 ./...`）：
-  - 老 hub.json 加载后的配置和改动前一致（golden，含只有 `database_url` 的 db.sh 文件、没有 `public` 段的手写文件）；`newInstallConfig()` 带 TLS、局域网 `public_url`、`admin.first_setup`。
-  - pending：设备码加的电脑是 pending，收不到 Key，不会被选成助手机器，不在新建 Agent 列表里，24 小时清理；升级前的机器、`/admin` 和回环加的都是已确认；手表、link、配对码身份不能出电脑码。
-  - `assign` 只改还是默认值的用途；预设添加名字可空、重名加后缀；内置预设字段齐全。
-  - 就绪度：每种状态一个用例；默认不发模型请求；`?probe=1` 30 秒内复用结果。
-  - `Not logged in` 进 markers 后，定时任务、待办、会话列表的 `TurnError` 的行为有测试。
-  - `no_machine` 等码回 409，`error` 是中文。
-- **文案守门**：在 `scripts/test/` 里新加 test_onboarding_copy.py，扫引导、空状态、错误码对应的文案（网页 i18n、Android `values-zh`、iOS 字符串、服务端 i18n），禁止出现 `hub.json`、`token`（「配对码」不算）、`jq`、`personad`、`TLS`、`node`、`herdr`、`launcher`、`localhost`、`~/.`。「高级」「详情」里的键在白名单里。和 `privacy_check.py` 一样进测试。
-- **故障场景**：`mock_hub.py` / `mock_scenarios.py` 加七种就绪状态（零电脑、离线、pending、没装 Claude Code、没登录、Key 错、一切正常）和第 4.6 节每个码的错误，网页 Playwright、Android `android.sh shots`、iOS 截图共用一套。
-- 实现（#4033，用法见 `docs/testing.md`「新手文案守门」「就绪度场景」），和上面不同或补充的地方：
-  - 文案守门除了白名单（`ALLOW`，写理由），还有一张 `PENDING`：现在还不对、有人在改的（Android 的首屏和空状态归 #4032，iOS / Mac 的归 7.3 的 M2–M4），改好了必须拿掉，新的不能加。iOS 没有词条文件，扫几个 Swift 文件里的中文字面量。
-  - 「待确认」场景的就绪度是 `no_machine`，不是 `machine_pending`：hub 不把待确认的电脑给助手（`devices.list` 不含它），和 5.1 的实现说明一致；`machine_pending` 出现在给它开 Agent 时，以及 `MOCK_START_ERROR=machine_pending`。
-  - 七种之外另有 `demo`、`unverified`、`launcher_missing`、`model_route`、`rate_limited`、`node_outdated`、`assistant_offline`。场景的就绪度和开对话的拒绝由 `server/internal/assistant/readiness_scenarios_test.go` 用真代码生成 golden，mock 的测试逐个比对，不靠手抄。
-- **全新用户端到端**（Linux 开发机）：隔离测试 hub（自己的端口、数据目录、数据库，`JARVIS_LOCAL_NODE=0`）上，Playwright 走网页：登录 → 引导卡出现 → 用假网关加一个预设供应商 → `assign` 生效 → 就绪度的 `model` 变化。断言首屏和引导里没有文案守门禁止的词。
-- **升级回归**：拿一份手写 hub.json、`~/.zshrc` 启动器和带 Persona 管理供应商的库，升级后 Key 照常下发、机器都已确认、主对话照常；`./scripts/test/test-server.sh` 全过。
+- **Server unit tests** (Linux development machine, real Postgres, `go test -p 1 ./...`):
+  - Loading old hub.json gives the same configuration as before (goldens include db.sh's database_url-only file and a handwritten file without `public`); `newInstallConfig()` includes TLS, LAN `public_url`, `admin.first_setup`.
+  - Pending: device codes add pending computers; no keys, no assistant selection, absent from New Agent, cleanup after 24 hours. Pre-upgrade machines and `/admin` / loopback additions are confirmed; Watch, link, and pairing-code identities cannot generate computer codes.
+  - `assign` changes only untouched-default purposes; preset additions allow empty names and suffix collisions; built-in presets have complete fields.
+  - Readiness: a case for each state; no model request by default; `?probe=1` reuses results within 30 seconds.
+  - After adding `Not logged in` to markers, test scheduled tasks, to-dos, and session-list `TurnError` behavior.
+  - Codes such as `no_machine` return 409 with localized `error`.
+- **Copy guard**: add test_onboarding_copy.py under `scripts/test/`, scanning onboarding, empty states, and error-code copy (web i18n, Android `values-zh`, iOS strings, server i18n). Prohibit `hub.json`, `token` ("pairing code" does not count), `jq`, `personad`, `TLS`, `node`, `herdr`, `launcher`, `localhost`, `~/.`. Whitelist keys under "Advanced" / "Details." Include it in tests like `privacy_check.py`.
+- **Failure scenarios**: add seven readiness states (zero computers, offline, pending, missing Claude Code, not logged in, wrong key, all ready) and every code in 4.6 to `mock_hub.py` / `mock_scenarios.py`. Web Playwright, Android `android.sh shots`, and iOS screenshots share them.
+- Implementation (#4033; usage in `docs/testing.md`, "Onboarding copy guard" and "Readiness scenarios") differs from or adds to the design:
+  - Alongside the whitelist (`ALLOW`, with reasons), the copy guard has `PENDING` for existing issues being fixed (Android first screen / empty states in #4032; iOS / Mac in M2–M4 of 7.3). Remove entries once fixed; never add new ones. iOS has no catalogs yet, so scan Chinese literals in a few Swift files.
+  - The pending scenario's readiness is `no_machine`, not `machine_pending`: hub does not expose pending computers to the assistant (`devices.list` excludes them), matching 5.1's implementation notes. `machine_pending` appears when starting an Agent on one, and with `MOCK_START_ERROR=machine_pending`.
+  - Additional scenarios: `demo`, `unverified`, `launcher_missing`, `model_route`, `rate_limited`, `node_outdated`, `assistant_offline`. `server/internal/assistant/readiness_scenarios_test.go` generates goldens for readiness and chat-creation rejection from real code; mock tests compare each rather than copying by hand.
+- **Fresh-user end-to-end** (Linux development machine): on an isolated test hub (own port, data directory, database, `JARVIS_LOCAL_NODE=0`), Playwright follows web login → guidance card → add a preset provider through a fake gateway → `assign` takes effect → readiness `model` changes. Assert the first screen and onboarding contain no prohibited copy-guard terms.
+- **Upgrade regression**: upgrade using a handwritten hub.json, `~/.zshrc` launchers, and a database with Persona-managed providers. Keys still distribute, all machines are confirmed, main chat works as before; `./scripts/test/test-server.sh` passes completely.
 
-### 8.2 截图
+### 8.2 Screenshots
 
-每个界面 PR：上面每种状态深浅色各一张，网页另加 390 宽。Android 在有 KVM 的机器上补截，Linux 开发机 截不了时 PR 里写明。iOS / Mac 按 7.3 的验收在 Mac 上截。
+For every UI PR: a light and dark screenshot for each state above; web also at width 390. Take Android screenshots on a KVM-capable machine; if unavailable on the Linux development machine, state that in the PR. iOS / Mac screenshots follow 7.3 acceptance on a Mac.
 
-### 8.3 找非技术用户实测
+### 8.3 Testing with nontechnical users
 
-**两档验收**：
+**Two acceptance tiers**:
 
-- **A 档（本期能达成）**：一台常开的 Linux 小主机或 NAS + 手机。测试员照官网截图粘一行命令（hub 机器上唯一的一次），其余全在 App 里。
-- **B 档（拍板 1、2 之后）**：干净的 Mac + iPhone，只下载 App，不碰终端。#287 原始的「10 分钟」验收属于这一档。
+- **Tier A (achievable this round)**: an always-on Linux mini PC or NAS + phone. The tester pastes one command using the website screenshots (the only command on the hub machine); everything else happens in the app.
+- **Tier B (after decisions 1 and 2)**: clean Mac + iPhone, downloads apps only, no terminal. The original "10 minutes" acceptance in #287 belongs to this tier.
 
-**步骤**：
+**Steps**:
 
-1. **纸面原型先行**：把引导的截图串成可点的点击稿（Wizard of Oz），找 2 个人走一遍，先改文案再写界面。
-2. **招 5 个人**：没用过终端，不做研发、产品、测试，有自己的手机。干净的系统用户、卸载重装的 App。
-3. **只给目标、不给步骤**：场景卡写「让 Persona 告诉你这台电脑上最大的几个文件夹」。A 档另加「再接上你的笔记本」。模型给一张有余额的测试 Key，或让他自己去开通（看「去哪弄模型」页能不能用）。
-4. **网络分两种**：家里 Wi-Fi；最后切到蜂窝网络再问一句（检验出门在外的提示是不是说清楚了）。
-5. **故障注入**：每人随机抽 1 个，由观察员事先制造：电脑睡眠、配对码过期、Key 填错、Claude Code 没登录、手机拒绝本地网络权限。看错误卡能不能让人自己修好。
-6. **观察员只看不帮**：被问时只说「你觉得应该怎么做」；卡住超过 3 分钟才给提示，记一次「求助」。
-7. **记录**：完成与否、总时长、每一步时长、求助次数、看到的每张错误卡、说出的困惑词（「hub 是啥」）。录屏要签同意书，不进仓库；匿名化的结论写进 `docs/archive/onboarding-usability-<日期>.md`。
-8. **同时数一件事**：第一次让主对话动电脑时弹了几次审批（决定拍板 14）。
+1. **Paper prototype first**: turn onboarding screenshots into a clickable prototype (Wizard of Oz); have 2 people try it, fixing copy before writing the UI.
+2. **Recruit 5 people**: never used a terminal, not developers, product managers, or testers, with their own phones. Use a clean OS user and an uninstalled / reinstalled app.
+3. **Give goals, not steps**: the scenario card says "Have Persona tell you the largest folders on this computer." Tier A also asks "Connect your laptop." Provide a funded test key or let them sign up themselves (testing whether "Where to get a model" works).
+4. **Two networks**: home Wi-Fi; at the end, switch to cellular and ask another question (checking whether away-from-home guidance is clear).
+5. **Inject failures**: randomly assign 1 failure per person, prepared by the observer: computer sleep, expired pairing code, wrong key, Claude Code not logged in, phone denied local network permission. See whether the error card lets them fix it themselves.
+6. **Observer watches without helping**: if asked, say only "What do you think you should do?" Give a hint only after more than 3 minutes stuck; record one help request.
+7. **Record**: completion, total time, time per step, help requests, every error card seen, and confusing terms spoken ("What is hub?"). Screen recording requires signed consent and is not committed; anonymized conclusions go in `docs/archive/onboarding-usability-<date>.md`.
+8. **Count one more thing**: approvals prompted when main chat first acts on the computer (for decision 14).
 
-**通过线**：5 人里至少 4 人 15 分钟内独立完成 A 档；没人看到英文原文；求助总数不超过 3；每个故障场景都有人靠卡片上的按钮自己修好。没过的步骤回到纸面原型重改。
+**Passing threshold**: at least 4 of 5 independently finish tier A within 15 minutes; no one sees raw English diagnostics; at most 3 help requests in total; every failure scenario has someone fix it using card buttons alone. Return failed steps to the paper prototype and revise.
 
-## 9. 兼容
+## 9. Compatibility
 
-- 新默认只写进新生成的 hub.json；已有文件一个字段不改，`defaultConfig()` 不加新默认（4.1）。
-- `deploy.sh`、`db.sh`、`hub-systemd.sh`、socket activation、手写 hub.json 照旧；`hub setup` 建的库容器和 `db.sh` 同名同卷。
-- `~/.zshrc` 启动器照旧被发现、照旧能选；新手向导只是不提它。
-- `jarvisd` 命令名、`jarvis://pair` / `jarvis://link` 链接、`JARVIS_*` 环境变量照旧；Persona Link 两个 scheme 都认。
-- 错误从 502 `internal` 变成 409 + code：老客户端都把非 2xx 的 `error` 当文本显示，只是语言变了。
-- 老 node、老 Persona Link 不需要懂 pending，过滤全在 hub 和助手服务里。
-- 新接口在 `features` 里登记；老 hub 上新客户端退回现在的页面。
-- 动 Postgres 的 PR（信任表、就绪度键不需要新表）挑迁移号前先看所有 worktree。
+- New defaults go only into newly generated hub.json; no field changes in existing files, and no new defaults in `defaultConfig()` (4.1).
+- `deploy.sh`, `db.sh`, `hub-systemd.sh`, socket activation, and handwritten hub.json work as before. The database container created by `hub setup` has the same name and volume as `db.sh`.
+- `~/.zshrc` launchers are still discovered and selectable; onboarding simply does not mention them.
+- The `jarvisd` command, `jarvis://pair` / `jarvis://link` links, and `JARVIS_*` environment variables remain; Persona Link recognizes both schemes.
+- Errors change from 502 `internal` to 409 + code: old clients already display non-2xx `error` as text; only the language changes.
+- Old node and Persona Link do not need to understand pending; filtering lives entirely in hub and the assistant service.
+- New endpoints are registered in `features`; new clients fall back to current pages on old hubs.
+- Check all worktrees before choosing migration numbers in Postgres PRs (the trust table needs one; the readiness key needs no new table).
