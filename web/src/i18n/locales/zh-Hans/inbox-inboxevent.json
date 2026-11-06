@@ -1,0 +1,21 @@
+{
+  "preparing": "AI 正在准备建议",
+  "failed_short": "AI 没处理完",
+  "recap": "总结",
+  "open_conversation": "处理对话",
+  "failed": "AI 没处理完，需要你来看",
+  "failed_with": "AI 没处理完：{error}",
+  "handback": "需要你判断",
+  "edit_text": "修改建议的文字",
+  "say": "说一句话",
+  "say_placeholder": "说一句话让 AI 重新出建议，如「别这么回，先问时间」",
+  "reject": "驳回",
+  "edit": "修改",
+  "chain": "处理链条",
+  "chain_collapse": "收起",
+  "chain_expand": "展开全部（{count}）",
+  "entry_expand": "展开",
+  "entry_collapse": "收起",
+  "message_sender": "{sender}：",
+  "related": "有关"
+}

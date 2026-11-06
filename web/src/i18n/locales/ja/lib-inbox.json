@@ -75,5 +75,7 @@
   "muted": "「{name}」をミュートしました。今後は受信トレイに入りません",
   "mute_failed": "ミュートできませんでした：{error}",
   "ix_elicitation_form": "MCPフォームの入力待ち",
-  "ix_elicitation_url": "MCPリンクの確認待ち"
+  "ix_elicitation_url": "MCPリンクの確認待ち",
+  "tier_working": "進行中",
+  "suggestion_failed": "提案を処理できませんでした：{error}"
 }

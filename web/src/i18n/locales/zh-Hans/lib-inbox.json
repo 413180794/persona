@@ -75,5 +75,7 @@
   "muted": "已静音「{name}」，以后不再进收件箱",
   "mute_failed": "没静音成：{error}",
   "ix_elicitation_form": "MCP 表单等你填写",
-  "ix_elicitation_url": "MCP 链接等你确认"
+  "ix_elicitation_url": "MCP 链接等你确认",
+  "tier_working": "进行中",
+  "suggestion_failed": "建议没处理成：{error}"
 }

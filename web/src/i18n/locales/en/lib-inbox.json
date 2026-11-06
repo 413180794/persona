@@ -82,5 +82,7 @@
   "muted": "Muted “{name}”. It won't come into the Inbox again.",
   "mute_failed": "Couldn't mute: {error}",
   "ix_elicitation_form": "An MCP form needs you",
-  "ix_elicitation_url": "An MCP link needs you"
+  "ix_elicitation_url": "An MCP link needs you",
+  "tier_working": "In progress",
+  "suggestion_failed": "Couldn't act on the suggestion: {error}"
 }

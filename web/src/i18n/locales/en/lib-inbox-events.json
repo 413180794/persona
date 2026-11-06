@@ -1,0 +1,21 @@
+{
+  "state_looking": "AI is looking",
+  "state_agent": "Agent working",
+  "state_waiting": "Waiting for a reply",
+  "kind_reply": "Suggested reply",
+  "kind_agent": "Suggested Agent",
+  "kind_conclusion": "Conclusion",
+  "kind_generic": "Suggestion",
+  "confirm": "Confirm",
+  "send": "Send",
+  "start": "Start",
+  "got_it": "Got it",
+  "day_time": "{month}/{day} {time}",
+  "stale": "Suggestion updated",
+  "rejected": "Rejected, back to the AI",
+  "instructed": "Sent to the AI for a new suggestion",
+  "handed_back": "Handed to the AI",
+  "sent": "Sent, waiting for a reply",
+  "agent_started": "Agent started",
+  "filed": "Marked as done"
+}

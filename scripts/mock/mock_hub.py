@@ -4291,11 +4291,25 @@ PLUGIN_WECHAT_MORE = PLUGIN_WECHAT and os.environ.get("MOCK_wechat-connector_MOR
 WECHAT_GROUP = "10000000001@chatroom"
 
 
+# Low-saturation avatar colours of the group's two senders and the poster they share (media refs wx.*).
+WECHAT_AVATARS = {"wx.avatar.c": (128, 146, 168), "wx.avatar.d": (176, 150, 132)}
+
+
+def plugin_wechat_media(ref):
+    """The bytes a made-up WeChat media ref names: an avatar, or the poster as a 4:3 picture; None otherwise."""
+    if ref in WECHAT_AVATARS:
+        return png(96, 96, WECHAT_AVATARS[ref])
+    if ref == "wx.g2.image":
+        return tg_photo(400, 300, (150, 178, 196), (226, 232, 236))
+    return None
+
+
 def plugin_wechat_group_thread(at):
-    a, c = {"id": "wxid_example_c", "name": "示例同事"}, {"id": "wxid_example_d", "name": "示例设计师"}
+    a = {"id": "wxid_example_c", "name": "示例同事", "avatar": "wx.avatar.c"}
+    c = {"id": "wxid_example_d", "name": "示例设计师", "avatar": "wx.avatar.d"}
     return {"chat": {"id": WECHAT_GROUP, "name": "示例项目群", "kind": "group", "members": 8}, "messages": [
         {"id": "g1", "at": at(95), "sender": c, "text": "新版的示例海报放群文件了，大家看看"},
-        {"id": "g2", "at": at(90), "sender": a, "text": "[图片]"},
+        {"id": "g2", "at": at(90), "sender": c, "media": [{"kind": "image", "ref": "wx.g2.image", "width": 1200, "height": 900}]},
         {"id": "g3", "at": at(42), "sender": a, "text": "周五的示例活动场地定了吗？"},
         {"id": "g4", "at": at(12), "sender": a, "text": "@我 场地和预算今天能定吗？我下午要报给示例客户"},
     ]}
@@ -4329,6 +4343,15 @@ def plugin_connector_area(h, method, p, raw):
     if what == "thread" and method == "GET" and PLUGIN_WECHAT:
         page = plugin_wechat_thread(parse_qs(urlparse(h.path).query).get("thread", [""])[0])
         return (h.send_json(page) if page else h.send_json({"error": "没有这个会话"}, 502)) or True
+    if what == "media" and method == "GET" and PLUGIN_WECHAT_MORE:
+        data = plugin_wechat_media(parse_qs(urlparse(h.path).query).get("ref", [""])[0])
+        if data is None:
+            return h.send_json({"error": "不认识这个媒体"}, 502) or True
+        h.send_response(200)
+        h.send_header("Content-Type", "image/png"); h.send_header("Content-Length", str(len(data)))
+        h.send_header("Cache-Control", "private, max-age=31536000, immutable")
+        h.end_headers(); h.wfile.write(data)
+        return True
     if what == "login" and method == "POST":
         if body.get("step") == PLUGIN_STEP and (body.get("values") or {}).get(PLUGIN_STEP) == PLUGIN_SECRET:
             c.update(status="ok", account=PLUGIN_ACCOUNT)
@@ -4463,6 +4486,88 @@ for _i in range(int(os.environ.get("MOCK_INBOX_EXTRA", "0"))):
                   "started_at": ago(hours=3, minutes=_i), "updated_at": ago(hours=3, minutes=_i), "tier": "fyi", "read": False,
                   "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [900 + _i], "from": {"name": "示例商城", "email": "shop@example.com"}}})
 
+# MOCK_INBOX_EVENTS=1: inbox events (docs/inbox.md「事件、处理链条、建议」): the list is scripts/mock/inbox_events.json, one
+# item per state (a reply suggestion, 急事 preparing, waiting, an Agent working, an agent suggestion, failed, a
+# conclusion in 知悉即可, noise, done), its times shifted so `as_of` is now. POST /api/v1/inbox/{id}/suggestion acts as
+# the hub does (409 suggestion_stale on another version); GET /mock/inbox_events/bump?id=<item> puts a new suggestion
+# version in place, for 「建议已更新」. MOCK_INBOX_EVENTS=legacy: the same items without any of the new fields (an old hub).
+MOCK_INBOX_EVENTS = os.environ.get("MOCK_INBOX_EVENTS", "")
+EVENT_FIELDS = ("status", "urgent", "recap", "handling", "suggestion", "chain", "related")
+
+
+def _shift_times(v, delta):
+    """Every ISO time in the fixture moved by delta (they all end in Z)."""
+    if isinstance(v, dict):
+        return {k: _shift_times(x, delta) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_shift_times(x, delta) for x in v]
+    if isinstance(v, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", v):
+        return (datetime.fromisoformat(v.replace("Z", "+00:00")) + delta).isoformat().replace("+00:00", "Z")
+    return v
+
+
+if MOCK_INBOX_EVENTS:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox_events.json"), encoding="utf-8") as _f:
+        _ev = json.load(_f)
+    _delta = NOW - datetime.fromisoformat(_ev["as_of"].replace("Z", "+00:00"))
+    INBOX[:] = _shift_times(_ev["items"], _delta)
+    if MOCK_INBOX_EVENTS == "legacy":
+        for _x in INBOX:
+            for _k in EVENT_FIELDS: _x.pop(_k, None)
+
+
+def _chain_add(x, kind, text, **more):
+    x.setdefault("chain", []).append(dict({"id": "c%d" % (len(x["chain"]) + 1), "at": ago(), "kind": kind, "text": text}, **more))
+
+
+def inbox_suggestion(iid, body):
+    """POST /api/v1/inbox/{id}/suggestion (MOCK_INBOX_EVENTS): confirm / reject / instruct the current suggestion."""
+    x = next((x for x in INBOX if x["id"] == iid), None)
+    if x is None: return {"error": "收件箱里没有这一条", "code": "not_found"}, 404
+    if x.get("done_at"): return {"error": "这件事已经处理了", "code": "inbox_item_done"}, 409
+    s, action = x.get("suggestion"), body.get("action")
+    if action not in ("confirm", "reject", "instruct"): return {"error": "action 不对", "code": "bad_request"}, 400
+    if not s or body.get("version") != s.get("version"):
+        return {"error": "建议已更新", "code": "suggestion_stale", "item": x}, 409
+    if action == "instruct" and not (body.get("text") or "").strip(): return {"error": "要说一句话", "code": "bad_request"}, 400
+    SENT.append(dict(body, inbox=iid))
+    x.pop("suggestion", None)
+    x.pop("agent", None)
+    h = x.setdefault("handling", {"owner": "manager"})
+    if action == "reject":
+        _chain_add(x, "rejected", "你驳回了")
+        h.update(state="looking", since=ago()); x["status"] = "working"
+    elif action == "instruct":
+        _chain_add(x, "instructed", "你说：" + body["text"], detail=body["text"])
+        h.update(state="looking", since=ago()); x["status"] = "working"
+    elif s.get("handback"):
+        _chain_add(x, "confirmed", "你确认了", detail=s["text"])
+        h.update(state="looking", since=ago()); x["status"] = "working"
+    else:
+        text = body.get("text") or s["text"]
+        edited = text != s["text"]
+        _chain_add(x, "confirmed", "你确认了（改过文字）" if edited else "你确认了", detail=text, **({"edited": True} if edited else {}))
+        if s["kind"] == "reply":
+            _chain_add(x, "sent", "发了邮件" if x.get("mail") else "发了飞书消息", link={"type": "source"})
+            h.update(state="waiting", since=ago()); x["status"] = "working"
+        elif s["kind"] == "agent":
+            _chain_add(x, "agent", "开了子会话：" + text[:40], link={"type": "session", "machine_id": "m1", "session_id": "s-mock-agent"})
+            h.update(state="agent", since=ago()); x["status"] = "working"
+        else:
+            x["done_at"], x["done_by"] = ago(), "user"
+    x["updated_at"] = ago()
+    return x, 200
+
+
+def inbox_suggestion_bump(iid):
+    """GET /mock/inbox_events/bump?id=: the manager wrote a new suggestion meanwhile (the open card's version is stale)."""
+    x = next((x for x in INBOX if x["id"] == iid), None)
+    if not x or not x.get("suggestion"): return {"error": "no suggestion"}, 404
+    s = x["suggestion"]
+    s.update(version=s["version"] + 1, text=s["text"] + "（已按新消息更新）", at=ago())
+    return x, 200
+
+
 # MOCK_INBOX_LINE=1: a 线索 (#2128): 设计评审 grew out of the chat with 韩梅梅 (continues), which hangs under a todo; the
 # 周末徒步群 item grew out of 设计评审. GET /api/v1/inbox/tree/{kind}/{id} answers from the items' parents.
 if os.environ.get("MOCK_INBOX_LINE") == "1":
@@ -4585,74 +4690,13 @@ LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {
     {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "导出尺寸"}]},
     {"type": "paragraph", "content": [{"type": "text", "text": "16、20、24、32 四档，每档单独微调。"}]},
 ]}}
-# GET /api/v1/lark/raw/documents/ai-summary: Feishu's cached AI summary of a document (the reader's summary card).
-LARK_DOC_SUMMARY = {"state": "ready", "summary": "这篇评审确定了新版图标的方向：统一圆角和描边，深色模式单独调对比度。\n\n- 还要确认：主色是否再暖一点、小尺寸下的描边粗细\n- 导出四档尺寸，每档单独微调\n- 下周一前出第二版"}
-
-LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
-
-# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
-if os.environ.get("MOCK_LARK_OLK"):
-    def _olk(pos, state, body, cover, handout=False):
-        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
-        m["parts"] = [{"kind": "text", "text": m["text"]}]
-        m["olk"] = {"version": 1, "state": state,
-                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
-        if state == "decrypted":
-            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
-        return m
-    LARK_MESSAGES["f2"] = [
-        _olk(200, "decrypted", "", "稍等", True),
-        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
-        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
-        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
-        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
-    ]
-    LARK_MESSAGES["f2"][2]["reply_to"] = {
-        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
-        "olk": LARK_MESSAGES["f2"][1]["olk"],
-    }
-    LARK_MESSAGES["f2"][4]["reply_to"] = {
-        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
-        "olk": LARK_MESSAGES["f2"][3]["olk"],
-    }
-
-LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
-# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
-LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
-def lark_pin_rows():
-    rows = [dict(c) for c in LARK_CHATS]
-    for i in range(1, 81):
-        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
-                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
-                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
-    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
-    if LARK_PIN_FIXTURE["newest"]:
-        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
-        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
-    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
-        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
-    return rows
-
-LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
-# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no [removed] switch.
-if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
-    del LARK_DISPLAY["brave_climb_codec"]
-
-BRAVE_CLIMB_ALPHABET = "[removed]"
-def brave_climb(text):
-    """"""
+# GET /api/v1/lark/raw/documents/ai-summary: Feishu's cached AI summary of a document (the reader''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
     n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
     while True:
         n, d = divmod(n, 34)
         out = BRAVE_CLIMB_ALPHABET[d] + out
         if n == 0:
-            return "**字" + out + "**"
-
-# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and 设计评审 (f2) has [removed] words: a whole message, one split over
-# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
-# the list is words too.
-if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
+            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
     whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
     whole["parts"] = [{"kind": "text", "text": whole["text"]}]
     words = brave_climb("标签栏改粗一号")
@@ -4660,7 +4704,7 @@ if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
     split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
     inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
     inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
     legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
     reply = _lm("214", "我", "好的", mine=True, mins=36)
     reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
@@ -4741,6 +4785,10 @@ def _lark_f3():
 
 LARK_MESSAGES["f3"], LARK_THREADS = _lark_f3()
 LARK_MESSAGES["w1"] = [_lm("10", "王芳", "@你 下周一前把排期填一下，表格在群公告里", mins=8)]
+if MOCK_INBOX_EVENTS:  # the chat behind the first event, for 看原文 and its 收到 3 条新消息 entry
+    LARK_MESSAGES["oc_demo1"] = [_lm("98", "我", "报价单我下周更新", mine=True, mins=1500), _lm("99", "张三", "好的", mins=1490),
+                                 _lm("100", "张三", "在吗", mins=12), _lm("101", "张三", "客户催报价了", mins=11),
+                                 _lm("102", "张三", "周五前能把报价给客户吗？", mins=10)]
 if os.environ.get("MOCK_LARK_ACCOUNTS"):
     for it in INBOX:
         if it.get("lark") and it["account_name"] == "飞书":
@@ -10787,6 +10835,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/modes": return self.send_json({"modes": MODES_LOG})
         if p == "/mock/node_actions": return self.send_json({"actions": NODE_ACTIONS})
         if p == "/mock/served": return self.send_json({"served": SERVED})
+        if p == "/mock/inbox_events/bump": return self.send_json(*inbox_suggestion_bump((q.get("id") or [""])[0]))
         if p == "/api/v1/inbox":
             # MOCK_INBOX_DELAY_MS=<ms>: a slow hub, for the inbox refreshing in the background (#1947, docs/testing.md)
             time.sleep(int(os.environ.get("MOCK_INBOX_DELAY_MS", "0")) / 1000)
@@ -11906,6 +11955,8 @@ class H(BaseHTTPRequestHandler):
                             st["value"] = ch.get("value")
                             return self.send_json(x)
             return self.send_json({"error": "no such row"}, 400)
+        if p.startswith("/api/v1/inbox/") and p.endswith("/suggestion") and self.command == "POST":  # 确认 / 驳回 / 说一句话
+            return self.send_json(*inbox_suggestion(unquote(p[len("/api/v1/inbox/"):-len("/suggestion")]), json.loads(self.last_body or b"{}")))
         if p.startswith("/api/v1/inbox/") and p.endswith("/draft"):  # AI 草拟回复
             return self.send_json({"text": "看过了，退避时间没问题，可以合。"})
         if p.startswith("/api/v1/inbox/") and p.endswith("/reply"):

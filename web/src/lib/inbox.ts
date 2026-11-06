@@ -21,6 +21,7 @@ import { onHubEvent } from "./store";
 import type { AssistantInfo, Interaction, Session } from "./types";
 import { toast } from "../ui/atoms";
 import { byTime } from "./times";
+import { actedText, actOnSuggestion, statusOf, type ChainEntry, type InboxHandling, type InboxRelated, type InboxStatus, type InboxSuggestion, type SuggestionAction } from "./inbox-events";
 
 // ── wire types (docs/protocol.md「收件箱 API」) ─────────
 
@@ -113,6 +114,18 @@ export interface InboxItem {
   parent?: InboxParent;
   /** What it can be muted by (docs/inbox.md「静音」): its repository, chat or sender in its source. */
   mutes?: InboxMuteOption[];
+  // ── events (docs/inbox.md「事件、处理链条、建议」; lib/inbox-events.ts): absent from an older hub ──
+  /** The section of an open item; absent: by `tier` as before. */
+  status?: InboxStatus;
+  /** 急事: stays in 需要你 while the AI prepares a suggestion. */
+  urgent?: boolean;
+  /** 总结 by the manager: background, progress, where it is stuck. */
+  recap?: string;
+  handling?: InboxHandling;
+  suggestion?: InboxSuggestion;
+  /** 处理链条, oldest first. */
+  chain?: ChainEntry[];
+  related?: InboxRelated[];
 }
 
 /** One thing an item can be muted by: a repository, a chat or a sender of its source. */
@@ -205,8 +218,11 @@ export interface MailAccount {
 // ── one item ─────────────────────────────────────────────
 
 export type Tier = "action" | "fyi" | "noise";
-export const TIERS: { key: Tier; title: string }[] = [
+/** A section of open items: the tiers, and 进行中 (an event the AI or an Agent works on, or waiting for the other side). */
+export type SectionKey = Tier | "working";
+export const TIERS: { key: SectionKey; title: string }[] = [
   { key: "action", title: t("lib-inbox.tier_action") },
+  { key: "working", title: t("lib-inbox.tier_working") },
   { key: "fyi", title: t("lib-inbox.tier_fyi") },
   { key: "noise", title: t("lib-inbox.tier_noise") },
 ];
@@ -404,17 +420,18 @@ const byUpdated = (a: InboxItem, b: InboxItem) => byTime(b.updated_at, a.updated
 const byDoneAt = (a: InboxItem, b: InboxItem) => byTime(b.done_at, a.done_at) || a.id.localeCompare(b.id);
 
 export interface InboxSections {
-  tiers: Record<Tier, InboxItem[]>;
+  tiers: Record<SectionKey, InboxItem[]>;
   done: InboxItem[];
 }
 
-/** The open items by triage tier (newest first) and the done ones (most recently done first). */
+/** The open items by section (the hub's `status`, else the triage tier; newest first) and the done ones (most
+ * recently done first). */
 export function sections(items: InboxItem[], f: InboxFilter): InboxSections {
-  const out: InboxSections = { tiers: { action: [], fyi: [], noise: [] }, done: [] };
+  const out: InboxSections = { tiers: { action: [], working: [], fyi: [], noise: [] }, done: [] };
   for (const it of items) {
     if (!matches(it, f)) continue;
     if (isDone(it)) out.done.push(it);
-    else out.tiers[triage(it)].push(it);
+    else out.tiers[statusOf(it)].push(it);
   }
   for (const t of TIERS) out.tiers[t.key].sort(byUpdated);
   out.done.sort(byDoneAt);
@@ -423,7 +440,7 @@ export function sections(items: InboxItem[], f: InboxFilter): InboxSections {
 
 /** The sidebar badge: open items that need the user. */
 export function badgeCount(items: InboxItem[]): number {
-  return items.filter((it) => !isDone(it) && triage(it) === "action").length;
+  return items.filter((it) => !isDone(it) && statusOf(it) === "action").length;
 }
 
 /** The connectors with items in the list (GitHub…), one filter chip each, in the order they first come. */
@@ -980,6 +997,33 @@ export async function sendReply(item: InboxItem, text: string, changes: DocChang
     if (before) patchItem(item.id, () => before);
     if (text) unsentReplies.set(item.id, text);
     toast(t("lib-inbox.reply_failed", { error: errorText(e) }), "error");
+    return false;
+  } finally {
+    set({ sending: state.sending.filter((x) => x !== item.id) });
+  }
+}
+
+/** 发送 / 开始 / 知道了 / 确认, 驳回, 说一句话 on the item's suggestion: the hub's item replaces ours. A suggestion that
+ * changed meanwhile is not run: 「建议已更新」 and the item as it is now. Resolves to whether it went through. */
+export async function suggestionAct(item: InboxItem, action: SuggestionAction, text?: string): Promise<boolean> {
+  const s = item.suggestion;
+  if (!s || state.sending.includes(item.id)) return false;
+  set({ sending: [...state.sending, item.id] });
+  try {
+    const r = await actOnSuggestion(itemPath(item.id), s.version, action, text);
+    if (r.ok) {
+      if (r.item?.id === item.id) replaceItem(r.item);
+      toast(actedText(s, action), "ok");
+      return true;
+    }
+    if (r.stale) {
+      if (r.item) replaceItem(r.item);
+      else void reloadInbox();
+      toast(r.error, "info");
+    } else {
+      if (r.code === "inbox_item_done") void reloadInbox();
+      toast(t("lib-inbox.suggestion_failed", { error: r.error }), "error");
+    }
     return false;
   } finally {
     set({ sending: state.sending.filter((x) => x !== item.id) });

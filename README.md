@@ -166,19 +166,24 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 
 ### 微信（wechat-connector）
 
+<table>
+<tr>
+<td width="50%" valign="top">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/wechat-connector-inbox-dark.webp">
-  <img src="docs/assets/readme/wechat-connector-inbox-light.webp" alt="网页版收件箱只看微信：示例项目群里有人 @你 问场地和预算，排在「需要你」，下面是 AI 分身草拟的回复和修改、发送按钮；右边打开这个群的会话，四条示例消息；下面还有一条私聊和一条「知悉即可」" width="100%">
-</picture>
-
-<p align="center"><sub>收件箱只看微信：群里 @ 你的那条排在最前，AI 分身已经起草了回复，右边是这个群的会话。</sub></p>
-
+  <img src="docs/assets/readme/wechat-connector-inbox-light.webp" alt="网页版收件箱只看微信：示例项目群里有人 @你 问场地和预算，排在「需要你」，下面是 AI 分身草拟的回复和修改、发送按钮；右边打开这个群的会话，发送人带头像，有一张海报缩略图和三条示例消息；下面还有一条私聊和一条「知悉即可」" width="100%">
+</picture><br>
+<sub>收件箱只看微信：群里 @ 你的那条排在最前，AI 分身已经起草了回复，右边是这个群的会话。</sub>
+</td>
+<td width="50%" valign="top">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/wechat-connector-signin-dark.webp">
   <img src="docs/assets/readme/wechat-connector-signin-light.webp" alt="设置 › 连接器 › 微信的登录步骤：服务器地址填 https://wechat-connector.example.com，应用密钥显示成圆点，下方是进知识库、进收件箱两个开关" width="100%">
-</picture>
-
-<p align="center"><sub>接入只要两项：wechat-connector 服务的地址和一把只读的应用密钥。</sub></p>
+</picture><br>
+<sub>接入只要两项：wechat-connector 服务的地址和一把只读的应用密钥。</sub>
+</td>
+</tr>
+</table>
 
 图里的人、群和消息都是假 hub 的演示数据。
 

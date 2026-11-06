@@ -1,7 +1,10 @@
 // One item opened: what it is and where from, 已处理 on the right; the AI's summary, its 线索 (InboxLine), AI 草拟回复 / 交给 AI; then
 // the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the 公司圈 post — or,
 // when the extension whose connector brought the item in draws its page (inbox_item), the extension's View.
+// An event (a hub that sends this phase's fields, lib/inbox-events.ts) opens on its event body instead (InboxEvent.tsx:
+// 摘要, 总结, the suggestion, 处理链条); 「看原文」 and the chain's source entries open the thing itself, 「看处理」 goes back.
 import { useEffect, useState } from "react";
+import { hasEvent, itemAtUid } from "../../lib/inbox-events";
 import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
 import { useInboxItemPlace } from "../../lib/extension-slots";
 import { PHONE, useMedia } from "../../lib/viewport";
@@ -17,12 +20,18 @@ import { markFromRow } from "./InboxList";
 import { AgentWorking, ItemAvatar, Spark, Tag } from "./InboxParts";
 import { InboxExtensionBody } from "./InboxExtensionBody";
 import { InboxLine } from "./InboxLine";
+import { EventBody, type SourceAt } from "./InboxEvent";
 import { chatOfItem, LarkThread } from "./LarkThread";
 
 export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
   const [dialog, setDialog] = useState<"" | "draft" | "handoff">("");
   const [pins, setPins] = useState(false);
-  useEffect(() => setPins(false), [item?.id]);
+  // an event's own page (the chat, the mail) when 看原文 or a source entry opened it; null: the event body
+  const [source, setSource] = useState<SourceAt | null>(null);
+  useEffect(() => {
+    setPins(false);
+    setSource(null);
+  }, [item?.id]);
   const prefs = useTranslatePrefs();
   const place = useInboxItemPlace(item?.source);
   const [ownShown, setOwnShown] = useState(false); // under an extension's page: it fell back to the item's own body
@@ -39,15 +48,20 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   }
   const done = isDone(item);
   const label = kindLabel(item);
-  const draft = agentDraft(item);
+  const event = hasEvent(item);
+  const showEvent = event && !source;
+  // a suggestion takes the AI 分身's draft's place (the hub mirrors a reply suggestion into the draft for older apps)
+  const draft = item.suggestion ? undefined : agentDraft(item);
   const translated = hubTranslation(item, prefs);
   const time = shortTime(item.updated_at);
-  const canPin = Boolean(item.lark) && (!place || ownShown);
+  const canPin = Boolean(item.lark) && (!place || ownShown) && !showEvent;
   const muteRows: MenuItem[] = (item.mutes ?? []).map((m) => ({ key: `${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", onSelect: () => void muteItem(item, m) }));
   // the item's own body: the chat, the mail, the document's rows, the post, a connector's thread
+  // (a chain entry opens the chat at its message, the mail at its uid)
+  const at = source ?? {};
   const own = () => (
     <div className={cx("min-h-0 flex-1", item.lark || item.connector ? "flex flex-col overflow-hidden" : "overflow-y-auto")}>
-      {item.doc ? <DocBody item={item} /> : item.moment ? <MomentBody item={item} /> : item.lark ? <LarkThread chat={chatOfItem(item)} pinsOpen={pins} onPinsOpen={setPins} /> : item.connector ? <ConnectorBody item={item} /> : item.mail ? <MailBody item={item} /> : (
+      {item.doc ? <DocBody item={item} /> : item.moment ? <MomentBody item={item} /> : item.lark ? <LarkThread chat={at.position ? { ...chatOfItem(item), focus: at.position } : chatOfItem(item)} pinsOpen={pins} onPinsOpen={setPins} /> : item.connector ? <ConnectorBody item={item} /> : item.mail ? <MailBody key={at.uid ?? ""} item={itemAtUid(item, at.uid)} /> : (
         <div className="mx-auto max-w-[760px] px-6 py-5 text-[13.5px] whitespace-pre-wrap text-ink">{item.preview}</div>
       )}
     </div>
@@ -101,14 +115,14 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
               </Button>
             )}
           </div>
-          {item.summary && (
+          {item.summary && !showEvent && (
             <p className="mt-3 text-[13px] leading-relaxed text-ink">
               <Spark />
               {item.summary}
             </p>
           )}
-          <InboxLine item={item} />
-          {!done && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
+          {!showEvent && <InboxLine item={item} />}
+          {!done && !item.handling && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
           <div className="mt-3 flex flex-wrap gap-2">
             {canDraft(item) ? (
               <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? t("inbox-inboxdetail.view_draft") : t("inbox-inboxdetail.ai_draft")}</Button>
@@ -117,10 +131,15 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
               openURL(item) && <Button tone="accent" icon="external" onClick={() => openSystem(openURL(item)!)}>{openTitle(item)}</Button>
             )}
             <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>{t("inbox-inboxdetail.hand_to_ai")}</Button>
+            {event && (showEvent ? (
+              <Button tone="quiet" icon={item.mail ? "mail" : "chat"} onClick={() => setSource({})}>{t("inbox-inboxdetail.view_source")}</Button>
+            ) : (
+              <Button tone="quiet" icon="list" onClick={() => setSource(null)}>{t("inbox-inboxdetail.view_event")}</Button>
+            ))}
           </div>
         </div>
       </div>
-      {place ? <InboxExtensionBody key={`${item.id}/${place.extension}/${place.id}`} item={item} place={place} own={own} onOwn={setOwnShown} /> : own()}
+      {showEvent ? <EventBody item={item} onSource={setSource} /> : place ? <InboxExtensionBody key={`${item.id}/${place.extension}/${place.id}`} item={item} place={place} own={own} onOwn={setOwnShown} /> : own()}
       {dialog === "draft" && <DraftDialog item={item} onClose={() => setDialog("")} />}
       {dialog === "handoff" && <HandOffDialog item={item} onClose={() => setDialog("")} />}
     </div>

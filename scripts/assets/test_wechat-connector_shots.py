@@ -20,5 +20,12 @@ class FindingsTest(unittest.TestCase):
         self.assertIn(address, shots.findings("hub 在 " + address))
 
 
+class ClipTest(unittest.TestCase):
+    def test_crop_stays_inside_the_window(self):
+        self.assertEqual(shots.clip(-40, 500), {"x": 0, "y": shots.VIEW["height"] - 700, "width": 1100, "height": 700})
+        self.assertEqual(shots.clip(170, 30)["x"], 170)
+        self.assertEqual(shots.clip(900, 0)["x"], shots.VIEW["width"] - 1100)
+
+
 if __name__ == "__main__":
     unittest.main()

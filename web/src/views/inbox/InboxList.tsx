@@ -5,7 +5,7 @@ import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
   listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, unmuteInbox,
   BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, reloadInbox, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
-  useInbox, waitingAgents, type BulkAction, type InboxItem, type InboxMute, type Tier,
+  useInbox, waitingAgents, type BulkAction, type InboxItem, type InboxMute, type SectionKey,
 } from "../../lib/inbox";
 import { useMailAccounts } from "../../lib/mail";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
@@ -23,6 +23,7 @@ import { Icon } from "../../ui/icons";
 import { isNoHover } from "../../ui/media-query";
 import { DraftDialog } from "./InboxDialogs";
 import { TriageBanner } from "./TriageBanner";
+import { EventMark } from "./InboxEvent";
 import { AgentWorking, Chip, Count, DraftCard, Glyph, ItemAvatar, Spark, StatusMenu, Tag, type GlyphName } from "./InboxParts";
 
 function useStored(key: string): [string, (v: string) => void] {
@@ -50,7 +51,7 @@ export function InboxList({ selected }: { selected?: string }) {
   const [source, setSource] = useStored("inbox.source");
   const [kind, setKind] = useStored("inbox.kind");
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState<Set<string>>(() => new Set(["action", "fyi"]));
+  const [open, setOpen] = useState<Set<string>>(() => new Set(["action", "working", "fyi"]));
   const [editing, setEditing] = useState<InboxItem | null>(null);
   const accounts = useMailAccounts();
   const more = useMenu();
@@ -69,12 +70,12 @@ export function InboxList({ selected }: { selected?: string }) {
   const chips = mailAccounts(accounts, items);
   const connectors = useMemo(() => connectorSources(items), [items]);
   const failed = Boolean(error) && !items.length;
-  const empty = !s.tiers.action.length && !s.tiers.fyi.length && !s.tiers.noise.length && !agents.length;
+  const empty = !s.tiers.action.length && !s.tiers.working.length && !s.tiers.fyi.length && !s.tiers.noise.length && !agents.length;
   // nothing ever came in, nothing filtered: is anything connected at all? (still unknown: the plain 都处理完了)
   const sources = useInboxSources(ready && empty && !failed && !items.length && !query && !source && !kind);
   const unconnected = sources && !sources.connected ? sources : null;
   // 全部标为已处理: the open items the list shows (its filters and search); the agents waiting are not items.
-  const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.fyi, ...s.tiers.noise];
+  const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.working, ...s.tiers.fyi, ...s.tiers.noise];
   const filterNames = [
     source === "feishu" ? t("inbox-inboxlist.source_lark") : connectors.find((c) => c.id === source)?.name ?? mailShort(chips.find((a) => a.id === source)?.email ?? ""),
     KIND_FILTERS.find((k) => k.key === kind)?.label ?? "",
@@ -231,7 +232,7 @@ export function sectionCount(items: number, agents: number): { text: string; lab
   };
 }
 
-function Section({ k, title, count, open, onToggle, action, children }: { k: Tier | "done"; title: string; count: { text: string; label: string }; open: boolean; onToggle: () => void; action?: { label: string; run: () => void }; children: React.ReactNode }) {
+function Section({ k, title, count, open, onToggle, action, children }: { k: SectionKey | "done"; title: string; count: { text: string; label: string }; open: boolean; onToggle: () => void; action?: { label: string; run: () => void }; children: React.ReactNode }) {
   return (
     <section className="mt-4">
       <div className="flex items-center gap-2 px-1 pb-1.5">
@@ -267,8 +268,10 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
   const to = { name: "inbox", id: it.id } as const;
   const done = isDone(it);
   const label = kindLabel(it);
-  const draft = !done && agentDraft(it);
-  const working = !done && agentWorking(it);
+  // a suggestion takes the AI 分身's draft's place, and the event's handling the AI 分身's 正在处理
+  const draft = !done && !it.suggestion && agentDraft(it);
+  const working = !done && !it.handling && agentWorking(it);
+  const mark = !done && (it.suggestion || it.handling) ? <EventMark it={it} /> : null;
   const rows = !done ? it.doc?.rows ?? [] : [];
   const first = rows[0];
   const translated = hubTranslation(it, useTranslatePrefs());
@@ -305,7 +308,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
           </span>
         </span>
       </a>
-      {(first || draft || working) && (
+      {(first || draft || working || mark) && (
         <div className="-mt-1 flex flex-col gap-2 pr-3 pb-3 pl-[64px]">
           {first && (
             <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-2">
@@ -317,6 +320,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
           )}
           {draft && <DraftCard it={it} onEdit={onEdit} onSend={() => void sendReply(it, draft, it.agent?.changes ?? [])} />}
           {working && <AgentWorking it={it} />}
+          {mark}
         </div>
       )}
       {/* Shown on hover with a mouse; on a touch screen (no hover, #4141) always there as a check beside the time, so an

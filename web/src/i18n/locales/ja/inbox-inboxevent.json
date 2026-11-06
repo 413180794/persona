@@ -1,0 +1,21 @@
+{
+  "preparing": "AI が提案を準備中",
+  "failed_short": "AI が処理しきれませんでした",
+  "recap": "まとめ",
+  "open_conversation": "処理の会話",
+  "failed": "AI が処理しきれませんでした。確認してください",
+  "failed_with": "AI が処理しきれませんでした：{error}",
+  "handback": "判断が必要",
+  "edit_text": "提案の文面を編集",
+  "say": "ひとこと伝える",
+  "say_placeholder": "AI に伝えて提案し直してもらう（例：先に時間を聞いて）",
+  "reject": "却下",
+  "edit": "編集",
+  "chain": "処理の流れ",
+  "chain_collapse": "閉じる",
+  "chain_expand": "すべて表示（{count}）",
+  "entry_expand": "開く",
+  "entry_collapse": "閉じる",
+  "message_sender": "{sender}：",
+  "related": "関連"
+}

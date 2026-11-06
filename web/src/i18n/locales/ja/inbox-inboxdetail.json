@@ -9,5 +9,7 @@
   "placeholder_title": "項目を選択",
   "placeholder_hint": "左の一覧で項目をクリックすると、ここに詳細が表示されます。",
   "mute": "ミュート",
-  "more": "その他"
+  "more": "その他",
+  "view_source": "原文",
+  "view_event": "処理"
 }

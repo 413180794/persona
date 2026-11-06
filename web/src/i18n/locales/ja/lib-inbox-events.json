@@ -1,0 +1,21 @@
+{
+  "state_looking": "AI が確認中",
+  "state_agent": "Agent が作業中",
+  "state_waiting": "返信待ち",
+  "kind_reply": "返信の提案",
+  "kind_agent": "Agent の提案",
+  "kind_conclusion": "結論",
+  "kind_generic": "提案",
+  "confirm": "確認",
+  "send": "送信",
+  "start": "開始",
+  "got_it": "了解",
+  "day_time": "{month}月{day}日 {time}",
+  "stale": "提案が更新されました",
+  "rejected": "却下して AI に戻しました",
+  "instructed": "AI に伝えました。新しい提案を待っています",
+  "handed_back": "AI に任せました",
+  "sent": "送信しました。返信待ちです",
+  "agent_started": "Agent を開始しました",
+  "filed": "処理済みにしました"
+}

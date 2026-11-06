@@ -1,0 +1,21 @@
+{
+  "state_looking": "AI 正在看",
+  "state_agent": "Agent 在做",
+  "state_waiting": "等对方回复",
+  "kind_reply": "建议回复",
+  "kind_agent": "建议派 Agent",
+  "kind_conclusion": "结论",
+  "kind_generic": "建议",
+  "confirm": "确认",
+  "send": "发送",
+  "start": "开始",
+  "got_it": "知道了",
+  "day_time": "{month}月{day}日 {time}",
+  "stale": "建议已更新",
+  "rejected": "已驳回，交回 AI",
+  "instructed": "已交给 AI，等它重新出建议",
+  "handed_back": "已交给 AI 去做",
+  "sent": "已发送，等对方回复",
+  "agent_started": "Agent 已开始",
+  "filed": "已标为已处理"
+}
