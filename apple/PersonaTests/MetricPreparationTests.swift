@@ -44,6 +44,19 @@ struct MetricPreparationTests {
         }
     }
 
+    @Test @MainActor func densePlotInputsKeepEverySampleAndSeparateGapSegments() {
+        var points: [MetricPoint] = (0..<1_729).map { MetricPoint(t: Int64($0) * 50, cpu: Double($0 % 100)) }
+        points.insert(MetricPoint(t: 43_200, gap: true), at: 864)
+        let prepared = PreparedMetricSeries.build(points, key: .cpu, name: "CPU")
+        #expect(prepared.values.count == 1_729)
+        #expect(prepared.values.map(\.date) == points.filter { !$0.isGap }.map(\.date))
+        #expect(prepared.values.map(\.value) == points.compactMap(\.cpu))
+        #expect(Set(prepared.values.map(\.series)) == ["CPU#0", "CPU#1"])
+        #expect(prepared.values.first?.series == "CPU#0")
+        #expect(prepared.values.last?.series == "CPU#1")
+        #expect(prepared.peak == 99)
+    }
+
     nonisolated private static func prepareOnCallingThread() -> (isMain: Bool, series: PreparedMetricSeries) {
         (Thread.isMainThread, PreparedMetricSeries.build([MetricPoint(t: 0, cpu: 42)], key: .cpu, name: "CPU"))
     }

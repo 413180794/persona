@@ -270,6 +270,44 @@ struct MetricChart: View, Equatable {
         return points.compactMap { series[index].value($0) }.max()
     }
 
+    @ChartContentBuilder private func historySeries(_ index: Int, timeLabel: String, segmentLabel: String) -> some ChartContent {
+        let s = series[index]
+        let values = preparedSeries(index)?.values ?? points.chartValues(s)
+        let washColor = s.color.opacity(0.1)
+        let stroke = StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+        if #available(iOS 18.0, macOS 15.0, watchOS 11.0, visionOS 2.0, *) {
+            if series.count == 1 {
+                AreaPlot(values, x: .value(timeLabel, \.date), y: .value(s.name, \.value),
+                         series: .value(segmentLabel, \.series))
+                    .foregroundStyle(washColor)
+                    .interpolationMethod(.monotone)
+            }
+            LinePlot(values, x: .value(timeLabel, \.date), y: .value(s.name, \.value),
+                     series: .value(segmentLabel, \.series))
+                .foregroundStyle(s.color)
+                .lineStyle(stroke)
+                .interpolationMethod(.monotone)
+        } else {
+            ForEach(values) { v in
+                legacyHistoryPoint(v, series: s, washColor: washColor, stroke: stroke,
+                                   timeLabel: timeLabel, segmentLabel: segmentLabel)
+            }
+        }
+    }
+
+    @ChartContentBuilder private func legacyHistoryPoint(_ value: ChartValue, series s: ChartSeries, washColor: Color,
+                                                        stroke: StrokeStyle, timeLabel: String, segmentLabel: String) -> some ChartContent {
+        if series.count == 1 {
+            AreaMark(x: .value(timeLabel, value.date), y: .value(s.name, value.value), series: .value(segmentLabel, value.series))
+                .foregroundStyle(washColor)
+                .interpolationMethod(.monotone)
+        }
+        LineMark(x: .value(timeLabel, value.date), y: .value(s.name, value.value), series: .value(segmentLabel, value.series))
+            .foregroundStyle(s.color)
+            .lineStyle(stroke)
+            .interpolationMethod(.monotone)
+    }
+
     var body: some View {
         let _ = colorScheme
         let _ = locale
@@ -281,18 +319,7 @@ struct MetricChart: View, Equatable {
             header(picked)
             Chart {
                 ForEach(series.indices, id: \.self) { i in
-                    let s = series[i]
-                    ForEach(preparedSeries(i)?.values ?? points.chartValues(s)) { v in
-                        if series.count == 1 {
-                            AreaMark(x: .value(timeLabel, v.date), y: .value(s.name, v.value), series: .value(segmentLabel, v.series))
-                                .foregroundStyle(s.color.opacity(0.1))
-                                .interpolationMethod(.monotone)
-                        }
-                        LineMark(x: .value(timeLabel, v.date), y: .value(s.name, v.value), series: .value(segmentLabel, v.series))
-                            .foregroundStyle(s.color)
-                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                            .interpolationMethod(.monotone)
-                    }
+                    historySeries(i, timeLabel: timeLabel, segmentLabel: segmentLabel)
                 }
                 if let reference {
                     RuleMark(y: .value(String(localized: "Reference"), reference.value))

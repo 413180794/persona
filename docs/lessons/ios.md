@@ -392,6 +392,9 @@ Use an invalidation revision as the task key and handle the flag after completio
 - 机器详情的历史曲线不要在每次 `body` 重算时生成点 ID、gap 分段和最大值（2026-11-06，#5730）：响应解码和完整曲线准备放到 `Task.detached`，在 MainActor 一次发布。图表时间域随指标刷新推进，不随无关的会话推送或选点变化推进；保留完整历史、稳定点 ID 和 gap，不靠删点隐藏长帧。
   - `Equatable` 图表必须比较不可变的选点快照，不能只比较两个指向同一状态的 `Binding` 当前值。范围切换和并发刷新用请求序号及范围共同校验，防止旧响应覆盖新范围。
   - 预计算的 peak 为 `nil` 可以表示整个系列没有有效点，不是缓存缺失；不要用 `??` 再扫描原数组。
+  - 解码及曲线准备搬走后，5 轮正式测量仍有一轮 459 ms 长帧（2026-11-07，#5730），不能用中位数 60 宣称已解决。详情仍按每个样本创建 `LineMark` / `AreaMark`；稠密历史改用批量 plot 时保留所有样本、原 `series` gap 标签、单调插值、填充和选点，旧系统保留逐点入口。它针对逐点成本，不推翻上面迷你图的每图布局成本结论；收益仍须实测。
+  - SDK 27 的 plot 同时参与 View 和 ChartContent 重载时，`ForEach` 可能选 ViewBuilder，随后报条件内容的 ChartContent conformance 仅 iOS 27 可用。用显式 `@ChartContentBuilder`、返回 `some ChartContent` 的辅助函数约束两层循环，不为绕过重载问题抬高系统版本。
+  - 批量 plot 复测：同口径 5 轮最差长帧 459.0 → 390.1 ms、最差 custom hitch 81.8 → 69.6 ms/s，页面高度及位移相同；仍有一轮明显停顿，另有一轮 33.3 ms 帧。主线及主机负载并未完全隔离，不能写成已经稳定 60 FPS。
 - `Menu` label overlays / glass surfaces become part of the menu button: glass covers avatar + name, and overlay text is absent from XCUITest (button reports initial label only).
   Put temporary button hints in a sibling ZStack (`AssistantTopBar.face`).
 - Floating-header fog must cover status bar: use GeometryReader `safeAreaInsets.top` and shift background upward; direct `ignoresSafeArea` computes insufficient height.
