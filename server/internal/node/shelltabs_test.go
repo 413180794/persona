@@ -153,3 +153,31 @@ func TestHerdrSendExitClosesTheAgent(t *testing.T) {
 		t.Errorf("an agent that is not running was resumed to quit: %q", got)
 	}
 }
+
+// The resident node makes a new Node for every hub connection: the sweep's memory is the process's, so a reconnect
+// continues each pane's wait instead of starting it again (#5720).
+func TestShellTabSweepOutlivesAHubConnection(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := mkdir(t, filepath.Join(home, "proj"))
+	n.state.put(sidA, sessionState{Launcher: "cc", Cwd: cwd})
+	f.reply("session.snapshot", snapshot(nil, nil, nil, []any{shellPane("w1:p1", "w1:t1", "w1", cwd, sidA)}))
+	f.reply("pane.process_info", foreground([2]string{"zsh", "-zsh"}))
+	f.setScreen("w1:p1", "Resume this session with:\nclaude --resume "+sidA+"\n$ ")
+	listSessions(t, n)
+	n.shellTabs = nil // the process's memory, as a resident node's Nodes have it
+	processShellTabs = shellTabs{}
+	t.Cleanup(func() { processShellTabs = shellTabs{} })
+
+	t0 := time.Now()
+	n.sweepShellTabs(t.Context(), t0) // the first connection's first look
+
+	next, _, _ := herdrNode(t) // the next connection: a new Node over the same herdr
+	next.hosts, next.state, next.shellTabs = n.hosts, n.state, nil
+	listSessions(t, next)
+	if got := next.sweepShellTabs(t.Context(), t0.Add(shellTabIdle+time.Second)); got != 1 {
+		t.Fatalf("closed %d after a reconnect, want 1 (the wait started on the first connection)", got)
+	}
+	if got := f.trace("tab.close"); len(got) != 1 || got[0] != call("tab.close", map[string]any{"tab_id": "w1:t1"}) {
+		t.Errorf("tab.close calls %q", got)
+	}
+}

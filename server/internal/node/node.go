@@ -96,7 +96,7 @@ type Node struct {
 	launches  map[string]claudeLaunch    // herdr pane -> how Persona started its Claude, for herdr's restore (herdrresume.go)
 	panes     map[string]string          // pane id -> session id (learned from hooks)
 	layouts   map[string]layout          // host kind -> space / slot names from its last snapshot
-	shellTabs shellTabs                  // Persona tabs left with only a shell, waiting to be closed (shelltabs.go)
+	shellTabs *shellTabs                 // the sweep's memory; nil: the process's own (shelltabs.go)
 	procs     map[string]*assistantProc  // headless assistant conversations (assistant.go)
 	spare     *assistantProc             // warm process waiting for the next new conversation
 	akeys     map[string]*assistantProc  // the key a Codex conversation's MCP server reports until its thread exists

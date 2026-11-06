@@ -1353,7 +1353,7 @@ The foundation shared by the file page and the various previews (spreadsheets, O
 The app's file browser (the session's Files pane, the machine page's Files row) can upload into a folder (#4858); rename, move and delete come in the second batch.
 
 - **Where writes are allowed** (`node/writeguard.go`): inside the home only. A path first passes the read guard (`pathguard.go`: links followed component by component; iCloud, key folders such as `.ssh`,
-  private key names and the hub's keys are refused); the real path after following links must still be in the home (the home itself is fine); `~/.persona`, `~/.jarvis` and `~/Library` are entirely unwritable.
+  private key names and the hub's keys are refused); the real path after following links must still be in the home (the home itself is fine); `~/.persona`, `~/.jarvis`, `~/Library` and the data folder `PERSONA_HOME` names (unless it is the home itself) are entirely unwritable.
   `../` and links pointing outside the home are judged by where they end up. A refused write is 409 `code: read_only`. Everything outside the home stays read-only.
 - **Upload into a folder**: `POST /api/v1/machines/{mid}/files?name=<file name>&dest=dir&dir=<folder>[&cwd=][&conflict=]`; `dir` may be `~/…`, absolute,
   or relative to `cwd` (the session's working directory). Chunks, cancel and timeouts as in "Send files" above; the cap is 2 GB (`proto.MaxDirUploadBytes`). A missing `dir` is 400; a folder that does not exist or is not a folder, or an unknown `conflict`, is 502 `code: internal` with the node's reason.

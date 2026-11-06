@@ -44,11 +44,24 @@ func markPersonaTab(ctx context.Context, launch host.Launcher, pane host.PaneRef
 }
 
 // shellTabs is what the sweep remembers between looks: each candidate pane's screen and since when it has been so.
+// It belongs to the process, not to a Node: the resident node makes a new Node for every hub connection, and a hub
+// redeployed every few minutes would otherwise restart each pane's wait every time, so its tab is never closed (#5720).
 type shellTabs struct {
 	mu   sync.Mutex
 	seen map[string]shellLook
 	// idle replaces shellTabIdle when set (tests).
 	idle time.Duration
+}
+
+// processShellTabs is the sweep's memory for every Node of this process (Node.shellTabs nil).
+var processShellTabs shellTabs
+
+// tabSweep is the memory this node's sweep uses.
+func (n *Node) tabSweep() *shellTabs {
+	if n.shellTabs != nil {
+		return n.shellTabs
+	}
+	return &processShellTabs
 }
 
 type shellLook struct {
@@ -76,9 +89,10 @@ func (n *Node) watchShellTabs(ctx context.Context) {
 // sweepShellTabs closes the Persona tabs whose agent is gone and whose shell has sat untouched for shellTabIdle, and
 // returns how many it closed. It looks at the panes of the hosts' last snapshots (refreshHosts).
 func (n *Node) sweepShellTabs(ctx context.Context, now time.Time) (closed int) {
+	mem := n.tabSweep()
 	idle := shellTabIdle
-	if n.shellTabs.idle > 0 {
-		idle = n.shellTabs.idle
+	if mem.idle > 0 {
+		idle = mem.idle
 	}
 	type candidate struct {
 		h      host.Host
@@ -124,17 +138,17 @@ func (n *Node) sweepShellTabs(ctx context.Context, now time.Time) (closed int) {
 		}
 		live[pane] = true
 		sum := sha256.Sum256([]byte(screen))
-		n.shellTabs.mu.Lock()
-		look, ok := n.shellTabs.seen[pane]
+		mem.mu.Lock()
+		look, ok := mem.seen[pane]
 		if !ok || look.screen != sum {
-			if n.shellTabs.seen == nil {
-				n.shellTabs.seen = map[string]shellLook{}
+			if mem.seen == nil {
+				mem.seen = map[string]shellLook{}
 			}
-			n.shellTabs.seen[pane] = shellLook{screen: sum, since: now} // new, or typed into since: wait again
-			n.shellTabs.mu.Unlock()
+			mem.seen[pane] = shellLook{screen: sum, since: now} // new, or typed into since: wait again
+			mem.mu.Unlock()
 			continue
 		}
-		n.shellTabs.mu.Unlock()
+		mem.mu.Unlock()
 		if now.Sub(look.since) < idle {
 			continue
 		}
@@ -146,13 +160,13 @@ func (n *Node) sweepShellTabs(ctx context.Context, now time.Time) (closed int) {
 		delete(live, pane)
 		closed++
 	}
-	n.shellTabs.mu.Lock()
-	for pane := range n.shellTabs.seen {
+	mem.mu.Lock()
+	for pane := range mem.seen {
 		if !live[pane] {
-			delete(n.shellTabs.seen, pane)
+			delete(mem.seen, pane)
 		}
 	}
-	n.shellTabs.mu.Unlock()
+	mem.mu.Unlock()
 	return closed
 }
 

@@ -45,6 +45,13 @@ func (n *Node) writable(real string) error {
 			return errReadOnly(real)
 		}
 	}
+	// The data folder wherever PERSONA_HOME puts it (its extensions, knowledge base, managers), as the read guard
+	// finds it (#5694). With PERSONA_HOME=~ it is the home itself, which stays writable.
+	for _, dir := range n.dataDirs() {
+		if !isHome(dir, n.home) && (p == dir || strings.HasPrefix(p, dir+"/")) {
+			return errReadOnly(real)
+		}
+	}
 	return nil
 }
 

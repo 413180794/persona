@@ -254,3 +254,43 @@ func TestDirUploadRefused(t *testing.T) {
 		t.Fatalf("over the cap: %v", err)
 	}
 }
+
+// The data folder PERSONA_HOME names is Persona's own folder too, whatever it is called: its extensions, knowledge base
+// and managers are as read-only as ~/.persona's, by its own path or a link to it. With PERSONA_HOME=~ the data folder
+// is the home itself, and the home stays writable.
+func TestWritableDirCustomDataDir(t *testing.T) {
+	n, home := writeNode(t)
+	state := filepath.Join(home, "persona-state")
+	t.Setenv("PERSONA_HOME", state)
+	t.Setenv("JARVIS_HOME", "")
+	for _, d := range []string{"persona-state/extensions/demo", "persona-state/data"} {
+		if err := os.MkdirAll(filepath.Join(home, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(state, filepath.Join(home, "proj", "state")); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{"~/persona-state", "~/persona-state/extensions/demo", "~/persona-state/data", "~/proj/state/extensions"} {
+		if _, _, err := n.writableDir(dir, ""); rpcCode(err) != proto.CodeReadOnly {
+			t.Errorf("%s: %v, want %s", dir, err, proto.CodeReadOnly)
+		}
+	}
+	if _, err := dirUpload(t, n, "~/persona-state/extensions/demo", "", proto.UploadConflictReplace, "run", []byte("x")); err == nil {
+		t.Error("an upload replaced a file in the data folder")
+	}
+	if names := dirNames(t, filepath.Join(state, "extensions", "demo")); len(names) != 0 {
+		t.Fatalf("the data folder got %v", names)
+	}
+	if _, _, err := n.writableDir("~/proj", ""); err != nil {
+		t.Errorf("a project folder beside the data folder: %v", err)
+	}
+
+	n, _ = writeNode(t)
+	t.Setenv("PERSONA_HOME", "~")
+	for _, dir := range []string{"~", "~/proj"} {
+		if _, _, err := n.writableDir(dir, ""); err != nil {
+			t.Errorf("PERSONA_HOME=~: %s: %v", dir, err)
+		}
+	}
+}
