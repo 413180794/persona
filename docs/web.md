@@ -5,6 +5,8 @@ Inbox, machine monitoring and Settings. Features roughly match the phone app (ga
 [Beautiful UI](https://www.beautifului.dev/) (MIT, license in `THIRD_PARTY_NOTICES.md`): design tokens (`--ink` / `--surface` / `--line`…, light and dark sets),
 keyframes and component grammar (Thinking's expandable trace, Tool Chips, Approval Card, Prompt Bar, Sidebar Nav's sliding highlight, Search, Task Rows, Insight Cards).
 The components are rewritten from the site's React versions and wired to real data. They are not the site's demo components copied as is (those run their own demo animations and take no data).
+Text tokens (`--ink`, `--ink-2`, `--ink-3`, `--accent-ink`) reach at least 4.5:1 (WCAG AA for small text) on the tested base backgrounds (page / canvas / surface / inset / hover / hover-2 / field).
+`--ink-3` stays a step quieter than `--ink-2`; `src/ui/theme-contrast.test.ts` guards these pairs (#2804: dark `--ink-3` previously reached only 2.5–3.5:1).
 
 ## Running it
 

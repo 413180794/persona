@@ -3,7 +3,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Design tokens, keyframes and component grammar from Beautiful UI (https://www.beautifului.dev/, MIT,
- * Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md). Every view reads colors through these. */
+ * Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md). Every view reads colors through these.
+ * Text tokens (--ink, --ink-2, --ink-3, --accent-ink) keep WCAG AA 4.5:1 on every background token (#2804, theme-contrast.test.ts). */
 :root {
   --page: #fafafb;
   --canvas: #f1f2f3;
@@ -13,14 +14,14 @@
   --hover-2: #e7e9eb;
   --ink: #1f2124;
   --ink-2: #62656b;
-  --ink-3: #6e7177;
+  --ink-3: #66696f;
   --line: #ecedef;
   --line-strong: #e0e2e5;
   --field: #f2f2f3;
   --stripe: #49494913;
   --stripe-bg: #f5f5f5;
   --accent: #0285ff;
-  --accent-ink: #0170dd;
+  --accent-ink: #0166cc;
   --accent-tint: #e9f3ff;
   --green: #189a4d;
   --green-tint: #e8f5ed;
@@ -61,7 +62,7 @@
   --hover-2: #313236;
   --ink: #f2f3f4;
   --ink-2: #a5a8ad;
-  --ink-3: #6c6f75;
+  --ink-3: #979aa0;
   --line: #2e3033;
   --line-strong: #3a3c40;
   --field: #2b2c2f;
