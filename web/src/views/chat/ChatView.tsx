@@ -35,6 +35,7 @@ import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
 import { agentCommands } from "../../lib/composer-commands";
 import { PendingCards } from "./Interactions";
 import { focusedCard, focusedFirst } from "../../lib/card-focus";
+import { lostWith } from "../../lib/dock-focus";
 import { FailureNote, showsFailureNote } from "./FailureNote";
 import { AWAIT_MS, awaitingTurn, DOCK_MAX, turnStart } from "./dock";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
@@ -788,6 +789,17 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     });
     return () => cancelAnimationFrame(frame);
   }, [view, fine]);
+  // A card answered above the composer takes the focused button with it: the keyboard goes back to the composer (#5154).
+  // Not on a touch screen alone (that would raise the keyboard), nor when something else took the focus.
+  const dockFocus = useRef<Element | null>(null);
+  const onDockFocus = (e: React.FocusEvent) => {
+    dockFocus.current = composerBox.current?.contains(e.target) ? null : e.target;
+  };
+  useEffect(() => {
+    if (!lostWith(dockFocus.current, document.activeElement, document.body)) return;
+    dockFocus.current = null;
+    if (fine) composerBox.current?.querySelector("textarea")?.focus({ preventScroll: true });
+  });
   // the run's time counts from the turn's start, as its "Working…" does (not from the session's last state change)
   const stateSince = session?.state_since;
   const runStart = useMemo(() => {
@@ -935,6 +947,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         className="mx-auto flex max-h-(--dock-max) w-full max-w-[880px] flex-col justify-end gap-2 px-4 pb-4 sm:px-7 [@media(max-height:500px)]:pb-2"
         style={{ "--dock-max": DOCK_MAX } as React.CSSProperties}
         onInput={pendingRecap ? dismissRecap : undefined}
+        onFocus={onDockFocus}
       >
         {/* everything over the composer: it shrinks and scrolls before the composer does (the composer grew, and its
             cards, task questions and notes stood taller than the dock, drawn up over the chat or pushing it to nothing);
