@@ -1156,6 +1156,15 @@ Source view, code, JSON and logs all stay at 60 fps.
   - JSON is a tree, with expandable arrays;
   - README is rendered.
 
+## Error reports (#5621)
+
+iPhone, iPad and Mac crashes go to the hub's `error_reports` (format and rules: [protocol.md](protocol.md) "Error reports"). Everything is in `Shared/ErrorReports.swift` (the report builder, the disk queue and the sender); `AppModel.flushErrorReports` wires it to the connection. There is no UI.
+
+- **Crash**: an uncaught `NSException` handler, installed first at launch (`AppDelegate` on iOS, `applicationWillFinishLaunching` on the Mac), writes the report synchronously (kind `crash`, level `fatal`, `previous_launch` true: it is sent at the next launch) and then hands the exception to the handler that was there before. On the Mac it rarely fires: AppKit catches an exception raised on the main thread (it logs it and the app goes on) unless `NSApplicationCrashOnExceptions` is set, so only exceptions on other threads reach the handler.
+- **Content**: the exception's name (`message`) and reason (≤ 1 KB), and `callStackSymbols` as frames, innermost last, at most 64: the symbol (or the image's address and offset) as `function`, the image as `module`, `in_app` for the app's executable (`Persona.debug.dylib` too), PersonaKit and PersonaSSH. There is no `file` (not symbolicated on the device). `release` and `build` come from the bundle, then `os`, `os_version` and `device_model` (the hardware model identifier; the simulated one on a simulator); `source` is `ios` or `mac`. No device id, name or account.
+- **Queue and sending**: one JSON file a report in Application Support `error-reports/` (`<time ms>-<id>.json`), at most 50, at most 7 days old. A file, not UserDefaults: it is written right before the app dies. It is sent only to the hub of the group the hub-level pages show (the one picked, else the first), after each hello and each `machines` message; when its hello's `features` has no `error_reports`, the queue is deleted. Batches of ≤ 20 reports and ≤ 240 KB through `APIClient`; 2xx deletes the batch (and `{"enabled": false}` deletes the rest); 4xx drops it, except 408 / 429; 5xx or no answer keeps it for the next time. A retry sends the same `id`.
+- **Not yet** (#5621 phase 2): signal crashes, MetricKit crash and hang diagnostics, the Mac's main-thread exceptions (`NSApplicationCrashOnExceptions`, or reporting what AppKit catches), breadcrumbs, the watch (through the phone) and visionOS.
+
 ## DEBUG launch arguments (Debug only; Release checks exclude these strings)
 
 `-pairURL jarvis://pair?...` (pair without scanning a QR code, no notification permission prompt), `-openSession <machine>/<session>`,

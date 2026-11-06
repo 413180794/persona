@@ -89,6 +89,16 @@ final class HubLink: Identifiable {
 }
 
 extension AppModel {
+    /// Sends the error reports kept on disk to `group`'s hub (the caller passes the hub-level one), or deletes them when its last hello has no
+    /// `error_reports` (#5621, docs/protocol.md "Error reports"). The watch and visionOS do not report yet.
+    func flushErrorReports(_ group: String) {
+        #if os(iOS) || os(macOS)
+        guard let link = link(group), !link.isDemo else { return }
+        let features = link.features, api = link.api
+        Task.detached(priority: .utility) { _ = await ErrorReportSender.shared.flush(features: features, api: api) }
+        #endif
+    }
+
     // MARK: Groups (docs/multi-hub.md)
 
     /// The groups in order (the default group first).

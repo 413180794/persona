@@ -1425,6 +1425,7 @@ final class AppModel {
             Task { await refreshInAppTunnel(group) }
             // Back on the hub: an install that moved on while the connection was down shows where it is now (#3307).
             if isHub, Set(hello.features).hasExtensionFeature("operations") { Task { await ExtensionOperations.shared.reload() } }
+            if isHub { flushErrorReports(group) } // the feature may have come or gone with this hello (#5621)
             #if DEBUG && (os(iOS) || os(visionOS))
             // Registered on connect, before this hello said whether the hub keeps the runtime CLI from the agents.
             if RuntimeCLI.overHub, let link = link(group) { registerPhone(link) }
@@ -1449,6 +1450,7 @@ final class AppModel {
             let wasOffline = Set(machines.filter { !$0.online && $0.group == group }.map(\.id))
             // Every view that names a machine reads the list: the same list again is no change.
             replaceMachines(group, list)
+            if isHub { flushErrorReports(group) } // what a 5xx or no network kept goes again
             for m in list where m.online && wasOffline.contains(m.id) {
                 for key in subscribed where key.machineRef == m.ref {
                     chat(key).error = nil

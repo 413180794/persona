@@ -206,6 +206,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
     #endif
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        ErrorReports.installExceptionHandler(queue: .shared) // first: a crash while launching is reported too (#5621)
         #if DEBUG
         MacSnapshot.applyAppearanceIfAsked()
         // A snapshot paired with -pairURL (a mock hub): paired before the window is built. Launched in the background
