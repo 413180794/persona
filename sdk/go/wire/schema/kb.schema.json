@@ -135,7 +135,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {"type": "string", "minLength": 1},
-        "day": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+        "day": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "description": "YYYY-MM-DD, a real date (the hub refuses 2026-13-45)."}
       },
       "required": ["id", "day"]
     },
@@ -163,7 +163,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "query": {"type": "string", "minLength": 1},
+        "query": {"type": "string", "minLength": 1, "description": "Not only spaces (the hub refuses that)."},
         "messages": {"type": "boolean", "x-go-pointer": true},
         "limit": {"type": "integer", "minimum": 0, "maximum": 200, "description": "0 is 40."}
       },
@@ -185,7 +185,7 @@
       "required": ["path", "line"]
     },
     "KBUpdateParams": {
-      "description": "kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned, lock and the remove_* lists). tags replaces (an empty list clears); a field left out is kept. Protected fields and history limits: docs/knowledge.md.",
+      "description": "kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned, lock and the remove_* lists). A field left out is kept; the other lists add to what is there. Protected fields and history limits: docs/knowledge.md.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -205,7 +205,7 @@
         "note": {"type": "string"},
         "importance": {"type": "string"},
         "relevance": {"type": "integer", "minimum": 0, "maximum": 100, "x-go-pointer": true},
-        "tags": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}, "x-go-pointer": true, "description": "Replaces the tags; an empty list clears them, none keeps them."},
         "summary": {"type": "string"},
         "log": {"type": "string", "description": "A project's: a line appended to its timeline."},
         "source": {"type": "string", "description": "Who writes the log line."},

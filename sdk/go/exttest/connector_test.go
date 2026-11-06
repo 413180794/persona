@@ -3,7 +3,9 @@ package exttest_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +31,7 @@ var connectorManifest = []byte(`{
 // exampleChat is a connector written with the SDK alone: its calls are the schema's types.
 type exampleChat struct {
 	hub     *ext.Hub
+	init    *ext.Init
 	mu      sync.Mutex
 	heard   []string
 	account string
@@ -75,7 +78,7 @@ func (c *exampleChat) program() ext.Program {
 	}
 	return ext.Program{ID: "examplechat", Version: "1.0.0", Manifest: connectorManifest,
 		Init: func(ctx context.Context, in *ext.Init, hub *ext.Hub) (map[string]any, error) {
-			c.hub = hub
+			c.hub, c.init = hub, in
 			return nil, nil
 		},
 		Namespaces: map[string]ext.Handler{
@@ -135,10 +138,62 @@ func TestTheKnowledgeBaseFromTheSDK(t *testing.T) {
 	if err != nil || len(got.Items) != 1 || got.Items[0].ID != "example" {
 		t.Fatalf("kb.list: %+v %v", got, err)
 	}
-	// What the hub does not answer here is {}: the program sees an empty owner, and the test no schema failure
-	// for its own params.
-	if _, err := c.hub.KBOwner(context.Background()); err != nil {
-		t.Fatal(err)
+	// As the real hub: without an answer there is no knowledge base, without kb.write no update, and a method
+	// it does not have is unknown.
+	ctx := context.Background()
+	var e *ext.Error
+	if _, err := c.hub.KBOwner(ctx); !errors.As(err, &e) || e.Code != wire.KBErrorCodeKbUnavailable {
+		t.Errorf("kb.owner without an answer: %v", err)
+	}
+	if _, err := c.hub.KBUpdate(ctx, wire.KBUpdateParams{Kind: wire.KBKindProjects, ID: "example"}); !errors.As(err, &e) ||
+		e.Code != wire.ErrorCodePermissionDenied || !strings.Contains(string(e.Data), "kb.write") {
+		t.Errorf("kb.update without kb.write: %v", err)
+	}
+	if err := c.hub.Call(ctx, "kb.lst", map[string]any{}, nil); !errors.As(err, &e) || e.Code != wire.ErrorCodeUnknownMethod {
+		t.Errorf("a misspelled kb method: %v", err)
+	}
+	// The extension's only connector takes its calls whatever they name, as the hub routes them.
+	if _, err := c.hub.LoadSecret(ctx, ""); err != nil {
+		t.Errorf("the only connector's secret, no contribution named: %v", err)
+	}
+	if err := c.hub.Call(ctx, "kb.update", map[string]any{"kind": "projects", "id": "x"}, nil); !errors.As(err, &e) ||
+		e.Code != wire.ErrorCodePermissionDenied {
+		t.Errorf("kb.update by the program, not granted: %v", err)
+	}
+	if _, err := c.hub.PutPosts(ctx, wire.ConnectorPostsPutParams{Contribution: "examplechat", Posts: []wire.ConnectorPostPut{}}); err == nil ||
+		!strings.Contains(err.Error(), "no knowledge base") {
+		t.Errorf("posts.put with no knowledge base: %v", err)
+	}
+	// An answer the test gives replaces the host's own, secrets too.
+	h.Answer("connector.secrets.load", func(json.RawMessage) (any, error) { return nil, &ext.Error{Message: "the store is down"} })
+	if _, err := c.hub.LoadSecret(ctx, "examplechat"); err == nil || !strings.Contains(err.Error(), "store is down") {
+		t.Errorf("secrets.load answered by the test: %v", err)
+	}
+	// What the real hub starts it with: its contributions active, its permissions granted, the hub's capabilities.
+	if in := c.init; in == nil || !slices.Contains(in.Active["connectors"], "examplechat") || !slices.Contains(in.Active["events"], "knowledge") ||
+		!slices.Contains(in.Granted.Hub, "kb.read") || !slices.Contains(in.Hub.Capabilities, wire.HubCapabilityInboxGroup) {
+		t.Errorf("initialize: %+v", c.init)
+	}
+}
+
+func TestStartWithAnotherGrant(t *testing.T) {
+	c := &exampleChat{}
+	h := exttest.StartWith(t, connectorManifest, exttest.Serve(t, c.program()), func(p *wire.InitializeParams) {
+		p.Granted = wire.Permissions{Hub: []string{"kb.read", "kb.write"}}
+	})
+	h.Answer("kb.update", func(json.RawMessage) (any, error) { return wire.KBUpdateResult{ID: "example"}, nil })
+	tags := []string{}
+	got, err := c.hub.KBUpdate(context.Background(), wire.KBUpdateParams{Kind: wire.KBKindProjects, ID: "example", Tags: tags})
+	if err != nil || got.ID != "example" {
+		t.Fatalf("kb.update granted: %+v %v", got, err)
+	}
+	b, _ := json.Marshal(wire.KBUpdateParams{Kind: wire.KBKindProjects, ID: "example", Tags: tags})
+	if !strings.Contains(string(b), `"tags":[]`) {
+		t.Errorf("an empty tag list clears the tags, so it is sent: %s", b)
+	}
+	b, _ = json.Marshal(wire.ConnectorPostPut{Post: wire.ConnectorPost{ID: "p"}, Comments: []wire.ConnectorPostComment{}})
+	if !strings.Contains(string(b), `"comments":[]`) {
+		t.Errorf("an empty comment list says the post has none, so it is sent: %s", b)
 	}
 }
 
@@ -186,4 +241,21 @@ func waitFor(t *testing.T, ok func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("timed out")
+}
+
+// A program with two connectors names the one it means: another is no_contribution, as on the hub.
+func TestTwoConnectorsNameTheirs(t *testing.T) {
+	two := []byte(strings.Replace(string(connectorManifest), `"connectors": [`,
+		`"connectors": [{"id": "examplemail", "name": "Example Mail", "capabilities": ["status"]}, `, 1))
+	c := &exampleChat{}
+	prog := c.program()
+	prog.Manifest = two
+	exttest.Start(t, two, exttest.Serve(t, prog))
+	var e *ext.Error
+	if _, err := c.hub.LoadSecret(context.Background(), "another"); !errors.As(err, &e) || e.Code != wire.ErrorCodeNoContribution {
+		t.Errorf("another connector's secret: %v", err)
+	}
+	if _, err := c.hub.LoadSecret(context.Background(), "examplemail"); err != nil {
+		t.Errorf("its own second connector's secret: %v", err)
+	}
 }

@@ -56,8 +56,13 @@ Such a file names its calls and events, with the definitions they hold to:
 an answer of `{}`. The names are the wire's: with the namespace (`connector.status`), and an event the hub sends
 as `event.<name>`. The generator writes them out as `wire.Calls` (Go) and `CALLS` (TypeScript):
 
-- `wire.ValidateParams(name, raw)` and `wire.ValidateResult(name, raw)` hold a call's params and answer to them. A
-  `null` is read as absent there, as the hub reads it: Go writes a nil list as `null`.
+- `wire.ValidateParams(name, raw)` and `wire.ValidateResult(name, raw)` hold a call's params and answer to them.
+  A `null` is read as the hub's Go decoding reads it, by what the schema says is there: a null list or object is an
+  empty one, a null of any JSON (`meta`) stays null, any other null is absent; an answer of `null` is `{}`. Go writes
+  a nil slice, map or pointer as `null`, and both SDKs' programs are held to what the hub accepts, not more.
+- A list whose empty value means something (`kb.update`'s `tags` clears them, `posts.put`'s `comments` says there are
+  none) has `"x-go-pointer": true`: Go then writes it with `omitzero`, so an empty list is sent and only a nil one is
+  left out.
 - Params of a call in the connector namespace carry `contribution` (the connector's id; the hub adds it with
   `extension.Targeted`); results do not. Knowledge-base params are strict: no `contribution`, and an unknown field is
   `invalid_params`.
@@ -72,9 +77,13 @@ In the Go SDK, `ext.Methods{…}.For(<contributions>)` is a namespace's handler 
 (`ext.Method(func(ctx, wire.ConnectorThreadParams) (wire.ConnectorThreadPage, error))`), and `ext.Hub` has the
 program's calls (`LoadSecret` / `SaveSecret` / `DeleteSecret`, `ConnectorChanged`, `PutPosts`, `ArchivedChats`,
 `ChannelReceive`, `ChannelStatus`, `KBList`, `KBGet`, `KBUpdate`, `KBOwner`…; `ext.CannotSend` is channel.send's
-`cannot_send`). `exttest.Start` is a fake hub to call a program from its own tests
-(secrets in memory, `Answer` for the knowledge base and the rest, `Hear` for the hub's events, every message held to
-the schemas, a channel's messages in `Received`); `exttest.CheckConnectors` makes the hub's read-only calls of each
+`cannot_send`). `exttest.Start` (`StartWith` to change what `initialize` sends) is a fake hub to call a program from its own tests
+(`initialize` carries the manifest's contributions as active, its permissions as granted and the hub's
+capabilities, extension point versions only when the test sets them; it refuses what the hub refuses: a connector or
+channel the extension does not have, a knowledge-base call or gh token not granted, an unknown method of these
+namespaces; an `Answer` replaces its own; secrets in memory, `Answer` for
+the knowledge base and the rest, `Hear` for the hub's events, every message held to the schemas, a channel's
+messages in `Received`); `exttest.CheckConnectors` makes the hub's read-only calls of each
 connector the manifest declares, and `exttest.CheckChannels` holds each channel to the channel protocol.
 
 ## The subset

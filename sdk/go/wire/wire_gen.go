@@ -3023,8 +3023,8 @@ type ConnectorGroupToolParams struct {
 }
 
 // ConnectorGroupAppendParams: group.append (meta): add messages to one event, an existing one (event and its meta) or
-// a new one (event empty, meta null) that may continue a done one. Answered with the event as a ConnectorInboxThing
-// with id and meta.
+// a new one (event empty, meta null: meta is always there) that may continue a done one. Answered with the event as a
+// ConnectorInboxThing with id and meta.
 type ConnectorGroupAppendParams struct {
 	Contribution string          `json:"contribution"`
 	Thread       string          `json:"thread"`
@@ -3301,7 +3301,7 @@ type ConnectorPostsPutParams struct {
 // empty list is none.
 type ConnectorPostPut struct {
 	Post     ConnectorPost          `json:"post"`
-	Comments []ConnectorPostComment `json:"comments,omitempty"`
+	Comments []ConnectorPostComment `json:"comments,omitzero"`
 }
 
 // ConnectorPost: one public post. feed names the archive's heading; text over 64 KB is cut.
@@ -3426,12 +3426,14 @@ type ChannelReceiveParams struct {
 	Message      ChannelMessage `json:"message"`
 }
 
-// ChannelMessage: at most 4 images of 3 MB and files of 50 MB each; what does not fit is dropped and said in
-// unsupported. A message with nothing in it (no text, images, files, quote, forward or unsupported) is not handed on.
+// ChannelMessage: at most 4 images of 3 MB and files of 50 MB each, and the hub hands on at most 40 MB of them
+// together; what does not fit is dropped and said in unsupported. A message with nothing in it (no text, images,
+// files, quote, forward or unsupported) is not handed on.
 type ChannelMessage struct {
 	// The chat app's id of the message: the same message delivered again is taken once.
-	ID     string        `json:"id"`
-	Text   string        `json:"text,omitempty"`
+	ID   string `json:"id"`
+	Text string `json:"text,omitempty"`
+	// At most 4 are kept.
 	Images []ChannelBlob `json:"images,omitempty"`
 	Files  []ChannelBlob `json:"files,omitempty"`
 	// The text of the message it quotes.
@@ -3474,8 +3476,7 @@ type ChannelSendParams struct {
 	Contribution string `json:"contribution"`
 	Ref          string `json:"ref"`
 	Text         string `json:"text"`
-	// ChannelSendKind.
-	Kind string `json:"kind"`
+	Kind         string `json:"kind"`
 	// The owner's message it answers (ChannelMessage.id).
 	ReplyTo string `json:"reply_to,omitempty"`
 }
@@ -3611,7 +3612,8 @@ type KBRecordingSegment struct {
 
 // KBDayParams: kb.day: a chat's messages of one day in the knowledge base's time zone.
 type KBDayParams struct {
-	ID  string `json:"id"`
+	ID string `json:"id"`
+	// YYYY-MM-DD, a real date (the hub refuses 2026-13-45).
 	Day string `json:"day"`
 }
 
@@ -3631,6 +3633,7 @@ type KBDayMessage struct {
 
 // KBSearchParams: kb.search: lines that match, messages too unless messages is false.
 type KBSearchParams struct {
+	// Not only spaces (the hub refuses that).
 	Query    string `json:"query"`
 	Messages *bool  `json:"messages,omitempty"`
 	// 0 is 40.
@@ -3648,7 +3651,7 @@ type KBHit struct {
 }
 
 // KBUpdateParams: kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned,
-// lock and the remove_* lists). tags replaces (an empty list clears); a field left out is kept. Protected fields and
+// lock and the remove_* lists). A field left out is kept; the other lists add to what is there. Protected fields and
 // history limits: docs/knowledge.md.
 type KBUpdateParams struct {
 	Kind string `json:"kind"`
@@ -3663,15 +3666,16 @@ type KBUpdateParams struct {
 	RemoveProjects []string `json:"remove_projects,omitempty"`
 	Name           string   `json:"name,omitempty"`
 	// A project's: short or long.
-	ProjectKind string   `json:"project_kind,omitempty"`
-	Status      string   `json:"status,omitempty"`
-	Goal        string   `json:"goal,omitempty"`
-	MyRole      string   `json:"my_role,omitempty"`
-	Note        string   `json:"note,omitempty"`
-	Importance  string   `json:"importance,omitempty"`
-	Relevance   *int     `json:"relevance,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	Summary     string   `json:"summary,omitempty"`
+	ProjectKind string `json:"project_kind,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Goal        string `json:"goal,omitempty"`
+	MyRole      string `json:"my_role,omitempty"`
+	Note        string `json:"note,omitempty"`
+	Importance  string `json:"importance,omitempty"`
+	Relevance   *int   `json:"relevance,omitempty"`
+	// Replaces the tags; an empty list clears them, none keeps them.
+	Tags    []string `json:"tags,omitzero"`
+	Summary string   `json:"summary,omitempty"`
 	// A project's: a line appended to its timeline.
 	Log string `json:"log,omitempty"`
 	// Who writes the log line.

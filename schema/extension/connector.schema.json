@@ -506,7 +506,7 @@
       "required": ["contribution", "thread", "name"]
     },
     "ConnectorGroupAppendParams": {
-      "description": "group.append (meta): add messages to one event, an existing one (event and its meta) or a new one (event empty, meta null) that may continue a done one. Answered with the event as a ConnectorInboxThing with id and meta.",
+      "description": "group.append (meta): add messages to one event, an existing one (event and its meta) or a new one (event empty, meta null: meta is always there) that may continue a done one. Answered with the event as a ConnectorInboxThing with id and meta.",
       "type": "object",
       "properties": {
         "contribution": {"type": "string"},
@@ -855,7 +855,7 @@
       "type": "object",
       "properties": {
         "post": {"$ref": "#/$defs/ConnectorPost"},
-        "comments": {"type": "array", "maxItems": 5000, "items": {"$ref": "#/$defs/ConnectorPostComment"}}
+        "comments": {"type": "array", "maxItems": 5000, "items": {"$ref": "#/$defs/ConnectorPostComment"}, "x-go-pointer": true}
       },
       "required": ["post"]
     },

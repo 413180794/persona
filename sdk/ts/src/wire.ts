@@ -3181,7 +3181,8 @@ export interface ConnectorGroupToolParams {
 
 /**
  * group.append (meta): add messages to one event, an existing one (event and its meta) or a new one (event empty,
- * meta null) that may continue a done one. Answered with the event as a ConnectorInboxThing with id and meta.
+ * meta null: meta is always there) that may continue a done one. Answered with the event as a ConnectorInboxThing
+ * with id and meta.
  */
 export interface ConnectorGroupAppendParams {
   contribution: string;
@@ -3629,13 +3630,15 @@ export interface ChannelReceiveParams {
 }
 
 /**
- * At most 4 images of 3 MB and files of 50 MB each; what does not fit is dropped and said in unsupported. A message
- * with nothing in it (no text, images, files, quote, forward or unsupported) is not handed on.
+ * At most 4 images of 3 MB and files of 50 MB each, and the hub hands on at most 40 MB of them together; what does
+ * not fit is dropped and said in unsupported. A message with nothing in it (no text, images, files, quote, forward or
+ * unsupported) is not handed on.
  */
 export interface ChannelMessage {
   /** The chat app's id of the message: the same message delivered again is taken once. */
   id: string;
   text?: string;
+  /** At most 4 are kept. */
   images?: ChannelBlob[];
   files?: ChannelBlob[];
   /** The text of the message it quotes. */
@@ -3686,8 +3689,7 @@ export interface ChannelSendParams {
   contribution: string;
   ref: string;
   text: string;
-  /** ChannelSendKind. */
-  kind: string;
+  kind: ChannelSendKind;
   /** The owner's message it answers (ChannelMessage.id). */
   reply_to?: string;
 }
@@ -3826,6 +3828,7 @@ export interface KBRecordingSegment {
  */
 export interface KBDayParams {
   id: string;
+  /** YYYY-MM-DD, a real date (the hub refuses 2026-13-45). */
   day: string;
 }
 
@@ -3849,6 +3852,7 @@ export interface KBDayMessage {
  * kb.search: lines that match, messages too unless messages is false.
  */
 export interface KBSearchParams {
+  /** Not only spaces (the hub refuses that). */
   query: string;
   messages?: boolean;
   /** 0 is 40. */
@@ -3867,7 +3871,7 @@ export interface KBHit {
 
 /**
  * kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned, lock and the
- * remove_* lists). tags replaces (an empty list clears); a field left out is kept. Protected fields and history
+ * remove_* lists). A field left out is kept; the other lists add to what is there. Protected fields and history
  * limits: docs/knowledge.md.
  */
 export interface KBUpdateParams {
@@ -3890,6 +3894,7 @@ export interface KBUpdateParams {
   note?: string;
   importance?: string;
   relevance?: number;
+  /** Replaces the tags; an empty list clears them, none keeps them. */
   tags?: string[];
   summary?: string;
   /** A project's: a line appended to its timeline. */

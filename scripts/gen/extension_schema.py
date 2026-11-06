@@ -386,7 +386,8 @@ def gen_go(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
         typ = gtype(f.type, optional, f.pointer)
         tag = f.name
         if optional:
-            tag += ",omitzero" if f.type.kind == "time" else ",omitempty"
+            # x-go-pointer on a list: an empty one means something (replaces), only a nil one is left out.
+            tag += ",omitzero" if f.type.kind == "time" or f.type.kind == "array" and f.pointer else ",omitempty"
         return comment("\t// ", f.doc) + [f"\t{go_field(f.name)} {typ} `json:\"{tag}\"`"]
 
     for d in defs.values():
