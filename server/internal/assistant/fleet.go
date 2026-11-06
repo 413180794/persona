@@ -79,6 +79,9 @@ type fleetBook struct {
 
 	mutesMu sync.Mutex
 	mutes   *Pins
+	// mutesStale: the hub said the mutes changed (fleet.mutes); they are read again, the ones read last kept until then
+	mutesStale bool
+	mutesErr   bool // the last read of the mutes failed (logged once until one goes through)
 
 	askMu sync.Mutex
 	asked map[string]*askedOne // the assistant's own questions and cards on the phone (by interaction id)
@@ -445,7 +448,7 @@ func (s *Service) FleetEvent(ctx context.Context, name string, params json.RawMe
 		}
 	case assistantwire.EventMutes:
 		s.fleet.mutesMu.Lock()
-		s.fleet.mutes = nil
+		s.fleet.mutesStale = true
 		s.fleet.mutesMu.Unlock()
 		for _, m := range s.fleetMachines() {
 			s.publishSessions(m.ID)
@@ -665,18 +668,28 @@ type Pins struct {
 	Allowed  []string `json:"allowed,omitempty"`
 }
 
+// loadMutes reads the mutes once, and again after the hub says they changed. A read that fails is tried again next
+// time; meanwhile the mutes read last stay (none before any read): an empty set would push every muted agent's cards
+// and finished turns for that moment.
 func (s *Service) loadMutes(ctx context.Context) Pins {
 	f := &s.fleet
 	f.mutesMu.Lock()
 	defer f.mutesMu.Unlock()
-	if f.mutes == nil {
+	if f.mutes == nil || f.mutesStale {
 		p := Pins{Spaces: []string{}, Sessions: []string{}}
 		if st := s.store(); st != nil {
 			if _, err := st.Setting(ctx, "mutes", &p); err != nil {
-				return p // try again next time
+				if !f.mutesErr { // the lists ask once per session: one line, not one per session and round
+					s.logf("assistant: mutes: %v", err)
+				}
+				f.mutesErr = true
+				if f.mutes != nil {
+					return *f.mutes
+				}
+				return Pins{Spaces: []string{}, Sessions: []string{}}
 			}
 		}
-		f.mutes = &p
+		f.mutes, f.mutesStale, f.mutesErr = &p, false, false
 	}
 	return *f.mutes
 }
