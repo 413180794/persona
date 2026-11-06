@@ -4790,9 +4790,9 @@ if MOCK_INBOX_EVENTS:  # the chat behind the first event, for 看原文 and its 
                                  _lm("100", "张三", "在吗", mins=12), _lm("101", "张三", "客户催报价了", mins=11),
                                  _lm("102", "张三", "周五前能把报价给客户吗？", mins=10)]
 if os.environ.get("MOCK_LARK_ACCOUNTS"):
-    for it in INBOX:
-        if it.get("lark") and it["account_name"] == "飞书":
-            it["account_name"] = "飞书 · 我"
+    for _it in INBOX:  # not `it`: that is the transcript helper later lines still call
+        if _it.get("lark") and _it["account_name"] == "飞书":
+            _it["account_name"] = "飞书 · 我"
     INBOX.insert(0, {"id": "lark:account:2:w1:10", "source": "lark", "kind": "mention", "account": "feishu", "account_name": "飞书 · 工作号",
                      "title": "季度规划", "sender": "王芳", "preview": "@你 下周一前把排期填一下，表格在群公告里", "count": 1,
                      "started_at": ago(minutes=8), "updated_at": ago(minutes=8), "tier": "action", "summary": "王芳请你下周一前填排期",
