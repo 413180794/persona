@@ -76,6 +76,10 @@
     <string name="chat_interaction_ended_cancelled">コンピューター側でこのリクエストが取り消されたため、回答は届きませんでした</string>
     <string name="chat_interaction_ended_dismissed">このリクエストはコンピューターに戻されたため、回答は届きませんでした</string>
     <string name="chat_answered_dismissed">コンピューターに戻しました</string>
+    <plurals name="chat_next_waiting">
+        <item quantity="other">ほかに%1$d件が対応待ち · 次：%2$s · %3$s</item>
+    </plurals>
+    <string name="chat_next_waiting_open">次を開く</string>
     <string name="chat_answered_by_assistant">アシスタントが代わりに回答しました</string>
     <string name="chat_answered_unanswered">（未回答）</string>
     <string name="chat_answered_approved">承認</string>

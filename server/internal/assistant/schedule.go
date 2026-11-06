@@ -1096,7 +1096,7 @@ func (s *Service) recordRun(r ScheduleRun) string {
 			t.LastSessionID = r.SessionID
 		}
 	}
-	streakTask, streakN, streak := streakToldLocked(sc, len(sc.runs)-1) // told once per streak (schedule_streak.go)
+	streakTask, streakN, streak := streakToldLocked(sc, len(sc.runs)-1, false) // told once per streak (schedule_streak.go)
 	r = sc.runs[len(sc.runs)-1]
 	s.saveLocked(sc)
 	if st := s.store(); st != nil { // under the lock: two runs finishing together must not save their lists out of order
@@ -1128,11 +1128,12 @@ func (s *Service) updateRun(r ScheduleRun, status, errText string) bool {
 		sc.mu.Unlock()
 		return false
 	}
+	wasOK := sc.runs[i].Status == runOK
 	sc.runs[i].Status, sc.runs[i].Error = status, errText
 	if j := sc.indexLocked(r.RefID); j >= 0 && (r.of.IsZero() || !sc.tasks[j].LastRun.After(r.of)) {
 		sc.tasks[j].LastStatus, sc.tasks[j].LastError = status, errText
 	}
-	streakTask, streakN, streak := streakToldLocked(sc, i) // a turn that ends in an error is a failed run too (schedule_streak.go)
+	streakTask, streakN, streak := streakToldLocked(sc, i, wasOK) // a turn that ends in an error is a failed run too (schedule_streak.go)
 	streakRun := sc.runs[i]
 	s.saveLocked(sc)
 	if st := s.store(); st != nil {

@@ -2,6 +2,7 @@ package persona.feature.chat
 
 import persona.core.designsystem.text
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -162,6 +163,9 @@ private fun ChatPage(
     val machine = machines.firstOrNull { it.id == key.machineId }
     var resolved by remember { mutableStateOf(emptySet<String>()) }
     var interactionFeedback by remember { mutableStateOf<String?>(null) }
+    // Counts the cards this page took away by answering: the next one waiting elsewhere is offered for a while after.
+    var answeredHere by remember { mutableIntStateOf(0) }
+    var offerNext by remember { mutableStateOf(false) }
     var uncertain by remember { mutableStateOf(emptySet<String>()) }
     var busyId by remember { mutableStateOf<String?>(null) }
     // The assistant's tasks (docs/unified-entry.md): their agents' questions are answered here too, oldest first.
@@ -520,6 +524,10 @@ private fun ChatPage(
     LaunchedEffect(interactionFeedback) {
         if (interactionFeedback != null) { delay(3_000); interactionFeedback = null }
     }
+    // As long as the web shows its 已回答 receipts (20 s); never moves on by itself.
+    LaunchedEffect(answeredHere) {
+        if (answeredHere > 0) { offerNext = true; delay(NEXT_WAITING_MILLIS); offerNext = false }
+    }
     LaunchedEffect(allRequests) {
         val pending = allRequests.map { it.id }.toSet()
         resolved = resolved.intersect(pending); uncertain = uncertain.intersect(pending)
@@ -637,6 +645,14 @@ private fun ChatPage(
                                 // Inset like the status line and the composer around it, not edge to edge.
                                 JNotice(interactionFeedback.orEmpty(), Modifier.padding(horizontal = Tokens.Space.m))
                             }
+                            // This agent has nothing left for you, others have (#4325): one tap to the next, no jump.
+                            val openRequest = chrome.onOpenRequest
+                            val keyboard = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+                            if (showsNextWaiting(offerNext, requests.size, readOnly, renderStyle == ChatRenderStyle.Assistant,
+                                    canOpen = openRequest != null, keyboard = keyboard))
+                                nextWaiting(chrome.waiting, key)?.let { next ->
+                                    NextWaitingRow(next, { offerNext = false; openRequest?.invoke(next.request.session, next.request.requestId) })
+                                }
                             if (!readOnly) InteractionPanel(requests, machine, panelMax, busyId, uncertain, { interaction, resolution ->
                                 if (busyId == null && interaction.id !in uncertain && interaction.id !in resolved &&
                                     allRequests.any { it == interaction } &&
@@ -650,6 +666,7 @@ private fun ChatPage(
                                                 resolved = resolved + interaction.id
                                                 uncertain = uncertain - interaction.id
                                                 interactionFeedback = result.notice(res, interaction)
+                                                if (result.offersNext(resolution)) answeredHere++
                                             } else uncertain = uncertain + interaction.id
                                             notice = if (result.submission == InteractionSubmission.Unknown) res.getString(result.submission.notice) else null
                                             if (result.submission == InteractionSubmission.PromptChanged || result.submission == InteractionSubmission.Unknown) {

@@ -21,7 +21,7 @@ func counted(r ScheduleRun) bool {
 
 // runStreak counts ref's runs in a row that did not go through, newest first, and says whether one of them was
 // already told about (StreakTold) and whether the run id is one of them.
-func runStreak(runs []ScheduleRun, ref, id string) (n int, told, in bool) {
+func runStreak(runs []ScheduleRun, ref, id string) (n, newer int, told, in bool) {
 	for i := len(runs) - 1; i >= 0; i-- {
 		r := runs[i]
 		if r.RefID != ref || !counted(r) {
@@ -32,17 +32,26 @@ func runStreak(runs []ScheduleRun, ref, id string) (n int, told, in bool) {
 		}
 		n++
 		told = told || r.StreakTold
-		in = in || r.ID == id
+		if r.ID == id {
+			in = true
+		} else if !in {
+			newer++
+		}
 	}
-	return n, told, in
+	return n, newer, told, in
 }
 
-// streakToldLocked says whether sc.runs[i], just recorded (or just turned failed), makes a repeating task's runs in a
-// row that did not go through streakLimit or more, with none of them told yet; t is that task then, n how many. The
-// run is then marked told, so this is once per streak whatever order runs record in: the count can jump past
-// streakLimit when a run recorded ok turns failed after a later one (#4785). A run that goes through ends the streak
-// and with it the mark. The schedule is locked.
-func streakToldLocked(sc *schedule, i int) (t Task, n int, tell bool) {
+// streakToldLocked says whether sc.runs[i], just recorded (wasOK false) or just turned failed from ok (wasOK true),
+// makes a repeating task's runs in a row that did not go through streakLimit or more, with none of them told yet; t is
+// that task then, n how many. The run is then marked told, so this is once per streak whatever order runs record in:
+// the count can jump past streakLimit when a run recorded ok turns failed after a later one (#4785). A run that goes
+// through ends the streak and with it the mark. The schedule is locked.
+//
+// Only a streak that was below streakLimit before this run tells (#4881): one that was already over it was told, even
+// when no run in it carries the mark — it was told before marks existed (#4670), or its marked run has fallen out of
+// the maxRuns kept. Before this run the streak was n-1 for a new run; for one that turned failed it was the runs
+// newer than it, which its ok had cut off from the older ones.
+func streakToldLocked(sc *schedule, i int, wasOK bool) (t Task, n int, tell bool) {
 	r := sc.runs[i]
 	if r.Status == runOK || !counted(r) {
 		return Task{}, 0, false
@@ -51,8 +60,12 @@ func streakToldLocked(sc *schedule, i int) (t Task, n int, tell bool) {
 	if j < 0 || sc.tasks[j].Repeat == repeatOnce {
 		return Task{}, 0, false
 	}
-	n, told, in := runStreak(sc.runs, r.RefID, r.ID)
-	if !in || told || n < streakLimit {
+	n, newer, told, in := runStreak(sc.runs, r.RefID, r.ID)
+	before := n - 1
+	if wasOK {
+		before = newer
+	}
+	if !in || told || n < streakLimit || before >= streakLimit {
 		return Task{}, 0, false
 	}
 	sc.runs[i].StreakTold = true

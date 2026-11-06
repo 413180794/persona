@@ -55,6 +55,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
     val key = SessionKey(route.machineId, route.sessionId)
     val sessions by session.sessions.sessions.collectAsStateWithLifecycle()
     val metadata = sessions.firstOrNull { it.key == key }
+    val waiting = rememberWaitingRequests(session, sessions)
     val assistant = route.kind == ConversationKind.Assistant || metadata?.assistant == true
     val editor = rememberChatDraftEditor(wiring, key)
     val storedComposer by (editor?.composer ?: remember { MutableStateFlow<ChatComposerState?>(null) }).collectAsStateWithLifecycle()
@@ -90,6 +91,10 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
                 gitLabel = "Git${git?.files?.size?.takeIf { it > 0 }?.let { " · $it" }.orEmpty()}",
                 actions = actions, connection = wiring?.connection ?: session.connection, requestId = requestId, covered = pane != null,
                 onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
+                waiting = waiting,
+                onOpenRequest = { chat, request ->
+                    navigator.navigate(InteractionRoute(ChatRoute(chat.machineId, chat.sessionId, ConversationKind.Agent), request))
+                },
                 onOpenAssistant = { navigator.navigate(persona.feature.chat.conversationRoute(it, assistant = true)) },
                 onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },
                 files = session.files, ports = wiring?.ports, onOpenPath = if (filesAvailable) ({ path, line -> open(FilesPane.Files, path, line) }) else null,
@@ -111,6 +116,25 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
             }, initialPane = pane!!, initialPath = openedPath, initialLine = openedLine,
                 connection = connectionState)
         }
+    }
+}
+
+/**
+ * The cards agents wait on you with, as the Persona home's 现在要你处理的事 lists them (the same `needsYou`, all of
+ * them): a chat that has just answered its last card offers the first one of another chat (#4325).
+ */
+@Composable
+private fun rememberWaitingRequests(session: ShellSession, sessions: List<persona.core.contracts.Session>): List<WaitingRequest> {
+    val pending by session.interactions.pending.collectAsStateWithLifecycle()
+    val assistant by session.assistant.assistant.collectAsStateWithLifecycle()
+    // `snapshots` builds a new flow on each read: keep one, or the collection restarts on every recomposition.
+    val snapshots = remember(session) { session.preferences.snapshots }
+    val preferences by snapshots.collectAsStateWithLifecycle(persona.feature.agents.AgentsPreferencesSnapshot())
+    return remember(pending, sessions, assistant, preferences.mutes) {
+        persona.feature.assistant.needsYou(pending, sessions, preferences.mutes, emptyList(), shown = Int.MAX_VALUE,
+            isAssistant = { it == assistant.mainSession || assistant.conversations.any { c -> c.key == it } })
+            .lines.filterIsInstance<persona.feature.assistant.NeedsYouLine.Agent>()
+            .map { WaitingRequest(it.session, it.requestId, it.who, it.what) }
     }
 }
 

@@ -78,6 +78,11 @@
     <string name="chat_interaction_ended_cancelled">The computer withdrew this request, so the answer wasn\'t delivered</string>
     <string name="chat_interaction_ended_dismissed">This request was handed back to the computer, so the answer wasn\'t delivered</string>
     <string name="chat_answered_dismissed">Handed back to the computer</string>
+    <plurals name="chat_next_waiting">
+        <item quantity="one">%1$d more needs you · Next: %2$s · %3$s</item>
+        <item quantity="other">%1$d more need you · Next: %2$s · %3$s</item>
+    </plurals>
+    <string name="chat_next_waiting_open">Open the next one</string>
     <string name="chat_answered_by_assistant">Answered by the assistant</string>
     <string name="chat_answered_unanswered">(No answer)</string>
     <string name="chat_answered_approved">Approved</string>

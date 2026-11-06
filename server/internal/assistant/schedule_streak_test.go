@@ -189,3 +189,57 @@ func TestAFailureInAMutedConversationIsStillPushed(t *testing.T) {
 	}
 	t.Fatalf("the third failure in a row was not pushed at all: %+v", n.pushed())
 }
+
+// A streak already over the limit when the hub was upgraded was told by #4670's code, which marked nothing (#4881).
+// Its next failure is not a new streak: no second notice. A run that goes through still starts one that is told.
+func TestAStreakToldBeforeMarksExistedIsNotToldAgain(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	sc := setTasks(h, Task{ID: "p", Title: "值守", Prompt: "巡检", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true})
+	sc.mu.Lock()
+	for i := range streakLimit + 1 { // the history as the old code left it: told at the third, no StreakTold
+		sc.runs = append(sc.runs, ScheduleRun{ID: "run_old" + string(rune('a'+i)), Kind: "routine", RefID: "p", Title: "值守",
+			Status: runFailed, Error: "API Error: 503"})
+	}
+	sc.mu.Unlock()
+
+	outcome(h, "p", runFailed, "API Error: 503")
+	if p := n.pushed(); len(p) != 0 {
+		t.Fatalf("the fifth in a row of a streak told before the upgrade: %+v", p)
+	}
+	outcome(h, "p", runOK, "")
+	for range streakLimit {
+		outcome(h, "p", runFailed, "again")
+	}
+	if p := n.pushed(); len(p) != 1 || !strings.Contains(p[0].Body, "again") {
+		t.Fatalf("a new streak after a run that went through is told: %+v", p)
+	}
+}
+
+// The history keeps maxRuns runs for all tasks together (#4881): a task that keeps failing outlives the run that told
+// its streak. The streak was over the limit before each of those runs, so it is not told again.
+func TestAStreakWhoseToldRunFellOutOfTheHistoryIsNotToldAgain(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	sc := setTasks(h, Task{ID: "p", Title: "值守", Prompt: "巡检", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true})
+
+	for range streakLimit {
+		outcome(h, "p", runFailed, "API Error: 503")
+	}
+	if p := n.pushed(); len(p) != 1 {
+		t.Fatalf("three in a row are told: %+v", p)
+	}
+	for range maxRuns {
+		outcome(h, "p", runFailed, "API Error: 503")
+	}
+	if p := n.pushed(); len(p) != 1 {
+		t.Fatalf("the same streak is told once, its mark gone or not: %d pushes", len(p))
+	}
+	sc.mu.Lock()
+	marked := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.StreakTold })
+	kept := len(sc.runs)
+	sc.mu.Unlock()
+	if marked || kept != maxRuns {
+		t.Fatalf("the told run is out of the %d kept (marked %v, kept %d)", maxRuns, marked, kept)
+	}
+}

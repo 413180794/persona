@@ -1,0 +1,57 @@
+package persona.feature.chat
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import persona.core.contracts.SessionKey
+import persona.core.designsystem.ChatHint
+import persona.core.designsystem.PersonaTheme
+import persona.core.designsystem.Tokens
+import persona.core.designsystem.icons.PhIcons
+
+/**
+ * One card an agent waits on you with, as the Persona home's 现在要你处理的事 lists it (the app maps its `needsYou`
+ * lines): the conversation, the card, the conversation's name and what the card asks (`Interaction.headline`).
+ */
+data class WaitingRequest(val session: SessionKey, val requestId: String, val who: String, val what: String)
+
+/** What other chats still wait on you with (#4325, web #4091): the first in the list's order, and how many there are. */
+internal data class NextWaiting(val request: WaitingRequest, val count: Int)
+
+/** How long the line stays after an answer here: as long as the web shows its 已回答 receipts. */
+internal const val NEXT_WAITING_MILLIS = 20_000L
+
+/**
+ * Whether this reply puts the next card on offer: only an answer that went through (not one handing the card back to
+ * the computer) or one the hub had already (as the web's 已回答 receipt). A changed screen, an expired, withdrawn or
+ * handed-back card is not: a changed screen brings a new card here at once.
+ */
+internal fun InteractionReply.offersNext(resolution: persona.core.contracts.Resolution): Boolean =
+    submission == InteractionSubmission.AlreadyAnswered ||
+        submission == InteractionSubmission.Answered && resolution.dismiss != true
+
+/**
+ * Whether the line shows now: offered after an answer here, this chat has no card left, the page can answer and open
+ * another chat (not Persona's conversations, not a read-only view), and the keyboard is down (as on the web).
+ */
+internal fun showsNextWaiting(offered: Boolean, cardsHere: Int, readOnly: Boolean, assistant: Boolean, canOpen: Boolean,
+                              keyboard: Boolean): Boolean =
+    offered && cardsHere == 0 && !readOnly && !assistant && canOpen && !keyboard
+
+/** The cards of [waiting] outside [here] (the same session id on another computer is another chat); null when none is. */
+internal fun nextWaiting(waiting: List<WaitingRequest>, here: SessionKey): NextWaiting? {
+    val others = waiting.filter { it.session != here }
+    return others.firstOrNull()?.let { NextWaiting(it, others.size) }
+}
+
+/** 还有 N 件等你 · 下一件：<agent> · <what it asks> ›, under the answer's notice; a tap opens that chat with that card first. */
+@Composable
+internal fun NextWaitingRow(next: NextWaiting, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val text = pluralStringResource(R.plurals.chat_next_waiting, next.count, next.count, next.request.who, next.request.what)
+    ChatHint(text, PhIcons.Hand, PersonaTheme.palette.needsYou.dot, onOpen,
+        modifier.padding(horizontal = Tokens.Space.m).testTag("chat-next-waiting"),
+        onClickLabel = stringResource(R.string.chat_next_waiting_open))
+}

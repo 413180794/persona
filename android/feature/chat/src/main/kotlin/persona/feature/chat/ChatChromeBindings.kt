@@ -19,6 +19,12 @@ data class ChatChromeBindings(
     val actions: ChatActions? = null,
     val connection: HubConnection? = null,
     val onOpenSession: ((SessionKey) -> Unit)? = null,
+    /**
+     * The cards other agents wait on you with, in the Persona home's order, and how one opens: its chat with that card
+     * first. With both, an agent's chat that has just answered its last card offers the next one (#4325).
+     */
+    val waiting: List<WaitingRequest> = emptyList(),
+    val onOpenRequest: ((SessionKey, requestId: String) -> Unit)? = null,
     /** Opens an assistant conversation (a branch of the Persona conversation, web `forkAt`); null: assistant branches are not offered. */
     val onOpenAssistant: ((SessionKey) -> Unit)? = null,
     val onConnectionDetails: (() -> Unit)? = null,
