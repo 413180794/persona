@@ -3,7 +3,8 @@ import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/ap
 import { pair, takeToken } from "./lib/auth";
 import { useCloseOnBack } from "./lib/back-close";
 import { SCRIM_FADE, useLingers } from "./lib/lingers";
-import { PageBoundary } from "./views/PageBoundary";
+import { isChunkError, PageBoundary } from "./views/PageBoundary";
+import { navigationCrumb, reportBoundary } from "./lib/error-reports";
 import { lazyPage, preloadPages } from "./lib/lazy-page";
 import { drawerA11y, focusBack, useDrawerDrag } from "./lib/drawer";
 import { acceptHubs, here, rememberHub, takeHubs } from "./lib/hubs";
@@ -135,6 +136,8 @@ function PageLoading() {
 
 function Shell() {
   const route = useRoute();
+  // an error report's breadcrumb: the kind of page only (its name), never the ids or the query in its address
+  useEffect(() => navigationCrumb(route.name), [route.name]);
   const conn = useStore((s) => s.conn);
   // this hub goes on the list of hubs to switch between, under the name it gives itself
   const hubName = useStore((s) => s.hubName);
@@ -414,14 +417,16 @@ function useOpened(open: boolean): boolean {
  * down, since it sits outside PageBoundary: the overlay shows nothing and is closed, so the next open from any entry
  * (shortcut, sidebar button) is a fresh open that tries again (lazyPage does not keep a failed load).
  */
-class OverlayBoundary extends Component<{ open: boolean; onClose: () => void; children: ReactNode }, { failed: boolean }> {
+export class OverlayBoundary extends Component<{ open: boolean; onClose: () => void; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
     return { failed: true };
   }
 
-  componentDidCatch() {
+  componentDidCatch(error: unknown) {
+    // a chunk that would not load is a warning (a redeploy), anything else a render crash (docs/web.md "Error reports")
+    reportBoundary(error, "overlay_boundary", isChunkError(error));
     // left open, an open request would not change the state, and the entry points would do nothing until a reload
     this.props.onClose();
   }

@@ -4,6 +4,7 @@
 import { Component, type ReactNode } from "react";
 import { Button } from "../ui/atoms";
 import { t } from "../i18n";
+import { reportBoundary } from "../lib/error-reports";
 
 const RELOADED = "persona.chunkReload";
 
@@ -35,7 +36,12 @@ export class PageBoundary extends Component<{ children: ReactNode; page: string 
   }
 
   componentDidCatch(error: unknown) {
-    if (!reloadsFor(error, lastReload(), Date.now())) return;
+    if (!reloadsFor(error, lastReload(), Date.now())) {
+      // shown to the user: a render crash (fatal), or a chunk that still would not load after the reload (warning). The
+      // first chunk failure, which only reloads, is the expected cost of a redeploy and not reported.
+      reportBoundary(error, "page_boundary", isChunkError(error));
+      return;
+    }
     try {
       sessionStorage.setItem(RELOADED, String(Date.now()));
     } catch {

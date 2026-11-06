@@ -33,6 +33,11 @@ vi.mock("./views/Home", () => ({ Home: () => null }));
 vi.mock("./views/NewWorktree", () => ({ NewWorktreeHost: () => null }));
 vi.mock("./views/SidePanel", () => ({ SidePanel: () => null }));
 vi.mock("./views/ShortcutHelp", () => ({ ShortcutHelp: () => null }));
+const reported = vi.hoisted(() => ({ list: [] as { boundary: string; chunk: boolean }[] }));
+vi.mock("./lib/error-reports", async (load) => ({
+  ...(await load<typeof import("./lib/error-reports")>()),
+  reportBoundary: (_e: unknown, boundary: string, chunk: boolean) => void reported.list.push({ boundary, chunk }),
+}));
 vi.mock("./lib/store", async (load) => ({ ...(await load<typeof import("./lib/store")>()), connect: () => {}, disconnect: () => {} }));
 import { refresh, reset } from "./lib/store";
 import { setToken } from "./lib/api";
@@ -71,6 +76,7 @@ beforeEach(() => {
   seen.palette = seen.newAgent = undefined;
   seen.mounts = seen.failed = 0;
   seen.fail = seen.failNewAgent = false;
+  reported.list = [];
   vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(answers[new URL(url, "http://x").pathname] ?? {}), { headers: { "Content-Type": "application/json" } }))));
   history.replaceState(null, "", "/");
   host = document.createElement("div");
@@ -123,6 +129,8 @@ describe("the palette and the new-agent dialog", () => {
     await until(() => expect(seen.failed).toBeGreaterThan(0));
     await flush();
     expect(seen.palette).toBeUndefined();
+    // reported as a warning (a chunk that would not load); the overlay still closes as before
+    expect(reported.list[0]).toEqual({ boundary: "overlay_boundary", chunk: true });
     // the rest of the shell still works
     await act(async () => openNewAgent({}));
     await until(() => expect(seen.newAgent).toBe(true));

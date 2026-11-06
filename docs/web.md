@@ -921,6 +921,15 @@ hello's `features`, `hub_name` and `mesh` are kept in the store. Lark through th
 
 **Request failures** (#3728): `errorText` in `lib/api.ts` explains common failures in the page's language. A 404, `not_found` or a bare `not found` says the item does not exist or this version does not support it yet, and suggests refreshing or checking whether the hub or the computer needs an update; 502 / 503 / 504 say the hub cannot answer right now, other 5xx that the service hit an error, both with retry and check-that-it-runs advice. The HTTP status and the hub's original text stay in brackets for diagnosis; the terminal list's error line stays on one line and shows the whole text on hover. Wrong credentials and other business errors show as before. Code that decides on compatibility or an error code reads the raw `ApiError`, never the explained text.
 
+## Error reports (#5533)
+
+The page reports its own errors to `POST /api/v1/error-reports` (`lib/error-reports.ts`, wired up in `lib/error-reports-start.ts`; format and rules in [protocol.md](protocol.md) "Error reports"). No UI, no strings.
+
+- **Captured**: `window` `error` events (not a cross-origin "Script error." with no error), `unhandledrejection` (not an `AbortError`), and what the two boundaries catch: `PageBoundary` reports a render crash as `fatal` and a chunk that still would not load after its one reload as `warning`; the first chunk failure, which only reloads (a redeployed hub), is not reported. `OverlayBoundary` reports a failed chunk as `warning`, anything else `fatal`. Both draw and close exactly as before. Each report is `source: "web"`, `kind: "exception"`, a fresh UUID, `os` / `os_version` from the user agent (coarse), no `release` / `build` (the bundle has no version of its own) and no `device_model`; the stack becomes frames (V8 and Firefox / Safari formats), innermost last, `file` the script URL's path only, `in_app` for same-origin `/assets/` (`/src/` in dev).
+- **No user content**: the error's name, message and stack only, with URLs cut to their path and queries, fragments and e-mail addresses taken out (the hub scrubs again). The last 30 breadcrumbs: the route's name on navigation (never ids or query), and each failed hub request as `METHOD /path/:id status` (`0` / `network` when it did not get there; path segments that aren't the API's own words become `:id`; the reports' own requests are left out).
+- **Gate**: sent only while the hub's hello `features` has `error_reports`. Before the first hello reports are kept; a hello without it (or a `{"enabled": false}` answer) drops what was kept, and nothing more is kept on that page.
+- **Queue**: `localStorage` `persona.errorReports`, at most 50, none older than 7 days; what an earlier page load left is sent with `previous_launch`. Sent on the hello with the feature and 2 seconds after a new report, 20 a request; a 2xx removes them, a network failure, 5xx, 408 or 429 keeps them for the next try, any other 4xx drops them. The same message and top frame within 5 seconds is kept once. Reporting never throws, and an error while reporting is not reported.
+
 ## Install as an App (PWA, #1772)
 
 The web app can be installed on a phone's home screen / a computer's desktop and opens in its own window, with the same icon and name as the iOS App.
@@ -1218,10 +1227,7 @@ Compared item by item with iOS as the reference and Android for comparison. #297
 | Interface style, layout | N/A | — | The web has only Beautiful UI; new styles become new options per CLAUDE.md |
 | Avatar | Yes | #433 | Settings › General, profile page |
 | Model providers, model configuration | Yes | — | |
-| Model provider "Usage" | Yes | #1326 | In the provider dialog, above "Availability" |
-| Assistant (proactive work, About me, memory, where it runs) | Yes | #297 | Changing the assistant's machine is not done (iOS can't change it either) |
-| Claude Code settings, Codex settings | Yes | #297 | |
-| Connectors: mail | Yes | #297, #2968 | Gmail and Outlook can only be added on the phone (the sign-in callback is a custom scheme only the App can receive); Outlook''t saved; topic groups can't send in this mode (same as iOS) |
+| Model provider "Usage" | Yes | #1326 | In the provider dialog, above "Availability""Brave Climb") word-encoded text: read and send | Yes | #3102 | The input box has no draft and the mode isn't saved; topic groups can't send in this mode (same as iOS) |
 | Connectors: Lark bot (status, credentials, pairing, what it can do) | Yes | #1325 | Settings › Connectors, opens as a dialog; copying the pairing code uses the clipboard (falls back to execCommand over http) |
 | hub version and updates (check, update, update now, auto-update, history, Docker commands) | Yes | #1325, #2897 | Settings › hub; the hub notice row below the filter bar in the sidebar's Agents block (`views/agents/HubNoticeRow.tsx`, chosen by `hubNotice` in `lib/hub-update.ts`); the two App / hub version compatibility notices don't apply to the web (the hub hosts the web app itself) |
 | Assistant Skills | Yes | #1325 | Settings › Assistant, read-only (same as iOS) |

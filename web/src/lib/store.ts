@@ -121,7 +121,8 @@ function shallowEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-const subscribe = (l: () => void) => {
+/** Called after every change of the state (lib/error-reports-start.ts watches the hello's features). */
+export const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => {
     listeners.delete(l);

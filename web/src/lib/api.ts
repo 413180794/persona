@@ -1,6 +1,7 @@
 // REST client for the hub. The page is served by the hub itself (same origin), so every path is relative.
 
 import { BASE } from "./base";
+import { requestCrumb } from "./error-reports";
 import { currentLanguage, t } from "../i18n";
 import type { Item } from "./types";
 
@@ -103,7 +104,15 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown; to
     headers.set("Content-Type", "application/json");
     body = JSON.stringify(init.json);
   }
-  const res = await fetch(`${BASE}/api/v1${path}`, { ...init, headers, body });
+  const method = init.method ?? "GET";
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/v1${path}`, { ...init, headers, body });
+  } catch (e) {
+    // a breadcrumb for an error report: the method, the path's pattern (no ids, no query) and that it did not get there
+    if (!isAbort(e)) requestCrumb(method, path, 0);
+    throw e;
+  }
   const text = await res.text();
   let data: Record<string, unknown> = {};
   let isJson = false;
@@ -115,6 +124,7 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown; to
     isJson = false;
   }
   if (!res.ok) {
+    requestCrumb(method, path, res.status);
     if (res.status === 401 && init.token === undefined) onUnauthorized();
     const msg = typeof data.error === "string" && data.error ? data.error : `HTTP ${res.status}`;
     throw new ApiError(res.status, msg, data, isJson, res.headers?.get("X-Request-Id") ?? undefined);

@@ -27,6 +27,7 @@ if (target) {
   const { ScreenView } = await import("./screen/ScreenView");
   root.render(createElement(StrictMode, null, createElement(ScreenView, { target })));
 } else {
-  const [{ ExtensionThemeProvider }, { App }] = await Promise.all([import("./ui/ExtensionThemePicker"), import("./App")]);
+  // Error reports (docs/web.md "Error reports") start with the app: they go out only if the hub's hello has the feature.
+  const [{ ExtensionThemeProvider }, { App }] = await Promise.all([import("./ui/ExtensionThemePicker"), import("./App"), import("./lib/error-reports-start")]);
   root.render(createElement(StrictMode, null, createElement(ExtensionThemeProvider, null, createElement(App))));
 }
