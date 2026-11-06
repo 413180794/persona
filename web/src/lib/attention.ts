@@ -145,6 +145,34 @@ export function trackTurns(prev: ReadonlyMap<string, Turn>, sessions: Session[],
 /** How long a finished turn must stay finished before it sounds (the status flaps working → done → working around a turn). */
 export const SETTLE_MS = 1500;
 
+/** How long finished turns gather before their notification (#4945): it goes out once none has joined for
+ *  BATCH_QUIET_MS (after its own SETTLE_MS), and at the latest BATCH_MAX_MS after the first joined. */
+export const BATCH_QUIET_MS = 1500;
+export const BATCH_MAX_MS = 5000;
+
+/** When a batch whose first turn joined at `firstAt` and last at `lastAt` (ms) is posted. */
+export function batchDue(firstAt: number, lastAt: number): number {
+  return Math.min(lastAt + BATCH_QUIET_MS, firstAt + BATCH_MAX_MS);
+}
+
+/** How many agents a batch's notification names; the rest are "and others". */
+export const BATCH_NAMES = 3;
+
+/** How a batch of finished turns is told: nothing, the one agent's own notification, or one for all of them. */
+export type FinishedBatch = { kind: "none" } | { kind: "one"; key: string } | { kind: "many"; keys: string[]; names: string[]; more: boolean };
+
+/**
+ * How a batch of finished turns is told (#4945). `keys` are the agents in the order they finished (repeats are
+ * fine), `unread` the names of the sessions that are still finished unread, by agentKey: one seen or gone meanwhile is left
+ * out. None left: nothing; one: its own notification, as before; more: one notification naming the first `max`.
+ */
+export function finishedBatch(keys: readonly string[], unread: ReadonlyMap<string, string>, max = BATCH_NAMES): FinishedBatch {
+  const left = [...new Set(keys)].filter((k) => unread.has(k));
+  if (!left.length) return { kind: "none" };
+  if (left.length === 1) return { kind: "one", key: left[0] };
+  return { kind: "many", keys: left, names: left.slice(0, max).map((k) => unread.get(k)!), more: left.length > max };
+}
+
 /** Where the user is looking: the session on the page, and whether the window is the one they are using. */
 export interface Viewing {
   /** agentKey of the conversation on the page, if any. */

@@ -1,12 +1,12 @@
 // The DOM side of the attention signals (#2332, logic in lib/attention.ts): the tab title, the favicon's badge, and the
 // optional sounds, and the system notifications (#2971, lib/notify.ts). `<AttentionSignals>` is what App renders for them.
 import { useEffect, useRef } from "react";
-import { attentionReason, sessionCan, stateOf } from "./format";
+import { attentionReason, sessionCan, sessionTitle, stateOf } from "./format";
 import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
-import { answeredTags, attentionSoundEnabled, badgeText, detectNewCards, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
-import { claimNotification, closeNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
+import { answeredTags, attentionSoundEnabled, badgeText, batchDue, finishedBatch, detectNewCards, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
+import { claimNotification, closeNotification, dismissNotification, releaseClaim, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
 import { failedTagsOver, listenForNotificationClicks } from "./notification-answer";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
@@ -166,8 +166,9 @@ const ASK_TITLE = {
 /** A system notification for the event (Settings › Notifications): only while no tab of the app is in front (that one's title, badge
  *  and sounds cover it), and once for all the open tabs. Clicking it opens the agent's conversation. `card` is the new
  *  card of a session that was already "Needs you" (#4058): it replaces the agent's earlier "Needs you" one (same tag), and the tabs
- *  share it by the card, so a transition just posted does not keep it back. Returns the card a "Needs you" one is about. */
-function notify(s: Session, kind: "needs" | "finished", card?: Interaction): string | undefined {
+ *  share it by the card, so a transition just posted does not keep it back. Undefined when it was not posted, else
+ *  the card a "Needs you" one is about. */
+function notify(s: Session, kind: "needs" | "finished", card?: Interaction): { about?: string } | undefined {
   if (inFront() || otherTabInFront() || !systemNotifyActive()) return;
   const tag = `${agentKey(s)}#${kind}`;
   if (!claimNotification(card ? `${tag}@${card.id}` : tag)) return;
@@ -191,7 +192,29 @@ function notify(s: Session, kind: "needs" | "finished", card?: Interaction): str
   // filled in first (fields: as the hub's push and the overview's quick answers); the rest need the conversation
   const ix = waiting.ix?.kind === "permission" && !waiting.ix.fields?.length && sessionCan(s, "approve") ? waiting.ix.id : undefined;
   postNotification({ title, body, tag, url: href(route), icon, ix }, () => navigate(route));
-  return waiting.ix?.id;
+  return { about: waiting.ix?.id };
+}
+
+/** The tag of the one notification for several finished turns (#4945): the next batch replaces it. */
+const BATCH_TAG = "finished#batch";
+/** What the tabs claim a batch by: its agents, so the tabs post one batch once. */
+const batchClaim = (keys: readonly string[]) => `${BATCH_TAG}@${[...keys].sort().join(",")}`;
+
+/** No notification goes out from any tab now: one of them is in front, or they are off. */
+const unannounced = () => inFront() || otherTabInFront() || !systemNotifyActive();
+
+/** One notification for several finished turns (#4945), under the same rules as notify's; clicking it opens the overview.
+ *  `names` are the first few of `keys` (finishedBatch), `more` that there are others. The caller checked unannounced. */
+function notifyBatch(keys: readonly string[], names: readonly string[], more: boolean): void {
+  // this tab's own single ones are told in the batch now; their claims stay, another tab may hold them
+  for (const k of keys) dismissNotification(`${k}#finished`);
+  // the tabs see the same batch: the first to post it does
+  if (!claimNotification(batchClaim(keys))) return;
+  const list = names.join(t("notify.finished_batch_separator"));
+  const title = t("notify.finished_batch_title", { count: keys.length, names: more ? t("notify.finished_batch_more", { names: list }) : list });
+  const route = { name: "home" } as const;
+  const icon = document.querySelector<HTMLLinkElement>(ICONS)?.dataset.original ?? document.querySelector<HTMLLinkElement>(ICONS)?.href;
+  postNotification({ title, body: t("notify.finished_batch_body"), tag: BATCH_TAG, url: href(route), icon }, () => navigate(route));
 }
 
 /**
@@ -252,6 +275,9 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
   const cards = useRef<ReadonlyMap<string, number> | undefined>(undefined);
   const announced = useRef(new Map<string, string>());
   const bare = useRef(new Set<string>());
+  // finished turns gathering for one notification (#4945), and the agents the finished notification on screen names
+  const batch = useRef<{ keys: string[]; firstAt: number; timer?: ReturnType<typeof setTimeout> }>({ keys: [], firstAt: 0 });
+  const batched = useRef<string[]>([]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -267,6 +293,12 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     // while the session waits on another; and a Could not allow one about a card that is gone
     const settled = new Set([...settledTags(prev.current, next), ...answeredTags(announced.current, interactions), ...failedTagsOver(interactions)]);
     settled.forEach(closeNotification);
+    // every agent the batch notification names was seen (or is gone): it goes too (a single one goes by settledTags)
+    if (batched.current.length && !batched.current.some((k) => next.get(k) === "unread")) {
+      releaseClaim(batchClaim(batched.current)); // the same agents finishing again post again
+      batched.current = [];
+      closeNotification(BATCH_TAG);
+    }
     for (const tag of settled) if (tag.endsWith("#needs")) announced.current.delete(tag.slice(0, -"#needs".length));
     prev.current = next;
     turns.current = trackTurns(turns.current, sessions, now);
@@ -282,6 +314,42 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
       if (allow.current(Date.now())) play(kind);
     };
     const find = (k: string) => latest.current.find((x) => agentKey(x) === k);
+    // The finished turns of a batch make one notification (#4945): one alone is its own, as before.
+    const flush = () => {
+      const keys = batch.current.keys;
+      batch.current = { keys: [], firstAt: 0 };
+      const unread = new Map(latest.current.filter((x) => stateOf(x) === "unread").map((x) => [agentKey(x), sessionTitle(x)]));
+      if (finishedBatch(keys, unread).kind === "none") return;
+      // it replaces the batch notification on screen: the agents that one named and are still unseen stay in it
+      const shown = finishedBatch([...batched.current, ...keys], unread);
+      if (shown.kind === "none" || unannounced()) return;
+      // remembered whichever tab won the claim, so every tab forms the next batch from the same agents
+      if (shown.kind === "one") {
+        const s = find(shown.key);
+        if (!s) return;
+        notify(s, "finished");
+        batched.current = [shown.key]; // a batch after it, while it is unseen, takes it in
+      } else {
+        notifyBatch(shown.keys, shown.names, shown.more);
+        batched.current = shown.keys;
+      }
+    };
+    const gather = (k: string) => {
+      const at = Date.now();
+      const b = batch.current;
+      if (!b.keys.length) b.firstAt = at;
+      b.keys.push(k);
+      if (b.timer) {
+        clearTimeout(b.timer);
+        timers.current.delete(b.timer);
+      }
+      const timer = setTimeout(() => {
+        timers.current.delete(timer);
+        flush();
+      }, batchDue(b.firstAt, at) - at);
+      b.timer = timer;
+      timers.current.add(timer);
+    };
     const urgent = wanted.filter((e) => e.kind === "needs");
     // a card that follows its session's "Needs you" rewrites that notification without a second sound
     const first = pickEvent(urgent.filter((e) => !e.follows));
@@ -291,7 +359,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     for (const e of urgent) {
       const s = find(e.key);
       if (!s || isMuted(s, getState().mutes)) continue;
-      const about = notify(s, "needs", e.card);
+      const about = notify(s, "needs", e.card)?.about;
       if (about) announced.current.set(e.key, about);
     }
     // A finished turn speaks once it has stayed finished (the status flaps working → done → working around a turn).
@@ -302,7 +370,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
         const s = find(done.key);
         if (!s || stateOf(s) !== "unread") return;
         if (!first) speak("finished", done.key);
-        notify(s, "finished");
+        gather(done.key);
       }, SETTLE_MS);
       timers.current.add(t);
     }
@@ -310,7 +378,11 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
 
   useEffect(() => {
     const pending = timers.current;
-    return () => pending.forEach(clearTimeout);
+    const gathering = batch;
+    return () => {
+      pending.forEach(clearTimeout);
+      gathering.current = { keys: [], firstAt: 0 }; // nothing gathered is posted by a later mount
+    };
   }, []);
 }
 

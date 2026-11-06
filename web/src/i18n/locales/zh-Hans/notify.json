@@ -9,5 +9,9 @@
   "screen_title": "{name} 在终端里等你",
   "elicitation_title": "{name} 有 MCP 请求等你处理",
   "allow_failed": "没能允许",
-  "deny_failed": "没能拒绝"
+  "deny_failed": "没能拒绝",
+  "finished_batch_title": "{count} 个任务做完了 · {names}",
+  "finished_batch_more": "{names} 等",
+  "finished_batch_body": "点开看总览",
+  "finished_batch_separator": "、"
 }

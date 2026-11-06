@@ -293,7 +293,7 @@ export function claimNotification(tag: string, now = Date.now()): boolean {
 }
 
 /** Forgets that `tag` was posted just now (its notification was taken back), so the next event for it posts. */
-function releaseClaim(tag: string): void {
+export function releaseClaim(tag: string): void {
   const seen = readJSON<Record<string, number>>(NOTIFIED_KEY);
   if (!seen || !(tag in seen)) return;
   delete seen[tag];
@@ -405,6 +405,12 @@ const posted = new Map<string, Notification>();
 export function closeNotification(tag: string): void {
   // its event is over: the next one for the same agent and kind may post at once, not after NOTIFIED_WINDOW_MS
   releaseClaim(tag);
+  closePageNotification(tag);
+  closeWorkerNotifications(tag);
+}
+
+/** Closes this page's notification for `tag` and the worker's, keeping the tabs' claim on it (another tab may hold it). */
+export function dismissNotification(tag: string): void {
   closePageNotification(tag);
   closeWorkerNotifications(tag);
 }

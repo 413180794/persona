@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answeredTags, badgeText, detectNewCards, FORGET_CARD_MS, detectTransitions, MIN_GAP_MS, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle, trackTurns } from "./attention";
+import { answeredTags, badgeText, BATCH_MAX_MS, BATCH_QUIET_MS, batchDue, finishedBatch, detectNewCards, FORGET_CARD_MS, detectTransitions, MIN_GAP_MS, pickEvent, rateLimiter, SETTLE_MS, suppressed, tabTitle, trackTurns } from "./attention";
 import { stateCounts } from "./sessions";
 import { agentKey } from "./pins";
 import type { AgentMutes } from "./agent-groups";
@@ -205,5 +205,29 @@ describe("已在需要你时又来一张卡（#4058）", () => {
     const later = T + FORGET_CARD_MS;
     const { ids: old } = detectNewCards(seen(["1"]), [], waiting, waiting, sessions, none, later);
     expect(detectNewCards(old, [card("1", "a")], waiting, waiting, sessions, none, later).events).toHaveLength(1);
+  });
+});
+
+describe("一批做完的怎么显示（#4945）", () => {
+  const unread = new Map([["m/a", "A"], ["m/b", "B"], ["m/c", "C"], ["m/d", "D"]]);
+  it("一个都不剩：不发", () => {
+    expect(finishedBatch([], unread)).toEqual({ kind: "none" });
+    expect(finishedBatch(["m/x", "m/y"], unread)).toEqual({ kind: "none" });
+  });
+  it("只剩一个：走原来的单条", () => {
+    expect(finishedBatch(["m/a"], unread)).toEqual({ kind: "one", key: "m/a" });
+    expect(finishedBatch(["m/x", "m/b", "m/b"], unread)).toEqual({ kind: "one", key: "m/b" });
+  });
+  it("多个：合成一条，按做完的顺序列名字，重复的只算一次", () => {
+    expect(finishedBatch(["m/c", "m/a", "m/c"], unread)).toEqual({ kind: "many", keys: ["m/c", "m/a"], names: ["C", "A"], more: false });
+  });
+  it("名字最多列三个，多的记一个「等」", () => {
+    expect(finishedBatch(["m/a", "m/b", "m/c"], unread)).toMatchObject({ names: ["A", "B", "C"], more: false });
+    expect(finishedBatch(["m/a", "m/b", "m/c", "m/d"], unread)).toMatchObject({ keys: ["m/a", "m/b", "m/c", "m/d"], names: ["A", "B", "C"], more: true });
+  });
+  it("安静一小段就发，最多等一小段", () => {
+    expect(batchDue(0, 0)).toBe(BATCH_QUIET_MS);
+    expect(batchDue(0, 1000)).toBe(1000 + BATCH_QUIET_MS);
+    expect(batchDue(0, BATCH_MAX_MS)).toBe(BATCH_MAX_MS);
   });
 });

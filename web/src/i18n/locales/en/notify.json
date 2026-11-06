@@ -9,5 +9,9 @@
   "screen_title": "{name} is waiting for you in the terminal",
   "elicitation_title": "{name} has an MCP request for you",
   "allow_failed": "Couldn't allow",
-  "deny_failed": "Couldn't deny"
+  "deny_failed": "Couldn't deny",
+  "finished_batch_title": "{count} tasks finished · {names}",
+  "finished_batch_more": "{names} and others",
+  "finished_batch_body": "Open the overview",
+  "finished_batch_separator": ", "
 }

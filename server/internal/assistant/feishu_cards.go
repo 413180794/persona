@@ -1424,12 +1424,8 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 			s.botNote(ctx, messageID, err.Error())
 			return true, ""
 		}
-		var b strings.Builder
-		b.WriteString(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": feishubot.EscapeMarkdown(s.targetLabel(ctx, t))}))
-		if running := len(s.channelRuns(channel.Feishu)); running > 0 {
-			b.WriteString(i18n.T(l, "assistant-feishu_cards.status_waiting", i18n.Args{"count": running}))
-		}
-		reply(feishubot.NewCard("", "", i18n.T(l, "assistant-feishu_cards.status_title")).Markdown(strings.TrimSpace(b.String())), "")
+		card, fallback := s.statusCard(ctx, t)
+		reply(card, fallback)
 	default:
 		// A command the bot does not know goes on as it is (an agent's own, like /compact). A bare one a letter off
 		// one of the bot's (/stpo for /stop) sent to a Persona conversation would sit in line behind the turn it
@@ -1451,6 +1447,118 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		return false, text
 	}
 	return true, ""
+}
+
+// statusPendingMax bounds a /status card's pending rows so a long queue can't get the card refused.
+const statusPendingMax = 5
+
+var ixIcons = map[string]string{proto.IxQuestion: "❓ ", proto.IxPlan: "📋 ", proto.IxPermission: "🔐 ", proto.IxScreen: "🖥 ", proto.IxElicitation: "📝 "}
+
+// pendingQuestion is one line saying what a pending interaction waits for; "" when it says nothing.
+func pendingQuestion(ix proto.Interaction) string {
+	switch ix.Kind {
+	case proto.IxQuestion:
+		return strings.TrimSpace(questionSummary(ix))
+	case proto.IxPlan:
+		return strings.TrimSpace(planTitle(ix.Plan))
+	case proto.IxPermission:
+		return strings.TrimSpace(toolDisplayName(ix.ToolName) + " " + oneLine(ix.Summary))
+	}
+	return strings.TrimSpace(oneLine(ix.Summary))
+}
+
+// statusCard is /status plus the same content as plain text (the fallback when Feishu refuses the card): the
+// target's work state (offline / unknown never reads as idle), last activity, goal and pending questions. With the
+// fleet online both sources are local; the web button is built once and is nil without a public_url.
+func (s *Service) statusCard(ctx context.Context, t botTarget) (*feishubot.Card, string) {
+	l := s.botLang(ctx)
+	card := feishubot.NewCard("", "", i18n.T(l, "assistant-feishu_cards.status_title"))
+	rt, err := s.resolveBotTarget(ctx, t) // one resolve: the target line reuses its label, not targetLabel's
+	label := i18n.T(l, "assistant-feishu.not_found")
+	switch {
+	case err == nil && t.Kind == targetJarvis && rt.isNew:
+		label = i18n.T(l, "assistant-feishu.new_chat_next")
+	case err == nil:
+		label = rt.label
+	}
+	var head, fb strings.Builder
+	to := i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": feishubot.EscapeMarkdown(label)})
+	head.WriteString(to)
+	fmt.Fprintf(&fb, "%s\n", fallbackText.Replace(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": label})))
+	if running := len(s.channelRuns(channel.Feishu)); running > 0 {
+		waiting := i18n.T(l, "assistant-feishu_cards.status_waiting", i18n.Args{"count": running})
+		head.WriteString(waiting)
+		fb.WriteString(fallbackText.Replace(waiting))
+	}
+	card.Markdown(strings.TrimSpace(head.String()))
+	if err != nil || rt.isNew || rt.session.SessionID == "" {
+		return card, strings.TrimSpace(fb.String())
+	}
+
+	sess := rt.session
+	if list, err := s.sessions(ctx, rt.machine); err == nil {
+		for _, x := range list {
+			if x.SessionID == sess.SessionID {
+				sess = x
+				break
+			}
+		}
+	}
+	stateKey := "assistant-feishu_cards.status_state_offline" // offline, unknown or unset: never an idle machine
+	switch sess.State {
+	case proto.StateNeedsYou:
+		stateKey = "assistant-feishu_cards.status_state_waiting"
+	case proto.StateWorking:
+		stateKey = "assistant-feishu_cards.status_state_working"
+	case proto.StateUnread, proto.StateIdle:
+		stateKey = "assistant-feishu_cards.status_state_idle"
+	}
+	state := i18n.T(l, stateKey)
+	line := state
+	fmt.Fprintf(&fb, "%s\n", fallbackText.Replace(state))
+	if sess.LastText != "" {
+		last := clip(oneLine(sess.LastText), 90)
+		line += "\n" + feishubot.EscapeMarkdown(last)
+		fb.WriteString(last + "\n")
+	}
+	if g := sess.Goal; g != nil && g.Objective != "" && (g.Status == "" || g.Status == proto.GoalActive) {
+		goal := i18n.T(l, "assistant-feishu_cards.status_goal", i18n.Args{"objective": feishubot.EscapeMarkdown(clip(oneLine(g.Objective), 90))})
+		line += "\n" + goal
+		fb.WriteString(fallbackText.Replace(goal) + "\n")
+	}
+	card.Markdown(line)
+
+	var pending []proto.Interaction
+	for _, ix := range s.pendingInteractions() {
+		if ix.MachineID == rt.machine && ix.SessionID == sess.SessionID && pendingQuestion(ix) != "" {
+			pending = append(pending, ix)
+		}
+	}
+	pendingTitle := i18n.T(l, "assistant-feishu_cards.status_pending")
+	card.Markdown(pendingTitle)
+	fb.WriteString(fallbackText.Replace(pendingTitle) + "\n")
+	if len(pending) == 0 {
+		none := i18n.T(l, "assistant-feishu_cards.status_no_pending")
+		card.Markdown(none)
+		fb.WriteString(none + "\n")
+		return card, strings.TrimSpace(fb.String())
+	}
+	open := s.openButton(ctx, rt.machine, sess.SessionID) // every row is the same conversation: build it once
+	shown := pending
+	if len(pending) > statusPendingMax {
+		shown = pending[:statusPendingMax]
+	}
+	for _, ix := range shown {
+		q := clip(pendingQuestion(ix), 120)
+		card.Markdown(ixIcons[ix.Kind] + "**" + feishubot.EscapeMarkdown(q) + "**").Buttons(open)
+		fmt.Fprintf(&fb, "- %s%s\n", ixIcons[ix.Kind], fallbackText.Replace(q))
+	}
+	if more := len(pending) - len(shown); more > 0 {
+		note := i18n.T(l, "assistant-feishu_cards.status_more_pending", i18n.Args{"count": more})
+		card.Note(note)
+		fb.WriteString(note + "\n")
+	}
+	return card, strings.TrimSpace(fb.String())
 }
 
 // stopOutcome is what interrupting a conversation's current turn came to; the caller renders it as a command note

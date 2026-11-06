@@ -9,5 +9,9 @@
   "screen_title": "{name} がターミナルで待っています",
   "elicitation_title": "{name} に MCP リクエストがあります",
   "allow_failed": "許可できませんでした",
-  "deny_failed": "拒否できませんでした"
+  "deny_failed": "拒否できませんでした",
+  "finished_batch_title": "{count} 件のタスクが完了しました · {names}",
+  "finished_batch_more": "{names} など",
+  "finished_batch_body": "概要を開く",
+  "finished_batch_separator": "、"
 }

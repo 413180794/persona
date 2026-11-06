@@ -103,6 +103,20 @@ describe("收回后同一件事马上能再弹（#3458 review）", () => {
   });
 });
 
+describe("一批里收掉单条时不放开认领（#4945）", () => {
+  it("dismiss 只收通知，别的标签页抢先发的单条照样只发一次", async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+    vi.stubGlobal("navigator", {});
+    const { claimNotification, dismissNotification } = await import("./notify");
+    const now = 1_000_000;
+    expect(claimNotification("m/a#finished", now)).toBe(true); // another tab posted it alone
+    dismissNotification("m/a#finished"); // this tab folds it into a batch
+    expect(claimNotification("m/a#finished", now + 1000)).toBe(false); // the claim is kept
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("需要你的通知写清楚问什么（#4056）", () => {
   const asks = { ...words, asks: (k: Interaction["kind"], n: string) => `${n} ${k}` };
   const s = { machine_id: "m", session_id: "a", title: "修登录", cwd: "/p", last_text: "我先看一下" };
