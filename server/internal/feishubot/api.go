@@ -366,6 +366,9 @@ func (c *Client) UserName(ctx context.Context, openID string) (string, error) {
 	return out.User.Name, err
 }
 
+// ErrTooLarge: a message's image or file is larger than the download takes.
+var ErrTooLarge = errors.New("feishu download: too large")
+
 // Resource downloads an image or file of a message the bot received (kind "image" or "file"); at most limit bytes.
 func (c *Client) Resource(ctx context.Context, messageID, key, kind string, limit int64) ([]byte, string, error) {
 	for attempt := 0; ; attempt++ {
@@ -399,13 +402,17 @@ func (c *Client) Resource(ctx context.Context, messageID, key, kind string, limi
 			}
 			return nil, "", &APIError{Op: "download", Code: env.Code, Msg: env.Msg}
 		}
+		if resp.ContentLength > limit { // said up front: refused without downloading it
+			resp.Body.Close()
+			return nil, "", fmt.Errorf("%w: larger than %d MB", ErrTooLarge, limit>>20)
+		}
 		b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 		resp.Body.Close()
 		if err != nil {
 			return nil, "", err
 		}
 		if int64(len(b)) > limit {
-			return nil, "", fmt.Errorf("feishu download: larger than %d MB", limit>>20)
+			return nil, "", fmt.Errorf("%w: larger than %d MB", ErrTooLarge, limit>>20)
 		}
 		return b, ct, nil
 	}

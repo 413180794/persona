@@ -83,5 +83,7 @@
   "cot_tools_other": "Called tools {count} times",
   "cot_tools_paragraph": "Tools",
   "missing_pieces_one": "{count} part of this answer couldn't be sent to Lark (part {pieces}); see the whole answer in the app.",
-  "missing_pieces_other": "{count} parts of this answer couldn't be sent to Lark (parts {pieces}); see the whole answer in the app."
+  "missing_pieces_other": "{count} parts of this answer couldn't be sent to Lark (parts {pieces}); see the whole answer in the app.",
+  "file_too_large": "These files were too large to pass on: {files}. Put them on a computer and tell the assistant the path.",
+  "file_too_large_only": "the file is too large ({files}). Put it on a computer and tell the assistant the path."
 }

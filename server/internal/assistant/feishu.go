@@ -873,6 +873,7 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 		in.Forward = s.botForward(ctx, msg.MessageID)
 	}
 	var images []proto.Image
+	var tooLarge []string // files too large to pass on
 	for _, bm := range media {
 		md := bm.Media
 		if md.Kind == "image" {
@@ -903,7 +904,8 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 			}
 		}
 		var saved struct {
-			Path string `json:"path"`
+			Path     string `json:"path"`
+			TooLarge bool   `json:"too_large"`
 		}
 		if err := s.appCall(ctx, AppFeishu, FeishuSave, map[string]any{"message_id": bm.of, "key": md.Key, "kind": md.Kind, "name": md.Name,
 			"machine_id": rt.machine}, &saved); err != nil {
@@ -913,6 +915,10 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 			}
 			return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-feishu.save_file", i18n.Args{"machine": rt.machineName}), err)
 		}
+		if saved.TooLarge || saved.Path == "" {
+			tooLarge = append(tooLarge, md.Name) // left out: the rest of the message goes, and a line says so
+			continue
+		}
 		in.Files = append(in.Files, saved.Path)
 	}
 	if s.botRecalled(msg.MessageID) { // recalled while its pictures and files came down
@@ -921,7 +927,17 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 	}
 	text := prompts.RenderBotMessage(in)
 	if strings.TrimSpace(content.Text) == "" && in.Quote == nil && in.Forward == "" && len(images) == 0 && len(in.Files) == 0 {
+		if len(tooLarge) > 0 {
+			return errors.New(i18n.T(s.botLang(ctx), "assistant-feishu.file_too_large_only", i18n.Args{"files": strings.Join(tooLarge, listSep(s.botLang(ctx)))}))
+		}
 		return errors.New(i18n.T(s.botLang(ctx), "assistant-feishu.cannot_read"))
+	}
+	if len(tooLarge) > 0 {
+		defer func() {
+			if started {
+				s.botNote(context.WithoutCancel(ctx), msg.MessageID, i18n.T(s.botLang(ctx), "assistant-feishu.file_too_large", i18n.Args{"files": strings.Join(tooLarge, listSep(s.botLang(ctx)))}))
+			}
+		}()
 	}
 
 	run := &channel.Run{ID: "fb_" + msg.MessageID, Channel: channel.Feishu, ReplyTo: msg.MessageID, Started: time.Now().UTC(), Label: rt.label,
@@ -1275,11 +1291,15 @@ func missingPiecesNote(l i18n.Lang, missing []int) string {
 	for i, n := range missing {
 		nums[i] = strconv.Itoa(n)
 	}
-	sep := "、" // Chinese and Japanese list numbers with an enumeration comma
+	return i18n.T(l, "assistant-feishu.missing_pieces", i18n.Args{"count": len(missing), "pieces": strings.Join(nums, listSep(l))})
+}
+
+// listSep joins the items of a list in l: Chinese and Japanese use an enumeration comma, English ", ".
+func listSep(l i18n.Lang) string {
 	if strings.HasPrefix(string(l), "en") {
-		sep = ", "
+		return ", "
 	}
-	return i18n.T(l, "assistant-feishu.missing_pieces", i18n.Args{"count": len(missing), "pieces": strings.Join(nums, sep)})
+	return "、"
 }
 
 // endFoot is an answer's last line: how it ended, the label and time it took, and how many tools it called (one

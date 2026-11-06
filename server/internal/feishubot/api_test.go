@@ -310,3 +310,25 @@ func TestSendUUIDRetryPolicy(t *testing.T) {
 		})
 	}
 }
+
+// A file whose length is said up front to be over the limit is refused before its body is read.
+func TestResourceTooLargeIsRefusedUnread(t *testing.T) {
+	var wrote atomic.Int64
+	c, _, _, _ := retryAPIClient(t, func(w http.ResponseWriter, r *http.Request, _ *atomic.Int32) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", "4096")
+		w.WriteHeader(http.StatusOK)
+		for i := 0; i < 4; i++ {
+			n, err := w.Write(make([]byte, 1024))
+			wrote.Add(int64(n))
+			if err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		}
+	})
+	_, _, err := c.Resource(context.Background(), "om_x", "file_x", "file", 1024)
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("err %v", err)
+	}
+}

@@ -165,6 +165,9 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 			return nil, noDevice(a.MachineID)
 		}
 		data, _, err := api.Resource(ctx, a.MessageID, a.Key, a.Kind, botFileMax)
+		if errors.Is(err, feishubot.ErrTooLarge) {
+			return map[string]any{"too_large": true}, nil // the rest of the message still goes
+		}
 		if err != nil {
 			return nil, err
 		}

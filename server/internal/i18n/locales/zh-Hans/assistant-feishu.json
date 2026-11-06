@@ -83,5 +83,7 @@
   "cot_tools_other": "已调用 {count} 次工具",
   "cot_tools_paragraph": "调用工具",
   "missing_pieces_one": "这条回答有 {count} 段没能发到飞书（第 {pieces} 段），完整内容在 App 里看。",
-  "missing_pieces_other": "这条回答有 {count} 段没能发到飞书（第 {pieces} 段），完整内容在 App 里看。"
+  "missing_pieces_other": "这条回答有 {count} 段没能发到飞书（第 {pieces} 段），完整内容在 App 里看。",
+  "file_too_large": "这些文件太大，没交给助手：{files}。可以放到电脑上，再告诉它路径。",
+  "file_too_large_only": "文件太大（{files}），可以放到电脑上，再告诉助手路径。"
 }
