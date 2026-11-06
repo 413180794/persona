@@ -354,6 +354,22 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 			switch f["type"] {
 			case "subscribe":
 				h.ws[c][sid] = true
+				// What came after since_seq is sent at once, as the hub's sendBacklog does: a line written before the
+				// subscription got here is not missed (#5554). A subscription from 0 gets nothing (the hub would send
+				// the last exchanges: no test here needs them).
+				if since, _ := f["since_seq"].(float64); since > 0 && h.sessions[sid] != nil {
+					var after []proto.Item
+					for _, it := range h.sessions[sid].items {
+						if it.Seq > int(since) {
+							after = append(after, it)
+						}
+					}
+					if len(after) > 0 {
+						ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+						_ = writeJSON(ctx, c, map[string]any{"type": "items", "machine_id": "m", "session_id": sid, "items": after, "backlog": true})
+						cancel()
+					}
+				}
 			case "unsubscribe":
 				delete(h.ws[c], sid)
 			}
