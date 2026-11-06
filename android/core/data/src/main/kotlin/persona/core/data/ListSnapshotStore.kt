@@ -43,3 +43,9 @@ internal suspend inline fun <reified T> ListSnapshotStore?.restore(key: String):
 internal suspend inline fun <reified T> ListSnapshotStore?.save(key: String, value: T) {
     quietly { this?.write(key, JsonCodec.encodeToString(value)) }
 }
+
+/** The pairing's to-dos as last read from its hub, for TasksStore's first paint (#4533). */
+fun ListSnapshotStore.todoCache(): persona.core.domain.tasks.TodoCache = object : persona.core.domain.tasks.TodoCache {
+    override suspend fun read(): List<persona.core.contracts.Todo>? = restore<List<persona.core.contracts.Todo>>("todos")
+    override suspend fun write(todos: List<persona.core.contracts.Todo>) = save("todos", todos)
+}

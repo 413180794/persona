@@ -803,10 +803,25 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 	c := &s.chans
 	c.mu.Lock()
 	prog := c.live[r.ID]
+	if prog != nil {
+		// Its answer is about to go out, so a later message must not fold this run in. It is marked before waiting
+		// for prog.mu: a progress update may hold that lock for a while. When it was marked only after the lock, a
+		// message that came in that time folded this run in, and the same answer went out twice: here, under its own
+		// message, and again in the later message's answer.
+		if c.answering == nil {
+			c.answering = map[string]bool{}
+		}
+		c.answering[r.ID] = true
+	}
 	c.mu.Unlock()
 	if prog == nil {
 		return
 	}
+	defer func() {
+		c.mu.Lock()
+		delete(c.answering, r.ID)
+		c.mu.Unlock()
+	}()
 	prog.mu.Lock()
 	defer prog.mu.Unlock()
 	if prog.finished {
@@ -818,16 +833,7 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 	snap := *r
 	snap.Ext = cloneExt(r.Ext)
 	snap.Folded = slices.Clone(r.Folded)
-	if c.answering == nil {
-		c.answering = map[string]bool{}
-	}
-	c.answering[r.ID] = true // not folded into a later message while its answer goes out
 	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		delete(c.answering, r.ID)
-		c.mu.Unlock()
-	}()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	sink, err := s.sinkFor(ctx, r.Channel)

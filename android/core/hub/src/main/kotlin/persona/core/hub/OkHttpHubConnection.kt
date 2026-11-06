@@ -503,17 +503,29 @@ class OkHttpHubConnection(
             }
         }
 
-        fun remainingLifetime(): Long {
+        fun remainingLifetime(front: Boolean = foreground): Long {
             // Legacy hubs only send control frames, which OkHttp consumes internally.
             // Keep their background behavior until application probes are supported.
-            if (!foreground && "app_ping" !in features) return Long.MAX_VALUE
-            val limit = if (foreground) 45_000L else
+            if (!front && "app_ping" !in features) return Long.MAX_VALUE
+            val limit = if (front) 45_000L else
                 (_heartbeat.value.interval.toLong() + _heartbeat.value.pongTimeout) * 1000L
             return limit - (clockMillis() - lastReceived.get())
         }
 
         fun checkAlive() {
             if (remainingLifetime() <= 0) throw HubFailure(HubError.Timeout)
+        }
+
+        /**
+         * On return to the front or a wake, silence within the background limit is normal (#4695): only that limit
+         * fails here. Past the foreground one the clock starts over and returns true, so an unanswered ping decides.
+         */
+        fun checkAliveAfterBackground(): Boolean {
+            if ("app_ping" !in features) { checkAlive(); return false }
+            if (remainingLifetime(front = false) <= 0) throw HubFailure(HubError.Timeout)
+            if (remainingLifetime() > 0) return false
+            lastReceived.set(clockMillis())
+            return true
         }
 
         val inactivity = launch {
@@ -558,17 +570,19 @@ class OkHttpHubConnection(
                     publishState(ConnectionState.Updating)
                 }
                 Signal.Foreground -> {
+                    // Before the inactivity job wakes and measures the background silence against 45 s.
+                    val quiet = foreground && checkAliveAfterBackground()
                     activity.trySend(Unit)
                     if ("client_hello" in features) ws.send(clientHello(features).toString())
                     pingJob?.cancelAndJoin()
                     pingJob = null
                     pendingPing.set(null)
-                    if (foreground) { checkAlive(); probe() }
+                    if (foreground) probe(reconnectOnTimeout = quiet)
                     else probe(immediate = false)
                 }
                 Signal.Language -> if ("client_hello" in features) ws.send(clientHello(features).toString())
                 Signal.Wake -> {
-                    checkAlive()
+                    checkAliveAfterBackground()
                     pingJob?.cancelAndJoin()
                     pingJob = null
                     pendingPing.set(null)

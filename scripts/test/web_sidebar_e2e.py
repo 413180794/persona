@@ -66,10 +66,20 @@ def run(browser, base, token, main_id, other, shots):
     assert path_of(page) == "/", path_of(page)
     ok("/ opens the main conversation, Persona selected")
 
-    # Persona is the first entry; no accent 新建 Agent above the navigation.
-    first = page.locator("aside nav, aside").first.locator("a").first
-    assert first.get_attribute("title") == "Persona 的主对话", first.get_attribute("title")
-    ok("Persona is the sidebar's first entry")
+    # Persona is the first row of「Persona 对话」, with the 主对话 badge (#2824).
+    chats = page.locator("aside .group\\/sec", has=page.locator("button", has_text="Persona 对话"))
+    lead = chats.locator("xpath=following-sibling::*[1]")
+    expect(lead.locator("xpath=descendant-or-self::a[@title='Persona 的主对话']")).to_have_count(1)
+    expect(lead.get_by_text("主对话", exact=True)).to_have_count(1)
+    ok("Persona is the first row of「Persona 对话」, with the 主对话 badge")
+    # folding「Persona 对话」keeps the main row on show
+    head = chats.locator("button[aria-expanded]").first
+    head.click()
+    expect(head).to_have_attribute("aria-expanded", "false")
+    expect(persona).to_be_visible()
+    head.click()
+    expect(head).to_have_attribute("aria-expanded", "true")
+    ok("folded,「Persona 对话」still shows the main row")
 
     # 2. 总览 and back to Persona.
     page.locator('aside a[href="/overview"]').click()
@@ -82,7 +92,7 @@ def run(browser, base, token, main_id, other, shots):
 
     # 3. The main conversation is not listed twice.
     expect(page.locator(f'aside a[href="/j/{main_id}"]')).to_have_count(0)
-    expect(page.locator("aside").get_by_text("主对话", exact=True)).to_have_count(0)
+    expect(page.locator("aside").get_by_text("主对话", exact=True)).to_have_count(1)  # only the badge
     ok("the main conversation has one entry")
 
     if shots:
@@ -152,7 +162,7 @@ def run(browser, base, token, main_id, other, shots):
             page.wait_for_timeout(800)
             page.screenshot(path=os.path.join(shots, f"narrow-persona-{theme}.png"))
         ctx.close()
-    ok("narrow: the drawer leads with Persona, which opens the main conversation and closes the drawer")
+    ok("narrow: the drawer's「Persona 对话」starts with Persona, which opens the main conversation and closes the drawer")
 
 
 if __name__ == "__main__":

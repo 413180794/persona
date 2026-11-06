@@ -32,5 +32,8 @@
   "menu_run": "Run now",
   "menu_edit": "Edit",
   "menu_delete": "Delete",
-  "menu_delete_confirm": "Confirm delete"
+  "menu_delete_confirm": "Confirm delete",
+  "chat_at": "Chat · {when} {time}",
+  "chat_n": "Chat {n}",
+  "chats_label": "Chats from “{title}”"
 }

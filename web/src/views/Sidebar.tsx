@@ -290,6 +290,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const pinnedIds = usePinnedConversations();
   const { pinned: pinnedConvs, recent } = sidebarConversations(assistant?.conversations ?? [], assistant?.main, pinnedIds, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
   const convs = [...pinnedConvs, ...recent];
+  // 「Persona 对话」is drawn while the first load is out too, so the main row does not jump into it once it is in (#2824)
+  const loaded = useStore((s) => s.loaded);
+  const chats = !!assistant || !loaded;
   // a conversation row's ⋯ / right click (iOS: its long press), and the section title's 全部取消置顶
   const [convMenu, setConvMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
   const onConvMenu: RowMenuFn = (s, anchor, at) => setConvMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
@@ -319,7 +322,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
       <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
         {highlight}
         <div className="flex flex-col gap-px pt-1">
-          <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />
+          {/* a hub without the assistant has no「Persona 对话」to put it in */}
+          {!chats && <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} />}
           {narrow && <NavGrid pages={pages} activeKey={activeKey} go={go} />}
         </div>
         {!narrow && (
@@ -328,14 +332,22 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           </Section>
         )}
 
-        {assistant && (
-          <Section title={t("sidebar.persona_chats")} folded={jarvisFolded} onToggle={toggleJarvis} right={<SectionAdd label={t("sidebar.new_chat")} to={{ name: "persona-new" }} go={go} />}>
+        {chats && (
+          <Section
+            title={t("sidebar.persona_chats")}
+            folded={jarvisFolded}
+            onToggle={toggleJarvis}
+            // while the first load is out only the main row: a hub without the assistant has no new chat or 全部对话
+            right={assistant ? <SectionAdd label={t("sidebar.new_chat")} to={{ name: "persona-new" }} go={go} /> : undefined}
+            // the main conversation is its first row, on show however the section is folded (#2824)
+            lead={<PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} badge onMenu={mainConversation ? (el, at) => onConvMenu(mainConversation, el, at) : undefined} />}
+          >
             {pinnedConvs.length > 0 && <PinnedHeading onMenu={(at) => setChatsMenu(at)} />}
             {convs.map((c) => (
               <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={hover} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} icon={pinnedIds.includes(c.session_id) ? "pin" : undefined} onMenu={onConvMenu} menuLabel={t("conversation-menu.actions")} />
             ))}
-            <AutoConversations conversations={assistant.conversations} main={assistant.main} shown={convs} activeKey={activeKey} holds={autoHolds} reg={reg} hover={hover} go={go} />
-            <NavRow k="history" reg={reg} hover={hover} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label={t("sidebar.all_chats")} hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />
+            {assistant && <AutoConversations conversations={assistant.conversations} main={assistant.main} shown={convs} activeKey={activeKey} holds={autoHolds} reg={reg} hover={hover} go={go} />}
+            {assistant && <NavRow k="history" reg={reg} hover={hover} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label={t("sidebar.all_chats")} hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />}
           </Section>
         )}
 
@@ -856,7 +868,8 @@ function AutoConversations({ conversations, main, shown, activeKey, holds, reg, 
   );
 }
 
-function Section({ title, children, folded, onToggle, right, onMenu, first, hint }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean; hint?: string }) {
+/** `lead`: rows that stay on show when the section is folded (the main conversation, #2824). */
+function Section({ title, children, folded, onToggle, right, onMenu, first, hint, lead }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean; hint?: string; lead?: React.ReactNode }) {
   return (
     <div className={first ? "mt-1" : "mt-3"}>
       <div className="group/sec relative flex items-center gap-1 px-2 pb-1" {...(onMenu ? contextMenuProps(onMenu) : {})}>
@@ -868,6 +881,7 @@ function Section({ title, children, folded, onToggle, right, onMenu, first, hint
       </div>
       {/* a group whose name does not say why its agents are here (没挂待办的, 在终端里开的) says it in one line, folded too */}
       {hint && <p className="px-2 pb-1 text-[11px] leading-[1.45] text-ink-3">{hint}</p>}
+      {lead}
       <Collapse open={!folded}>
         <div className="flex flex-col gap-px" inert={folded || undefined}>{children}</div>
       </Collapse>
@@ -1527,7 +1541,8 @@ type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean
 // Persona's main conversation: the first and strongest entry (its face, always in ink), with the conversation's state
 // when it is working or wants you.
 // Its menu (拷贝会话 ID, 结束…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
-export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
+/** `badge`: labelled 主对话, as the first row of「Persona 对话」(#2824). */
+export function PersonaRow({ reg, hover, active, go, main, onMenu, badge }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void; badge?: boolean }) {
   const to: Route = { name: "jarvis" };
   const st = main ? stateOf(main) : undefined;
   const pending = main?.pending_interactions ?? 0;
@@ -1559,6 +1574,7 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegF
         }
       />
       <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
+      {badge && <span className={cx("shrink-0 whitespace-nowrap rounded-full bg-accent-tint px-1.5 text-[10.5px] font-medium leading-4 text-accent-ink", aside)}>{t("sidebar.main_chat")}</span>}
       {pending > 0 ? (
         <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums", aside)}>{pending}</span>
       ) : st === "working" || st === "needs_you" || st === "unread" ? (

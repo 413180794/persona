@@ -98,6 +98,9 @@ type botHub struct {
 	pairTold map[string]time.Time // sender -> when the pairing path last answered (short redelivery window)
 	names    map[string]string    // open id -> name
 	seen     []string             // the messages taken lately (Feishu delivers some again), memory only
+	// line is closed once the last message taken has been handed to the assistant (botMessage): they go in the
+	// order they came.
+	line chan struct{}
 	// now is replaced in tests.
 	now func() time.Time
 }

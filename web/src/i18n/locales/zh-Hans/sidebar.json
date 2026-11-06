@@ -129,5 +129,6 @@
   "auto_chats_label": "自动对话 {count} 段",
   "auto_working": "{count} 段在运行",
   "auto_needs_you": "{count} 段需要你",
-  "not_connected_yet": "还没连上"
+  "not_connected_yet": "还没连上",
+  "main_chat": "主对话"
 }

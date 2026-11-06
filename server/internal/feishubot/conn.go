@@ -29,6 +29,10 @@ import (
 //     The client answers each with the same frame, the payload replaced by {"code":200,"data":<base64 JSON>}; a card
 //     callback's data is the toast / card to show at once. Feishu waits about 3 s for it and then retries.
 
+// eventTurnWait is how long an event waits for the one before it: the handler returns quickly, so only a stuck one
+// is waited for that long.
+const eventTurnWait = 3 * time.Second
+
 // Handler takes one event's payload (the JSON Feishu would POST to a webhook) and returns what to answer: nil for an
 // event, the toast / new card for a card callback. It must return quickly: slow work goes on in its own goroutine.
 type Handler func(ctx context.Context, payload []byte) (any, error)
@@ -220,6 +224,7 @@ func (c *Conn) once(ctx context.Context) error {
 			}
 		}
 	}()
+	var lastEvent chan struct{} // closed once the last event frame read is handled
 	for {
 		// A peer gone without closing (sleep, NAT, network change) would leave Read waiting forever: Feishu answers
 		// every ping, so silence longer than two of them means the connection is dead.
@@ -248,7 +253,27 @@ func (c *Conn) once(ctx context.Context) error {
 				}
 			}
 		case frameData:
-			go c.data(cctx, f, write)
+			if f.Header("type") != "event" {
+				go c.data(cctx, f, write) // a card press: answered at once, not behind the events
+				continue
+			}
+			// Events are handled in the order they came: each in its own goroutine, one sent right after another
+			// could reach the handler first (two messages to the bot taken the wrong way round). One stuck in the
+			// handler holds the next for eventTurnWait at most.
+			prev, done := lastEvent, make(chan struct{})
+			lastEvent = done
+			go func() {
+				defer close(done)
+				if prev != nil {
+					t := time.NewTimer(eventTurnWait)
+					select {
+					case <-prev:
+					case <-t.C:
+					}
+					t.Stop()
+				}
+				c.data(cctx, f, write)
+			}()
 		}
 	}
 }

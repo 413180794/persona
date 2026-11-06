@@ -30,5 +30,8 @@
   "menu_run": "今すぐ実行",
   "menu_edit": "編集",
   "menu_delete": "削除",
-  "menu_delete_confirm": "削除を確認"
+  "menu_delete_confirm": "削除を確認",
+  "chat_at": "{when} {time} のチャット",
+  "chat_n": "チャット {n}",
+  "chats_label": "「{title}」のチャット"
 }

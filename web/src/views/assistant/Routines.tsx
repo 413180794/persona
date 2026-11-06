@@ -4,8 +4,10 @@
 // of runs beside them. A row opens the editor; 新建 starts from a template or blank.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
-import { navigate } from "../../lib/router";
+import { href, navigate, onLinkClick } from "../../lib/router";
+import { isAutoConversation } from "../../lib/conversation-origins";
 import {
+  taskConversations, parseTime,
   fromTemplate, hm, blankTask, dayLabel, lastRunText, nextText, ruleText, runDays, runsWith, splitTasks, taskBody, taskTitle, TEMPLATES,
   untilLabel, upcoming, type Run, type Task,
 } from "../../lib/routines";
@@ -132,6 +134,15 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   ];
 
   const { repeating, oneOff } = splitTasks(tasks ?? []);
+  // each task's conversations (#2824): the sidebar folds them into 自动对话, here they are under their task
+  const titles = useMemo(() => new Map((assistant?.conversations ?? []).map((c) => [c.session_id, c.title])), [assistant?.conversations]);
+  // the user's own (the main one, one the hub says the user opened) are never a task's, even if a run went into them
+  const mine = useMemo(() => {
+    const own = new Set((assistant?.conversations ?? []).filter((c) => !isAutoConversation(c) && c.origin).map((c) => c.session_id));
+    if (assistant?.main) own.add(assistant.main);
+    return (sid: string) => own.has(sid);
+  }, [assistant?.conversations, assistant?.main]);
+  const chatsOf = (task: Task) => taskConversations(task, runs ?? [], 3, mine).map((c) => ({ ...c, title: titles.get(c.sid) }));
   const next = upcoming(tasks ?? []);
   const browserTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -170,7 +181,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 <SectionTitle>{t("assistant-routines.section_scheduled")}</SectionTitle>
                 <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
                   {repeating.map((task) => (
-                    <TaskRow key={task.id} task={task} now={now} onOpen={() => setEditing(task)} onMenu={openRowMenu(task)} onToggle={(on) => void toggle(task, on)} />
+                    <TaskRow key={task.id} task={task} now={now} chats={chatsOf(task)} onOpen={() => setEditing(task)} onMenu={openRowMenu(task)} onToggle={(on) => void toggle(task, on)} />
                   ))}
                 </div>
                 <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">
@@ -187,7 +198,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 <SectionTitle>{t("assistant-routines.section_follow_ups")}</SectionTitle>
                 <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
                   {oneOff.map((task) => (
-                    <TaskRow key={task.id} task={task} now={now} onOpen={() => setEditing(task)} onMenu={openRowMenu(task)} onToggle={(on) => void toggle(task, on)} />
+                    <TaskRow key={task.id} task={task} now={now} chats={chatsOf(task)} onOpen={() => setEditing(task)} onMenu={openRowMenu(task)} onToggle={(on) => void toggle(task, on)} />
                   ))}
                 </div>
                 <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{noHover ? t("assistant-routines.follow_ups_footer") : t("assistant-routines.follow_ups_footer_pointer")}</p>
@@ -266,12 +277,15 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 }
 
 /** One task: its mark, title, rule in words, next and last run, what it runs with when not the default, a switch. */
-function TaskRow({ task, now, onOpen, onMenu, onToggle }: { task: Task; now: Date; onOpen: () => void; onMenu: (at: MenuAt) => void; onToggle: (on: boolean) => void }) {
+type TaskChat = { sid: string; title?: string; at?: string };
+
+function TaskRow({ task, now, chats, onOpen, onMenu, onToggle }: { task: Task; now: Date; chats: TaskChat[]; onOpen: () => void; onMenu: (at: MenuAt) => void; onToggle: (on: boolean) => void }) {
   const with_ = runsWith(task);
   const last = lastRunText(task, now);
   const next = nextText(task, now);
   const menu = contextMenuProps(onMenu);
   return (
+    <div>
     <div
       role="button"
       tabIndex={0}
@@ -286,7 +300,7 @@ function TaskRow({ task, now, onOpen, onMenu, onToggle }: { task: Task; now: Dat
         }
       }}
       aria-label={t("assistant-routines.row_label", { title: taskTitle(task), rule: ruleText(task), next })}
-      className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-none"
+      className={cx("flex cursor-pointer items-start gap-3 px-4 transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-none", chats.length > 0 ? "pt-3 pb-1.5" : "py-3")}
     >
       <span className={cx("mt-0.5", !task.enabled && "opacity-60")}>
         <IconTile icon={taskIcon(task)} tone={with_?.danger ? "red" : task.enabled ? "accent" : "muted"} />
@@ -318,6 +332,28 @@ function TaskRow({ task, now, onOpen, onMenu, onToggle }: { task: Task; now: Dat
       <span className="mt-1.5">
         <Switch checked={task.enabled} label={task.enabled ? t("assistant-routines.turn_off", { title: taskTitle(task) }) : t("assistant-routines.turn_on", { title: taskTitle(task) })} onChange={onToggle} />
       </span>
+    </div>
+      {chats.length > 0 && (
+        // its conversations (#2824), under the row (not inside its button): a tap opens one
+        <div aria-label={t("assistant-routines.chats_label", { title: taskTitle(task) })} role="group" className="flex min-w-0 flex-wrap gap-1.5 pb-3 pl-[60px] pr-4">
+          {chats.map((c, i) => {
+            const at = parseTime(c.at);
+            const label = at ? t("assistant-routines.chat_at", { when: dayLabel(at, now), time: hm(at) }) : t("assistant-routines.chat_n", { n: i + 1 });
+            return (
+              <a
+                key={c.sid}
+                href={href({ name: "jarvis", sid: c.sid })}
+                onClick={(e) => onLinkClick(e, { name: "jarvis", sid: c.sid })}
+                title={c.title || label}
+                className="inline-flex h-6 max-w-full items-center gap-1 whitespace-nowrap rounded-full bg-inset px-2 text-[11.5px] text-ink-2 shadow-hairline transition-colors hover:bg-hover hover:text-ink"
+              >
+                <Icon name="chat" size={11} className="shrink-0" />
+                <span className="truncate tabular-nums">{label}</span>
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -91,13 +91,19 @@ func (h *Manager) takeOwnerAction(id, interaction string) error {
 // inboundWait and asks again after a cut-off or timed-out call. An error is the assistant's own refusal, or
 // errAssistantOffline when it could not be reached in time.
 func (h *Manager) toAssistant(method string, params any) error {
+	return h.toAssistantSince(method, params, time.Now())
+}
+
+// toAssistantSince is toAssistant for a message that came at since: it waits for the assistant until inboundWait
+// after that (a message that waited its turn behind others does not wait the whole time again).
+func (h *Manager) toAssistantSince(method string, params any, since time.Time) error {
 	in := &h.chans.in
 	wait := inboundWait
 	if in.waiting.Add(1) > inboundMost {
 		wait = 0 // too many waiting already: say so at once
 	}
 	defer in.waiting.Add(-1)
-	return h.callAssistantWaiting(method, params, nil, time.Now().Add(wait), 20*time.Second)
+	return h.callAssistantWaiting(method, params, nil, since.Add(wait), 20*time.Second)
 }
 
 // callAssistantWaiting calls the assistant until deadline: while it is not connected it waits, a call cut off or out

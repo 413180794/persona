@@ -829,6 +829,7 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 
 代码在 `feature/agents/`（`TodosScreen`、`TodoDetailScreen`、`TodoPickerSheet`）和 `core/domain` 的 `TasksStore`、`sort/AgentList.kt`。
 
+- 本地缓存（#4533，对齐 iOS `TodoStore` 的 StateCache）：`TasksStore` 每次从 hub 读到待办（旧 hub 的 404 算空）就写进本配对的列表快照（`lists` 目录的 `todos`），冷启动和连不上 hub 时先显示上次的待办，hub 回答后以它为准；缓存不算 hub 回答过，「挂到待办」照旧等第一次真正读到。
 - 列表：没完成的行标题下面一行动态，顺序同 iOS `TodoRow`：自动完成的原因、最要紧 Agent 的最新一句（等你时红色）、说明（一行）、都没有时「还没交给 Agent」。已完成的行右滑重新打开、左滑删除，自动完成的写原因。列表为空、没在搜索时，空状态带「新建待办」按钮。 最要紧 Agent 的那句同 iOS `mostUrgentSummary`：启动失败且有原因时「启动失败：原因」，否则会话最新一句（去掉 Markdown 记号）、会话标题、Agent 自己的标题，都没有就往下落到说明。
 - 详情：状态标签后面「N 个 Agent · X 创建」；「项目」一段列整组挂上的工作区（项目 · 电脑，那个项目当前没有活着的 Agent 时写「当前没有 Agent」，「移出」调 `DELETE /api/v1/todos/{id}/spaces/{mid}/{space}`）；每个 Agent 写「电脑 · 空间 · tab」、来源（随项目 / 由 X 派出 / 派生 / 同群，同 iOS `TodosLogic.agentSource`）和最新一句。hub 的待办都不带 `spaces` 时（旧 hub）不显示项目，也不给空间菜单的入口。
 - 挂待办：Agents 页空间的 ⋯ 里「挂到待办… / 改挂到其他待办… / 移出待办」（`PUT` / `DELETE …/spaces/…`，项目名按 hub 的 `space_name`，没有时用空间 id），挂上的空间栏头带「待办：标题」标记；选待办的面板（会话和空间共用）下面有「新建待办…」→ 输入标题 →「创建并挂上」，空间挂着时还有「移出待办」。`TasksStore.setTodoSpace` 先在本地把项目挪过去（一个项目只在一个待办上，原来那个待办下随项目来的 Agent 一起去掉），失败退回，之后重读。 这三项只在 hub 读回过待办、并且认识项目（带 `spaces` 字段）时出现；挂的时候 hub 回路由层的 404（没有 code，或 `not_found` +「Not Found」，同 iOS `TodosLogic.isLegacySpacesRoute`）就当旧 hub，之后不再显示。

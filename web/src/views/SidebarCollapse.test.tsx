@@ -11,6 +11,8 @@ vi.hoisted(() => {
 });
 import { COLLAPSED_KEY, getLayout, setSidebarCollapsed } from "../lib/layout";
 import { setAllFolded } from "../lib/sidebar-api";
+import { refresh, reset } from "../lib/store";
+import type { AssistantInfo, Session } from "../lib/types";
 import { checkBinding, eventChord, getBindings, matchShortcut } from "../lib/shortcuts";
 import { useShortcuts } from "../lib/use-shortcuts";
 import { Sidebar, SidebarRail } from "./Sidebar";
@@ -38,6 +40,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  reset();
   vi.unstubAllGlobals();
 });
 
@@ -189,5 +192,44 @@ describe("the Agents list menu (#3027)", () => {
     await flush();
     expect(localStorage.getItem("fold:space:mac/a")).toBe("0");
     expect(localStorage.getItem("fold:jarvis")).toBeNull();
+  });
+});
+
+describe("the main conversation in「Persona 对话」(#2824)", () => {
+  const conv = (id: string, title: string): Session => ({ machine_id: "hub", session_id: id, title, cwd: "/", status: "idle", state: "idle", assistant: true });
+  const assistant: AssistantInfo = { machine_id: "hub", main: "main", conversations: [conv("main", "Persona"), conv("c1", "整理周报")] };
+  const block = (title: string) => button(title)!.closest(".mt-1, .mt-3") as HTMLElement;
+  // the rows under a block's title (its「+」is on the title line)
+  const rows = (title: string) => [...block(title).querySelectorAll("a")].filter((a) => !button(title)!.parentElement!.contains(a));
+  const load = async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      const body = new URL(url, "http://x").pathname === "/api/v1/assistant" ? assistant : {};
+      return Promise.resolve(new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } }));
+    }));
+    await act(() => refresh());
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+  };
+
+  it("is its first row, labelled 主对话, and listed only there", async () => {
+    await load();
+    const [first, second] = rows("Persona 对话");
+    expect(first.title).toBe("Persona 的主对话");
+    expect([...first.querySelectorAll("span")].map((s) => s.textContent)).toContain("主对话");
+    expect(second.textContent).toContain("整理周报");
+    expect(host.querySelectorAll('a[title="Persona 的主对话"]')).toHaveLength(1);
+    expect(host.querySelector('a[href="/j/main"]')).toBeNull();
+  });
+
+  it("stays on show when the block is folded, the other conversations folded away", async () => {
+    await load();
+    const title = button("Persona 对话")!;
+    act(() => title.click());
+    expect(title.getAttribute("aria-expanded")).toBe("false");
+    expect(localStorage.getItem("fold:jarvis")).toBe("1");
+    const main = block("Persona 对话").querySelector<HTMLElement>('a[title="Persona 的主对话"]')!;
+    expect(main).not.toBeNull();
+    expect(main.closest("[inert]")).toBeNull();
+    expect(rows("Persona 对话").find((a) => a.textContent?.includes("整理周报"))!.closest("[inert]")).not.toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import persona.core.contracts.CoreText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -259,9 +262,29 @@ fun dockAgents(conversation: String, main: String?, sessions: List<Session>, tod
 /** Whether a task may be removed from the dock or its detail: not while anything of it runs (iOS `isRemovable`). */
 val TaskState.isRemovable: Boolean get() = this != TaskState.Working && this != TaskState.NeedsYou
 
-class TasksStore(private val api: TasksApi, connection: HubConnection, private val scope: CoroutineScope) {
+/**
+ * The to-dos last read from this pairing's hub, kept on the phone (iOS TodoStore's StateCache): a cold start or an open
+ * without the hub shows them instead of 暂无待办 until the hub answers.
+ */
+interface TodoCache {
+    suspend fun read(): List<Todo>?
+    suspend fun write(todos: List<Todo>)
+}
+
+class TasksStore(
+    private val api: TasksApi,
+    connection: HubConnection,
+    private val scope: CoroutineScope,
+    private val cache: TodoCache? = null,
+) {
     private val _todos = MutableStateFlow<List<Todo>>(emptyList())
     val todos: StateFlow<List<Todo>> = _todos.asStateFlow()
+    /** Guards [answered] with the list: the cached list never replaces one the hub has given. */
+    private val todosLock = Any()
+    /** The hub's last answer (a list, or an older hub's 404 as none); null until it answers, while the cache shows. */
+    private var answered: List<Todo>? = null
+    private val writing = Mutex()
+    private var written: List<Todo>? = null
     private val _todosSupported = MutableStateFlow(true)
     val todosSupported: StateFlow<Boolean> = _todosSupported.asStateFlow()
     private val _plans = MutableStateFlow<Map<String, TaskPlan>>(emptyMap())
@@ -279,6 +302,12 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     val cardActions = AssistantCardActions(api, cards, reload = { load(it, whole = true) })
 
     init {
+        if (cache != null) scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val cached = try { cache.read() } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+            if (!cached.isNullOrEmpty()) synchronized(todosLock) {
+                if (answered == null && _todos.value.isEmpty()) { written = cached; _todos.value = cached }
+            }
+        }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             connection.events.collect { e ->
                 when (e) {
@@ -303,8 +332,9 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
                 .onSuccess { list ->
                     _todosSupported.value = true
                     todosLoaded = true
-                    if (list != _todos.value) _todos.value = list
+                    synchronized(todosLock) { answered = list; if (list != _todos.value) _todos.value = list }
                     dropStaleRoutes()
+                    remember()
                 }
                 .onFailure { error ->
                     val status = (error as? Exception)?.let { e ->
@@ -313,9 +343,25 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
                     }
                     if (status == 404 || error.message?.contains("404") == true) {
                         _todosSupported.value = false
-                        _todos.value = emptyList()
+                        synchronized(todosLock) { answered = emptyList(); _todos.value = emptyList() }
+                        remember()
                     }
                 }
+        }
+    }
+
+    /**
+     * Keeps the hub's latest answer for the next start, one write at a time (two reads can answer out of order); a failed
+     * write only costs that start its first paint.
+     */
+    private suspend fun remember() {
+        if (cache == null) return
+        writing.withLock {
+            val latest = synchronized(todosLock) { answered } ?: return
+            if (latest == written) return
+            try { cache.write(latest); written = latest }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { }
         }
     }
 

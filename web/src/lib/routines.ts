@@ -455,3 +455,22 @@ export function runDays(runs: Run[], now: Date): { day: string; runs: Run[] }[] 
   }
   return out;
 }
+
+/** The conversations a task's runs went into (#2824), one entry each, at most `n`, with when a run last went into
+ *  it: its own conversation first when it has one, then the runs' (newest first, as the hub lists them). The
+ *  conversation it came from (接着原来的对话) is the user's own and stays out, and so is any the caller knows is the
+ *  user's (`mine`: the main one, one the hub says the user opened), since `session_id` may have been cleared since
+ *  runs went into it. */
+export function taskConversations(task: Task, runs: readonly Run[], n = 3, mine: (sid: string) => boolean = () => false): { sid: string; at?: string }[] {
+  const out: { sid: string; at?: string }[] = [];
+  const add = (sid?: string, at?: string) => {
+    if (!sid || sid === task.session_id || (sid !== task.run_session_id && mine(sid))) return;
+    const had = out.find((c) => c.sid === sid);
+    if (!had) out.push({ sid, at });
+    else if (!had.at) had.at = at;
+  };
+  add(task.run_session_id);
+  for (const r of runs) if (r.ref_id === task.id) add(r.session_id, r.at);
+  if (out[0] && !out[0].at && out[0].sid === task.last_session_id) out[0].at = task.last_run;
+  return out.slice(0, n);
+}

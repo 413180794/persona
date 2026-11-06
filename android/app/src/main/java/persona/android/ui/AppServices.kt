@@ -156,7 +156,9 @@ class AppServices @Inject constructor(
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (error: Exception) { feedback.failure(error, true); throw error }
                 }
-                val tasksStore = persona.core.domain.tasks.TasksStore(persona.core.hub.HttpTasksApi(socket), runtime, data.coroutineScope)
+                // Its to-dos show from the last read until the hub answers (#4533), as the group's chat bindings' do.
+                val tasksStore = persona.core.domain.tasks.TasksStore(persona.core.hub.HttpTasksApi(socket), runtime, data.coroutineScope,
+                    ListSnapshotStore(File(data.noBackupDirectory, "lists")).todoCache())
                 // Files, chat actions and machine metrics go to the group of the machine they name (one group: this hub).
                 mutableSession.value = ShellSession(data.scope.path, runtime, sessions, chats, boundInteractions, sender,
                     assistant, inbox, preferences, HubTerminalTransport(socket), shell.files, mergedMetrics,

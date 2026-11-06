@@ -134,5 +134,6 @@
   "auto_chats_label": "{count} automatic chats",
   "auto_working": "{count} running",
   "auto_needs_you": "{count} need you",
-  "not_connected_yet": "Not connected yet"
+  "not_connected_yet": "Not connected yet",
+  "main_chat": "Main chat"
 }

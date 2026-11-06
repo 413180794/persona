@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -369,5 +370,56 @@ func TestUpdateErrorKinds(t *testing.T) {
 	}
 	if !MessageGone(gone) || MessageGone(limited) || !MessageGone(errors.New("feishu update card: 230110 deleted")) || MessageGone(errors.New("offline")) {
 		t.Fatal("gone")
+	}
+}
+
+// Events reach the handler in the order they came off the connection, one after another, even when the first is
+// slow to handle; a card press is not held up behind them.
+func TestConnHandsEventsInOrder(t *testing.T) {
+	f := newFakeFeishu(t)
+	var mu sync.Mutex
+	var order []string
+	slow, card := make(chan struct{}), make(chan struct{}, 1)
+	conn := NewConn(New("cli_x", "secret", f.srv.URL), func(_ context.Context, payload []byte) (any, error) {
+		p := string(payload)
+		if p == "card" {
+			card <- struct{}{}
+			return nil, nil
+		}
+		if p == "e0" {
+			<-slow
+		}
+		mu.Lock()
+		order = append(order, p)
+		mu.Unlock()
+		return nil, nil
+	}, t.Logf)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go conn.Run(ctx)
+	ws := <-f.conns
+	for i := range 5 {
+		id := fmt.Sprintf("e%d", i)
+		f.send(ws, &Frame{SeqID: uint64(i), Service: 9, Method: frameData, Payload: []byte(id), Headers: []Header{{"type", "event"}, {"message_id", id}}})
+	}
+	f.send(ws, &Frame{SeqID: 9, Service: 9, Method: frameData, Payload: []byte("card"), Headers: []Header{{"type", "card"}, {"message_id", "c1"}}})
+	select {
+	case <-card:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the card press waited behind the events")
+	}
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	early := len(order)
+	mu.Unlock()
+	if early != 0 {
+		t.Fatalf("handled before the first: %v", order)
+	}
+	close(slow)
+	f.waitAnswers(6)
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(order, " "); got != "e0 e1 e2 e3 e4" {
+		t.Fatalf("handled as %s", got)
 	}
 }

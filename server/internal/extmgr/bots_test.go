@@ -613,3 +613,31 @@ func TestBotRepliesInTheUsersLanguage(t *testing.T) {
 	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_other", "ou_stranger", "text", textContent("hi"), nil))
 	w.api.find(t, "/messages", "このボットは所有者専用です")
 }
+
+// The owner's messages are handed to the assistant in the order they came, one after another: one the assistant is
+// slow to take does not let the next one overtake it.
+func TestBotMessagesGoToTheAssistantInOrder(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	slow := make(chan struct{})
+	w.a.on(assistantwire.MethodFeishuMessage, func(p json.RawMessage) (any, error) {
+		if strings.Contains(string(p), "om_o0") {
+			<-slow
+		}
+		return map[string]any{}, nil
+	})
+	for i := range 4 {
+		if _, err := w.h.botEvent(w.ctx, botMessageEvent(fmt.Sprintf("om_o%d", i), "ou_me", "text", textContent(fmt.Sprint(i)), nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	if got := w.handed(); len(got) != 1 || got[0] != "om_o0" {
+		t.Fatalf("handed while the first waits: %v", got)
+	}
+	close(slow)
+	eventually(t, 5*time.Second, "all four handed", func() bool { return len(w.handed()) == 4 })
+	if got := strings.Join(w.handed(), " "); got != "om_o0 om_o1 om_o2 om_o3" {
+		t.Fatalf("handed as %s", got)
+	}
+}

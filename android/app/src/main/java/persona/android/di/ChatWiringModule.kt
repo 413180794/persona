@@ -13,6 +13,7 @@ import persona.core.contracts.api.*
 import persona.core.data.ChatDataRepositories
 import persona.core.data.ScopedHubData
 import persona.core.data.PersistentChatRecoveryService
+import persona.core.data.todoCache
 import persona.core.hub.*
 import persona.feature.chat.ChatAppBindings
 import persona.feature.chat.ChatWiringSource
@@ -106,7 +107,8 @@ internal suspend fun createChatWiring(
         // The photos sent with messages load from the session's machine (Persona' own conversations too).
         files = HubSessionFiles(connection),
         ports = HubPortOpener(connection),
-        tasks = persona.core.domain.tasks.TasksStore(persona.core.hub.HttpTasksApi(connection), group, data.coroutineScope))
+        tasks = persona.core.domain.tasks.TasksStore(persona.core.hub.HttpTasksApi(connection), group, data.coroutineScope,
+            repositories.snapshots.todoCache()))
 }
 
 /** Resolve each operation against the current route and reject late replies from a previous route. */

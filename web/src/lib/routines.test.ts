@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  taskConversations,
   blankTask, clockLabel, dayLabel, everyLabel, fromLocalInput, fromTemplate, lastRunText, momentLabel, nextHour, nextText, normalizeDays,
   parseTime, repeatsLabel, ruleText, runDays, runDetail, runsWith, sameTask, splitTasks, taskBody, taskTitle, TEMPLATES, toLocalInput, untilLabel, withPush,
   upcoming, validateTask, withRepeat, type Run, type Task,
@@ -208,5 +209,33 @@ describe("lists", () => {
     expect(runDetail(r({ status: "skipped" }))).toBe("已跳过");
     const days = runDays([r({ id: "1", at: iso(at(1, 22)) }), r({ id: "2", at: iso(at(2, 9)) }), r({ id: "3", at: iso(at(1, 9)) }), r({ id: "4", at: iso(new Date(2026, 9, 20, 9)) })], now);
     expect(days.map((d) => [d.day, d.runs.map((x) => x.id)])).toEqual([["今天", ["2"]], ["昨天", ["1", "3"]], ["10月20日", ["4"]]]);
+  });
+});
+
+describe("taskConversations (#2824)", () => {
+  const run = (id: string, ref: string, sid?: string) => ({ id, kind: "routine", ref_id: ref, title: "", due: "", at: "", status: "ok", session_id: sid });
+  it("lists a task's own conversation, then its runs', once each, without the one it came from", () => {
+    const tk = task({ id: "a", repeat: "daily", run_session_id: "own" });
+    const sids = (l: { sid: string }[]) => l.map((c) => c.sid);
+    expect(sids(taskConversations(tk, [run("1", "a", "r2"), run("2", "b", "x"), run("3", "a", "own"), run("4", "a", "r1"), run("5", "a")]))).toEqual(["own", "r2", "r1"]);
+    expect(taskConversations(task({ id: "a", repeat: "once", session_id: "mine" }), [run("1", "a", "mine")])).toEqual([]);
+    expect(sids(taskConversations(tk, [run("1", "a", "r1"), run("2", "a", "r2"), run("3", "a", "r3")], 2))).toEqual(["own", "r1"]);
+  });
+
+  it("leaves out the user's own conversations after the task stopped coming from them", () => {
+    // a follow-up from the main conversation, later moved to its own: its old runs went into the main one
+    const tk = task({ id: "a", repeat: "once", run_session_id: "own" });
+    const mine = (sid: string) => sid === "main" || sid === "u";
+    const sids = (l: { sid: string }[]) => l.map((c) => c.sid);
+    expect(sids(taskConversations(tk, [run("1", "a", "main"), run("2", "a", "u"), run("3", "a", "r1")], 3, mine))).toEqual(["own", "r1"]);
+    // its own conversation stays, whatever the caller says
+    expect(sids(taskConversations(tk, [], 3, () => true))).toEqual(["own"]);
+  });
+
+  it("gives each one when a run last went into it", () => {
+    const tk = task({ id: "a", repeat: "daily", run_session_id: "own" });
+    const r = (id: string, sid: string, at: string) => ({ ...run(id, "a", sid), at });
+    expect(taskConversations(tk, [r("1", "own", "2026-11-05T09:00:00Z"), r("2", "own", "2026-11-04T09:00:00Z"), r("3", "old", "2026-11-01T09:00:00Z")]))
+      .toEqual([{ sid: "own", at: "2026-11-05T09:00:00Z" }, { sid: "old", at: "2026-11-01T09:00:00Z" }]);
   });
 });

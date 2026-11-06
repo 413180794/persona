@@ -86,6 +86,47 @@ type feishuBook struct {
 	now      func() time.Time     // tests
 	cotOff   bool                 // Feishu refused an agent message (feishu_cot.go)
 	startAt  map[string]time.Time // recent /start form presses, for one press one agent (feishu_cards.go)
+	// line is closed when the last message taken is through (FeishuMessage): the chat's messages are handled one at
+	// a time, in the order they came.
+	line chan struct{}
+	// turnWait is how long a message waits for the one before it (0: feishuTurnWait; tests change it).
+	turnWait time.Duration
+}
+
+// feishuTurnWait is how long a message waits for the one before it to go into its conversation. Most get there in a
+// second or two; one stuck on a slow download or a new conversation that is slow to start must not hold up the chat
+// for the 3 minutes it may take, so after this the next message goes on without it.
+const feishuTurnWait = 20 * time.Second
+
+// feishuTurn is one message's place in the chat's line: it waits for prev, and done is closed when it is through.
+type feishuTurn struct {
+	prev, done chan struct{}
+	wait       time.Duration
+	once       sync.Once
+}
+
+// waitTurn waits for the message before it, at most t.wait.
+func (t *feishuTurn) waitTurn() {
+	if t.prev == nil {
+		return
+	}
+	timer := time.NewTimer(t.wait)
+	defer timer.Stop()
+	select {
+	case <-t.prev:
+	case <-timer.C:
+	}
+}
+
+// pass lets the next message go once this one's turn has come: right away when it waited already, else after the
+// message before it (a message not handled still keeps its place, so the ones after it do not overtake that one).
+func (t *feishuTurn) pass() {
+	t.once.Do(func() {
+		go func() {
+			t.waitTurn()
+			close(t.done)
+		}()
+	})
 }
 
 type botCard struct {
@@ -540,12 +581,33 @@ func (s *Service) feishuCardsWaiting() int {
 // ---- a message to the bot ----
 
 // FeishuMessage is feishu.message: the owner's message in the bot's private chat (the hub checked who it is from),
-// taken once and handled in the background.
+// taken once and handled in the background, one at a time in the order they came (feishuTurn).
+//
+// Handled each on its own, a message slower to get through (its reaction, a picture to download, a quote to read)
+// was overtaken by the next one. The later message went into the conversation first, and the one answer covering
+// both went under the earlier message. A message right after 「/new …」 could also read the target before the new
+// conversation was set, and start one more.
 func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	var ev feishubot.MessageEvent
 	if err := json.Unmarshal(p.Event, &ev); err != nil {
 		return badRequest(err)
 	}
+	// It takes its place as it comes, before the bot's status is read (a call to the hub). One that is not handled
+	// (refused, redelivered) still passes the turn on.
+	b := &s.fbot
+	turn := &feishuTurn{done: make(chan struct{}), wait: feishuTurnWait}
+	b.mu.Lock()
+	turn.prev, b.line = b.line, turn.done
+	if b.turnWait > 0 {
+		turn.wait = b.turnWait
+	}
+	b.mu.Unlock()
+	queued := false
+	defer func() {
+		if !queued {
+			turn.pass()
+		}
+	}()
 	// What it is taken with first: a message taken is always answered, never dropped for want of it.
 	st, err := s.feishuStatus(ctx)
 	if err != nil {
@@ -558,7 +620,12 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	if !first {
 		return nil // redelivered, or handed over again after a call that was cut off
 	}
-	go s.feishuMessage(ev, st)
+	queued = true
+	go func() {
+		defer turn.pass()
+		turn.waitTurn()
+		s.feishuMessage(ev, st)
+	}()
 	return nil
 }
 

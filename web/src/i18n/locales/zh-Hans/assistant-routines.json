@@ -30,5 +30,8 @@
   "menu_run": "立即运行",
   "menu_edit": "编辑",
   "menu_delete": "删除",
-  "menu_delete_confirm": "确认删除"
+  "menu_delete_confirm": "确认删除",
+  "chat_at": "{when} {time} 的对话",
+  "chat_n": "对话 {n}",
+  "chats_label": "「{title}」跑出来的对话"
 }

@@ -42,7 +42,15 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 		if !h.claimBotMessage(ev.Message.MessageID) {
 			return nil, nil // redelivered
 		}
-		go h.botMessage(ev, env.Event)
+		// Its place in line is taken here, as it comes: each handled on its own, a message sent right after another
+		// could be handed to the assistant first, and the conversation read them the wrong way round.
+		b := &h.bots
+		done := make(chan struct{})
+		b.mu.Lock()
+		prev := b.line
+		b.line = done
+		b.mu.Unlock()
+		go h.botMessage(ev, env.Event, time.Now(), prev, done)
 	case feishubot.EventCardAction:
 		var a feishubot.CardAction
 		if err := json.Unmarshal(env.Event, &a); err != nil {
@@ -167,8 +175,30 @@ func (h *Manager) botWelcome(openID, chatID string) {
 	h.botPairTell(api, openID, chatID, i18n.T(h.userLang(), "hub-bots_chat.pair_hint"))
 }
 
-// botMessage handles one message to the bot: the owner's go to the assistant.
-func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage) {
+// botTurnWait is how long a message waits for the one before it to be handed to the assistant. That is quick, unless
+// the assistant is away: then the one before waits for it up to inboundWait (a try may run 20 s past that). After
+// this the message goes on anyway.
+func botTurnWait() time.Duration { return inboundWait + 25*time.Second }
+
+// botMessage handles one message to the bot, which came at since: the owner's go to the assistant, after the one
+// before it (prev; nil for none) is handed over. done is closed once this one is, whatever became of it.
+func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, since time.Time, prev, done chan struct{}) {
+	passed := false
+	pass := func() {
+		if !passed {
+			passed = true
+			close(done)
+		}
+	}
+	defer pass()
+	if prev != nil {
+		t := time.NewTimer(botTurnWait())
+		select {
+		case <-prev:
+		case <-t.C:
+		}
+		t.Stop()
+	}
 	b := &h.bots
 	b.mu.Lock()
 	api, set := b.api, b.set.copy()
@@ -198,7 +228,8 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage) {
 		}
 		b.mu.Unlock()
 	}
-	err := h.toAssistant(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw})
+	err := h.toAssistantSince(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw}, since)
+	pass() // handed over (or not): the next one need not wait for the note below
 	if err == nil {
 		return
 	}

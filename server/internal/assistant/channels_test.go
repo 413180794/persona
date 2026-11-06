@@ -906,3 +906,243 @@ func TestProgressCardFileCountAtItsCap(t *testing.T) {
 		t.Fatalf("%s", b)
 	}
 }
+
+// slowReactHub is a fake hub on which putting the 「OnIt」 reaction on message slow takes a while (Feishu slow to
+// answer, as it is now and then).
+type slowReactHub struct {
+	*fakeHub
+	slow string
+}
+
+func (h slowReactHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error) {
+	if p.AppID == AppFeishu && p.Method == FeishuReact {
+		var m map[string]any
+		_ = json.Unmarshal(p.Params, &m)
+		if m["message_id"] == h.slow && m["emoji"] == "OnIt" {
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return h.fakeHub.AppCall(ctx, p)
+}
+
+// Messages sent to the bot one right after another go into the conversation in the order they came, and the one
+// answer covering them replies to the last. Each used to be handled on its own: one slower to pass on (its reaction,
+// a picture to download, a quote to read) was overtaken by the next, the conversation read them the wrong way round,
+// and the answer for all of them went under the first message, the others folded into it.
+func TestFeishuMessagesGoInInTheOrderTheyCame(t *testing.T) {
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	f.settings = &Settings{MachineID: "server", Main: "m1"}
+	f.answerApp(AppFeishu, FeishuReact, func(p json.RawMessage) (any, error) {
+		var m map[string]any
+		_ = json.Unmarshal(p, &m)
+		return map[string]any{"reaction_id": fmt.Sprint("rx_", m["message_id"])}, nil
+	})
+	f.answerApp(AppFeishu, FeishuUnreact, func(json.RawMessage) (any, error) { return map[string]any{}, nil })
+	st := &memStore{}
+	s := withSettings(t, f, New(Options{Hub: slowReactHub{fakeHub: f, slow: "om_1"}, Store: func() Store { return st }, Logf: testLogf(t)}))
+	ctx := context.Background()
+	for _, m := range []struct{ id, text string }{{"om_1", "一"}, {"om_2", "二"}, {"om_3", "三"}} {
+		raw, _ := json.Marshal(map[string]any{"message": map[string]any{"message_id": m.id, "chat_id": "oc_1", "chat_type": "p2p",
+			"message_type": "text", "content": fmt.Sprintf(`{"text":%q}`, m.text)}})
+		if err := s.FeishuMessage(ctx, FeishuMessage{Event: raw}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sent := func() []string {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		var ids []string
+		for _, c := range f.calls {
+			if c.Method == DeviceSessionSendOnce {
+				var p map[string]any
+				_ = json.Unmarshal(c.Params, &p)
+				ids = append(ids, fmt.Sprint(p["client_msg_id"]))
+			}
+		}
+		return ids
+	}
+	waitUntil(t, func() bool { return len(sent()) == 3 })
+	if got := strings.Join(sent(), " "); got != "feishu-om_1 feishu-om_2 feishu-om_3" {
+		t.Fatalf("went in as %s", got)
+	}
+	waitUntil(t, func() bool { return len(s.channelRuns(channel.Feishu)) == 1 })
+	r := s.channelRuns(channel.Feishu)[0]
+	if r.ReplyTo != "om_3" || len(r.Folded) != 2 || r.Folded[0].ReplyTo != "om_1" || r.Folded[1].ReplyTo != "om_2" {
+		t.Fatalf("the answer replies to %s, folded %+v", r.ReplyTo, r.Folded)
+	}
+	if got := strings.Join(r.MsgIDs, " "); got != "feishu-om_1 feishu-om_2 feishu-om_3" {
+		t.Fatalf("msg ids %s", got)
+	}
+}
+
+// A message that comes while the previous run's answer waits for a progress update to let go of it is not folded
+// into that run: the answer goes out under the earlier message, and the later message's answer would carry it again.
+func TestFeishuRunBeingAnsweredIsNotFolded(t *testing.T) {
+	s, posts, _ := cotHub(t, true)
+	r, prog := cotRun(s)
+	r.MsgIDs = []string{"feishu-m1"}
+	prog.mu.Lock() // a progress update is on it
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		s.finishChannelRun(r, &channel.Result{Answer: "答一"})
+	}()
+	time.Sleep(50 * time.Millisecond) // the answer waits for the update
+	next := &channel.Run{ID: "fb_m2", Channel: channel.Feishu, MachineID: "server", SessionID: "c1", ReplyTo: "om_m2", Label: "Persona",
+		Started: time.Now(), MsgIDs: []string{"feishu-m2"}}
+	started := make(chan struct{})
+	go func() {
+		defer close(started)
+		s.startChannelRun(next)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	prog.mu.Unlock()
+	for _, ch := range []chan struct{}{finished, started} {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out")
+		}
+	}
+	s.chans.mu.Lock()
+	folded, ids := len(next.Folded), slices.Clone(next.MsgIDs)
+	s.chans.mu.Unlock()
+	if folded != 0 || len(ids) != 1 {
+		t.Fatalf("the next run took in the one being answered: %d folded, msg ids %v", folded, ids)
+	}
+	if len(*posts) != 1 || !strings.Contains((*posts)[0]["card"].(string), "答一") || (*posts)[0]["reply_to"] != "om_m1" {
+		t.Fatalf("posts %v", *posts)
+	}
+}
+
+// feishuEvent is the owner's text message id in the bot's chat, as feishu.message hands it over.
+func feishuEvent(id, text string) FeishuMessage {
+	raw, _ := json.Marshal(map[string]any{"message": map[string]any{"message_id": id, "chat_id": "oc_1", "chat_type": "p2p",
+		"message_type": "text", "content": fmt.Sprintf(`{"text":%q}`, text)}})
+	return FeishuMessage{Event: raw}
+}
+
+// sentOnce are the client_msg_ids of the messages that went into a conversation, in order.
+func sentOnce(f *fakeHub) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var ids []string
+	for _, c := range f.calls {
+		if c.Method == DeviceSessionSendOnce {
+			var p map[string]any
+			_ = json.Unmarshal(c.Params, &p)
+			ids = append(ids, fmt.Sprint(p["client_msg_id"]))
+		}
+	}
+	return ids
+}
+
+// A message that is not handled still passes the turn on: one redelivered, one taken when the bot's status could not
+// be read (the hub hands it again), a command, one the chat may not send. The message after each goes in.
+func TestFeishuMessageNotHandledPassesTheTurnOn(t *testing.T) {
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	f.settings = &Settings{MachineID: "server", Main: "m1"}
+	f.answerApp(AppFeishu, FeishuReact, func(json.RawMessage) (any, error) { return map[string]any{"reaction_id": "rx"}, nil })
+	f.answerApp(AppFeishu, FeishuUnreact, func(json.RawMessage) (any, error) { return map[string]any{}, nil })
+	f.answerApp(AppFeishu, FeishuText, func(json.RawMessage) (any, error) { return map[string]any{}, nil })
+	st := &memStore{}
+	s := withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t)}))
+	s.fbot.mu.Lock()
+	s.fbot.turnWait = time.Hour // a turn not passed on would hang the test, not wait it out
+	s.fbot.mu.Unlock()
+	ctx := context.Background()
+	if err := s.FeishuMessage(ctx, feishuEvent("om_1", "一")); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, func() bool { return len(sentOnce(f)) == 1 })
+	steps := []struct {
+		what   string
+		before func()
+		ev     FeishuMessage
+		failed bool
+	}{
+		{what: "redelivered", ev: feishuEvent("om_1", "一")},
+		{what: "a command", ev: feishuEvent("om_help", "/help")},
+		{what: "the bot's status unread", failed: true, ev: feishuEvent("om_x", "状态读不到"), before: func() {
+			f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) { return nil, errors.New("hub away") })
+		}},
+		{what: "the chat may not send", ev: feishuEvent("om_off", "关着"), before: func() {
+			f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+				return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0)}, nil
+			})
+		}},
+	}
+	for _, st := range steps {
+		if st.before != nil {
+			st.before()
+		}
+		if err := s.FeishuMessage(ctx, st.ev); (err != nil) != st.failed {
+			t.Fatalf("%s: %v", st.what, err)
+		}
+	}
+	f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
+		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0), Features: FeishuFeatures{Main: true}}, nil
+	})
+	if err := s.FeishuMessage(ctx, feishuEvent("om_2", "二")); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, func() bool { return len(sentOnce(f)) == 2 })
+	if got := strings.Join(sentOnce(f), " "); got != "feishu-om_1 feishu-om_2" {
+		t.Fatalf("went in as %s", got)
+	}
+}
+
+// stuckHub is a fake hub on which downloading message stuck's picture does not answer until let go.
+type stuckHub struct {
+	*fakeHub
+	stuck   string
+	letGo   chan struct{}
+	pending chan struct{}
+}
+
+func (h stuckHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error) {
+	if p.AppID == AppFeishu && p.Method == FeishuResource {
+		var m map[string]any
+		_ = json.Unmarshal(p.Params, &m)
+		if m["message_id"] == h.stuck {
+			close(h.pending)
+			select {
+			case <-h.letGo:
+			case <-ctx.Done():
+			}
+			return nil, errors.New("too slow")
+		}
+	}
+	return h.fakeHub.AppCall(ctx, p)
+}
+
+// A message stuck before it goes into the conversation (a picture slow to download) holds the next one up only so
+// long: the next goes in without it.
+func TestFeishuStuckMessageHoldsTheNextOnlySoLong(t *testing.T) {
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	f.settings = &Settings{MachineID: "server", Main: "m1"}
+	f.answerApp(AppFeishu, FeishuReact, func(json.RawMessage) (any, error) { return map[string]any{"reaction_id": "rx"}, nil })
+	f.answerApp(AppFeishu, FeishuUnreact, func(json.RawMessage) (any, error) { return map[string]any{}, nil })
+	f.answerApp(AppFeishu, FeishuText, func(json.RawMessage) (any, error) { return map[string]any{}, nil })
+	h := stuckHub{fakeHub: f, stuck: "om_pic", letGo: make(chan struct{}), pending: make(chan struct{})}
+	defer close(h.letGo)
+	st := &memStore{}
+	s := withSettings(t, f, New(Options{Hub: h, Store: func() Store { return st }, Logf: testLogf(t)}))
+	s.fbot.mu.Lock()
+	s.fbot.turnWait = 200 * time.Millisecond
+	s.fbot.mu.Unlock()
+	ctx := context.Background()
+	pic, _ := json.Marshal(map[string]any{"message": map[string]any{"message_id": "om_pic", "chat_id": "oc_1", "chat_type": "p2p",
+		"message_type": "image", "content": `{"image_key":"img_1"}`}})
+	if err := s.FeishuMessage(ctx, FeishuMessage{Event: pic}); err != nil {
+		t.Fatal(err)
+	}
+	<-h.pending
+	if err := s.FeishuMessage(ctx, feishuEvent("om_2", "二")); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, func() bool { return len(sentOnce(f)) == 1 })
+	if got := sentOnce(f)[0]; got != "feishu-om_2" {
+		t.Fatalf("went in %s", got)
+	}
+}

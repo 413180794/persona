@@ -114,6 +114,47 @@ class HubConnectionLivenessTest {
         }
     }
 
+    /** #4695: silence that was normal in the background is not a failure on return; the ping decides. */
+    @Test fun foregroundAfterQuietBackgroundKeepsTheSocketWhenThePingIsAnswered() = runBlocking {
+        Fixture(appPing = true).use { fixture ->
+            val socket = fixture.start()
+            fixture.connection.setForeground(false)
+            fixture.scheduler.runCurrent()
+            socket.receive("""{"type":"client_hello_ack","heartbeat":{"interval":240,"pong_timeout":15}}""")
+            fixture.scheduler.runCurrent()
+            fixture.advance(60_000)
+            assertFalse(socket.cancelled)
+            fixture.connection.setForeground(true)
+            fixture.scheduler.runCurrent()
+            assertFalse(socket.cancelled)
+            assertEquals(ConnectionState.Online, fixture.connection.state.value)
+            val ping = socket.sent.last()
+            assertEquals("ping", (ping["type"]?.jsonPrimitive?.content).zhAny())
+            socket.receive(buildJsonObject { put("type", "pong"); put("id", ping.getValue("id")) }.toString())
+            fixture.advance(5_000)
+            assertFalse(socket.cancelled)
+            assertEquals(ConnectionState.Online, fixture.connection.state.value)
+        }
+    }
+
+    @Test fun foregroundAfterQuietBackgroundReconnectsWhenThePingGoesUnanswered() = runBlocking {
+        Fixture(appPing = true).use { fixture ->
+            val socket = fixture.start()
+            fixture.connection.setForeground(false)
+            fixture.scheduler.runCurrent()
+            socket.receive("""{"type":"client_hello_ack","heartbeat":{"interval":240,"pong_timeout":15}}""")
+            fixture.scheduler.runCurrent()
+            fixture.advance(60_000)
+            fixture.connection.setForeground(true)
+            fixture.scheduler.runCurrent()
+            assertFalse(socket.cancelled)
+            fixture.advance(4_999)
+            assertFalse(socket.cancelled)
+            fixture.advance(1)
+            assertTrue(socket.cancelled)
+        }
+    }
+
     @Test fun networkSwitchRenegotiatesConfiguredIntervalsAndJitterNeverRaisesThem() = runBlocking {
         val policy = HeartbeatPolicy(backgroundWifiSeconds = 180, backgroundCellularSeconds = 120,
             backgroundJitterFraction = 0.25)
