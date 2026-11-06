@@ -18,6 +18,8 @@ export interface AgentSetting {
   options?: string[];
   default?: SettingValue;
   value?: SettingValue;
+  /** A stored value the agent ignores; value is null so the control shows the default. */
+  ignored_value?: string;
 }
 
 export const AGENT_TEXT: Record<AgentKind, { name: string; path: string; file: string; footer: string }> = {
@@ -59,7 +61,8 @@ export function settingTitle(s: Pick<AgentSetting, "key" | "title">): string {
 }
 
 /** What a row does, in a sentence. */
-export function settingDetail(s: Pick<AgentSetting, "key" | "detail">): string {
+export function settingDetail(s: Pick<AgentSetting, "key" | "detail" | "ignored_value">): string {
+  if (s.key === "effortLevel" && s.ignored_value === "max") return t("lib-agent-settings.setting_effortLevel_ignored_max");
   return catalogText(`lib-agent-settings.setting_${s.key}_detail`, s.detail);
 }
 
@@ -97,9 +100,9 @@ export function isUnset(s: AgentSetting): boolean {
   return s.value === null || s.value === undefined;
 }
 
-/** The list with one key's value replaced (an optimistic change, or its rollback). */
+/** An optimistic change clears the old stored-value warning until the node answers. */
 export function withValue(list: AgentSetting[], key: string, value: SettingValue): AgentSetting[] {
-  return list.map((s) => (s.key === key ? { ...s, value } : s));
+  return list.map((s) => (s.key === key ? { ...s, value, ignored_value: undefined } : s));
 }
 
 /** What a text field sends: an empty field is "back to the default" (null), not an empty string written to the file. */

@@ -4,6 +4,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { t } from "../../i18n";
 import type { AgentSetting } from "../../lib/agent-settings";
 
 type Call = { path: string; method: string; json?: { key: string; value: unknown }; resolve: (v: unknown) => void; reject: (e: unknown) => void };
@@ -48,10 +49,78 @@ const click = (label: string) => act(async () => sw(label).click());
 const put = (key: string) => calls.find((c) => c.method === "PUT" && c.json?.key === key)!;
 const answer = (c: Call, v: unknown) => act(async () => c.resolve(v));
 
-async function loaded() {
+async function loaded(settings = list(false, false)) {
   await act(async () => root.render(<AgentSettings agent="claude" />));
-  await answer(calls.find((c) => c.method === "GET" && c.path.endsWith("/claude-settings"))!, { settings: list(false, false) });
+  await answer(calls.find((c) => c.method === "GET" && c.path.endsWith("/claude-settings"))!, { settings });
 }
+
+const ignoredEffort: AgentSetting = {
+  key: "effortLevel", title: "Thinking effort", detail: "Node fallback", type: "enum",
+  options: ["auto", "low", "medium", "high", "xhigh"], default: "auto", value: null, ignored_value: "max",
+};
+const effortSelect = () => host.querySelector<HTMLSelectElement>(`select[aria-label="${t("lib-agent-settings.setting_effortLevel")}"]`)!;
+const effortWarning = () => host.textContent!.includes(t("lib-agent-settings.setting_effortLevel_ignored_max"));
+const selectEffort = (value: string) => act(async () => {
+  effortSelect().value = value;
+  effortSelect().dispatchEvent(new Event("change", { bubbles: true }));
+});
+
+describe("Settings > Claude Code, ignored stored max", () => {
+  it("shows the default and warning, and offers only persistent effort levels", async () => {
+    await loaded([ignoredEffort]);
+    expect(effortSelect().value).toBe("auto");
+    expect([...effortSelect().options].map((o) => o.value)).toEqual(["auto", "low", "medium", "high", "xhigh"]);
+    expect(effortWarning()).toBe(true);
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+  });
+
+  it("restores the warning and default when saving an explicit level fails", async () => {
+    await loaded([ignoredEffort]);
+    await selectEffort("high");
+    expect(put("effortLevel").json).toEqual({ key: "effortLevel", value: "high" });
+    expect(effortWarning()).toBe(false);
+    expect(effortSelect().disabled).toBe(true);
+    await act(async () => put("effortLevel").reject(new Error("refused")));
+    expect(effortSelect().value).toBe("auto");
+    expect(effortSelect().disabled).toBe(false);
+    expect(effortWarning()).toBe(true);
+  });
+
+  it("can reset an ignored stored value even though the default is already effective", async () => {
+    await loaded([ignoredEffort]);
+    const label = t("settings-agentsettings.more", { title: t("lib-agent-settings.setting_effortLevel") });
+    await act(async () => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
+    const reset = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent!.includes(t("settings-agentsettings.reset")))!;
+    expect(reset.disabled).toBe(false);
+    await act(async () => reset.click());
+    expect(put("effortLevel").json).toEqual({ key: "effortLevel", value: null });
+    await answer(put("effortLevel"), { settings: [{ ...ignoredEffort, ignored_value: undefined }] });
+    expect(effortWarning()).toBe(false);
+    expect(effortSelect().value).toBe("auto");
+  });
+
+  it("keeps a corrected effort when another row's stale response arrives later", async () => {
+    await loaded([row("optA", false), ignoredEffort]);
+    await click("optA");
+    await selectEffort("high");
+    await answer(put("effortLevel"), { settings: [row("optA", true), { ...ignoredEffort, value: "high", ignored_value: undefined }] });
+    await answer(put("optA"), { settings: [row("optA", true), ignoredEffort] });
+    expect(effortSelect().value).toBe("high");
+    expect(effortWarning()).toBe(false);
+  });
+
+  it("keeps ignored-value metadata from the saved row's response while another save is pending", async () => {
+    await loaded([row("optA", false), { ...ignoredEffort, ignored_value: undefined }]);
+    await click("optA");
+    await selectEffort("high");
+    // The file was changed elsewhere before the node read back its settings.
+    await answer(put("effortLevel"), { settings: [row("optA", false), ignoredEffort] });
+    expect(effortWarning()).toBe(true);
+    expect(effortSelect().value).toBe("auto");
+    expect(sw("optA").disabled).toBe(true);
+    expect(sw("optA").getAttribute("aria-checked")).toBe("true");
+  });
+});
 
 describe("Settings > Claude Code, two saves at once", () => {
   it("keeps the other row busy and at its new value when the first save answers", async () => {

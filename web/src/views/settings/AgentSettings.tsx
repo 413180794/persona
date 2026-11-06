@@ -91,9 +91,8 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
 
   // Sends one value to the shown computer (and, with "Change all", every other online one); rolls the row back if the
   // shown computer refuses, and says what happened. While another row's save is in flight (or one started after
-  // this), the answer's list may hold that row's old value, so only this row's value is taken from it.
+  // this), the answer's list may hold that row's old value, so only this row is taken from it.
   const change = async (s: AgentSetting, value: SettingValue) => {
-    const before = s.value ?? null;
     const target = shown;
     const seq = ++started.current;
     saving.current.add(s.key);
@@ -108,11 +107,11 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
             const alone = saving.current.size === 1 && started.current === seq;
             const answered = r.settings.find((x) => x.key === s.key);
             if (alone) setSettings(r.settings);
-            else if (answered) setSettings((cur) => cur && withValue(cur, s.key, answered.value ?? null));
+            else if (answered) setSettings((cur) => cur && cur.map((row) => row.key === s.key ? answered : row));
           }
           return { id, name: name(id) };
         } catch (e) {
-          if (id === target && current.current === target) setSettings((cur) => cur && withValue(cur, s.key, before));
+          if (id === target && current.current === target) setSettings((cur) => cur && cur.map((row) => row.key === s.key ? s : row));
           return { id, name: name(id), error: errorText(e) };
         }
       }),
@@ -236,7 +235,7 @@ function SettingRow({ s, i, busy, others, onChange, onPushAll }: { s: AgentSetti
             align="right"
             width={220}
             items={[
-              { key: "reset", label: t("settings-agentsettings.reset"), hint: s.default !== undefined && s.default !== "" ? valueText(s.default ?? null, s.key) : undefined, icon: "retry", disabled: unset || busy, onSelect: () => onChange(null) },
+              { key: "reset", label: t("settings-agentsettings.reset"), hint: s.default !== undefined && s.default !== "" ? valueText(s.default ?? null, s.key) : undefined, icon: "retry", disabled: (unset && !s.ignored_value) || busy, onSelect: () => onChange(null) },
               { key: "all", label: t("settings-agentsettings.push_all"), hint: others > 0 ? t("settings-agentsettings.others_hint", { count: others }) : t("settings-agentsettings.no_others"), icon: "machine", disabled: others < 1 || busy, onSelect: onPushAll },
               { key: "key", label: t("settings-agentsettings.copy_key"), hint: s.key, icon: "copy", divider: true, onSelect: () => void copyText(s.key) },
             ]}

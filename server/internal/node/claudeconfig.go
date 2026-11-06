@@ -6,26 +6,30 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // ClaudeSetting is one Claude Code /config option the app may change. Only these keys are read or written;
 // everything else in settings.json (of each config directory, claudedirs.go) is preserved as is.
 type ClaudeSetting struct {
-	Key     string   `json:"key"`
-	Title   string   `json:"title"`
-	Detail  string   `json:"detail"`
-	Type    string   `json:"type"` // bool | enum | string
-	Options []string `json:"options,omitempty"`
-	Default any      `json:"default"`
-	Value   any      `json:"value"` // nil when unset (Claude Code uses the default)
+	Key          string   `json:"key"`
+	Title        string   `json:"title"`
+	Detail       string   `json:"detail"`
+	Type         string   `json:"type"` // bool | enum | string
+	Options      []string `json:"options,omitempty"`
+	Default      any      `json:"default"`
+	Value        any      `json:"value"`                   // nil when unset (Claude Code uses the default)
+	IgnoredValue string   `json:"ignored_value,omitempty"` // stored but not applied by Claude Code
 }
 
 var claudeSettings = []ClaudeSetting{
 	{Key: "awaySummaryEnabled", Title: "回来时先说进展", Detail: "离开 5 分钟以上再回来时，Claude 先简单说说这段时间做了什么", Type: "bool", Default: true},
 	{Key: "alwaysThinkingEnabled", Title: "每次都先想清楚", Detail: "每次回答前都先仔细想一想，更准，但更慢、更费额度", Type: "bool", Default: false},
 	{Key: "enableWorkflows", Title: "动态工作流", Detail: "允许 Claude 一次安排好几个 Agent 一起干活，开 ultracode 要先打开它。不设时由账号方案决定，组织策略也可能不让用", Type: "bool", Default: nil},
-	// "auto" (the model's default) is never written: Claude Code ignores it there, so choosing it removes the key.
-	{Key: "effortLevel", Title: "思考强度", Detail: "越高想得越仔细，也越慢；auto 用模型自己的默认档", Type: "enum", Options: effortLevels, Default: effortAuto},
+	// settings.json accepts only low through xhigh; max belongs to session controls.
+	// "auto" removes the key so Claude Code uses the model's default.
+	{Key: "effortLevel", Type: "enum", Options: []string{effortAuto, "low", "medium", "high", "xhigh"}, Default: effortAuto},
 	{Key: "language", Title: "回复语言", Detail: "Claude 回答用哪种语言，比如「中文」", Type: "string", Default: ""},
 	{Key: "promptSuggestionEnabled", Title: "猜你下一句", Detail: "在输入框里先替你写出可能要说的下一句", Type: "bool", Default: true},
 	{Key: "spinnerTipsEnabled", Title: "等待时的小提示", Detail: "Claude 干活时，在终端底部显示使用小技巧", Type: "bool", Default: true},
@@ -75,7 +79,7 @@ func readSettingsFile(path string) (map[string]any, error) {
 }
 
 // getClaudeSettings returns the editable options with their current values.
-func (n *Node) getClaudeSettings() ([]ClaudeSetting, error) {
+func (n *Node) getClaudeSettings(lang i18n.Lang) ([]ClaudeSetting, error) {
 	raw, err := n.readClaudeSettings()
 	if err != nil {
 		return nil, err
@@ -83,6 +87,16 @@ func (n *Node) getClaudeSettings() ([]ClaudeSetting, error) {
 	out := make([]ClaudeSetting, len(claudeSettings))
 	for i, s := range claudeSettings {
 		s.Value = raw[s.Key]
+		if s.Key == "effortLevel" {
+			s.Title = i18n.T(lang, "claude-settings.effort_title")
+			s.Detail = i18n.T(lang, "claude-settings.effort_detail")
+			if value, ok := s.Value.(string); ok && value == "max" {
+				// Reading must not rewrite the file or present an ignored default as applied.
+				s.Value = nil
+				s.IgnoredValue = value
+				s.Detail = i18n.T(lang, "claude-settings.effort_max_ignored")
+			}
+		}
 		out[i] = s
 	}
 	return out, nil

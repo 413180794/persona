@@ -27,6 +27,12 @@ For Persona-started sessions, node state records the launcher. Manually started 
 if exactly one launcher matches both base URL and model, use it; otherwise, if exactly one launcher has that base URL (runtime-selected model, displayed as `(claude-choose)`), use it too.
 Leave other cases blank (multiple launchers share a base URL with no model match, or no base URL), without guessing between candidates. Listing sessions does not wait for the launcher list, which requires a login shell: use cache, refresh expired cache in background. The first list after node startup may therefore lack inferred launchers.
 
+## Default thinking effort
+
+**Settings › Claude Code › Thinking effort** changes the machine's `settings.json` default. It offers `auto`, `low`, `medium`, `high`, and `xhigh`. Choosing `auto` removes `effortLevel`, letting the model choose its default. `max` is available through the session's effort control or `/effort max`; it cannot be stored as an effective `settings.json` default.
+
+If an older configuration contains `effortLevel: "max"`, the settings page shows the model default and explains that the saved value is not applied. Reading leaves the file untouched. Choose a supported explicit level to replace it, or use the web page's **Reset to default** action to remove it. The node returns `value: null` with `ignored_value: "max"`, so existing mobile clients also display the default and the explanation without an app update. The hub forwards the requested interface language for the effort title and explanation; the web uses its own matching translations.
+
 ## Independent ultracode switch (#3427)
 
 ultracode makes Claude orchestrate every substantive task as a multi-Agent workflow, independently of reasoning effort. The server supports the independent-switch semantics from Claude Code `2.1.284` onward. Earlier versions require an upgrade, including `2.1.203–2.1.283`, where ultracode occupied the slider's final position and locked the effort level. Running sessions use the version their transcript recorded since the current process started; new sessions use the computer's Claude version. An unknown version may be tried, but the result must still be read back. The switch is off by default, applies only to the current process, does not remember the user's last choice, and is not automatically re-enabled on resume. It is unavailable for headless assistants, including the main chat.

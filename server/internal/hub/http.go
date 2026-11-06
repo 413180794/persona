@@ -90,7 +90,9 @@ func (h *Hub) routes() http.Handler {
 		return map[string]any{"cwd": q.Get("cwd"), "skip": atoi(q.Get("skip")), "limit": atoi(q.Get("limit"))}
 	}))
 	api.HandleFunc("POST /api/v1/machines/{mid}/files", h.withMachine(h.uploadFile))
-	api.HandleFunc("GET /api/v1/machines/{mid}/claude-settings", h.proxy("claude.settings", nil))
+	api.HandleFunc("GET /api/v1/machines/{mid}/claude-settings", h.proxy("claude.settings", func(r *http.Request) any {
+		return map[string]any{"locale": h.requestLang(r)}
+	}))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/claude-settings", h.proxyBody("claude.settings.set"))
 	api.HandleFunc("GET /api/v1/machines/{mid}/codex-settings", h.proxy("codex.settings", nil))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/codex-settings", h.proxyBody("codex.settings.set"))
@@ -498,6 +500,9 @@ func (h *Hub) proxyBody(method string) http.HandlerFunc {
 			return
 		}
 		p["session_id"] = r.PathValue("sid")
+		if method == "claude.settings.set" {
+			p["locale"] = h.requestLang(r)
+		}
 		// Resuming an offline session can take a while (shell + claude startup).
 		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()

@@ -22,6 +22,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/nodeupdate"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -1073,21 +1074,23 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"settings": list}, err
 	case "claude.dirs.list": // every config directory the node knows, blocked ones too (claudedirs.go)
 		return map[string]any{"dirs": n.listClaudeDirs()}, nil
-	case "claude.settings":
-		list, err := n.getClaudeSettings()
-		return map[string]any{"settings": list}, err
-	case "claude.settings.set":
+	case "claude.settings", "claude.settings.set":
 		var a struct {
-			Key   string `json:"key"`
-			Value any    `json:"value"`
+			Key    string `json:"key"`
+			Value  any    `json:"value"`
+			Locale string `json:"locale"`
 		}
-		if err := json.Unmarshal(params, &a); err != nil {
-			return nil, err
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &a); err != nil {
+				return nil, err
+			}
 		}
-		if err := n.setClaudeSetting(a.Key, a.Value); err != nil {
-			return nil, err
+		if method == "claude.settings.set" {
+			if err := n.setClaudeSetting(a.Key, a.Value); err != nil {
+				return nil, err
+			}
 		}
-		list, err := n.getClaudeSettings()
+		list, err := n.getClaudeSettings(i18n.Resolve(a.Locale))
 		return map[string]any{"settings": list}, err
 	case "file.upload.begin", "file.upload.chunk", "file.upload.end", "file.upload.abort":
 		return n.uploadCall(method, params)

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { initI18n } from "../i18n";
 import {
   AGENT_TEXT,
   applySummary,
@@ -48,6 +49,29 @@ describe("agent settings", () => {
     expect(changed[0].value).toBe(false);
     expect(changed[1]).toBe(effort);
     expect(withValue(changed, "awaySummaryEnabled", null)[0].value).toBeNull();
+  });
+
+  it.each([
+    ["en", "not applied"],
+    ["zh-Hans", "未生效"],
+    ["ja", "反映されていません"],
+  ])("explains ignored max in %s while keeping the model default selected", async (lang, warning) => {
+    try {
+      await initI18n(lang);
+      const ignored: AgentSetting = { ...effort, value: null, default: "auto", ignored_value: "max" };
+      expect(effective(ignored)).toBe("auto");
+      expect(isUnset(ignored)).toBe(true);
+      expect(settingDetail(ignored)).toContain(warning);
+      expect(settingDetail(ignored)).toContain("/effort max");
+      const changed = withValue([ignored, recap], "effortLevel", "high");
+      expect(changed[0].ignored_value).toBeUndefined();
+      expect(settingDetail(changed[0])).not.toContain(warning);
+      expect(settingDetail(changed[0])).toContain("auto");
+      expect(settingDetail(changed[0])).toContain("/effort max");
+      expect(changed[1]).toBe(recap);
+    } finally {
+      await initI18n("zh-Hans");
+    }
   });
 
   it("send an empty text field as back to the default", () => {
