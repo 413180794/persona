@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nwverse/persona/server/internal/db/dbtest"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -306,6 +307,109 @@ func TestNodeSessions(t *testing.T) {
 	}
 }
 
+// state.load reaches node_sessions through node_sessions_started, so it reads only the 60-day window instead of every
+// session the machine ever had, both planned for its machine and as the generic plan a cached statement may switch to.
+func TestNodeSessionsStartedIndexed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// A test table is too small for the planner to prefer any index on its own; rule the scan out to see the choice.
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `PREPARE node_sessions_load(text) AS `+nodeSessionsSQL); err != nil {
+		t.Fatal(err)
+	}
+	// A prepared statement outlives the transaction; the connection goes back to the pool.
+	defer func() { _, _ = tx.Exec(ctx, `DEALLOCATE node_sessions_load`) }()
+	for _, mode := range []string{"force_custom_plan", "force_generic_plan"} {
+		if _, err := tx.Exec(ctx, `SET LOCAL plan_cache_mode = `+mode); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := tx.Query(ctx, `EXPLAIN EXECUTE node_sessions_load('server')`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan := strings.Join(lines, "\n"); !strings.Contains(plan, "node_sessions_started") || strings.Contains(plan, "node_sessions_pkey") {
+			t.Fatalf("%s: NodeSessions does not use node_sessions_started:\n%s", mode, plan)
+		}
+	}
+}
+
+// A session without its node_model settings row still loads, with the model fields empty.
+func TestNodeSessionsModelRow(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	with := NodeSession{Launcher: "claude", Cwd: "/x", Model: "m", ModelFingerprint: "fp", ModelEffort: "high", AppMode: "plan", AppEffort: "low"}
+	if err := d.PutNodeSession(ctx, "server", "with", with); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.PutNodeSession(ctx, "server", "without", NodeSession{Launcher: "claude", Model: "gone"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.pool.Exec(ctx, `DELETE FROM settings WHERE key = 'node_model.server.without'`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.NodeSessions(ctx, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := got["with"]
+	if w.Model != "m" || w.ModelFingerprint != "fp" || w.ModelEffort != "high" || w.AppMode != "plan" || w.AppEffort != "low" || w.Launcher != "claude" {
+		t.Fatalf("with = %+v", w)
+	}
+	wo, ok := got["without"]
+	if !ok || wo.Launcher != "claude" || wo.Model != "" || wo.ModelFingerprint != "" || wo.ModelEffort != "" || wo.AppMode != "" || wo.AppEffort != "" {
+		t.Fatalf("without = %+v, %v", wo, ok)
+	}
+}
+
+// NodeSessions reaches each session's node_model row through settings_pkey, planned for its machine and as the
+// generic plan a cached statement may switch to. settings keeps a row for every session ever started, so a plan that
+// joins on the computed key and hashes the whole table instead must not come back.
+func TestNodeSessionsSettingsLookup(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// A test table is too small for the planner to prefer any index on its own; rule the scan out to see the choice.
+	// Ruling out nested loops leaves a join only a hash or merge over all of settings, which a per-row lookup is not.
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off; SET LOCAL enable_nestloop = off`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `PREPARE node_sessions_q(text) AS `+nodeSessionsSQL); err != nil {
+		t.Fatal(err)
+	}
+	// A prepared statement outlives the transaction; the connection goes back to the pool.
+	defer func() { _, _ = tx.Exec(ctx, `DEALLOCATE node_sessions_q`) }()
+	for _, mode := range []string{"force_custom_plan", "force_generic_plan"} {
+		if _, err := tx.Exec(ctx, `SET LOCAL plan_cache_mode = `+mode); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := tx.Query(ctx, `EXPLAIN EXECUTE node_sessions_q('server')`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := strings.Join(lines, "\n")
+		if !strings.Contains(plan, "using settings_pkey on settings") || !strings.Contains(plan, "Index Cond: (key = ") ||
+			strings.Contains(plan, "Seq Scan on settings") || strings.Contains(plan, "Join") {
+			t.Fatalf("%s: NodeSessions does not look settings up by key:\n%s", mode, plan)
+		}
+	}
+}
+
 func TestMailAccountsReplace(t *testing.T) {
 	d, ctx := open(t), context.Background()
 	rows := []MailAccountRow{{ID: "1", Email: "a@x", Data: json.RawMessage(`{"name":"A"}`), PasswordEnc: "enc"}, {ID: "2", Email: "b@x", Data: json.RawMessage(`{}`)}}
@@ -408,6 +512,139 @@ func TestPendingInteractionsIndexed(t *testing.T) {
 		if plan := strings.Join(lines, "\n"); !strings.Contains(plan, "interactions_pending") {
 			t.Fatalf("%s\nplan:\n%s", q, plan)
 		}
+	}
+}
+
+// Each combination of filters returns the same rows the single OR statement did: newest first, limited, and a
+// session alone matches that session id on every machine.
+func TestInteractionsFilters(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	base := time.Now().Add(-time.Hour).UTC()
+	type row struct{ id, machine, session string }
+	var all []row // newest first
+	for i := 11; i >= 0; i-- {
+		r := row{fmt.Sprintf("ix%02d", i), []string{"m1", "m2"}[i%2], []string{"s1", "s2", "s3"}[i%3]}
+		all = append(all, r)
+		if err := d.InsertInteraction(ctx, proto.Interaction{ID: r.id, MachineID: r.machine, SessionID: r.session,
+			Kind: proto.IxQuestion, CreatedAt: base.Add(time.Duration(i) * time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range []struct {
+		machine, session string
+		limit            int
+	}{{"", "", 0}, {"", "", 3}, {"m1", "", 0}, {"m2", "", 2}, {"", "s1", 0}, {"m1", "s1", 0}, {"m2", "s1", 1}, {"m1", "nope", 0}} {
+		var want []string
+		for _, r := range all {
+			if (c.machine == "" || r.machine == c.machine) && (c.session == "" || r.session == c.session) &&
+				(c.limit == 0 || len(want) < c.limit) {
+				want = append(want, r.id)
+			}
+		}
+		// Past five runs, so a cached statement is on its generic plan by the last ones.
+		for range 7 {
+			recs, err := d.Interactions(ctx, c.machine, c.session, c.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := make([]string, len(recs))
+			for i, r := range recs {
+				got[i] = r.Interaction.ID
+			}
+			if strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Fatalf("Interactions(%q, %q, %d) = %v, want %v", c.machine, c.session, c.limit, got, want)
+			}
+		}
+	}
+}
+
+// The cached history statements stay on an index under a generic plan too, which Postgres switches a cached
+// statement to: neither scans the table, and machine+session does not walk interactions_created past the rows it skips.
+func TestInteractionsHistoryIndexed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if _, err := d.pool.Exec(ctx, `INSERT INTO interactions (id, machine_id, session_id, kind, payload, created_at)
+		SELECT 'ix' || g, 'm' || (g % 20), 's' || (g % 600), 'question', '{}', now() - g * interval '1 minute'
+		FROM generate_series(1, 6000) g`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.pool.Exec(ctx, `ANALYZE interactions`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, sql, types, args, index string
+	}{
+		{"ix_history", interactionsSQL, "int", "100", "interactions_created"},
+		{"ix_history_machine_session", interactionsMachineSessionSQL, "text, text, int", "'m7', 's7', 100", "interactions_session"},
+	} {
+		if _, err := tx.Exec(ctx, `PREPARE `+c.name+`(`+c.types+`) AS `+c.sql); err != nil {
+			t.Fatal(err)
+		}
+		// A prepared statement outlives the transaction; the connection goes back to the pool.
+		defer func() { _, _ = d.pool.Exec(ctx, `DEALLOCATE `+c.name) }()
+		for _, mode := range []string{"force_custom_plan", "force_generic_plan"} {
+			if _, err := tx.Exec(ctx, `SET LOCAL plan_cache_mode = `+mode); err != nil {
+				t.Fatal(err)
+			}
+			// EXPLAIN EXECUTE takes no bind parameters, so the values are written in.
+			rows, err := tx.Query(ctx, `EXPLAIN EXECUTE `+c.name+`(`+c.args+`)`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan := strings.Join(lines, "\n")
+			walks := strings.Contains(plan, "interactions_created") && c.index != "interactions_created"
+			if !strings.Contains(plan, c.index) || strings.Contains(plan, "Seq Scan") || walks {
+				t.Fatalf("%s %s: want %s\nplan:\n%s", c.name, mode, c.index, plan)
+			}
+		}
+	}
+}
+
+// The machine-only and session-only history statements go as unnamed statements, planned for each call with their
+// values: a cached one would settle on a generic plan that walks every row for a quiet machine or session.
+func TestInteractionsNotCached(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	cfg, err := pgxpool.ParseConfig(os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.MaxConns = 1 // one connection, so pg_prepared_statements below sees the statements Interactions used
+	one, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer one.Close()
+	d = &DB{pool: one}
+	for range 7 {
+		if _, err := d.Interactions(ctx, "m1", "", 10); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Interactions(ctx, "", "s1", 10); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Interactions(ctx, "m1", "s1", 10); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var alone, both int
+	if err := one.QueryRow(ctx, `SELECT count(*) FILTER (WHERE statement IN ($1, $2)), count(*) FILTER (WHERE statement = $3)
+		FROM pg_prepared_statements`, interactionsMachineSQL, interactionsSessionSQL, interactionsMachineSessionSQL).Scan(&alone, &both); err != nil {
+		t.Fatal(err)
+	}
+	// machine+session is cached as usual, which shows the lookup sees the statements of this connection.
+	if alone != 0 || both != 1 {
+		t.Fatalf("prepared: machine or session alone %d (want 0), machine+session %d (want 1)", alone, both)
 	}
 }
 

@@ -607,3 +607,13 @@ hub 自更新原来只下「这一刻 hub 已经知道平台的机器」用到�
 「hub 上没有 `<os>/<arch>` 的 jarvisd」，「重新部署」怎么点都失败；那个平台要是在上个版本留下一份旧文件，推过去的还是旧二进制，机器回来报的还是旧版本号，版本差照样消不掉。
 现在下载列表直接取发布清单里的所有平台（四个，和 `deploy.sh`、镜像一致），hub 自己那个平台的 node 二进制就是 hub 自己的二进制，复用已下载的那份。
 凡是「按当前运行时状态决定要准备什么」的下载 / 构建清单，都要先想清楚：更新以后才出现的对象怎么办。
+
+## 缓存的语句换成通用计划后，「空值就不过滤」的写法会丢掉索引（2026-11-06，#4907）
+
+- pgx 默认把语句缓存成 prepared statement；Postgres 对同一个 prepared statement 跑过五次之后可能改用通用计划（generic plan），这时它看不到参数的值。
+  `WHERE ($1 = '' OR machine_id = $1)` 这种「传空就不过滤」的写法在通用计划里折不掉，原来的 `Interactions()` 因此沿着 `interactions_created` 走遍保留下来的每一行。
+  现在按传了哪些过滤条件拆成几条语句（`interactionsSQL` 等），回归 `TestInteractionsHistoryIndexed`。前五次 EXPLAIN 看着都好，之后才变慢；测试里在事务中 `SET LOCAL plan_cache_mode = force_generic_plan` 再 EXPLAIN EXECUTE，直接看通用计划。
+- 只有 machine 或只有 session 时没有按 `created_at` 排好的索引：繁忙的那个走 `interactions_created` 最快，冷清的那个读 `interactions_session` 再排序最快，通用计划只能选一种。
+  这类查询用 `pgx.QueryExecModeExec`（无名语句、每次带着值规划），回归 `TestInteractionsNotCached`。别在连接池上全局改 `plan_cache_mode`：那会让所有语句都每次重新规划。
+- 用拼出来的键 LEFT JOIN（`s.key = 'node_model.' || n.machine_id || '.' || n.session_id`）时，规划器可能把整张 `settings` 做成哈希表；`settings` 给每个启动过的会话都留一行，越来越大。
+  改成按行的标量子查询走 `settings_pkey`（`nodeSessionsSQL`）。jsonb 整块取回在 Go 里解：在外层 SELECT 里逐个取字段会让子查询每个字段跑一次。

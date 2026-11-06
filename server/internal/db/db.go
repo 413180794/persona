@@ -426,13 +426,28 @@ func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSessi
 	return err
 }
 
+// nodeSessionsSQL reads a machine's sessions from the last 60 days through node_sessions_started (0418), with the
+// model settings PutNodeSession keeps beside each one.
+// settings holds a node_model row for every session ever started, so the row is fetched per session through
+// settings_pkey: a join on the computed key lets the planner hash all of settings instead. The jsonb comes back
+// whole because extracting its fields in an outer SELECT repeats the subquery once per field.
+const nodeSessionsSQL = `SELECT n.session_id, n.pane, n.launcher, n.cwd, n.started_at, n.tasks,
+		COALESCE((SELECT s.value FROM settings s WHERE s.key = 'node_model.' || n.machine_id || '.' || n.session_id), '{}')
+		FROM node_sessions n
+		WHERE n.machine_id = $1 AND n.started_at > now() - interval '60 days'`
+
+// nodeModel is the node_model.<machine>.<session> settings value PutNodeSession writes.
+type nodeModel struct {
+	Model            string `json:"model"`
+	ModelFingerprint string `json:"model_fingerprint"`
+	ModelEffort      string `json:"model_effort"`
+	AppMode          string `json:"app_mode"`
+	AppEffort        string `json:"app_effort"`
+}
+
 // NodeSessions returns a machine's sessions from the last 60 days.
 func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeSession, error) {
-	rows, err := d.pool.Query(ctx, `SELECT n.session_id, n.pane, n.launcher, n.cwd, n.started_at, n.tasks,
-		COALESCE(s.value->>'model',''), COALESCE(s.value->>'model_fingerprint',''), COALESCE(s.value->>'model_effort',''),
-		COALESCE(s.value->>'app_mode',''), COALESCE(s.value->>'app_effort','')
-		FROM node_sessions n LEFT JOIN settings s ON s.key = 'node_model.' || n.machine_id || '.' || n.session_id
-		WHERE n.machine_id = $1 AND n.started_at > now() - interval '60 days'`, machine)
+	rows, err := d.pool.Query(ctx, nodeSessionsSQL, machine)
 	if err != nil {
 		return nil, err
 	}
@@ -441,9 +456,11 @@ func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeS
 	for rows.Next() {
 		var id string
 		var s NodeSession
-		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt, &s.Tasks, &s.Model, &s.ModelFingerprint, &s.ModelEffort, &s.AppMode, &s.AppEffort); err != nil {
+		var m nodeModel
+		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt, &s.Tasks, &m); err != nil {
 			return nil, err
 		}
+		s.Model, s.ModelFingerprint, s.ModelEffort, s.AppMode, s.AppEffort = m.Model, m.ModelFingerprint, m.ModelEffort, m.AppMode, m.AppEffort
 		out[id] = s
 	}
 	return out, rows.Err()
@@ -523,14 +540,42 @@ type InteractionRecord struct {
 	ResolvedAt  *time.Time        `json:"resolved_at,omitempty"`
 }
 
-// Interactions lists recent interactions, newest first, optionally for one session.
+// The statements of Interactions, one per combination of filters. The single statement they replace matched an
+// empty filter with an OR ("$1 = empty OR machine_id = $1"). Once Postgres switched that cached statement to a generic
+// plan (after five runs) it could not fold the empty test away, so it walked interactions_created over every row ever
+// kept. TestInteractionsHistoryIndexed checks the plans of the cached ones.
+const (
+	interactionsSQL        = `SELECT payload, status, resolution, resolved_at FROM interactions ORDER BY created_at DESC LIMIT $1`
+	interactionsMachineSQL = `SELECT payload, status, resolution, resolved_at FROM interactions
+		WHERE machine_id = $1 ORDER BY created_at DESC LIMIT $2`
+	interactionsSessionSQL = `SELECT payload, status, resolution, resolved_at FROM interactions
+		WHERE session_id = $1 ORDER BY created_at DESC LIMIT $2`
+	interactionsMachineSessionSQL = `SELECT payload, status, resolution, resolved_at FROM interactions
+		WHERE machine_id = $1 AND session_id = $2 ORDER BY created_at DESC LIMIT $3`
+)
+
+// Interactions lists recent interactions, newest first, optionally for one machine and/or one session.
 func (d *DB) Interactions(ctx context.Context, machine, session string, limit int) ([]InteractionRecord, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := d.pool.Query(ctx, `SELECT payload, status, resolution, resolved_at FROM interactions
-		WHERE ($1 = '' OR machine_id = $1) AND ($2 = '' OR session_id = $2)
-		ORDER BY created_at DESC LIMIT $3`, machine, session, limit)
+	// A machine alone or a session alone has no index that orders by created_at: the best plan walks
+	// interactions_created for a busy one and reads interactions_session then sorts for a quiet one. A generic plan
+	// settles on the walk, which reads every row ever kept for a quiet one, so these two go as the unnamed statement
+	// of QueryExecModeExec, planned for each call with its values. TestInteractionsNotCached checks that.
+	var q string
+	var args []any
+	switch {
+	case machine != "" && session != "":
+		q, args = interactionsMachineSessionSQL, []any{machine, session, limit}
+	case machine != "":
+		q, args = interactionsMachineSQL, []any{pgx.QueryExecModeExec, machine, limit}
+	case session != "":
+		q, args = interactionsSessionSQL, []any{pgx.QueryExecModeExec, session, limit}
+	default:
+		q, args = interactionsSQL, []any{limit}
+	}
+	rows, err := d.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
