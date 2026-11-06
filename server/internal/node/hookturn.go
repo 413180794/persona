@@ -3,8 +3,6 @@ package node
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,9 +28,6 @@ const (
 	// call can be silent for a while.
 	hookQuietUnknown = 2 * claudeFresh
 )
-
-// hookAncestors bounds the walk from a hook process up to its claude (the hook runs under a shell or two).
-const hookAncestors = 6
 
 // hookTurn is what a session's hooks have told the node since it started.
 type hookTurn struct {
@@ -230,27 +225,6 @@ func stopSignature(reply string) string {
 	}
 	sum := sha256.Sum256([]byte(reply))
 	return hex.EncodeToString(sum[:8])
-}
-
-// hookAgent finds the claude a hook runs under: walking up from the hook's parent, the first process whose
-// sessions/<pid>.json names this session. That file is Claude Code's own, so a shell, a launcher or a wrapper in between
-// is never taken for it. The process' start comes with it where the platform can tell (start is "" otherwise). Not
-// finding it (the file is written a few seconds after claude starts, or this is not a claude) is pid 0.
-func hookAgent(sessionID string, from int, dir string, parent func(int) (int, error)) (pid int, start string) {
-	if sessionID == "" {
-		return 0, ""
-	}
-	for i, p := 0, from; i < hookAncestors && p > 1; i++ {
-		if readClaudeSessionID(filepath.Join(dir, "sessions", strconv.Itoa(p)+".json")) == sessionID {
-			return p, procStartMark(p)
-		}
-		next, err := parent(p)
-		if err != nil {
-			return 0, ""
-		}
-		p = next
-	}
-	return 0, ""
 }
 
 // sameProcess says whether pid is still the process that was seen with that start. Where the start is known it is the

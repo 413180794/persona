@@ -13,6 +13,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 // herdrHost is the herdr host: every method is one herdr client call (Close: the tab's pane count, then a close).
@@ -36,7 +37,7 @@ var (
 )
 
 // herdrPaneEnv is the variable herdr sets in every pane.
-const herdrPaneEnv = "HERDR_PANE_ID"
+const herdrPaneEnv = nodeclient.HerdrPaneEnv
 
 // herdrAgentEnv tells herdr which agent a pane runs. herdr knows Claude and Codex by the foreground program's name
 // (basename claude / claude-code, codex), so a wrapper that execs a binary of another name ("claude-2.1.318") was never

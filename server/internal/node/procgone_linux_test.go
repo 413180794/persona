@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"syscall"
 	"testing"
+
+	"github.com/nwverse/persona/server/internal/procinfo"
 )
 
 // A claude killed but not reaped yet is a zombie whose /proc entry still has its start: that is gone, as is one reaped.
@@ -24,7 +26,7 @@ func TestProcGoneZombieAndReaped(t *testing.T) {
 	}
 	_ = cmd.Process.Signal(syscall.SIGKILL)
 	waitFor(t, "the zombie", func() bool {
-		f, err := procStat(pid)
+		f, err := procinfo.Stat(pid)
 		return err == nil && len(f) > 0 && f[0] == "Z"
 	})
 	if !procGone(pid, start) {

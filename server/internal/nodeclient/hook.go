@@ -1,0 +1,168 @@
+package nodeclient
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/procinfo"
+)
+
+// The environment the engines give a pane's processes, naming the pane (node/host*.go set and read the same names).
+const (
+	HerdrPaneEnv      = "HERDR_PANE_ID"   // classic herdr
+	HerdrCorePaneEnv  = "HC_TERMINAL_ID"  // herdr-core (Herdr App)
+	OrcaPaneEnv       = "ORCA_PANE_KEY"   // Orca
+	OrcaLegacyPaneEnv = "ORCA_AGENT_PANE" // older Orca
+)
+
+// GlobalHookFlag marks the report-only entries the node puts in the user's own Claude Code settings
+// (node/globalhooks.go): `<binary> hook --persona-global`.
+const GlobalHookFlag = "--persona-global"
+
+// HookPane is the pane a hook runs in, from its environment, as a stored PaneRef: herdr's HERDR_PANE_ID as it always
+// was, else herdr-core's HC_TERMINAL_ID ("herdr-core:t7"), else Orca's ORCA_PANE_KEY (or its older ORCA_AGENT_PANE:
+// "orca:<tabId>:<leafId>"); "" in none.
+func HookPane(getenv func(string) string) string {
+	if p := getenv(HerdrPaneEnv); p != "" {
+		return p
+	}
+	if t := getenv(HerdrCorePaneEnv); t != "" {
+		return host.PaneRef{Kind: host.HerdrCore, ID: t}.String()
+	}
+	for _, v := range []string{OrcaPaneEnv, OrcaLegacyPaneEnv} {
+		if k := getenv(v); k != "" {
+			return host.PaneRef{Kind: host.Orca, ID: k}.String()
+		}
+	}
+	return ""
+}
+
+// RunHook is `<binary> hook [--persona-global]`: a Claude Code hook's input on stdin, what the hook prints on stdout
+// (nothing: let the TUI decide). The node writes that command into the settings of the Agents it starts and, with
+// GlobalHookFlag, into the user's own (node/doctor.go, node/globalhooks.go).
+func RunHook(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) {
+	input, err := io.ReadAll(stdin)
+	if err != nil || !json.Valid(input) {
+		return
+	}
+	if len(args) > 0 && args[0] == GlobalHookFlag { // an entry in the user's settings.json: report only
+		ReportHook(ctx, input, HookPane(os.Getenv))
+		return
+	}
+	out := Hook(ctx, input, HookPane(os.Getenv))
+	if len(out) == 0 {
+		return
+	}
+	_, _ = stdout.Write(append(out, '\n'))
+}
+
+// Hook hands a Claude Code hook's input to the node and returns what the hook should print (nil: let the TUI decide).
+// When the node goes away while the phone is deciding (a hub or node restart) it reconnects to the next node with the
+// same request for up to ResumeWait: the interaction keeps its id, and the hub keeps it pending through the gap.
+// No node at all: nil at once, the TUI asks as usual.
+func Hook(ctx context.Context, input json.RawMessage, pane string) json.RawMessage {
+	req := Request{Kind: "hook", Input: input, Pane: pane, Attempt: NewAttempt()}
+	req.AgentPID, req.AgentStart = AgentOf(input)
+	// A live node answers by the interaction's expiry; a socket that is there but never answers must not hold Claude.
+	ctx, cancel := context.WithTimeout(ctx, HookTimeout+ResumeWait)
+	defer cancel()
+	line, err := DialResumable(ctx, Dial, req)
+	if err != nil {
+		return nil
+	}
+	var resp struct {
+		Output json.RawMessage `json:"output"`
+	}
+	_ = json.Unmarshal(line, &resp)
+	if len(resp.Output) == 0 || string(resp.Output) == "null" {
+		return nil
+	}
+	return resp.Output
+}
+
+// reportTimeout is how long a report-only hook waits for the node; it asks for nothing, so a node that does not
+// answer at once is not worth holding the process for.
+const reportTimeout = 3 * time.Second
+
+// ReportHook hands a global report-only hook's input to the node and returns at once when there is nothing to report
+// to: not in a pane Persona knows, or no node socket. It prints nothing either way (the entries are async).
+func ReportHook(ctx context.Context, input json.RawMessage, pane string) {
+	if pane == "" {
+		return
+	}
+	if _, err := os.Stat(SocketPath()); err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, reportTimeout)
+	defer cancel()
+	req := Request{Kind: "hook", Input: input, Pane: pane, ReportOnly: true}
+	req.AgentPID, req.AgentStart = AgentOf(input) // the counters need it as much as a plugin hook's do
+	_, _ = Dial(ctx, req)
+}
+
+// HookAncestors bounds how far up from a hook's parent AgentOf looks for its claude (a launcher, a shell, a wrapper).
+const HookAncestors = 6
+
+// AgentOf finds the claude this hook process runs under (FindAgent), by the session id in its input.
+func AgentOf(input json.RawMessage) (pid int, start string) {
+	var who struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = json.Unmarshal(input, &who)
+	home, _ := os.UserHomeDir()
+	return FindAgent(who.SessionID, os.Getppid(), ClaudeDir(home), procinfo.Parent)
+}
+
+// FindAgent finds the claude a hook runs under: walking up from the hook's parent, the first process whose
+// sessions/<pid>.json names this session. That file is Claude Code's own, so a shell, a launcher or a wrapper in between
+// is never taken for it. The process' start comes with it where the platform can tell (start is "" otherwise). Not
+// finding it (the file is written a few seconds after claude starts, or this is not a claude) is pid 0.
+func FindAgent(sessionID string, from int, dir string, parent func(int) (int, error)) (pid int, start string) {
+	if sessionID == "" {
+		return 0, ""
+	}
+	for i, p := 0, from; i < HookAncestors && p > 1; i++ {
+		if ReadClaudeSessionID(filepath.Join(dir, "sessions", strconv.Itoa(p)+".json")) == sessionID {
+			return p, procinfo.StartMark(p)
+		}
+		next, err := parent(p)
+		if err != nil {
+			return 0, ""
+		}
+		p = next
+	}
+	return 0, ""
+}
+
+// ClaudeDir is the default Claude Code directory for home: $CLAUDE_CONFIG_DIR, else ~/.claude.
+func ClaudeDir(home string) string {
+	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+		return d
+	}
+	return filepath.Join(home, ".claude")
+}
+
+// sessionIDRe is what a Claude Code session id looks like (a UUID; the node's validID).
+var sessionIDRe = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
+
+// ReadClaudeSessionID reads the session id out of a claude's sessions/<pid>.json ("" when missing or invalid).
+func ReadClaudeSessionID(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var f struct {
+		SessionID string `json:"sessionId"`
+	}
+	if json.Unmarshal(b, &f) != nil || !sessionIDRe.MatchString(f.SessionID) {
+		return ""
+	}
+	return f.SessionID
+}

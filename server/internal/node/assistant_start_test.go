@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 // fakeClaudeHome puts a fake claude on PATH, run through the interactive zsh the assistant starts in.
@@ -77,7 +79,7 @@ func TestSockGoneTellsADeadReplacementFromALiveOne(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
-	if err := os.MkdirAll(filepath.Dir(SocketPath()), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(nodeclient.SocketPath()), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -91,8 +93,8 @@ func TestSockGoneTellsADeadReplacementFromALiveOne(t *testing.T) {
 	}
 
 	// Another process listens on the path and exits without unlinking.
-	_ = os.Remove(SocketPath())
-	other, err := net.Listen("unix", SocketPath())
+	_ = os.Remove(nodeclient.SocketPath())
+	other, err := net.Listen("unix", nodeclient.SocketPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,15 +106,15 @@ func TestSockGoneTellsADeadReplacementFromALiveOne(t *testing.T) {
 	if _, err := n.listenOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if c, err := net.Dial("unix", SocketPath()); err != nil {
+	if c, err := net.Dial("unix", nodeclient.SocketPath()); err != nil {
 		t.Fatalf("not re-created: %v", err)
 	} else {
 		c.Close()
 	}
 
 	// A newer node's live socket stays its own.
-	_ = os.Remove(SocketPath())
-	newer, err := net.Listen("unix", SocketPath())
+	_ = os.Remove(nodeclient.SocketPath())
+	newer, err := net.Listen("unix", nodeclient.SocketPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +132,7 @@ func TestSockGoneTellsADeadReplacementFromALiveOne(t *testing.T) {
 		t.Fatalf("a live newer socket: %q", why)
 	}
 
-	_ = os.Remove(SocketPath())
+	_ = os.Remove(nodeclient.SocketPath())
 	if why := n.sockGone(); why != "vanished" {
 		t.Fatalf("a removed socket: %q", why)
 	}

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -190,8 +190,8 @@ func TestInterruptHangsUp(t *testing.T) {
 
 // The command line reaches the node with the dialer that hangs up on a cancelled ctx.
 func TestDialsInterruptibly(t *testing.T) {
-	if reflect.ValueOf(dial).Pointer() != reflect.ValueOf(node.Dialer(node.DialSocketInterruptible)).Pointer() {
-		t.Fatal("personad tool must dial with node.DialSocketInterruptible")
+	if reflect.ValueOf(dial).Pointer() != reflect.ValueOf(nodeclient.Dialer(nodeclient.DialInterruptible)).Pointer() {
+		t.Fatal("personad tool must dial with nodeclient.DialInterruptible")
 	}
 }
 

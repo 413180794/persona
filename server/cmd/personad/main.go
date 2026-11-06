@@ -20,6 +20,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extmgr"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/assistant"
@@ -299,7 +300,7 @@ func main() {
 			}
 		}
 	case "hook":
-		runHook(ctx)
+		nodeclient.RunHook(ctx, os.Args[2:], os.Stdin, os.Stdout)
 	case "launch": // a launcher kept in Settings › Models: its settings from the local node, then claude (docs/launchers.md)
 		if len(os.Args) < 3 {
 			err = usageError("usage: " + commandName() + " launch <launcher> [claude args…]")
@@ -518,22 +519,6 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 }
 
 // runHook forwards a Claude Code hook event to the local node. Any failure exits 0 silently so claude carries on as usual.
-func runHook(ctx context.Context) {
-	input, err := io.ReadAll(os.Stdin)
-	if err != nil || !json.Valid(input) {
-		return
-	}
-	if len(os.Args) > 2 && os.Args[2] == "--persona-global" { // an entry in the user's settings.json: report only
-		node.ReportHook(ctx, input, node.HookPane(os.Getenv))
-		return
-	}
-	out := node.Hook(ctx, input, node.HookPane(os.Getenv))
-	if len(out) == 0 {
-		return
-	}
-	os.Stdout.Write(out)
-	os.Stdout.Write([]byte("\n"))
-}
 
 // sysmonMaxCount caps `sysmon [n]` at a day of 10-second samples: a bigger n never ends in practice, and the
 // largest ints overflowed n+1 in the summary.

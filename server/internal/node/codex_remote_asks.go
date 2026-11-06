@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -31,7 +32,7 @@ func (c *codexRemote) request(m codexMessage) {
 	c.n.mu.Lock()
 	machineID := c.n.machineID
 	c.n.mu.Unlock()
-	ix := proto.Interaction{ID: remoteInteractionID(machineID, c.spec.ID, c.generation, r.ThreadID, m.ID), SessionID: t.publicID, Cwd: firstNonEmpty(r.Cwd, t.cwd), SessionTitle: t.title, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(HookTimeout).UTC(), ToolUseID: r.ItemID,
+	ix := proto.Interaction{ID: remoteInteractionID(machineID, c.spec.ID, c.generation, r.ThreadID, m.ID), SessionID: t.publicID, Cwd: firstNonEmpty(r.Cwd, t.cwd), SessionTitle: t.title, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(nodeclient.HookTimeout).UTC(), ToolUseID: r.ItemID,
 		Agent: "codex", Reason: strings.TrimSpace(r.Reason)}
 	var response func(proto.Resolution) (any, bool)
 	switch m.Method {

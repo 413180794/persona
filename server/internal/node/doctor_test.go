@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/herdr"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 // doctorEnv is a node directory, an executable standing in for personad, and the sockets and Claude settings the
@@ -251,7 +252,7 @@ func TestDoctorSockets(t *testing.T) {
 func TestNodeAnswersPing(t *testing.T) {
 	e := newDoctorEnv(t)
 	e.listenNode(t, e.opts.NodeSock)
-	line, err := dialSocketAt(context.Background(), e.opts.NodeSock, sockRequest{Kind: "ping"})
+	line, err := nodeclient.DialAt(context.Background(), e.opts.NodeSock, sockRequest{Kind: "ping"})
 	if err != nil || strings.TrimSpace(string(line)) != `{"ok":true}` {
 		t.Errorf("ping: %q, %v", line, err)
 	}

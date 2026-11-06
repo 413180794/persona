@@ -56,7 +56,7 @@ type pending struct {
 }
 
 // resumeGrace is how long a resumable interaction outlives its node: a little longer than hooks keep reconnecting
-// (node.ResumeWait).
+// (nodeclient.ResumeWait).
 var resumeGrace = 3 * time.Minute
 
 // ixMap is the pending interactions, made on first use. Callers hold s.fleet.mu.

@@ -21,6 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantskills"
 	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 // `personad node doctor` looks at what a node on this machine needs for the sessions Persona starts to reach the
@@ -86,7 +87,7 @@ func DefaultDoctorOptions() (DoctorOptions, error) {
 	}
 	return DoctorOptions{
 		Dir: identity.DataDir(home), Bin: bin,
-		NodeSock: SocketPath(), RuntimeSock: RuntimeSocketPath(), HerdrSock: herdr.SocketPath(),
+		NodeSock: nodeclient.SocketPath(), RuntimeSock: RuntimeSocketPath(), HerdrSock: herdr.SocketPath(),
 		ClaudeConfigDir: claudeDirOf(home), ClaudeVersion: claudeVersion,
 	}, nil
 }
@@ -230,7 +231,7 @@ func checkNodeSocket(ctx context.Context, path string) DoctorCheck {
 	}
 	ctx, cancel := context.WithTimeout(ctx, doctorDialTimeout)
 	defer cancel()
-	line, err := dialSocketAt(ctx, path, sockRequest{Kind: "ping"})
+	line, err := nodeclient.DialAt(ctx, path, sockRequest{Kind: "ping"})
 	if err != nil {
 		c.Status, c.Detail = DoctorFail, "文件在但连不上或没有应答（"+shorten(err.Error(), 80)+"）"
 		c.Hint = "可能是旧 node 退出后留下的文件；重启这台电脑上的 node"

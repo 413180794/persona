@@ -12,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/herdrcore"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -392,7 +393,7 @@ func TestHookPane(t *testing.T) {
 		{env("HC_TERMINAL_ID", "t7"), "herdr-core:t7"},
 		{env(), ""},
 	} {
-		if got := HookPane(c.env); got != c.want {
+		if got := nodeclient.HookPane(c.env); got != c.want {
 			t.Errorf("HookPane = %q, want %q", got, c.want)
 		}
 	}

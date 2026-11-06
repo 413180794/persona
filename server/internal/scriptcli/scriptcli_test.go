@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 // fake is a node socket that answers with canned lines (no real socket, no phone) and remembers what it was asked.
@@ -133,7 +133,7 @@ func TestAskUsage(t *testing.T) {
 
 // With no node (or no hub) and a person at the terminal, the question is asked there; --require-remote never does.
 func TestAskFallsBackToTheTerminal(t *testing.T) {
-	down := func() *fake { return &fake{err: fmt.Errorf("%w: no such file", node.ErrNoNode)} }
+	down := func() *fake { return &fake{err: fmt.Errorf("%w: no such file", nodeclient.ErrNoNode)} }
 
 	r := ask(down(), true, "2\n", "Which?", "--options", "a,b")
 	if r.code != ExitOK || r.out != "b\n" || !strings.Contains(r.errOut, "1) a") {
@@ -203,7 +203,7 @@ func TestNotifyBestEffort(t *testing.T) {
 	}
 
 	for name, f := range map[string]*fake{
-		"no node":      {err: fmt.Errorf("%w: gone", node.ErrNoNode)},
+		"no node":      {err: fmt.Errorf("%w: gone", nodeclient.ErrNoNode)},
 		"muted":        {reply: `{"sent":false,"reason":"muted"}`},
 		"hub refuses":  {reply: `{"sent":false,"error":"unknown method notify"}`},
 		"broken reply": {reply: `nonsense`},

@@ -96,7 +96,7 @@ func runHookAsync(t *testing.T, n *Node, in map[string]any) <-chan any {
 }
 
 // A claude killed while its hook waits on the phone leaves the hook running (Claude Code starts hooks in their own
-// process group): the node sees the claude gone and withdraws the card instead of holding it until HookTimeout (#4344).
+// process group): the node sees the claude gone and withdraws the card instead of holding it until nodeclient.HookTimeout (#4344).
 func TestHookCardEndsWithItsClaude(t *testing.T) {
 	question := map[string]any{
 		"hook_event_name": "PreToolUse", "session_id": decidedSession, "tool_name": "AskUserQuestion",

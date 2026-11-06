@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,6 +23,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -925,7 +927,7 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 		ix.AlwaysKeys = []string{"runtime:" + rt + ":tool:" + ix.ToolName}
 	}
 	ix.CreatedAt = now
-	timeout := HookTimeout
+	timeout := nodeclient.HookTimeout
 	if p.TimeoutSeconds > 0 && time.Duration(p.TimeoutSeconds)*time.Second < timeout {
 		timeout = time.Duration(p.TimeoutSeconds) * time.Second
 	}

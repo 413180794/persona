@@ -8,14 +8,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeclient"
+
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -199,7 +200,7 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		// pane: an agent's MCP server has no session id of its own; the node knows the session in its pane
 		// (report_to_supervisor and the todo decision tools need to know whose call it is: node callerTools).
 		line, err := callNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
-			"session_id": sessionID(), "assistant": isAssistant(), "guest": isGuest(), "pane": node.HookPane(os.Getenv)})
+			"session_id": sessionID(), "assistant": isAssistant(), "guest": isGuest(), "pane": nodeclient.HookPane(os.Getenv)})
 		if err != nil {
 			return toolResult(proto.TextResult(callFailure(ctx, err), true)), nil
 		}
@@ -233,7 +234,7 @@ func checkCallParams(name *string, args *json.RawMessage) *rpcError {
 // dialNode and retryEvery are swapped out by tests. dialNode hangs up when its ctx is cancelled, so a cancelled tool
 // call ends on the node too (and with it the hub's call and its card, rpc.Peer.Cancels).
 var (
-	dialNode   = node.DialSocketInterruptible
+	dialNode   = nodeclient.DialInterruptible
 	retryEvery = 500 * time.Millisecond
 )
 
@@ -244,7 +245,7 @@ func callNode(ctx context.Context, req any) ([]byte, error) {
 	deadline := time.Now().Add(callRedialFor)
 	for {
 		line, err := dialNode(ctx, req)
-		if err == nil || !errors.Is(err, node.ErrNoNode) || time.Now().After(deadline) {
+		if err == nil || !errors.Is(err, nodeclient.ErrNoNode) || time.Now().After(deadline) {
 			return line, err
 		}
 		select {
@@ -260,7 +261,7 @@ func callNode(ctx context.Context, req any) ([]byte, error) {
 // the model must check its effect rather than retry blindly.
 func callFailure(ctx context.Context, err error) string {
 	switch {
-	case errors.Is(err, node.ErrNoNode):
+	case errors.Is(err, nodeclient.ErrNoNode):
 		return fmt.Sprintf("Persona node is not reachable (%v), so the call was not run. Is the hub connected to this machine?", err)
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return "The Persona node timed out before returning the result; the call may still have run, so check its effect before retrying."

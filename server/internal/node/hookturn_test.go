@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -196,7 +197,7 @@ func TestHookAgentFindsClaudeAmongAncestors(t *testing.T) {
 		{"a parent that cannot be read", id, 777, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if pid, _ := hookAgent(tc.id, tc.from, dir, parent); pid != tc.want {
+			if pid, _ := nodeclient.FindAgent(tc.id, tc.from, dir, parent); pid != tc.want {
 				t.Fatalf("pid %d, want %d", pid, tc.want)
 			}
 		})

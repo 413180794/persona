@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 // Opt-in report-only hooks for the claude sessions Persona did not start (hub.json machines[].claude_global_hooks,
@@ -30,7 +32,7 @@ import (
 // is where such tools put it) would need that tool's value edited.
 
 // globalHookFlag is the argument that makes `jarvisd hook` report only; it is also what marks an entry as Persona's.
-const globalHookFlag = "--persona-global"
+const globalHookFlag = nodeclient.GlobalHookFlag
 
 // globalHookTimeout is how long Claude Code lets a report-only hook run (seconds); the hook itself gives up sooner.
 const globalHookTimeout = 10

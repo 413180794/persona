@@ -7,8 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,44 +15,10 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
-
-// SocketPath is where hook and mcp subprocesses reach the node.
-func SocketPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(identity.SocketDir(home), "node.sock")
-}
-
-// HookTimeout is how long a hook waits for the phone before handing the dialog back to the terminal.
-var HookTimeout = 30 * time.Minute
-
-// ResumeWait is how long a hook whose node went away mid-wait (a hub or node restart) keeps reconnecting to the next
-// node; the hub holds its interaction at least that long (hub.resumeGrace).
-var ResumeWait = 2 * time.Minute
-
-// ErrNoNode: nothing listens on the node socket (no hub connected to this machine).
-var ErrNoNode = errors.New("no jarvis node")
-
-type sockRequest struct {
-	Kind      string          `json:"kind"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	Pane      string          `json:"pane,omitempty"`
-	Name      string          `json:"name,omitempty"`
-	Args      json.RawMessage `json:"args,omitempty"`
-	SessionID string          `json:"session_id,omitempty"`
-	Assistant bool            `json:"assistant,omitempty"` // the caller is the assistant's MCP server
-	Guest     bool            `json:"guest,omitempty"`     // a guest conversation's MCP server (assistant_guest.go)
-	// Attempt is the hook process's own id, the same on each reconnect; Resume marks those reconnects.
-	Attempt string `json:"attempt,omitempty"`
-	Resume  bool   `json:"resume,omitempty"`
-	// AgentPID / AgentStart: the claude the hook runs under and when it started (hookAgent); 0 / "" when not found.
-	AgentPID   int    `json:"agent_pid,omitempty"`
-	AgentStart string `json:"agent_start,omitempty"`
-	// ReportOnly: the hook is one of the global report-only entries (globalhooks.go), which never ask the phone.
-	ReportOnly bool `json:"report_only,omitempty"`
-}
 
 func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
 	ln, err := n.listenOnce(ctx)
@@ -88,7 +52,7 @@ func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
 // sockGone says why the node socket needs re-creating, "" when it does not: the file is gone, or it is another file
 // than the one this node listens on and nothing answers there. A live one is left alone: a newer node owns it.
 func (n *Node) sockGone() string {
-	fi, err := os.Stat(SocketPath())
+	fi, err := os.Stat(nodeclient.SocketPath())
 	if os.IsNotExist(err) {
 		return "vanished"
 	}
@@ -101,7 +65,7 @@ func (n *Node) sockGone() string {
 	if mine {
 		return ""
 	}
-	c, err := net.DialTimeout("unix", SocketPath(), time.Second)
+	c, err := net.DialTimeout("unix", nodeclient.SocketPath(), time.Second)
 	if err != nil {
 		return "replaced by one nothing answers on"
 	}
@@ -110,7 +74,7 @@ func (n *Node) sockGone() string {
 }
 
 func (n *Node) listenOnce(ctx context.Context) (net.Listener, error) {
-	path := SocketPath()
+	path := nodeclient.SocketPath()
 	_ = os.Remove(path)
 	ln, err := net.Listen("unix", path)
 	if err != nil {
@@ -303,7 +267,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 
 	ix := proto.Interaction{
 		ID: interactionID(in, req.Attempt), SessionID: in.SessionID, Cwd: in.Cwd, CreatedAt: time.Now().UTC(),
-		ExpiresAt: time.Now().Add(HookTimeout).UTC(), ToolName: in.ToolName, ToolUseID: in.ToolUseID, ToolInput: in.ToolInput,
+		ExpiresAt: time.Now().Add(nodeclient.HookTimeout).UTC(), ToolName: in.ToolName, ToolUseID: in.ToolUseID, ToolInput: in.ToolInput,
 		Resumable: req.Attempt != "",
 		AgentID:   in.AgentID, AgentType: in.AgentType, MCPServerName: in.MCPServerName, MCPConfigSource: in.MCPConfigSource,
 	}
@@ -550,7 +514,7 @@ func asksPhone(in hookInput) bool {
 
 // watchAgent ends ctx once the claude the hook runs under is gone (killed, crashed, out of memory). Claude Code starts
 // its hooks in their own process group on Linux and macOS, so a claude that dies without cleaning up leaves its hook
-// waiting, and the card on the phone, until HookTimeout (#4344). Ending ctx withdraws the card the way the hook going
+// waiting, and the card on the phone, until nodeclient.HookTimeout (#4344). Ending ctx withdraws the card the way the hook going
 // away does (ask sends interaction.cancel). Gone takes two looks in a row, so one odd read does not withdraw the card
 // of a claude still waiting. Not watched: a hook whose claude was not found (AgentPID 0), or one already gone when it
 // asks (a pid from another pid namespace reads as gone). stop also waits for the watcher.
@@ -674,157 +638,6 @@ func toolSummary(name string, input json.RawMessage) string {
 		return snippet(s)
 	}
 	return name
-}
-
-// HookPane is the pane a hook runs in, from its environment, as a stored PaneRef: herdr's HERDR_PANE_ID as it always
-// was, else herdr-core's HC_TERMINAL_ID ("herdr-core:t7"), else Orca's ORCA_PANE_KEY (or its older ORCA_AGENT_PANE:
-// "orca:<tabId>:<leafId>"); "" in none.
-func HookPane(getenv func(string) string) string {
-	if p := getenv(herdrPaneEnv); p != "" {
-		return p
-	}
-	if t := getenv(herdrCorePaneEnv); t != "" {
-		return host.PaneRef{Kind: host.HerdrCore, ID: t}.String()
-	}
-	for _, v := range []string{orcaPaneEnv, orcaLegacyPaneEnv} {
-		if k := getenv(v); k != "" {
-			return host.PaneRef{Kind: host.Orca, ID: k}.String()
-		}
-	}
-	return ""
-}
-
-// Hook hands a Claude Code hook's input to the node and returns what the hook should print (nil: let the TUI decide).
-// When the node goes away while the phone is deciding (a hub or node restart) it reconnects to the next node with the
-// same request for up to ResumeWait: the interaction keeps its id, and the hub keeps it pending through the gap.
-// No node at all: nil at once, the TUI asks as usual.
-func Hook(ctx context.Context, input json.RawMessage, pane string) json.RawMessage {
-	req := sockRequest{Kind: "hook", Input: input, Pane: pane, Attempt: newUUID()}
-	req.AgentPID, req.AgentStart = hookAgentOf(input)
-	// A live node answers by the interaction's expiry; a socket that is there but never answers must not hold Claude.
-	ctx, cancel := context.WithTimeout(ctx, HookTimeout+ResumeWait)
-	defer cancel()
-	line, err := dialResumable(ctx, DialSocket, req)
-	if err != nil {
-		return nil
-	}
-	var resp struct {
-		Output json.RawMessage `json:"output"`
-	}
-	_ = json.Unmarshal(line, &resp)
-	if len(resp.Output) == 0 || string(resp.Output) == "null" {
-		return nil
-	}
-	return resp.Output
-}
-
-// dialResumable sends req to the node and returns its answer line. When the node goes away while the phone is deciding
-// (it answers {"retry":true}, or the connection breaks) it reconnects to the next one with the same request, marked
-// Resume, for up to ResumeWait. The error is ErrNoNode when nothing listens at the first try.
-func dialResumable(ctx context.Context, dial Dialer, req sockRequest) ([]byte, error) {
-	line, err := dial(ctx, req)
-	if errors.Is(err, ErrNoNode) {
-		return nil, err
-	}
-	var until time.Time
-	for {
-		var rep struct {
-			Retry bool `json:"retry"`
-		}
-		if err == nil && json.Unmarshal(line, &rep) == nil && !rep.Retry {
-			return line, nil
-		}
-		if until.IsZero() {
-			until = time.Now().Add(ResumeWait)
-		}
-		if time.Now().After(until) {
-			if err == nil {
-				err = errors.New("the node went away")
-			}
-			return nil, err
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(resumeRetry):
-		}
-		req.Resume = true
-		line, err = dial(ctx, req)
-	}
-}
-
-// hookAgentOf finds the claude this hook process runs under (hookAgent), by the session id in its input.
-func hookAgentOf(input json.RawMessage) (pid int, start string) {
-	var who struct {
-		SessionID string `json:"session_id"`
-	}
-	_ = json.Unmarshal(input, &who)
-	home, _ := os.UserHomeDir()
-	return hookAgent(who.SessionID, os.Getppid(), claudeDirOf(home), parentPID)
-}
-
-// reportTimeout is how long a report-only hook waits for the node; it asks for nothing, so a node that does not
-// answer at once is not worth holding the process for.
-const reportTimeout = 3 * time.Second
-
-// ReportHook hands a global report-only hook's input to the node and returns at once when there is nothing to report
-// to: not in a pane Persona knows, or no node socket. It prints nothing either way (the entries are async).
-func ReportHook(ctx context.Context, input json.RawMessage, pane string) {
-	if pane == "" {
-		return
-	}
-	if _, err := os.Stat(SocketPath()); err != nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(ctx, reportTimeout)
-	defer cancel()
-	req := sockRequest{Kind: "hook", Input: input, Pane: pane, ReportOnly: true}
-	req.AgentPID, req.AgentStart = hookAgentOf(input) // the counters need it as much as a plugin hook's do
-	_, _ = DialSocket(ctx, req)
-}
-
-// resumeRetry is how often a resuming hook tries the node socket.
-var resumeRetry = time.Second
-
-// DialSocket sends one request to the local node and returns the raw response line. It fails with ErrNoNode when no
-// node listens.
-func DialSocket(ctx context.Context, req any) ([]byte, error) {
-	return dialSocketAt(ctx, SocketPath(), req)
-}
-
-// DialSocketInterruptible is DialSocket that also hangs up when ctx is cancelled (Ctrl-C in personad ask): the wait
-// ends at once and, with the connection, the node withdraws the card.
-func DialSocketInterruptible(ctx context.Context, req any) ([]byte, error) {
-	return dialSocket(ctx, SocketPath(), req, true)
-}
-
-// dialSocketAt is DialSocket for the node socket at path.
-func dialSocketAt(ctx context.Context, path string, req any) ([]byte, error) {
-	return dialSocket(ctx, path, req, false)
-}
-
-func dialSocket(ctx context.Context, path string, req any, hangUpOnCancel bool) ([]byte, error) {
-	var d net.Dialer
-	c, err := d.DialContext(ctx, "unix", path)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrNoNode, err)
-	}
-	defer c.Close()
-	if hangUpOnCancel {
-		defer context.AfterFunc(ctx, func() { c.Close() })()
-	}
-	if dl, ok := ctx.Deadline(); ok {
-		_ = c.SetDeadline(dl)
-	}
-	b, _ := json.Marshal(req)
-	if _, err := c.Write(append(b, '\n')); err != nil {
-		return nil, err
-	}
-	line, err := bufio.NewReader(c).ReadBytes('\n')
-	if err != nil {
-		return nil, fmt.Errorf("node closed connection: %w", err)
-	}
-	return line, nil
 }
 
 // callerTools are the agents' own tools that act for the agent calling them (assistant/agent_control.go

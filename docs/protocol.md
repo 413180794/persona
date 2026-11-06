@@ -1930,6 +1930,8 @@ The assistant uses `assistant.BusHub` (`server/internal/assistant/bus.go`), a wr
 
 ## hook / mcp ↔ node (unix socket `~/.persona/node.sock`)
 
+The client side (socket path, dialing, request / reply types, resuming) is `server/internal/nodeclient`. `personad hook`, `personad mcp` (`internal/mcpserver`), `personad ask` / `personad notify` (`internal/scriptcli`) and `personad tool` (`internal/toolcli`) use only it and the contract packages, never `internal/node`; a guard test (`nodeclient_test.go`) keeps the node, the manager and the hub out of their dependencies, so the device's own program can carry these commands. The node writes the commands into the settings it manages as `<its own binary> hook` (`hook --persona-global` in the user's own settings) and `<its own binary> mcp`, so whichever binary runs the node serves them.
+
 One question and one answer per connection, one line of JSON each:
 
 - `{"kind":"hook","input":<the stdin JSON Claude Code passes to the hook>,"pane":"…","attempt":"<the hook process's own id>","resume":<whether this is a reconnect>}`
@@ -1947,7 +1949,7 @@ When the node can't be reached (hub not online), the hook exits 0 immediately wi
 Deploys are frequent (hub restarts, node binary swaps). Questions / plans / permissions being answered on the phone used to disappear and fall back to the computer's TUI. Now:
 
 - **hook**: if the node goes away after the hook has connected but before it gets an answer (connection dropped or `retry` returned), it reconnects to `node.sock` every second and resends with the same `attempt`,
-  for up to 2 minutes (`node.ResumeWait`). If it can't reach the node at the very start, it still hands over to the TUI immediately.
+  for up to 2 minutes (`nodeclient.ResumeWait`). If it can't reach the node at the very start, it still hands over to the TUI immediately.
 - **node**: the interaction id is deterministic: a hash of `session_id + event + tool name + tool_use_id` (without a tool_use_id, the hook's attempt is used),
   so a reconnecting hook gets the same id. Interactions with an attempt are marked `resumable: true`, and the reconnecting one doesn't send `hook.event` again.
 - **hub**: `resumable` interactions aren't withdrawn when the node connection drops; they're kept for 3 minutes (`resumeGrace`) for the hook to reclaim. An `interaction.create` with the same id

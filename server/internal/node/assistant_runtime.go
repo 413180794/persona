@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +18,9 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
 	"github.com/nwverse/persona/server/internal/osproc"
@@ -293,7 +295,7 @@ func (n *Node) assistantGateTool(ctx context.Context, g *proto.CommandGate, sess
 		words[i] = shellQuote(w)
 	}
 	command := g.Command + " " + strings.Join(words, " ")
-	ix := proto.Interaction{SessionID: session, Cwd: cwd, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(HookTimeout).UTC(),
+	ix := proto.Interaction{SessionID: session, Cwd: cwd, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(nodeclient.HookTimeout).UTC(),
 		ToolName: g.Tool.Name, SessionTitle: filepath.Base(cwd)}
 	if s, _, ok := n.runtimes.rowOf(session); ok && s.Title != "" {
 		ix.SessionTitle = s.Title

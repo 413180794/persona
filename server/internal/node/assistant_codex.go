@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -39,7 +40,7 @@ import (
 //     the phone like Claude's PermissionRequest hook does. The approval policy is always one that asks (codexPolicy),
 //     so the gate sees every command that is not on Codex's read-only list, bypassPermissions included.
 
-// codexToolTimeout: ask_user waits for the phone (up to HookTimeout); Codex's default MCP tool timeout is 60 s.
+// codexToolTimeout: ask_user waits for the phone (up to nodeclient.HookTimeout); Codex's default MCP tool timeout is 60 s.
 const codexToolTimeout = 86400
 
 // codexStartTimeout bounds the app-server's startup handshake (initialize, thread/start or thread/resume).
@@ -793,7 +794,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 	cwd := firstNonEmpty(r.Cwd, p.cwd)
 	ix := proto.Interaction{
 		ID: codexInteractionID(p.id, method, r.ItemID, r.ApprovalID, r.ServerName), SessionID: p.id, Cwd: cwd,
-		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(HookTimeout).UTC(), ToolUseID: r.ItemID,
+		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(nodeclient.HookTimeout).UTC(), ToolUseID: r.ItemID,
 		SessionTitle: n.assistantTitle(p.id, cwd),
 	}
 	switch method {

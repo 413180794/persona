@@ -24,6 +24,7 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/transcript"
 )
@@ -1540,19 +1541,7 @@ func (n *Node) sessionFromProcess(pane string) string {
 }
 
 // readClaudeSessionID reads the session id out of a claude's sessions/<pid>.json ("" when missing or invalid).
-func readClaudeSessionID(path string) string {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	var f struct {
-		SessionID string `json:"sessionId"`
-	}
-	if json.Unmarshal(b, &f) != nil || !validID(f.SessionID) {
-		return ""
-	}
-	return f.SessionID
-}
+func readClaudeSessionID(path string) string { return nodeclient.ReadClaudeSessionID(path) }
 
 // panePIDRetry: how soon a pane whose claude had no sessions/<pid>.json is looked at again; a fresh pane's
 // (freshPane) every refresh while its claude starts.

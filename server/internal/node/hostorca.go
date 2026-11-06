@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/orcart"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -73,8 +74,8 @@ var orcaScan = scanOrcaProcs
 
 // Orca's pane variables in the processes of its terminals: the pane key, and the alias Claude Code does not scrub.
 const (
-	orcaPaneEnv       = "ORCA_PANE_KEY"
-	orcaLegacyPaneEnv = "ORCA_AGENT_PANE"
+	orcaPaneEnv       = nodeclient.OrcaPaneEnv
+	orcaLegacyPaneEnv = nodeclient.OrcaLegacyPaneEnv
 )
 
 const (

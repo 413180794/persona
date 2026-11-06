@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 func listRequest() request {
@@ -98,7 +98,7 @@ func callRequest() request {
 func TestToolsCallWaitsForTheNodeSocket(t *testing.T) {
 	n := fakeNode(t, func(n int) ([]byte, error) {
 		if n < 3 {
-			return nil, fmt.Errorf("%w: dial unix node.sock: no such file or directory", node.ErrNoNode)
+			return nil, fmt.Errorf("%w: dial unix node.sock: no such file or directory", nodeclient.ErrNoNode)
 		}
 		return []byte(`{"content":[{"type":"text","text":"sent"}]}`), nil
 	})
@@ -129,7 +129,7 @@ func TestToolsCallFailureSaysWhetherTheToolMayHaveRun(t *testing.T) {
 	}{
 		{"no node", context.Background(),
 			func(int) ([]byte, error) {
-				return nil, fmt.Errorf("%w: dial unix node.sock: connection refused", node.ErrNoNode)
+				return nil, fmt.Errorf("%w: dial unix node.sock: connection refused", nodeclient.ErrNoNode)
 			},
 			[]string{"not reachable", "was not run", "connection refused"}, []string{"may have run"}},
 		{"connection lost after sending", context.Background(),

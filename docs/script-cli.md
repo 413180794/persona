@@ -45,7 +45,7 @@ personad ask / notify
 node's replies:
 
 - `ask`: `{"status":"answered|denied|dismissed|timeout|unavailable|invalid","answer":"…","error":"…","retry":true}`.
-  `retry` means node is exiting (hub or node restart); the command reconnects to the next node with the same `attempt`, for at most `node.ResumeWait` (2 minutes), exactly like hook.
+  `retry` means node is exiting (hub or node restart); the command reconnects to the next node with the same `attempt`, for at most `nodeclient.ResumeWait` (2 minutes), exactly like hook.
 - `notify`: `{"sent":true|false,"reason":"muted","error":"…"}`.
 
 An old node doesn't know `ask` / `notify` (replies `{"error":"unknown kind"}`), and the command treats that as unreachable. With a new node and an old hub, the `notify` request fails with unknown method and is likewise treated as not sent.
@@ -66,7 +66,7 @@ When the command is killed (Ctrl-C), node sends `interaction.cancel` and the car
 
 ### Attribution
 
-The command reads the caller's pane with `node.HookPane` (`HERDR_PANE_ID`, then herdr-core's `HC_TERMINAL_ID`, Orca's `ORCA_PANE_KEY`) and sends it to node with the request.
+The command reads the caller's pane with `nodeclient.HookPane` (`HERDR_PANE_ID`, then herdr-core's `HC_TERMINAL_ID`, Orca's `ORCA_PANE_KEY`) and sends it to node with the request.
 node uses the "pane → session" table learned from hooks (`bindPane`) to find the Claude session in that pane:
 
 - Found: the card / notification is attached to that session (`session_id`), the card's subtitle is the session title, tapping the notification opens that session, and `notify` sends nothing when that session is muted.

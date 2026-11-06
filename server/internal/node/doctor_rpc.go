@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 // The web machine page's "What this computer can do" card asks the node for the same report `personad node doctor` prints
@@ -19,7 +21,7 @@ func (n *Node) doctorOptions() DoctorOptions {
 	}
 	opts := DoctorOptions{
 		Dir: n.dir, Bin: n.bin,
-		NodeSock: SocketPath(), RuntimeSock: RuntimeSocketPath(),
+		NodeSock: nodeclient.SocketPath(), RuntimeSock: RuntimeSocketPath(),
 		ClaudeConfigDir: claudeDirOf(n.home), ClaudeVersion: claudeVersion,
 	}
 	if def, err := DefaultDoctorOptions(); err == nil {

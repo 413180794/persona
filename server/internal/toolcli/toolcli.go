@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -67,7 +67,7 @@ func readStdin(stdin io.Reader) ([]byte, error) {
 // dial reaches the node; it hangs up when ctx is cancelled (Ctrl-C, SIGTERM), so a write waiting for the user ends on
 // the node too and the hub takes its card off the phone (rpc.Peer.Cancels), instead of a card nobody waits for until
 // it expires (replaced by tests).
-var dial node.Dialer = node.DialSocketInterruptible
+var dial nodeclient.Dialer = nodeclient.DialInterruptible
 
 // call asks the node to run a tool as the assistant's (replaced by tests).
 var call = func(ctx context.Context, name string, args any) (proto.ToolResult, error) {

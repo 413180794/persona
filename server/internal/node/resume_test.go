@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/nodeclient"
 )
 
 func TestInteractionIDStableAcrossAttempts(t *testing.T) {
@@ -45,7 +47,7 @@ func fakeNodes(t *testing.T, replies ...map[string]any) chan sockRequest {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	_ = os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700)
-	ln, err := net.Listen("unix", SocketPath())
+	ln, err := net.Listen("unix", nodeclient.SocketPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,14 +75,14 @@ func fakeNodes(t *testing.T, replies ...map[string]any) chan sockRequest {
 }
 
 func TestHookResumesOnNextNode(t *testing.T) {
-	defer func(d time.Duration) { resumeRetry = d }(resumeRetry)
-	resumeRetry = 10 * time.Millisecond
+	defer func(d time.Duration) { nodeclient.ResumeRetry = d }(nodeclient.ResumeRetry)
+	nodeclient.ResumeRetry = 10 * time.Millisecond
 	got := fakeNodes(t,
 		nil,                           // the node dies while the phone decides
 		map[string]any{"retry": true}, // the next one is shutting down too
 		map[string]any{"output": map[string]any{"ok": 1}},
 	)
-	out := Hook(context.Background(), json.RawMessage(`{"session_id":"s1"}`), "w1:p1")
+	out := nodeclient.Hook(context.Background(), json.RawMessage(`{"session_id":"s1"}`), "w1:p1")
 	if string(out) != `{"ok":1}` {
 		t.Fatalf("output %s", out)
 	}
@@ -98,7 +100,7 @@ func TestHookWithoutNodeLeavesItToTheTUI(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	start := time.Now()
-	if out := Hook(context.Background(), json.RawMessage(`{}`), ""); out != nil {
+	if out := nodeclient.Hook(context.Background(), json.RawMessage(`{}`), ""); out != nil {
 		t.Fatalf("output %s", out)
 	}
 	if time.Since(start) > time.Second {
@@ -107,17 +109,17 @@ func TestHookWithoutNodeLeavesItToTheTUI(t *testing.T) {
 }
 
 func TestHookGivesUpAfterResumeWait(t *testing.T) {
-	defer func(d, w time.Duration) { resumeRetry, ResumeWait = d, w }(resumeRetry, ResumeWait)
-	resumeRetry, ResumeWait = 10*time.Millisecond, 50*time.Millisecond
+	defer func(d, w time.Duration) { nodeclient.ResumeRetry, nodeclient.ResumeWait = d, w }(nodeclient.ResumeRetry, nodeclient.ResumeWait)
+	nodeclient.ResumeRetry, nodeclient.ResumeWait = 10*time.Millisecond, 50*time.Millisecond
 	fakeNodes(t, nil) // dies, and no node comes back
-	if out := Hook(context.Background(), json.RawMessage(`{}`), ""); out != nil {
+	if out := nodeclient.Hook(context.Background(), json.RawMessage(`{}`), ""); out != nil {
 		t.Fatalf("output %s", out)
 	}
 }
 
 func TestHookNullOutput(t *testing.T) {
 	fakeNodes(t, map[string]any{"output": nil})
-	if out := Hook(context.Background(), json.RawMessage(`{}`), ""); out != nil {
+	if out := nodeclient.Hook(context.Background(), json.RawMessage(`{}`), ""); out != nil {
 		t.Fatalf("output %s", out)
 	}
 }

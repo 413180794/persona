@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -530,13 +531,13 @@ func TestReportHookReturnsAtOnceWithoutAPaneOrASocket(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_RUNTIME_DIR", home)
-	if !strings.HasPrefix(SocketPath(), home) { // never the real node's socket
-		t.Skipf("socket path %s is not under the temporary home", SocketPath())
+	if !strings.HasPrefix(nodeclient.SocketPath(), home) { // never the real node's socket
+		t.Skipf("socket path %s is not under the temporary home", nodeclient.SocketPath())
 	}
 	done := make(chan struct{})
 	go func() {
-		ReportHook(context.Background(), reportInput("Stop", reportSession, ""), "")    // no pane
-		ReportHook(context.Background(), reportInput("Stop", reportSession, ""), "p_1") // no socket
+		nodeclient.ReportHook(context.Background(), reportInput("Stop", reportSession, ""), "")    // no pane
+		nodeclient.ReportHook(context.Background(), reportInput("Stop", reportSession, ""), "p_1") // no socket
 		close(done)
 	}()
 	select {

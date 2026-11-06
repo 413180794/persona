@@ -9,7 +9,7 @@
 //	personad notify "title" [body] [--silent] [--error] [--strict]
 //	    one notification. Best effort: exit 0 whatever happens, unless --strict (the hub must take it, else exit 1).
 //
-// Both are attributed to the herdr pane the caller runs in (HERDR_PANE_ID and its siblings, node.HookPane).
+// Both are attributed to the herdr pane the caller runs in (HERDR_PANE_ID and its siblings, nodeclient.HookPane).
 package scriptcli
 
 import (
@@ -24,9 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"golang.org/x/term"
-
-	"github.com/nwverse/persona/server/internal/node"
 )
 
 // Exit codes of ask.
@@ -47,7 +46,7 @@ const notifyUsage = `usage: personad notify "title" [body] [--silent] [--error] 
 
 // Runner is what the commands need from the machine they run on (replaced by tests).
 type Runner struct {
-	Dial   node.Dialer
+	Dial   nodeclient.Dialer
 	Getenv func(string) string
 	Getwd  func() (string, error)
 	// IsTerminal says whether r is a terminal a person types in.
@@ -56,7 +55,7 @@ type Runner struct {
 
 // Default is the machine this process runs on.
 func Default() Runner {
-	return Runner{Dial: node.DialSocketInterruptible, Getenv: os.Getenv, Getwd: os.Getwd, IsTerminal: isTerminal}
+	return Runner{Dial: nodeclient.DialInterruptible, Getenv: os.Getenv, Getwd: os.Getwd, IsTerminal: isTerminal}
 }
 
 // isTerminal: a person types at r (not /dev/null, which is a character device too).
@@ -132,7 +131,7 @@ func (r Runner) Ask(ctx context.Context, args []string, stdin io.Reader, stdout,
 		fmt.Fprintf(stderr, "personad ask: exactly one question, quoted\n%s\n", askUsage)
 		return ExitUsage
 	}
-	req := node.AskRequest{Question: pos[0]}
+	req := nodeclient.AskRequest{Question: pos[0]}
 	req.Options = strings.Split(*options, ",") // Normalize drops the empty and repeated ones
 	if *timeout != "" {
 		d, err := parseTimeout(*timeout)
@@ -150,39 +149,39 @@ func (r Runner) Ask(ctx context.Context, args []string, stdin io.Reader, stdout,
 
 	// The node answers by the card's expiry; the margin is the time it may spend reconnecting to a restarted hub.
 	parent := ctx
-	ctx, cancel := context.WithTimeout(ctx, req.Timeout()+node.ResumeWait+30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, req.Timeout()+nodeclient.ResumeWait+30*time.Second)
 	defer cancel()
-	rep, err := node.AskNode(ctx, r.Dial, req, node.HookPane(r.Getenv))
+	rep, err := nodeclient.AskNode(ctx, r.Dial, req, nodeclient.HookPane(r.Getenv))
 	if parent.Err() != nil { // interrupted: hanging up on the node withdrew the card
 		return ExitInterrupted
 	}
 	status := rep.Status
 	switch {
 	case err != nil:
-		status = node.AskUnavailable
-		if errors.Is(err, node.ErrNoNode) {
+		status = nodeclient.AskUnavailable
+		if errors.Is(err, nodeclient.ErrNoNode) {
 			rep.Error = "没有在运行的 Persona node（hub 没连上这台电脑）"
 		} else {
 			rep.Error = err.Error()
 		}
 	case status == "": // a node that does not know ask
-		status, rep.Error = node.AskUnavailable, "这台电脑上的 personad 太旧，不认识 ask"
+		status, rep.Error = nodeclient.AskUnavailable, "这台电脑上的 personad 太旧，不认识 ask"
 	}
 	switch status {
-	case node.AskAnswered:
+	case nodeclient.AskAnswered:
 		if rep.Answer != "" {
 			fmt.Fprintln(stdout, rep.Answer)
 		}
 		return ExitOK
-	case node.AskDenied:
+	case nodeclient.AskDenied:
 		return ExitDenied
-	case node.AskTimeout:
+	case nodeclient.AskTimeout:
 		fmt.Fprintln(stderr, "personad ask: 超时，手机上没人回答")
 		return ExitTimeout
-	case node.AskInvalid:
+	case nodeclient.AskInvalid:
 		fmt.Fprintf(stderr, "personad ask: %s\n", rep.Error)
 		return ExitUsage
-	case node.AskDismissed: // handed back to the computer
+	case nodeclient.AskDismissed: // handed back to the computer
 		if *remote || !r.IsTerminal(stdin) {
 			fmt.Fprintln(stderr, "personad ask: 手机上选了「交回电脑」")
 			return ExitDenied
@@ -199,7 +198,7 @@ func (r Runner) Ask(ctx context.Context, args []string, stdin io.Reader, stdout,
 }
 
 // askTerminal asks the question where the person is: a numbered list of the options, or y/N. EOF is a no.
-func askTerminal(req node.AskRequest, stdin io.Reader, prompt, stdout io.Writer) int {
+func askTerminal(req nodeclient.AskRequest, stdin io.Reader, prompt, stdout io.Writer) int {
 	in := bufio.NewReader(stdin)
 	fmt.Fprintln(prompt, req.Question)
 	for i, o := range req.Options {
@@ -254,17 +253,17 @@ func (r Runner) Notify(ctx context.Context, args []string, stdout, stderr io.Wri
 		fmt.Fprintf(stderr, "personad notify: a title and at most one body, each quoted\n%s\n", notifyUsage)
 		return ExitUsage
 	}
-	req := node.NotifyRequest{Title: pos[0], Silent: *silent, Error: *isErr}
+	req := nodeclient.NotifyRequest{Title: pos[0], Silent: *silent, Error: *isErr}
 	if len(pos) == 2 {
 		req.Body = pos[1]
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	rep, err := node.NotifyNode(ctx, r.Dial, req, node.HookPane(r.Getenv))
+	rep, err := nodeclient.NotifyNode(ctx, r.Dial, req, nodeclient.HookPane(r.Getenv))
 	why := ""
 	switch {
-	case errors.Is(err, node.ErrNoNode):
+	case errors.Is(err, nodeclient.ErrNoNode):
 		why = "没有在运行的 Persona node"
 	case err != nil:
 		why = err.Error()

@@ -6,13 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -22,23 +22,8 @@ import (
 // POST /api/v1/notify takes). Both are attributed to the session of the pane the caller runs in, when the caller says
 // which pane that is (HookPane) and a hook has told the node what runs there.
 
-// Ask results (AskReply.Status).
+// What the node says about a script's cards and notifications.
 const (
-	AskAnswered    = "answered"    // an option was chosen (Answer), or the card was allowed
-	AskDenied      = "denied"      // the card was denied
-	AskDismissed   = "dismissed"   // handed back to the computer, or answered without an answer
-	AskTimeout     = "timeout"     // nobody answered in time
-	AskUnavailable = "unavailable" // there is no hub to ask, or asking it failed
-	AskInvalid     = "invalid"     // the request is wrong (Error says how)
-)
-
-// Limits of an ask: the phone draws a short list of short labels.
-const (
-	askOptionsMost  = 12
-	askOptionMost   = 100 // runes
-	askQuestionMost = 1000
-	// AskTimeoutMost bounds how long one ask waits for the phone.
-	AskTimeoutMost = 24 * time.Hour
 	// scriptAgent / scriptAgentLabel: who asks, as a runtime's cards say it (docs/runtimes.md): the apps draw "Script is asking you" (in Chinese)
 	// and offer no "always allow" on it.
 	scriptAgent      = "script"
@@ -50,78 +35,6 @@ const (
 	notifyTitleMost = 120
 	notifyBodyMost  = 1000
 )
-
-// AskRequest is `personad ask`'s question.
-type AskRequest struct {
-	Question string   `json:"question"`
-	Options  []string `json:"options,omitempty"` // none: allow / deny
-	// TimeoutSeconds: 0 is HookTimeout.
-	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
-	Cwd            string `json:"cwd,omitempty"` // where the caller runs: names the card when no session does
-}
-
-// Normalize trims the question and the options (empty and repeated ones go) and says what is wrong with the request.
-func (a *AskRequest) Normalize() error {
-	a.Question = strings.TrimSpace(a.Question)
-	switch {
-	case a.Question == "":
-		return errors.New("the question is empty")
-	case utf8.RuneCountInString(a.Question) > askQuestionMost:
-		return fmt.Errorf("the question is longer than %d characters", askQuestionMost)
-	case a.TimeoutSeconds < 0 || time.Duration(a.TimeoutSeconds)*time.Second > AskTimeoutMost:
-		return fmt.Errorf("the timeout must be between 1 second and %s", AskTimeoutMost)
-	}
-	var opts []string
-	seen := map[string]bool{}
-	for _, o := range a.Options {
-		o = strings.TrimSpace(o)
-		if o == "" || seen[o] {
-			continue
-		}
-		if utf8.RuneCountInString(o) > askOptionMost {
-			return fmt.Errorf("an option is longer than %d characters", askOptionMost)
-		}
-		seen[o] = true
-		opts = append(opts, o)
-	}
-	if len(opts) > askOptionsMost {
-		return fmt.Errorf("more than %d options", askOptionsMost)
-	}
-	a.Options = opts
-	return nil
-}
-
-// Timeout is how long the ask waits for the phone.
-func (a AskRequest) Timeout() time.Duration {
-	if a.TimeoutSeconds <= 0 {
-		return HookTimeout
-	}
-	return time.Duration(a.TimeoutSeconds) * time.Second
-}
-
-// AskReply is the node's answer to an ask.
-type AskReply struct {
-	Status string `json:"status"`
-	Answer string `json:"answer,omitempty"` // the option chosen (or what was typed on the card)
-	Error  string `json:"error,omitempty"`
-	// Retry: the node is going away under the question (a hub or node restart); ask the next one with the same request.
-	Retry bool `json:"retry,omitempty"`
-}
-
-// NotifyRequest is `personad notify`'s notification.
-type NotifyRequest struct {
-	Title  string `json:"title"`
-	Body   string `json:"body,omitempty"`
-	Silent bool   `json:"silent,omitempty"` // no sound
-	Error  bool   `json:"error,omitempty"`  // time-sensitive, marked ⚠️
-}
-
-// NotifyReply is the node's answer to a notification: Sent is the hub having taken it (not the phone showing it).
-type NotifyReply struct {
-	Sent   bool   `json:"sent"`
-	Reason string `json:"reason,omitempty"` // why not, when the hub did not send it (muted)
-	Error  string `json:"error,omitempty"`  // why the hub could not be asked
-}
 
 // scriptSession is the session that runs in the caller's pane and its title; "" when no hook has told the node.
 func (n *Node) scriptSession(pane, cwd string) (id, title string) {
@@ -156,16 +69,16 @@ func scriptInteractionID(attempt string) string {
 }
 
 // handleAsk puts the question in front of the phone and waits.
-func (n *Node) handleAsk(ctx context.Context, req sockRequest) AskReply {
-	var a AskRequest
+func (n *Node) handleAsk(ctx context.Context, req sockRequest) nodeclient.AskReply {
+	var a nodeclient.AskRequest
 	if err := json.Unmarshal(req.Input, &a); err != nil {
-		return AskReply{Status: AskInvalid, Error: "bad request"}
+		return nodeclient.AskReply{Status: nodeclient.AskInvalid, Error: "bad request"}
 	}
 	if err := a.Normalize(); err != nil {
-		return AskReply{Status: AskInvalid, Error: err.Error()}
+		return nodeclient.AskReply{Status: nodeclient.AskInvalid, Error: err.Error()}
 	}
 	if n.peer == nil {
-		return AskReply{Status: AskUnavailable, Error: "this node is not connected to a hub"}
+		return nodeclient.AskReply{Status: nodeclient.AskUnavailable, Error: "this node is not connected to a hub"}
 	}
 	sid, title := n.scriptSession(req.Pane, a.Cwd)
 	now := time.Now()
@@ -187,25 +100,25 @@ func (n *Node) handleAsk(ctx context.Context, req sockRequest) AskReply {
 	res, ok, err := n.ask(ctx, ix)
 	switch {
 	case errors.Is(err, errNodeGone):
-		return AskReply{Retry: true}
+		return nodeclient.AskReply{Retry: true}
 	case err != nil:
-		return AskReply{Status: AskUnavailable, Error: err.Error()}
+		return nodeclient.AskReply{Status: nodeclient.AskUnavailable, Error: err.Error()}
 	case !ok && !time.Now().Before(ix.ExpiresAt.Add(-500*time.Millisecond)):
 		// The hub's timer and ours end at the same moment: n.ask cannot tell which one it was.
-		return AskReply{Status: AskTimeout}
+		return nodeclient.AskReply{Status: nodeclient.AskTimeout}
 	case !ok && res.Dismiss:
-		return AskReply{Status: AskDismissed}
+		return nodeclient.AskReply{Status: nodeclient.AskDismissed}
 	case !ok:
-		return AskReply{Status: AskUnavailable, Error: "the hub did not take the question"}
+		return nodeclient.AskReply{Status: nodeclient.AskUnavailable, Error: "the hub did not take the question"}
 	}
 	if ix.Kind == proto.IxPermission {
 		switch {
 		case res.Allow == nil:
-			return AskReply{Status: AskDismissed}
+			return nodeclient.AskReply{Status: nodeclient.AskDismissed}
 		case *res.Allow:
-			return AskReply{Status: AskAnswered}
+			return nodeclient.AskReply{Status: nodeclient.AskAnswered}
 		}
-		return AskReply{Status: AskDenied}
+		return nodeclient.AskReply{Status: nodeclient.AskDenied}
 	}
 	answer := strings.TrimSpace(res.Answers[a.Question])
 	if answer == "" && len(res.Answers) == 1 {
@@ -214,9 +127,9 @@ func (n *Node) handleAsk(ctx context.Context, req sockRequest) AskReply {
 		}
 	}
 	if answer == "" {
-		return AskReply{Status: AskDismissed}
+		return nodeclient.AskReply{Status: nodeclient.AskDismissed}
 	}
-	return AskReply{Status: AskAnswered, Answer: answer}
+	return nodeclient.AskReply{Status: nodeclient.AskAnswered, Answer: answer}
 }
 
 // cutRunes cuts s to at most n characters, ending in … when it was cut.
@@ -228,17 +141,17 @@ func cutRunes(s string, n int) string {
 }
 
 // handleNotify has the hub alert the user's devices (hub "notify" request, the path POST /api/v1/notify takes).
-func (n *Node) handleNotify(ctx context.Context, req sockRequest) NotifyReply {
-	var nr NotifyRequest
+func (n *Node) handleNotify(ctx context.Context, req sockRequest) nodeclient.NotifyReply {
+	var nr nodeclient.NotifyRequest
 	if err := json.Unmarshal(req.Input, &nr); err != nil {
-		return NotifyReply{Error: "bad request"}
+		return nodeclient.NotifyReply{Error: "bad request"}
 	}
 	nr.Title, nr.Body = strings.TrimSpace(nr.Title), strings.TrimSpace(nr.Body)
 	if nr.Title == "" && nr.Body == "" {
-		return NotifyReply{Error: "the notification is empty"}
+		return nodeclient.NotifyReply{Error: "the notification is empty"}
 	}
 	if n.peer == nil {
-		return NotifyReply{Error: "this node is not connected to a hub"}
+		return nodeclient.NotifyReply{Error: "this node is not connected to a hub"}
 	}
 	level := "active"
 	if nr.Error {
@@ -259,39 +172,7 @@ func (n *Node) handleNotify(ctx context.Context, req sockRequest) NotifyReply {
 		Reason string `json:"reason"`
 	}
 	if err := n.peer.Call(ctx, "notify", params, &res); err != nil {
-		return NotifyReply{Error: err.Error()}
+		return nodeclient.NotifyReply{Error: err.Error()}
 	}
-	return NotifyReply{Sent: res.Sent, Reason: res.Reason}
-}
-
-// Dialer sends one request line to the node's socket and returns its answer line (DialSocket).
-type Dialer func(ctx context.Context, req any) ([]byte, error)
-
-// AskNode asks the node to put a question in front of the phone and returns the answer. Like Hook, when the node goes
-// away while the phone is deciding it reconnects to the next one with the same request (dialResumable). The error is
-// ErrNoNode when nothing listens on the socket, else a transport failure; both mean the phone could not be asked.
-func AskNode(ctx context.Context, dial Dialer, a AskRequest, pane string) (AskReply, error) {
-	in, _ := json.Marshal(a)
-	line, err := dialResumable(ctx, dial, sockRequest{Kind: "ask", Input: in, Pane: pane, Attempt: newUUID()})
-	if err != nil {
-		return AskReply{}, err
-	}
-	var rep AskReply
-	_ = json.Unmarshal(line, &rep)
-	return rep, nil
-}
-
-// NotifyNode asks the node to send a notification. The error is ErrNoNode when nothing listens on the socket, else a
-// transport failure; a failure on the node's or the hub's side is NotifyReply.Error.
-func NotifyNode(ctx context.Context, dial Dialer, nr NotifyRequest, pane string) (NotifyReply, error) {
-	in, _ := json.Marshal(nr)
-	line, err := dial(ctx, sockRequest{Kind: "notify", Input: in, Pane: pane})
-	if err != nil {
-		return NotifyReply{}, err
-	}
-	var rep NotifyReply
-	if err := json.Unmarshal(line, &rep); err != nil {
-		return NotifyReply{}, fmt.Errorf("bad answer from the Persona node: %w", err)
-	}
-	return rep, nil
+	return nodeclient.NotifyReply{Sent: res.Sent, Reason: res.Reason}
 }

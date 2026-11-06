@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -100,7 +101,7 @@ func newScriptHub(t *testing.T, create func(ctx context.Context, ix proto.Intera
 	return h
 }
 
-// dial is Dialer over the test's socket.
+// dial is nodeclient.Dialer over the test's socket.
 func (h *scriptHub) dial(ctx context.Context, req any) ([]byte, error) {
 	var d net.Dialer
 	c, err := d.DialContext(ctx, "unix", h.sock)
@@ -108,7 +109,7 @@ func (h *scriptHub) dial(ctx context.Context, req any) ([]byte, error) {
 		return nil, err
 	}
 	defer c.Close()
-	defer context.AfterFunc(ctx, func() { c.Close() })() // as DialSocket: a cancelled ctx hangs up
+	defer context.AfterFunc(ctx, func() { c.Close() })() // as nodeclient.Dial: a cancelled ctx hangs up
 	b, _ := json.Marshal(req)
 	if _, err := c.Write(append(b, '\n')); err != nil {
 		return nil, err
@@ -139,8 +140,8 @@ func boolp(b bool) *bool { return &b }
 func TestScriptAskOptionsIsAQuestionCard(t *testing.T) {
 	h := newScriptHub(t, answerWith(proto.Resolution{Answers: map[string]string{"Deploy where?": "staging"}}), notifyOK)
 	h.n.panes = map[string]string{"w1:p1": "sess-1"}
-	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "Deploy where?", Options: []string{"staging", " prod ", "staging", ""}, Cwd: "/work/app"}, "w1:p1")
-	if err != nil || rep.Status != AskAnswered || rep.Answer != "staging" {
+	rep, err := nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "Deploy where?", Options: []string{"staging", " prod ", "staging", ""}, Cwd: "/work/app"}, "w1:p1")
+	if err != nil || rep.Status != nodeclient.AskAnswered || rep.Answer != "staging" {
 		t.Fatalf("reply %+v, %v", rep, err)
 	}
 	ix := h.lastCreated(t)
@@ -168,8 +169,8 @@ func TestScriptAskOptionsIsAQuestionCard(t *testing.T) {
 // A card typed into ("Other") answers with what was typed.
 func TestScriptAskTypedAnswer(t *testing.T) {
 	h := newScriptHub(t, answerWith(proto.Resolution{Answers: map[string]string{"other key": " 手写的 "}}), notifyOK)
-	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "q", Options: []string{"a", "b"}}, "")
-	if err != nil || rep.Status != AskAnswered || rep.Answer != "手写的" {
+	rep, err := nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "q", Options: []string{"a", "b"}}, "")
+	if err != nil || rep.Status != nodeclient.AskAnswered || rep.Answer != "手写的" {
 		t.Fatalf("reply %+v, %v", rep, err)
 	}
 	if ix := h.lastCreated(t); ix.SessionID != "" {
@@ -184,14 +185,14 @@ func TestScriptAskWithoutOptionsIsAPermissionCard(t *testing.T) {
 		res  proto.Resolution
 		want string
 	}{
-		{"allow", proto.Resolution{Allow: boolp(true)}, AskAnswered},
-		{"deny", proto.Resolution{Allow: boolp(false), Message: "no"}, AskDenied},
-		{"handed back", proto.Resolution{Dismiss: true}, AskDismissed},
-		{"no verdict", proto.Resolution{}, AskDismissed},
+		{"allow", proto.Resolution{Allow: boolp(true)}, nodeclient.AskAnswered},
+		{"deny", proto.Resolution{Allow: boolp(false), Message: "no"}, nodeclient.AskDenied},
+		{"handed back", proto.Resolution{Dismiss: true}, nodeclient.AskDismissed},
+		{"no verdict", proto.Resolution{}, nodeclient.AskDismissed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newScriptHub(t, answerWith(tc.res), notifyOK)
-			rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "Run the migration?"}, "")
+			rep, err := nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "Run the migration?"}, "")
 			if err != nil || rep.Status != tc.want || rep.Answer != "" {
 				t.Fatalf("reply %+v, %v", rep, err)
 			}
@@ -210,8 +211,8 @@ func TestScriptAskTimeout(t *testing.T) {
 		return nil, ctx.Err()
 	}, notifyOK)
 	start := time.Now()
-	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "q", TimeoutSeconds: 1}, "")
-	if err != nil || rep.Status != AskTimeout {
+	rep, err := nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "q", TimeoutSeconds: 1}, "")
+	if err != nil || rep.Status != nodeclient.AskTimeout {
 		t.Fatalf("reply %+v, %v", rep, err)
 	}
 	if d := time.Since(start); d < 900*time.Millisecond || d > 5*time.Second {
@@ -230,7 +231,7 @@ func TestScriptAskCancelledWithTheCaller(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := AskNode(ctx, h.dial, AskRequest{Question: "q"}, "")
+		_, err := nodeclient.AskNode(ctx, h.dial, nodeclient.AskRequest{Question: "q"}, "")
 		done <- err
 	}()
 	<-asked
@@ -245,18 +246,18 @@ func TestScriptAskCancelledWithTheCaller(t *testing.T) {
 
 func TestScriptAskUnavailableAndInvalid(t *testing.T) {
 	h := newScriptHub(t, answerWith(proto.Resolution{}), notifyOK)
-	rep, _ := AskNode(context.Background(), h.dial, AskRequest{Question: "   "}, "")
-	if rep.Status != AskInvalid || rep.Error == "" {
+	rep, _ := nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "   "}, "")
+	if rep.Status != nodeclient.AskInvalid || rep.Error == "" {
 		t.Fatalf("an empty question: %+v", rep)
 	}
-	if rep, _ = AskNode(context.Background(), h.dial, AskRequest{Question: "q", TimeoutSeconds: -1}, ""); rep.Status != AskInvalid {
+	if rep, _ = nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "q", TimeoutSeconds: -1}, ""); rep.Status != nodeclient.AskInvalid {
 		t.Fatalf("a negative timeout: %+v", rep)
 	}
-	many := make([]string, askOptionsMost+1)
+	many := make([]string, nodeclient.AskOptionsMost+1)
 	for i := range many {
 		many[i] = string(rune('a' + i))
 	}
-	if rep, _ = AskNode(context.Background(), h.dial, AskRequest{Question: "q", Options: many}, ""); rep.Status != AskInvalid {
+	if rep, _ = nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "q", Options: many}, ""); rep.Status != nodeclient.AskInvalid {
 		t.Fatalf("too many options: %+v", rep)
 	}
 	h.mu.Lock()
@@ -267,7 +268,7 @@ func TestScriptAskUnavailableAndInvalid(t *testing.T) {
 	}
 
 	h.n.peer = nil // a node with no hub
-	if rep, _ = AskNode(context.Background(), h.dial, AskRequest{Question: "q"}, ""); rep.Status != AskUnavailable {
+	if rep, _ = nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "q"}, ""); rep.Status != nodeclient.AskUnavailable {
 		t.Fatalf("no hub: %+v", rep)
 	}
 }
@@ -277,23 +278,23 @@ func TestScriptAskHubFailure(t *testing.T) {
 	h := newScriptHub(t, func(context.Context, proto.Interaction) (any, error) {
 		return nil, &rpc.Error{Message: "boom"}
 	}, notifyOK)
-	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "q"}, "")
-	if err != nil || rep.Status != AskUnavailable {
+	rep, err := nodeclient.AskNode(context.Background(), h.dial, nodeclient.AskRequest{Question: "q"}, "")
+	if err != nil || rep.Status != nodeclient.AskUnavailable {
 		t.Fatalf("reply %+v, %v", rep, err)
 	}
 }
 
-// An ask whose node goes away reconnects with the same attempt and finds the same card id; no node at all is ErrNoNode.
+// An ask whose node goes away reconnects with the same attempt and finds the same card id; no node at all is nodeclient.ErrNoNode.
 func TestAskNodeResumes(t *testing.T) {
-	defer func(d time.Duration) { resumeRetry = d }(resumeRetry)
-	resumeRetry = 10 * time.Millisecond
+	defer func(d time.Duration) { nodeclient.ResumeRetry = d }(nodeclient.ResumeRetry)
+	nodeclient.ResumeRetry = 10 * time.Millisecond
 	got := fakeNodes(t,
 		nil, // the node dies while the phone decides
 		map[string]any{"retry": true},
 		map[string]any{"status": "answered", "answer": "b"},
 	)
-	rep, err := AskNode(context.Background(), DialSocket, AskRequest{Question: "q", Options: []string{"a", "b"}}, "w1:p1")
-	if err != nil || rep.Status != AskAnswered || rep.Answer != "b" {
+	rep, err := nodeclient.AskNode(context.Background(), nodeclient.Dial, nodeclient.AskRequest{Question: "q", Options: []string{"a", "b"}}, "w1:p1")
+	if err != nil || rep.Status != nodeclient.AskAnswered || rep.Answer != "b" {
 		t.Fatalf("reply %+v, %v", rep, err)
 	}
 	first, second, third := <-got, <-got, <-got
@@ -309,10 +310,10 @@ func TestAskNodeResumes(t *testing.T) {
 }
 
 func TestAskNodeGivesUpAfterResumeWait(t *testing.T) {
-	defer func(d, w time.Duration) { resumeRetry, ResumeWait = d, w }(resumeRetry, ResumeWait)
-	resumeRetry, ResumeWait = 10*time.Millisecond, 50*time.Millisecond
+	defer func(d, w time.Duration) { nodeclient.ResumeRetry, nodeclient.ResumeWait = d, w }(nodeclient.ResumeRetry, nodeclient.ResumeWait)
+	nodeclient.ResumeRetry, nodeclient.ResumeWait = 10*time.Millisecond, 50*time.Millisecond
 	fakeNodes(t, nil) // dies, and no node comes back
-	if _, err := AskNode(context.Background(), DialSocket, AskRequest{Question: "q"}, ""); err == nil {
+	if _, err := nodeclient.AskNode(context.Background(), nodeclient.Dial, nodeclient.AskRequest{Question: "q"}, ""); err == nil {
 		t.Fatal("the phone could not be asked: an error")
 	}
 }
@@ -320,15 +321,15 @@ func TestAskNodeGivesUpAfterResumeWait(t *testing.T) {
 func TestAskNodeWithoutNode(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
-	if _, err := AskNode(context.Background(), DialSocket, AskRequest{Question: "q"}, ""); err == nil || !isNoNode(err) {
-		t.Fatalf("err %v, want ErrNoNode", err)
+	if _, err := nodeclient.AskNode(context.Background(), nodeclient.Dial, nodeclient.AskRequest{Question: "q"}, ""); err == nil || !isNoNode(err) {
+		t.Fatalf("err %v, want nodeclient.ErrNoNode", err)
 	}
-	if _, err := NotifyNode(context.Background(), DialSocket, NotifyRequest{Title: "t"}, ""); err == nil || !isNoNode(err) {
-		t.Fatalf("err %v, want ErrNoNode", err)
+	if _, err := nodeclient.NotifyNode(context.Background(), nodeclient.Dial, nodeclient.NotifyRequest{Title: "t"}, ""); err == nil || !isNoNode(err) {
+		t.Fatalf("err %v, want nodeclient.ErrNoNode", err)
 	}
 }
 
-// Only DialSocketInterruptible hangs up on a cancelled ctx (Ctrl-C in personad ask); DialSocket waits as it always did
+// Only nodeclient.DialInterruptible hangs up on a cancelled ctx (Ctrl-C in personad ask); nodeclient.Dial waits as it always did
 // (a hook, the MCP server and the launcher end by the deadline or the node's answer).
 func TestDialSocketCancel(t *testing.T) {
 	home, err := os.MkdirTemp("", "jh")
@@ -339,7 +340,7 @@ func TestDialSocketCancel(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	_ = os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700)
-	ln, err := net.Listen("unix", SocketPath())
+	ln, err := net.Listen("unix", nodeclient.SocketPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,14 +364,14 @@ func TestDialSocketCancel(t *testing.T) {
 			c.Close()
 		}
 	})
-	dial := func(f Dialer) (cancel func(), done chan error) {
+	dial := func(f nodeclient.Dialer) (cancel func(), done chan error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		done = make(chan error, 1)
 		go func() { _, err := f(ctx, map[string]any{"kind": "x"}); done <- err }()
 		held = append(held, <-conns)
 		return cancel, done
 	}
-	cancel, done := dial(DialSocketInterruptible)
+	cancel, done := dial(nodeclient.DialInterruptible)
 	cancel()
 	select {
 	case err := <-done:
@@ -378,26 +379,26 @@ func TestDialSocketCancel(t *testing.T) {
 			t.Fatal("a hung-up dial is an error")
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("DialSocketInterruptible kept waiting after its ctx was cancelled")
+		t.Fatal("nodeclient.DialInterruptible kept waiting after its ctx was cancelled")
 	}
 
-	cancel, done = dial(DialSocket)
+	cancel, done = dial(nodeclient.Dial)
 	cancel()
 	select {
 	case err := <-done:
-		t.Fatalf("DialSocket gave up on a cancelled ctx: %v", err)
+		t.Fatalf("nodeclient.Dial gave up on a cancelled ctx: %v", err)
 	case <-time.After(300 * time.Millisecond):
 	}
 }
 
-func isNoNode(err error) bool { return err != nil && errors.Is(err, ErrNoNode) }
+func isNoNode(err error) bool { return err != nil && errors.Is(err, nodeclient.ErrNoNode) }
 
 // A notification goes to the hub as the notify request the HTTP API takes: the session of the caller's pane, the
 // level and the sound as asked, long texts cut to the hub's limits.
 func TestScriptNotify(t *testing.T) {
 	h := newScriptHub(t, answerWith(proto.Resolution{}), notifyOK)
 	h.n.panes = map[string]string{"w1:p1": "sess-1"}
-	rep, err := NotifyNode(context.Background(), h.dial, NotifyRequest{Title: "Build done", Body: "all green", Silent: true}, "w1:p1")
+	rep, err := nodeclient.NotifyNode(context.Background(), h.dial, nodeclient.NotifyRequest{Title: "Build done", Body: "all green", Silent: true}, "w1:p1")
 	if err != nil || !rep.Sent || rep.Error != "" {
 		t.Fatalf("reply %+v, %v", rep, err)
 	}
@@ -405,7 +406,7 @@ func TestScriptNotify(t *testing.T) {
 	for i := range long {
 		long[i] = '字'
 	}
-	if _, err = NotifyNode(context.Background(), h.dial, NotifyRequest{Title: "Tests failed", Body: string(long), Error: true}, ""); err != nil {
+	if _, err = nodeclient.NotifyNode(context.Background(), h.dial, nodeclient.NotifyRequest{Title: "Tests failed", Body: string(long), Error: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	h.mu.Lock()
@@ -432,19 +433,19 @@ func TestScriptNotifyFailures(t *testing.T) {
 	h := newScriptHub(t, answerWith(proto.Resolution{}), func() (any, error) {
 		return map[string]any{"sent": false, "reason": "muted"}, nil
 	})
-	rep, err := NotifyNode(context.Background(), h.dial, NotifyRequest{Title: "t"}, "")
+	rep, err := nodeclient.NotifyNode(context.Background(), h.dial, nodeclient.NotifyRequest{Title: "t"}, "")
 	if err != nil || rep.Sent || rep.Reason != "muted" {
 		t.Fatalf("muted: %+v, %v", rep, err)
 	}
-	if rep, _ = NotifyNode(context.Background(), h.dial, NotifyRequest{Title: " "}, ""); rep.Sent || rep.Error == "" {
+	if rep, _ = nodeclient.NotifyNode(context.Background(), h.dial, nodeclient.NotifyRequest{Title: " "}, ""); rep.Sent || rep.Error == "" {
 		t.Fatalf("empty: %+v", rep)
 	}
 	h2 := newScriptHub(t, answerWith(proto.Resolution{}), func() (any, error) { return nil, &rpc.Error{Message: "unknown method notify"} })
-	if rep, _ = NotifyNode(context.Background(), h2.dial, NotifyRequest{Title: "t"}, ""); rep.Sent || rep.Error == "" {
+	if rep, _ = nodeclient.NotifyNode(context.Background(), h2.dial, nodeclient.NotifyRequest{Title: "t"}, ""); rep.Sent || rep.Error == "" {
 		t.Fatalf("an older hub: %+v", rep)
 	}
 	h2.n.peer = nil
-	if rep, _ = NotifyNode(context.Background(), h2.dial, NotifyRequest{Title: "t"}, ""); rep.Sent || rep.Error == "" {
+	if rep, _ = nodeclient.NotifyNode(context.Background(), h2.dial, nodeclient.NotifyRequest{Title: "t"}, ""); rep.Sent || rep.Error == "" {
 		t.Fatalf("no hub: %+v", rep)
 	}
 }

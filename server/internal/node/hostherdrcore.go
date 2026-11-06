@@ -14,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/herdrcore"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -38,7 +39,7 @@ var (
 )
 
 // herdrCorePaneEnv is the variable herdr-core sets in every terminal: its address.
-const herdrCorePaneEnv = "HC_TERMINAL_ID"
+const herdrCorePaneEnv = nodeclient.HerdrCorePaneEnv
 
 // herdrAppDoc is the Herdr app's layout document on the core: its spaces, each with tabs holding terminals. Terminals
 // the app opened also carry its ids as labels (herdrSpaceLabel, herdrTabLabel) and its "<space> / <tab>" as where.

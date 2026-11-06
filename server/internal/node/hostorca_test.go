@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeclient"
 	"github.com/nwverse/persona/server/internal/orcart"
 	"github.com/nwverse/persona/server/internal/orcart/orcarttest"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -617,7 +618,7 @@ func TestHookPaneOrca(t *testing.T) {
 		{map[string]string{"HERDR_PANE_ID": "w1:p2", "ORCA_PANE_KEY": "tab1:leaf1"}, "w1:p2"},
 		{map[string]string{"HC_TERMINAL_ID": "t7", "ORCA_PANE_KEY": "tab1:leaf1"}, "herdr-core:t7"},
 	} {
-		if got := HookPane(env(c.env)); got != c.want {
+		if got := nodeclient.HookPane(env(c.env)); got != c.want {
 			t.Errorf("%v: HookPane = %q, want %q", c.env, got, c.want)
 		}
 	}
