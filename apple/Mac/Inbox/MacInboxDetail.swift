@@ -96,6 +96,13 @@ struct MacInboxItemDetail: View {
     /// and list for the link panel); a standalone window never touches the main window's layout (#3477).
     static func writesSharedReading(standalone: Bool) -> Bool { !standalone }
 
+    /// Whether the detail takes the list's one-shot AI Draft Reply / Hand to AI signal for `itemID` and opens the sheet:
+    /// only the inbox page's detail does. A standalone window of the same item took it too, whichever came first, and
+    /// opened the sheet in the window behind (#3817); its own buttons still open its sheets.
+    static func takesListSignal(_ signalID: String?, itemID: String, standalone: Bool) -> Bool {
+        !standalone && signalID == itemID
+    }
+
     private var current: InboxItem { InboxStore.shared.items.first { $0.id == item.id } ?? item }
 
     var body: some View {
@@ -133,10 +140,10 @@ struct MacInboxItemDetail: View {
         .sheet(isPresented: $drafting) { InboxDraftSheet(item: current, accounts: accounts).macSheet() }
         .sheet(isPresented: $handingOff) { InboxHandOffSheet(item: current).macSheet() }
         .onChange(of: MacInboxState.shared.drafting, initial: true) { _, d in
-            if d?.id == item.id { drafting = true; MacInboxState.shared.drafting = nil }
+            if Self.takesListSignal(d?.id, itemID: item.id, standalone: standalone) { drafting = true; MacInboxState.shared.drafting = nil }
         }
         .onChange(of: MacInboxState.shared.handingOff, initial: true) { _, d in
-            if d?.id == item.id { handingOff = true; MacInboxState.shared.handingOff = nil }
+            if Self.takesListSignal(d?.id, itemID: item.id, standalone: standalone) { handingOff = true; MacInboxState.shared.handingOff = nil }
         }
         #if DEBUG
         // `-showInboxAction draft|handoff`: open that sheet; `-openInboxLink <url>`: the link panel (screenshots).
