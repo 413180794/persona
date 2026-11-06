@@ -28,6 +28,11 @@ internal data class AgentsPageState(
     val groupCounts: Map<String?, Int> = emptyMap(),
     /** botmux's sessions in the list's range, hidden or not: the 「botmux」 switch shows while there are any (#2786). */
     val botmuxCount: Int = 0,
+    /**
+     * False only for the placeholder before the first build: the sessions and the local preferences arrive
+     * asynchronously, so until then the list shows no empty state (as the space page's `loaded`, #5377).
+     */
+    val loaded: Boolean = false,
 )
 
 /**
@@ -52,6 +57,11 @@ internal class AgentsViewModel(
     machineManagement: MachineManagement? = null,
     /** The phone's hub groups: a request is answered through its own group's connection (AgentGroups.kt stateFor). */
     private val hubGroups: persona.core.contracts.api.HubGroups = persona.core.contracts.api.HubGroups.None,
+    /**
+     * Where [page] is built: the app passes [kotlinx.coroutines.Dispatchers.Default], so sorting, filtering and counting
+     * every session on each push stays off the main thread. Empty (the caller's thread) keeps tests synchronous.
+     */
+    listContext: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
 ) : ViewModel() {
     private val operations = bindings?.operations?.let { AgentOperationsState(it, preferences.hubCache) }
     val operationState = operations?.state ?: MutableStateFlow(AgentOperationsSnapshot())
@@ -62,7 +72,9 @@ internal class AgentsViewModel(
     private val groupFilter = MutableStateFlow<GroupFilter?>(null)
     /** The hub group the list shows; null is every group (AgentGroups.kt). */
     val group = groupFilter.asStateFlow()
-    private var previous: AgentListResult? = null
+    // Written while building [page] (on listContext) and reset from the main thread.
+    @Volatile private var previous: AgentListResult? = null
+    // Only touched while building [page]: one build at a time, so it needs no more.
     private var previousContext: List<Any>? = null
     private val _delivery = MutableStateFlow<Map<String, RequestDelivery>>(emptyMap())
     val delivery = _delivery.asStateFlow()
@@ -167,8 +179,8 @@ internal class AgentsViewModel(
             machineCounts(knownMachines, everywhere), everywhere.size, groupCounts(everySession, everyMachine, prefs, effective, ops),
             // With botmux shown, 全部's own 飞书群 count is it; hidden, counted without a fourth list.
             botmuxCount = if (effective.hideBotmux) botmuxCount(rows, prefs, effective)
-                else all.counts[AgentQuickFilter.Feishu] ?: 0)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentsPageState())
+                else all.counts[AgentQuickFilter.Feishu] ?: 0, loaded = true)
+    }.flowOn(listContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentsPageState())
 
     init {
         if (hubUpdates != null) {

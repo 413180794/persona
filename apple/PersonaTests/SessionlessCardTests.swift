@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// A card on no session (`personad ask` outside herdr, #4059) can be answered in the app, and Agents' 需要你处理 lists
+/// A card on no session (`personad ask` outside herdr, #4059) can be answered in the app, and Agents' Needs your input lists
 /// every card its badge counts.
 @MainActor
 struct SessionlessCardTests {
@@ -66,7 +66,7 @@ struct SessionlessCardTests {
         #expect(card("c", kind: .question).sessionlessPlace == nil)
         #expect(card("d", kind: .question, cwd: "/srv/deploy").placeLine(machine: "MacBook") == "脚本 · deploy · MacBook")
         var labelled = card("e", kind: .question, cwd: "/srv/deploy")
-        labelled.agentLabelHint = "脚本" // its title already says 脚本 在问你
+        labelled.agentLabelHint = "脚本" // its title already says A script is asking you
         #expect(labelled.placeLine(machine: "MacBook") == "deploy · MacBook")
         #expect(card("f", kind: .question, session: "s", title: "补测试").placeLine(machine: "MacBook") == "补测试 · MacBook")
     }

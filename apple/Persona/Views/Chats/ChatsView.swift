@@ -3256,7 +3256,7 @@ struct AgentsTopBar: View, Equatable {
     }
 }
 
-/// Agents' 需要你处理: every card but the assistant's, on the machine and hub picked. A card on no session (`personad
+/// Agents' Needs your input: every card but the assistant's, on the machine and hub picked. A card on no session (`personad
 /// ask` outside herdr) or on one not listed yet is here too, as the tab's badge counts it (#4059).
 enum AgentsNeedsYou {
     static func cards(_ all: [Interaction], session: (SessionKey) -> Session?, machine: String = "", hub: String? = nil) -> [Interaction] {

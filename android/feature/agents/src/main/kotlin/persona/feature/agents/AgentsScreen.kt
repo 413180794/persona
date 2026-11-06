@@ -315,7 +315,7 @@ internal fun AgentsScreen(
                     value = pluralStringResource(R.plurals.agents_mark_all_read_count, unread.size, unread.size),
                     chevron = false, onClick = { confirmRead = unread })
             }
-            if (page.list.groups.isEmpty()) item("empty") {
+            if (page.loaded && page.list.groups.isEmpty()) item("empty") {
                 // Three cases, as iOS: a search with no result (no 新建会话, which read as if the agents were gone), no
                 // sessions at all, and a quick filter with nothing left (看全部).
                 when {

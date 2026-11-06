@@ -1617,7 +1617,7 @@ struct SessionlessCardSheet: View {
 
 extension Interaction {
     /// The line under a card's title in a list: its session's title; a sessionless card says where it comes from, and
-    /// 脚本 when its title does not already name who asks (`personad ask` labels its cards 脚本, docs/script-cli.md).
+    /// Script when its title does not already name who asks (`personad ask` labels its cards Script, docs/script-cli.md).
     func placeLine(machine: String?) -> String {
         let mark = (agentLabelHint ?? "").isEmpty ? String(localized: "脚本") : nil
         let parts: [String?] = isSessionless ? [mark, sessionlessPlace, machine] : [sessionTitle, machine]
