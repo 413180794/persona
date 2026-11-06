@@ -27,6 +27,12 @@ func SocketPath() string {
 	return filepath.Join(identity.SocketDir(home), "node.sock")
 }
 
+// LaunchKeyPath is the machine's launch key, beside the socket: `personad launch` reads it and sends it with
+// launcher.env, so the node gives a managed launcher's settings only to a caller that can read the data directory.
+func LaunchKeyPath() string {
+	return filepath.Join(filepath.Dir(SocketPath()), "launch.key")
+}
+
 // HookTimeout is how long a hook waits for the phone before handing the dialog back to the terminal.
 var HookTimeout = 30 * time.Minute
 
@@ -61,6 +67,8 @@ type Request struct {
 	// AwayOK: the client takes {"away":true} (a resident node in standby) for no node. An older `personad mcp` does
 	// not, so standby gives one without it the answer of a node that cannot reach its manager.
 	AwayOK bool `json:"away_ok,omitempty"`
+	// LaunchKey: launcher.env's proof that the caller can read LaunchKeyPath.
+	LaunchKey string `json:"launch_key,omitempty"`
 }
 
 // Dialer sends one request line to the node's socket and returns its answer line (Dial).

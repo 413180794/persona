@@ -85,6 +85,9 @@ func (n *Node) listenOnce(ctx context.Context) (net.Listener, error) {
 	// Never unlink on close: by then the path may belong to a newer node.
 	ln.(*net.UnixListener).SetUnlinkOnClose(false)
 	_ = os.Chmod(path, 0o600)
+	if _, err := ensureLaunchKey(nodeclient.LaunchKeyPath()); err != nil { // before any personad launch reads it
+		n.logf("launch key: %v", err)
+	}
 	if fi, err := os.Stat(path); err == nil {
 		n.sockMu.Lock()
 		n.sock = fi
@@ -171,7 +174,7 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 	case "notify": // personad notify (scriptcli.go)
 		resp = n.handleNotify(ctx, req)
 	case "launcher.env": // jarvisd launch <name>
-		resp = n.launcherEnv(req.Name)
+		resp = n.launcherEnvFor(req)
 	case "mcp.tools":
 		var res struct {
 			Tools []proto.Tool `json:"tools"`

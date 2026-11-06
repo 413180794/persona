@@ -138,7 +138,7 @@ func claudeExecutable() (string, error) { return agentExecutable("claude") }
 
 // Launch is `jarvisd launch <name> [claude args…]`: the managed launcher's settings from the local node, then claude.
 func Launch(ctx context.Context, name string, args []string) error {
-	line, err := nodeclient.Dial(ctx, sockRequest{Kind: "launcher.env", Name: name})
+	line, err := nodeclient.Dial(ctx, launcherEnvRequest(name))
 	if err != nil {
 		return fmt.Errorf("jarvisd launch %s: %w", name, err)
 	}

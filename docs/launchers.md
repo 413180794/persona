@@ -77,6 +77,18 @@ Supported since herdr 0.7.1 (Linux) / 0.7.5 (macOS); ignored by older herdr and 
   (`ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`; the small model goes to haiku / small fast; the sub-Agent model to `CLAUDE_CODE_SUBAGENT_MODEL`, following the primary model if empty;
   custom model options go to `ANTHROPIC_CUSTOM_MODEL_OPTION` and its name / description), then execs claude.
   Keys never enter the terminal or command line. You can also type `jarvisd launch <name>` directly in a terminal.
+- **Only `jarvisd launch` gets the settings** (#5588). Every agent's hooks and MCP servers have to reach node.sock, so being able to connect proves nothing.
+  `launcher.env` answers only a request that carries the machine's launch key, a random value the node keeps in `launch.key` beside node.sock
+  (0600, written when the node starts listening, kept across restarts). `jarvisd launch` reads the file and sends the key, so every start works as before:
+  from the node, typed into a herdr pane, herdr's `resume_argv` after a herdr restart, and typed by hand in a terminal.
+  Any other request gets one error, whatever launcher it names, with none of the settings in it. That includes a process that cannot read the data directory
+  (an agent in a sandbox that hides it, #5357) and a `jarvisd` older than the node, which does not send the key (run the node's own binary instead).
+  - The check is exactly as strong as the file boundary. A process of the same user outside such a sandbox can read `launch.key`, but it can also read the
+    `launcher-settings` files below, which hold the keys themselves. A sandbox for agents must keep `launch.key` hidden along with `secret.key`,
+    and must start where `jarvisd launch` execs the agent, not around `jarvisd launch`, which has to read the key first.
+  - Why not a one-time nonce from the node: it cannot reach a launch typed in a terminal, or herdr's stored resume command, which herdr runs on its own after it restarts.
+    Checking the peer process (uid, pid ancestry) adds nothing either. The socket is already 0600, `jarvisd launch` runs whatever `claude` comes first in PATH, and a herdr pane's
+    start shares its ancestry with the agents' own tool processes.
 - Settings `env` overrides process environment. A different gateway in the user's global `~/.claude/settings.json` `env` would override these variables, so Persona also writes the same variables (including the key)
   to `~/.persona/launcher-settings/<name>-env-settings.json` (0600) and passes it through `--settings` (`node/launcher_settings.go`). On older Claude Code, this is merged with
   Persona hooks in `<name>-<claude|assistant>-settings.json`. These files are rewritten on every start; manual edits are lost.
