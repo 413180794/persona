@@ -114,6 +114,35 @@ class CamelJoinTests(unittest.TestCase):
         self.assertEqual(pc.problems("at lamp-Post", [host]), [host])
 
 
+class BannedNameTests(unittest.TestCase):
+    # Built from pieces so the repository scan of this file does not flag it.
+    NAMES = [("aster", "gate"), ("open", "lark"), ("open", "wechat"), ("extensions", "internal"), ("corp", "link")]
+
+    def spellings(self, a, b):
+        return [a + b, a.upper() + b.upper(), a.capitalize() + b.capitalize(), a + "-" + b, a + "_" + b.upper(),
+                a.capitalize() + " " + b.capitalize(), "x" + a + b + "y"]
+
+    def test_every_spelling_is_found_without_configuration(self):
+        for a, b in self.NAMES:
+            for text in self.spellings(a, b):
+                with self.subTest(text=text):
+                    found = pc.problems("see " + text + " here", [])
+                    self.assertEqual(len(found), 1, found)
+                    self.assertTrue(pc.private_kind(found[0]).startswith("banned name"))
+
+    def test_the_parts_alone_are_not_names(self):
+        for line in ["the open gate", "an aster", "lark and wechat", "internal extensions", "corporate links"]:
+            with self.subTest(line=line):
+                self.assertEqual([w for w in pc.problems(line, []) if pc.BANNED_NAMES.fullmatch(w)], [])
+
+    def test_a_name_inside_a_longer_word_is_still_found(self):
+        name = "open" + "-" + "lark"
+        self.assertEqual(pc.problems(name + "s?", []), [name])
+
+    def test_the_pattern_does_not_spell_itself(self):
+        self.assertIsNone(pc.BANNED_NAMES.search(pc.BANNED_NAMES.pattern))
+
+
 class LoopbackTests(unittest.TestCase):
     def test_persona_and_legacy_config_words_are_both_scanned(self):
         with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
@@ -330,6 +359,16 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
         self.assertFalse((self.home / ".config/jarvis/config.json").exists())
         self.assertFalse((self.home / ".config/jarvis/private-words.txt").exists())
         self.assert_blocked(self.scan())
+
+    def test_full_scan_blocks_a_banned_name_in_content_and_path(self):
+        name = "aster" + "-" + "gate"
+        (self.repo / "notes.md").write_text("Reads quotas from " + name.upper() + ".\n")
+        (self.repo / (name + ".txt")).write_text("plain\n")
+        self.git("add", "notes.md", name + ".txt")
+        result = self.scan()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("notes.md:1: banned name", result.stdout)
+        self.assertIn(name + ".txt:path: banned name", result.stdout)
 
     def test_public_full_scan_passes(self):
         self.write_lock()

@@ -9,7 +9,8 @@
 What counts as private comes from this machine, never from the repo: the values of ~/.config/jarvis/config.json
 (hosts, hub address, machine names, Apple ids, emails), ~/.config/jarvis/private-words.txt (one word per line:
 internal project names, people, anything else) and CLAUDE.local.md's `code spans`. On top of that, any private IPv4
-address and any email outside example.* domains. Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
+address, any email outside example.* domains, and the names in BANNED_NAMES (vendors and internal repositories that
+only extensions may name). Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
 
 Not private: loopback addresses (127.0.0.0/8, ::1, also with a port or as a URL's host) even when the config or
 CLAUDE.local.md holds one, the documentation and IETF protocol ranges (192.0.0.0/24), an `xcode` in /Applications,
@@ -199,6 +200,13 @@ REAL_TLDS = {"com", "net", "org", "io", "cn", "dev", "app", "ai", "co", "me", "c
 # The public site (site/) shows a contact address on purpose: the OAuth consent screen requires one.
 PUBLIC_DIRS = ("site/",)
 
+# Names that are never in the repository, in any spelling (#4967): vendors and internal repositories Persona only
+# reaches through extensions, which bring their own names. Case-insensitive, with a hyphen, underscore, space or
+# nothing between the parts; checked in contents, paths and commit messages on every machine, CI included, with no
+# private configuration needed. This file is the only place they are spelled, as patterns.
+BANNED_NAMES = re.compile(r"aster[-_ ]?gate|open[-_ ]?lark|open[-_ ]?wechat|extensions[-_ ]?internal|corp[-_ ]?link",
+                          re.IGNORECASE)
+
 
 CAMEL_JOIN = re.compile(r"[a-z][A-Z]")
 
@@ -224,6 +232,7 @@ def problems(text, words, emails=True):
                 found.append(w)
         elif w.lower() in low and not only_in_camel_joins(text, w):
             found.append(w)
+    found += [m.group(0) for m in BANNED_NAMES.finditer(text)]
     for m in IPV4.finditer(text):
         try:
             ip = ipaddress.ip_address(m.group(1))
@@ -239,6 +248,8 @@ def problems(text, words, emails=True):
 
 
 def private_kind(value):
+    if BANNED_NAMES.fullmatch(value):
+        return "banned name (a vendor or internal repository; use the extension's own wording, #4967)"
     return "private IP" if IPV4.fullmatch(value) else "email" if "@" in value else "private value (%d chars)" % len(value)
 
 
