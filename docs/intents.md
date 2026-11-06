@@ -48,19 +48,24 @@ They do not need the app in the foreground and do not use WebSocket: each call r
 
 ## Error messages
 
-All in Chinese, each a single sentence that says what to do next (`IntentFailure.sentence(for:host:)`):
+Each a single sentence that says what to do next, in the app's language (`IntentFailure.sentence` / `sentence(for:host:)`):
 
 | Case | Message |
 | --- | --- |
-| Not paired | Not paired yet. Open Persona and scan the QR code from `personad hub pair`. |
+| Not paired | Not paired yet. Open Persona and scan the QR code your hub shows. |
 | 401 / 403 | The pairing has expired. Open Persona to pair again. |
 | 410 | This was already handled. |
-| Network / timeout | Can't reach the hub (the `hub` address); the phone must be able to reach the hub (public direct connection, the same LAN, or VPN). |
-| No machines | No machines are online. Check personad on the hub machine and the SSH tunnels. |
+| Other HTTP errors | The hub's error message as is |
+| Timeout | The hub isn't responding (`<hub address>`). Try again later. |
+| Phone offline / connection lost | Your phone is offline (`<hub address>`). |
+| Other network errors | Can't reach the hub (`<hub address>`). Make sure your phone can reach it (same network or VPN). |
+| No machines | No computer is online right now. Check that your computer is on and Persona Link is running. |
+| The chosen machine is offline | `<machine>` is offline: it may be asleep, or Persona Link isn't running on it. |
 | No live session on that machine | No sessions are running on `<machine>`. Open Persona to start one, or say "new session". |
+| New session, but no remembered folder / launcher | You haven't started a new chat on `<machine>` yet. Start one in Persona once, and Siri will know which folder and launcher to use. |
 | Nothing pending | Nothing needs you right now. |
 
-The hub is plain HTTP on the company intranet: the intents use `.background` mode, so an unreachable network does not pull the app into the foreground.
+The hub may only be reachable over a LAN, a VPN or an SSH tunnel: the intents use `.background` mode, so an unreachable network does not pull the app into the foreground.
 
 ## Phrases
 
