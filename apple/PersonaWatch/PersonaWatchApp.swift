@@ -484,6 +484,7 @@ struct WatchInteractionView: View {
                 case .question:
                     ForEach(interaction.questions ?? []) { q in
                         Text(q.question).font(.headline)
+                            .foregroundStyle(triedEarly && answer(q) == nil ? Theme.cautionText : Color.primary)
                         ForEach(q.options, id: \.label) { opt in
                             Button {
                                 if q.multiSelect {
@@ -513,6 +514,9 @@ struct WatchInteractionView: View {
                     }
                     if (interaction.questions ?? []).count > 1 || (interaction.questions ?? []).contains(where: \.multiSelect) {
                         Button("Submit") { submit() }.buttonStyle(.borderedProminent)
+                    }
+                    if triedEarly && !allAnswered {
+                        Label("Some questions are unanswered", systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.caution)
                     }
                 case .plan:
                     Text(WatchText.shown(interaction.plan ?? "")).font(.footnote)
@@ -577,12 +581,29 @@ struct WatchInteractionView: View {
         .disabled(!model.canAnswer(interaction))
     }
 
+    /// 提交 was tapped with a question left: say so under the button until every question has a pick.
+    @State private var triedEarly = false
+
+    /// The phone's rule (`QuestionForm.answer`, without its free text): the picked labels in the options' order, nil
+    /// when nothing is picked.
+    private func answer(_ q: Question) -> String? {
+        let set = picks[q.question, default: []]
+        guard !set.isEmpty else { return nil }
+        return q.options.map(\.label).filter(set.contains).joined(separator: ", ")
+    }
+
+    private var allAnswered: Bool { (interaction.questions ?? []).allSatisfy { answer($0) != nil } }
+
     private func submit() {
-        var answers: [String: String] = [:]
-        for q in interaction.questions ?? [] {
-            let set = picks[q.question, default: []]
-            answers[q.question] = q.options.map(\.label).filter(set.contains).joined(separator: ", ")
+        // Like the phone: nothing goes until every question is answered (an empty answer reached the agent as the
+        // user's choice and the card counted as answered, #4374).
+        guard allAnswered else {
+            triedEarly = true
+            WKInterfaceDevice.current().play(.retry)
+            return
         }
+        var answers: [String: String] = [:]
+        for q in interaction.questions ?? [] { answers[q.question] = answer(q) }
         act(Resolution(answers: answers))
     }
 

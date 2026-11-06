@@ -163,8 +163,20 @@ export function ago(iso?: string, now = Date.now()): string {
   if (s < 45) return t("lib-format.just_now");
   if (s < 3600) return formatRelative(-Math.round(s / 60), "minute");
   if (s < 86400) return formatRelative(-Math.round(s / 3600), "hour");
-  if (s < 86400 * 7) return formatRelative(-Math.round(s / 86400), "day");
+  // Days by the local calendar, not by 24 h spans: yesterday morning seen late tonight is 昨天, not 前天 (#4281).
+  const days = calendarDays(ts, now);
+  if (days < 7) return formatRelative(-days, "day");
   return formatDate(ts, { month: "numeric", day: "numeric" });
+}
+
+/** How many local midnights lie between `from` and `to` (rounded: a DST day is 23 or 25 hours). */
+function calendarDays(from: number, to: number): number {
+  const midnight = (ms: number) => {
+    const d = new Date(ms);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+  return Math.round((midnight(to) - midnight(from)) / 86400_000);
 }
 
 export function duration(ms: number): string {

@@ -18,7 +18,7 @@ struct InboxConnectorDetailView: View {
 
     var body: some View {
         if thread.loaded && (thread.unavailable || thread.chat.map { !$0.isChat && !$0.isGitHub } == true) {
-            InboxConnectorTextView(item: item, problem: thread.failure)
+            InboxConnectorTextView(item: item, problem: thread.failure, reread: reread)
         } else if thread.chat?.isGitHub == true {
             GitHubThreadView(model: thread, item: item)
                 .navigationTitle(item.accountName)
@@ -30,6 +30,16 @@ struct InboxConnectorDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
         }
     }
+
+    /// The text page's Retry reads the conversation page again first and says whether that page now takes the text's
+    /// place (read and a conversation); nil when there is no page to read (a CI run) or it was already read.
+    private var reread: (() async -> Bool)? {
+        guard thread.unavailable, !thread.thread.isEmpty else { return nil }
+        return {
+            await thread.load()
+            return !thread.unavailable && thread.chat.map { $0.isChat || $0.isGitHub } == true
+        }
+    }
 }
 
 /// What the hub collected about a connector's item (the description and the newest comments, read for triage) and
@@ -38,12 +48,17 @@ struct InboxConnectorTextView: View {
     var item: InboxItem
     /// Why the conversation page could not be read (a rate limit), said over the text.
     var problem: String? = nil
+    /// Reads the conversation page again (it could not be read the first time), true when it was read and replaces
+    /// this page; nil when there is none to read.
+    var reread: (() async -> Bool)? = nil
     @Environment(AppModel.self) private var model
     @State private var context: String?
     @State private var failure: String?
     @State private var link: LinkTarget?
+    @State private var retrying = false
 
     private var connector: InboxItem.Connector? { item.connector }
+    private var showsProblem: Bool { problem?.isEmpty == false && connector?.thread.isEmpty == false }
 
     var body: some View {
         List {
@@ -73,16 +88,19 @@ struct InboxConnectorTextView: View {
                 }
             }
             // Why its conversation page could not be read (a rate limit); an item without one (a CI run) has nothing to say.
-            if let problem, !problem.isEmpty, connector?.thread.isEmpty == false {
+            if showsProblem, let problem {
                 Section {
                     Label(problem, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(.secondary)
+                    if reread != nil { retryButton }
                 }
             }
             Section("Content") {
-                if let context, !context.isEmpty {
-                    Text(context).font(Theme.Font.secondary).textSelection(.enabled)
+                if let context {
+                    // Nothing collected: the item's preview, as the web shows it, rather than a spinner that never ends.
+                    Text(context.isEmpty ? item.preview : context).font(Theme.Font.secondary).textSelection(.enabled)
                 } else if let failure {
                     Text(failure).font(Theme.Font.label).foregroundStyle(Theme.danger)
+                    if !(showsProblem && reread != nil) { retryButton }
                 } else {
                     ProgressView().frame(maxWidth: .infinity)
                 }
@@ -92,6 +110,7 @@ struct InboxConnectorTextView: View {
         .navigationTitle(item.accountName)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: item.id) { await load() }
+        .refreshable { await retry() }
         #if os(macOS)
         .macLinkPanel($link)
         #else
@@ -101,12 +120,37 @@ struct InboxConnectorTextView: View {
         #endif
     }
 
+    /// Retry in place of leaving and coming back: the conversation page first (read, it replaces this page), then the text.
+    private var retryButton: some View {
+        Button { Task { await retry() } } label: { Label("Retry [Components b8784c]", systemImage: Theme.Icon.retry).lineLimit(1) }
+            .formButton()
+            .disabled(retrying)
+    }
+
+    private func retry() async {
+        guard !retrying else { return }
+        retrying = true
+        defer { retrying = false }
+        failure = nil // the section shows it is reading again
+        if let reread, await reread() { return }
+        await load()
+    }
+
     private func load() async {
         do {
             context = try await model.api?.inboxItem(item.id).context ?? ""
             failure = nil
         } catch {
-            failure = error.shown.map { String(localized: "Couldn't read the content: \($0)") }
+            if error.isCancellation { return }
+            // No network or no answer says so too: a nil failure left the section spinning for good.
+            if let shown = error.shown {
+                failure = String(localized: "Couldn't read the content: \(shown)")
+            } else if error.isOffline {
+                let why = String(localized: "Can't reach the hub")
+                failure = String(localized: "Couldn't read the content: \(why)")
+            } else {
+                failure = String(localized: "The hub didn't respond. Try again later.") // a timeout: the hub may be up but slow
+            }
         }
     }
 }

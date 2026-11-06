@@ -183,6 +183,7 @@ func TestFoldedRunAnswer(t *testing.T) {
 		{"the later one first", []proto.Item{userSays("wechat-2", "二"), agentSays("答二"), userSays("wechat-1", "一"), agentSays("答一")}, "答二|答一", true},
 		{"taken in mid-turn", []proto.Item{userSays("wechat-1", "一"), toolUse, userSays("wechat-2", "二"), toolResult, agentSays("一起答")}, "一起答", true},
 		{"one not in yet", []proto.Item{userSays("wechat-1", "一"), agentSays("答一")}, "", false},
+		{"queued mid-turn", []proto.Item{userSays("wechat-1", "一"), {Role: "user", Kind: proto.KindText, Text: "二", ClientMsgID: "wechat-2", Queued: true}, agentSays("一起答")}, "一起答", true},
 		{"an older node", []proto.Item{userSays("", "一"), agentSays("答一"), userSays("", "二"), agentSays("答二")}, "答二", true},
 	} {
 		got, all := RunAnswer(r, c.items)
@@ -357,5 +358,30 @@ func TestReadTurnFoldsAProbedFirstMessage(t *testing.T) {
 	held.Fold(&Run{Held: true, Started: t0})
 	if held.Head {
 		t.Fatal("a held run folded in as an unanswered message")
+	}
+}
+
+// A turn that ended with a turn_duration only (#4895): no words, not stopped, but recorded as finished.
+func TestReadTurnTurnDurationWithoutWords(t *testing.T) {
+	duration := proto.Item{Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 500}}
+	src := &pagedSource{page: 10, items: numbered(userSays("voice-1", "one"), duration)}
+	rd, err := ReadTurn(context.Background(), src, &Run{MsgIDs: []string{"voice-1"}})
+	if err != nil || !rd.Found || rd.Answer != "" || rd.Stopped != "" || rd.Last != 2 {
+		t.Fatalf("turn_duration only: %+v %v", rd, err)
+	}
+}
+
+// A folded run where a queued message is present when a prior turn is stopped (#4895):
+// the queued message has not started its turn yet, so the run must not finish early.
+func TestFoldedRunQueuedInterruptedDoesNotFinishEarly(t *testing.T) {
+	stopped := proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.InterruptedNotice}
+	queued := proto.Item{Role: "user", Kind: proto.KindText, Text: "two", ClientMsgID: "voice-2", Queued: true}
+	src := &pagedSource{page: 10, items: numbered(userSays("voice-1", "one"), queued, stopped)}
+	rd, err := ReadTurn(context.Background(), src, &Run{MsgIDs: []string{"voice-1", "voice-2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rd.Found {
+		t.Fatalf("folded run with queued message should not finish early on stopped notice: %+v", rd)
 	}
 }

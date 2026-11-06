@@ -102,7 +102,7 @@ struct PersonalAgentListView: View {
         Menu {
             Picker(selection: Binding(get: { prefs.view.groupBy }, set: { g in update { $0.view.group = g.rawValue } })) {
                 ForEach(AgentGroupBy.allCases, id: \.self) { Text($0.label).tag($0) }
-            } label: { Label("Group By [Personal Agent List View 72148c]", systemImage: "square.stack") }
+            } label: { Label("Group By [Personal Agent List View 72148c]", systemImage: Theme.Icon.groupBy) }
                 .pickerStyle(.menu)
             Picker(selection: Binding(get: { prefs.view.sortBy }, set: { v in update { $0.view.sort = v.rawValue } })) {
                 ForEach(AgentSortBy.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -124,16 +124,16 @@ struct PersonalAgentListView: View {
                 }
             } label: { Label("Display", systemImage: Theme.Icon.view) }
             Divider()
-            Button { naming = true } label: { Label("New Group", systemImage: "folder.badge.plus") }
+            Button { naming = true } label: { Label("New Group", systemImage: Theme.Icon.newGroup) }
             if !prefs.sections.isEmpty {
                 Menu {
                     ForEach(prefs.sections) { sec in
                         Button(role: .destructive) { update { $0.removeSection(sec.id) } } label: { Text(sec.name) }
                     }
-                } label: { Label("Delete Group", systemImage: "folder.badge.minus") }
+                } label: { Label("Delete Group", systemImage: Theme.Icon.deleteGroup) }
             }
             Divider()
-            Button { update { $0.resetView() } } label: { Label("Reset to Default", systemImage: "arrow.counterclockwise") }
+            Button { update { $0.resetView() } } label: { Label("Reset to Default", systemImage: Theme.Icon.resetDefaults) }
                 .disabled(prefs.view.isDefault)
             Button {
                 query = ""

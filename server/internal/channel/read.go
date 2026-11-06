@@ -88,11 +88,14 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 	if named && found && !slices.ContainsFunc(kept, func(it proto.Item) bool { return it.Role == "assistant" }) {
 		// Its message is in, nothing after it yet: its turn has not answered (the session's status can come before its
 		// lines, two messages one right after the other): as one still waiting. Unless the turn was stopped before it
-		// said anything (#4505): only the "Interrupted" notice follows it, and the turn is over without words.
-		// Only once all of a folded run's messages are in (a later one's turn is still to come), and not for an API
-		// error Claude Code is still retrying (the turn goes on).
-		if why := Stopped(kept); why != "" && !retrying(kept) {
-			if _, all := RunAnswer(r, kept); all {
+		// said anything (#4505): only the "Interrupted" notice follows it, and the turn is over without words. Or a turn
+		// that ended with a turn_duration only (#4895): it took its turn, said nothing, and is over.
+		// Only once all of a folded run's messages are in (a later one's turn is still to come; one only queued behind
+		// this wordless turn does not count, #4895), and not for an API error Claude Code is still retrying (the turn
+		// goes on).
+		why := Stopped(kept)
+		if (why != "" || hasTurnDuration(kept)) && !retrying(kept) {
+			if _, all := RunAnswer(r, notQueued(kept)); all {
 				return Reading{Found: true, Last: after, Stopped: why}, nil
 			}
 		}
@@ -185,4 +188,17 @@ func retrying(items []proto.Item) bool {
 		}
 	}
 	return false
+}
+
+// hasTurnDuration: items has a whole-turn duration recorded (a turn that finished, words or not).
+func hasTurnDuration(items []proto.Item) bool {
+	return slices.ContainsFunc(items, func(it proto.Item) bool {
+		return it.TurnDuration != nil || it.Kind == "turn_duration"
+	})
+}
+
+// notQueued is items without the messages queued mid-turn: where nothing was said, one of them may still get a turn
+// of its own. Elsewhere a queued message counts as in (the agent took it in and answered it with the rest).
+func notQueued(items []proto.Item) []proto.Item {
+	return slices.DeleteFunc(slices.Clone(items), func(it proto.Item) bool { return it.Queued })
 }

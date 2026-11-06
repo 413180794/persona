@@ -185,6 +185,12 @@ extension Theme {
         static let filterActive = "line.3.horizontal.decrease.circle.fill"
         /// A plain list layout.
         static let listView = "list.bullet"
+        /// A list's view menu: how rows are grouped (Group By), a custom group added or removed (New Group /
+        /// Delete Group), and the view put back to its defaults (Reset to Default).
+        static let groupBy = "square.stack"
+        static let newGroup = "folder.badge.plus"
+        static let deleteGroup = "folder.badge.minus"
+        static let resetDefaults = "arrow.counterclockwise"
         static let settings = "gearshape"
         static let enter = "return"
         static let link = "link"
@@ -437,17 +443,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

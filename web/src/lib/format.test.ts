@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { attentionReason, externalLink, failureReason, failureText, sessionPreview } from "./format";
+import { ago, attentionReason, externalLink, failureReason, failureText, sessionPreview } from "./format";
+import { formatRelative } from "../i18n";
 import type { Session } from "./types";
 
 const session = (o: Partial<Session>): Session => ({ machine_id: "m", session_id: "s", cwd: "/x", status: "idle", ...o }) as Session;
@@ -54,5 +55,25 @@ describe("externalLink", () => {
       expect(externalLink(session({ external_url: url })), url).toBeUndefined();
     }
     expect(externalLink(undefined)).toBeUndefined();
+  });
+});
+
+describe("ago", () => {
+  const at = (d: number, h: number) => new Date(2026, 10, d, h, 0).getTime();
+  const iso = (ms: number) => new Date(ms).toISOString();
+
+  it("counts days by the calendar, not by 24 hour spans (#4281)", () => {
+    // yesterday morning seen late tonight: 40 h, still yesterday
+    expect(ago(iso(at(4, 7)), at(5, 23))).toBe(formatRelative(-1, "day"));
+    // the evening before yesterday seen just past midnight: 30 h, two days ago
+    expect(ago(iso(at(3, 19)), at(5, 1))).toBe(formatRelative(-2, "day"));
+    // six calendar days back still reads as days; seven is a date
+    expect(ago(iso(at(1, 23)), at(7, 1))).toBe(formatRelative(-6, "day"));
+    expect(ago(iso(at(1, 1)), at(8, 23))).not.toBe(formatRelative(-7, "day"));
+  });
+
+  it("keeps minutes and hours as they were", () => {
+    expect(ago(iso(at(5, 1)), at(5, 3))).toBe(formatRelative(-2, "hour"));
+    expect(ago(iso(at(4, 23)), at(5, 1))).toBe(formatRelative(-2, "hour"));
   });
 });
