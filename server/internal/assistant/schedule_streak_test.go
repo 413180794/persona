@@ -1,8 +1,12 @@
 package assistant
 
 import (
+	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // outcome records one run of task ref as it ends (recordRun is where the history and the streak are kept).
@@ -38,12 +42,12 @@ func TestARepeatingTaskThatKeepsNotGoingThroughIsToldOnce(t *testing.T) {
 		t.Fatalf("nothing more until it goes through: %+v", p)
 	}
 
-	// Its automatic retry is part of the failure it retried: an ok record with Retried neither ends the streak nor
-	// tells again when the retry fails too.
-	h.recordRun(ScheduleRun{Kind: "routine", RefID: "p", Status: runOK, Retried: true})
+	// Its automatic retry: one that fails too is the same failure over again and tells nothing, and one that went
+	// through ends the streak (the task worked) and tells nothing either.
 	h.recordRun(ScheduleRun{Kind: "routine", RefID: "p", Status: runFailed, Retried: true, Error: "retry"})
+	h.recordRun(ScheduleRun{Kind: "routine", RefID: "p", Status: runOK, Retried: true})
 	if p := n.pushed(); len(p) != 1 {
-		t.Fatalf("a retry is the same failure over again: %+v", p)
+		t.Fatalf("a retry is quiet whichever way it went: %+v", p)
 	}
 
 	// Going through once ends it: three more in a row is news again.
@@ -101,4 +105,87 @@ func TestABusyStreakIsToldAndARetryThatWorkedEndsIt(t *testing.T) {
 	if p := n.pushed(); len(p) != 1 {
 		t.Fatalf("a retry that went through ended the streak, two more is not three: %+v", p)
 	}
+}
+
+// Runs are recorded when they start and turned failed when their turn ends, so the count can jump past streakLimit
+// (#4785): two failures; the third is sent and recorded ok; the fourth is skipped (the conversation is still on the
+// third); then the third's turn ends in an error. That is four in a row at once, never exactly three: told then, and
+// once only.
+func TestAStreakThatJumpsPastTheLimitIsStillToldOnce(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "巡检", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true})
+
+	outcome(h, "p", runFailed, "API Error: 503")
+	outcome(h, "p", runFailed, "API Error: 503")
+	third := h.recordRun(ScheduleRun{Kind: "routine", RefID: "p", Title: "值守", Status: runOK})
+	outcome(h, "p", runSkipped, "上一轮还在运行，这次跳过")
+	if p := n.pushed(); len(p) != 0 {
+		t.Fatalf("the third went through as far as anyone knows: %+v", p)
+	}
+
+	if !h.updateRun(ScheduleRun{ID: third, RefID: "p"}, runFailed, "API Error: 529 overloaded") {
+		t.Error("updateRun says the streak notice went out")
+	}
+	p := n.pushed()
+	if len(p) != 1 || !strings.Contains(p[0].Title, "值守") || !strings.Contains(p[0].Body, "529") {
+		t.Fatalf("four in a row is told, with the reason of the run that made it: %+v", p)
+	}
+
+	// The same streak growing on is not told again.
+	outcome(h, "p", runFailed, "x")
+	outcome(h, "p", runSkipped, "y")
+	if p := n.pushed(); len(p) != 1 {
+		t.Fatalf("one streak, one notice: %+v", p)
+	}
+	// A run that goes through ends it; the next three in a row are a new streak, told again.
+	outcome(h, "p", runOK, "")
+	outcome(h, "p", runFailed, "a")
+	outcome(h, "p", runFailed, "b")
+	outcome(h, "p", runFailed, "c")
+	if p := n.pushed(); len(p) != 2 || !strings.Contains(p[1].Body, "c") {
+		t.Fatalf("a new streak is told once more: %+v", p)
+	}
+}
+
+// In a muted conversation the streak notice stays quiet like the conversation's other pushes, but the run's own
+// 「定时任务失败」 still goes out, as it did before the streak notice (#4785): it is not left out for a notice that
+// was never sent.
+func TestAFailureInAMutedConversationIsStillPushed(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	h.runRetry = 50 * time.Millisecond
+	h.fleet.mutes = &Pins{Spaces: []string{}, Sessions: []string{"server/s1"}}
+	n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
+	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute),
+		Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+	for i := 0; i < streakLimit-1; i++ {
+		h.recordRun(ScheduleRun{Kind: "routine", RefID: "p", Title: "值守", Status: runFailed, Error: "API Error: 503",
+			MachineID: "server", SessionID: "s1"})
+	}
+
+	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
+		Cwd: "/home/me/.jarvis/assistant"})
+	go func() {
+		time.Sleep(3 * time.Second)
+		n.mu.Lock()
+		for i := range n.sessions["server"] {
+			n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
+		}
+		n.mu.Unlock()
+	}()
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if slices.ContainsFunc(n.pushed(), func(p Notification) bool { return p.Title == "定时任务失败：值守" }) {
+			if p := n.pushed(); slices.ContainsFunc(p, func(p Notification) bool { return strings.Contains(p.Title, "没跑成") }) {
+				t.Fatalf("the streak notice stays quiet in a muted conversation: %+v", p)
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("the third failure in a row was not pushed at all: %+v", n.pushed())
 }

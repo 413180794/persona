@@ -59,20 +59,25 @@ func (d *DB) InsertMetric(ctx context.Context, machine string, s proto.MetricSam
 	return err
 }
 
+// rollupMetricsSQL moves the raw rows before $1 (Unix seconds) into one row a machine and minute of step $2. The raw
+// rows are found through the partial index machine_metrics_raw (migration 0415) instead of a scan of the whole table.
+// The raw step is written out (RawMetricStep, 10) rather than passed: a cached statement may get a generic plan, and
+// the planner can only match a partial index's WHERE against a constant.
+const rollupMetricsSQL = `WITH moved AS (
+		DELETE FROM machine_metrics WHERE step = 10 AND ts < to_timestamp($1) RETURNING *
+	)
+	INSERT INTO machine_metrics (machine_id, ts, step, cpu, load, mem_used, mem_total, swap_used, swap_total,
+		net_rx, net_tx, disk_used, disk_total)
+	SELECT machine_id, date_bin('1 minute', ts, timestamptz 'epoch'), $2, avg(cpu), avg(load), avg(mem_used)::bigint,
+		max(mem_total), avg(swap_used)::bigint, max(swap_total), avg(net_rx), avg(net_tx), avg(disk_used)::bigint,
+		max(disk_total)
+	FROM moved GROUP BY 1, 2
+	ON CONFLICT (machine_id, ts, step) DO NOTHING`
+
 // RollupMetrics turns raw rows older than before (rounded down to a minute) into one row per machine and minute:
 // averages, except the totals (largest). Moving and averaging is one statement, so a minute is rolled up once.
 func (d *DB) RollupMetrics(ctx context.Context, before time.Time) (int64, error) {
-	tag, err := d.pool.Exec(ctx, `WITH moved AS (
-			DELETE FROM machine_metrics WHERE step = $2 AND ts < to_timestamp($1) RETURNING *
-		)
-		INSERT INTO machine_metrics (machine_id, ts, step, cpu, load, mem_used, mem_total, swap_used, swap_total,
-			net_rx, net_tx, disk_used, disk_total)
-		SELECT machine_id, date_bin('1 minute', ts, timestamptz 'epoch'), $3, avg(cpu), avg(load), avg(mem_used)::bigint,
-			max(mem_total), avg(swap_used)::bigint, max(swap_total), avg(net_rx), avg(net_tx), avg(disk_used)::bigint,
-			max(disk_total)
-		FROM moved GROUP BY 1, 2
-		ON CONFLICT (machine_id, ts, step) DO NOTHING`,
-		before.Truncate(time.Minute).Unix(), RawMetricStep, RolledMetricStep)
+	tag, err := d.pool.Exec(ctx, rollupMetricsSQL, before.Truncate(time.Minute).Unix(), RolledMetricStep)
 	if err != nil {
 		return 0, err
 	}

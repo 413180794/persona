@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -410,6 +411,30 @@ func TestPendingInteractionsIndexed(t *testing.T) {
 	}
 }
 
+func TestPendingClientOpsIndexed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// A test table is too small for the planner to prefer any index on its own; rule the scan out to see the choice.
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(ctx, `EXPLAIN `+recoverClientOpsSQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan := strings.Join(lines, "\n"); !strings.Contains(plan, "client_ops_pending") {
+		t.Fatalf("%s\nplan:\n%s", recoverClientOpsSQL, plan)
+	}
+}
+
 func TestSettings(t *testing.T) {
 	d, ctx := open(t), context.Background()
 	var v struct{ Launcher string }
@@ -431,6 +456,31 @@ func TestSessionViews(t *testing.T) {
 	got, err := d.SeenTimes(ctx)
 	if err != nil || !got[[2]string{"server", "s"}].Equal(t1) {
 		t.Fatalf("seen = %v, %v", got, err)
+	}
+}
+
+// The 30-day seen load uses session_views_seen instead of scanning every session ever viewed.
+func TestSeenTimesIndexed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// A test table is too small for the planner to prefer any index on its own; rule the scan out to see the choice.
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(ctx, `EXPLAIN `+seenTimesSQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan := strings.Join(lines, "\n"); !strings.Contains(plan, "session_views_seen") {
+		t.Fatalf("SeenTimes does not use session_views_seen:\n%s", plan)
 	}
 }
 
@@ -604,6 +654,47 @@ func TestMachineMetrics(t *testing.T) {
 
 	if n, err := d.PruneMetrics(ctx, base.Add(30*time.Minute)); err != nil || n != 31 {
 		t.Fatalf("pruned %d, %v", n, err)
+	}
+}
+
+// The per-minute rollup finds the raw rows through machine_metrics_raw instead of scanning all 24 hours of rows, both
+// planned for its values and as the generic plan a cached statement may switch to.
+func TestRollupMetricsIndexed(t *testing.T) {
+	// The partial index and the SQL write the raw step out; they must match RawMetricStep.
+	if RawMetricStep != 10 || !strings.Contains(rollupMetricsSQL, "step = 10 ") {
+		t.Fatalf("RawMetricStep %d: update rollupMetricsSQL and the machine_metrics_raw index", RawMetricStep)
+	}
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// A test table is too small for the planner to prefer any index on its own; rule the scan out to see the choice.
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `PREPARE rollup_metrics(bigint, smallint) AS `+rollupMetricsSQL); err != nil {
+		t.Fatal(err)
+	}
+	// A prepared statement outlives the transaction; the connection goes back to the pool.
+	defer func() { _, _ = tx.Exec(ctx, `DEALLOCATE rollup_metrics`) }()
+	for _, mode := range []string{"force_custom_plan", "force_generic_plan"} {
+		if _, err := tx.Exec(ctx, `SET LOCAL plan_cache_mode = `+mode); err != nil {
+			t.Fatal(err)
+		}
+		// EXPLAIN EXECUTE takes no bind parameters, so the two integers are written in.
+		rows, err := tx.Query(ctx, fmt.Sprintf(`EXPLAIN EXECUTE rollup_metrics(%d, %d)`, time.Now().Add(-time.Hour).Unix(), RolledMetricStep))
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan := strings.Join(lines, "\n"); !strings.Contains(plan, "machine_metrics_raw") {
+			t.Fatalf("%s: RollupMetrics does not use machine_metrics_raw:\n%s", mode, plan)
+		}
 	}
 }
 

@@ -188,6 +188,9 @@ type ScheduleRun struct {
 	SessionID string    `json:"session_id,omitempty"`
 	// Retried: this run is the automatic retry after a failure (so a retry that fails again does not retry forever).
 	Retried bool `json:"retried,omitempty"`
+	// StreakTold: this run made its task's streak of runs that did not go through long enough to tell the user, who
+	// was told then (schedule_streak.go): the rest of that streak is not told again.
+	StreakTold bool `json:"streak_told,omitempty"`
 	// of is when the scheduler started this run (the task's LastRun then; 立即运行's tap): a run that finishes after a
 	// newer one started is history only, it does not overwrite the newer one's status (recordRun).
 	of time.Time
@@ -1093,7 +1096,8 @@ func (s *Service) recordRun(r ScheduleRun) string {
 			t.LastSessionID = r.SessionID
 		}
 	}
-	streakTask, streak := streakToldLocked(sc, r) // the run that makes it streakLimit in a row is told once (schedule_streak.go)
+	streakTask, streakN, streak := streakToldLocked(sc, len(sc.runs)-1) // told once per streak (schedule_streak.go)
+	r = sc.runs[len(sc.runs)-1]
 	s.saveLocked(sc)
 	if st := s.store(); st != nil { // under the lock: two runs finishing together must not save their lists out of order
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1105,14 +1109,15 @@ func (s *Service) recordRun(r ScheduleRun) string {
 	sc.mu.Unlock()
 	s.broadcastSchedule()
 	if streak {
-		s.pushStreak(streakTask, r)
+		s.pushStreak(streakTask, streakN, r)
 	}
 	return r.ID
 }
 
 // updateRun rewrites a recorded run's outcome (a run that was sent but whose turn ended in an API error) and the
 // task's last status when this run is still the newest.
-// updateRun returns whether it pushed the streak notice (#4658), which then stands for the run's own failure push.
+// updateRun returns whether it pushed the streak notice (#4658), which then stands for the run's own failure push;
+// false when the notice was left out (a muted conversation, #4785), so that push still goes.
 func (s *Service) updateRun(r ScheduleRun, status, errText string) bool {
 	sc, err := s.lockedSchedule(context.Background())
 	if err != nil {
@@ -1127,7 +1132,7 @@ func (s *Service) updateRun(r ScheduleRun, status, errText string) bool {
 	if j := sc.indexLocked(r.RefID); j >= 0 && (r.of.IsZero() || !sc.tasks[j].LastRun.After(r.of)) {
 		sc.tasks[j].LastStatus, sc.tasks[j].LastError = status, errText
 	}
-	streakTask, streak := streakToldLocked(sc, sc.runs[i]) // a turn that ends in an error is a failed run too (schedule_streak.go)
+	streakTask, streakN, streak := streakToldLocked(sc, i) // a turn that ends in an error is a failed run too (schedule_streak.go)
 	streakRun := sc.runs[i]
 	s.saveLocked(sc)
 	if st := s.store(); st != nil {
@@ -1139,10 +1144,7 @@ func (s *Service) updateRun(r ScheduleRun, status, errText string) bool {
 	}
 	sc.mu.Unlock()
 	s.broadcastSchedule()
-	if streak {
-		s.pushStreak(streakTask, streakRun)
-	}
-	return streak
+	return streak && s.pushStreak(streakTask, streakN, streakRun)
 }
 
 // errTaskBusy: the task's last run is still going; this one is skipped (and recorded) rather than queued behind it.

@@ -4,12 +4,15 @@ import android.content.Context
 import androidx.room.Room
 import persona.core.contracts.HubScope
 import persona.core.contracts.Item
+import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ChatTransport
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.HubPreferencesTransport
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import java.io.File
 
 /** Pairing-scoped lifetime; callers replace the entire owner when switching hubs. */
@@ -76,7 +79,12 @@ class ChatDataRepositories private constructor(
             }
         }
     }
-    val interactions = HubInteractionCenter(transport, connection, scope, snapshots)
+    val interactions = HubInteractionCenter(transport, connection, scope, snapshots, sessions.sessions)
+    /** [sessions] as the pages show them: an agent whose card was just answered here is at work (#4525). */
+    val shownSessions: StateFlow<List<Session>> = answeredSessions(sessions.sessions, interactions)
+        .stateIn(scope, SharingStarted.Eagerly, sessions.sessions.value)
+    /** [sessions] with [shownSessions] as its list, for the pages that take a repository (the Persona tab). */
+    val shownRepository = sessions.showing(shownSessions)
     val chats = HubChatRepository(transport, connection, items, sessions, scope,
         foreground, seen = preferenceTransport?.let { remote -> { key -> remote.seen(key) } }, transcript = transcript)
 

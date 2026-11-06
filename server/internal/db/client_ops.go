@@ -58,9 +58,13 @@ func (d *DB) ForgetClientOp(ctx context.Context, id string) error {
 	return err
 }
 
+// The startup statement of RecoverClientOps. It must stay answerable from the client_ops_pending partial index
+// (migration 0417); TestPendingClientOpsIndexed checks the plan of this exact constant.
+const recoverClientOpsSQL = `UPDATE client_ops SET state = 'unknown', updated_at = now() WHERE state = 'pending'`
+
 // RecoverClientOps never retries operations whose executor disappeared during a restart.
 func (d *DB) RecoverClientOps(ctx context.Context) error {
-	_, err := d.pool.Exec(ctx, `UPDATE client_ops SET state = 'unknown', updated_at = now() WHERE state = 'pending'`)
+	_, err := d.pool.Exec(ctx, recoverClientOpsSQL)
 	return err
 }
 

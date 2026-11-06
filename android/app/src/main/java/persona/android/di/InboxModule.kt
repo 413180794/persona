@@ -112,8 +112,9 @@ class InboxDataOwner @Inject constructor(
                 localMessages = realInbox::larkOutbox, onMessages = realInbox::acceptLarkWindow)
             data.messages.connectReconciler(OutboxReconciler { realInbox.reconcilePendingReplies() })
             val reading = LarkReadingStore.open(InboxReadingStorage(data), data.scope.path, data.coroutineScope)
-            // Persona' own transport gives plain ids, so it reads the group's own sessions and preferences.
-            val assistant = RealAssistantRepository(connection, stack.repositories.sessions, data.coroutineScope, snapshots,
+            // Persona' own transport gives plain ids, so it reads the group's own sessions and preferences; the sessions
+            // as the pages show them, so a card just answered here stops saying 需要你 on the Persona tab too (#4525).
+            val assistant = RealAssistantRepository(connection, stack.repositories.shownRepository, data.coroutineScope, snapshots,
                 stack.repositories.preferences ?: preferences.takeIf { names.plain })
             Repositories(data, wrapped, assistant.inGroup(names, data.coroutineScope), mail,
                 ReplyComposers(wrapped, data.coroutineScope), reading, names)

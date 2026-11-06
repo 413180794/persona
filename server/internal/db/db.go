@@ -756,9 +756,12 @@ func (d *DB) MarkSeen(ctx context.Context, machine, session string, at time.Time
 	return err
 }
 
+// seenTimesSQL reads the recent views through session_views_seen; the table keeps every session ever viewed.
+const seenTimesSQL = `SELECT machine_id, session_id, seen_at FROM session_views WHERE seen_at > now() - interval '30 days'`
+
 // SeenTimes returns when each session was last looked at (last 30 days).
 func (d *DB) SeenTimes(ctx context.Context) (map[[2]string]time.Time, error) {
-	rows, err := d.pool.Query(ctx, `SELECT machine_id, session_id, seen_at FROM session_views WHERE seen_at > now() - interval '30 days'`)
+	rows, err := d.pool.Query(ctx, seenTimesSQL)
 	if err != nil {
 		return nil, err
 	}

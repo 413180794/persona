@@ -474,10 +474,14 @@ class TasksStore(
     /** The main assistant conversation's id once read: its dock also shows the agents no task stands for (#1113). */
     val mainConversation = MutableStateFlow<String?>(null)
 
-    /** The 今天 card, for the main conversation only (as iOS). */
+    /**
+     * The 今天 card, for the main conversation only (as iOS). A conversation that isn't the one held asks the hub again:
+     * 新建主对话, a move to another machine or another device replaces the main (#4690).
+     */
     fun loadTodayIfMain(conversation: String) {
         scope.launch {
-            val id = main ?: runCatching { api.mainConversation() }.getOrNull()?.also { main = it; mainConversation.value = it }
+            val id = main.takeIf { it == conversation }
+                ?: runCatching { api.mainConversation() }.getOrNull()?.also { main = it; mainConversation.value = it }
             if (id == conversation) loadToday(conversation)
         }
     }

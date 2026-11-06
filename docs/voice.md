@@ -394,7 +394,8 @@ type voiceRun struct {
   1. `channel.ReadTurn(ctx, httpItems{m, s}, &run)`，再 `Decide`。
   2. 遇到 `Held`：`Hold(last)` 后 `Base` 前移，`run` 帧带上新的 `base_seq`。
   3. seq 比 `Base` 小（transcript 被重写了）：`Base` 归零，按 `MsgIDs` / `Probe` 重新定位。
-  4. 消息过了 `QueuedMost` 还没出现，就读最后几句（同渠道管线）。
+  4. 消息过了 `QueuedMost` 还没出现：不读最后几句（那是上一轮的收尾），这一轮以 `gave_up` 结束，note 是 `voice-runs.not_delivered`（「没能确认消息送达，请再说一次」），按失败播报（同渠道管线，#4630）；
+     发送途中被 App 交回的（`unsent`）分不清到没到，按 `unknown` 报。
 - **结束**：
   - `Finish` 带 note（`gave_up` / `gone`）时按失败播报；`Quiet` 时什么都不说。
   - 通话结束时退订，run 直接丢掉。

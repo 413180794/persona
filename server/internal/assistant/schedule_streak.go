@@ -19,43 +19,54 @@ func counted(r ScheduleRun) bool {
 	return r.Status == runOK || !r.Manual && !r.Retried
 }
 
-// runStreak counts ref's runs in a row that did not go through, newest first.
-func runStreak(runs []ScheduleRun, ref string) int {
-	n := 0
+// runStreak counts ref's runs in a row that did not go through, newest first, and says whether one of them was
+// already told about (StreakTold) and whether the run id is one of them.
+func runStreak(runs []ScheduleRun, ref, id string) (n int, told, in bool) {
 	for i := len(runs) - 1; i >= 0; i-- {
 		r := runs[i]
 		if r.RefID != ref || !counted(r) {
 			continue
 		}
 		if r.Status == runOK {
-			return n
+			break
 		}
 		n++
+		told = told || r.StreakTold
+		in = in || r.ID == id
 	}
-	return n
+	return n, told, in
 }
 
-// streakToldLocked says whether r, just recorded (or just turned failed), is the run that brought a repeating task to
-// streakLimit runs in a row that did not go through; t is that task then. The schedule is locked. Exactly
-// streakLimit, and only when r itself counts: the streak only grows until a run goes through, so this is once.
-func streakToldLocked(sc *schedule, r ScheduleRun) (Task, bool) {
+// streakToldLocked says whether sc.runs[i], just recorded (or just turned failed), makes a repeating task's runs in a
+// row that did not go through streakLimit or more, with none of them told yet; t is that task then, n how many. The
+// run is then marked told, so this is once per streak whatever order runs record in: the count can jump past
+// streakLimit when a run recorded ok turns failed after a later one (#4785). A run that goes through ends the streak
+// and with it the mark. The schedule is locked.
+func streakToldLocked(sc *schedule, i int) (t Task, n int, tell bool) {
+	r := sc.runs[i]
 	if r.Status == runOK || !counted(r) {
-		return Task{}, false
+		return Task{}, 0, false
 	}
-	i := sc.indexLocked(r.RefID)
-	if i < 0 || sc.tasks[i].Repeat == repeatOnce {
-		return Task{}, false
+	j := sc.indexLocked(r.RefID)
+	if j < 0 || sc.tasks[j].Repeat == repeatOnce {
+		return Task{}, 0, false
 	}
-	return sc.tasks[i], runStreak(sc.runs, r.RefID) == streakLimit
+	n, told, in := runStreak(sc.runs, r.RefID, r.ID)
+	if !in || told || n < streakLimit {
+		return Task{}, 0, false
+	}
+	sc.runs[i].StreakTold = true
+	return sc.tasks[j], n, true
 }
 
-// pushStreak tells the user t has not gone through its last streakLimit runs (#4658): which task, how many, and the
-// last run's reason, in the conversation that run was in. Nothing repeats it until the task goes through once.
-func (s *Service) pushStreak(t Task, last ScheduleRun) {
+// pushStreak tells the user t has not gone through its last count runs (#4658): which task, how many, and the last
+// run's reason, in the conversation that run was in. Nothing repeats it until the task goes through once. It says
+// whether it pushed: not into a muted conversation, where the run's own failure push is all the user gets (#4785).
+func (s *Service) pushStreak(t Task, count int, last ScheduleRun) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if last.SessionID != "" && s.muted(last.MachineID, last.SessionID) {
-		return
+		return false
 	}
 	l := s.lang(ctx)
 	name := t.labelIn(l)
@@ -67,12 +78,13 @@ func (s *Service) pushStreak(t Task, last ScheduleRun) {
 		why = i18n.T(l, "assistant-schedule.streak_unknown")
 	}
 	n := Notification{SessionID: last.SessionID, DeviceID: last.MachineID,
-		Title: i18n.T(l, "assistant-schedule.streak", i18n.Args{"name": name, "count": streakLimit}),
-		Body:  i18n.T(l, "assistant-schedule.streak_body", i18n.Args{"reason": why, "count": streakLimit})}
+		Title: i18n.T(l, "assistant-schedule.streak", i18n.Args{"name": name, "count": count}),
+		Body:  i18n.T(l, "assistant-schedule.streak_body", i18n.Args{"reason": why, "count": count})}
 	if last.MachineID != "" {
 		if m, ok := s.device(ctx, last.MachineID); ok {
 			n.Subtitle = m.Name
 		}
 	}
 	s.push(ctx, n)
+	return true
 }

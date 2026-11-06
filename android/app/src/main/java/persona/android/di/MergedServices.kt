@@ -30,7 +30,7 @@ internal fun mergedSessions(stacks: GroupStacks): SessionsRepository = object : 
         s.mapped(s.repositories.sessions.machines) { list -> list.map(::machine) }
     }) { it.flatten() }
     override val sessions = stacks.merged(emptyList<Session>(), { s ->
-        s.mapped(s.repositories.sessions.sessions) { list -> list.map(::session) }
+        s.mapped(s.repositories.shownSessions) { list -> list.map(::session) }
     }) { it.flatten() }
     override suspend fun refresh() = stacks.forEach { it.repositories.sessions.refresh() }
     override fun verifiedSessions(): Map<String, List<Session>> = stacks.stacks.value.flatMap { stack ->

@@ -69,8 +69,9 @@ class TaskDockTest {
         override suspend fun retryTask(todoId: String): Todo = error("unused")
         override suspend fun removeTask(todoId: String) = Unit
         override suspend fun route(conversation: String, todoId: String, text: String): FeedItem = error("unused")
-        override suspend fun today(conversation: String): FeedItem = error("unused")
-        override suspend fun mainConversation(): String? = null
+        var main: String? = null
+        override suspend fun today(conversation: String): FeedItem { calls += "today $conversation"; return FeedItem("today-$conversation", conversation, kind = "today") }
+        override suspend fun mainConversation(): String? = main
         override suspend fun inboxReply(itemId: String, text: String, card: String?) = Unit
     }
 
@@ -79,6 +80,20 @@ class TaskDockTest {
         override val events = MutableSharedFlow<ServerEvent>()
         override fun reconnect() = Unit
         override fun send(message: JsonObject): Boolean = true
+    }
+
+    @Test fun aNewMainConversationIsFollowedNotTheFirstOneRead() {
+        val api = Api()
+        val store = TasksStore(api, Connection(), CoroutineScope(Dispatchers.Unconfined))
+        api.main = "A"
+        store.loadTodayIfMain("A")
+        assertEquals(listOf("today A"), api.calls)
+        assertEquals("A", store.mainConversation.value)
+        // 新建主对话, a move to another machine or another device: the hub's main is B now (#4690).
+        api.main = "B"
+        store.loadTodayIfMain("B")
+        assertEquals(listOf("today A", "today B"), api.calls)
+        assertEquals("B", store.mainConversation.value)
     }
 
     @Test fun aProjectMovesToTheTodoItIsLinkedToAndBackOnFailure() = runBlocking {
