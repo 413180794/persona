@@ -1,88 +1,88 @@
-# 计划：连接器（先接 GitHub 和 iMessage）
+# Plan: connectors (GitHub and iMessage first)
 
-状态：进行中。Telegram 连接器的方案单独写在 `docs/archive/plan-telegram.md`（#533；2026-11-05 起它是扩展，在 `nwverse/persona-extensions`，#1704、#2057）。用户 2026-11-01：「派个车道先写连接器的计划，先接 GitHub 和 iMessage」；2026-11-02 开始做：先做框架（C1），再接 GitHub，再接 iMessage（iMessage 交给 terminal 车道，#449），
-飞书和邮件的迁移（M0–M6）放后面。还没拍板的两项先按保守的默认值做，留好开关（见「需要用户拍板」2、7）。
-用户对本计划点头后按「分步计划」做，做完的步骤打勾；全部做完后把设计部分并进 `docs/connectors.md`（新）、`docs/knowledge.md`、`docs/inbox.md`，删掉这份计划。
-2026-11-03：迁移 M0–M6 做完，现在的结构已经写进 `docs/connectors.md`「一」，那里还有 v2 的设计和做完的情况（2026-11-03 收尾：V1、V3–V6 做完，V2、V7 不做）；这份计划留着记过程和没做完的步骤（I5、Telegram 的后几步）。
+`Status`: in progress. Telegram has its own plan in `docs/archive/plan-telegram.md` (#533; an extension `since` 2026-11-05 in `nwverse/persona-extensions`, #1704, #2057). User, 2026-11-01: "Assign a lane to write the `connector` plan first, starting with GitHub and iMessage"; implementation began 2026-11-02: framework (C1), then GitHub, then iMessage (assigned to the terminal lane, #449),
+with Lark and `mail` migration (M0–M6) later. Use conservative defaults and keep switches for the two undecided points ("Decisions needed from the user", 2 and 7).
+After the user approves, follow "Implementation steps" and check completed steps; once everything is done, merge the design into `docs/connectors.md` (new), `docs/knowledge.md`, `docs/inbox.md`, then delete this plan.
+2026-11-03: migration M0–M6 complete; current structure is in part I of `docs/connectors.md`, together with v2 design and progress (closed out 2026-11-03: V1, V3–V6 complete, V2 and V7 rejected). This plan remains as process history and for unfinished steps (I5, later Telegram steps).
 
-## 背景：现在各接各的
+## Background: separate integrations today
 
-| 管道 | 飞书 | 公司圈 | 邮件 |
+| Pipeline | Lark | Moments | Mail |
 | --- | --- | --- | --- |
-| 知识库归档 | `larkSource`（`kb.Source` + `kb.Backfiller`，`hub/kb.go`） | `momentsSource`（同上，`Older` 是空的） | `mailSource` 是空壳；真正的归档是 `hub.kbMail` 自己一个循环，游标在 `mail-cursors.json`，调 `kb.Engine.Ingest` |
-| 文档 / 会议 / 日程 | `larkItems`（`kb.ItemSource`） | — | — |
-| 收件箱 | `collectLark`、`collectDocs`（`inbox.go`、`inbox_docs.go`） | `collectMoments`（`inbox_moments.go`） | `collectMail`（`inbox.go`） |
-| 收件箱条目 | `Source: "lark"` 写死，`Lark` / `Doc` / `Moment` 各一个块 | 同左 | `Source: "mail"`，`Mail` 块 |
-| 回复 | `replyInbox` 里按 `Moment` / `Doc` / `Lark` / `Mail` 哪个不为空走 `switch` | 同左 | 同左 |
-| AI 的读工具 | `lark_chats` / `lark_messages` / `lark_search`（`assistantTools(withLark, withMail)` 写死名字），飞书网关的 skill | 走飞书网关的 skill | `mail_*`（`mail/mcp.go`） |
-| 写操作的闸门 | node 的 Bash 闸门（`node/larkgate.go`，hub.json `lark_gate` 规则） | 同左 | `hub.approve`（`mail_send` 自己调） |
-| 实时 | 飞书网关事件 WebSocket（`lark_events.go`）踢收件箱和归档 | 跟飞书一起轮询 | 轮询（收件箱 3 分钟、归档 6 分钟） |
-| App 链接 | `FeishuLinks.route` → 文档 / 公司圈原生，其余 `LinkSheet` 网页 | 同左 | — |
-| 设置 › 连接器 | `FeishuConnectorView`（`GET /api/v1/lark/status`） | — | 邮箱页 |
+| Knowledge-base archive | `larkSource` (`kb.Source` + `kb.Backfiller`, `hub/kb.go`) | `momentsSource` (same, empty `Older`) | `mailSource` is a shell; real archiving is a separate `hub.kbMail` loop, cursor in `mail-cursors.json`, calling `kb.Engine.Ingest` |
+| Documents / meetings / events | `larkItems` (`kb.ItemSource`) | — | — |
+| `Inbox` | `collectLark`, `collectDocs` (`inbox.go`, `inbox_docs.go`) | `collectMoments` (`inbox_moments.go`) | `collectMail` (`inbox.go`) |
+| `Inbox` items | Hardcoded `Source: "lark"`, separate `Lark` / `Doc` / `Moment` blocks | Same | `Source: "mail"`, `Mail` block |
+| `Reply` | `replyInbox` switches according to which of `Moment` / `Doc` / `Lark` / `Mail` is nonempty | Same | Same |
+| AI read tools | `lark_chats` / `lark_messages` / `lark_search` (names hardcoded in `assistantTools(withLark, withMail)`), Lark gateway skill | Lark gateway skill | `mail_*` (`mail/mcp.go`) |
+| Write `gate` | Node Bash `gate` (`node/larkgate.go`, hub.json `lark_gate` rules) | Same | `hub.approve` (called by `mail_send` itself) |
+| Live updates | Lark gateway event WebSocket (`lark_events.go`) wakes `Inbox` and archive | Polled with Lark | Polling (`Inbox` 3 minutes, archive 6 minutes) |
+| App links | `FeishuLinks.route` → native documents / Moments, `LinkSheet` web for everything else | Same | — |
+| Settings › Connectors | `FeishuConnectorView` (`GET /api/v1/lark/status`) | — | `Mail` page |
 
-每接一个来源，就要在这六七处各写一套，还要记得在每个 `switch` 里加一支。客户端也写死了来源：iOS 的 `InboxItem.isLark`、Android 的 `source == "lark"`，
-**不是 lark 的都当邮件显示**。所以直接塞一个 `source: "github"` 的条目进去，旧 App 会把它画成邮件，点「发送」走邮件回复。
+Each new source needs its own implementation in six or seven places, plus another branch in every `switch`. Clients also hardcode `sources`: iOS `InboxItem.isLark`, Android `source == "lark"`,
+**everything other than `lark` displays as `mail`**. Simply inserting `source: "github"` therefore makes old Apps render it as `mail` and route "Send" to a `mail` reply.
 
-## 目标
+## Goals
 
-一个来源实现一个**连接器**：能力按需实现，全部可选。hub 看它实现了哪些，就自动接到知识库、收件箱、助手（MCP 工具）和 App 上。
-加一个来源不再改这些管道的代码。
+Each source implements one **`connector`**, providing capabilities as needed, all optional. The hub discovers what it implements and automatically attaches it to the knowledge base, `Inbox`, assistant (MCP tools) and App.
+Adding a source no longer `changes` these pipelines.
 
-不做的：不为任何来源做浏览页面（`docs/feishu.md`「不做第二个飞书」同理适用于 GitHub、信息）；不改现有来源的行为。
+Out of scope: source-specific browsing pages (`docs/feishu.md` ("Do not build another Lark") applies equally to GitHub and Messages); changing existing `sources`' behavior.
 
-## 一、Connector 接口
+## I. `Connector` interface
 
-代码放 `server/internal/connector`（接口、`Registry`、通用的闸门和状态），各内置连接器一个子包（`connector/github`、`connector/imessage`），
-飞书、公司圈、邮件迁移时先留在 `hub` 里用适配器包一层，避免一次搬太多。`connector` 依赖 `kb` 的数据类型（`SourceChat`、`SourceMessage`、`Item`），
-不依赖 `hub`；`hub` 持有 `Registry`。
+Code lives in `server/internal/connector` (interfaces, `Registry`, generic `gate` and status), with one subpackage per built-in `connector` (`connector/github`, `connector/imessage`).
+During migration, Lark, Moments and `mail` initially stay in `hub` behind adapters to avoid moving too much at once. `connector` depends on `kb` data types (`SourceChat`, `SourceMessage`, `Item`),
+not `hub`; hub owns the `Registry`.
 
-核心只有身份：
+The core is identity only:
 
 ```go
 type Connector interface {
-    ID() string   // "lark" "mail" "github" "imessage"：配置的键、MCP 工具名前缀、InboxItem.Source
-    Name() string // 给人看的：飞书 / 邮件 / GitHub / 信息
+    ID() string   // "lark" "mail" "github" "imessage": config key, MCP tool prefix, InboxItem.Source
+    Name() string // Human-readable: Lark / Mail / GitHub / Messages
 }
 ```
 
-其余能力用接口断言判断有没有（和 `host` 包的可选能力一个写法）：
+Other capabilities are discovered through interface assertions (the same approach as optional capabilities in `host`):
 
-### 1. 账号与健康（`Accounts`）
+### 1. `Accounts` and health (`Accounts`)
 
 ```go
 type Status struct {
-    State     string    // ok | not_configured | not_signed_in | no_permission | rate_limited | error | disabled（用户关掉的，#533）
-    Account   string    // 显示的账号名（飞书的名字、GitHub 的 login、「这台 Mac 上的信息」）
-    Error     string    // 给人看的一句话（「飞书网关未登录飞书」「没有完全磁盘访问权限」）
+    State     string    // ok | not_configured | not_signed_in | no_permission | rate_limited | error | disabled (turned off by the user, #533)
+    Account   string    // Displayed account name (Lark name, GitHub login, "Messages on this Mac")
+    Error     string    // Human-readable sentence ("Lark gateway is not signed in", "Full Disk Access is missing")
     LastSync  time.Time
     LastEvent time.Time
 }
 type Accounts interface {
     Status(ctx context.Context) Status
 }
-// 需要用户提供凭据的连接器再实现：
+// Connectors requiring user-provided credentials also implement:
 type Credentials interface {
-    Fields() []CredentialField           // 要什么（GitHub：token、可选 base_url）
-    Verify(ctx context.Context, v map[string]string) (account string, err error) // 存之前先试一次
+    Fields() []CredentialField           // Required fields (GitHub: token, optional base_url)
+    Verify(ctx context.Context, v map[string]string) (account string, err error) // Try before storing
 }
 ```
 
-- 凭据存 hub：用 `secret.key` AES-GCM 加密（和启动器的 Key、邮箱凭据同一个主密钥，`internal/secretkey`），存 Postgres 新表
-  `connector_accounts(connector, account, config jsonb, secret_enc text, created_at, updated_at)`；新迁移号挑之前先看所有 worktree。
-  明文只在内存，任何接口都不返回（只回「已设置」和账号名）。也可以写 hub.json 的 `<connector>.token_file`（0600），给不想经过 App 的人用。
-- `not_signed_in` 这类状态统一出现在：设置 › 连接器、收件箱顶部的错误条、助手快照（「GitHub 未登录」时它就不会去调工具）。
-  App 里（`ConnectorText.state` / `tone`）：只有 `error` 写「出错了」，红点只给 `error`、`no_permission`；关掉的（「已关闭」）、未配置、未登录是灰点，
-  App 还不认识的状态（更新的 hub 加的）写「状态未知」、灰点，不当成出错。
-  hub 跑的程序（Telegram）在 #669 以前的 hub 上，关着、还没跑过时列不出能力（空列表，能力是程序自己报的；#669 起 hub 先按静态声明列）：
-  App 照样给开关、不写「在 hub.json 设置」，打开后每秒再问一次，直到程序启动、报出 `login`（最多 15 秒）。
-- 飞书的 `lark.ErrNotLoggedIn` → `not_signed_in`，`/api/v1/lark/status` 保留（旧 App 用），数据从同一个 `Status` 来。
+- Credentials live on the hub: AES-GCM encryption with `secret.key` (the same master key as launcher keys and `mail` credentials, `internal/secretkey`), in a new Postgres table
+  `connector_accounts(connector, account, config jsonb, secret_enc text, created_at, updated_at)`; check every worktree before selecting a migration number.
+  Plaintext exists only in memory and is never returned by an API (only "configured" and the account name). A hub.json `<connector>.token_file` (0600) is also available for people who do not want to use the App.
+- States such as `not_signed_in` appear consistently in Settings › Connectors, the `Inbox`'s top `error` bar, and assistant snapshots (it will not call tools when "GitHub is not signed in").
+  In the App (`ConnectorText.state` / `tone`), only `error` says "Something went wrong"; red dots are only for `error` and `no_permission`. Disabled ("Off"), unconfigured and unsigned-in states have grey dots;
+  states unknown to the App (added by a newer hub) say "Unknown status" with a grey dot, not an error.
+  Programs run by the hub (Telegram), on hubs before #669, cannot list capabilities while off and never started (empty list; capabilities self-reported by the program; `since` #669 the hub lists static declarations first):
+  the App still offers a toggle, does not say "configure in hub.json", and polls every second after enabling until the program starts and reports `login` (at most 15 seconds).
+- Lark's `lark.ErrNotLoggedIn` → `not_signed_in`; keep `/api/v1/lark/status` for old Apps, reading the same `Status`.
 
-### 2. 会话（`Conversations`）和往回补（`Backfill`）
+### 2. `Conversations` (`Conversations`) and backfill (`Backfill`)
 
-增量有两种天然的单位，都要支持：
+Increments have two natural units, both supported:
 
 ```go
-// 按会话的游标（飞书、公司圈）：就是现在的 kb.Source + kb.Backfiller，原样搬过来。
+// Per-conversation cursor (Lark, Moments): today's kb.Source + kb.Backfiller, moved unchanged.
 type ChatSource interface {
     Chats(ctx, limit) ([]kb.SourceChat, error)
     Messages(ctx, chat kb.SourceChat, after string, limit int) (msgs []kb.SourceMessage, newer string, more bool, err error)
@@ -91,474 +91,474 @@ type Backfiller interface {
     Older(ctx, chat kb.SourceChat, before string, limit int) ([]kb.SourceMessage, string, bool, error)
 }
 
-// 按账号的游标（邮件的 UID、iMessage 的 ROWID、GitHub 的 updated_at）：一次拿到「自从游标以来」所有会话的新消息。
+// Per-account cursor (mail UID, iMessage ROWID, GitHub updated_at): new messages from all conversations since the cursor in one call.
 type StreamSource interface {
     Changes(ctx, cursor string, limit int) (batches []ChatBatch, next string, more bool, err error)
 }
 type ChatBatch struct {
     Chat     kb.SourceChat
-    Messages []kb.SourceMessage // 旧的在前
+    Messages []kb.SourceMessage // Oldest first
 }
 
-type Attachments interface { Download(ctx, media, dst string) error } // 现在 kb.Source 里的 Download 拆出来
+type Attachments interface { Download(ctx, media, dst string) error } // Extract Download from today's kb.Source
 ```
 
-- 一个连接器可以有几路会话（飞书连接器 = 飞书会话 + 公司圈帖子），所以是 `ChatSources() []ChatSource` / `Streams() []StreamSource`，
-  每路有自己的 `Name()`（`lark`、`moments`），它是知识库 id 的前缀（`chats/lark-…`、`chats/moments-…`），**迁移时不能变**。
-- 流式游标存在知识库目录 `cursors/<connector>-<stream>.json`（现在 `mail-cursors.json` 迁过去，读旧文件兼容一版）；按会话的游标照旧在每个会话的 `meta.json`。
-- `kb.Engine.Archive` 对 `ChatSource` 照旧；对 `StreamSource` 调 `Changes` 后逐批 `Ingest`。回填对两种都只用 `Backfiller`，按相关性挑会话不变。
-- 要注意的现有行为：`archiveChat` 跳过「不比 `LastAt` 新」的消息。iCloud 同步晚到的旧消息、GitHub 改过的评论会比 `LastAt` 早，
-  流式路径要像 `Backfill` 那样按日期插进对应的天文件（`AppendMessages` 已经按天分；要补的是「插到这一天里正确的位置」和按 id 去重）。
+- A `connector` may expose several conversation `sources` (Lark `connector` = Lark conversations + Moments posts), hence `ChatSources() []ChatSource` / `Streams() []StreamSource`.
+  Each source has its own `Name()` (`lark`, `moments`), the knowledge-base id prefix (`chats/lark-…`, `chats/moments-…`), which **must not change during migration**.
+- Stream cursors live in the knowledge-base directory at `cursors/<connector>-<stream>.json` (migrate today's `mail-cursors.json`, read the old file for one version); per-conversation cursors stay in each conversation's `meta.json`.
+- `kb.Engine.Archive` remains unchanged for `ChatSource`; for `StreamSource`, call `Changes` then `Ingest` each batch. `Backfill` uses only `Backfiller` for both, retaining relevance-based conversation selection.
+- Existing behavior to watch: `archiveChat` skips messages "not newer than `LastAt`". Late iCloud-synced older messages and edited GitHub comments can predate `LastAt`;
+  the stream path must insert them into the appropriate daily file by `date`, like `Backfill` (`AppendMessages` already splits by day; missing pieces are correct ordering within a day and dedup by id).
 
-### 3. 条目（`Items`）
+### 3. `Items` (`Items`)
 
-文档、任务、PR、日程。现在的 `kb.ItemSource`（`Items` + `DocTitle`）原样搬过来，`Item.Kind` 从固定的 doc / meeting / event 放开成连接器自己的
-（`pr`、`issue`），知识库目录 `items/<kind>/`（现有的 `docs/`、`meetings/`、`events/` 不搬，`kind` 不变）。打标、挂项目走同一个 `TagItems`。
-另加一个可选的 `Links() []LinkPattern`：消息里出现这种链接就记成条目（现在 `archive.go` 的 `docLink` 是写死的飞书文档正则）。
+Documents, tasks, PRs and calendar events. Move today's `kb.ItemSource` (`Items` + `DocTitle`) unchanged; expand `Item.Kind` beyond fixed doc / meeting / event values to connector-owned kinds
+(`pr`, `issue`), in knowledge-base directories `items/<kind>/` (existing `docs/`, `meetings/`, `events/` stay, with unchanged `kind`). Tagging and project association use the same `TagItems`.
+Add optional `Links() []LinkPattern`: matching links in messages become items (today `docLink` in `archive.go` is a hardcoded Lark-document regex).
 
-### 4. 事件（`Events`）
+### 4. `Events` (`Events`)
 
 ```go
 type Events interface {
-    // Watch 一直跑到 ctx 结束，有变化就调 changed（scope：chats | inbox | items）；返回错误时 hub 按退避重启它。
+    // Watch runs until ctx ends, calling changed on updates (scope: chats | inbox | items); the hub restarts errors with backoff.
     Watch(ctx context.Context, changed func(scope string)) error
 }
 type Poller interface {
-    NextPoll() time.Duration // 没有实时推送的：hub 按它说的间隔轮询（GitHub 每次按 X-Poll-Interval 改）
+    NextPoll() time.Duration // Without live push: the hub polls at this interval (GitHub updates it from X-Poll-Interval each time)
 }
 ```
 
-`changed` 就是现在的 `kickInbox` / `h.kb.kick`（带防抖）。飞书的事件 WebSocket、iMessage 的「chat.db-wal 变了」都是 `Watch`；邮件、GitHub 是 `Poller`。
+`changed` is today's `kickInbox` / `h.kb.kick` (debounced). Lark's event WebSocket and iMessage's "`chat.db-wal` `changed`" are `Watch`; `mail` and GitHub are `Poller`.
 
-### 5. 收件箱（`Inbox`）
+### 5. `Inbox` (`Inbox`)
 
-「和我有关、需要我」的判断留在连接器里，产出统一的 `InboxItem`：
+The `connector` decides "related to me, needs me", producing a common `InboxItem`:
 
 ```go
 type Inbox interface {
-    // Collect 返回这一轮有变化的事；open 找这个线程还没处理的那件（现在的 inbox.openFor）。
+    // Collect returns things changed this round; open finds the unresolved item for a thread (today's inbox.openFor).
     Collect(ctx context.Context, open func(thread string) *InboxItem) ([]*InboxItem, error)
-    // Reply 把（用户确认过的）文字发回去：飞书发消息、邮件回信、GitHub 评论。
+    // Reply sends user-confirmed text back: a Lark message, email reply, GitHub comment.
     Reply(ctx context.Context, it InboxItem, text string) error
 }
 ```
 
-- `InboxItem.Source` = 连接器的 `ID()`，不再写死。已有的 `lark` / `mail` 值、`Lark` / `Mail` / `Doc` / `Moment` 块**原样保留**（App 和库里的老数据都靠它们）。
-- 新连接器统一用一个新块 `Connector *InboxConnector`：`{thread, label（类型标签：「请你 review」「@我」「CI 失败」）, icon, url（App 内打开）,
-  open_url（`sms:` 这类交给系统的）, reply_to（回复会发到哪，一句话）, can_reply}`。App 只画这一个块，不认识具体来源。
-- 生命周期（已处理、`done_by=replied/read`、3 天 / 8 天的保留、分拣、AI 分身、翻译）是 hub 通用的，不进连接器。
-- 分拣和 AI 分身的提示词里「类型行」按 `kind` 取（`prompts/inbox/item.md`），新 kind 的说明放 `prompts/inbox/kinds/<connector>.md`，不在 Go 里拼。
-- **向后兼容**：`GET /api/v1/inbox` 默认只回 `lark` / `mail`；带 `?sources=all` 才回别的来源。新 App、新手表才带，旧 App 不会把 PR 当邮件画。
-  `{"type":"inbox"}` 推送不变。
+- `InboxItem.Source` = `connector` `ID()`, no longer hardcoded. Existing `lark` / `mail` values and `Lark` / `Mail` / `Doc` / `Moment` blocks **stay unchanged** (old App and database data depend on them).
+- New connectors share a new block `Connector *InboxConnector`: `{thread, label (`kind` label: "Review requested", "@me", "CI failed"), icon, url (opens in-App),
+  `open_url` (system-handled schemes such as `sms:`), `reply_to` (one sentence saying where the reply goes), can_reply}`. The App renders only this block without knowing the source.
+- Lifecycle (done, `done_by=replied/read`, 3-day / 8-day retention, classification, AI twin, translation) is hub-generic, outside connectors.
+- Classification and AI twin prompts select the "`kind` line" by `kind` (`prompts/inbox/item.md`); new-kind descriptions go in `prompts/inbox/kinds/<connector>.md`, not concatenated in Go.
+- **Backward compatibility**: `GET /api/v1/inbox` returns only `lark` / `mail` by default; other `sources` require `?sources=all`. Only new Apps/watches send it, so old Apps never render PRs as mail.
+  `{"type":"inbox"}` pushes remain unchanged.
 
-### 6. 读工具（`ReadTools`）
+### 6. Read tools (`ReadTools`)
 
 ```go
 type ReadTools interface {
-    Tools() []string                                                   // 工具名，必须以 "<id>_" 开头
+    Tools() []string                                                   // Tool names must start with "<id>_"
     Call(ctx context.Context, name string, args json.RawMessage) (string, error)
 }
 ```
 
-- 描述和 schema 放 `server/internal/prompts/mcp/<connector>/<工具名>.md`（`docs/prompts.md`「MCP 工具」的格式不变），`prompts.Tool(name)` 读。
-- hub 的工具列表从 `Registry` 来：状态是 `ok` 的连接器才给工具（现在 `assistantTools(withLark, withMail)` 的两个布尔就是这个意思的特例）；
-  `callTool` / `runAssistantTool` 按前缀分给连接器。`mcp_tools.*` 的 golden 迁移前后逐字节一致。
-- 只读工具在 `--allowedTools mcp__jarvis` 下不用批准（和现在 `lark_*` 一样）；写操作不放在这里。
+- Descriptions and schemas live in `server/internal/prompts/mcp/<connector>/<tool name>.md` (unchanged format from `docs/prompts.md` ("MCP tools")), read by `prompts.Tool(name)`.
+- The hub tool list comes from `Registry`: only `ok` connectors expose tools (today's two booleans in `assistantTools(withLark, withMail)` are a special case);
+  `callTool` / `runAssistantTool` dispatch by prefix. `mcp_tools.*` goldens must remain byte-for-byte identical across migration.
+- Read-only tools need no approval under `--allowedTools mcp__jarvis` (like today's `lark_*`); writes do not belong here.
 
-### 7. 写操作（`Actions`）
+### 7. Writes (`Actions`)
 
 ```go
 type Action struct {
-    Name    string // "github_comment"、"github_review"、"imessage_send"
-    Visible string // 谁会看到（「example-org/example-repo#12 的所有参与者」）：卡片上必须写
+    Name    string // "github_comment", "github_review", "imessage_send"
+    Visible string // Who sees it ("all participants in example-org/example-repo#12"): required on the card
 }
 type Actions interface {
     Actions() []string
-    // Describe 把参数变成手机卡片上的话（会话名、对象、要发的全文）；不联网也要能出结果（出不来就原样列参数）。
+    // Describe turns parameters into phone-card text (conversation, target, full outgoing text); must work offline (otherwise list raw parameters).
     Describe(ctx context.Context, name string, args json.RawMessage) (Action, string)
     Do(ctx context.Context, name string, args json.RawMessage) (string, error)
 }
 ```
 
-- **统一过闸门**（`connector/gate.go`）：hub 收到写操作 → 查规则 → `allow` 直接做、`deny` 拒绝并把理由还给模型、`confirm`（默认）
-  走现有的 `hub.approve`（`IxPermission` 卡片，15 分钟过期，「本会话总是允许」）。规则是 hub.json 的 `connector_gate: [{connector, action, match?, decision}]`，
-  第一条匹配的说了算，和 `lark_gate` 一个写法；`mail_send` 迁过来后行为不变。
-- 收件箱里「发送」按钮本身就是用户的确认，`Reply` 不再弹卡片（和现在飞书 / 邮件一样）；AI 分身只能起草（`inbox_draft`），它的提示词照旧禁止直接发。
-- 飞书的写操作还是飞书网关的 skill + node 的 Bash 闸门（命令行里才知道是读是写），不搬；只把规则的存放和卡片的样子统一。
+- **One `gate`** (`connector/gate.go`): hub receives a write → checks rules → `allow` runs directly, `deny` refuses with a `reason` returned to the `model`, `confirm` (default)
+  uses existing `hub.approve` (`IxPermission` card, 15-minute expiry, "Always `allow` in this session"). Rules are hub.json `connector_gate: [{connector, action, match?, decision}]`,
+  first `match` wins, same form as `lark_gate`; behavior of migrated `mail_send` stays unchanged.
+- The `Inbox`'s "Send" button itself is confirmation, so `Reply` shows no extra card (as with current Lark / `mail`); the AI twin may only draft (`inbox_draft`), with direct sending still forbidden by its prompt.
+- Lark writes remain its gateway skill + node Bash `gate` (read/write is known only from the command line), not moved; unify only rule storage and card appearance.
 
-### 8. 链接（`Links`）
+### 8. `Links` (`Links`)
 
-- hub 一侧：上面「条目」里的 `LinkPattern`，消息里的链接记成条目、挂到会话和项目上。
-- App 一侧：任何链接本来就在 App 内打开（`LinkSheet` 网页卡片），新连接器**不做原生页面**。`GET /api/v1/connectors` 带上每个连接器认的主机名
-  （比如自建 GitHub Enterprise 的域名只在配置里，不能写进 App），App 用它决定卡片上的图标和「在 GitHub 打开」这类文字。
-  `FeishuLinks` 不动。
+- Hub side: the `LinkPattern` under "`Items`" above records links from messages as items and associates them with conversations and projects.
+- App side: all links already `open` in-App (`LinkSheet` web cards); new connectors **get no native pages**. `GET /api/v1/connectors` includes recognized hostnames
+  (e.g. self-hosted GitHub Enterprise domains live only in config, never in the App), which the App uses for card icons and labels such as "Open in GitHub".
+  `FeishuLinks` stays unchanged.
 
-### hub 怎么接
+### Hub wiring
 
 ```text
-Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.Engine（归档、回填、压缩、打标照旧）
+Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.Engine (archive, backfill, compression, tagging unchanged)
            ├─ Items / LinkPattern                              → kb.CollectItems / TagItems
-           ├─ Events / Poller                                  → 踢 kbLoop、inboxLoop
-           ├─ Inbox                                            → collectInbox、replyInbox
-           ├─ ReadTools / Actions                              → 助手和 Agent 的 MCP 工具，Actions 先过闸门
-           └─ Accounts / Credentials                           → GET /api/v1/connectors、设置 › 连接器、快照
+           ├─ Events / Poller                                  → wake kbLoop, inboxLoop
+           ├─ Inbox                                            → collectInbox, replyInbox
+           ├─ ReadTools / Actions                              → assistant and Agent MCP tools, Actions gated first
+           └─ Accounts / Credentials                           → GET /api/v1/connectors, Settings › Connectors, snapshots
 ```
 
-新接口 `GET /api/v1/connectors` → `{connectors:[{id, name, status, account, error, last_sync, capabilities:[…], hosts:[…], credential_fields:[…]}]}`，
-`PUT /api/v1/connectors/{id}/credentials`、`DELETE …/credentials`。`features` 里加 `connectors`，旧 App 看不到这个特性就不显示新行。
+New API `GET /api/v1/connectors` → `{connectors:[{id, name, status, account, error, last_sync, capabilities:[…], hosts:[…], credential_fields:[…]}]}`,
+`PUT /api/v1/connectors/{id}/credentials`, `DELETE …/credentials`. Add `connectors` to `features`; old Apps omit new rows when they do not see this feature.
 
-## 二、三种形态
+## II. Three forms
 
-### 内置（Go，在 hub 里）
+### Built-in (Go, in the hub)
 
-飞书、公司圈、邮件、GitHub。直接实现上面的接口，跟 personad 一起发布，提示词在本仓库、受 golden 测试管。
+Lark, Moments, `mail`, GitHub. Implement the interfaces directly, release with `personad`, with prompts in this `repo` enforced by goldens.
 
-### 外部进程（沿用插件机制，代码在别的仓库）
+### External process (reuse the plugin mechanism, code in another `repo`)
 
-`docs/extensions.md` 的插件加一个 `kind: "connector"`：hub 照旧启动进程、给 `JARVIS_PLUGIN_SOCKET`、健康检查、退避重启；
-只连 socket 的远端插件（`ssh -R`）也照旧能用。插件在 socket 上提供：
+Add `kind: "connector"` to plugins in `docs/extensions.md`: the hub still starts the process, supplies `JARVIS_PLUGIN_SOCKET`, checks health and restarts with backoff;
+remote plugins that only connect to the socket (`ssh -R`) still work. The plugin exposes over the socket:
 
-| 路径 | 用途 |
+| Path | Purpose |
 | --- | --- |
-| `GET /manifest` | `{id, name, capabilities, actions:[{name, visible}], hosts}`：hub 据此注册能力；**没在 actions 里声明的工具一律当只读之外的东西处理**（见下） |
-| `POST /mcp` | MCP（streamable HTTP，JSON-RPC 的 `tools/list`、`tools/call`）：给 AI 用的工具。hub 当 MCP 客户端，把工具加上 `<id>_` 前缀转给助手 |
+| `GET /manifest` | `{id, name, capabilities, actions:[{name, visible}], hosts}`: the hub registers capabilities from it; **tools not declared in actions are treated as something other than read-only** (below) |
+| `POST /mcp` | MCP (streamable HTTP, JSON-RPC `tools/list`, `tools/call`): AI tools. The hub is an MCP client, prefixes tools with `<id>_` and forwards them to the assistant |
 | `GET /status` | `Status` |
-| `GET /sync/chats`、`/sync/messages?chat=&after=&limit=`、`/sync/older?…`、`/sync/changes?cursor=&limit=` | 会话 / 往回补 / 流式（和 Go 接口一一对应的 JSON） |
-| `GET /sync/items`、`GET /sync/inbox` | 条目；收件箱的候选（hub 负责 `open` / 合并 / 生命周期） |
-| `GET /events` | SSE：`{"scope":"chats"}` 这样的一行一个；没有就按 manifest 里的 `poll_seconds` 轮询 |
-| `GET /media?path=` | 附件 |
-| `POST /actions/{name}` | 写操作：**只在 hub 的闸门放行之后**由 hub 调 |
+| `GET /sync/chats`, `/sync/messages?chat=&after=&limit=`, `/sync/older?…`, `/sync/changes?cursor=&limit=` | `Conversations` / backfill / streams (JSON mapping one-to-one to Go interfaces) |
+| `GET /sync/items`, `GET /sync/inbox` | `Items`; `Inbox` candidates (hub owns `open`, merging, lifecycle) |
+| `GET /events` | SSE: one `message` per line such as `{"scope":"chats"}`; if absent, poll at manifest `poll_seconds` |
+| `GET /media?path=` | Attachments |
+| `POST /actions/{name}` | Writes: called by the hub **only after its `gate` allows them** |
 
-**评估：可行，建议这样做。**
+**Assessment: feasible, recommended.**
 
-- 光用 MCP 不够：MCP 有 resources + 订阅，但没有游标、往回补的约定，现成的 MCP server 大多也不实现；知识库要的是「从上次到现在的增量」。
-  所以 MCP 只管「给 AI 用的工具」，增量用一个很小的 REST 扩展（上表 `/sync/*`），两边各干各的、都简单。
-- 闸门不能信插件：MCP 的 `readOnlyHint` 只是提示。hub 只把 manifest 里**没**列在 actions、且 `annotations.readOnlyHint == true` 的工具当只读直接放行，
-  其余全部按写操作过闸门。插件拿不到用户的确认，也绕不过去（App 的请求不会到插件，插件只能被 hub 调）。
-- 好处：现成的 MCP server（比如某个服务官方的）可以零改动当「只有读工具」的连接器挂上；以后要收件箱 / 知识库再补 `/sync/*`。
-- 代价：hub 要多一个 MCP 客户端（`tools/list`、`tools/call` 两个方法，几百行）；外部连接器的工具描述不在本仓库的 `prompts/mcp/`，不受 golden 管，
-  这是「提示词一律放 `prompts/`」的一个明文例外（只适用于不在本仓库的代码）。
-- 现在没有第一个外部连接器，**这一形态先只定协议，等真有一个再实现**（见「需要用户拍板」）。
-- **第一方的子进程形态（已做，#533）**：本仓库里、只是依赖太大不想编进 personad 的连接器（Telegram 的 gotd），用 `connector/serve`（程序那头）
-  和 `connector/proc`（hub 这头）：hub 起程序，stdin / stdout 上跑 hub↔node 那套 JSON-lines RPC，Connector 的各项能力一一对应成方法，
-  程序启动时报 manifest（id、name、能力，`Capabler`），加密存储反过来由程序调 hub 的 `secrets.*`（hub 绑定到这个连接器）。和上面给第三方的 HTTP + MCP 不冲突。
+- MCP alone is insufficient: it has resources + subscriptions but no cursor or backfill conventions, and most existing MCP servers do not implement them; the knowledge base needs "increments `since` last time".
+  MCP therefore handles only AI tools, with a small REST extension for increments (`/sync/*` above); each does its own simple job.
+- The `gate` cannot trust plugins: MCP's `readOnlyHint` is only a hint. The hub directly allows only tools **not** listed in manifest actions with `annotations.readOnlyHint == true`;
+  everything else is treated as a gated write. Plugins cannot obtain or bypass user confirmation (App requests never reach plugins; only the hub can call them).
+- Benefit: an existing MCP server (e.g. a service's official server) can attach unchanged as a read-tools-only `connector`; add `/sync/*` later for `Inbox` / knowledge base.
+- Cost: a new MCP client in the hub (two methods, `tools/list`, `tools/call`, hundreds of lines); external `connector` tool descriptions are outside this `repo`'s `prompts/mcp/` and its goldens,
+  an explicit exception to "all prompts live in `prompts/`" (only for code outside this `repo`).
+- No first external `connector` exists yet; **specify this protocol now, implement when one actually exists** ("Decisions needed from the user").
+- **First-party subprocess form (done, #533)**: connectors in this `repo` with dependencies too large for `personad` (Telegram's gotd) use `connector/serve` (program side)
+  and `connector/proc` (hub side): the hub starts the program and speaks the hub↔node JSON-lines RPC over stdin / stdout, mapping each `Connector` capability to a method.
+  The program reports a manifest at startup (id, name, capabilities, `Capabler`); encrypted storage is handled by reverse `secrets.*` calls to the hub (bound to this `connector`). This does not conflict with the third-party HTTP + MCP design above.
 
-### 第三种：node 当本地连接器（Mac 上的数据）
+### Third form: node as a local `connector` (data on Mac)
 
-有些数据只在某台电脑上（iMessage 的 `chat.db`、以后的本地备忘录、照片……），hub 读不到。node 本来就经 ssh 连着 hub、有双向 RPC，
-所以由 node 读本机数据、hub 一侧注册成连接器（`connector/imessage/remote.go`：一个把调用转成 RPC 的适配器）。
+Some data exists only on a computer (iMessage `chat.db`, future local notes, photos…), inaccessible to the hub. The node already connects to the hub over ssh with bidirectional RPC,
+so it reads local data while the hub registers a `connector` (`connector/imessage/remote.go`: an RPC-forwarding adapter).
 
-hub → node 新方法（旧 node 回 `unknown method`，hub 当它没有本地连接器）：
+New hub → node methods (old nodes return `unknown method`, treated as no local connectors):
 
 | method | params → result |
 | --- | --- |
-| `connector.list` | → `{connectors:[{id, status, error}]}`：这台机器能提供哪些、能不能用（比如没有完全磁盘访问权限就是 `no_permission`） |
+| `connector.list` | → `{connectors:[{id, status, error}]}`: what this machine provides and whether it works (e.g. missing Full Disk Access is `no_permission`) |
 | `connector.changes` | `{id, stream, cursor, limit}` → `{batches, next, more}` |
 | `connector.older` | `{id, chat, before, limit}` → `{messages, before, more}` |
-| `connector.media` | `{id, path, offset}` → 分块读（同 `file.read` 的分块方式，单个 20 MB 封顶） |
-| `connector.action` | `{id, name, args, approval}` → `{result}`：只在 hub 闸门放行后发，`approval` 是那张卡片的 id（node 记日志用） |
-| `credential.gh_token` | `{host}` → `{token}`：跑 `gh auth token`，给 GitHub 连接器的 `from_machine` 用（「四 · 凭据」）；只回给 hub，不写日志 |
+| `connector.media` | `{id, path, offset}` → chunked reads (like `file.read`, 20 MB maximum per item) |
+| `connector.action` | `{id, name, args, approval}` → `{result}`: sent only after hub gating; `approval` is the card id (for node logging) |
+| `credential.gh_token` | `{host}` → `{token}`: runs `gh auth token` for GitHub `from_machine` ("IV · Credentials"); returned only to the hub, never logged |
 
-node → hub 事件：`connector.changed {id, scope}`。
+node → hub event: `connector.changed {id, scope}`.
 
-一个连接器只认**一台**机器（配置里写 `imessage.machine`），不在多台 Mac 上各读一份（iCloud 同步的数据是同一份，读两遍只会重复）。
+A `connector` uses only **one** machine (configured as `imessage.machine`), not several Macs (iCloud data is the same; reading twice only duplicates it).
 
-## 三、迁移：飞书、公司圈、邮件搬到新接口（只重构，不改行为）
+## III. Migration: move Lark, Moments and `mail` to new interfaces (refactor only)
 
-每一步一个 PR，合入前同一组验证：
+One PR per step, with the same checks before merging:
 
-- **现有测试全绿**：`./scripts/test/test-server.sh`（hub 机器、真 Postgres）、`go test ./...`、App 的 `JarvisTests` 和收件箱 / 知识库的 UI 测试。
-- **golden 逐字节不变**：提示词、MCP 工具列表（`mcp_tools.*`、`mail_tools`）。
-- **新增的对照测试**（第 M0 步先写，用旧代码生成基线）：假飞书网关 + 假邮箱（合成数据）跑一轮归档 + 收件箱采集，
-  把结果（知识库目录树和每个文件的内容、`InboxItem` 的 JSON）存成 golden；之后每步都必须一致。
-- **真实数据对照**（只读、只打印数字）：`jarvisd dev connector-diff`（只在 DEBUG 构建 / 测试里），在 hub 机器上用真实的飞书网关和邮箱，
-  旧代码和新代码各跑一轮，写到两个临时目录（不碰 `~/.persona/data`、不写库、不标已读），比较：每个会话的行数和内容哈希、收件箱条目的 id / kind / 线程归属。
-  只打印「一致 / 第几个会话不一致、差几行」，不打印内容。对照完删掉临时目录。
+- **All existing tests pass**: `./scripts/test/test-server.sh` (hub machine, real Postgres), `go test ./...`, App `JarvisTests` and `Inbox` / knowledge-base UI tests.
+- **Byte-identical goldens**: prompts, MCP tool lists (`mcp_tools.*`, `mail_tools`).
+- **New comparison tests** (write in M0, baseline generated with old code): fake Lark gateway + fake `mail` (synthetic data), one archive + `Inbox` collection round,
+  saving results (knowledge-base directory tree and every file's content, `InboxItem` JSON) as goldens; every subsequent step must match.
+- **Real-data comparison** (read-only, print numbers only): `jarvisd dev connector-diff` (DEBUG builds / tests only), using real Lark gateway and `mail` on the hub machine;
+  run old and new code once each into two temporary directories (no touching `~/.persona/data`, database writes or marking read), comparing each conversation's line count/content hash and `Inbox` item id / `kind` / thread ownership.
+  Print only "`match` / conversation N differs, by N lines", not content. Delete temporary directories afterwards.
 
-| 步 | 做什么 | 验收（除了上面那组） |
+| Step | Work | Acceptance (in addition to above) |
 | --- | --- | --- |
-| M0 | 写对照测试和 `connector-diff`，用当前 master 生成基线 | 基线入库（合成数据）；真实对照在当前代码上自己和自己比一致 |
-| M1 ✓ | （#529）`connector` 加 `Chats{ChatSources() []kb.Source}`、`Items{ItemSource()}`，飞书连接器（`hub/lark_connector.go`）包住 `larkSource`、`momentsSource`、`larkItems`，`kbSources()` / `kbCollectItems()` 从 Registry 来；工具只分发给真的提供它的连接器（`Registry.Offers`），所以 `lark` 连接器在 M4 前不接 `lark_*`；`/api/v1/connectors` 在 M6 前不列 `lark` / `mail`。**和原计划不同**：飞书的事件 WebSocket 不包进连接器的 `Events`，它还要推 App 的信息 tab、刷新个人 Agent、立刻起 /agent，留在 hub。原计划：加 `connector` 包和 `Registry`；飞书连接器 = 现在的 `larkSource` + `momentsSource` + `larkItems` + 事件 WebSocket 的包装；`kb.Engine.Sources` 从 Registry 来 | 知识库 id 前缀不变；真实对照一致 |
-| M2 ✓ | （#544）邮件连接器（`extmgr/mail_connector.go`）实现 `connector.Archive`，加可选的 `Poller`（邮件 6 分钟），删掉 `kbMail`；对照基线只有游标文件的位置变了。原计划：邮件实现 `StreamSource`（UID 游标），删掉空壳 `mailSource` 和 `kbMail` 的循环；`mail-cursors.json` 迁到 `cursors/` 并兼容读旧文件 | 迁移前后同一批邮件得到同样的会话和行；游标不回退（不会重复归档） |
-| M3 ✓ | （#548）飞书、邮件的条目保留自己的块，所以走 hub 内部的 `ownInbox{collectInbox, replyInbox}`（`hub/inbox_own.go`，由飞书、邮件连接器实现），`collectInbox` 按 Registry 顺序收，`replyInbox` 的 switch 换成按条目归属的连接器分发；加可选的 `connector.InboxReplier{ReplyItem}`（`Reply` 签名不变，和 terminal 车道对过）；每件的回复在 hub 里排队到归档完。原计划：收件箱：`collectLark` / `collectDocs` / `collectMoments` / `collectMail` 包成 `Inbox`；`replyInbox` 的 `switch` 换成 `Reply`；加 `?sources=` | 收件箱对照一致；旧 App（不带 `sources`）看到的列表和以前一样 |
-| M4 ✓ | （#557）飞书连接器提供 `lark_chats/messages/search`（只给助手），邮件连接器提供 `mail_accounts/search/read` 和写操作 `mail_send`（过闸门，卡片不变；加可选 `AgentTools`、`Validator`）；工具列表按「手机、给 Agent 的连接器、助手自己的、只给助手的连接器」拼，三份 golden 不变；`lark_agent_reply` 留在 hub。拒绝发信时模型收到的话变成通用的「The user declined mail_send.」。原计划：MCP：`lark_*`、`mail_*` 从 Registry 注册，`callTool` 按前缀分发 | 三种工具列表的 golden 逐字节一致；`TestEveryMCPToolIsUsed` 过 |
-| M5 ✓ | （#605）`mail_send` 从 M4 起已经由 `Registry.Call` 过 `connector_gate`；判定 + 批准挪进 `connector/gate.go`（`gate`）。`connector_gate` 里 `connector` 是 `lark` 的规则就是助手写飞书的规则，`action` 写「方法 路径」（`"POST /conversations/*/messages"`、`"CLI /im/+messages-send"`、`"*"`），`match` 当 body；hub 把它们和老的 `lark_gate` 合成一份（`connector.LarkRules`，前者在前）经 `assistant.lark` 交给 node，node 和协议不变。卡片还是 node 和 hub 原来的那两种，文字没动。原计划：闸门：`mail_send` 的批准、`lark_gate` 的规则读取搬进 `connector/gate.go`，加 `connector_gate` 配置 | 卡片文字和以前一样（代码没动，不用截图）；`lark_gate` 老配置照样生效（单元测试） |
-| M6 ✓ | （#609）`GET /api/v1/connectors?all=1` 连飞书、邮件一起列（不带参数照旧不列：M6 以前的 App 会把它们再画一行）；App 的设置 › 连接器整节按这份列表画，`lark` / `mail` 画成原来的飞书 / 邮箱行（标题、图标、右边的字、点进去的页面不变，状态还读各自的接口），老 hub 没列它们时照旧画；连接器状态加 `guide`（`Status.Guide`，信息连接器没权限时带上），通用的连接器页出问题时列出来。原计划：`GET /api/v1/connectors`；App 的设置 › 连接器用它画新行，邮箱 / 飞书两行不变 | `/api/v1/lark/status` 还在；设置页截图深浅色和改前一样（多了的行除外） |
+| M0 | Comparison tests and `connector-diff`; baseline from current master | Commit synthetic baseline; real comparison of current code against itself matches |
+| M1 ✓ | (#529) Add `Chats{ChatSources() []kb.Source}`, `Items{ItemSource()}` to `connector`; Lark `connector` (hub/lark_connector.go) wraps `larkSource`, `momentsSource`, `larkItems`; `kbSources()` / `kbCollectItems()` use Registry. Tools dispatch only to connectors that actually provide them (`Registry.Offers`), so `lark` does not `handle` `lark_*` before M4; `/api/v1/connectors` omits `lark` / `mail` before M6. **Departure from plan**: Lark event WebSocket is not wrapped as `connector` `Events`; it also pushes the App's Messages tab, refreshes personal Agents and starts /agent immediately, so remains in the hub. Original plan: add `connector` and `Registry`; Lark `connector` wraps `larkSource` + `momentsSource` + `larkItems` + event WebSocket; `kb.Engine.Sources` comes from `Registry` | Knowledge-base id prefixes unchanged; real comparison matches |
+| M2 ✓ | (#544) `Mail` `connector` (`extmgr/mail_connector.go`) implements `connector.Archive`; add optional `Poller` (`mail` 6 minutes), remove `kbMail`; only cursor-file location `changes` in the baseline. Original plan: `mail` implements `StreamSource` (UID cursor), remove shell `mailSource` and `kbMail` loop; move `mail-cursors.json` to `cursors/`, reading old file compatibly | Same `mail` batch produces identical conversations/lines; no cursor regression (no duplicate archive) |
+| M3 ✓ | (#548) Lark/mail items keep their own blocks and use hub-internal `ownInbox{collectInbox, replyInbox}` (hub/inbox_own.go, implemented by their connectors); `collectInbox` collects in `Registry` order, replace the `replyInbox` `switch` with ownership-based `connector` dispatch; add optional `connector.InboxReplier{ReplyItem}` (`Reply` signature unchanged, coordinated with terminal lane); queue each reply in the hub until archive completes. Original plan: wrap `collectLark` / `collectDocs` / `collectMoments` / `collectMail` as `Inbox`; replace the `replyInbox` `switch` with `Reply`; add `?sources=` | `Inbox` comparison matches; old Apps without `sources` see the same list |
+| M4 ✓ | (#557) Lark `connector` provides `lark_chats/messages/search` (assistant only); `mail` provides `mail_accounts/search/read` and gated `mail_send` (same card; optional `AgentTools`, `Validator`). Tool lists concatenate phone, Agent-exposed connectors, assistant-owned tools, assistant-only connectors; three goldens unchanged; `lark_agent_reply` remains in hub. Declined `mail` now gives the `model` the generic "The user declined mail_send." Original plan: register `lark_*`, `mail_*` from `Registry` and dispatch `callTool` by prefix | Three tool-list goldens byte-identical; `TestEveryMCPToolIsUsed` passes |
+| M5 ✓ | (#605) Since M4, `mail_send` is gated by `Registry.Call` through `connector_gate`; move decision + approval into `connector/gate.go` (`gate`). `connector:"lark"` rules in `connector_gate` govern assistant Lark writes; `action` is "method path" (`"POST /conversations/*/messages"`, `"CLI /im/+messages-send"`, `"*"`), `match` matches body. Hub combines these before old `lark_gate` (`connector.LarkRules`) and passes them to node through `assistant.lark`; node/protocol unchanged. Both original node/hub card types and text unchanged. Original plan: move `mail_send` approval and `lark_gate` rule reading into `connector/gate.go`, add `connector_gate` | Card text unchanged (code untouched, no screenshots needed); old `lark_gate` config works (unit tests) |
+| M6 ✓ | (#609) `GET /api/v1/connectors?all=1` includes Lark/mail (without it, still omitted: pre-M6 Apps would duplicate their rows). App Settings › Connectors draws the section from this list; `lark` / `mail` retain original Lark/mail rows (same titles, icons, trailing text and destinations, status still from their APIs); old hubs omitting them retain original rendering. `Status` gains `guide` (`Status.Guide`, supplied by Messages when permissions are missing), shown on generic `connector` `error` pages. Original plan: `GET /api/v1/connectors`; use it for new settings rows, keep mail/Lark rows unchanged | `/api/v1/lark/status` remains; dark/light settings screenshots `match` before, except added rows |
 
-M1–M6 合完、部署后在 hub 上看一天日志（归档行数、收件箱条数、分拣数和前一天同量级），再开始接新来源。
+After merging and deploying M1–M6, watch hub logs for a day (archive lines, `Inbox` items and classifications roughly comparable to the day before), then add new sources.
 
-## 四、GitHub 连接器（第一个新来源，内置）
+## IV. GitHub `connector` (first new source, built-in)
 
-### 收件箱：什么算「需要我」
+### `Inbox`: what "needs me"
 
-轮询 `GET /notifications`（只看未读、`participating` 不加，原因看 `reason`），一个 notification 线程 = 一件事（`github:<thread id>:<updated_at>`），
-线程后来又有动静就并进还没处理的那件，处理后再来的另开一件（和飞书会话一样的规则）。
+Poll `GET /notifications` (unread only, without `participating`, using `reason`); one notification thread = one thing (`github:<thread id>:<updated_at>`).
+Later activity merges into the unresolved item; activity after completion opens a new item (same rule as Lark conversations).
 
-| 情形 | 怎么认 | 默认分拣 |
+| Situation | Detection | Default classification |
 | --- | --- | --- |
-| 等我 review 的 PR | `reason = review_requested`，且我还在 requested reviewers 里（团队请求的看我是不是那个团队的） | 需要你 |
-| @ 我 | `mention`；`team_mention` 默认「知悉即可」 | 需要你 |
-| 我的 PR 有新评论 / review | `author` + `subject.type = PullRequest`，最新一条不是我 | 交给模型（「请你改」的是需要你，「LGTM」是知悉即可） |
-| 我的 PR 的 CI 挂了 | `ci_activity`（我触发的 Actions 跑完了），再查这个提交的 check runs 有没有 failure；我开着的 PR 的 head 提交也查一次（别人推的 CI 不发通知） | 需要你 |
-| 分配给我的 issue | `assign` | 需要你 |
-| 其余（`subscribed`、`state_change`、`comment` 等） | 不进收件箱，只在知识库里（如果这个线程已经在） | — |
+| PR waiting for my review | `reason = review_requested`, and I remain in requested reviewers (for team requests, check my team membership) | Needs you |
+| @ me | `mention`; `team_mention` defaults to FYI | Needs you |
+| New `comment` / review on my PR | `author` + `subject.type = PullRequest`, latest entry not mine | Model decides ("please change this" needs you, "LGTM" is FYI) |
+| CI failed on my PR | `ci_activity` (`Actions` run I triggered finished), then check the commit's check runs for failure; also check head commits of my `open` PRs (CI triggered by someone else's push sends no notification) | Needs you |
+| Issue assigned to me | `assign` | Needs you |
+| Other (`subscribed`, `state_change`, `comment`, etc.) | Not in `Inbox`; knowledge base only, if the thread is already there | — |
 
-- 自己在 GitHub 上回了（线程最新一条评论是我、在这件事之后）→ `done_by=replied`；PR 合了 / 关了、review 请求撤了 → `done_by=read`（不是「需要你」的直接算处理完）。
-- **已处理只记在 Persona，不回写 GitHub 的已读**（和飞书、邮件的规则一致；要不要改见「需要用户拍板」）。
-- 回复：在 PR / issue 下发评论（`POST /repos/{o}/{r}/issues/{n}/comments`）；`reply_to` 写「评论到 example-org/example-repo#12（仓库可见的人都能看到）」。
-- App 行：GitHub 标志（`Theme.Brand.github`，要加官方标志资源）、标签（「请你 review」「@我」「CI 失败」「分配给你」）、标题是 PR / issue 标题，
-  第二行 ✦ 摘要，第三行「仓库 #号 · 最新评论人：内容」。点开是通用详情：这件事的上下文（hub 的 `Context`：描述、最近的评论 / review、失败的检查名）
-  +「在 GitHub 打开」（App 内网页卡片）+ 操作条（AI 草拟回复 / 交给 AI / 已处理）。**没有** PR 浏览页、diff 页、仓库页。
+- Replied on GitHub (latest `comment` is mine and later than this item) → `done_by=replied`; PR merged / closed, or review request withdrawn → `done_by=read` (items not needing you are simply completed).
+- **Done is recorded only in Persona, not written back as read on GitHub** (same as Lark/mail; possible change under "Decisions needed from the user").
+- `Reply`: `comment` on PR / `issue` (`POST /repos/{o}/{r}/issues/{n}/comments`); `reply_to` says "Comment on `example-org/example-repo`#12 (visible to everyone with repository access)".
+- App row: GitHub logo (`Theme.Brand.github`, official asset to add), label ("Review requested", "@me", "CI failed", "Assigned to you"), PR / `issue` title,
+  second line ✦ summary, third "repository #number · latest commenter: content". Opens generic detail: context (`Context` from hub: description, recent comments / reviews, failed check names)
+  plus "Open in GitHub" (in-App web card) and actions (AI draft reply / hand to AI / done). **No** PR browser, diff page or repository page.
 
-### 知识库
+### Knowledge base
 
-- **会话**：一个 PR / issue 一个会话 `chats/github-<owner>-<repo>-<号>`（`kind: pr | issue`），描述是第一条，后面是 issue 评论、review（「alice 批准了」「bob 要求修改：…」）、
-  行内评论（带文件名:行号）按时间排；机器人（`[bot]` 账号、CI 评论）的标成机器人，`HasPeople` 不把它们算真人。
-- **哪些进**：只收「和我有关」的线程（通知里出现过的 + 搜索 `involves:@me` 最近 30 天更新过的），不爬整个仓库。游标是线程的 `updated_at`
-  + 每类评论的 `since`（`StreamSource`），往回补就是第一次读全部评论（和公司圈一样，不需要 `Older`）。
-- **仓库挂项目**：项目的 `dirs`（`<机器>:<路径>`）是代码目录；node 的 `git.status` 加一个可选字段 `remotes`（旧 node 没有就跳过），
-  hub 把 `github.com/<owner>/<repo>`（或配置的 GHE 主机）对上项目，存进项目 `meta.json` 的 `repos`。这个仓库的 PR 会话压缩时把项目直接给模型（不用它猜），
-  时间线记「GitHub · PR #号 · 一句话」。没对上项目的仓库照常由模型按内容挂。
-- 消息里出现的 PR / issue 链接（飞书、邮件里）记成条目（`LinkPattern`），挂到那个会话的项目上。
+- **`Conversations`**: one per PR / `issue`, `chats/github-<owner>-<repo>-<number>` (`kind: pr | issue`), description first, then `issue` comments, reviews ("`alice` approved", "bob requested `changes`: …"),
+  inline comments (with file:line), chronologically ordered. Bots (`[bot]` accounts, CI comments) are marked as bots and excluded from real people by `HasPeople`.
+- **What is collected**: only `threads` "related to me" (seen in notifications + search `involves:@me` updated in the last 30 days), not entire repositories. Cursor uses thread `updated_at`
+  + `since` per `comment` type (`StreamSource`); backfill reads all comments on first fetch (like Moments, no `Older` needed).
+- **Repositories link to projects**: project `dirs` (`<machine>:<path>`) are code directories; node `git.status` gains optional `remotes` (skip old nodes without it).
+  The hub matches `github.com/<owner>/<repo>` (or configured GHE `host`) to projects, storing `repos` in project `meta.json`. PR conversation compression gets the project directly (no guessing),
+  with timeline entries "GitHub · PR #number · one sentence". Unmatched repositories still use content-based `model` association.
+- PR / `issue` links in messages (Lark, `mail`) become items (`LinkPattern`) associated with that conversation's project.
 
-### AI 的工具
+### AI tools
 
-| 工具 | 只读 / 写 | 做什么 |
+| Tool | Read / write | Purpose |
 | --- | --- | --- |
-| `github_search` | 只读 | 搜 issue / PR（GitHub 搜索语法，默认加 `involves:@me` 的提示写在描述里）、搜代码 |
-| `github_read` | 只读 | 一个 PR / issue：描述、状态、reviewers、评论和 review（截断，最新的优先） |
-| `github_diff` | 只读 | PR 的改动文件列表 + 指定文件的 patch（每个文件截断，太大的只给统计） |
-| `github_checks` | 只读 | 一个提交 / PR 的检查结果；失败的 job 日志最后 N KB（Actions 的 logs 接口） |
-| `github_comment` | 写，过闸门 | 评论 PR / issue；卡片写明仓库、编号、标题、全文、「仓库可见的人都能看到」 |
-| `github_review` | 写，过闸门 | approve / request changes / comment；approve 卡片单独强调 |
+| `github_search` | Read | Search issues / PRs (GitHub syntax, default `involves:@me` suggested in description), search code |
+| `github_read` | Read | PR / `issue` description, state, reviewers, comments and reviews (truncated, newest first) |
+| `github_diff` | Read | PR changed-file list + selected file patch (truncated per file; oversized files get statistics only) |
+| `github_checks` | Read | Commit / PR checks; last N KB of failed job logs (`Actions` logs API) |
+| `github_comment` | Write, gated | Comment on PR / `issue`; card states repository, number, title, full text, "visible to everyone with repository access" |
+| `github_review` | Write, gated | approve / request `changes` / `comment`; approval card gets special emphasis |
 
-描述放 `prompts/mcp/github/`，golden 加一种「有 GitHub」的工具列表。
+Descriptions in `prompts/mcp/github/`; add a "with GitHub" tool-list golden.
 
-### 事件：轮询
+### `Events`: polling
 
-hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `If-Modified-Since`（原样回传上次的 `Last-Modified`），
-304 不算速率限制；两次请求的间隔按响应头 `X-Poll-Interval`（一般 60 秒，GitHub 忙时会变大，必须遵守），`Poller.NextPoll` 每次更新。
-有新通知再去读对应的 PR / issue / check runs（每轮封顶 30 个线程，剩下的下一轮）。`X-RateLimit-Remaining` 低于 10% 时状态变 `rate_limited`、
-只保留通知轮询。
+The hub has no public entry point, so cannot receive webhooks. `GET /notifications` sends the previous `Last-Modified` verbatim as `If-Modified-Since`;
+304s do not count against rate limits. Request intervals follow `X-Poll-Interval` (usually 60 seconds, longer when GitHub is busy; mandatory), updating `Poller.NextPoll` each time.
+Fetch corresponding PRs / issues / check runs only for new notifications (at most 30 `threads` per round, rest next round). Below 10% `X-RateLimit-Remaining`, status becomes `rate_limited`
+and only notification polling remains.
 
-### 会话页（#1055）
+### Conversation page (#1055)
 
-用户要求：「github&Telegram 的 UI，都支持丰富一下，参考飞书的对话页面，GitHub 的 thread 页面」。收件箱点开 PR / issue，
-不再是 hub 收集的一块纯文本，而是原生的 GitHub thread 页（`apple/Persona/Views/Inbox/ConnectorThread/GitHubThreadView.swift`）。
-接口和 Telegram 共用连接器的 `threads` 能力（`docs/connectors.md`），App 按 `ThreadChat.Kind`（pr / issue）选这个页面。
+User request: "Make the github & Telegram UI richer, based on the Lark conversation page and GitHub thread page." Opening an `Inbox` PR / `issue`
+now shows a native GitHub thread page rather than hub-collected plain text (`apple/Persona/Views/Inbox/ConnectorThread/GitHubThreadView.swift`).
+It shares the `connector` `threads` capability with Telegram (`docs/connectors.md`); the App selects this page for `ThreadChat.Kind` `pr` / issue.
 
-- **页面**：
-  - 页头卡片：仓库 · #号、标题、状态（打开绿、合并紫、PR 关闭红、issue 关闭紫、草稿灰）、发起人头像、`head → base`、标签（底色取标签自己的颜色，字一律主色，浅色标签也看得清）、「在 GitHub 打开」。
-  - 描述：Markdown，当作第一条评论。
-  - 时间线（旧的在前）：
-    - 评论；
-    - review，状态有颜色：批准绿、要求修改红，卡片左边一条状态色；
-    - 行内评论：`文件:行`，上面是 diff 的最后 6 行；回复显示引用，不重复 diff；
-    - CI 检查：连续的检查合成一张卡，写「3 项检查 · 1 项失败」，第一个失败的日志末尾（最后 40 行）默认展开；
-    - 灰色的事件行：加标签、请人 review、改标题、合并、关闭、强制推送……
-  - 更早的动态：在描述和时间线之间的「显示更早的动态」，同 GitHub 的 Load more。
-  - 回复：底部回复框，长按评论「引用回复」把原文变成 Markdown 引用（不带 @，免得通知人家）。
-    发送走 `github_comment`（`{chat, text}` 和助手用的 `{repo, number, body}` 都认）。用户自己点的发送直接评论，不过闸门、不弹卡片（#1190）；助手调的照旧过闸门。
-  - 「AI 草拟回复」「交给 AI」照旧在收件箱的顶栏。CI 失败的通知不是 PR / issue，照旧显示 hub 收集的文本。
-- **数据**（`server/internal/connector/github/thread.go`）：
-  - 每次读：issue、评论、事件；PR 再读 PR、reviews、行内评论，打开的 PR 再读 head 提交的 check runs。每个列表最多 5 页 × 100 条。
-  - 合起来按时间排序，在内存里分页：游标是上一页最旧那条的 id。
-- **缓存**：
-  - 每个接口的回答连同 ETag 留在内存里（最多 400 个，最久没用的先丢），下次带 `If-None-Match`；304 不算速率限制。
-  - 15 秒内再读同一个接口（往前翻页）不发请求。
-  - 失败的 job 日志按 job id 只读一次。
-  - 自己发了评论或 review 后，那个 PR / issue 的缓存清掉，刷新就能看到。
-- **头像**：媒体 ref 是 `avatar:<login>:<v>`（`v` 取 GitHub 头像地址里的版本号），hub 从 GitHub 的头像域名取 96 像素的，不带 token。
-  hub 重启后没见过的 login 先问一次 `/users/<login>`。
+- **Page**:
+  - Header card: repository · #number, title, state (`open` green, merged purple, closed PR red, closed `issue` purple, draft grey), `author` avatar, `head → base`, labels (their own background color, primary text color so light labels remain readable), "Open in GitHub".
+  - Description: Markdown, treated as the first comment.
+  - Timeline (oldest first):
+    - comments;
+    - reviews with colored states: approval green, `changes` requested red, a state-colored stripe at the card's left;
+    - inline comments: `file:line` with the diff's last 6 lines above; replies show a quote, not repeated diffs;
+    - CI checks: consecutive checks merge into one card, e.g. "3 checks · 1 failed", with the first failure's log tail (last 40 lines) expanded by default;
+    - grey event rows: labels added, review requested, title `changed`, merged, closed, force-pushed…
+  - Earlier activity: "Show earlier activity" between description and timeline, like GitHub's Load more.
+  - `Reply`: bottom composer; long-press "Quote reply" turns a `comment` into a Markdown quote (no @, to avoid notifying its `author`).
+    Sending uses `github_comment` (accepts both `{chat, text}` and the assistant's `{repo, number, body}`). User sends `comment` directly, without gate/card (#1190); assistant calls remain gated.
+  - "AI draft reply" and "Hand to AI" stay in the `Inbox` top bar. CI-failure notifications that are not PRs/issues still show hub-collected text.
+- **Data** (`server/internal/connector/github/thread.go`):
+  - Each read fetches `issue`, comments, events; PRs additionally fetch PR, reviews, inline comments; `open` PRs additionally fetch head-commit check runs. Each list capped at 5 pages × 100 entries.
+  - Merge chronologically, paginate in memory; cursor is the oldest entry's id from the previous page.
+- **Cache**:
+  - Keep each API response and ETag in memory (maximum 400, least recently used evicted), send `If-None-Match` next time; 304s do not count against rate limits.
+  - Re-reading an API within 15 seconds (paging backward) makes no request.
+  - Failed-job logs are read once per job id.
+  - Posting a comment/review clears that PR/issue's cache so refresh shows it.
+- **Avatars**: media ref `avatar:<login>:<v>` (`v` is the version in GitHub's avatar URL); hub fetches 96-pixel images from GitHub's avatar domain without a token.
+  After a hub restart, a previously unseen `login` first requires `/users/<login>`.
 
-### 凭据
+### Credentials
 
-**已定（2026-11-01 用户）：从某台机器的 `gh` 登录读。** 用户原话：「github 能不能支持自动从 gh cli 读，从某台机器上读取来授权登录」。
+**Decided (user, 2026-11-01): read a machine's `gh` login.** Original request: "Can GitHub automatically read authorization from `gh` cli on a selected machine?"
 
-- **配置**：hub.json `"github": {"auth": {"from_machine": "<机器 id>", "host": "github.com"}}`（`host` 可省，默认 github.com；自建的 GitHub Enterprise 写它的主机名，只在配置里）。
-- **取 token**：node 加一个 RPC `credential.gh_token {host}` → `{token}`：在那台机器上非交互地跑 `gh auth token [-h <host>]`。
-  - 只有 hub 能调：它是 hub → node 的 RPC，走 hub 和 node 之间的 ssh 通道；不开 REST 接口，hook / MCP 的 `node.sock` 不认这个方法，助手和 Agent 拿不到。
-  - `gh` 把登录存在 `~/.config/gh/hosts.yml` 时 ssh 里能读；存在钥匙串里时，ssh 会话打不开钥匙串，报「那台机器的 gh 登录在钥匙串里，经 ssh 读不到」，
-    给出两条路：那台机器上 `gh auth login --insecure-storage`，或者改用手动粘贴。旧 node 不认这个方法，报「<机器> 的 personad 太旧」。
-- **token 只在 hub 的内存里**：不落库、不写日志、不进任何响应和错误信息（错误里出现 token 样式的串先抹掉）；也不放进助手 / Agent 的环境变量。
-  - 请求回 401：重新向那台机器取一次（那边可能刚重新登录过），还是 401 就是 `not_signed_in`：「<机器> 上的 gh 登录失效了，在那台机器上运行 gh auth login」。
-  - 那台机器离线：用内存里上次取到的；hub 重启后它还离线、内存里又没有，状态是「GitHub 未授权（<机器> 离线）」，它连上时自动再取。
-- **App**：设置 › 连接器 › GitHub 显示「来自 <机器> 的 gh 登录 · <账号>」（账号来自 `GET /user`）。
-- **备选：手动粘贴 token**（加密存 hub，同「一、账号与健康」）。没配 `from_machine` 时用它；两个都配了以 `from_machine` 为准。
-- **权限要说清**：gh 的 token 权限大（实测 scopes 是 `gist`、`read:org`、`repo`、`workflow`：能推代码、改 CI 配置）。连接器自己只调读接口；
-  写操作只有 `github_comment`、`github_review` 两个，照旧过闸门；不拿它做 git 推送、不碰 workflow、不给别的连接器用。
-- **主会话实测（2026-11-01，不打印 token）**：两台 Mac 上的 gh 都登录了 github.com、是同一个账号，token 在 `hosts.yml` 里，经 ssh 非交互 `gh auth token`
-  拿得到（40 个字符）；另一台 Mac 的 gh 登录已过期（具体哪台记在车道报告里）。用这个 token 调 `/notifications` 回 200，
-  `X-Accepted-OAuth-Scopes` 是 `notifications, repo`（有 `repo` 就够），`X-Poll-Interval` 是 60；搜索 `review-requested:@me` 也是 200。
+- **Config**: hub.json `"github": {"auth": {"from_machine": "<machine id>", "host": "github.com"}}` (`host` optional, default github.com; self-hosted GitHub Enterprise hostname only in config).
+- **Get token**: new node RPC `credential.gh_token {host}` → `{token}`: noninteractive `gh auth token [-h <host>]` on that machine.
+  - Hub only: hub → node RPC over their ssh channel; no REST endpoint; hook / MCP `node.sock` does not recognize it, so assistant/Agents cannot obtain it.
+  - `gh` `login` in `~/.config/gh/hosts.yml` is readable over ssh; keychain `login` is not because ssh cannot unlock it. Report "This machine's `gh` `login` is in the keychain and cannot be read over ssh",
+    with two alternatives: `gh auth login --insecure-storage` on that machine, or manual paste. Old nodes report "`personad` on <machine> is too old".
+- **Token only in hub memory**: no database, logs, responses or errors (redact token-shaped strings in errors); not in assistant/Agent environment variables either.
+  - On 401, fetch again once (the machine may have just logged in again); another 401 gives `not_signed_in`: "`gh` `login` on <machine> has expired; run `gh auth login` there".
+  - Machine offline: use the last token in memory; after hub restart, if still offline and no token cached, state is "GitHub not authorized (<machine> offline)"; fetch automatically on reconnection.
+- **App**: Settings › Connectors › GitHub says "`gh` `login` from <machine> · <account>" (account from `GET /user`).
+- **Fallback: manually pasted token** (encrypted on hub, "I. `Accounts` and health"). Used without `from_machine`; if both are configured, `from_machine` wins.
+- **Explain permissions**: `gh` tokens are powerful (measured scopes `gist`, `read:org`, `repo`, `workflow`: can push code and change CI). The `connector` only calls read APIs;
+  its only writes are gated `github_comment` and `github_review`; no git pushes, `workflow` `changes` or reuse by other connectors.
+- **Main-session measurement (2026-11-01, no token printed)**: `gh` on two Macs was logged into github.com as the same account, with tokens in `hosts.yml`, readable through noninteractive ssh `gh auth token`
+  (40 characters); a third Mac's `login` had expired (which machine is recorded in the lane report). `/notifications` with this token returned 200,
+  `X-Accepted-OAuth-Scopes` was `notifications, repo` (`repo` suffices), `X-Poll-Interval` 60; search `review-requested:@me` also returned 200.
 
-为什么之前写的两种给法不用了：通知接口只支持经典 PAT 和 OAuth 的 token（细粒度 PAT、GitHub App 的 token 不行），gh 登录拿到的就是 OAuth token，
-带 `repo` 已经够用，用户也不用再去生成 token。
+Why the two earlier token methods were dropped: notifications supports only classic PAT and OAuth tokens (not fine-grained PAT or GitHub App tokens); `gh` yields an OAuth token,
+and `repo` is sufficient, so users need not generate another token.
 
-## 五、iMessage 连接器（第二个，Mac 本地）
+## V. iMessage `connector` (second, local to Mac)
 
-### 调研结果（2026-11-01，只看文件在不在和行数，没读任何内容）
+### Findings (2026-11-01, checked file existence and row counts only, no content read)
 
-- hub 连着的 Mac 里有三台有 `~/Library/Messages/chat.db`，都是 macOS 26。其中两台的消息数、会话数、附件数完全一样（同一个 Apple ID 开了 iCloud 信息同步），
-  另一台少很多、最新一条停在半个多月前。具体是哪几台记在车道报告里，不进仓库。
-- 经 ssh 起的进程在这三台上都读得了 `chat.db`：这几台的「完全磁盘访问权限」里已经打开了 `sshd-keygen-wrapper`（「远程登录 › 允许远程用户完全访问磁盘」），
-  见 `docs/lessons/server.md` 的 TCC 一条。
-- 大约一半的消息 `text` 是空的、只有 `attributedBody`：不解析 typedstream 就丢一半。
-- `date` 是 2001-01-01 起的纳秒数（老系统是秒，按数量级判断）。会话的服务有 iMessage、SMS、RCS 三种，SMS 占多数（大多是验证码、通知类）。
+- Three Macs connected to the hub have `~/Library/Messages/chat.db`, all on macOS 26. Two have identical `message`, conversation and `attachment` counts (same Apple ID with iCloud Messages sync);
+  the third has far fewer, with its latest `message` over half a month old. Machine identities are in the lane report, not the repo.
+- Processes started over ssh can read `chat.db` on all three: `sshd-keygen-wrapper` already has Full Disk Access ("Remote Login › Allow full disk access for remote users"),
+  see the TCC lesson in `docs/lessons/server.md`.
+- Roughly half the messages have empty `text` and only `attributedBody`; without typedstream parsing, half are lost.
+- `date` is nanoseconds `since` 2001-01-01 (seconds on older systems; distinguish by magnitude). Conversation services are iMessage, SMS and RCS, mostly SMS (verification codes and notifications).
 
-### 完全磁盘访问权限（TCC）
+### Full Disk Access (TCC)
 
-`chat.db` 受 TCC 保护，权限算在**负责进程**（responsible process）头上，不是读文件的那个二进制：
+`chat.db` is TCC-protected; permission belongs to the **responsible process**, not the binary reading the file:
 
-- node 是 hub 经 `ssh … personad node --stdio` 起的，负责进程是 `sshd-keygen-wrapper`。给它完全磁盘访问权限 = **任何 ssh 登录这台 Mac 的会话都有**，
-  不只是 personad。这几台现在就是这样（为了读「桌面」「文稿」早就打开了）。
-- 直接给 `personad` 本身授权没用：经 ssh 起的子进程仍算在 sshd 头上；而且 personad 每次部署都换二进制、ad-hoc 签名，授权会失效。
-- 最小、最稳的做法是一个**独立的小帮手**：`jarvisd messages-helper`，由用户的 LaunchAgent（`launchd` 起，负责进程是它自己）运行，
-  只在本机 unix socket 上提供「读 chat.db / 通讯录、拿附件」，node 连这个 socket。授权只给它一个；签名要稳定（Developer ID，按团队 ID 认，换版本不掉授权），
-  所以它不随 personad 每次部署更新，单独发版。
-- 建议：**第一期用现成的 ssh 授权**（已经打开、零配置，`connector.list` 读不了时报 `no_permission` 并给出说明），
-  帮手放到后面、和发送（要「自动化」权限，也得在图形会话里授权）一起做。这条要用户拍板。
+- For `ssh … personad node --stdio` started by the hub, the responsible process is `sshd-keygen-wrapper`. Granting it Full Disk Access grants **every ssh session on this Mac**,
+  not just personad. These Macs already do this (enabled earlier for Desktop and Documents).
+- Granting `personad` itself does not help: ssh children still belong to sshd; `personad`'s binary also `changes` on every deployment with ad-hoc signing, invalidating permission.
+- The smallest, most stable approach is a **separate helper**: `jarvisd messages-helper`, run by the user's LaunchAgent (started by `launchd`, responsible for itself),
+  exposing only "read `chat.db` / contacts, fetch attachments" on a local unix socket for the node. Only the helper gets permission; signing must be stable (Developer ID, recognized by team ID, preserving permissions across versions),
+  so it releases separately rather than with every `personad` deployment.
+- Recommendation: **use existing ssh permission in phase one** (already enabled, zero setup; `connector.list` reports `no_permission` and guidance on failure),
+  defer the helper to sending (which needs Automation permission, also granted in a graphical session). User decision needed.
 
-### 读 chat.db
+### Reading `chat.db`
 
-交给 AI（#528，用户 2026-11-03：「iMessage 的文字可以交给 AI，和飞书一样」）：node 的 `connector.changes` 按 ROWID 增量给新消息（第一次从 30 天前开始），`connector.search` 给助手搜；
-默认只给成员里有通讯录里的人、或者我说过话的会话（验证码、银行、快递这类没人存的短号码不给），交出去的文字里验证码打码，App 自己看的不打码。
-hub 一侧（`connector/imessage/jarvis.go`）：开关「交给 Persona」（hub 设置 `imessage.ai`，默认开）开着时实现 `Archive`（知识库的会话 `imessage-<会话哈希>`、人 `imessage-<号码哈希>`）、
-`Inbox`（每 2 分钟看最近的会话：有未读的进收件箱，私聊需要你、群聊知悉即可，在别处读了或我回了就结束；「在信息里回复」是 `sms:` 链接，Persona 不发）、
-`ReadTools`（`imessage_chats` / `imessage_read` / `imessage_search`）；关掉后都不给，已存的另外删：`DELETE /api/v1/imessage/data`（关着时才行）调 `kb.Engine.ForgetSource("imessage")`
-删会话、人、项目里的引用和它们写的时间线、游标（项目标成待重写，摘要按剩下的重写），再删索引行和收件箱条目；正在压缩的会话删了以后不会被写回。
+Hand to AI (#528, user 2026-11-03: "iMessage text can be given to AI, like Lark"): node `connector.changes` returns new messages incrementally by `ROWID` (first fetch starts 30 days back), `connector.search` supports assistant search;
+by default, expose only conversations with a contact-book member or in which I have spoken (exclude unsaved short-code senders such as codes, banks and delivery services). Redact verification codes in AI text, not in App-only viewing.
+Hub side (`connector/imessage/jarvis.go`): with "Share with Persona" enabled (hub setting `imessage.ai`, on by default), implement `Archive` (knowledge-base conversations `imessage-<conversation hash>`, people `imessage-<number hash>`),
+`Inbox` (check recent conversations every 2 minutes: unread enters `Inbox`, direct chats need you, groups are FYI; reading elsewhere or my reply completes it; "`Reply` in Messages" is an `sms:` link, Persona does not send),
+`ReadTools` (`imessage_chats` / `imessage_read` / `imessage_search`). Disabled means none are exposed; stored data is deleted separately: `DELETE /api/v1/imessage/data` (only while disabled) calls `kb.Engine.ForgetSource("imessage")`
+to remove conversations, people, project references and their timeline entries, cursors (projects marked for rewriting, summaries rebuilt from remaining data), then index rows and `Inbox` items. Deleted conversations under compression cannot be written back.
 
-已实现（#449，`server/internal/connector/imessage`，node 的 `connector.*` RPC 见 `docs/protocol.md`）：会话按人合并（一个号码在 iMessage / 短信 / RCS 上的几个 `chat` 是一个会话，群按 `guid`），
-id 是哈希；通讯录按号码后 10 位对，对不上再按后 7 位（只有一个人有时）；没有权限时 `connector.list` 按 node 怎么跑给出两种说法：经 ssh 起的打开「远程登录 › 允许远程用户完全访问磁盘」，
-launchd 常驻的 node（`scripts/deploy/node-launchd.sh`）给 personad 本身授权（personad 每次部署换二进制，授权可能要重开，帮手那一步解决）。
-测试数据是 `testdata/home`（合成的 `chat.db` 和通讯录，表结构是 macOS 26 的；`testdata/gen` 下的 `blobs.swift` + `make.py` 生成），读真数据只用 `TestRealMessagesCounts` 打印条数。
+Implemented (#449, `server/internal/connector/imessage`, node `connector.*` RPC in `docs/protocol.md`): merge conversations by person (multiple iMessage / SMS / RCS `chat`s for one number form one conversation; groups use `guid`),
+with hashed ids; contact matching uses the last 10 phone digits, then last 7 if unique. On missing permission, `connector.list` gives guidance by node execution `model`: ssh requires "Remote Login › Allow full disk access for remote users";
+launchd-resident node (`scripts/deploy/node-launchd.sh`) requires permission for `personad` itself (deployment replaces the binary, possibly requiring reauthorization; the helper step fixes this).
+Fixtures are `testdata/home` (synthetic `chat.db` and contacts, macOS 26 schemas; generated by `blobs.swift` + `make.py` in `testdata/gen`); real data is read only by `TestRealMessagesCounts`, printing counts.
 
-- 只读打开：`sqlite3 -readonly -json`（macOS 自带的 `/usr/bin/sqlite3`，personad 是 `CGO_ENABLED=0` 交叉编译的，不引入 SQLite 驱动；
-  `attributedBody` 用 `hex()` 取出来）。不加 `immutable=1`（会读不到还在 WAL 里的新消息）。不复制、不缓存整个库。
-- 用到的表：`message`（`ROWID`、`guid`、`text`、`attributedBody`、`handle_id`、`is_from_me`、`date`、`date_read`、`is_read`、`cache_has_attachments`、
-  `associated_message_type` / `associated_message_guid`（点按回应）、`thread_originator_guid`（行内回复）、`date_edited`、`date_retracted`、`item_type`（群事件））、
-  `chat`（`guid`、`chat_identifier`、`display_name`、`style`、`service_name`）、`handle`、`chat_message_join`、`chat_handle_join`、`attachment`、`message_attachment_join`。
-- **增量游标：ROWID**。它只增不减，iCloud 晚到的旧消息也拿到新的 ROWID，所以按 ROWID 不会漏；归档时按 `date` 放进对应的天文件
-  （见上面「要注意的现有行为」）。`date` 不能当游标：晚到的旧消息会被跳过。编辑、撤回第一期不追（归档是追加的，和飞书一样）；
-  后面要的话每轮再看最近 7 天 `date_edited` / `date_retracted` 变了的。
-- **typedstream**（`attributedBody`）：是 `NSArchiver` 的 streamtyped 格式（`\x04\x0bstreamtyped` 开头），里面是 `NSAttributedString`，第一个 `NSString` 就是正文。
-  写一个最小的 typedstream 解码器（`connector/imessage/typedstream.go`）：按格式读类链和对象，取出第一个字符串（长度前缀：小于 0x80 是一个字节；
-  `0x81` 后面 2 字节、`0x82` 后面 4 字节，小端），属性里的 `__kIMMentionConfirmedMention`（@ 了谁）、链接也读出来。
-  解不出来的消息记一行「[无法解析的消息]」并计数（状态里显示），**不打印、不记录原始数据**。
-- 测试数据：在 Mac 上用一个 Swift 小脚本（`NSArchiver` 归档 `NSAttributedString`，正文是合成的「示例消息」）生成几种 blob（纯文字、长文字、带 @、带链接、emoji），
-  连同一个只有用到的表、全是合成数据的 `chat.db` 一起放 `testdata/`，生成脚本也入库。
-- 点按回应（`associated_message_type` 2000–3006）不当消息，第一期直接跳过；行内回复带上被回复的那条的开头（「回复「…」：」）；群事件（改名、加人）记成系统行。
+- Read-only `open`: `sqlite3 -readonly -json` (macOS `/usr/bin/sqlite3`; `personad` cross-compiles with `CGO_ENABLED=0`, no SQLite driver;
+  fetch `attributedBody` with `hex()`). No `immutable=1` (would miss new WAL messages). Do not copy or cache the whole database.
+- Tables used: `message` (`ROWID`, `guid`, `text`, `attributedBody`, `handle_id`, `is_from_me`, `date`, `date_read`, `is_read`, `cache_has_attachments`,
+  `associated_message_type` / `associated_message_guid` (tapbacks), `thread_originator_guid` (inline replies), `date_edited`, `date_retracted`, `item_type` (group events)),
+  `chat` (`guid`, `chat_identifier`, `display_name`, `style`, `service_name`), `handle`, `chat_message_join`, `chat_handle_join`, `attachment`, `message_attachment_join`.
+- **Incremental cursor: `ROWID`**. Monotonically increasing; late iCloud messages get new ROWIDs, so none are missed. `Archive` into daily files by `date`
+  ("Existing behavior to watch" above). `date` cannot be the cursor: late old messages would be skipped. Phase one does not track edits/recalls (append-only archive, like Lark);
+  later, if needed, inspect `changed` `date_edited` / `date_retracted` in the last 7 days each round.
+- **typedstream** (`attributedBody`): `NSArchiver` streamtyped format (starts `\x04\x0bstreamtyped`), containing `NSAttributedString`; its first `NSString` is the body.
+  Write a minimal decoder (`connector/imessage/typedstream.go`): read class chains and objects, extract first string (length prefix: one byte below 0x80;
+  2 bytes after `0x81`, 4 after `0x82`, little-endian), plus `__kIMMentionConfirmedMention` (mentions) and links in attributes.
+  Unparseable messages get one line `[无法解析的消息]` (unable to parse message) and a counter (shown in status); **never print or log raw data**.
+- Fixtures: a small Swift script on Mac (`NSArchiver` archiving `NSAttributedString`, synthetic body `示例消息` (example message)) generates blobs (plain text, long text, mentions, links, emoji),
+  committed to `testdata/` with a synthetic `chat.db` containing only used tables; generator scripts also committed.
+- Tapbacks (`associated_message_type` 2000–3006) are not messages and are skipped in phase one; inline replies include the start of the referenced message (`回复「…」：`, "Reply to ‘…’: "); group events (rename, added people) become system lines.
 
-### 附件
+### Attachments
 
-- 第一期**只记一行占位**：「[图片]」「[文件 名字 · 大小]」「[语音]」，不拷文件。
-- 第二期（要用户同意）：图片走 `connector.media` 拷到 hub 的 `attachments/<日期>/`（HEIC 在 node 上用 `sips` 转 JPEG），单个 20 MB 封顶，和飞书一样 30 天删；
-  文件、语音、视频仍只占位。`attachment.filename` 是 `~/Library/Messages/Attachments/…` 的路径，只认这个目录下的（防止被诱导读别处）。
+- Phase one **records only a placeholder line**: `[图片]` (image), `[文件 <name> · <size>]` (file, name · size), `[语音]` (voice); no file copies.
+- Phase two (user approval needed): images copied through `connector.media` into hub `attachments/<date>/` (HEIC converted to JPEG on node with `sips`), maximum 20 MB each, deleted after 30 days like Lark;
+  files, voice and video remain placeholders. `attachment.filename` is a path under `~/Library/Messages/Attachments/…`; `allow` only that directory (prevent induced reads elsewhere).
 
-### 群聊和联系人名字
+### Group and contact names
 
-`handle.id` 只有电话号码 / 邮箱，群可能没名字。两条路：
+`handle.id` contains only phone / email, and groups may lack names. Two options:
 
-- **Mac 的通讯录**：同一台 Mac 的 `~/Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb`（也是 SQLite，同样的完全磁盘访问权限），
-  电话号码规范化（去空格、`+86`）后对上名字。离线可用、和信息同一个 Apple ID。
-- **手机的 `phone_contacts`**：已有的工具，但要手机在线（或被静默推送唤醒），批量查几十个号码不合适。
-- 建议用 Mac 通讯录为主，对不上的再在压缩时把号码交给 `phone_contacts` 补一次，结果缓存在知识库的人上（`people/imessage-<号码哈希>`）。
-  没名字的群用成员名拼（「张三、李四等 4 人」）。
+- **Mac contacts**: `~/Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb` on the same Mac (also SQLite, same Full Disk Access),
+  `match` names after normalizing phone numbers (remove spaces, `+86`). Works offline, same Apple ID as Messages.
+- **Phone `phone_contacts`**: existing tool, but needs the phone online (or woken by silent push), unsuitable for dozens of bulk lookups.
+- Recommend Mac contacts first, then one `phone_contacts` lookup for unmatched numbers during compression, cached on the knowledge-base person (`people/imessage-<number hash>`).
+  Unnamed groups use joined member names ("Alice, Bob and 2 others").
 
-### 身份和 id
+### Identity and ids
 
-- 会话 id 用 `chat.guid` 的哈希（`imessage-<sha256 前 12 位>`），**不用**电话号码 / `chat_identifier`：目录名、日志、URL 里都不出现号码。人同理。
-- 号码只存在 `meta.json` 里（hub 机器的知识库，本来就是个人数据的地方），日志里只出现 id。
+- Conversation id is a hash of `chat.guid` (`imessage-<first 12 sha256 characters>`), **not** phone / `chat_identifier`: no numbers in directory names, logs or URLs. Same for people.
+- Numbers live only in `meta.json` (the hub's knowledge base, already a place for personal data); logs contain only ids.
 
-### 收件箱：什么算「需要我」
+### `Inbox`: what "needs me"
 
-- 私聊里对方发来、我还没回的（最新一条不是我）；群里 @ 了我的。一个会话同时一件未处理，规则同飞书。
-- 在 iPhone / Mac 上读过（`is_read`）且不是「需要你」的 → `done_by=read`；我回了 → `done_by=replied`。
-- 回复，第一期**不从 Mac 发**：App 的「发送」变成「在信息里回复」，打开 `sms:<号码>&body=<草稿>`（系统「信息」，草稿填好，用户自己按发送）；群聊没有可靠的 URL，只给「打开信息」。
-  `open_url` 由 hub 给（号码不进 App 的日志）。
-- 第二期：`imessage_send`（AppleScript `tell application "Messages"`），**必须过闸门**，卡片写明发给谁（名字 + 号码后四位）、全文；
-  需要「自动化」权限（控制「信息」），要在图形会话里授权一次，所以放在帮手那一步做。
+- Direct messages from someone else that I have not answered (latest entry not mine); group messages mentioning me. One unresolved item per conversation, same rules as Lark.
+- Read on iPhone / Mac (`is_read`) and not Needs you → `done_by=read`; my reply → `done_by=replied`.
+- Replies in phase one **are not sent from Mac**: App "Send" becomes "`Reply` in Messages", opening `sms:<number>&body=<draft>` (system Messages, prefilled draft, user taps send); no reliable group-chat URL, only "Open Messages".
+  The hub supplies `open_url` (numbers stay out of App logs).
+- Phase two: `imessage_send` (AppleScript `tell application "Messages"`), **gated**, card states recipient (name + last four phone digits), full text;
+  requires Automation permission (control Messages), granted once in a graphical session, so done with the helper.
 
-### 事件
+### `Events`
 
-node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 秒后推 `connector.changed`；另外每 5 分钟兜底查一次 `max(ROWID)`。
+Node watches `chat.db-wal` writes with kqueue (no database polling), debounces 3 seconds then pushes `connector.changed`; additionally checks `max(ROWID)` every 5 minutes as fallback.
 
-## 六、App 侧
+## VI. App side
 
-遵守「不做第二个某某 App」：不给 GitHub 做浏览页面（没有仓库列表、PR 页、diff 页）。**信息是例外**（用户 2026-11-02「App 里先做最小可用的一版：会话列表加消息查看」）：
-消息默认不交给 AI（`imessage.model` 默认关），用户只能在 App 里自己看，所以有会话列表和消息查看（只读，经 hub 读那台 Mac 的 `chat.db`，消息不复制到 hub）。
-已实现（#449）：设置 › 连接器 › 信息（读的是哪台 Mac、状态，没有完全磁盘访问权限时按那台 Mac 的 node 怎么跑一步步说怎么开、「重新检查」）› 会话（新的在前，未读数，搜名字或号码）› 一个会话
-（像「信息」那样：隔一小时或换一天出时间，群里换人出名字，短信 / iMessage 换了标出来，回复带被回复的开头，附件只有描述，编辑、撤回、读不出来的都说明）；
-`Views/Messages/`，DEBUG `-openConnectorMessages YES [-openMessagesChats YES]`、`-openMessagesChat <会话 id>`，mock 的 `MOCK_IMESSAGE=denied`，UI 测试 `MessagesConnectorTests`。其余只做三处：
+Follow "do not build another source App": no GitHub browsing pages (repository list, PR page, diff page). **Messages is an exception** (user 2026-11-02: "Start with the smallest usable App version: conversation list and `message` viewing"):
+messages are not shared with AI by default (`imessage.model` off); users can only view them in the App, hence a read-only conversation list/viewer through the hub reading the Mac's `chat.db`, without copying messages to the hub.
+Implemented (#449): Settings › Connectors › Messages (which Mac, status, step-by-step Full Disk Access guidance according to its node execution `model`, "Check again") › `Conversations` (newest first, unread counts, search names/numbers) › conversation
+(like Messages: timestamps after an hour or day change, sender names when group speakers change, SMS / iMessage `changes` marked, replies include referenced openings, descriptive `attachment` placeholders, edits/recalls/unreadable messages explained);
+`Views/Messages/`, DEBUG `-openConnectorMessages YES [-openMessagesChats YES]`, `-openMessagesChat <conversation id>`, mock `MOCK_IMESSAGE=denied`, UI tests `MessagesConnectorTests`. Otherwise only three areas:
 
-1. **收件箱的条目**：通用的 `InboxConnector` 块画行和详情（上面「GitHub」「iMessage」里写的样子）；筛选条按 `GET /api/v1/connectors` 加「GitHub」「信息」；
-   手表的「需要你」也显示（标签 + 标题 + 摘要）。App 请求列表时带 `?sources=all`。Android、网页这一轮不做，它们拿不到新来源（不带参数）。
-2. **链接在 App 内打开**：GitHub 链接本来就走 `LinkSheet` 网页卡片，不改；卡片标题栏按 `hosts` 显示 GitHub 标志。iMessage 没有链接，只有 `sms:`。
-3. **设置 › 连接器的状态**：在现有的「这台 iPhone / 邮箱 / 飞书」下面按 `/api/v1/connectors` 加行：
-   - GitHub：状态、账号、粘贴 token（A / B 两种给法的说明，`SecureField`，存了只显示「已设置」）、`base_url`、最近一次同步、速率限制剩余。
-   - 信息：读的是哪台 Mac、权限状态（没权限时一步步说怎么开）、收哪些会话（只收通讯录里的人 / 全部）、排除列表、保留天数。
-   - DEBUG 入口 `openConnectorGitHub`、`openConnectorMessages`（和 `openConnectorFeishu` 一样，名字不和 Swift 标识符重名，加进 `release.sh` 的列表）。
-   - mock hub（`scripts/mock/mock_hub.py`）加两个连接器和几件合成的条目，UI 测试和深浅色截图都用它。
+1. **`Inbox` items**: generic `InboxConnector` block renders rows/details (as described under GitHub/iMessage above); filters add GitHub/Messages from `GET /api/v1/connectors`;
+   watch Needs you also displays them (label + title + summary). App list requests include `?sources=all`. Android/web excluded this round; without the parameter they receive no new sources.
+2. **In-App links**: GitHub links already use `LinkSheet` web cards, unchanged; card title bars show the GitHub logo according to `hosts`. iMessage has only `sms:`, no links.
+3. **Settings › Connectors status**: below existing "This iPhone / `Mail` / Lark", add rows from `/api/v1/connectors`:
+   - GitHub: state, account, pasted token (instructions for methods A / B, `SecureField`, only "Configured" after saving), `base_url`, last sync, remaining rate limit.
+   - Messages: source Mac, permissions (step-by-step setup when missing), conversations to collect (contacts only / all), exclusions, retention days.
+   - DEBUG entries `openConnectorGitHub`, `openConnectorMessages` (like `openConnectorFeishu`; names cannot clash with Swift identifiers and must be added to `release.sh`).
+   - Mock hub (`scripts/mock/mock_hub.py`) adds two connectors and synthetic items; use it for UI tests and dark/light screenshots.
 
-## 七、隐私
+## VII. Privacy
 
-- **仓库里只有合成数据**：测试、golden、截图、提交信息里不出现真实的消息、PR 内容、人名、仓库名、电话号码、邮箱、GHE 域名。
-  GitHub 用 `example-org/example-repo`、`alice`；信息用 `+1 555 0100` 这类保留号段、「示例消息」。`scripts/privacy_check.py` 照常跑，
-  加两条规则：像真实手机号的串、`github.com/<非 example 的组织>`。
-- **日志**：不记消息正文、号码、token；只记连接器、id、条数、错误类型。`connector-diff` 只打印数字。
-- **GitHub**：token 加密存 hub，不回给任何客户端；只收和我有关的线程；写操作全部过闸门。
-- **iMessage 是最敏感的个人数据**，默认关，打开时在设置里逐项选：
-  - **哪些进知识库**：默认只收**通讯录里有的人**的私聊和群（验证码、银行、快递、营销这类短号码自动排除）；可以改成「全部」或「只收白名单」。
-    hub.json / 设置里的 `imessage: {machine, mode: contacts|all|allowlist, include: [], exclude: [], text_days, attachments: false, model: false}`（`model` 默认关，见拍板 7）；
-    排除列表按会话（App 里在收件箱详情点「不再收这个会话」也加进去），**加进排除时立刻删掉已归档的内容**。
-  - **验证码**：即使在收的会话里，像验证码的消息（「验证码」「code」附近的 4–8 位数字）把数字换成「••••」再存。
-  - **保留多久**：文字默认跟 `kb.text_days`（365 天），可以单独设短（建议 90 天，见拍板）；附件第一期不存。
-  - **给不给模型**：压缩、打标、分拣、AI 分身都会把文字发给 hub 配的模型（`kb.ai` / `ai`，可能是第三方服务）。`model: false` 时只归档、可搜索，
-    不压缩、不进收件箱的分拣（按规则兜底），也不进快照。
-  - 读是只读的：不改已读、不删消息、不写 `chat.db`。
+- **Synthetic data only in the `repo`**: no real messages, PR content, people, repositories, phone numbers, emails or GHE domains in tests, goldens, screenshots or commit messages.
+  GitHub uses `example-org/example-repo`, `alice`; Messages uses reserved numbers such as `+1 555 0100` and "Example `message`". Run `scripts/privacy_check.py` as usual,
+  adding rules for realistic phone-number strings and `github.com/<non-example organization>`.
+- **Logs**: no `message` bodies, numbers or tokens; only `connector`, id, counts, `error` types. `connector-diff` prints numbers only.
+- **GitHub**: encrypted token on hub, never returned to clients; collect only related `threads`; all writes gated.
+- **iMessage is the most sensitive personal data**, off by default; enabling requires settings for each item:
+  - **Knowledge-base scope**: default to direct/group chats with **people in contacts** (automatically exclude short-code verification, bank, delivery and marketing senders); optionally All or Allowlist only.
+    hub.json / settings `imessage: {machine, mode: contacts|all|allowlist, include: [], exclude: [], text_days, attachments: false, model: false}` (`model` off by default, decision 7);
+    exclusions by conversation (`Inbox` detail "Stop collecting this conversation" adds it too); **adding an exclusion immediately deletes archived content**.
+  - **Verification codes**: even in included conversations, replace code-like digits (4–8 digits near `验证码` (verification code) or `code`) with "••••" before storing.
+  - **Retention**: text follows `kb.text_days` (365 days) by default; may be shorter independently (recommend 90 days, see decisions); attachments not stored in phase one.
+  - **Model access**: compression, tagging, classification and AI twin send text to the hub-configured `model` (`kb.ai` / `ai`, possibly third-party). With `model: false`, archive and search only,
+    no compression, `Inbox` `model` classification (rule fallback), or snapshots.
+  - Reads are read-only: no marking read, deleting messages or writing `chat.db`.
 
-## 八、分步计划和验收
+## VIII. Implementation steps and acceptance
 
-| 步 | 内容 | 验收 |
+| Step | Contents | Acceptance |
 | --- | --- | --- |
-| P0 | 本计划 | 用户点头；拍板项有结论 |
-| C1 ✓ | 框架（#414）：`connector` 包（`Connector` 和可选能力 `Accounts` / `ReadTools` / `Actions` / `Events` / `Hosts`、`Registry`、闸门 `connector_gate`）；hub 持有 Registry，`GET /api/v1/connectors`、特性 `connectors`，连接器的工具只给助手、按前缀分发，写操作过闸门、默认走手机卡片；`Events` 踢收件箱 / 知识库。`Inbox`、`StreamSource`、凭据、`Poller` 随第一个用到它们的连接器（G1–G4）一起加 | 不注册连接器时 MCP golden 逐字节不变；假连接器的单元测试（工具只来自 `ok` 的、写操作等卡片、闸门 allow / deny、Watch 退避重启） |
-| M0–M6 | 迁移（第三节） | 每步：现有测试 + golden 逐字节 + 合成对照 + 真实数据对照一致；部署后一天日志同量级 |
-| G1 ✓ | GitHub（#421）：`credential.gh_token` RPC、`from_machine` 取 token（内存）、~~粘贴备选~~（先不做，等真有人不用 gh 时再加）、状态、`/api/v1/connectors`、设置页的 GitHub 行 | 设置页显示「来自 <机器> 的 gh 登录 · 账号」；那台机器离线时用内存里的、hub 重启后离线报「未授权（<机器> 离线）」、连上自动恢复；401 重新取一次；旧 node 报太旧；token 不出现在数据库、日志、响应、助手环境里（grep 验证）；粘贴假 token 报错；设置页深浅色截图 |
-| G2 ✓ | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
-| G3 ✓ | 通知轮询 + 收件箱（四种情形）+ `?sources=all` + App 的通用行和详情 | 合成通知的单元测试覆盖每种 `reason`、并入 / 另开、`done_by`；304 和 `X-Poll-Interval` 被遵守（测试里的假服务器计数）；旧 App 列表不变；新 App 截图 |
-| G4 ✓ | 知识库（#476）：PR / issue 会话（`connector.Archive`，游标在 `cursors/<id>.json`）。`remotes` 对项目、链接成条目（G4b）暂不做：2026-11-02 hub 上 40 个在用的项目没有一个填了 `dirs`，对上了也挂不到项目；链接本来就在压缩的上下文里。等项目普遍有 `dirs` 再做 | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
-| G5 ✓ | 写（#480；实测等用户在自己的测试仓库做）：`github_comment`、`github_review` 过闸门；收件箱「发送」= 评论 | 闸门测试（confirm / allow / deny）；用户在自己的测试仓库实测一次评论（卡片截图里只有合成内容的测试仓库） |
-| I0 | 在选定的 Mac 上确认权限和规模（只读行数，已完成一部分） | 报告里有：哪台、权限是否够、消息量 |
-| I1 | node：`connector.list/changes`、typedstream 解码、ROWID 游标、kqueue（#449 的第一步先做了 `connector.list` / `connector.chats` / `connector.older`、typedstream、Mac 通讯录对名字，给 App 的会话列表和消息查看用；`changes`、kqueue 等进知识库时再做） | 合成 `chat.db` + 合成 blob 的单元测试（包括解不出来的）；旧 hub ↔ 新 node、新 hub ↔ 旧 node 都不报错 |
-| I2 | hub：远程连接器适配、知识库归档（只收通讯录里的人）、联系人名字、验证码打码、排除即删除（#449 先做了适配：hub.json `imessage.machine`、状态和权限引导 `GET /api/v1/imessage`、App 读会话和消息的两个只读接口，不存、不给模型；归档等 AI 开关有结论再做） | 在真 Mac 上跑一轮：只打印会话数、行数、被排除数、解码失败数；抽查由用户自己在 App 里看 |
-| I3 | 收件箱 + `sms:` 回复 + 设置里的「信息」行（#449 先做了「信息」行和会话 / 消息查看；收件箱等 AI 开关有结论，用 G3 的 `InboxThing.OpenURL` 和通用块的 `open_url` 按钮） | 合成数据单元测试；mock hub 截图；真机上点「在信息里回复」草稿已填好 |
-| I4 | 附件（图片，可选） | 拷贝只在 Attachments 目录下；30 天清理 |
-| I5 | 帮手（LaunchAgent + 自己的授权）+ `imessage_send` 过闸门 | 关掉 ssh 的完全磁盘访问后仍能读；发送卡片截图；拒绝时不发 |
-| X1 | 外部进程连接器（`kind: connector`、MCP 客户端、`/sync/*`） | 有第一个外部连接器时再做；用一个合成的示例插件跑通 |
+| P0 | This plan | User approval; decisions resolved |
+| C1 ✓ | Framework (#414): `connector` (`Connector`, optional `Accounts` / `ReadTools` / `Actions` / `Events` / `Hosts`, `Registry`, `connector_gate`); hub owns `Registry`, `GET /api/v1/connectors`, `connectors` feature; `connector` tools assistant-only, prefix dispatch, gated writes defaulting to phone cards; `Events` wakes `Inbox` / knowledge base. Add `Inbox`, `StreamSource`, credentials, `Poller` with their first consumer (G1–G4) | No connectors registered: MCP golden byte-identical; fake-connector unit tests (tools only from `ok`, writes wait for cards, `allow` / `deny`, `Watch` backoff/restart) |
+| M0–M6 | Migration (section III) | Each step: existing tests + byte-identical goldens + synthetic and real comparisons; comparable logs for a day after deployment |
+| G1 ✓ | GitHub (#421): `credential.gh_token` RPC, `from_machine` token in memory, ~~paste fallback~~ (defer until someone actually does not use `gh`), status, `/api/v1/connectors`, GitHub settings row | "`gh` `login` from <machine> · account"; cached token while offline, "not authorized (<machine> offline)" after hub restart, automatic recovery on connect; refetch once on 401; old node reports too old; grep confirms no token in database/logs/responses/assistant environment; fake pasted token errors; dark/light settings screenshots |
+| G2 ✓ | Read tools `github_search/read/diff/checks` | Goldens; mock GitHub synthetic-JSON unit tests; read a user's own PR with their real token on hub, inspect counts/truncation only |
+| G3 ✓ | Notification polling + `Inbox` (four situations) + `?sources=all` + generic App row/detail | Synthetic notification tests for every `reason`, merge / new item, `done_by`; fake-server counts verify 304 and `X-Poll-Interval`; old App list unchanged; new App screenshots |
+| G4 ✓ | Knowledge base (#476): PR / `issue` conversations (`connector.Archive`, cursor `cursors/<id>.json`). Defer project matching through `remotes` and link items (G4b): on 2026-11-02 none of 40 active hub projects had `dirs`, so even matching could not attach; links already appear in compression context. Wait for widespread project `dirs` | Synthetic archive golden; real PR archive line/comment counts `match`, numbers only |
+| G5 ✓ | Writes (#480; live test awaits user in their own test `repo`): gated `github_comment`, `github_review`; `Inbox` Send = `comment` | `confirm` / `allow` / `deny` tests; user tests a `comment` in their own test `repo` (card screenshots only synthetic test-repo content) |
+| I0 | Confirm permissions and scale on selected Mac (read-only counts, partly done) | Report identifies machine, permissions, `message` volume |
+| I1 | Node: `connector.list/changes`, typedstream, `ROWID`, kqueue (#449 first implemented `connector.list` / `connector.chats` / `connector.older`, typedstream, Mac contact-name matching for App conversation/message viewing; defer `changes`/kqueue to knowledge-base ingestion) | Synthetic `chat.db`/blob tests, including decode failure; old hub ↔ new node and new hub ↔ old node do not `error` |
+| I2 | Hub: remote adapter, archive (contacts only), names, code redaction, delete on exclusion (#449 initially implemented hub.json `imessage.machine`, status/permission guidance `GET /api/v1/imessage`, two read-only App APIs, no storage/model; archive awaits AI-switch decision) | One real-Mac round prints only conversations, lines, exclusions, decode failures; user spot-checks in App |
+| I3 | `Inbox` + `sms:` reply + Messages settings row (#449 initially implemented row and conversation/message viewing; `Inbox` awaits AI-switch decision, using G3 `InboxThing.OpenURL` and generic block `open_url` button) | Synthetic unit tests, mock screenshots; real-device `Reply` in Messages has a prefilled draft |
+| I4 | Attachments (images, optional) | Copies only inside Attachments; 30-day cleanup |
+| I5 | Helper (LaunchAgent + own permission) + gated `imessage_send` | Reads after disabling ssh Full Disk Access; sending-card screenshot; denial sends nothing |
+| X1 | External-process `connector` (`kind: connector`, MCP client, `/sync/*`) | Wait for first external `connector`; run a synthetic example plugin end to end |
 
-GitHub 和迁移可以并行（G1、G2 只依赖 M1、M4）；iMessage 依赖 M1、M2（流式归档）和 M3（收件箱接口）。
+GitHub and migration can run in parallel (G1/G2 depend only on M1/M4); iMessage depends on M1, M2 (stream archive) and M3 (`Inbox` interface).
 
-## 需要用户拍板
+## Decisions needed from the user
 
-1. ~~**GitHub token 怎么给**~~：已定（2026-11-01）——从 `github.auth.from_machine` 那台机器的 gh 登录读，只留在 hub 内存；手动粘贴作备选（见「四 · 凭据」）。
-2. **GitHub 是 github.com 还是公司自建的 GHE**（或者两个都要）？自建的地址只写配置。
-   暂按默认（2026-11-02 主会话）：先接 github.com；`github.auth.host` 留成配置项，GHE 现在不做。
-3. **GitHub 进知识库的范围**：只收和我有关的线程（推荐），还是指定仓库全部 PR / issue？
-4. **已处理要不要回写 GitHub 的已读**：现在飞书、邮件都不回写（推荐保持一致）。
-5. **iMessage 读哪台 Mac**：数据一致的两台里选一台常开的（推荐），另一台不读。
-6. **权限**：第一期用现成的「ssh 有完全磁盘访问权限」（推荐，代价是任何 ssh 会话都有这个权限，现在已经如此），还是一开始就做独立帮手、把 ssh 那个开关关掉？
-7. **iMessage 收哪些**：只收通讯录里的人（推荐）/ 全部 / 白名单；SMS（验证码、通知）要不要收；文字保留多久（推荐 90 天）；
-   **能不能把信息的文字发给模型**（压缩、分拣、AI 分身；不能的话只归档和搜索）。
-   暂按默认（2026-11-02 主会话）：读取放在 Mac 的 node 本地；**默认不把消息文字交给 AI**，只在 App 里给用户自己看；`imessage.model` 是开关，默认关。
-8. **联系人名字**：Mac 通讯录为主、手机补（推荐），还是只用手机的 `phone_contacts`？
-9. **iMessage 回复第一期**：用 `sms:` 打开系统「信息」由你按发送（推荐），还是直接做从 Mac 发（要「自动化」权限，必须过闸门）？
-10. **外部进程连接器**：同意「MCP 管工具 + `/sync/*` 管增量」的方向，并且等有第一个外部连接器再实现？
-11. **Android、网页**这一轮不显示新来源，可以吗？
+1. ~~**How to provide a GitHub token**~~: decided 2026-11-01—read `gh` `login` from `github.auth.from_machine`, keep only in hub memory; manual paste as fallback ("IV · Credentials").
+2. **github.com or company-hosted GHE** (or both)? Self-hosted addresses only in config.
+   Interim default (main session, 2026-11-02): github.com first; keep configurable `github.auth.host`, no GHE implementation yet.
+3. **GitHub knowledge-base scope**: only related `threads` (recommended), or every PR / `issue` in specified repositories?
+4. **Write completion back as read on GitHub?** Lark/mail currently do not (recommend consistency).
+5. **Which Mac for iMessage**: one always-on Mac from the pair with matching data (recommended); do not read the other.
+6. **Permissions**: use existing ssh Full Disk Access in phase one (recommended; every ssh session gets it, already the case), or build the independent helper immediately and disable ssh's permission?
+7. **iMessage scope**: contacts only (recommended) / all / allowlist; include SMS (codes, notifications)? Text retention (recommend 90 days)?
+   **May `message` text be sent to a `model`** (compression, classification, AI twin; otherwise archive/search only)?
+   Interim default (main session, 2026-11-02): local reads on the Mac node; **`message` text is not shared with AI by default**, viewed only by the user in the App; `imessage.model` toggle defaults off.
+8. **Contact names**: Mac contacts first, phone fallback (recommended), or only `phone_contacts`?
+9. **iMessage replies in phase one**: `sms:` opens system Messages for you to send (recommended), or send directly from Mac (Automation permission, gated)?
+10. **External-process connectors**: approve "MCP for tools + `/sync/*` for increments", implementing only with the first external `connector`?
+11. May **Android/web** omit the new `sources` this round?
 
-## 需要用户做的事
+## What the user needs to do
 
-- GitHub：在 hub.json 写 `github.auth.from_machine`（用哪台机器的 gh 登录，选 gh 登录有效、常开的那台）；那台机器保持 `gh` 登录，
-  过期了就在那台机器上 `gh auth login`（登录要存在 `hosts.yml`，不要只存钥匙串）。用自建 GHE 的话写上 `host`。不想用 gh 的登录，再在 App 里粘贴 token。
-- iMessage：选定的那台 Mac 保持登录「信息」、开着 iCloud 信息同步；第一期确认「远程登录 › 允许远程用户完全访问磁盘」保持打开；
-  做帮手那一步时在那台 Mac 的图形界面里给帮手授权一次（完全磁盘访问 + 控制「信息」）。
-- 写操作的实测（G5、I5）用你自己的测试仓库 / 发给自己的号码，测试内容只用合成的话。
+- GitHub: set `github.auth.from_machine` in hub.json (choose an always-on machine with valid `gh` `login`); keep `gh` logged in,
+  rerun `gh auth login` there after expiry (store `login` in `hosts.yml`, not only keychain). Set `host` for self-hosted GHE. If not using `gh`, paste a token in the App.
+- iMessage: keep the selected Mac signed into Messages with iCloud Messages sync enabled; `confirm` "Remote Login › Allow full disk access for remote users" stays on in phase one;
+  when implementing the helper, grant it Full Disk Access + control of Messages once through the Mac's graphical UI.
+- Live write tests (G5, I5) use your own test repository / own phone number, with synthetic text only.

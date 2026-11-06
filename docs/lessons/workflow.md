@@ -1,95 +1,95 @@
-# 经验：协作与流程：多个 Agent 同时改仓库、提交、迁移号、脚本
+# Lessons: collaboration and process: multiple Agents changing the repo at once, commits, migration numbers, scripts
 
-踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
+Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.md` ("Lessons"); index in `docs/lessons/README.md`). Put new lessons in the matching section; if none fits, start a new one.
 
-- PR 合并和进展评论必须串行校验（#2024）：`gh pr merge` 可能因新冲突失败；复合 shell 若没有停止，后面的「已合并」评论仍会发出去。合并命令失败就退出，发完成评论前再读取 PR 的 `state`，只有 `MERGED` 才标完成。`mergeable: UNKNOWN` 不是可以合并的确认，也不能直接断定冲突；读回明确状态再处理。误报时先修改原评论，保留已验证结果和未完成项，不能留两条互相矛盾的进展。
+- PR merges and progress comments must be checked serially (#2024): `gh pr merge` can fail on a new conflict; if a compound shell command does not stop, the "merged" comment after it still goes out. Exit when the merge command fails, and read the PR's `state` again before posting a completion comment; mark it done only on `MERGED`. `mergeable: UNKNOWN` is not confirmation that it can merge, nor proof of a conflict; read back a definite state before acting. On a false report, edit the original comment first, keeping the verified results and the unfinished items; never leave two contradicting progress comments.
 
-- 多个 agent 同时在这个仓库干活：模拟器各用各的（`SIM=<udid> scripts/app/sim.sh`），别人没写完的文件编译不过时在 `git worktree` 里构建自己的改动；
-  提交只暂存自己的文件 / hunk。
-- mock hub 的端口也会撞（2026-10-31：别的车道的 `mock_hub.py` 占着 18794，自己带 `MOCK_DRAWER=1` 的 mock 起不来，测试连到别人的 mock 上，
-  报「对话没加载」）：起 mock 前 `lsof -nP -iTCP:<端口> -sTCP:LISTEN` 看一眼，失败要看 mock 的日志，别只看测试报错。
-  停自己的 mock 按端口停（`kill $(lsof -t -iTCP:<端口> -sTCP:LISTEN)`），别 `pkill -f mock_hub.py`：会把别的车道正在用的 mock 一起杀掉（2026-10-31 踩过）。
-  经 ssh 远程 `pkill -f <路径>` 也会匹配到 ssh 起的那个 `bash -c '…'` 自己（命令行里有同一个路径），把这次 ssh 连同后面的命令一起杀掉：按记下的 pid / 进程组停。
-- 脚本要在 macOS 自带的 Python 3.9 上跑（2026-11-03，#579）：新版 Python 上写的 `def f(x: str | None = None)` 在 3.9 上一 import 就 `TypeError: unsupported operand type(s) for |`，Mac mini 上发不了 TestFlight，而在新版 Python 上测试全过。注解里用 `X | None` 就在文件开头加 `from __future__ import annotations`；`isinstance(x, int | str)`、`A = int | None` 这种不在注解里的它也救不了，改用元组 / `Optional`。`datetime.fromisoformat` 在 3.9 上只认 3 或 6 位小数秒，Go 写的 RFC 3339 时间有 0–9 位，先补齐到 6 位再解析（`redact_transcript.py` 的 `ts`）。`scripts/test/test_script_layout.py` 按源码查注解里的 `X | Y` 和 3.9 以后才有的语法，不在注解里的 `|` 查不到。
-- 部署官网 / 发版的 worktree 要建在刚 fetch 过的 origin/master 上（2026-11-04）：`git worktree add --detach … origin/master` 用的是本地记的 origin/master，
-  几分钟没 fetch 就可能落后。那次 `SITE_ONLY=1 publish.sh` 的 worktree 比 #1164（香港入口、中继认入口转发的 IP）早 7 分钟，`wrangler deploy` 把线上的
-  `worker.mjs` 整个换回旧版，约 30 分钟里中继又只按入口的出口 IP 限流；旧的 `wrangler.jsonc` 还想把已经交给 DNS 的官网根域名绑回 Worker
-  （被 Cloudflare 拒了，报 `externally managed DNS records`，publish 退出 1，但脚本已经上传）。建 worktree 前先 `git fetch`，部署前 `git rev-parse HEAD origin/master`
-  核对一致；publish 报错时先看线上是不是已经换成了这份代码，再决定怎么补。
-- 两个会话同时发版会撞构建号（2026-11-04）：两边在同一分钟各自起 `release.sh`（不带构建号），拿到同一个按时间生成的号 `202611040002`，
-  先传完的那次进了 TestFlight，后一次上传被 App Store Connect 拒（`Redundant Binary Upload`，exit 70），Organizer 里的同名归档也只剩一份。
-  起发布前先 `pgrep -fl scripts/release/release.sh` 看有没有别人在发；要发就用 `asc_testflight.py next-build` 拿号、显式传给 `release.sh <构建号>`。
-  被拒的那次不换号重传同一个提交：先 `asc_testflight.py status` 看那个号是不是已经 VALID、是不是同一个提交，是就接着 `wait` / `external`。
-- 多个 agent 同时往 master 推：rebase 冲突时不要用自己的旧副本整文件覆盖别人的改动（2026-10-25 一次 rebase 把浅蓝气泡、通知跳转修复整个盖回去了）；
-  解决冲突只改冲突块，push 前 `git diff origin/master...HEAD --stat` 看看有没有动到不是自己的文件。打 TestFlight 前确认 master 是修好的那一版。
-- 多个 agent 并行改同一仓库（飞书工作台 6 个 worker，见 `docs/feishu.md`）：每人独立 worktree + 独立克隆模拟器；新增类型带领域前缀
-  （`FeishuSearchXxx`…，否则 master 撞名编译失败）；rebase 冲突时自己目录外的文件一律取 origin/master 版本，push 前看
-  `git diff origin/master --stat` 只含自己的文件（14fe469 曾用旧副本覆盖半个仓库，941d067 恢复）；主工作区有别人未提交的改动时，
-  自己的修复在 `git worktree add --detach /tmp/x origin/master` 里做。
-- 数据库迁移号按车道分段（00x1…），挑号前先看所有 worktree 的 `server/internal/db/migrations/` 和 `jarvis_test` 库的 `schema_migrations`：
-  别的车道没合的迁移可能已经占了号（2026-10-30 0051 撞号，改用 0061）。
-- 2026-11-01 `ios/` 改名为 `apple/`（iOS、手表、macOS 三个 App 和共享代码在同一个 XcodeGen 工程里）：老的分支 / worktree rebase 时，
-  新建在 `ios/` 下的文件要手动挪到 `apple/`（改动已有文件 git 会跟着改名走）。
-- 2026-10-28 改写过一次全部 git 历史（去掉内网信息和个人信息，GitHub 仓库删了重建）：此前的提交号全部失效，
-  别的机器上的旧克隆要删掉重新 clone，不能 push，否则旧历史会被推回去。
-- 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论（2026-10-29 一个只等成功的 `until grep` 空等了五个多小时）。
-  脚本里顺手起的常驻进程（mock hub）要把整个后台组的输出重定向走：`( cd … && exec python3 … ) > log 2>&1 < /dev/null &`。
-  写成 `(cd … && python3 … > log 2>&1 &)` 时，后台那层 shell 还拿着脚本的 stdout，`脚本 | tail` 永远等不到结尾，
-  脚本早跑完了也不会唤醒等它的会话（2026-11-01 停了将近 6 小时）。
-- macOS 的 sed 不认 `\b`，整词替换用 `perl -pi -e 's/\bFoo\b/Bar/g'`。
-- Go 构建临时盘不足时，`GOTMPDIR` 指向**仓库外、短的物理目录**，`GOCACHE` 用本车道独立缓存（#2469）。`go test` 会把该临时目录传给测试：放进 worktree 会让「不在仓库里」的夹具被 Git 当成真实仓库，甚至尝试真实 fetch/push；路径过长会让 Unix socket 报 `bind: invalid argument`。不要用短符号链接掩盖长目录，Git 的 canonical root 与夹具的逻辑路径会不一致，目录拒绝测试也可能改变结果。保留失败记录，换合适目录重跑，不删共享缓存或抬测试基线。
-- 服务端测试以前都连同一个 `jarvis_test` 库：几个车道和部署同时跑，互相清掉、迁移对方的表，测试拿到空的或别人的数据随机失败（#545、#556、#583）。
-  现在有库的测试包在 `TestMain` 里调 `dbtest.Main`（`server/internal/db/dbtest`）：每个测试二进制在 `JARVIS_TEST_DATABASE_URL` 旁边建自己的
-  `jarvis_test_<时间>_<随机>`，跑完删掉（被杀掉留下的，6 小时后由下一次运行清掉）；测试里再起的子进程（假 node）沿用父进程的库。
-  新加用到数据库的测试包也要这样加 `TestMain`，别直接连共用的库。角色没有建库权限时退回成加锁、排队用共用的库。
-- 新加了大依赖（#167 的 tailscale / gvisor，单个 zip 21 MB）后第一次在 hub 机器上 `go test`：那台机器出网慢，`go` 在下载上挂了二十多分钟，
-  最后报 `unexpected EOF`（2026-11-01）。办法：按 `server/go.sum` 列出 hub 的 `~/go/pkg/mod/cache/download` 里缺的文件，在开发机上从
-  proxy.golang.org 下好（.zip / .mod / .info），rsync 到 hub 的一个目录，测试时 `GOPROXY=file://<那个目录>,https://proxy.golang.org`。
+- Multiple agents working in this repo at once: each uses its own simulator (`SIM=<udid> scripts/app/sim.sh`); when someone else's unfinished files do not compile, build your own changes in a `git worktree`;
+  commits stage only your own files / hunks.
+- mock hub ports collide too (2026-10-31: another lane's `mock_hub.py` held 18794, your own mock with `MOCK_DRAWER=1` could not start, the tests connected to someone else's mock
+  and reported "chat not loaded"): before starting a mock, check with `lsof -nP -iTCP:<port> -sTCP:LISTEN`; on failure read the mock's log, not just the test error.
+  Stop your own mock by port (`kill $(lsof -t -iTCP:<port> -sTCP:LISTEN)`), not `pkill -f mock_hub.py`: it also kills mocks other lanes are using (hit on 2026-10-31).
+  A remote `pkill -f <path>` over ssh also matches the `bash -c '…'` ssh itself started (its command line contains the same path), killing this ssh along with the commands after it: stop by the recorded pid / process group.
+- Scripts must run on macOS's bundled Python 3.9 (2026-11-03, #579): `def f(x: str | None = None)` written on a newer Python raises `TypeError: unsupported operand type(s) for |` on import under 3.9, so TestFlight could not be released from the Mac mini, while all tests passed on the newer Python. If annotations use `X | None`, add `from __future__ import annotations` at the top of the file; it cannot rescue uses outside annotations like `isinstance(x, int | str)` or `A = int | None`; use a tuple / `Optional` there. On 3.9, `datetime.fromisoformat` accepts only 3 or 6 fractional-second digits, while RFC 3339 times written by Go have 0–9; pad to 6 digits before parsing (`ts` in `redact_transcript.py`). `scripts/test/test_script_layout.py` scans source for `X | Y` in annotations and syntax newer than 3.9; it cannot catch `|` outside annotations.
+- Worktrees for deploying the site / releasing must be created on a freshly fetched origin/master (2026-11-04): `git worktree add --detach … origin/master` uses the locally recorded origin/master,
+  which can be behind after a few minutes without a fetch. That time the `SITE_ONLY=1 publish.sh` worktree was 7 minutes older than #1164 (Hong Kong entry, relay trusting the IP forwarded by the entry); `wrangler deploy` replaced the live
+  `worker.mjs` wholesale with the old version, and for about 30 minutes the relay again rate-limited only by the entry's egress IP; the old `wrangler.jsonc` also tried to bind the site's apex domain, already handed to DNS, back to the Worker
+  (Cloudflare rejected it with `externally managed DNS records`, publish exited 1, but the script had already uploaded). Run `git fetch` before creating the worktree, and check `git rev-parse HEAD origin/master`
+  match before deploying; when publish errors, first check whether the live site already switched to this code, then decide how to fix it.
+- Two sessions releasing at once collide on the build number (2026-11-04): both started `release.sh` (without a build number) in the same minute and got the same time-based number `202611040002`;
+  the one that finished uploading first went into TestFlight, the later upload was rejected by App Store Connect (`Redundant Binary Upload`, exit 70), and only one archive with that name was left in Organizer.
+  Before releasing, check `pgrep -fl scripts/release/release.sh` for someone else releasing; to release, get a number with `asc_testflight.py next-build` and pass it explicitly to `release.sh <build number>`.
+  To retry the rejected one with the same commit without changing the number: first check with `asc_testflight.py status` whether that number is already VALID and the same commit; if so, continue with `wait` / `external`.
+- Multiple agents pushing to master at once: on a rebase conflict, do not overwrite others' changes with your own old copy of the whole file (on 2026-10-25 one rebase reverted the light-blue bubbles and the notification navigation fix entirely);
+  resolve only the conflict hunks, and before pushing check `git diff origin/master...HEAD --stat` for files that are not yours. Before building for TestFlight, confirm master is the fixed version.
+- Multiple agents changing the same repo in parallel (6 workers on the Lark workplace, see `docs/feishu.md`): each gets its own worktree + its own cloned simulator; new types get a domain prefix
+  (`FeishuSearchXxx`…, otherwise names collide on master and the build fails); on rebase conflicts, files outside your own directory always take the origin/master version; before pushing check
+  that `git diff origin/master --stat` contains only your files (14fe469 once overwrote half the repo with an old copy; 941d067 restored it); when the main working tree has someone else's uncommitted changes,
+  do your fix in `git worktree add --detach /tmp/x origin/master`.
+- Database migration numbers are split into ranges per lane (00x1…); before picking a number, check `server/internal/db/migrations/` in every worktree and `schema_migrations` in the `jarvis_test` database:
+  another lane's unmerged migration may already hold the number (2026-10-30, 0051 collided; switched to 0061).
+- On 2026-11-01 `ios/` was renamed to `apple/` (the iOS, watch and macOS Apps and shared code are in the same XcodeGen project): when rebasing an old branch / worktree,
+  files newly created under `ios/` must be moved to `apple/` by hand (git follows the rename for changes to existing files).
+- On 2026-10-28 the whole git history was rewritten once (removing intranet and personal information; the GitHub repo was deleted and recreated): all earlier commit hashes are invalid;
+  old clones on other machines must be deleted and cloned again, and must not push, or the old history would be pushed back.
+- Scripts that wait on background jobs / logs always have a timeout, and exit with a one-line verdict on success, failure and timeout (on 2026-10-29 an `until grep` that waited only for success idled for over five hours).
+  Resident processes a script starts along the way (mock hub) must have the whole background group's output redirected: `( cd … && exec python3 … ) > log 2>&1 < /dev/null &`.
+  Written as `(cd … && python3 … > log 2>&1 &)`, the background shell layer still holds the script's stdout, so `script | tail` never sees the end,
+  and the session waiting on it is never woken even long after the script finished (2026-11-01, stalled for almost 6 hours).
+- macOS sed does not understand `\b`; for whole-word replacement use `perl -pi -e 's/\bFoo\b/Bar/g'`.
+- When the temp disk is too small for Go builds, point `GOTMPDIR` at a **short physical directory outside the repo**, and give `GOCACHE` a cache of this lane's own (#2469). `go test` passes that temp directory to tests: putting it in the worktree makes fixtures that are "not in a repo" look like a real repo to Git, which may even try a real fetch/push; a path that is too long makes Unix sockets fail with `bind: invalid argument`. Do not hide a long directory behind a short symlink: Git's canonical root and the fixture's logical path diverge, and directory-rejection tests may change their result. Keep the failure record, rerun in a suitable directory, and do not delete the shared cache or raise test baselines.
+- Server tests used to all connect to the same `jarvis_test` database: several lanes and deploys running at once wiped each other, migrated each other's tables, and tests randomly failed on empty or someone else's data (#545, #556, #583).
+  Now test packages that use the database call `dbtest.Main` (`server/internal/db/dbtest`) in `TestMain`: each test binary creates its own
+  `jarvis_test_<time>_<random>` next to `JARVIS_TEST_DATABASE_URL` and drops it afterwards (ones left behind by a killed run are cleaned by the next run after 6 hours); subprocesses started in tests (fake node) reuse the parent's database.
+  New test packages that use the database must add `TestMain` the same way, not connect to the shared database directly. When the role lacks permission to create databases, it falls back to locking and queuing on the shared database.
+- After adding a large dependency (#167's tailscale / gvisor, one zip is 21 MB), the first `go test` on the hub machine: that machine's outbound network is slow, `go` hung on the download for over twenty minutes,
+  and finally reported `unexpected EOF` (2026-11-01). Fix: from `server/go.sum`, list the files missing from the hub's `~/go/pkg/mod/cache/download`, download them on the dev machine from
+  proxy.golang.org (.zip / .mod / .info), rsync them to a directory on the hub, and test with `GOPROXY=file://<that directory>,https://proxy.golang.org`.
 
-- `gh pr edit` 更新正文时可能附带查询组织 / 讨论字段，只带 `repo` scope 的 token 会报缺 `read:org`（2026-11-02）。
-  更新正文不需要扩权限：把 `{"body": "…"}` 作为 JSON 标准输入交给 `gh api --method PATCH repos/<owner>/<repo>/pulls/<number> --input -`，只访问仓库的 PR 接口。
+- `gh pr edit` may also query org / discussion fields when updating the body, so a token with only the `repo` scope reports missing `read:org` (2026-11-02).
+  Updating the body does not need more permissions: pass `{"body": "…"}` as JSON on stdin to `gh api --method PATCH repos/<owner>/<repo>/pulls/<number> --input -`, which only touches the repo's PR endpoint.
 
-- 独立 worktree 的隐私扫描用脚本所属 checkout 定位根目录（#336），不受调用者当前目录影响。旧版取调用者的 `git rev-parse --show-toplevel`：从主工作区调用 `/tmp/<worktree>/scripts/privacy_check.py` 会扫主工作区，也会读它的 `CLAUDE.local.md`（2026-11-02，#341）。两边结果不同先确认脚本版本和扫描根，不要跳过或放宽规则。
-- 网页静态说明、表单 placeholder、mock、测试里的示例机器 ID 也要避免个人配置值（2026-11-03，#627）：即使是常见的机器类型词，与本机配置重合也会让全仓隐私扫描拦住发布。ID 用明确的示例标识，域名用 example.com，说明文字描述机器类型，不修改敏感词或给页面加豁免。
-- `gh pr checks` 的旧版本不支持 `--fail-fast`（2026-11-02，#341）：先看 `--help`，用支持的 `--watch` / `--interval`；参数错误的退出码 1 不等于 CI 失败，要看具体 check 的结论。
+- Privacy scans in a separate worktree locate the root from the checkout the script belongs to (#336), regardless of the caller's current directory. The old version used the caller's `git rev-parse --show-toplevel`: calling `/tmp/<worktree>/scripts/privacy_check.py` from the main working tree scanned the main working tree and also read its `CLAUDE.local.md` (2026-11-02, #341). When the two give different results, first confirm the script version and the scan root; do not skip or loosen the rules.
+- Static web help text, form placeholders, mocks and example machine IDs in tests must also avoid personal config values (2026-11-03, #627): even a common machine-type word, if it matches the local config, makes the repo-wide privacy scan block the release. Use explicit example identifiers for IDs, example.com for domains, describe machine types in prose; do not change the sensitive-word list or add exemptions for the page.
+- Older versions of `gh pr checks` do not support `--fail-fast` (2026-11-02, #341): check `--help` first and use the supported `--watch` / `--interval`; exit code 1 from a bad argument is not a CI failure; look at the specific check's conclusion.
 
-## PR 里贴截图和录屏
+## Screenshots and screen recordings in PRs
 
-- 不用第三方图床、不进仓库：`gh` 2.99 起 `gh pr create`、`gh pr comment`、`gh issue comment` 等有 `--attach`（可重复，一次最多 50 个），
-  图片和视频传到 GitHub 的 user-attachments。正文写 `--body-file x.md`，里面用 `![说明](./a.png)` 引用，路径相对 body 文件所在目录。
-- 只有 Markdown 的 `![…](./a.png)` 会被换成上传后的地址；HTML 的 `<img src="./a.png" width=…>` 原样留着（2026-11-04，#1691）：
-  表格里全是坏图，附件被追加到评论末尾。要控制大小就先发 Markdown，再用 `gh api -X PATCH repos/<仓库>/issues/comments/<id> -F body=@…` 把地址填进 `<img>`。
-- 仓库是私有的，附件也只有成员能看：不登录 `curl` 是 404，带 `gh auth token` 是 200，不是传坏了。
-- 截图只用 mock hub / 体验模式的编造数据，`scripts/privacy_check.py` 查不到图片里的字，发之前自己看一遍。
+- No third-party image hosts, nothing in the repo: since `gh` 2.99, `gh pr create`, `gh pr comment`, `gh issue comment` and others have `--attach` (repeatable, at most 50 at a time),
+  which uploads images and videos to GitHub's user-attachments. Write the body with `--body-file x.md` and reference files in it as `![caption](./a.png)`, with paths relative to the body file's directory.
+- Only Markdown `![…](./a.png)` is replaced with the uploaded URL; HTML `<img src="./a.png" width=…>` is left as is (2026-11-04, #1691):
+  the table was all broken images and the attachments were appended to the end of the comment. To control the size, post Markdown first, then fill the URLs into `<img>` with `gh api -X PATCH repos/<repo>/issues/comments/<id> -F body=@…`.
+- The repo is private, so attachments are visible only to members: `curl` without login gives 404, with `gh auth token` gives 200; the upload is not broken.
+- Screenshots use only made-up data from the mock hub / demo mode; `scripts/privacy_check.py` cannot read text inside images, so look them over yourself before posting.
 
-## 临时的测试 hub
+## Temporary test hubs
 
-- 产品改名不等于运行时契约改名（2026-11-03，#277）：文档的产品名写 Persona，但历史路径、签名 profile、数据库 / 数据卷、协议字段、包 ID、缓存键和源码证据不能盲替换。文档展示 `personad` / `~/.persona` 时明确旧 `jarvisd` / `~/.jarvis` 兼容，环境变量只为已经实现的新入口写优先级；独立文案 PR 不作为运行时迁移已经完成的证明。
+- Renaming the product does not rename the runtime contract (2026-11-03, #277): docs call the product Persona, but historical paths, signing profiles, databases / data volumes, protocol fields, bundle IDs, cache keys and source evidence must not be blindly replaced. When docs show `personad` / `~/.persona`, state that the old `jarvisd` / `~/.jarvis` remain compatible; describe env var precedence only for new entry points that are already implemented; a standalone wording PR is not proof that the runtime migration is done.
 
-- 要在真实机器上验证、又不能动生产 hub：在 hub 机器上用另一个 HOME（`HOME=/tmp/x jarvisd hub`，hub.json 里换 listen 端口、
-  单独建一个库）起一份，`kind: local` 的机器就是同一份二进制起的 node，HOME 不同所以碰不到生产 node 的 socket 和配置。用完删库、删目录。
-- `ssh -L` 前先看本地端口有没有被占：别的车道可能已经在同一个端口上开着到生产 hub 的隧道，`ExitOnForwardFailure` 报错之前的请求会打到生产 hub。
-  连上后先看 `/api/v1/health` 的 `version` 是不是自己那份。
-- 远程 `pkill -f <模式>` 会匹配到执行它的那条 ssh 命令本身（命令行里也有这个模式），把自己的会话杀掉、后面的清理不跑：用 `pgrep` 拿到 pid 再 kill，或者用不会出现在命令行里的写法。
-- 远程用 `nohup … &` 起的后台进程会让 ssh 一直不返回（继承了会话），工具调用就卡到超时：重定向输出之外再加 `setsid`，或者起完单独一条 ssh 去查。
-- 提交前用 `git var GIT_AUTHOR_IDENT` 确认作者是 GitHub 身份（比如 noreply 邮箱，仓库级 `git config --local` 设）：全局 git 身份如果是公司的真名和邮箱，
-  它会留在 PR 的提交记录里（`refs/pull/<n>/head`，PR 合并后改不掉、删不了，只有 GitHub 支持能清），
-  而且 squash 合并时 GitHub 会把和合并人不同的作者写成 `Co-authored-by` 带进 master 的提交信息（2026-11-02）。worktree 共用仓库级配置。
-- `gh pr merge <号> --squash --delete-branch` 连本地分支一起删；那个分支正在某个 worktree 里检出时，gh 2.99 把**整个 worktree 目录也删了**（2026-11-03，叠起来的 PR 在 `/tmp` 的临时 worktree 里 rebase，合并后目录没了）。
-- **别在 worktree 里用 `git stash` 做「先撤掉再对比」**：stash 列表是整个仓库共用的，`git stash` 没东西可存（比如只有未跟踪的新文件）时什么都不做，接着的 `git stash pop` 就把**别人**在别的 worktree 存的那条弹进你的目录（2026-11-04，一条安全快照的冲突和未跟踪文件全落进了新开的 worktree；pop 冲突时 git 保留了那条 stash，没丢）。要对比 master 的行为，另开一个 `git worktree add --detach` 或用 `git show origin/master:<文件>`；真的弹错了，只在自己的 worktree 里 `git reset --hard` 并删掉多出来的未跟踪目录，别动 `git stash list`。
-  合并前先让那个 worktree 离开这个分支（`git checkout --detach`），或者合并用的 worktree 不检出 PR 的分支；里面有没提交的东西会一起丢。
-- `gh pr merge --delete-branch` 也可能在 GitHub 已合并之后，本地切回 master 时因 master 正在另一棵 worktree 中而退出失败（2026-11-03，#277）。先查 PR 的 `merged` / `merge_commit_sha`，不要把本地收尾错误当作合并失败反复重试；用主工作区执行合并或分开处理本地分支清理。
+- To verify on a real machine without touching the production hub: on the hub machine, start a copy with a different HOME (`HOME=/tmp/x jarvisd hub`, with another listen port in hub.json
+  and a separate database); the `kind: local` machine is a node started from the same binary, and the different HOME keeps it away from the production node's socket and config. Drop the database and delete the directory afterwards.
+- Before `ssh -L`, check whether the local port is taken: another lane may already have a tunnel to the production hub on the same port, and requests made before `ExitOnForwardFailure` errors out go to the production hub.
+  After connecting, first check that `version` in `/api/v1/health` is your own copy.
+- A remote `pkill -f <pattern>` matches the ssh command running it (its command line contains the pattern too), killing your own session so the cleanup after it never runs: get the pid with `pgrep` and kill that, or write it in a form that does not appear on the command line.
+- A background process started remotely with `nohup … &` keeps ssh from returning (it inherits the session), so the tool call hangs until timeout: besides redirecting output, add `setsid`, or check on it with a separate ssh afterwards.
+- Before committing, confirm with `git var GIT_AUTHOR_IDENT` that the author is the GitHub identity (e.g. the noreply email, set at repo level with `git config --local`): if the global git identity is your real name and company email,
+  it stays in the PR's commit history (`refs/pull/<n>/head`, which cannot be changed or deleted after merge; only GitHub support can purge it),
+  and on squash merge GitHub writes an author different from the merger into master's commit message as `Co-authored-by` (2026-11-02). Worktrees share the repo-level config.
+- `gh pr merge <number> --squash --delete-branch` also deletes the local branch; when that branch is checked out in some worktree, gh 2.99 **deletes the whole worktree directory too** (2026-11-03: stacked PRs rebased in a temporary worktree under `/tmp`, and the directory was gone after the merge).
+- **Do not use `git stash` in a worktree to "back out and compare"**: the stash list is shared by the whole repo; when `git stash` has nothing to save (e.g. only new untracked files) it does nothing, and the following `git stash pop` pops the entry **someone else** stashed in another worktree into your directory (2026-11-04: the conflicts and untracked files of a safety snapshot all landed in a freshly opened worktree; because pop conflicted, git kept that stash, so it was not lost). To compare against master's behavior, open another `git worktree add --detach` or use `git show origin/master:<file>`; if you really popped the wrong one, `git reset --hard` only in your own worktree and delete the extra untracked directories; do not touch `git stash list`.
+  Before merging, move that worktree off the branch (`git checkout --detach`), or merge from a worktree that does not have the PR's branch checked out; anything uncommitted in it is lost along with it.
+- `gh pr merge --delete-branch` can also exit with a failure after GitHub has already merged, when switching back to master locally fails because master is checked out in another worktree (2026-11-03, #277). Check the PR's `merged` / `merge_commit_sha` first; do not mistake a local cleanup error for a failed merge and retry; run the merge from the main working tree, or handle local branch cleanup separately.
 
-## 把长期的集成分支合进 master
+## Merging a long-lived integration branch into master
 
-- 一次大合并（#606，集成分支落后 master 一百多个提交）按模块拆 PR：在合并用的工作树里解完冲突、`git add`，按路径出补丁
-  `git diff --cached --binary MERGE_HEAD -- <路径>`，再在**最新的** `origin/master` 上新开 worktree `git apply -3 --index`。合并期间 master 还在动，
-  解冲突时又可能顺手抄进了更新的 master 代码（引用了合并基准里还没有的函数），所以每个模块都在最新 master 上编译、测试，不在合并工作树里。
-- 一边重构了公共的查找方式，另一边新写的代码还按老办法：集成分支把 `h.byID[…]` / `range h.machines` 换成了 `localMachine` / `machinesNow`
-  （成员 hub 交来的电脑、管理界面新加的电脑都在里面），master 新加的待办、连接器、飞书机器人、自更新都还直接读 `h.byID`。合完 grep 一遍。
-- 两边的测试各自带着对方不知道的前提：`httptest.NewRequest` 的来源 192.0.2.1 是公网地址，集成分支的入口会拦明文和主 token（403），
-  master 的测试要改成从回环来；集成分支的错误都带 `code`；新配对会给已有设备推一条「有新设备配对」。别为了过测试改实现，先弄清是哪边的前提。
-- 两个模块共用的东西跟着读它的测试走：`spec/fixtures` 是服务端测试的 golden，跟服务端模块一起合，不放在 Android 模块里。
+- One big merge (#606, the integration branch was over a hundred commits behind master) was split into PRs by module: resolve the conflicts and `git add` in the merge worktree, export a patch per path with
+  `git diff --cached --binary MERGE_HEAD -- <path>`, then open a new worktree on the **latest** `origin/master` and `git apply -3 --index`. master keeps moving during the merge,
+  and resolving conflicts may also pull in newer master code along the way (referencing functions not yet in the merge base), so every module is built and tested on the latest master, not in the merge worktree.
+- One side refactored a shared lookup while new code on the other side still used the old way: the integration branch replaced `h.byID[…]` / `range h.machines` with `localMachine` / `machinesNow`
+  (which include computers handed over by member hubs and computers newly added in the admin UI), while the to-dos, connectors, Lark bot and self-update newly added on master still read `h.byID` directly. grep for it after merging.
+- Each side's tests carry assumptions the other side does not know: the source 192.0.2.1 of `httptest.NewRequest` is a public address, and the integration branch's entry point blocks plaintext and the main token (403),
+  so master's tests must be changed to come from loopback; the integration branch's errors all carry a `code`; a new pairing pushes "New device paired" to existing devices. Do not change the implementation to make tests pass; first work out whose assumption it is.
+- Things two modules share go with the tests that read them: `spec/fixtures` is the server tests' golden data, so it merges with the server module, not the Android module.
 
 ## Rootless Docker CI fixtures
 
@@ -112,5 +112,5 @@ under pipefail even when the expected text was printed. Command substitution
 keeps the command's own failure fatal and consumes its complete output before
 applying the same content assertion.
 
-- zsh 里没匹配到任何文件的通配符（`rm -rf /tmp/x-*`）会让整条命令报错（nomatch），`&&` 后面的都不执行（2026-11-04：端到端没跑，结果却被当成失败记了下来）。
-  清临时目录用 `find /tmp -maxdepth 1 -name 'x-*' -exec rm -rf {} +` 或先 `setopt nullglob`；记录检查结果前先确认那条命令真的跑了。
+- In zsh, a glob that matches no files (`rm -rf /tmp/x-*`) makes the whole command fail (nomatch), and nothing after `&&` runs (2026-11-04: the end-to-end test never ran, yet the result was recorded as a failure).
+  To clean temp directories use `find /tmp -maxdepth 1 -name 'x-*' -exec rm -rf {} +` or `setopt nullglob` first; before recording a check result, confirm the command actually ran.

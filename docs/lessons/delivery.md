@@ -1,29 +1,29 @@
-# 派活与交付
+# Dispatching work and delivery
 
-2026-11-05 的一次复盘：8 台机器、20 多个 Agent 干了一天，真正上线的只有 6 项，大部分停在「开了 PR」「合了但默认关」「没部署」。
-产品里落下来的部分见 `docs/todos.md`「交付」（#3306，助手设置 `done_needs_delivery`，默认关，那一节写了怎么打开）。
+A retrospective from 2026-11-05: 8 machines and 20-plus Agents worked for a day, and only 6 items actually shipped. Most stopped at "opened a PR", "merged but off by default" or "not deployed".
+What made it into the product is in `docs/todos.md` ("Delivery") (#3306, the assistant setting `done_needs_delivery`, off by default; that section says how to turn it on).
 
-## 为什么停在半路
+## Why work stopped halfway
 
-1. **完成标准写错了**：派活 prompt 写的是「开 PR / 合入」，Agent 照做就说做完了；hub 的完成判断（`assistant/task_done.md`）也把「合并了 PR」当 done，自动关掉任务，用户看到的「已完成」其实没上线。
-2. **要用户点头的事零散冒出来**：合并、部署、打开默认关的功能、对外发消息，每个任务各问一次，散在不同的对话和卡片里，没有一处能一次批完，于是一直放着。
-3. **卡在别处没人追**：CI runner 积压（有一次排队 40 多分钟）、等外部的人 review，Agent 停下来说「等 CI」就结束了，没人回头看。
-4. **产能花在修 Agent 基础设施上**：大量 Agent 在修启动器、隧道、鉴权这些 Agent 自己跑起来需要的东西，真正的需求排在后面。
-5. **缺真实环境**：没有能部署、能实测的环境，验证只能写「未测」，做完也上不去。
+1. **The definition of done was wrong**: the dispatch prompt said "open a PR / merge", the Agent did exactly that and reported done; the hub's completion check (`assistant/task_done.md`) also counted "merged the PR" as done and closed the task automatically, so what the user saw as "Done" had not actually shipped.
+2. **Things needing the user's OK popped up piecemeal**: merging, deploying, turning on an off-by-default feature, sending messages outside. Each task asked separately, scattered across different chats and cards, with no single place to approve them all at once, so they just sat there.
+3. **Nobody chased work blocked elsewhere**: CI runner backlog (one wait was over 40 minutes), waiting for outside reviewers. The Agent stopped with "waiting for CI" and that was the end; nobody came back to check.
+4. **Capacity went into fixing Agent infrastructure**: many Agents were fixing launchers, tunnels and auth, the things Agents themselves need to run, while the real requirements waited.
+5. **No real environment**: with no environment to deploy to and test in, verification could only say "untested", and finished work could not ship.
 
-## 对策
+## Countermeasures
 
-- **完成 = 上线并实测，附读数**：派活时就说清楚（hub 给非只读任务自动接上交付标准），停在 PR / 合入的要写明卡在哪道闸、谁来解；功能默认关的写清启用步骤。
-  hub 判断完成时同时判断交付，只有上线了或本来不涉及上线的才关，其余留着并在待办上写卡点。
-- **最后一行固定格式**：`交付：…；卡点：…；谁来解：…`。模型读自然语言容易被「已合并」骗，固定的一行让判断和统计都有据可依；模型和这一行矛盾时，以正文里的证据为准。
-- **等用户点头的集中批**：hub 把「谁来解 = 用户」的任务列成一组，助手一次列给用户、用户一句话批完，再分头告诉各个 Agent。别让每个 Agent 各自冒一个问题。
-- **卡在别处的要追**：CI 排队、等人这类先自己解（重跑一次、换机器），解不了写清谁能解；跟进由主对话的督办（#3124）负责，判断交付时记下的 `gate` 是它的输入。
-- **基础设施的活单独算**：修 Agent 自己运行环境的任务要有上限，超过半天就停下来换路（换机器、换模型、手动处理），不让它挤掉需求。
-- **先备好真实环境**：派要上线的活之前先确认有能部署、能实测的环境（测试 hub、模拟器、真机）；没有就把「备环境」当成第一个任务，而不是让每个任务写「未测」。
+- **Done = shipped and tested, with readings attached**: say so when dispatching (the hub automatically appends the delivery standard to non-read-only tasks). Work that stops at PR / merge must say which gate it is stuck at and who clears it; off-by-default features must state how to enable them.
+  When the hub judges completion it also judges delivery: it closes only tasks that shipped or never involved shipping, and keeps the rest open with the blocker written on the to-do.
+- **Fixed format for the last line**: `交付：…；卡点：…；谁来解：…` (Delivery: …; Blocker: …; Who clears it: …). A model reading natural language is easily fooled by "merged"; a fixed line gives both the judgment and the statistics something solid. When the model's claim contradicts this line, the evidence in the body wins.
+- **Batch the items waiting on the user**: the hub groups tasks where "who clears it = the user", the assistant lists them to the user at once, the user approves in one sentence, and the assistant then tells each Agent. Do not let every Agent raise its own question.
+- **Chase work blocked elsewhere**: for CI queues, waiting on people and the like, first try to clear it yourself (rerun once, switch machines); if you cannot, say who can. Follow-up belongs to the main chat's supervisor (#3124); the `gate` recorded when judging delivery is its input.
+- **Count infrastructure work separately**: tasks that fix the Agents' own runtime environment get a cap. After half a day, stop and change course (another machine, another model, handle it manually) so it does not crowd out real requirements.
+- **Prepare a real environment first**: before dispatching work that must ship, confirm there is an environment to deploy to and test in (test hub, simulator, real device); if not, make "set up the environment" the first task instead of letting every task write "untested".
 
-## 还没做的
+## Not done yet
 
-- iOS / Mac 的待办卡片还不显示交付卡在哪（网页、Android 已经有）。
-- 「等用户点头」还只是助手快照里的一组，没有一张能逐项勾选、一键批完的卡片。
-- 卡点的跟进（到点回头看 CI、催 review）交给督办（#3124）：督办的任务交付没到位时，督办消息带上卡点，但还没有到点自动回头看。
-- 基础设施类任务的占比和上限还没有统计和提醒。
+- The iOS / Mac to-do cards do not yet show where delivery is stuck (web and Android already do).
+- "Waiting on the user" is still just a group in the assistant snapshot; there is no card where you can tick items one by one and approve them all with one tap.
+- Following up on blockers (checking CI again at a set time, nudging reviewers) is handed to the supervisor (#3124): when a supervised task has not been delivered, the supervisor message includes the blocker, but there is no automatic check-back at a set time yet.
+- There are no statistics or alerts yet for the share of infrastructure tasks or their cap.

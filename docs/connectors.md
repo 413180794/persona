@@ -1,387 +1,387 @@
-# 连接器
+# Connectors
 
-连接器是 Persona 接一个数据来源的统一方式：GitHub、信息（iMessage）、Telegram、飞书、邮件各是一个连接器，hub 的几条管道
-（助手的工具、写操作的闸门、收件箱、知识库、设置 › 连接器 的状态、实时事件）按连接器提供了什么自动接上，加一个来源不用改这些管道。
+A connector is Persona's standard way to connect a data source: GitHub, Messages (iMessage), Telegram, Lark and mail each have one. The hub's pipelines
+(assistant tools, write gates, Inbox, knowledge base, status in Settings › Connectors, live events) attach automatically according to what the connector provides; adding a source does not require changing those pipelines.
 
-这份文档分三部分：
+This document has three parts:
 
-- **一、现在的样子（v1）**：飞书、邮件的迁移（M0–M6）和 GitHub、信息、Telegram 已经合入的部分做完以后的实际结构，加新连接器照这个做。
-- **二、v2 设计**：对 v1 的 8 条意见，逐条写同意 / 不同意、怎么改、改动多大、动哪些连接器、新旧怎么兼容。
-  **2026-11-03 已拍板**（结果在第四部分，正文已按拍板改好）；V1、V3–V6 已做完，V2、V7 决定不做，v2 已收尾。
-- **三、迁移顺序**，**四、拍板结果**。
+- **I. Current structure (v1)**: the actual structure after the Lark and mail migration (M0–M6) and the merged GitHub, Messages and Telegram work. Follow this to add a connector.
+- **II. v2 design**: eight comments on v1, each with agreement / disagreement, how to change it, size of the change, affected connectors and old/new compatibility.
+  **Decided 2026-11-03** (results in part IV; the text already reflects them); V1 and V3–V6 are complete, V2 and V7 were rejected, and v2 is closed out.
+- **III. Migration order**, **IV. Decisions**.
 
-过程和历史（为什么这样拆、每一步的验收）在 `docs/plan-connectors.md`；Telegram 的在 `docs/archive/plan-telegram.md`（2026-11-05 起它是扩展，#1704；代码在 `nwverse/persona-extensions`，#2057）。
-计划中的 Discord（用户自己的机器人，扩展，#2828）在 `docs/plan-discord.md`。
+The process and history (why it was split this way, acceptance for each step) are in `docs/plan-connectors.md`; Telegram is in `docs/archive/plan-telegram.md` (an extension since 2026-11-05, #1704; code in `nwverse/persona-extensions`, #2057).
+Planned Discord support (the user's own bot, extension, #2828) is in `docs/plan-discord.md`.
 
-## 一、现在的样子（v1）
+## I. Current structure (v1)
 
-### 有哪些连接器
+### Available connectors
 
-| id | 名字 | 怎么跑 | 知识库 | 收件箱 | 助手的工具 | 写操作 | 登录 |
+| id | Name | How it runs | Knowledge base | Inbox | Assistant tools | Writes | Login |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `github` | GitHub | hub 里（`connector/github`） | `Archive`（`updated_at` 游标） | 有，规则定档 + 降噪（`rules.go`） | `github_search/read/diff/checks` | `github_comment`、`github_review`（过闸门） | 读某台电脑上 `gh` 的登录（`credential.gh_token`） |
-| `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
-| `telegram` | Telegram | 扩展市场 `nwverse/persona-extensions` 里的扩展 `telegram`（#1704、#2057，代码不在本仓库），hub 经进程扩展协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
-| `wechat` | 微信 | 内置扩展的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
-| `lark` | 飞书 | #1571 起由接飞书的扩展注册（原来是 hub 的 lark_connector.go，包住原来的飞书网关代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | 扩展给的收件箱块（块类型在 `assistant/inbox_blocks.go`；原来是 hub 的 inbox_own.go） | `lark_chats/messages/search` | 走接飞书的扩展带的 skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的飞书网关里登录 |
-| `mail` | 邮件 | hub 里（`extmgr/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
+| `github` | GitHub | In the hub (`connector/github`) | `Archive` (`updated_at` cursor) | Yes, rule-based tiers + noise reduction (`rules.go`) | `github_search/read/diff/checks` | `github_comment`, `github_review` (gated) | Reads `gh` login from a computer (`credential.gh_token`) |
+| `imessage` | Messages | Reads on the Mac's node, with an RPC-forwarding adapter in the hub (`connector/imessage`) | `Archive` (ROWID) | Yes | `imessage_chats/read/search` | None | None (grant personad Full Disk Access on the Mac) |
+| `telegram` | Telegram | Extension `telegram` in the `nwverse/persona-extensions` marketplace (#1704, #2057, code outside this repo), called by the hub over the process extension protocol (`connector/proc`) | `Archive` | Yes | Read-only tools; reads through the `tg` CLI (`Unlisted`) | `telegram_send/forward/react/mark_read` (`tg` CLI, `Unlisted`, gated) | Stepwise `Login` (phone number, code, two-step verification password), session encrypted in `connector_secrets` |
+| `wechat` | WeChat | Separate built-in extension program `jarvisd-wechat` (`docs/wechat.md`): a bot in WeChat, not a data source but a channel (`docs/channels.md`); the connector handles only binding and status | None | None | None | None | QR `Login` (`kind: qr`), token encrypted in `connector_secrets` |
+| `lark` | Lark | Registered by the Lark extension since #1571 (formerly the hub's lark_connector.go wrapping the original Lark gateway code) | `Chats` (one cursor per conversation) + `Items` (documents, meetings, events) | Inbox blocks from the extension (block types in `assistant/inbox_blocks.go`; formerly the hub's inbox_own.go) | `lark_chats/messages/search` | Through the Lark extension's skill + the node's Bash gate (rules below) | Log in through the Lark gateway on the hub machine |
+| `mail` | Mail | In the hub (`extmgr/mail_connector.go`) | `Archive` (UID per account) | The hub's own Inbox blocks | `mail_accounts/search/read` | `mail_send` (gated) | Its own API: password / Gmail and Outlook OAuth (`/api/v1/mail/…`) |
 
-### 接口：一份清单，按清单分派
+### Interfaces: one manifest, dispatched by declaration
 
-`server/internal/connector/connector.go`：`Connector` 有 `ID()`、`Name()`、`Manifest()`。清单（`manifest.go`，v2 · V1 起）一处写明它能做什么：
+`server/internal/connector/connector.go`: `Connector` has `ID()`, `Name()`, `Manifest()`. The manifest (`manifest.go`, since v2 · V1) declares what it can do in one place:
 
-| 清单的字段 | 意思 |
+| Manifest field | Meaning |
 | --- | --- |
-| `Capabilities` | 有类型的能力（`CapStatus`、`CapTools`、`CapActions`、`CapEvents`、`CapInbox`、`CapSettle`、`CapArchive`、`CapChats`、`CapItems`、`CapLogin`、`CapOptions`），每个对应一个接口 |
-| `Hosts` | 链接所在的主机名（App 认链接） |
-| `AgentTools` | 哪些工具也给 Agent（不只给助手），按名字的通配（邮件是 `mail_*`） |
-| `Unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 扩展的 `tg` 命令行和 skill，`docs/connector-protocol.md`「命令行」）。不是权限 |
-| `ConfirmAlways` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选）：`connector_gate` 里命中它的 `allow` 规则被钳成 `confirm`，`deny` 不变（见「闸门」）。扩展清单里写 `confirm_always` |
-| `Poll` | 多久问一次 `Archive`（0 是 hub 的默认；邮件 6 分钟） |
-| `Kinds` | 收件箱条目的种类；每个种类在 `prompts/inbox/kinds/<id>.md` 里要有自己的说明（`connector.CheckKinds`，各连接器的 `TestKindsAreDescribed`），收到没声明的种类记一行日志 |
-| `Proxy` | 它替一个程序回答（子进程的 `proc.Conn`）：实现了全部接口，只有声明的那些是真的 |
+| `Capabilities` | Typed capabilities (`CapStatus`, `CapTools`, `CapActions`, `CapEvents`, `CapInbox`, `CapSettle`, `CapArchive`, `CapChats`, `CapItems`, `CapLogin`, `CapOptions`), each corresponding to an interface |
+| `Hosts` | Link hostnames (for link recognition in the App) |
+| `AgentTools` | Tools also given to Agents (not only the assistant), name globs (`mail_*` for mail) |
+| `Unlisted` | Tools and writes excluded from the model's tool list, name globs: the connector's own frontend calls them by name (the Telegram extension's `tg` CLI and skill, `docs/connector-protocol.md` ("CLI")). Not a permission |
+| `ConfirmAlways` | Writes that always require confirmation on the phone, name globs (optional): matching `allow` rules in `connector_gate` are clamped to `confirm`, while `deny` stays unchanged (see "Gate"). Written as `confirm_always` in extension manifests |
+| `Poll` | How often to query `Archive` (0 is the hub default; mail is 6 minutes) |
+| `Kinds` | Inbox item kinds; each needs a description in `prompts/inbox/kinds/<id>.md` (`connector.CheckKinds`, each connector's `TestKindsAreDescribed`); an undeclared kind received is logged |
+| `Proxy` | Answers on behalf of another program (subprocess `proc.Conn`): implements every interface, but only declared ones are real |
 
-hub 只用 `connector.As[接口](c)` 找能力：清单声明了才去断言。`Registry.Add` 用 `connector.Check` 检查清单：声明了没实现、实现了没声明（`Proxy` 除外）、
-不认识的能力、种类却没有收件箱，都在注册时报错。各能力的接口：
+The hub uses only `connector.As[interface](c)` to discover capabilities: it asserts the interface only when declared. `Registry.Add` checks the manifest with `connector.Check`: declared but unimplemented, implemented but undeclared (except `Proxy`),
+unknown capabilities, or kinds without an Inbox capability all fail registration. Capability interfaces:
 
-| 能力 | 接口 | 干什么 | 谁有 |
+| Capability | Interface | What it does | Who has it |
 | --- | --- | --- | --- |
-| `status` | `Accounts` | `Status()`：状态、账号、出错时给人看的一句话和 `Guide` | 除飞书、邮件外都有（没有就当 `ok`；`Proxy` 的状态总是问它自己） |
-| `tools` / `actions` | `ReadTools` / `Actions` | 只读工具；写操作（`Describe` 出卡片上的话、参数不对时返回错误不弹卡片，`Do` 真去做） | 见上表 |
-| `options` | `Options` | 连接器自己的设置（JSON），App 里改 | GitHub |
-| `events` | `Events` | 实时事件，`changed(Scope)`；`Scope` 是有类型的常量，子进程报来的先校验 | 各有各的 |
-| `archive`、`chats`、`items` | `Archive`、`Chats`、`Items` | 进知识库的三种形状 | 见上表 |
-| `inbox`、`settle` | `Inbox`、`InboxSettler` | 收件箱的候选和回复（`Reply` 拿到整条 `InboxReply`：会话、条目、回的是哪一步、正文）；按规则收掉旧的 | GitHub、信息、Telegram；`settle` 只有 GitHub |
-| `login` | `Login` | 分步登录 | Telegram |
-| `threads` | `Threads` | 收件箱的会话在 App 里打开成会话页：`Thread(thread, before, limit)` 一页消息（发送人、头像、媒体、引用、游标），`Media(ref)` 头像和媒体的字节；只读，回复走 `ThreadChat.Reply` 指的 action（过闸门）。App 按 `ThreadChat.Kind` 选页面：dm / group / channel 画成气泡，pr / issue 画成 GitHub 的版式 | Telegram（#1054）、GitHub（#1055，`docs/plan-connectors.md`「会话页」） |
+| `status` | `Accounts` | `Status()`: state, accounts, a human-readable error sentence and `Guide` | All except Lark and mail (absence means `ok`; a `Proxy` is always asked for its own status) |
+| `tools` / `actions` | `ReadTools` / `Actions` | Read-only tools; writes (`Describe` produces the card text and returns errors for bad parameters without showing a card; `Do` performs the write) | See above |
+| `options` | `Options` | Connector-specific settings (JSON), edited in the App | GitHub |
+| `events` | `Events` | Live events, `changed(Scope)`; `Scope` is a typed constant, validated when received from subprocesses | Each has its own |
+| `archive`, `chats`, `items` | `Archive`, `Chats`, `Items` | Three shapes for knowledge-base ingestion | See above |
+| `inbox`, `settle` | `Inbox`, `InboxSettler` | Inbox candidates and replies (`Reply` receives the full `InboxReply`: conversation, item, which step it answers, body); settle old items by rule | GitHub, Messages, Telegram; `settle` only GitHub |
+| `login` | `Login` | Stepwise login | Telegram |
+| `threads` | `Threads` | Opens an Inbox conversation as a chat page in the App: `Thread(thread, before, limit)` returns a page of messages (sender, avatar, media, references, cursor); `Media(ref)` supplies avatar/media bytes. Read-only; replies use the action named in `ThreadChat.Reply` (gated). The App selects a page by `ThreadChat.Kind`: bubbles for dm / group / channel, GitHub layout for pr / issue | Telegram (#1054), GitHub (#1055, `docs/plan-connectors.md` ("Conversation pages")) |
 
-`Runner`（自己的循环）、`Machines`（某台电脑连上了）是怎么跑的，不是能力，照旧按类型断言。收件箱的档是 `connector.Tier`（`TierAction`、`TierFYI`、`TierNoise`），
-hub 收到不认识的档就丢掉、交给模型分拣。
+`Runner` (its own loop) and `Machines` (a computer connected) describe how it runs, not capabilities, and still use type assertions. Inbox tiers are `connector.Tier` (`TierAction`, `TierFYI`, `TierNoise`);
+the hub drops unknown tiers and leaves classification to the model.
 
-`Registry`（`registry.go`）持有全部连接器：按状态发工具（只有 `ok` 的给）、按前缀分发调用、开关（`SetEnabled`）、启动 `Run` / `Watch`（失败退避重启）。
+`Registry` (`registry.go`) owns all connectors: offers tools according to status (only `ok`), dispatches calls by prefix, enables/disables (`SetEnabled`), and starts `Run` / `Watch` (restarts with backoff after failure).
 
-### 三种跑法
+### Three execution models
 
-- **在 hub 里**：Go 代码直接实现接口。
-- **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 personad 的（Telegram 的 gotd；#1704 起 Telegram 是扩展，走进程扩展协议）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
-  JSON-lines RPC（`internal/rpc`），方法一一对应接口（`serve.go` 的 `init`、`status`、`archive.changes`、`inbox.collect`、`tools.call`……），
-  程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；扩展的来自它的
-  `persona-plugin.json`），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
-  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。内置扩展的程序（微信机器人）必须和 hub 同一次构建（`version -v` 一字不差）；协议有版本号（v2，`docs/connector-protocol.md`）。
-- **node 中转**：数据只在某台 Mac 上（`chat.db`）。node 上有一个读本地数据的 `Reader`，hub 经 node 的 RPC（`connector.list/chats/older/changes/search`，
-  `node/node.go` 里写死的 5 个方法；新 node 也经 `plugin.node.call {id: "imessage"}` 答，见 `docs/extensions.md`「内置的 node 程序」）去读，
-  hub 一侧的 `imessage.Remote` 才是连接器。读哪台 Mac 在内置扩展「信息（iMessage）」里选（#1830 第 6 步），没选时看 hub.json 的 `imessage.machine`。
+- **In the hub**: Go code implements the interfaces directly.
+- **Subprocess** (`connector/proc` ↔ `connector/serve`): first-party code whose dependencies are too large to compile into personad (Telegram's gotd; since #1704 Telegram is an extension using the process extension protocol). The hub starts the program; stdin / stdout carry the same
+  JSON-lines RPC as hub↔node (`internal/rpc`), with methods corresponding to interfaces (`init`, `status`, `archive.changes`, `inbox.collect`, `tools.call`… in `serve.go`).
+  The program calls the hub's `secrets.*` in the other direction. At registration the hub gives `proc.Conn` a static manifest (`proc.Config.Manifest`; extensions get it from their
+  `persona-plugin.json`), so even connectors that have never started and are off by default can report capabilities and log in/out (#666). The program manifest returned by `init`
+  (`serve.Manifest`, snake_case fields on the wire) is checked against it; mismatches are logged and the static one still wins. Built-in extension programs (the WeChat bot) must come from the same build as the hub (`version -v` matches exactly); the protocol is versioned (v2, `docs/connector-protocol.md`).
+- **node relay**: data exists only on a Mac (`chat.db`). A `Reader` on the node reads local data; the hub reads through node RPC (`connector.list/chats/older/changes/search`,
+  five methods hardcoded in `node/node.go`; new nodes also answer through `plugin.node.call {id: "imessage"}`, see `docs/extensions.md` ("Built-in node programs"));
+  the hub-side `imessage.Remote` is the connector. Choose the Mac in the built-in extension "Messages (iMessage)" (#1830 step 6); without a selection, use `imessage.machine` in hub.json.
 
-### 闸门
+### Gate
 
-- 闸门只管 **AI 发起的**写操作（助手的工具、`tg` 命令行 / skill、Agent，都经 node 的 `mcp.call`）：`Registry.Call` →
-  `connector/gate.go` 的规则（hub.json `connector_gate`，第一条匹配的说了算）→
-  `allow` 直接做、`deny` 拒绝、`confirm`（默认）在手机上弹卡片（`hub.approve`，15 分钟过期）。卡片写明做什么、全文、谁会看到。
-  连接器清单的 `ConfirmAlways` 命中的写操作，`allow` 规则（含 `*`）也钳成 `confirm`（`Decide`），`deny` 照旧；以 hub 登记的清单为准，程序自报的放不宽它。
-- **用户本人手动发起的不过闸门**（#1190，用户：「我自己发送消息还需要我自己审批？这个完全不对吧」）：会话页回复框
-  （`POST …/thread/reply`）从用户自己登录的设备（手机、Mac、网页的 full 设备 token）发来，就走 `Registry.Run` 直接做，不弹卡片，
-  `deny` 规则也不拦。按 hub 鉴权得到的身份判断（`extmgr/helpers.go` 的 `byOwnDevice`），不看客户端自报的字段；hub.json 的配对 token、配对码、
-  机器 / 互联凭据不算设备，照旧过闸门。飞书的发消息、收件箱的「发送」本来就不过闸门。
-- 飞书的写操作不是工具：助手用接飞书的扩展带的 skill 里的命令 / lark-cli，node 的 Bash 钩子（`node/larkgate.go`）读命令判断读写，规则是
-  `connector_gate` 里 `connector:"lark"` 的（`action` 写「方法 路径」）加上老的 `lark_gate`，再加内置规则（M5）。
-- 收件箱里点「发送」本身就是确认，`Reply` 不再弹卡片；会话页回复框同理（见上）。
+- The gate handles only **AI-initiated** writes (assistant tools, `tg` CLI / skill, Agents, all through the node's `mcp.call`): `Registry.Call` →
+  rules in `connector/gate.go` (hub.json `connector_gate`, first match wins) →
+  `allow` runs directly, `deny` refuses, `confirm` (default) shows a card on the phone (`hub.approve`, expires in 15 minutes). The card says what will happen, the full text, and who will see it.
+  For writes matching the manifest's `ConfirmAlways`, even `allow` rules (including `*`) are clamped to `confirm` (`Decide`), while `deny` stays unchanged; the manifest registered by the hub wins, and a program's self-report cannot loosen it.
+- **Manual actions by the user bypass the gate** (#1190, user: "Why do I need to approve a message I send myself? That's completely wrong"): replies from the conversation-page composer
+  (`POST …/thread/reply`) sent by the user's own logged-in device (phone, Mac, web full device token) use `Registry.Run` directly, without a card;
+  `deny` rules do not block them either. Identity comes from hub authentication (`byOwnDevice` in `extmgr/helpers.go`), not client-reported fields; hub.json pairing tokens, pairing codes,
+  machine / linked-hub credentials are not devices and still go through the gate. Lark sends and Inbox "Send" already bypassed it.
+- Lark writes are not tools: the assistant uses commands / lark-cli in the Lark extension's skill; the node's Bash hook (`node/larkgate.go`) reads the command to distinguish reads and writes. Its rules are
+  `connector:"lark"` in `connector_gate` (`action` is "method path"), plus the old `lark_gate` and built-in rules (M5).
+- Tapping "Send" in the Inbox is itself confirmation, so `Reply` shows no extra card; the conversation-page composer works the same way (above).
 
-### 进收件箱
+### Inbox ingestion
 
-连接器给 `InboxThing`（一件事：`Thread` 是它的键，`Kind` 是它自己的种类，`Tier` / `Why` 是它的规则定的档，`Done` 是它看到这件事结束了）；
-hub 每轮把连接器给的候选交给管理者（总线上的 `inbox.collected`，`docs/inbox.md`「谁管什么」），管理者（`assistant/inbox_connectors.go` 的 `applyConnector`）
-把同一个 `Thread` 的后续动作并进一个打开的条目，之后的分拣、AI 分身、处理完、保留多久都是管理者的，所有来源一样；回复、`Settle`、事件合成的工具
-仍由 hub 调连接器（管理者经 `app.call inbox.*` 请它调）。条目用一个通用块（`InboxConnector`），App 不用认识来源就能画。
+The connector provides `InboxThing` (one thing: `Thread` is its key, `Kind` its own kind, `Tier` / `Why` the tier chosen by its rules, and `Done` means it observed completion);
+each round, the hub hands candidates to the manager (`inbox.collected` on the bus, `docs/inbox.md` ("Who owns what")). The manager (`applyConnector` in `assistant/inbox_connectors.go`)
+merges subsequent activity for the same `Thread` into an open item. Classification, AI twin, completion and retention then belong to the manager and are the same for every source; replies, `Settle` and tools derived from events
+are still dispatched to connectors by the hub (the manager asks through `app.call inbox.*`). Items use a generic block (`InboxConnector`), so the App can render them without knowing the source.
 
-### 进知识库
+### Knowledge-base ingestion
 
-- `Archive`：一个账号一个游标，`Changes(cursor)` 给出变了的会话，hub 把游标存在 `cursors/<id>.json`，会话 id 是 `<连接器 id>-<会话 id>`。
-- `Chats`：飞书这种每个会话自己有游标、能往回补（`kb.Backfiller`）、有附件的，直接给 `kb.Source`，归档、回补、压缩、打标照旧。
-- `Items`：飞书的文档、会议、日程。
+- `Archive`: one cursor per account; `Changes(cursor)` returns changed conversations. The hub stores the cursor in `cursors/<id>.json`; conversation ids are `<connector id>-<conversation id>`.
+- `Chats`: for sources like Lark with per-conversation cursors, backfill (`kb.Backfiller`) and attachments, provide `kb.Source` directly; archiving, backfill, compression and tagging stay unchanged.
+- `Items`: Lark documents, meetings and calendar events.
 
-### 设置 › 连接器
+### Settings › Connectors
 
-`GET /api/v1/connectors?all=1`（不带 `all` 时不列飞书和邮件，给 M6 以前的 App），一项是 `{id, name, status, account, via, error, guide, capabilities, hosts, enabled, options, archive, inbox}`。
-`archive` / `inbox` 是「进知识库」「进收件箱」两个开关（`Registry.SetFeed`，默认开，存在 hub 设置里）：关掉「进知识库」后 hub 不再调 `Archive`，「删除已存的知识库内容」（`DELETE …/{id}/archive`）只删知识库里它的会话和人；关掉「进收件箱」后不再 `Collect`，已有的条目不动。连接器本身照常跑，工具照常给。
-App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读各自的接口），信息有自己的页，其余走通用的连接器页。接口细节见 `docs/protocol.md`「连接器 API」。
+`GET /api/v1/connectors?all=1` (without `all`, omits Lark and mail for pre-M6 Apps); each entry is `{id, name, status, account, via, error, guide, capabilities, hosts, enabled, options, archive, inbox}`.
+`archive` / `inbox` are the "Add to knowledge base" / "Add to Inbox" toggles (`Registry.SetFeed`, on by default, stored in hub settings): disabling knowledge-base ingestion stops hub calls to `Archive`; "Delete stored knowledge-base content" (`DELETE …/{id}/archive`) deletes only its conversations and people in the knowledge base. Disabling Inbox ingestion stops `Collect` without changing existing items. The connector keeps running and tools remain available.
+The App draws the whole section from this list: Lark and mail retain their original rows (status still comes from their own APIs), Messages has its own page, and others use the generic connector page. API details in `docs/protocol.md` ("Connector API").
 
 Audit: signing in or out, the switch, the two feeds, the connector's own settings, deleting its data or knowledge base content and GitHub's token source are recorded in `plugin_audit`
 with who did it (#5281); never a credential or a typed value. The actions and their details are listed in `docs/extensions.md` (after the install / upgrade steps).
 
-### 加一个连接器（v1 的做法）
+### Adding a connector (v1 approach)
 
-1. `connector/<id>` 一个包，实现 `Connector`（含 `Manifest()`）和清单里声明的能力；工具的描述放 `prompts/mcp/<id>/`，收件箱的种类说明放
-   `prompts/inbox/kinds/<id>.md`，种类写进清单，加一个 `TestKindsAreDescribed`。
-2. hub.json 加一节配置，`extmgr/connectors.go` 的 `registerConnectors` 里注册。
-3. 写操作只做成 `Actions`，`Describe` 的卡片写明谁会看到。
-4. 状态 `Status` 只从内存回答（每次列工具都要问），出错时 `Error` 一句话、能自己修的给 `Guide`。
-5. 日志、错误里不出现正文、号码、token。
-6. 要连外部服务的，配置里嵌入 `connector.Egress`（`connector/egress.go`），就有了 `proxy` 键（`http://[用户名:密码@]主机:端口`，空的直连），
-   HTTP client 一律用 `Egress.HTTPClient` 建：配了走代理、没配直连，填错了报错而不是悄悄直连。`github.proxy` 就是这样来的（#1106）；
-   代理地址的解析在 `netproxy`，`google.proxy` 也用它。还没接上的：Telegram（MTProto 不是 HTTP）、子进程 / 第三方连接器（要把代理传给程序），见 #1106。
+1. Create a `connector/<id>` package implementing `Connector` (including `Manifest()`) and its declared capabilities; tool descriptions go in `prompts/mcp/<id>/`, Inbox kind descriptions in
+   `prompts/inbox/kinds/<id>.md`; declare kinds in the manifest and add `TestKindsAreDescribed`.
+2. Add a hub.json config section and register it in `registerConnectors` in `extmgr/connectors.go`.
+3. Writes must be `Actions`; the `Describe` card must say who will see the result.
+4. `Status` answers only from memory (queried on every tool listing); errors get a one-sentence `Error`, and self-service fixes get a `Guide`.
+5. No body text, phone numbers or tokens in logs/errors.
+6. For external services, embed `connector.Egress` (`connector/egress.go`) in config to get a `proxy` key (`http://[username:password@]host:port`, empty means direct).
+   Build every HTTP client with `Egress.HTTPClient`: use the proxy when configured, direct otherwise; invalid config errors rather than silently connecting directly. This is how `github.proxy` works (#1106);
+   proxy-address parsing lives in `netproxy`, also used by `google.proxy`. Not yet wired: Telegram (MTProto, not HTTP), subprocess / third-party connectors (proxy must be passed to the program), see #1106.
 
-> **进程扩展连接器不写在 hub 里**：比如个人微信的连接器，是一个外部 API 服务的客户端，以扩展包（`.tar.gz` 加 sha256）交付、从扩展市场安装，
-> 用扩展协议 1 加连接器协议 v2 和 hub 说话，声明 `fallback`（每个收件箱条目带兜底分级）。本仓库没有它的代码，扩展和它的接入手册由它自己的仓库发布。
-> 本仓库只留一个中性的示例连接器 `examplechat`（「示例聊天」）的线上夹具和清单（`schema/extension/examples/Manifest.examplechat.json`）。
-> 怎么给这样的外部程序做一致性测试：扩展一侧的起停和握手用 `conformance.Program`（[extensions.md](extensions.md)「一致性测试」），
-> 连接器一侧逐个能力的检查用 `CheckProgram` 加合成的线上夹具（[connector-protocol.md](connector-protocol.md)「一致性测试」）。
+> **Process-extension connectors live outside the hub**: for example, a personal WeChat connector is a client for an external API service, delivered as an extension package (`.tar.gz` plus sha256) and installed from the extension marketplace.
+> It speaks extension protocol 1 and connector protocol v2 to the hub and declares `fallback` (each Inbox item carries a fallback tier). Its code is outside this repo; the extension and its integration guide are published from its own repository.
+> This repo retains only the wire fixtures and manifest for the neutral `examplechat` ("Example chat") connector (`schema/extension/examples/Manifest.examplechat.json`).
+> Conformance testing for such external programs: use `conformance.Program` for extension-side start/stop and handshake ([extensions.md](extensions.md) ("Conformance tests")),
+> and `CheckProgram` with synthetic wire fixtures for connector-side capability checks ([connector-protocol.md](connector-protocol.md) ("Conformance tests")).
 
-## 二、v2 设计
+## II. v2 design
 
-对 v1 的评价是「能用、文档好，但不够优雅」。下面 8 条逐条看代码后的判断。改动大小按「小：一两个 PR、几百行，不碰 App」
-「中：三到五个 PR，可能碰 App」「大：跨 hub / node / 程序 / App，要分好几步」估。
+The assessment of v1 was "usable, well documented, but not elegant enough". Below are judgments on eight points after reading the code. Change sizes are estimated as "small: one or two PRs, hundreds of lines, no App changes",
+"medium: three to five PRs, possibly App changes", "large: crosses hub / node / programs / App, needs several steps".
 
-### 1. 能力的声明：一份显式的清单（Manifest）
+### 1. Capability declarations: one explicit manifest
 
-**同意。**
+**Agreed.**
 
-现状：可选能力有 19 个接口（`Accounts`、`ReadTools`、`Actions`、`Options`、`AgentTools`、`Validator`、`Events`、`Runner`、`Machines`、`Hosts`、
-`Poller`、`Chats`、`Items`、`Archive`、`Inbox`、`InboxReplier`、`InboxSettler`、`Login`、`Capabler`）。问题不只是多：
+Current state: 19 optional capability interfaces (`Accounts`, `ReadTools`, `Actions`, `Options`, `AgentTools`, `Validator`, `Events`, `Runner`, `Machines`, `Hosts`,
+`Poller`, `Chats`, `Items`, `Archive`, `Inbox`, `InboxReplier`, `InboxSettler`, `Login`, `Capabler`). The problem is not just their number:
 
-- 两套声明。hub 里的连接器靠「实现了哪个接口」，子进程靠 `Capabler` 自己报；而 `proc.Conn` 为了能代表任何程序，把能用 RPC 转的方法全实现了，
-  hub 的类型断言对它永远成立，正确性靠程序「没有就回空」。`Capabilities()`（当时在 `connector/registry.go`，现在是 `connector/manifest.go` 的 `Capabilities`）只报得出其中 11 个，
-  `AgentTools`、`Validator`、`Poller`、`InboxReplier`、`InboxSettler` 这些在 `GET /api/v1/connectors` 里看不到。
-- 有几项其实是数据，不是行为：`Hosts`、`AgentTools`、`Poller` 各是一个返回不变的值（常量或配置）的方法。
+- Two declaration systems. In-hub connectors use "which interface is implemented", subprocesses self-report through `Capabler`; to represent any program, `proc.Conn` implements every method it can forward over RPC,
+  so the hub's assertions always succeed, and correctness depends on the program "returning empty if unsupported". `Capabilities()` (then in `connector/registry.go`, now `Capabilities` in `connector/manifest.go`) reports only 11,
+  leaving `AgentTools`, `Validator`, `Poller`, `InboxReplier`, `InboxSettler` invisible in `GET /api/v1/connectors`.
+- Some entries are data, not behavior: `Hosts`, `AgentTools`, `Poller` each returns an unchanging value (constant or config).
 
-方案：
+Proposal:
 
 ```go
 type Connector interface {
-    Manifest() Manifest // 启动时读一次；子进程在握手时报同一个结构
+    Manifest() Manifest // Read once at startup; subprocess reports the same structure in its handshake
 }
 
 type Manifest struct {
     ID, Name     string
-    Protocol     int          // 连接器协议的版本（第 4 条）
-    Capabilities []Capability // 有类型的常量：CapStatus、CapTools、CapInbox、CapChanges、CapLogin、CapOptions…
+    Protocol     int          // Connector protocol version (point 4)
+    Capabilities []Capability // Typed constants: CapStatus, CapTools, CapInbox, CapChanges, CapLogin, CapOptions…
     Hosts        []string
-    Tools        []ToolSpec   // 每个工具：名字、只读还是写、给不给 Agent（取代 AgentTools，粒度到工具）
-    Inbox        *InboxSpec   // 种类（名字、标签、默认档）、能不能回复、会不会自己收旧条目
-    Changes      *ChangesSpec // 多久问一次（取代 Poller）、能不能往回补、有没有附件
-    Login        *LoginSpec   // 登录的方式（第 7 条）
+    Tools        []ToolSpec   // Each tool: name, read/write, exposed to Agents (replaces AgentTools, per-tool granularity)
+    Inbox        *InboxSpec   // Kinds (name, label, default tier), reply support, whether it settles old items itself
+    Changes      *ChangesSpec // Poll interval (replaces Poller), backfill support, attachments
+    Login        *LoginSpec   // Login methods (point 7)
 }
 ```
 
-- 类型断言只用来**分派**：清单里声明了 `CapInbox`，hub 才去断言 `Inbox` 接口；声明了却没实现、实现了却没声明，`Registry.Add` 直接报错（启动时就发现，不是运行时回空）。
-- 接口合并到 7 组：`Status`（必选，给一个嵌入用的 `connector.Base` 默认 `ok`）、`Run`（合并 `Runner` + `Events` + `Machines`：`Run(ctx, Host)`，
-  `Host` 给 `Changed(scope)`、`MachineOnline` 订阅）、`Tools`（`ReadTools` + `Actions`，`Describe` 能回错误，取代 `Validator`）、`Inbox`、`Changes`（第 2 条）、`Login`、`Options`。
-- `GET /api/v1/connectors` 的 `capabilities` 从清单来，现有的名字不变，App 不用改。
+- Type assertions are only for **dispatch**: the hub asserts `Inbox` only if the manifest declares `CapInbox`; declared but unimplemented, or implemented but undeclared, fails in `Registry.Add` (caught at startup rather than returning empty at runtime).
+- Merge interfaces into seven groups: `Status` (required, with an embeddable `connector.Base` defaulting to `ok`), `Run` (merges `Runner` + `Events` + `Machines`: `Run(ctx, Host)`,
+  where `Host` provides `Changed(scope)` and `MachineOnline` subscription), `Tools` (`ReadTools` + `Actions`, `Describe` can return errors, replacing `Validator`), `Inbox`, `Changes` (point 2), `Login`, `Options`.
+- `capabilities` in `GET /api/v1/connectors` comes from the manifest; existing names remain unchanged, so no App changes.
 
-改动：**小到中**。机械地改 5 个连接器和 hub 的分派，MCP / 收件箱 / 知识库的 golden 必须逐字节不变。
+Size: **small to medium**. Mechanical changes to five connectors and hub dispatch; MCP / Inbox / knowledge-base goldens must remain byte-for-byte identical.
 
-### 2. 进知识库：统一成「按游标取变化」
+### 2. Knowledge-base ingestion: unify as "cursor-based changes"
 
-**不做（2026-11-03 拍板，V7）。** 看完代码以后的结论：
+**Not doing this (decided 2026-11-03, V7).** Conclusions after reading the code:
 
-- GitHub、邮件、信息、Telegram 四个 `Archive` 已经是同一种「按游标取变化」，统一它们只剩改名。
-- 飞书的 `Items`（文档、会议、日程）是每次全量的快照，不是增量；硬并进游标接口还得另开一个按链接查文档标题的口子。
-- 飞书的 `Chats`（每个会话一个游标、往回补、下附件）就是知识库的归档引擎本身，包一层适配器只是把代码挪个地方，
-  对外没有任何变化，却是在最大的来源上风险最高的一步。
+- GitHub, mail, Messages and Telegram's four `Archive` implementations already use the same cursor-based changes pattern; unifying them would only rename things.
+- Lark's `Items` (documents, meetings, events) returns full snapshots, not increments; forcing it into a cursor interface would still require another endpoint for document-title lookup by link.
+- Lark's `Chats` (per-conversation cursors, backfill, attachment downloads) is the knowledge-base archive engine itself. An adapter would merely move code,
+  with no external change, yet create the highest-risk step on the largest source.
 
-所以三种形状照旧：`Archive`、`Chats`、`Items`（「一 · 进知识库」）。下面是当时的提案，留作记录。
+So the three shapes stay: `Archive`, `Chats`, `Items` ("I · Knowledge-base ingestion"). The original proposal follows for the record.
 
-当时的判断：**大部分同意；往回补和附件不并进去。**
+The judgment then: **mostly agreed; backfill and attachments stay separate.**
 
-现状三种形状加一个节奏：`Archive`（GitHub、邮件、信息、Telegram，已经是「按游标取变化」）、`Chats`（飞书和公司圈，每个会话一个游标，
-知识库引擎自己挑会话、往回补、下附件）、`Items`（飞书的文档、会议、日程，每次给全量快照）、`Poller`（只是节奏）。
+Three current shapes plus scheduling: `Archive` (GitHub, mail, Messages, Telegram, already cursor-based changes), `Chats` (Lark and Moments, per-conversation cursors,
+with the knowledge-base engine selecting conversations, backfilling and downloading attachments), `Items` (Lark documents, meetings, events, a full snapshot each time), `Poller` (only scheduling).
 
-方案：
+Proposal:
 
 ```go
 type Changes interface {
-    // cursor 是连接器自己的（一个数、每个账号一个数、每个会话一个数都行），hub 原样存、原样还。
+    // The connector owns the cursor (one number, one per account, or one per conversation); the hub stores and returns it verbatim.
     Changes(ctx context.Context, cursor string, limit int) (Batch, error)
 }
 type Batch struct {
-    Chats    []ChatBatch // 会话的新消息（同现在）
-    Items    []kb.Item   // 文档、会议、日程（取代 Items）
+    Chats    []ChatBatch // New conversation messages (as today)
+    Items    []kb.Item   // Documents, meetings, events (replaces Items)
     Next     string
     More     bool
-    NextPoll time.Duration // 取代 Poller；0 用清单里的
+    NextPoll time.Duration // Replaces Poller; 0 uses the manifest value
 }
 ```
 
-- 已经是 `Archive` 的 4 个连接器：只改名和返回结构。
-- `Items`：并进 `Batch.Items`；`DocTitle`（按链接查文档标题）不是「变化」，留成一个可选的查询（以后并进 v1 计划里的「链接」）。
-- 飞书的会话：用一个适配器 `connector.PerChat(kb.Source)` 把「每个会话一个游标」包成一个复合游标，引擎挑会话的逻辑搬进适配器。
-  **飞书是最大的来源，这一步风险最高，放最后**，必须过 M0 的对照基线（当时 hub 的 connector_baseline_test.go，#1571 随 hub 的飞书来源删掉）和真实数据对照。
-- **不并进去的**：往回补（读更早的历史，方向和「从上次到现在」相反）留成可选的 `Backfill`；附件（`Download`）留成可选的 `Media`。
-  硬塞进 `Changes` 会让游标同时表示两个方向，更难懂。
+- The four existing `Archive` connectors: only rename and change the return structure.
+- `Items`: merge into `Batch.Items`; `DocTitle` (document-title lookup by link) is not a "change", so remains an optional query (later merged into "Links" in the v1 plan).
+- Lark conversations: an adapter `connector.PerChat(kb.Source)` wraps per-conversation cursors into a composite cursor, moving the engine's conversation-selection logic into the adapter.
+  **Lark is the largest source and this is the highest-risk step, so do it last**, with the M0 comparison baseline (then the hub's connector_baseline_test.go, removed with the hub's Lark source in #1571) and real-data comparison required.
+- **Kept separate**: backfill (reading older history, the opposite direction from "since last time") remains optional `Backfill`; attachments (`Download`) remain optional `Media`.
+  Forcing them into `Changes` makes one cursor represent two directions and harder to understand.
 
-改动：**中**（4 个连接器几乎机械）**到大**（飞书）。公司圈跟飞书一起走。
+Size: **medium** (almost mechanical for four connectors) **to large** (Lark). Moments moves with Lark.
 
-### 3. 打补丁式的接口和随手写的字符串
+### 3. Patchwork interfaces and ad hoc strings
 
-**同意，`Kind` 例外。**
+**Agreed, except for `Kind`.**
 
-- `InboxReplier`：并进 `Inbox.Reply(ctx, InboxReply)`，一个签名。5 个连接器都改；子进程的 `inbox.reply` 只多几个字段，兼容。
-- `AgentTools`：变成清单里每个工具的 `ForAgents`（第 1 条）。现在是整个连接器一起给，粒度太粗。
-- `Validator`：并进 `Describe` 返回的错误。
-- `scope`：已经有常量，但子进程、node 传过来的是字符串。改成有类型的 `Scope`，在边界上校验，认不出的记一行日志丢掉。
-- 收件箱的档（`"action"`、`"fyi"`、`"noise"`）：连接器包里没有常量，Telegram、信息、GitHub 各写各的字符串。加 `TierAction` 这几个常量。
-- **`Kind` 不做成全局枚举**：它本来就该是连接器自己的词（`review_requested`、`dm`、`ci_failed`），模型靠 `prompts/inbox/kinds/<id>.md` 理解。
-  改成在清单里声明（名字、给人看的标签、默认档），hub 遇到没声明的种类就报错，再加一个测试，检查每个声明了的种类都在提示词文件里有说明。
+- `InboxReplier`: merge into `Inbox.Reply(ctx, InboxReply)`, one signature. Change all five connectors; subprocess `inbox.reply` only gains a few fields, so remains compatible.
+- `AgentTools`: becomes per-tool `ForAgents` in the manifest (point 1). Currently an entire connector is exposed at once, too coarse.
+- `Validator`: merge into errors returned by `Describe`.
+- `scope`: constants already exist, but subprocesses and nodes send strings. Make it a typed `Scope`, validate at boundaries, log and drop unknown values.
+- Inbox tiers (`"action"`, `"fyi"`, `"noise"`): the connector package has no constants, so Telegram, Messages and GitHub each write their own strings. Add constants such as `TierAction`.
+- **Do not make `Kind` a global enum**: these should be the connector's own terms (`review_requested`, `dm`, `ci_failed`), understood by the model through `prompts/inbox/kinds/<id>.md`.
+  Declare them in the manifest instead (name, human-readable label, default tier); the hub errors on undeclared kinds, and a test checks that every declared kind is described in the prompt file.
 
-改动：**小**。
+Size: **small**.
 
-### 4. 一个有版本号的协议，在进程里的只是它的一个适配
+### 4. One versioned protocol, with in-process code as an adapter
 
-**同意要有版本号、要统一、要写规范；不同意内置连接器在生产里也走一遍 JSON。**
+**Agreed on versioning, unification and a written spec; disagreed on making built-in connectors pass through JSON in production.**
 
-现状：三种跑法三套约定。
+Current state: three execution models, three conventions.
 
-- 子进程：没有版本号，靠「同一次构建」。字段大多没有 JSON 标签，线上的键是 Go 的字段名（`Cursor`、`Batches`），第三方很难照着写。
-- node 中转：只为 iMessage 写的 5 个方法，当时在 `node/node.go` 里写死（现在是 `node/connectors.go` 的 `serveLocalConnector`）。
-- 第三方：`plan-connectors.md` 的「外部进程」一节设计过 HTTP + MCP，没实现。
+- Subprocess: no version, relies on "same build". Most fields lack JSON tags, so wire keys are Go field names (`Cursor`, `Batches`), hard for third parties to reproduce.
+- node relay: five iMessage-specific methods, then hardcoded in `node/node.go` (now `serveLocalConnector` in `node/connectors.go`).
+- Third party: HTTP + MCP was designed in `plan-connectors.md` ("External processes") but not implemented.
 
-方案：
+Proposal:
 
-- **协议 v2**：JSON-RPC 风格的一行一条消息（沿用 `internal/rpc`，已经在 hub↔node、hub↔子进程上跑着），字段一律 snake_case，方法和第 1–3 条的接口一一对应：
-  `initialize`（双方报 `protocol` 版本，hub 支持当前和上一版）→ 程序回清单 → `status`、`changes`、`inbox.collect`、`inbox.reply`、`tools.call`、`action.describe`、`action.do`、`login.step`……；
-  程序调 hub：`secrets.*`、`changed`。错误有固定的 code（`not_signed_in`、`rate_limited`、`unknown_method`…）。
-- **三种传输共用这一套**（已拍板，第三方也用这一套，不走原计划的 HTTP + MCP）：stdin / stdout（第一方子进程、第三方本地程序）；经 node 中转（hub 发 `connector.call {id, method, params}`，node 原样转给它那边的连接器，
-  iMessage 的 `Reader` 变成 node 上跑的一个协议 v2 连接器，不再是写死的 5 个方法）；常驻服务的 WebSocket（第三方的服务自己跑着，hub 去连，和 `docs/daemons.md` 的连法一样）。
-- **在进程里的**（已拍板）：生产上照旧直接调 Go 接口（类型检查、不复制大批量的消息）。但测试里有一个「过一遍 JSON」的适配器：同一套**一致性测试**
-  （`connector/conformance`）对每个内置连接器跑两遍（直接调 / 编码再解码），保证「在进程里的就是协议的一个实现」这句话是被测试守着的，而不只是写在文档里。
-- **工具描述**：第三方的工具描述不在本仓库的 `prompts/`，这是「提示词一律放 prompts/」的明文例外（`plan-connectors.md` 已写）。
-  第三方能不能直接挂现成的 MCP server 当「只有读工具的连接器」：可以作为协议的一个可选能力（`tools` 走 MCP），不作为主协议，
-  因为 MCP 没有游标、收件箱、登录这些。
-- **给第三方的规范**：单写 `docs/connector-protocol.md`：握手、清单、每个方法的参数和结果、错误码、版本规则，加上安全的硬性规定（写操作只能是声明过的 action、
-  由 hub 过闸门后调；密钥只能存 hub 给的 `secrets`；日志不写正文和号码；`status` 不联网），以及一致性测试怎么对自己的程序跑。草案的要点就是上面几条。
+- **Protocol v2**: JSON-RPC-style one-message-per-line (reuse `internal/rpc`, already used hub↔node and hub↔subprocess), all fields snake_case, methods mapping one-to-one to the interfaces in points 1–3:
+  `initialize` (both sides report `protocol` versions; the hub supports current and previous) → program returns manifest → `status`, `changes`, `inbox.collect`, `inbox.reply`, `tools.call`, `action.describe`, `action.do`, `login.step`…;
+  program calls hub: `secrets.*`, `changed`. Fixed error codes (`not_signed_in`, `rate_limited`, `unknown_method`…).
+- **The same protocol on three transports** (decided: third parties use it too, not the original HTTP + MCP plan): stdin / stdout (first-party subprocesses, third-party local programs); node relay (hub sends `connector.call {id, method, params}`, node forwards verbatim to its connector,
+  with iMessage's `Reader` becoming a protocol-v2 connector on the node instead of five hardcoded methods); WebSocket for resident services (third-party service runs itself and the hub connects, like `docs/daemons.md`).
+- **In-process** (decided): production still calls Go interfaces directly (type checking, no copies of large message batches). Tests get a JSON round-trip adapter: the same **conformance tests**
+  (`connector/conformance`) run twice for each built-in connector (direct / encode then decode), so "in-process is an implementation of the protocol" is enforced by tests, not merely written in a doc.
+- **Tool descriptions**: third-party tool descriptions do not live in this repo's `prompts/`, an explicit exception to "all prompts live in prompts/" (already stated in `plan-connectors.md`).
+  Can a third party attach an existing MCP server as a connector with only read tools? It can be an optional protocol capability (`tools` over MCP), not the main protocol,
+  because MCP has no cursors, Inbox or login.
+- **Third-party spec**: write `docs/connector-protocol.md` separately: handshake, manifest, every method's parameters/results, error codes, version rules, hard safety requirements (writes only as declared actions,
+  invoked by the hub after gating; secrets only in the hub-provided `secrets`; no body text or numbers in logs; no networking in `status`), and how to run conformance tests on your program. The draft's essentials are above.
 
-改动：**大**。Telegram（子进程，跟 personad 一起发，同时升级，最简单）→ 信息（node 上要换实现，旧 node 照旧走 5 个方法）→ 第三方的规范和一致性测试。
-飞书、邮件、GitHub 在 hub 里，只跑一致性测试。
+Size: **large**. Telegram (subprocess, released with personad, upgraded together, simplest) → Messages (node implementation changes, old nodes keep the five methods) → third-party spec and conformance tests.
+Lark, mail and GitHub stay in the hub and only run conformance tests.
 
-### 5. 收件箱条目带结构化属性，合并、静音、自动关闭由 hub 统一做
+### 5. Structured Inbox attributes; hub-managed merging, muting and automatic closure
 
-**同意合并键、发送者种类、标签、取代关系由 hub 统一处理；不同意「怎样算自动解决」写成声明式条件。**
+**Agreed on hub-managed merge keys, sender kinds, tags and supersession; disagreed on declarative conditions for "automatically resolved".**
 
-现状：降噪全在 GitHub 连接器里（`connector/github/rules.go`）：CI 按「仓库 + 分支」合并（把 `Thread` 本身做成 `ci:<仓库>@<分支>`）、
-认机器人（`isBot`）、静音仓库和忽略分支（GitHub 自己的 `Options`）、后来成功 / 分支删了 / PR 合了就关（`followUpCI` + `Settle`）。
-Telegram、信息各自又写一遍「群聊算知悉即可」「机器人不进收件箱」。换一个来源就要再写一遍，App 里也只有 GitHub 能静音。
+Current state: all noise reduction lives in the GitHub connector (`connector/github/rules.go`): CI merges by "repository + branch" (`Thread` itself becomes `ci:<repo>@<branch>`),
+bot recognition (`isBot`), muted repositories and ignored branches (GitHub's own `Options`), and closure after a successful run / branch deletion / PR merge (`followUpCI` + `Settle`).
+Telegram and Messages each repeat "groups are FYI" and "bots stay out of the Inbox". Every new source repeats this, and only GitHub can be muted in the App.
 
-方案：`InboxThing` 加这些字段：
+Proposal: add these fields to `InboxThing`:
 
-| 字段 | 意思 | hub 统一做什么 |
+| Field | Meaning | What the hub handles centrally |
 | --- | --- | --- |
-| `Group` | 合并键（不填就是 `Thread`） | 同一个 `Group` 的打开条目合成一个；`Thread` 只管「回复发到哪」 |
-| `From {Name, Kind, Handles}` | 最新一步是谁做的；`Kind` 是 `person` / `bot` / `self` / `system`；`Handles` 见第 6 条 | 规则：机器人默认「知悉即可」，自己的动作不算新消息 |
-| `Tags map[string]string` | 筛选和静音用的属性（`repo`、`branch`、`branch_role`、`chat`、`sender`） | 静音规则按标签匹配（支持通配），存在 hub；App 的条目菜单「静音这个仓库 / 会话 / 发件人」对所有来源都一样（已拍板，新界面先截图） |
-| `Supersedes []string` | 这件事取代了哪些 `Group`（CI 后来跑成功了：成功的那条取代失败的分组） | 被取代的打开条目收掉，原因写明 |
+| `Group` | Merge key (defaults to `Thread`) | Merge open items with the same `Group`; `Thread` only decides "where the reply goes" |
+| `From {Name, Kind, Handles}` | Who performed the latest step; `Kind` is `person` / `bot` / `self` / `system`; `Handles` in point 6 | Rule: bots default to FYI; your own actions are not new messages |
+| `Tags map[string]string` | Attributes for filtering and muting (`repo`, `branch`, `branch_role`, `chat`, `sender`) | Tag-matching mute rules (with globs), stored on the hub; the App's item menu "mute this repository / conversation / sender" works the same for every source (decided; screenshot the new UI first) |
+| `Supersedes []string` | Which `Group`s this item replaces (a later successful CI run supersedes the failed group) | Close superseded open items with a stated reason |
 
-「怎样算自动解决」保持由连接器观察、上报：分支删了、后来跑成功、PR 合了，hub 不调 GitHub 的接口就判断不了，写成声明式条件也只能让连接器去查。
-所以只把上报的方式统一成两条：推（`InboxThing.Done` + `Why`，看到就报）和拉（`InboxSettler.Settle` 改名 `Check(openGroups)`，
-hub 定时问还开着的分组结束没有）；静音和规则变了以后的收尾由 hub 自己做，不再需要连接器的 `Settle`。
+"What counts as automatically resolved" remains observed and reported by the connector: the hub cannot know that a branch was deleted, a later run succeeded or a PR merged without calling GitHub; declarative conditions would still require the connector to check.
+Unify only the reporting into two paths: push (`InboxThing.Done` + `Why`, report when observed) and pull (rename `InboxSettler.Settle` to `Check(openGroups)`,
+with the hub periodically asking whether open groups are finished). Cleanup after mute/rule changes belongs to the hub and no longer needs the connector's `Settle`.
 
-**GitHub 是第一个用的**：`muted_repos` → 标签 `repo` 的静音规则；`ignore_branches` → 标签 `branch` 的静音规则（通配）；`isBot` → `From.Kind`；
-CI 的「仓库 + 分支」→ `Group`；后来成功 → `Supersedes`；CI 模式（关 / 默认分支 / 加上我的 PR / 全部）用标签 `branch_role`（`default` / `mine` / `other`）
-在 hub 里判断，App 的 GitHub 设置页不变（只是存的地方从 GitHub 的 options 变成 hub 的静音规则；老的 `github.inbox` 配置第一次启动时转过去）。
-验收：用 #584 时的真实数据只读重放，「需要你」还是 13 条，前后一致。
+**GitHub is the first adopter**: `muted_repos` → mute rules on `repo`; `ignore_branches` → glob mute rules on `branch`; `isBot` → `From.Kind`;
+CI's "repository + branch" → `Group`; later success → `Supersedes`; CI mode (off / default branch / include my PRs / all) is evaluated in the hub through `branch_role` (`default` / `mine` / `other`).
+The App's GitHub settings page stays unchanged (storage moves from GitHub options to hub mute rules; old `github.inbox` config migrates on first startup).
+Acceptance: read-only replay of the real data used for #584 still gives 13 Needs you items, identical before and after.
 
-之后：Telegram、信息改用 `From.Kind` 和 `Tags`（删掉各自的机器人 / 群聊判断）；飞书、邮件的收件箱还是 hub 自己的块，
-等它们改用 `InboxThing`（v1 没做，是另一件事）再接上。
+Then Telegram and Messages adopt `From.Kind` and `Tags` (delete their separate bot / group checks); Lark and mail still use the hub's own Inbox blocks,
+and will attach when they adopt `InboxThing` (not done in v1; a separate task).
 
-改动：**中**。hub 的收件箱、GitHub、Telegram、信息；App 的「静音」菜单是新界面，单独一个 PR，截图给你看。
+Size: **medium**. Hub Inbox, GitHub, Telegram, Messages; the App's mute menu is new UI, a separate PR with screenshots shown to you.
 
-### 6. 发送者带身份线索
+### 6. Sender identity hints
 
-**同意，v2 只记录不合并；线索只存 HMAC 哈希，不给模型看，只用来认人（已拍板）。**
+**Agreed; v2 records but does not merge. Hints store only HMAC hashes, are hidden from models, and are used only to recognize people (decided).**
 
-现状：知识库的人（`kb/store.go` 的 `Person`）只有一个 `Source` + `SourceID`，同一个人在飞书、邮件、信息、Telegram 里各一份。
-信息为了不让号码落盘，人的 id 已经是号码 / 邮箱的哈希（`connector/imessage/jarvis.go` 的 `PersonKey`）。
+Current state: knowledge-base people (`Person` in `kb/store.go`) have only one `Source` + `SourceID`; the same person has separate entries in Lark, mail, Messages and Telegram.
+To keep numbers off disk, Messages already uses a phone/email hash as the person id (`PersonKey` in `connector/imessage/jarvis.go`).
 
-方案：
+Proposal:
 
-- `Handle{Kind, Hash}`：`Kind` 是 `email` / `phone` / `github` / `telegram` / `lark` 这些；`Hash` 是规范化之后（邮箱小写、手机号 E.164）用 hub 自己的密钥做的 HMAC。
-  同一个邮箱在邮件和信息里得到同一个哈希，能认出是同一个人，又不需要把号码写进知识库。
-- 放在 `InboxThing.From.Handles` 和 `kb.SourceMessage.SenderHandles`；`Person` 加 `Handles []string`（只增不删）。
-- **不给模型看**：MCP 工具的结果、收件箱分拣和知识库压缩的提示词里都不带线索（哈希对模型没有意义，还会白占上下文），golden 守着；
-  原值（号码、邮箱）照旧不落盘。
-- 各来源能给什么：邮件（地址）、信息（号码 / 邮箱，本来就是它的 id）、GitHub（登录名；邮箱拿不到就不给）、Telegram（用户 id；通讯录里的人才有号码）、
-  飞书（用户 id；有权限时加邮箱）。
-- **认人（把几份合成一个人）不在 v2**：拿到线索以后单独设计，包括合错了怎么拆、谁来确认。
+- `Handle{Kind, Hash}`: `Kind` is `email` / `phone` / `github` / `telegram` / `lark`; `Hash` is an HMAC with the hub's own key after normalization (lowercase email, E.164 phone).
+  The same email in mail and Messages gets the same hash, identifying the same person without writing the number to the knowledge base.
+- Put it in `InboxThing.From.Handles` and `kb.SourceMessage.SenderHandles`; add `Handles []string` to `Person` (append only).
+- **Hidden from models**: no hints in MCP results, Inbox classification prompts or knowledge-base compression prompts (hashes mean nothing to the model and waste context), enforced by goldens;
+  raw values (phone, email) still stay off disk.
+- What each source can supply: mail (address), Messages (phone / email, already its id), GitHub (login; omit email when unavailable), Telegram (user id; phone only for contacts),
+  Lark (user id; email with permission).
+- **Identity merging (combining entries into one person) is outside v2**: design separately once hints exist, including how to undo a bad merge and who confirms it.
 
-改动：**小**（各连接器加字段）**到中**（知识库写入）。5 个连接器都动一点。
+Size: **small** (connector fields) **to medium** (knowledge-base writes). Small changes to all five connectors.
 
-### 7. 登录支持「打开网页去授权」
+### 7. Login supports "open a web page to authorize"
 
-**同意。邮件要先支持多账号，放在后面。**
+**Agreed. Mail needs multi-account support first, so comes later.**
 
-现状：只有 Telegram 走 `Login`（填字段的分步）。Gmail、Outlook 是邮件自己的 `/api/v1/mail/oauth/{google,microsoft}/start|finish`；
-GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登录页（Telegram 的 App 侧正在做）。
+Current state: only Telegram uses `Login` (stepwise field entry). Gmail and Outlook use mail-specific `/api/v1/mail/oauth/{google,microsoft}/start|finish`;
+GitHub reads `gh` login from a computer. The App has no generic connector login page yet (Telegram's App side is in progress).
 
-方案：`Prompt` 除了填字段，再加两种步骤：
+Proposal: add two step types to `Prompt` beyond field entry:
 
-- `open_url`：`{url, callback_scheme}`。App 用系统的网页登录（`ASWebAuthenticationSession`）打开，拿到回调地址后作为这一步的值交回（`callback_url`）。OAuth 都是这种。
-- `device_code`：`{url, user_code, interval}`。App 显示验证码、打开网址，然后每隔 `interval` 秒问一次同一步，直到 `done`。GitHub 的设备码登录是这种。
-- `qr`（#1351）：`{url, interval}`，`url` 是要用别的 App 扫的内容（微信的扫码授权）。hub 回给 App 时附上二维码的点阵 `qr: {size, rows}`（`rows` 是一行一串 `0` / `1`，
-  不含四周的空白，和管理界面配对的二维码同一个生成法），App 照着画（深浅色下都是白底黑块，带安静区），每隔 `interval` 秒问一次同一步，直到 `done`；
-  在同一部手机上扫不了自己的屏幕，所以下面有「保存二维码」（分享 / 存到相册，再在那个 App 里从相册识别）。iOS / Mac、网页（设置 › 连接器，#1693）和 Android 都有连接器登录页。
-- 客户端画不了的步骤（不认识的 `kind`、`qr` 却没有点阵、没有字段的表单）不能显示成空表单加一个永远灰着的「下一步」（#1693）：要说明这一步画不了、下一步怎么办（更新后重新开始；也是渠道的到 设置 › 渠道 绑定），并给「重新开始」。
-  网页在 `qr` 只缺点阵、`url` 是 http(s) 时退一步显示链接（可复制，照常轮询）。iOS / Mac 一样说明这一步这个版本的 App 显示不了、更新后「重新开始」，二维码的还提示去网页版 设置 › 连接器 扫码（`ConnectorPrompt.cannotDraw`）。
-  Android（设置 › 连接器、设置 › 渠道、扩展的登录，#4488）和网页一样：`qr` 只缺点阵、`url` 是 http(s) 时显示链接（复制按钮或长按选中，照常轮询）；其余画不了的说明原因，给「重新开始」「取消」，不轮询（`SignInSteps.kt` 的 `StepView`）。
+- `open_url`: `{url, callback_scheme}`. The App opens it through system web authentication (`ASWebAuthenticationSession`), then returns the callback URL as this step's value (`callback_url`). OAuth uses this.
+- `device_code`: `{url, user_code, interval}`. The App shows the code, opens the URL, then polls the same step every `interval` seconds until `done`. GitHub device-code login uses this.
+- `qr` (#1351): `{url, interval}`, where `url` is content for another App to scan (WeChat QR authorization). The hub adds the QR matrix `qr: {size, rows}` to its App response (`rows` is one string of `0` / `1` per row,
+  without surrounding whitespace, generated like the admin pairing QR). The App draws it (black modules on white in both dark and light, with a quiet zone), polling the same step every `interval` seconds until `done`;
+  a phone cannot scan its own screen, so a "Save QR code" action appears below (share / save to Photos, then recognize it from the album in the other App). iOS / Mac, web (Settings › Connectors, #1693) and Android all have connector login pages.
+- Steps the client cannot draw (unknown `kind`, `qr` without a matrix, a form with no fields) must not become an empty form with a permanently disabled "Next" (#1693): explain that the step cannot be displayed and what to do next (update and restart; for a channel, also bind in Settings › Channels), and offer "Start over".
+  Web falls back to a link (copyable, still polled) when a `qr` step lacks only the matrix and `url` is http(s). iOS / Mac likewise explain that this App version cannot display the step and to update then "Start over"; QR steps also suggest scanning through web Settings › Connectors (`ConnectorPrompt.cannotDraw`).
+  Android (Settings › Connectors, Settings › Channels, extension login, #4488) follows the web fallback: when a `qr` step lacks only its matrix and `url` is http(s), show a link (copy button or long-press selection) and keep polling. For other unsupported steps, explain the reason, offer "Start over" and "Cancel", and do not poll (`StepView` in `SignInSteps.kt`).
 
-于是 App 只做**一个**通用登录页（填字段、打开网页、显示验证码三种步骤），Telegram、Gmail、Outlook、GitHub 都用它。
+The App then has **one** generic login page (field entry, web authorization, code display), used by Telegram, Gmail, Outlook and GitHub.
 
-- **邮件**：一个连接器下面有好几个账号，现在的 `Login` 是一个连接器一份会话。要加「账号」这一层（`login.step` 带上 `account`，空的是加一个新账号；`logout` 指定账号）。
-  老的 `/api/v1/mail/oauth/*` 留给老 App。
-- **GitHub**：设备码登录用内置的 GitHub CLI Client ID，用户不用注册 OAuth App（#1089 拍板，取代原来的「用户自己填」）。
-  这是 `cli/cli` 源码 `internal/authflow/flow.go` 里的 `oauthClientID`（`178c6fc778ccc68e1d6a`，源码注释写明可以放进版本库），
-  写死在 `server/internal/connector/github/login.go` 的 `ghCLIClientID`；设备码登录不需要 client secret。登录第一步直接拿验证码，App 显示验证码、自动等授权。
-  以前的 hub 存过用户自填的 client ID：不再读取，下次保存时丢掉；用它拿到的 token 照常可用。GitHub 拒绝发验证码时直接报错，不再回到填 ID。
-  「读某台电脑上的 gh 登录」作为另一种方式保留。
+- **Mail**: one connector has several accounts, while today's `Login` holds one session per connector. Add an "account" layer (`login.step` carries `account`, empty to add an account; `logout` names the account).
+  Keep old `/api/v1/mail/oauth/*` for old Apps.
+- **GitHub**: device-code login uses the built-in GitHub CLI Client ID; users need not register an OAuth App (decided #1089, replacing user-entered IDs).
+  This is `oauthClientID` in `internal/authflow/flow.go` of `cli/cli` (`178c6fc778ccc68e1d6a`, whose source comment explicitly permits committing it),
+  hardcoded as `ghCLIClientID` in `server/internal/connector/github/login.go`; device-code login needs no client secret. The first step gets the code directly, and the App shows it and automatically waits for authorization.
+  Older hubs stored a user-entered client ID: stop reading it and discard it on the next save; tokens obtained with it remain valid. If GitHub refuses to issue a code, report the error directly, not another ID form.
+  Keep "read gh login from a computer" as an alternative.
 
-  用户看到的：
+  What the user sees:
 
-  1. 设置 › 连接器 › GitHub › 从哪里登录 › 设备码登录 › 登录，App 显示验证码。
-  2. 在 github.com/login/device 输入验证码。**授权页上显示的是「GitHub CLI」**（借用的是它的 OAuth App），不是 Persona，属正常。
-  3. GitHub 列出要的权限：只有 `repo`（读写仓库，包括私有仓库的 PR、issue、评论、review、CI 和日志，也包括通知），确认即可；
-     以后要撤销在 Settings › Applications › Authorized OAuth Apps 里找「GitHub CLI」（撤销会同时让各台电脑上用 gh 设备码登录拿到的同一授权失效，需要时重新 `gh auth login`）。
+  1. Settings › Connectors › GitHub › Login source › Device-code login › Log in; the App shows a code.
+  2. Enter it at github.com/login/device. **The authorization page says "GitHub CLI"** (its OAuth App is being reused), not Persona; this is expected.
+  3. GitHub lists the requested permission: only `repo` (read/write repositories, including private-repository PRs, issues, comments, reviews, CI and logs, and notifications); confirm it.
+     To revoke later, find "GitHub CLI" in Settings › Applications › Authorized OAuth Apps (revoking also invalidates the same grant obtained by gh device-code login on your computers; run `gh auth login` again when needed).
 
-改动：**中**。hub 的登录接口、App 的通用登录页（新界面，截图给你看）、邮件的多账号、GitHub 的设备码。
+Size: **medium**. Hub login API, generic App login page (new UI, screenshots shown to you), multi-account mail, GitHub device codes.
 
-### 8. 写操作只以工具提供、必须过闸门；skill 不加额外闸门
+### 8. Writes are tools and must be gated; no extra gate for skills
 
-**连接器的写操作照旧以工具过 `connector_gate`；skill 不加额外闸门，交给 Claude Code 自己的权限判断（2026-11-03 拍板，V2 不做）。**
+**Connector writes still go through `connector_gate` as tools; skills get no extra gate and rely on Claude Code's own permission checks (decided 2026-11-03; V2 rejected).**
 
-现状（不变）：
+Current state (unchanged):
 
-- 连接器的写操作都是 `Actions`，AI 调的都过闸门（`github_comment`、`github_review`、`mail_send`）；用户在 App 里自己点发送的不过（#1190，见「闸门」）。
-- 飞书的写操作是例外：接飞书的扩展带的 skill 里的命令和 lark-cli，node 的 Bash 钩子按命令判断读写（M5 后规则也写在 `connector_gate`），不管权限模式都要确认。
-- 用户自己放进 `~/.persona/skills` 的 skill 都会链接进助手的目录；助手调这些 skill 的脚本走 Claude Code 自己的权限流程。
+- Connector writes are `Actions`, gated for every AI call (`github_comment`, `github_review`, `mail_send`); manual sends in the App bypass the gate (#1190, see "Gate").
+- Lark writes are the exception: commands and lark-cli in the Lark extension's skill are classified by the node's Bash hook (rules also in `connector_gate` after M5), requiring confirmation regardless of permission mode.
+- User skills in `~/.persona/skills` are linked into the assistant directory; their scripts follow Claude Code's permission flow.
 
-曾经的提案是把 `larkgate.go` 的「按命令判断」推广到所有 skill（skill 在 `jarvis.json` 里声明写脚本，执行时手机上确认，#654 / #657）。
-用户的决定：skill 写操作的鉴权 Claude Code 自己已经有了，Claude 会自己判断，需要用户判断的时候会问用户，「这块千万别过度设计」。所以不做，代码没有合入。
+The former proposal generalized `larkgate.go` command classification to every skill (declare write scripts in `jarvis.json`, confirm on the phone at execution, #654 / #657).
+The user's decision: Claude Code already authorizes skill writes; Claude judges for itself and asks when a user decision is needed. "Do not over-engineer this." So it was not implemented or merged.
 
-要写就做成连接器的 action 这条照旧：Telegram 的发送、回复、转发、reaction、标已读做成了 `telegram_send` 等 actions（#988），
-经 `tg` 命令行调，过闸门，卡片写明发给谁、全文；子进程协议为此加了 `actions.*`（`docs/connector-protocol.md`）。
+The rule to make writes connector actions remains: Telegram send, reply, forward, reaction and mark-read became actions such as `telegram_send` (#988),
+called through the `tg` CLI, gated with a card naming the recipient and full text; the subprocess protocol gained `actions.*` for this (`docs/connector-protocol.md`).
 
-## 三、迁移顺序
+## III. Migration order
 
-每一步一个 issue 一个 PR，外部行为不变的步骤都要过现有的 golden（MCP 工具、收件箱、知识库的 M0 基线），改界面的步骤截图给你看。
+Each step gets one issue and one PR. Steps preserving external behavior must pass existing goldens (MCP tools, Inbox, knowledge-base M0 baseline); UI changes get screenshots shown to you.
 
-| 步 | 内容 | 对应 | 大小 | 动哪些 | 兼容 |
+| Step | Contents | Points | Size | Affected | Compatibility |
 | --- | --- | --- | --- | --- | --- |
-| V1 ✓ | 清单（`Manifest`）+ 按清单分派（`As`、`Check`）；档、scope 的常量；`Capabler`、`Hosts`、`Poller`、`AgentTools`、`Validator`、`InboxReplier` 并掉；种类在清单里声明并对照提示词。可选接口从 19 个减到 11 个能力接口加 `Runner`、`Machines`。**没做的**：`Runner` + `Events` + `Machines` 并成 `Run(ctx, Host)`（会把 hub 的 `Watch` 退避重启搬进各连接器，对外有变化，和 V5 的协议一起做）；`ReadTools` + `Actions` 两个能力保留（清单分得开读写，合并没有好处）；`Settle` 在 V3 改，知识库的三种在 V7 并 | 1、3 | 小到中 | 5 个都动（机械） | 对外不变：`GET /api/v1/connectors` 的能力和 MCP 工具的 golden 一致，真实 hub 的列表前后对照 |
-| ~~V2~~ | ~~skill 的命令闸门~~：**不做**（2026-11-03 用户决定：交给 Claude Code 自己的权限判断，见第 8 条；#654 关闭） | 8 | — | — | — |
-| V3 ✓ | 收件箱的静音由 hub 统一做（#670）：`InboxThing.Tags`（`repo`、`chat`、`sender`、`branch`），所有来源（飞书、邮件、GitHub、信息、Telegram）按「来源 + 标签 + 值」静音，收集时收掉被覆盖的；App 每一行的长按菜单「静音这个仓库 / 会话 / 发件人」和「更多 › 已静音」；GitHub 的 `muted_repos` 变成静音（启动时搬过去，设置页照旧）。**没做**：`Group`、`From`、`Supersedes`——按 `Thread` 合并本来就是 hub 统一做的，GitHub 的 CI 后来成功、分支删了、PR 合了也已经由它自己报 `Done`，等有连接器真要用再加，不过度设计 | 5 | 中 | GitHub、Telegram、信息、hub 收件箱、App | 新字段和新接口；老 App 不画菜单、GitHub 设置页照旧；条目多了 `mutes`，连接器块多了 `tags`（wire 样例已更新） |
-| V4 ✓ | 身份线索（只记录，#687）：连接器在消息上带发送者的原始线索（只在内存），知识库用 hub 的密钥（`~/.jarvis/handles.key`）做 HMAC 后存进人的 `handles.json`，不进 `meta.json`、模型看不到；5 个连接器都给（邮件地址、信息的邮箱 / 号码、GitHub 登录名、Telegram 用户、飞书用户 id）。**没做**：收件箱条目上的 `From.Handles`（还没有用的地方）、飞书的邮箱（要额外权限） | 6 | 小 | 5 个都动一点、知识库 | 新文件，老数据不动；`meta.json` 和 golden 不变 |
-| V5 ✓ | 协议 v2（#699）：线上字段一律 snake_case，`init` 和清单带 `protocol`（现在是 2，不一致就停），固定的错误码（`not_initialized`、`no_capability`、`unknown_method`、`wrong_protocol`）；规范写在 `docs/connector-protocol.md`；一致性测试 `connector/conformance` 把 GitHub、信息、Telegram 放到协议的程序一侧，逐个能力比直接调和经协议调的结果，`TestWireTypesAreTagged` 检查线上字段都有名字。**没做**：信息的 node 侧换成协议 v2（node 上照旧是写死的 5 个方法，能用，等要动 node 时再换）、常驻服务的 WebSocket 传输（等第一个外部连接器） | 4 | 中 | Telegram、hub 的子进程接法、测试 | 子进程和 hub 同一次构建一起升级；node 不动 |
-| V6 ✓ | GitHub 的登录在 App 里选（#704）：**从哪里登录**——列出各台电脑和它们 gh 的登录（账号、权限），用户选一台；或者**设备码登录**（不依赖电脑，用内置的 GitHub CLI Client ID，App 直接显示验证码、自动等授权；#1089 前要用户填自己 OAuth App 的 Client ID）。选择存在 hub 设置里（`github_auth`），hub.json 的 `github.auth.from_machine` 只是默认值；换一个就是退出上一个（选电脑时忘掉设备码的 token），所以 GitHub 没有单独的退出登录。**权限**：连接器只用 `repo`（读私有仓库的 PR / issue / 评论 / CI 和日志、搜索、评论和 review，也包括通知；不碰组织和团队，所以不要 `read:org`），设备码登录只申请 `repo`；用的 token 少了 scope（GitHub 的 `X-OAuth-Scopes`）时页面写明少了什么、怎么补（`gh auth refresh -s repo` 或改用设备码）、哪些功能受影响。登录步骤多一种 `device_code`。**没做**：`open_url` 步骤（现在没人用，邮件的 OAuth 照旧）、邮件多账号 | 7 | 中 | GitHub、hub、App | hub.json 照旧生效（没选过时）；老 App 看不到选择区 |
-| ~~V7~~ | ~~进知识库统一成 `Changes`~~：**不做**（2026-11-03 用户决定，理由见第 2 条：四个 `Archive` 已经同形，`Items` 是全量快照，飞书的会话就是知识库引擎本身）；#731 | 2 | — | — | — |
-| — | 第三方规范 `docs/connector-protocol.md`，等第一个外部连接器再实现 WebSocket 传输 | 4 | — | — | — |
+| V1 ✓ | Manifest (`Manifest`) + manifest-based dispatch (`As`, `Check`); tier/scope constants; remove `Capabler`, `Hosts`, `Poller`, `AgentTools`, `Validator`, `InboxReplier`; declare kinds and check their prompts. Optional interfaces shrink from 19 to 11 capability interfaces plus `Runner`, `Machines`. **Not done**: merging `Runner` + `Events` + `Machines` into `Run(ctx, Host)` (would move hub `Watch` backoff/restart into connectors, changing behavior; do with V5's protocol); retain separate `ReadTools` + `Actions` (the manifest distinguishes reads/writes, merging has no benefit); `Settle` changes in V3, the three knowledge-base shapes merge in V7 | 1, 3 | Small to medium | All five (mechanical) | No external change: `GET /api/v1/connectors` capabilities and MCP goldens match; compare real hub lists before/after |
+| ~~V2~~ | ~~Skill command gate~~: **rejected** (user decision 2026-11-03: rely on Claude Code's permission checks, point 8; #654 closed) | 8 | — | — | — |
+| V3 ✓ | Hub-managed Inbox muting (#670): `InboxThing.Tags` (`repo`, `chat`, `sender`, `branch`); all sources (Lark, mail, GitHub, Messages, Telegram) mute by "source + tag + value", settling covered items during collection; each App row's long-press menu offers "mute this repository / conversation / sender", plus "More › Muted"; GitHub `muted_repos` migrates to mutes at startup, settings page unchanged. **Not done**: `Group`, `From`, `Supersedes`—the hub already merges by `Thread`, and GitHub already reports `Done` after CI success, branch deletion or PR merge. Add only when a connector actually needs them; no over-engineering | 5 | Medium | GitHub, Telegram, Messages, hub Inbox, App | New fields/APIs; old Apps omit menus, GitHub settings unchanged; items gain `mutes`, connector blocks gain `tags` (wire samples updated) |
+| V4 ✓ | Identity hints (record only, #687): connectors include raw sender hints in messages (memory only); the knowledge base HMACs them with the hub key (`~/.jarvis/handles.key`) and stores them in the person's `handles.json`, not `meta.json`, invisible to models; all five supply hints (mail addresses, Messages emails / numbers, GitHub logins, Telegram users, Lark user ids). **Not done**: `From.Handles` on Inbox items (no consumer yet), Lark emails (extra permission needed) | 6 | Small | Small changes to all five, knowledge base | New file, old data untouched; `meta.json` and goldens unchanged |
+| V5 ✓ | Protocol v2 (#699): all wire fields snake_case, `init` and manifest carry `protocol` (currently 2; mismatch stops it), fixed error codes (`not_initialized`, `no_capability`, `unknown_method`, `wrong_protocol`); spec in `docs/connector-protocol.md`; `connector/conformance` puts GitHub, Messages and Telegram on the program side, comparing direct and protocol results for each capability; `TestWireTypesAreTagged` checks every wire field has a name. **Not done**: converting Messages' node side to protocol v2 (the five hardcoded methods work; change when touching node), resident-service WebSocket transport (wait for the first external connector) | 4 | Medium | Telegram, hub subprocess integration, tests | Subprocess and hub upgraded from the same build; node unchanged |
+| V6 ✓ | Choose GitHub login in the App (#704): **Login source** lists computers and their gh logins (account, scopes), letting the user select one; or **Device-code login** (no computer needed, built-in GitHub CLI Client ID, App shows the code and waits automatically; before #1089 users entered their OAuth App Client ID). Selection stored in hub settings (`github_auth`); hub.json `github.auth.from_machine` is only the default. Switching logs out the previous source (selecting a computer forgets the device-code token), so GitHub has no separate logout. **Scopes**: only `repo` (private-repository PRs / issues / comments / CI and logs, search, comments, reviews, notifications; no orgs or teams, so no `read:org`); device-code login requests only `repo`. If the token lacks scopes (GitHub `X-OAuth-Scopes`), the page states what is missing, how to add it (`gh auth refresh -s repo` or device-code login), and affected features. New `device_code` login step. **Not done**: `open_url` (no current user; mail OAuth unchanged), multi-account mail | 7 | Medium | GitHub, hub, App | hub.json still works before a selection; old Apps omit the selector |
+| ~~V7~~ | ~~Unify knowledge-base ingestion as `Changes`~~: **rejected** (user decision 2026-11-03, reasons in point 2: four `Archive`s already match, `Items` is a full snapshot, Lark conversations are the knowledge-base engine itself); #731 | 2 | — | — | — |
+| — | Third-party spec `docs/connector-protocol.md`; implement WebSocket transport with the first external connector | 4 | — | — | — |
 
-顺序的理由：V1 便宜、后面都要用；V3 是用户最能感觉到的（每个来源都能静音、降噪）；
-V5–V7 大而收益在内部，放后面，飞书的会话最后。
+Why this order: V1 is cheap and needed by everything after it; V3 is the most visible to users (mute and reduce noise for every source);
+V5–V7 are larger with mostly internal benefits, so come later, Lark conversations last.
 
-**收尾（2026-11-03）**：V1、V3、V4、V5、V6 做完；V2（skill 闸门）和 V7（统一进知识库）用户决定不做。连接器 v2 到此结束。
+**Closeout (2026-11-03)**: V1, V3, V4, V5, V6 complete; the user rejected V2 (skill gate) and V7 (unified knowledge-base ingestion). Connector v2 ends here.
 
-## 四、拍板结果（2026-11-03）
+## IV. Decisions (2026-11-03)
 
-1. **整体方向和 V1–V7 的顺序**：同意。V1、V7 对外不变，用 golden 和真实数据对照守住。后来 V7 改为不做（见第 2 条）。
-2. **第 4 条**：内置连接器生产上照旧直接调 Go 接口，只在测试里过一遍 JSON，一致性测试守住。
-3. **第 4 条**：第三方连接器用「一行一条 JSON 的 RPC，走 stdin / stdout 或 WebSocket」，和子进程、node 是一套；不走原计划的 HTTP + MCP。
-4. **第 5 条**：收件箱每一行的菜单加「静音这个仓库 / 会话 / 发件人」，所有来源一样。是新界面，做的时候先给截图。
-5. **第 6 条**：身份线索只存 HMAC 哈希，不给模型看，只用来认人。
-6. **第 7 条**：GitHub 设备码登录用内置的 GitHub CLI Client ID，用户不用注册 OAuth App，授权页上显示的是「GitHub CLI」（2026-11-04 用户改拍板，#1089；原来的「用户自己填 client ID」作废），见第 7 条。
-7. **第 8 条**：先定的是「skill 闸门默认放行，只拦声明为写的命令，只管助手」；随后改为**不做 skill 闸门**：skill 写操作交给 Claude Code 自己的权限判断，Claude 会自己判断、需要时问用户，不要过度设计。连接器的写操作照旧以工具过 `connector_gate`。
+1. **Overall direction and V1–V7 order**: agreed. V1 and V7 preserve external behavior, enforced by goldens and real-data comparison. V7 was later rejected (see point 2).
+2. **Point 4**: built-in connectors keep direct Go calls in production; JSON round-trips happen only in tests, enforced by conformance tests.
+3. **Point 4**: third-party connectors use "one JSON message per line over RPC, on stdin / stdout or WebSocket", the same protocol as subprocesses and nodes; not the original HTTP + MCP plan.
+4. **Point 5**: add "mute this repository / conversation / sender" to every Inbox row's menu, for all sources. This is new UI; show screenshots first when implementing it.
+5. **Point 6**: identity hints store only HMAC hashes, hidden from models, used only to recognize people.
+6. **Point 7**: GitHub device-code login uses the built-in GitHub CLI Client ID, so users need not register an OAuth App; the authorization page says "GitHub CLI" (user revised the decision 2026-11-04, #1089; the original user-entered client ID decision is void), see point 7.
+7. **Point 8**: initially decided "skill gate allows by default, blocks only declared write commands, applies only to the assistant"; then changed to **no skill gate**: Claude Code's own permissions govern skill writes; Claude judges and asks when needed, without over-engineering. Connector writes remain tools gated through `connector_gate`.
