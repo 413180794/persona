@@ -123400,7 +123400,7 @@
       "extractionState": "manual"
     },
     "The inference service has no GPU available right now": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123411,7 +123411,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "推論サービスで今使えるGPUがありません"
+            "value": "推論サービスで現在利用できるGPUがありません"
           }
         },
         "zh-Hans": {
@@ -123423,7 +123423,7 @@
       }
     },
     "The model service is overloaded": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123446,7 +123446,7 @@
       }
     },
     "The sign-in expired. Run /login again on the computer": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123469,7 +123469,7 @@
       }
     },
     "Too many requests: rate limited": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123492,7 +123492,7 @@
       }
     },
     "The request timed out": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123515,7 +123515,7 @@
       }
     },
     "Can't reach the model service": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123538,7 +123538,7 @@
       }
     },
     "The request was refused: something is wrong with its parameters or context": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123561,7 +123561,7 @@
       }
     },
     "The model service is unavailable right now": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123584,7 +123584,7 @@
       }
     },
     "The model request failed": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why a model request failed: the first line of the error card in a chat (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123595,7 +123595,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "モデルへのリクエストが失敗しました"
+            "value": "モデルへのリクエストに失敗しました"
           }
         },
         "zh-Hans": {
@@ -123607,7 +123607,7 @@
       }
     },
     "This version of the app can't show this step. Update the app and tap Start Over, or scan the code on the hub's web page in Settings › Connectors › %@.": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "A connector's sign-in sheet, at a step this version of the app can't draw; %@ is the connector's name (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123618,7 +123618,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このバージョンのアプリではこのステップを表示できません。アプリをアップデートして「最初からやり直す」をタップするか、hubのWeb版の設定 › コネクタ › %1$@でコードを読み取ってください。"
+            "value": "このバージョンのアプリではこのステップを表示できません。アプリをアップデートして「最初からやり直す」をタップするか、ハブのWeb版の設定 › コネクタ › %1$@でコードを読み取ってください。"
           }
         },
         "zh-Hans": {
@@ -123630,7 +123630,7 @@
       }
     },
     "This version of the app can't show this step. Update the app and tap Start Over to try again.": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "A connector's sign-in sheet, at a step this version of the app can't draw (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123653,7 +123653,7 @@
       }
     },
     "No permission to list the folders in “%@”. If you know the next folder's name, type the full path above": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why New Chat's folder picker can't list a folder; %@ is the folder's name (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123676,7 +123676,7 @@
       }
     },
     "“%@” doesn't exist": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why New Chat's folder picker can't list a folder; %@ is the path (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123699,7 +123699,7 @@
       }
     },
     "“%@” isn't a folder": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why New Chat's folder picker can't list a folder; %@ is the path (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123722,7 +123722,7 @@
       }
     },
     "Can't open “%@”": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why New Chat's folder picker can't list a folder; %@ is the path (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123745,7 +123745,7 @@
       }
     },
     "Every %@: no task written yet": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "The line over an agent's composer while the draft is a /loop command; %@ is the interval, e.g. 10 minutes (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123767,19 +123767,19 @@
         }
       }
     },
-    "Format: /loop [interval] task, e.g. /loop 10m check CI; without an interval, Claude sets its own pace": {
-      "comment": "PersonaKit (#5758)",
+    "/loop [interval] task, e.g. /loop 10m check CI. No interval: Claude's own pace": {
+      "comment": "The line over an agent's composer while the draft is a /loop command, before it has a task; two lines at most on a phone (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Format: /loop [interval] task, e.g. /loop 10m check CI; without an interval, Claude sets its own pace"
+            "value": "/loop [interval] task, e.g. /loop 10m check CI. No interval: Claude's own pace"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "形式：/loop [間隔] やること（例：/loop 10m CIを確認）。間隔を省くとClaudeが自分でペースを決めます"
+            "value": "/loop [間隔] やること（例：/loop 10m CIを確認）。間隔を省くとClaudeが決めます"
           }
         },
         "zh-Hans": {
@@ -123791,7 +123791,7 @@
       }
     },
     "Repeats every %@: %@": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "The line over an agent's composer while the draft is a /loop command; %1$@ is the interval, e.g. 10 minutes, and %2$@ the task (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123814,7 +123814,7 @@
       }
     },
     "Repeats at Claude's own pace: %@": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "The line over an agent's composer while the draft is a /loop command; %@ is the task (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123836,31 +123836,8 @@
         }
       }
     },
-    "%lld min": {
-      "comment": "PersonaKit (#5758)",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld min"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld分"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 分钟"
-          }
-        }
-      }
-    },
     "Not a valid notebook file (its JSON can't be read)": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why the file viewer shows a .ipynb notebook as its source text (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -123883,7 +123860,7 @@
       }
     },
     "Notebooks in nbformat %lld aren't supported, so this one is shown as source": {
-      "comment": "PersonaKit (#5758)",
+      "comment": "Why the file viewer shows a .ipynb notebook as its source text; %lld is the notebook's format version (PersonaKit, #5758)",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -124537,6 +124514,146 @@
         }
       },
       "extractionState": "manual"
+    },
+    "%lld seconds": {
+      "comment": "A /loop interval in the line over an agent's composer: Repeats every 10 minutes (PersonaKit, #5758)",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld second"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld seconds"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld秒"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 秒"
+          }
+        }
+      }
+    },
+    "%lld minutes": {
+      "comment": "A /loop interval in the line over an agent's composer: Repeats every 10 minutes (PersonaKit, #5758)",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld minute"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld minutes"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld分"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 分钟"
+          }
+        }
+      }
+    },
+    "%lld hours": {
+      "comment": "A /loop interval in the line over an agent's composer: Repeats every 10 minutes (PersonaKit, #5758)",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld hour"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld hours"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld時間"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 小时"
+          }
+        }
+      }
+    },
+    "%lld days": {
+      "comment": "A /loop interval in the line over an agent's composer: Repeats every 10 minutes (PersonaKit, #5758)",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld day"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld days"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld日"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 天"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

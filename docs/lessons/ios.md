@@ -1135,7 +1135,8 @@ but UIKit still had a page with only Agents Back and empty content.
   without a conflict, because the two entries sat at different places in the file. Master then had a duplicate JSON key: `check` failed,
   and Xcode rejects such a catalog.
 - After every master merge into a branch, run `python3 scripts/i18n/apple_l10n.py check`, even when git reported no conflict in the catalog.
-  Only a run on master itself catches two PRs that merged close together; PR runs (scripts-tests.yml) each see their own base.
+  PR runs (scripts-tests.yml) each see their own base, so only a run on master itself catches two PRs that merged close together:
+  run `check` on master right after your PR merges, too.
 
 ### An interpolated String looks up a `%@` key the catalog doesn't have (#5544)
 - `String(localized: "Exit code \(code)")` with `code` a `String` (or a regex match's `Substring`) asks for `"Exit code %@"`. The catalog had

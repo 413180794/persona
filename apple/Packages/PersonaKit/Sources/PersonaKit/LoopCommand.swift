@@ -35,7 +35,7 @@ public enum LoopCommand {
         let task = (every == nil ? words : Array(words.dropFirst())).joined(separator: " ")
         guard !task.isEmpty else {
             return LoopHint(text: every.map { String(localized: "Every \($0): no task written yet") }
-                                ?? String(localized: "Format: /loop [interval] task, e.g. /loop 10m check CI; without an interval, Claude sets its own pace"),
+                                ?? String(localized: "/loop [interval] task, e.g. /loop 10m check CI. No interval: Claude's own pace"),
                             missing: true)
         }
         return LoopHint(text: every.map { String(localized: "Repeats every \($0): \(task)") } ?? String(localized: "Repeats at Claude's own pace: \(task)"),
@@ -50,15 +50,16 @@ public enum LoopCommand {
         return claude && !(sourceKind ?? "").hasPrefix("codex")
     }
 
-    /// Claude Code's interval forms, a number and s / m / h / d, in words ("10m" → "10 min"); nil for anything else.
+    /// Claude Code's interval forms, a number and s / m / h / d, in the web's words ("10m" → "10 minutes"; the catalog
+    /// has "1 minute"); nil for anything else.
     static func interval(_ word: String) -> String? {
         guard word.count >= 2, let unit = word.last?.lowercased(), let n = Int(word.dropLast()),
               word.dropLast().allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
         switch unit {
-        case "s": return String(localized: "\(n) s")
-        case "m": return String(localized: "\(n) min")
-        case "h": return String(localized: "\(n) hr")
-        case "d": return String(localized: "\(n)d")
+        case "s": return String(localized: "\(n) seconds")
+        case "m": return String(localized: "\(n) minutes")
+        case "h": return String(localized: "\(n) hours")
+        case "d": return String(localized: "\(n) days")
         default: return nil
         }
     }

@@ -254,12 +254,18 @@ class SourceKeysTest(unittest.TestCase):
         src = "\n".join(('Text(verbatim: "Missing")', 'Text("Missing", bundle: .module)', 'Text(name ?? "Missing")',
                          'Text(open ? title : "Missing")', 'Text(format("Missing"))', 'Text("—")', 'Text("\\(a) / \\(b)")'))
         self.assertEqual(self.bui(src), [])
-    def test_keys_only_checks_explicit_keys_not_chinese_literals(self):
-        # PersonaKit (#5575): its String(localized:) keys must be in the app catalog; its other text isn't migrated yet.
-        src = 'String(localized: "Missing")\nlet note = "中文"\nString(localized: "Open")'
-        problems = apple_l10n.source_problems(src, {"Localizable": ("Open",)}, cjk=False)
-        self.assertEqual(len(problems), 1, problems)
-        self.assertIn("localized key not in Localizable", problems[0])
+    def test_personakit_is_held_to_the_app_rules(self):
+        # PersonaKit looks its text up in the app's catalog and is migrated (#5575, #5758): check flags its Chinese
+        # literals and its unknown keys, as in the app targets.
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp, "apple/Packages/PersonaKit/Sources/PersonaKit/Note.swift")
+            source.parent.mkdir(parents=True)
+            source.write_text('let note = "中文"\nlet hint = String(localized: "Missing")\n', encoding="utf-8")
+            with patch.object(apple_l10n, "ROOT", tmp), patch.object(apple_l10n, "APPLE", str(Path(tmp, "apple"))):
+                problems = [p for p in apple_l10n.check() if "PersonaKit" in p]
+        self.assertEqual(len(problems), 2, problems)
+        self.assertIn("Chinese/Japanese source literal", problems[0])
+        self.assertIn("localized key not in Localizable", problems[1])
 
     def test_chinese_catalog_membership_never_excuses_a_source_literal(self):
         problems = self.check_source('Text("打开")', ("打开",))

@@ -39,9 +39,9 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 APPLE = os.path.join(ROOT, "apple")
 LANGS = ["en", "zh-Hans", "ja"]
 SOURCE = "en"
-# The app targets' sources (not the tests, not the separate SwiftPM packages / test apps).
+# The app targets' sources and PersonaKit's, whose text is looked up in the app's main bundle (#5575, #5758); not the
+# tests, the test apps or the other SwiftPM packages (BeautifulUI's keys: `beautifului_problems`).
 SOURCE_DIRS = ["Persona", "Shared", "Mac", "Vision", "PersonaWatch", "PersonaWidgets", "LiveActivity", "PersonaNotify", "PersonaShare",
-               # PersonaKit looks its keys up in the app's main bundle, and its text is migrated (#5575, #5758)
                "Packages/PersonaKit/Sources"]
 CATALOGS = [
     "Shared/Localization/Localizable.xcstrings",
@@ -539,11 +539,10 @@ def localized_literals(src, streams=None):
             yield lit, table, hashes
 
 
-def source_problems(src, catalog_keys, rel="source", cjk=True):
-    """Validate source text against {table name: iterable of keys}; never match visible English aliases.
-    `cjk=False` checks only the explicit localized keys (a package whose other text is not migrated yet)."""
+def source_problems(src, catalog_keys, rel="source"):
+    """Validate source text against {table name: iterable of keys}; never match visible English aliases."""
     problems = []
-    marked = ignored_lines(src) if cjk else None
+    marked = ignored_lines(src)  # None: the whole file is ignored (`// i18n-ignore-file`)
     skip = preview_lines(src)
     streams = _swift_tokens(src)
     notes = {(token[1].line, token[1].col) for tokens in streams for i, token in enumerate(tokens)
