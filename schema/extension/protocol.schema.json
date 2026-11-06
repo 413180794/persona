@@ -34,6 +34,54 @@
       "type": "string",
       "enum": ["initialize", "ping", "manifest"]
     },
+    "AuthState": {"type": "string", "enum": ["signed_out", "pending", "signed_in", "expired", "error"]},
+    "AuthStatus": {
+      "description": "auth.status and auth.logout: the extension's sign-in now (manifest.auth).",
+      "type": "object",
+      "properties": {
+        "state": {"$ref": "#/$defs/AuthState"},
+        "account": {"type": "string"},
+        "message": {"type": "string", "description": "For people: why it is in error, what is signed in."},
+        "expires_at": {"type": "string", "format": "date-time"}
+      },
+      "required": ["state"]
+    },
+    "AuthStepParams": {
+      "description": "auth.step: step \"\" starts over; values are the fields of the step before.",
+      "type": "object",
+      "properties": {
+        "step": {"type": "string"},
+        "values": {"type": "object", "additionalProperties": {"type": "string"}}
+      },
+      "required": ["step"]
+    },
+    "AuthField": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "label": {"type": "string"},
+        "secret": {"type": "boolean"},
+        "placeholder": {"type": "string"}
+      },
+      "required": ["name", "label"]
+    },
+    "AuthPrompt": {
+      "description": "auth.step's answer, the connectors' Prompt: fields to fill, a device code (url to open, user_code to enter) or a QR code (url, scanned with another app), or done. For device_code and qr the app asks the same step again (no values) every interval seconds.",
+      "type": "object",
+      "properties": {
+        "step": {"type": "string"},
+        "fields": {"type": "array", "items": {"$ref": "#/$defs/AuthField"}},
+        "kind": {"type": "string", "description": "Empty: fields to fill; device_code; qr."},
+        "url": {"type": "string"},
+        "user_code": {"type": "string"},
+        "interval": {"type": "integer"},
+        "hint": {"type": "string"},
+        "error": {"type": "string"},
+        "done": {"type": "boolean"},
+        "account": {"type": "string"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "HubRole": {"type": "string", "enum": ["center", "member"]},
     "HubCapability": {"type": "string", "enum": ["inbox_group"]},
     "InitializeParams": {

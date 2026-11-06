@@ -54,8 +54,12 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
     var configuration: JSONValue?
     var secrets: [ExtensionSecretSpec]?
     var permissions: ExtensionPermissions?
+    /// Command-line programs the hub installs into the extension's own directory and puts first on its PATH
+    /// (docs「命令行程序（tools）」, #4507). Installing them is a permission. Hubs before them refuse the manifest.
+    var tools: [ExtensionToolSpec]?
+    var auth: ExtensionAuthSpec?
 
-    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, tags: [String]? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, node: ExtensionNodeRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, offByDefault: [String]? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil) {
+    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, tags: [String]? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, node: ExtensionNodeRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, offByDefault: [String]? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil, tools: [ExtensionToolSpec]? = nil, auth: ExtensionAuthSpec? = nil) {
         self.manifestVersion = manifestVersion
         self.id = id
         self.name = name
@@ -76,6 +80,8 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         self.configuration = configuration
         self.secrets = secrets
         self.permissions = permissions
+        self.tools = tools
+        self.auth = auth
     }
 
     enum CodingKeys: String, CodingKey {
@@ -99,6 +105,8 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         case configuration
         case secrets
         case permissions
+        case tools
+        case auth
     }
 
     init(from decoder: Decoder) throws {
@@ -123,6 +131,172 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         self.configuration = try? c.decodeIfPresent(JSONValue.self, forKey: .configuration)
         self.secrets = try? c.decodeIfPresent([ExtensionSecretSpec].self, forKey: .secrets)
         self.permissions = try? c.decodeIfPresent(ExtensionPermissions.self, forKey: .permissions)
+        self.tools = try? c.decodeIfPresent([ExtensionToolSpec].self, forKey: .tools)
+        self.auth = try? c.decodeIfPresent(ExtensionAuthSpec.self, forKey: .auth)
+    }
+}
+
+/// One command-line program. Exactly one of archive and npm.
+nonisolated struct ExtensionToolSpec: Codable, Hashable, Sendable {
+    /// The command put on PATH.
+    var name: String
+    var title: String?
+    /// What is installed, for people.
+    var version: String
+    /// Other tools of the manifest installed (and on PATH) first.
+    var requires: [String]?
+    var check: ExtensionToolCheck?
+    /// By <GOOS>-<GOARCH>.
+    var archive: [String: ExtensionToolArchive]?
+    var npm: ExtensionToolNPM?
+
+    init(name: String = "", title: String? = nil, version: String = "", requires: [String]? = nil, check: ExtensionToolCheck? = nil, archive: [String: ExtensionToolArchive]? = nil, npm: ExtensionToolNPM? = nil) {
+        self.name = name
+        self.title = title
+        self.version = version
+        self.requires = requires
+        self.check = check
+        self.archive = archive
+        self.npm = npm
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case title
+        case version
+        case requires
+        case check
+        case archive
+        case npm
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.title = try? c.decodeIfPresent(String.self, forKey: .title)
+        self.version = (try? c.decodeIfPresent(String.self, forKey: .version)) ?? ""
+        self.requires = try? c.decodeIfPresent([String].self, forKey: .requires)
+        self.check = try? c.decodeIfPresent(ExtensionToolCheck.self, forKey: .check)
+        self.archive = try? c.decodeIfPresent([String: ExtensionToolArchive].self, forKey: .archive)
+        self.npm = try? c.decodeIfPresent(ExtensionToolNPM.self, forKey: .npm)
+    }
+}
+
+/// A copy on the hub's PATH (outside the home directory) is used instead of installing one when <name> <args> prints
+/// a version (the first x.y.z) of at least min_version.
+nonisolated struct ExtensionToolCheck: Codable, Hashable, Sendable {
+    /// Default --version.
+    var args: [String]?
+    var minVersion: String?
+
+    init(args: [String]? = nil, minVersion: String? = nil) {
+        self.args = args
+        self.minVersion = minVersion
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case args
+        case minVersion = "min_version"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.args = try? c.decodeIfPresent([String].self, forKey: .args)
+        self.minVersion = try? c.decodeIfPresent(String.self, forKey: .minVersion)
+    }
+}
+
+/// A download: a .tar.gz, .tgz or .zip with the program at path, or the program itself.
+nonisolated struct ExtensionToolArchive: Codable, Hashable, Sendable {
+    var url: String
+    var sha256: String
+    var path: String?
+    var mirrors: [String]?
+
+    init(url: String = "", sha256: String = "", path: String? = nil, mirrors: [String]? = nil) {
+        self.url = url
+        self.sha256 = sha256
+        self.path = path
+        self.mirrors = mirrors
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case url
+        case sha256
+        case path
+        case mirrors
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
+        self.sha256 = (try? c.decodeIfPresent(String.self, forKey: .sha256)) ?? ""
+        self.path = try? c.decodeIfPresent(String.self, forKey: .path)
+        self.mirrors = try? c.decodeIfPresent([String].self, forKey: .mirrors)
+    }
+}
+
+/// An npm package unpacked as published: no install scripts, no dependencies (a bundled package).
+nonisolated struct ExtensionToolNPM: Codable, Hashable, Sendable {
+    var package: String
+    var version: String
+    var integrity: String
+    /// Default https://registry.npmjs.org.
+    var registry: String?
+    /// The key of package.json's bin; default the tool's name.
+    var bin: String?
+
+    init(package: String = "", version: String = "", integrity: String = "", registry: String? = nil, bin: String? = nil) {
+        self.package = package
+        self.version = version
+        self.integrity = integrity
+        self.registry = registry
+        self.bin = bin
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case package
+        case version
+        case integrity
+        case registry
+        case bin
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.package = (try? c.decodeIfPresent(String.self, forKey: .package)) ?? ""
+        self.version = (try? c.decodeIfPresent(String.self, forKey: .version)) ?? ""
+        self.integrity = (try? c.decodeIfPresent(String.self, forKey: .integrity)) ?? ""
+        self.registry = try? c.decodeIfPresent(String.self, forKey: .registry)
+        self.bin = try? c.decodeIfPresent(String.self, forKey: .bin)
+    }
+}
+
+/// The extension signs in: its program answers auth.status, auth.step and auth.logout (docs「登录（auth）」).
+nonisolated struct ExtensionAuthSpec: Codable, Hashable, Sendable {
+    var title: String
+    var description: String?
+    /// An extension_page (plugin_page) ui contribution: its own sign-in page for apps that do not know auth; apps
+    /// that do leave it out of its pages.
+    var page: String?
+
+    init(title: String = "", description: String? = nil, page: String? = nil) {
+        self.title = title
+        self.description = description
+        self.page = page
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case description
+        case page
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.description = try? c.decodeIfPresent(String.self, forKey: .description)
+        self.page = try? c.decodeIfPresent(String.self, forKey: .page)
     }
 }
 
@@ -1763,6 +1937,159 @@ nonisolated enum ExtensionMethod {
     static let ping = "ping"
     static let manifest = "manifest"
     static let all = ["initialize", "ping", "manifest"]
+}
+
+/// Values of AuthState.
+nonisolated enum ExtensionAuthState {
+    static let signedOut = "signed_out"
+    static let pending = "pending"
+    static let signedIn = "signed_in"
+    static let expired = "expired"
+    static let error = "error"
+    static let all = ["signed_out", "pending", "signed_in", "expired", "error"]
+}
+
+/// auth.status and auth.logout: the extension's sign-in now (manifest.auth).
+nonisolated struct ExtensionAuthStatus: Codable, Hashable, Sendable {
+    var state: String
+    var account: String?
+    /// For people: why it is in error, what is signed in.
+    var message: String?
+    var expiresAt: String?
+
+    init(state: String = "", account: String? = nil, message: String? = nil, expiresAt: String? = nil) {
+        self.state = state
+        self.account = account
+        self.message = message
+        self.expiresAt = expiresAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case account
+        case message
+        case expiresAt = "expires_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.state = (try? c.decodeIfPresent(String.self, forKey: .state)) ?? ""
+        self.account = try? c.decodeIfPresent(String.self, forKey: .account)
+        self.message = try? c.decodeIfPresent(String.self, forKey: .message)
+        self.expiresAt = try? c.decodeIfPresent(String.self, forKey: .expiresAt)
+    }
+}
+
+/// auth.step: step "" starts over; values are the fields of the step before.
+nonisolated struct ExtensionAuthStepParams: Codable, Hashable, Sendable {
+    var step: String
+    var values: [String: String]?
+
+    init(step: String = "", values: [String: String]? = nil) {
+        self.step = step
+        self.values = values
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case step
+        case values
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.step = (try? c.decodeIfPresent(String.self, forKey: .step)) ?? ""
+        self.values = try? c.decodeIfPresent([String: String].self, forKey: .values)
+    }
+}
+
+nonisolated struct ExtensionAuthField: Codable, Hashable, Sendable {
+    var name: String
+    var label: String
+    var secret: Bool?
+    var placeholder: String?
+
+    init(name: String = "", label: String = "", secret: Bool? = nil, placeholder: String? = nil) {
+        self.name = name
+        self.label = label
+        self.secret = secret
+        self.placeholder = placeholder
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case label
+        case secret
+        case placeholder
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
+        self.secret = try? c.decodeIfPresent(Bool.self, forKey: .secret)
+        self.placeholder = try? c.decodeIfPresent(String.self, forKey: .placeholder)
+    }
+}
+
+/// auth.step's answer, the connectors' Prompt: fields to fill, a device code (url to open, user_code to enter) or a
+/// QR code (url, scanned with another app), or done. For device_code and qr the app asks the same step again (no
+/// values) every interval seconds.
+nonisolated struct ExtensionAuthPrompt: Codable, Hashable, Sendable {
+    var step: String?
+    var fields: [ExtensionAuthField]?
+    /// Empty: fields to fill; device_code; qr.
+    var kind: String?
+    var url: String?
+    var userCode: String?
+    var interval: Int?
+    var hint: String?
+    var error: String?
+    var done: Bool?
+    var account: String?
+    var expiresAt: String?
+
+    init(step: String? = nil, fields: [ExtensionAuthField]? = nil, kind: String? = nil, url: String? = nil, userCode: String? = nil, interval: Int? = nil, hint: String? = nil, error: String? = nil, done: Bool? = nil, account: String? = nil, expiresAt: String? = nil) {
+        self.step = step
+        self.fields = fields
+        self.kind = kind
+        self.url = url
+        self.userCode = userCode
+        self.interval = interval
+        self.hint = hint
+        self.error = error
+        self.done = done
+        self.account = account
+        self.expiresAt = expiresAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case step
+        case fields
+        case kind
+        case url
+        case userCode = "user_code"
+        case interval
+        case hint
+        case error
+        case done
+        case account
+        case expiresAt = "expires_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.step = try? c.decodeIfPresent(String.self, forKey: .step)
+        self.fields = try? c.decodeIfPresent([ExtensionAuthField].self, forKey: .fields)
+        self.kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        self.url = try? c.decodeIfPresent(String.self, forKey: .url)
+        self.userCode = try? c.decodeIfPresent(String.self, forKey: .userCode)
+        self.interval = try? c.decodeIfPresent(Int.self, forKey: .interval)
+        self.hint = try? c.decodeIfPresent(String.self, forKey: .hint)
+        self.error = try? c.decodeIfPresent(String.self, forKey: .error)
+        self.done = try? c.decodeIfPresent(Bool.self, forKey: .done)
+        self.account = try? c.decodeIfPresent(String.self, forKey: .account)
+        self.expiresAt = try? c.decodeIfPresent(String.self, forKey: .expiresAt)
+    }
 }
 
 /// Values of HubRole.

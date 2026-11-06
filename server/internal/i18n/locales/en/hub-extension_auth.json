@@ -1,0 +1,7 @@
+{
+  "no_auth": "This extension doesn’t need you to sign in",
+  "disabled": "The extension is turned off. Turn it on to sign in",
+  "not_running": "The extension isn’t running yet (it may still need settings). Set it up first",
+  "warn_signed_out": "Not signed in ({title}). Sign in from the extension’s details",
+  "warn_expired": "Sign-in expired ({title}). Sign in again from the extension’s details"
+}

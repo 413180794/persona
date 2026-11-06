@@ -187,6 +187,8 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `configuration` | 否 | 配置的 JSON Schema，只能用下面的子集 |
 | `secrets` | 否 | `[{name, title, description?, required?}]`，`name` 是 `^[a-z][a-z0-9_]{0,31}$`，最多 32 个 |
 | `permissions` | 否 | 见「权限」 |
+| `tools` | 否 | 要的命令行程序（#4507），hub 装在扩展自己的目录、放进它的 `PATH`，见「命令行程序（tools）」；要有 `runtime` |
+| `auth` | 否 | `{title, description?, page?}`：扩展要登录（#4507），程序实现 `auth.*`，见「登录（auth）」；要有说协议的 `runtime` |
 
 清单最大 256 KB，按严格模式读：任何一层有不认识的字段都装不上（拼错的 `permission` 不会被悄悄忽略）。
 
@@ -263,6 +265,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `node.permissions.network` | 主机名列表，同 `network` | 在那些电脑上会访问哪些地方 | 只展示和记录 |
 | `node.permissions.files` | `true` | 读写那些电脑上自己数据目录以外的文件 | 只展示和记录 |
 | `node.permissions.macos_privacy` | `true` | 会请求 Mac 的完全磁盘访问、辅助功能这类系统权限 | 只展示；系统权限要用户在那台 Mac 上同意 |
+| 安装命令行程序（有 `tools` 就有） | — | 在 hub 机器上下载、装下列出的程序（每个写上版本和从哪里来） | hub 自己下载、按清单的 sha256 / integrity 校验，装在扩展自己的目录，不用 sudo、不跑安装脚本；算进权限摘要，升级时新的程序或换了来源要重新同意（只是版本变了不用），见「命令行程序（tools）」 |
 | 发给电脑的密钥（`node.secrets`） | — | 这几个密钥会发到选中的电脑上 | 只在内存里交给程序，不落那台电脑的盘 |
 
 #### hub 的接口：范围（#1855）
@@ -415,7 +418,7 @@ hub 里有一个**出网代理**（`server/internal/extension/egress`），第�
 手机（设备凭据）能看列表、开关、改配置、填密钥；装、升级、回滚、卸载只能针对**已登记的扩展市场里的扩展**（见「扩展市场」），
 任意来源（目录、文件、网址、上传、跑在别处）仍只走上面两条路。
 
-每次安装、升级、卸载都是一个分步骤的操作（下载 → 校验 → 解包 → 检查 → 同意 → 安装 → 启动 → 电脑同步），客户端看得到进度和卡在哪一步，见 [protocol.md](protocol.md)「扩展的安装、升级、卸载进度」（#3277）。
+每次安装、升级、卸载都是一个分步骤的操作（下载 → 校验 → 解包 → 检查 → 同意 → 安装命令行 → 安装 → 启动 → 电脑同步），客户端看得到进度和卡在哪一步，见 [protocol.md](protocol.md)「扩展的安装、升级、卸载进度」（#3277）。
 
 扩展包：一个目录，或一个 `.tar.gz` / `.tgz` / `.zip`（根目录或唯一的顶层目录里有清单）。最大 200 MB、2 万个文件；解包时拒绝绝对路径、`..`、指向包外的链接、
 设备文件，zip 里不能有链接；文件权限只留「可执行或不可执行」。在 Mac 上打的包常带 macOS 的元数据（tar 没设 `COPYFILE_DISABLE=1` 时的 `._*` AppleDouble 文件、
@@ -443,6 +446,80 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 
 每一步都记进 `plugin_audit`（谁、什么时候、从哪个版本到哪个），不记配置的值和密钥。谁：`personad extension`（命令行）、`admin UI`（管理界面）、
 `hub token` / `device:<id>`（App 的开关、配置、密钥）。
+
+### 命令行程序（tools）
+
+扩展靠某个命令行干活（比如包一层公司内部服务的命令行）时，在清单里写 `tools`，hub 在安装时把它装好，没装过这个命令行的电脑也能直接用（#4507）。
+
+```json
+"tools": [
+  {"name": "node", "title": "Node.js", "version": "22.23.4", "check": {"args": ["--version"], "min_version": "18.0.0"},
+   "archive": {"linux-amd64": {"url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz", "sha256": "…",
+                               "path": "node-v22.23.4-linux-x64/bin/node", "mirrors": ["https://cdn.npmmirror.com/binaries/node/v22.23.4/node-v22.23.4-linux-x64.tar.gz"]}}},
+  {"name": "example-cli", "version": "2.3.4", "requires": ["node"], "check": {"min_version": "2.0.0"},
+   "npm": {"package": "@example/example-cli", "version": "2.3.4", "registry": "https://registry.example.com", "integrity": "sha512-…"}}
+]
+```
+
+| 字段 | 规则 |
+| --- | --- |
+| `name` | `^[a-z0-9][a-z0-9._-]{0,31}$`，放进 `PATH` 的命令名；最多 8 个、不重名 |
+| `title`、`version` | 给人看；`version` 必填 |
+| `requires` | 同一份清单里先装的其他程序（不能成环）；检查、安装它时前面的已经在 `PATH` 上 |
+| `check` | 有就先在 hub 的 `PATH` 里找同名命令：跑 `<name> <args…>`（默认 `--version`，10 秒），输出里第一个 `x.y.z` 不小于 `min_version` 就直接用它（复用），不下载。家目录里的不复用（沙箱里看不到）。装好后也用它查一遍能不能跑。没有 `check` 永远自己装 |
+| `archive` | `{"<GOOS>-<GOARCH>": {url, sha256, path?, mirrors?}}`：只收 https，`url` 和最多 4 个 `mirrors` 按顺序试；`.tar.gz` / `.tgz` / `.zip` 解开，`path` 是里面那个程序，别的扩展名当成程序本身 |
+| `npm` | `{package, version, integrity, registry?, bin?}`：hub 自己下 `<registry>/<package>/-/<名字>-<version>.tgz`（`registry` 默认 npmjs，只收 https；内网 registry 写它的地址），按 `integrity`（`sha512-…` / `sha256-…`）校验后解开。**不跑 install 脚本、不装依赖**：只适合把依赖打包进去的包。`bin` 是 `package.json` 的 `bin` 里的名字（默认 `name`）；它多半是 `#!/usr/bin/env node` 的脚本，所以通常 `requires: ["node"]` |
+
+`archive` 和 `npm` 恰好一个；这台 hub 的平台没有 `archive` 条目又复用不了时装不上。解开最多 1 GB、10 万个文件（Node.js 约 200 MB、6000 个）。
+
+- **什么时候装**：安装、升级的 `tools` 步骤（同意之后、写库之前，`extension.Registry.planTools`）；有一个装不上整个安装失败（`error_code` `tools_failed`），扩展保持原样，可以重试。
+- **放在哪**：`~/.persona/extensions/tools/<id>/<name>-<规格 hash>/`（`pkg/` 是解开的，`bin/<name>` 指向程序），复用的是 `machine-<name>/bin/<name>` 指向机器上那一份；
+  `versions/<版本>.json` 记这个版本用哪几个。规格 hash 相同就是同一份：升级不重下，回滚用上一版的；只留当前和上一版用到的，卸载整个删掉（`--keep-data` 也删：不是数据）。
+- **运行**：hub 起扩展时把这个版本的各个 `bin/` 放到 `PATH` 最前面（要别的的在前）；沙箱里这个目录只读挂进去（Linux `--ro-bind`，macOS 放行读），复用的程序在系统目录里，沙箱本来就看得到。
+  扩展跑的子进程照常继承 `PATH`。只管从包里装的扩展：`dir:` 开发时（`extension dev`）、hub.json 和内置的不装。
+- **没有 sudo、不碰全局**：只写 hub 的状态目录；程序要的别的东西（凭据、缓存）放扩展的数据目录，比如用环境变量把它的配置目录指过去。
+- 列表和详情的 `tools` 是这个版本用的程序：`[{name, title?, version, reused}]`。
+
+### 登录（auth）
+
+扩展要用户登录某个服务时（扫码、设备码、填 token），清单写 `auth`，程序实现三个方法，hub 把它变成扩展的「登录」状态，各端用同一套界面登录（#4507）。
+
+```json
+"auth": {"title": "飞书登录", "description": "用飞书确认身份后才能查", "page": "login"}
+```
+
+`page` 可选：一个 `extension_page`（`plugin_page`）的 `ui` 贡献，是扩展自己画的登录页，给不认识 `auth` 的旧客户端用；新客户端不把它列在「页面」里。
+
+| 方法 | 参数 → 回答 | 说明 |
+| --- | --- | --- |
+| `auth.status` | `{}` → `AuthStatus` | 只看本地状态，要快（hub 最多等 10 秒） |
+| `auth.step` | `{step, values}` → `AuthPrompt` | 分步登录，`step` 为 `""` 从头开始；hub 最多等 1 分钟 |
+| `auth.logout` | `{}` → `AuthStatus` | 清掉扩展自己存的凭据 |
+| 事件 `auth.changed` | `{}` | 状态自己变了（过期、在别处登出）：hub 再问一次 `auth.status` |
+
+`AuthStatus`：`{state, account?, message?, expires_at?}`，`state` 是 `signed_out`、`pending`（登录进行中）、`signed_in`、`expired`、`error`（`message` 写原因）。
+`AuthPrompt` 就是连接器的 `Prompt`（`connector-protocol.md` 末尾）加一个可选的 `expires_at`：填字段的一步、`device_code`（`url` 打开、`user_code` 输入，`user_code` 可以没有）、`qr`（`url` 用别的 App 扫），或 `done`。
+`device_code` / `qr` 时客户端每隔 `interval` 秒带同一个 `step`、不带值再问，直到回来别的步骤或 `done`。hub 给 `qr` 和 `device_code` 的 `url` 都画好二维码点阵（`qr`），扩展只给 `url`。
+Go SDK：`ext.AuthHandler(a)` 放在 `Program.Namespaces["auth"]`，`hub.AuthChanged()` 发事件。
+
+**凭据只在扩展那里**：登录得到的东西存在扩展的数据目录（`PERSONA_EXTENSION_DATA`）；`values` 只交给扩展，hub 不记日志、不回显，审计只记 `auth_start`、`auth_signed_in`、`auth_logout` 和谁做的。
+
+**hub 的接口**（同改配置，完整权限的设备和主 token；代码 `extmgr/extension_auth.go`）：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/extensions/{id}/-/auth` | 现在问一次扩展，回 `ExtensionAuth`：`{title, description?, page?, state, account?, message?, expires_at?, checked_at?}`，`state` 另有 `unknown`（扩展没在运行：停用、缺设置）；没声明 `auth` 404 `no_auth` |
+| POST | `/api/v1/extensions/{id}/-/auth/step` | `{step, values}` → `AuthPrompt`（带 `qr`）；停用 409 `disabled`，没在运行 409 `not_running` |
+| POST | `/api/v1/extensions/{id}/-/auth/logout` | → `ExtensionAuth` |
+
+- 列表和详情的 `auth` 是 hub 记下的上一次状态（还没问过时在后台问一次，问到了推事件）；扩展重启、升级、改配置后重新问。
+- 没登录、登录过期时 `warnings` 多一句「还没登录（<title>）：在扩展详情里登录」，旧客户端也看得到。
+- 事件 `{"type": "extension_auth", "extension": "<id>", "auth": ExtensionAuth}`：状态变了就推。`hello.features` 带 `extension_auth`。
+- 安装、升级做完时扩展要登录又没登录，操作带 `"next": "auth"`，客户端打开扩展详情的登录。
+- 命令行：`personad extension auth <id>`（状态）、`… auth <id> login`（在终端里打印二维码、链接和验证码，或逐项问字段，等到完成）、`… auth <id> logout`。
+
+**各端**：详情在状态下面一节「登录」：状态、「登录」/「重新登录」、已登录时「退出登录」；登录是一张卡片（`device_code` 显示可点的链接、验证码和链接的二维码，`qr` 显示二维码，填字段的显示表单），
+列表里没登录的状态后加「· 未登录」，「关于」列出命令行程序（复用的标「机器上已有」）。安装确认页多一行「安装命令行程序」，安装进度多一步「安装命令行」（每个程序一行，正在下的带进度）。
 
 ### 贡献的开关（#1854）
 
@@ -521,6 +598,7 @@ personad extension upgrade <id> <source> [--yes]     同 install，只是升级�
 personad extension rollback <id>                     回到上一次升级前的版本
 personad extension enable <id> | disable <id> [--cascade]   --cascade：依赖它的扩展一起停用
 personad extension sandbox <id> on|off|default       在沙箱里跑不跑（default：受信任市场的不开，别的开），见「沙箱」
+personad extension auth <id> [login|logout]          扩展的登录：状态；login 在终端里显示二维码 / 链接 / 验证码并等到完成，见「登录（auth）」
 personad extension contributions <id>                每个贡献和它的开关
 personad extension contribution <id> <point>/<cid> on|off   单独开关一个贡献（连接器的就是连接器的开关）
 personad extension config <id> key=value …           值能解析成 JSON 就按 JSON，否则当文字；key= 删掉这一项

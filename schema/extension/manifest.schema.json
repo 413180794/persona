@@ -44,9 +44,74 @@
         },
         "configuration": {"description": "The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」)."},
         "secrets": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/SecretSpec"}},
-        "permissions": {"$ref": "#/$defs/Permissions"}
+        "permissions": {"$ref": "#/$defs/Permissions"},
+        "tools": {
+          "description": "Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs「命令行程序（tools）」, #4507). Installing them is a permission. Hubs before them refuse the manifest.",
+          "type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/ToolSpec"}
+        },
+        "auth": {"$ref": "#/$defs/AuthSpec"}
       },
       "required": ["manifest_version", "id", "name", "version"]
+    },
+    "ToolSpec": {
+      "description": "One command-line program. Exactly one of archive and npm.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$", "description": "The command put on PATH."},
+        "title": {"type": "string"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 64, "description": "What is installed, for people."},
+        "requires": {"type": "array", "items": {"type": "string"}, "description": "Other tools of the manifest installed (and on PATH) first."},
+        "check": {"$ref": "#/$defs/ToolCheck"},
+        "archive": {"type": "object", "additionalProperties": {"$ref": "#/$defs/ToolArchive"}, "description": "By <GOOS>-<GOARCH>."},
+        "npm": {"$ref": "#/$defs/ToolNPM"}
+      },
+      "required": ["name", "version"]
+    },
+    "ToolCheck": {
+      "description": "A copy on the hub's PATH (outside the home directory) is used instead of installing one when <name> <args> prints a version (the first x.y.z) of at least min_version.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "args": {"type": "array", "maxItems": 8, "items": {"type": "string"}, "description": "Default --version."},
+        "min_version": {"type": "string", "pattern": "[0-9]+\\.[0-9]+\\.[0-9]+"}
+      }
+    },
+    "ToolArchive": {
+      "description": "A download: a .tar.gz, .tgz or .zip with the program at path, or the program itself.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "path": {"type": "string"},
+        "mirrors": {"type": "array", "maxItems": 4, "items": {"type": "string", "pattern": "^https://"}}
+      },
+      "required": ["url", "sha256"]
+    },
+    "ToolNPM": {
+      "description": "An npm package unpacked as published: no install scripts, no dependencies (a bundled package).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "package": {"type": "string"},
+        "version": {"type": "string"},
+        "integrity": {"type": "string", "pattern": "^sha(256|512)-"},
+        "registry": {"type": "string", "pattern": "^https://", "description": "Default https://registry.npmjs.org."},
+        "bin": {"type": "string", "description": "The key of package.json's bin; default the tool's name."}
+      },
+      "required": ["package", "version", "integrity"]
+    },
+    "AuthSpec": {
+      "description": "The extension signs in: its program answers auth.status, auth.step and auth.logout (docs「登录（auth）」).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "description": {"type": "string"},
+        "page": {"type": "string", "description": "An extension_page (plugin_page) ui contribution: its own sign-in page for apps that do not know auth; apps that do leave it out of its pages."}
+      },
+      "required": ["title"]
     },
     "Dependency": {
       "type": "object",

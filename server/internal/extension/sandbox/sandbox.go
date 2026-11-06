@@ -40,7 +40,9 @@ type Plan struct {
 	// Pkg is the package (read-only), Data its own data (writable), Run its sockets (writable: its HTTP socket and
 	// the proxy's, ProxySocket).
 	Pkg, Data, Run string
-	ProxySocket    string
+	// Tools are its command-line programs (manifest.tools), read-only; "" when it has none.
+	Tools       string
+	ProxySocket string
 	// ProxyURL (macOS) is the hub's proxy on loopback with the extension's credential; HubPort the hub's own port.
 	ProxyURL string
 	// Self is personad (Linux: the sandbox's first process).
@@ -151,6 +153,11 @@ func Linux(bwrap string, plan Plan) (string, []string, []string) {
 		"--bind", plan.Data, plan.Data,
 		"--bind", plan.Run, plan.Run,
 		"--ro-bind", plan.Self, SelfPath,
+	)
+	if plan.Tools != "" {
+		args = append(args, "--ro-bind-try", plan.Tools, plan.Tools)
+	}
+	args = append(args,
 		"--setenv", "HOME", plan.Data, "--setenv", "TMPDIR", "/tmp",
 		"--unsetenv", "DBUS_SESSION_BUS_ADDRESS", "--unsetenv", "XDG_RUNTIME_DIR",
 		// The sandbox's own root (the directories made for the mounts) read-only too: only its data, run and /tmp take
@@ -183,6 +190,14 @@ func ProxyEnv(proxy string) []string {
 		"ALL_PROXY=" + proxy, "all_proxy=" + proxy, "NO_PROXY=", "no_proxy="}
 }
 
+// toolsRule lets the program read its command-line programs (manifest.tools), when it has any.
+func toolsRule(tools string, real func(string) string) string {
+	if tools == "" {
+		return ""
+	}
+	return `(allow file-read* (subpath ` + strconv.Quote(real(tools)) + `))`
+}
+
 // Darwin is the command line that runs plan under sandbox-exec, and the environment it adds: no network but the hub's
 // proxy on loopback, no writing but its data and run directories, no reading the home directory but its package,
 // data and run directories.
@@ -206,7 +221,10 @@ func Darwin(plan Plan) (string, []string, []string) {
 	// directory, so without these every such path fails (execvp: Operation not permitted). Each link is allowed on
 	// its own (literal): reading it gives only where it points, and what is behind it is checked by its real path.
 	var links []string
-	for _, p := range []string{plan.Pkg, plan.Data, plan.Run, tmp, plan.Command} {
+	for _, p := range []string{plan.Pkg, plan.Data, plan.Run, tmp, plan.Command, plan.Tools} {
+		if p == "" {
+			continue
+		}
 		for _, l := range linksOn(p) {
 			if !slices.Contains(links, l) {
 				links = append(links, l)
@@ -231,6 +249,7 @@ func Darwin(plan Plan) (string, []string, []string) {
 		`(allow file-write* (subpath ` + q(real(plan.Data)) + `) (subpath ` + q(real(plan.Run)) + `) (subpath "/dev"))`,
 		`(deny file-read* (subpath ` + q(real(home)) + `))`,
 		`(allow file-read* (subpath ` + q(real(plan.Pkg)) + `) (subpath ` + q(real(plan.Data)) + `) (subpath ` + q(real(plan.Run)) + `))`,
+		toolsRule(plan.Tools, real),
 		linkRule,
 	}, "\n")
 	args := append([]string{"-p", profile, plan.Command}, plan.Args...)

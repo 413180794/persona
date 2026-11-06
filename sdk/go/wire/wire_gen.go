@@ -47,6 +47,61 @@ type Manifest struct {
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
 	Permissions   *Permissions    `json:"permissions,omitempty"`
+	// Command-line programs the hub installs into the extension's own directory and puts first on its PATH
+	// (docs「命令行程序（tools）」, #4507). Installing them is a permission. Hubs before them refuse the manifest.
+	Tools []ToolSpec `json:"tools,omitempty"`
+	Auth  *AuthSpec  `json:"auth,omitempty"`
+}
+
+// ToolSpec: one command-line program. Exactly one of archive and npm.
+type ToolSpec struct {
+	// The command put on PATH.
+	Name  string `json:"name"`
+	Title string `json:"title,omitempty"`
+	// What is installed, for people.
+	Version string `json:"version"`
+	// Other tools of the manifest installed (and on PATH) first.
+	Requires []string   `json:"requires,omitempty"`
+	Check    *ToolCheck `json:"check,omitempty"`
+	// By <GOOS>-<GOARCH>.
+	Archive map[string]ToolArchive `json:"archive,omitempty"`
+	Npm     *ToolNPM               `json:"npm,omitempty"`
+}
+
+// ToolCheck: A copy on the hub's PATH (outside the home directory) is used instead of installing one when <name>
+// <args> prints a version (the first x.y.z) of at least min_version.
+type ToolCheck struct {
+	// Default --version.
+	Args       []string `json:"args,omitempty"`
+	MinVersion string   `json:"min_version,omitempty"`
+}
+
+// ToolArchive: A download: a .tar.gz, .tgz or .zip with the program at path, or the program itself.
+type ToolArchive struct {
+	URL     string   `json:"url"`
+	Sha256  string   `json:"sha256"`
+	Path    string   `json:"path,omitempty"`
+	Mirrors []string `json:"mirrors,omitempty"`
+}
+
+// ToolNPM: an npm package unpacked as published: no install scripts, no dependencies (a bundled package).
+type ToolNPM struct {
+	Package   string `json:"package"`
+	Version   string `json:"version"`
+	Integrity string `json:"integrity"`
+	// Default https://registry.npmjs.org.
+	Registry string `json:"registry,omitempty"`
+	// The key of package.json's bin; default the tool's name.
+	Bin string `json:"bin,omitempty"`
+}
+
+// AuthSpec: the extension signs in: its program answers auth.status, auth.step and auth.logout (docs「登录（auth）」).
+type AuthSpec struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	// An extension_page (plugin_page) ui contribution: its own sign-in page for apps that do not know auth; apps that do
+	// leave it out of its pages.
+	Page string `json:"page,omitempty"`
 }
 
 type Dependency struct {
@@ -644,6 +699,58 @@ const (
 
 // Methods are the values of Method, in order.
 var Methods = []string{"initialize", "ping", "manifest"}
+
+// Values of AuthState.
+const (
+	AuthStateSignedOut = "signed_out"
+	AuthStatePending   = "pending"
+	AuthStateSignedIn  = "signed_in"
+	AuthStateExpired   = "expired"
+	AuthStateError     = "error"
+)
+
+// AuthStates are the values of AuthState, in order.
+var AuthStates = []string{"signed_out", "pending", "signed_in", "expired", "error"}
+
+// AuthStatus: auth.status and auth.logout: the extension's sign-in now (manifest.auth).
+type AuthStatus struct {
+	State   string `json:"state"`
+	Account string `json:"account,omitempty"`
+	// For people: why it is in error, what is signed in.
+	Message   string    `json:"message,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
+}
+
+// AuthStepParams: auth.step: step "" starts over; values are the fields of the step before.
+type AuthStepParams struct {
+	Step   string            `json:"step"`
+	Values map[string]string `json:"values,omitempty"`
+}
+
+type AuthField struct {
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	Secret      bool   `json:"secret,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
+}
+
+// AuthPrompt: auth.step's answer, the connectors' Prompt: fields to fill, a device code (url to open, user_code to
+// enter) or a QR code (url, scanned with another app), or done. For device_code and qr the app asks the same step
+// again (no values) every interval seconds.
+type AuthPrompt struct {
+	Step   string      `json:"step,omitempty"`
+	Fields []AuthField `json:"fields,omitempty"`
+	// Empty: fields to fill; device_code; qr.
+	Kind      string    `json:"kind,omitempty"`
+	URL       string    `json:"url,omitempty"`
+	UserCode  string    `json:"user_code,omitempty"`
+	Interval  int       `json:"interval,omitempty"`
+	Hint      string    `json:"hint,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Done      bool      `json:"done,omitempty"`
+	Account   string    `json:"account,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
+}
 
 // Values of HubRole.
 const (
@@ -1845,7 +1952,12 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"``json:"text"`
+	Users []string `json:"users,omitempty"`
+}
+
+// MessagingDecoration: A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+type MessagingDecoration struct {
+	Text string `json:"text"`
 	Icon string `json:"icon,omitempty"`
 	Tone string `json:"tone,omitempty"`
 }
@@ -2292,6 +2404,11 @@ type MessagingError struct {
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
 	"Manifest":                  func() any { return new(Manifest) },
+	"ToolSpec":                  func() any { return new(ToolSpec) },
+	"ToolCheck":                 func() any { return new(ToolCheck) },
+	"ToolArchive":               func() any { return new(ToolArchive) },
+	"ToolNPM":                   func() any { return new(ToolNPM) },
+	"AuthSpec":                  func() any { return new(AuthSpec) },
 	"Dependency":                func() any { return new(Dependency) },
 	"Exports":                   func() any { return new(Exports) },
 	"ExportedPoint":             func() any { return new(ExportedPoint) },
@@ -2337,6 +2454,10 @@ var newDef = map[string]func() any{
 	"ShortcutParam":             func() any { return new(ShortcutParam) },
 	"Frame":                     func() any { return new(Frame) },
 	"RPCError":                  func() any { return new(RPCError) },
+	"AuthStatus":                func() any { return new(AuthStatus) },
+	"AuthStepParams":            func() any { return new(AuthStepParams) },
+	"AuthField":                 func() any { return new(AuthField) },
+	"AuthPrompt":                func() any { return new(AuthPrompt) },
 	"InitializeParams":          func() any { return new(InitializeParams) },
 	"ExportedContribution":      func() any { return new(ExportedContribution) },
 	"HubInfo":                   func() any { return new(HubInfo) },

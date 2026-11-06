@@ -264,17 +264,21 @@ func macMetadata(rel string) bool {
 	return false
 }
 
-// budget keeps a package within PackageMost bytes and PackageFiles files.
-type budget struct{ bytes, files int64 }
+// budget keeps a package within PackageMost bytes and PackageFiles files (or its own limits, for a tool).
+type budget struct{ bytes, files, maxBytes, maxFiles int64 }
 
 func (b *budget) take(n int64) error {
+	most, files := int64(PackageMost), int64(PackageFiles)
+	if b.maxBytes > 0 {
+		most, files = b.maxBytes, b.maxFiles
+	}
 	b.bytes += n
 	b.files++
-	if b.bytes > PackageMost {
-		return fmt.Errorf("包超过 %d MB", PackageMost>>20)
+	if b.bytes > most {
+		return fmt.Errorf("包超过 %d MB", most>>20)
 	}
-	if b.files > PackageFiles {
-		return fmt.Errorf("包里超过 %d 个文件", PackageFiles)
+	if b.files > files {
+		return fmt.Errorf("包里超过 %d 个文件", files)
 	}
 	return nil
 }
@@ -415,7 +419,9 @@ func unpackAs(file, name, to string) error {
 	return fmt.Errorf("%s：包只能是目录、.tar.gz 或 .zip", filepath.Base(name))
 }
 
-func untar(file, to string) error {
+func untar(file, to string) error { return untarIn(file, to, &budget{}) }
+
+func untarIn(file, to string, b *budget) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
@@ -426,7 +432,6 @@ func untar(file, to string) error {
 		return fmt.Errorf("不是 gzip：%w", err)
 	}
 	tr := tar.NewReader(gz)
-	var b budget
 	if err := os.MkdirAll(to, 0o755); err != nil {
 		return err
 	}
@@ -495,13 +500,14 @@ func untar(file, to string) error {
 	}
 }
 
-func unzip(file, to string) error {
+func unzip(file, to string) error { return unzipIn(file, to, &budget{}) }
+
+func unzipIn(file, to string, b *budget) error {
 	zr, err := zip.OpenReader(file)
 	if err != nil {
 		return fmt.Errorf("不是 zip：%w", err)
 	}
 	defer zr.Close()
-	var b budget
 	for _, zf := range zr.File {
 		rel := strings.TrimSuffix(zf.Name, "/")
 		if rel == "" {

@@ -45,7 +45,7 @@
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`herdr_focus`（完整界面的焦点联动：`herdr_focus` 等，见下「焦点联动」）、`file_upload`。
 - 按 hub.json 出现：`assistant_views`（`assistant.persona_view` 打开：声明式动作带 `expected_version`、活卡片、正文卡片注册的接口可用）、`assistant_html_bridge`（另外 `assistant.html_views` 未关：`…/html-actions` 可用；客户端是否运行 HTML 仍看自己的安全验收，不据此跑 JS），见下面「助手」的卡片接口和 [assistant-views.md](assistant-views.md)。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`assistant_readiness`（主对话就绪度，见下「主对话就绪度」）；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）、`machines_add`（已登录设备经 `POST /api/v1/auth/pair-codes` 的 `add` 添加电脑、拿电脑的配对码，见下面「临时配对」里的「电脑的配对码」）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`assistant_readiness`（主对话就绪度，见下「主对话就绪度」）；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`extension_auth`（扩展的登录 `/api/v1/extensions/{id}/-/auth…`、`extension_auth` 事件、安装步骤 `tools`，[extensions.md](extensions.md)「登录（auth）」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）、`machines_add`（已登录设备经 `POST /api/v1/auth/pair-codes` 的 `add` 添加电脑、拿电脑的配对码，见下面「临时配对」里的「电脑的配对码」）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -677,13 +677,15 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 
 | kind | 步骤 |
 | --- | --- |
-| install / upgrade | `download`（下载包）→ `verify`（核对 sha256 和市场索引）→ `unpack`（解包）→ `check`（清单、权限、依赖、冲突；合集和缺的依赖一起预览）→ `consent`（等用户同意）→ `install`（放进 installed/、写库）→ `start`（启动并等到它起来）→ `nodes`（把它在电脑上的程序发到各台电脑，只有带 `node` 段的） |
+| install / upgrade | `download`（下载包）→ `verify`（核对 sha256 和市场索引）→ `unpack`（解包）→ `check`（清单、权限、依赖、冲突；合集和缺的依赖一起预览）→ `consent`（等用户同意）→ `tools`（安装清单 `tools` 里的命令行程序，#4507）→ `install`（放进 installed/、写库）→ `start`（启动并等到它起来）→ `nodes`（把它在电脑上的程序发到各台电脑，只有带 `node` 段的） |
 | uninstall | `stop`（停下它）→ `remove`（删文件和记录）→ `nodes`（各台电脑上停掉、删掉它的程序，只有带 `node` 段的） |
 
 - `consent` 是 `running` 时操作的 `state` 是 `needs_consent`：带 `preview_id`，客户端 `GET …/operations/{id}` 拿到完整预览（同 `catalog/preview` 的回答）给用户看，同意了照旧 `POST /-/install`（或 `/{id}/-/upgrade`）带这个 `preview_id`，hub 接着这个操作往下走；不同意 `DELETE …/operations/{id}`。预览过期（`expires_at`）操作就变成 `canceled`。不用用户同意的升级（自动升级、权限没变多的）这一步是 `skipped`。
 - `start`：没有程序的扩展（只有声明）、按需启动的（第一次被调才起）立刻 `done`；等到 `running` 才 `done`，起不来是 `failed`（升级会回滚到原来的版本，`error` 写明）。最多等 `host.ReadyWithin` 加 5 秒。
+- `tools`：没有 `tools` 的扩展 `skipped`；全部复用、或同一规格装过的立刻 `done`。步骤带 `tools: [{"name", "state", "reused"?}]`（`state`：`pending` / `running` / `done` / `failed`，按安装顺序），`bytes` / `total` 是正在下的那一个（`total` 常常不知道）。失败时什么都没装上，`error_code` 是 `tools_failed`，`error` 写哪个程序、为什么，见 [extensions.md](extensions.md)「命令行程序（tools）」。
+- `next`：操作 `succeeded` 时，扩展有 `auth` 又没登录（`signed_out` / `expired`），操作带 `"next": "auth"`：客户端打开扩展详情的登录（[extensions.md](extensions.md)「登录（auth）」）。
 - `nodes`：等每台在线的电脑同步完（离线的不等，上线时 hub 照旧补发），步骤带 `machines: {"done": 1, "total": 2}`；某台失败不算整个操作失败，那台的原因在 `machines.errors`（`{"<机器 id>": "…"}`）。
-- `error_code`：`download_stalled`（下载 30 秒没有收到数据）、`download_failed`、`checksum_mismatch`、`invalid_package`、`needs_consent`（同意的不是这份）、`start_failed`、`rolled_back`、`uninstall_failed`；不认识的按 `error` 显示。
+- `error_code`：`download_stalled`（下载 30 秒没有收到数据）、`download_failed`、`checksum_mismatch`、`invalid_package`、`tools_failed`、`needs_consent`（同意的不是这份）、`start_failed`、`rolled_back`、`uninstall_failed`；不认识的按 `error` 显示。
 - 操作只在 hub 的内存里：进行中和结束后 10 分钟内的列得出来，hub 重启后就没了（重启前没装完的照常没装上，再装一次即可）。
 
 ### 接口
@@ -925,6 +927,7 @@ hub 读不到待确认的电脑（数据库不通）时，每台电脑都按待�
 | `workspace_board_settings` | `enabled`：看板的开关改了（`PUT /api/v1/workspace-board/settings`），客户端据此显示或隐藏入口 |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
 | `extension_operation` | `operation`（`ExtensionOperation`）：扩展的安装、升级、卸载走到了下一步，或下载有进展（最多每秒一条）；只发给声明了 `extension_operations` 的连接，不进事件日志，见上「扩展的安装、升级、卸载进度」 |
+| `extension_auth` | `extension`、`auth`（`ExtensionAuth`）：扩展的登录状态变了（登录完成、登出、过期、扩展发了 `auth.changed`），见 [extensions.md](extensions.md)「登录（auth）」 |
 | `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[extensions.md](extensions.md)「UI 插槽」 |
 | `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条；kind `view` 是活卡片的原始位置，body.view 是 AssistantView |
 | `assistant_view` | `conversation`, `view`（schema 的 AssistantView：id、conversation、version、view、created_at、updated_at）：已存入数据库的活卡片更新；同一卡片每秒最多一次，按 version 忽略旧更新；不另发通知 |

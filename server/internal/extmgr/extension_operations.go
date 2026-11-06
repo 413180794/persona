@@ -42,7 +42,7 @@ const (
 
 // The steps of each kind, in order.
 var (
-	installSteps   = []string{extension.StepDownload, extension.StepVerify, extension.StepUnpack, extension.StepCheck, extension.StepConsent, extension.StepInstall, extension.StepStart, extension.StepNodes}
+	installSteps   = []string{extension.StepDownload, extension.StepVerify, extension.StepUnpack, extension.StepCheck, extension.StepConsent, extension.StepTools, extension.StepInstall, extension.StepStart, extension.StepNodes}
 	uninstallSteps = []string{extension.StepStop, extension.StepRemove, extension.StepNodes}
 )
 
@@ -67,20 +67,32 @@ type ExtensionOperation struct {
 	StartedAt time.Time         `json:"started_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
 	EndedAt   *time.Time        `json:"ended_at,omitempty"`
+	// Next is what the user should do once it succeeded: "auth" when the extension signs in and is not signed in.
+	Next string `json:"next,omitempty"`
 	// Preview is the preview waiting for the user's consent (GET of one operation only, never in events).
 	Preview any `json:"preview,omitempty"`
 }
 
 // ExtensionOpStep is one step of an operation.
 type ExtensionOpStep struct {
-	ID        string      `json:"id"`
-	State     string      `json:"state"`
-	Bytes     int64       `json:"bytes,omitempty"`
-	Total     int64       `json:"total,omitempty"`
-	Cached    bool        `json:"cached,omitempty"`
-	Machines  *OpMachines `json:"machines,omitempty"`
-	StartedAt *time.Time  `json:"started_at,omitempty"`
-	EndedAt   *time.Time  `json:"ended_at,omitempty"`
+	ID       string      `json:"id"`
+	State    string      `json:"state"`
+	Bytes    int64       `json:"bytes,omitempty"`
+	Total    int64       `json:"total,omitempty"`
+	Cached   bool        `json:"cached,omitempty"`
+	Machines *OpMachines `json:"machines,omitempty"`
+	// Tools is the tools step's command-line programs, in the order they install.
+	Tools     []OpTool   `json:"tools,omitempty"`
+	StartedAt *time.Time `json:"started_at,omitempty"`
+	EndedAt   *time.Time `json:"ended_at,omitempty"`
+}
+
+// OpTool is one command-line program of the tools step: pending, running, done or failed; Reused when it is the
+// machine's own copy.
+type OpTool struct {
+	Name   string `json:"name"`
+	State  string `json:"state"`
+	Reused bool   `json:"reused,omitempty"`
 }
 
 // OpMachines is how far the nodes step is: the computers done of those it waits for, and why one failed.
@@ -248,9 +260,39 @@ func (h *Manager) progress(op *extOp) extension.ProgressFunc {
 					s.Cached, changed = true, true
 				}
 			}
+			if s := stepOf(v, step); s != nil && step == extension.StepTools {
+				if toolProgress(s, ev) {
+					changed = true
+				}
+				if ev.State == extension.StepDone || ev.State == extension.StepSkipped {
+					changed = setStep(v, extension.StepInstall, extension.StepRunning) || changed
+				}
+			}
 			return changed
 		})
 	}
+}
+
+// toolProgress records a tools step event on s: a program's state, and the bytes of the one downloading.
+func toolProgress(s *ExtensionOpStep, ev extension.StepEvent) bool {
+	if ev.Tool == "" {
+		return false
+	}
+	i := slices.IndexFunc(s.Tools, func(t OpTool) bool { return t.Name == ev.Tool })
+	if i < 0 {
+		s.Tools = append(s.Tools, OpTool{Name: ev.Tool})
+		i = len(s.Tools) - 1
+	}
+	t := &s.Tools[i]
+	changed := t.State != ev.ToolState || t.Reused != ev.Reused
+	t.State, t.Reused = ev.ToolState, ev.Reused
+	switch {
+	case ev.ToolState == extension.StepRunning && ev.Bytes > 0:
+		s.Bytes, s.Total, changed = ev.Bytes, ev.Total, true
+	case ev.ToolState == extension.StepRunning:
+		s.Bytes, s.Total = 0, 0
+	}
+	return changed
 }
 
 // opFail ends op with err, at the step it was at (the first one not done when none was running).
@@ -303,6 +345,8 @@ func opErrorCode(step, kind string, err error) string {
 		return "checksum_mismatch"
 	case errors.Is(err, errRolledBack):
 		return "rolled_back"
+	case errors.Is(err, extension.ErrTools):
+		return "tools_failed"
 	case kind == opUninstall:
 		return "uninstall_failed"
 	}
@@ -313,7 +357,7 @@ func opErrorCode(step, kind string, err error) string {
 		return "checksum_mismatch"
 	case extension.StepUnpack, extension.StepCheck:
 		return "invalid_package"
-	case extension.StepConsent, extension.StepInstall:
+	case extension.StepConsent, extension.StepTools, extension.StepInstall:
 		return "install_failed"
 	case extension.StepStart:
 		return "start_failed"
@@ -428,7 +472,7 @@ func (h *Manager) installing(op *extOp, pv *extension.Preview, digest string) {
 		}
 		v.State, v.PreviewID = opRunning, ""
 		setStep(v, extension.StepConsent, extension.StepDone)
-		setStep(v, extension.StepInstall, extension.StepRunning)
+		setStep(v, extension.StepTools, extension.StepRunning) // the registry says done or skipped, then install runs
 		return true
 	})
 }
@@ -447,6 +491,9 @@ func (h *Manager) settle(ctx context.Context, op *extOp, p *extension.Extension,
 	h.opStep(op, extension.StepStart, extension.StepDone)
 	if cur := ps.reg.Get(id); cur != nil && cur.Manifest.NodeProgram() != nil {
 		h.syncNodesFor(ctx, op, cur)
+	}
+	if h.needsSignIn(ctx, id) {
+		h.update(op, func(v *ExtensionOperation) bool { v.Next = "auth"; return true })
 	}
 	h.opSucceed(op)
 }
@@ -765,7 +812,7 @@ func (h *Manager) installOp(ctx context.Context, op *extOp, upgrade, previewID, 
 	reg := h.extensions.reg
 	pv := reg.PreviewOf(previewID)
 	h.installing(op, pv, digest)
-	p, err := h.installExtensionPlan(ctx, upgrade, previewID, digest, refs, actor) // members and it together
+	p, err := h.installExtensionPlan(extension.WithProgress(ctx, h.progress(op)), upgrade, previewID, digest, refs, actor) // members and it together
 	if err != nil {
 		h.opFail(op, err)
 		return nil, err

@@ -62,6 +62,10 @@ type Manifest struct {
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
 	Permissions   Permissions     `json:"permissions,omitzero"`
+	// Tools are command-line programs the hub installs for it (tools.go); Auth says it signs in (auth.* methods).
+	// Hubs before them refuse the manifest (strict), so an extension using them asks for a newer hub in engines.
+	Tools []ToolSpec `json:"tools,omitempty"`
+	Auth  *AuthSpec  `json:"auth,omitempty"`
 }
 
 // Engines are what the extension runs on.
@@ -392,6 +396,7 @@ func (m *Manifest) Validate() error {
 		bad("contributes: nothing")
 	}
 	errs = append(errs, m.validateModel()...)
+	errs = append(errs, m.validateTools()...)
 	for _, name := range sortedKeys(m.Contributes) {
 		p, known := Points[name]
 		if !known {

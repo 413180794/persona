@@ -116,9 +116,32 @@ func Digest(m *Manifest) string {
 		Events      []string     `json:"events,omitempty"`
 		Surfaces    []string     `json:"surfaces,omitempty"`
 		Node        *nodeConsent `json:"node,omitempty"`
-	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces(), m.NodeProgram().consent()})
+		Tools       []string     `json:"tools,omitempty"`
+	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces(), m.NodeProgram().consent(), m.ToolsConsent()})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// toolsLine is the tools as the install screen shows them.
+func toolsLine(tools []ToolSpec, title string) PermissionLine {
+	var what []string
+	for i := range tools {
+		what = append(what, tools[i].Describe())
+	}
+	return PermissionLine{Key: "tools", Title: title,
+		Detail: strings.Join(what, "、") + "。装在扩展自己的目录，不用管理员权限；机器上已有能用的会直接用"}
+}
+
+// NewTools are m's tools old did not install the same way (a new name, or from somewhere else).
+func NewTools(old, m *Manifest) []ToolSpec {
+	was := old.ToolsConsent()
+	var out []ToolSpec
+	for i := range m.Tools {
+		if !slices.Contains(was, m.Tools[i].consent()) {
+			out = append(out, m.Tools[i])
+		}
+	}
+	return out
 }
 
 // PermissionLine is one line of what a plugin may do, as the install screen shows it.
@@ -254,6 +277,9 @@ func Explain(m *Manifest) []PermissionLine {
 		}
 		out = append(out, PermissionLine{Key: "secrets", Title: "使用你填的密钥", Detail: strings.Join(names, "、")})
 	}
+	if len(m.Tools) > 0 {
+		out = append(out, toolsLine(m.Tools, "安装命令行程序"))
+	}
 	if m.NodeProgram() != nil {
 		out = append(out, nodeLines(m.Node, nil)...)
 		if names := nodeSecrets(m, nil); len(names) > 0 {
@@ -270,6 +296,9 @@ func Added(old, m *Manifest) []PermissionLine {
 	var out []PermissionLine
 	if m.Runtime != nil && old.Runtime == nil {
 		out = append(out, runsCode)
+	}
+	if more := NewTools(old, m); len(more) > 0 {
+		out = append(out, toolsLine(more, "安装更多命令行程序"))
 	}
 	var hosts []string
 	for _, h := range m.Permissions.normalized().Network {

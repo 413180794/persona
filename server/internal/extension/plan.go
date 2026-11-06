@@ -89,6 +89,48 @@ type packageMove struct {
 	moved          bool
 }
 
+// planTools installs the command-line programs of the plan's packages (StepTools) before anything is committed: a
+// tool that does not install leaves the extension as it was. It answers the manifests it installed tools for.
+func (r *Registry) planTools(ctx context.Context, id, previewID, digest string, refs []PreviewRef, complete bool) ([]*Manifest, error) {
+	r.mu.Lock()
+	plans, err := r.validatePlan(id, previewID, digest, refs, complete)
+	r.mu.Unlock()
+	if err != nil {
+		return nil, nil // commitPlan says why
+	}
+	var done []*Manifest
+	any := false
+	for _, plan := range plans {
+		if m := plan.preview.Manifest; plan.row.Remote == nil && len(m.Tools) > 0 {
+			any = true
+			if err := r.installTools(ctx, m); err != nil {
+				r.dropPlanTools(append(done, m))
+				return nil, &PlanError{"安装命令行", err}
+			}
+			done = append(done, m)
+		}
+	}
+	if !any {
+		reportState(ctx, StepTools, StepSkipped)
+	}
+	return done, nil
+}
+
+// dropPlanTools undoes planTools for a plan that did not commit: what the versions that stay do not use goes.
+func (r *Registry) dropPlanTools(ms []*Manifest) {
+	for _, m := range ms {
+		var keep []string
+		if cur := r.Snapshot(m.ID); cur != nil && cur.Record.Source == SourceInstalled {
+			keep = []string{cur.Record.Version, cur.Record.PreviousVersion}
+		}
+		if len(keep) == 0 {
+			_ = os.RemoveAll(r.ToolsDir(m.ID))
+			continue
+		}
+		r.pruneTools(m.ID, keep...)
+	}
+}
+
 // InstallPlan/UpgradePlan execute the complete confirmation, not a sequence of independently activated installs.
 func (r *Registry) InstallPlan(ctx context.Context, previewID, digest string, refs []PreviewRef, actor string) (*Extension, error) {
 	return r.applyPlan(ctx, "", previewID, digest, refs, actor, true)
@@ -98,8 +140,13 @@ func (r *Registry) UpgradePlan(ctx context.Context, id, previewID, digest string
 }
 
 func (r *Registry) applyPlan(ctx context.Context, id, previewID, digest string, refs []PreviewRef, actor string, complete bool) (*Extension, error) {
+	tooled, err := r.planTools(ctx, id, previewID, digest, refs, complete)
+	if err != nil {
+		return nil, err
+	}
 	plans, main, err := r.commitPlan(ctx, id, previewID, digest, refs, complete)
 	if err != nil {
+		r.dropPlanTools(tooled)
 		return nil, err
 	}
 	// Nothing runs, is pruned, or records a successful install before all database records have committed.

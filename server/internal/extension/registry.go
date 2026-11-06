@@ -498,6 +498,7 @@ func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID strin
 func MorePermissions(cur *Extension, m *Manifest) bool {
 	was := cur.Full
 	return !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && was.Runtime == nil) || NodeAdds(was, m) ||
+		len(NewTools(was, m)) > 0 ||
 		slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(was.Topics(), t) }) ||
 		slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(was.Surfaces(), t) }) ||
 		len(newChannels(was, m)) > 0 ||
@@ -841,6 +842,7 @@ func (r *Registry) prune(id string, keep ...string) {
 			_ = os.RemoveAll(filepath.Join(r.dir, "installed", id, e.Name()))
 		}
 	}
+	r.pruneTools(id, keep...)
 }
 
 // Rollback goes back to the version installed before the last upgrade.
@@ -937,6 +939,7 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 			r.extensions[id] = back
 		}
 		_ = os.RemoveAll(filepath.Join(r.dir, "installed", id))
+		_ = os.RemoveAll(r.ToolsDir(id))
 		if !keepData {
 			_ = os.RemoveAll(r.DataDir(id))
 		}

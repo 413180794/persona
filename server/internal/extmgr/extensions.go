@@ -81,6 +81,18 @@ type ExtensionView struct {
 	Nodes []ExtensionNodeView `json:"nodes,omitempty"`
 	// Sandbox: an installed extension's sandbox and its connections through the egress proxy (extension_sandbox.go).
 	Sandbox *SandboxView `json:"sandbox,omitempty"`
+	// Auth is its sign-in (manifest.auth, extension_auth.go); Tools the command-line programs this version runs with
+	// (manifest.tools).
+	Auth  *ExtensionAuth      `json:"auth,omitempty"`
+	Tools []ExtensionToolView `json:"tools,omitempty"`
+}
+
+// ExtensionToolView is one of an extension's command-line programs: Reused when it is the machine's own copy.
+type ExtensionToolView struct {
+	Name    string `json:"name"`
+	Title   string `json:"title,omitempty"`
+	Version string `json:"version"`
+	Reused  bool   `json:"reused,omitempty"`
 }
 
 // Statuses besides the host's.
@@ -142,6 +154,8 @@ type extensions struct {
 	upgrades extensionUpgrades
 	// ops are the installs, upgrades and uninstalls in progress or just over (extension_operations.go).
 	ops extensionOps
+	// auth is the last sign-in status of the extensions that sign in (extension_auth.go).
+	auth authCache
 	// dev streams what the extensions being written log (extension_dev.go).
 	dev devTaps
 	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; extension_ui.go).
@@ -285,6 +299,14 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 	if m.NodeProgram() != nil {
 		v.Nodes = ps.nodes.views(p.Record.ID)
 	}
+	if v.Auth = ps.authView(p); v.Auth != nil && ps.h != nil {
+		if line := authWarning(ps.h.contextLang(ctx), v.Auth); line != "" {
+			v.Warnings = append(slices.Clone(v.Warnings), line)
+		}
+	}
+	for _, t := range ps.reg.Tools(p.Record.ID, p.Record.Version) {
+		v.Tools = append(v.Tools, ExtensionToolView{Name: t.Name, Title: t.Title, Version: t.Version, Reused: t.Reused})
+	}
 	if st := ps.sandboxOf(ctx, p); st.applies {
 		sv := st.SandboxView
 		v.Sandbox = &sv
@@ -406,6 +428,7 @@ func (ps *extensions) changed(c extension.Change) {
 		ctx = context.Background()
 	}
 	ps.apply(ctx, c.ID)
+	ps.forgetAuth(c.ID) // another version, removed, switched, set up again: ask again
 	affected := ps.modelChanged(ctx, c)
 	nodeChanged := c.Old != nil && c.Old.Manifest.NodeProgram() != nil
 	for _, p := range affected {
@@ -721,6 +744,10 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			return s, err
 		}
 		s.Env = []string{"PERSONA_PLUGIN_ID=" + id, "PERSONA_PLUGIN_DIR=" + p.Dir, "PERSONA_PLUGIN_DATA=" + dataDir}
+		// Its command-line programs (manifest.tools, installed with this version) first on PATH, for it and what it runs.
+		if len(ps.reg.Tools(id, p.Record.Version)) > 0 {
+			s.Env = append(s.Env, "PATH="+ps.reg.ToolPath(id, p.Record.Version, os.Getenv("PATH")))
+		}
 		for k, v := range rt.Env {
 			s.Env = append(s.Env, k+"="+v)
 		}
@@ -867,6 +894,10 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		}
 		if event == "ui.invalidate" {
 			ps.invalidate(id, params)
+			return
+		}
+		if event == "auth.changed" {
+			ps.authChanged(id, params)
 			return
 		}
 		if rest, ok := strings.CutPrefix(event, serve.Namespace+"."); ok {

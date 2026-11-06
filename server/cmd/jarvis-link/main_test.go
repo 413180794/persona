@@ -527,6 +527,31 @@ func TestTailFollowsAcrossARotation(t *testing.T) {
 	}
 }
 
+// Lines written to the old file just before it is moved aside, after the last look, still come out, before the
+// new file's.
+func TestTailReadsTheOldFileToItsEndOnRotation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "link.log")
+	_ = os.WriteFile(path, []byte("1\n"), 0o600)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out syncBuffer
+	done := make(chan error, 1)
+	go func() { done <- tailFile(ctx, &out, path, 5, true, 200*time.Millisecond) }()
+	waitText(t, &out, "1\n")
+	r, err := openRotating(path, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = r.Write([]byte("2\n")) // to the old file
+	_, _ = r.Write([]byte("3\n")) // moves it aside first
+	r.Close()
+	waitText(t, &out, "1\n2\n3\n")
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLogsWithoutALogFile(t *testing.T) {
 	f := newFakeEnv(t)
 	if err := logs(f.env, nil); err != nil || !strings.Contains(f.out.String(), "还没有日志") {

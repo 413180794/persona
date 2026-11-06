@@ -50,6 +50,10 @@ func TestMain(m *testing.M) {
 		serveConnectorExtensionForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "auth" {
+		serveAuthExtensionForTest()
+		return
+	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "ui" {
 		serveUIExtensionForTest()
 		return

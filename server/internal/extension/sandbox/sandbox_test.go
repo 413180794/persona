@@ -336,3 +336,21 @@ func TestDarwinSandboxForReal(t *testing.T) {
 		t.Errorf("proxy counts %+v", st)
 	}
 }
+
+// An extension's command-line programs (manifest.tools) are mounted read-only; without any nothing is added.
+func TestToolsMounted(t *testing.T) {
+	plan := Plan{ID: "notes", Command: "/x/pkg/bin/notes", Pkg: "/x/pkg", Data: "/x/data", Run: "/x/run", ProxySocket: "/x/run/p.sock",
+		Self: "/usr/local/bin/personad", Tools: "/x/tools/notes"}
+	_, args, _ := Linux("/usr/bin/bwrap", plan)
+	if line := strings.Join(args, " "); !strings.Contains(line, "--ro-bind-try /x/tools/notes /x/tools/notes") {
+		t.Fatal(line)
+	}
+	plan.Tools = ""
+	if _, args, _ := Linux("/usr/bin/bwrap", plan); strings.Contains(strings.Join(args, " "), "/x/tools") {
+		t.Fatal(args)
+	}
+	plan.Tools, plan.Data, plan.ProxyURL = "/x/tools/notes", t.TempDir(), "http://ext:c@127.0.0.1:40001"
+	if _, args, _ := Darwin(plan); !strings.Contains(args[1], `(allow file-read* (subpath "/x/tools/notes"))`) {
+		t.Fatal(args[1])
+	}
+}

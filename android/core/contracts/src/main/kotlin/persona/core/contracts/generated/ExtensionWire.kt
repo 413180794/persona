@@ -70,6 +70,94 @@ data class ExtensionManifest(
     val configuration: JsonElement? = null,
     val secrets: List<ExtensionSecretSpec>? = null,
     val permissions: ExtensionPermissions? = null,
+    /**
+     * Command-line programs the hub installs into the extension's own directory and puts first on its PATH
+     * (docs「命令行程序（tools）」, #4507). Installing them is a permission. Hubs before them refuse the manifest.
+     */
+    val tools: List<ExtensionToolSpec>? = null,
+    val auth: ExtensionAuthSpec? = null,
+)
+
+/**
+ * One command-line program. Exactly one of archive and npm.
+ */
+@Serializable
+data class ExtensionToolSpec(
+    /**
+     * The command put on PATH.
+     */
+    val name: String = "",
+    val title: String? = null,
+    /**
+     * What is installed, for people.
+     */
+    val version: String = "",
+    /**
+     * Other tools of the manifest installed (and on PATH) first.
+     */
+    val requires: List<String>? = null,
+    val check: ExtensionToolCheck? = null,
+    /**
+     * By <GOOS>-<GOARCH>.
+     */
+    val archive: Map<String, ExtensionToolArchive>? = null,
+    val npm: ExtensionToolNPM? = null,
+)
+
+/**
+ * A copy on the hub's PATH (outside the home directory) is used instead of installing one when <name> <args> prints a
+ * version (the first x.y.z) of at least min_version.
+ */
+@Serializable
+data class ExtensionToolCheck(
+    /**
+     * Default --version.
+     */
+    val args: List<String>? = null,
+    @SerialName("min_version") val minVersion: String? = null,
+)
+
+/**
+ * A download: a .tar.gz, .tgz or .zip with the program at path, or the program itself.
+ */
+@Serializable
+data class ExtensionToolArchive(
+    val url: String = "",
+    val sha256: String = "",
+    val path: String? = null,
+    val mirrors: List<String>? = null,
+)
+
+/**
+ * An npm package unpacked as published: no install scripts, no dependencies (a bundled package).
+ */
+@Serializable
+data class ExtensionToolNPM(
+    val `package`: String = "",
+    val version: String = "",
+    val integrity: String = "",
+    /**
+     * Default https://registry.npmjs.org.
+     */
+    val registry: String? = null,
+    /**
+     * The key of package.json's bin; default the tool's name.
+     */
+    val bin: String? = null,
+)
+
+/**
+ * The extension signs in: its program answers auth.status, auth.step and auth.logout (docs「登录（auth）」).
+ */
+@Serializable
+data class ExtensionAuthSpec(
+    val title: String = "",
+    val description: String? = null,
+    /**
+     * An extension_page (plugin_page) ui contribution: its own sign-in page for apps that do not know auth; apps that
+     * do leave it out of its pages.
+     */
+    val page: String? = null,
 )
 
 @Serializable
@@ -876,6 +964,72 @@ object ExtensionMethod {
     const val MANIFEST = "manifest"
     val ALL = listOf("initialize", "ping", "manifest")
 }
+
+/**
+ * Values of AuthState.
+ */
+object ExtensionAuthState {
+    const val SIGNED_OUT = "signed_out"
+    const val PENDING = "pending"
+    const val SIGNED_IN = "signed_in"
+    const val EXPIRED = "expired"
+    const val ERROR = "error"
+    val ALL = listOf("signed_out", "pending", "signed_in", "expired", "error")
+}
+
+/**
+ * auth.status and auth.logout: the extension's sign-in now (manifest.auth).
+ */
+@Serializable
+data class ExtensionAuthStatus(
+    val state: String = "",
+    val account: String? = null,
+    /**
+     * For people: why it is in error, what is signed in.
+     */
+    val message: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
+)
+
+/**
+ * auth.step: step "" starts over; values are the fields of the step before.
+ */
+@Serializable
+data class ExtensionAuthStepParams(
+    val step: String = "",
+    val values: Map<String, String>? = null,
+)
+
+@Serializable
+data class ExtensionAuthField(
+    val name: String = "",
+    val label: String = "",
+    val secret: Boolean? = null,
+    val placeholder: String? = null,
+)
+
+/**
+ * auth.step's answer, the connectors' Prompt: fields to fill, a device code (url to open, user_code to enter) or a QR
+ * code (url, scanned with another app), or done. For device_code and qr the app asks the same step again (no values)
+ * every interval seconds.
+ */
+@Serializable
+data class ExtensionAuthPrompt(
+    val step: String? = null,
+    val fields: List<ExtensionAuthField>? = null,
+    /**
+     * Empty: fields to fill; device_code; qr.
+     */
+    val kind: String? = null,
+    val url: String? = null,
+    @SerialName("user_code") val userCode: String? = null,
+    val interval: Int? = null,
+    val hint: String? = null,
+    val error: String? = null,
+    val done: Boolean? = null,
+    val account: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
+)
 
 /**
  * Values of HubRole.

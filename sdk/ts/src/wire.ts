@@ -42,6 +42,75 @@ export interface Manifest {
   configuration?: unknown;
   secrets?: SecretSpec[];
   permissions?: Permissions;
+  /**
+   * Command-line programs the hub installs into the extension's own directory and puts first on its PATH
+   * (docs「命令行程序（tools）」, #4507). Installing them is a permission. Hubs before them refuse the manifest.
+   */
+  tools?: ToolSpec[];
+  auth?: AuthSpec;
+}
+
+/**
+ * One command-line program. Exactly one of archive and npm.
+ */
+export interface ToolSpec {
+  /** The command put on PATH. */
+  name: string;
+  title?: string;
+  /** What is installed, for people. */
+  version: string;
+  /** Other tools of the manifest installed (and on PATH) first. */
+  requires?: string[];
+  check?: ToolCheck;
+  /** By <GOOS>-<GOARCH>. */
+  archive?: Record<string, ToolArchive>;
+  npm?: ToolNPM;
+}
+
+/**
+ * A copy on the hub's PATH (outside the home directory) is used instead of installing one when <name> <args> prints a
+ * version (the first x.y.z) of at least min_version.
+ */
+export interface ToolCheck {
+  /** Default --version. */
+  args?: string[];
+  min_version?: string;
+}
+
+/**
+ * A download: a .tar.gz, .tgz or .zip with the program at path, or the program itself.
+ */
+export interface ToolArchive {
+  url: string;
+  sha256: string;
+  path?: string;
+  mirrors?: string[];
+}
+
+/**
+ * An npm package unpacked as published: no install scripts, no dependencies (a bundled package).
+ */
+export interface ToolNPM {
+  package: string;
+  version: string;
+  integrity: string;
+  /** Default https://registry.npmjs.org. */
+  registry?: string;
+  /** The key of package.json's bin; default the tool's name. */
+  bin?: string;
+}
+
+/**
+ * The extension signs in: its program answers auth.status, auth.step and auth.logout (docs「登录（auth）」).
+ */
+export interface AuthSpec {
+  title: string;
+  description?: string;
+  /**
+   * An extension_page (plugin_page) ui contribution: its own sign-in page for apps that do not know auth; apps that
+   * do leave it out of its pages.
+   */
+  page?: string;
 }
 
 export interface Dependency {
@@ -582,6 +651,55 @@ export const ERROR_CODES = ["not_initialized", "unknown_method", "wrong_protocol
  */
 export type Method = "initialize" | "ping" | "manifest" | (string & {});
 export const METHODS = ["initialize", "ping", "manifest"] as const;
+
+export type AuthState = "signed_out" | "pending" | "signed_in" | "expired" | "error" | (string & {});
+export const AUTH_STATES = ["signed_out", "pending", "signed_in", "expired", "error"] as const;
+
+/**
+ * auth.status and auth.logout: the extension's sign-in now (manifest.auth).
+ */
+export interface AuthStatus {
+  state: AuthState;
+  account?: string;
+  /** For people: why it is in error, what is signed in. */
+  message?: string;
+  expires_at?: string;
+}
+
+/**
+ * auth.step: step "" starts over; values are the fields of the step before.
+ */
+export interface AuthStepParams {
+  step: string;
+  values?: Record<string, string>;
+}
+
+export interface AuthField {
+  name: string;
+  label: string;
+  secret?: boolean;
+  placeholder?: string;
+}
+
+/**
+ * auth.step's answer, the connectors' Prompt: fields to fill, a device code (url to open, user_code to enter) or a QR
+ * code (url, scanned with another app), or done. For device_code and qr the app asks the same step again (no values)
+ * every interval seconds.
+ */
+export interface AuthPrompt {
+  step?: string;
+  fields?: AuthField[];
+  /** Empty: fields to fill; device_code; qr. */
+  kind?: string;
+  url?: string;
+  user_code?: string;
+  interval?: number;
+  hint?: string;
+  error?: string;
+  done?: boolean;
+  account?: string;
+  expires_at?: string;
+}
 
 export type HubRole = "center" | "member" | (string & {});
 export const HUB_ROLES = ["center", "member"] as const;

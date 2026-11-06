@@ -331,9 +331,13 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 	limits := p.Manifest.Runtime.Resources.Limits()
 	sup := sandboxProbe()
 	pkg, data := p.Dir, ps.reg.DataDir(id)
+	tools := ""
+	if len(ps.reg.Tools(id, p.Record.Version)) > 0 {
+		tools = ps.reg.ToolsDir(id)
+	}
 	s.Wrap = func(command string, args []string) (string, []string, []string, error) {
 		proxyURL := px.Register(id, rule)
-		plan := sandbox.Plan{ID: id, Command: command, Args: args, Pkg: pkg, Data: data, Run: run,
+		plan := sandbox.Plan{ID: id, Command: command, Args: args, Pkg: pkg, Data: data, Run: run, Tools: tools,
 			MemoryMB: limits.MemoryMB, CPUPercent: limits.CPUPercent, Scope: sup.Scope, Env: os.Environ()}
 		if runtime.GOOS == "darwin" {
 			plan.ProxyURL = proxyURL

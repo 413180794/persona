@@ -150,6 +150,15 @@ func tailFile(ctx context.Context, w io.Writer, path string, n int, follow bool,
 			if err != nil {
 				continue
 			}
+			if !os.SameFile(at, now) {
+				// Moved aside: what was written to it after the last look comes before the new file's lines.
+				if old, err := f.Stat(); err == nil && old.Size() > offset {
+					if _, err := io.Copy(w, io.NewSectionReader(f, offset, old.Size()-offset)); err != nil {
+						nf.Close()
+						return err
+					}
+				}
+			}
 			f.Close()
 			f, at, offset = nf, now, 0
 		}

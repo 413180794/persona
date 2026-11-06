@@ -39,6 +39,8 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
   enable <id> | disable <id> [--cascade]
                                     --cascade: the extensions that depend on it are switched off too
   sandbox <id> on|off|default       run it in a sandbox or not (default: on unless from a trusted market)
+  auth <id> [login|logout]          an extension's sign-in (manifest.auth): its state; login shows the link, code and QR
+                                    code here and waits until it is done; logout signs it out
   config <id> key=value …           set settings (a value is JSON when it parses, text otherwise)
   secret <id> <name>                set a secret, read from stdin (never an argument)
   secret <id> <name> --delete
@@ -345,6 +347,11 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		}
 		fmt.Fprintf(stdout, "%s：%s\n", d.ID, d.Status)
 		return nil
+	case "auth": // docs/extensions.md「登录（auth）」
+		if err := need(1); err != nil {
+			return err
+		}
+		return extensionAuthCommand(ctx, c, positional, stdin, stdout)
 	case "sandbox": // docs/extensions.md「沙箱」
 		if err := need(2); err != nil {
 			return err

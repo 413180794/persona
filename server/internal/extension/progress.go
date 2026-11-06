@@ -25,6 +25,7 @@ const (
 	StepConsent  = "consent"
 	StepInstall  = "install"
 	StepStart    = "start"
+	StepTools    = "tools" // installing its command-line programs (tools.go), between consent and install
 	StepNodes    = "nodes"
 	StepStop     = "stop"
 	StepRemove   = "remove"
@@ -46,6 +47,11 @@ type StepEvent struct {
 	Bytes  int64
 	Total  int64
 	Cached bool
+	// Tool is the tools step's program the event is about ("" the step itself), ToolState its state and Reused
+	// whether it is the machine's own copy.
+	Tool      string
+	ToolState string
+	Reused    bool
 }
 
 // ProgressFunc receives the steps a preview goes through.
