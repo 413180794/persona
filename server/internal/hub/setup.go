@@ -112,6 +112,10 @@ type setupEnv struct {
 	getenv   func(string) string
 	sleep    func(time.Duration)
 
+	isContainer func() bool
+	// restartHub: config changed what a running hub reads only at start, so service restarts it.
+	restartHub bool
+
 	healthWait time.Duration
 	dbWait     time.Duration
 	// The database setup creates; another name only for tests and trial runs (_PERSONA_SETUP_DB_CONTAINER…).
@@ -134,17 +138,18 @@ func newSetupEnv(out io.Writer, o setupOptions) (*setupEnv, error) {
 	}
 	e := &setupEnv{
 		home: home, root: root, goos: runtime.GOOS, uid: os.Getuid(), user: name, out: out, o: o,
-		run:      runCommand,
-		runTTY:   runOnTerminal,
-		lookPath: exec.LookPath,
-		ask:      askTerminal,
-		lanIPv4:  defaultLANIPv4,
-		portFree: tcpPortFree,
-		exe:      os.Executable,
-		pingDB:   pingPostgres,
-		doctor:   setupDoctor,
-		getenv:   identity.Getenv,
-		sleep:    time.Sleep,
+		run:         runCommand,
+		runTTY:      runOnTerminal,
+		lookPath:    exec.LookPath,
+		ask:         askTerminal,
+		lanIPv4:     defaultLANIPv4,
+		portFree:    tcpPortFree,
+		exe:         os.Executable,
+		pingDB:      pingPostgres,
+		doctor:      setupDoctor,
+		getenv:      identity.Getenv,
+		sleep:       time.Sleep,
+		isContainer: inContainer,
 
 		healthWait:  90 * time.Second,
 		dbWait:      30 * time.Second,
@@ -274,6 +279,7 @@ func (e *setupEnv) config() (*setupConfig, error) {
 	}
 	_, hasToken := raw.get("token")
 	fresh := !hasToken
+	e.restartHub = false
 	var notes []string
 	if fresh {
 		in := e.installInputs(&notes)
@@ -296,6 +302,19 @@ func (e *setupEnv) config() (*setupConfig, error) {
 			if err := editHubJSON(e.root, outsideTLS); err != nil {
 				return nil, e.fail("config", "写不了 "+e.hubJSON()+"："+err.Error(), "检查这个目录的权限")
 			}
+		}
+		// No machine yet (installed before claude / herdr were, #4083): this machine is the first one once it has them.
+		if noMachines(raw) && e.hasAgents() {
+			if err := editHubJSON(e.root, func(o *jsonObject) error {
+				if !noMachines(o) {
+					return nil
+				}
+				return o.set("machines", []MachineConfig{defaultLocalMachine()})
+			}); err != nil {
+				return nil, e.fail("config", "写不了 "+e.hubJSON()+"："+err.Error(), "检查这个目录的权限")
+			}
+			e.restartHub = true // a running hub reads machines only when it starts
+			notes = append(notes, "补上本机作为电脑（kind: local）")
 		}
 	}
 	b, err := os.ReadFile(e.hubJSON())
@@ -410,8 +429,29 @@ func (e *setupEnv) installInputs(notes *[]string) installInputs {
 			}
 		}
 	}
-	in.agents = e.getenv("JARVIS_LOCAL_NODE") != "0" && (e.hasProgram("herdr") || e.hasProgram("claude"))
+	in.agents = e.hasAgents()
 	return in
+}
+
+// noMachines: hub.json says "machines": []. Without the key the hub starts with this machine already (defaultConfig).
+func noMachines(o *jsonObject) bool {
+	raw, ok := o.get("machines")
+	var list []json.RawMessage
+	return ok && json.Unmarshal(raw, &list) == nil && len(list) == 0
+}
+
+func (e *setupEnv) isInsideContainer() bool {
+	if e.isContainer != nil {
+		return e.isContainer()
+	}
+	return inContainer()
+}
+
+func (e *setupEnv) hasAgents() bool {
+	if e.getenv("JARVIS_LOCAL_NODE") == "0" || e.isInsideContainer() {
+		return false
+	}
+	return e.hasProgram("herdr") || e.hasProgram("claude")
 }
 
 // hasProgram: on PATH, or where the node looks besides (install.sh's has_herdr).

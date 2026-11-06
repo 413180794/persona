@@ -253,6 +253,9 @@ func (e *setupEnv) systemdService(ctx context.Context, cfg *Config, bin string) 
 		steps = append(steps, []string{"stop", "jarvisd"}, []string{"disable", "--now", "jarvisd.socket"}, []string{"start", "jarvisd"})
 	case changed || !serviceActive:
 		steps = append(steps, []string{"restart", "jarvisd"})
+	case e.restartHub:
+		steps = append(steps, []string{"restart", "jarvisd"})
+		what = "常驻服务已经装好；hub.json 补了本机，重启了 hub"
 	case binChanged:
 		// The units are as they were, but the binary is new (an upgrade): the hub running is the old one. The port
 		// stays with jarvisd.socket, so the restart is not noticed (docs/hub-restart.md).
@@ -439,11 +442,11 @@ func (e *setupEnv) launchdService(ctx context.Context, cfg *Config, bin string) 
 			if out, err := e.run(ctx, nil, "launchctl", "bootstrap", domain, e.agentPlist(label)); err != nil {
 				return e.fail("service", "启动已有的 launchd 服务 "+label+" 失败："+setupFirstLine(string(out)), "运行 launchctl print "+domain+"/"+label+" 看原因")
 			}
-		} else if binChanged {
+		} else if binChanged || e.restartHub {
 			if err := e.kickstart(ctx, domain+"/"+label); err != nil {
 				return err
 			}
-			detail += "；hub 换了新版本，重启了它"
+			detail += "；hub 换了新版本或 hub.json 补了本机，重启了它"
 		}
 		noteBinary(bin, sum)
 		e.report("service", true, detail, "")
@@ -455,11 +458,11 @@ func (e *setupEnv) launchdService(ctx context.Context, cfg *Config, bin string) 
 	_, loadedErr := e.run(ctx, nil, "launchctl", "print", domain+"/"+hubLaunchdLabel)
 	if string(before) == want && loadedErr == nil {
 		detail := "常驻服务已经装好、在运行，没动它（launchd " + hubLaunchdLabel + "）"
-		if binChanged {
+		if binChanged || e.restartHub {
 			if err := e.kickstart(ctx, domain+"/"+hubLaunchdLabel); err != nil {
 				return err
 			}
-			detail = "常驻服务已经装好；hub 换了新版本，重启了它（launchd " + hubLaunchdLabel + "）"
+			detail = "常驻服务已经装好；hub 换了新版本或 hub.json 补了本机，重启了它（launchd " + hubLaunchdLabel + "）"
 		}
 		noteBinary(bin, sum)
 		e.report("service", true, detail, "")

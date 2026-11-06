@@ -93,7 +93,7 @@ A phone that's already connected can let other devices in, without going back to
 ## Connect a computer
 
 If Claude Code was installed on the hub machine before the hub, that machine is already your first computer and you can skip this section.
-If you added Claude Code to it only after installing the hub, the hub won't find it on its own, and the main chat will still show **Add your computers** above it; for now ask someone comfortable with the command line to add it using the item in "Advanced".
+If you added Claude Code to it only after installing the hub, run the hub install command (`personad hub setup`) once more in a terminal and it adds that machine as your first computer; you can also add it by hand (see "Advanced").
 
 To add another computer (say, your Mac laptop), do it on the web:
 
@@ -115,7 +115,7 @@ Closing that screen is fine: the computer's card in the machine list shows an or
 
 ## Connect a model
 
-The main chat always runs on a computer with Claude Code installed. Even if you use another vendor's API key, it's the Claude Code on that computer that connects to it. So first make sure your computer has Claude Code; if it doesn't, the card above the main chat shows you how to install it (see the next section). If you only use the hub machine, remember Claude Code has to be installed before the hub (see "Install the hub").
+The main chat always runs on a computer with Claude Code installed. Even if you use another vendor's API key, it's the Claude Code on that computer that connects to it. So first make sure your computer has Claude Code; if it doesn't, the card above the main chat shows you how to install it (see the next section). If you only use the hub machine and Claude Code wasn't there when you installed the hub, install it and run `personad hub setup` once more in a terminal (see "Install the hub").
 
 Pick a path based on what you have:
 
@@ -156,7 +156,7 @@ These cards on iPhone and Android are still in progress; there you'll only see t
 - With only an API key and no computer, the main chat doesn't work; you must connect a computer that has Claude Code.
 - The NAS install package needs a GitHub login to download.
 - Connecting back home while out needs a VPN you set up yourself; direct IPv6 also needs one command run in the hub machine's terminal.
-- If Claude Code was installed on the hub machine only after the hub, you have to add it as a computer manually (see "Advanced").
+- If Claude Code was installed on the hub machine only after the hub, rerun `personad hub setup` to add it as a computer, or add it by hand (see "Advanced").
 - Add Computer, the new model wizard and the cards on the main chat are only on the web for now; iPhone and Android are in progress.
 
 ## Advanced
@@ -167,7 +167,7 @@ For people comfortable with the command line. The commands and files behind each
   What it does and doesn't change is in [onboarding.md](onboarding.md) ("Installer"); for manual deployment see [server.md](server.md), for a NAS see [docker.md](docker.md).
 - Get another phone pairing code: run `personad hub pair` on the hub machine. Under "Advanced" on the web sign-in page you can sign in with the hub's master key; it's the `token` in hub.json, and whoever has it can do anything.
 - Add a computer without the web: **Admin › Computers › Add computer**, or run `personad hub pair --machine <id> --add --name <name>` on the hub machine. Computers added either way count as confirmed right away. Details in [link.md](link.md).
-- If the machine had no `claude` or `herdr` when the hub was installed, `machines` in `hub.json` is empty, and rerunning `personad hub setup` later won't fill it in. To have the hub machine do work after adding Claude Code: edit hub.json in the admin page (or directly), add an entry `{"id": "<hostname>", "name": "<name>", "kind": "local"}` to `machines`, and restart the hub ([config.md](config.md)).
+- If the machine had no `claude` or `herdr` when the hub was installed, `machines` in `hub.json` is empty. After adding Claude Code, rerunning `personad hub setup` adds this machine (`kind: local`) while `machines` is still empty; or edit hub.json in the admin page (or directly), add an entry `{"id": "<hostname>", "name": "<name>", "kind": "local"}` to `machines`, and restart the hub ([config.md](config.md)).
 - A freshly installed hub only opens its TLS port on LAN IPv4; to connect directly from outside too, rerun `personad hub setup --outside`, see [network.md](network.md).
 - If you already wrote a claude launcher function in `~/.zshrc`, it's still discovered and selectable, and you can also use **Import from ~/.zshrc** in **Settings › Model Providers**; see [launchers.md](launchers.md).
 - The APIs for main chat readiness and error codes are in [protocol.md](protocol.md) ("Main chat readiness"); design and future plans are in [onboarding.md](onboarding.md).

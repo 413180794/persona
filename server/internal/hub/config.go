@@ -163,10 +163,15 @@ func dataDir() string {
 // Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/config.md). With
 // JARVIS_LOCAL_NODE=0 (the Docker image, docs/docker.md) there is no machine at all: the hub's own has no herdr or
 // claude to drive, every computer is added to hub.json.
-func defaultConfig() *Config {
+func defaultLocalMachine() MachineConfig {
 	host, _ := os.Hostname()
 	short := strings.Split(host, ".")[0]
-	machines := []MachineConfig{{ID: short, Name: short, Kind: "local", Icon: "server"}}
+	return MachineConfig{ID: short, Name: short, Kind: "local", Icon: "server"}
+}
+
+func defaultConfig() *Config {
+	host, _ := os.Hostname()
+	machines := []MachineConfig{defaultLocalMachine()}
 	if identity.Getenv("JARVIS_LOCAL_NODE") == "0" {
 		machines = []MachineConfig{}
 	}

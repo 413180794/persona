@@ -211,15 +211,16 @@ func testSetupEnv(t *testing.T, home string, o setupOptions, cmds *fakeCommands,
 			}
 			return "", errors.New("not found")
 		},
-		ask:        func(string) (bool, bool) { return false, false },
-		lanIPv4:    func() string { return ip4(192, 168, 1, 20) },
-		portFree:   func(int) bool { return true },
-		exe:        func() (string, error) { return "/nonexistent", nil },
-		pingDB:     func(context.Context, string) error { return nil },
-		doctor:     func(context.Context, string, bool) []string { return nil },
-		getenv:     func(string) string { return "" },
-		sleep:      func(time.Duration) {},
-		healthWait: time.Second, dbWait: time.Second,
+		ask:         func(string) (bool, bool) { return false, false },
+		lanIPv4:     func() string { return ip4(192, 168, 1, 20) },
+		portFree:    func(int) bool { return true },
+		exe:         func() (string, error) { return "/nonexistent", nil },
+		pingDB:      func(context.Context, string) error { return nil },
+		doctor:      func(context.Context, string, bool) []string { return nil },
+		getenv:      func(string) string { return "" },
+		sleep:       func(time.Duration) {},
+		isContainer: func() bool { return false },
+		healthWait:  time.Second, dbWait: time.Second,
 		dbContainer: setupDBContainer, dbVolume: setupDBVolume, dbPort: setupDBPort,
 	}
 	return e, &out
@@ -373,6 +374,67 @@ func TestSetupKeepsAnExistingHubJSON(t *testing.T) {
 	}
 	if strings.Contains(text, "#setup=") {
 		t.Fatalf("a setup code with the password set:\n%s", text)
+	}
+}
+
+// A hub installed before claude / herdr (#4083): rerunning setup once they are there adds this machine while hub.json
+// has "machines": [], and restarts the running hub so it sees it; never in a container, with JARVIS_LOCAL_NODE=0, or over
+// machines already there.
+func TestSetupAddsTheLocalMachineLater(t *testing.T) {
+	for _, c := range []struct {
+		name, prog, machines  string
+		localNode0, container bool
+		want                  string // the one machine's kind afterwards, "" for none
+	}{
+		{name: "empty list, claude", prog: "claude", machines: `,"machines":[]`, want: "local"},
+		{name: "empty list, herdr", prog: "herdr", machines: `,"machines":[]`, want: "local"},
+		{name: "JARVIS_LOCAL_NODE=0", prog: "claude", machines: `,"machines":[]`, localNode0: true},
+		{name: "in a container", prog: "claude", machines: `,"machines":[]`, container: true},
+		{name: "machines kept", prog: "claude", machines: `,"machines":[{"id":"remote1","name":"remote1","kind":"ssh"}]`, want: "ssh"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := setupTestHome(t)
+			token := "existing-token"
+			port := fakeHub(t, &token, true)
+			cmds := &fakeCommands{replies: map[string]fakeReply{"loginctl show-user": {out: "yes\n"}}}
+			e, out := testSetupEnv(t, home, setupOptions{listen: ":18660", tls: ":18662"}, cmds, "systemctl", "loginctl", c.prog)
+			e.getenv = func(k string) string {
+				if k == "JARVIS_LOCAL_NODE" && c.localNode0 {
+					return "0"
+				}
+				return ""
+			}
+			e.isContainer = func() bool { return c.container }
+			write := func(machines string) {
+				file := `{"token":"existing-token","listen":":` + strconv.Itoa(port) + `","public_url":"http://hub.example.com:1","database_url":"postgres://x"` + machines + `}`
+				if err := os.WriteFile(filepath.Join(e.root, "hub.json"), []byte(file), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// A first run installs the service, so the second has nothing but the machine to restart the hub for.
+			write(`,"machines":[{"id":"remote1","name":"remote1","kind":"ssh"}]`)
+			if err := e.setup(context.Background()); err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+			write(c.machines)
+			cmds.calls = nil
+			cmds.replies["systemctl --user is-active"] = fakeReply{}
+			out.Reset()
+			if err := e.setup(context.Background()); err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+			var cfg Config
+			if b, err := os.ReadFile(filepath.Join(e.root, "hub.json")); err != nil || json.Unmarshal(b, &cfg) != nil {
+				t.Fatalf("hub.json: %v", err)
+			}
+			if len(cfg.Machines) > 1 || (len(cfg.Machines) == 1 && cfg.Machines[0].Kind != c.want) || (len(cfg.Machines) == 0) != (c.want == "") {
+				t.Fatalf("machines %+v, want one %q", cfg.Machines, c.want)
+			}
+			added := c.want == "local"
+			if strings.Contains(out.String(), "补上本机") != added || cmds.called("systemctl --user restart jarvisd") != added {
+				t.Fatalf("added=%v: calls %v, output:\n%s", added, cmds.calls, out)
+			}
+		})
 	}
 }
 

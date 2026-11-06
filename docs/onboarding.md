@@ -572,7 +572,7 @@ Two additions to existing `POST /api/v1/launchers`:
 Documentation implementation (#4046): "Get started" lives in `docs/getting-started.md`. The README top is split into "I want to use it" and "I want to develop"; pairing in `persona-link-install.md` and `link.md` primarily uses web **Machines › Add computer**, with admin UI and command line under "Advanced."
 Differences from the plan: the website was not changed (first screen and FAQ await decision 15), and the app still has no entry point to this page. No screenshots were added; demo-mode screenshots will accompany the website version.
 Until iOS / Android add-computer, preset wizard, and readiness cards merge, the page honestly says "Use the web for now"; update it as those items merge.
-`hub setup` checks for local claude / herdr only when first writing hub.json, so the document says "If this hub computer should do work, install Claude Code before hub." If installed later, manually add `kind: local` under "Advanced"; #4083 covers adding the local machine on setup reruns.
+When Claude Code is installed after the hub, rerunning `hub setup` adds this machine (`kind: local`) while hub.json has `"machines": []`, and restarts the running hub so it picks it up (#4083); no hand edit of hub.json is needed.
 
 ### 6.2 Deferred
 
