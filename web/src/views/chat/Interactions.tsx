@@ -1,18 +1,18 @@
 // What the agent is waiting on (questions, plans, permissions, terminal dialogs, MCP forms and links), as Beautiful UI's Approval Card.
 import { useEffect, useId, useState } from "react";
-import { ApiError, enc, errorText } from "../../lib/api";
-import { apiOp } from "../../lib/ops";
+import { answerCard } from "../../lib/card-answer";
+import { allowBody, denyBody } from "../../lib/quick-answers";
 import { BUSY_MOTION, spinStyle } from "../../lib/busy-motion";
 import type { Interaction } from "../../lib/types";
 import { defaults, elicitationDraft, elicitationResolution, elicitationSource, fields, numberInputMode, saveElicitationDraft, urlHost, urlTarget, validate, type ElicitationAction, type Field, type Values } from "../../lib/elicitation";
-import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
+import { answerLines } from "../../lib/answered";
 import { sessionCan, sessionTitle } from "../../lib/format";
 import { interactionAsk } from "../../lib/inbox";
 import { plainMarkdown } from "../../lib/plain-markdown";
 import { mcpServerLabel, toolDisplayName } from "../../lib/turns";
 import { optionDisplay } from "../../lib/tool-detail";
 import { RecommendedTag } from "../../ui/RecommendedTag";
-import { dropAnswered, endInteraction, getSession, useStore, type AnsweredCard as Answered } from "../../lib/store";
+import { dropAnswered, getSession, useStore, type AnsweredCard as Answered } from "../../lib/store";
 import { Button, Collapse, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
@@ -27,29 +27,10 @@ import { composing } from "../../lib/send-history";
 
 /** Answers a card: the chat's cards and the overview's quick answers (Home, #4090) send through this. */
 export async function resolve(ix: Interaction, body: Record<string, unknown>) {
-  if (!sessionCan(getSession(ix.machine_id, ix.session_id), "approve")) {
-    toast(t("chat-interactions.approve_not_allowed"), "error");
-    return false;
-  }
-  try {
-    // one op id for this answer: sent again through a gap (a hub restart), it is taken once
-    const res = await apiOp<ResolveResult>(`/interactions/${enc(ix.id)}/resolve`, { method: "POST", json: body });
-    // Answered already (here, its event missed; or elsewhere): the hub says with what, and the card shows that.
-    const already = res?.already === true;
-    const r: Resolution = already ? (res.resolution ?? {}) : body;
-    // Handed back now, or the hub says it was handed back already: the agent waits on the computer (#4877).
-    const handedBack = already ? res.status === "dismissed" : r.dismiss === true;
-    endInteraction(ix.id, r.dismiss === true && !already ? undefined : { ix, resolution: r, already, handedBack });
-    if (already) toast(t("chat-interactions.already_answered"), "info");
-    return true;
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 410) {
-      endInteraction(ix.id); // over (expired, withdrawn, handed back): nothing left to answer
-      toast(endedText(e.body.status), "error");
-    } else if (e instanceof ApiError && e.code === "prompt_changed") toast(t("chat-interactions.prompt_changed"), "error");
-    else toast(t("chat-interactions.send_failed", { error: errorText(e) }), "error");
-    return false;
-  }
+  const r = await answerCard(ix, body);
+  if (!r.ok) toast(r.error, "error");
+  else if (r.already) toast(t("chat-interactions.already_answered"), "info");
+  return r.ok;
 }
 
 function Card({ title, kicker, onDismiss, children, footer }: { title: string; kicker: string; onDismiss: () => void; children: React.ReactNode; footer: React.ReactNode }) {
@@ -301,7 +282,7 @@ function PermissionCard({ ix }: { ix: Interaction }) {
       onDismiss={() => go({ dismiss: true })}
       footer={
         <>
-          <Button tone="quiet" onClick={() => go({ allow: false, message: t("chat-interactions.denied_message") })}>
+          <Button tone="quiet" onClick={() => go(denyBody())}>
             {t("chat-interactions.deny")}
           </Button>
           <span className="flex gap-1.5">
@@ -311,7 +292,7 @@ function PermissionCard({ ix }: { ix: Interaction }) {
                 {t("chat-interactions.always_allow")}
               </Button>
             )}
-            <Button tone="primary" busy={busy} onClick={() => go({ allow: true })}>
+            <Button tone="primary" busy={busy} onClick={() => go(allowBody())}>
               {t("chat-interactions.allow")}
             </Button>
           </span>

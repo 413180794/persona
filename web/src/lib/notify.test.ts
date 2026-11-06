@@ -70,6 +70,10 @@ describe("收回系统通知（#3458）", () => {
     vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
     const { postNotification, closeNotification } = await import("./notify");
     postNotification({ title: "a 需要你", body: "", tag: "m/a#needs", url: "/" }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    // the page's replaces the worker's under the same tag (#4464: Chrome doesn't do it by itself)
+    expect(closed).toEqual(["sw:m/a#needs"]);
+    closed.length = 0;
     closeNotification("m/a#needs");
     await new Promise((r) => setTimeout(r, 0));
     expect(closed).toEqual(["page:m/a#needs", "sw:m/a#needs"]);
@@ -124,5 +128,70 @@ describe("需要你的通知写清楚问什么（#4056）", () => {
     const cards = [ix({ id: "b", created_at: "2026-01-02" }), ix({ id: "x", session_id: "other", created_at: "2026-01-01" }), ix({ id: "a", created_at: "2026-01-01" })];
     expect(waitingCard(cards, s)?.id).toBe("a");
     expect(waitingCard(cards, { machine_id: "m", session_id: "none" })).toBeUndefined();
+  });
+});
+
+describe("授权卡的通知带「允许 / 拒绝」（#4464）", () => {
+  const n = { title: "a 要你批准", body: "go test ./...", tag: "m/a#needs", url: "/s/m/a" };
+  async function post(o: { maxActions?: number; controller?: boolean; fine?: boolean; ix?: string; before?: boolean; workerHas?: string[] }) {
+    const made: string[] = [];
+    const closed: string[] = [];
+    const workerClosed: string[] = [];
+    class FakeNote {
+      static permission = "granted";
+      static maxActions = o.maxActions;
+      onclick: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor(public title: string) {
+        made.push(title);
+      }
+      close() {
+        closed.push(this.title);
+      }
+    }
+    const showNotification = vi.fn(async () => {});
+    const getNotifications = vi.fn(async ({ tag }: { tag: string }) => (o.workerHas ?? []).filter((x) => x === tag).map((x) => ({ close: () => workerClosed.push(x) })));
+    const reg = { showNotification, getNotifications };
+    vi.stubGlobal("Notification", FakeNote);
+    vi.stubGlobal("navigator", { serviceWorker: { controller: o.controller === false ? null : {}, ready: Promise.resolve(reg), getRegistration: async () => reg } });
+    vi.stubGlobal("matchMedia", () => ({ matches: o.fine !== false }));
+    vi.stubGlobal("localStorage", { getItem: (k: string) => (k === "persona.systemNotify" ? "1" : null), setItem: () => {}, removeItem: () => {} });
+    const { postNotification } = await import("./notify");
+    if (o.before) postNotification({ ...n, title: "a 需要你" }, () => {});
+    postNotification({ ...n, ix: o.ix }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    vi.unstubAllGlobals();
+    return { made, closed, workerClosed, showNotification };
+  }
+
+  it("浏览器画得出按钮：经 service worker 弹，带两个按钮和卡片 id", async () => {
+    const { made, showNotification } = await post({ maxActions: 2, ix: "p1" });
+    expect(made).toEqual([]);
+    expect(showNotification).toHaveBeenCalledWith("a 要你批准", expect.objectContaining({
+      tag: "m/a#needs",
+      data: { url: "/s/m/a", ix: "p1" },
+      actions: [{ action: "allow", title: "允许" }, { action: "deny", title: "拒绝" }],
+    }));
+  });
+
+  it("画不出按钮（Safari、旧 Firefox）、没有 service worker、手机、不是授权卡：照旧", async () => {
+    for (const o of [{ ix: "p1" }, { maxActions: 2, controller: false, ix: "p1" }, { maxActions: 2, fine: false, ix: "p1" }, { maxActions: 2 }]) {
+      const { made, showNotification } = await post(o);
+      expect(made).toEqual(["a 要你批准"]);
+      expect(showNotification).not.toHaveBeenCalled();
+    }
+  });
+
+  it("同一件事只留一条：带按钮的弹出前收回页面弹的那条（Chrome 里两种不互相替换）", async () => {
+    const { made, closed, showNotification } = await post({ maxActions: 2, ix: "p1", before: true });
+    expect(made).toEqual(["a 需要你"]);
+    expect(closed).toEqual(["a 需要你"]);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("同一件事只留一条：页面弹的那条出来后收回 worker 弹的同 tag 那条", async () => {
+    const { made, workerClosed } = await post({ workerHas: ["m/a#needs", "m/b#needs"] });
+    expect(made).toEqual(["a 要你批准"]);
+    expect(workerClosed).toEqual(["m/a#needs"]);
   });
 });

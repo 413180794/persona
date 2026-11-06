@@ -7,5 +7,7 @@
   "plan_title": "{name} の計画が承認を待っています",
   "permission_title": "{name} が許可を求めています",
   "screen_title": "{name} がターミナルで待っています",
-  "elicitation_title": "{name} に MCP リクエストがあります"
+  "elicitation_title": "{name} に MCP リクエストがあります",
+  "allow_failed": "許可できませんでした",
+  "deny_failed": "拒否できませんでした"
 }

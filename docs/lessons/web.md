@@ -305,6 +305,11 @@
 - 成功响应也可能带用户必须处理的 warning，不能只 toast「已卸载」就丢弃。多条目录清理提示需要完整留在结果对话框，确认后再关闭和刷新；短时 toast 有容量和时限，不适合承载它。
 - 结果阶段不再提供卸载按钮，避免把已经成功的操作重试成「没有这个扩展」。无警告仍走原成功路径，真实错误仍保留原重试语义。用真正会在 onDone 卸载子组件的父组件测警告是否仍可见，避免浅层模型测试漏掉生命周期。
 
+## service worker 和页面别共用有值的模块（2026-11-06，#4464）
+
+- `sw.js` 是 `vite.config.ts` 里的一个入口，按 classic script 注册：页面也 import 了 `sw.ts` 依赖的某个模块的值（常量、函数）时，Rollup 把它拆成共享 chunk，`sw.js` 开头变成 `import … from "./assets/…"`，classic worker 一加载就语法错，整个 service worker 装不上（离线外壳、通知点击都没了），`tsc` 和单测都看不出来。
+  页面要用的常量自己再写一份（单测里比对两份一样），只 `import type`；改完看一眼 `head -c 200 dist/sw.js` 不以 `import` 开头。
+
 ## 词条名别以复数后缀结尾（2026-11-05）
 
 - 网页的词条 key 以 `_zero` / `_one` / `_two` / `_few` / `_many` / `_other` 结尾会被当成复数形式（`catalog.test.ts`、`t()` 的 `pluralKey`）：起名 `kind_other` 的「其它」词条，检查会报「key 不存在」（它只认去掉后缀的 `kind`）。「其它 / 通用」用 `_generic` 这类名字。

@@ -7,5 +7,7 @@
   "plan_title": "{name}'s plan is waiting for your approval",
   "permission_title": "{name} needs your permission",
   "screen_title": "{name} is waiting for you in the terminal",
-  "elicitation_title": "{name} has an MCP request for you"
+  "elicitation_title": "{name} has an MCP request for you",
+  "allow_failed": "Couldn't allow",
+  "deny_failed": "Couldn't deny"
 }

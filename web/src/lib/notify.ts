@@ -3,6 +3,7 @@
 // not push to a browser: while the page is open it watches its own session list (lib/attention-signals.ts) and posts a
 // notification when it is not in front, as the Mac app does (MacAttention.swift). The prefs also decide the sounds.
 import { useSyncExternalStore } from "react";
+import { t } from "../i18n";
 import { api, enc } from "./api";
 import { sessionTitle } from "./format";
 import { interactionAsk } from "./inbox";
@@ -347,16 +348,37 @@ export function notificationText(s: Pick<Session, "title" | "cwd" | "last_text">
   return { title, body: (said || (kind === "needs" ? words.needsBody : words.finishedBody)).slice(0, 200) };
 }
 
+/** The browser draws buttons on a notification (Chrome, Edge, Firefox 152+; not Safari) and a service worker controls
+ *  this page to show one with them: only the worker's notifications have buttons. Not on a phone or tablet: its lock
+ *  screen runs a button without unlocking, and the apps ask to unlock before 允许 (NotificationActions), a page can't. */
+function buttonsOnNotifications(): boolean {
+  if (typeof matchMedia === "undefined" || !matchMedia("(pointer: fine)").matches) return false;
+  return ((Notification as { maxActions?: number }).maxActions ?? 0) >= 2 && !!navigator.serviceWorker?.controller;
+}
+
 /**
  * Posts one notification; a later one for the same agent and kind replaces it (`tag`). Clicking it brings the page
  * forward and runs `open`. Where the page can't make one itself (Chrome on Android wants the service worker's), the
- * service worker shows it and opens `url` when clicked (sw.ts notificationclick).
+ * service worker shows it and opens `url` when clicked (sw.ts notificationclick). One about a permission card (`ix`)
+ * gets 允许 / 拒绝 where the browser can draw them (#4464): the worker shows it and an open page answers a button
+ * (lib/notification-answer.ts); elsewhere it is the plain one.
  */
-export function postNotification(n: { title: string; body: string; tag: string; url: string; icon?: string }, open: () => void): void {
+export function postNotification(n: { title: string; body: string; tag: string; url: string; icon?: string; ix?: string }, open: () => void): void {
   if (!systemNotifyActive()) return;
+  if (n.ix && buttonsOnNotifications()) {
+    // Chrome doesn't let the worker's notification replace the page's under the same tag: take the page's back first
+    closePageNotification(n.tag);
+    const actions = [{ action: "allow", title: t("chat-interactions.allow") }, { action: "deny", title: t("chat-interactions.deny") }];
+    navigator.serviceWorker.ready
+      .then((reg) => reg.showNotification(n.title, { body: n.body, tag: n.tag, icon: n.icon, data: { url: n.url, ix: n.ix }, actions } as NotificationOptions))
+      .catch(() => postNotification({ ...n, ix: undefined }, open));
+    return;
+  }
   try {
     const note = new Notification(n.title, { body: n.body, tag: n.tag, icon: n.icon });
     posted.set(n.tag, note);
+    // nor the page's the worker's (one with buttons, from an earlier permission card of this agent)
+    closeWorkerNotifications(n.tag);
     note.onclick = () => {
       window.focus();
       open();
@@ -383,15 +405,22 @@ const posted = new Map<string, Notification>();
 export function closeNotification(tag: string): void {
   // its event is over: the next one for the same agent and kind may post at once, not after NOTIFIED_WINDOW_MS
   releaseClaim(tag);
+  closePageNotification(tag);
+  closeWorkerNotifications(tag);
+}
+
+function closePageNotification(tag: string): void {
   const note = posted.get(tag);
-  if (note) {
-    posted.delete(tag);
-    try {
-      note.close();
-    } catch {
-      // already gone
-    }
+  if (!note) return;
+  posted.delete(tag);
+  try {
+    note.close();
+  } catch {
+    // already gone
   }
+}
+
+function closeWorkerNotifications(tag: string): void {
   if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
   navigator.serviceWorker
     .getRegistration()

@@ -175,4 +175,41 @@ describe("已在需要你时又来一张卡（#4058）", () => {
     await show([session("a", "needs_you")], [ask, perm]);
     expect(posted).toEqual([]);
   });
+
+  describe("授权卡的通知带「允许 / 拒绝」（#4464）", () => {
+    let shown: { title: string; ix?: string }[];
+    beforeEach(() => {
+      shown = [];
+      (FakeNotification as unknown as { maxActions: number }).maxActions = 2;
+      vi.stubGlobal("matchMedia", () => ({ matches: true }));
+      const reg = { showNotification: async (title: string, o: { data?: { ix?: string } }) => void shown.push({ title, ix: o.data?.ix }), getNotifications: async () => [] };
+      vi.stubGlobal("navigator", { ...navigator, serviceWorker: { controller: {}, ready: Promise.resolve(reg), getRegistration: async () => reg, addEventListener() {}, removeEventListener() {} } });
+    });
+    afterEach(() => delete (FakeNotification as unknown as { maxActions?: number }).maxActions);
+
+    it("能批的会话：经 service worker 弹，带卡片 id", async () => {
+      await show([session("a", "working")]);
+      await show([session("a", "needs_you")], [perm]);
+      await act(async () => {});
+      expect(shown).toEqual([{ title: "a 要你批准", ix: "p1" }]);
+      expect(posted).toEqual([]);
+    });
+
+    it("要先填内容的授权卡（fields）：不带按钮", async () => {
+      await show([session("a", "working")]);
+      await show([session("a", "needs_you")], [{ ...perm, fields: [{ key: "pw", label: "密码", secret: true }] }]);
+      await act(async () => {});
+      expect(shown).toEqual([]);
+      expect(posted.map((p) => p.title)).toEqual(["a 要你批准"]);
+    });
+
+    it("不能批的会话（approve=false）：不带按钮，照旧弹普通通知", async () => {
+      const locked = { ...session("a", "needs_you"), source_kind: "codex_history", capabilities: { approve: false } } as Session;
+      await show([{ ...locked, state: "working", status: "working" }]);
+      await show([locked], [perm]);
+      await act(async () => {});
+      expect(shown).toEqual([]);
+      expect(posted.map((p) => p.title)).toEqual(["a 要你批准"]);
+    });
+  });
 });

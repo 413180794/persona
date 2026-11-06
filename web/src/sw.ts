@@ -2,7 +2,7 @@
 // registered by lib/pwa.ts. It makes the installed app start fast and still open when the hub can't be reached: the
 // shell (index.html) comes from the hub when it answers in time, else from the cache; hashed assets from the cache.
 // The API is never touched (lib/sw-routes.ts).
-import { openFromNotification, type ClickClients } from "./lib/sw-click";
+import { clickNotification, type ClickClients } from "./lib/sw-click";
 import { ASSET_CACHE, ASSET_LIMIT, assetsIn, SHELL_CACHE, SHELL_TIMEOUT_MS, strategy } from "./lib/sw-routes";
 
 // The tsconfig has the DOM's types, not the worker's: the few this file uses.
@@ -11,6 +11,8 @@ interface ExtendableEvent extends Event {
 }
 interface NotificationEvent extends ExtendableEvent {
   notification: Notification;
+  /** The button clicked; "" for the notification itself. */
+  action: string;
 }
 interface FetchEvent extends ExtendableEvent {
   request: Request;
@@ -121,10 +123,10 @@ async function fresh(req: Request): Promise<Response> {
   }
 }
 
-// A notification the page had the worker show (lib/notify.ts postNotification: where the page can't make one itself):
-// clicking it brings an open window of the app forward on the agent's conversation, or opens one (lib/sw-click.ts).
+// A notification the page had the worker show (lib/notify.ts postNotification: where the page can't make one itself, or
+// a permission card's, with 允许 / 拒绝): clicking it brings an open window of the app forward on the agent's
+// conversation, or opens one; a button is answered by an open window without bringing it forward (lib/sw-click.ts).
 worker.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const url = (e.notification.data as { url?: string } | null)?.url;
-  e.waitUntil(openFromNotification(worker.clients, url));
+  e.waitUntil(clickNotification(worker.clients, e.notification.data as { url?: string; ix?: string } | null, e.action));
 });

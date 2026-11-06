@@ -1,12 +1,13 @@
 // The DOM side of the attention signals (#2332, logic in lib/attention.ts): the tab title, the favicon's badge, and the
 // optional sounds, and the system notifications (#2971, lib/notify.ts). `<AttentionSignals>` is what App renders for them.
 import { useEffect, useRef } from "react";
-import { attentionReason, stateOf } from "./format";
+import { attentionReason, sessionCan, stateOf } from "./format";
 import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
 import { answeredTags, attentionSoundEnabled, badgeText, detectNewCards, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
 import { claimNotification, closeNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
+import { listenForNotificationClicks } from "./notification-answer";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
 import { t } from "../i18n";
@@ -186,7 +187,10 @@ function notify(s: Session, kind: "needs" | "finished", card?: Interaction): str
   );
   const route = { name: "session", mid: s.machine_id, sid: s.session_id } as const;
   const icon = document.querySelector<HTMLLinkElement>(ICONS)?.dataset.original ?? document.querySelector<HTMLLinkElement>(ICONS)?.href;
-  postNotification({ title, body, tag, url: href(route), icon }, () => navigate(route));
+  // a permission card's gets 允许 / 拒绝 (#4464), when the session can be answered from here and nothing has to be
+  // filled in first (fields: as the hub's push and the overview's quick answers); the rest need the conversation
+  const ix = waiting.ix?.kind === "permission" && !waiting.ix.fields?.length && sessionCan(s, "approve") ? waiting.ix.id : undefined;
+  postNotification({ title, body, tag, url: href(route), icon, ix }, () => navigate(route));
   return waiting.ix?.id;
 }
 
@@ -204,6 +208,8 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
   useEffect(() => setFaviconBadge(needs), [needs]);
 
   useEffect(armAudio, []);
+  // 允许 / 拒绝 clicked on a permission card's notification: the service worker hands it to this page (#4464)
+  useEffect(listenForNotificationClicks, []);
 
   // Tells the other tabs whether this one is in front (notify: none of them posts then).
   useEffect(() => {
