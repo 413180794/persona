@@ -3,7 +3,7 @@ import Foundation
 import Network
 import ServiceManagement
 
-/// A hub address jarvis-link may try, as it reports them (internal/link).
+/// A hub address persona-link may try, as it reports them (internal/link).
 struct LinkEndpoint: Decodable, Hashable, Identifiable {
     var url: String
     var kind: String
@@ -11,7 +11,7 @@ struct LinkEndpoint: Decodable, Hashable, Identifiable {
     var id: String { url }
 }
 
-/// One status line from `jarvis-link run` (internal/link Status).
+/// One status line from `persona-link run` (internal/link Status).
 struct LinkStatus: Decodable, Equatable {
     var state: String // unpaired | connecting | connected | waiting | refused
     var machine: String?
@@ -84,7 +84,7 @@ struct PassivePairing: Decodable, Equatable {
     }
 }
 
-/// The resident node's service, as `jarvis-link node status --json` says.
+/// The resident node's service, as `persona-link node status --json` says.
 struct NodeService: Decodable, Equatable {
     var installed: Bool
     var file: String?
@@ -175,7 +175,7 @@ enum LinkText {
     static func mode(_ passive: Bool) -> String { passive ? "让 hub 来连（被动）" : "我去连 hub（主动）" }
 }
 
-/// Runs the jarvis-link helper inside the app bundle, keeps it running, and turns its status lines into state.
+/// Runs the persona-link helper inside the app bundle, keeps it running, and turns its status lines into state.
 @MainActor @Observable final class LinkModel {
     static let shared = LinkModel()
 
@@ -192,11 +192,11 @@ enum LinkText {
     /// The resident node's service; nil until asked.
     private(set) var nodeService: NodeService?
     private(set) var nodeNote: String?
-    /// A pairing link opened from outside (`jarvis://link?…`), for the pairing window to fill in; it never pairs by
+    /// A pairing link opened from outside (`persona://link?…`), for the pairing window to fill in; it never pairs by
     /// itself. `incomingNotice`: a link of ours that is not for this app, said in the window instead.
     private(set) var incoming: PairLink?
     private(set) var incomingNotice: String?
-    /// How many times pairing ran (`jarvis-link pair`): only the 「配对」 (Pair) button does it.
+    /// How many times pairing ran (`persona-link pair`): only the 「配对」 (Pair) button does it.
     private(set) var pairRuns = 0
 
     @ObservationIgnored private var process: Process?
@@ -208,9 +208,9 @@ enum LinkText {
     @ObservationIgnored private let monitor = NWPathMonitor()
     @ObservationIgnored private var sawFirstPath = false
 
-    nonisolated static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/jarvis-link")
-    /// The jarvisd the app carries, for the resident node when this Mac has none (`jarvis-link node install`).
-    nonisolated static let jarvisdURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/jarvisd")
+    nonisolated static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/persona-link")
+    /// The personad the app carries, for the resident node when this Mac has none (`persona-link node install`).
+    nonisolated static let personadURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/personad")
     /// Set once the app has set up (or found) the resident node by itself: later it only offers to.
     static let nodeSetUpKey = "nodeServiceSetUp"
     nonisolated static let stateEnvironment = LinkStatePaths.serviceEnvironment(
@@ -224,7 +224,6 @@ enum LinkText {
     nonisolated static var helperEnvironment: [String: String] {
         var environment = stateEnvironment
         environment["PERSONA_HOME"] = stateURL.path
-        environment["JARVIS_HOME"] = stateURL.path
         return environment
     }
     nonisolated static let configURL = stateURL.appendingPathComponent("link.json")
@@ -379,7 +378,7 @@ enum LinkText {
 
     // MARK: pairing and addresses: one-off runs of the helper, which owns link.json
 
-    /// A `jarvis://` / `persona://` link opened from outside: the pairing window fills in a link for this app and says
+    /// A `persona://` / `persona://` link opened from outside: the pairing window fills in a link for this app and says
     /// what a link for another one is. Nothing is sent to any hub here.
     func openLink(_ url: URL) {
         let parsed = PairLink.parse(url)
@@ -445,18 +444,18 @@ enum LinkText {
 
     // MARK: passive mode
 
-    /// `jarvis-link pair --listen`: the link for the hub's admin page (stdout), or why not.
+    /// `persona-link pair --listen`: the link for the hub's admin page (stdout), or why not.
     func pairListen(listen: String) async -> (ok: Bool, message: String, link: String?) {
         var args = ["pair", "--listen"]
         let l = listen.trimmingCharacters(in: .whitespacesAndNewlines)
         if !l.isEmpty { args.append(l) }
         let r = await Self.runHelper(args, stdin: nil, split: true)
         readConfig()
-        guard r.ok, r.out.hasPrefix("jarvis://connector?") else { return (false, r.message, nil) }
+        guard r.ok, r.out.hasPrefix("persona://connector?") else { return (false, r.message, nil) }
         return (true, r.err, r.out)
     }
 
-    /// `jarvis-link mode <mode>`: switches without pairing again; the helper follows within a second.
+    /// `persona-link mode <mode>`: switches without pairing again; the helper follows within a second.
     func setMode(_ mode: String) async -> (ok: Bool, message: String) {
         let r = await Self.runHelper(["mode", mode], stdin: nil)
         readConfig()
@@ -470,15 +469,15 @@ enum LinkText {
         nodeService = try? JSONDecoder().decode(NodeService.self, from: Data(r.out.utf8))
     }
 
-    /// `jarvis-link node install --jarvisd <the app's>`: the resident node's launchd agent, unless there is one.
+    /// `persona-link node install --personad <the app's>`: the resident node's launchd agent, unless there is one.
     func installNode() async {
         nodeNote = nil
-        let r = await Self.runHelper(["node", "install", "--jarvisd", Self.jarvisdURL.path], stdin: nil)
+        let r = await Self.runHelper(["node", "install", "--personad", Self.personadURL.path], stdin: nil)
         if !r.ok { nodeNote = r.message }
         await refreshNodeService()
     }
 
-    /// The resident node's service is there but not running: set it up again (`node uninstall` keeps the jarvisd in
+    /// The resident node's service is there but not running: set it up again (`node uninstall` keeps the personad in
     /// ~/.persona/bin, `node install` loads the service anew).
     func reinstallNode() async {
         nodeNote = nil
@@ -492,11 +491,11 @@ enum LinkText {
     private func setUpNodeOnce() async {
         await refreshNodeService()
         guard !UserDefaults.standard.bool(forKey: Self.nodeSetUpKey), let s = nodeService else { return }
-        if !s.installed && FileManager.default.isExecutableFile(atPath: Self.jarvisdURL.path) { await installNode() }
+        if !s.installed && FileManager.default.isExecutableFile(atPath: Self.personadURL.path) { await installNode() }
         if nodeService?.installed == true { UserDefaults.standard.set(true, forKey: Self.nodeSetUpKey) }
     }
 
-    /// The order jarvis-link tries them in (internal/link ranked).
+    /// The order persona-link tries them in (internal/link ranked).
     static func ranked(_ eps: [LinkEndpoint]) -> [LinkEndpoint] {
         // Same URL may arrive both manually and from the hub; keep the first occurrence like the Go reference (manual
         // ones are ordered first upstream), then rank.

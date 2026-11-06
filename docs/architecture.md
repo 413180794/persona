@@ -116,7 +116,7 @@ Where the business type needs fields of its own, it stays a separate type with t
 
 ### Starting a session
 1. App: pick a machine → pick a folder (recent projects / browse) → pick a launcher → optional first message.
-2. hub → node `session.start`: in the herdr workspace `jarvis` (created if missing), create a tab (cwd=folder, label=folder name),
+2. hub → node `session.start`: in the herdr workspace `persona` (created if missing), create a tab (cwd=folder, label=folder name),
    `pane run "<launcher> --session-id <uuid> --mcp-config ~/.persona/mcp.json --plugin-dir ~/.persona/agent-plugin --plugin-dir ~/.persona/claude-hooks"`
    (older Claude Code: `--settings ~/.persona/claude-settings.json` instead of the two plugins).
 3. The node waits for the agent to be ready (`agent wait`); if it is blocked (trust folder, etc.), the screen is pushed to the phone as a `screen` interaction. Once ready, the first message is sent.

@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-const convDir = "/home/me/.jarvis/assistant"
+const convDir = "/home/me/.persona/assistant"
 
 // conversationsHub is a hub whose assistant runs on a fake node with a main conversation and three side ones (one
 // of them Codex), plus a coding agent elsewhere; settings are kept in memory.
@@ -260,7 +260,7 @@ func TestConversationNewAndSend(t *testing.T) {
 	if hopOf(t, h, "s1") != 1 {
 		t.Fatal("the new conversation works at hop 1")
 	}
-	if first := strings.TrimSpace(regexp.MustCompile(`(?s)<jarvis-context\b[^>]*>.*?</jarvis-context>`).ReplaceAllString(sent, "")); first != "把行程整理成表格" {
+	if first := strings.TrimSpace(regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`).ReplaceAllString(sent, "")); first != "把行程整理成表格" {
 		t.Fatalf("its title is made from the message, not the note: %q", first)
 	}
 

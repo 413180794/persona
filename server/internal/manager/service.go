@@ -21,9 +21,9 @@ import (
 )
 
 // A manager as a service of its own (docs/managers.md, "Commands"): on Linux the systemd user unit
-// jarvis-manager-<id>.service, on a Mac the launchd agent com.jarvis.manager.<id>; each runs
+// persona-manager-<id>.service, on a Mac the launchd agent com.persona.manager.<id>; each runs
 // `<binary> manager run --dir <its directory>` and is started again when it exits. In a container the container is
-// the service (docker run --restart unless-stopped). Named like the hub's jarvisd and com.jarvis.hub.
+// the service (docker run --restart unless-stopped). Named like the hub's personad and com.persona.hub.
 
 // env is what the service commands touch, so tests can stand in for systemctl / launchctl.
 type env struct {
@@ -62,8 +62,8 @@ func newEnv(stdout io.Writer) *env {
 // self is how the user runs this program, for the lines it prints.
 func (e *env) self() string { return "personad" }
 
-func unitName(id string) string     { return "jarvis-manager-" + id + ".service" }
-func launchdLabel(id string) string { return "com.jarvis.manager." + id }
+func unitName(id string) string     { return "persona-manager-" + id + ".service" }
+func launchdLabel(id string) string { return "com.persona.manager." + id }
 
 func (e *env) unitPath(id string) string {
 	base := e.getenv("XDG_CONFIG_HOME")
@@ -77,10 +77,10 @@ func (e *env) plistPath(id string) string {
 	return filepath.Join(e.home, "Library", "LaunchAgents", launchdLabel(id)+".plist")
 }
 
-// binary is what the service runs: the hub machine's <data dir>/bin/jarvisd when there is one (install.sh puts it
+// binary is what the service runs: the hub machine's <data dir>/bin/personad when there is one (install.sh puts it
 // there and self-update keeps it current), else this executable.
 func (e *env) binary() (string, error) {
-	bin := filepath.Join(dataDir(), "bin", "jarvisd")
+	bin := filepath.Join(dataDir(), "bin", "personad")
 	if fileExists(bin) {
 		return bin, nil
 	}

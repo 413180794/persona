@@ -170,7 +170,6 @@ func TestSyncBufferWaitFor(t *testing.T) {
 // It returns the TLS and plaintext base URLs, the pin and the hub's log.
 func proxyTestHub(t *testing.T, pp *ProxyProtocolConfig) (h *Hub, tlsURL, plainURL, pin string, logs *syncBuffer) {
 	t.Helper()
-	t.Setenv("JARVIS_ADMIN_ACCESS", "")
 	t.Setenv("PERSONA_ADMIN_ACCESS", "")
 	h = newPublicTestHub(t)
 	logs = &syncBuffer{}

@@ -1,7 +1,7 @@
 // A link opened in the side panel (CLAUDE.md "Links open inside the app", docs/web.md "Links"): Feishu documents in a reader
 // (the phone's FeishuDocReader), Moments posts as the post, while the hub reads Feishu (feature `lark`); any other page belongs in a browser tab (lib/links.ts says
 // why), so one that lands here says so and opens the tab. Text selected in the reader can go to the agent:
-// "Add as context" rides along with the next message, "AI edit" asks for a change at once (<jarvis-context>). A document's
+// "Add as context" rides along with the next message, "AI edit" asks for a change at once (<persona-context>). A document's
 // comments open over it (DocComments.tsx, #1290); with the plugin's `lark_doc_comments` the selection bar's "Comment"
 // comments on the passage. Like the phone's reader, a document shows Feishu's cached AI summary (folded to a few lines)
 // and an outline of its headings ("Contents" in the header) that scrolls to the one picked.

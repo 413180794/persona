@@ -41,7 +41,7 @@ object MediaShare {
         val type = ImageMath.sniffMime(bytes)
         val resolver = context.contentResolver
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "jarvis-${System.currentTimeMillis()}.${ImageMath.extension(type)}")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "persona-${System.currentTimeMillis()}.${ImageMath.extension(type)}")
             put(MediaStore.MediaColumns.MIME_TYPE, type)
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Persona")
             put(MediaStore.MediaColumns.IS_PENDING, 1)

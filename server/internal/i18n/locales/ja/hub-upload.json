@@ -1,4 +1,4 @@
 {
   "too_large": "ファイルが{mb}MBを超えています",
-  "outdated": "{name}の jarvisd が古いため、ファイルを受け取れません。再デプロイしてください"
+  "outdated": "{name}の personad が古いため、ファイルを受け取れません。再デプロイしてください"
 }

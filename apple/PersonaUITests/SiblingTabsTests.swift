@@ -2,20 +2,20 @@ import XCTest
 
 /// The chat header's tabs of the space (`SiblingTabs`): the tabs are laid out in a strip with their state, the current
 /// one marked; ⋯ lists every tab with its state and the space's page; picking from either switches the chat.
-/// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): weather has tests (Needs You), widget (Working) and review (Seen).
+/// Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB): weather has tests (Needs You), widget (Working) and review (Seen).
 final class SiblingTabsTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let reset = expectation(description: "重置标签测试数据")
         URLSession.shared.dataTask(with: URL(string: hub + "/mock/reset")!) { _, _, _ in reset.fulfill() }.resume()
         wait(for: [reset], timeout: 5)
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006",
                                "-holdChromeOpen", "YES"] // the header stays open: the test taps in it
         app.launchPinned()
@@ -34,7 +34,7 @@ final class SiblingTabsTests: XCTestCase {
     }
 
     @MainActor private func mock(_ path: String) async throws -> [String: Any] {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         let (data, _) = try await URLSession.shared.data(from: URL(string: hub + path)!)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }

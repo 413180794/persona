@@ -127,7 +127,7 @@ describe("设置 › 以你的名义发出", () => {
       row(5, { origin: {} }),
     ]);
     const links = [...host.querySelectorAll("a")].map((a) => a.getAttribute("href"));
-    expect(links).toEqual(["/s/mac/s1", "/j/c1", "/s/mac/s9"]);
+    expect(links).toEqual(["/s/mac/s1", "/persona/c1", "/s/mac/s9"]);
     const rows = (id: number) => rowOf(`Subject ${id}`)!.parentElement!.textContent ?? "";
     expect(rows(3)).toContain("扩展自述");
     expect(rows(3)).toContain("chatext");

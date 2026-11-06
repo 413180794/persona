@@ -358,7 +358,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const onConvMenu: RowMenuFn = (s, anchor, at) => setConvMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
   const [chatsMenu, setChatsMenu] = useState<MenuAt | null>(null);
   const autoHolds = activeKey.startsWith("auto:") || isOpenAuto(assistant?.conversations, activeKey, convs);
-  const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || autoHolds || convs.some((c) => activeKey === `j:${c.session_id}`) });
+  const [personaFolded, togglePersona] = useFolded("persona", false, { holds: activeKey === "history" || autoHolds || convs.some((c) => activeKey === `j:${c.session_id}`) });
   // the pages fold under their own title (#2524); the drawer's grid of icons doesn't
   const [pagesFolded, togglePages] = useFolded("pages", false, { all: false, holds: more.some((p) => p.k === activeKey) });
   const { nav, reg, hover, highlight } = useGlide(activeKey);
@@ -401,13 +401,13 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         {chats && (
           <Section
             title={t("sidebar.persona_chats")}
-            folded={jarvisFolded}
-            onToggle={toggleJarvis}
+            folded={personaFolded}
+            onToggle={togglePersona}
             right={<SectionAdd label={t("sidebar.new_chat")} to={{ name: "persona-new" }} go={go} />}
           >
             {pinnedConvs.length > 0 && <PinnedHeading onMenu={(at) => setChatsMenu(at)} />}
             {convs.map((c) => (
-              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={hover} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} icon={pinnedIds.includes(c.session_id) ? "pin" : undefined} onMenu={onConvMenu} menuLabel={t("conversation-menu.actions")} />
+              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={hover} active={activeKey === `j:${c.session_id}`} to={{ name: "persona", sid: c.session_id }} go={go} showState={false} icon={pinnedIds.includes(c.session_id) ? "pin" : undefined} onMenu={onConvMenu} menuLabel={t("conversation-menu.actions")} />
             ))}
             {assistant && <AutoConversations conversations={assistant.conversations} main={assistant.main} shown={convs} activeKey={activeKey} holds={autoHolds} reg={reg} hover={hover} go={go} />}
             {assistant && <NavRow k="history" reg={reg} hover={hover} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label={t("sidebar.all_chats")} hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />}
@@ -591,7 +591,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   const todosSupported = useStore((s) => s.todosSupported);
   const todosLoaded = useStore((s) => s.todosLoaded);
   const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
-  const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("jarvis.agentGrouping")));
+  const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("persona.agentGrouping")));
   // the switch-grouping shortcut (lib/sidebar-api.ts)
   useEffect(() => onGrouping(setGrouping), []);
   const availableGroupings = useMemo(() => {
@@ -601,7 +601,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   // a hub without todos shows by machine, a by-todo choice kept for when it has them
   const shownGrouping = todosSupported === false && grouping === "todo" ? "machine" : grouping;
   const chooseGrouping = (g: AgentGrouping) => {
-    localStorage.setItem("jarvis.agentGrouping", g);
+    localStorage.setItem("persona.agentGrouping", g);
     setGrouping(g);
     hover(null);
   };
@@ -612,7 +612,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   const listMenu = useMenu();
   const listLabel = byUpdate ? t("sidebar.list_menu_sorted", { sort: AGENT_SORTS[1].label }) : t("sidebar.list_menu");
   // the quick filter ("All" / "Needs you" / "Unread" / "Working"), stacked on any grouping; what it showed when chosen stays (`kept`)
-  const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("jarvis.agentFilter")));
+  const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("persona.agentFilter")));
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
   // "botmux" beside the filters (#2786): botmux sessions shown or hidden in this browser
   const [botmuxHidden, setBotmuxHidden] = useState(() => botmuxAndFilter(filter, localStorage.getItem(BOTMUX_HIDDEN_KEY) === "1", "filter").hidden);
@@ -678,7 +678,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
   const choose = (f: AgentFilter) => {
     if (botmuxAndFilter(f, botmuxHidden, "filter").hidden !== botmuxHidden) saveBotmuxHidden(false);
-    localStorage.setItem("jarvis.agentFilter", f);
+    localStorage.setItem("persona.agentFilter", f);
     setFilter(f);
     setKept(matchingKeys(live, f, mutes));
     hover(null);
@@ -1756,7 +1756,7 @@ type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean
 // conversation's state when it is working or wants you. A line under it parts it from the pages.
 // Its menu (Copy session ID, End…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
 export function PersonaRow({ reg, hover, active, go, main, chord, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; /** The "Open Persona" shortcut as bound now ("": none). */ chord?: string; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
-  const to: Route = { name: "jarvis" };
+  const to: Route = { name: "persona" };
   const st = main ? stateOf(main) : undefined;
   const pending = main?.pending_interactions ?? 0;
   const row = useRef<HTMLAnchorElement | null>(null);
@@ -2425,7 +2425,7 @@ export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onS
       <nav aria-label={t("sidebar.pages")} className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overscroll-contain">
         {link(
           "persona",
-          { name: "jarvis" },
+          { name: "persona" },
           pending > 0 ? `Persona ${pending}` : "Persona",
           <AppMark size={20} radius={5} className="shadow-hairline" />,
           pending > 0 ? <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-red ring-2 ring-canvas" />

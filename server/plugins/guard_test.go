@@ -241,7 +241,7 @@ func TestPluginsDependOnlyOnTheSDK(t *testing.T) {
 			continue
 		}
 		if e.Type()&os.ModeSymlink != 0 {
-			// A compatibility alias (jarvisd → personad, …) links to a program in cmd/, scanned under its own name. A
+			// A compatibility alias (personad → personad, …) links to a program in cmd/, scanned under its own name. A
 			// link to a file or to nothing holds no program.
 			target, err := filepath.EvalSymlinks(path)
 			if info, statErr := os.Stat(path); err == nil && statErr == nil && info.IsDir() &&
@@ -739,7 +739,7 @@ func sameProgram(rel, target, root string) bool {
 	if from[0] != "cmd" {
 		return false
 	}
-	if len(from) == 2 && len(dest) == 2 { // cmd/jarvisd → cmd/personad
+	if len(from) == 2 && len(dest) == 2 { // cmd/personad → cmd/personad
 		return true
 	}
 	return len(from) >= 3 && len(dest) >= 2 && from[1] == dest[1]

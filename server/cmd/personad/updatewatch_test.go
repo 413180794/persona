@@ -21,7 +21,7 @@ func TestRestartHubWithoutAServiceManager(t *testing.T) {
 		t.Fatal(err)
 	}
 	started := filepath.Join(dir, "started")
-	target := filepath.Join(dir, "bin", "jarvisd")
+	target := filepath.Join(dir, "bin", "personad")
 	script := "#!/bin/sh\necho \"$@\" > " + started + "\n"
 	if err := os.WriteFile(target, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestRestartHubWithoutAServiceManager(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() { done <- hub.Wait() }()
-	if err := restartHub(update.Pending{PID: hub.Process.Pid, Target: target, Args: []string{"/old/path/jarvisd", "hub", "run"}}); err != nil {
+	if err := restartHub(update.Pending{PID: hub.Process.Pid, Target: target, Args: []string{"/old/path/personad", "hub", "run"}}); err != nil {
 		t.Fatal(err)
 	}
 	select {

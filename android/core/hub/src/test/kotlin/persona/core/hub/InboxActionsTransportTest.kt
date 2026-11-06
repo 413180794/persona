@@ -38,7 +38,8 @@ class InboxActionsTransportTest {
 
             current = false
             assertTrue(runCatching { transport.draft("x", "") }.exceptionOrNull() is CancellationException)
-            assertEquals(4, server.requestCount)
+            assertEquals("Unexpected request: ${if (server.requestCount > 4) server.takeRequest(200, java.util.concurrent.TimeUnit.MILLISECONDS) else null}",
+                4, server.requestCount)
         }
     }
 }

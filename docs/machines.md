@@ -9,7 +9,7 @@ Each computer's OS, current load and curves for the past 24 hours. The node coll
 | Manager storage, downsampling, cleanup, API (hub forwards `devicewire.MetricsRoutes`) | `server/internal/devices/metrics.go`, `server/internal/db/metrics.go`, migration `0051_machine_metrics.sql` |
 | Token usage: node metering, manager storage, API (see "Token usage" below) | `server/internal/node/usage.go`, `server/internal/devices/usage.go`, `server/internal/db/usage.go`, migration `manager/0421_machine_usage.sql` |
 | App | `apple/Persona/Views/Machines/` (`MachinesView`, `MachineDetailView`, `MetricCharts`, `OSBadge`), model `apple/Shared/MachineMetrics.swift` |
-| Inspect local samples / overhead | `jarvisd sysmon [n]`: prints system info and n+1 samples (one every 10 seconds, n ≤ 8640, one day); final line gives actual sample count, collection duration and personad CPU (Ctrl-C stops immediately) |
+| Inspect local samples / overhead | `personad sysmon [n]`: prints system info and n+1 samples (one every 10 seconds, n ≤ 8640, one day); final line gives actual sample count, collection duration and personad CPU (Ctrl-C stops immediately) |
 
 ## Who connects to computers (2026-11-04)
 
@@ -99,7 +99,7 @@ Computers belong to the manager, and so does everything they send: the hub's exi
 
 | Manager responsibility | Code |
 | --- | --- |
-| Interactions: waiting for `interaction.create`, resumable cards (retain for 3 minutes after node disconnect for hook reclaim; recover from `interactions` after manager restart, without another push on reclaim), expiry, always allow for session, screen cards (read, keypress, recheck), Codex cards, plans answered in terminal, history table, assistant questions/cards, questions from hub-owned features (`fleet.ask`: sending mail, Cua apps, jarvis_settings) | `fleet_ix.go` |
+| Interactions: waiting for `interaction.create`, resumable cards (retain for 3 minutes after node disconnect for hook reclaim; recover from `interactions` after manager restart, without another push on reclaim), expiry, always allow for session, screen cards (read, keypress, recheck), Codex cards, plans answered in terminal, history table, assistant questions/cards, questions from hub-owned features (`fleet.ask`: sending mail, Cua apps, persona_settings) | `fleet_ix.go` |
 | Session lists: unified state, background tasks, model errors, seen (`session_seen`), state start time, to-do / quiet / work state / channel markers / assistant-chat titles | `fleet.go`, `fleet_work.go`, `fleet_text.go` |
 | Push decisions: waiting and filtering for done notifications (seen, muted, answered through a channel, Inbox twin, notify_user already pushed, no duplicate push for one Stop), card notifications | `fleet_push.go` |
 | Live Activity content (FleetState) and Dynamic Island counts | `fleet_live.go` |
@@ -174,7 +174,7 @@ Count only traffic actually leaving the machine. Virtual interfaces are either l
 
 If counters decrease between readings (interface vanished or counters reset), discard that sample instead of drawing a huge spike.
 
-### Overhead (measured 2026-10-30, `jarvisd sysmon 30`)
+### Overhead (measured 2026-10-30, `personad sysmon 30`)
 
 | Machine | Collection time | personad CPU | Other |
 | --- | --- | --- | --- |
@@ -183,7 +183,7 @@ If counters decrease between readings (interface vanished or counters reset), di
 | Windows 11 desktop (16 threads, 4 drive letters, 7 interfaces, 2026-11-04) | 1.8 ms (interface/drive enumeration once a minute ~8 ms, other samples ~0.5 ms) | 47 ms / 5 minutes = 0.016% | No subprocesses |
 
 Five minutes after node starts, it logs average duration once (`metrics: a sample takes …`). Startup transcript scanning can inflate it
-(4.7 ms observed on the same Linux machine where standalone `jarvisd sysmon` takes 0.76 ms).
+(4.7 ms observed on the same Linux machine where standalone `personad sysmon` takes 0.76 ms).
 
 ## Storage and retention
 

@@ -3,15 +3,15 @@ import XCTest
 /// A connector's items in the inbox (GitHub…, docs/plan-connectors.md「六、App 侧」): the generic row with the
 /// connector's tag, mark and thread, a filter for the source, the detail (a pull request as GitHub's thread) and
 /// Open in GitHub, and AI Draft Reply whose Send comments on the thread through the hub. Against scripts/mock/mock_hub.py with
-/// MOCK_GITHUB_INBOX=1 (JARVIS_MOCK_HUB), which lists them only to apps asking ?sources=all and records replies at
+/// MOCK_GITHUB_INBOX=1 (PERSONA_MOCK_HUB), which lists them only to apps asking ?sources=all and records replies at
 /// /mock/sent.
 final class InboxConnectorTests: XCTestCase {
     @MainActor func testAGitHubItemReadsAndReplies() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "", "-inbox.source", ""]
         app.launchPinned()
         func shot(_ name: String) {

@@ -1,7 +1,7 @@
 import XCTest
 
 /// The flat activity timeline against the standard mock hub (no extra scenarios).
-/// TEST_RUNNER_JARVIS_RECENT_HUB=<mock URL>; JARVIS_LAYOUT=shell also exercises the new shell.
+/// TEST_RUNNER_PERSONA_RECENT_HUB=<mock URL>; PERSONA_LAYOUT=shell also exercises the new shell.
 final class RecentAgentsTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
@@ -11,8 +11,8 @@ final class RecentAgentsTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let url = ProcessInfo.processInfo.environment["JARVIS_RECENT_HUB"] else {
-            throw XCTSkip("needs the standard mock hub (JARVIS_RECENT_HUB)")
+        guard let url = ProcessInfo.processInfo.environment["PERSONA_RECENT_HUB"] else {
+            throw XCTSkip("needs the standard mock hub (PERSONA_RECENT_HUB)")
         }
         hub = url
     }
@@ -56,7 +56,7 @@ final class RecentAgentsTests: XCTestCase {
             }
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", "", "-tab", "dev"]
             + (fresh ? ["-openAgentsFresh", "YES", "-openChatsFresh", "YES"] : [])
         app.launchPinned()
@@ -67,7 +67,7 @@ final class RecentAgentsTests: XCTestCase {
     }
 
     @MainActor private func menu() -> XCUIElement {
-        if ProcessInfo.processInfo.environment["JARVIS_LAYOUT"] == "shell" {
+        if ProcessInfo.processInfo.environment["PERSONA_LAYOUT"] == "shell" {
             return app.buttons.matching(identifier: "shell-agents").allElementsBoundByIndex.first(where: \.isHittable)
                 ?? app.buttons["shell-agents"].firstMatch
         }
@@ -108,9 +108,9 @@ final class RecentAgentsTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let path = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"] ?? "system"
-            let layout = ProcessInfo.processInfo.environment["JARVIS_LAYOUT"] ?? "tabs"
+        if let path = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"] ?? "system"
+            let layout = ProcessInfo.processInfo.environment["PERSONA_LAYOUT"] ?? "tabs"
             try screenshot.pngRepresentation.write(to: URL(fileURLWithPath: path).appendingPathComponent("\(name)-\(layout)-\(style).png"))
         }
     }

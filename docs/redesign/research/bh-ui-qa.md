@@ -179,7 +179,7 @@ Some components remain scattered in Features rather than DesignSystem:
 
 ### 2.2 Current Persona pairing [Fact]
 
-- `WelcomeView`: App icon, slogan, four features, "Connect hub", then "Run `jarvisd hub pair` on the hub machine to display a QR code" (`JV:ios/Jarvis/Views/Settings/SettingsView.swift:220-274`).
+- `WelcomeView`: App icon, slogan, four features, "Connect hub", then "Run `personad hub pair` on the hub machine to display a QR code" (`JV:ios/Persona/Views/Settings/SettingsView.swift:220-274`).
 - `PairView`:
   - scans with `DataScannerViewController` and connects immediately on detection; "Manual entry" takes server address and Token (`:276-322`);
   - one failure message: "Connection failed: … Make sure the phone can reach this address (e.g. on the same network or VPN)." (`:333`).
@@ -190,13 +190,13 @@ Some components remain scattered in Features rather than DesignSystem:
 1. **Segmented progress after scanning, not just a spinner**: Parse QR → Connect hub (DNS / TCP / TLS) → Validate token → Exchange device token → Read machines → Ready. Categorized failures:
    - DNS: "Can't find this address";
    - refusal/timeout: check hub is running and phone/hub share network or VPN;
-   - 401 / 403: pairing code expired; rerun `jarvisd hub pair`;
+   - 401 / 403: pairing code expired; rerun `personad hub pair`;
    - incompatible version;
    - Android uses the same stages/copy, strings in a shared table.
 2. **Include hub identity in the QR**: certificate/public-key fingerprint in pairing URL. Compare automatically, showing a reference-app-style "Verify fingerprint" page on mismatch, clearly "changed / first time", never silently accepting. Explicitly warn in forms for HTTP (non-TLS), as the reference app does.
 3. **Explain what pairing does**: "What this phone stores / what is added on the hub" sheet covering device token, Keychain, revocation in **Settings › Devices**, analogous to the reference app's Security panel and "What will happen on my computer?".
 4. **Post-pairing readiness checklist**: machine online status, herdr/Claude versions, node/hub version match, notification permission. Each skippable with consequences, like the reference dependency list and "Skip for now, terminal only".
-5. **Separate manual-entry fields**: address/token, distinct keyboards, screen-reader names; automatically split pasted `jarvis://pair?...` URLs.
+5. **Separate manual-entry fields**: address/token, distinct keyboards, screen-reader names; automatically split pasted `persona://pair?...` URLs.
 6. **HTML prototype the whole setup first** (320 / 393 narrow screens, light/dark, Reduce Motion, all failure cases), then implement iOS/Android after user approval.
 
 ---
@@ -316,8 +316,8 @@ Some components remain scattered in Features rather than DesignSystem:
 
 ### 4.3 Persona equivalents [Fact]
 
-- Units: 24 Swift files under `JV:ios/JarvisTests`, plus recorded `terminal-*.jsonl` frames; Go server tests, anonymized transcript goldens/corpus comparisons (`JV:docs/testing.md:5-15`, `JV:docs/archive/lanes/msg-render-verification.md`).
-- UI: 16 XCUITest files under `JV:ios/JarvisUITests`, e.g. `MessageMenuTests`, `SendSafetyTests`, `ConnectionTests`, `TerminalKeysTests`, `MachinePagesTests`, `LiveActivityShots`.
+- Units: 24 Swift files under `JV:ios/PersonaTests`, plus recorded `terminal-*.jsonl` frames; Go server tests, anonymized transcript goldens/corpus comparisons (`JV:docs/testing.md:5-15`, `JV:docs/archive/lanes/msg-render-verification.md`).
+- UI: 16 XCUITest files under `JV:ios/PersonaUITests`, e.g. `MessageMenuTests`, `SendSafetyTests`, `ConnectionTests`, `TerminalKeysTests`, `MachinePagesTests`, `LiveActivityShots`.
   - Most connect to `scripts/mock/mock_hub.py`; `MOCK_*` scenarios cover disconnects, delay, gaps, terminal streams, uploads; assertions read `GET /mock/resolved|sent|keys|uploads|hits` (`JV:docs/testing.md:79-139`).
   - `MachinePagesTests` screenshots each step in light/dark, attaching screenshots/view trees on failure (`:129-130`).
 - Mock hub was built for screenshot privacy: three fictional machines, Agents, Inbox; DEBUG arguments jump directly to pages (`JV:docs/testing.md:40-77`, `JV:docs/ios.md:299-305`).
@@ -347,8 +347,8 @@ Some components remain scattered in Features rather than DesignSystem:
   - `Font`: role-based Dynamic Type: panelTitle, rowTitle, body, cardBody, preview, meta, chip, micro, code, greeting (`:158-180`);
   - `Motion`: state `.snappy 0.25`, layout `.smooth 0.3` (`:205-208`);
   - separate `Watch` sizes (`:184-201`).
-- **Styled modifiers**: `surface(tint:interactive:in:)`, `themedButton(prominent:)`, `themedPage()`, `themedGroupedPage()`, `themedRow()`, plus Clay/Island `SoftButtonStyle`, at least 44pt (`JV:ios/Jarvis/Views/Styling.swift:6-137`). RootView rebuilds with style as id when switching, so static tokens suffice (`JV:docs/ios.md:229`).
-- **Components** (`JV:ios/Jarvis/Views/Components.swift`):
+- **Styled modifiers**: `surface(tint:interactive:in:)`, `themedButton(prominent:)`, `themedPage()`, `themedGroupedPage()`, `themedRow()`, plus Clay/Island `SoftButtonStyle`, at least 44pt (`JV:ios/Persona/Views/Styling.swift:6-137`). RootView rebuilds with style as id when switching, so static tokens suffice (`JV:docs/ios.md:229`).
+- **Components** (`JV:ios/Persona/Views/Components.swift`):
   - `StatusDot`: Needs you breathes, stops under Reduce Motion (`:6-38`);
   - `SessionAvatar` (`:41-69`);
   - `Chip`: neutral / tinted / outlined (`:75-128`);
@@ -410,7 +410,7 @@ Some components remain scattered in Features rather than DesignSystem:
   6. `rules`: **machine-checkable contrast floors**, e.g. `onAccent / accent ≥ 3.5`, `userBubbleText / userBubble ≥ 4.5`, `accent / page ≥ 3`, `status.text / page ≥ 4.5`. Check every style × light/dark; fail generation below floors. Turns `JV:docs/ios.md:223-225` prose into checks.
 - **Generator**: `scripts/assets/gen_tokens.py`, matching existing Python tooling. Outputs:
   - `ios/Shared/Generated/Tokens.swift`: pure-data enums `nonisolated`, per CLAUDE.md's `ios/Shared` default MainActor lesson;
-  - `android/core/designsystem/.../Tokens.kt`: `JarvisColors`, `LocalJarvisColors`, `Dp` / `TextStyle`, mapped to `MaterialTheme.colorScheme`;
+  - `android/core/designsystem/.../Tokens.kt`: `PersonaColors`, `LocalPersonaColors`, `Dp` / `TextStyle`, mapped to `MaterialTheme.colorScheme`;
   - `prototypes/_tokens.css`: HTML tokens, removing manual prototype color duplication;
   - `docs/design-tokens.md`: generated palettes/dimensions;
   - `--check`: regenerate/compare repository files plus contrast checks, in pre-commit or release scripts;
@@ -425,7 +425,7 @@ Some components remain scattered in Features rather than DesignSystem:
 
 ### 6.2 Component library
 
-- iOS: extract `Theme`, `StatusPalette`, `Styling`, `Components` into a local Swift Package (e.g. `JarvisDesignSystem`), following reference-app boundaries: no AppModel dependency, no network (`BH:docs/ARCHITECTURE.md:45`). AppModel-dependent pieces like `CloseAgentSheet` become pure views with callbacks.
+- iOS: extract `Theme`, `StatusPalette`, `Styling`, `Components` into a local Swift Package (e.g. `PersonaDesignSystem`), following reference-app boundaries: no AppModel dependency, no network (`BH:docs/ARCHITECTURE.md:45`). AppModel-dependent pieces like `CloseAgentSheet` become pure views with callbacks.
 - Android: `:core:designsystem`. **Names, parameters, states match iOS one to one**; one spec per component (dimensions, states, spoken-label rules, minimum hit area, wrapping), under `docs/components/`.
 - Both get a **component catalog**: iOS DEBUG `-openCatalog YES`, Android debug Activity, for human review and screenshot tests.
 - First components combine both projects' strengths:

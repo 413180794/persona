@@ -7,7 +7,7 @@ import kotlinx.serialization.json.*
 internal data class AnswerFixture(val name: String, val input: JsonObject, val expected: JsonObject)
 
 internal fun fixtures(domain: String): List<AnswerFixture> {
-    val root = File(System.getProperty("jarvis.repo.root") ?: error("jarvis.repo.root is required"))
+    val root = File(System.getProperty("persona.repo.root") ?: error("persona.repo.root is required"))
     val directory = File(root, "spec/fixtures/$domain")
     check(directory.isDirectory) { "Missing fixtures: $domain" }
     val files = directory.listFiles { file -> file.extension == "json" }!!.sortedBy { it.name }

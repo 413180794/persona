@@ -6,15 +6,16 @@ import org.junit.Test
 
 class PersonaDesignTest {
     @Test fun storedIdsMatchIosAndUnknownFallsBackToTheDefault() {
-        assertEquals(listOf("persona", "jarvis", "jarvis-circuit"), PersonaDesign.entries.map { it.id })
+        assertEquals(listOf("persona", "persona-visor", "persona-circuit"), PersonaDesign.entries.map { it.id })
         PersonaDesign.entries.forEach { assertEquals(it, PersonaDesign.fromId(it.id)) }
-        listOf(null, "", "doudou", "JARVIS").forEach { assertEquals(PersonaDesign.Mochi, PersonaDesign.fromId(it)) }
+        listOf(null, "", "doudou", "PERSONA").forEach { assertEquals(PersonaDesign.Mochi, PersonaDesign.fromId(it)) }
     }
 
-    /** Mochi became the default on 2026-11-03: nothing saved means it; a saved Visor (`jarvis`) stays Visor. */
+    /** Mochi is the default; the distinct Visor id restores Visor. */
     @Test fun mochiIsTheDefaultAndASavedVisorStays() {
         assertEquals(PersonaDesign.Mochi, PersonaDesign.Default)
-        assertEquals(PersonaDesign.Visor, PersonaDesign.fromId("jarvis"))
+        assertEquals(PersonaDesign.Visor, PersonaDesign.fromId("persona-visor"))
+        assertEquals(PersonaDesign.Mochi, PersonaDesign.fromId("persona"))
         assertEquals(R.string.designsystem_face_mochi, PersonaDesign.Default.titleRes)
     }
 

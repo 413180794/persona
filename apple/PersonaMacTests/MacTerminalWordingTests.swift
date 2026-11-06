@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The terminal's help on the Mac is about a click, the keyboard, the wheel and the trackpad: none of the iPhone's
 /// touches (long press, swipes on the screen, the on-screen keyboard) and no Edit button the Mac does not show.

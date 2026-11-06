@@ -57,7 +57,7 @@ func TestRankedTriesTheLANFirst(t *testing.T) {
 func TestParsePairLink(t *testing.T) {
 	q := url.Values{"url": {"http://[fd00::10]:18660"}, "token": {"jp_x"}, "hub": {"h1"}, "fp": {"pin"}, "tls": {"18662"},
 		"alt": {"https://[2400::1]:18662", "https://hub.example.com:18662"}, "machine": {"laptop"}}
-	token, c, err := parsePairLink("jarvis://link?" + q.Encode())
+	token, c, err := parsePairLink("persona://link?" + q.Encode())
 	if err != nil || token != "jp_x" || c.Machine != "laptop" || c.Hub != "h1" || c.FP != "pin" {
 		t.Fatalf("%v %+v", err, c)
 	}
@@ -70,14 +70,14 @@ func TestParsePairLink(t *testing.T) {
 	}
 	// The apps' link works too; the machine then comes from the command line.
 	q.Del("machine")
-	if _, c, err = parsePairLink(" jarvis://pair?" + q.Encode() + "\n"); err != nil || c.Machine != "" {
+	if _, c, err = parsePairLink(" persona://pair?" + q.Encode() + "\n"); err != nil || c.Machine != "" {
 		t.Fatalf("%v %+v", err, c)
 	}
 	q.Del("tls")
-	if _, _, err = parsePairLink("jarvis://pair?" + q.Encode()); err == nil || !strings.Contains(err.Error(), "TLS") {
+	if _, _, err = parsePairLink("persona://pair?" + q.Encode()); err == nil || !strings.Contains(err.Error(), "TLS") {
 		t.Fatalf("without TLS: %v", err)
 	}
-	for _, bad := range []string{"https://example.com", "jarvis://open?x=1", "not a link"} {
+	for _, bad := range []string{"https://example.com", "persona://open?x=1", "not a link"} {
 		if _, _, err := parsePairLink(bad); err == nil {
 			t.Errorf("%q parsed", bad)
 		}
@@ -497,7 +497,7 @@ func TestRaceCalledOffIsAnError(t *testing.T) {
 func TestParsePairLinkWithoutAPinIsAReverseProxy(t *testing.T) {
 	q := url.Values{"url": {"https://Hub.Example.com/prefix/"}, "token": {"jp_x"}, "hub": {"h1"}, "machine": {"laptop"},
 		"alt": {"https://hub.example.com:443/prefix"}}
-	token, c, err := parsePairLink("jarvis://link?" + q.Encode())
+	token, c, err := parsePairLink("persona://link?" + q.Encode())
 	if err != nil || token != "jp_x" || c.FP != "" || c.Trust != TrustSystem || !c.SystemTrust() {
 		t.Fatalf("%v %+v", err, c)
 	}
@@ -509,13 +509,13 @@ func TestParsePairLinkWithoutAPinIsAReverseProxy(t *testing.T) {
 		t.Fatalf("stream URL %s", got)
 	}
 	q.Set("url", "https://hub.example.com:8443")
-	if _, c, err = parsePairLink("jarvis://link?" + q.Encode()); err != nil || c.Endpoints[0].URL != "https://hub.example.com:8443" {
+	if _, c, err = parsePairLink("persona://link?" + q.Encode()); err != nil || c.Endpoints[0].URL != "https://hub.example.com:8443" {
 		t.Fatalf("%v %+v", err, c)
 	}
 	// No pin and no https: there is nothing the link may use.
 	for _, bad := range []string{"http://hub.example.com/prefix", "", "https://user@hub.example.com/prefix", "https://hub.example.com/p?x=1"} {
 		q.Set("url", bad)
-		if _, _, err := parsePairLink("jarvis://link?" + q.Encode()); err == nil || !strings.Contains(err.Error(), "HTTPS") {
+		if _, _, err := parsePairLink("persona://link?" + q.Encode()); err == nil || !strings.Contains(err.Error(), "HTTPS") {
 			t.Errorf("%q: %v", bad, err)
 		}
 	}
@@ -524,7 +524,7 @@ func TestParsePairLinkWithoutAPinIsAReverseProxy(t *testing.T) {
 	q.Set("fp", "pin")
 	q.Set("tls", "18662")
 	q.Del("alt")
-	if _, c, err = parsePairLink("jarvis://link?" + q.Encode()); err != nil || c.Trust != "" || c.SystemTrust() ||
+	if _, c, err = parsePairLink("persona://link?" + q.Encode()); err != nil || c.Trust != "" || c.SystemTrust() ||
 		len(c.Endpoints) != 1 || c.Endpoints[0].URL != "https://hub.example.com:18662" {
 		t.Fatalf("%v %+v", err, c)
 	}

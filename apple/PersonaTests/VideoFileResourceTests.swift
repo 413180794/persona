@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 final class VideoReadLog: @unchecked Sendable {
     private let lock = NSLock()
@@ -106,9 +106,9 @@ struct VideoFileResourceTests {
         }
     }
 
-    @MainActor @Test(.enabled(if: ProcessInfo.processInfo.environment["JARVIS_VIDEO_HUB"] != nil))
+    @MainActor @Test(.enabled(if: ProcessInfo.processInfo.environment["PERSONA_VIDEO_HUB"] != nil))
     func realHTTPReadsMiddleTailAndRejectsChangedRevision() async throws {
-        let url = try #require(ProcessInfo.processInfo.environment["JARVIS_VIDEO_HUB"].flatMap(URL.init(string:)))
+        let url = try #require(ProcessInfo.processInfo.environment["PERSONA_VIDEO_HUB"].flatMap(URL.init(string:)))
         let api = APIClient(config: ServerConfig(url: url, token: "mock"))
         let file = FileContent(path: "/Users/me/code/weather/media/preview.mp4", name: "preview.mp4", size: 0, mime: "video/mp4", truncated: true, isDir: false)
         let source = VideoFileSource(api: api, ref: FileRef(machineID: "macbook", path: file.path), file: file)

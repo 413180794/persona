@@ -352,13 +352,13 @@ type ThemeItem struct {
 
 // BuiltinLook: A look every app draws itself: Mochi (the default), Visor, Circuit.
 const (
-	BuiltinLookPersona       = "persona"
-	BuiltinLookJarvis        = "jarvis"
-	BuiltinLookJarvisCircuit = "jarvis-circuit"
+	BuiltinLookPersona        = "persona"
+	BuiltinLookPersonaVisor   = "persona-visor"
+	BuiltinLookPersonaCircuit = "persona-circuit"
 )
 
 // BuiltinLooks are the values of BuiltinLook, in order.
-var BuiltinLooks = []string{"persona", "jarvis", "jarvis-circuit"}
+var BuiltinLooks = []string{"persona", "persona-visor", "persona-circuit"}
 
 // LookTexts: A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters
 // (the hub checks).
@@ -611,11 +611,11 @@ type AssistantItem struct {
 // machine, its tools as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its
 // environment. Not a shell or an interpreter.
 type MCPServerItem struct {
-	// The server's name for the assistant; not jarvis or persona.
+	// The server's name for the assistant; not persona or persona.
 	ID string `json:"id"`
 	// Looked up on PATH, then in ~/bin.
 	Command string `json:"command"`
-	// A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+	// A PERSONA_ variable (PERSONA_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
 	// leave the server out.
 	Env  string   `json:"env,omitempty"`
 	Args []string `json:"args,omitempty"`
@@ -2029,7 +2029,7 @@ type Action struct {
 	// Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from the
 	// client.
 	Reply string `json:"reply,omitempty"`
-	// Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+	// Assistant only: an https URL or a validated persona/persona session, task, kb or file target, opened inside the
 	// app.
 	Open string `json:"open,omitempty"`
 	// Assistant only: return one page within the card.

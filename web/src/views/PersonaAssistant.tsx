@@ -1,5 +1,5 @@
-// The Persona tab: the headless assistant on the hub's machine (docs/assistant.md). `/` (and the old `/j`) is the main
-// conversation, `/j/<id>` one of them, `/j/new` a new one-off conversation. With no main conversation yet, the first
+// The Persona tab: the headless assistant on the hub's machine (docs/assistant.md). `/` (and the old `/persona`) is the main
+// conversation, `/persona/<id>` one of them, `/persona/new` a new one-off conversation. With no main conversation yet, the first
 // message on `/` starts it.
 import { useState } from "react";
 import type { MentionSource } from "./chat/MentionMenu";
@@ -26,7 +26,7 @@ const SUGGESTIONS = [t("personaassistant.suggestion_meetings"), t("personaassist
 const starting = new Set<string>();
 
 // @ in a new conversation: other sessions as context; no chat yet, so no files it touched (typed / and ~ paths still browse)
-const NEW_MENTION: MentionSource = { self: "jarvis-new", files: () => [], workspaces: true };
+const NEW_MENTION: MentionSource = { self: "persona-new", files: () => [], workspaces: true };
 
 export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string; fresh?: boolean; onToggleSidebar: () => void }) {
   const assistant = useStore((s) => s.assistant);
@@ -102,7 +102,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
         noteSent(r.session.machine_id, r.session.session_id, out);
         if (launcher) pickLauncher(NEW_CONVERSATION, undefined);
         void refreshAssistant().catch(() => {});
-        navigate({ name: "jarvis", sid: r.session.session_id });
+        navigate({ name: "persona", sid: r.session.session_id });
         return true;
       } catch (e) {
         // the assistant restarting: a few seconds, tried again without a word (docs/onboarding.md 4.6)
@@ -119,7 +119,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
   };
 
   const fill = (text: string) => {
-    localStorage.setItem("draft:jarvis-new", text);
+    localStorage.setItem("draft:persona-new", text);
     setSeed((x) => x + 1);
   };
 
@@ -174,7 +174,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
             </div>
           )}
           {gate.dialog}
-          <Composer key={seed} blocked={gate.blocked} draftKey="jarvis-new" placeholder={t("personaassistant.ask_placeholder", { name: persona.name })} machineId={assistant?.machine_id} mention={NEW_MENTION} onSend={start} autoFocus commands={[]} footer={assistant ? <StarterLauncherChip /> : undefined} />
+          <Composer key={seed} blocked={gate.blocked} draftKey="persona-new" placeholder={t("personaassistant.ask_placeholder", { name: persona.name })} machineId={assistant?.machine_id} mention={NEW_MENTION} onSend={start} autoFocus commands={[]} footer={assistant ? <StarterLauncherChip /> : undefined} />
           <div className="mt-4 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {suggestions.map((x, i) => (
               <button

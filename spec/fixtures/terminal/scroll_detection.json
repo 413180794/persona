@@ -6,8 +6,8 @@
       "name": "scroll_up_two",
       "description": "顶部连续匹配三行正文时检测到向上滚动两行。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
-        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/PersonaTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
       ],
       "input": {
         "cols": 12,
@@ -95,8 +95,8 @@
       "name": "scroll_growth_in_place",
       "description": "第一行未改变时，屏幕原地增长不算上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
-        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/PersonaTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
       ],
       "input": {
         "cols": 12,
@@ -184,8 +184,8 @@
       "name": "scroll_clear_is_not_scroll",
       "description": "清屏后的新内容没有旧屏连续匹配，不算上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
-        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/PersonaTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
       ],
       "input": {
         "cols": 12,
@@ -273,8 +273,8 @@
       "name": "scroll_filler_not_evidence",
       "description": "只对上空行和分隔线不能证明上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
-        "ios/JarvisTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey",
+        "ios/PersonaTests/TerminalWrapTests.swift — onlyAMoveUpIsAScroll"
       ],
       "input": {
         "cols": 12,
@@ -362,7 +362,7 @@
       "name": "scroll_small_screen",
       "description": "少于四行的屏幕不做上滚检测。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -430,7 +430,7 @@
       "name": "scroll_needs_three_matches",
       "description": "只连续匹配两行正文不能证明上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -506,7 +506,7 @@
       "name": "scroll_one_telling_line",
       "description": "连续匹配三行但只有一行正文时不算上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -586,7 +586,7 @@
       "name": "scroll_style_change",
       "description": "文字相同而样式不同的行不参与滚动匹配。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -673,7 +673,7 @@
       "name": "scroll_down_is_not_up",
       "description": "向下移动屏幕不会检测为上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -749,7 +749,7 @@
       "name": "scroll_threshold_floor",
       "description": "剩余十二行至少要匹配四行，匹配三行不能证明上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -857,7 +857,7 @@
       "name": "scroll_threshold_four",
       "description": "剩余十二行匹配四行正文时检测到上滚。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -965,7 +965,7 @@
       "name": "scroll_first_row_equal",
       "description": "即使后面存在可匹配位移，第一行完全相同时仍返回零。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -1045,7 +1045,7 @@
       "name": "scroll_sparse_row_difference",
       "description": "显式尾空格与未存储空格不相等，不能只按去尾空白文本匹配。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,
@@ -1121,7 +1121,7 @@
       "name": "scroll_smallest_matching_shift",
       "description": "重复正文满足多个位移时返回最小的匹配位移。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.scrolled / rowKey"
       ],
       "input": {
         "cols": 12,

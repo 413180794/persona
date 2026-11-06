@@ -28,16 +28,16 @@ import (
 // connection. Each round asks Claude for an AskUserQuestion and times every hop; odd rounds answer on the card, even
 // ones on the terminal (the card has to go away).
 //
-//	HERDR_SOCKET_PATH=<the isolated herdr's socket> JARVIS_LIVE_CARD_PANE=<pane running claude, no Jarvis hooks>
-//	[JARVIS_LIVE_CARD_ROUNDS=3] go test -tags herdrlive -run TestLiveCardLatency ./internal/hub/
+//	HERDR_SOCKET_PATH=<the isolated herdr's socket> PERSONA_LIVE_CARD_PANE=<pane running claude, no Persona hooks>
+//	[PERSONA_LIVE_CARD_ROUNDS=3] go test -tags herdrlive -run TestLiveCardLatency ./internal/hub/
 func TestLiveCardLatency(t *testing.T) {
-	pane := os.Getenv("JARVIS_LIVE_CARD_PANE")
+	pane := os.Getenv("PERSONA_LIVE_CARD_PANE")
 	socket := os.Getenv("HERDR_SOCKET_PATH")
 	if pane == "" || socket == "" {
-		t.Skip("HERDR_SOCKET_PATH / JARVIS_LIVE_CARD_PANE not set")
+		t.Skip("HERDR_SOCKET_PATH / PERSONA_LIVE_CARD_PANE not set")
 	}
 	rounds := 3
-	if r, err := strconv.Atoi(os.Getenv("JARVIS_LIVE_CARD_ROUNDS")); err == nil && r > 0 {
+	if r, err := strconv.Atoi(os.Getenv("PERSONA_LIVE_CARD_ROUNDS")); err == nil && r > 0 {
 		rounds = r
 	}
 	realHome, _ := os.UserHomeDir()
@@ -175,7 +175,7 @@ func TestLiveCardLatency(t *testing.T) {
 		mu.Unlock()
 		prompt := fmt.Sprintf("Round %d: call the AskUserQuestion tool once, asking me which of two colours I prefer, with exactly "+
 			"the options Red and Blue. Do not do anything else and do not use any other tool. After my answer reply with one word.", i)
-		two := os.Getenv("JARVIS_LIVE_CARD_TWO") != ""
+		two := os.Getenv("PERSONA_LIVE_CARD_TWO") != ""
 		if two {
 			prompt = fmt.Sprintf("Round %d: call the AskUserQuestion tool once with two questions in that one call: which of two "+
 				"colours I prefer (options Red and Blue), and which of two fruits (options Apple and Pear). Do not do anything "+
@@ -265,7 +265,7 @@ func TestLiveCardLatency(t *testing.T) {
 		got := append([]mark(nil), marks...)
 		mu.Unlock()
 		lines = append(lines, summarize(i, via, got, ix.CreatedAt, answered))
-		if os.Getenv("JARVIS_LIVE_CARD_TRACE") != "" {
+		if os.Getenv("PERSONA_LIVE_CARD_TRACE") != "" {
 			lines = append(lines, trace(got))
 		}
 	}

@@ -113,7 +113,7 @@ func TestUltracodeObservationsOfTheUsersSessionWriteNoRecord(t *testing.T) {
 		`{"type":"attachment","timestamp":"`+at+`","attachment":{"type":"ultra_effort_enter","reminderType":"full"}}`,
 		`{"type":"system","subtype":"turn_duration","timestamp":"`+at+`","durationMs":1000}`)
 	seedAgents(t, n, f, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", cwd, ""))
-	if s := byID(listSessions(t, n))[sidA]; s.Ultracode == nil || !*s.Ultracode || s.StartedByJarvis {
+	if s := byID(listSessions(t, n))[sidA]; s.Ultracode == nil || !*s.Ultracode || s.StartedByPersona {
 		t.Fatalf("row: %+v", s)
 	}
 	if _, err := request(t, n, "session.ultracode", map[string]any{"session_id": sidA, "dismiss_lost": true}); err != nil {
@@ -123,7 +123,7 @@ func TestUltracodeObservationsOfTheUsersSessionWriteNoRecord(t *testing.T) {
 	if err := requestUltra(t, n, false); err != nil {
 		t.Fatal(err)
 	}
-	if s := byID(listSessions(t, n))[sidA]; s.Ultracode == nil || *s.Ultracode || s.StartedByJarvis {
+	if s := byID(listSessions(t, n))[sidA]; s.Ultracode == nil || *s.Ultracode || s.StartedByPersona {
 		t.Fatalf("after switching off: %+v", s)
 	}
 	if _, ours := n.state.get(sidA); ours {
@@ -473,7 +473,7 @@ func TestResumedBranchIsStartedByPersona(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if s := decodeSessions(t, []any{res["session"]})[0]; !s.StartedByJarvis {
+			if s := decodeSessions(t, []any{res["session"]})[0]; !s.StartedByPersona {
 				t.Fatalf("resumed by Persona, not started by it: %+v", s)
 			}
 			if st, ok := n.state.get(startID); !ok || st.StartedAt.IsZero() {

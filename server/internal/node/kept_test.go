@@ -108,7 +108,7 @@ func TestAssistantConversationsOutlastOtherDirectories(t *testing.T) {
 	const legacy = "dddddddd-0000-0000-0000-000000000006"
 	const stale = "dddddddd-0000-0000-0000-000000000007"
 	write("-home-me--persona-assistant", mine, 3*time.Hour)
-	write("-data-home-me--jarvis-assistant", legacy, 2*24*time.Hour)
+	write("-data-home-me--persona-assistant", legacy, 2*24*time.Hour)
 	write("-home-me--persona-assistant", stale, 10*24*time.Hour) // still out: older than the offline window
 	for i := 0; i < 85; i++ {
 		write("-tmp", fmt.Sprintf("eeeeeeee-0000-0000-0000-%012d", i), time.Duration(i+1)*time.Minute)
@@ -132,7 +132,7 @@ func TestAssistantConversationsOutlastOtherDirectories(t *testing.T) {
 	}
 }
 
-// The assistant's projects directory is told by its name: under ~/.persona or ~/.jarvis through any home, or this
+// The assistant's projects directory is told by its name: under ~/.persona or ~/.persona through any home, or this
 // node's own assistant directory however PERSONA_HOME puts it; a directory under the assistant's is not it.
 func TestIsAssistantProject(t *testing.T) {
 	n, _ := claudeHome(t)
@@ -143,7 +143,7 @@ func TestIsAssistantProject(t *testing.T) {
 	}
 	for base, want := range map[string]bool{
 		"-home-me--persona-assistant":              true,
-		"-data-home-me--jarvis-assistant":          true,
+		"-data-home-me--persona-assistant":         true,
 		"-opt-persona-state-assistant":             true,
 		"-home-me--persona-assistant-worklog-data": false,
 		"-home-me--persona-health":                 true, // the health space (docs/health.md)

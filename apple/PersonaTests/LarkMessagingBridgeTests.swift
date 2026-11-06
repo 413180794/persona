@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The messaging source's answers reshaped into the Feishu screens' models (#2138, LarkMessagingBridge): what the
 /// extension sends must decode, with the shapes the screens read.

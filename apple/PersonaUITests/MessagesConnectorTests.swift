@@ -1,13 +1,13 @@
 import XCTest
 
-/// Settings › Connectors › Messages against scripts/mock/mock_hub.py: the Mac's conversations and one of them, read-only (JARVIS_MOCK_HUB);
-/// without Full Disk Access on that Mac, the steps to give it (JARVIS_MOCK_HUB_DENIED, a mock with MOCK_IMESSAGE=denied).
+/// Settings › Connectors › Messages against scripts/mock/mock_hub.py: the Mac's conversations and one of them, read-only (PERSONA_MOCK_HUB);
+/// without Full Disk Access on that Mac, the steps to give it (PERSONA_MOCK_HUB_DENIED, a mock with MOCK_IMESSAGE=denied).
 final class MessagesConnectorTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     @MainActor private func launch(_ hub: String, _ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""] + extra
         app.launchPinned()
         return app
@@ -21,7 +21,7 @@ final class MessagesConnectorTests: XCTestCase {
     }
 
     @MainActor func testConversationsAndAThread() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
         // From Settings: the hub's connectors list Messages under Connectors.
         let app = launch(hub, [])
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信息")).firstMatch
@@ -47,7 +47,7 @@ final class MessagesConnectorTests: XCTestCase {
 
     /// Hand to Persona: on to begin with; off lets the hub's copy be deleted, after a confirmation.
     @MainActor func testTheSwitchAndDelete() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py") }
         let app = launch(hub, ["-openConnectorMessages", "YES"])
         let toggle = app.switches["messages-ai"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10), "no 交给 Persona:\n\(app.debugDescription)")
@@ -66,7 +66,7 @@ final class MessagesConnectorTests: XCTestCase {
     }
 
     @MainActor func testWithoutPermissionItSaysHow() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_DENIED"] else { throw XCTSkip("needs a mock with MOCK_IMESSAGE=denied") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_DENIED"] else { throw XCTSkip("needs a mock with MOCK_IMESSAGE=denied") }
         let app = launch(hub, ["-openConnectorMessages", "YES"])
         XCTAssertTrue(app.staticTexts["没有完全磁盘访问权限"].waitForExistence(timeout: 10), "\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["点「远程登录」右边的 ⓘ，打开「允许远程用户完全访问磁盘」"].exists)

@@ -29,8 +29,9 @@ type fakeEnv struct {
 
 func newFakeEnv(t *testing.T) *fakeEnv {
 	t.Helper()
+	t.Setenv("PERSONA_HOME", "")
 	home := t.TempDir()
-	self := filepath.Join(t.TempDir(), "jarvis-link")
+	self := filepath.Join(t.TempDir(), "persona-link")
 	if err := os.WriteFile(self, []byte("#!/bin/sh\n# this build\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -107,9 +108,9 @@ func codeOf(err error) int {
 }
 
 func TestUnitFile(t *testing.T) {
-	u := unitFile("/home/pi/.jarvis/bin/jarvis-link", "/home/pi/.jarvis/link.log")
+	u := unitFile("/home/pi/.persona/bin/persona-link", "/home/pi/.persona/link.log")
 	for _, want := range []string{
-		`ExecStart="/home/pi/.jarvis/bin/jarvis-link" run --log "/home/pi/.jarvis/link.log"` + "\n",
+		`ExecStart="/home/pi/.persona/bin/persona-link" run --log "/home/pi/.persona/link.log"` + "\n",
 		"Restart=always\n", "StandardOutput=null\n", "WantedBy=default.target\n",
 	} {
 		if !strings.Contains(u, want) {
@@ -126,7 +127,7 @@ func TestUnitFile(t *testing.T) {
 	if got := shellQuote("/home/a b/it's"); got != `'/home/a b/it'\''s'` {
 		t.Errorf("shell quoted %s", got)
 	}
-	if got := shellQuote("/home/pi/.jarvis/bin/jarvis-link"); got != "/home/pi/.jarvis/bin/jarvis-link" {
+	if got := shellQuote("/home/pi/.persona/bin/persona-link"); got != "/home/pi/.persona/bin/persona-link" {
 		t.Errorf("shell quoted %s", got)
 	}
 }
@@ -142,7 +143,7 @@ func TestInstallWritesTheUnitStartsItAndWaitsForTheLink(t *testing.T) {
 	}
 	f.saveStatus(t, link.Status{State: "connected", Node: "online"}, 41)
 	f.onCommand = func(call string) (string, error) {
-		if call == "systemctl --user restart jarvis-link.service" {
+		if call == "systemctl --user restart persona-link.service" {
 			release()
 			f.saveStatus(t, link.Status{State: "stopped"}, 41)
 			f.saveStatus(t, link.Status{State: "connected", Kind: "lan", Address: "https://192.0.2.10:18662", Node: "online",
@@ -157,14 +158,14 @@ func TestInstallWritesTheUnitStartsItAndWaitsForTheLink(t *testing.T) {
 	if err != nil || !strings.Contains(string(unit), f.binPath()) {
 		t.Fatalf("unit %s %v", unit, err)
 	}
-	if f.unitPath() != filepath.Join(f.home, ".config", "systemd", "user", "jarvis-link.service") {
+	if f.unitPath() != filepath.Join(f.home, ".config", "systemd", "user", "persona-link.service") {
 		t.Fatal(f.unitPath())
 	}
 	if b, err := os.ReadFile(f.binPath()); err != nil || !strings.Contains(string(b), "this build") {
 		t.Fatalf("binary not put in place: %v", err)
 	}
-	want := []string{"systemctl --user show-environment", "systemctl --user daemon-reload", "systemctl --user enable jarvis-link.service",
-		"systemctl --user restart jarvis-link.service"}
+	want := []string{"systemctl --user show-environment", "systemctl --user daemon-reload", "systemctl --user enable persona-link.service",
+		"systemctl --user restart persona-link.service"}
 	if strings.Join(f.calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("ran %q", f.calls)
 	}
@@ -193,7 +194,7 @@ func TestInstallSaysWhenTheLinkDoesNotComeUp(t *testing.T) {
 	f := newFakeEnv(t)
 	f.pairHere(t)
 	f.onCommand = func(call string) (string, error) {
-		if strings.HasSuffix(call, "restart jarvis-link.service") {
+		if strings.HasSuffix(call, "restart persona-link.service") {
 			f.saveStatus(t, link.Status{State: "waiting", Error: "内网 192.0.2.10:18662：超时；域名 hub.example.com:18662：拒绝连接"}, 50)
 		}
 		return "", nil
@@ -215,14 +216,14 @@ func TestInstallBeforePairing(t *testing.T) {
 	if err := install(f.env, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(f.out.String(), "还没配对：jarvis-link pair") {
+	if !strings.Contains(f.out.String(), "还没配对：persona-link pair") {
 		t.Fatalf("output:\n%s", f.out)
 	}
 	// --pair reads the link from stdin when none follows it; a bad one stops before anything is installed.
 	f = newFakeEnv(t)
 	f.stdin = strings.NewReader("https://example.com/not-a-pairing-link\n")
 	err := install(f.env, []string{"--pair", "--machine", "pi"})
-	if err == nil || !strings.Contains(err.Error(), "不是 jarvisd hub pair 给的配对链接") || fileExists(f.unitPath()) || len(f.calls) != 0 {
+	if err == nil || !strings.Contains(err.Error(), "不是 personad hub pair 给的配对链接") || fileExists(f.unitPath()) || len(f.calls) != 0 {
 		t.Fatalf("%v, calls %q", err, f.calls)
 	}
 }
@@ -267,7 +268,7 @@ func TestInstallElsewhere(t *testing.T) {
 		t.Fatalf("mac: %v", err)
 	}
 	f.goos = "freebsd" // Windows has its scheduled task (winservice_test.go)
-	if err := install(f.env, nil); err == nil || !strings.Contains(err.Error(), "jarvis-link run") {
+	if err := install(f.env, nil); err == nil || !strings.Contains(err.Error(), "persona-link run") {
 		t.Fatalf("freebsd: %v", err)
 	}
 	if fileExists(f.binPath()) || len(f.calls) != 0 {
@@ -287,7 +288,7 @@ func TestStatus(t *testing.T) {
 		return "", nil
 	}
 	// Not paired, nothing installed.
-	if codeOf(status(f.env, nil)) != 1 || !strings.Contains(f.out.String(), "链路：还没配对") || !strings.Contains(f.out.String(), "后台服务：没装（jarvis-link install）") {
+	if codeOf(status(f.env, nil)) != 1 || !strings.Contains(f.out.String(), "链路：还没配对") || !strings.Contains(f.out.String(), "后台服务：没装（persona-link install）") {
 		t.Fatalf("output:\n%s", f.out)
 	}
 
@@ -325,9 +326,9 @@ hub：「家里」，互联组共 3 台 hub
 候选地址（按尝试顺序）：
   · 内网 https://192.0.2.10:18662（在用）
   · 域名 https://hub.example.com:18662（手动加的）
-后台服务：systemd 用户服务 jarvis-link.service · active · enabled · linger 没开，退出登录就停：sudo loginctl enable-linger pi
+后台服务：systemd 用户服务 persona-link.service · active · enabled · linger 没开，退出登录就停：sudo loginctl enable-linger pi
 进程：pid 4321 · 版本 v1
-日志：` + f.logPath() + `（jarvis-link logs -f）
+日志：` + f.logPath() + `（persona-link logs -f）
 `
 	if f.out.String() != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", f.out, want)
@@ -383,15 +384,15 @@ func TestUninstall(t *testing.T) {
 	if fileExists(f.unitPath()) || !fileExists(f.configPath()) || !fileExists(f.binPath()) {
 		t.Fatal("uninstall takes the service away, nothing else")
 	}
-	if !strings.Contains(strings.Join(f.calls, "\n"), "systemctl --user disable --now jarvis-link.service") ||
-		!strings.Contains(f.out.String(), "jarvis-link uninstall --purge") {
+	if !strings.Contains(strings.Join(f.calls, "\n"), "systemctl --user disable --now persona-link.service") ||
+		!strings.Contains(f.out.String(), "persona-link uninstall --purge") {
 		t.Fatalf("calls %q\n%s", f.calls, f.out)
 	}
 
-	// --purge with another jarvis-link still running (the menu bar app's, say): refused, nothing deleted.
+	// --purge with another persona-link still running (the menu bar app's, say): refused, nothing deleted.
 	release, _ := link.LockRun(f.configPath())
 	if err := uninstall(f.env, []string{"--purge"}); err == nil || !fileExists(f.configPath()) {
-		t.Fatalf("purged under a running jarvis-link: %v", err)
+		t.Fatalf("purged under a running persona-link: %v", err)
 	}
 	release()
 	f.saveStatus(t, link.Status{State: "stopped"}, 1)
@@ -412,12 +413,12 @@ func TestPairReadsTheLinkFromStdin(t *testing.T) {
 		t.Fatalf("empty stdin: %v", err)
 	}
 	// Piped: the whole input. On a terminal: one line, without waiting for the end of input.
-	f.stdin = strings.NewReader("  jarvis://elsewhere?token=x  \n")
-	if _, err := pair(f.env, "-", ""); err == nil || !strings.Contains(err.Error(), "不是 jarvisd hub pair 给的配对链接") {
+	f.stdin = strings.NewReader("  persona://elsewhere?token=x  \n")
+	if _, err := pair(f.env, "-", ""); err == nil || !strings.Contains(err.Error(), "不是 personad hub pair 给的配对链接") {
 		t.Fatalf("piped: %v", err)
 	}
 	f.terminal = true
-	f.stdin = strings.NewReader("jarvis://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_x\nmore that never comes")
+	f.stdin = strings.NewReader("persona://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_x\nmore that never comes")
 	if _, err := pair(f.env, "", ""); err == nil || !strings.Contains(err.Error(), "没开 TLS") {
 		t.Fatalf("terminal: %v", err)
 	}
@@ -560,7 +561,7 @@ func TestLogsWithoutALogFile(t *testing.T) {
 	// The service installed but no log file (yet): the journal.
 	_ = os.MkdirAll(filepath.Dir(f.unitPath()), 0o755)
 	_ = os.WriteFile(f.unitPath(), []byte("x"), 0o644)
-	if err := logs(f.env, []string{"-n", "20", "-f"}); err != nil || f.calls[len(f.calls)-1] != "journalctl --user -u jarvis-link.service -n 20 --no-pager -f" {
+	if err := logs(f.env, []string{"-n", "20", "-f"}); err != nil || f.calls[len(f.calls)-1] != "journalctl --user -u persona-link.service -n 20 --no-pager -f" {
 		t.Fatalf("%v %q", err, f.calls)
 	}
 	if err := logs(f.env, []string{"-n", "x"}); err == nil {
@@ -621,7 +622,7 @@ func TestStatusWithoutTheUserInstance(t *testing.T) {
 	r := report{Paired: true, Machine: "pi", HubName: "家里", Log: "/x/link.log",
 		Service: &serviceState{Unit: unitName, Installed: true, Missing: noUserInstance + "：Failed to connect to bus: No medium found"}}
 	out := r.text(time.Now(), "pi")
-	want := "后台服务：装了 jarvis-link.service，但连不上你的 systemd 用户实例（Failed to connect to bus: No medium found）；" +
+	want := "后台服务：装了 persona-link.service，但连不上你的 systemd 用户实例（Failed to connect to bus: No medium found）；" +
 		"没开 linger 时没人登录它就不在：sudo loginctl enable-linger pi\n"
 	if !strings.Contains(out, want) || !strings.HasPrefix(out, "模式：我去连 hub（主动）\n链路：没在运行\n") {
 		t.Fatalf("output:\n%s", out)

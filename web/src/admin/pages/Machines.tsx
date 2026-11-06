@@ -1,7 +1,7 @@
-// "Computers": every computer the hub drives and every way it reaches each one (paths), adding computers, jarvis-link pairing,
+// "Computers": every computer the hub drives and every way it reaches each one (paths), adding computers, persona-link pairing,
 // re-pairing a connector, reconnect, remove. New computers come through the node service (docs/plan-hub-center.md 0,
-// 4): the computer dials the hub (kind link, a jarvis-link pairing link) or the hub dials the computer's connector
-// (kind service, the jarvis://connector link it prints). Both connect at once; removing waits for a restart.
+// 4): the computer dials the hub (kind link, a persona-link pairing link) or the hub dials the computer's connector
+// (kind service, the persona://connector link it prints). Both connect at once; removing waits for a restart.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
@@ -344,7 +344,7 @@ function idError(id: string, existing: string[]): string {
   return existing.includes(id) ? t("admin-pages-machines.id_taken") : "";
 }
 
-// AddLink: the computer dials the hub. Make the entry, then the jarvis-link pairing link right away.
+// AddLink: the computer dials the hub. Make the entry, then the persona-link pairing link right away.
 function AddLink({ open, onClose, existing, onAdded }: { open: boolean; onClose: () => void; existing: string[]; onAdded: () => void }) {
   const [id, setId] = useState("");
   const [name, setName] = useState("");
@@ -413,7 +413,7 @@ function AddLink({ open, onClose, existing, onAdded }: { open: boolean; onClose:
 
 type Platform = "mac" | "linux" | "windows";
 
-// PairPanel makes a jarvis-link pairing link for a link computer and says how to use it on each platform.
+// PairPanel makes a persona-link pairing link for a link computer and says how to use it on each platform.
 function PairPanel({ machine, onClose }: { machine: AdminMachine; onClose: () => void }) {
   const [pair, setPair] = useState<LinkPair | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -508,13 +508,13 @@ function PairLinkDialog({ machine, onClose }: { machine: AdminMachine | null; on
   );
 }
 
-// ConnectorLinkField: the jarvis://connector link pasted from `jarvis-link pair --listen`, read back to the user.
+// ConnectorLinkField: the persona://connector link pasted from `persona-link pair --listen`, read back to the user.
 function ConnectorLinkField({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
   const parsed = value.trim() ? parseConnectorLink(value) : null;
   const bad = value.trim() !== "" && !parsed;
   return (
     <div>
-      <Field label={t("admin-pages-machines.pair_link")} value={value} onChange={onChange} placeholder="jarvis://connector?addr=…&fp=…&code=…" mono multiline autoFocus={autoFocus} error={bad ? t("admin-pages-machines.connector_link_invalid") : undefined} />
+      <Field label={t("admin-pages-machines.pair_link")} value={value} onChange={onChange} placeholder="persona://connector?addr=…&fp=…&code=…" mono multiline autoFocus={autoFocus} error={bad ? t("admin-pages-machines.connector_link_invalid") : undefined} />
       {parsed && (
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-ink-3" style={{ animation: "fade-in 160ms ease-out both" }}>
           <span>
@@ -622,7 +622,7 @@ function AddService({ open, onClose, existing, onAdded }: { open: boolean; onClo
         <form onSubmit={submit} className="space-y-3.5">
           <div>
             <p className="mb-2 text-[12.5px] leading-relaxed text-ink-2">{t("admin-pages-machines.add_service_body")}</p>
-            <CodeBlock value="jarvis-link pair --listen" copyLabel={t("admin-pages-machines.copy_command")} />
+            <CodeBlock value="persona-link pair --listen" copyLabel={t("admin-pages-machines.copy_command")} />
             <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">
               {t("admin-pages-machines.add_service_note")}
             </p>
@@ -709,7 +709,7 @@ function RepairDialog({ machine, onClose, onDone }: { machine: AdminMachine | nu
     >
       <form onSubmit={submit} className="space-y-3.5">
         <p className="text-[12.5px] leading-relaxed text-ink-2">
-          {tRich("admin-pages-machines.repair_body", { command: <code className="font-mono text-[12px] text-ink">jarvis-link pair --listen</code> })}
+          {tRich("admin-pages-machines.repair_body", { command: <code className="font-mono text-[12px] text-ink">persona-link pair --listen</code> })}
         </p>
         <ConnectorLinkField value={link} onChange={setLink} autoFocus />
         <Field label={t("admin-pages-machines.address_optional")} hint={t("admin-pages-machines.repair_address_hint")} value={address} onChange={setAddress} placeholder={machine?.address || "192.0.2.30:18663"} mono error={addrErr || undefined} />

@@ -50,7 +50,7 @@ func startFakeDaemon(t *testing.T, token string, hello map[string]any) *fakeDaem
 	return f
 }
 
-func (f *fakeDaemon) url() string { return "ws" + strings.TrimPrefix(f.srv.URL, "http") + "/jarvis" }
+func (f *fakeDaemon) url() string { return "ws" + strings.TrimPrefix(f.srv.URL, "http") + "/persona" }
 
 func (f *fakeDaemon) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
@@ -697,12 +697,12 @@ func TestDaemonSubagentIDs(t *testing.T) {
 func TestDaemonGetsNoPackage(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(runtimepkg.OverrideEnv, dir)
-	_ = os.MkdirAll(filepath.Join(dir, "jarvis-dsh-runtime", "dsh"), 0o755)
-	if err := os.WriteFile(filepath.Join(dir, "jarvis-dsh-runtime", "dsh", "a.js"), []byte("x"), 0o644); err != nil {
+	_ = os.MkdirAll(filepath.Join(dir, "persona-dsh-runtime", "dsh"), 0o755)
+	if err := os.WriteFile(filepath.Join(dir, "persona-dsh-runtime", "dsh", "a.js"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	d := startFakeDaemon(t, "tok", map[string]any{"runtime": "x", "caps": map[string]any{"send": true},
-		"package": map[string]any{"name": "jarvis-dsh-runtime", "hash": "an-older-one"}})
+		"package": map[string]any{"name": "persona-dsh-runtime", "hash": "an-older-one"}})
 	rh, _ := daemonHost(t, map[string]any{"id": "acme", "url": d.url(), "token": "tok"})
 	runtimeNodeOn(t, rh)
 	waitFor(t, "the daemon's hello", func() bool { res, _, _ := d.hellod(); return res != nil })
@@ -712,7 +712,7 @@ func TestDaemonGetsNoPackage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var out map[string]any
-	if err := d.current().Call(ctx, "runtime.package", map[string]any{"name": "jarvis-dsh-runtime"}, &out); err == nil {
+	if err := d.current().Call(ctx, "runtime.package", map[string]any{"name": "persona-dsh-runtime"}, &out); err == nil {
 		t.Fatalf("a daemon fetched a package: %v", out)
 	}
 }

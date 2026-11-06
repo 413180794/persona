@@ -2,7 +2,7 @@ import BeautifulUI
 import PhotosUI
 import SwiftUI
 
-/// The Persona tab: one personal assistant (a Claude session in ~/.jarvis/assistant on the hub's machine) that can reach the
+/// The Persona tab: one personal assistant (a Claude session in ~/.persona/assistant on the hub's machine) that can reach the
 /// user's computers, iPhone data, mail, company data and the knowledge base. One conversation is the main one (where the
 /// user usually talks to it, and where other pages hand things to it); the others are side conversations.
 struct AssistantView: View {
@@ -926,7 +926,7 @@ struct BeautifulStarterComposer: View {
                                let files = videos.ready
                                let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "See the context above.") : String(localized: "Please look at the image [Assistant View a3e0a0]")) : String(localized: "Please look at the image [Assistant View 5ad878]")) : t,
                                                                files: files)
-                               // Quoted sessions ride along as <jarvis-context> tags before what was typed, as in a chat.
+                               // Quoted sessions ride along as <persona-context> tags before what was typed, as in a chat.
                                send(quotes.isEmpty ? body : quotes.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
                                text = ""
                                images = []

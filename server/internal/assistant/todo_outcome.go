@@ -330,7 +330,7 @@ func outcomeLogLine(o taskOutcome) string {
 // projectOutcomesMost is how many finished todos' outcomes a new agent for a project is handed.
 const projectOutcomesMost = 5
 
-// projectContext is the <jarvis-context> a new agent working in dir on machine gets before its first prompt: each of
+// projectContext is the <persona-context> a new agent working in dir on machine gets before its first prompt: each of
 // its projects' one line and latest todo outcomes (todo/project); empty when the directory is no project's or the
 // knowledge base is not open (the agent starts without it).
 func (s *Service) projectContext(ctx context.Context, machine, dir string) string {

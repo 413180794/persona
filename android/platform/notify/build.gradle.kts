@@ -1,6 +1,6 @@
 plugins {
-    id("jarvis.android.library")
-    id("jarvis.hilt")
+    id("persona.android.library")
+    id("persona.hilt")
 }
 
 android {
@@ -10,7 +10,7 @@ android {
     sourceSets.getByName("androidTest").kotlin.srcDir("src/sharedTest/kotlin")
     testOptions.unitTests.isIncludeAndroidResources = true
     testOptions.unitTests.all {
-        it.systemProperty("jarvis.repo.root", rootProject.projectDir.parentFile.absolutePath)
+        it.systemProperty("persona.repo.root", rootProject.projectDir.parentFile.absolutePath)
     }
 }
 

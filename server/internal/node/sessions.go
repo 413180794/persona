@@ -32,7 +32,7 @@ import (
 
 // stateFile remembers which sessions Persona started and with which launcher. It lives in the hub's Postgres:
 // loaded with `state.load` when the node starts and written through with `state.put` events. A session in Sessions
-// is Persona's (takesReport, close and decorate's StartedByJarvis go by that): what the node only observes of the
+// is Persona's (takesReport, close and decorate's StartedByPersona go by that): what the node only observes of the
 // user's own sessions never goes in (ultracode.go keeps that in memory, #5510).
 type stateFile struct {
 	mu       sync.Mutex
@@ -70,7 +70,7 @@ type sessionState struct {
 
 func newState() *stateFile { return &stateFile{Sessions: map[string]sessionState{}} }
 
-// legacyState reads the pre-Postgres ~/.jarvis/sessions.json, if any.
+// legacyState reads the pre-Postgres ~/.persona/sessions.json, if any.
 func legacyState(path string) map[string]sessionState {
 	var f struct {
 		Sessions map[string]sessionState `json:"sessions"`
@@ -1114,7 +1114,7 @@ func (n *Node) decorate(s *proto.Session) {
 		s.Host = host.ParsePane(s.PaneID).Kind // the host it runs in (#2576)
 	}
 	if st, ok := n.state.get(s.SessionID); ok {
-		s.StartedByJarvis = true
+		s.StartedByPersona = true
 		s.Launcher = st.Launcher
 		s.Compaction = st.Compaction
 		if s.Cwd == "" {
@@ -1773,14 +1773,14 @@ func (n *Node) assistantProject() string {
 }
 
 // isAssistantProject: base is the name of the projects directory Claude Code keeps for the assistant's directory
-// (own: this node's, assistantProject). The assistant may have run under ~/.persona or ~/.jarvis, through a symlinked
+// (own: this node's, assistantProject). The assistant may have run under ~/.persona or ~/.persona, through a symlinked
 // home, so the name is matched by its end as well.
 // The health space's directory (docs/health.md) sits next to it and counts as the assistant's too.
 func isAssistantProject(base, own string) bool {
 	if base == own || base == strings.TrimSuffix(own, "-assistant")+"-health" {
 		return true
 	}
-	for _, suffix := range []string{"--persona-assistant", "--jarvis-assistant", "--persona-health", "--jarvis-health"} {
+	for _, suffix := range []string{"--persona-assistant", "--persona-assistant", "--persona-health", "--persona-health"} {
 		if strings.HasSuffix(base, suffix) {
 			return true
 		}

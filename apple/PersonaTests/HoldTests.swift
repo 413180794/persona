@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// `Hold`'s policy (docs/ios-state.md「及时性」), with short times: scrolling holds until the list rests, what waits
 /// lands within the cap while it still scrolls, out of sight has no cap and lands when seen again.

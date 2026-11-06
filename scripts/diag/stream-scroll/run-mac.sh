@@ -1,5 +1,5 @@
 #!/bin/bash
-# The Mac app (Debug, with MacScrollLab) streaming a long reply into the Jarvis conversation, with synthetic trackpad
+# The Mac app (Debug, with MacScrollLab) streaming a long reply into the Persona conversation, with synthetic trackpad
 # swipes, its scroll trace and its window drawn every 0.1 s, against a mock hub on PORT (docs/mac.md "Scroll experiments").
 # Snapshot mode (-macSnapshot): it reads no keychain and quits at the end, so it works while the Mac is locked.
 #   APP=<Persona.app> scripts/diag/stream-scroll/run-mac.sh <out dir> "13:150,17:900,23:-1400" [stream at s] [late ms]
@@ -12,7 +12,7 @@ if lsof -nP -tiTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then echo "RESULT port $P
 (cd "$ROOT" && env MOCK_LONG_HISTORY=1 PORT=$PORT python3 scripts/mock/mock_hub.py > "$OUT/mock.log" 2>&1) &
 for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:$PORT/api/v1/machines && break; sleep 0.5; done
 MOCKPID=$(lsof -nP -tiTCP:$PORT -sTCP:LISTEN)
-pair="jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A$PORT&token=mock"
+pair="persona://pair?url=http%3A%2F%2F127.0.0.1%3A$PORT&token=mock"
 "$APP/Contents/MacOS/Persona" -ApplePersistenceIgnoreState YES -macAppearance light -macWindowSize 1000x760 \
   -macSnapshot "$OUT/end.png" -macSnapshotDelay 34 -macSnapshotQuit YES -pairURL "$pair" -openChatsFresh YES \
   -tab assistant -openAssistant server/b2e4d6f8-0000-4000-8000-000000000004 \

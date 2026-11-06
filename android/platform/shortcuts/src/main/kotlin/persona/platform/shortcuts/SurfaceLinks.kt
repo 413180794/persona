@@ -13,7 +13,7 @@ import persona.core.navigation.NewTodoLink
 import persona.core.navigation.NotificationRoute
 
 /**
- * Where the widget, the tile and the shortcuts take the user: `jarvis://open` links handled by the app's own activity
+ * Where the widget, the tile and the shortcuts take the user: `persona://open` links handled by the app's own activity
  * exactly like a notification's (the same Router), cold start or not.
  */
 internal object SurfaceLinks {

@@ -269,7 +269,7 @@ internal class AndroidVoiceAudio(context: Context) : VoiceAudio {
     }
 
     private companion object {
-        const val Tag = "JarvisVoice"
+        const val Tag = "PersonaVoice"
         const val SpeakingTailMillis = 300L
     }
 }

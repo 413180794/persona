@@ -123,28 +123,28 @@ def run(browser, base, token, main_id, other, shots):
     ok("Mod+Alt+P opens the main conversation, as the click does")
 
     # 3. The main conversation is not listed twice.
-    expect(page.locator(f'aside a[href="/j/{main_id}"]')).to_have_count(0)
+    expect(page.locator(f'aside a[href="/persona/{main_id}"]')).to_have_count(0)
     expect(page.locator(PERSONA)).to_have_count(1)
     expect(page.locator("aside").get_by_text("主对话", exact=True)).to_have_count(0)
     ok("the main conversation has one entry")
 
     if shots:
         for theme in ("light", "dark"):
-            page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+            page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
             page.reload()
             expect(persona).to_have_attribute("aria-current", "page")
             page.wait_for_timeout(800)
             page.screenshot(path=os.path.join(shots, f"wide-persona-{theme}.png"))
-        page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
+        page.evaluate("localStorage.setItem('persona.theme', 'light')")
         page.reload()
 
     # 4. A new one-off conversation is the "+" of "Persona chats", without a main chat button on it.
     page.locator('aside a[aria-label="新对话"]').click()
-    page.wait_for_function("location.pathname === '/j/new'")
+    page.wait_for_function("location.pathname === '/persona/new'")
     expect(page.get_by_text(STARTER)).to_be_visible()
     expect(page.locator("main").get_by_role("button", name="主对话")).to_have_count(0)
     expect(persona).not_to_have_attribute("aria-current", "page")
-    ok("「Persona 对话」+ opens a new conversation at /j/new, no 主对话 button")
+    ok('Persona chats + opens a new conversation at /persona/new without a main-chat button')
 
     # 5. "New agent" is the "+" of Agents and still opens the dialog.
     page.locator('aside button[aria-label="新建 Agent"]').click()
@@ -156,16 +156,23 @@ def run(browser, base, token, main_id, other, shots):
     expect(page.get_by_role("dialog")).to_have_count(0)
     ok("Agents + opens 新建 Agent")
 
-    # 6. Old links.
-    for old in ("/j", "/persona", f"/j/{main_id}"):
-        page.goto(base + old)
-        expect(persona).to_have_attribute("aria-current", "page")
+    # 6. Canonical links open Persona; retired routes stay unknown and show Overview.
+    for path in ('/persona', f'/persona/{main_id}'):
+        page.goto(base + path)
+        expect(persona).to_have_attribute('aria-current', 'page')
         expect(page.get_by_text(STARTER)).to_have_count(0)
-        ok(f"{old} opens the main conversation")
-    page.goto(base + "/j/" + other["session_id"])
-    expect(page.locator(f'aside a[href="/j/{other["session_id"]}"]')).to_have_attribute("aria-current", "page")
-    expect(persona).not_to_have_attribute("aria-current", "page")
-    ok("/j/<id> opens that conversation with its row selected")
+        ok(f'{path} opens the main conversation')
+    for retired in ('/j', f'/j/{main_id}', f'/j/{other["session_id"]}'):
+        page.goto(base + retired)
+        page.wait_for_function('location.pathname === ' + json.dumps(retired))
+        expect(page.locator('aside a[href="/overview"]')).to_have_attribute('aria-current', 'page')
+        expect(persona).not_to_have_attribute('aria-current', 'page')
+        expect(page.locator('main textarea')).to_have_count(0)
+        ok(f'{retired} is not a Persona route and does not redirect')
+    page.goto(base + '/persona/' + other['session_id'])
+    expect(page.locator(f'aside a[href="/persona/{other["session_id"]}"]')).to_have_attribute('aria-current', 'page')
+    expect(persona).not_to_have_attribute('aria-current', 'page')
+    ok('/persona/<id> opens that conversation with its row selected')
     for old, key in (("/history", "/history"), ("/inbox", "/inbox"), ("/settings", "/settings")):
         page.goto(base + old)
         expect(page.locator(f'aside a[href="{key}"]')).to_have_attribute("aria-current", "page")
@@ -180,7 +187,7 @@ def run(browser, base, token, main_id, other, shots):
         page.goto(base + "/overview?token=" + token)
         # signed in (the link's token traded for this browser's) before the reload, or the reload lands on the login form
         expect(page.locator("aside")).to_be_attached()
-        page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+        page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
         page.reload()
         page.locator("main").get_by_role("button", name="侧边栏").first.click()
         persona = page.locator(PERSONA)

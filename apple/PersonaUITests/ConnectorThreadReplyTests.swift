@@ -3,16 +3,16 @@ import XCTest
 /// The reply box of a connector's conversation page (Telegram's): what the user sends there goes out at once and shows
 /// in the page, with nothing to allow on the phone (#1190: the hub's gate is for the AI's writes, not the user's own).
 /// Against scripts/mock/mock_hub.py started with MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1
-/// (JARVIS_MOCK_HUB_TELEGRAM_THREAD), whose made-up dm takes replies into its page.
+/// (PERSONA_MOCK_HUB_TELEGRAM_THREAD), whose made-up dm takes replies into its page.
 final class ConnectorThreadReplyTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     @MainActor func testAReplyGoesOutWithoutACard() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_TELEGRAM_THREAD"] else {
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_TELEGRAM_THREAD"] else {
             throw XCTSkip("needs a mock with MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "telegram:dm1"]
         app.launchPinned()
         func text(_ s: String) -> XCUIElement {

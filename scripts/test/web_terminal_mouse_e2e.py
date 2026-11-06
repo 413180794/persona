@@ -45,9 +45,9 @@ def clicks(hub):
 def fresh(browser, token, viewport, scheme="light", mode=None):
     # the checks find controls by their Chinese names: the page follows the browser's language, not the machine's (#4027)
     ctx = browser.new_context(viewport=viewport, color_scheme=scheme, device_scale_factor=2, locale="zh-CN")
-    init = f"localStorage.setItem('jarvis.token', {token!r}); localStorage.setItem('jarvis.theme', {scheme!r});"
+    init = f"localStorage.setItem('persona.token', {token!r}); localStorage.setItem('persona.theme', {scheme!r});"
     if mode:
-        init += f"localStorage.setItem('jarvis.terminal.mouse', {mode!r});"
+        init += f"localStorage.setItem('persona.terminal.mouse', {mode!r});"
     ctx.add_init_script(init)
     page = ctx.new_page()
     page.set_default_timeout(10000)
@@ -288,11 +288,11 @@ def setting(browser, base, token, shots):
     expect(group.get_by_role("radio", name="交给程序")).to_have_attribute("aria-checked", "true")
     group.get_by_role("radio", name="本地选择").click()
     expect(group.get_by_role("radio", name="本地选择")).to_have_attribute("aria-checked", "true")
-    assert page.evaluate("localStorage.getItem('jarvis.terminal.mouse')") == "local"
+    assert page.evaluate("localStorage.getItem('persona.terminal.mouse')") == "local"
     if shots:
         page.screenshot(path=os.path.join(shots, "mouse-setting-light.png"))
     group.get_by_role("radio", name="交给程序").click()
-    assert page.evaluate("localStorage.getItem('jarvis.terminal.mouse')") is None
+    assert page.evaluate("localStorage.getItem('persona.terminal.mouse')") is None
     ok("终端设置 › 鼠标 switches the mode and remembers it (the default stores nothing)")
     ctx.close()
 

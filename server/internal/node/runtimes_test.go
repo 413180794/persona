@@ -691,24 +691,24 @@ func TestRuntimeSubagentsAndBackground(t *testing.T) {
 func TestRuntimePackageUpdate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(runtimepkg.OverrideEnv, dir)
-	root := filepath.Join(dir, "jarvis-dsh-runtime")
+	root := filepath.Join(dir, "persona-dsh-runtime")
 	for path, data := range map[string]string{"dsh/lib/plugin.js": "export const api = 1", "runtime-sdk/index.js": "export {}"} {
 		_ = os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o755)
 		if err := os.WriteFile(filepath.Join(root, path), []byte(data), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	pkg, err := runtimepkg.Load("jarvis-dsh-runtime")
+	pkg, err := runtimepkg.Load("persona-dsh-runtime")
 	if err != nil || pkg == nil {
 		t.Fatal(err)
 	}
 	n, _ := runtimeNode(t)
 
 	hello := dshHello()
-	hello["package"] = map[string]any{"name": "jarvis-dsh-runtime", "hash": "an-older-one"}
+	hello["package"] = map[string]any{"name": "persona-dsh-runtime", "hash": "an-older-one"}
 	old := dialRuntime(t, n, hello)
 	offer, _ := old.helloR["update"].(map[string]any)
-	if offer["name"] != "jarvis-dsh-runtime" || offer["hash"] != pkg.Hash || offer["version"] == nil {
+	if offer["name"] != "persona-dsh-runtime" || offer["hash"] != pkg.Hash || offer["version"] == nil {
 		t.Fatalf("hello answered %v", old.helloR)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -721,7 +721,7 @@ func TestRuntimePackageUpdate(t *testing.T) {
 			Data string `json:"data"`
 		} `json:"files"`
 	}
-	if err := old.peer.Call(ctx, "runtime.package", map[string]any{"name": "jarvis-dsh-runtime"}, &got); err != nil {
+	if err := old.peer.Call(ctx, "runtime.package", map[string]any{"name": "persona-dsh-runtime"}, &got); err != nil {
 		t.Fatal(err)
 	}
 	var files []runtimepkg.File
@@ -732,7 +732,7 @@ func TestRuntimePackageUpdate(t *testing.T) {
 		}
 		files = append(files, runtimepkg.File{Path: f.Path, Data: data})
 	}
-	if got.Name != "jarvis-dsh-runtime" || got.Hash != pkg.Hash || runtimepkg.Hash(files) != pkg.Hash || len(files) != 2 {
+	if got.Name != "persona-dsh-runtime" || got.Hash != pkg.Hash || runtimepkg.Hash(files) != pkg.Hash || len(files) != 2 {
 		t.Fatalf("package %s %s, %d files", got.Name, got.Hash, len(files))
 	}
 	if err := old.peer.Call(ctx, "runtime.package", map[string]any{"name": "something-else"}, &got); err == nil {
@@ -742,7 +742,7 @@ func TestRuntimePackageUpdate(t *testing.T) {
 	// Running the node's own: nothing offered. Without a package (an older runtime): nothing either.
 	same := dshHello()
 	same["runtime"], same["launcher"] = "dsh2", "dsh2"
-	same["package"] = map[string]any{"name": "jarvis-dsh-runtime", "hash": pkg.Hash}
+	same["package"] = map[string]any{"name": "persona-dsh-runtime", "hash": pkg.Hash}
 	if r := dialRuntime(t, n, same); r.helloR["update"] != nil {
 		t.Fatalf("offered its own package: %v", r.helloR)
 	}

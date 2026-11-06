@@ -48,7 +48,7 @@ import kotlin.math.roundToInt
 
 /** Where each tab's divider was left, as a share of the panes' width; kept on this phone like the style, any pairing. */
 internal class PaneSplitStore(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("jarvis-panes", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences("persona-panes", Context.MODE_PRIVATE)
 
     fun share(tab: AppTab): Float? = prefs.getFloat(key(tab), -1f).takeIf { it > 0f }
     fun save(tab: AppTab, share: Float) { prefs.edit().putFloat(key(tab), share).apply() }

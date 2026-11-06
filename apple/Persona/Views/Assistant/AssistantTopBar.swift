@@ -120,7 +120,7 @@ struct AssistantTopBar: View {
             .fixedSize()
             .help("Knowledge, details, copy directory and chat info")
             .accessibilityLabel(link != .online ? String(localized: "\(name), \(ConnectionLabel.text(link, hubRestarting: model.hubUpdate?.restarting == true))") : name)
-            .accessibilityIdentifier("jarvis-avatar")
+            .accessibilityIdentifier("persona-avatar")
             .connectionDetails($showLink)
             .layoutPriority(-1)
             Spacer(minLength: Theme.Space.s)
@@ -271,7 +271,7 @@ struct AssistantTopBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(link != .online ? String(localized: "\(name), \(ConnectionLabel.text(link, hubRestarting: model.hubUpdate?.restarting == true))") : name)
         .accessibilityHint("Knowledge, details, copy directory and chat info")
-        .accessibilityIdentifier("jarvis-avatar")
+        .accessibilityIdentifier("persona-avatar")
         .connectionDetails($showLink)
     }
 

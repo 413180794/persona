@@ -68,21 +68,21 @@ class ComposerParityTest {
         val s = Session(machineId = "m", sessionId = "s1", title = "照片同步", cwd = "/w/photos", lastText = " 计划写好了 ")
         val ref = sessionQuote(s, res)
         assertEquals("context", ref.kind)
-        assertEquals("jarvis://session/m/s1", ref.url)
+        assertEquals("persona://session/m/s1", ref.url)
         assertEquals("另一个会话：照片同步（Claude）\n目录：/w/photos\n它最近说：计划写好了", ref.text)
         assertEquals(listOf("context"), ChatLinkContext.parse(ref.xml()).first.map { it.kind })
     }
 
     @Test fun aQuoteKeepsItsKindAndMessageAndIsNotAddedTwice() {
         val quote = ChatLinkContext.quote(" 第一行\n第二行 ", "Claude", "msg-1")
-        assertEquals("<jarvis-context kind=\"quote\" title=\"Claude\" url=\"\" msg=\"msg-1\">\n第一行\n第二行\n</jarvis-context>", quote.xml())
+        assertEquals("<persona-context kind=\"quote\" title=\"Claude\" url=\"\" msg=\"msg-1\">\n第一行\n第二行\n</persona-context>", quote.xml())
         val parsed = ChatLinkContext.parse(quote.xml() + "\n\n好的").first.single()
         assertEquals(listOf("quote", "Claude", "msg-1", "第一行\n第二行"), listOf(parsed.kind, parsed.title, parsed.msg, parsed.text))
         val once = withQuote(emptyList(), quote)
         assertEquals(once, withQuote(once, ChatLinkContext.quote("第一行", "Claude", "msg-1")))
         assertEquals(2, withQuote(once, ChatLinkContext.quote("别的", "我", "msg-2")).size)
         // Contexts other than quotes keep writing kind="context" (a page's text) or "edit".
-        assertTrue(ChatLinkContext("other", "t", "", "x").xml().startsWith("<jarvis-context kind=\"context\""))
+        assertTrue(ChatLinkContext("other", "t", "", "x").xml().startsWith("<persona-context kind=\"context\""))
     }
 
     @Test fun theHostsNoteOverTheComposer() {
@@ -146,7 +146,7 @@ class ComposerParityTest {
 
     @Test fun yourQuoteSaysWoOnTheWireInEveryLanguage() {
         val mine = messageQuote("看下这里", user = true, agent = "Codex", msg = "m1")
-        assertTrue(mine.xml().startsWith("<jarvis-context kind=\"quote\" title=\"我\""))
+        assertTrue(mine.xml().startsWith("<persona-context kind=\"quote\" title=\"我\""))
         assertEquals("Codex", messageQuote("x", user = false, agent = "Codex", msg = "m2").title)
     }
 

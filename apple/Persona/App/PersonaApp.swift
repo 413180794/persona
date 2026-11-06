@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         QuickAction.publish()
         #endif
         #if DEBUG
-        // Simulator automation: `simctl launch … -pairURL jarvis://pair?...`; `-pairURL2`, `-pairURL3` pair more hubs
+        // Simulator automation: `simctl launch … -pairURL persona://pair?...`; `-pairURL2`, `-pairURL3` pair more hubs
         // (several groups, docs/multi-hub.md「截图」).
         if let s = UserDefaults.standard.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
             let more = ["pairURL2", "pairURL3"].compactMap { UserDefaults.standard.string(forKey: $0).flatMap(ServerConfig.init(pairURL:)) }
@@ -205,7 +205,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"), island: d.string(forKey: "fleetIsland"),
                                                      count: d.integer(forKey: "showFleetCount"))
         }
-        RuntimeCLI.startIfAsked() // `-runtimeCLI <port>`: scripts/app/jarvisctl.py drives the running app
+        RuntimeCLI.startIfAsked() // `-runtimeCLI <port>`: scripts/app/personactl.py drives the running app
         let automation = d.string(forKey: "pairURL") != nil
         #else
         let automation = false
@@ -236,7 +236,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         PushRegistrar.shared.didFail(error)
     }
 
-    /// Silent push from the hub (`jarvis_wake`): the assistant needs a phone_* tool while the app is in the background.
+    /// Silent push from the hub (`persona_wake`): the assistant needs a phone_* tool while the app is in the background.
     /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go. A withdrawal push
     /// (`resolved_interaction_ids`) removes the notifications of cards that are over.
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
@@ -254,7 +254,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             AppModel.shared.withdrawResolved(ids, group: AppModel.shared.pushGroup(info)) { done(.newData) }
             return
         }
-        let wake = info["jarvis_wake"]
+        let wake = info["persona_wake"]
         guard wake != nil, AppModel.shared.isPaired, !AppModel.shared.isDemo else {
             completionHandler(.noData)
             return

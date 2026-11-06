@@ -86,7 +86,7 @@ func TestKBAnswersTheHub(t *testing.T) {
 	c := &kb.Chat{ID: "lark-f1", Source: "lark", SourceID: "f1", Kind: "group", Name: "发布群"}
 	_ = e.Store.PutChat(c)
 	_ = e.Store.PutSummary(kb.KindChat, c.ID, "在推发布")
-	if _, err := e.Apply(kb.KindProject, "Jarvis 发布", kb.Update{Chats: []string{"lark-f1"}, Dirs: []string{"server:/code/jarvis"}}); err != nil {
+	if _, err := e.Apply(kb.KindProject, "Persona 发布", kb.Update{Chats: []string{"lark-f1"}, Dirs: []string{"server:/code/persona"}}); err != nil {
 		t.Fatal(err)
 	}
 	ask := func(method string, params any) any {
@@ -102,16 +102,16 @@ func TestKBAnswersTheHub(t *testing.T) {
 		return v
 	}
 	got := fmt.Sprint(ask(assistantwire.MethodKBContext, map[string]any{"chat_id": "lark-f1"}))
-	if !strings.Contains(got, "ChatName:发布群") || !strings.Contains(got, "在推发布") || !strings.Contains(got, "Name:Jarvis 发布") {
+	if !strings.Contains(got, "ChatName:发布群") || !strings.Contains(got, "在推发布") || !strings.Contains(got, "Name:Persona 发布") {
 		t.Fatalf("context: %s", got)
 	}
 	if got := ask(assistantwire.MethodKBContext, map[string]any{"chat_id": "lark-nope"}); fmt.Sprint(got) != "map[context:<nil>]" {
 		t.Fatalf("context of an unknown chat: %v", got)
 	}
-	if got := fmt.Sprint(ask(assistantwire.MethodKBProjects, map[string]any{"machine_id": "server", "cwd": "/code/jarvis/ios"})); got != "map[projects:[map[name:Jarvis 发布 slug:jarvis-发布]]]" {
+	if got := fmt.Sprint(ask(assistantwire.MethodKBProjects, map[string]any{"machine_id": "server", "cwd": "/code/persona/ios"})); got != "map[projects:[map[name:Persona 发布 slug:persona-发布]]]" {
 		t.Fatalf("projects: %s", got)
 	}
-	if got := fmt.Sprint(ask(assistantwire.MethodKBProjects, map[string]any{"machine_id": "laptop", "cwd": "/code/jarvis"})); got != "map[projects:[]]" {
+	if got := fmt.Sprint(ask(assistantwire.MethodKBProjects, map[string]any{"machine_id": "laptop", "cwd": "/code/persona"})); got != "map[projects:[]]" {
 		t.Fatalf("another machine's: %s", got)
 	}
 
@@ -163,7 +163,7 @@ func TestKBOffAnswersTheHub(t *testing.T) {
 func TestKBAgentTurn(t *testing.T) {
 	s := newKBService(t, newFakeHub())
 	e := kbEng(t, s)
-	if _, err := e.Apply(kb.KindProject, "Jarvis", kb.Update{Dirs: []string{"server:/code/jarvis"}}); err != nil {
+	if _, err := e.Apply(kb.KindProject, "Persona", kb.Update{Dirs: []string{"server:/code/persona"}}); err != nil {
 		t.Fatal(err)
 	}
 	turn := func(t assistantwire.KBAgentTurn) {
@@ -172,12 +172,12 @@ func TestKBAgentTurn(t *testing.T) {
 			panic(fmt.Sprint(ok, err))
 		}
 	}
-	turn(assistantwire.KBAgentTurn{MachineID: "server", SessionID: "s1", Cwd: "/code/jarvis/ios", Title: "修排序", Line: "改好了，\n测试通过"})
-	turn(assistantwire.KBAgentTurn{MachineID: "server", SessionID: "s1", Cwd: "/code/jarvis/ios", Title: "修排序", Line: "又改了"})
-	turn(assistantwire.KBAgentTurn{MachineID: "laptop", SessionID: "s2", Cwd: "/code/jarvis", Line: "x"})
-	turn(assistantwire.KBAgentTurn{MachineID: "server", SessionID: "s3", Cwd: "/code/jarvis", Title: "Claude Code", Line: "完成：发好了"})
-	log := e.Store.Log("jarvis", 10)
-	if len(log) != 2 || !strings.Contains(log[0], "Agent · 修排序 · server · 改好了， 测试通过") || !strings.Contains(log[1], "Agent · jarvis · server · 完成：发好了") {
+	turn(assistantwire.KBAgentTurn{MachineID: "server", SessionID: "s1", Cwd: "/code/persona/ios", Title: "修排序", Line: "改好了，\n测试通过"})
+	turn(assistantwire.KBAgentTurn{MachineID: "server", SessionID: "s1", Cwd: "/code/persona/ios", Title: "修排序", Line: "又改了"})
+	turn(assistantwire.KBAgentTurn{MachineID: "laptop", SessionID: "s2", Cwd: "/code/persona", Line: "x"})
+	turn(assistantwire.KBAgentTurn{MachineID: "server", SessionID: "s3", Cwd: "/code/persona", Title: "Claude Code", Line: "完成：发好了"})
+	log := e.Store.Log("persona", 10)
+	if len(log) != 2 || !strings.Contains(log[0], "Agent · 修排序 · server · 改好了， 测试通过") || !strings.Contains(log[1], "Agent · persona · server · 完成：发好了") {
 		t.Fatalf("log: %v", log)
 	}
 	if ok, _ := s.kbEvent(context.Background(), assistantwire.EventKBKick, nil); !ok || len(s.kb.kick) != 1 {
@@ -199,7 +199,7 @@ func TestKBZoneAtStart(t *testing.T) {
 	c := &kb.Chat{ID: "lark-f1", Source: "lark", SourceID: "f1", Name: "发布群"}
 	_ = old.PutChat(c)
 	_ = old.AppendMessages(c, []kb.Line{{At: time.Date(2026, 11, 3, 20, 0, 0, 0, time.UTC), Sender: "张三", Text: "晚上好"}})
-	if _, err := (&kb.Engine{Store: old}).Apply(kb.KindProject, "Jarvis", kb.Update{Dirs: []string{"server:/code/jarvis"}}); err != nil {
+	if _, err := (&kb.Engine{Store: old}).Apply(kb.KindProject, "Persona", kb.Update{Dirs: []string{"server:/code/persona"}}); err != nil {
 		t.Fatal(err)
 	}
 	zoneOf := func() string {
@@ -265,7 +265,7 @@ func TestKBZoneAtStart(t *testing.T) {
 		t.Fatal("the refused write went in")
 	}
 	// The agent's turn that came before it opened went in once it did.
-	if log := e.Store.Log("jarvis", 10); len(log) != 1 || !strings.Contains(log[0], "Agent · 修排序 · server") {
+	if log := e.Store.Log("persona", 10); len(log) != 1 || !strings.Contains(log[0], "Agent · 修排序 · server") {
 		t.Fatalf("the waiting turn: %v", log)
 	}
 
@@ -284,7 +284,7 @@ func TestKBZoneAtStart(t *testing.T) {
 
 // zoneTestTurn hands s an agent's finished turn in the project directory of TestKBZoneAtStart.
 func zoneTestTurn(s *Service, session string) (bool, error) {
-	raw, _ := json.Marshal(assistantwire.KBAgentTurn{MachineID: "server", SessionID: session, Cwd: "/code/jarvis", Title: "修排序", Line: "改好了"})
+	raw, _ := json.Marshal(assistantwire.KBAgentTurn{MachineID: "server", SessionID: session, Cwd: "/code/persona", Title: "修排序", Line: "改好了"})
 	return s.kbEvent(context.Background(), assistantwire.EventKBAgentTurn, raw)
 }
 
@@ -311,15 +311,15 @@ func TestKBPostsIndex(t *testing.T) {
 // A project's page lists the agents working in its directories (not the assistant's conversations, not offline ones).
 func TestKBRouteProjectAgents(t *testing.T) {
 	f := newFakeHub()
-	f.sessions["server"] = []proto.Session{{SessionID: "a1", Cwd: "/code/jarvis/ios", Status: proto.StatusIdle},
-		{SessionID: "a2", Cwd: "/code/jarvis", Status: proto.StatusOffline}, {SessionID: "c1", Cwd: "/code/jarvis", Assistant: true},
+	f.sessions["server"] = []proto.Session{{SessionID: "a1", Cwd: "/code/persona/ios", Status: proto.StatusIdle},
+		{SessionID: "a2", Cwd: "/code/persona", Status: proto.StatusOffline}, {SessionID: "c1", Cwd: "/code/persona", Assistant: true},
 		{SessionID: "a3", Cwd: "/elsewhere", Status: proto.StatusWorking}}
 	s := newKBService(t, f)
-	if _, err := kbEng(t, s).Apply(kb.KindProject, "Jarvis", kb.Update{Dirs: []string{"server:/code/jarvis"}}); err != nil {
+	if _, err := kbEng(t, s).Apply(kb.KindProject, "Persona", kb.Update{Dirs: []string{"server:/code/persona"}}); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/kb/projects/jarvis", nil))
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/kb/projects/persona", nil))
 	var out struct {
 		Agents []proto.Session `json:"agents"`
 	}

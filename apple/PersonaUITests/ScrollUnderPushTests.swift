@@ -7,19 +7,19 @@ import XCTest
 /// that comes and goes, new steps in the open chat) while the test drags and flicks the list; the app watches every
 /// frame of the scroll (`PerfScroll`, `-perfCounts YES`): what is on screen moves with the finger or the glide only.
 ///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/ScrollUnderPushTests
-/// Both layouts: TEST_RUNNER_JARVIS_LAYOUT=shell runs it in the shell (docs/testing.md).
+///   TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/ScrollUnderPushTests
+/// Both layouts: TEST_RUNNER_PERSONA_LAYOUT=shell runs it in the shell (docs/testing.md).
 final class ScrollUnderPushTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
     private static let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // at work, long with MOCK_LONG_HISTORY
-    private static let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"  // a long Persona conversation
+    private static let persona = "server/b2e4d6f8-0000-4000-8000-000000000004"  // a long Persona conversation
     private static let rounds = 10
 
     override func setUpWithError() throws {
         continueAfterFailure = true
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (JARVIS_CHURN_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_CHURN_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (PERSONA_CHURN_HUB)")
         }
         hub = h
         _ = mock("reset")
@@ -37,7 +37,7 @@ final class ScrollUnderPushTests: XCTestCase {
 
     private func launch(chat: String = "", tab: String = "chats", _ extra: [String] = []) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // Paired with another hub than last time, the app starts over on Assistant: pair first, then open the page.
         app.launchArguments = ["-pairURL", pair]
         app.launchPinned()
@@ -146,9 +146,9 @@ final class ScrollUnderPushTests: XCTestCase {
     }
 
     // The Persona chat, while the agents and the inbox are pushed around it.
-    func testJarvisChatScrollsThroughPushes() {
-        launch(tab: "assistant", ["-openAssistant", Self.jarvis, "-showScrollState", "YES"])
-        waitForChat(Self.jarvis)
+    func testPersonaChatScrollsThroughPushes() {
+        launch(tab: "assistant", ["-openAssistant", Self.persona, "-showScrollState", "YES"])
+        waitForChat(Self.persona)
         assertStill(scrollThroughPushes("Persona chat"), "Persona chat")
     }
 }

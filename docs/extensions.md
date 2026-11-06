@@ -43,8 +43,8 @@ The user's decision: extensions, connectors and chat bots all belong to the **ma
 - Forwards these routes **to the manager as-is**: it opens a stream over `/api/v1/bus/relay` (`extensions.accept`) and runs this one HTTP exchange on it, so SSE and WebSocket are still streams. Who is asking goes in `X-Persona-*` headers (device, role, whether it is the owner using the main token locally, admin UI session, language, address); any of these headers sent by the client are stripped, and the hub's credentials are not forwarded. Extension pages in the admin UI are forwarded only through the admin UI route group (with the admin session header).
 - When an extension token hits one of the hub's own routes, the hub asks the manager (`extensions.authorize`: the token's hash, the hub route pattern), and the manager says whose token it is and whether that scope is granted. The table is `extwire.RouteScopes` (`TestRouteScopes` still guards it).
 - Keeps the manager's last report (also stored under the hub's own key `hub.extensions_report`, used after a hub restart before the manager reports): the `features` in hello, `computer` / `browser` in the machine list, screen ports. It forwards by the extensions' API prefixes, and for sends that declare receipts, the hub still records the receipts.
-- What its own features need, it asks through `extensions.hub_call`: GitHub sign-in (avatar tiers) and the manager's `jarvis_settings` (mailboxes, each source's own triage rules). The node's MCP tools (`mcp.tools` / `mcp.call`), the extension wording on gate command cards, and `assistant.lark` belong to the manager (`docs/machines.md` ("Who handles computer events")): the assistant's `fleet_tools.go` asks the extensions directly in the same process (`extmgr`'s `AgentTools`, `CallTool`, `AssistantSummary`, `AssistantLark`, in the same order as before), bypassing the hub; if the caller stops waiting (the node cancels the call), the card it was waiting on is withdrawn too. Model config belongs to the assistant (`docs/model-config.md`). What it needs from extensions (providers, the voice extension's model, extensions that need a triage model, quota plugins: `app.call plugins.*`) and what extensions need from it (`models.usable`, `models.launcher_http`, `models.launchers`) are asked directly inside the manager's process, bypassing the hub (`extmgr/models_link.go`, `launcherquota.go`).
-- Cards (send mail, Cua apps, `jarvis_settings`) wait in the assistant's interaction queue, also in the same process (`Options.Ask` → the assistant's `askHub`). When the owner answers in a channel, the assistant answers the card, after first letting the extension clear that owner action (`app.call interactions.owner_action`, in-process). What the manager needs the hub to do goes through the `hub` app of `app.call`: push (`push.localized`, `push.background`) and the language for mail translation (`push.mail_targets`).
+- What its own features need, it asks through `extensions.hub_call`: GitHub sign-in (avatar tiers) and the manager's `persona_settings` (mailboxes, each source's own triage rules). The node's MCP tools (`mcp.tools` / `mcp.call`), the extension wording on gate command cards, and `assistant.lark` belong to the manager (`docs/machines.md` ("Who handles computer events")): the assistant's `fleet_tools.go` asks the extensions directly in the same process (`extmgr`'s `AgentTools`, `CallTool`, `AssistantSummary`, `AssistantLark`, in the same order as before), bypassing the hub; if the caller stops waiting (the node cancels the call), the card it was waiting on is withdrawn too. Model config belongs to the assistant (`docs/model-config.md`). What it needs from extensions (providers, the voice extension's model, extensions that need a triage model, quota plugins: `app.call plugins.*`) and what extensions need from it (`models.usable`, `models.launcher_http`, `models.launchers`) are asked directly inside the manager's process, bypassing the hub (`extmgr/models_link.go`, `launcherquota.go`).
+- Cards (send mail, Cua apps, `persona_settings`) wait in the assistant's interaction queue, also in the same process (`Options.Ask` → the assistant's `askHub`). When the owner answers in a channel, the assistant answers the card, after first letting the extension clear that owner action (`app.call interactions.owner_action`, in-process). What the manager needs the hub to do goes through the `hub` app of `app.call`: push (`push.localized`, `push.background`) and the language for mail translation (`push.mail_targets`).
 
 **When the manager is away**: these routes return `503 assistant_offline` "助手暂时连不上，稍后再试" ("The assistant can't be reached right now, try again later"). `KeptRoutes` (`GET /api/v1/extensions`, `…/-/ui`, `…/-/themes`, `…/-/prompts`, `…/-/widgets`, `…/-/shortcuts`, `…/-/triage-templates`) return the last answer, so the App still draws extension UI and themes; hello still carries the last reported features. Connector, Cua and ego tools are not in the Agent's tool list during this time (calls get the same message); the hub's other features work normally. When the manager comes back it starts extensions, connectors and bots, runs one full Inbox collection round, and sends the full report again.
 
@@ -70,7 +70,7 @@ UI text always says "extension" (**Settings › Extensions**, **Extension Market
 ## Naming and compatibility
 
 This system used to be called "plugin"; #1844 renamed it. Apps already shipped (iOS / Mac / Android / web), extensions already installed, and existing extension packages and marketplaces still use the old names,
-so the old names **all keep working**. New code, manifests and docs use the new names.
+so the old extension-system terms **keep working** where listed below. This does not retain previous product-brand names or marketplace filenames; the [Persona-only cutover](persona-cutover.md) takes precedence. New code, manifests and docs use the new terms.
 
 | Old | New | Compatibility |
 | --- | --- | --- |
@@ -80,15 +80,15 @@ so the old names **all keep working**. New code, manifests and docs use the new 
 | `/api/v1/admin/plugins…` (including upload `…/upload`) | `/api/v1/admin/extensions…` | Same as above |
 | Request body `{market, plugin}` (preview from a marketplace) | `{market, extension}` | Both accepted |
 | Command `personad plugin …` | `personad extension …`, short form `personad ext …` | `plugin` still works; the CLI calls the new path first and falls back to the old path when the hub is still an old version (not restarted yet) |
-| Marketplace index `persona-plugins.json`, list key `plugins` | `persona-extensions.json`, list key `extensions` | GitHub and git marketplaces look for the new file first and read the old one if it is missing; https marketplaces given as a directory (`https://…/dir/`) read `dir/persona-extensions.json` first and `dir/persona-plugins.json` on 404; ones registered earlier and stored as a full URL still read that file. Both list keys are accepted |
-| Env vars `PERSONA_PLUGIN_*`, `JARVIS_PLUGIN_*` | `PERSONA_EXTENSION_*` | Every variable is accepted in all four spellings (`PERSONA_` / `JARVIS_` × `EXTENSION_` / `PLUGIN_`) |
+| Marketplace list key `plugins` | `persona-extensions.json`, list key `extensions` | GitHub, git and HTTPS-directory marketplaces use only the canonical index filename. Both list keys are accepted; an explicitly registered full JSON URL remains its exact address |
+| Env vars `PERSONA_PLUGIN_*` | `PERSONA_EXTENSION_*` | Both extension-system spellings are accepted; only the canonical product prefix is supported |
 | manager.json `plugins` | `extensions` | Both read; if the same id appears in both, the one in `extensions` is used |
 | Directory `~/.persona/plugins/` | `~/.persona/extensions/` | At startup the hub moves the old directory over whole and leaves a link `plugins → extensions` in its place (manual `ssh -R` to `~/.persona/plugins/<id>.sock` and rollbacks to an old hub still find it). If it can't be moved or both exist, the old directory stays in use and a log line is written; startup is not blocked |
 | features `plugins` / `plugin_manager` / `plugin_ui_slots` / `plugin_auto_upgrade` | `extensions` / `extension_manager` / `extension_ui_slots` / `extension_auto_upgrade`, plus `extension_market_spec` | The old ones are still reported. A new client that sees `extensions` uses the new paths; otherwise (old hub) it uses the old paths |
 | WebSocket events `plugin_ui {plugin, …}`, `plugin_upgrade {plugin, …}` | `extension_ui {extension, …}`, `extension_upgrade {extension, …}` | During the compatibility period both are sent (old first); push payloads carry both `plugin_upgrade` and `extension_upgrade` keys |
 | Protocol `initialize`'s `plugin` | `extension` | The hub sends both keys; the SDK accepts both |
 | Go packages `internal/plugin`, `plugin/host`, `plugin/serve`, `plugin/conformance` | `internal/extension/…` | — |
-| Database tables `plugins`, `plugin_secrets`, `plugin_audit`, `plugin_markets`, setting key `plugin_upgrades`, model purpose `plugin.<id>`, hub↔node `plugin_skills`, `~/.persona/plugin-skills/`, slot name `plugin_page`, icon name `plugin`, error codes `plugin_failed` / `invalid_plugin` / `no_plugins` | **Unchanged** | Identities in persistence and internal protocols (same approach as Jarvis → Persona, `docs/rename.md`); changing them would need a data migration, and node and hub would fall out of sync |
+| Database tables `plugins`, `plugin_secrets`, `plugin_audit`, `plugin_markets`, setting key `plugin_upgrades`, model purpose `plugin.<id>`, hub↔node `plugin_skills`, `~/.persona/plugin-skills/`, slot name `plugin_page`, icon name `plugin`, error codes `plugin_failed` / `invalid_plugin` / `no_plugins` | **Unchanged** | Identities in persistence and internal protocols (same approach as Previous-brand → Persona, `docs/rename.md`); changing them would need a data migration, and node and hub would fall out of sync |
 
 **Marketplace move**: after a marketplace repository is renamed or moved (for example, `<org>/<old repository>` → `<org>/<new repository>`), extensions installed from it have the source `market:<market id>/<extension id>`, and the market id must not change.
 Use `personad extension market set-spec <market id> <new URL>` (API `PUT /api/v1/extensions/-/markets/{id}` `{spec}`) to change the URL in place. It first reads the new URL once with the market's existing token; if that fails, nothing changes.
@@ -113,7 +113,7 @@ What an extension contributes where is written in the manifest's `contributes`: 
 | `providers` (version 1) | `provider.` | `id`, `name`, `description?`, `kind?` (`launcher` / `api`), `api?` (`messages` / `responses`), `base_url`, `model?`, `small_model?`, `models?: [{id, name?}]`, `dynamic_models?`, `key_hint?` | Declarative is enough; `dynamic_models` needs the process to speak the protocol | **From Extension** in **Settings › Model Providers**, see "Model providers" below |
 | `api` (version 1) | `api.` | `id`, `prefix` (one path segment), `features?`, `events?`, `receipts?` (`[{method, path, kind}]`: writes that need send receipts) | `runtime.http`, `on_startup`; with `events`, the process must speak the protocol | A block of App-facing API `/api/v1/<prefix>/…`, see "App API" below |
 | `assistant` (version 1) | `assistant.` | `id`, `skills?` (directories in the package, each with `SKILL.md`), `instructions?` (an `.md` in the package), `gate?` (a `.json` in the package: the gate for one command in a skill) | These files exist in the package; `gate` requires `skills`, and when credentials are needed the process speaks the protocol | The assistant's skills, instructions and command gates, see "Assistant" below |
-| `mcp_servers` (version 1) | `mcp.` | `id` (`a-z0-9_-`, cannot be `jarvis` / `persona`), `command`, `env?`, `args?`, `requires?`, `allow?`, `deny?` | Declarative is enough; the command is installed on the computer that runs the assistant | One more MCP server for the Claude assistant (tool names `mcp__<id>__*`), see "MCP servers" below |
+| `mcp_servers` (version 1) | `mcp.` | `id` (`a-z0-9_-`, cannot be `persona` / `persona`), `command`, `env?`, `args?`, `requires?`, `allow?`, `deny?` | Declarative is enough; the command is installed on the computer that runs the assistant | One more MCP server for the Claude assistant (tool names `mcp__<id>__*`), see "MCP servers" below |
 | `ui` (version 2) | `ui.` | `id`, `title`, `placement` (slot, see "UI slots": `extension_page` (old name `plugin_page`) / `launcher_section` / `nav_page` / `overview_card` / `capsule_card` / `machine_section` / `inbox_item` / `widget`), `hosts?` (only for `launcher_section`: gateway host names, may start with `*.`; omitted means any launcher, the extension decides), `icon?` (only `nav_page`), `opens?` (only `overview_card`, `capsule_card` and `widget`), `connector?` (only `inbox_item`, and required: the id of a connector contributed by the same extension), `families` / `refresh_minutes?` (only `widget`; `families` is required, see "System-level placements") | Process speaks the protocol; `launcher_section` needs permission `launcher_keys` | A page in the extension's details, a section on the launcher page, main navigation, overview, machine details, the details of an Inbox item, widgets and watch faces outside the App; see "Declarative UI", "UI slots", "System-level placements" below |
 | `agent_sources` (version 1) | `agentsrc.` | `id` (`a-z0-9_-`, also the source segment of session ids `<id>:<sessionKey>`), `name`, `providers?` (`a-z0-9_`, e.g. `grok_bot`) | Process speaks the protocol, `on_startup` | Personal Agents on the Agents page (the hub has no sources of its own; all come from extensions), see "Personal Agent sources" below |
 | `channel` (version 1) | `channel.` | `id` (`^[a-z][a-z0-9_]{0,31}$`, cannot be 8 hex digits), `name`, `kind` (`im`), `connector?` (binding and status come from this connector of the same extension), `bind?` (`qr` / `code` / `fields`), `description?`, `capabilities` (receive images / files / voice, `format`, `max_text`, `asks`, `push`, `typing`, `progress`, `threads`) | Process speaks the protocol; `on_startup` when there is no `connector` | A channel for talking to Persona: the hub runs the shared pipeline (into the chat, tracking the turn, sending the answer back, questions), and the extension only talks to the IM; see [channels.md](channels.md) |
@@ -183,7 +183,7 @@ Lives at the root of the extension package. Example (a connector for a fictional
 | `tags` | No | Tags shown and searched in the marketplace (#2424, previously in the extension repository's `market.json`): at most 16, each 1–24 characters. Written only in the source manifest: the manifests inside packages and marketplace indexes drop it (both SDKs also drop it when answering `manifest`, since the program embeds the source manifest), and the tags go in the index entry's `tags` (see "Extension marketplace"), because hubs from before this field read manifests strictly and refuse to install when they see `tags` |
 | `engines.persona` | No | A range of hub build numbers, only `>=N`, `<N` and combinations; if not satisfied it can't be installed, and installed ones are marked `incompatible`. Development builds (build number 0) are not checked; a warning is given |
 | `engines.extension_protocol` | Yes when there is `runtime` or `node` | `1` |
-| `runtime` | No | Without it, the extension is declarative only. `command`: a relative path in the package, or `{"<GOOS>-<GOARCH>": path}`; if this hub's platform is missing it can't be installed. Must not be absolute or escape the package (`..` and links pointing outside the package are both checked), and must be executable; `personad` is allowed only for built-in extensions. `args`; `env` (must not start with `PERSONA_` / `JARVIS_`, nor be the dynamic loader's `LD_*` / `DYLD_*`, which would reach the sandbox launcher outside the sandbox; secrets don't go here); `rpc`: `stdio` (default) / `none`; `http`: serve HTTP on `PERSONA_EXTENSION_SOCKET`. `rpc: none` without `http` can't be installed |
+| `runtime` | No | Without it, the extension is declarative only. `command`: a relative path in the package, or `{"<GOOS>-<GOARCH>": path}`; if this hub's platform is missing it can't be installed. Must not be absolute or escape the package (`..` and links pointing outside the package are both checked), and must be executable; `personad` is allowed only for built-in extensions. `args`; `env` (must not start with `PERSONA_` / `PERSONA_`, nor be the dynamic loader's `LD_*` / `DYLD_*`, which would reach the sandbox launcher outside the sandbox; secrets don't go here); `rpc`: `stdio` (default) / `none`; `http`: serve HTTP on `PERSONA_EXTENSION_SOCKET`. `rpc: none` without `http` can't be installed |
 | `node` | No | A program that runs on computers you pick (#1830, `docs/plan-extensions.md` ("Seven")). `command`: per platform only, `{"darwin-<arch>" \| "linux-<arch>": path}`, same path rules as `runtime`, cannot be `personad`; the platforms listed are the computers it can run on, and every platform's program must be in the package and executable (the hub does not check its own platform). `machines`: the name of the config field that picks computers; this field must be an array of `format: machine`, its `items` must set `x-os`, and only to systems that `command` has a program for (to limit it to one computer, set `maxItems`). `args`, `env`, `rpc`, `http` as in `runtime`; `keep_running`: `lease` (default, stops if the hub hasn't renewed for half an hour) / `always`; `secrets`: names of secrets sent to the computer (must be in `secrets`), the rest stay on the hub only; `permissions`: `network` (host names), `files`, `macos_privacy`, see "Permissions". You can have `node` without `runtime` (if the extension points you contribute don't need a program on the hub). How it runs: see "Programs that run on computers" |
 | `activation_events` | No | `on_startup` / `on_call` / `on_http`, see "When it runs"; with `runtime` the default is `on_call`; `rpc: none` allows only `on_startup` |
 | `contributes` | Yes (except packs) | See "Extension points", at least one item; contributions to an extension point exported by another extension are written `"<extension id>.<extension point id>"`, see "Dependencies, exports and packs" |
@@ -226,7 +226,7 @@ and the API returns the ordered `form.fields`). Anything outside the subset can'
 **Conventional settings**: names the hub recognizes; when an extension declares one, it gets extra uses.
 - `triage_rules` (a top-level `string`; `maxLength` of at most 4000 is recommended, since the hub uses only the first 4000 characters): this source's Inbox triage rules, in the user's own words. The extension attaches it as `rules` when it hands over items (`docs/connector-protocol.md`),
   and the hub uses it instead of the global `inbox.rules` when triaging this source's items (`docs/inbox.md` ("AI triage")). An extension that declares it gets an item
-  `inbox.rules.<extension id>` in the assistant's `jarvis_settings`: reading is free; changing it pops a confirmation on the phone (before → after), and only once approved is it written through the same config-change path (validated against the schema, only this item changed, extension restarted);
+  `inbox.rules.<extension id>` in the assistant's `persona_settings`: reading is free; changing it pops a confirmation on the phone (before → after), and only once approved is it written through the same config-change path (validated against the schema, only this item changed, extension restarted);
   extensions configured in the manager's manager.json are read-only.
 
 Extensions that use the Inbox **must** have `triage_rules`; see "General rules for the Inbox" below.
@@ -310,7 +310,7 @@ To call the hub's HTTP API, an extension lists the scopes it uses in `permission
 - **Which route belongs to which scope** is registered in `routeScopes` in `server/internal/extmgr/extension_scopes.go` (by the pattern the route was registered with); **unregistered routes accept only full credentials**, and extension tokens always get 403.
   All hub routes and the decision for each are listed in `server/internal/hub/testdata/route_scopes.txt` (`-` means full credentials only), guarded by `TestRouteScopes`: adding a route makes the test fail,
   so first decide whether extensions may call it (if so, add it to `routeScopes`), then run `PERSONA_UPDATE_ROUTE_SCOPES=1 go test ./internal/hub -run TestRouteScopes` and review the diff carefully.
-- **Token**: starts with `pext_`. Each time the hub starts an extension's program it signs a new one (revoking the old one at the same time) and gives it via the env vars `PERSONA_HUB_URL` / `PERSONA_HUB_TOKEN` (old names `JARVIS_*` given too)
+- **Token**: starts with `pext_`. Each time the hub starts an extension's program it signs a new one (revoking the old one at the same time) and gives it via the env vars `PERSONA_HUB_URL` / `PERSONA_HUB_TOKEN` (old names `PERSONA_*` given too)
   and `initialize`'s `hub.url` / `hub.token` / `hub.scopes` (extensions running elsewhere get only `initialize`). It is revoked when the extension is disabled, upgraded, reconfigured or uninstalled, and a new one is signed at the next start.
   The token lives only in the hub's memory: extension processes are the hub's child processes and restart with the hub (`docs/hub-restart.md`), and the new hub signs new ones; it will be persisted once extensions move out of the hub's cgroup.
 - Local only: requests with an extension token coming from the public internet return 403 `extension_token_local_only`. Routes without a scope return 403 `{"code": "permission_denied"}`, and a missing scope also carries `scope` (the missing one).
@@ -454,7 +454,7 @@ A change restarts the extension and is recorded as `sandbox` in the audit log. T
 **macOS**: `sandbox-exec`, with a profile that allows by default, then denies all outbound network (allowing only the hub proxy's local port and unix sockets in its own run directory), denies all writes (allowing only the data directory, run directory and `/dev`),
 and denies reading the home directory (allowing only the package, data and run directories). There is no network namespace, so the proxy uses a local TCP port plus credentials; there are no resource limits. Tested on macOS 27.2 on 2026-11-05: writing data works, writing / reading the home directory doesn't,
 only the proxy's port is reachable, direct connections to the internet fail, and a package placed under the home directory can still read itself.
-  The paths the hub gives (package, data, run directory, the program itself) often pass through symlinks in the home directory (`~/.persona -> .jarvis` or the other way round): sandbox-exec treats reading the symlink itself as reading the home directory,
+  The paths the hub gives (package, data, run directory, the program itself) often pass through symlinks in the home directory (`~/.persona -> .persona` or the other way round): sandbox-exec treats reading the symlink itself as reading the home directory,
   so denying home-directory reads makes every path through it fail to open (`execvp … Operation not permitted`). The profile allows these directories by their real paths, then allows each symlink along the way individually (`literal`, which only lets it read where the link points;
   what follows is still judged by the real path). So the hub keeps using the original paths (arguments, `HOME`, `TMPDIR`, sockets in env vars), and nothing else in the home directory can be read through the symlinks.
 
@@ -664,7 +664,7 @@ CLI: `personad extension contributions <id>` (list), `personad extension contrib
 
 ### Command line
 
-Only used on the hub machine: it reads the master token and the `listen` port from hub.json in the state directory (default `~/.persona`, see "Naming and compatibility"; the port defaults to 18660 if unset, overridden by the env var `PERSONA_LISTEN`, the old name `JARVIS_LISTEN` is also accepted), and calls "The hub's API" via `127.0.0.1`.
+Only used on the hub machine: it reads the master token and the `listen` port from hub.json in the state directory (default `~/.persona`, see "Naming and compatibility"; the port defaults to 18660 if unset, overridden by the env var `PERSONA_LISTEN`, the old name `PERSONA_LISTEN` is also accepted), and calls "The hub's API" via `127.0.0.1`.
 If there is no hub.json on this machine it errors out; it does not connect anywhere else. `personad ext …` and `personad plugin …` (the name before #1844) are the same command. `help` prints usage to stdout; with no subcommand, usage is printed to stderr as an error with exit code 1; `contributions` / `contribution` are only listed together when a subcommand is mistyped.
 `new`, `test` and `pack` below do not need the hub; everything else needs the hub running.
 
@@ -806,7 +806,7 @@ Older hubs have none of this: they preview synchronously as before and wait for 
 
 | File | Content |
 | --- | --- |
-| `<index>.sig` (in the same directory as the index: `persona-extensions.json.sig`; for an index with the old name, `persona-plugins.json.sig`) | `{"alg": "ed25519", "key_id": "<first 16 hex chars of the sha256 of the 32-byte public key>", "sig": "<signature over the index file's raw bytes, base64>"}` |
+| `<index>.sig` (in the same directory as the index: `persona-extensions.json.sig`; an explicitly registered JSON URL uses that index's filename plus `.sig`) | `{"alg": "ed25519", "key_id": "<first 16 hex chars of the sha256 of the 32-byte public key>", "sig": "<signature over the index file's raw bytes, base64>"}` |
 | Top-level `signing_key` in the index | `ed25519:<base64 of the 32-byte public key>`: which key the marketplace says it uses, **only a hint**; the hub does not trust on its basis (older hubs ignore this field) |
 | `market.pub` at the repo root | The same public key on one line, for people and for CI to verify |
 
@@ -920,7 +920,7 @@ the host side (every call, every run, every log line) is the `Observer` in `exte
 - Extensions that speak the protocol get `config` and `secrets` in `initialize`; ones that do not get them through the env vars `PERSONA_EXTENSION_CONFIG` and `PERSONA_EXTENSION_SECRETS` (both JSON).
   Each extension only gets its own. When config, secrets or the switch change, the hub restarts the extension's process (no hot reload).
 - Env vars: `PERSONA_EXTENSION_ID`, `PERSONA_EXTENSION_DIR` (package directory), `PERSONA_EXTENSION_DATA` (`~/.persona/extensions/data/<id>/`, the extension's own cache and data, deleted on uninstall),
-  `PERSONA_EXTENSION_SOCKET` (when it has `http`); extensions that asked for `hub` scopes also get `PERSONA_HUB_URL` and `PERSONA_HUB_TOKEN` (only those scopes, a new one each start, see "Permissions", "The hub's API: scopes"), and ones that accepted `hub_api` (the old form) get the full token. The old `JARVIS_*` names are given too.
+  `PERSONA_EXTENSION_SOCKET` (when it has `http`); extensions that asked for `hub` scopes also get `PERSONA_HUB_URL` and `PERSONA_HUB_TOKEN` (only those scopes, a new one each start, see "Permissions", "The hub's API: scopes"), and ones that accepted `hub_api` (the old form) get the full token. The old `PERSONA_*` names are given too.
 - **Installed extensions do not get the hub's own environment**: the hub's environment may contain its own credentials (the database connection string in a Docker deployment), so installed extensions inherit only an allowlist
   (`PATH`, `HOME`, `USER`, `LANG`, `TZ`, `TMPDIR`, a few proxy and certificate vars, `host.PassEnv`), plus the ones above. Built-in ones and ones from manager.json still inherit the hub's whole environment.
 - State a connector saves for itself while running (Telegram's session) still goes through `connector.secrets.*`, stored in `connector_secrets`, one copy per connector id: that is written by the program itself, separate from secrets the user fills in.
@@ -1030,7 +1030,7 @@ An extension contributes `api` to provide a set of app-facing endpoints `/api/v1
 - The extension sends the event `api.broadcast {type, …}`: the hub pushes it as-is to online clients (with `contribution` removed); `type` must be in `events`, otherwise it is dropped and logged. The manager reports the running extensions' `events` to the hub (the extensions' report, `events_declared: true`), which passes a manager's message of such a type only from that manager (from an older manager, whose report does not say, any type but the hub's own), never one of the hub's own types, and only about that manager's computers and sessions (`docs/managers.md`, "What the hub keeps of each manager").
 - Extensions that push in real time must stay resident: `api` requires `on_startup`.
 - **Send receipts** (#1503): writes listed in `receipts` (`method` is POST / PUT / PATCH / DELETE, `path` is a path under the prefix with `*` for one segment, `kind` is the receipt kind) get the hub's
-  same receipt as its own sends (`withReplyReceipt`): the receipt id is derived from the request body's `client_id` and `kind` (or the caller's own `X-Jarvis-Op-Id`); a retry with the same id gets the first answer
+  same receipt as its own sends (`withReplyReceipt`): the receipt id is derived from the request body's `client_id` and `kind` (or the caller's own `X-Persona-Op-Id`); a retry with the same id gets the first answer
   without reaching the extension again, a different body returns 409, and it can be looked up at `GET /api/v1/ops/{id}`. Routes migrated out of the hub use the hub's original `kind`, so the receipt id the app computes stays the same.
 
 ## Assistant
@@ -1067,7 +1067,7 @@ An extension contributes `assistant`:
     So commands the gate cannot parse (loops, scripts, `$(…)`) are denied outright if they contain a write, with a hint to send it as a separate command. A resident node's proxy is process-wide: chats that survive a hub reconnect keep using the original address, and calls allowed on the new connection still pass.
     Once the extension is disabled, both the command and the credentials are gone. Gates with no `auth` that do not meet the default condition (several secrets, no `base_env`) still put credentials into the assistant's environment, as do gates provided by older hubs (before #1317).
   - **Card**: the confirmation card's title is `title`; the extension can answer `assistant.summary {contribution, summary}` → `{summary}` to replace ids in the card with names (left as-is if they cannot be resolved).
-  - The gate file is read in strict mode and checked at install time (the script must be inside a skill); credentials cannot start with `PERSONA_` / `JARVIS_` or be `PATH`.
+  - The gate file is read in strict mode and checked at install time (the script must be inside a skill); credentials cannot start with `PERSONA_` / `PERSONA_` or be `PATH`.
 
 ## MCP servers
 
@@ -1076,9 +1076,9 @@ one more MCP server when it starts the **Claude assistant**, with tool names `mc
 
 | Field | Meaning |
 | --- | --- |
-| `id` | The server name the assistant sees (`a-z0-9_-`, cannot be `jarvis` or `persona`); when several extensions give the same id, the one whose extension id sorts first wins |
+| `id` | The server name the assistant sees (`a-z0-9_-`, cannot be `persona` or `persona`); when several extensions give the same id, the one whose extension id sorts first wins |
 | `command` | The command name (lowercase letters, digits, `-`; cannot be a command the assistant already has, nor a shell, interpreter or similar command that runs anything given as arguments): looked up in `PATH` first, then `~/bin/<command>` |
-| `env?` | An env var name starting with `PERSONA_`: if set, no lookup happens and the value is the command's path; set to `""`, `0`, `off` or `false` to not attach on this computer. When unset, the matching `JARVIS_` one is also honored |
+| `env?` | An env var name starting with `PERSONA_`: if set, no lookup happens and the value is the command's path; set to `""`, `0`, `off` or `false` to not attach on this computer. When unset, the matching `PERSONA_` one is also honored |
 | `args?` | Arguments after the command, e.g. `["mcp-server", "--control"]` |
 | `requires?` | Words `<command> --help` must print; if any is missing it is not attached (cached by path, mtime and size), so old versions of the command are not attached by mistake |
 | `allow?` | Tools that can run without asking (put into `--allowedTools`) |
@@ -1491,7 +1491,7 @@ a page that returns loading first and sends `ui.invalidate` after 3 seconds; ove
 - Each client's screenshot tests draw directly from these snapshots without connecting to a hub: web `web/showcase.html` (only with `npx vite` in development, not in the build; `?theme=dark`, `?pages=a,b`, `?only=<page>`, rendered with the real `ExtensionUI`,
   a fake hub returning that page's snapshot by `state`), unit test `web/src/showcase/showcase.test.tsx`; Android `ExtensionShowcaseShotsTest` (Robolectric, 35 pages × three styles × light/dark, 210 screenshots,
   output to `feature/settings/build/extension-showcase-shots/`). iOS `ExtensionShowcaseTests` reads the same snapshots unchanged through mock HTTP and draws real app pages;
-  five styles × light/dark, 350 page-top screenshots, plus 50 screenshots at the bottom of long pages. Set the output directory with `TEST_RUNNER_JARVIS_SHOTS` for each run;
+  five styles × light/dark, 350 page-top screenshots, plus 50 screenshots at the bottom of long pages. Set the output directory with `TEST_RUNNER_PERSONA_SHOTS` for each run;
   see the contact sheets below. Mac is compiled only, with no windows opened or automatic screenshots, respecting the user's focus restriction.
 - When a component changes: update the showcase extension first (add a page or state), regenerate and copy snapshots, then inspect each client's screenshots again.
 
@@ -1806,7 +1806,7 @@ When an extension sends a notification (hub `POST /api/v1/notify`, scope `notify
 
 ### Mock hub
 
-In the `MOCK_PLUGINS=1` mock hub, `example-gateway` has a `today` widget (five sizes, opens `usage`) and two shortcuts (`usage_today` returns a sentence and a card; `set_budget` requires an amount).
+In the `MOCK_EXTENSIONS=1` mock hub, `example-gateway` has a `today` widget (five sizes, opens `usage`) and two shortcuts (`usage_today` returns a sentence and a card; `set_budget` requires an amount).
 `PUT /api/v1/devices/{id}/widgets` stores in memory; notifications with buttons use the `.apns` example above. Only on the new `/api/v1/extensions/…` paths.
 
 
@@ -1949,7 +1949,7 @@ Extensions add avatars to Persona: name, avatar image (multisize PNG, optional S
 
 | Field | Rules |
 | --- | --- |
-| `id` | Avatar-package id rules (clients use it as a cache-directory name); globally unique among `looks`; cannot be a built-in avatar (`persona`, `jarvis`, `jarvis-circuit`) or an avatar package compiled into personad (`nwverse`). An avatar package with the same id in `~/.persona/personas/` takes precedence |
+| `id` | Avatar-package id rules (clients use it as a cache-directory name); globally unique among `looks`; cannot be a built-in avatar (`persona`, `persona`, `persona-circuit`) or an avatar package compiled into personad (`nwverse`). An avatar package with the same id in `~/.persona/personas/` takes precedence |
 | `name` / `names` | Source language 1–20 characters; `names` only allows `zh-Hans` / `en` / `ja`, each 1–40. Clients resolve `names[UI language]` → `names.en` → `name` |
 | `subtitle` / `subtitles` | Second line on the Settings card, ≤40 characters |
 | `avatar.sizes` | Side length (16–1024) → square PNG in the package, actual side length matching the key; at least one (bitmaps for watch, Lock Screen and places without SVG rendering) |
@@ -1973,7 +1973,7 @@ Extensions add avatars to Persona: name, avatar image (multisize PNG, optional S
 **The selected avatar is stored on the hub** (setting `look`); one hub belongs to one person, and clients follow it: `PUT /api/v1/looks/current {"id"}`, broadcasting `look` on change.
 
 - **Disable** the extension or contribution: selection remains, `current.effective` returns `persona`; re-enabling restores it. **Uninstall**: if its avatar is selected, reset selection to `persona` and broadcast `look`.
-- **Migration from old local client settings** (iOS `UserDefaults persona.id`, Android `persona` in `jarvis-appearance`, web `localStorage jarvis.persona`):
+- **Migration from old local client settings** (iOS `UserDefaults persona.id`, Android `persona` in `persona-appearance`, web `localStorage persona.persona`):
   connect to a hub with `/api/v1/looks`; if hub `current.id` is `null` and a local choice was explicitly made → `PUT {"id": local selection, "if_unset": true}`, honoring the response (the first connected device's choice becomes everyone's); if the hub already has a choice → use it;
   no local choice → do not upload; old hub (404) → use the local choice as before. Local selection remains a cache, displayed on startup without waiting for the hub.
 
@@ -2004,7 +2004,7 @@ once on connection, again on rule changes, followed by another session-list fetc
 ```
 
 - **Matching**: for sessions in `agents` (both types if omitted), remove a session if any marker matches:
-  - `originators`: exact match against `originator` in the Codex rollout's first-line `session_meta` (Persona launches use `jarvis`, CLI `codex-tui`, desktop app `Codex Desktop`);
+  - `originators`: exact match against `originator` in the Codex rollout's first-line `session_meta` (Persona launches use `persona`, CLI `codex-tui`, desktop app `Codex Desktop`);
   - `added_dirs`: additional working directories (`additionalWorkingDirectories`) in Claude Code transcript environment attachments equal or descend from this directory; absolute or `~/…` paths, at least two levels;
   - `first_message_prefixes`: first user message (leading whitespace stripped) begins with this text, 8–200 characters. Only a fallback for sessions without stable markers: overly broad prefixes can hide your own sessions.
 - **Switches**: a rule with `when` is active only when that boolean config field is true (must exist in `configuration` and be `boolean`, otherwise installation fails).
@@ -2042,7 +2042,7 @@ Views, components, actions, responses, placements and context all use schema-gen
 - Contributed connectors (#3178, iOS / Mac #3228): when contributing a connector with Inbox support (`contributes.connectors`, connector has `inbox`), web, Android and iOS / iPad / Mac details show a section per connector after **Pages**:
   its **Show in Inbox** switch (the hub connector switch `PUT /api/v1/connectors/{id}/settings {"inbox"}`, shared with **Settings › Connectors › …**, not stored separately) and a **Connector Settings** row (opens the connector page, refetches on return).
   Hidden without error when the extension is disabled, connector lists cannot be read, the hub lacks `connectors`, or the connector has no `inbox` field (old hub). Settings for which items enter the Inbox (e.g. GitHub repositories/types) remain the extension's own `configuration`, rendered as a form.
-  Mock hub: `MOCK_PLUGINS=1 MOCK_GITHUB_EXTENSION=1` (`=old` is an old hub without the switch); UI test `ExtensionConnectorInboxTests`.
+  Mock hub: `MOCK_EXTENSIONS=1 MOCK_GITHUB_EXTENSION=1` (`=old` is an old hub without the switch); UI test `ExtensionConnectorInboxTests`.
 - Pages (#1328, "Declarative UI"): details lists each extension `plugin_page` as a row (**Pages** section), opening a full page; launcher details add one section per
   `launcher_section` after quota and availability. `ExtensionViewRenderer` (`ExtensionViewRenderer.swift`) draws eight item types with the design system: dividers split a section into two groups (title on the first, footer on the last),
   `tone` maps to `Theme.positive` / `caution` / `danger` (neutral: secondary color, accent for progress), five `field` kinds (`secret` uses SecureField,
@@ -2077,7 +2077,7 @@ Views, components, actions, responses, placements and context all use schema-gen
   `persona-card` converts to components under `sdk/go/wire/personacard.go` rules (`ExtensionPersonaCard.view()`, number formatting like `Number`; `PersonaCardTests` compares every field of every case in
   `schema/extension/examples/persona-card/`), `persona-view` is a View or one component; both draw in a card with `ExtensionViewStack`,
   with no model, so rows, buttons, fields, search, filters and more are inactive; links still work. Undrawable content remains a code block.
-- Screenshots: `example-gateway` in the `MOCK_PLUGINS=1` mock hub has a "Notes (components v3)" page (`-openExtension example-gateway -openExtensionPage notes`),
+- Screenshots: `example-gateway` in the `MOCK_EXTENSIONS=1` mock hub has a "Notes (components v3)" page (`-openExtension example-gateway -openExtensionPage notes`),
   `GET /mock/invalidate` syncs one note and sends `ui.invalidate`; UI test `ExtensionV3Tests` (list, filters, more, search to empty state, push note page, edit/save/pop, invalidate),
   unit tests `ExtensionUIv3Tests`, `PersonaCardTests`. `MOCK_EXTENSION_CARDS=1` with `ExtensionAssistantCardTests` checks in a real assistant chat that
   `persona-view` and old `persona-card` share the renderer, actions are not tappable, links remain, and saves light/dark screenshots. Four-client showcase comparison depends on #1852, not replaceable by notes screenshots.
@@ -2108,12 +2108,12 @@ Views, components, actions, responses, placements and context all use schema-gen
   Marketplace management starts with a master **Auto-Update Extensions** switch (`GET/PUT /api/v1/extensions/-/upgrades`), hidden on old hubs without the endpoint and when there are no marketplaces.
   Extensions awaiting consent append "· New version needs approval" to their status. Mock hub `MOCK_PLUGIN_UPGRADE` (`needs_permission` (default) / `waiting_idle` / `skipped` / `upgraded`)
   determines `example-gateway`'s state; UI tests `ExtensionMarketTests.testAutoUpgrade`, `testAutoUpgradeForAll`, unit test `ExtensionUpgradeTests`.
-- Screenshots: the `MOCK_PLUGINS=1` mock hub (like a new hub: reports `extensions` and `extension_*`, returns new keys on `/api/v1/extensions/…`; add `MOCK_PLUGINS_LEGACY=1` for a pre-rename hub) has five sample extensions with different states, plus `example-gateway` pages and a launcher section (and one always returning unsupported),
+- Screenshots: the `MOCK_EXTENSIONS=1` mock hub (like a new hub: reports `extensions` and `extension_*`, returns new keys on `/api/v1/extensions/…`; add `MOCK_EXTENSIONS_LEGACY=1` for a pre-rename hub) has five sample extensions with different states, plus `example-gateway` pages and a launcher section (and one always returning unsupported),
   two marketplaces and their catalogs; `-tab settings -openExtensions YES` (`-openExtension <id>` opens details directly, add `-openExtensionPage <ui>` for its page; old `-openPlugin…` forms still work),
   `-openExtensionMarket YES` (catalog), `-openExtensionMarkets YES` (marketplace management), `-openMarketExtension <marketplace id>/<extension id>`, `-openLauncherPage <launcher>`.
   UI slots: `-tab settings` shows cards and entries; `-openExtension example-gateway -openExtensionPage usage` opens usage; `-openMachines YES -openMachineDetail macbook`
   shows the machine section. Mac uses `scripts/app/mac_shot.sh` (`DEMO=0` plus `-pairURL`); `-openMacExtensionPage example-gateway/usage` opens that sidebar page.
-  UI tests `ExtensionSettingsTests`, `ExtensionMarketTests` (marketplace installation, upgrade preview, marketplace management, saving extension pages, launcher section; `TEST_RUNNER_JARVIS_PLUGINS_HUB`),
+  UI tests `ExtensionSettingsTests`, `ExtensionMarketTests` (marketplace installation, upgrade preview, marketplace management, saving extension pages, launcher section; `TEST_RUNNER_PERSONA_EXTENSIONS_HUB`),
   `ExtensionSlotsTests` (cards, entries/badges, usage-page segmented controls and chart, opening cards, machine sections),
   unit tests `ExtensionsModelTests`, `ExtensionMarketModelTests`, `ExtensionViewModelTests`, `ExtensionSlotsModelTests`.
 - Web (#1207): **Settings › Extensions**, same lists and details (`web/src/views/settings/Extensions.tsx`, `web/src/lib/extensions.ts`, `/settings?tab=extensions&extension=<id>`; old `?tab=plugins&plugin=<id>` links still open), see `docs/web.md` ("Settings").
@@ -2333,7 +2333,7 @@ Built-in `personad voice` ("Built-in voice extension" below) is unaffected: it i
 
 ## Telegram: from built-in extension to extension (#1704)
 
-The Telegram connector was the built-in extension `telegram` (`jarvisd-telegram`, beside personad). Since 2026-11-05 it is extension `telegram`, outside this repo: before 0.1.2 in a private extension repository, from 0.1.3 in `extensions/telegram/` of `nwverse/persona-extensions` (#2057), installed/upgraded from that marketplace. It connects directly over TCP to Telegram data centers and cannot run in the sandbox (official-marketplace installs default to no sandbox; see "Sandbox").
+The Telegram connector was the built-in extension `telegram` (`personad-telegram`, beside personad). Since 2026-11-05 it is extension `telegram`, outside this repo: before 0.1.2 in a private extension repository, from 0.1.3 in `extensions/telegram/` of `nwverse/persona-extensions` (#2057), installed/upgraded from that marketplace. It connects directly over TCP to Telegram data centers and cannot run in the sandbox (official-marketplace installs default to no sandbox; see "Sandbox").
 Connector id remains `telegram`, preserving login in `connector_secrets`, Inbox, knowledge base, connector switches/options under the same id; installation requires no new sign-in.
 During handoff, the registry lets the built-in yield to an installed extension with the same id (`Registry.Yields`): stop the built-in process before starting the extension, so both never connect to the same Telegram session simultaneously.
 Once the built-in is removed, hubs without the extension have no Telegram connector (the app shows only hub-listed connectors); the login row remains in the database for use when installed.
@@ -2354,7 +2354,7 @@ Inbox, knowledge base `github-*` sessions, switches, options and mutes; uninstal
 
 ## Built-in extension: WeChat (`wechat`)
 
-When `jarvisd-wechat` is beside personad, it registers as built-in extension `wechat` (#1352, `docs/wechat.md`), contributing connector `wechat` (only `status` and QR-code `login`,
+When `personad-wechat` is beside personad, it registers as built-in extension `wechat` (#1352, `docs/wechat.md`), contributing connector `wechat` (only `status` and QR-code `login`,
 declared in `wechat/spec`) and channel `wechat` (`channel` extension point, #1466, [channels.md](channels.md)), with only `network: *.weixin.qq.com` permission.
 It must be built alongside the hub and runs with the connector switch. The first version combined `hub_api` + `events` (extension polling sessions and tracking the turn); since #1466 these use the hub's channel pipeline,
 so the extension no longer gets the hub token or subscribes to events. A connector program acts as a channel: implement `channel.Transport` (`Send`, optional `Typing` / `Edit`), hand incoming messages to `serve.Init.Channel` (`Receive`);
@@ -2393,12 +2393,12 @@ except the maximum backoff rises from 60 seconds to 5 minutes.
 - `disabled: true` disables while preserving config.
 - `config`: extension settings (any JSON), passed unchanged as `PERSONA_EXTENSION_CONFIG`. Not included in registry config/forms or returned by endpoints (may contain credentials).
   Exception for entries taken over by the built-in voice extension: their upstream `config` goes in `PERSONA_VOICE_HUB_CONFIG`; `PERSONA_EXTENSION_CONFIG` contains Settings form values (see "Built-in voice extension").
-- Built-ins may still use compatible `"command": "jarvisd"` (no path) to refer to the hub binary itself, without changes after moves/upgrades. `personad` works too.
+- Built-ins may still use compatible `"command": "personad"` (no path) to refer to the hub binary itself, without changes after moves/upgrades. `personad` works too.
 - `socket` without `command`: extension runs elsewhere; hub only connects (health checks, forwarding), never starts or restarts it.
   Useful when the hub machine cannot reach extension dependencies: run on a machine that can, forward the socket with `ssh -R <hub socket>:<local socket> <hub machine>`;
-  the extension then configures `JARVIS_HUB_URL` (hub `public_url`) and token itself.
+  the extension then configures `PERSONA_HUB_URL` (hub `public_url`) and token itself.
 - Supplied env vars: `PERSONA_EXTENSION_SOCKET` (`~/.persona/extensions/<id>.sock`, old socket removed by hub before start, extension serves HTTP there), `PERSONA_EXTENSION_ID`,
-  `PERSONA_EXTENSION_CONFIG` when configured, `JARVIS_HUB_URL` and `JARVIS_HUB_TOKEN` (local hub API address/token: configured by the hub owner, considered part of the hub like nodes,
+  `PERSONA_EXTENSION_CONFIG` when configured, `PERSONA_HUB_URL` and `PERSONA_HUB_TOKEN` (local hub API address/token: configured by the hub owner, considered part of the hub like nodes,
   allowed to read knowledge base, Agents, etc.); corresponding `PERSONA_*` names also supplied.
 - Request extension `GET /health` every second (every 10 seconds once started); 200 means `running`. Changes to `extensions` require hub restart.
 
@@ -2474,7 +2474,7 @@ It is built-in: appears in **Settings › Extensions** without a manager.json en
       "id": "voice",
       "name": "Voice",
       "kind": "voice",
-      "command": "jarvisd",
+      "command": "personad",
       "args": ["voice"],
       "config": {
         "providers": [
@@ -2499,7 +2499,7 @@ connecting to the upstream of the selected model. `config.default` specifies the
 | `key` / `key_file` / `key_command` | Credentials sent as `Authorization: Bearer`: inline value, file's first line, or first line printed by command (`sh -c`). Command runs for every conversation, immediately using credentials renewed elsewhere. Credentials only on the hub machine (manager.json 0600 or separate file) |
 | `ssh` | When the hub cannot reach the service, connect through this machine (`ssh -W host:port <machine>`, TLS still end-to-end); hub must have passwordless SSH access |
 | `models`, `default_model` | Listed models; if omitted, live dialect reads service `GET <url>/models`, codex dialect uses `gpt-live-1-codex` |
-| `tools` | Live dialect: declare Persona function tools in `session.start` (knowledge-base search, list Agents, send to Agent, hand to main chat). Public GPT-Live API rejects `session.tools`; enable only on self-hosted services supporting it. Some services delegate only when tools are declared (`docs/lessons/voice.md`), making it required. Full devices (`X-Persona-Role` `full` or absent) declare all four; calls from other extensions declare only `ask_jarvis` (hand to main chat, their only capability); protocol 2 calls bound to a chat declare knowledge-base search, list Agents and `delegate_task` (hand to bound chat, `docs/voice.md` 4.4) |
+| `tools` | Live dialect: declare Persona function tools in `session.start` (knowledge-base search, list Agents, send to Agent, hand to main chat). Public GPT-Live API rejects `session.tools`; enable only on self-hosted services supporting it. Some services delegate only when tools are declared (`docs/lessons/voice.md`), making it required. Full devices (`X-Persona-Role` `full` or absent) declare all four; calls from other extensions declare only `ask_persona` (hand to main chat, their only capability); protocol 2 calls bound to a chat declare knowledge-base search, list Agents and `delegate_task` (hand to bound chat, `docs/voice.md` 4.4) |
 | `input_rate` | Microphone sample rate 16000 / 24000; default live 16000, codex 24000 |
 
 ### Configure upstreams in the app (#3500)
@@ -2535,12 +2535,12 @@ can set addresses, keys and switches; admin has a switch too:
 - **Model fallback**: if the selected model's upstream disappears (address cleared, manager.json changed), no error/disconnect: use default model and voice, then send nonfatal `error{code: "model_unavailable"}` after connecting.
 - **`GET /info`**: `{"protocol": 2, "features": ["target", "runs", "asks", "resume", "suspend"], "setup"?: "…", "warnings"?: ["…"]}`, without keys or upstream list. `protocol` is the highest voice-frame version this extension speaks (2 since #3502; clients not sending `protocol: 2` in `start` still use protocol 1 from this section); `features` lists only implemented capabilities (`docs/voice.md` ("Version negotiation")).
 - **Extension env vars**: `PERSONA_EXTENSION_CONFIG` (form values with defaults), `PERSONA_EXTENSION_SECRETS` (`{"key": "…"}`, decrypted only in process environment),
-  `PERSONA_VOICE_HUB_CONFIG` (original `config` of the taken-over entry), entry `env`, and `JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN` (manifest `hub_api`, as before);
+  `PERSONA_VOICE_HUB_CONFIG` (original `config` of the taken-over entry), entry `env`, and `PERSONA_HUB_URL` / `PERSONA_HUB_TOKEN` (manifest `hub_api`, as before);
   legacy `PERSONA_PLUGIN_*` names are also supplied and accepted.
 
 ### Taking over manager.json entries
 
-- The **first** manager.json entry with empty or `voice` `kind`, `command` of `personad` / `jarvisd` (no path), and `args[0]` of `voice` no longer runs as a manager.json extension,
+- The **first** manager.json entry with empty or `voice` `kind`, `command` of `personad` / `personad` (no path), and `args[0]` of `voice` no longer runs as a manager.json extension,
   instead registering as a built-in with the same id: **id unchanged** (model-config purpose `plugin.<id>`, selected models and app voice choices remain), socket still `~/.persona/extensions/<id>.sock`,
   with `dir`, `env`, `config` supplied as before (env vars above). Entry `socket` unused; later matching entries still run as manager.json extensions.
 - **Switch**: `disabled: true` keeps it off (even if its database row says on; enabling in-app returns 409 with a reason, settings remain editable);
@@ -2565,7 +2565,7 @@ can set addresses, keys and switches; admin has a switch too:
 | Answer | Full turn response as `session.commentary.append{delegation_id}` (the delegation's only result, spoken by the model; 4000-character limit), with nothing returned at delegation time | `delegation.context.append{channel: speakable}`, split into 500-byte chunks |
 | Typed sentence | `session.commentary.append{delegation_id: null}` | `session.context.append{channel: speakable}` |
 
-When the model delegates to the client (delegation, or `ask_jarvis` function call with `tools` enabled), the extension hands it to **Persona's main chat** (creating and marking one as main if absent),
+When the model delegates to the client (delegation, or `ask_persona` function call with `tools` enabled), the extension hands it to **Persona's main chat** (creating and marking one as main if absent),
 with message `client_msg_id` `voice-<16 random hex digits>`, task on the first line and a "Context · Voice chat" block after it. Return nothing at handoff (the model already said it handed it to main chat).
 The extension tracks by turn (`docs/voice.md` ("Turn tracking"), same `channel.Run` rules as the channel pipeline): find the message by id, wait for **that turn** to end (queue behind another busy main-chat turn),
 read its complete response, convert to speakable text (code, tables, links and hashes become placeholders such as "12 lines of code, on screen"; paths retain only filenames),
@@ -2583,7 +2583,7 @@ If the upstream rejects a result (expired delegation, too long), resend through 
 **Interruption gate** (#3502, both protocols, `docs/voice.md` 4.5 rule 3): extension-initiated speech (results for gone delegations, cards awaiting you) waits until you stop for 1.2 seconds and model audio ends for 1.5 seconds;
 delegation results themselves wait for you to stop and model audio to finish. "You are speaking" uses app audio energy; sustained noise (TV, car) is subtracted as background after a few seconds. Your voice delays results at most 4 seconds, other speech at most 15 seconds.
 
-The extension tracks through hub APIs (`JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN`): session lists, pagination `…/items?after_seq=`, `…/items/{id}/full`, `GET /api/v1/machines`,
+The extension tracks through hub APIs (`PERSONA_HUB_URL` / `PERSONA_HUB_TOKEN`): session lists, pagination `…/items?after_seq=`, `…/items/{id}/full`, `GET /api/v1/machines`,
 plus one shared `GET /api/v1/ws` (`subscribe` main chat, receive `turn_duration` in `items`, `sessions`, `delta`, `hook_event`; nonblocking read loop); without it, poll every 5 seconds.
 `X-Persona-Lang` selects the language of these model/main-chat messages (Chinese, English, Japanese).
 
@@ -2592,7 +2592,7 @@ at most 3 consecutive reconnects per conversation (reset after a session lasts 6
 
 ### Deployment
 
-Deploying personad normally with `scripts/deploy.sh` includes this extension; add the entry above to the manager's manager.json, then `systemctl --user restart jarvisd` (`extensions` changes require a hub restart, which restarts the built-in manager).
+Deploying personad normally with `scripts/deploy.sh` includes this extension; add the entry above to the manager's manager.json, then `systemctl --user restart personad` (`extensions` changes require a hub restart, which restarts the built-in manager).
 Try locally: `PERSONA_EXTENSION_SOCKET=/tmp/v.sock PERSONA_EXTENSION_CONFIG='{"providers":[…]}' personad voice` (old format),
 or `PERSONA_EXTENSION_CONFIG='{"url":"wss://<real-time service>/v1/live"}' PERSONA_EXTENSION_SECRETS='{"key":"<key>"}'` (form format), then send `GET /info`, `GET /models` and open `/ws` on that socket.
 App-configured upstreams need no hub restart: changing settings/keys restarts the extension (disconnecting active calls).

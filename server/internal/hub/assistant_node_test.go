@@ -44,7 +44,7 @@ func newAssistantNode(t *testing.T, h *Hub) *assistantNode {
 		defer n.mu.Unlock()
 		switch method {
 		case "assistant.prepare":
-			return map[string]any{"cwd": "/home/me/.jarvis/assistant"}, nil
+			return map[string]any{"cwd": "/home/me/.persona/assistant"}, nil
 		case "node.configure":
 			n.kept = nil
 			for _, k := range p["keep_sessions"].([]any) {

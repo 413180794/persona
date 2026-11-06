@@ -5,7 +5,7 @@
       "name": "plan_approve_all",
       "description": "对话页全部放行使用 bypassPermissions。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -36,7 +36,7 @@
       "name": "plan_approve_edits",
       "description": "对话页只接受编辑使用 acceptEdits。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -67,7 +67,7 @@
       "name": "plan_reject_preserves_whitespace",
       "description": "对话页打回保留意见的首尾空白。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -98,7 +98,7 @@
       "name": "plan_reject_empty",
       "description": "对话页允许不填意见直接打回。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -129,7 +129,7 @@
       "name": "permission_allow",
       "description": "允许一次只发送 allow。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PermissionForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -158,7 +158,7 @@
       "name": "permission_deny",
       "description": "当前授权面板拒绝不附带原因。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PermissionForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -187,7 +187,7 @@
       "name": "permission_always",
       "description": "本会话总是允许附带 always。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PermissionForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -217,7 +217,7 @@
       "name": "permission_always_without_session",
       "description": "没有会话标识时不提供总是允许。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm.body"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PermissionForm.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -242,7 +242,7 @@
       "name": "plan_rejecting_hides_approve",
       "description": "打回编辑状态下批准按钮不显示。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm.body"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -270,7 +270,7 @@
       "name": "plan_cancel_retains_feedback_allows_approve",
       "description": "取消打回后旧意见仍保留且现有批准按钮可用。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm.body（取消只改 rejecting）"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm.body（取消只改 rejecting）"
       ],
       "input": {
         "profile": "ios_current",
@@ -301,7 +301,7 @@
       "name": "notification_ix_allow",
       "description": "通知动作映射为现有 Resolution。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+        "ios/Persona/App/NotificationActions.swift：resolution(action:text:)"
       ],
       "input": {
         "profile": "ios_current",
@@ -329,7 +329,7 @@
       "name": "notification_ix_deny",
       "description": "通知动作映射为现有 Resolution。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+        "ios/Persona/App/NotificationActions.swift：resolution(action:text:)"
       ],
       "input": {
         "profile": "ios_current",
@@ -357,7 +357,7 @@
       "name": "notification_ix_approve_plan",
       "description": "通知动作映射为现有 Resolution。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+        "ios/Persona/App/NotificationActions.swift：resolution(action:text:)"
       ],
       "input": {
         "profile": "ios_current",
@@ -386,7 +386,7 @@
       "name": "notification_ix_reject_plan",
       "description": "通知动作映射为现有 Resolution。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+        "ios/Persona/App/NotificationActions.swift：resolution(action:text:)"
       ],
       "input": {
         "profile": "ios_current",
@@ -415,7 +415,7 @@
       "name": "notification_reject_without_text",
       "description": "通知打回缺少文字时发送空意见。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)"
+        "ios/Persona/App/NotificationActions.swift：resolution(action:text:)"
       ],
       "input": {
         "profile": "ios_current",
@@ -443,7 +443,7 @@
       "name": "dismiss_question",
       "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
         "ios/Shared/Models.swift：Resolution.dismissed"
       ],
       "input": {
@@ -471,7 +471,7 @@
       "name": "dismiss_plan",
       "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
         "ios/Shared/Models.swift：Resolution.dismissed"
       ],
       "input": {
@@ -499,7 +499,7 @@
       "name": "dismiss_permission",
       "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
         "ios/Shared/Models.swift：Resolution.dismissed"
       ],
       "input": {
@@ -527,7 +527,7 @@
       "name": "dismiss_screen",
       "description": "交给电脑处理发送 dismiss 而不表示拒绝。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form",
         "ios/Shared/Models.swift：Resolution.dismissed"
       ],
       "input": {

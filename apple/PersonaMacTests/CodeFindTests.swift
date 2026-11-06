@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Find in the code viewer (⌘F over an open file): matching, the ranges in each line, and the order ⏎ / ⇧⏎ go in.
 struct CodeFindTests {

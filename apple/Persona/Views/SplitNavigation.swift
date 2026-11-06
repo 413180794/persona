@@ -99,7 +99,7 @@ enum SplitColumns {
     /// The empty sidebar column, and no system button to bring it out.
     static var noSidebar: some View { Color.clear.toolbar(removing: .sidebarToggle) }
 
-    static let log = Logger(subsystem: "jarvis", category: "split")
+    static let log = Logger(subsystem: "persona", category: "split")
     #else
     static let shown = NavigationSplitViewVisibility.all
     #endif

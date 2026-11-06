@@ -64,8 +64,8 @@ def open_chat(browser, base, token, main_id, theme, viewport, touch):
     page.goto(base + "/overview?token=" + token)
     # the token is traded for this browser's own credential first; leaving before that lands on the login page
     expect(page.locator("aside")).to_be_attached()
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
-    page.goto(base + "/j/" + main_id)
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
+    page.goto(base + "/persona/" + main_id)
     box = page.locator("main textarea").last
     expect(box).to_be_visible(timeout=15000)
     return ctx, page, box

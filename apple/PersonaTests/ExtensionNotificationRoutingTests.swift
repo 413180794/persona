@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UserNotifications
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct ExtensionNotificationRoutingTests {
     private func event(_ action: String = "reply", hub: String? = "hub-b", text: String? = "收到") throws -> ExtensionNotificationEvent {

@@ -226,7 +226,7 @@ nonisolated enum InboxEventText {
         switch e.kind {
         case "received": Theme.Icon.received
         case "triaged": Theme.Icon.triaged
-        case "handling": Theme.Icon.jarvis
+        case "handling": Theme.Icon.persona
         case "sent": Theme.Icon.sendMail
         case "agent": Theme.Icon.agents
         case "confirmed": Theme.Icon.success

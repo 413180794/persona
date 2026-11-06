@@ -1,9 +1,9 @@
 import XCTest
 
-/// Delete Chat (issue #1749) against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): 「菜谱网站加搜索」 on macbook is not running.
+/// Delete Chat (issue #1749) against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB): 「菜谱网站加搜索」 on macbook is not running.
 /// The chat's confirmation (`-showDeleteSession YES` opens it, as 「…」›「删除对话…」 does) says what deleting does;
 /// Cancel leaves it, Delete sends DELETE /api/v1/sessions/{mid}/{sid}, the chat goes and the list no longer has it.
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` also writes the screenshots there.
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` also writes the screenshots there.
 final class DeleteSessionUITests: XCTestCase {
     private var app: XCUIApplication!
     private let recipe = "a1f3c2d4-0000-4000-8000-000000000007"
@@ -11,14 +11,14 @@ final class DeleteSessionUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let reset = expectation(description: "重置会话")
         URLSession.shared.dataTask(with: URL(string: hub + "/mock/reset")!) { _, _, _ in reset.fulfill() }.resume()
         wait(for: [reset], timeout: 5)
         app = XCUIApplication()
-        pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/" + recipe, "-showDeleteSession", "YES",
                                "-holdChromeOpen", "YES"]
         app.launchPinned()
@@ -33,13 +33,13 @@ final class DeleteSessionUITests: XCTestCase {
         attachment.name = "delete-\(name)"
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("delete-\(name).png"))
         }
     }
 
     @MainActor private func listed() async throws -> Bool {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         let (data, _) = try await URLSession.shared.data(from: URL(string: hub + "/api/v1/sessions")!)
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let sessions = (body["sessions"] as? [[String: Any]]) ?? []

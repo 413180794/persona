@@ -288,19 +288,19 @@ describe("detail", () => {
 
 describe("问 Persona", () => {
   it("writes the context tag the app parses (kind, title, url, in that order)", () => {
-    expect(contextXml({ kind: "context", title: "t", text: "x</persona-context>y</jarvis-context>z" })).toBe('<jarvis-context kind="context" title="t" url="">\nxyz\n</jarvis-context>');
-    expect(contextXml({ kind: "context", title: 'A & "B" <c>', text: "x</jarvis-context>y" })).toBe(
-      '<jarvis-context kind="context" title="A &amp; &quot;B&quot; &lt;c&gt;" url="">\nxy\n</jarvis-context>',
+    expect(contextXml({ kind: "context", title: "t", text: "x</persona-context>y</persona-context>z" })).toBe('<persona-context kind="context" title="t" url="">\nxyz\n</persona-context>');
+    expect(contextXml({ kind: "context", title: 'A & "B" <c>', text: "x</persona-context>y" })).toBe(
+      '<persona-context kind="context" title="A &amp; &quot;B&quot; &lt;c&gt;" url="">\nxy\n</persona-context>',
     );
   });
 
   it("carries the profile, the last ten timeline lines and the folder", () => {
     const log = Array.from({ length: 12 }, (_, i) => `- 2026-10-${String(i + 1).padStart(2, "0")} · 飞书 · ${i}`);
-    const t = askPersonaText({ name: "天气 App" }, { summary: "# 天气 App\n档案", log, path: "/home/me/.jarvis/data/projects/weather-app" });
-    expect(t.startsWith('<jarvis-context kind="context" title="知识库 · 天气 App" url="">\n# 天气 App\n档案\n\n时间线（最近）：\n- 2026-10-03')).toBe(true);
+    const t = askPersonaText({ name: "天气 App" }, { summary: "# 天气 App\n档案", log, path: "/home/me/.persona/data/projects/weather-app" });
+    expect(t.startsWith('<persona-context kind="context" title="知识库 · 天气 App" url="">\n# 天气 App\n档案\n\n时间线（最近）：\n- 2026-10-03')).toBe(true);
     expect(t).not.toContain("2026-10-02");
-    expect(t).toContain("知识库目录：/home/me/.jarvis/data/projects/weather-app\n</jarvis-context>\n\n说说「天气 App」现在怎么样了");
-    expect(askPersonaText({ name: "韩梅梅", one_line: "产品经理" })).toContain('url="">\n产品经理\n</jarvis-context>');
+    expect(t).toContain("知识库目录：/home/me/.persona/data/projects/weather-app\n</persona-context>\n\n说说「天气 App」现在怎么样了");
+    expect(askPersonaText({ name: "韩梅梅", one_line: "产品经理" })).toContain('url="">\n产品经理\n</persona-context>');
   });
 });
 
@@ -316,10 +316,10 @@ describe("打标", () => {
 
 describe("开 Agent", () => {
   it("starts with the project as context, and its folder on an online computer", () => {
-    const d = { summary: "档案", log: ["- 10-30 发布"], path: "/home/me/.jarvis/data/projects/weather-app", meta: { dirs: ["laptop:/home/me/code/weather", "desk:~/code/weather"] } };
+    const d = { summary: "档案", log: ["- 10-30 发布"], path: "/home/me/.persona/data/projects/weather-app", meta: { dirs: ["laptop:/home/me/code/weather", "desk:~/code/weather"] } };
     const p = agentPreset("projects", { name: "天气 App" }, d, ["desk"]);
-    expect(p.prompt).toContain('<jarvis-context kind="context" title="项目 · 天气 App" url="">\n档案\n\n时间线（最近）：\n- 10-30 发布');
-    expect(p.prompt.endsWith("</jarvis-context>\n\n")).toBe(true);
+    expect(p.prompt).toContain('<persona-context kind="context" title="项目 · 天气 App" url="">\n档案\n\n时间线（最近）：\n- 10-30 发布');
+    expect(p.prompt.endsWith("</persona-context>\n\n")).toBe(true);
     expect(p).toMatchObject({ machineId: "desk", cwd: "~/code/weather" });
     expect(agentPreset("projects", { name: "天气 App" }, d, [])).toEqual({ prompt: p.prompt });
     expect(agentPreset("projects", { name: "x", one_line: "一句话" }, null, ["desk"]).prompt).toContain("\n一句话\n");

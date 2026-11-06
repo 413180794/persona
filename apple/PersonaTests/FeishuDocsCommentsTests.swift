@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Commenting in the Feishu document reader (#1290): where Send goes, what it sends (the @s the text still holds, the
 /// passage it quotes), a failed send keeping the words and retrying with the same id, resolving and reopening, and

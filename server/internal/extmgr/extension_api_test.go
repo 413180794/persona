@@ -81,7 +81,7 @@ func apiPackage(t *testing.T) string {
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
 	_ = os.MkdirAll(filepath.Join(dir, "skills", "example-feed"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "feed"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=api exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "feed"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=api exec "+self+" \"$@\"\n"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "skills", "example-feed", "SKILL.md"), []byte("---\nname: example-feed\ndescription: Read the example feed.\n---\nUse it.\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "assistant.md"), []byte("## Example feed\n\nThe example feed is read with its skill.\n"), 0o644)
 	_ = os.MkdirAll(filepath.Join(dir, "skills", "example-feed", "scripts"), 0o755)

@@ -77,7 +77,7 @@ func dialCodexDesktop(ctx context.Context, home string) (*codexDesktop, error) {
 		_ = conn.SetDeadline(dl)
 	}
 	c := &codexDesktop{conn: conn}
-	if _, err := c.request("initialize", map[string]any{"clientType": "jarvis"}, ""); err != nil {
+	if _, err := c.request("initialize", map[string]any{"clientType": "persona"}, ""); err != nil {
 		conn.Close()
 		return nil, err
 	}

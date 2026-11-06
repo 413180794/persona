@@ -1,5 +1,5 @@
 // Package pgdocker is a Postgres of one's own in Docker: one container, one volume, its port published on 127.0.0.1.
-// `personad hub setup` makes the hub's with it (jarvis-postgres, scripts/deploy/db.sh's), and `personad manager
+// `personad hub setup` makes the hub's with it (persona-postgres, scripts/deploy/db.sh's), and `personad manager
 // install` a manager's (docs/managers.md, "Database"). It only runs docker; what to tell the user is the caller's.
 package pgdocker
 
@@ -23,8 +23,8 @@ const Image = "postgres:18-alpine"
 
 // User and Database are the role and database a container is made with.
 const (
-	User     = "jarvis"
-	Database = "jarvis"
+	User     = "persona"
+	Database = "persona"
 )
 
 // Runner runs a program and returns its combined output; env is added to the environment (the password goes

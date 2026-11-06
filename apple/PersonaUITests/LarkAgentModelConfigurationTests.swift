@@ -6,7 +6,7 @@ final class LarkAgentModelConfigurationTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let value = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
+        guard let value = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
               URL(string: value)?.host == "127.0.0.1" else {
             throw XCTSkip("needs the loopback-only Lark model fixture")
         }
@@ -24,7 +24,7 @@ final class LarkAgentModelConfigurationTests: XCTestCase {
 
     @MainActor private func launch(scheme: String, entry: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let common = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", "", "-ui.scheme", scheme]
         // Complete first pairing before applying a deep link, which pairing itself resets.
         app.launchArguments = common
@@ -45,7 +45,7 @@ final class LarkAgentModelConfigurationTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let directory = ProcessInfo.processInfo.environment["JARVIS_MODEL_SHOTS"] {
+        if let directory = ProcessInfo.processInfo.environment["PERSONA_MODEL_SHOTS"] {
             try screenshot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".png"))
         }
     }

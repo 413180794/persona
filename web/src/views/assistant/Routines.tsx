@@ -115,7 +115,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     try {
       const r = await api<{ session_id: string }>(`/assistant/tasks/${enc(task.id)}/run`, { method: "POST", json: {} });
       toast(t("assistant-taskeditor.run_started", { title: taskTitle(task) }), "ok");
-      navigate({ name: "jarvis", sid: r.session_id });
+      navigate({ name: "persona", sid: r.session_id });
     } catch (e) {
       toast(e instanceof ApiError && e.status === 409 ? e.message || t("assistant-taskeditor.still_running") : errorText(e), "error");
       void load();
@@ -260,7 +260,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                       <div className="mb-1 px-1 text-[11px] font-medium text-ink-3">{d.day}</div>
                       <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
                         {d.runs.map((r) => (
-                          <RunLine key={r.id} run={r} now={now} showTitle onOpen={r.session_id ? () => navigate({ name: "jarvis", sid: r.session_id! }) : undefined} />
+                          <RunLine key={r.id} run={r} now={now} showTitle onOpen={r.session_id ? () => navigate({ name: "persona", sid: r.session_id! }) : undefined} />
                         ))}
                       </div>
                     </div>
@@ -356,8 +356,8 @@ function TaskRow({ task, now, chats, onOpen, onMenu, onToggle }: { task: Task; n
             return (
               <a
                 key={c.sid}
-                href={href({ name: "jarvis", sid: c.sid })}
-                onClick={(e) => onLinkClick(e, { name: "jarvis", sid: c.sid })}
+                href={href({ name: "persona", sid: c.sid })}
+                onClick={(e) => onLinkClick(e, { name: "persona", sid: c.sid })}
                 title={c.title || label}
                 className="inline-flex h-6 max-w-full items-center gap-1 whitespace-nowrap rounded-full bg-inset px-2 text-[11.5px] text-ink-2 shadow-hairline transition-colors hover:bg-hover hover:text-ink"
               >

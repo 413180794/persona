@@ -15,7 +15,7 @@ import (
 )
 
 // ServeTailcat brings up this machine's tailcat endpoint for a resident node, when it was set up for it
-// (`jarvisd node tailcat init`, ~/.jarvis/tailcat.json): the hub's connections on tunnel.NodePort go to the returned
+// (`personad node tailcat init`, ~/.persona/tailcat.json): the hub's connections on tunnel.NodePort go to the returned
 // channel (Attach's extra), a new binary on tunnel.UploadPort replaces this one and calls upgraded. Not set up: a nil
 // channel. Starting needs the network (the DERP map, the relay), so it retries in the background until it works:
 // relays over ssh are served meanwhile. stopped closes once ctx ended and the endpoint is down.

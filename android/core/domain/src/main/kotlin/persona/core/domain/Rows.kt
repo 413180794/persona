@@ -43,7 +43,7 @@ fun buildRows(items: List<Item>, photo: String): List<Row> {
 
 /**
  * A message as one plain text for previews (docs/protocol.md "Tags in messages"): what the hub / Claude Code wrap around
- * typed text unwrapped, photos as "[Image]". `<jarvis-context>` blocks are not what the user wrote and are left out
+ * typed text unwrapped, photos as "[Image]". `<persona-context>` blocks are not what the user wrote and are left out
  * ([parseContexts]); a message of nothing but blocks previews as empty. A conversation row draws photos as thumbnails
  * instead ([messageText]) and folds the blocks into one row.
  */
@@ -53,7 +53,7 @@ fun cleanText(s: String, photo: String): String {
     return if (shown.images.isEmpty()) shown.text else ("$photo\n" + shown.text).trim()
 }
 
-/** A tool's own name without its MCP prefix (iOS `ToolPresentation.baseName`): "mcp__jarvis__agent_read" → "agent_read". */
+/** A tool's own name without its MCP prefix (iOS `ToolPresentation.baseName`): "mcp__persona__agent_read" → "agent_read". */
 fun toolBaseName(name: String): String = if (name.startsWith("mcp__")) name.substringAfterLast("__") else name
 
 /** The word for a tool call (iOS `ToolPresentation.verb`): a name the table knows, else its bare name; "tool" without one. */
@@ -72,7 +72,7 @@ fun namedToolVerb(name: String): CoreText? {
     return if (isPersonaTool(name)) CoreText.of(Key.ToolPersonaCall, n.replace('_', ' ')) else null
 }
 
-/** The MCP server of a tool's full name ("mcp__jarvis__agent_read" → "jarvis"), null for any other tool. */
+/** The MCP server of a tool's full name ("mcp__persona__agent_read" → "persona"), null for any other tool. */
 fun toolServer(name: String): String? {
     if (!name.startsWith("mcp__")) return null
     val rest = name.removePrefix("mcp__")
@@ -80,8 +80,8 @@ fun toolServer(name: String): String? {
     return if (i <= 0) null else rest.substring(0, i)
 }
 
-/** Persona's own MCP server: `jarvis` on the wire (as a plugin `plugin_jarvis`), `persona` if it is ever renamed. */
-fun isPersonaTool(name: String): Boolean = toolServer(name)?.removePrefix("plugin_") in setOf("jarvis", "persona")
+/** Persona's MCP server, also exposed by the `plugin_persona` runtime plugin. */
+fun isPersonaTool(name: String): Boolean = toolServer(name)?.removePrefix("plugin_") == "persona"
 
 private fun genericToolVerb(n: String): Key? {
     if (n.startsWith("phone_")) return Key.ToolPhone
@@ -127,7 +127,7 @@ private fun personaToolVerb(n: String): Key? = when (n) {
     "agents_list", "list_agents" -> Key.ToolAgentsList
     "agent_start", "task_plan" -> Key.ToolAgentStart
     "interaction_answer" -> Key.ToolInteractionAnswer
-    "ask_jarvis" -> Key.ToolAskPersona
+    "ask_persona" -> Key.ToolAskPersona
     // The knowledge base (docs/knowledge.md).
     "kb_get", "kb_list", "kb_search", "search_knowledge" -> Key.ToolKbSearch
     "kb_update" -> Key.ToolKbUpdate
@@ -140,7 +140,7 @@ private fun personaToolVerb(n: String): Key? = when (n) {
     "schedule_routine" -> Key.ToolRoutineSchedule
     "delete_routine" -> Key.ToolRoutineDelete
     "inbox_draft" -> Key.ToolInboxDraft
-    "jarvis_settings" -> Key.ToolPersonaSettings
+    "persona_settings" -> Key.ToolPersonaSettings
     // Live cards (docs/assistant-views.md).
     "view_show" -> Key.ToolViewShow
     "view_get" -> Key.ToolViewGet

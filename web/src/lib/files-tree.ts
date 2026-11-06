@@ -84,7 +84,7 @@ export function listingCache(mid: string, cwd: string): ListingCache {
 
 // ── expanded folders, kept per session ──────────────────────────────────
 
-export const expandedKey = (mid: string, sid: string) => `jarvis.files.expanded.${mid}.${sid}`;
+export const expandedKey = (mid: string, sid: string) => `persona.files.expanded.${mid}.${sid}`;
 
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 

@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// ⌘V in a composer (#3472): the shortcut is recognised even with Caps Lock on, when the event's
 /// charactersIgnoringModifiers comes through as an uppercase "V". Shift and other extra modifiers still disqualify it.

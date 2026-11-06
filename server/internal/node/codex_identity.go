@@ -12,7 +12,7 @@ func (n *Node) ownedAssistantSource(id string) bool {
 	_, own := n.procs[id]
 	path := n.paths[id]
 	n.mu.Unlock()
-	if own || strings.Contains(path, "-jarvis-assistant") {
+	if own || strings.Contains(path, "-persona-assistant") {
 		return true
 	}
 	if n.state != nil {

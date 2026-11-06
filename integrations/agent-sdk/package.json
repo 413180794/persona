@@ -1,5 +1,5 @@
 {
-  "name": "jarvis-agent-sdk-runtime",
+  "name": "persona-agent-sdk-runtime",
   "version": "0.1.0",
   "private": true,
   "description": "The assistant's main conversation on the Claude Agent SDK: a stdin/stdout bridge the node runs in place of claude -p.",

@@ -1,12 +1,12 @@
 // The site is static files, except /relay/* and the downloads /dl/*.gz.
 //
-// /dl/*.gz (the public personad, docs/release.md "Publishing jarvisd") come from the R2 bucket bound as DL: a Workers static
+// /dl/*.gz (the public personad, docs/release.md "Publishing personad") come from the R2 bucket bound as DL: a Workers static
 // file is at most 25 MiB and personad outgrew it (#2541). publish.sh uploads a release's files to one of two slots,
 // <slot>/<name>, and deploys the site with dl/SLOT naming it; the other slot keeps the release before, so a download
 // that started before a deploy still finishes. The small files (VERSION, SHA256SUMS, latest.json, SLOT) stay static
 // files, deployed with the site: the manifest and the slot it points at change in one deploy.
 //
-// /relay/*: the push relay (docs/push-relay.md), which runs elsewhere (`jarvisd relay`)
+// /relay/*: the push relay (docs/push-relay.md), which runs elsewhere (`personad relay`)
 // and is reached at RELAY_ORIGIN, e.g. a Cloudflare Tunnel hostname. Both values are Worker secrets, not in the repo:
 //   npx wrangler secret put RELAY_ORIGIN         # https://<tunnel host>
 //   npx wrangler secret put RELAY_PROXY_SECRET   # the relay's proxy_secret

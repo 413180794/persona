@@ -56,7 +56,7 @@ def shot(page, shots, name):
 
 def fresh(browser, base, size, theme):
     ctx = browser.new_context(viewport=SIZES[size], device_scale_factor=2, locale="zh-CN", color_scheme=theme)
-    ctx.add_init_script(f"localStorage.setItem('jarvis.token', 'mock'); localStorage.setItem('jarvis.theme', '{theme}')")
+    ctx.add_init_script(f"localStorage.setItem('persona.token', 'mock'); localStorage.setItem('persona.theme', '{theme}')")
     page = ctx.new_page()
     page.set_default_timeout(15000)
     page.goto(base + AGENT)

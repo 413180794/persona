@@ -43,7 +43,7 @@ func TestSetSubsystem(t *testing.T) {
 		t.Fatalf("GUI image: %v", err)
 	}
 	for name, bad := range map[string][]byte{
-		"script":    []byte("#!/bin/sh\nexec jarvis-link \"$@\"\n" + strings.Repeat(" ", 100)),
+		"script":    []byte("#!/bin/sh\nexec persona-link \"$@\"\n" + strings.Repeat(" ", 100)),
 		"truncated": fakePE(peSubsystemConsole)[:0x90],
 		"no PE":     append([]byte("MZ"), make([]byte, 0x200)...),
 	} {
@@ -59,7 +59,7 @@ func TestSetSubsystem(t *testing.T) {
 
 func TestGUICopy(t *testing.T) {
 	dir := t.TempDir()
-	src, dst := filepath.Join(dir, "jarvis-link.exe"), filepath.Join(dir, serviceExe)
+	src, dst := filepath.Join(dir, "persona-link.exe"), filepath.Join(dir, serviceExe)
 	if err := os.WriteFile(src, fakePE(peSubsystemConsole), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestGUICopy(t *testing.T) {
 	}
 }
 
-// The real thing: this test binary is a Go console program like jarvis-link.exe.
+// The real thing: this test binary is a Go console program like persona-link.exe.
 func TestGUICopyOfAGoProgram(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("needs a Windows build")

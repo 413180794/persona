@@ -1,7 +1,7 @@
 import XCTest
 
 /// An agent's dev server opened from the phone (docs/ports.md), against scripts/mock/mock_hub.py with MOCK_PORTS=1
-/// (JARVIS_MOCK_HUB): the session lists the port and its reply links it, both as `:port` badges with the page's title;
+/// (PERSONA_MOCK_HUB): the session lists the port and its reply links it, both as `:port` badges with the page's title;
 /// a tap opens the page in the in-app sheet, its bytes through the hub's …/ports/{port}/connect (GET /mock/ports
 /// lists those); the badge of a server that has stopped is gray and says so when tapped.
 final class PortForwardTests: XCTestCase {
@@ -10,15 +10,15 @@ final class PortForwardTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_PORTS=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_PORTS=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let suffix = ProcessInfo.processInfo.environment["SHOT_SUFFIX"].map { "-" + $0 } ?? ""
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-ports-\(name)\(suffix).png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-ports-\(name)\(suffix).png"))
     }
 
     private func json(_ path: String) throws -> [String: Any] {
@@ -36,7 +36,7 @@ final class PortForwardTests: XCTestCase {
     @MainActor func testOpenTheAgentsDevServer() throws {
         let port = try devPort()
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // A fresh chat cache: each mock run serves its page on another port, under the same message id.
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/" + landing, "-openChatsFresh", "YES"]
         app.launchPinned()

@@ -35,14 +35,14 @@ internal class InboxSelectionWebView(context: Context) : WebView(context) {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean = delegate.onCreateActionMode(mode, menu)
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
             val changed = delegate.onPrepareActionMode(mode, menu)
-            menu.removeItem(HAND_TO_JARVIS)
+            menu.removeItem(HAND_TO_PERSONA)
             if (onPick == null) return changed
             val group = (0 until menu.size()).map { menu.getItem(it) }.minByOrNull { it.order }?.groupId ?: Menu.NONE
-            menu.add(group, HAND_TO_JARVIS, 0, context.getString(R.string.inbox_hand_to_persona)).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            menu.add(group, HAND_TO_PERSONA, 0, context.getString(R.string.inbox_hand_to_persona)).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             return true
         }
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            if (item.itemId != HAND_TO_JARVIS) return delegate.onActionItemClicked(mode, item)
+            if (item.itemId != HAND_TO_PERSONA) return delegate.onActionItemClicked(mode, item)
             val sourceUrl = url.orEmpty()
             val sourceTitle = title.orEmpty()
             // Read the selection before closing the menu: finishing first clears it.
@@ -61,6 +61,6 @@ internal class InboxSelectionWebView(context: Context) : WebView(context) {
     }
 
     private companion object {
-        const val HAND_TO_JARVIS = 0x6a0201
+        const val HAND_TO_PERSONA = 0x6a0201
     }
 }

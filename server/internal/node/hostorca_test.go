@@ -30,11 +30,11 @@ func TestMain(m *testing.M) {
 		runTestPlugin(mode)
 	}
 	// No test may reach the user's running Orca: the default metadata path points nowhere.
-	os.Setenv("ORCA_USER_DATA_PATH", "/tmp/jarvis-test-no-orca")
+	os.Setenv("ORCA_USER_DATA_PATH", "/tmp/persona-test-no-orca")
 	// Nor the user's botmux: a node registers no botmux host unless a test gives it one.
 	botmuxBin = func() string { return "" }
 	// Nor the user's Paseo: its home points nowhere (a test that wants one sets its own).
-	os.Setenv("PASEO_HOME", "/tmp/jarvis-test-no-paseo")
+	os.Setenv("PASEO_HOME", "/tmp/persona-test-no-paseo")
 	// Nor the user's Claude config directory (claude under a profile, or these tests run from inside a Claude Code
 	// session): the node's own default is then ~/.claude of the test's home (#2140; a test that wants one sets its own).
 	os.Unsetenv("CLAUDE_CONFIG_DIR")
@@ -440,7 +440,7 @@ func TestOrcaAbsentOrGone(t *testing.T) {
 
 	var logged []string
 	var mu sync.Mutex
-	c := &orcart.Client{MetaPath: "/tmp/jarvis-no-such-dir/orca-runtime.json", Log: func(format string, args ...any) {
+	c := &orcart.Client{MetaPath: "/tmp/persona-no-such-dir/orca-runtime.json", Log: func(format string, args ...any) {
 		mu.Lock()
 		logged = append(logged, fmt.Sprintf(format, args...))
 		mu.Unlock()
@@ -495,7 +495,7 @@ func TestOrcaEngineDetection(t *testing.T) {
 	if e.Available || e.Note == "" || e.Version != "1.4.245" {
 		t.Errorf("incompatible: %+v", e)
 	}
-	e = orcaEngine(context.Background(), &orcart.Client{MetaPath: "/tmp/jarvis-no-such-dir/orca-runtime.json"})
+	e = orcaEngine(context.Background(), &orcart.Client{MetaPath: "/tmp/persona-no-such-dir/orca-runtime.json"})
 	if e != (proto.Engine{ID: "orca", Name: "Orca"}) {
 		t.Errorf("absent: %+v", e)
 	}

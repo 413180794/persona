@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application>
         <service
-            android:name="jarvis.platform.notify.HubService"
+            android:name="persona.platform.notify.HubService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -16,8 +16,6 @@
                 android:value="Maintains the user's hub connection for agent interactions and local notifications without a push provider." />
         </service>
         <receiver android:name="persona.platform.notify.ActionReceiver" android:exported="false" />
-        <receiver android:name="jarvis.platform.notify.ActionReceiver" android:exported="false" />
-        <receiver android:name="jarvis.platform.notify.BootReceiver" android:exported="false" />
         <receiver android:name="persona.platform.notify.BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

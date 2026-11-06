@@ -29,16 +29,16 @@ type Manifest struct {
 	// Ancestors is every commit the release's code contains (EncodeAncestors of git rev-list <commit>): a hub installs
 	// it by itself only when its own commit is one of them (Build.Hold).
 	Ancestors string `json:"ancestors,omitempty"`
-	// Programs are the programs released with jarvisd that the hub runs beside it (jarvisd-wechat): name ->
-	// "linux-amd64" -> its download. The hub swaps them with jarvisd, and goes back with it. Older hubs ignore them.
+	// Programs are the programs released with personad that the hub runs beside it (personad-wechat): name ->
+	// "linux-amd64" -> its download. The hub swaps them with personad, and goes back with it. Older hubs ignore them.
 	Programs map[string]map[string]File `json:"programs,omitempty"`
 }
 
-// ProgramNames are the programs released with jarvisd, each built from server/cmd/<name>.
-var ProgramNames = []string{"jarvisd-wechat"}
+// ProgramNames are the programs released with personad, each built from server/cmd/<name>.
+var ProgramNames = []string{"personad-wechat"}
 
-// program names the program a download belongs to ("jarvisd-wechat-linux-amd64.gz" -> "jarvisd-wechat"), "" for
-// jarvisd's own.
+// program names the program a download belongs to ("personad-wechat-linux-amd64.gz" -> "personad-wechat"), "" for
+// personad's own.
 func program(gz string) string {
 	for _, p := range ProgramNames {
 		if strings.HasPrefix(gz, p+"-") {
@@ -112,7 +112,7 @@ func (m *Manifest) Contains(commit string) (bool, error) {
 
 // File is one platform's download.
 type File struct {
-	Name         string `json:"name"`   // jarvisd-linux-amd64.gz, next to latest.json
+	Name         string `json:"name"`   // personad-linux-amd64.gz, next to latest.json
 	Size         int64  `json:"size"`   // of the .gz
 	SHA256       string `json:"sha256"` // of the .gz
 	BinarySHA256 string `json:"binary_sha256"`
@@ -130,10 +130,10 @@ func ParseManifest(b []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-// BuildManifest describes the downloads in dir: every jarvisd-<os>-<arch>.gz there, and every program's
+// BuildManifest describes the downloads in dir: every personad-<os>-<arch>.gz there, and every program's
 // <program>-<os>-<arch>.gz, with its hashes and the hash of what it unpacks to.
 func BuildManifest(dir string, m Manifest) (*Manifest, error) {
-	gzs, err := filepath.Glob(filepath.Join(dir, "jarvisd-*-*.gz"))
+	gzs, err := filepath.Glob(filepath.Join(dir, "personad-*-*.gz"))
 	if err != nil {
 		return nil, err
 	}
@@ -154,10 +154,10 @@ func BuildManifest(dir string, m Manifest) (*Manifest, error) {
 			m.Programs[prog][strings.TrimSuffix(strings.TrimPrefix(base, prog+"-"), ".gz")] = f
 			continue
 		}
-		m.Files[strings.TrimSuffix(strings.TrimPrefix(base, "jarvisd-"), ".gz")] = f
+		m.Files[strings.TrimSuffix(strings.TrimPrefix(base, "personad-"), ".gz")] = f
 	}
 	if len(m.Files) == 0 {
-		return nil, fmt.Errorf("no jarvisd-*.gz in %s", dir)
+		return nil, fmt.Errorf("no personad-*.gz in %s", dir)
 	}
 	return &m, nil
 }

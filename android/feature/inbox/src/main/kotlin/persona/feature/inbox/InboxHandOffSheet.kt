@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 /**
  * "Hand to AI" (iOS `InboxHandOffSheet`, the old app's sheet): what to do with the item (three presets or the user's own
  * words), who does it — Persona's main conversation (2026-11-02: hand-offs go there) or one of the live Agents — and
- * whether to file the item as done. The message is the item as `<jarvis-context>` plus the request; once it is queued
+ * whether to file the item as done. The message is the item as `<persona-context>` plus the request; once it is queued
  * the sheet closes and the conversation it went to opens.
  *
  * [context] replaces the hub's text of the item (the mail page has the whole message); [onHandedOff] hears where it
@@ -70,7 +70,7 @@ internal fun InboxHandOffSheet(
                 }
                 onDismiss()
                 onHandedOff(target)
-                if (target == null) navigator?.selectTab(AppTab.Jarvis)
+                if (target == null) navigator?.selectTab(AppTab.Persona)
                 else navigator?.navigate(ChatRoute(target.machineId, target.sessionId, ConversationKind.Agent))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = res.getString(R.string.inbox_handoff_failed, failureReason(e).resolve(res)) }

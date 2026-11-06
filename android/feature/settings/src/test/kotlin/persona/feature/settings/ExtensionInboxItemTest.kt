@@ -175,7 +175,7 @@ class ExtensionInboxItemTest {
         assertEquals("lark:F1:1051", ExtensionViewText.inboxSource("persona://inbox/lark%3AF1%3A1051/source"))
         assertEquals("a+b/c", ExtensionViewText.inboxSource("persona://inbox/a+b%2Fc/source"))
         assertEquals("mail-1", ExtensionViewText.inboxSource("PERSONA://inbox/mail-1/source"))
-        listOf(null, "", "https://example.com/inbox/x/source", "jarvis://inbox/x/source", "persona://inbox/x", "persona://inbox//source",
+        listOf(null, "", "https://example.com/inbox/x/source", "example://inbox/x/source", "persona://inbox/x", "persona://inbox//source",
             "persona://inbox/x/source/more", "persona://inbox/x/reply", "persona://open/x/source", "persona://inbox/x/source?y=1",
             "persona://inbox/x/source#top", "persona:inbox/x/source", "persona://inbox/a b/source").forEach {
             assertNull(it, ExtensionViewText.inboxSource(it))

@@ -22,8 +22,8 @@ nonisolated struct TerminalTheme: Sendable {
 
     func side(_ dark: Bool) -> Side { dark ? self.dark : light }
 
-    static let jarvis = TerminalTheme(
-        id: "jarvis", name: "Persona",
+    static let persona = TerminalTheme(
+        id: "persona", name: "Persona",
         light: Side(background: 0xFBFAF7, foreground: 0x1F2328, cursor: 0x0A84FF, selection: 0x0A84FF,
                     ansi: [0x24292F, 0xCF222E, 0x116329, 0x9A6700, 0x0550AE, 0x8250DF, 0x1B7C83, 0x6E7781,
                            0x57606A, 0xA40E26, 0x1A7F37, 0x7D4E00, 0x0969DA, 0xA475F9, 0x3192AA, 0x8C959F]),
@@ -42,7 +42,7 @@ nonisolated struct TerminalTheme: Sendable {
                           0x002B36, 0xCB4B16, 0x586E75, 0x657B83, 0x839496, 0x6C71C4, 0x93A1A1, 0xFDF6E3]))
 
     /// Always dark, the classic terminal look (the tab's look before themes).
-    static let midnight = TerminalTheme(id: "midnight", name: String(localized: "Midnight", comment: "Terminal color theme name"), light: jarvis.dark, dark: jarvis.dark)
+    static let midnight = TerminalTheme(id: "midnight", name: String(localized: "Midnight", comment: "Terminal color theme name"), light: persona.dark, dark: persona.dark)
 
     /// The default: near black whatever the app's appearance, soft bright colors (what terminal apps on the phone look like).
     static let ink: TerminalTheme = {
@@ -52,7 +52,7 @@ nonisolated struct TerminalTheme: Sendable {
         return TerminalTheme(id: "ink", name: String(localized: "Ink", comment: "Terminal color theme name"), light: side, dark: side)
     }()
 
-    static let all = [ink, midnight, jarvis, solarized]
+    static let all = [ink, midnight, persona, solarized]
     static let defaultID = ink.id
     static func named(_ id: String) -> TerminalTheme { all.first { $0.id == id } ?? ink }
 

@@ -16,7 +16,7 @@ func TestFeishuOldCardStillRoutesItsReply(t *testing.T) {
 	s.rememberBotThread("om_first", agent, "Claude")
 	for i := 0; i < 150; i++ {
 		now = now.Add(time.Hour)
-		s.rememberBotThread(fmt.Sprintf("om_%d", i), botTarget{Kind: targetJarvis, MachineID: "server", SessionID: "m1"}, "主对话")
+		s.rememberBotThread(fmt.Sprintf("om_%d", i), botTarget{Kind: targetPersona, MachineID: "server", SessionID: "m1"}, "主对话")
 	}
 	if got := s.botTargetFor("om_first", "om_first"); got != agent {
 		t.Fatalf("a card of six days ago routes to %+v", got)

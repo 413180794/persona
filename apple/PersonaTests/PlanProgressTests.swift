@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A plan's (TodoWrite's) progress in the one sentence the web says it too (#5901).
 @MainActor

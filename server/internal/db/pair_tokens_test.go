@@ -126,7 +126,7 @@ func TestRevokeDeviceTokenExpiresAssociatedPairToken(t *testing.T) {
 	}
 }
 
-// A pairing code made for one machine's jarvis-link carries the machine, and so does the credential it becomes.
+// A pairing code made for one machine's persona-link carries the machine, and so does the credential it becomes.
 func TestLinkPairTokenKeepsItsMachine(t *testing.T) {
 	d := open(t)
 	ctx := context.Background()
@@ -137,7 +137,7 @@ func TestLinkPairTokenKeepsItsMachine(t *testing.T) {
 	if err != nil || p == nil || p.MachineID != "laptop" {
 		t.Fatalf("pair %+v %v", p, err)
 	}
-	device := DeviceToken{ID: "dev-link", Name: "笔记本 的 jarvis-link", Kind: "link", Role: "link", MachineID: "laptop"}
+	device := DeviceToken{ID: "dev-link", Name: "笔记本 的 persona-link", Kind: "link", Role: "link", MachineID: "laptop"}
 	if ok, err := d.RedeemPairToken(ctx, "link-pair", device, "link-hash"); !ok || err != nil {
 		t.Fatalf("redeem %v %v", ok, err)
 	}

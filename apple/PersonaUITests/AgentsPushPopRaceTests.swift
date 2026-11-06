@@ -6,7 +6,7 @@ import XCTest
 /// runtime CLI's `navigate … keep`, which sets `model.openChat` the same way) while Back is on its way, during a back
 /// swipe let go halfway or carried through, while the list reorders under a busy hub, while the shell changes page, and
 /// while the tree is rebuilt (the background snapshot's width change). After each step: the list or a chat, never neither.
-/// Against scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 (JARVIS_MOCK_HUB); JARVIS_RACE_ROUNDS (default 1).
+/// Against scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 (PERSONA_MOCK_HUB); PERSONA_RACE_ROUNDS (default 1).
 final class AgentsPushPopRaceTests: XCTestCase {
     private static let a = "macbook/a1f3c2d4-0000-4000-8000-000000000007" // 「菜谱网站加搜索」
     private static let b = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // 「给天气 App 加主屏幕小组件」
@@ -76,7 +76,7 @@ final class AgentsPushPopRaceTests: XCTestCase {
     }
 
     /// The one that left the page blank (BeautifulUI, 1 in 18): a back swipe carried through, and a chat opened from
-    /// outside while the pop finishes. Repeated round the moment it hit, the edge where the open stops being dropped and lands (JARVIS_RACE_ROUNDS × 26 tries).
+    /// outside while the pop finishes. Repeated round the moment it hit, the edge where the open stops being dropped and lands (PERSONA_RACE_ROUNDS × 26 tries).
     @MainActor func testBackSwipeMeetsAnOpen() throws {
         let app = try launchForRaces()
         let rounds = Self.rounds
@@ -91,14 +91,14 @@ final class AgentsPushPopRaceTests: XCTestCase {
         XCTAssertTrue(blanks.isEmpty, "a page with nothing on it after: \(blanks.joined(separator: ", "))")
     }
 
-    private static var rounds: Int { Int(ProcessInfo.processInfo.environment["JARVIS_RACE_ROUNDS"] ?? "") ?? 1 }
+    private static var rounds: Int { Int(ProcessInfo.processInfo.environment["PERSONA_RACE_ROUNDS"] ?? "") ?? 1 }
 
     @MainActor private func launchForRaces() throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-ui.oldLayout", "NO", "-holdChromeOpen", "YES",
                                "-runtimeCLI", "\(Self.port)", "-runtimeCLIToken", Self.token]
@@ -166,7 +166,7 @@ final class AgentsPushPopRaceTests: XCTestCase {
         shot.name = "blank-\(step)"
         shot.lifetime = .keepAlways
         add(shot)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? XCUIScreen.main.screenshot().pngRepresentation
                 .write(to: URL(fileURLWithPath: dir).appendingPathComponent("race-blank-\(step).png"))
         }

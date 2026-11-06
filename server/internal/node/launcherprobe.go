@@ -23,7 +23,7 @@ import (
 // subshell with `claude`, `codex`, `traex`, `command` and `env` stubbed out: instead of starting anything they print
 // the environment and arguments the agent would have got. probeScript is that harness; parseProbe reads its output.
 
-const probeMarker = "__JARVIS_LAUNCHER_PROBE__"
+const probeMarker = "__PERSONA_LAUNCHER_PROBE__"
 
 // errProbeUnseen is a launcher the stubs never saw start an agent: it reaches claude some way they cannot stand in for
 // (a function that runs a script of its own, which execs claude by its absolute path). Nothing is known about what it

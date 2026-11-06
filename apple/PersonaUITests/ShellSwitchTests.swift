@@ -27,12 +27,12 @@ final class ShellSwitchTests: XCTestCase {
         add(shot)
     }
 
-    /// The shell on Assistant's empty chat: against scripts/mock/mock_hub.py when JARVIS_MOCK_HUB is set (connected, like a phone
+    /// The shell on Assistant's empty chat: against scripts/mock/mock_hub.py when PERSONA_MOCK_HUB is set (connected, like a phone
     /// with its hub), else in Demo Mode.
     @MainActor private func launchShell() {
         app = XCUIApplication()
-        if let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] {
-            let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        if let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] {
+            let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
             app.launchArguments = ["-pairURL", pair, "-demo.on", "NO"]
         } else {
             app.launchArguments = ["-demo.on", "YES"]

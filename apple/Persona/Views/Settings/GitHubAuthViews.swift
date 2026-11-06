@@ -134,7 +134,7 @@ struct GitHubConnectorSections: View {
             return who
         case "not_signed_in": return String(localized: "gh not signed in")
         case "no_gh": return String(localized: "gh not installed")
-        case "too_old": return String(localized: "jarvisd is too old to read gh sign-in")
+        case "too_old": return String(localized: "personad is too old to read gh sign-in")
         case "offline": return String(localized: "Offline [Machine Entity be1b4f]")
         default: return m.error.map { String(localized: "Can't read gh sign-in: \($0)") } ?? String(localized: "Can't read gh sign-in")
         }

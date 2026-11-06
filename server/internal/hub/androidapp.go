@@ -61,9 +61,9 @@ func (h *Hub) androidAppAPK(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/vnd.android.package-archive")
-	w.Header().Set("Content-Disposition", `attachment; filename="jarvis.apk"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="persona.apk"`)
 	w.Header().Set("ETag", `"`+release.SHA256+`"`)
-	http.ServeContent(w, r, "jarvis.apk", info.ModTime(), f)
+	http.ServeContent(w, r, "persona.apk", info.ModTime(), f)
 }
 
 func androidAppError(w http.ResponseWriter, err error) {

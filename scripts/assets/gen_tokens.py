@@ -103,8 +103,8 @@ class Catalog:
                 require(set(doc) == {"$description", "$extensions"}, "rules.json：需要 $description 和 $extensions")
                 require(isinstance(doc["$description"], str), "rules.json：$description 必须是字符串")
                 ext = doc["$extensions"]
-                require(isinstance(ext, dict) and set(ext) == {"jarvis"}, "rules.json：需要 jarvis 扩展")
-                self.rules = ext["jarvis"]
+                require(isinstance(ext, dict) and set(ext) == {"persona"}, "rules.json：需要 persona 扩展")
+                self.rules = ext["persona"]
             else:
                 self._walk(doc, "")
         require(self.tokens, "没有 token")

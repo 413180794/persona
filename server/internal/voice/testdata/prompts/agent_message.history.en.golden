@@ -1,10 +1,10 @@
 check tomorrow's calendar
 
-<jarvis-context kind="context" title="Voice conversation" url="">
+<persona-context kind="context" title="Voice conversation" url="">
 I said this in a voice conversation and the voice assistant passed it on, so it may be misheard: when something is ambiguous, ask me before acting on it.
 
 Said in the voice conversation just before:
 Me: what meetings do I have tomorrow
 Voice assistant: Let me have the main conversation look.
 Me: 
-</jarvis-context>
+</persona-context>

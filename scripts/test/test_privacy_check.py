@@ -144,19 +144,23 @@ class BannedNameTests(unittest.TestCase):
 
 
 class LoopbackTests(unittest.TestCase):
-    def test_persona_and_legacy_config_words_are_both_scanned(self):
+    def test_persona_config_words_are_scanned_without_former_config_reads(self):
         with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
             home = Path(temp)
-            for brand in ("persona", "jarvis"):
-                directory = home / ".config" / brand
-                directory.mkdir(parents=True)
-                (directory / "config.json").write_text(json.dumps({"machine_label": brand + "-private-label"}))
-                (directory / "private-words.txt").write_text(brand + "-private-word\n")
+            directory = home / '.config/persona'
+            directory.mkdir(parents=True)
+            (directory / 'config.json').write_text(json.dumps({'machine_label': 'persona-private-label'}))
+            (directory / 'private-words.txt').write_text('persona-private-word\n')
+            former = home / '.config' / ('jar' + 'vis')
+            former.mkdir()
+            (former / 'config.json').write_text(json.dumps({'machine_label': 'former-private-label'}))
+            (former / 'private-words.txt').write_text('former-private-word\n')
             with patch.object(pc, "HOME", str(home)), patch.object(pc, "ROOT", str(home)):
                 words, _ = pc.terms()
-            for brand in ("persona", "jarvis"):
-                self.assertIn(brand + "-private-label", words)
-                self.assertIn(brand + "-private-word", words)
+            self.assertIn('persona-private-label', words)
+            self.assertIn('persona-private-word', words)
+            self.assertNotIn('former-private-label', words)
+            self.assertNotIn('former-private-word', words)
 
     def test_loopback_values(self):
         for value in ["127.0.0.1", "127.1.2.3", "::1", "[::1]", "0:0:0:0:0:0:0:1",
@@ -190,7 +194,7 @@ class LoopbackTests(unittest.TestCase):
     def test_config_loopback_is_not_a_word(self):
         with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
             home = Path(temp)
-            config = home / ".config/jarvis/config.json"
+            config = home / ".config/persona/config.json"
             config.parent.mkdir(parents=True)
             config.write_text(json.dumps({"hub": {"url": "http://127.0.0.1:18660"}, "lan_host": PRIVATE_IP,
                                           "local_ipv6": "[::1]"}))
@@ -356,8 +360,8 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
     def test_full_scan_blocks_without_private_configuration(self):
         self.write_lock(UNAPPROVED_URL)
         self.git("add", "web/package-lock.json")
-        self.assertFalse((self.home / ".config/jarvis/config.json").exists())
-        self.assertFalse((self.home / ".config/jarvis/private-words.txt").exists())
+        self.assertFalse((self.home / ".config/persona/config.json").exists())
+        self.assertFalse((self.home / ".config/persona/private-words.txt").exists())
         self.assert_blocked(self.scan())
 
     def test_full_scan_blocks_a_banned_name_in_content_and_path(self):
@@ -377,7 +381,7 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_config_loopback_is_not_flagged_but_private_ip_is(self):
-        config = self.home / ".config/jarvis/config.json"
+        config = self.home / ".config/persona/config.json"
         config.parent.mkdir(parents=True)
         config.write_text(json.dumps({"hub": {"url": "http://127.0.0.1:18660"}, "lan_host": PRIVATE_IP}))
         (self.repo / "notes.md").write_text("The hub listens on 127.0.0.1:18660.\n")
@@ -474,7 +478,7 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
     def test_commit_msg_keeps_private_word_check_and_redaction(self):
         self.write_lock()
         self.git("add", "web/package-lock.json")
-        words = self.home / ".config/jarvis/private-words.txt"
+        words = self.home / ".config/persona/private-words.txt"
         words.parent.mkdir(parents=True)
         marker = "private-marker-example"
         words.write_text(marker + "\n")
@@ -503,7 +507,7 @@ class RangeAndPushTests(unittest.TestCase):
 
     def setUp(self):
         PrivacyCheckIntegrationTests.setUp(self)
-        words = self.home / ".config/jarvis/private-words.txt"
+        words = self.home / ".config/persona/private-words.txt"
         words.parent.mkdir(parents=True)
         words.write_text("secretbox\n")
         (self.repo / "old.md").write_text("an old note about secretbox\n")  # on master already: not this branch's doing

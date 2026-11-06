@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// FrameStats writes its numbers as JSON for the measuring scripts (docs/testing.md「卡顿测量」).
 @MainActor struct FrameStatsTests {

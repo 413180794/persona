@@ -1,7 +1,7 @@
 import XCTest
 
 /// Settings › Connectors › Telegram against scripts/mock/mock_hub.py started with MOCK_TELEGRAM=off MOCK_TELEGRAM_2FA=1
-/// (JARVIS_MOCK_HUB_TELEGRAM), as a hub has it at first: switched off, its program not run, so the hub lists no
+/// (PERSONA_MOCK_HUB_TELEGRAM), as a hub has it at first: switched off, its program not run, so the hub lists no
 /// capabilities for it. Switching it on, then signing in a step at a time (API credentials → phone → code, a wrong one
 /// first → two-step password), then signing out. The mock is left on and signed out (its credentials gone too).
 final class TelegramConnectorTests: XCTestCase {
@@ -15,9 +15,9 @@ final class TelegramConnectorTests: XCTestCase {
     }
 
     @MainActor func testSignInAStepAtATime() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_TELEGRAM"] else { throw XCTSkip("needs a mock with MOCK_TELEGRAM=off MOCK_TELEGRAM_2FA=1") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_TELEGRAM"] else { throw XCTSkip("needs a mock with MOCK_TELEGRAM=off MOCK_TELEGRAM_2FA=1") }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""]
         app.launchPinned()
         let any = app.descendants(matching: .any)

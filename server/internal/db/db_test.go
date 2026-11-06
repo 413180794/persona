@@ -22,13 +22,13 @@ import (
 // TestMain runs the tests on a database of their own (dbtest, #583): other runs on the same machine do not touch it.
 func TestMain(m *testing.M) { os.Exit(dbtest.Main(m)) }
 
-// open connects to JARVIS_TEST_DATABASE_URL (a throwaway database; scripts/test/test-server.sh creates it on the hub machine)
+// open connects to PERSONA_TEST_DATABASE_URL (a throwaway database; scripts/test/test-server.sh creates it on the hub machine)
 // and wipes every table so each test starts clean.
 func open(t testing.TB) *DB {
 	t.Helper()
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	d, err := Open(context.Background(), url, AllSets)
 	if err != nil {
@@ -726,7 +726,7 @@ func TestInteractionsHistoryIndexed(t *testing.T) {
 // values: a cached one would settle on a generic plan that walks every row for a quiet machine or session.
 func TestInteractionsNotCached(t *testing.T) {
 	d, ctx := open(t), context.Background()
-	cfg, err := pgxpool.ParseConfig(os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	cfg, err := pgxpool.ParseConfig(os.Getenv("PERSONA_TEST_DATABASE_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}

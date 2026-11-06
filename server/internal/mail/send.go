@@ -31,7 +31,7 @@ func RenderMessage(req SendRequest, from Address) ([]byte, error) {
 	if err := h.GenerateMessageID(); err != nil {
 		// A missing Message-ID is not fatal, but it breaks threading; fall back
 		// to a random local id.
-		h.SetMessageID(fmt.Sprintf("%d.jarvis", time.Now().UnixNano()))
+		h.SetMessageID(fmt.Sprintf("%d.persona", time.Now().UnixNano()))
 	}
 	h.SetSubject(req.Subject)
 	h.SetAddressList("From", []*mail.Address{{Name: from.Name, Address: from.Email}})

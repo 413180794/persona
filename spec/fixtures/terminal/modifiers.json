@@ -6,9 +6,9 @@
       "name": "modifier_once",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
-        "ios/JarvisTests/TerminalTests.swift — tapArmsForOneKey"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/PersonaTests/TerminalTests.swift — tapArmsForOneKey"
       ],
       "input": {
         "probe_key": "c",
@@ -47,9 +47,9 @@
       "name": "modifier_lock",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
-        "ios/JarvisTests/TerminalTests.swift — doubleTapLocksUntilTappedAgain"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/PersonaTests/TerminalTests.swift — doubleTapLocksUntilTappedAgain"
       ],
       "input": {
         "probe_key": "c",
@@ -122,9 +122,9 @@
       "name": "modifier_slow_second_tap",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
-        "ios/JarvisTests/TerminalTests.swift — slowSecondTapDisarms"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/PersonaTests/TerminalTests.swift — slowSecondTapDisarms"
       ],
       "input": {
         "probe_key": "x",
@@ -165,9 +165,9 @@
       "name": "modifier_hold_used",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
-        "ios/JarvisTests/TerminalTests.swift — holdingKeepsItDownUntilLetGo"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/PersonaTests/TerminalTests.swift — holdingKeepsItDownUntilLetGo"
       ],
       "input": {
         "probe_key": "c",
@@ -226,9 +226,9 @@
       "name": "modifier_hold_unused",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
-        "ios/JarvisTests/TerminalTests.swift — holdingKeepsItDownUntilLetGo"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/PersonaTests/TerminalTests.swift — holdingKeepsItDownUntilLetGo"
       ],
       "input": {
         "probe_key": "a",
@@ -267,9 +267,9 @@
       "name": "modifier_order",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests",
-        "ios/JarvisTests/TerminalTests.swift — combinesInHerdrOrder"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests",
+        "ios/PersonaTests/TerminalTests.swift — combinesInHerdrOrder"
       ],
       "input": {
         "probe_key": "x",
@@ -322,8 +322,8 @@
       "name": "modifier_escape",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests"
       ],
       "input": {
         "probe_key": "esc",
@@ -386,8 +386,8 @@
       "name": "modifier_mixed_states",
       "description": "按点击、按住和发送事件更新修饰键状态。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests"
       ],
       "input": {
         "probe_key": "x",
@@ -472,8 +472,8 @@
       "name": "modifier_shared_hold_usage",
       "description": "第二个按住事件重置共用使用标志，保留两个键释放后都粘滞的现状。",
       "source": [
-        "ios/Jarvis/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
-        "ios/JarvisTests/TerminalTests.swift — TerminalModifierTests"
+        "ios/Persona/Views/Chat/TerminalKeys.swift — TerminalModifiers.tap / hold / release / pressed / apply",
+        "ios/PersonaTests/TerminalTests.swift — TerminalModifierTests"
       ],
       "input": {
         "probe_key": "x",

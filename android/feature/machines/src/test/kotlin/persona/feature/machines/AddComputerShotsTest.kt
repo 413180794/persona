@@ -60,11 +60,11 @@ class AddComputerShotsTest {
         override val sessions = MutableStateFlow(emptyList<Session>())
         override suspend fun refresh() = Unit
     }
-    private val pair = "jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_example&machine=macbook&hub=example&fp=example&tls=18662"
+    private val pair = "persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_example&machine=macbook&hub=example&fp=example&tls=18662"
     private val api = object : ComputerPairing {
         override val canAdd = flowOf(true)
         override suspend fun add(name: String, os: ComputerOs) = ComputerCode("macbook", name, pair, System.currentTimeMillis() + 598_000,
-            command = "jarvis-link pair '$pair'", linuxInstall = "curl -fsSL https://example.com/install.sh | sh -s -- --node --pair '$pair'")
+            command = "persona-link pair '$pair'", linuxInstall = "curl -fsSL https://example.com/install.sh | sh -s -- --node --pair '$pair'")
         override suspend fun again(machineId: String) = add(machineId, ComputerOs.Mac)
         override suspend fun machines(machineId: String) = machines.value
         override suspend fun confirm(machineId: String) {}

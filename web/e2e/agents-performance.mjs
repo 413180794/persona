@@ -16,7 +16,7 @@ await cp(join(web, "../server"), join(scratch, "server"), { recursive: true });
 await cp(join(web, "../sdk/go"), join(scratch, "sdk/go"), { recursive: true });
 await copyFile(join(web, "e2e/agents_hub_test.go"), join(scratch, "server/internal/hub/web_agents_fixture_test.go"));
 const env = { ...process.env, WEB_AGENTS_DIST: join(web, "dist"), WEB_AGENTS_PORT: String(port), GOTMPDIR: scratch };
-delete env.JARVIS_TEST_DATABASE_URL;
+delete env.PERSONA_TEST_DATABASE_URL;
 delete env.PERSONA_TEST_DATABASE_URL;
 
 async function command(program, args, cwd, timeout) {
@@ -52,7 +52,7 @@ try {
   browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-US", colorScheme: "light" });
   await context.addInitScript(() => {
-    localStorage.setItem("jarvis.token", "synthetic-browser-token");
+    localStorage.setItem("persona.token", "synthetic-browser-token");
     localStorage.setItem("persona.language", "en");
     const observer = new MutationObserver(() => {
       if (document.querySelector("main [data-session-row]")) {
@@ -164,7 +164,7 @@ try {
   assert.equal(traversalPages, 159);
   // A cold deep link outside the loaded first page reads only its exact full record, never a list scan.
   const snapshotContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-US" });
-  await snapshotContext.addInitScript(() => { localStorage.setItem("jarvis.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
+  await snapshotContext.addInitScript(() => { localStorage.setItem("persona.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
   const snapshotPage = await snapshotContext.newPage();
   const snapshotRequests = [];
   snapshotPage.on("response", async (response) => {
@@ -196,7 +196,7 @@ try {
 
   // A hub with pages but no lookup feature retains complete bounded rows and uses its own deltas for chat recovery.
   const fallbackContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-US" });
-  await fallbackContext.addInitScript(() => { localStorage.setItem("jarvis.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
+  await fallbackContext.addInitScript(() => { localStorage.setItem("persona.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
   const fallbackPage = await fallbackContext.newPage();
   const fallbackRequests = [];
   fallbackPage.on("response", async (response) => { const address = new URL(response.url()); if (address.pathname === "/api/v1/sessions") fallbackRequests.push(Object.fromEntries(address.searchParams)); });
@@ -217,7 +217,7 @@ try {
   await fallbackContext.close();
 
   const personalContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-US" });
-  await personalContext.addInitScript(() => { localStorage.setItem("jarvis.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
+  await personalContext.addInitScript(() => { localStorage.setItem("persona.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
   const personalPage = await personalContext.newPage();
   const personalRequests = [];
   let personalChanged = false;
@@ -255,7 +255,7 @@ try {
   assert.ok(personalRequests.some((r) => r.since === "p1"));
   await personalContext.close();
   const legacyContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-US" });
-  await legacyContext.addInitScript(() => { localStorage.setItem("jarvis.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
+  await legacyContext.addInitScript(() => { localStorage.setItem("persona.token", "synthetic-browser-token"); localStorage.setItem("persona.language", "en"); });
   const legacyPage = await legacyContext.newPage();
   let legacyRows = 0;
   legacyPage.on("response", async (response) => {

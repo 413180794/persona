@@ -6,10 +6,10 @@
       "name": "machine_uses_registry_order",
       "description": "机器分组遵循机器列表顺序，缺少机器记录的会话不生成分组。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -115,11 +115,11 @@
       "name": "space_header_counts",
       "description": "空间标题朗读需要你、未读和空闲数量。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
-        "ios/JarvisTests/AgentFilterTests.swift: foldedHeaderSpeaksItsCounts"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/PersonaTests/AgentFilterTests.swift: foldedHeaderSpeaksItsCounts"
       ],
       "input": {
         "sessions": [
@@ -243,11 +243,11 @@
       "name": "space_time_tie",
       "description": "空间同时间按机器与空间标识排序。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
-        "ios/JarvisTests/AgentFilterTests.swift: spacesWithTheSameTimeKeepTheirOrder"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/PersonaTests/AgentFilterTests.swift: spacesWithTheSameTimeKeepTheirOrder"
       ],
       "input": {
         "sessions": [
@@ -363,11 +363,11 @@
       "name": "space_time_tie_reversed",
       "description": "空间同时间按机器与空间标识排序。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
-        "ios/JarvisTests/AgentFilterTests.swift: spacesWithTheSameTimeKeepTheirOrder"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/PersonaTests/AgentFilterTests.swift: spacesWithTheSameTimeKeepTheirOrder"
       ],
       "input": {
         "sessions": [
@@ -483,10 +483,10 @@
       "name": "spaces_pin_busy_muted_quiet",
       "description": "项目依次显示置顶、活跃、屏蔽和空闲空间，空闲空间展开后保留槽位顺序。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -736,10 +736,10 @@
       "name": "quick_spaces_use_updated_time",
       "description": "快速筛选下置顶空间领先，其余空间按更新时间排序且不收进空闲空间。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -999,10 +999,10 @@
       "name": "active_space_uses_rank_not_slots",
       "description": "活跃空间内按状态排序，缺少空间时使用占位标识和目录名。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct AgentCloseTests {
     private func session(_ state: String, status: String = "idle") throws -> Session {

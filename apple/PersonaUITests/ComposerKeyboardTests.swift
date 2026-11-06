@@ -10,8 +10,8 @@ final class ComposerKeyboardTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] != nil else {
-            throw XCTSkip("needs the isolated composer mock hub (JARVIS_MOCK_HUB)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] != nil else {
+            throw XCTSkip("needs the isolated composer mock hub (PERSONA_MOCK_HUB)")
         }
     }
 
@@ -26,8 +26,8 @@ final class ComposerKeyboardTests: XCTestCase {
     }
 
     @MainActor private func openChat(oldLayout: Bool, isAssistant: Bool, sideBars: Bool = false) {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app = XCUIApplication()
         // Pair separately: a first pairing resets the route arguments, and must never point at a real hub.
         app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", oldLayout ? "YES" : "NO"]
@@ -56,8 +56,8 @@ final class ComposerKeyboardTests: XCTestCase {
         attachment.name = "\(name) \(UITestStyle.name)"
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let directory = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let appearance = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        if let directory = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let appearance = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"] ?? "light"
             let url = URL(fileURLWithPath: directory).appendingPathComponent("\(UITestStyle.name)-\(appearance)-\(name).png")
             try? screenshot.pngRepresentation.write(to: url)
         }

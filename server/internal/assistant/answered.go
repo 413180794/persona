@@ -263,7 +263,7 @@ func fieldValues(l i18n.Lang, ix proto.Interaction, r proto.Resolution) []string
 var secretName = regexp.MustCompile(`(?i)pass|secret|token|credential|api[_-]?key|private|otp|pin\b`)
 
 // toolDisplayName is a tool's name for a sentence: an MCP tool as "Persona · mail send" (Persona's own server keeps
-// its old id jarvis, which allow lists and hooks match), others as written.
+// its old id persona, which allow lists and hooks match), others as written.
 func toolDisplayName(name string) string {
 	rest, ok := strings.CutPrefix(name, "mcp__")
 	if !ok {
@@ -273,7 +273,7 @@ func toolDisplayName(name string) string {
 	if i := strings.LastIndex(rest, "__"); i > 0 {
 		server, tool = rest[:i], strings.ReplaceAll(rest[i+2:], "_", " ")
 	}
-	if server = strings.TrimPrefix(server, "plugin_"); server == "jarvis" {
+	if server = strings.TrimPrefix(server, "plugin_"); server == "persona" {
 		server = "Persona"
 	}
 	if server == "" {

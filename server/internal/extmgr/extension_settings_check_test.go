@@ -52,7 +52,7 @@ func settingsCheckPackageWith(t *testing.T, secret string) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "gw"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=settingscheck exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "gw"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=settingscheck exec "+self+" \"$@\"\n"), 0o755)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-gateway", "name": "Example Gateway", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/gw"}}, "activation_events": ["on_startup"],
 		"contributes": {"ui": [{"id": "page", "title": "Gateway", "placement": "nav_page"}]},

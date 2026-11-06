@@ -174,7 +174,7 @@ func TestCodexStartRefusals(t *testing.T) {
 func TestCodexStartFailures(t *testing.T) {
 	withCodexLaunchers(t, map[string][]string{"nocodex": {"codex-not-installed"}})
 	n, f, _, _ := codexStartHerdr(t, time.Hour)
-	f.setScreen("w1:p2", "% jarvisd codex-start: codex-not-installed not found in PATH\n% \n")
+	f.setScreen("w1:p2", "% personad codex-start: codex-not-installed not found in PATH\n% \n")
 	start := time.Now()
 	_, err := request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "nocodex", "prompt": "hi"})
 	if err == nil || !strings.Contains(err.Error(), "codex-not-installed not found in PATH") || time.Since(start) > 5*time.Second {
@@ -226,9 +226,9 @@ func TestCodexStartThroughASymlink(t *testing.T) {
 
 // codex-start passes the message on byte for byte, as one argument after "--", with the launcher's variables set.
 func TestCodexStartHelper(t *testing.T) {
-	if os.Getenv("JARVIS_CODEX_START_HELPER") == "1" {
+	if os.Getenv("PERSONA_CODEX_START_HELPER") == "1" {
 		var args []string
-		_ = json.Unmarshal([]byte(os.Getenv("JARVIS_CODEX_START_ARGS")), &args)
+		_ = json.Unmarshal([]byte(os.Getenv("PERSONA_CODEX_START_ARGS")), &args)
 		err := CodexStart(args)
 		fmt.Println(err)
 		os.Exit(3)
@@ -242,7 +242,7 @@ func TestCodexStartHelper(t *testing.T) {
 	}
 	args, _ := json.Marshal([]string{file})
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCodexStartHelper$")
-	cmd.Env = append(os.Environ(), "JARVIS_CODEX_START_HELPER=1", "JARVIS_CODEX_START_ARGS="+string(args))
+	cmd.Env = append(os.Environ(), "PERSONA_CODEX_START_HELPER=1", "PERSONA_CODEX_START_ARGS="+string(args))
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, b)
 	}
@@ -278,7 +278,7 @@ func TestCodexStartReplacesAnInheritedHerdrAgent(t *testing.T) {
 			}
 			args, _ := json.Marshal([]string{file})
 			cmd := exec.Command(os.Args[0], "-test.run=^TestCodexStartHelper$")
-			cmd.Env = append(os.Environ(), "HERDR_AGENT=inherited", "JARVIS_CODEX_START_HELPER=1", "JARVIS_CODEX_START_ARGS="+string(args))
+			cmd.Env = append(os.Environ(), "HERDR_AGENT=inherited", "PERSONA_CODEX_START_HELPER=1", "PERSONA_CODEX_START_ARGS="+string(args))
 			out, err := cmd.Output()
 			if err != nil {
 				t.Fatalf("%v: %s", err, out)

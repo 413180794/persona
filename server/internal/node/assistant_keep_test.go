@@ -62,7 +62,7 @@ func TestResidentNodeKeepsConversations(t *testing.T) {
 		t.Fatal("the claude conversation was stopped with the connection")
 	}
 
-	b.state.put(id, sessionState{Launcher: "claude", Cwd: "/home/u/.jarvis/assistant"})
+	b.state.put(id, sessionState{Launcher: "claude", Cwd: "/home/u/.persona/assistant"})
 	adopted := k.adopt(b)
 	if len(adopted) != 2 || b.procs[id] != p || b.procs[codexID] != cx {
 		t.Fatalf("not taken over: %v", adopted)

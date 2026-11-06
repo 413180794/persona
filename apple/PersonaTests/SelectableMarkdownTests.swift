@@ -1,6 +1,6 @@
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// Select Text (#3189): a reply reads as the chat shows it, without the Markdown marks, so a part copied from it is clean;
 /// your own message, formulas and code stay exactly as written.

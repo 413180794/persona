@@ -22,7 +22,7 @@ open class ConnectionWatchdog(context: Context, parameters: WorkerParameters) : 
     }
 
     companion object {
-        private const val WORK_NAME = "jarvis-hub-watchdog"
+        private const val WORK_NAME = "persona-hub-watchdog"
 
         internal fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP,

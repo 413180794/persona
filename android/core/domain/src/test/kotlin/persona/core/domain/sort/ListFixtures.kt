@@ -10,7 +10,7 @@ internal data class ListFixture(val name: String, val operation: String, val inp
 }
 
 internal fun listFixtures(domain: String): List<Array<Any>> {
-    val root = System.getProperty("jarvis.repo.root") ?: error("jarvis.repo.root is required")
+    val root = System.getProperty("persona.repo.root") ?: error("persona.repo.root is required")
     val directory = File(root, "spec/fixtures/$domain")
     check(directory.isDirectory) { "Missing fixtures: $directory" }
     val files = directory.listFiles { file -> file.extension == "json" }!!.sortedBy { it.name }

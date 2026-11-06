@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct ComposerGrowthTests {
     @Test func smallAndLargeKeyboardViewports() {

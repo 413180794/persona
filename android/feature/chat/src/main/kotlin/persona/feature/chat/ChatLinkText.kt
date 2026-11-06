@@ -69,5 +69,5 @@ internal fun ChatContextCard(context: ChatLinkContext, compact: Boolean = false,
     }
 }
 
-/** Where a session picked with @ points ([sessionQuote]): `jarvis://session/<machine>/<session>`. */
-internal const val SESSION_CONTEXT_URL = "jarvis://session/"
+/** Where a session picked with @ points ([sessionQuote]): `persona://session/<machine>/<session>`. */
+internal const val SESSION_CONTEXT_URL = "persona://session/"

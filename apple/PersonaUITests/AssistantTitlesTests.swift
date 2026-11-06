@@ -2,22 +2,22 @@ import XCTest
 
 /// The assistant's conversations titled by the hub 「MMDD | 类型 | 主题」 (docs/assistant.md「对话标题」) in the drawer,
 /// a topic too long for it cut at the end, and Rename… in a conversation's long-press menu (the user's title is then
-/// the hub's for good). Against scripts/mock/mock_hub.py with MOCK_TITLES=1 (JARVIS_MOCK_HUB), which records renames at
+/// the hub's for good). Against scripts/mock/mock_hub.py with MOCK_TITLES=1 (PERSONA_MOCK_HUB), which records renames at
 /// /mock/renamed.
 final class AssistantTitlesTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(shell: Bool) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-newAssistant", "YES", "-ui.oldLayout", shell ? "NO" : "YES"]
         app.launchPinned()
         return app
@@ -25,7 +25,7 @@ final class AssistantTitlesTests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let suffix = ProcessInfo.processInfo.environment["SHOT_SUFFIX"].map { "-" + $0 } ?? ""
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-titles-\(name)\(suffix).png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-titles-\(name)\(suffix).png"))
     }
 
     /// A drawer row, found by the start of its label (title, then its state and preview).

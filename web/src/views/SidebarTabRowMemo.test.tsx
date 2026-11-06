@@ -45,7 +45,7 @@ const menu = () => document.querySelector('[role="menu"]');
 
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("jarvis.agentGrouping", "machine");
+  localStorage.setItem("persona.agentGrouping", "machine");
   previews.clear();
   vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(answers[new URL(url, "http://x").pathname] ?? {}), { headers: { "Content-Type": "application/json" } }))));
   history.replaceState(null, "", "/");

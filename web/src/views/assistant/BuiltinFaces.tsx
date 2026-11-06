@@ -1,4 +1,4 @@
-// Visor (jarvis) and Circuit (jarvis-circuit), the built-in looks besides Mochi (docs/persona.md "Built-in avatars"): the same drawings as
+// Visor (persona) and Circuit (persona-circuit), the built-in looks besides Mochi (docs/persona.md "Built-in avatars"): the same drawings as
 // the apps' PersonaFace (Android PersonaFace.kt visor / circuit, iOS Shared/Design/PersonaFace.swift), in shares of a
 // 100-unit side, painted in the page's accent (gray when offline). Each state reads from its first frame alone; the
 // blink and the needs-you ring are the mochi-* loops (face-motion.ts) and stop with reduced motion.

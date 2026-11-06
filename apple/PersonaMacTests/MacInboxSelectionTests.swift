@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// After a multi-select, some items expire and vanish: the selected count and the actions use only the selection still in the list (#3795).
 @MainActor

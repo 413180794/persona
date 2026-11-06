@@ -4,15 +4,15 @@ import XCTest
 /// The image viewer (docs/ios.md「图片查看器」): every button of its bars inside the screen (they ran off both sides on an
 /// iPhone, 2026-11-05), a tap hides and shows the bars, a pull down closes it. Run it on the narrowest phone too (SE).
 ///   PORT=18831 MOCK_TURN_IMAGES=many python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18831 xcodebuild test … -only-testing:PersonaUITests/ImageViewerTests
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18831 xcodebuild test … -only-testing:PersonaUITests/ImageViewerTests
 final class ImageViewerTests: XCTestCase {
     private var hub = ""
     /// The blog conversation, whose last turn looked at five pictures (MOCK_TURN_IMAGES=many).
     private let blog = "studio/a1f3c2d4-0000-4000-8000-000000000003"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TURN_IMAGES=many (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TURN_IMAGES=many (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -20,7 +20,7 @@ final class ImageViewerTests: XCTestCase {
 
     @MainActor private func open(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", blog, "-openViewedImage", "2"] + extra
         app.launchPinned()
         XCTAssertTrue(app.buttons["viewer-close"].waitForExistence(timeout: 30), "the viewer did not open:\n\(app.debugDescription)")
@@ -208,7 +208,7 @@ final class ImageViewerTests: XCTestCase {
         attachShot(app, name: "dark-viewer-paging-and-chrome")
     }
 
-    private static let probePort = Int(ProcessInfo.processInfo.environment["JARVIS_VIEWER_CLI_PORT"] ?? "18932") ?? 18932
+    private static let probePort = Int(ProcessInfo.processInfo.environment["PERSONA_VIEWER_CLI_PORT"] ?? "18932") ?? 18932
     private static let probeToken = UUID().uuidString
 
     @MainActor private func openProbe(_ extra: [String] = []) -> XCUIApplication {

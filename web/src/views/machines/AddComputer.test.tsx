@@ -15,7 +15,7 @@ import { AddComputer } from "./AddComputer";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const PAIR = "jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_x&machine=home";
+const PAIR = "persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_x&machine=home";
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "Content-Type": "application/json" } });
 
 let posts: { path: string; body: unknown }[] = [];
@@ -37,7 +37,7 @@ function hub(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
         name: "家里的服务器",
         trust: "pending",
         added: true,
-        command: `jarvis-link pair '${PAIR}'`,
+        command: `persona-link pair '${PAIR}'`,
         install: { linux: `curl -fsSL https://example.com/install.sh | sh -s -- --node --pair '${PAIR}'` },
       }),
     );
@@ -230,7 +230,7 @@ describe("AddComputer", () => {
     await click("Linux");
     expect(text()).toContain("curl -fsSL https://example.com/install.sh");
     await click("Windows");
-    expect(text()).toContain("jarvis-link.exe install");
+    expect(text()).toContain("persona-link.exe install");
   });
 
   it("drops a reply to a request made before the dialog closed", async () => {
@@ -248,7 +248,7 @@ describe("AddComputer", () => {
     await act(async () => root.render(<AddComputer open={false} onClose={() => {}} />));
     await act(async () => root.render(<AddComputer open onClose={() => {}} />));
     await flush();
-    release(json({ token: "jp_old", expires_at: new Date(Date.now() + 600_000).toISOString(), pair_url: "jarvis://old", machine: "old", name: "旧电脑" }));
+    release(json({ token: "jp_old", expires_at: new Date(Date.now() + 600_000).toISOString(), pair_url: "persona://old", machine: "old", name: "旧电脑" }));
     await flush();
     expect(button("下一步")).toBeTruthy(); // still the new dialog's form
     expect(text()).not.toContain("旧电脑");

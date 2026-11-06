@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UserNotifications
-@testable import Jarvis
+@testable import Persona
 
 struct NotificationActionsTests {
     /// The hub names categories "INTERACTION_" + upper-cased kind (push.go); every kind must have one registered.

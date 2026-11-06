@@ -26,7 +26,7 @@ import (
 // The mesh end to end: hubs in this process on 127.0.0.1 over TLS, in-process nodes, apps on WebSockets.
 
 // meshNode is a computer's node: it answers the calls a hub makes and can push events and ask questions. A resident
-// one takes one connection at a time (a new one drops the one before), like `jarvisd node --attach`.
+// one takes one connection at a time (a new one drops the one before), like `personad node --attach`.
 type meshNode struct {
 	uid, host string
 	resident  bool
@@ -257,7 +257,7 @@ type testHub struct {
 	mgr    *testManager // carries its machines
 }
 
-var meshLogs = os.Getenv("JARVIS_MESH_LOG") == "1"
+var meshLogs = os.Getenv("PERSONA_MESH_LOG") == "1"
 
 func startTestHub(t *testing.T, id, name string, machines []MachineConfig, nodes []*meshNode) *testHub {
 	t.Helper()
@@ -581,7 +581,7 @@ func TestMeshPairingCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(code.Code, "jarvis://peer?") || time.Until(code.ExpiresAt) > peerCodeLife || time.Until(code.ExpiresAt) < peerCodeLife-time.Minute {
+	if !strings.HasPrefix(code.Code, "persona://peer?") || time.Until(code.ExpiresAt) > peerCodeLife || time.Until(code.ExpiresAt) < peerCodeLife-time.Minute {
 		t.Fatalf("code %+v", code)
 	}
 	if _, err := a.h.joinPeer(ctx, code.Code); err != nil {

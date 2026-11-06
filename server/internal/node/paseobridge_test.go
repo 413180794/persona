@@ -19,7 +19,7 @@ import (
 
 // The bridge is written out once per version, and older versions go.
 func TestPaseoBridgeIsWrittenOut(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "jarvis-paseo-runtime")
+	dir := filepath.Join(t.TempDir(), "persona-paseo-runtime")
 	files := []runtimepkg.File{{Path: "paseo/bridge.mjs", Data: []byte("// v1")}, {Path: "runtime-sdk/index.js", Data: []byte("export {}")}}
 	pkg := &runtimepkg.Package{Name: paseoPackage, Files: files, Hash: runtimepkg.Hash(files)}
 	got, err := writePackage(dir, pkg)

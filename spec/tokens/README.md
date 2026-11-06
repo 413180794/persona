@@ -13,12 +13,12 @@
 | `color.semantic.json` | `semantic.<style>.<mode>` | `ios/Shared/Theme.swift` 的 `accent(_:)`、`userBubble(_:)`、`userBubbleText`、`pageBackground(_:)`、`card(_:)`、`cardStroke`；原生风格取 `prototypes/android/style.css` |
 | 同上 | `common.<mode>` | `Theme.brand/danger/positive/caution/cautionText/ai/loop/countBadge`、代码和终端色、`Theme.Diff`、`Theme.Hue`、`Theme.Fill` |
 | 同上 | `system.<mode>` | `Theme.systemPage/systemCard`、SwiftUI 的 `Color.primary/secondary`、UIKit 系统 fill 的显式回退值；见下文限制 |
-| `color.status.json` | `status.<mode>.<state>` | `ios/Shared/StatusPalette.swift`；待唤醒和已屏蔽的映射取 `ios/Jarvis/Views/Chats/ChatsView.swift` 的分组表 |
+| `color.status.json` | `status.<mode>.<state>` | `ios/Shared/StatusPalette.swift`；待唤醒和已屏蔽的映射取 `ios/Persona/Views/Chats/ChatsView.swift` 的分组表 |
 | `dimension.json` | `radius`、`space`、`watch` | `Theme.Radius`、`Theme.Space`、`Theme.Watch`；触控区取 `docs/redesign/README.md` D7，胶囊按短边的一半 |
 | `type.json` | `type.<role>` | `Theme.Font` 的文本样式、默认字号和字重；行高是跨端默认值，iOS 没有写死这些行高 |
 | `motion.json` | `motion` | `Theme.Motion.state/layout` 的配置时长；减少动态效果时用零时长。它们不是运行耗时的实测数据 |
-| `surface.json` | `surface.<style>` | `ios/Jarvis/Views/Styling.swift` 的 `Surface`：材质、阴影颜色与偏移、描边；原生回退使用无阴影实心表面 |
-| `rules.json` | `$extensions.jarvis` | `docs/ios.md` 可读性底线、`docs/redesign/ux.md` 第 7、8 节，以及 WCAG AA |
+| `surface.json` | `surface.<style>` | `ios/Persona/Views/Styling.swift` 的 `Surface`：材质、阴影颜色与偏移、描边；原生回退使用无阴影实心表面 |
+| `rules.json` | `$extensions.persona` | `docs/ios.md` 可读性底线、`docs/redesign/ux.md` 第 7、8 节，以及 WCAG AA |
 
 风格键为 `glass`（液态玻璃）、`claude`、`clay`（黏土）、`island`、`lark`（飞书）、`native`（Android 原生）；模式键为 `light`、`dark`。每个风格、模式必须有同样的语义色字段。
 
@@ -88,19 +88,19 @@ iOS 的系统背景、文字与 fill 随系统环境变化，源码没有唯一 
 
 ```sh
 python3 scripts/assets/gen_tokens.py \
-  --kotlin /tmp/jarvis-tokens/Tokens.kt \
-  --css /tmp/jarvis-tokens/tokens.css \
-  --md /tmp/jarvis-tokens/palette.md
+  --kotlin /tmp/persona-tokens/Tokens.kt \
+  --css /tmp/persona-tokens/tokens.css \
+  --md /tmp/persona-tokens/palette.md
 
 python3 scripts/assets/gen_tokens.py --check \
-  --kotlin /tmp/jarvis-tokens/Tokens.kt \
-  --css /tmp/jarvis-tokens/tokens.css \
-  --md /tmp/jarvis-tokens/palette.md
+  --kotlin /tmp/persona-tokens/Tokens.kt \
+  --css /tmp/persona-tokens/tokens.css \
+  --md /tmp/persona-tokens/palette.md
 
 python3 -m unittest discover -s scripts/assets -p test_gen_tokens.py -v
 ```
 
-三个输出参数可以单独使用，参数值是文件路径。包名默认 `jarvis.android.core.designsystem`，可用 `--package example.design` 或 `--kotlin-package example.design` 改。默认 token 目录相对脚本定位，任意工作目录均可调用；`--source <目录>` 可检查独立的测试用 token。
+三个输出参数可以单独使用，参数值是文件路径。包名默认 `persona.android.core.designsystem`，可用 `--package example.design` 或 `--kotlin-package example.design` 改。默认 token 目录相对脚本定位，任意工作目录均可调用；`--source <目录>` 可检查独立的测试用 token。
 
 普通生成先校验结构与引用，打印对比度失败但仍输出文件，成功写入时返回 0。这样可以在修色前先审阅色板。`--check` 全程只读：结构、引用、底线对比度（不含已知例外）、已知例外是否已经达标、指定文件的字节一致性有任一失败就返回 1，成功返回 0；建议项只报告；参数用法错误返回 2。未传输出路径时只检查 JSON 与对比度，不会推测客户端中的产物位置。已有对比度失败不会跳过产物比较，文件不存在也算失败。
 
@@ -132,7 +132,7 @@ CSS 在 `:root` 暴露全路径变量，例如 `--semantic-native-light-accent`�
 
 ## 对比度规则与现有冲突
 
-`rules.json` 的 `$extensions.jarvis.contrast` 保存规则。路径可用 `{style}` 和 `{mode}`，每条规则在六种风格、两种模式下展开。背景透明时必须提供不透明 `canvas`；检查器先在 sRGB 中按 alpha 合成背景，再合成前景，最后按 [WCAG 2.2 相对亮度公式](https://www.w3.org/TR/WCAG22/#dfn-relative-luminance) 计算。使用完整精度判断，显示时才取四位小数。
+`rules.json` 的 `$extensions.persona.contrast` 保存规则。路径可用 `{style}` 和 `{mode}`，每条规则在六种风格、两种模式下展开。背景透明时必须提供不透明 `canvas`；检查器先在 sRGB 中按 alpha 合成背景，再合成前景，最后按 [WCAG 2.2 相对亮度公式](https://www.w3.org/TR/WCAG22/#dfn-relative-luminance) 计算。使用完整精度判断，显示时才取四位小数。
 
 底线为按钮字与主色 3.5、主色链接与页面 3、用户气泡正文 4.5。其余正文、次要文字、状态字、计数、diff 符号与终端文字按 4.5；大字按 3，但达到大字尺寸和字重条件前仍按正文要求。状态标签还检查 `text / tint / pageBackground` 的透明度合成结果。点色与发丝描边不作为文字对比度规则；实际控件的非文字边界与焦点可见性仍需组件验收。
 

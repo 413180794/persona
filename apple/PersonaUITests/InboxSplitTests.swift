@@ -2,18 +2,18 @@ import XCTest
 
 /// Regular width (iPad, iPhone Duo open): the inbox list is the split's sidebar and the items it opens replace each
 /// other in the detail column. Each opens as its own page: another Feishu chat shows its own messages and draft, not
-/// those of the chat open before. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB); skipped when the app is not a
-/// split. TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a screenshot of each step.
+/// those of the chat open before. Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB); skipped when the app is not a
+/// split. TEST_RUNNER_PERSONA_SHOTS=<dir> keeps a screenshot of each step.
 final class InboxSplitTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "", "-inbox.source", ""]
         app.launchPinned()
         guard app.windows.firstMatch.frame.width > 600 else { throw XCTSkip("not a split: needs an iPad or iPhone Duo open") }
@@ -77,7 +77,7 @@ final class InboxSplitTests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("inbox-split-\(name).png"))
     }
 

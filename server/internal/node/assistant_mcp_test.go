@@ -56,9 +56,9 @@ func TestAssistantMCPServersRules(t *testing.T) {
 	}
 	// The assistant's own server name is never taken.
 	s := exampleMCP()
-	s.ID = "jarvis"
+	s.ID = "persona"
 	if servers, _, _ := assistantMCPServers([]proto.AssistantMCPServer{s}); len(servers) != 0 {
-		t.Fatalf("took jarvis: %v", servers)
+		t.Fatalf("took persona: %v", servers)
 	}
 }
 
@@ -68,9 +68,9 @@ func TestAssistantMCPBin(t *testing.T) {
 	oldBin := writeFakeMCPBin(t, t.TempDir(), "example-agent", "Usage: example-agent mcp-server")
 	s := exampleMCP()
 
-	// PERSONA_ takes precedence over JARVIS_.
+	// PERSONA_ overrides executable lookup without reading unrelated variables.
 	t.Setenv("PERSONA_EXAMPLE_AGENT", bin)
-	t.Setenv("JARVIS_EXAMPLE_AGENT", filepath.Join(dir, "missing"))
+	t.Setenv("OTHER_EXAMPLE_AGENT", filepath.Join(dir, "missing"))
 	if got := assistantMCPBin(s); got != bin {
 		t.Fatalf("env override: got %q, want %q", got, bin)
 	}
@@ -86,25 +86,27 @@ func TestAssistantMCPBin(t *testing.T) {
 		t.Fatalf("off should turn off, got %q", got)
 	}
 
-	// The legacy JARVIS_ name when PERSONA_ is unset.
+	// With the override absent, an unrelated variable cannot enable the server.
 	os.Unsetenv("PERSONA_EXAMPLE_AGENT")
-	t.Setenv("JARVIS_EXAMPLE_AGENT", bin)
-	if got := assistantMCPBin(s); got != bin {
-		t.Fatalf("legacy fallback: got %q, want %q", got, bin)
+	t.Setenv("OTHER_EXAMPLE_AGENT", bin)
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	if got := assistantMCPBin(s); got != "" {
+		t.Fatalf("unrelated variable enabled server: %q", got)
 	}
 
 	// A build whose --help lacks a word of requires is left out.
-	t.Setenv("JARVIS_EXAMPLE_AGENT", oldBin)
+	t.Setenv("PERSONA_EXAMPLE_AGENT", oldBin)
 	if got := assistantMCPBin(s); got != "" {
 		t.Fatalf("older build should be left out, got %q", got)
 	}
-	t.Setenv("JARVIS_EXAMPLE_AGENT", filepath.Join(dir, "missing"))
+	t.Setenv("PERSONA_EXAMPLE_AGENT", filepath.Join(dir, "missing"))
 	if got := assistantMCPBin(s); got != "" {
 		t.Fatalf("missing override: got %q", got)
 	}
 
 	// Neither set: PATH, then ~/bin.
-	os.Unsetenv("JARVIS_EXAMPLE_AGENT")
+	os.Unsetenv("PERSONA_EXAMPLE_AGENT")
 	t.Setenv("PATH", dir)
 	if got := assistantMCPBin(s); got != bin {
 		t.Fatalf("PATH: got %q, want %q", got, bin)
@@ -158,8 +160,8 @@ func TestClaudeAssistantMCPAndToolsWiring(t *testing.T) {
 	}
 	mcpJSON, flags := n.claudeAssistantMCPAndTools("sess-123", "")
 	got := servers(mcpJSON)
-	if _, ok := got["jarvis"]; !ok {
-		t.Fatal("missing jarvis mcp server")
+	if _, ok := got["persona"]; !ok {
+		t.Fatal("missing persona mcp server")
 	}
 	if got["example"]["command"] != bin {
 		t.Fatalf("example server = %v, want %q", got["example"], bin)

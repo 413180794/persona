@@ -17,7 +17,7 @@ import (
 // tag the compose file runs.
 type Image struct {
 	Registry string // ghcr.io, registry-1.docker.io, localhost:5000
-	Repo     string // owner/jarvis (library/<name> for Docker Hub's official images)
+	Repo     string // owner/persona (library/<name> for Docker Hub's official images)
 	Tag      string // latest when none is given
 }
 
@@ -172,7 +172,7 @@ func pullToken(ctx context.Context, client *http.Client, challenge, token string
 		return "", err
 	}
 	if token != "" {
-		req.SetBasicAuth("jarvis", token)
+		req.SetBasicAuth("persona", token)
 	}
 	res, err := client.Do(req)
 	if err != nil {

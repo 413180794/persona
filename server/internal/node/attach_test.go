@@ -23,7 +23,7 @@ func TestRelay(t *testing.T) {
 		t.Fatal("relayed with no resident node listening")
 	}
 
-	if err := os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".persona"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	ln, err := net.Listen("unix", AttachSocketPath())
@@ -59,7 +59,7 @@ func TestRelay(t *testing.T) {
 // A second resident node refuses to start while one is listening: it would steal relays from the first.
 func TestAttachIsSingle(t *testing.T) {
 	home := shortHome(t)
-	if err := os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".persona"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	ln, err := net.Listen("unix", AttachSocketPath())
@@ -87,7 +87,7 @@ func TestAttachIsSingle(t *testing.T) {
 // A stale socket file (the last resident node died without cleaning up) doesn't stop a new one.
 func TestAttachReplacesStaleSocket(t *testing.T) {
 	home := shortHome(t)
-	if err := os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".persona"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(AttachSocketPath(), nil, 0o600); err != nil {
@@ -116,7 +116,7 @@ func TestAttachReplacesStaleSocket(t *testing.T) {
 // A resident node set up for tailcat serves the hub's connections from there too, alongside relays over ssh.
 func TestAttachServesExtraConnections(t *testing.T) {
 	home := shortHome(t)
-	if err := os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".persona"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -165,7 +165,7 @@ func TestAttachServesExtraConnections(t *testing.T) {
 }
 
 // shortHome sets HOME to a short temp dir: a unix socket path is limited to 104 bytes on macOS, and t.TempDir() under
-// /var/folders makes ~/.jarvis/node-attach.sock longer than that. Windows has no /tmp; its temp directory is short.
+// /var/folders makes ~/.persona/node-attach.sock longer than that. Windows has no /tmp; its temp directory is short.
 func shortHome(t *testing.T) string {
 	t.Helper()
 	base := "/tmp"

@@ -11,12 +11,12 @@ class CardRouteTest {
     @Test fun aCardClosesTheConversationLeftOpenOnAgents() {
         val stacks = stacks()
         stacks.getValue(AppTab.Agents).add(ChatRoute("machine", "other", ConversationKind.Agent))
-        stacks.getValue(AppTab.Jarvis).add(ChatRoute("machine", "assistant", ConversationKind.Assistant))
+        stacks.getValue(AppTab.Persona).add(ChatRoute("machine", "assistant", ConversationKind.Assistant))
         val route = ResolvedRoute(AppTab.Agents, AgentsRoute, card = RequestRef("machine", "script"))
         assertEquals(AppTab.Agents, route.restore(stacks))
         assertEquals(listOf<NavKey>(AgentsRoute), stacks.getValue(AppTab.Agents))
         // Other tabs stay as the user left them.
-        assertEquals(2, stacks.getValue(AppTab.Jarvis).size)
+        assertEquals(2, stacks.getValue(AppTab.Persona).size)
     }
 
     @Test fun aTabOnlyRouteStillKeepsTheStack() {

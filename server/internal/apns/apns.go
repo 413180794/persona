@@ -1,5 +1,5 @@
 // Package apns sends to Apple Push Notification service with a token-based (.p8) key. The hub uses it when it has
-// its own key (~/.jarvis/apns.json); the push relay (jarvisd relay, docs/push-relay.md) uses it for everyone else.
+// its own key (~/.persona/apns.json); the push relay (personad relay, docs/push-relay.md) uses it for everyone else.
 package apns
 
 import (
@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-// Config is the key: ~/.jarvis/apns.json on a hub, the "apns" object in relay.json.
+// Config is the key: ~/.persona/apns.json on a hub, the "apns" object in relay.json.
 type Config struct {
 	KeyID   string `json:"key_id"`
 	TeamID  string `json:"team_id"`

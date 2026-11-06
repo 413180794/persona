@@ -3,12 +3,12 @@ import XCTest
 final class VideoFileUITests: XCTestCase {
     @MainActor func testVideoOpensAndReopens() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_VIDEO_HUB"] ?? ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_VIDEO_HUB"] ?? ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
             throw XCTSkip("需要带 MOCK_VIDEO_FILE 的独立 mock hub")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        let appearance = ProcessInfo.processInfo.environment["JARVIS_VIDEO_APPEARANCE"] ?? "system"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let appearance = ProcessInfo.processInfo.environment["PERSONA_VIDEO_APPEARANCE"] ?? "system"
         defer { app.terminate() }
         for pass in 0..<2 {
             if pass == 0 {

@@ -10,14 +10,14 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-func TestManagedLauncherRunsThroughJarvisd(t *testing.T) {
-	n := &Node{bin: "/opt/jarvis bin/jarvisd"}
+func TestManagedLauncherRunsThroughPersonad(t *testing.T) {
+	n := &Node{bin: "/opt/persona bin/personad"}
 	if got := n.launcherCommand("cc_kiro"); got != "cc_kiro" {
 		t.Fatalf("a ~/.zshrc launcher is its own name: %q", got)
 	}
 	n.setManaged([]proto.ManagedLauncher{{Name: "jv_strong", BaseURL: "http://gw.example.com", Model: "m1", APIKey: "k"}})
-	if got := n.launcherCommand("jv_strong"); got != "'/opt/jarvis bin/jarvisd' launch jv_strong" {
-		t.Fatalf("a managed one runs as jarvisd launch: %q", got)
+	if got := n.launcherCommand("jv_strong"); got != "'/opt/persona bin/personad' launch jv_strong" {
+		t.Fatalf("a managed one runs as personad launch: %q", got)
 	}
 	env := n.launcherEnv("jv_strong")["env"].([]string)
 	// ANTHROPIC_AUTH_TOKEN is there and empty: Claude Code would otherwise take one from ~/.claude/settings.json and
@@ -73,7 +73,7 @@ func TestClaudeExecutableFallsBackToInstallLocations(t *testing.T) {
 }
 
 func TestManagedLauncherBearerAuth(t *testing.T) {
-	n := &Node{bin: "jarvisd"}
+	n := &Node{bin: "personad"}
 	n.setManaged([]proto.ManagedLauncher{{Name: "gw", BaseURL: "http://gw.example.com", Model: "m1", APIKey: "k", Auth: "bearer"}})
 	env := n.launcherEnv("gw")["env"].([]string)
 	if !slices.Contains(env, "ANTHROPIC_AUTH_TOKEN=k") || !slices.Contains(env, "ANTHROPIC_API_KEY=") {
@@ -136,7 +136,7 @@ func TestRedactSecrets(t *testing.T) {
 // call that says nothing of it leaves it, and "" clears it.
 func TestPlainClaudeStartsInTheConfiguredDir(t *testing.T) {
 	n, _ := testNode(t)
-	n.bin = "/opt/jarvisd"
+	n.bin = "/opt/personad"
 	n.setManaged([]proto.ManagedLauncher{{Name: "jv_strong", BaseURL: "http://gw.example.com"}})
 	if got := n.launcherCommand("claude"); got != "claude" {
 		t.Fatalf("unset: %q", got)
@@ -154,7 +154,7 @@ func TestPlainClaudeStartsInTheConfiguredDir(t *testing.T) {
 	if got := n.launcherCommand("cc_kiro"); got != "cc_kiro" {
 		t.Errorf("a ~/.zshrc launcher keeps its own: %q", got)
 	}
-	if got := n.launcherCommand("jv_strong"); got != "/opt/jarvisd launch jv_strong" {
+	if got := n.launcherCommand("jv_strong"); got != "/opt/personad launch jv_strong" {
 		t.Errorf("a managed launcher keeps its own: %q", got)
 	}
 	configureNode(t, n, map[string]any{"botmux": true})

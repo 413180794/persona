@@ -338,7 +338,7 @@
       "required": ["id", "name", "light", "dark"]
     },
     "LookID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "A look's id: also a persona package's (the apps cache by it)."},
-    "BuiltinLook": {"type": "string", "enum": ["persona", "jarvis", "jarvis-circuit"], "description": "A look every app draws itself: Mochi (the default), Visor, Circuit."},
+    "BuiltinLook": {"type": "string", "enum": ["persona", "persona-visor", "persona-circuit"], "description": "A look every app draws itself: Mochi (the default), Visor, Circuit."},
     "LookTexts": {
       "description": "A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
       "type": "object",
@@ -589,9 +589,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"$ref": "#/$defs/ID", "description": "The server's name for the assistant; not jarvis or persona."},
+        "id": {"$ref": "#/$defs/ID", "description": "The server's name for the assistant; not persona or persona."},
         "command": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$", "description": "Looked up on PATH, then in ~/bin."},
-        "env": {"type": "string", "pattern": "^PERSONA_[A-Z0-9_]{1,56}$", "description": "A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or \"\" / 0 / off / false to leave the server out."},
+        "env": {"type": "string", "pattern": "^PERSONA_[A-Z0-9_]{1,56}$", "description": "A PERSONA_ variable (PERSONA_ read too) that, when set, replaces the lookup: a path, or \"\" / 0 / off / false to leave the server out."},
         "args": {"type": "array", "items": {"type": "string"}},
         "requires": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Words `<command> --help` must print; otherwise the server is left out."},
         "allow": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"}, "description": "Tools that run without asking."},

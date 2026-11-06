@@ -1,4 +1,4 @@
-// End-to-end harness for a runtime (docs/runtimes.md "Acceptance"): starts a real `jarvisd node --stdio` in an isolated HOME
+// End-to-end harness for a runtime (docs/runtimes.md "Acceptance"): starts a real `personad node --stdio` in an isolated HOME
 // and plays the hub on its stdio, so a check can drive the runtime the way the phone does and watch what reaches the
 // hub. The runtime under test connects to `runtimeSocket`. Nothing outside the temp directory is touched.
 
@@ -9,15 +9,15 @@ import { Peer } from '../lib/wire.js'
 import { until } from './fake-node.js'
 
 /**
- * @param {{ jarvisd: string, keep?: boolean, home?: string, env?: Record<string, string> }} opts - home: an existing
- *   HOME to use (a resident node's, startResident): `jarvisd node --stdio` then relays to the resident node, as the
+ * @param {{ personad: string, keep?: boolean, home?: string, env?: Record<string, string> }} opts - home: an existing
+ *   HOME to use (a resident node's, startResident): `personad node --stdio` then relays to the resident node, as the
  *   hub's ssh does. Left in place. env: more of the node's environment (HERDR_SOCKET_PATH for a herdr of the run's own).
  */
-export async function startNode({ jarvisd, keep = false, home: given, env = {} }) {
+export async function startNode({ personad, keep = false, home: given, env = {} }) {
   const root = given ? undefined : mkdtempSync(join('/tmp', 'jrt-e2e-'))
   const home = given ?? join(root, 'home')
   mkdirSync(home, { recursive: true })
-  const child = spawn(jarvisd, ['node', '--stdio'], { env: { PATH: '/usr/bin:/bin', ...env, HOME: home }, stdio: ['pipe', 'pipe', 'pipe'] })
+  const child = spawn(personad, ['node', '--stdio'], { env: { PATH: '/usr/bin:/bin', ...env, HOME: home }, stdio: ['pipe', 'pipe', 'pipe'] })
   const log = []
   child.stderr.on('data', (d) => log.push(String(d)))
   const stdio = {
@@ -26,7 +26,7 @@ export async function startNode({ jarvisd, keep = false, home: given, env = {} }
     write: (s) => child.stdin.write(s),
     destroy: () => child.kill(),
   }
-  const h = { root, home, runtimeSocket: join(home, '.jarvis', 'runtime.sock'), events: [], asked: [], log }
+  const h = { root, home, runtimeSocket: join(home, '.persona', 'runtime.sock'), events: [], asked: [], log }
   h.resolve = () => ({ dismiss: true }) // how the "phone" answers interaction cards
   h.tools = [] // the hub's tools (mcp.tools), and how a call of one is answered (mcp.call)
   h.assistantTools = [] // listed besides h.tools when the node asks for the assistant's
@@ -85,19 +85,19 @@ export async function startNode({ jarvisd, keep = false, home: given, env = {} }
 }
 
 /**
- * A resident node (`jarvisd node --attach`, what launchd keeps running on a Mac) in a fresh HOME; hub connections
+ * A resident node (`personad node --attach`, what launchd keeps running on a Mac) in a fresh HOME; hub connections
  * reach it through startNode({ home }). stop ends it (the HOME stays until removeHome).
- * @param {{ jarvisd: string, home?: string }} opts
+ * @param {{ personad: string, home?: string }} opts
  */
-export async function startResident({ jarvisd, home: given }) {
+export async function startResident({ personad, home: given }) {
   const root = given ? undefined : mkdtempSync(join('/tmp', 'jrt-res-'))
   const home = given ?? join(root, 'home')
-  mkdirSync(join(home, '.jarvis'), { recursive: true })
-  const child = spawn(jarvisd, ['node', '--attach'], { env: { PATH: '/usr/bin:/bin', HOME: home }, stdio: ['ignore', 'ignore', 'pipe'] })
+  mkdirSync(join(home, '.persona'), { recursive: true })
+  const child = spawn(personad, ['node', '--attach'], { env: { PATH: '/usr/bin:/bin', HOME: home }, stdio: ['ignore', 'ignore', 'pipe'] })
   const log = []
   child.stderr.on('data', (d) => log.push(String(d)))
-  const r = { home, runtimeSocket: join(home, '.jarvis', 'runtime.sock'), log, child }
-  await until('the resident node listening', () => existsSync(join(home, '.jarvis', 'node-attach.sock')) && existsSync(r.runtimeSocket), 20_000)
+  const r = { home, runtimeSocket: join(home, '.persona', 'runtime.sock'), log, child }
+  await until('the resident node listening', () => existsSync(join(home, '.persona', 'node-attach.sock')) && existsSync(r.runtimeSocket), 20_000)
   r.stop = async () => {
     if (child.exitCode !== null) return
     const exited = new Promise((res) => child.once('exit', res))

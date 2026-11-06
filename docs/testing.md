@@ -17,7 +17,7 @@ Every PR's CI "Scripts tests" (`.github/workflows/scripts-tests.yml`, job `scrip
 
 CI runs server `go vet ./...` and `go test -count=1 ./...` on Linux (`.github/workflows/server-test.yml`), only when a PR touches paths the server reads
 (`server/`, `sdk/go/`, `spec/fixtures/`, `schema/extension/`, `integrations/`, etc.; list in the workflow). New pushes on the same branch cancel old running jobs.
-If server tests start reading other repository files, add their paths. CI has no Postgres; database tests skip without `JARVIS_TEST_DATABASE_URL`, still relying on `scripts/test/test-server.sh` on the hub machine.
+If server tests start reading other repository files, add their paths. CI has no Postgres; database tests skip without `PERSONA_TEST_DATABASE_URL`, still relying on `scripts/test/test-server.sh` on the hub machine.
 
 ## Fast local checks (`scripts/check-fast.sh`, #2849)
 
@@ -57,7 +57,7 @@ Any changes always run `scripts/privacy_check.py` first: local-only, no network,
 Not covered:
 
 - iOS / macOS / watchOS builds, simulator screenshots and UI tests still run on Mac with `scripts/app/sim.sh`, `scripts/app/ui-test.sh`; PersonaKit uses `swift test`.
-- Full server tests against real Postgres still use `scripts/test/test-server.sh` (`internal/db`, etc. skip without `JARVIS_TEST_DATABASE_URL`; full `internal/node`, `internal/hub`, etc. assume a hub-machine environment. Fast-check timeouts aren't failures; test-server.sh is authoritative).
+- Full server tests against real Postgres still use `scripts/test/test-server.sh` (`internal/db`, etc. skip without `PERSONA_TEST_DATABASE_URL`; full `internal/node`, `internal/hub`, etc. assume a hub-machine environment. Fast-check timeouts aren't failures; test-server.sh is authoritative).
 - Android Gradle builds/screenshots use `scripts/app/android.sh`.
 
 **PersonaKit** (`apple/Packages/PersonaKit`, #2095): non-UI App logic moves into this package. Tests run with `swift test` on Mac: about 10 seconds cold,
@@ -81,10 +81,10 @@ API smoke tests: `curl -H "Authorization: Bearer $TOKEN" …/api/v1/machines`, `
 
 | Scenario | Method | Result |
 | --- | --- | --- |
-| Create session from phone | `POST /api/v1/sessions`, launch via a launcher in `~/jarvis-test` on the hub machine | Directory trust accepted automatically; first message delivered |
+| Create session from phone | `POST /api/v1/sessions`, launch via a launcher in `~/persona-test` on the hub machine | Directory trust accepted automatically; first message delivered |
 | Questions | First message asks claude to call AskUserQuestion (one question / two, including multi-select) | question interaction appears on hub; after `resolve`, claude receives answers and continues |
 | Plan approval | ExitPlanMode → deny + feedback → revise plan → allow + setMode | Both branches correct (`docs/claude-integration.md`) |
-| Phone tools | claude on hub machine calls `mcp__jarvis__phone_device_info` | node → hub → simulator App returns iPhone 17 Pro / iOS 26.5 |
+| Phone tools | claude on hub machine calls `mcp__persona__phone_device_info` | node → hub → simulator App returns iPhone 17 Pro / iOS 26.5 |
 | Live stream | App opens a working session on another Mac | Tool steps append live; status bar shows spinner line |
 | Watch | Watch simulator `-pairURL` | "Needs you" (waiting Agents + Inbox items), running sessions; `-openInboxFirst YES` opens first item, `-openWatchItem question\|plan\|permission\|screen\|session` opens first request of that type / first running session (`running`: hides "Needs you" to screenshot running rows; `inbox`: only Inbox rows under "Needs you"); `-showWatchMissing Work,Home` shows groups missing watch credentials (`""` is default group; no `-pairURL` opens "No watch credentials yet", #1185) |
 
@@ -119,7 +119,7 @@ python3 scripts/mock/mock_hub.py &                                  # 127.0.0.1:
 SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue number>")          # create/slim boot ("Simulators"), normal boot if simslim absent
 xcrun simctl status_bar $SIM override --time "$(date +%H:%M)" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
 xcrun simctl launch --terminate-running-process $SIM <bundle id> \
-  -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A18760&token=mock" [-tab dev|mail] [-openSession <machine>/<session>]
+  -pairURL "persona://pair?url=http%3A%2F%2F127.0.0.1%3A18760&token=mock" [-tab dev|mail] [-openSession <machine>/<session>]
 ```
 
 - **Create a new simulator**, not one paired to a real hub: App disk caches (chats/Inbox) can leak real data into screenshots.
@@ -132,22 +132,22 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - herdr stopped (#1916): `MOCK_HERDR_STOPPED=macbook` stops classic herdr for mock MacBook; Agents shows "MacBook's herdr isn't running" and "Start" at the top.
   `MOCK_HERDR_START=slow|fail|stale`: startup takes 6 seconds / fails (node's reason) / starts but `GET` still reports stopped (old hub). `GET /mock/herdr?stopped=…&start=…` changes it live,
   `/mock/reset` restores environment settings; `starts` counts requests per machine. `-showHerdrStart YES` auto-taps Start once on the first row (capture "Starting…" and failure).
-  UI suite `HerdrNoticeTests` (`TEST_RUNNER_JARVIS_MOCK_HUB`, screenshots in `JARVIS_SHOTS`).
-- Computer control (docs/computer-use.md): `MOCK_COMPUTER=ready|permissions|both|locked|missing` enables extension `cua` and mock MacBook (ready / missing Screen Recording / missing both permissions / locked / not installed: "Install Cua Driver" advances through download, verification, disabling analytics, authorization and Allow, every `MOCK_COMPUTER_STEP` seconds, default 2). Add `MOCK_WEB=web/dist` (first `npm run build`) to host the web VNC page and forward MacBook's 5900 to this Mac's own Screen Sharing (UI tests only with `TEST_RUNNER_JARVIS_COMPUTER_SCREEN=1`); Mac Studio remains disabled. `=off` enables the extension but no machines. With `MOCK_PLUGINS=1`, the extension list includes "Computer control (Cua)"; "Computers it can control" syncs bidirectionally with each Mac's `computer.enabled` (`-tab settings -openExtension cua`). `-tab settings -openMachines YES -openMachineDetail macbook` opens MacBook's machine page. `MOCK_COMPUTER_OPERATING=1` adds a running operation to the assistant's "Calculate 6×7" and the Agent widget chat, showing "Operating MacBook · …" above input (`ScreenDrawerTests`). `MOCK_DEVICE_TOKEN=jd_…` (same `TEST_RUNNER_JARVIS_DEVICE_TOKEN` in UI tests, `UITestToken`) makes mock `/api/` accept only that token (`Authorization` or `?token=`), returning 401 invalid token otherwise, like hub (#1498: VNC page got a double-encoded token). `MOCK_COMPUTER_APPS=1` gives MacBook two assistant-approved apps (Calculator, entire screen), removable on its machine page (`ComputerSectionTests.testAllowedAppsCanBeTakenBack`, `TEST_RUNNER_JARVIS_COMPUTER_APPS=1`). "Don't auto-lock while the extension is on": machine toggle asks first (`ComputerSectionTests.testNoAutoLockAsksFirst`), and per-machine extension toggles honor `x-confirm` (`ExtensionMachineSwitchesTests.testAListWithAConfirmAsksFirst`, `MOCK_PLUGINS=1`); mock syncs extension-page `no_auto_lock` to each `computer.no_auto_lock`. `MOCK_SCREEN=fake` replaces forwarding to real Screen Sharing with a mock server (macOS-like ARD login first when openssl exists, then VeNCrypt Plain, account `me`, password `mock-pass`; `GET /mock/screen-password?p=…` changes password, `&clear=1` clears recorded keys; correct password+Return unlocks mock MacBook). It draws one desktop frame, supplies ZRLE when requested, records pointers/clicks/clipboard (node `GET/POST …/computer/clipboard` shares it); `?clip=…` sends clipboard to clients, `&slow=S` delays S seconds (miniwindow "Connecting…"), `&down=1` drops current and future connections (`0` restores). `MOCK_SCREEN_ANIMATE=1` moves a square at about 30 fps (`ScreenPasswordTests`, `VNCTests`, native client; UI tests use `TEST_RUNNER_JARVIS_FAKE_SCREEN=1`). Simulators have no PiP; VNC falls back to a full page, miniwindow needs a device.
-- File browser upload / Save to Files (#4858, `docs/protocol.md` "Changing files"): `MOCK_FILE_OPS=1` makes the mock take `dest=dir` (files go into the mock tree, a taken name is 409 `exists`, `conflict=keep|replace` as the node does, outside the home `read_only`) and the rename / move / trash / restore routes. `-tab settings -openMachines YES -openMachineDetail macbook -openMachineFiles YES` opens the MacBook's Files directly; `-showFolderUpload <name>` uploads a 24 MB fake file into the current folder (`MOCK_UPLOAD_KBPS=300` makes the progress visible); an existing name (`README.md` in session `macbook/a1f3c2d4-0000-4000-8000-000000000002 -openPane files`) asks first. UI test `FolderUploadTests` (`TEST_RUNNER_JARVIS_FILES_HUB`).
+  UI suite `HerdrNoticeTests` (`TEST_RUNNER_PERSONA_MOCK_HUB`, screenshots in `PERSONA_SHOTS`).
+- Computer control (docs/computer-use.md): `MOCK_COMPUTER=ready|permissions|both|locked|missing` enables extension `cua` and mock MacBook (ready / missing Screen Recording / missing both permissions / locked / not installed: "Install Cua Driver" advances through download, verification, disabling analytics, authorization and Allow, every `MOCK_COMPUTER_STEP` seconds, default 2). Add `MOCK_WEB=web/dist` (first `npm run build`) to host the web VNC page and forward MacBook's 5900 to this Mac's own Screen Sharing (UI tests only with `TEST_RUNNER_PERSONA_COMPUTER_SCREEN=1`); Mac Studio remains disabled. `=off` enables the extension but no machines. With `MOCK_EXTENSIONS=1`, the extension list includes "Computer control (Cua)"; "Computers it can control" syncs bidirectionally with each Mac's `computer.enabled` (`-tab settings -openExtension cua`). `-tab settings -openMachines YES -openMachineDetail macbook` opens MacBook's machine page. `MOCK_COMPUTER_OPERATING=1` adds a running operation to the assistant's "Calculate 6×7" and the Agent widget chat, showing "Operating MacBook · …" above input (`ScreenDrawerTests`). `MOCK_DEVICE_TOKEN=jd_…` (same `TEST_RUNNER_PERSONA_DEVICE_TOKEN` in UI tests, `UITestToken`) makes mock `/api/` accept only that token (`Authorization` or `?token=`), returning 401 invalid token otherwise, like hub (#1498: VNC page got a double-encoded token). `MOCK_COMPUTER_APPS=1` gives MacBook two assistant-approved apps (Calculator, entire screen), removable on its machine page (`ComputerSectionTests.testAllowedAppsCanBeTakenBack`, `TEST_RUNNER_PERSONA_COMPUTER_APPS=1`). "Don't auto-lock while the extension is on": machine toggle asks first (`ComputerSectionTests.testNoAutoLockAsksFirst`), and per-machine extension toggles honor `x-confirm` (`ExtensionMachineSwitchesTests.testAListWithAConfirmAsksFirst`, `MOCK_EXTENSIONS=1`); mock syncs extension-page `no_auto_lock` to each `computer.no_auto_lock`. `MOCK_SCREEN=fake` replaces forwarding to real Screen Sharing with a mock server (macOS-like ARD login first when openssl exists, then VeNCrypt Plain, account `me`, password `mock-pass`; `GET /mock/screen-password?p=…` changes password, `&clear=1` clears recorded keys; correct password+Return unlocks mock MacBook). It draws one desktop frame, supplies ZRLE when requested, records pointers/clicks/clipboard (node `GET/POST …/computer/clipboard` shares it); `?clip=…` sends clipboard to clients, `&slow=S` delays S seconds (miniwindow "Connecting…"), `&down=1` drops current and future connections (`0` restores). `MOCK_SCREEN_ANIMATE=1` moves a square at about 30 fps (`ScreenPasswordTests`, `VNCTests`, native client; UI tests use `TEST_RUNNER_PERSONA_FAKE_SCREEN=1`). Simulators have no PiP; VNC falls back to a full page, miniwindow needs a device.
+- File browser upload / Save to Files (#4858, `docs/protocol.md` "Changing files"): `MOCK_FILE_OPS=1` makes the mock take `dest=dir` (files go into the mock tree, a taken name is 409 `exists`, `conflict=keep|replace` as the node does, outside the home `read_only`) and the rename / move / trash / restore routes. `-tab settings -openMachines YES -openMachineDetail macbook -openMachineFiles YES` opens the MacBook's Files directly; `-showFolderUpload <name>` uploads a 24 MB fake file into the current folder (`MOCK_UPLOAD_KBPS=300` makes the progress visible); an existing name (`README.md` in session `macbook/a1f3c2d4-0000-4000-8000-000000000002 -openPane files`) asks first. UI test `FolderUploadTests` (`TEST_RUNNER_PERSONA_FILES_HUB`).
 - Temporary-code pairing (#2766): `MOCK_PAIR_TOKEN=jp_…` behaves like `personad hub pair`: usable everywhere before `POST /api/v1/auth/tokens` exchange, then for `MOCK_PAIR_GRACE` seconds (default 10 instead of hub's 2 minutes); a second exchange returns 401. Exchanged device tokens (`jd_mock_<n>`) remain valid; every 401 logs a line. Paired sockets close after grace like hub; `ws open host=… token=…` identifies handshake tokens. `MOCK_PAIR_TRADE_DELAY=<seconds>` delays exchange, `MOCK_PAIR_DROP=<seconds>` drops the first temporary-token socket once. Add `MOCK_HUB_NAME` and `MOCK_MESH_PEERS` with `center: true`, address `http://localhost:<port>`, to reconnect through the group's center (another address). `-openWelcome YES -openPairLink 'persona://pair?url=http://127.0.0.1:<port>&token=jp_…'` pairs like scanning (`-pairURL` doesn't exchange device tokens; `simctl openurl` prompts system confirmation); `-openPairLinkTimes 2` processes it again after a few seconds. Correct only if no 401 after grace and title isn't "Connecting…".
-- Browser (docs/plan-ego-browser.md): `MOCK_BROWSER=missing|setup|ready` enables `ego` and MacBook (not installed / installed without first setup / ready, analytics on; `MOCK_BROWSER_ANALYTICS=off` disables analytics); Mac Studio disabled/uninstalled. "Install ego lite" / "Open ego lite" advance every `MOCK_COMPUTER_STEP` seconds. With `MOCK_PLUGINS=1`, list includes "Browser (ego lite)" (`-tab settings -openExtension ego`).
+- Browser (docs/plan-ego-browser.md): `MOCK_BROWSER=missing|setup|ready` enables `ego` and MacBook (not installed / installed without first setup / ready, analytics on; `MOCK_BROWSER_ANALYTICS=off` disables analytics); Mac Studio disabled/uninstalled. "Install ego lite" / "Open ego lite" advance every `MOCK_COMPUTER_STEP` seconds. With `MOCK_EXTENSIONS=1`, list includes "Browser (ego lite)" (`-tab settings -openExtension ego`).
 - Cards on no session (#4059): `MOCK_SCRIPT_ASK=1` adds a question card with an empty `session_id`, like `personad ask` run outside herdr;
   Agents' needs-you list and the inbox both list it, and tapping it opens the card in a sheet (`-tab mail -openInboxAsk ix_script_ask` opens it directly).
 - Unified main-chat entry (docs/unified-entry.md): `MOCK_TASKS=1` supplies a started plan, three tasks working/waiting/done, one Agent-start failure (red card and receipt, #1077),
   answered questions, receipts, direct task messages and a final unstarted plan. `MOCK_TASKS_AT=<minutes>` cuts newer items so earlier portions sit at the bottom without scrolling.
-  `MOCK_TASKS_NO_ASKS=1` suppresses task-Agent questions above input. `MOCK_TASKS_DOCK=2` keeps two working tasks (two dock capsules, then two manual Agents); `=pair` one task + one manual Agent waiting for you; `=many` adds four tasks (dock wider than screen, "All" fixed left); `=multi` keeps only "Fix widget landscape crash" with two Agents (task-title ⌄ switch, `TaskSheetHeaderTests` with `TEST_RUNNER_JARVIS_TASK_MULTI=1`); `=long` keeps two overlong titles (parallel capsules, no overlapping truncation; `simctl ui <udid> content_size extra-extra-extra-large`, #3010). Default: four unfinished tasks + two manual Agents (#1113). `-showTaskDetail <to-do id>` (e.g. `todo_task_widget`) opens details; `-showTaskBoard YES` opens board.
+  `MOCK_TASKS_NO_ASKS=1` suppresses task-Agent questions above input. `MOCK_TASKS_DOCK=2` keeps two working tasks (two dock capsules, then two manual Agents); `=pair` one task + one manual Agent waiting for you; `=many` adds four tasks (dock wider than screen, "All" fixed left); `=multi` keeps only "Fix widget landscape crash" with two Agents (task-title ⌄ switch, `TaskSheetHeaderTests` with `TEST_RUNNER_PERSONA_TASK_MULTI=1`); `=long` keeps two overlong titles (parallel capsules, no overlapping truncation; `simctl ui <udid> content_size extra-extra-extra-large`, #3010). Default: four unfinished tasks + two manual Agents (#1113). `-showTaskDetail <to-do id>` (e.g. `todo_task_widget`) opens details; `-showTaskBoard YES` opens board.
   Hub-injected messages (#2358, `docs/protocol.md` ("Persona-injected messages")): `MOCK_INJECTED=1` adds an unmarked task notification (recognized by text) and a marked scheduled task below receipts;
-  `MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14` puts them at the bottom. `InjectedLineTests` (`JARVIS_SHOTS` captures both lines and expanded scheduled task) opens scheduled task, then notification to open task.
+  `MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14` puts them at the bottom. `InjectedLineTests` (`PERSONA_SHOTS` captures both lines and expanded scheduled task) opens scheduled task, then notification to open task.
   Watch: add `MOCK_INJECTED_WATCH=1` (working main chat listed first), `-openWatchItem session` opens it.
-  Task answer records (#1231): "Complete network-layer unit tests" has three full question/answer pairs; "Fix widget landscape crash" is an old summary-only record. `MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23` puts them at bottom; `AnsweredLineTests` (`JARVIS_SHOTS`, collapsed/expanded) opens then collapses them.
+  Task answer records (#1231): "Complete network-layer unit tests" has three full question/answer pairs; "Fix widget landscape crash" is an old summary-only record. `MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23` puts them at bottom; `AnsweredLineTests` (`PERSONA_SHOTS`, collapsed/expanded) opens then collapses them.
   The hub's notice line (#4305): `MOCK_TASKS=1 MOCK_TASKS_NOTICE=1 MOCK_TASKS_NO_ASKS=1` adds "电脑和模型接好了，定时任务恢复运行，这次是「早报」" as the conversation's last line, small and centered.
-- Away recap in message flow (#1360): `MOCK_RECAP_LONG=1` adds eight turns before "Review PR #42 changes", taller than one screen, ending in a recap. `TEST_RUNNER_JARVIS_MOCK_HUB=<address> xcodebuild test … -only-testing:PersonaUITests/RecapInFlowTests` checks expanded recap between reply/input, scrolling away, tap-to-collapse, remaining closed after reopening (`-openRecapsFresh YES` forgets closures). `TEST_RUNNER_JARVIS_SHOTS=<directory>` and `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` save expanded/collapsed × bottom/scrolled-up, four shots. `MOCK_RECAPS=1` keeps the earlier two as small bars when three are folded to one line.
+- Away recap in message flow (#1360): `MOCK_RECAP_LONG=1` adds eight turns before "Review PR #42 changes", taller than one screen, ending in a recap. `TEST_RUNNER_PERSONA_MOCK_HUB=<address> xcodebuild test … -only-testing:PersonaUITests/RecapInFlowTests` checks expanded recap between reply/input, scrolling away, tap-to-collapse, remaining closed after reopening (`-openRecapsFresh YES` forgets closures). `TEST_RUNNER_PERSONA_SHOTS=<directory>` and `TEST_RUNNER_PERSONA_SHOTS_APPEARANCE=light|dark` save expanded/collapsed × bottom/scrolled-up, four shots. `MOCK_RECAPS=1` keeps the earlier two as small bars when three are folded to one line.
 - Truncated output: `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openAllWork YES -showFullOutput card` (expand Run card,
   "Truncated, view full output") or `sheet` (open full-output sheet, mock `/items/{id}/full` returns it).
 - Stable content when scrolling up (`ChatView` freeze): `MOCK_STREAM=1` adds a step/reply every 2 seconds after opening first session, 12 times;
@@ -156,18 +156,18 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - New Persona chat (#511): mock pushes session list immediately, transcript starts empty, first sentence appears/pushes after `MOCK_ASSISTANT_TRANSCRIPT_SECONDS` (default 1).
   After sending, chat retains that sentence (never "No messages yet"), selects new sidebar chat with Working spinner. `MOCK_ASSISTANT_START_SECONDS=<seconds>` delays POST;
   inspect bubble and "Persona is getting ready…" while waiting. Covered by `scripts/mock/test_assistant_mock.py`.
-- Lark multi-account (#1321): `MOCK_LARK_ACCOUNTS=1` adds "Me", "Work account", one signed-out account to `/api/v1/lark/accounts`; `ol_account=2` reads Work chats, top Inbox item is from Work. `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>` runs `LarkAccountsFlowTests` (Messages account switch, Work chat, Settings › Lark accounts; `JARVIS_SHOTS`); web: `scripts/test/web_lark_accounts_e2e.py <web URL> [--shots <directory>]` (usage at top).
-- Lark encrypted messages (#689, #1664): `MOCK_LARK_NATIVE_OLK=1`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>` runs `LarkNativeEncryptionFlowTests` (Messages › Design review, choose external display, unlock/send/retry; Inbox can't send encrypted drafts as plain messages; no Save Password after unlock). `JARVIS_SHOTS` stores in `docs/screenshots/lark-native-encryption/`. Multi-account's second account pins "Quarterly planning", shelf-only (`feishu-pin-w1`), absent from list (#1342).
-- Brave Climb (#882): `MOCK_LARK_BRAVE_CLIMB=1` enables it; Design review includes whole/two-part/mid-sentence/old-four-character encoded text and a quote, encoded list previews. `TEST_RUNNER_JARVIS_MOCK_HUB` runs `LarkBraveClimbFlowTests` (on: list/chat decode, selecting Brave Climb encoding sends encoded text; off: raw bubbles, preview "Brave Climb encoded message", mode absent; enabling from another device decodes current chat). `MOCK_LARK_OLD_DISPLAY=1` simulates an old extension without the switch.
+- Lark multi-account (#1321): `MOCK_LARK_ACCOUNTS=1` adds "Me", "Work account", one signed-out account to `/api/v1/lark/accounts`; `ol_account=2` reads Work chats, top Inbox item is from Work. `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>` runs `LarkAccountsFlowTests` (Messages account switch, Work chat, Settings › Lark accounts; `PERSONA_SHOTS`); web: `scripts/test/web_lark_accounts_e2e.py <web URL> [--shots <directory>]` (usage at top).
+- Lark encrypted messages (#689, #1664): `MOCK_LARK_NATIVE_OLK=1`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>` runs `LarkNativeEncryptionFlowTests` (Messages › Design review, choose external display, unlock/send/retry; Inbox can't send encrypted drafts as plain messages; no Save Password after unlock). `PERSONA_SHOTS` stores in `docs/screenshots/lark-native-encryption/`. Multi-account's second account pins "Quarterly planning", shelf-only (`feishu-pin-w1`), absent from list (#1342).
+- Brave Climb (#882): `MOCK_LARK_BRAVE_CLIMB=1` enables it; Design review includes whole/two-part/mid-sentence/old-four-character encoded text and a quote, encoded list previews. `TEST_RUNNER_PERSONA_MOCK_HUB` runs `LarkBraveClimbFlowTests` (on: list/chat decode, selecting Brave Climb encoding sends encoded text; off: raw bubbles, preview "Brave Climb encoded message", mode absent; enabling from another device decodes current chat). `MOCK_LARK_OLD_DISPLAY=1` simulates an old extension without the switch.
 - Messaging sources (`messaging` extension point, #2138): `MOCK_MESSAGING=1`, `GET /api/v1/messaging` lists `lark` (extension `larkext`); `/api/v1/messaging/lark/…` follows `docs/extension-messaging.md`. `scripts/mock/lark_messaging.py` reads mock `/api/v1/lark/…` and converts, applying extension display rules for Brave Climb, encrypted external/unlocked display, recall/edit history. Settings is full extension UI `POST /api/v1/extensions/larkext/-/ui/display`; hello/health add `messaging` feature, and every `{type: lark}` push also emits `{type: messaging}`. Can combine other fixtures (`MOCK_LARK=1`, `MOCK_LARK_TRAINER=1`, `MOCK_LARK_BRAVE_CLIMB=1`, `MOCK_LARK_NATIVE_OLK=1`…). `python3 scripts/mock/test_lark_messaging.py` verifies schemas and processing.
 - Hub without Lark gateway extension (#1530): default features include extension-provided `lark`, `lark_moments`; `MOCK_NO_LARK=1` removes them and `lark_attachments`, all `/api/v1/lark/…` return 404, no Lark connector. Messages, Settings › Connectors › Lark, translation's Lark chat option vanish; Lark docs/Moments links open as regular web pages.
-- Lark /agent context (#876): `MOCK_LARK_AGENT=1` turns the "Schedule Friday…" request into Lark /agent (instructions + 7 context items in `<jarvis-context>`, only request outside). `-openSession server/b2e4d6f8-0000-4000-8000-000000000003`, `-showContexts YES` expands context group and first item.
+- Lark /agent context (#876): `MOCK_LARK_AGENT=1` turns the "Schedule Friday…" request into Lark /agent (instructions + 7 context items in `<persona-context>`, only request outside). `-openSession server/b2e4d6f8-0000-4000-8000-000000000003`, `-showContexts YES` expands context group and first item.
 - Persona sidebar: `MOCK_ASSISTANT_SIDEBAR=1` adds 36 Recent chats (above displayed 30, showing View All); first three Needs you (red), unread (blue), Working (spinner).
 - Follow latest (`ChatFollowTests`, `MOCK_LONG_HISTORY=1`): long chat opens at bottom; new replies follow when already there (Persona replies first stream via `delta`); scrolling up shows "Back to latest",
   replies don't pull you down; tapping returns to bottom and resumes following. Agent opens tested normally, Unread (`-showAsUnread YES`), saved position (`-chat.read.<session> <row id>`), and cold-start with disk cache far from end (mock `/mock/paging?on=1` mimics hub pagination, `/mock/delay?s=3` shows cache first, #597; `/mock/reset` disables both).
   `GET /mock/say?text=…&user=…&stream=1` pushes replies to all open chats. App `-showScrollState YES` reports list state via accessibility
   `chat.scrollState`: bottom / follows / frozen / arrow / newestShown / withheld… (`visible` draws it). XCUITest misreads inverted-list row positions.
-  `testRealHubChats` captures real-hub before/after (`TEST_RUNNER_JARVIS_REAL_PAIR`, etc., skip if absent; only own sessions, opening marks read).
+  `testRealHubChats` captures real-hub before/after (`TEST_RUNNER_PERSONA_REAL_PAIR`, etc., skip if absent; only own sessions, opening marks read).
 - Terminal stream: `MOCK_TERMINAL_STREAM=1` (hello `terminal_stream`) sends a fake Claude full frame after subscription, then one frame/second advancing spinner;
   `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe.jsonl` replays real herdr frames (colors, boxed Chinese, emoji, links, 200-character line).
   `-openPane terminal`, `-terminalWrap NO` disables wrapping, `-terminalPages 1` loads one page (mock `/screen/before` gives colored history).
@@ -180,21 +180,21 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   `GET /mock/terminal_input` inspects bytes); `MOCK_TERMINAL_BUSY=1` shows "Another program on the computer is using this terminal"; `-terminalSize phone|mirror` selects mode.
   `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` needs this mock; other terminal UI tests fix `-terminalSize mirror`.
 - Voice mode (docs/voice.md 6.8, #3508): `MOCK_VOICE=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py` (`scripts/mock/voice_mock.py`: `/info` at protocol 2 and a scripted socket; a protocol 1 `start` still gets the old Android script; `MOCK_VOICE=setup|p1` for an extension that is not set up / too old; `GET /mock/voice2` shows what the app sent).
-  `TEST_RUNNER_JARVIS_VOICE_HUB=http://127.0.0.1:<port>` runs `VoiceModeTests`: four matrix cases shoot ten `-showVoiceSample <state>` states for Agent / main conversation × standard / AX text, and `testOpenVoiceWalksTheScript` walks the script with `-openVoice silent`.
-  `TEST_RUNNER_JARVIS_SHOTS=<dir>` saves screenshots; switch the appearance with `simctl ui <udid> appearance light|dark` (`TEST_RUNNER_JARVIS_VOICE_APPEARANCE` only names the files) and the style with `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`. A simulator's microphone may not work (lessons/voice.md "The iOS voice mode"), which is why the real path uses `silent`.
-- Settings › Extensions: `MOCK_PLUGINS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`; `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>` runs `ExtensionSettingsTests` (list, rejected form, Running after secret), `ExtensionSlotsTests` (Settings home card/entry, usage page, machine section).
-  Restart mock before each round (in-memory state). Screenshots as above: `TEST_RUNNER_JARVIS_SHOTS`, `simctl ui … appearance`, naming `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`, both styles.
-  Extension install progress (#3307): `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=fail PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_PLUGINS_OPS_HUB=http://127.0.0.1:<port>` runs `ExtensionInstallProgressTests` (background preview steps, auto-opening on approval, stuck at Start, leave/return, cache retry completes directly, uninstall failure/retry).
-  Extension CLI/login (#4507): fresh `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1 PORT=<port>` mock and old hub `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=installed MOCK_EXTENSION_AUTH_OLD=1 PORT=<port 2>` each time; `TEST_RUNNER_JARVIS_EXT_AUTH_HUB` / `TEST_RUNNER_JARVIS_EXT_AUTH_OLD_HUB` runs `ExtensionSignInTests` (Install command-line programs in confirmation, Install CLI step/programs, automatic QR sign-in after install, polling success, sign-out, CLI section; old hub only warning + extension's login page, no login section).
+  `TEST_RUNNER_PERSONA_VOICE_HUB=http://127.0.0.1:<port>` runs `VoiceModeTests`: four matrix cases shoot ten `-showVoiceSample <state>` states for Agent / main conversation × standard / AX text, and `testOpenVoiceWalksTheScript` walks the script with `-openVoice silent`.
+  `TEST_RUNNER_PERSONA_SHOTS=<dir>` saves screenshots; switch the appearance with `simctl ui <udid> appearance light|dark` (`TEST_RUNNER_PERSONA_VOICE_APPEARANCE` only names the files) and the style with `TEST_RUNNER_PERSONA_UI_STYLE=beautiful`. A simulator's microphone may not work (lessons/voice.md "The iOS voice mode"), which is why the real path uses `silent`.
+- Settings › Extensions: `MOCK_EXTENSIONS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`; `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=http://127.0.0.1:<port>` runs `ExtensionSettingsTests` (list, rejected form, Running after secret), `ExtensionSlotsTests` (Settings home card/entry, usage page, machine section).
+  Restart mock before each round (in-memory state). Screenshots as above: `TEST_RUNNER_PERSONA_SHOTS`, `simctl ui … appearance`, naming `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE`, both styles.
+  Extension install progress (#3307): `MOCK_EXTENSIONS=1 MOCK_EXTENSION_OPS=fail PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_PERSONA_EXTENSIONS_OPS_HUB=http://127.0.0.1:<port>` runs `ExtensionInstallProgressTests` (background preview steps, auto-opening on approval, stuck at Start, leave/return, cache retry completes directly, uninstall failure/retry).
+  Extension CLI/login (#4507): fresh `MOCK_EXTENSIONS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1 PORT=<port>` mock and old hub `MOCK_EXTENSIONS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=installed MOCK_EXTENSION_AUTH_OLD=1 PORT=<port 2>` each time; `TEST_RUNNER_PERSONA_EXT_AUTH_HUB` / `TEST_RUNNER_PERSONA_EXT_AUTH_OLD_HUB` runs `ExtensionSignInTests` (Install command-line programs in confirmation, Install CLI step/programs, automatic QR sign-in after install, polling success, sign-out, CLI section; old hub only warning + extension's login page, no login section).
   `MOCK_EXTENSION_OPS=1` all succeeds; `MOCK_EXTENSION_OPS_STEP=<seconds>` slows for screenshots. Without OPS, `MOCK_EXTENSION_INSTALL_DELAY=<seconds>` shows old-hub Installing.
   First launch on a new simulator asks notification permission; test dismisses it.
-- Git pull: `MOCK_FILES=1 MOCK_GIT_PULL=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`; `TEST_RUNNER_JARVIS_GIT_HUB=http://127.0.0.1:<port>` runs `GitPullUITests`, from 28 commits behind through refresh success, recheck, failure/retry.
-  `TEST_RUNNER_JARVIS_SHOTS=<directory>`; actually switch `simctl ui <udid> appearance light|dark`, both styles; `TEST_RUNNER_JARVIS_GIT_APPEARANCE` only names files.
+- Git pull: `MOCK_FILES=1 MOCK_GIT_PULL=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`; `TEST_RUNNER_PERSONA_GIT_HUB=http://127.0.0.1:<port>` runs `GitPullUITests`, from 28 commits behind through refresh success, recheck, failure/retry.
+  `TEST_RUNNER_PERSONA_SHOTS=<directory>`; actually switch `simctl ui <udid> appearance light|dark`, both styles; `TEST_RUNNER_PERSONA_GIT_APPEARANCE` only names files.
   `GitPullTests` with `FakeHub` checks POST, decode, feedback, repeated taps. Server `TestGitPull*` uses temporary local remotes with isolated HOME/Git config to test unfetched latest commits, fast-forward/divergence, modified/staged/untracked files, existing stash, failure; never pulls real worktrees.
 - File viewer (`docs/ios.md` ("File viewer")): `MOCK_FILES=1` provides fake `/Users/me/code/weather`: small file per language,
   3 MB JSON, 20K-line Go, 4000+-line README, 5 MB log; `GET …/file` (2 MB/page) and `…/stat` serve it. "Add a Home Screen widget to the weather App"
   final reply links several files and two nonexistent paths. `FileViewerUITests` needs this mock. Timing/fps: build `-O`
-  (`SWIFT_OPTIMIZATION_LEVEL=-O`, separate DerivedData), run `FileViewerPerfTests` with `JARVIS_FILE_PERF=1`, read App
+  (`SWIFT_OPTIMIZATION_LEVEL=-O`, separate DerivedData), run `FileViewerPerfTests` with `PERSONA_FILE_PERF=1`, read App
   `Library/Caches/file-perf.log`. Use App constant-speed scrolling, not XCUITest drags: each gesture captures a main-thread accessibility snapshot, itself a 40–100 ms long frame.
   Uninstall before changing mock message text: item-id caches don't replace old text under the same id.
 - Spreadsheet viewer (web #1310): `MOCK_FILES=1 MOCK_SHEETS=1` adds `data/stations.csv` (3000 rows, quotes/newlines/Chinese), `reports/季度报告.xlsx` (quarterly report; three sheets, merged title, widths, numeric/percent formatting); open in file panel. `file?stream=1` returns only binary descriptions; content via `file/download`.
@@ -205,27 +205,27 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - Media (web #1422): `MOCK_MEDIA=1` adds WAV, scripted SVG, browser-unrenderable HEIC (`file/thumb` draws stand-in) under `media/`; `MOCK_VIDEO_FILE=<webm/mp4>`, `MOCK_SENT_VIDEO=<same>` show file-page video/chat card (WebM safest for headless Chrome).
 - Compare (web #1437): `MOCK_COMPARE=1` adds changed `reports/季度报告.docx` (quarterly report), `reports/季度回顾.pptx` (quarterly review), `assets/banner.png`; `git/blob` serves staged/HEAD versions.
 - Images seen this turn (web #1540): `MOCK_TURN_IMAGES_WEB=1`: final collapsed-work turn of Review PR #42 has 9 (Read/screenshots/web/MCP/Codex view_image); release-notes turn 1 card; working widget turn 2.
-- Links in file previews (`FilePreviewLinkTests`): `MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_FILE_LINK_HUB=http://127.0.0.1:<port>`. Open README from old-layout chat file block (fixed `-ui.oldLayout YES -tab dev`, preventing hidden assistant handling global DEBUG args) and default shell Files page; links clickable immediately before closing file. Closing returns to original file position, reopening same link works, no stale link pops up after closing. Dev preview must actually show webpage text forwarded through hub.
-  Run both styles in actual light/dark; `TEST_RUNNER_JARVIS_SHOTS=<directory>` saves images, `TEST_RUNNER_JARVIS_FILE_LINK_APPEARANCE` only names them.
+- Links in file previews (`FilePreviewLinkTests`): `MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_PERSONA_FILE_LINK_HUB=http://127.0.0.1:<port>`. Open README from old-layout chat file block (fixed `-ui.oldLayout YES -tab dev`, preventing hidden assistant handling global DEBUG args) and default shell Files page; links clickable immediately before closing file. Closing returns to original file position, reopening same link works, no stale link pops up after closing. Dev preview must actually show webpage text forwarded through hub.
+  Run both styles in actual light/dark; `TEST_RUNNER_PERSONA_SHOTS=<directory>` saves images, `TEST_RUNNER_PERSONA_FILE_LINK_APPEARANCE` only names them.
 - Video preview: synthesize 120-second >2 MiB H.264/AAC MP4 (e.g. `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 120 -c:v libx264 -b:v 3M -g 30 -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`); `ffmpeg -i /tmp/preview.mp4 -c copy /tmp/preview-tail.mp4` creates tail-index version. `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`, optionally `MOCK_VIDEO_DELAY=0.01` per 32 KiB network chunk. `GET /mock/video-reads` reports Range starts/ends, bytes sent, active/cancelled; `?reset=1` clears. Mock correctly returns 206, Content-Range, ETag, If-Match 412, never counts a full response as Range success.
-  `VideoFileUITests` checks chat-file open/close/reopen in same process; `TEST_RUNNER_JARVIS_VIDEO_HUB` dedicated mock. Switch actual `xcrun simctl ui <udid> appearance light|dark`; both styles × both appearances, inspect screenshots; `TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` only names them. `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4` enables `VideoFileTests/nativeVideoPlaysSeeksAndCleansUp`: starts without full download, seeks to 90 seconds/resumes, reads only needed later ranges, cleans temporary cache; repeat tail-index version. `ffprobe -select_streams v:0 -show_packets -show_entries packet=pts_time,pos,flags -of json` finds 90-second keyframe `pos`; pass `TEST_RUNNER_JARVIS_VIDEO_SEEK_BYTE` to verify exact byte coverage. Without fixture integration test skips, not passes. `VideoFileResourceTests` covers direct middle/tail reads, chunk reuse, boundaries, version/length errors, cancellation cleanup; `VideoFileHTTPTests` covers auth/Range, ignored ranges, short chunks, old node errors; adding `TEST_RUNNER_JARVIS_VIDEO_HUB` runs real HTTP middle/tail/412 regressions. node/hub `TestDownload*` verifies bounded large-file reads, Range, old nodes, invalid ranges, changed files, cancellation.
+  `VideoFileUITests` checks chat-file open/close/reopen in same process; `TEST_RUNNER_PERSONA_VIDEO_HUB` dedicated mock. Switch actual `xcrun simctl ui <udid> appearance light|dark`; both styles × both appearances, inspect screenshots; `TEST_RUNNER_PERSONA_VIDEO_APPEARANCE` only names them. `TEST_RUNNER_PERSONA_VIDEO_FIXTURE=/tmp/preview.mp4` enables `VideoFileTests/nativeVideoPlaysSeeksAndCleansUp`: starts without full download, seeks to 90 seconds/resumes, reads only needed later ranges, cleans temporary cache; repeat tail-index version. `ffprobe -select_streams v:0 -show_packets -show_entries packet=pts_time,pos,flags -of json` finds 90-second keyframe `pos`; pass `TEST_RUNNER_PERSONA_VIDEO_SEEK_BYTE` to verify exact byte coverage. Without fixture integration test skips, not passes. `VideoFileResourceTests` covers direct middle/tail reads, chunk reuse, boundaries, version/length errors, cancellation cleanup; `VideoFileHTTPTests` covers auth/Range, ignored ranges, short chunks, old node errors; adding `TEST_RUNNER_PERSONA_VIDEO_HUB` runs real HTTP middle/tail/412 regressions. node/hub `TestDownload*` verifies bounded large-file reads, Range, old nodes, invalid ranges, changed files, cancellation.
 - Sending video (#981, docs/protocol.md ("Sending video")): AVAssetWriter synthesizes a 6-second H.264 MOV (no ffmpeg required, gradient with sweeping bar, no real video); `xcrun simctl addmedia <udid> <file>` adds to Photos.
   Give another to `MOCK_SENT_VIDEO=<file>` (chat card sent by "another device", file only on computer); uploaded videos are stored by mock and downloadable.
-  `VideoSendTests` uses real PHPicker: pick video in Agent and new assistant chats, inspect upload progress/card, check `<jarvis-file>` in `/mock/sent`, open system player from card;
-  another test opens computer-only card, downloading first. `TEST_RUNNER_JARVIS_VIDEO_SEND_HUB`, layout/style via `TEST_RUNNER_JARVIS_LAYOUT=shell` / `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`,
-  `TEST_RUNNER_JARVIS_SHOTS=<directory>`; `MOCK_UPLOAD_KBPS=640` makes progress visible. `VideoAttachTests` synthesizes one-second video, checks passthrough, H.264 MP4 conversion preserving duration, rejection when too large.
+  `VideoSendTests` uses real PHPicker: pick video in Agent and new assistant chats, inspect upload progress/card, check `<persona-file>` in `/mock/sent`, open system player from card;
+  another test opens computer-only card, downloading first. `TEST_RUNNER_PERSONA_VIDEO_SEND_HUB`, layout/style via `TEST_RUNNER_PERSONA_LAYOUT=shell` / `TEST_RUNNER_PERSONA_UI_STYLE=beautiful`,
+  `TEST_RUNNER_PERSONA_SHOTS=<directory>`; `MOCK_UPLOAD_KBPS=640` makes progress visible. `VideoAttachTests` synthesizes one-second video, checks passthrough, H.264 MP4 conversion preserving duration, rejection when too large.
   Final video-fix verification (2026-11-03): 544 iOS unit tests + 4 targeted file/video UI cases per style passed; foreground chat-file video open, close/reopen across four actual light/dark × style combinations, screenshots inspected. Synthetic 4,116,551-byte video fully downloaded, playback advanced, seek to 8 seconds and cleanup passed. Full server suite passed against isolated real Postgres; iOS (including watch/extension dependencies) and Mac built with Xcode 27.1. Exact Xcode 26.0, devices, original user video unverified—not evidence of release or fixing original case. Initial unsigned keychain failure, hidden-shell assistant executing `openFile` breaking old file UI (recorded in #412), merged fixtures displacing file block, and appearance labels disagreeing with screenshots remain invalid/failed records; assertions weren't weakened.
 - Avatars (`docs/persona.md`): `MOCK_PERSONAS=demo` uses `scripts/assets/make_persona.py demo` to draw original demo avatar "Mint" on startup;
   `MOCK_PERSONAS=<directory>` lists its packs (other avatars, packs not committed). `PersonaPickerTests` needs demo mock.
   `LookPickerTests` (independent avatar/theme/style choices) needs directory mock containing a colored pack id `doudou`;
-  `JARVIS_LOOK_SHOTS=<directory>` stores theme/style pages under Settings › Appearance and Settings home (actual simulator light/dark). It changes saved `ui.style` / `ui.color`, then restores Liquid Glass + Follow interface style.
+  `PERSONA_LOOK_SHOTS=<directory>` stores theme/style pages under Settings › Appearance and Settings home (actual simulator light/dark). It changes saved `ui.style` / `ui.color`, then restores Liquid Glass + Follow interface style.
   Direct combination: `-ui.style clay -ui.color persona -openPersona doudou`.
 - Hub version/update (`docs/hub-update.md` ("In the App")): `MOCK_HUB_UPDATE=available|waiting|notice|docker|docker-pinned`: new version with auto-update off,
   waiting on two busy Agents, first "Automatic updates enabled" notice, Docker new image (`:latest` or pinned tag). Unset: `GET /api/v1/hub/update` 404, old hub, absent everywhere.
   `GET /mock/hub_update?mode=…` changes/restarts live. `-tab settings -openHubUpdate YES`, `-openSkills YES` opens pages; notice in Agents.
-  `HubNoticeUITests` (independent notice buttons, Update now asks confirmation) needs `TEST_RUNNER_JARVIS_HUB_UPDATE_HUB=<mock URL>`.
+  `HubNoticeUITests` (independent notice buttons, Update now asks confirmation) needs `TEST_RUNNER_PERSONA_HUB_UPDATE_HUB=<mock URL>`.
 - Real takeover without deployment: build darwin personad on hub machine, run local test hub (fake HOME, `HERDR_SOCKET_PATH` real herdr socket,
-  dedicated `jarvis_termlab` database over SSH tunnel, `machines` only one `kind: local`), pair simulator, open lab pane terminal (measurements in `docs/terminal.md` section 11 used this).
+  dedicated `persona_termlab` database over SSH tunnel, `machines` only one `kind: local`), pair simulator, open lab pane terminal (measurements in `docs/terminal.md` section 11 used this).
 - Terminal disconnect: `MOCK_SCREEN_FAIL_AFTER=3:14` returns 503 after 3 seconds of terminal reads, recovers 14 seconds later;
   `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openPane terminal`; red "Last updated N seconds ago · Retry" should appear, then disappear on recovery.
   Timing starts at first request, not mock startup; if old App polls during build, start App before mock.
@@ -273,12 +273,12 @@ Except `demo`, only `mbp`, no Agents or other assistant chats (new-user state). 
 `MOCK_INBOX_SOURCES=none` leaves no Inbox sources (no items/mail accounts, Lark unconfigured, GitHub signed out); combine `zero` for zero-computer/zero-source empty states (#4485, #4480). `mock_scenarios.py` names them `readiness-<scenario>` for live switching.
 
 iOS add-computer (`AddComputerTests`, #4196): `python3 scripts/mock/mock_scenarios.py --port <port> --control <control port>`,
-`TEST_RUNNER_JARVIS_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_ADD_CONTROL=http://127.0.0.1:<control port>`. Tests switch `MOCK_READINESS=zero` / `MOCK_ADD_COMPUTER=seed`,
-`MOCK_PAIR_SECONDS` as needed: zero → add → wait → confirm → online, Linux row, expiry/regeneration, pending/error_code in list, rejection removes row, Agents zero-computer state; `TEST_RUNNER_JARVIS_SHOTS=<directory>` saves light/dark.
+`TEST_RUNNER_PERSONA_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_PERSONA_ADD_CONTROL=http://127.0.0.1:<control port>`. Tests switch `MOCK_READINESS=zero` / `MOCK_ADD_COMPUTER=seed`,
+`MOCK_PAIR_SECONDS` as needed: zero → add → wait → confirm → online, Linux row, expiry/regeneration, pending/error_code in list, rejection removes row, Agents zero-computer state; `TEST_RUNNER_PERSONA_SHOTS=<directory>` saves light/dark.
 
 Built-in preset wizard (`ProviderPresetWizardTests`, #4197): with a scenario or `MOCK_BUILTIN_PRESETS=1`, Test requests carrying built-in `preset` return hub text according to words in the key (`bad` 401, `forbid` 403, `nopath` 404, `busy` 429, `slow` timeout, `region` region block).
 Adding with `preset` follows hub naming (`deepseek`, duplicate `-2`) and display names; with `assign`, returns `assigned` / `kept`. `MOCK_ASSIGN_KEPT=assistant:customized,…` retains listed purposes for the supplied reasons.
-Start `mock_scenarios.py` as above, set `TEST_RUNNER_JARVIS_PRESET_HUB=…`, `TEST_RUNNER_JARVIS_PRESET_CONTROL=…`: A, already using Claude Code (`full` test message succeeds, `not_logged_in` fails); B, only a key (401 → replace key → test passes → save, main chat `kept`); C, where to get a model (sign up → link card → close to key entry), plus disabled Advanced import with zero computers. `TEST_RUNNER_JARVIS_SHOTS=<directory>` saves screenshots.
+Start `mock_scenarios.py` as above, set `TEST_RUNNER_PERSONA_PRESET_HUB=…`, `TEST_RUNNER_PERSONA_PRESET_CONTROL=…`: A, already using Claude Code (`full` test message succeeds, `not_logged_in` fails); B, only a key (401 → replace key → test passes → save, main chat `kept`); C, where to get a model (sign up → link card → close to key entry), plus disabled Advanced import with zero computers. `TEST_RUNNER_PERSONA_SHOTS=<directory>` saves screenshots.
 
 Drift guard: `server/internal/assistant/readiness_scenarios_test.go` builds the same fake-hub scenarios and saves real readiness responses (three languages) and start refusals in
 `testdata/readiness_scenarios/<scenario>.json`; `scripts/mock/test_readiness_mock.py` compares each mock response. After readiness/text changes: `UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`,
@@ -289,9 +289,9 @@ review diff, update `scripts/mock/readiness_mock.py`.
 `apple/PersonaUITests` drives the real App in a simulator against the configured hub (not part of default unit tests):
 `SIM=<udid or name> ./scripts/app/ui-test.sh [machine/session]` (slim boot through `sim-boot.sh`, see "Simulators" below). Currently tests edge-swipe back with expanded/collapsed top bar.
 Long-press message toolbar (`MessageMenuTests`: release after 0.4 / 0.8 / 1.5 / 2.5 seconds leaves it open; tap list/scroll closes) uses `scripts/mock/mock_hub.py`, not real hub:
-`TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`.
+`TEST_RUNNER_PERSONA_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`.
 Select Text copies only a segment (`SelectTextTests`: Agent reply with code block, main-chat reply with bold/list; `MOCK_SELECT_TEXT` has a user message with `__init__.py`, `2*3*4`, `# …`, and a reply with fences/math/indented code/separator; double-tap first word, clipboard exactly that word). Use `MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1`,
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>`, style `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`, `TEST_RUNNER_JARVIS_SHOTS=<directory>` (named by simulator appearance).
+`TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>`, style `TEST_RUNNER_PERSONA_UI_STYLE=beautiful`, `TEST_RUNNER_PERSONA_SHOTS=<directory>` (named by simulator appearance).
 Run a new UI test against unfixed code first to confirm it fails, then apply the fix.
 
 ### Simulators: always `scripts/app/sim-boot.sh`, slim by default (simslim, #2287, #2801)
@@ -357,17 +357,17 @@ Pitfalls:
 
 Chat composer (#2200): confirm port free, then `PORT=<dedicated port> python3 scripts/mock/composer_hub.py`.
 This separate entry reuses fictional data, only changes main/Agent chat models to short/long GPT IDs, never other lanes' fixtures.
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<dedicated port> xcodebuild test … -only-testing:PersonaUITests/ComposerKeyboardTests`
+`TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<dedicated port> xcodebuild test … -only-testing:PersonaUITests/ComposerKeyboardTests`
 checks no App keyboard-dismiss button in old/new layouts, input/newlines, gesture dismissal retaining draft, sending, sidebar-header collapse, model-label/menu consistency.
-Style `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`; actual `simctl ui <udid> appearance light|dark`,
-`TEST_RUNNER_JARVIS_SHOTS=<directory>` saves, `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` only names files.
+Style `TEST_RUNNER_PERSONA_UI_STYLE=beautiful`; actual `simctl ui <udid> appearance light|dark`,
+`TEST_RUNNER_PERSONA_SHOTS=<directory>` saves, `TEST_RUNNER_PERSONA_SHOTS_APPEARANCE` only names files.
 Fresh dedicated simulator paired only to this mock; never target real main chat. Fixture regression:
 `python3 -B -m unittest discover -s scripts/mock -p 'test_composer_hub.py'`.
 
-输入框展开（#5685）：同一隔离 mock，运行 `ComposerExpandTests` 和 `ComposerGrowthTests`。所有 `xcodebuild` 前加 `~/.local/bin/xcode-slot`，用 `-parallel-testing-enabled NO`，小屏和大屏依次验证，不同时启动两台模拟器。`testAdaptiveThresholdAndFourStates` 在实际输入中寻找阈值，验证未达阈值无按钮、到阈值右上角按钮、停止长高、展开 / 收起不改文字、光标恢复、删除后按钮消失。`TEST_RUNNER_JARVIS_UI_LANGUAGE=zh-Hans|en|ja` 验证两种按钮的无障碍标签；`TEST_RUNNER_JARVIS_EXPECTED_LINES=<行数>` 可断言指定设备的实际阈值。用 `xcrun xcresulttool export attachments --path <结果.xcresult> --output-path <截图目录>` 导出 `01-below-threshold`、`02-at-threshold`、`03-expanded`、`04-collapsed` 四张附件，再人工检查。深浅色由 `simctl ui <udid> appearance light|dark` 切换。键盘截图使用 `sim-boot.sh --profile stock`；每台跑完就 shutdown，任务结束删除自建模拟器。真实横屏用支持横屏的 iPad；当前 iPhone 的 `Info.plist` 只允许竖屏，不能把设置了 `JARVIS_ORIENTATION=landscape` 当作已经旋转。测试会断言 App 窗口宽度大于高度。部分运行时的 `app.screenshot()` 在旋转后会出现错向 / 黑边，功能测试通过不等于截图可用，不用这种截图做视觉验收。
+输入框展开（#5685）：同一隔离 mock，运行 `ComposerExpandTests` 和 `ComposerGrowthTests`。所有 `xcodebuild` 前加 `~/.local/bin/xcode-slot`，用 `-parallel-testing-enabled NO`，小屏和大屏依次验证，不同时启动两台模拟器。`testAdaptiveThresholdAndFourStates` 在实际输入中寻找阈值，验证未达阈值无按钮、到阈值右上角按钮、停止长高、展开 / 收起不改文字、光标恢复、删除后按钮消失。`TEST_RUNNER_PERSONA_UI_LANGUAGE=zh-Hans|en|ja` 验证两种按钮的无障碍标签；`TEST_RUNNER_PERSONA_EXPECTED_LINES=<行数>` 可断言指定设备的实际阈值。用 `xcrun xcresulttool export attachments --path <结果.xcresult> --output-path <截图目录>` 导出 `01-below-threshold`、`02-at-threshold`、`03-expanded`、`04-collapsed` 四张附件，再人工检查。深浅色由 `simctl ui <udid> appearance light|dark` 切换。键盘截图使用 `sim-boot.sh --profile stock`；每台跑完就 shutdown，任务结束删除自建模拟器。真实横屏用支持横屏的 iPad；当前 iPhone 的 `Info.plist` 只允许竖屏，不能把设置了 `PERSONA_ORIENTATION=landscape` 当作已经旋转。测试会断言 App 窗口宽度大于高度。部分运行时的 `app.screenshot()` 在旋转后会出现错向 / 黑边，功能测试通过不等于截图可用，不用这种截图做视觉验收。
 
 Notification buttons (`NotificationActionTests`) use mock, not real hub:
-`PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/NotificationActionTests`.
+`PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/NotificationActionTests`.
 Long-press SpringBoard banner, tap Deny, inspect mock `GET /mock/resolved` for resolve.
 `LiveActivityActionTests` also uses mock: start sample activity, lock, tap Deny. English system authorization button is Allow;
 authorization persists, so schedule notification only once App goes background or it appears while test still waits for permission.
@@ -376,16 +376,16 @@ Direct terminal typing (`TerminalTypingTests`: tap opens keyboard, text/Return s
 `MOCK_TERMINAL_INTERVAL=0.02` replays recorded frames rapidly (default one/second), with `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe-mixed.jsonl`
 (long mixed Chinese/English reply) or `-permission.jsonl` (permission dialog) for terminal shots.
 Terminal keys/selection (`TerminalKeysTests`: tap/double-lock/hold ctrl/alt/shift, typed ctrl text, ⌃C, key names/order, long-press Copy, double-tap shortcut sends, input completion) also uses mock:
-`PORT=18792 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:PersonaUITests/TerminalKeysTests`
+`PORT=18792 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:PersonaUITests/TerminalKeysTests`
 (mock `GET /mock/keys` returns recorded keys).
 
 Search results open chats with only one title line, remain after return, and find/open Agents inside collapsed spaces (`SearchOpenTests`, with non-search control and edge-swipe back;
 `-openAgentsFresh YES` avoids old collapse state) against ordinary mock:
-`PORT=18793 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:PersonaUITests/SearchOpenTests`.
+`PORT=18793 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:PersonaUITests/SearchOpenTests`.
 
 Assistant `ask_user` renders as Question (`AskUserRowTests`, #677): tool row says Question + first question, not raw name; expanded questions/options check user choices (including multi-select),
 unanswered says No answer. `-openAllWork YES -showToolDetails YES` expands work/tool rows (inverted-list taps unreliable):
-`MOCK_ASK_USER=1 PORT=18797 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests`,
+`MOCK_ASK_USER=1 PORT=18797 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests`,
 shots `/tmp/persona-ask-user-*` (`TEST_RUNNER_SHOT_SUFFIX` distinguishes appearance/style).
 
 To-do details No Agent currently (#1110): `MOCK_TODO_OFFLINE=1` adds backup project on disconnected NAS to Weather App 1.3 release, session unknown;
@@ -393,51 +393,51 @@ To-do details No Agent currently (#1110): `MOCK_TODO_OFFLINE=1` adds backup proj
 
 Port forwarding (`PortForwardTests`, `docs/ports.md`): `:<port>` badges in chat header/replies include page titles; stopped gray. Open loads mock's page through
 `…/ports/{port}/connect` (`GET /mock/ports` records connections); gray says No longer listening:
-`MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`;
-light/dark × shell/old layout via `TEST_RUNNER_JARVIS_LAYOUT`, `TEST_RUNNER_SHOT_SUFFIX`, shots `/tmp/jarvis-ports-*`.
+`MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`;
+light/dark × shell/old layout via `TEST_RUNNER_PERSONA_LAYOUT`, `TEST_RUNNER_SHOT_SUFFIX`, shots `/tmp/persona-ports-*`.
 
 Own-hub links open in App (`HubPageLinkUITests`, #2696): mock `/s/…?at=…` opens Agent chat with target message visible, `/todos?id=…` opens to-do details;
 external links remain web cards. `MOCK_HUB_LINKS=1 PORT=18796 python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_HUB_LINKS_HUB=http://127.0.0.1:18796 xcodebuild test … -only-testing:PersonaUITests/HubPageLinkUITests`;
-`TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` save shots. URL unit tests `PersonaTests/HubPageLinkTests`.
+`TEST_RUNNER_PERSONA_HUB_LINKS_HUB=http://127.0.0.1:18796 xcodebuild test … -only-testing:PersonaUITests/HubPageLinkUITests`;
+`TEST_RUNNER_PERSONA_SHOTS=<directory>`, `TEST_RUNNER_PERSONA_SHOTS_APPEARANCE=light|dark` save shots. URL unit tests `PersonaTests/HubPageLinkTests`.
 
 Telegram reply box (`ConnectorThreadReplyTests`, #1190): sent replies appear immediately; no confirmation-card notice or Allow:
 `MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1 PORT=18857 python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_MOCK_HUB_TELEGRAM_THREAD=http://127.0.0.1:18857 xcodebuild test … -only-testing:PersonaUITests/ConnectorThreadReplyTests`.
+`TEST_RUNNER_PERSONA_MOCK_HUB_TELEGRAM_THREAD=http://127.0.0.1:18857 xcodebuild test … -only-testing:PersonaUITests/ConnectorThreadReplyTests`.
 
 QR login (`QRSignInTests`, #1351): `MOCK_WECHAT=signed_out PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_MOCK_HUB_QR=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/QRSignInTests`: Settings › WeChat › Sign In shows QR and Save QR Code,
-mock confirms sixth poll, auto-switches to connected. Restart mock before another round (e.g. dark), state in process; `MOCK_WECHAT_WAIT=1` stays QR for shots. `MOCK_WECHAT_QR=link` removes matrix only, `none` removes link too (unrenderable step, #1693). `testAStepItCannotDrawSaysSo` uses another `MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none`, `TEST_RUNNER_JARVIS_MOCK_HUB_QR_NONE=http://127.0.0.1:<port>`; page explains inability, Restart, no Next.
+`TEST_RUNNER_PERSONA_MOCK_HUB_QR=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/QRSignInTests`: Settings › WeChat › Sign In shows QR and Save QR Code,
+mock confirms sixth poll, auto-switches to connected. Restart mock before another round (e.g. dark), state in process; `MOCK_WECHAT_WAIT=1` stays QR for shots. `MOCK_WECHAT_QR=link` removes matrix only, `none` removes link too (unrenderable step, #1693). `testAStepItCannotDrawSaysSo` uses another `MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none`, `TEST_RUNNER_PERSONA_MOCK_HUB_QR_NONE=http://127.0.0.1:<port>`; page explains inability, Restart, no Next.
 Hub decides own-device replies need no cards (mock doesn't distinguish devices); `TestConnectorThreadReplyFromTheUsersDevice`.
 
-Secret fields never prompt Save Password (`SecretFieldTests`, #1598): `MOCK_PLUGINS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_SECRETS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SecretFieldTests`: provider API keys (manual/extension), Lark bot App Secret,
+Secret fields never prompt Save Password (`SecretFieldTests`, #1598): `MOCK_EXTENSIONS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_PERSONA_SECRETS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SecretFieldTests`: provider API keys (manual/extension), Lark bot App Secret,
 mail password/app code, terminal password; after entry/navigation no system Save Password (`PasswordPrompt.assertNone`), values reach mock. Terminal card disappears after answer; restart for rerun.
 
-Channels (`ChannelSettingsTests`, #1529, #2195, `docs/channels.md` ("UI")): `MOCK_CHANNELS=1 MOCK_PLUGINS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/ChannelSettingsTests`: Channels row/summary before Connectors, no channels in extensions, About only version/build with assistant settings accessible,
+Channels (`ChannelSettingsTests`, #1529, #2195, `docs/channels.md` ("UI")): `MOCK_CHANNELS=1 MOCK_EXTENSIONS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_PERSONA_CHANNELS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/ChannelSettingsTests`: Channels row/summary before Connectors, no channels in extensions, About only version/build with assistant settings accessible,
 three sections (Persona / Connected / Available to install), WeChat account/destination/features, token binding (invalid inline error), Lark bot unbind/re-pair six-digit code,
 From WeChat below first main-chat message. Restart mock for dark (binding state in process); `-openChannels YES` / `-openChannel <id>` direct opens.
 
 Sent as You (`SentModelTests`, `SentAsYouTests`, #5278, `docs/connectors.md` ("Sent as the user")): `MOCK_SENT=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SentAsYouTests`: the row after Connectors, how each send was let through, a row's details and a text of exactly 4000 characters,
+`TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SentAsYouTests`: the row after Connectors, how each send was let through, a row's details and a text of exactly 4000 characters,
 the chat that asked, Load Earlier, the connector chips and a chip with nothing recorded (Show All), and the empty / no database / no full access / older hub / unreachable states. Each test first puts the mock back to its rows
-(`GET /mock/sent?mode=1`), then switches it with `mode=empty|nodb|forbidden|old`. `TEST_RUNNER_JARVIS_SHOTS=<dir>` writes `ios-sent-as-you-light.png` and `-dark.png` (`testScreenshots`). `-tab settings -openSentAsYou YES` opens the page directly.
+(`GET /mock/sent?mode=1`), then switches it with `mode=empty|nodb|forbidden|old`. `TEST_RUNNER_PERSONA_SHOTS=<dir>` writes `ios-sent-as-you-light.png` and `-dark.png` (`testScreenshots`). `-tab settings -openSentAsYou YES` opens the page directly.
 
-Browser logins (#1304): `MOCK_BROWSER=ready PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>` runs `BrowserLoginsTests`: machine websites, pick cookies.txt (`-openCookieFile <path>` replaces file picker), none selected by default, expired disabled, import/clear; `TEST_RUNNER_JARVIS_SHOTS=<directory>`.
+Browser logins (#1304): `MOCK_BROWSER=ready PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>` runs `BrowserLoginsTests`: machine websites, pick cookies.txt (`-openCookieFile <path>` replaces file picker), none selected by default, expired disabled, import/clear; `TEST_RUNNER_PERSONA_SHOTS=<directory>`.
 
 Send/terminal-dialog safety (`SendSafetyTests`) uses mock:
 `PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/SendSafetyTests`:
+`TEST_RUNNER_PERSONA_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/SendSafetyTests`:
 tap dialog option, hub gets `option` not keys and Dialog changed notice; existing computer draft, Clear and send retry carries
 `clear_draft`, same `client_msg_id` (`GET /mock/resolved`, `GET /mock/sent`). Screenshot `-openSendMessage <text>` sends after 3 seconds (`-openSendDelay <seconds>` overrides).
 
 New Persona chat from elsewhere (`NewConversationEntryTests`, #527): Inbox Hand to AI immediately shows sent message, not No messages yet;
 late transcript shows it once. `PORT=18927 MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18927 xcodebuild test … -only-testing:PersonaUITests/NewConversationEntryTests` (one per shell/old layout).
+`TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18927 xcodebuild test … -only-testing:PersonaUITests/NewConversationEntryTests` (one per shell/old layout).
 
 Weak/offline network (`ConnectionTests`, `docs/ios.md` ("Connection state")): `PORT=18760 python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`: 16-second outage, title unchanged first 8-second grace (`docs/hub-restart.md`), then Connecting,
+`TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`: 16-second outage, title unchanged first 8-second grace (`docs/hub-restart.md`), then Connecting,
 restored on return; 0.2-second outage (~1-second reconnect) never changes title. Offline send says Auto-send when connected, received once after recovery,
 even further drops/background (no background reconnect/send until foreground)/App relaunch (disk outbox). Server restart dedup: `TestSendRetryAfterRestartAndRefusal`.
 Planned restart (#1634): `MOCK_RESTART=1`, `GET /mock/restart?gap_ms=1500&missed=todos,inbox` emits `hub_restarting`, closes all WS with 1001;
@@ -448,7 +448,7 @@ also startup `MOCK_DELAY=<seconds>`. Kill only listener: `kill $(lsof -i TCP:187
 `lsof -i :18760` also lists connected simulator App, killing both loses App. Shots `-showConnection …` (`docs/ios.md`).
 
 File sending (`FileUploadTests`: Files in + menu, progress/cancel above input, finished path appended after typed text without sending) uses mock:
-`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/FileUploadTests`
+`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_PERSONA_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/FileUploadTests`
 (`GET /mock/uploads` lists received files; `MOCK_UPLOAD_OLD_NODE=1` old node). `-openUploadDemo <filename>` uploads fake 24 MB file after 3 seconds.
 System file-picker selection isn't automated; XCUITest unreliable there.
 
@@ -460,27 +460,27 @@ new chat (offline disabled, directory browser/recent/launchers, POST contents, e
 
 - Mock: `PORT=18773 MOCK_MACHINES=1 python3 scripts/mock/mock_hub.py &` (extra offline Lab host, `POST …/reconnect` makes online;
   Mac Studio 36 Agents; `GET /mock/hits`, `/mock/reconnects`, `/mock/started`, `/mock/reset`; cwd ending `/broken` starts return 502),
-  `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/MachinePagesTests`,
-  repeat dark (`simctl ui <udid> appearance dark`, `JARVIS_STYLE=dark`), every-step shots in `JARVIS_SHOTS`, failures attach image/tree.
+  `TEST_RUNNER_PERSONA_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_PERSONA_SHOTS=<directory> TEST_RUNNER_PERSONA_STYLE=light xcodebuild test … -only-testing:PersonaUITests/MachinePagesTests`,
+  repeat dark (`simctl ui <udid> appearance dark`, `PERSONA_STYLE=dark`), every-step shots in `PERSONA_SHOTS`, failures attach image/tree.
 - Real API: local test hub; **don't reconnect/create/close on production hub**. Build personad `GOOS=darwin` on hub machine, copy back;
-  `docker exec jarvis-postgres createdb -U jarvis <own database>`, tunnel `ssh -L <local port>:127.0.0.1:18661`; fake HOME `~/.persona/hub.json`
+  `docker exec persona-postgres createdb -U persona <own database>`, tunnel `ssh -L <local port>:127.0.0.1:18661`; fake HOME `~/.persona/hub.json`
   (0600) only `listen`, `token`, `database_url`, two machines: local and unreachable ssh. `herdr --session <name> server` creates isolated herdr,
   `HERDR_SOCKET_PATH` points to it, not active one. Create `code/demo` in fake HOME, then
-  `TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=… TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=… TEST_RUNNER_JARVIS_LIVE_MACHINES_CODE=<fake HOME>/code xcodebuild test … -only-testing:PersonaUITests/MachinePagesLiveTests`.
+  `TEST_RUNNER_PERSONA_LIVE_MACHINES_HUB=… TEST_RUNNER_PERSONA_LIVE_MACHINES_TOKEN=… TEST_RUNNER_PERSONA_LIVE_MACHINES_CODE=<fake HOME>/code xcodebuild test … -only-testing:PersonaUITests/MachinePagesLiveTests`.
   Recent directories come from actual local Claude records, so `-cwd.<machine id>` sets browser origin. Afterwards stop hub/tunnel/herdr and drop database.
 - Other lanes may `pkill -f mock_hub.py` during cleanup: copy long-running mock under another name (`/tmp/<lane>_fakehub.py`), wrap while loop to restart if killed.
 - XCTest failure terminates App, cancels requests; hub logs that `POST /api/v1/sessions` as 502 even though node started session (node doesn't follow hub cancellation).
   For isolated 502, first check if test killed App.
 - What this computer can do (`MachineHealthTests`, #3018): `MOCK_DOCTOR=stale PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
-  `TEST_RUNNER_JARVIS_DOCTOR_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/MachineHealthTests`: MacBook machine page Two features need attention→Fix→confirm→All good→expand checks;
-  `TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark`, three images. Restart mock before rerun (remembers repairs).
+  `TEST_RUNNER_PERSONA_DOCTOR_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/MachineHealthTests`: MacBook machine page Two features need attention→Fix→confirm→All good→expand checks;
+  `TEST_RUNNER_PERSONA_SHOTS=<directory>`, `TEST_RUNNER_PERSONA_SHOTS_APPEARANCE=light|dark`, three images. Restart mock before rerun (remembers repairs).
 
 ### Agents list (`AgentsListTests`)
 
 Idle-space ordering (`QuietSpaceOrderTests`, #2443): `MOCK_QUIET=order PORT=<port>`,
-`TEST_RUNNER_JARVIS_QUIET_ORDER_HUB=<mock URL>`, `TEST_RUNNER_JARVIS_LAYOUT=shell`, `-only-testing:PersonaUITests/QuietSpaceOrderTests`.
+`TEST_RUNNER_PERSONA_QUIET_ORDER_HUB=<mock URL>`, `TEST_RUNNER_PERSONA_LAYOUT=shell`, `-only-testing:PersonaUITests/QuietSpaceOrderTests`.
 Fixture tab order 41 / 52 / 1 minutes ago must expand as 1 / 41 / 52; cards, compact list, collapse/reopen covered.
-`TEST_RUNNER_JARVIS_UI_STYLE=glass|beautiful` plus actual light/dark covers ordinary cards/capsules; `TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_STYLE` filename-only.
+`TEST_RUNNER_PERSONA_UI_STYLE=glass|beautiful` plus actual light/dark covers ordinary cards/capsules; `TEST_RUNNER_PERSONA_SHOTS=<directory>`, `TEST_RUNNER_PERSONA_STYLE` filename-only.
 
 Quick filters (All / Needs you / Unread / Working, counts follow machine filter), compact list (≥2.5× card rows, persisted across restart), space-title collapse (state counts remain,
 persisted; collapse/expand all; collapsed-space ⋯ Open Space), space ⋯ Mark All as Read (N), browsing Unread keeps seen entries until reselecting filter,
@@ -492,32 +492,32 @@ Long-scroll uses `XCTOSSignpostMetric`; simulator reports duration, not dropped 
 
 - Mock: `PORT=18775 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &` (~130 sessions: platform 3 Needs you / 35 Unread / 12 Working,
   plus mostly/all-idle spaces; `seen` WS or POST changes Unread→Seen, `GET /mock/seen`, `/mock/reset`),
-  `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/AgentsListTests`, repeat dark.
+  `TEST_RUNNER_PERSONA_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_PERSONA_SHOTS=<directory> TEST_RUNNER_PERSONA_STYLE=light … -only-testing:PersonaUITests/AgentsListTests`, repeat dark.
 - `-openAgentsFresh YES` clears remembered filter/grouping/compact/collapse at launch. Tests must change these via UI, not fixed launch args which override saved values.
-- Grouping menu and long-run cap (`AgentsGroupingTests`, #5766): `PORT=<port> MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_GROUPING_HUB=<mock URL>`; each grouping from the capsule beside the quick filters, By Status kept after a restart, Unread's Show all; `TEST_RUNNER_JARVIS_SHOTS=<directory>` + `TEST_RUNNER_JARVIS_SCHEME=light|dark` + `TEST_RUNNER_JARVIS_STYLE=<name>` for the shots.
-- Recent flat mode (`RecentAgentsTests`): ordinary mock (no `MOCK_AGENTS`), `TEST_RUNNER_JARVIS_RECENT_HUB=<mock URL>`,
+- Grouping menu and long-run cap (`AgentsGroupingTests`, #5766): `PORT=<port> MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_PERSONA_GROUPING_HUB=<mock URL>`; each grouping from the capsule beside the quick filters, By Status kept after a restart, Unread's Show all; `TEST_RUNNER_PERSONA_SHOTS=<directory>` + `TEST_RUNNER_PERSONA_SCHEME=light|dark` + `TEST_RUNNER_PERSONA_STYLE=<name>` for the shots.
+- Recent flat mode (`RecentAgentsTests`): ordinary mock (no `MOCK_AGENTS`), `TEST_RUNNER_PERSONA_RECENT_HUB=<mock URL>`,
   `-only-testing:PersonaUITests/RecentAgentsTests`. Real menu switch; cross-project activity order, persistence, read/return, idle/offline history, live reorder, machine filter/search.
-  Light/dark, `TEST_RUNNER_JARVIS_LAYOUT=shell` too; per-step `TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_STYLE=light|dark` names.
+  Light/dark, `TEST_RUNNER_PERSONA_LAYOUT=shell` too; per-step `TEST_RUNNER_PERSONA_SHOTS=<directory>`, `TEST_RUNNER_PERSONA_STYLE=light|dark` names.
 - `NavigationLink` row accessibility identifiers appear twice (cell/button); count/select nth with `app.buttons.matching(identifier:)`.
 - `SearchOpenTests` formerly omitted `-dev.openChat ""`: previous open chat restored, swipe-back couldn't reach list; both failed on master too.
 - Both `SearchOpenTests` couldn't find weather header/Add weather row on master (#1051): five pending requests filled first screen, lazy list hadn't built rows. `bringAboveTabBar` scroll to them, back to top before search; after return use row to verify list (original scroll position, filter absent from tree).
 - `ShellAvatarTests` also omitted `-dev.openChat ""`: prior Agents chat restored, no list header/avatar, also failed on master.
 - Compact-list shots (`CompactListShots`, demo not mock): All (many spaces), Mac Studio (many unread/idle spaces), Unread, Needs you, Mac mini (all idle),
-  by-state, card comparison; all three text sizes (`-ui.textSize small|standard|large`; `TEST_RUNNER_JARVIS_TEXT_SIZES=standard` one only).
-  `TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/CompactListShots`, repeat dark.
+  by-state, card comparison; all three text sizes (`-ui.textSize small|standard|large`; `TEST_RUNNER_PERSONA_TEXT_SIZES=standard` one only).
+  `TEST_RUNNER_PERSONA_SHOTS=<directory> TEST_RUNNER_PERSONA_STYLE=light … -only-testing:PersonaUITests/CompactListShots`, repeat dark.
   Before/after: put same test file in `git worktree add --detach <directory> origin/master`, same data both sides.
-- Computer sections (#2108, `AgentsByMachineTests`): default three-computer mock (`TEST_RUNNER_JARVIS_MOCK_HUB`), repository/project modes section by computer, hub order,
+- Computer sections (#2108, `AgentsByMachineTests`): default three-computer mock (`TEST_RUNNER_PERSONA_MOCK_HUB`), repository/project modes section by computer, hub order,
   no computer name repeated in group headers, computer title collapses whole section, machine filter removes headers. Repository/worktree inference: `AgentRepoTreeTests`.
   `MOCK_WORKTREES=1`: weather widget Agent in `.worktrees/widget` (idle peer),
   idle in `.claude/worktrees/fix-crash`, all-idle notes repo on MacBook. Both groupings, light/dark, all three renderings (default, `-ui.style beautiful`, compact).
   `-openWelcome YES` removes prior pairing (Keychain hub beats demo); `-demo.on YES` enters demo.
-  All `launchJarvis()` / `launchPinned()` launches auto-add `-openWelcome YES` when demo on without `-pairURL`, never reuse previous mock pairing.
+  All `launchPersona()` / `launchPinned()` launches auto-add `-openWelcome YES` when demo on without `-pairURL`, never reuse previous mock pairing.
 
 ### Stopping/closing space tabs (`SiblingTabsTests`)
 
 - Ordinary mock, dedicated port/simulator: `PORT=<port> python3 scripts/mock/mock_hub.py`, then
-  `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_LAYOUT=shell xcodebuild test … -only-testing:PersonaUITests/SiblingTabsTests`.
-  xcodebuild variables need `TEST_RUNNER_`; test process reads stripped `JARVIS_MOCK_HUB`. Passing only the latter skips the suite.
+  `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> TEST_RUNNER_PERSONA_LAYOUT=shell xcodebuild test … -only-testing:PersonaUITests/SiblingTabsTests`.
+  xcodebuild variables need `TEST_RUNNER_`; test process reads stripped `PERSONA_MOCK_HUB`. Passing only the latter skips the suite.
 - Verify swipe actions, long-press menu, Working cancellation, failed close retaining tab/confirmation, current close switches neighbor, other close doesn't switch, last close returns.
   Run existing create/switch regressions too; inspect light/dark. `sibling-*` attachments in `.xcresult`,
   export `xcrun xcresulttool export attachments --path <result> --output-path <directory>`; don't swallow failures writing directly from test process to host `/tmp`.
@@ -534,8 +534,8 @@ Each case records body counts/main-thread time per push (`PERF` logs/attachments
 - Mock: `PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &`; `GET /mock/churn?n=12&ms=400` pushes n rounds (each machine's session list—working text changes,
   two working Agents alternate newest—machine list, one new step per open chat, reply every 4 rounds). `&steps=N` steps/chat/round; `&final=1` ends turn after pushes (final reply, Working→done); `/mock/churned` progress. `MOCK_CHURN=1` adds first-chat screenshot +5 machines (menu scroll). `&inbox=1` changes Inbox/pending items each round; `&waiting=1` adds waiting Agent,
   answered next round (badge changes; real hub pushes these continually, session-only tests miss badge-driven rebuilds, `docs/archive/lanes/live-updates.md` ("It returned")).
-- `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests`.
-- Run shell/old layout: UI tests default old (`launchJarvis` adds `-ui.oldLayout YES`); `TEST_RUNNER_JARVIS_LAYOUT=shell` uses iPhone-default shell.
+- `TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests`.
+- Run shell/old layout: UI tests default old (`launchPersona` adds `-ui.oldLayout YES`); `TEST_RUNNER_PERSONA_LAYOUT=shell` uses iPhone-default shell.
   `LiveUpdateTests`, `ChatFollowTests`, `ScrollUnderPushTests` must pass both.
 
 ### Pushes while scrolling (`ScrollUnderPushTests`)
@@ -552,11 +552,11 @@ every 2 seconds. `&real=1` alternates working text between one/two lines and fin
   - Anomalies within 0.3 seconds of releasing held updates (after 0.5-second rest or immediate critical update) are `landed`: designed at-rest updates,
     UIKit may defer layout until next touch, not scrolling interruption.
   - Bodies evaluated during scrolling in `bodies`; all under `perf.counts.scroll`.
-- Assert `big`, `replaced`, `stopped`, `defaults` = 0; Agents `moved` = 0. Both layouts/styles (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`).
+- Assert `big`, `replaced`, `stopped`, `defaults` = 0; Agents `moved` = 0. Both layouts/styles (`TEST_RUNNER_PERSONA_UI_STYLE=beautiful`).
   - <100 pt jumps happen without pushes (lazy row sizing/synthetic drags), excluded.
   - Glass-card pages like Machines continuously increase `moved` without pushes (effect layers move relative to content); only inspect it on lists.
 - Mock: `PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &` (both chats long enough to scroll),
-  `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797`.
+  `TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797`.
 - First pair once/quit, then launch target page: changed hub pairing restarts App on assistant, ignores `-app.tab`, `-dev.openChat`.
 
 ### Stable return from chats (`AgentsReturnTests`)
@@ -567,7 +567,7 @@ every 2 seconds. `&real=1` alternates working text between one/two lines and fin
   - First row/navigation bar stable (range and adjacent-frame jumps ≤1pt), same as before leaving;
   - Search retains collapsed/expanded state;
   - Navigation-container y and top safe area unchanged.
-- Both styles (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`). #340: shell return previously slid list down, auto-expanded search, bounced up 52pt.
+- Both styles (`TEST_RUNNER_PERSONA_UI_STYLE=beautiful`). #340: shell return previously slid list down, auto-expanded search, bounced up 52pt.
 
 ### Truth and timeliness (`ScreenTruthTests`)
 
@@ -583,14 +583,14 @@ Displayed state must match hub promptly (`docs/ios-state.md` ("Truth and timelin
   - During touch, Needs you/questions visible ≤1 s;
   - Last line lands ≤0.5 s after release (assert 0.8 s including probe read);
   - Sustained touch still lands ≤5 s (assert 5.5 s);
-  - Seeded random sequence (scroll/push/churn/chat navigation/foreground-background/offline pushes) converges ≤8 s; replay `TEST_RUNNER_JARVIS_SEED`;
+  - Seeded random sequence (scroll/push/churn/chat navigation/foreground-background/offline pushes) converges ≤8 s; replay `TEST_RUNNER_PERSONA_SEED`;
   - Tap right after fling opens the Agent actually seen;
   - Offline title after 8-second grace (≤11 s), disappears ≤25 s after reconnect: backoff 1,2,4…max 20 s (±20%).
 - Both layouts/styles, seeds 7,21,42 each.
 
 ### Demo mode (`DemoModeTests`, `DemoHubTests`)
 
-No mock: `TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/DemoModeTests`, repeat dark.
+No mock: `TEST_RUNNER_PERSONA_SHOTS=<directory> TEST_RUNNER_PERSONA_STYLE=light xcodebuild test … -only-testing:PersonaUITests/DemoModeTests`, repeat dark.
 `testWalkThroughAndLeave` enters demo from pairing (`-openWelcome YES`), walks Agents (filters, compact, Claude send/demo reply, terminal, question answers,
 plan, Codex, tables/links), Machines/24-hour charts, Persona (main/sidebar/scheduled tasks), Inbox (Lark/mail),
 asserts no "This data isn't available in demo mode" on every page, exits via Settings, still pairing after relaunch. `testStaysAcrossLaunches` verifies demo persists.
@@ -605,7 +605,7 @@ Inspect simulator logs for missing `DemoHub` APIs:
 ### Assistant live-card snapshots/events (`AssistantLiveViewTests`, #2024)
 
 Dedicated loopback mock: `python3 scripts/mock/assistant_views_hub.py --port 0 --port-file /tmp/view-hub.port`, system-assigned port; read/pass
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests`.
+`TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests`.
 Fixtures `schema/extension/examples/assistant/progress.json`, `progress-updated.json`: initial version 1, `POST /mock/views/update` pushes 2,
 `POST /mock/views/stale` pushes 1 without changing latest snapshot. Actual App checks progress updates in place, one feed row, stale cannot overwrite; light/dark with inspected shots.
 
@@ -615,12 +615,12 @@ Fixtures `schema/extension/examples/assistant/progress.json`, `progress-updated.
 
 ### Main-chat rich UI interactions/shared samples (`AssistantRichCardTests`, #2024)
 
-`python3 scripts/mock/assistant_rich_ui_hub.py --port 0 --port-file /tmp/rich-ui-hub.port` runs an isolated loopback fixture, never real main chats/accounts. Pass port through `TEST_RUNNER_JARVIS_MOCK_HUB`. Watch shots use another instance with `--watch`, only synthetic assistant session; pass its `-pairURL`, `-openWatchItem session`, never alter running iOS fixture.
+`python3 scripts/mock/assistant_rich_ui_hub.py --port 0 --port-file /tmp/rich-ui-hub.port` runs an isolated loopback fixture, never real main chats/accounts. Pass port through `TEST_RUNNER_PERSONA_MOCK_HUB`. Watch shots use another instance with `--watch`, only synthetic assistant session; pass its `-pairURL`, `-openWatchItem session`, never alter running iOS fixture.
 
 - Forms: fill, native confirmation, submit once, selected/source display, feed restores submitted values after restart.
 - Body cards: shared fence parsing creates item id/ordinal key; another-device selection event prevents resubmission.
 - Confirmation race: server version changes without event; stale confirmation returns `view_changed`, no reply sent; draft retained, new confirmation submits new version.
-- `testAllSharedSamplesAreVisibleAndCaptured` reads decision/comparison/progress/form/chart/HTML samples individually. Pin each `AppStyle` via `TEST_RUNNER_JARVIS_UI_STYLE`, run light/dark and inspect. HTML without execution-security acceptance must use fallback; API feature isn't permission to execute.
+- `testAllSharedSamplesAreVisibleAndCaptured` reads decision/comparison/progress/form/chart/HTML samples individually. Pin each `AppStyle` via `TEST_RUNNER_PERSONA_UI_STYLE`, run light/dark and inspect. HTML without execution-security acceptance must use fallback; API feature isn't permission to execute.
 
 ### Assistant HTML cards (`HTMLCardTests`, `AssistantHTMLCardTests`, #2025)
 
@@ -655,8 +655,8 @@ PORT=18762 MOCK_HUB_ID=hub-c MOCK_HUB_NAME="Work 2" \
   MOCK_MESH_PEERS='[{"hub_id":"hub-b","name":"Work","endpoints":["http://127.0.0.1:18761"]}]' \
   MOCK_MACHINE_OWNER='{"server":"hub-b"}' MOCK_MACHINES_KEEP=server,macbook \
   MOCK_MACHINE_NAMES='{"server":"Work server","macbook":"Work MacBook"}' python3 scripts/mock/mock_hub.py &
-TEST_RUNNER_JARVIS_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_JARVIS_HUB_B=http://127.0.0.1:18761 \
-  TEST_RUNNER_JARVIS_HUB_C=http://127.0.0.1:18762 xcodebuild test … -only-testing:PersonaUITests/MultiHubTests
+TEST_RUNNER_PERSONA_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_PERSONA_HUB_B=http://127.0.0.1:18761 \
+  TEST_RUNNER_PERSONA_HUB_C=http://127.0.0.1:18762 xcodebuild test … -only-testing:PersonaUITests/MultiHubTests
 ```
 
 - Shots: `-pairURL <A> -pairURL2 <B> -pairURL3 <C>` (DEBUG; same address/credentials retains group id across restart), plus
@@ -688,7 +688,7 @@ simulator DEBUG args:
 # base64 SSHRoute JSON (Shared/HubTransport.swift); raw JSON would be parsed as plist
 SEED=$(python3 -c 'import base64,json;print(base64.b64encode(json.dumps({"host":"127.0.0.1","port":<sshd port>,"user":"<user>",
   "target_host":"<hub address>","target_port":18660,"host_key":"SHA256:…","always":False}).encode()).decode())')
-scripts/app/personactl.py launch -- -pairURL "jarvis://pair?url=<unreachable direct address>&token=<token>" -seedSSHTunnel "$SEED" -tab settings -openSSHTunnel YES
+scripts/app/personactl.py launch -- -pairURL "persona://pair?url=<unreachable direct address>&token=<token>" -seedSSHTunnel "$SEED" -tab settings -openSSHTunnel YES
 ```
 
 Read App-generated public key via `personactl.py find --id ssh.publicKey` (or test key `-seedSSHKey`). Unreachable pairing URL (e.g. `http://hub.invalid:18660`) tests fallback; `"always": true` with real hub URL tests Always use SSH.
@@ -711,12 +711,12 @@ After hub pairing/auth/WebSocket changes, connect current unchanged iOS App to l
   both products `Persona.app`, Multiple commands produce. Without team use `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`.
 - DEBUG `-pairURL` skips pairing-token/device-token exchange (`DeviceCredentials.swift`). Verify upgrade by launching with `-pairURL` once
   (Keychain config), then cold-launch no arguments for real `upgradeCredentials()`; inspect new `device_tokens` row and `pair_tokens.used_at`.
-- iOS 27 `simctl openurl jarvis://pair?...` prompts Open in Persona, not script-clickable; don't pair this way.
+- iOS 27 `simctl openurl persona://pair?...` prompts Open in Persona, not script-clickable; don't pair this way.
 - Simulator Keychain survives uninstall: second pairing may use old credentials; use new simulator or disconnect in App first.
 
 ## herdr integration
 
-`./scripts/test/test-herdr.sh` starts independent headless `herdr --session jarvis-test-<pid> server`, unrelated to active herdr,
+`./scripts/test/test-herdr.sh` starts independent headless `herdr --session persona-test-<pid> server`, unrelated to active herdr,
 stopped by name afterwards. `herdrlive` tests compare socket/CLI, events; launch claude in new temporary directory,
 verify trust dialog detected (`dialog_open` refusal), option answers (rev check, keys from current screen), empty input allowed, draft refused
 (`input_draft`), unrelated text not cleared, clearing seen draft allows send. Without local Go, cross-build test binary on hub/copy back.
@@ -724,26 +724,26 @@ Requires herdr/claude locally (claude starts but receives no message).
 
 ## Codex integration
 
-`./scripts/test/test-codex.sh` tests real Codex question/approval cards (`docs/codex.md` ("Questions and approvals")), independent `jarvis-codex-<pid>` herdr
+`./scripts/test/test-codex.sh` tests real Codex question/approval cards (`docs/codex.md` ("Questions and approvals")), independent `persona-codex-<pid>` herdr
 (stopped by name), temporary git repo, same node `codexAnswer` code, checks rollout/screens per case:
 async questions (empty input/draft/0.163 expanded panel/already answered on computer), approvals (direct/scrolled/other tab foreground/transcript pager
 with denial reason/already answered), question then approval, two Plan questions (option/free text).
 
-- `JARVIS_CODEX_BINS="codex /path/to/other/codex"` versions, e.g. temporary npm `@openai/codex@0.163.0`;
-  `JARVIS_CODEX_ARGS="-m <model>"` usable authenticated model (ChatGPT login not all models); `JARVIS_CODEX_ROUNDS` default 2;
-  `JARVIS_CODEX_COLS=64` also narrow-window runs (`stty cols`, headless splits don't narrow); `JARVIS_CODEX_CASES=a,b` selected cases.
+- `PERSONA_CODEX_BINS="codex /path/to/other/codex"` versions, e.g. temporary npm `@openai/codex@0.163.0`;
+  `PERSONA_CODEX_ARGS="-m <model>"` usable authenticated model (ChatGPT login not all models); `PERSONA_CODEX_ROUNDS` default 2;
+  `PERSONA_CODEX_COLS=64` also narrow-window runs (`stty cols`, headless splits don't narrow); `PERSONA_CODEX_CASES=a,b` selected cases.
 - Uses own `~/.codex` login, real tiny model calls. Trust writes `~/.codex/config.toml`, rollouts in `~/.codex/sessions`;
   both cleaned on exit. No local Go: cross-build on hub/copy back.
-- `JARVIS_CODEX_DAEMON_BINS="<0.163 codex>"` daemon route (`docs/codex.md` ("Sessions on daemons")): tests own
+- `PERSONA_CODEX_DAEMON_BINS="<0.163 codex>"` daemon route (`docs/codex.md` ("Sessions on daemons")): tests own
   `codex app-server --listen unix://<temporary directory>/app.sock`, restartable child, never active daemon. TUI `--remote … -C <directory> -s read-only`,
   node discovery disabled, only this app-server, fake hub answers/withdraws cards. Async/blocking questions, command/edit/permission approvals, denial reasons,
-  computer-first/phone-first/simultaneous answers, restart, draft send; first `JARVIS_CODEX_BINS` (e.g. 0.153) alongside confirms terminal route.
+  computer-first/phone-first/simultaneous answers, restart, draft send; first `PERSONA_CODEX_BINS` (e.g. 0.153) alongside confirms terminal route.
   Permission tests enable `features.request_permissions_tool` in test app-server.
 - Phone start (`TestLiveCodexStart`, `docs/codex.md` ("Creating from the phone")): real `session.start`, first message quotes/newlines/`$`/backticks/Chinese/thousands of characters.
   Each daemon binary via `--remote` on own server (app-server route), same with `-c` (terminal route, Connection explanation), first BINS (0.153).
   Each round: reply ≤60 s, correct thread, exact rollout first message, one session/pane,
   correct route, second phone message received after first reply; missing-command launcher errors immediately. Needs local personad (`codex-start`), built by script.
-  Don't run no-argument 0.163; it joins/starts active daemon. `JARVIS_CODEX_TESTS="cards daemon start"` selects, default all.
+  Don't run no-argument 0.163; it joins/starts active daemon. `PERSONA_CODEX_TESTS="cards daemon start"` selects, default all.
 - Each round/case prints `LIVE <version> round <n> <case>: ok in <seconds>`, failure screen; final `RESULT all: passed|FAILED`.
   Codex model-service errors (e.g. Selected model is at capacity, not Persona) log `SERVICE-RETRY` and rerun once;
   each RESULT reports retry count—include in stability reports, not pretend absent.
@@ -979,8 +979,8 @@ separate drag/post-release stats in `Documents/drawer-probe.jsonl`; `DrawerPan` 
   Optimized Debug (`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`, separate derivedData); old worktree
   same `DrawerProbe.swift` and three named methods.
 - Sidebar contrast (#4496): `SidebarContrastTests` measures left-half Inbox-row luminance difference (normally >0.9, white-on-light only a few percent), repeated toggles/home-return,
-  `-showLookBlink 3` switches window appearance/layout/back every 3 seconds like background snapshots. `testRowsFollowALookChange` needs `TEST_RUNNER_JARVIS_FLIP_LOOK=<file>`;
-  test writes light/dark, harness `simctl ui <udid> appearance` switches/deletes (skip if absent). `TEST_RUNNER_JARVIS_SCHEME=light|dark` adds `-ui.scheme`.
+  `-showLookBlink 3` switches window appearance/layout/back every 3 seconds like background snapshots. `testRowsFollowALookChange` needs `TEST_RUNNER_PERSONA_FLIP_LOOK=<file>`;
+  test writes light/dark, harness `simctl ui <udid> appearance` switches/deletes (skip if absent). `TEST_RUNNER_PERSONA_SCHEME=light|dark` adds `-ui.scheme`.
   Deterministic `DrawerSidebarLookTests`: window appearance wins over mismatched page environment.
 - Main-thread sample `sample <pid> 30 1`; locate own simulator `pgrep -f "Devices/<udid>/.*Persona.app/Persona"` (other lanes run App too).
 
@@ -999,7 +999,7 @@ separate drag/post-release stats in `Documents/drawer-probe.jsonl`; `DrawerPan` 
 
 First frame = drag start, formerly builds sidebar/hides tab bar (safe-area whole-page relayout); longest post-release formerly final close frame restoring tabs.
 Total drops (>1.5 frames) 76→9.
-Real XCUITest drag (`testMeasureDrags`, `JARVIS_DRAWER_MEASURE=4`): after, 16 drags main-thread p50 ~4 ms, max 15, all flings open;
+Real XCUITest drag (`testMeasureDrags`, `PERSONA_DRAWER_MEASURE=4`): after, 16 drags main-thread p50 ~4 ms, max 15, all flings open;
 before first fling failed (495pt/s below old 600 threshold), first frame 18.6 ms, close 40–50 ms.
 Simulator runs Mac CPU, absolute times smaller than device; compare relative changes. 120 Hz device has 8.3 ms/frame.
 
@@ -1007,9 +1007,9 @@ Simulator runs Mac CPU, absolute times smaller than device; compare relative cha
 
 Compare same real pushes before/after hub session-list/Live Activity timing changes:
 
-1. Record on hub: `cd server && go run ./cmd/pushrec 20m ~/push.jsonl`. App-like hub connection (token from `~/.persona/hub.json`, never printed; `listen` address, `PERSONA_LISTEN` / `JARVIS_LISTEN` override),
+1. Record on hub: `cd server && go run ./cmd/pushrec 20m ~/push.jsonl`. App-like hub connection (token from `~/.persona/hub.json`, never printed; `listen` address, `PERSONA_LISTEN` / `PERSONA_LISTEN` override),
    no phone/desktop registration or chat opening, `{"t": milliseconds, "msg": original}` per message. Contains real session titles/last lines, 0600, **stays on that machine**, never copied/committed.
-2. Replay `JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`: before-recorded/after-generated
+2. Replay `PERSONA_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`: before-recorded/after-generated
    counts/bytes per minute; timestamped Live Activity changes pass through coalescing/throttling, report notifications/hour with App closed and longest island/hub mismatch, fail beyond limits.
 3. Real `broadcastSessions` decides sends, matches byte-comparison results (decode retains fields); parallel incremental App (`sessions_delta`) counted.
 4. Background `AgentSync` fetches: `python3 scripts/diag/agentsync_replay.py ~/push.jsonl`, recorded rev/state (45/min→9/min, `docs/ios.md` ("Background sync")).
@@ -1031,12 +1031,12 @@ Compare same real pushes before/after hub session-list/Live Activity timing chan
 home compact state (two shots 0.4 s apart for animation), long-press expanded (sometimes retry `expanded2`), lock/wake screenshot (first Allow Live Activities prompt handled), then unlock:
 
 ```sh
-TEST_RUNNER_JARVIS_FLEET_SAMPLE=needsYou TEST_RUNNER_JARVIS_FLEET_DETAILS=YES TEST_RUNNER_JARVIS_FLEET_ISLAND=custom:assistant,load xcodebuild test … -only-testing:PersonaUITests/LiveActivityShots \
+TEST_RUNNER_PERSONA_FLEET_SAMPLE=needsYou TEST_RUNNER_PERSONA_FLEET_DETAILS=YES TEST_RUNNER_PERSONA_FLEET_ISLAND=custom:assistant,load xcodebuild test … -only-testing:PersonaUITests/LiveActivityShots \
   -resultBundlePath /tmp/shots.xcresult
 xcrun xcresulttool export attachments --path /tmp/shots.xcresult --output-path /tmp/shots
 ```
 
-`JARVIS_FLEET_SAMPLE=current` doesn't launch App, captures current activity (real APNs, `docs/live-activity.md` verification).
+`PERSONA_FLEET_SAMPLE=current` doesn't launch App, captures current activity (real APNs, `docs/live-activity.md` verification).
 Shared island: `scripts/app/island_peer.sh <simulator udid>` installs sample `apple/IslandPeer` (one "8 min" activity),
-add `TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer`, extra `-shared` coexistence and `-landscape` (sample foreground landscape, Persona alone on island);
-`TEST_RUNNER_JARVIS_FLEET_COUNT=12` changes fake counts to 12 for two/three digits. iPhone 18 Pro/17 Pro differ, screenshot both (`docs/live-activity.md` ("Sharing Dynamic Island with other Apps")).
+add `TEST_RUNNER_PERSONA_ISLAND_PEER=dev.example.islandpeer`, extra `-shared` coexistence and `-landscape` (sample foreground landscape, Persona alone on island);
+`TEST_RUNNER_PERSONA_FLEET_COUNT=12` changes fake counts to 12 for two/three digits. iPhone 18 Pro/17 Pro differ, screenshot both (`docs/live-activity.md` ("Sharing Dynamic Island with other Apps")).

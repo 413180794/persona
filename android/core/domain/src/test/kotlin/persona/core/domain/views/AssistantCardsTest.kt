@@ -10,7 +10,7 @@ import org.junit.Test
 // Cards read and checked as CheckAssistantView does (sdk/go/wire/assistantview.go), with the shared examples.
 class AssistantCardsTest {
     private fun example(name: String): String =
-        generateSequence(File(System.getProperty("jarvis.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
+        generateSequence(File(System.getProperty("persona.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
             .map { File(it, "schema/extension/examples/assistant/$name.json") }.first { it.exists() }.readText()
 
     @Test fun everySharedExampleReads() {
@@ -80,7 +80,7 @@ class AssistantCardsTest {
     @Test fun openTargets() {
         assertEquals(AssistantOpenTarget.Web("https://example.com/a?b=1"), AssistantOpen.target("https://example.com/a?b=1"))
         assertEquals(AssistantOpenTarget.Session("mac", "s 1"), AssistantOpen.target("persona://session/mac/s%201"))
-        assertEquals(AssistantOpenTarget.Session("mac", "s1"), AssistantOpen.target("jarvis://session/mac/s1"))
+        assertEquals(AssistantOpenTarget.Session("mac", "s1"), AssistantOpen.target("persona://session/mac/s1"))
         assertEquals(AssistantOpenTarget.Task("t1"), AssistantOpen.target("persona://task/t1"))
         assertEquals(AssistantOpenTarget.Knowledge("people/a.md"), AssistantOpen.target("persona://kb/people/a.md"))
         assertEquals(AssistantOpenTarget.File("mac", "/tmp/a b.txt"), AssistantOpen.target("persona://file/mac/%2Ftmp%2Fa%20b.txt"))

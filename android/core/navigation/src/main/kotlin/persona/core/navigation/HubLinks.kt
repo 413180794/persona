@@ -6,7 +6,7 @@ import java.net.URLDecoder
 
 /**
  * A page of the hub's web app (web/src/lib/router.ts) that the app shows itself: the links the assistant writes into
- * its answers (`/s/<machine>/<session>`, `/j/<conversation>`, `/todos?id=<todo>`, server/internal/assistant
+ * its answers (`/s/<machine>/<session>`, `/persona/<conversation>`, `/todos?id=<todo>`, server/internal/assistant
  * feishu_cards.go sessionLink / todoLink) and the other pages a user may paste. Machine ids are the hub's own; the
  * shell adds the group suffix ([persona.core.contracts.GroupKeys]) of the hub the link was on.
  */
@@ -17,8 +17,8 @@ sealed interface HubPage {
      */
     data class Agent(val machineId: String, val sessionId: String, val itemId: String? = null) : HubPage
     /**
-     * `/j/<conversation>`: one of the assistant's conversations, at the message `?at=` names ([itemId]); `/`, `/j` and
-     * `/j/new` are Persona's page (null, no message).
+     * `/persona/<conversation>`: one of the assistant's conversations, at the message `?at=` names ([itemId]); `/`, `/persona` and
+     * `/persona/new` are Persona's page (null, no message).
      */
     data class Conversation(val sessionId: String?, val itemId: String? = null) : HubPage
     /** A page with no ids to resolve: a todo, the todo list, an inbox item, a tab, the machines. */
@@ -57,7 +57,7 @@ object HubLinks {
             4 -> HubPage.Screen(AgentsRoute)
             else -> null
         }
-        "j", "persona" -> when {
+        "persona" -> when {
             p.size == 1 || p.size == 2 && p[1] == "new" -> HubPage.Conversation(null)
             p.size == 2 -> HubPage.Conversation(p[1], at(query))
             else -> null

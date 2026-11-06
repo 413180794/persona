@@ -165,7 +165,7 @@ class HubChatTransport internal constructor(
         get(api("sessions", session.machineId, session.sessionId, "items", itemId, "full"))
 
     companion object {
-        const val OP_ID_HEADER = "X-Jarvis-Op-Id"
+        const val OP_ID_HEADER = "X-Persona-Op-Id"
         const val RESOLVE_RETRY_MILLIS = 60_000L
         /** Between tries: a hub that answers 503 while it stops would otherwise be asked again at once. */
         const val RESOLVE_RETRY_PAUSE_MILLIS = 500L

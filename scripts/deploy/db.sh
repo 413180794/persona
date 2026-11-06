@@ -1,9 +1,9 @@
 #!/bin/bash
-# Runs on the hub machine (deploy.sh pipes it over ssh): make sure the Jarvis Postgres container is up and that
-# ~/.jarvis/hub.json has database_url. Idempotent; the password is generated once and lives only in hub.json (0600).
-#   container jarvis-postgres · image postgres:18-alpine · 127.0.0.1:18661 · volume jarvis-pgdata
+# Runs on the hub machine (deploy.sh pipes it over ssh): make sure the Persona Postgres container is up and that
+# ~/.persona/hub.json has database_url. Idempotent; the password is generated once and lives only in hub.json (0600).
+#   container persona-postgres · image postgres:18-alpine · 127.0.0.1:18661 · volume persona-pgdata
 set -euo pipefail
-NAME=jarvis-postgres
+NAME=persona-postgres
 PORT=18661
 ROOT="${_PERSONA_STATE_DIR:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/../persona_identity.py" --service hub --prepare)}"
 CFG="$ROOT/hub.json"
@@ -24,14 +24,14 @@ fi
 
 if ! docker ps -a --format '{{.Names}}' | grep -qx "$NAME"; then
   PW=$(python3 -c 'import secrets;print(secrets.token_hex(24))')
-  docker volume create jarvis-pgdata >/dev/null
+  docker volume create persona-pgdata >/dev/null
   # postgres 18 keeps PGDATA under /var/lib/postgresql/<major>/docker, so mount the parent.
   docker run -d --name "$NAME" --restart unless-stopped -p 127.0.0.1:$PORT:5432 \
-    -v jarvis-pgdata:/var/lib/postgresql -e POSTGRES_USER=jarvis -e POSTGRES_PASSWORD="$PW" -e POSTGRES_DB=jarvis \
+    -v persona-pgdata:/var/lib/postgresql -e POSTGRES_USER=persona -e POSTGRES_PASSWORD="$PW" -e POSTGRES_DB=persona \
     postgres:18-alpine >/dev/null
   [ -f "$CFG" ] || echo '{}' > "$CFG"
   umask 077
-  python3 - "$CFG" "postgres://jarvis:$PW@127.0.0.1:$PORT/jarvis?sslmode=disable" <<'PY'
+  python3 - "$CFG" "postgres://persona:$PW@127.0.0.1:$PORT/persona?sslmode=disable" <<'PY'
 import json, sys
 path, url = sys.argv[1], sys.argv[2]
 cfg = json.load(open(path))
@@ -53,13 +53,13 @@ except ValueError: print(5432)' "$(url)")
 fi
 in_db() { docker exec -e PGPORT="$INNER" "$NAME" "$@"; }
 for _ in $(seq 1 30); do
-  in_db pg_isready -U jarvis -d jarvis >/dev/null 2>&1 && break
+  in_db pg_isready -U persona -d persona >/dev/null 2>&1 && break
   sleep 1
 done
-ready=$(in_db pg_isready -U jarvis -d jarvis 2>&1) ||
+ready=$(in_db pg_isready -U persona -d persona 2>&1) ||
   { echo "postgres in $NAME is not ready on port $INNER inside the container after 30s: $ready" >&2; exit 1; }
 # Throwaway database for scripts/test/test-server.sh.
-in_db psql -U jarvis -d jarvis -tAc "SELECT 1 FROM pg_database WHERE datname='jarvis_test'" | grep -q 1 ||
-  in_db createdb -U jarvis jarvis_test
+in_db psql -U persona -d persona -tAc "SELECT 1 FROM pg_database WHERE datname='persona_test'" | grep -q 1 ||
+  in_db createdb -U persona persona_test
 [ -n "$(url)" ] || { echo "hub.json has no database_url" >&2; exit 1; }
 echo "postgres ready on 127.0.0.1:$PORT"

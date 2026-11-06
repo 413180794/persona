@@ -11,8 +11,8 @@ data class RequestRef(val machineId: String, val requestId: String)
  * [card]: a request with no conversation of its own (#4808); the link opens Agents at its list with that card open.
  */
 data class NotificationRoute(val tab: AppTab?, val chat: ChatRoute? = null, val request: String? = null, val card: RequestRef? = null) {
-    fun uri(): Uri = Uri.Builder().scheme("jarvis").authority("open").apply {
-        tab?.let { appendQueryParameter("tab", if (it == AppTab.Jarvis) "jarvis" else "agents") }
+    fun uri(): Uri = Uri.Builder().scheme("persona").authority("open").apply {
+        tab?.let { appendQueryParameter("tab", if (it == AppTab.Persona) "persona" else "agents") }
         chat?.let {
             appendQueryParameter("machine", it.machineId)
             appendQueryParameter("session", it.sessionId)
@@ -25,7 +25,7 @@ data class NotificationRoute(val tab: AppTab?, val chat: ChatRoute? = null, val 
 
     companion object {
         fun conversation(machineId: String, sessionId: String, assistant: Boolean?, request: String? = null) = NotificationRoute(
-            when (assistant) { true -> AppTab.Jarvis; false -> AppTab.Agents; null -> null }, ChatRoute(machineId, sessionId),
+            when (assistant) { true -> AppTab.Persona; false -> AppTab.Agents; null -> null }, ChatRoute(machineId, sessionId),
             request?.takeIf { it.isNotBlank() },
         )
 
@@ -34,9 +34,9 @@ data class NotificationRoute(val tab: AppTab?, val chat: ChatRoute? = null, val 
             card = requestId?.takeIf { it.isNotBlank() && machineId.isNotBlank() }?.let { RequestRef(machineId, it) })
 
         fun parse(uri: Uri): NotificationRoute? {
-            if (uri.scheme !in setOf("persona", "jarvis") || uri.host != "open") return null
+            if (uri.scheme != "persona" || uri.host != "open") return null
             val tab = when (uri.getQueryParameter("tab")) {
-                "jarvis" -> AppTab.Jarvis
+                "persona" -> AppTab.Persona
                 "agents" -> AppTab.Agents
                 null -> null
                 else -> return null

@@ -49,23 +49,23 @@ func TestManagerConfigReadWrite(t *testing.T) {
 
 // A manager's database is never the hub's: SameDatabase tells the hub's own apart from another on the same server.
 func TestSameDatabase(t *testing.T) {
-	hub := "postgres://jarvis:pw@[fd00::20]:5432/jarvis?sslmode=disable"
-	if !SameDatabase("postgres://other@[FD00::20]:5432/jarvis", hub) {
+	hub := "postgres://persona:pw@[fd00::20]:5432/persona?sslmode=disable"
+	if !SameDatabase("postgres://other@[FD00::20]:5432/persona", hub) {
 		t.Fatal("the hub's own database on the same server")
 	}
-	if SameDatabase("postgres://jarvis:pw@[fd00::20]:5432/mine", hub) || SameDatabase("postgres://jarvis@[fd00::21]:5432/jarvis", hub) ||
-		SameDatabase("postgres://jarvis@[fd00::20]:5433/jarvis", hub) {
+	if SameDatabase("postgres://persona:pw@[fd00::20]:5432/mine", hub) || SameDatabase("postgres://persona@[fd00::21]:5432/persona", hub) ||
+		SameDatabase("postgres://persona@[fd00::20]:5433/persona", hub) {
 		t.Fatal("another database taken for the hub's")
 	}
 	// Every name of this machine is one, and 5432 is the port when none is written.
-	local := "postgres://jarvis:pw@127.0.0.1:5432/jarvis?sslmode=disable"
-	for _, same := range []string{"postgres://x@localhost/jarvis", "postgres://x@[::1]:5432/jarvis", "postgres://x@127.0.0.2/jarvis",
-		"postgres://x@LOCALHOST:5432/jarvis"} {
+	local := "postgres://persona:pw@127.0.0.1:5432/persona?sslmode=disable"
+	for _, same := range []string{"postgres://x@localhost/persona", "postgres://x@[::1]:5432/persona", "postgres://x@127.0.0.2/persona",
+		"postgres://x@LOCALHOST:5432/persona"} {
 		if !SameDatabase(same, local) {
 			t.Errorf("%s is the hub's own database too", same)
 		}
 	}
-	if SameDatabase("postgres://x@localhost:18661/jarvis", local) {
+	if SameDatabase("postgres://x@localhost:18661/persona", local) {
 		t.Error("another port on this machine")
 	}
 }

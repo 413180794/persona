@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Tasks from the assistant's conversation (docs/unified-entry.md): the hub's shapes decode, a task's state follows
 /// its agents, the feed lands at the end of the exchange it happened in, and the @ of a mention is told from an address.
@@ -199,20 +199,20 @@ struct TasksTests {
     }
 
     @Test func quickResultsComeFromThePhonesWrites() throws {
-        let r = try #require(QuickResult(toolCall("mcp__jarvis__phone_reminders_create",
+        let r = try #require(QuickResult(toolCall("mcp__persona__phone_reminders_create",
                                                   result: #"{"id":"R1","title":"给爸妈打电话","due":"2026-11-07T10:00:00+08:00","list":"提醒事项"}"#)))
         #expect(r.kind == .reminder && r.itemID == "R1" && r.title == "给爸妈打电话" && r.place == "提醒事项" && r.when != nil)
         let e = try #require(QuickResult(toolCall("phone_calendar_create_event",
                                                   result: #"{"id":"E1","title":"评审","start":"2026-11-03T15:00:00+08:00","calendar":"工作"}"#)))
         #expect(e.kind == .event && e.place == "工作")
-        #expect(QuickResult(toolCall("mcp__jarvis__phone_reminders_list", result: #"{"id":"x"}"#)) == nil) // a read is no result card
-        #expect(QuickResult(toolCall("mcp__jarvis__phone_reminders_create", result: #"{"error":"denied"}"#, error: true)) == nil)
-        #expect(QuickResult(toolCall("mcp__jarvis__phone_reminders_create", result: nil)) == nil) // still running
+        #expect(QuickResult(toolCall("mcp__persona__phone_reminders_list", result: #"{"id":"x"}"#)) == nil) // a read is no result card
+        #expect(QuickResult(toolCall("mcp__persona__phone_reminders_create", result: #"{"error":"denied"}"#, error: true)) == nil)
+        #expect(QuickResult(toolCall("mcp__persona__phone_reminders_create", result: nil)) == nil) // still running
     }
 
     /// A turn's quick result goes right after its work line, after the line's open steps.
     @Test func quickResultFollowsItsWork() {
-        let call = toolCall("mcp__jarvis__phone_reminders_create", result: #"{"id":"R1","title":"t"}"#)
+        let call = toolCall("mcp__persona__phone_reminders_create", result: #"{"id":"R1","title":"t"}"#)
         let work = ChatLine.work(id: "wt-1", items: [.step(.call(call))], live: false, start: .now, end: .now)
         let step = ChatLine.workStep(group: "wt-1", item: .step(.call(call)), first: true)
         let end = ChatLine.workEnd(group: "wt-1", count: 1)

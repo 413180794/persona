@@ -6,16 +6,16 @@ import org.junit.Test
 
 class MessageTextTest {
     @Test fun attachedImagesBecomePathsNotText() {
-        val text = messageText("看这个 [Image #1]\n<attached_images>\n/tmp/jarvis/a.jpg\n/tmp/jarvis/b.jpg\n</attached_images>")
+        val text = messageText("看这个 [Image #1]\n<attached_images>\n/tmp/persona/a.jpg\n/tmp/persona/b.jpg\n</attached_images>")
         assertEquals("看这个", (text.text).zhAny())
-        assertEquals(listOf("/tmp/jarvis/a.jpg", "/tmp/jarvis/b.jpg"), (text.images).zhAny())
+        assertEquals(listOf("/tmp/persona/a.jpg", "/tmp/persona/b.jpg"), (text.images).zhAny())
         assertTrue(text.files.isEmpty())
     }
 
     @Test fun onlyPhotosLeaveNoText() {
-        val text = messageText("<attached_images>\n/Users/me/.jarvis/uploads/photo.jpg\n</attached_images>")
+        val text = messageText("<attached_images>\n/Users/me/.persona/uploads/photo.jpg\n</attached_images>")
         assertEquals("", (text.text).zhAny())
-        assertEquals(listOf("/Users/me/.jarvis/uploads/photo.jpg"), (text.images).zhAny())
+        assertEquals(listOf("/Users/me/.persona/uploads/photo.jpg"), (text.images).zhAny())
     }
 
     @Test fun olderImageNotesAreReadToo() {
@@ -30,8 +30,8 @@ class MessageTextTest {
     }
 
     @Test fun findsFilePathsButNotUrlsOrModelNames() {
-        val t = "改了 ~/.config/x.json、/home/me/code/app/Main.kt 和 ios/Jarvis/Foo.swift，见 https://example.com/a/b.html，模型 deepseek/v4.1-flash。"
-        assertEquals(listOf("~/.config/x.json", "/home/me/code/app/Main.kt", "ios/Jarvis/Foo.swift"), (FilePaths.find(t)).zhAny())
+        val t = "改了 ~/.config/x.json、/home/me/code/app/Main.kt 和 ios/Persona/Foo.swift，见 https://example.com/a/b.html，模型 deepseek/v4.1-flash。"
+        assertEquals(listOf("~/.config/x.json", "/home/me/code/app/Main.kt", "ios/Persona/Foo.swift"), (FilePaths.find(t)).zhAny())
         assertEquals(emptyList<String>(), (FilePaths.find("/tmp")).zhAny())
         assertEquals(listOf("src/a.kt"), (FilePaths.find("看 src/a.kt:42 这一行")).zhAny())
         assertEquals(listOf("/w/proj/"), (FilePaths.find("目录 /w/proj/ 下面")).zhAny())
@@ -53,8 +53,8 @@ class MessageTextTest {
         assertEquals("[图片]\nlook", (cleanText("<attached_images>\n/tmp/a.png\n</attached_images>\nlook", "[图片]")).zhAny())
         assertEquals("[图片]", (cleanText("<attached_images>\n/tmp/a.png\n</attached_images>", "[图片]")).zhAny())
         // A context block is not what the user wrote: previews leave it out (#876).
-        assertEquals("看看", (cleanText("<jarvis-context kind=\"context\" title=\"t\" url=\"\">引用</jarvis-context>看看", "[图片]")).zhAny())
-        assertEquals("", (cleanText("<jarvis-context kind=\"doc\" title=\"t\">正文</jarvis-context>", "[图片]")).zhAny())
+        assertEquals("看看", (cleanText("<persona-context kind=\"context\" title=\"t\" url=\"\">引用</persona-context>看看", "[图片]")).zhAny())
+        assertEquals("", (cleanText("<persona-context kind=\"doc\" title=\"t\">正文</persona-context>", "[图片]")).zhAny())
         assertEquals("hey", (cleanText("<cross-session-message from-name=\"other\">hey</cross-session-message>", "[图片]")).zhAny())
     }
 }

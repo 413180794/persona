@@ -42,7 +42,7 @@ class HubEndpointsTest {
     @Test fun refusesAddressesThatCannotBeACandidate() {
         assertEquals("请输入地址", (message("  ")).zhAny())
         assertEquals("地址里不能有空格", (message("hub.example.com :18662")).zhAny())
-        assertEquals("只支持 https:// 或 http:// 开头的地址", (message("jarvis://pair?url=x&token=y")).zhAny())
+        assertEquals("只支持 https:// 或 http:// 开头的地址", (message("persona://pair?url=x&token=y")).zhAny())
         assertEquals("只支持 https:// 或 http:// 开头的地址", (message("ftp://hub.example.com:21")).zhAny())
         assertEquals("地址里不能带用户名或密码", (message("https://me:secret@hub.example.com:18662")).zhAny())
         assertEquals("只写到端口为止，不要带路径、? 或 #", (message("https://hub.example.com:18662/api/v1/health")).zhAny())
@@ -116,7 +116,7 @@ class HubEndpointsTest {
         assertEquals("ipv4", (endpointKind("https://192.0.2.10:18662")).zhAny())
         assertEquals("name", (endpointKind("https://hub.example.com:18662")).zhAny())
         assertEquals("name", (endpointKind("https://999.0.2.1:18662")).zhAny())
-        assertEquals("unknown", (endpointKind("jarvis://pair")).zhAny())
+        assertEquals("unknown", (endpointKind("persona://pair")).zhAny())
     }
 
     @Test fun theDefaultOrderGoesByKindThenSchemeThenSource() {

@@ -539,7 +539,7 @@ func answerText(task string) string {
 // handTool is the tool the model hands things over with ("" none: a delegation of its own).
 func (c *conversation) handTool() string {
 	tools := c.toolSet()
-	for _, name := range []string{"delegate_task", "ask_jarvis"} {
+	for _, name := range []string{"delegate_task", "ask_persona"} {
 		if slices.Contains(tools, name) {
 			return name
 		}

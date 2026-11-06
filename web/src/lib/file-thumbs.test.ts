@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;
-  g.localStorage = { getItem: (k: string) => (k === "jarvis.token" ? "t" : null), setItem() {}, removeItem() {} };
+  g.localStorage = { getItem: (k: string) => (k === "persona.token" ? "t" : null), setItem() {}, removeItem() {} };
 });
 
 import { markThumbFailed, Slots, thumbFailed, thumbSrc } from "./file-thumbs";

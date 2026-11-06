@@ -104,8 +104,8 @@ const dlAssets = (slot) => ({
 });
 
 test("/dl/*.gz comes from the served slot of the bucket", async () => {
-  const DL = bucket({ "b/jarvisd-linux-amd64.gz": "new bytes", "a/jarvisd-linux-amd64.gz": "old bytes" });
-  const r = await worker.fetch(new Request("https://site.example/dl/jarvisd-linux-amd64.gz"), { ASSETS: dlAssets("b"), DL });
+  const DL = bucket({ "b/personad-linux-amd64.gz": "new bytes", "a/personad-linux-amd64.gz": "old bytes" });
+  const r = await worker.fetch(new Request("https://site.example/dl/personad-linux-amd64.gz"), { ASSETS: dlAssets("b"), DL });
   assert.equal(r.status, 200);
   assert.equal(await r.text(), "new bytes");
   assert.equal(r.headers.get("content-length"), "9");
@@ -114,8 +114,8 @@ test("/dl/*.gz comes from the served slot of the bucket", async () => {
 });
 
 test("/dl/*.gz HEAD gives the size without reading the object", async () => {
-  const DL = bucket({ "a/jarvisd-linux-amd64.gz": "0123456789" });
-  const r = await worker.fetch(new Request("https://site.example/dl/jarvisd-linux-amd64.gz", { method: "HEAD" }), { ASSETS: dlAssets("a"), DL });
+  const DL = bucket({ "a/personad-linux-amd64.gz": "0123456789" });
+  const r = await worker.fetch(new Request("https://site.example/dl/personad-linux-amd64.gz", { method: "HEAD" }), { ASSETS: dlAssets("a"), DL });
   assert.equal(r.status, 200);
   assert.equal(r.headers.get("content-length"), "10");
   assert.deepEqual(DL.calls.map((c) => c[0]), ["head"]);

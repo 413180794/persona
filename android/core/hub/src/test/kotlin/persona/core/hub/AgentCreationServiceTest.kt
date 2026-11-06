@@ -28,7 +28,7 @@ class AgentCreationServiceTest {
             assertEquals("created", ((result as AgentStartResult.Created).session.sessionId).zhAny())
             val post = server.takeRequest()
             assertEquals("POST", (post.method).zhAny())
-            assertEquals(operation, post.getHeader("X-Jarvis-Op-Id"))
+            assertEquals(operation, post.getHeader("X-Persona-Op-Id"))
             assertEquals("codex", (JsonCodec.parseToJsonElement(post.body.readUtf8()).jsonObject["agent_type"]?.jsonPrimitive?.content).zhAny())
             val lookup = server.takeRequest()
             assertEquals("GET", (lookup.method).zhAny())
@@ -51,7 +51,7 @@ class AgentCreationServiceTest {
             assertEquals(AgentStartResult.Pending, service.start(AgentStartRequest("machine", "/code", "claude", "首句", "plan", "high", resumeSessionId = "history"), operation))
             val start = server.takeRequest()
             assertEquals("/api/v1/sessions", (start.path).zhAny())
-            assertEquals(operation, start.getHeader("X-Jarvis-Op-Id"))
+            assertEquals(operation, start.getHeader("X-Persona-Op-Id"))
             assertEquals("Bearer test-token", (start.getHeader("Authorization")).zhAny())
             val body = JsonCodec.parseToJsonElement(start.body.readUtf8()).jsonObject
             assertEquals("plan", (body["permission_mode"]?.jsonPrimitive?.content).zhAny())

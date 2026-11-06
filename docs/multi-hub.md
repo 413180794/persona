@@ -75,7 +75,7 @@
 ## Push and notifications
 
 - Push registration: register once per group with its first hub (the credential issuer; contract 2.6 forwards other hubs' events to it for pushing, with one registration per device), using that group's own push public key.
-- On receiving a push, determine its group in this order: payload top-level `hub_id` (contract 2.6, added in L1) → the group whose key decrypts it (the notification service extension tries each key and writes the successful one into `jarvis_group`)
+- On receiving a push, determine its group in this order: payload top-level `hub_id` (contract 2.6, added in L1) → the group whose key decrypts it (the notification service extension tries each key and writes the successful one into `persona_group`)
   → the group containing the session → the first group. Notification buttons (allow / deny / approve / send back) target that group's hub; tapping opens that group's session; silent wakeups wake only that group's connection.
 - Disconnecting a group only forgets it locally (as with the old "Disconnect and forget server"; it does not revoke the device on the hub). Subsequent pushes from that hub, encrypted with the deleted key, display only the relay's "New message" text.
 

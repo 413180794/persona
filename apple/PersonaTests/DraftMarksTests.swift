@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Agents rows' Draft (#4578): a chat with text or quotes not sent; blank text alone is none.
 struct DraftMarksTests {

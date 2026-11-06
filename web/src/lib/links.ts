@@ -2,14 +2,14 @@
 // ordinary pages open in a new tab (most sites refuse to be framed and the page cannot tell it was refused, so a
 // framed panel would just be blank), Feishu documents and Moments posts open in the side panel's reader (the same links
 // the phone reads natively, FeishuLinks.route) when the hub reads Feishu (feature `lark`; otherwise they are ordinary
-// pages), and jarvis://session links move to that conversation. This hub's own agent and task pages (/s/<machine>/
+// pages), and persona://session links move to that conversation. This hub's own agent and task pages (/s/<machine>/
 // <session>, /todos?id=…, the links the assistant writes) open in the side panel next to where they were clicked, or
-// move there on a narrow screen, which has no room beside the page; its conversations (/j/<id>) move there. The
+// move there on a narrow screen, which has no room beside the page; its conversations (/persona/<id>) move there. The
 // hub's own pages are those of this page's origin and of every address the hub advertises (hello's endpoints, its
 // public_url first: the address the assistant writes, which may not be the one this page was opened at).
 //
 // Also the hand-off between the reader and the composers: text picked in the panel goes to the composer the user is
-// writing in, as <jarvis-context> tags in the next message (docs/protocol.md "Tags in messages").
+// writing in, as <persona-context> tags in the next message (docs/protocol.md "Tags in messages").
 import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { uuid } from "./format";
@@ -26,10 +26,10 @@ export type DocKind = "doc" | "sheet" | "bitable" | "mindnote" | "file" | "slide
 export type LinkRoute =
   | { kind: "doc"; doc: DocKind } // a Feishu cloud document: the panel's reader
   | { kind: "moments"; id: string } // a Moments post: the panel
-  | { kind: "session"; mid: string; sid: string } // jarvis://session/<machine>/<session>: that conversation
+  | { kind: "session"; mid: string; sid: string } // persona://session/<machine>/<session>: that conversation
   | { kind: "agent"; mid: string; sid: string } // this hub's /s/<machine>/<session>: that agent's chat in the panel
   | { kind: "task"; id: string } // this hub's /todos?id=<todo>: that task in the panel
-  | { kind: "conversation"; sid: string } // this hub's /j/<id>: that assistant conversation, in place
+  | { kind: "conversation"; sid: string } // this hub's /persona/<id>: that assistant conversation, in place
   | { kind: "web" } // any other http(s) page: a new tab
   | { kind: "system" } // mailto: / tel:: the browser hands it to the system
   | { kind: "none" }; // anything else (javascript:, other apps' schemes, not a URL): not followed
@@ -120,7 +120,7 @@ export function hubOrigins(endpoints: unknown): string[] {
 
 const pageOrigin = () => (typeof location !== "undefined" ? [location.origin, ...advertised] : advertised);
 
-/** An agent, task or conversation page of the hub this page is served by (router.ts's /s/…, /todos, /j/…, under the
+/** An agent, task or conversation page of the hub this page is served by (router.ts's /s/…, /todos, /persona/…, under the
  * sub-path the page is served at), or null. */
 function hubPage(u: URL, origin: string | string[], base: string): LinkRoute | null {
   const origins = (Array.isArray(origin) ? origin : [origin]).filter(Boolean);
@@ -133,7 +133,7 @@ function hubPage(u: URL, origin: string | string[], base: string): LinkRoute | n
     return null;
   }
   if (p[0] === "s" && p[1] && p[2] && p.length === 3) return { kind: "agent", mid: p[1], sid: p[2] };
-  if (p[0] === "j" && p[1] && p[1] !== "new" && p.length === 2) return { kind: "conversation", sid: p[1] };
+  if (p[0] === "persona" && p[1] && p[1] !== "new" && p.length === 2) return { kind: "conversation", sid: p[1] };
   if (p[0] === "todos" && p.length <= 2) {
     const id = p[1] || u.searchParams.get("id");
     if (id) return { kind: "task", id };
@@ -149,8 +149,8 @@ export function linkRoute(url: string, lark = larkOn(), origin: string | string[
   const u = parse(url.trim());
   if (!u) return { kind: "none" };
   const scheme = u.protocol.toLowerCase();
-  if (scheme === "jarvis:" || scheme === "persona:") {
-    // jarvis://session/<mid>/<sid>: the host is "session"
+  if (scheme === "persona:") {
+    // persona://session/<mid>/<sid>: the host is "session"
     try {
       const parts = `${u.host}${u.pathname}`.split("/").filter(Boolean).map(decodeURIComponent);
       if (parts[0] === "session" && parts[1] && parts[2]) return { kind: "session", mid: parts[1], sid: parts[2] };
@@ -182,7 +182,7 @@ export function opensInApp(url: string): boolean {
   return (r.kind === "doc" && r.doc !== "bitable") || r.kind === "moments" || r.kind === "session" || r.kind === "agent" || r.kind === "task" || r.kind === "conversation";
 }
 
-/** The href to put on an <a>: jarvis://session links become the in-app path, so ⌘-click opens a tab of that page. */
+/** The href to put on an <a>: persona://session links become the in-app path, so ⌘-click opens a tab of that page. */
 export function linkHref(url: string): string {
   const r = linkRoute(url);
   return r.kind === "session" ? `${BASE}/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}` : url;
@@ -204,7 +204,7 @@ export function openLink(url: string, title?: string) {
       else openPanel({ kind: "task", todo: r.id });
       return;
     case "conversation":
-      navigate({ name: "jarvis", sid: r.sid });
+      navigate({ name: "persona", sid: r.sid });
       return;
     case "doc":
     case "moments":
@@ -250,7 +250,7 @@ export function prefetchLink(url: string | undefined) {
   if (url && opensInApp(url) && linkRoute(url).kind === "doc") prefetcher?.(url);
 }
 
-// ── <jarvis-context> ─────────────────────────────────────
+// ── <persona-context> ─────────────────────────────────────
 
 /** A piece of a page the user picked (LinkSheet.swift ContextRef). `text` is "(whole document)" in Chinese for a whole document. */
 export interface ContextRef {
@@ -264,21 +264,21 @@ export interface ContextRef {
   attrs?: Record<string, string>;
 }
 
-// i18n-ignore: a marker inside <jarvis-context>, the app (QuoteViews.swift) matches it
+// i18n-ignore: a marker inside <persona-context>, the app (QuoteViews.swift) matches it
 export const WHOLE = "（整篇）";
 
 function escAttr(s: string) {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** `<jarvis-context kind="…" title="…" url="…">\ntext\n</jarvis-context>`, as the phone writes it. */
+/** `<persona-context kind="…" title="…" url="…">\ntext\n</persona-context>`, as the phone writes it. */
 export function contextXML(r: Pick<ContextRef, "kind" | "title" | "url" | "text" | "attrs">): string {
   const body = contextBody(r.text);
   const extra = Object.entries(r.attrs ?? {})
     .filter(([k]) => /^[a-z_]+$/.test(k) && k !== "kind" && k !== "title" && k !== "url")
     .map(([k, v]) => ` ${k}="${escAttr(v)}"`)
     .join("");
-  return `<jarvis-context kind="${escAttr(r.kind)}" title="${escAttr(r.title)}" url="${escAttr(r.url)}"${extra}>\n${body}\n</jarvis-context>`;
+  return `<persona-context kind="${escAttr(r.kind)}" title="${escAttr(r.title)}" url="${escAttr(r.url)}"${extra}>\n${body}\n</persona-context>`;
 }
 
 /** A message with its picked contexts in front (ChatView.swift sendText). */

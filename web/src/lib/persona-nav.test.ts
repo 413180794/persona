@@ -6,19 +6,19 @@ import type { Session } from "./types";
 const conv = (id: string, updated: string) => ({ machine_id: "hub", session_id: id, updated_at: updated }) as Session;
 
 describe("Persona is the front door (#1239)", () => {
-  it("opens the main conversation at / and at the old /j and /persona links", () => {
-    expect(parse("/")).toEqual({ name: "jarvis" });
-    expect(parse("/j")).toEqual({ name: "jarvis", sid: undefined });
-    expect(parse("/persona")).toEqual({ name: "jarvis", sid: undefined });
-    expect(href({ name: "jarvis" })).toBe("/");
+  it("opens the main conversation at / and at the old /persona and /persona links", () => {
+    expect(parse("/")).toEqual({ name: "persona" });
+    expect(parse("/persona")).toEqual({ name: "persona", sid: undefined });
+    expect(parse("/persona")).toEqual({ name: "persona", sid: undefined });
+    expect(href({ name: "persona" })).toBe("/");
   });
 
-  it("keeps one conversation's link and moves the one-off new conversation to /j/new", () => {
-    expect(parse("/j/abc")).toEqual({ name: "jarvis", sid: "abc" });
-    expect(href({ name: "jarvis", sid: "abc" })).toBe("/j/abc");
-    expect(parse("/j/new")).toEqual({ name: "persona-new" });
+  it("keeps one conversation's link and moves the one-off new conversation to /persona/new", () => {
+    expect(parse("/persona/abc")).toEqual({ name: "persona", sid: "abc" });
+    expect(href({ name: "persona", sid: "abc" })).toBe("/persona/abc");
     expect(parse("/persona/new")).toEqual({ name: "persona-new" });
-    expect(href({ name: "persona-new" })).toBe("/j/new");
+    expect(parse("/persona/new")).toEqual({ name: "persona-new" });
+    expect(href({ name: "persona-new" })).toBe("/persona/new");
   });
 
   it("moves 总览 to /overview and keeps unknown paths on it", () => {
@@ -37,10 +37,10 @@ describe("Persona is the front door (#1239)", () => {
   });
 
   it("lights the Persona row for the main conversation however it is reached", () => {
-    expect(sidebarActiveKey({ name: "jarvis" }, "main")).toBe("persona");
-    expect(sidebarActiveKey({ name: "jarvis", sid: "main" }, "main")).toBe("persona");
-    expect(sidebarActiveKey({ name: "jarvis", sid: "other" }, "main")).toBe("j:other");
-    expect(sidebarActiveKey({ name: "jarvis" }, undefined)).toBe("persona");
+    expect(sidebarActiveKey({ name: "persona" }, "main")).toBe("persona");
+    expect(sidebarActiveKey({ name: "persona", sid: "main" }, "main")).toBe("persona");
+    expect(sidebarActiveKey({ name: "persona", sid: "other" }, "main")).toBe("j:other");
+    expect(sidebarActiveKey({ name: "persona" }, undefined)).toBe("persona");
     expect(sidebarActiveKey({ name: "persona-new" }, "main")).toBe("j:new");
     expect(sidebarActiveKey({ name: "history" }, "main")).toBe("history");
     expect(sidebarActiveKey({ name: "history", origin: "inbox" }, "main")).toBe("auto:inbox");

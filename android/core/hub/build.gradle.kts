@@ -1,5 +1,5 @@
 plugins {
-    id("jarvis.jvm.library")
+    id("persona.jvm.library")
 }
 
 dependencies {

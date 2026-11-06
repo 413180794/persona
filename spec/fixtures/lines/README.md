@@ -114,7 +114,7 @@
 
 ## 与设计文档的差异
 
-- [总纲 2.3、D1、D4](../../../docs/redesign/README.md) 和 [架构调研 A4/A5](../../../docs/redesign/research/jarvis-ios-arch.md) 指定共享行为夹具，本目录固定的是当前 iOS 输出，没有重构生产代码。
+- [总纲 2.3、D1、D4](../../../docs/redesign/README.md) 和 [架构调研 A4/A5](../../../docs/redesign/research/persona-ios-arch.md) 指定共享行为夹具，本目录固定的是当前 iOS 输出，没有重构生产代码。
 - [UX 3.3](../../../docs/redesign/ux.md) 要求折叠时显示失败数、缺结果记录，且耗时只取记录中的轮次时长；当前 `WorkSummary` 未显示这些计数，`WorkLine` 仍用时间戳差及当前时钟，本夹具保留现状，并另列已知失败和缺结果数供后续使用。
 - 协议说空思考不显示，实际 `workItems` 只过滤独立 thinking，已并入 `.tools` 的空思考未经再次过滤；两个空思考用例分别固定这两条路径。
 - [UX 3.2/5.1](../../../docs/redesign/ux.md) 的统一状态行尚未进入当前 `ChatView`，本目录只覆盖工作行的 `live`，不提前定义新状态机。

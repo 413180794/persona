@@ -62,7 +62,7 @@ enum NotificationsTool {
         let trigger: UNNotificationTrigger? = delay > 0
             ? UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(delay), repeats: false)
             : nil
-        let request = UNNotificationRequest(identifier: "jarvis-\(UUID().uuidString)", content: content, trigger: trigger)
+        let request = UNNotificationRequest(identifier: "persona-\(UUID().uuidString)", content: content, trigger: trigger)
         try await center.add(request)
 
         return Output.json(Output.object([

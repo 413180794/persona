@@ -20,7 +20,7 @@ func TestUsageMistakesNameTheProgram(t *testing.T) {
 	run := func(name string, args ...string) (string, int) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestUsageMistakesNameTheProgram$")
 		cmd.Env = append(os.Environ(), "PERSONAD_TEST_USAGE_ARGS="+strings.Join(args, "\x1f"), "PERSONAD_TEST_USAGE_NAME="+name,
-			"HOME="+home, "PERSONA_HOME="+filepath.Join(home, ".persona"), "JARVIS_HOME="+filepath.Join(home, ".jarvis"))
+			"HOME="+home, "PERSONA_HOME="+filepath.Join(home, ".persona"))
 		out, err := cmd.CombinedOutput()
 		code := 0
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -30,14 +30,11 @@ func TestUsageMistakesNameTheProgram(t *testing.T) {
 		}
 		return string(out), code
 	}
-	for _, name := range []string{"personad", "/usr/local/bin/jarvisd"} {
-		want, other := "usage: "+filepath.Base(name)+" ", "usage: jarvisd "
-		if filepath.Base(name) == "jarvisd" {
-			other = "usage: personad "
-		}
+	for _, name := range []string{"personad", "/usr/local/bin/personad"} {
+		want := "usage: personad "
 		for _, args := range [][]string{{"release"}, {"release", "bogus"}, {"release", "check-next"}, {"launch"}, {"update-watch"}} {
 			out, code := run(name, args...)
-			if code != 2 || !strings.HasPrefix(out, want) && !strings.Contains(out, "\n"+want) || strings.Contains(out, other) {
+			if code != 2 || !strings.HasPrefix(out, want) && !strings.Contains(out, "\n"+want) {
 				t.Errorf("%s %q: exit %d, output %q", name, args, code, out)
 			}
 		}
@@ -48,7 +45,7 @@ func TestUsageMistakesNameTheProgram(t *testing.T) {
 			t.Errorf("%s release bogus: %q", name, out)
 		}
 		// The hints and usage texts beyond the usage: lines name the program as run too.
-		base, otherBase := filepath.Base(name), strings.Fields(other)[1]
+		base := filepath.Base(name)
 		for _, c := range []struct {
 			args []string
 			want string
@@ -60,7 +57,7 @@ func TestUsageMistakesNameTheProgram(t *testing.T) {
 			{[]string{"bogus"}, "  " + base + " hub [run]"},
 		} {
 			out, code := run(name, c.args...)
-			if code != 2 || !strings.Contains(out, c.want) || strings.Contains(out, otherBase+" ") {
+			if code != 2 || !strings.Contains(out, c.want) {
 				t.Errorf("%s %q: exit %d, want %q in %q", name, c.args, code, c.want, out)
 			}
 		}

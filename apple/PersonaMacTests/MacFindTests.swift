@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Edit › Find… ⌘F: the window's search field (a page's `.searchable`, which AppKit shows as a toolbar search item or a
 /// field in the page) takes the keyboard. The pages are not touched one by one.

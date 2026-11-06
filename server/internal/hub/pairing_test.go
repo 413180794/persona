@@ -281,13 +281,13 @@ func TestPairCodesFromADevice(t *testing.T) {
 	if !strings.HasPrefix(reply.Token, "jp_") || s.pairs[hashToken(reply.Token)].Hash == "" {
 		t.Fatal("no one-time pairing code made")
 	}
-	if !strings.HasPrefix(reply.PairURL, "jarvis://pair?") || reply.QR.Size == 0 || len(reply.QR.Rows) != reply.QR.Size {
+	if !strings.HasPrefix(reply.PairURL, "persona://pair?") || reply.QR.Size == 0 || len(reply.QR.Rows) != reply.QR.Size {
 		t.Fatalf("app pairing link / QR: %q %d", reply.PairURL, reply.QR.Size)
 	}
 	if reply.WebURL != "https://hub.example.com/settings#token="+reply.Token || len(reply.WebQR.Rows) == 0 {
 		t.Fatalf("web sign-in link %q", reply.WebURL)
 	}
-	// The code pairs a new device once, like one from `jarvisd hub pair`.
+	// The code pairs a new device once, like one from `personad hub pair`.
 	code, device := call(t, h.routes(), "POST", "/api/v1/auth/tokens", reply.Token, `{"name":"另一台电脑","kind":"web"}`)
 	if code != 200 || !strings.HasPrefix(device["token"].(string), "jd_") {
 		t.Fatalf("exchange %d %v", code, device)
@@ -353,9 +353,9 @@ func TestPairRepeatedRedemptionIsRateLimited(t *testing.T) {
 
 // Exercise the real migration and transaction through the HTTP flow, using only the lane's test database.
 func TestPairTokenDatabaseFlow(t *testing.T) {
-	dsn := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	dsn := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

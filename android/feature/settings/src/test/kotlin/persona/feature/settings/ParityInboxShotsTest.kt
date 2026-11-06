@@ -124,6 +124,6 @@ class ParityInboxShotsTest {
             ), more = true, before = "m1")
         override suspend fun larkMessageDisplay() = LarkMessageDisplay("acct", antiRecall = true, showEditHistory = false, braveClimb = false)
         override suspend fun microsoftConfig() = MicrosoftConfig(configured = outlook, clientId = if (outlook) "00000000-0000-0000-0000-000000000000" else null,
-            redirectUri = "jarvis-mail-oauth://outlook")
+            redirectUri = "persona-mail-oauth://outlook")
     }
 }

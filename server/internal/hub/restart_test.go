@@ -158,9 +158,9 @@ func TestHelloResumes(t *testing.T) {
 }
 
 func TestEventLogHandOver(t *testing.T) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	database, err := db.Open(context.Background(), url, db.HubSet)
 	if err != nil {
@@ -197,9 +197,9 @@ func TestEventLogHandOver(t *testing.T) {
 // TestRestartIsPlanned runs a hub, stops it as systemd would and starts the next one: the app hears hub_restarting
 // and a 1001 "hub restarting", and resumes its event stream on the next hub.
 func TestRestartIsPlanned(t *testing.T) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	database, err := db.Open(context.Background(), url, db.HubSet)
 	if err != nil {
@@ -216,10 +216,11 @@ func TestRestartIsPlanned(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
-	dir := filepath.Join(home, ".jarvis")
+	dir := filepath.Join(home, ".persona")
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	ln, err := net.Listen("tcp", net.JoinHostPort(netip.AddrFrom4([4]byte{127, 0, 0, 1}).String(), "0"))

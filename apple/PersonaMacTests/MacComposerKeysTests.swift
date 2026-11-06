@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// ⏎ and ⇧⏎ in a composer (docs/mac.md「细节」, #785): ⏎ sends, ⇧⏎ starts a new line, an input method's ⏎ confirms
 /// its candidate, and the other ⏎ combinations stay with the field (⌥⏎ a new line) and the send button (⌘⏎).

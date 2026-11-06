@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor
 struct VideoFileTests {
@@ -43,9 +43,9 @@ struct VideoFileTests {
         #expect(try Data(contentsOf: destination) == bytes)
     }
 
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["JARVIS_VIDEO_FIXTURE"] != nil))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["PERSONA_VIDEO_FIXTURE"] != nil))
     func nativeVideoPlaysSeeksAndCleansUp() async throws {
-        let fixture = try #require(ProcessInfo.processInfo.environment["JARVIS_VIDEO_FIXTURE"])
+        let fixture = try #require(ProcessInfo.processInfo.environment["PERSONA_VIDEO_FIXTURE"])
         let bytes = try Data(contentsOf: URL(fileURLWithPath: fixture))
         #expect(bytes.count > 2 << 20)
         let hub = FakeHub()
@@ -89,7 +89,7 @@ struct VideoFileTests {
         }
         #expect(player.currentTime().seconds >= target + 0.3, "seek 后视频时钟没有继续推进")
         let after = Array(reads.ranges.dropFirst(before.count))
-        if let offset = ProcessInfo.processInfo.environment["JARVIS_VIDEO_SEEK_BYTE"].flatMap(Int64.init) {
+        if let offset = ProcessInfo.processInfo.environment["PERSONA_VIDEO_SEEK_BYTE"].flatMap(Int64.init) {
             #expect(after.contains { $0.contains(offset) }, "seek 没有读取目标关键帧的字节区间：\(after)")
         }
         if duration > 60 {

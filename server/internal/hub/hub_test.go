@@ -53,16 +53,17 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-// The Docker image's hub (JARVIS_LOCAL_NODE=0) starts with no machine: its own has no herdr or claude.
+// The Docker image's hub (PERSONA_LOCAL_NODE=0) starts with no machine: its own has no herdr or claude.
 func TestDefaultConfigWithoutLocalNode(t *testing.T) {
-	t.Setenv("JARVIS_LOCAL_NODE", "0")
+	t.Setenv("PERSONA_LOCAL_NODE", "0")
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	if _, err := LoadConfig(); err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(home, ".jarvis", "hub.json"))
+	b, err := os.ReadFile(filepath.Join(home, ".persona", "hub.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,9 +79,10 @@ func TestDefaultConfigWithoutLocalNode(t *testing.T) {
 // A compose file gives the database's address and the hub's own: they win over hub.json and are not written into it.
 func TestEnvOverridesConfig(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-	dir := filepath.Join(home, ".jarvis")
+	dir := filepath.Join(home, ".persona")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -88,9 +90,9 @@ func TestEnvOverridesConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(file), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("JARVIS_DATABASE_URL", "postgres://env")
-	t.Setenv("JARVIS_PUBLIC_URL", "https://hub.example.com")
-	t.Setenv("JARVIS_LISTEN", ":18660")
+	t.Setenv("PERSONA_DATABASE_URL", "postgres://env")
+	t.Setenv("PERSONA_PUBLIC_URL", "https://hub.example.com")
+	t.Setenv("PERSONA_LISTEN", ":18660")
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -101,28 +103,29 @@ func TestEnvOverridesConfig(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "hub.json")); string(b) != file {
 		t.Fatalf("hub.json was rewritten: %s", b)
 	}
-	t.Setenv("JARVIS_DATABASE_URL", "")
+	t.Setenv("PERSONA_DATABASE_URL", "")
 	if cfg, _ := LoadConfig(); cfg.DatabaseURL != "postgres://file" {
 		t.Fatalf("an empty variable must not override: %q", cfg.DatabaseURL)
 	}
 }
 
 func TestNodeBinaryDirFromEnv(t *testing.T) {
-	t.Setenv("JARVIS_NODE_BINARIES", "/opt/jarvis/nodes")
-	if d := identity.NodeBinaryDir(); d != "/opt/jarvis/nodes" {
+	t.Setenv("PERSONA_NODE_BINARIES", "/opt/persona/nodes")
+	if d := identity.NodeBinaryDir(); d != "/opt/persona/nodes" {
 		t.Fatalf("node binaries in %s", d)
 	}
 }
 
 func TestLoadConfigCreatesAndReloads(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(home, ".jarvis", "hub.json")
+	path := filepath.Join(home, ".persona", "hub.json")
 	st, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("config file was not created: %v", err)
@@ -140,12 +143,13 @@ func TestLoadConfigCreatesAndReloads(t *testing.T) {
 }
 
 // scripts/deploy/db.sh creates hub.json with only database_url before the hub's first start: the token generated then must
-// be written down, or each start and `jarvisd hub pair` would invent another one and paired phones get 401.
+// be written down, or each start and `personad hub pair` would invent another one and paired phones get 401.
 func TestLoadConfigPersistsTokenMissingFromFile(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-	dir := filepath.Join(home, ".jarvis")
+	dir := filepath.Join(home, ".persona")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -173,9 +177,10 @@ func TestLoadConfigPersistsTokenMissingFromFile(t *testing.T) {
 
 func TestLoadConfigKeepsExplicitValues(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-	dir := filepath.Join(home, ".jarvis")
+	dir := filepath.Join(home, ".persona")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -194,9 +199,10 @@ func TestLoadConfigKeepsExplicitValues(t *testing.T) {
 
 func TestLoadConfigRejectsEmptyToken(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-	dir := filepath.Join(home, ".jarvis")
+	dir := filepath.Join(home, ".persona")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -210,9 +216,10 @@ func TestLoadConfigRejectsEmptyToken(t *testing.T) {
 
 func TestLoadConfigRejectsBadJSON(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-	dir := filepath.Join(home, ".jarvis")
+	dir := filepath.Join(home, ".persona")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -227,14 +234,14 @@ func TestLoadConfigRejectsBadJSON(t *testing.T) {
 func TestPairURLRoundTrips(t *testing.T) {
 	cfg := &Config{PublicURL: "http://hub.example.com:18660", Token: "a b&c=d/é"}
 	link := cfg.PairURL()
-	if !strings.HasPrefix(link, "jarvis://pair?") {
+	if !strings.HasPrefix(link, "persona://pair?") {
 		t.Fatalf("pair url = %q", link)
 	}
 	u, err := url.Parse(link)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Scheme != "jarvis" || u.Host != "pair" {
+	if u.Scheme != "persona" || u.Host != "pair" {
 		t.Fatalf("unexpected scheme/host %q %q", u.Scheme, u.Host)
 	}
 	q := u.Query()
@@ -246,7 +253,7 @@ func TestPairURLRoundTrips(t *testing.T) {
 	}
 }
 
-// The Mac has no camera to scan with: `jarvisd hub pair` prints the link too, to paste into "Connect hub".
+// The Mac has no camera to scan with: `personad hub pair` prints the link too, to paste into "Connect hub".
 func TestPairPrintsTheLinkForTheMac(t *testing.T) {
 	cfg := &Config{PublicURL: "http://hub.example.com:18660", Token: "tok"}
 	var b strings.Builder
@@ -328,9 +335,9 @@ func TestToolResultDeliversToWaiter(t *testing.T) {
 }
 
 func TestPhoneToolsPersist(t *testing.T) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
 	}
 	database, err := db.Open(context.Background(), url, db.HubSet)
 	if err != nil {

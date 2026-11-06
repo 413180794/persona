@@ -277,8 +277,8 @@ func swiftBlock(t *testing.T, source, marker string) string {
 
 // The generated Swift executable only lives in t.TempDir. Enable this on macOS for source-backed checks.
 func TestResolutionFixturesIOS(t *testing.T) {
-	if os.Getenv("JARVIS_VERIFY_IOS_FIXTURES") != "1" {
-		t.Skip("set JARVIS_VERIFY_IOS_FIXTURES=1 on macOS to run the read-only Swift oracle")
+	if os.Getenv("PERSONA_VERIFY_IOS_FIXTURES") != "1" {
+		t.Skip("set PERSONA_VERIFY_IOS_FIXTURES=1 on macOS to run the read-only Swift oracle")
 	}
 	root := answerFixtureRoot(t)
 	read := func(path string) string {

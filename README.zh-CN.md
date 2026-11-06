@@ -139,7 +139,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 > 还没有 hub？在 App 的配对页点「没有 hub？先体验一下」，用内置的演示数据把每个功能走一遍，不连任何服务器。
 
 > [!NOTE]
-> Persona 原名 Jarvis。`jarvisd`、`~/.jarvis`、`~/.config/jarvis/config.json` 和 `JARVIS_*` 继续兼容，现有配对、签名和数据库身份不变。
+> Persona 原名 Persona。`personad`、`~/.persona`、`~/.config/persona/config.json` 和 `PERSONA_*` 继续兼容，现有配对、签名和数据库身份不变。
 > 升级前先看 [命名与兼容](docs/config.md#命名与兼容) 和 [迁移清单](docs/rename.md)。
 
 ## 平台和连接器

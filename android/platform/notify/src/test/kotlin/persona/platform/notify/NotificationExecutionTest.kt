@@ -209,7 +209,7 @@ class NotificationExecutionTest {
         delivery.accept(notice.copy(kind = "done"))
         delivery.accept(notice.copy(kind = "assistant"))
         assertEquals(listOf("done", "assistant"), notifications.map { it.kind })
-        assertEquals(AppTab.Jarvis, NotificationRoute.conversation("machine", "session", true).tab)
+        assertEquals(AppTab.Persona, NotificationRoute.conversation("machine", "session", true).tab)
         assertEquals(AppTab.Agents, NotificationRoute.conversation("machine", "session", false).tab)
         assertNull(NotificationRoute.conversation("machine", "session", null).tab)
     }

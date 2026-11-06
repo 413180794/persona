@@ -1,15 +1,14 @@
 import Foundation
 
-/// How Persona's own MCP tools (server `jarvis`: `mcp__jarvis__agent_read`…) are named in a run of steps.
+/// How Persona's own MCP tools (server `persona`: `mcp__persona__agent_read`…) are named in a run of steps.
 ///
-/// Display only: the server keeps its old name `jarvis` on the wire and everything that matches tools by their full
-/// name stays as it is. The common tools get a verb of their own ("Read agent chat"); the rest read like the web's rows,
+/// The server's wire name is `persona`. Common tools get a verb of their own ("Read agent chat"); the rest read like the web's rows,
 /// "Call Persona · agent read", never the raw `agent_read`.
 enum PersonaToolNames {
-    /// The MCP server names that are Persona itself (`jarvis` today; `persona` if the server is ever renamed).
-    nonisolated static let servers: Set<String> = ["jarvis", "persona"]
+    /// The MCP server name for Persona itself.
+    nonisolated static let servers: Set<String> = ["persona"]
 
-    /// The server of an MCP tool's full name ("mcp__jarvis__agent_read" → "jarvis"), nil for any other tool.
+    /// The server of an MCP tool's full name ("mcp__persona__agent_read" → "persona"), nil for any other tool.
     nonisolated static func server(_ name: String) -> String? {
         guard name.hasPrefix("mcp__") else { return nil }
         let rest = name.dropFirst(5)
@@ -46,7 +45,7 @@ enum PersonaToolNames {
         case "agents_list", "list_agents": String(localized: "List Agents")
         case "agent_start", "task_plan": String(localized: "Assign Task")
         case "interaction_answer": String(localized: "Answer for You")
-        case "ask_jarvis": String(localized: "Hand to Persona")
+        case "ask_persona": String(localized: "Hand to Persona")
         // The knowledge base (docs/knowledge.md).
         case "kb_get", "kb_list", "kb_search", "search_knowledge": String(localized: "Search Knowledge")
         case "kb_update": String(localized: "Update Knowledge")
@@ -59,7 +58,7 @@ enum PersonaToolNames {
         case "schedule_routine": String(localized: "Schedule Task")
         case "delete_routine": String(localized: "Delete Scheduled Task [Persona Tool Names 24bbfb]")
         case "inbox_draft": String(localized: "Draft Reply")
-        case "jarvis_settings": String(localized: "Persona Settings")
+        case "persona_settings": String(localized: "Persona Settings")
         // Live cards (docs/assistant-views.md).
         case "view_show": String(localized: "Draw Card")
         case "view_get": String(localized: "Read Card")

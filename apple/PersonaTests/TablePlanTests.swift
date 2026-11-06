@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Column widths of a reply's table (`TablePlan`): natural when it fits, long columns wrap before the table scrolls.
 struct TablePlanTests {

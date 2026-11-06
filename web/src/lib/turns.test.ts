@@ -93,15 +93,15 @@ describe("parseUserText", () => {
     expect(seg.user?.photos).toEqual(["/tmp/persona/a.jpg", "/tmp/persona/b.png"]);
   });
 
-  it("pulls out jarvis-context tags", () => {
-    const p = parseUserText('<jarvis-context kind="edit" title="Doc &amp; co" url="https://x">sel</jarvis-context>fix it');
+  it("pulls out persona-context tags", () => {
+    const p = parseUserText('<persona-context kind="edit" title="Doc &amp; co" url="https://x">sel</persona-context>fix it');
     expect(p.text).toBe("fix it");
     expect(p.contexts).toEqual([{ kind: "edit", title: "Doc & co", url: "https://x", text: "sel" }]);
   });
 
-  it("pulls out persona-context tags, alongside older jarvis-context ones (#3182)", () => {
+  it("pulls out persona-context tags, alongside older persona-context ones (#3182)", () => {
     const p = parseUserText(
-      '<persona-context kind="context" title="新" url="">a</persona-context>\n<jarvis-context kind="edit" title="旧">b</jarvis-context>\n问题',
+      '<persona-context kind="context" title="新" url="">a</persona-context>\n<persona-context kind="edit" title="旧">b</persona-context>\n问题',
     );
     expect(p.text).toBe("问题");
     expect(p.contexts.map((c) => [c.kind, c.title, c.text])).toEqual([["context", "新", "a"], ["edit", "旧", "b"]]);
@@ -110,9 +110,9 @@ describe("parseUserText", () => {
 
   it("leaves only the request of a Feishu /agent prompt as the text", () => {
     const raw =
-      '<jarvis-context kind="instructions" title="给 Agent 的说明">\n示例用户在飞书「发布群」里用 /agent 叫你。\n\n## 怎么做\n\n- 做完回复一次。\n</jarvis-context>\n' +
-      '<jarvis-context kind="context" title="请求的位置">\n位置：群聊「发布群」\n</jarvis-context>\n' +
-      '<jarvis-context kind="context" title="项目 · 发布">\n</jarvis-context>\n看下构建为什么挂了';
+      '<persona-context kind="instructions" title="给 Agent 的说明">\n示例用户在飞书「发布群」里用 /agent 叫你。\n\n## 怎么做\n\n- 做完回复一次。\n</persona-context>\n' +
+      '<persona-context kind="context" title="请求的位置">\n位置：群聊「发布群」\n</persona-context>\n' +
+      '<persona-context kind="context" title="项目 · 发布">\n</persona-context>\n看下构建为什么挂了';
     const p = parseUserText(raw);
     expect(p.text).toBe("看下构建为什么挂了");
     expect(p.contexts.map((c) => [c.kind, c.title])).toEqual([["instructions", "给 Agent 的说明"], ["context", "请求的位置"], ["context", "项目 · 发布"]]);
@@ -311,26 +311,26 @@ it("toolLabel names an MCP tool by its own name, whatever the server is called",
   expect(toolLabel("Bash")).toBe("运行");
 });
 
-it("toolDisplayName shows Persona's own MCP server (still id `jarvis`) as Persona", () => {
-  expect(toolDisplayName("mcp__jarvis__agent_read")).toBe("Persona · agent read");
-  expect(toolDisplayName("mcp__plugin_jarvis__agent_send")).toBe("Persona · agent send");
-  expect(toolDisplayName("mcp__jarvis")).toBe("Persona");
+it("toolDisplayName shows Persona's own MCP server (still id `persona`) as Persona", () => {
+  expect(toolDisplayName("mcp__persona__agent_read")).toBe("Persona · agent read");
+  expect(toolDisplayName("mcp__plugin_persona__agent_send")).toBe("Persona · agent send");
+  expect(toolDisplayName("mcp__persona")).toBe("Persona");
   expect(toolDisplayName("mcp__github__create_issue")).toBe("github · create issue");
   expect(toolDisplayName("mcp__plugin_lark_docs__fetch_doc")).toBe("lark_docs · fetch doc");
-  expect(toolDisplayName("mcp__jarvis_extra__x")).toBe("jarvis_extra · x");
+  expect(toolDisplayName("mcp__persona_extra__x")).toBe("persona_extra · x");
   expect(toolDisplayName("Bash")).toBe("Bash");
   expect(toolDisplayName(undefined)).toBe("工具");
 });
 
-describe("jarvis-file tags", () => {
+describe("persona-file tags", () => {
   it("become files on the message, not text", () => {
-    const p = parseUserText('上次的录屏，你看下按钮那里\n\n<jarvis-file kind="video" path="/tmp/录屏 1.mov" name="录屏.mov" size="25270000" duration="6.0"/>\n<jarvis-file kind="file" path="/tmp/a&amp;b.pdf"/>');
+    const p = parseUserText('上次的录屏，你看下按钮那里\n\n<persona-file kind="video" path="/tmp/录屏 1.mov" name="录屏.mov" size="25270000" duration="6.0"/>\n<persona-file kind="file" path="/tmp/a&amp;b.pdf"/>');
     expect(p.text).toBe("上次的录屏，你看下按钮那里");
     expect(p.files).toEqual([
       { kind: "video", path: "/tmp/录屏 1.mov", name: "录屏.mov", size: 25270000, duration: 6 },
       { kind: "file", path: "/tmp/a&b.pdf", name: "a&b.pdf", size: undefined, duration: undefined },
     ]);
-    expect(parseUserText('<jarvis-file kind="video" name="x"/>').files).toEqual([]); // no path: nothing to play
+    expect(parseUserText('<persona-file kind="video" name="x"/>').files).toEqual([]); // no path: nothing to play
   });
 
   it("formats durations", () => {
@@ -372,20 +372,20 @@ describe("Persona's messages for the model (lib/injected.ts)", () => {
 });
 
 it("personaToolVerb names Persona's own tools by what they do, and nothing else", () => {
-  expect(personaToolVerb("mcp__jarvis__agent_read")).toEqual({ verb: "读 Agent 对话" });
-  expect(personaToolVerb("mcp__plugin_jarvis__kb_update")).toEqual({ verb: "更新知识库" });
+  expect(personaToolVerb("mcp__persona__agent_read")).toEqual({ verb: "读 Agent 对话" });
+  expect(personaToolVerb("mcp__plugin_persona__kb_update")).toEqual({ verb: "更新知识库" });
   expect(personaToolVerb("mcp__persona__ask_user")).toEqual({ verb: "问你" });
-  expect(personaToolVerb("mcp__jarvis__send_to_agent")).toEqual({ verb: "给 Agent 发消息" });
-  expect(personaToolVerb("mcp__jarvis__conversation_new")).toEqual({ verb: "新开对话" });
-  expect(personaToolVerb("mcp__jarvis__computer_run")).toEqual({ verb: "操控电脑" });
-  expect(personaToolVerb("mcp__jarvis__phone_contacts_search")).toEqual({ verb: "iPhone", what: "contacts search" });
-  expect(personaToolVerb("mcp__jarvis__mail_send")).toEqual({ verb: "邮件", what: "send" });
+  expect(personaToolVerb("mcp__persona__send_to_agent")).toEqual({ verb: "给 Agent 发消息" });
+  expect(personaToolVerb("mcp__persona__conversation_new")).toEqual({ verb: "新开对话" });
+  expect(personaToolVerb("mcp__persona__computer_run")).toEqual({ verb: "操控电脑" });
+  expect(personaToolVerb("mcp__persona__phone_contacts_search")).toEqual({ verb: "iPhone", what: "contacts search" });
+  expect(personaToolVerb("mcp__persona__mail_send")).toEqual({ verb: "邮件", what: "send" });
   // no verb of its own: keeps "Called Persona · …"
-  expect(personaToolVerb("mcp__jarvis__something_new")).toBeNull();
+  expect(personaToolVerb("mcp__persona__something_new")).toBeNull();
   // other servers, and the bare server
   expect(personaToolVerb("mcp__github__agent_read")).toBeNull();
-  expect(personaToolVerb("mcp__jarvis_extra__agent_read")).toBeNull();
-  expect(personaToolVerb("mcp__jarvis")).toBeNull();
+  expect(personaToolVerb("mcp__persona_extra__agent_read")).toBeNull();
+  expect(personaToolVerb("mcp__persona")).toBeNull();
   expect(personaToolVerb("agent_read")).toBeNull();
   expect(personaToolVerb(undefined)).toBeNull();
 });

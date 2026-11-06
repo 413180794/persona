@@ -14,18 +14,18 @@ import (
 	"strings"
 )
 
-// The resident node (`jarvisd node --attach`, docs/server.md "Resident node") is what the connector forwards to. Setting
-// it up here is packaging only, so that one command (Linux: `jarvis-link install`) or one app (the Mac menu bar app)
+// The resident node (`personad node --attach`, docs/server.md "Resident node") is what the connector forwards to. Setting
+// it up here is packaging only, so that one command (Linux: `persona-link install`) or one app (the Mac menu bar app)
 // sets a computer up as the node service: it writes the same service scripts/deploy/node-launchd.sh does, and leaves one
-// that is already there as it is. What the node does stays in jarvisd.
+// that is already there as it is. What the node does stays in personad.
 
 const (
-	nodeUnitName = "jarvisd-node.service" // systemd user unit (Linux), as scripts/deploy/node-launchd.sh names it
-	nodeLabel    = "com.jarvis.node"      // launchd agent (Mac), likewise
+	nodeUnitName = "personad-node.service" // systemd user unit (Linux), as scripts/deploy/node-launchd.sh names it
+	nodeLabel    = "com.persona.node"      // launchd agent (Mac), likewise
 )
 
-func (e *env) nodeBin() string { return filepath.Join(e.jarvisDir(), "bin", e.exeName("jarvisd")) }
-func (e *env) nodeLog() string { return filepath.Join(e.jarvisDir(), "node-attach.log") }
+func (e *env) nodeBin() string { return filepath.Join(e.personaDir(), "bin", e.exeName("personad")) }
+func (e *env) nodeLog() string { return filepath.Join(e.personaDir(), "node-attach.log") }
 
 func (e *env) nodeUnitPath() string { return filepath.Join(filepath.Dir(e.unitPath()), nodeUnitName) }
 func (e *env) nodePlistPath() string {
@@ -40,7 +40,7 @@ func (e *env) nodeServiceFile() string {
 	case "darwin":
 		return e.nodePlistPath()
 	case "windows":
-		return e.taskFile() // the node is part of jarvis-link's scheduled task (winservice.go)
+		return e.taskFile() // the node is part of persona-link's scheduled task (winservice.go)
 	}
 	return ""
 }
@@ -48,7 +48,7 @@ func (e *env) nodeServiceFile() string {
 // nodeUnitFile is the resident node's systemd user unit: scripts/deploy/node-launchd.sh's, without network-online.target
 // (a user instance has none, docs/lessons/server.md).
 func nodeUnitFile(bin, logPath string) string {
-	return `# Written by jarvis-link (docs/link.md); jarvis-link node uninstall removes it.
+	return `# Written by persona-link (docs/link.md); persona-link node uninstall removes it.
 [Unit]
 Description=Persona resident node (docs/server.md)
 
@@ -73,7 +73,6 @@ func nodePlist(bin, logPath string) string {
   <key>ProgramArguments</key><array><string>` + x(bin) + `</string><string>node</string><string>--attach</string></array>
   <key>EnvironmentVariables</key><dict>
     <key>PERSONA_HOME</key><string>` + x(filepath.Dir(logPath)) + `</string>
-    <key>JARVIS_HOME</key><string>` + x(filepath.Dir(logPath)) + `</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -83,7 +82,7 @@ func nodePlist(bin, logPath string) string {
 `
 }
 
-// nodeInstall sets up the resident node service unless it is there already: jarvisd at ~/.jarvis/bin/jarvisd (copied
+// nodeInstall sets up the resident node service unless it is there already: personad at ~/.persona/bin/personad (copied
 // from from when there is none yet), then the service, started.
 func nodeInstall(e *env, from string) error {
 	if e.goos == "windows" {
@@ -103,7 +102,7 @@ func nodeInstall(e *env, from string) error {
 	bin := e.nodeBin()
 	if !fileExists(bin) {
 		if from == "" {
-			return fmt.Errorf("没有 %s：先装 jarvisd（安装脚本会一起装），或者用 --jarvisd <路径> 指定", bin)
+			return fmt.Errorf("没有 %s：先装 personad（安装脚本会一起装），或者用 --personad <路径> 指定", bin)
 		}
 		if err := copyExecutable(from, bin); err != nil {
 			return fmt.Errorf("放不进 %s：%w", bin, err)
@@ -140,7 +139,7 @@ func nodeInstall(e *env, from string) error {
 	return nil
 }
 
-// nodeState is `jarvis-link node status --json`.
+// nodeState is `persona-link node status --json`.
 type nodeState struct {
 	Installed bool   `json:"installed"`
 	File      string `json:"file,omitempty"`
@@ -178,7 +177,7 @@ func nodeStatus(e *env) nodeState {
 	return st
 }
 
-// nodeCmd is `jarvis-link node install [--jarvisd <path>] | status [--json] | uninstall`.
+// nodeCmd is `persona-link node install [--personad <path>] | status [--json] | uninstall`.
 func nodeCmd(e *env, args []string) error {
 	if len(args) == 0 {
 		return errUsage
@@ -187,7 +186,7 @@ func nodeCmd(e *env, args []string) error {
 	case "install":
 		var from string
 		for i := 1; i < len(args); i++ {
-			v, next, ok, err := flagValue(args, i, "--jarvisd")
+			v, next, ok, err := flagValue(args, i, "--personad")
 			switch {
 			case err != nil:
 				return err
@@ -208,9 +207,9 @@ func nodeCmd(e *env, args []string) error {
 		case st.File == "":
 			fmt.Fprintf(e.stdout, "常驻 node：%s 上还没有服务可装（#299）\n", e.goos)
 		case !st.Installed && e.goos == "windows":
-			fmt.Fprintf(e.stdout, "常驻 node：不在计划任务「%s」里（jarvis-link install [--jarvisd <personad.exe 的路径>]）\n", taskName)
+			fmt.Fprintf(e.stdout, "常驻 node：不在计划任务「%s」里（persona-link install [--personad <personad.exe 的路径>]）\n", taskName)
 		case !st.Installed:
-			fmt.Fprintf(e.stdout, "常驻 node：服务没装（jarvis-link node install）\n")
+			fmt.Fprintf(e.stdout, "常驻 node：服务没装（persona-link node install）\n")
 		default:
 			fmt.Fprintf(e.stdout, "常驻 node：服务装了（%s）%s\n", st.File, map[bool]string{true: " · " + st.Running, false: ""}[st.Running != ""])
 		}

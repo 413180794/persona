@@ -6,10 +6,10 @@
       "name": "folded_space_keeps_counts",
       "description": "折叠空间隐藏行但保留成员与状态计数。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -144,10 +144,10 @@
       "name": "compact_expands_idle_without_reordering",
       "description": "细列表只改变行样式，展开空闲部分保留既有次序。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -286,10 +286,10 @@
       "name": "folded_state_and_expanded_idle",
       "description": "状态标题折叠与空闲行展开分别控制可见行。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -420,10 +420,10 @@
       "name": "folded_machine_hides_rows",
       "description": "折叠机器保留分组及成员并隐藏全部行。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -531,10 +531,10 @@
       "name": "search_expands_idle",
       "description": "搜索会自动展开匹配的空闲行。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [

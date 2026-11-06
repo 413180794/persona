@@ -21,7 +21,7 @@ import persona.core.domain.AttachedFile
 import persona.core.domain.mediaClock
 
 /**
- * The files a sent message carries (`<jarvis-file>`, iOS `AttachedFileCards`, web `FileCards`), above its bubble: one
+ * The files a sent message carries (`<persona-file>`, iOS `AttachedFileCards`, web `FileCards`), above its bubble: one
  * card each with the name and "size · length". A tap opens the file on the session's machine (the file viewer plays
  * videos and recordings); a long press copies its path.
  */

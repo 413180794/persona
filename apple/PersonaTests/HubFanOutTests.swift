@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Asking every group's hub at once (#4705): a hub out of reach holds back none of the others, and a poll skips the
 /// groups whose link is down unless none is up.

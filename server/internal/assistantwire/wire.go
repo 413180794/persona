@@ -153,12 +153,12 @@ const (
 	AppInteractions = "interactions"
 
 	// AppInbox is the hub's side of the inbox, its sources (inbox.go); AppSettings is Persona's own settings
-	// (jarvis_settings).
+	// (persona_settings).
 	AppInbox    = "inbox"
 	AppSettings = "settings"
 
 	// AppTool: {name, arguments, machine_id, session_id} → proto.ToolResult, one of the assistant's tools that is the
-	// app's to run (jarvis_settings).
+	// app's to run (persona_settings).
 	AppTool = "app.tool"
 )
 
@@ -815,12 +815,12 @@ const (
 	// plugin_skills_need): their files go next time.
 	PluginsSkillsNeed = "plugins.skills_need"
 
-	// SettingsList: {} → {settings: [Setting]}: the hub's own settings jarvis_settings offers; app.tool jarvis_settings
+	// SettingsList: {} → {settings: [Setting]}: the hub's own settings persona_settings offers; app.tool persona_settings
 	// runs get / set / add / remove on them (a change waits for the user's approval on the phone).
 	SettingsList = "settings.list"
 )
 
-// Setting is one of the hub's settings jarvis_settings offers.
+// Setting is one of the hub's settings persona_settings offers.
 type Setting struct {
 	Key     string   `json:"key"`
 	Title   string   `json:"title"`

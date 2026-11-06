@@ -25,7 +25,7 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/
 function idOf(config, key, fallback) {
   const v = config[key]
   if (v === undefined || v === null || v === '') return fallback
-  if (typeof v !== 'string' || !ID.test(v)) throw new Error(`jarvis-dsh-runtime: config.${key} must match ${ID}, got ${JSON.stringify(v)}`)
+  if (typeof v !== 'string' || !ID.test(v)) throw new Error(`persona-dsh-runtime: config.${key} must match ${ID}, got ${JSON.stringify(v)}`)
   return v
 }
 
@@ -34,10 +34,10 @@ const MODES = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions']
 /** config.presets: Persona permission mode -> DSH preset name; anything else fails the load. */
 function presetsOf(p) {
   if (p === undefined || p === null) return undefined
-  if (typeof p !== 'object' || Array.isArray(p)) throw new Error('jarvis-dsh-runtime: config.presets must map Persona permission modes to DSH presets')
+  if (typeof p !== 'object' || Array.isArray(p)) throw new Error('persona-dsh-runtime: config.presets must map Persona permission modes to DSH presets')
   for (const [mode, name] of Object.entries(p)) {
     if (!MODES.includes(mode) || typeof name !== 'string' || name === '') {
-      throw new Error(`jarvis-dsh-runtime: config.presets.${mode}: a mode of ${MODES.join(' / ')} to a DSH preset name`)
+      throw new Error(`persona-dsh-runtime: config.presets.${mode}: a mode of ${MODES.join(' / ')} to a DSH preset name`)
     }
   }
   return p

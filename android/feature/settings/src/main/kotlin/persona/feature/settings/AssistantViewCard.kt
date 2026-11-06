@@ -156,7 +156,7 @@ internal fun AssistantViewCard(key: String, version: Long, card: AssistantCard, 
         when (val target = AssistantOpen.target(url)) {
             is AssistantOpenTarget.Web -> runCatching { uri.openUri(target.url) }
             is AssistantOpenTarget.Session -> runCatching {
-                uri.openUri("jarvis://session/${segment(target.machine)}/${segment(target.session)}")
+                uri.openUri("persona://session/${segment(target.machine)}/${segment(target.session)}")
             }
             null -> feedback?.notice(badLinkText)
             else -> feedback?.notice(unsupportedText)

@@ -284,7 +284,7 @@ internal fun KnowledgeDetailScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(model, lifecycle, navigator) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            model.handoffs.collect { navigator.selectTab(AppTab.Jarvis) }
+            model.handoffs.collect { navigator.selectTab(AppTab.Persona) }
         }
     }
     LaunchedEffect(tagging.saved) { if (tagging.saved > 0) editing = false }

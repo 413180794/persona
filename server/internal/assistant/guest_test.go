@@ -88,7 +88,7 @@ func TestGuestConversationStart(t *testing.T) {
 	}
 	send := f.sends[len(f.sends)-1]
 	guest, _ := send["guest"].(map[string]any)
-	if send["cwd"] != "/home/me/.jarvis/guest" || guest == nil || !slices.Equal(anyStrings(guest["tools"]), []string{"lark_agent_reply"}) {
+	if send["cwd"] != "/home/me/.persona/guest" || guest == nil || !slices.Equal(anyStrings(guest["tools"]), []string{"lark_agent_reply"}) {
 		t.Fatalf("assistant.send: %v", send)
 	}
 	tools, ok, err := s.guestOf(context.Background(), "server", out.Session.SessionID)

@@ -3,13 +3,12 @@ import Foundation
 
 /// "Ask Persona": sends the sentence into the assistant's main conversation (the Persona tab) and waits a little for the
 /// answer, so Siri can speak it. Runs in the background straight against the hub (Keychain.serverConfig).
-// Compatibility: the system addresses this type by its original module/type identity.
-struct AskJarvisIntent: AppIntent {
+struct AskPersonaIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "Ask Persona"
     nonisolated static let description = IntentDescription(
         "Sends what you say to the Persona assistant's main chat, waits for the answer and reads it out. If it takes a while, you'll hear that it was sent and can read the answer in the app later.",
         categoryName: "Chat",
-        searchKeywords: ["Persona", "Jarvis", "Assistant", "ask [Ask Persona Intent 4628c0]", "assistant", "ask"]
+        searchKeywords: ["Persona", "Assistant", "ask [Ask Persona Intent 4628c0]", "assistant", "ask"]
     )
     nonisolated static var supportedModes: IntentModes { .background }
 
@@ -51,7 +50,7 @@ struct AskJarvisIntent: AppIntent {
     }
 }
 
-/// The network part of AskJarvisIntent: send, then poll the conversation's new items until the turn ends.
+/// The network part of AskPersonaIntent: send, then poll the conversation's new items until the turn ends.
 nonisolated enum AskPersonaFlow {
     /// Siri gives an intent roughly half a minute; leave room for the request itself.
     static let budget: Duration = .seconds(24)
@@ -88,7 +87,7 @@ nonisolated enum AskPersonaFlow {
     }
 }
 
-/// Pure wording / extraction for AskJarvisIntent (tested in SiriIntentsTests).
+/// Pure wording / extraction for AskPersonaIntent (tested in SiriIntentsTests).
 nonisolated enum AskPersonaText {
     static let pending = String(localized: "Sent to Persona. It's still thinking; the answer will show up in Persona's main chat.")
 

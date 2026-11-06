@@ -7,8 +7,8 @@ final class EngineChoiceTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let value = ProcessInfo.processInfo.environment["JARVIS_ENGINE_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_ENGINE_HUB)")
+        guard let value = ProcessInfo.processInfo.environment["PERSONA_ENGINE_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_ENGINE_HUB)")
         }
         hub = value
         _ = try Data(contentsOf: URL(string: hub + "/mock/reset")!)
@@ -24,7 +24,7 @@ final class EngineChoiceTests: XCTestCase {
     }
 
     private var pair: String {
-        "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
     }
 
     @MainActor private func shot(_ name: String) throws {
@@ -33,8 +33,8 @@ final class EngineChoiceTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"] ?? "light"
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"] ?? "light"
             try screenshot.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("engine-\(name)-\(style).png"))
         }
     }
@@ -176,7 +176,7 @@ final class EngineChoiceTests: XCTestCase {
     }
 
     @MainActor func testPairingFailureStaysOnTheStep() throws {
-        guard let errorHub = ProcessInfo.processInfo.environment["JARVIS_ENGINE_ERROR_HUB"] else {
+        guard let errorHub = ProcessInfo.processInfo.environment["PERSONA_ENGINE_ERROR_HUB"] else {
             throw XCTSkip("needs MOCK_ENGINE_ERROR=1 hub")
         }
         hub = errorHub

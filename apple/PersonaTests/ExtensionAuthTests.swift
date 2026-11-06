@@ -1,7 +1,7 @@
 import Foundation
 import PersonaKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Extensions that install command-line programs and sign in (#4507, docs/extensions.md「命令行程序（tools）」「登录（auth）」):
 /// the sign-in decodes from the hub's views and its `extension_auth` push (a state this app does not know reads as not

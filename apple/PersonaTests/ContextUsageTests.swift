@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Session Info's context usage (#3289, the web's #2430): what the session carries and the share the bar draws.
 struct ContextUsageTests {

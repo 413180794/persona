@@ -138,7 +138,7 @@ func (n *Node) connectorCLIs(cwd string) map[string]string {
 // one manager cannot remove another's commands or change which connector a shared command name calls.
 func (n *Node) assistantBin(cwd string) string {
 	key := assistantPrepareDir(cwd)
-	if key == assistantPrepareDir(n.assistantDirOf(".jarvis/assistant")) {
+	if key == assistantPrepareDir(n.assistantDirOf(".persona/assistant")) {
 		return filepath.Join(n.dir, "assistant-bin")
 	}
 	return filepath.Join(n.dir, "assistant-bins", fmt.Sprintf("%x", sha256.Sum256([]byte(key))))

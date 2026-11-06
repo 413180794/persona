@@ -44,17 +44,17 @@ func TestGuestProcessFlags(t *testing.T) {
 
 	mcpJSON, flags := n.claudeAssistantMCPAndTools("guest-1", t.TempDir())
 	got := servers(mcpJSON)
-	if len(got) != 1 || got["jarvis"] == nil {
+	if len(got) != 1 || got["persona"] == nil {
 		t.Fatalf("servers = %v, want Persona's alone", got)
 	}
-	env, _ := got["jarvis"]["env"].(map[string]any)
+	env, _ := got["persona"]["env"].(map[string]any)
 	if env["PERSONA_GUEST"] != "1" || env["PERSONA_SESSION_ID"] != "guest-1" || env["PERSONA_ASSISTANT"] != "1" {
-		t.Fatalf("jarvis env = %v", env)
+		t.Fatalf("persona env = %v", env)
 	}
 	if v, ok := flagValue(flags, "--tools"); !ok || v != "" {
 		t.Fatalf("--tools = %q (%v), want no built-in tools: %q", v, ok, flags)
 	}
-	if v, _ := flagValue(flags, "--allowedTools"); v != "mcp__jarvis__lark_agent_reply" {
+	if v, _ := flagValue(flags, "--allowedTools"); v != "mcp__persona__lark_agent_reply" {
 		t.Fatalf("--allowedTools = %q, want only the guest's tool", v)
 	}
 	if !slices.Contains(flags, "--strict-mcp-config") || slices.Contains(flags, "--disallowedTools") {
@@ -112,7 +112,7 @@ func TestGuestConversationStarts(t *testing.T) {
 			line = string(raw)
 		}
 	}
-	for _, want := range []string{"[--tools] []", "[--strict-mcp-config]", "[--allowedTools] [mcp__jarvis__lark_agent_reply]"} {
+	for _, want := range []string{"[--tools] []", "[--strict-mcp-config]", "[--allowedTools] [mcp__persona__lark_agent_reply]"} {
 		if !strings.Contains(line, want) {
 			t.Fatalf("the guest's process has no %s: %s", want, line)
 		}
@@ -148,12 +148,12 @@ func TestGuestRefusesTheAgentSDK(t *testing.T) {
 // Its directory holds only its instructions; a path out of the home is refused. Tool names are plain identifiers.
 func TestGuestPrepareAndTools(t *testing.T) {
 	n, _ := testNode(t)
-	out, err := n.assistantGuestPrepare(json.RawMessage(`{"dir":".jarvis/guest","claude_md":"# guest"}`))
+	out, err := n.assistantGuestPrepare(json.RawMessage(`{"dir":".persona/guest","claude_md":"# guest"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	cwd := out.(map[string]any)["cwd"].(string)
-	if cwd != filepath.Join(n.home, ".jarvis", "guest") {
+	if cwd != filepath.Join(n.home, ".persona", "guest") {
 		t.Fatalf("cwd = %q", cwd)
 	}
 	entries, _ := os.ReadDir(cwd)
@@ -176,7 +176,7 @@ func TestGuestPrepareAndTools(t *testing.T) {
 		{[]string{"lark_agent_reply"}, true},
 		{nil, false},
 		{[]string{"lark_agent_reply,Bash"}, false},
-		{[]string{"mcp__jarvis__x"}, true}, // a name; the hub says which are a guest's
+		{[]string{"mcp__persona__x"}, true}, // a name; the hub says which are a guest's
 		{[]string{"Bash"}, false},
 		{[]string{"a", "b", "c", "d", "e", "f", "g", "h", "i"}, false},
 	} {

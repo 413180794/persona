@@ -3,19 +3,19 @@ import XCTest
 /// UI version 3 on an extension's page (docs/extensions.md「UI 版本 3」): the mock's example-gateway › 「笔记」 page — rows with
 /// an icon, an avatar and a thumbnail, its search field and filter chips, `more` at the end of the list, a row that pushes
 /// the note's page (Markdown, a table), that page pushing its editor, saving popping back to a page drawn again, and
-/// `ui.invalidate` drawing the list again with what synced in. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
-/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`, restarted for each run (the notes are kept in its memory);
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
+/// `ui.invalidate` drawing the list again with what synced in. Against scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1:
+/// `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=http://127.0.0.1:<port>`, restarted for each run (the notes are kept in its memory);
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` and the style.
 final class ExtensionV3Tests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     @MainActor private func launch(_ args: [String] = []) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)") }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings"] + args
         app.launchPinned()
@@ -25,13 +25,13 @@ final class ExtensionV3Tests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "v3-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 
     private func mock(_ path: String) {
-        guard let hub = env["JARVIS_PLUGINS_HUB"], let url = URL(string: hub + path) else { return }
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"], let url = URL(string: hub + path) else { return }
         let done = expectation(description: path)
         URLSession.shared.dataTask(with: url) { _, _, _ in done.fulfill() }.resume()
         wait(for: [done], timeout: 10)

@@ -383,7 +383,7 @@ func (u *updater) rollback(p update.Pending, reason string) {
 // and has the manager redeploy each connected machine whose node is not this build, one at a time.
 func (u *updater) updateNodes(ctx context.Context, staged string) {
 	if staged != "" {
-		files, _ := filepath.Glob(filepath.Join(staged, "jarvisd-*"))
+		files, _ := filepath.Glob(filepath.Join(staged, "personad-*"))
 		for _, f := range files {
 			if strings.HasSuffix(f, ".gz") || strings.HasSuffix(f, ".part") {
 				continue
@@ -633,7 +633,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 			// rather than fetching it twice (a machine on the hub's platform added later needs it too).
 			err := os.MkdirAll(nodes, 0o755)
 			if err == nil {
-				err = copyInto(bin, filepath.Join(nodes, "jarvisd-"+plat))
+				err = copyInto(bin, filepath.Join(nodes, "personad-"+plat))
 			}
 			if err != nil {
 				fail(fmt.Errorf("the node binary for the hub's own platform: %w", err))
@@ -650,7 +650,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		fail(err)
 		return
 	}
-	// The programs the hub runs beside it (jarvisd-wechat): this platform's build of each, checked like jarvisd.
+	// The programs the hub runs beside it (personad-wechat): this platform's build of each, checked like personad.
 	programs := map[string]string{} // name -> the downloaded binary
 	for _, name := range update.ProgramNames {
 		f, ok := m.Programs[name][runtime.GOOS+"-"+runtime.GOARCH]
@@ -909,9 +909,9 @@ type imageView struct {
 	Pinned bool   `json:"pinned"`
 }
 
-// dockerImage is the image this Docker hub runs: the compose file's JARVIS_IMAGE, else the one it was built as.
+// dockerImage is the image this Docker hub runs: the compose file's PERSONA_IMAGE, else the one it was built as.
 func (u *updater) dockerImage() (update.Image, error) {
-	s := identity.Getenv("JARVIS_IMAGE")
+	s := identity.Getenv("PERSONA_IMAGE")
 	if s == "" {
 		s = u.h.build.Image
 	}
@@ -922,7 +922,7 @@ func (u *updater) dockerImage() (update.Image, error) {
 }
 
 // checkImage asks the registry for the newest release of the image this Docker hub runs (docs/hub-update.md "Docker").
-// A private image needs JARVIS_REGISTRY_TOKEN (a read token) in the container's environment.
+// A private image needs PERSONA_REGISTRY_TOKEN (a read token) in the container's environment.
 func (u *updater) checkImage(ctx context.Context) error {
 	im, err := u.dockerImage()
 	if err != nil {
@@ -932,7 +932,7 @@ func (u *updater) checkImage(ctx context.Context) error {
 	u.setState("checking")
 	cctx, cancel := context.WithTimeout(ctx, updateRequestLimit)
 	defer cancel()
-	newest, err := update.LatestVersion(cctx, u.client, im, identity.Getenv("JARVIS_REGISTRY_TOKEN"))
+	newest, err := update.LatestVersion(cctx, u.client, im, identity.Getenv("PERSONA_REGISTRY_TOKEN"))
 	u.mu.Lock()
 	u.lastCheck = time.Now()
 	if err == nil {

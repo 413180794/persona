@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Files / Git panes' live refresh (#3089, `FsLive`): what the hub is told and when a pane refreshes.
 @MainActor

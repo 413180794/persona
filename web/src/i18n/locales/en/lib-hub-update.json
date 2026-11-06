@@ -19,7 +19,7 @@
   "warning_bad": "This version failed to start last time and was rolled back. Auto-update won't install it again.",
   "warning_held": "Auto-update won't install this version: {why}. If it looks fine, update manually.",
   "new_image": "New image {version}",
-  "docker_set_image": "On the hub machine, set JARVIS_IMAGE in the .env next to the compose file to:",
+  "docker_set_image": "On the hub machine, set PERSONA_IMAGE in the .env next to the compose file to:",
   "docker_then_run": "Then run in that folder:",
   "docker_run": "On the hub machine, run in the compose file's folder:",
   "docker_how": "A Docker hub updates with a new image. When there is one, run this in the compose file's folder:",

@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Two fingers on the Mac's screen as its wheel (#4878, VNCWheel): how far 100 pt goes, small moves, coasting.
 struct VNCWheelTests {

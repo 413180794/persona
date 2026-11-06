@@ -25,7 +25,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <!-- Outlook's "Sign in with a Microsoft account": the hub's default redirect URI (server/internal/mail/microsoft.go). -->
-                <data android:scheme="jarvis-mail-oauth" android:host="outlook" />
+                <data android:scheme="persona-mail-oauth" android:host="outlook" />
             </intent-filter>
         </activity>
     </application>

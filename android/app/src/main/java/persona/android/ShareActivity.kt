@@ -335,8 +335,8 @@ internal fun formatSharedContent(
         fun escape(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;")
             .replace("<", "&lt;").replace(">", "&gt;")
         val url = Regex("https?://[^\\s<>]+", RegexOption.IGNORE_CASE).find(text)?.value.orEmpty()
-        "<jarvis-context kind=\"context\" title=\"${escape(title.ifBlank { untitled })}\" url=\"${escape(url)}\">\n" +
-            contextBody(content) + "\n</jarvis-context>"
+        "<persona-context kind=\"context\" title=\"${escape(title.ifBlank { untitled })}\" url=\"${escape(url)}\">\n" +
+            contextBody(content) + "\n</persona-context>"
     } else content
     return listOf(shared, note.trim()).filter { it.isNotBlank() }.joinToString("\n\n")
 }

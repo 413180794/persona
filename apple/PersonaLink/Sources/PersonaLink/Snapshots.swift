@@ -26,7 +26,7 @@ import SwiftUI
             return s
         }
         let pairedPassive = PassivePairing(listen: ":18663", hubName: "家里", machine: "mac-mini", paired: true)
-        let nodeInstalled = NodeService(installed: true, file: "~/Library/LaunchAgents/com.jarvis.node.plist", hasBin: true, running: "loaded")
+        let nodeInstalled = NodeService(installed: true, file: "~/Library/LaunchAgents/com.persona.node.plist", hasBin: true, running: "loaded")
         let menus: [(String, LinkStatus?, String?)] = [
             ("connected", status("connected") {
                 $0.address = endpoints[0].url; $0.kind = "lan"; $0.since = now.addingTimeInterval(-7_380); $0.node = "online"
@@ -43,7 +43,7 @@ import SwiftUI
             ("node-missing", status("connected") {
                 $0.hubName = "家里"; $0.meshHubs = 1
                 $0.address = endpoints[1].url; $0.kind = "ipv6"; $0.since = now.addingTimeInterval(-95); $0.node = "offline"
-                $0.nodeError = "本机的常驻 node 没在运行（~/.jarvis/node-attach.sock 连不上）：让 jarvisd node --attach 一直跑（scripts/deploy/node-launchd.sh install）"
+                $0.nodeError = "本机的常驻 node 没在运行（~/.persona/node-attach.sock 连不上）：让 personad node --attach 一直跑（scripts/deploy/node-launchd.sh install）"
             }, nil),
             ("connecting", status("connecting"), nil),
             ("waiting", status("waiting") {
@@ -63,7 +63,7 @@ import SwiftUI
             }, nil),
             ("passive-node-missing", passive("listening") {
                 $0.lastSeen = now.addingTimeInterval(-20); $0.from = "192.0.2.10"; $0.node = "offline"
-                $0.nodeError = "本机的常驻 node 没在运行（~/.jarvis/node-attach.sock 连不上）：让 jarvisd node --attach 一直跑"
+                $0.nodeError = "本机的常驻 node 没在运行（~/.persona/node-attach.sock 连不上）：让 personad node --attach 一直跑"
             }, nil),
             ("passive-unpaired", LinkStatus(state: "unpaired", mode: "passive", listen: ":18663", codeExpires: now.addingTimeInterval(500)), nil),
             ("passive-waiting", passive("waiting") {
@@ -94,11 +94,11 @@ import SwiftUI
             png(MenuView(model: noNode, now: now), dark: dark, to: dir.appendingPathComponent("menu-no-node-service-\(mode).png"))
             let paired = LinkModel()
             paired.show(menus[0].1, endpoints: endpoints, machine: "macbook")
-            png(PairView(model: paired, result: (true, "配对好了：这台是 hub 上的「macbook」，凭据存在 ~/.jarvis/link.json。")),
+            png(PairView(model: paired, result: (true, "配对好了：这台是 hub 上的「macbook」，凭据存在 ~/.persona/link.json。")),
                 dark: dark, to: dir.appendingPathComponent("pair-paired-\(mode).png"))
             let fresh = LinkModel()
             fresh.show(LinkStatus(state: "unpaired"))
-            png(PairView(model: fresh, link: "jarvis://link?url=http%3A%2F%2F192.0.2.10%3A18660&tls=18662&machine=macbook&token=jp_…",
+            png(PairView(model: fresh, link: "persona://link?url=http%3A%2F%2F192.0.2.10%3A18660&tls=18662&machine=macbook&token=jp_…",
                          result: (false, "配对失败：内网 192.0.2.10:18662：hub 回了 HTTP 401")),
                 dark: dark, to: dir.appendingPathComponent("pair-error-\(mode).png"))
             png(PairView(model: paired, newAddress: "hub.example", addressError: "\"hub.example:x\" 的端口不对"),
@@ -106,7 +106,7 @@ import SwiftUI
             // Passive mode's pairing: the link made, to paste into the hub's admin page.
             let fresh2 = LinkModel()
             fresh2.show(LinkStatus(state: "unpaired", mode: "passive", listen: ":18663"), mode: "passive")
-            let inviteLink = "jarvis://connector?addr=192.0.2.20%3A18663&addr=%5B2001%3Adb8%3A1%3A%3A20%5D%3A18663&fp=Wm9vb3ZlcnRoZW1vb25hbmRiYWNrYWdhaW4xMjM0NTY&code=jc_ZXhhbXBsZWNvZGVvbmx5"
+            let inviteLink = "persona://connector?addr=192.0.2.20%3A18663&addr=%5B2001%3Adb8%3A1%3A%3A20%5D%3A18663&fp=Wm9vb3ZlcnRoZW1vb25hbmRiYWNrYWdhaW4xMjM0NTY&code=jc_ZXhhbXBsZWNvZGVvbmx5"
             png(PairView(model: fresh2, tab: "passive", invite: (inviteLink, PairView.inviteNote(link: inviteLink, stderr:
                 "防火墙：只对 hub 放行 TCP 18663，别对所有人开（例如 ufw：sudo ufw allow from <hub 的地址> to any port 18663 proto tcp；firewalld、nftables、路由器同理）。"))),
                 dark: dark, to: dir.appendingPathComponent("pair-passive-link-\(mode).png"))
@@ -118,15 +118,15 @@ import SwiftUI
             let viaProxy = LinkModel()
             viaProxy.show(menus.last!.1, endpoints: proxied, machine: "macbook")
             png(PairView(model: viaProxy), dark: dark, to: dir.appendingPathComponent("pair-proxy-\(mode).png"))
-            // A `jarvis://link?…` link opened from outside: the window filled in, waiting for 「配对」 (Pair).
+            // A `persona://link?…` link opened from outside: the window filled in, waiting for 「配对」 (Pair).
             let opened = LinkModel()
             opened.show(LinkStatus(state: "unpaired"))
-            opened.openLink(URL(string: "jarvis://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_ZXhhbXBsZQ&machine=macbook&hub=h_example&fp=Wm9vb3ZlcnRoZW1vb24&tls=18662")!)
+            opened.openLink(URL(string: "persona://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_ZXhhbXBsZQ&machine=macbook&hub=h_example&fp=Wm9vb3ZlcnRoZW1vb24&tls=18662")!)
             png(PairView(model: opened), dark: dark, to: dir.appendingPathComponent("pair-opened-link-\(mode).png"))
-            // The phone's link (jarvis://pair?…) opened here: said, nothing filled in.
+            // The phone's link (persona://pair?…) opened here: said, nothing filled in.
             let other = LinkModel()
             other.show(LinkStatus(state: "unpaired"))
-            other.openLink(URL(string: "jarvis://pair?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_ZXhhbXBsZQ")!)
+            other.openLink(URL(string: "persona://pair?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_ZXhhbXBsZQ")!)
             png(PairView(model: other), dark: dark, to: dir.appendingPathComponent("pair-other-app-link-\(mode).png"))
             // A link without a machine (pasted from `personad hub pair`): the machine id under 「高级」 (Advanced).
             let fresh3 = LinkModel()

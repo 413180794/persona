@@ -161,7 +161,7 @@ private fun PersonaRootContent(
                             if (hub == null) JTextButton(stringResource(R.string.app_try_demo), onClick = { scope.launch {
                                 try { shell.enterDemo(); MainActivity.pendingPairLink.value = null }
                                 catch (error: Exception) {
-                                    android.util.Log.w("JarvisShell", "Unable to start demo", error)
+                                    android.util.Log.w("PersonaShell", "Unable to start demo", error)
                                     shell.feedback.failure(error)
                                 }
                             } })
@@ -231,14 +231,14 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             }
         })
     }
-    var selected by rememberSaveable { mutableStateOf(initialRoute?.tab ?: if (session.demo != null) AppTab.Jarvis else saved.tab) }
+    var selected by rememberSaveable { mutableStateOf(initialRoute?.tab ?: if (session.demo != null) AppTab.Persona else saved.tab) }
     var machine by rememberSaveable { mutableStateOf(saved.machine) }
     val assistantStack = rememberNavBackStack(AssistantRoute,
-        *listOfNotNull(saved.chats[AppTab.Jarvis]?.takeIf { !embeddedAssistant }).toTypedArray())
+        *listOfNotNull(saved.chats[AppTab.Persona]?.takeIf { !embeddedAssistant }).toTypedArray())
     val agentsStack = rememberNavBackStack(AgentsRoute, *listOfNotNull(saved.chats[AppTab.Agents]).toTypedArray())
     val inboxStack = rememberNavBackStack(InboxRoute)
     val settingsStack = rememberNavBackStack(SettingsRoute)
-    val stacks = mapOf(AppTab.Jarvis to assistantStack, AppTab.Agents to agentsStack, AppTab.Inbox to inboxStack, AppTab.Settings to settingsStack)
+    val stacks = mapOf(AppTab.Persona to assistantStack, AppTab.Agents to agentsStack, AppTab.Inbox to inboxStack, AppTab.Settings to settingsStack)
     val sessions by session.sessions.sessions.collectAsStateWithLifecycle()
     val assistant by session.assistant.assistant.collectAsStateWithLifecycle()
     val pending by session.interactions.pending.collectAsStateWithLifecycle()
@@ -266,15 +266,15 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     fun openAssistant(key: NavKey, select: Boolean): Boolean {
         val conversation = assistantTarget(key) ?: return false
         if (select) {
-            val stack = stacks.getValue(AppTab.Jarvis)
+            val stack = stacks.getValue(AppTab.Persona)
             while (stack.size > 1) stack.removeAt(stack.lastIndex)
-            selected = AppTab.Jarvis
+            selected = AppTab.Persona
         }
         assistantPending = conversation
         return true
     }
     fun openResolved(route: ResolvedRoute): AppTab =
-        if (openAssistant(route.key, true)) AppTab.Jarvis else route.open(stacks)
+        if (openAssistant(route.key, true)) AppTab.Persona else route.open(stacks)
     remember {
         initialRoute?.let { route ->
             // The first frame already shows the requested conversation, not the home's default one.
@@ -292,7 +292,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         assistantPending = null
     }
     val navigator = remember { AppNavigator(stacks, { selected }, { selected = it }, chatTab = { route ->
-        currentKind(SessionKey(route.machineId, route.sessionId))?.let { if (it == ConversationKind.Assistant) AppTab.Jarvis else AppTab.Agents }
+        currentKind(SessionKey(route.machineId, route.sessionId))?.let { if (it == ConversationKind.Assistant) AppTab.Persona else AppTab.Agents }
     }, openAssistant = { chat, select -> openAssistant(chat, select) }) }
     val router = remember { Router { m, s -> currentKind(SessionKey(m, s)) } }
     val agentsWiring by session.agentsWiring.state.collectAsStateWithLifecycle()
@@ -314,7 +314,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         object : Navigator by navigator {
             override fun navigate(key: NavKey) {
                 // Ignore late automatic navigation from an assistant entry that is leaving the screen.
-                if (selected == AppTab.Jarvis) navigator.navigate(key)
+                if (selected == AppTab.Persona) navigator.navigate(key)
             }
         }
     }
@@ -406,7 +406,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             buildInboxList(inbox.records.map { it.item }, inbox.interactions, inbox.sessions, inbox.mutes), inbox.records)
     }
     // Settings carries the extensions' nav page badges added up (a dot when they are words).
-    val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Jarvis to assistantRequests.size, AppTab.Inbox to inboxNeeds, AppTab.Settings to slotBadge.count)
+    val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Persona to assistantRequests.size, AppTab.Inbox to inboxNeeds, AppTab.Settings to slotBadge.count)
     // "Needs you now" on the Persona home: the agents waiting (not Persona's own, not muted), then the inbox's "Needs you".
     val needsYou = remember(agentRequests, sessions, preferences.mutes, inbox.records) {
         persona.feature.assistant.needsYou(agentRequests, sessions, preferences.mutes,
@@ -415,8 +415,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     }
     // Voice chat is offered while the hub runs a voice extension: asked each time the Persona tab shows while connected.
     val voiceExtension = persona.feature.voice.rememberVoiceExtension(session.voice,
-        active = selected == AppTab.Jarvis && connection == ConnectionState.Online)
-    // Links over the whole shell, jarvis:// links from conversations, "Hand to Persona" from pages (ShellLinks.kt).
+        active = selected == AppTab.Persona && connection == ConnectionState.Online)
+    // Links over the whole shell, persona:// links from conversations, "Hand to Persona" from pages (ShellLinks.kt).
     ShellLinkHost(session, navigator, shell.feedback) {
         val uriHandler = LocalUriHandler.current
         // Each page shows the connection state in its own title, so the shell adds no banner above it.
@@ -582,7 +582,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         ReleaseTextInputOnChange(selected)
         // Back on the first page of Agents, Inbox or Settings goes to Persona; back on the Persona home leaves the app
         // (2026-11-01, the user's call; it used to go back through the tabs shown before).
-        BackHandler(selected != AppTab.Jarvis && stacks.getValue(selected).size <= 1) { navigator.selectTab(AppTab.Jarvis) }
+        BackHandler(selected != AppTab.Persona && stacks.getValue(selected).size <= 1) { navigator.selectTab(AppTab.Persona) }
         // Turned on its side, a phone's camera cutout or its three-button navigation bar sits on the left or right: the
         // shell keeps clear of them, while the background still runs under them (2026-11-02, the old app's shell did so).
         val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
@@ -697,7 +697,7 @@ internal fun navigationItems(badges: Map<AppTab, Int>, demo: String?, settingsDo
         NavItem(tab.name, label, icon, badge = badges[tab] ?: 0, badgeText = if (tab == AppTab.Settings) demo else null,
             dot = tab == AppTab.Settings && settingsDot)
     return listOf(
-        item(AppTab.Jarvis, "Persona", PhIcons.Sparkle),
+        item(AppTab.Persona, "Persona", PhIcons.Sparkle),
         item(AppTab.Agents, "Agents", PhIcons.SquaresFour),
         item(AppTab.Inbox, stringResource(R.string.app_tab_inbox), PhIcons.Tray),
         item(AppTab.Settings, stringResource(R.string.app_tab_settings), PhIcons.GearSix),

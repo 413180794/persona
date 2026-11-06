@@ -329,6 +329,7 @@ func TestAskNodeGivesUpAfterResumeWait(t *testing.T) {
 }
 
 func TestAskNodeWithoutNode(t *testing.T) {
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
 	if _, err := nodeclient.AskNode(context.Background(), nodeclient.Dial, nodeclient.AskRequest{Question: "q"}, ""); err == nil || !isNoNode(err) {
@@ -347,9 +348,10 @@ func TestDialSocketCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(home) })
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	_ = os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700)
+	_ = os.MkdirAll(filepath.Join(home, ".persona"), 0o700)
 	ln, err := net.Listen("unix", nodeclient.SocketPath())
 	if err != nil {
 		t.Fatal(err)

@@ -40,7 +40,7 @@ class PersonaManifestTest {
 
     @Test fun refusesWhatTheHubWouldLeaveOut() {
         assertNull(manifest().problem)
-        assertEquals("id jarvis-circuit", (manifest(id = "jarvis-circuit").problem).zhAny())
+        assertEquals("id persona-circuit", (manifest(id = "persona-circuit").problem).zhAny())
         assertEquals("id persona", (manifest(id = "persona").problem).zhAny())
         assertEquals("id Bad_Id", (manifest(id = "Bad_Id").problem).zhAny())
         assertEquals("no idle dot", (manifest(idle = false).problem).zhAny())

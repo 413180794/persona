@@ -633,7 +633,7 @@ func (m *Machine) onRequest(_ context.Context, method string, params json.RawMes
 	return nil, fmt.Errorf("unknown method %s", method)
 }
 
-// nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>
+// nodeMismatch: the node's personad is another build than the hub's. Builds are named <commit>[-dirty]-<time>
 // (deploy.sh); dev builds ("dev", empty) are never flagged. The local node is the hub binary itself.
 func nodeMismatch(hub, node string) bool {
 	if hub == "" || node == "" || hub == "dev" || node == "dev" {

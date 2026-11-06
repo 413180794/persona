@@ -4,8 +4,8 @@ import XCTest
 /// only the whole of it (Copy). A reply reads as in the chat, without the Markdown marks; your own message stays as
 /// written (its bubble shows it plain: `__init__.py`, `2*3*4`, `# …`, `- …` are kept).
 ///   PORT=18950 MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18950 xcodebuild test … -only-testing:PersonaUITests/SelectTextTests
-/// Both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful), iPhone and iPad; `TEST_RUNNER_JARVIS_SHOTS=<dir>` saves the
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18950 xcodebuild test … -only-testing:PersonaUITests/SelectTextTests
+/// Both styles (TEST_RUNNER_PERSONA_UI_STYLE=beautiful), iPhone and iPad; `TEST_RUNNER_PERSONA_SHOTS=<dir>` saves the
 /// page, named by the simulator's appearance (`simctl ui <udid> appearance light|dark`).
 final class SelectTextTests: XCTestCase {
     private var app: XCUIApplication!
@@ -15,15 +15,15 @@ final class SelectTextTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] != nil else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1 (JARVIS_MOCK_HUB)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] != nil else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1 (PERSONA_MOCK_HUB)")
         }
     }
 
     @MainActor private func launch(_ args: [String]) {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
     }
@@ -134,7 +134,7 @@ final class SelectTextTests: XCTestCase {
         a.name = "select-text \(name) \(UITestStyle.name)"
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         let mode = XCUIDevice.shared.appearance == .dark ? "dark" : "light"
         let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
         try? app.screenshot().pngRepresentation

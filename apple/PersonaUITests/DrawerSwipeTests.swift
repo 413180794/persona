@@ -3,7 +3,7 @@ import XCTest
 /// The Persona tab's sidebar drag (docs/ios.md「Persona 顶栏和侧边栏」): it opens from wherever a finger starts a drag to the
 /// right — the middle of the chat at a slant, on a message bubble, right after the list stopped scrolling — while a
 /// code block wider than the phone still scrolls sideways under the finger.
-/// Against scripts/mock/mock_hub.py started with MOCK_DRAWER=1 (JARVIS_MOCK_HUB): the main conversation ends with a wide
+/// Against scripts/mock/mock_hub.py started with MOCK_DRAWER=1 (PERSONA_MOCK_HUB): the main conversation ends with a wide
 /// code block; ASK4 is a long conversation.
 final class DrawerSwipeTests: XCTestCase {
     private var hub: String!
@@ -12,18 +12,18 @@ final class DrawerSwipeTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_DRAWER=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_DRAWER=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(_ open: String) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistant", open, "-showDrawerProbe", "YES"]
         app.launchPinned()
-        XCTAssertTrue(app.buttons["jarvis-avatar"].waitForExistence(timeout: 15), "the Persona tab did not open")
+        XCTAssertTrue(app.buttons["persona-avatar"].waitForExistence(timeout: 15), "the Persona tab did not open")
         return app
     }
 
@@ -136,7 +136,7 @@ final class DrawerSwipeTests: XCTestCase {
         XCTAssertTrue(agents.isHittable, "the tab bar did not come back on 设置")
         agents.tap()
         app.tabBars.buttons["Persona"].tap()
-        XCTAssertTrue(app.buttons["jarvis-avatar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["persona-avatar"].waitForExistence(timeout: 5))
         XCTAssertFalse(sidebar(app).exists, "back on the Persona tab the sidebar is still out")
         XCTAssertTrue(agents.isHittable)
     }
@@ -144,11 +144,11 @@ final class DrawerSwipeTests: XCTestCase {
     /// Not a check: drags whose frames `DrawerProbe` measures (docs/testing.md「侧边栏拖动」) — a slow drag open, a drag
     /// back, half way and let go (it springs back), and a quick flick open — in the long conversation.
     @MainActor func testMeasureDrags() throws {
-        guard ProcessInfo.processInfo.environment["JARVIS_DRAWER_MEASURE"] != nil else { throw XCTSkip("set JARVIS_DRAWER_MEASURE") }
+        guard ProcessInfo.processInfo.environment["PERSONA_DRAWER_MEASURE"] != nil else { throw XCTSkip("set PERSONA_DRAWER_MEASURE") }
         let app = launch(long)
         XCTAssertTrue(app.staticTexts["第 30 本也整理一下"].waitForExistence(timeout: 10))
         sleep(2)
-        let rounds = Int(ProcessInfo.processInfo.environment["JARVIS_DRAWER_MEASURE"] ?? "") ?? 3
+        let rounds = Int(ProcessInfo.processInfo.environment["PERSONA_DRAWER_MEASURE"] ?? "") ?? 3
         for _ in 0..<rounds {
             drag(app, from: point(app, 0.2, 0.5), dx: 260, dy: 0, velocity: XCUIGestureVelocity(400), hold: 0.2)
             XCTAssertTrue(isOpen(app), "the slow drag did not open")

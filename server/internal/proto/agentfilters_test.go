@@ -19,7 +19,7 @@ func TestAgentFilterMatches(t *testing.T) {
 		{"the words later in the prompt", f, "claude", SessionMarks{First: "Why does it say You are a bot of the platform?"}, false},
 		{"another agent", f, "codex", SessionMarks{AddedDirs: []string{"/home/me/.bot/bundles"}}, false},
 		{"the originator", codex, "codex", SessionMarks{Originator: "codex-bot"}, true},
-		{"another originator", codex, "codex", SessionMarks{Originator: "jarvis"}, false},
+		{"another originator", codex, "codex", SessionMarks{Originator: "persona"}, false},
 		{"no marks", codex, "codex", SessionMarks{}, false},
 	}
 	for _, c := range cases {

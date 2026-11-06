@@ -69,7 +69,7 @@ func TestPutSettings(t *testing.T) {
 	}
 	code, out := put(`{"launcher":"codex-l","timezone":"Asia/Shanghai","main":"m1","main_tasks_quiet":false,"notes":"关于我"}`)
 	if code != http.StatusOK || out["launcher"] != "codex-l" || out["timezone"] != "Asia/Shanghai" || out["main"] != "m1" ||
-		out["main_tasks_quiet"] != false || out["notes_effective"] != "关于我" || out["cwd"] != "/home/me/.jarvis/assistant" {
+		out["main_tasks_quiet"] != false || out["notes_effective"] != "关于我" || out["cwd"] != "/home/me/.persona/assistant" {
 		t.Fatalf("PUT: %d %v", code, out)
 	}
 	if r := modelRecordOf(t, s, "assistant"); r.Binding.Provider != "launcher.codex-l" {
@@ -268,7 +268,7 @@ func TestRename(t *testing.T) {
 	}
 }
 
-// jarvis_settings: the list has the assistant's settings and the hub's; the assistant's own are read, and changed
+// persona_settings: the list has the assistant's settings and the hub's; the assistant's own are read, and changed
 // once the user approves on the phone (its own card); the hub's go to the hub.
 func TestSettingsTool(t *testing.T) {
 	ctx := context.Background()
@@ -277,7 +277,7 @@ func TestSettingsTool(t *testing.T) {
 	s := newTestService(t, f)
 	setModel(t, s, "assistant", ModelBinding{Provider: "launcher.claude", Model: "chosen", Effort: "high"})
 	tool := func(args string) string {
-		r := s.Tool(ctx, ToolCall{Name: "jarvis_settings", Arguments: json.RawMessage(args), MachineID: "server", SessionID: "c1"})
+		r := s.Tool(ctx, ToolCall{Name: "persona_settings", Arguments: json.RawMessage(args), MachineID: "server", SessionID: "c1"})
 		return r.Content[0].Text
 	}
 	if out := tool(`{}`); !strings.Contains(out, "- assistant.launcher (Persona 的启动器)") || !strings.Contains(out, "- inbox.rules (收件箱分拣规则)") ||
@@ -291,7 +291,7 @@ func TestSettingsTool(t *testing.T) {
 		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
 			if qs := s.pendingQuestions(); len(qs) == 1 {
 				raw, _ := json.Marshal(proto.Resolution{Allow: &allow})
-				if qs[0].Kind != proto.IxPermission || qs[0].ToolName != "jarvis_settings" || qs[0].SessionID != "c1" {
+				if qs[0].Kind != proto.IxPermission || qs[0].ToolName != "persona_settings" || qs[0].SessionID != "c1" {
 					t.Errorf("card: %+v", qs[0])
 				}
 				if _, err := s.Action(ctx, Action{Op: "answer", InteractionID: qs[0].ID, Answer: raw}); err != nil {

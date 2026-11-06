@@ -51,13 +51,13 @@ class PathLinksShotsTest {
     @get:Rule val rule = createComposeRule()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val there = mapOf("/tmp/jarvis-tasks/1664-lark-test.md" to "file", "web/src/lib/api.ts" to "file", "docs/web.md" to "file")
+    private val there = mapOf("/tmp/persona-tasks/1664-lark-test.md" to "file", "web/src/lib/api.ts" to "file", "docs/web.md" to "file")
     private val presence = PathPresence(scope, { paths -> SessionPathStats(paths.map { SessionPathStat(it, there[it] ?: "missing") }) })
     private val opened = mutableListOf<String>()
     private val actions = ChatRowActions(SessionKey("mac", "s1"), fullText = { it.text.orEmpty() }, openPath = { path, _ -> opened += path },
         photos = null, pictures = { emptyList() }, openImages = { _, _ -> }, menu = null, retryLineId = null, onRetry = {}, paths = presence)
 
-    private val user = "读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/notes.md"
+    private val user = "读 /tmp/persona-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/notes.md"
     private val reply = "改好了：`web/src/lib/api.ts:34` 加了重试，说明写在 docs/web.md 里；/tmp/other/notes.md 没动。"
 
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/path-link-shots").also { it.mkdirs() }
@@ -68,7 +68,7 @@ class PathLinksShotsTest {
         presence.ask(PathLinks.asked(user) + PathLinks.asked(reply))
         val deadline = System.currentTimeMillis() + 5_000
         while (presence.kind("docs/web.md") == null && System.currentTimeMillis() < deadline) Thread.sleep(20)
-        assertTrue(presence.linkable("/tmp/jarvis-tasks/1664-lark-test.md") && !presence.linkable("/tmp/other/notes.md"))
+        assertTrue(presence.linkable("/tmp/persona-tasks/1664-lark-test.md") && !presence.linkable("/tmp/other/notes.md"))
 
         var style by mutableStateOf(AppStyle.Glass)
         var dark by mutableStateOf(false)
@@ -88,10 +88,10 @@ class PathLinksShotsTest {
         rule.waitForIdle()
         // The user's text: one link, the path that is there; a tap opens it.
         val links = annotated!!.getLinkAnnotations(0, user.length)
-        assertEquals(listOf("/tmp/jarvis-tasks/1664-lark-test.md"), links.map { user.substring(it.start, it.end) })
+        assertEquals(listOf("/tmp/persona-tasks/1664-lark-test.md"), links.map { user.substring(it.start, it.end) })
         val link = links.single().item as LinkAnnotation.Clickable
         link.linkInteractionListener!!.onClick(link)
-        assertEquals(listOf("/tmp/jarvis-tasks/1664-lark-test.md"), opened)
+        assertEquals(listOf("/tmp/persona-tasks/1664-lark-test.md"), opened)
 
         for (s in AppStyle.entries) for (d in listOf(false, true)) {
             style = s; dark = d

@@ -17,7 +17,7 @@ import persona.core.contracts.JsonCodec
 // The reply's cards by the hub's fence rules (sdk/go/wire/assistantblocks.go) and the shared vectors.
 class AssistantFencesTest {
     private fun repo(path: String): File =
-        generateSequence(File(System.getProperty("jarvis.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
+        generateSequence(File(System.getProperty("persona.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
             .map { File(it, path) }.firstOrNull { it.exists() } ?: error("$path not found")
 
     @Test fun theSharedVectors() {

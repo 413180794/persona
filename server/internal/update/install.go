@@ -67,7 +67,7 @@ type Pending struct {
 	Args        []string  `json:"args"`       // how it was started
 	HealthURL   string    `json:"health_url"` // where the watchdog asks
 	Nodes       string    `json:"nodes"`      // the downloaded node binaries, put in place once confirmed
-	// Programs are the programs swapped with the hub (jarvisd-wechat): going back puts them back too.
+	// Programs are the programs swapped with the hub (personad-wechat): going back puts them back too.
 	Programs []Swapped `json:"programs,omitempty"`
 }
 
@@ -129,7 +129,7 @@ type RolledBack struct {
 	Auto        bool      `json:"auto"`
 }
 
-// Dir is where the markers and downloads live: ~/.jarvis/update.
+// Dir is where the markers and downloads live: ~/.persona/update.
 func Dir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(identity.DataDir(home), "update")

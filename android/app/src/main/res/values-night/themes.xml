@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The window shows before Compose draws; match the dark JarvisTheme instead of flashing white. -->
-    <style name="Theme.Jarvis" parent="android:Theme.Material.NoActionBar">
+    <!-- The window shows before Compose draws; match the dark PersonaTheme instead of flashing white. -->
+    <style name="Theme.Persona" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <!-- Pages in the link sheet are darkened (algorithmic darkening) only when the theme around them says so. -->

@@ -88,7 +88,7 @@ class HubHttpRoutingTest {
                                 assertEquals("/api/v1/inbox/item%2Fencoded/reply", (received[3].path).zhAny())
                                 assertEquals("/api/v1/lark/conversations/feed%2Fencoded/messages?around=3", (received[4].path).zhAny())
                                 assertEquals("/api/v1/lark/media/image?size=120", (received[6].path).zhAny())
-                                assertEquals("stable-id", (received.last().getHeader("X-Jarvis-Op-Id")).zhAny())
+                                assertEquals("stable-id", (received.last().getHeader("X-Persona-Op-Id")).zhAny())
                             }
 
                             verify(firstEndpoint, firstRequests)

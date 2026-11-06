@@ -3,7 +3,7 @@
 A DEBUG App running in the simulator opens a local port, and scripts send it commands with `scripts/app/personactl.py`: read state, wait for the screen to settle, take screenshots,
 navigate, switch styles, and (later) read the accessibility tree, tap, inject state. No need to add a launch flag per scenario or restart the App for every screenshot.
 
-`personactl.py` and the old `jarvisctl.py` are the same implementation; existing `JARVISCTL_*` variables, command arguments and cache locations are kept, and the CLI file rename does not imply a new set of environment variables. Since #773 the bundle fallback reads `PERSONA_BUNDLE_ID` first and still accepts `JARVIS_BUNDLE_ID`; when `--via-hub` needs the default hub run root it resolves it by the service role `hub`, not by borrowing the directory of a node / Link on the same machine. The service resolver doesn't read credentials; credentials for the actual requests still come from the CLI's dedicated source, and the two must not be mixed up. The new entry point for the config script is `scripts/persona_config.py` (the old entry is a compatibility symlink); for run root rules see [compatibility migration](rename.md#部署脚本按服务恢复运行目录).
+`personactl.py` and the old `personactl.py` are the same implementation; existing `PERSONACTL_*` variables, command arguments and cache locations are kept, and the CLI file rename does not imply a new set of environment variables. Since #773 the bundle fallback reads `PERSONA_BUNDLE_ID` first and still accepts `PERSONA_BUNDLE_ID`; when `--via-hub` needs the default hub run root it resolves it by the service role `hub`, not by borrowing the directory of a node / Link on the same machine. The service resolver doesn't read credentials; credentials for the actual requests still come from the CLI's dedicated source, and the two must not be mixed up. The new entry point for the config script is `scripts/persona_config.py` (the old entry is a compatibility symlink); for run root rules see [compatibility migration](rename.md#部署脚本按服务恢复运行目录).
 
 Why it exists, the trade-offs against other approaches (URL scheme, re-reading launch flags at runtime) and measured numbers: see the 2026-11-02 evaluation (spike branch
 `spike/runtime-cli`). Conclusion: an in-App JSON service is the only approach that can "ask" the App; identity screenshots measured 3.1 s each (9.3 s with the old method).
@@ -11,7 +11,7 @@ Why it exists, the trade-offs against other approaches (URL scheme, re-reading l
 ## Usage
 
 ```sh
-export JARVISCTL_UDID=<simulator udid>            # unset means booted
+export PERSONACTL_UDID=<simulator udid>            # unset means booted
 scripts/app/personactl.py launch --hub http://127.0.0.1:18760   # kill and relaunch the App (with a one-time token), wait for it to answer
 scripts/app/personactl.py state                      # current tab, open session, style, theme color, light/dark, connection state
 scripts/app/personactl.py online                     # wait for the hub's live connection (reconnects once if not connected within 2 s)
@@ -20,10 +20,10 @@ scripts/app/personactl.py screenshot out.png         # simctl io screenshot afte
 scripts/app/personactl.py call <command> k=v …           # any command the App understands
 ```
 
-In scripts: `from jarvisctl import Ctl; c = Ctl(); c.launch(hub); c.call("settle", pixels=600)`.
+In scripts: `from personactl import Ctl; c = Ctl(); c.launch(hub); c.call("settle", pixels=600)`.
 
 **`settle` instead of a fixed `sleep`**: the screenshot script (identity comparison) used to `sleep 7` after launch before capturing. Most pages are drawn in 1–2 s, while some are still blank
-at 7 s. With `jarvisctl.py settle` after launch, each shot measured 4.3–5.3 s (previously 9.2–11.4 s), and the captures are pixel-identical to the old ones.
+at 7 s. With `personactl.py settle` after launch, each shot measured 4.3–5.3 s (previously 9.2–11.4 s), and the captures are pixel-identical to the old ones.
 `--pixels` is the tolerance: a working Agent's status dot is always moving (about 300 pixels), so with no tolerance it never "settles".
 
 ## Commands
@@ -34,7 +34,7 @@ at 7 s. With `jarvisctl.py settle` after launch, each shot measured 4.3–5.3 s 
 | `state` | | `tab`, `openChat`, `assistant`, `visibleSession`, `settingsOpen`, `settingsDepth`, `style`, `color`, `appearance`, `connection`, `paired`, `appState` (active / inactive / background), `screen` (window width and height, pt) |
 | `settle` | `timeout` (8 s), `every` (150 ms), `stable` (3 times), `pixels` (0), `ignore` (element filters, one or more sets; their frames aren't compared), `ignorePad` (6 pt), `ignoreRects` (`[[x, y, w, h]]`, pt) | `settled`, `frames`, `changed`, `box` (where the last two frames still differ) |
 | `freeze` | `on` (default true; false restores), `reduceMotion` (default true), `layers` (strip / pause / none, default strip) | `frozen`, `reduceMotion`, `paused`; see "Screens that never stop moving" |
-| `online` | `timeout` (15 s) | `nudged` (whether it reconnected); on timeout it errors with the current state. When `jarvisctl.py online` is connected to `mock_scenarios.py` it also returns `mockRestarts` (see "Injecting state") |
+| `online` | `timeout` (15 s) | `nudged` (whether it reconnected); on timeout it errors with the current state. When `personactl.py online` is connected to `mock_scenarios.py` it also returns `mockRestarts` (see "Injecting state") |
 | `reset` | `coldChats` (keep no chats in memory; reload from disk cache then the hub, as after launch), `dropChatCache` (also clear the disk cache, = `-openChatsFresh YES`) | A new view tree, route unchanged, as if just launched. Answers like `state` |
 | `tree` | Element filters (below) | `elements`: each accessibility element's `id` (accessibilityIdentifier), `label`, `value`, `traits`, `frame` (screen coordinates, pt), `visible` (tappable), `onScreen` (frame is on screen) |
 | `find` | Element filters, `index` | `count`, `element` (without `index`, the first one on screen) |
@@ -46,15 +46,15 @@ at 7 s. With `jarvisctl.py settle` after launch, each shot measured 4.3–5.3 s 
 | `scroll` | `pages` (screens; negative goes up, each screen is 0.8 of the height) or `to` (top / bottom) | Sets the offset of the largest scroll view on screen directly, no momentum; only picks ones that are drawn (the page the shell hides is the same size but transparent); `offset`, `contentHeight`, `frame` (which one moved) |
 | `type` | `text`, optionally element filters (activates it first to take focus, picked as in `activate`) | Types into the focused text field |
 | `dismiss-keyboard` | | Dismisses the keyboard |
-| `snapshot` | `path` or none (returns base64), `scale` | PNG of the App window (no status bar; to compare pixel by pixel with old screenshots use `jarvisctl.py screenshot`) |
+| `snapshot` | `path` or none (returns base64), `scale` | PNG of the App window (no status bar; to compare pixel by pixel with old screenshots use `personactl.py screenshot`) |
 | `pasteboard` | `text`, or omit it to place a solid-color image (`width`, `height`, default 40 × 30 pt) | `changeCount`, `hasImages`; behaves like copying in another App, triggering the composer's Paste chip (can be captured without UI tests) |
 | `share` | `text` (default Persona), `url` | `presented`; opens the system share sheet from the current window to check whether Share › Persona is listed |
 | `navigate` | `scene` (home / assistant / agents / chat / inbox / settings / machines), `session` (`<machine>/<session>`, required for chat and assistant), `machine` (open one machine under machines), `defaults` (flags read only when a page is built, e.g. `{"openAllWork": true}`), `keep` (don't swap in a new view tree), `coldChats`, `dropChatCache` (as in `reset`) | Lands on the same page as the corresponding launch flag (`-newAssistant`, `-openAssistant`, `-tab dev`, `-openSession`, `-tab mail`, `-tab settings`, `-openMachines`), by default on a new view tree (the window's root is replaced with a new `RootView`, so chats pushed on the Agents page, drawers and scroll positions all start over). Answers like `state` |
 | `set-style` | `style` (glass / clay / island / lark / beautiful), `color` (theme color) | Like `state`; the whole tree is rebuilt in the new style |
-| `set-appearance` | `value` (light / dark / system) | Changes only the App: goes through **Settings › Appearance › Light & Dark** (`AppModel.colorScheme`, which is persisted; restore with `system` afterwards); `jarvisctl.py appearance` by default changes the whole simulator (`simctl ui appearance`, the status bar changes too; screenshot scripts use this) |
+| `set-appearance` | `value` (light / dark / system) | Changes only the App: goes through **Settings › Appearance › Light & Dark** (`AppModel.colorScheme`, which is persisted; restore with `system` afterwards); `personactl.py appearance` by default changes the whole simulator (`simctl ui appearance`, the status bar changes too; screenshot scripts use this) |
 | `defaults` | `set` (valid only for this run, written to the registration domain, not persisted), `remove` (delete stored keys, what `-openAgentsFresh` does), `get` | `values` |
 
-Every answer has `ok` and `ms` (time spent in the App); errors are `{"ok": false, "error": …}`, and `jarvisctl.py` exits non-zero.
+Every answer has `ok` and `ms` (time spent in the App); errors are `{"ok": false, "error": …}`, and `personactl.py` exits non-zero.
 
 ## Navigation and styles
 
@@ -70,7 +70,7 @@ scripts/app/personactl.py idle && scripts/app/personactl.py screenshot out.png
 glass background differed from a cold launch. The new tree has to be given the `scenePhase` that `WindowGroup` normally provides; otherwise pages that only work in the foreground (machine page metrics,
 `.tabActiveTask`) never move.
 
-`idle` (only in `jarvisctl.py`): waits until the mock hub (`scripts/mock/mock_hub.py` counts every GET at `/mock/hits`) has had no new requests for 0.8 s.
+`idle` (only in `personactl.py`): waits until the mock hub (`scripts/mock/mock_hub.py` counts every GET at `/mock/hits`) has had no new requests for 0.8 s.
 While a page is still waiting for data (machine page metrics) the screen is still, so `settle` thinks it's done; run `idle` first, then `settle`.
 
 ## Screens that never stop moving
@@ -99,7 +99,7 @@ While a page is still waiting for data (machine page metrics) the screen is stil
 
 ## All scenes in one launch (identity comparison)
 
-`scripts/app/jarvisctl-scenes/id-cli.py <output dir> glass:light beautiful:dark …`: launches once, then for each "style × light/dark × scene"
+`scripts/app/personactl-scenes/id-cli.py <output dir> glass:light beautiful:dark …`: launches once, then for each "style × light/dark × scene"
 (the 7 in `scenes-id1.txt`) runs `online` → `set-style` → `navigate --cold-chats` → `idle` → `settle` → `simctl io screenshot`
 (`FREEZE=1`: `freeze` before settle, see the previous section).
 `id-old.sh` is the original method (restart + launch flags + fixed sleep per shot). `id-judge.py --old <dir>… --cli <dir>…` judges whether the two methods
@@ -156,7 +156,7 @@ scripts/app/personactl.py snapshot app.png
 
 ## Gestures and foreground / background
 
-All are real touches sent by `jarvisctl.py` from the host with `idb` (same as `tap`'s fallback; no synthesized events in the App); it first waits for the screen to settle and re-reads the element's frame.
+All are real touches sent by `personactl.py` from the host with `idb` (same as `tap`'s fallback; no synthesized events in the App); it first waits for the screen to settle and re-reads the element's frame.
 
 ```sh
 scripts/app/personactl.py longpress --label-contains "、给天气 App 加主屏幕小组件、"          # long-press menu of a row (1.2 s by default); label = "add a home screen widget to the weather App"
@@ -193,7 +193,7 @@ The mock's own `/mock/reset`, `/mock/seen`, `/mock/churn` are still requested di
 
 **A killed mock comes back by itself**: in a long-running CLI session, the mock can get killed from outside midway (during evaluation another Agent's `pkill -f mock_hub.py` did exactly that),
 and every screenshot afterwards is stuck on "Connecting…". `mock_scenarios.py` checks the `mock_hub.py` it started every 0.5 s: if it exited unexpectedly (not stopped by a scenario switch), it restarts it with the current scenario
-and records the time, exit code and scenario (the `offline` scenario and scenario switches don't count). `restarts` in `GET /scenario` is these records, `mockRestarts` in the `jarvisctl.py online`
+and records the time, exit code and scenario (the `offline` scenario and scenario switches don't count). `restarts` in `GET /scenario` is these records, `mockRestarts` in the `personactl.py online`
 answer is the same data, and `id-cli.py` prints a WARNING line at the end if there were restarts (the screenshots around then need retaking). Measured: after `kill -9` on the child, the hub answers again in 0.6 s.
 
 ## Reaching a real device through the hub
@@ -215,8 +215,8 @@ After connecting to the hub and seeing its `runtime_cli`, it additionally regist
 When launched by the simulator scripts (with `-pairURL`), it registers only that one and doesn't take phone tools (`RuntimeCLI+Hub.swift`).
 
 ```sh
-export JARVISCTL_VIA_HUB=<hub address>          # or pass --via-hub <hub address> on each command
-export JARVISCTL_HUB_TOKEN_FILE=<file holding the device token>   # or JARVISCTL_HUB_TOKEN; on the hub machine it reads ~/.persona/hub.json by default; never printed
+export PERSONACTL_VIA_HUB=<hub address>          # or pass --via-hub <hub address> on each command
+export PERSONACTL_HUB_TOKEN_FILE=<file holding the device token>   # or PERSONACTL_HUB_TOKEN; on the hub machine it reads ~/.persona/hub.json by default; never printed
 scripts/app/personactl.py state
 scripts/app/personactl.py settle --pixels 600
 scripts/app/personactl.py tree --id-prefix agents. --visible
@@ -239,8 +239,8 @@ the App itself remembers what was marked read, so when counts don't match it res
 
 ```sh
 python3 scripts/mock/mock_scenarios.py --port 18761 --scenario agents &        # live_update.py uses --scenario churn
-JARVISCTL_UDID=<simulator udid> HUB=http://127.0.0.1:18761 scripts/app/cli-tests/agents_list.py 3           # all cases, 3 rounds
-JARVISCTL_UDID=<udid> HUB=… scripts/app/cli-tests/agents_list.py 1 quick_filters compact_rows             # only these two
+PERSONACTL_UDID=<simulator udid> HUB=http://127.0.0.1:18761 scripts/app/cli-tests/agents_list.py 3           # all cases, 3 rounds
+PERSONACTL_UDID=<udid> HUB=… scripts/app/cli-tests/agents_list.py 1 quick_filters compact_rows             # only these two
 ```
 
 Each case in each round prints one `PASS` / `FAIL` line with duration and failure reason, and the last line summarizes one case; any failure gives a non-zero exit code. `CLITEST_LOG=<file>` also appends tab-separated results.
@@ -267,7 +267,7 @@ Not migrated, staying in XCUITest permanently: `testScrollingTheLongList` (`XCTO
   `#if DEBUG` block.
 - Off by default: without `-runtimeCLI <port>` at launch, nothing listens.
 - Loopback only: `127.0.0.1:<port>` (the simulator and the Mac share loopback).
-- One-time token: `launch` generates a random one each time, passes it to the App via the launch argument `-runtimeCLIToken`, and stores it in `~/.cache/jarvisctl/<udid>.json` (0600); requests with the wrong token are rejected outright.
+- One-time token: `launch` generates a random one each time, passes it to the App via the launch argument `-runtimeCLIToken`, and stores it in `~/.cache/personactl/<udid>.json` (0600); requests with the wrong token are rejected outright.
 - One request per connection: one line of JSON `{"token", "cmd", "args"}`, one line of JSON back. All commands run on the main thread (MainActor).
 - `scripts/release/release.sh` checks that `strings` of the Release binary contain no `runtimeCLI`, `RuntimeCLI` or `_AXSSetAutomationEnabled`.
 
@@ -275,4 +275,4 @@ Not migrated, staying in XCUITest permanently: `testScrollingTheLongList` (`XCTO
 
 One file per category of commands, `apple/Persona/Debug/RuntimeCLI+<category>.swift` (also wrapped in `#if DEBUG && os(iOS)`), with names registered in
 `RuntimeCLI.commands`; answers can't contain NaN / infinity (JSON can't encode them, and you get a `reply is not JSON` error).
-Commands `jarvisctl.py` doesn't know can be sent with `call`; common ones get added as subcommands.
+Commands `personactl.py` doesn't know can be sent with `call`; common ones get added as subcommands.

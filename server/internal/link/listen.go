@@ -34,7 +34,7 @@ var errBadCode = errors.New("bad pairing code")
 const pairBodyMax = 16 << 10
 
 // streamClose is why the listener ends a stream itself: the credential it came with is no longer the one (another
-// hub paired), or jarvis-link stops listening (it stops, or switched to active mode).
+// hub paired), or persona-link stops listening (it stops, or switched to active mode).
 const (
 	closeCredential = CloseRevoked              // 4002, as active mode's revoked credential
 	closeStopping   = websocket.StatusGoingAway // 1001
@@ -77,7 +77,7 @@ type pstream struct {
 
 const refusalLog = 30 * time.Second // at most one line per this about refused requests (a setting)
 
-// runPassive listens for the hub until ctx ends (another mode, or jarvis-link stops). A port that cannot be had is
+// runPassive listens for the hub until ctx ends (another mode, or persona-link stops). A port that cannot be had is
 // retried with the same backoff as active mode's attempts, sooner when link.json changes (another port, say).
 func runPassive(ctx context.Context, o Options, rep *reporter) {
 	rep.switchTo(ModePassive)
@@ -228,7 +228,7 @@ func (s *passive) serve(ctx context.Context, ln net.Listener) {
 	s.mu.Lock()
 	close(s.stopped)
 	for st := range s.streams {
-		st.end(closeStopping, "jarvis-link stopped listening")
+		st.end(closeStopping, "persona-link stopped listening")
 	}
 	s.mu.Unlock()
 	_ = srv.Close() // the listener and connections still speaking HTTP; the streams are hijacked: ended above
@@ -445,7 +445,7 @@ func (s *passive) pair(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case errors.Is(err, errBadCode):
-		s.refuse(w, r, key, "bad_code", "配对码不对、过期了或者已经用过：在这台电脑上重新 jarvis-link pair --listen")
+		s.refuse(w, r, key, "bad_code", "配对码不对、过期了或者已经用过：在这台电脑上重新 persona-link pair --listen")
 		return
 	case err != nil:
 		s.o.Logf("passive: pairing: %v", err)
@@ -565,7 +565,7 @@ func (s *passive) stream(w http.ResponseWriter, r *http.Request) {
 	select {
 	case <-s.stopped: // stopped listening meanwhile
 		s.mu.Unlock()
-		_ = ws.Close(closeStopping, "jarvis-link stopped listening")
+		_ = ws.Close(closeStopping, "persona-link stopped listening")
 		return
 	default:
 	}

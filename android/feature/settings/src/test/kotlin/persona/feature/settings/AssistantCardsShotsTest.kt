@@ -65,7 +65,7 @@ class AssistantCardsShotsTest {
     @get:Rule val rule = createComposeRule()
 
     private fun example(name: String): String =
-        generateSequence(File(System.getProperty("jarvis.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
+        generateSequence(File(System.getProperty("persona.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
             .map { File(it, "schema/extension/examples/assistant/$name.json") }.first { it.exists() }.readText()
 
     private fun json(text: String): JsonElement = JsonCodec.parseToJsonElement(text)

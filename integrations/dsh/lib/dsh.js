@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { isAssistantDir } from '../../runtime-sdk/lib/identity.js'
 import { createRuntime, interactionId, RpcError, summaryOf } from '../../runtime-sdk/index.js'
-import { attachmentOf, dshSeq, eventItems, itemsOf, jarvisSeq, lastText, streamText, toolInput, toolName } from './map.js'
+import { attachmentOf, dshSeq, eventItems, itemsOf, personaSeq, lastText, streamText, toolInput, toolName } from './map.js'
 
 export const RUNTIME_VERSION = '0.5.0'
 
@@ -25,7 +25,7 @@ function shellWordsRe(words) {
   return alts.length ? new RegExp(`(^|[\\s;&|(\`$])(${alts.join('|')})(\\s|$)`) : null
 }
 
-/** cwd is the Persona assistant's directory (~/.jarvis/assistant, as the node and the hub tell its conversations). */
+/** cwd is the Persona assistant's directory (~/.persona/assistant, as the node and the hub tell its conversations). */
 function assistantDir(cwd) {
   return isAssistantDir(cwd)
 }
@@ -170,7 +170,7 @@ export function createDshRuntime(deps, options = {}) {
         row.space_id = s.cwd
         row.space_name = basename(s.cwd)
       }
-      if (seq >= 0) row.rev = jarvisSeq(seq)
+      if (seq >= 0) row.rev = personaSeq(seq)
       if (st?.lastText) row.last_text = st.lastText
       if (subagents.length > 0) row.subagents = subagents
       if (background.length > 0) row.background = background
@@ -225,7 +225,7 @@ export function createDshRuntime(deps, options = {}) {
       })
       rt.sessionsChanged()
     } catch (err) {
-      log(`jarvis: subagents of ${parent}: ${err.message}`)
+      log(`persona: subagents of ${parent}: ${err.message}`)
     }
   }
 
@@ -271,7 +271,7 @@ export function createDshRuntime(deps, options = {}) {
         out.set(String(j.id), task(String(j.id), { kind: j.kind, label: j.label, startedAt: j.startedAt }))
       }
     } catch (err) {
-      log(`jarvis: jobs of ${id}: ${err.message}`)
+      log(`persona: jobs of ${id}: ${err.message}`)
     }
     return [...out.values()]
   }
@@ -311,7 +311,7 @@ export function createDshRuntime(deps, options = {}) {
     const schema = t.input_schema && typeof t.input_schema === 'object' && !Array.isArray(t.input_schema)
       ? t.input_schema : { type: 'object', properties: {} }
     return {
-      name: `mcp__jarvis__${t.name}`,
+      name: `mcp__persona__${t.name}`,
       description: typeof t.description === 'string' ? t.description : t.name,
       parameters: schema,
       output: {
@@ -355,12 +355,12 @@ export function createDshRuntime(deps, options = {}) {
           const dispose = deps.registerTool(toolDefinition(t, assistantOnly), when ? { when } : undefined)
           if (typeof dispose === 'function') tools.disposers.push(dispose)
         } catch (err) {
-          log(`jarvis: tool ${t.name}: ${err.message}`)
+          log(`persona: tool ${t.name}: ${err.message}`)
         }
       }
-      log(`jarvis: ${tools.disposers.length} Persona tools for DSH's agents`)
+      log(`persona: ${tools.disposers.length} Persona tools for DSH's agents`)
     } catch (err) {
-      log(`jarvis: the hub's tools: ${err.message}`)
+      log(`persona: the hub's tools: ${err.message}`)
     } finally {
       tools.refreshing = false
     }
@@ -424,7 +424,7 @@ export function createDshRuntime(deps, options = {}) {
     const sessionId = params.session_id
     return withTimeout(25_000, async (signal) => {
       const cursor = await cursorOf(sessionId, signal)
-      const top = jarvisSeq(cursor)
+      const top = personaSeq(cursor)
       if (typeof params.through_seq === 'number' && params.through_seq > 0) {
         // A fold being opened: the events of [from_seq, through_seq].
         const from = dshSeq(params.from_seq ?? 1)
@@ -446,10 +446,10 @@ export function createDshRuntime(deps, options = {}) {
             break
           }
           out.push(...its)
-          to = jarvisSeq(e.seq)
+          to = personaSeq(e.seq)
         }
         if (!cut) to = top
-        const from = reached ? params.after_seq : jarvisSeq(events[0]?.seq ?? cursor) - 1
+        const from = reached ? params.after_seq : personaSeq(events[0]?.seq ?? cursor) - 1
         return { items: out, has_more: false, more_after: cut, history: history(sessionId), from_seq: from, to_seq: to }
       }
       const before = params.before_seq > 0 ? dshSeq(params.before_seq) : undefined
@@ -458,7 +458,7 @@ export function createDshRuntime(deps, options = {}) {
       const window = turns > 0 ? { minMessages: 1, minTurns: turns } : undefined
       const { events, hasMore } = await pageEvents(sessionId, cursor, before, turns > 0 ? 400 : limit, window, signal)
       const last = events.at(-1)
-      return { items: itemsOf(events), has_more: hasMore, history: history(sessionId), to_seq: before === undefined ? top : last ? jarvisSeq(last.seq) : 0 }
+      return { items: itemsOf(events), has_more: hasMore, history: history(sessionId), to_seq: before === undefined ? top : last ? personaSeq(last.seq) : 0 }
     })
   }
 
@@ -536,7 +536,7 @@ export function createDshRuntime(deps, options = {}) {
       deps.permissionPresets.set(agent.session, name)
       a.preset = name
     } catch (err) {
-      log(`jarvis: preset ${name} for ${id}: ${err.message}`)
+      log(`persona: preset ${name} for ${id}: ${err.message}`)
     }
   }
 
@@ -555,7 +555,7 @@ export function createDshRuntime(deps, options = {}) {
   const rt = createRuntime({
     listSessions,
     items,
-    cursor: (sessionId) => withTimeout(25_000, async (signal) => jarvisSeq(await cursorOf(sessionId, signal))),
+    cursor: (sessionId) => withTimeout(25_000, async (signal) => personaSeq(await cursorOf(sessionId, signal))),
     image,
     item,
     send,
@@ -598,7 +598,7 @@ export function createDshRuntime(deps, options = {}) {
   }
 
   /** The id Persona knows a DSH session by: a subagent's is "<parent>@<child>". */
-  function jarvisID(id, session) {
+  function personaID(id, session) {
     const parent = parentOf(id, session)
     return parent ? `${parent}@${id}` : id
   }
@@ -658,8 +658,8 @@ export function createDshRuntime(deps, options = {}) {
       }
     }
     // Every event moves the seq, even one the chat does not show. A subagent's go to "<parent>@<child>".
-    const jid = jarvisID(id, session)
-    rt.append(jid, { items: rt.watching(jid) ? eventItems(event) : [], fromSeq: event.seq, toSeq: jarvisSeq(event.seq), history: history(jid) })
+    const jid = personaID(id, session)
+    rt.append(jid, { items: rt.watching(jid) ? eventItems(event) : [], fromSeq: event.seq, toSeq: personaSeq(event.seq), history: history(jid) })
   }
 
   function callsOpen(id) {
@@ -684,7 +684,7 @@ export function createDshRuntime(deps, options = {}) {
   function onAssistantStream({ agent, frame }) {
     const own = String(agent?.session?.id ?? agent?.id ?? '')
     if (!own) return
-    const id = jarvisID(own, agent?.session)
+    const id = personaID(own, agent?.session)
     if (frame?.type === 'start') {
       texts.set(id, '')
       return
@@ -787,7 +787,7 @@ export function createDshRuntime(deps, options = {}) {
         sessionId,
         mode: 'steer',
         content: [{ type: 'text', text: `（在手机上拒绝了 ${tool || '这个工具调用'}）${text}` }],
-      }, AbortSignal.timeout(25_000)).catch((err) => log(`jarvis: refusal reason for ${sessionId}: ${err.message}`))
+      }, AbortSignal.timeout(25_000)).catch((err) => log(`persona: refusal reason for ${sessionId}: ${err.message}`))
     }, 0)
   }
 
@@ -841,7 +841,7 @@ export function createDshRuntime(deps, options = {}) {
       try {
         deps.userQuestions.answer(agent, callId, { answers: answerOf(questions, plan, res) })
       } catch (err) {
-        log(`jarvis: late answer for ${callId}: ${err.message}`)
+        log(`persona: late answer for ${callId}: ${err.message}`)
       }
     }, () => {})
     throw request.signal.reason ?? new Error('aborted')
@@ -867,8 +867,8 @@ export function createDshRuntime(deps, options = {}) {
       listen('user-questions/request', onQuestion, { global: true, prepend: true })
       if (options.assistant) listen('tools/pre-execute', onPreExecute, { global: true, prepend: true })
       rt.start().then((addr) => {
-        if (addr) log(`jarvis: daemon endpoint on ${addr.address}:${addr.port}`)
-      }, (err) => log(`jarvis: daemon endpoint: ${err.message}`)) // a port in use must not take DSH down
+        if (addr) log(`persona: daemon endpoint on ${addr.address}:${addr.port}`)
+      }, (err) => log(`persona: daemon endpoint: ${err.message}`)) // a port in use must not take DSH down
       if (typeof deps.registerTool === 'function') {
         tools.timer = setInterval(() => void refreshTools(rt.hubConnected), TOOLS_EVERY)
         tools.timer.unref?.()

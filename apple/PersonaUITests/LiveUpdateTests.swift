@@ -5,7 +5,7 @@ import XCTest
 /// hub's updates on demand (GET /mock/churn: sessions with new lines and a moving order, the machine list, a new step
 /// in each open conversation); the app counts view bodies and main-thread time per push (`-perfCounts YES`).
 ///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests
+///   TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests
 final class LiveUpdateTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
@@ -14,8 +14,8 @@ final class LiveUpdateTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 (JARVIS_CHURN_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_CHURN_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 (PERSONA_CHURN_HUB)")
         }
         hub = h
         _ = mock("reset")
@@ -35,7 +35,7 @@ final class LiveUpdateTests: XCTestCase {
     /// Agents (`app.tab`), so that is given too: otherwise the tab the last run ended on (another test's) decided it.
     private func launch(chat: String = "") {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev", "-openAgentsFresh", "YES", "-openChatsFresh", "YES", "-perfCounts", "YES"]
         app.launchPinned()
     }

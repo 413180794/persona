@@ -60,7 +60,7 @@ func quotaPackage(t *testing.T) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "quota"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=quota exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "quota"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=quota exec "+self+" \"$@\"\n"), 0o755)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-quota", "name": "Example 额度", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/quota"}},
 		"contributes": {"quota": [{"id": "example-gw", "name": "Example 网关"}]},

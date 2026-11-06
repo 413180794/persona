@@ -1,16 +1,16 @@
 import XCTest
 
-/// The terminal's key bar against scripts/mock/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>): what each
+/// The terminal's key bar against scripts/mock/mock_hub.py (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>): what each
 /// way of pressing ctrl / alt / shift sends, read back from GET /mock/keys.
 final class TerminalKeysTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     @MainActor func testModifiersReachTheTerminal() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror",
                                "-terminalKeys", "esc,tab,ctrlc,shortcuts,paste,alt,shift,pad"] // alt and ⇧ are off by default
@@ -65,11 +65,11 @@ final class TerminalKeysTests: XCTestCase {
 
     /// Long press selects the word under the finger and offers Copy.
     @MainActor func testLongPressCopies() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
         app.launchPinned()
@@ -93,7 +93,7 @@ final class TerminalKeysTests: XCTestCase {
         end.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.1, thenDragTo: end.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 140, dy: 0)))
         XCTAssertGreaterThan(end.frame.midX, before + 60, "the end handle did not move")
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/selection.png"))
         }
         let copyAgain = app.menuItems["拷贝"].exists ? app.menuItems["拷贝"] : app.buttons["拷贝"]
@@ -102,11 +102,11 @@ final class TerminalKeysTests: XCTestCase {
 
     /// A double tap on a shortcut sends it with return; typing offers completions from what the pane shows.
     @MainActor func testShortcutsAndSuggestions() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
         app.launchPinned()

@@ -151,7 +151,7 @@ func TestScreenCardWaitsOnlyForHooks(t *testing.T) {
 	}{
 		{"no hooks", proto.Session{SessionID: "s1", Agent: "claude"}, false, 0, 300 * time.Millisecond},
 		{"a hook event", proto.Session{SessionID: "s1", Agent: "claude"}, true, 1400 * time.Millisecond, 3 * time.Second},
-		{"started by Persona", proto.Session{SessionID: "s1", Agent: "claude", StartedByJarvis: true}, false, 1400 * time.Millisecond, 3 * time.Second},
+		{"started by Persona", proto.Session{SessionID: "s1", Agent: "claude", StartedByPersona: true}, false, 1400 * time.Millisecond, 3 * time.Second},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			ft, n := newCardFleet(t, false)

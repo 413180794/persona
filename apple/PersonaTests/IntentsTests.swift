@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Pure logic behind the intents: wording, selection rules and what each interaction kind resolves to.
 /// Everything here runs without a hub, which is why it is testable at all.
@@ -283,7 +283,7 @@ struct IntentsTests {
     @Test func statusReadsOutTheCardApproveSettles() {
         let sessions = waitingSessions, mutes = waitingMutes
         for c in waitingCases {
-            let text = JarvisStatusIntent.text(sessions: sessions, interactions: c.cards, mutes: mutes)
+            let text = PersonaStatusIntent.text(sessions: sessions, interactions: c.cards, mutes: mutes)
             let approved = ApproveFirstIntent.target(c.cards, sessions: sessions, mutes: mutes)
             #expect(approved?.id == c.first, "\(c.name)")
             #expect(text.hasPrefix(IntentText.status(working: 0, waiting: c.visible.count, first: nil)), "\(c.name)")
@@ -301,7 +301,7 @@ struct IntentsTests {
         let cards = [waitingCard("m", session: "muted", created: 1, kind: .plan), waitingCard("p", session: "plain", created: 2)]
         #expect(IntentPicker.pending(cards)?.id == "m")
         #expect(ApproveFirstIntent.target(cards, sessions: sessions, mutes: mutes)?.id == "p")
-        #expect(JarvisStatusIntent.text(sessions: sessions, interactions: cards, mutes: mutes).contains("card p"))
+        #expect(PersonaStatusIntent.text(sessions: sessions, interactions: cards, mutes: mutes).contains("card p"))
     }
 
     // MARK: Approve

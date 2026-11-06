@@ -596,7 +596,7 @@ struct PlanForm: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             ScrollView {
                 Markdown(MarkdownMemo.content(interaction.plan ?? ""))
-                    .markdownTheme(.jarvis)
+                    .markdownTheme(.persona)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scaledFrame(maxHeight: Theme.Size.box200)
@@ -634,7 +634,7 @@ struct PlanForm: View {
         .sheet(isPresented: $showFull) {
             NavigationStack {
                 ScrollView {
-                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.jarvis).padding()
+                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.persona).padding()
                 }
                 .navigationTitle(PlanText.title(interaction.plan ?? ""))
                 .navigationBarTitleDisplayMode(.inline)
@@ -1338,7 +1338,7 @@ struct BUIPlanForm: View {
         } context: { _ in
             ScrollView {
                 Markdown(MarkdownMemo.content(interaction.plan ?? ""))
-                    .markdownTheme(.jarvis)
+                    .markdownTheme(.persona)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scaledFrame(maxHeight: Theme.Size.box200)
@@ -1347,7 +1347,7 @@ struct BUIPlanForm: View {
         .sheet(isPresented: $showFull) {
             NavigationStack {
                 ScrollView {
-                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.jarvis).padding()
+                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.persona).padding()
                 }
                 .navigationTitle(PlanText.title(interaction.plan ?? ""))
                 .navigationBarTitleDisplayMode(.inline)

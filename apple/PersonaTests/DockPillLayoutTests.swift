@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The task dock's pills stay inside their own frames (#3010): the dock's horizontal ScrollView offers no width, and a
 /// pill whose cap was a flexible frame outside its capsule took its title's full width, so the capsule spilled over

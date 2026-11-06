@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fail when a built app bundle holds this person's private values: anyone with the TestFlight public link can install it.
 
-    python3 scripts/release/check_bundle_privacy.py <Jarvis.app>     # the watch app and extensions inside are scanned too
-    python3 scripts/release/check_bundle_privacy.py <Mac Jarvis.app> # the Mac app (Contents/…), same rules
-    python3 scripts/release/check_bundle_privacy.py --whole-short <dir>  # published jarvisd builds (scripts/release/publish.sh)
+    python3 scripts/release/check_bundle_privacy.py <Persona.app>     # the watch app and extensions inside are scanned too
+    python3 scripts/release/check_bundle_privacy.py <Mac Persona.app> # the Mac app (Contents/…), same rules
+    python3 scripts/release/check_bundle_privacy.py --whole-short <dir>  # published personad builds (scripts/release/publish.sh)
 
 The values are scripts/privacy_check.py's (config, private-words.txt, CLAUDE.local.md, the home directory), plus private
 IPv4 addresses and emails outside placeholder domains, looked for in every file's printable strings (like `strings`,
@@ -40,7 +40,7 @@ from urllib.parse import urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import jarvis_config  # noqa: E402
+import persona_config  # noqa: E402
 import privacy_check as pc  # noqa: E402
 
 SKIP = {"embedded.mobileprovision", "embedded.provisionprofile", "CodeResources"}
@@ -301,7 +301,7 @@ def texts(path: str, data=None):
 
 def remove_public_relay_url(text, configured_url, path="/relay"):
     """The app intentionally ships this exact public HTTPS endpoint, not its entire host or other URLs. path: the one
-    path the endpoint may have (/relay for the push relay, /dl for the hub's update URL in a published jarvisd)."""
+    path the endpoint may have (/relay for the push relay, /dl for the hub's update URL in a published personad)."""
     if not isinstance(configured_url, str):
         return text
     url = configured_url.rstrip("/")
@@ -324,7 +324,7 @@ def remove_public_relay_url(text, configured_url, path="/relay"):
 
 
 def public_download_url(cfg):
-    site = jarvis_config.get(cfg, "publish.site_url", "")
+    site = persona_config.get(cfg, "publish.site_url", "")
     return site.rstrip("/") + "/dl" if isinstance(site, str) and site else ""
 
 
@@ -336,8 +336,8 @@ def main():
         sys.exit(__doc__)
     root = args[0]
     modules = pc.module_paths()
-    cfg = jarvis_config.load()
-    inherent = [v for v in (jarvis_config.get(cfg, "app.bundle_id", ""), jarvis_config.get(cfg, "app.team_id", "")) if v]
+    cfg = persona_config.load()
+    inherent = [v for v in (persona_config.get(cfg, "app.bundle_id", ""), persona_config.get(cfg, "app.team_id", "")) if v]
     words, _ = pc.terms()
     words = [w for w in words if w not in inherent]
     bad = []
@@ -355,8 +355,8 @@ def main():
             for t in texts(path, data):
                 original_text = t
                 if not whole_short:
-                    t = remove_public_relay_url(t, jarvis_config.get(cfg, "app.push_relay", ""))
-                else:  # the update URL every published jarvisd carries (-X main.updateURL, scripts/release/publish.sh)
+                    t = remove_public_relay_url(t, persona_config.get(cfg, "app.push_relay", ""))
+                else:  # the update URL every published personad carries (-X main.updateURL, scripts/release/publish.sh)
                     t = remove_public_relay_url(t, public_download_url(cfg), "/dl")
                 for v in inherent:
                     t = t.replace(v, "")

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A message sent from the phone shows as a pending bubble until its copy in the transcript arrives (ChatStore.merge).
 @MainActor
@@ -103,7 +103,7 @@ struct PendingArrivalTests {
         let rewritten = PendingMessage(text: "/agent 看看这个群在聊什么", images: [])
         let compact = PendingMessage(text: "/compact", images: [])
         s.pending = [rewritten, compact]
-        s.merge([tagged(4, "<jarvis-context>…</jarvis-context>\n看看这个群在聊什么", rewritten.id)])
+        s.merge([tagged(4, "<persona-context>…</persona-context>\n看看这个群在聊什么", rewritten.id)])
         #expect(s.pending.map(\.id) == [compact.id])
         s.merge([tagged(5, "压缩上下文", compact.id, role: "system", kind: .notice)])
         #expect(s.pending.isEmpty)

@@ -10,7 +10,7 @@ import (
 // A card's conversation title made by clipping a first message inside its injected tag (an older node's).
 func TestCleanTitleDropsInjectedTags(t *testing.T) {
 	for title, want := range map[string]string{
-		`<jarvis-context kind="context" title="接上…`:                  "demo",
+		`<persona-context kind="context" title="接上…`:                 "demo",
 		`<persona-context kind="context" title="接上旧主对话">` + "\n摘要被截": "接上旧主对话",
 		"修一下登录": "修一下登录",
 		"":      "",
@@ -30,15 +30,15 @@ func TestCleanPromptTitle(t *testing.T) {
 	}{
 		{
 			name: "with context and task",
-			prompt: `<jarvis-context kind="context" title="待办 · 天气" url="">说明内容
-多行说明</jarvis-context>
+			prompt: `<persona-context kind="context" title="待办 · 天气" url="">说明内容
+多行说明</persona-context>
 把 1.3 的发布说明整理出来
 第二行要求`,
 			expected: "把 1.3 的发布说明整理出来",
 		},
 		{
 			name: "only context",
-			prompt: `<jarvis-context kind="context" title="待办" url="">只有说明</jarvis-context>
+			prompt: `<persona-context kind="context" title="待办" url="">只有说明</persona-context>
 `,
 			expected: "",
 		},
@@ -72,7 +72,7 @@ func TestCleanPromptTitle(t *testing.T) {
 			if got != tc.expected {
 				t.Fatalf("expected %q, got %q", tc.expected, got)
 			}
-			if strings.Contains(got, "<jarvis-context") || strings.Contains(got, "<persona-context") {
+			if strings.Contains(got, "<persona-context") {
 				t.Fatalf("result must never contain a context tag, got %q", got)
 			}
 		})

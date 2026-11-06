@@ -245,7 +245,7 @@ func TestToolSummary(t *testing.T) {
 		{"NotebookEdit", `{"notebook_path":"/tmp/n.ipynb"}`, "/tmp/n.ipynb"},
 		{"WebFetch", `{"url":"https://example.com","prompt":"hi"}`, "https://example.com"},
 		{"WebSearch", `{"query":"golang io.Pipe"}`, "golang io.Pipe"},
-		{"mcp__jarvis__mail_send", `{"description":"send mail"}`, "send mail"},
+		{"mcp__persona__mail_send", `{"description":"send mail"}`, "send mail"},
 		{"SomeTool", `{"description":"","path":"/p"}`, "/p"},
 		{"SomeTool", `{"other":"value"}`, "other: value"},
 		{"Bash", ``, ""},
@@ -270,13 +270,13 @@ func TestToolSummaryTruncatesLongInput(t *testing.T) {
 
 func TestShellQuote(t *testing.T) {
 	cases := map[string]string{
-		"/usr/local/bin/jarvisd": "/usr/local/bin/jarvisd",
-		"":                       "''",
-		"with space":             "'with space'",
-		"it's":                   `'it'\''s'`,
-		"$HOME":                  "'$HOME'",
-		"a;b":                    "'a;b'",
-		"a-b_c.d/e":              "a-b_c.d/e",
+		"/usr/local/bin/personad": "/usr/local/bin/personad",
+		"":                        "''",
+		"with space":              "'with space'",
+		"it's":                    `'it'\''s'`,
+		"$HOME":                   "'$HOME'",
+		"a;b":                     "'a;b'",
+		"a-b_c.d/e":               "a-b_c.d/e",
 	}
 	for in, want := range cases {
 		if got := shellQuote(in); got != want {

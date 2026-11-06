@@ -90,7 +90,7 @@ func (l *connTracker) drop() {
 }
 
 // The hub without TLS of its own behind a reverse proxy at /prefix (TLS with a test CA, the prefix stripped,
-// WebSockets passed on, the proxy on another machine of the LAN): jarvis-link pairs with a link without fp, connects,
+// WebSockets passed on, the proxy on another machine of the LAN): persona-link pairs with a link without fp, connects,
 // the hub reaches the resident node through it, and after the proxy drops every connection the link comes back.
 func TestLinkThroughAReverseProxy(t *testing.T) {
 	h, m, _ := newLinkHub(t) // the manager keeps using the hub's TLS test server

@@ -33,7 +33,7 @@ interface MachineManagement {
     /** `POST /api/v1/machines/{id}/reconnect`: the hub drops and redials the node; the result shows in `machines`. */
     suspend fun reconnect(machineId: String)
 
-    /** `POST /api/v1/machines/{id}/deploy`: the hub installs its own jarvisd there; progress comes with `machines`. */
+    /** `POST /api/v1/machines/{id}/deploy`: the hub installs its own personad there; progress comes with `machines`. */
     suspend fun deploy(machineId: String)
 
     /** `GET /api/v1/machines/{id}/herdr`: whether the node knows classic herdr is running. */

@@ -402,7 +402,7 @@ export function normalizePrefs(x: Partial<AgentPrefs> | null | undefined): Agent
 
 // Hub-backed (GET/PUT /agents/prefs) so web and iOS share pins; mirrored to localStorage, which is also the
 // fallback when the hub predates the endpoint.
-const PREFS_LS = "jarvis.agents.prefs";
+const PREFS_LS = "persona.agents.prefs";
 const readLocal = (): AgentPrefs => {
   try {
     return normalizePrefs(JSON.parse(localStorage.getItem(PREFS_LS) ?? "null"));

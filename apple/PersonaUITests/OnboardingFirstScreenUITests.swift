@@ -1,10 +1,10 @@
 import XCTest
 
 /// The first screen without commands and the checklist after pairing (#4195, docs/onboarding.md 4.5). The checklist
-/// tests run against scripts/mock/mock_hub.py with MOCK_READINESS=<scenario> (JARVIS_MOCK_HUB; JARVIS_READINESS names
-/// it for the screenshots). JARVIS_SHOTS=<dir> writes the screenshots (JARVIS_SHOTS_APPEARANCE in their names).
+/// tests run against scripts/mock/mock_hub.py with MOCK_READINESS=<scenario> (PERSONA_MOCK_HUB; PERSONA_READINESS names
+/// it for the screenshots). PERSONA_SHOTS=<dir> writes the screenshots (PERSONA_SHOTS_APPEARANCE in their names).
 final class OnboardingFirstScreenUITests: XCTestCase {
-    private var scenario: String { ProcessInfo.processInfo.environment["JARVIS_READINESS"] ?? "scenario" }
+    private var scenario: String { ProcessInfo.processInfo.environment["PERSONA_READINESS"] ?? "scenario" }
 
     /// The notification question and the icon's are SpringBoard's (as AddComputerTests).
     private func dismissSystemAlerts(wait: TimeInterval = 1) {
@@ -25,8 +25,8 @@ final class OnboardingFirstScreenUITests: XCTestCase {
         a.name = "\(name) \(UITestStyle.name)"
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let look = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let look = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"] ?? "light"
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name)-\(look).png"))
         }
     }
@@ -49,8 +49,8 @@ final class OnboardingFirstScreenUITests: XCTestCase {
         sleep(1)
         shot(app, "welcome-other")
 
-        // A code that is not good any more: the hub answers 401 invalid_token (JARVIS_MOCK_HUB runs MOCK_PAIR_TOKEN).
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { return }
+        // A code that is not good any more: the hub answers 401 invalid_token (PERSONA_MOCK_HUB runs MOCK_PAIR_TOKEN).
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { return }
         address.tap()
         address.typeText(hub)
         let code = app.secureTextFields.firstMatch.exists ? app.secureTextFields.firstMatch : app.textFields["pair.token"]
@@ -66,7 +66,7 @@ final class OnboardingFirstScreenUITests: XCTestCase {
 
     /// Just paired with a hub in MOCK_READINESS=<scenario>: the checklist comes up in place of the app.
     @MainActor func testTheChecklistAfterPairing() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs JARVIS_MOCK_HUB") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs PERSONA_MOCK_HUB") }
         let app = XCUIApplication()
         let link = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-openWelcome", "YES", "-openPairLink", link]

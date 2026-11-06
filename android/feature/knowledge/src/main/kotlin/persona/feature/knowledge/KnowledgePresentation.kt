@@ -371,9 +371,8 @@ internal fun knowledgeContext(detail: KnowledgeDetail, kindName: String): String
         }
         append("\n\n知识库目录：").append(detail.path) // i18n-ignore: context for the model
     }.let(::contextBody)
-        .replace("<jarvis-context", "&lt;jarvis-context")
         .replace("<persona-context", "&lt;persona-context")
-    return "<jarvis-context kind=\"context\" title=\"${attribute(title)}\" url=\"\">\n$text\n</jarvis-context>"
+    return "<persona-context kind=\"context\" title=\"${attribute(title)}\" url=\"\">\n$text\n</persona-context>"
 }
 
 /** What "Start agent" hands the new-Agent page: where to start (a project's first code directory) and the first message. */

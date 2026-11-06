@@ -118,14 +118,14 @@ class ModelsTest {
     }
 
     @Test fun personaOwnMcpServerShowsAsPersona() {
-        assertEquals("Persona · agent read", toolDisplayName("mcp__jarvis__agent_read"))
-        assertEquals("Persona · agent send", toolDisplayName("mcp__plugin_jarvis__agent_send"))
-        assertEquals("Persona", toolDisplayName("mcp__jarvis"))
+        assertEquals("Persona · agent read", toolDisplayName("mcp__persona__agent_read"))
+        assertEquals("Persona · agent send", toolDisplayName("mcp__plugin_persona__agent_send"))
+        assertEquals("Persona", toolDisplayName("mcp__persona"))
         assertEquals("github · create issue", toolDisplayName("mcp__github__create_issue"))
-        assertEquals("jarvis_extra · x", toolDisplayName("mcp__jarvis_extra__x"))
+        assertEquals("persona_extra · x", toolDisplayName("mcp__persona_extra__x"))
         assertEquals("Bash", toolDisplayName("Bash"))
         assertEquals(null, toolDisplayName(null))
-        assertEquals("Persona", mcpServerLabel("jarvis"))
+        assertEquals("Persona", mcpServerLabel("persona"))
         assertEquals("example-service", mcpServerLabel("example-service"))
     }
 
@@ -133,7 +133,7 @@ class ModelsTest {
     @Test fun interactionHeadlineNamesMcpTools() {
         val ix = Interaction("p", kind = "permission", toolName = "mcp__github__create_issue", summary = "Fix login")
         assertEquals("请求使用 github · create issue：Fix login", (ix.headline).zhAny())
-        assertEquals("请求使用 Persona · mail send", (ix.copy(toolName = "mcp__jarvis__mail_send", summary = null).headline).zhAny())
+        assertEquals("请求使用 Persona · mail send", (ix.copy(toolName = "mcp__persona__mail_send", summary = null).headline).zhAny())
         assertEquals("Codex 请求使用 github · create issue", (ix.copy(agent = "codex", summary = null).headline).zhAny())
     }
 }

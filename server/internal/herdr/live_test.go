@@ -71,7 +71,7 @@ func TestLiveSubscribe(t *testing.T) {
 	if err != nil || len(ws) == 0 {
 		t.Fatal(err)
 	}
-	created, err := c.TabCreate(ctx, ws[0].ID, "/tmp", "jarvis-live-test")
+	created, err := c.TabCreate(ctx, ws[0].ID, "/tmp", "persona-live-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,12 +122,12 @@ func TestLiveObserve(t *testing.T) {
 }
 
 // The wheel through a control session, against a pane whose program pins a row on top (Codex: the prompt of the turn;
-// a wheel over it does nothing): JARVIS_LIVE_WHEEL_PANE=<pane> go test -tags herdrlive -run TestLiveControlWheel.
+// a wheel over it does nothing): PERSONA_LIVE_WHEEL_PANE=<pane> go test -tags herdrlive -run TestLiveControlWheel.
 // The pane needs output above its screen. As the node sends it for an app that names no cell: the middle of the screen.
 func TestLiveControlWheel(t *testing.T) {
-	pane := os.Getenv("JARVIS_LIVE_WHEEL_PANE")
+	pane := os.Getenv("PERSONA_LIVE_WHEEL_PANE")
 	if pane == "" {
-		t.Skip("JARVIS_LIVE_WHEEL_PANE not set")
+		t.Skip("PERSONA_LIVE_WHEEL_PANE not set")
 	}
 	ctx := context.Background()
 	c := New()
@@ -227,12 +227,12 @@ func TestLiveMenuActions(t *testing.T) {
 }
 
 // The mouse through a control session, against a pane running vim with the mouse on (`:set mouse=a ruler`) on a file of
-// numbered lines, scrolled to the top: JARVIS_LIVE_MOUSE_PANE=<pane> go test -tags herdrlive -run TestLiveControlMouse.
+// numbered lines, scrolled to the top: PERSONA_LIVE_MOUSE_PANE=<pane> go test -tags herdrlive -run TestLiveControlMouse.
 // A click moves vim's cursor to the cell (its ruler says line,column), a drag across a row starts a visual selection.
 func TestLiveControlMouse(t *testing.T) {
-	pane := os.Getenv("JARVIS_LIVE_MOUSE_PANE")
+	pane := os.Getenv("PERSONA_LIVE_MOUSE_PANE")
 	if pane == "" {
-		t.Skip("JARVIS_LIVE_MOUSE_PANE not set")
+		t.Skip("PERSONA_LIVE_MOUSE_PANE not set")
 	}
 	ctx := context.Background()
 	c := New()

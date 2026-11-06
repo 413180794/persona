@@ -104,7 +104,7 @@ func authPackage(t *testing.T, archive []byte) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "auth"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=auth exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "auth"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=auth exec "+self+" \"$@\"\n"), 0o755)
 	sum := sha256.Sum256(archive)
 	platform := runtime.GOOS + "-" + runtime.GOARCH
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-auth", "name": "Example Auth", "version": "1.0.0",

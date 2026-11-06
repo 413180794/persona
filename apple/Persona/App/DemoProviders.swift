@@ -21,7 +21,7 @@ final class DemoProviders {
 
     func reset() {
         managed = ["demo_gateway": [
-            "name": "demo_gateway", "source": "jarvis", "kind": "launcher", "api": "messages", "base_url": "https://gateway.example.com",
+            "name": "demo_gateway", "source": "persona", "kind": "launcher", "api": "messages", "base_url": "https://gateway.example.com",
             "model": "glm-5", "has_key": true, "auth": "bearer", "has_headers": true,
             "models": [Self.catalog[3], Self.catalog[4]]
         ]]
@@ -72,7 +72,7 @@ final class DemoProviders {
             let names = body["providers"]?.array?.compactMap(\.string) ?? []
             var created: [JSONValue] = []
             for n in names where managed[n] == nil {
-                managed[n] = ["name": .string(n), "source": "jarvis", "kind": "launcher", "base_url": "https://gateway.example.com",
+                managed[n] = ["name": .string(n), "source": "persona", "kind": "launcher", "base_url": "https://gateway.example.com",
                               "model": "glm-5", "has_key": true, "origin": .string("zshrc:\(n)@\(body["machine"]?.string ?? "")"),
                               "models": [Self.catalog[3]]]
                 order.append(n)
@@ -87,7 +87,7 @@ final class DemoProviders {
             // Like the hub: the key and the headers are kept, never sent back.
             let key = l.removeValue(forKey: "api_key")?.string
             let headers = l.removeValue(forKey: "headers")
-            l["source"] = "jarvis"
+            l["source"] = "persona"
             l["has_key"] = .bool(key?.isEmpty == false || old["has_key"]?.bool == true)
             switch headers {
             case .some(.string(let h)): l["has_headers"] = .bool(!h.isEmpty)

@@ -179,7 +179,7 @@
     <string name="settings_hub_update_warning_bad">这一版上次装完起不来，已经回滚过；自动更新不会再装它。</string>
     <string name="settings_hub_update_warning_held">自动更新不会装这一版：%1$s。确认没问题可以手动更新。</string>
     <string name="settings_hub_update_docker_plain">Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行</string>
-    <string name="settings_hub_update_docker_env">在 hub 所在的机器上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成：</string>
+    <string name="settings_hub_update_docker_env">在 hub 所在的机器上，把 compose 文件旁边 .env 里的 PERSONA_IMAGE 改成：</string>
     <string name="settings_hub_update_docker_then">再在那个目录里运行：</string>
     <string name="settings_hub_update_docker_run">在 hub 所在的机器上，compose 文件所在的目录里运行：</string>
     <string name="settings_hub_update_docker_new_image">新镜像 %1$s</string>

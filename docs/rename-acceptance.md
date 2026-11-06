@@ -8,9 +8,9 @@ As of 2026-11-03, the local migration implementation, the compatibility gap fixe
 
 ## Compatibility boundaries in place
 
-- The product shows as Persona; on the server `personad` is recommended, and the old `jarvisd` entry point and artifacts keep working.
+- The product shows as Persona; on the server `personad` is recommended, and the old `personad` entry point and artifacts keep working.
 - The new default runtime root and build config directory are `~/.persona` and `~/.config/persona`; old directories stay compatible through existing data and missing-alias handling. Two independent directories are never merged or overwritten; a custom root doesn't change the global default alias.
-- `PERSONA_*` definitions take precedence, including empty values; old `JARVIS_*` are still supported. Switching config recomputes the derived exports and doesn't carry over the previous environment's addresses or bundle settings.
+- `PERSONA_*` definitions take precedence, including empty values; old `PERSONA_*` are still supported. Switching config recomputes the derived exports and doesn't carry over the previous environment's addresses or bundle settings.
 - Custom roots in Go, the SDK and scripts are normalized lexically; the default socket can use the short old path of the same store. Service recovery distinguishes hub / node / link, and supports old units without HOME, environment resets, user drop-ins, XDG paths, and a HOME field in the environment file.
 - Native, web / hub / connector inputs accept both the new and old schemes; generated links keep the old format so clients that haven't upgraded still work.
 - Bundle, module, Intent / Control / Live Activity, serialization, cache, protocol, database, service, and runtime update identities are kept. Names of existing users or external resources are not product copy and must not be changed blindly.

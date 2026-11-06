@@ -207,7 +207,7 @@ export function openTarget(target: string): OpenTarget | undefined {
     }
     return u.username || u.password || !u.hostname ? undefined : { kind: "web", url: u.href };
   }
-  if (scheme !== "persona" && scheme !== "jarvis") return undefined;
+  if (scheme !== "persona" && scheme !== "persona") return undefined;
   const m = /^[a-z]+:\/\/([^/?#]*)(\/[^?#]*)?$/i.exec(target);
   if (!m || /[@:]/.test(m[1])) return undefined;
   const host = m[1].toLowerCase();

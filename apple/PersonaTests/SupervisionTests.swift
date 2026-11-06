@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Supervised tasks (#3124, docs/unified-entry.md ("Supervision")) and their agents' reports (#5112): `supervision` decodes
 /// leniently, the chip, the checklist and the lines say what the web says (web/src/lib/supervision.test.ts). Tests run

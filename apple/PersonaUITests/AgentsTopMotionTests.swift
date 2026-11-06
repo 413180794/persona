@@ -12,7 +12,7 @@ import XCTest
 ///   when the tab comes back (#740); while searching the filters scroll with the results (#1051, #2189); the field
 ///   is found again after a round trip (#314).
 ///
-/// In both layouts (`TEST_RUNNER_JARVIS_LAYOUT`) and styles (`TEST_RUNNER_JARVIS_UI_STYLE`).
+/// In both layouts (`TEST_RUNNER_PERSONA_LAYOUT`) and styles (`TEST_RUNNER_PERSONA_UI_STYLE`).
 final class AgentsTopMotionTests: XCTestCase {
     /// The most a block may move in one frame (60 Hz) outside a drag: a 0.25 s move of 88 pt peaks at ~16, a dropped
     /// frame on a busy machine doubles it; the spring back was 138.

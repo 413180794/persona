@@ -1,8 +1,8 @@
 // End-to-end check of the DSH plugin's self-update (docs/dsh.md "Auto-update", docs/runtimes.md "Auto-update"): a real
-// `dsh web` with the plugin's loader (index.js) and a real `jarvisd node --stdio` whose packages come from a directory
-// (JARVIS_RUNTIME_PACKAGES), so it can carry another version of the plugin than DSH runs without another build.
+// `dsh web` with the plugin's loader (index.js) and a real `personad node --stdio` whose packages come from a directory
+// (PERSONA_RUNTIME_PACKAGES), so it can carry another version of the plugin than DSH runs without another build.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/dsh/e2e/update.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/dsh/e2e/update.mjs
 //
 // 1. The node carries what the plugin ships: nothing is offered, the shipped version runs from the store.
 // 2. The node is replaced by one carrying a newer plugin (a hub update does this): the plugin is offered it, fetches
@@ -21,12 +21,12 @@ import { PACKAGES, packageHash, readShipped } from '../../runtime-sdk/lib/packag
 const here = dirname(fileURLToPath(import.meta.url))
 const integrations = join(here, '..', '..')
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout) and PERSONAD (a personad binary)')
   process.exit(2)
 }
-const NAME = 'jarvis-dsh-runtime'
+const NAME = 'persona-dsh-runtime'
 const keep = process.env.KEEP === '1'
 const root = mkdtempSync(join('/tmp', 'jdsh-upd-'))
 const dshHome = join(root, 'dsh')
@@ -34,7 +34,7 @@ const work = join(root, 'work')
 const home = join(root, 'home')
 const pkgs = join(root, 'packages')
 for (const d of [dshHome, work, home]) mkdirSync(d, { recursive: true })
-const store = join(home, '.jarvis', 'runtime-packages', NAME)
+const store = join(home, '.persona', 'runtime-packages', NAME)
 const { check, summary } = checks()
 let dsh
 let node
@@ -67,16 +67,16 @@ function carry(edit = (_p, t) => t) {
 
 const nodeLog = () => node.log.join('')
 async function startTheNode() {
-  node = await startNode({ jarvisd, keep: true, home, env: { JARVIS_RUNTIME_PACKAGES: pkgs } })
+  node = await startNode({ personad, keep: true, home, env: { PERSONA_RUNTIME_PACKAGES: pkgs } })
 }
 
 const model = await scriptedModel(dshCheckout)
 const patch = join(root, 'patch.yml')
 writeFileSync(patch, `- insert:
-    - id: jarvis-dsh-runtime
+    - id: persona-dsh-runtime
       name: ${join(integrations, 'dsh', 'index.js')}
       config:
-        socket: ${join(home, '.jarvis', 'runtime.sock')}
+        socket: ${join(home, '.persona', 'runtime.sock')}
         interactions: phone
 `)
 const dshLog = []
@@ -109,7 +109,7 @@ try {
   await new Promise((r) => setTimeout(r, 500))
   await startTheNode()
   await until('the plugin running the node\'s version', () => connectedAs(nextVersion).test(nodeLog()), 120_000)
-  check('the new node offers its package and sends it', /offering package jarvis-dsh-runtime/.test(nodeLog()) && /sent package jarvis-dsh-runtime/.test(nodeLog()))
+  check('the new node offers its package and sends it', /offering package persona-dsh-runtime/.test(nodeLog()) && /sent package persona-dsh-runtime/.test(nodeLog()))
   check('the plugin switched without DSH\'s plugin manager, and says the new version', true, nextVersion)
   const current = JSON.parse(readFileSync(join(store, 'current.json'), 'utf8'))
   check('the store says which version runs, and keeps it under its hash', current.hash === next && current.shipped === shipped && existsSync(join(store, next, 'dsh', 'lib', 'dsh.js')))
@@ -136,7 +136,7 @@ try {
 } catch (err) {
   check('run', false, err.message)
   console.log('--- node log ---\n' + node?.log.join('').split('\n').filter((l) => !/herdr/.test(l)).slice(-30).join('\n'))
-  console.log('--- dsh log ---\n' + dshLog.join('').split('\n').filter((l) => /jarvis/i.test(l)).slice(-30).join('\n'))
+  console.log('--- dsh log ---\n' + dshLog.join('').split('\n').filter((l) => /persona/i.test(l)).slice(-30).join('\n'))
 } finally {
   await model.close()
   await cleanup()

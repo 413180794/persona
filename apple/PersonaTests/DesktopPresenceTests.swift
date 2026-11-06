@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// 「Mac 上的 Persona 已登录」(docs/protocol.md「桌面端」): the hub says which desktops are connected; a phone may
 /// choose Phone Muted while one is.
@@ -40,7 +40,7 @@ struct DesktopPresenceTests {
     }
 
     #if os(iOS)
-    /// The iPhone is the phone: it registers its tools (the Mac registers as a desktop, JarvisMacTests).
+    /// The iPhone is the phone: it registers its tools (the Mac registers as a desktop, PersonaMacTests).
     @Test func thePhoneRegistersAsThePhone() {
         let m = AppModel.registration(deviceName: "iPhone", tools: [], simulator: false)
         #expect(m["type"] as? String == "register_phone")

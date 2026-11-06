@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct FleetIntentsTests {
     /// Same rule as the notification buttons: yes needs Face ID, no works locked.

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// View › Text Size ⌘+ ⌘- ⌘0 and Go › Previous / Next Agent ⌘[ ⌘] (docs/mac.md「菜单和快捷键」).
 @MainActor
@@ -52,7 +52,7 @@ struct MacViewCommandsTests {
     private func session(_ id: String, _ state: AgentState, assistant: Bool = false) -> Session {
         try! JSON.decoder.decode(Session.self, from: Data("""
         {"machine_id":"m","session_id":"\(id)","title":"t","cwd":"/w","status":"idle","state":"\(state.rawValue)",
-         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0}
+         "started_by_persona":false,"assistant":\(assistant),"pending_interactions":0}
         """.utf8))
     }
 

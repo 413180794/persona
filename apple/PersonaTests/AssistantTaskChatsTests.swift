@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Which conversations scheduled tasks started (#2838, as the web's #2824): kept on Scheduled Tasks, not in the sidebar's Recent.
 struct AssistantTaskChatsTests {

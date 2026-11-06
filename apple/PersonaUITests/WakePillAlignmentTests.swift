@@ -5,11 +5,11 @@ final class WakePillAlignmentTests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     @MainActor func testCompletionSheetKeepsEventPillsLeading() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_WAKES=1 MOCK_WAKE_ALIGNMENT=1")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN", "-ui.oldLayout", "NO", "-openChatsFresh", "YES"]
         app.launchPinned()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -39,12 +39,12 @@ final class WakePillAlignmentTests: XCTestCase {
         XCTAssertGreaterThan(short.frame.minX, reply.frame.minX)
         XCTAssertLessThan(short.frame.minX - reply.frame.minX, 45)
         let screenshot = app.screenshot()
-        let appearance = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        let appearance = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"] ?? "light"
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = "wake-pills-\(appearance)"
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try screenshot.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "wake-pills-\(appearance).png"))
         }
     }

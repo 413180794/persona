@@ -18,23 +18,23 @@ class RouterTest {
 
     @Test fun allEntrancesResolveToTheSameTabAndPage() {
         val cases = listOf(
-            Triple(RouteInput.DeepLink("jarvis://open?machine=machine&session=assistant"), AppTab.Jarvis, assistant),
-            Triple(RouteInput.DeepLink("jarvis://open?machine=machine&session=agent"), AppTab.Agents, agent),
-            Triple(RouteInput.Notification("machine/assistant"), AppTab.Jarvis, assistant),
+            Triple(RouteInput.DeepLink("persona://open?machine=machine&session=assistant"), AppTab.Persona, assistant),
+            Triple(RouteInput.DeepLink("persona://open?machine=machine&session=agent"), AppTab.Agents, agent),
+            Triple(RouteInput.Notification("machine/assistant"), AppTab.Persona, assistant),
             Triple(RouteInput.Notification("machine/agent"), AppTab.Agents, agent),
-            Triple(RouteInput.Share(assistant.copy(kind = null)), AppTab.Jarvis, assistant),
+            Triple(RouteInput.Share(assistant.copy(kind = null)), AppTab.Persona, assistant),
             Triple(RouteInput.Share(agent), AppTab.Agents, agent),
-            Triple(RouteInput.Internal(assistant), AppTab.Jarvis, assistant),
+            Triple(RouteInput.Internal(assistant), AppTab.Persona, assistant),
             Triple(RouteInput.Internal(agent), AppTab.Agents, agent),
             Triple(RouteInput.Internal(InboxItemRoute("item")), AppTab.Inbox, InboxItemRoute("item")),
-            Triple(RouteInput.DeepLink("jarvis://open?target=inbox&item=item"), AppTab.Inbox, InboxItemRoute("item")),
-            Triple(RouteInput.DeepLink("jarvis://open?target=lark&chat=chat"), AppTab.Inbox, LarkChatRoute("chat")),
+            Triple(RouteInput.DeepLink("persona://open?target=inbox&item=item"), AppTab.Inbox, InboxItemRoute("item")),
+            Triple(RouteInput.DeepLink("persona://open?target=lark&chat=chat"), AppTab.Inbox, LarkChatRoute("chat")),
             Triple(RouteInput.Internal(LarkChatRoute("chat")), AppTab.Inbox, LarkChatRoute("chat")),
-            Triple(RouteInput.Notification("machine/assistant", requestId = "request"), AppTab.Jarvis, InteractionRoute(assistant, "request")),
-            Triple(RouteInput.DeepLink("jarvis://open?target=request&machine=machine&session=agent&request=request"), AppTab.Agents, InteractionRoute(agent, "request")),
+            Triple(RouteInput.Notification("machine/assistant", requestId = "request"), AppTab.Persona, InteractionRoute(assistant, "request")),
+            Triple(RouteInput.DeepLink("persona://open?target=request&machine=machine&session=agent&request=request"), AppTab.Agents, InteractionRoute(agent, "request")),
             Triple(RouteInput.Internal(ConnectionSettingsRoute), AppTab.Settings, SettingsPageRoute(SettingsPage.Diagnostics)),
-            Triple(RouteInput.DeepLink("jarvis://open?target=settings&page=notifications"), AppTab.Settings, SettingsPageRoute(SettingsPage.Notifications)),
-            Triple(RouteInput.DeepLink("jarvis://open?machine=machine&session=a%2Fb%2Bc&kind=assistant"), AppTab.Jarvis,
+            Triple(RouteInput.DeepLink("persona://open?target=settings&page=notifications"), AppTab.Settings, SettingsPageRoute(SettingsPage.Notifications)),
+            Triple(RouteInput.DeepLink("persona://open?machine=machine&session=a%2Fb%2Bc&kind=assistant"), AppTab.Persona,
                 ChatRoute("machine", "a/b+c", ConversationKind.Assistant)),
         )
         cases.forEach { (input, tab, key) -> assertRoute(router.parse(input), tab, key) }
@@ -45,24 +45,24 @@ class RouterTest {
         SettingsPage.entries.forEach { page ->
             assertRoute(router.parse(RouteInput.Internal(SettingsPageRoute(page))), AppTab.Settings, SettingsPageRoute(page))
         }
-        val pairLink = "jarvis://pair?url=https%3A%2F%2Fexample.com&token=example"
+        val pairLink = "persona://pair?url=https%3A%2F%2Fexample.com&token=example"
         val pairing = router.parse(RouteInput.DeepLink(pairLink))
         assertRoute(pairing, AppTab.Settings, PairingRoute)
         assertEquals(pairLink, pairing?.pairingLink)
         assertRoute(router.parseDebug(mapOf("debug.openPairing" to pairLink)), AppTab.Settings, PairingRoute)
         assertRoute(router.parseDebug(mapOf("debug.openPairing" to "true")), AppTab.Settings, PairingRoute)
         assertRoute(router.parseDebug(mapOf("debug.openDiagnostics" to "true")), AppTab.Settings, SettingsPageRoute(SettingsPage.Diagnostics))
-        assertRoute(router.parseDebug(mapOf("debug.openSession" to "machine/assistant")), AppTab.Jarvis, assistant)
+        assertRoute(router.parseDebug(mapOf("debug.openSession" to "machine/assistant")), AppTab.Persona, assistant)
         assertRoute(router.parseDebug(mapOf("debug.openSession" to "machine/agent")), AppTab.Agents, agent)
         assertRoute(router.parseDebug(mapOf("debug.openRequest" to "request", "debug.session" to "machine/agent")),
             AppTab.Agents, InteractionRoute(agent, "request"))
         assertRoute(router.parseDebug(mapOf("debug.openSession" to "machine/unknown", "debug.conversationKind" to "assistant")),
-            AppTab.Jarvis, ChatRoute("machine", "unknown", ConversationKind.Assistant))
+            AppTab.Persona, ChatRoute("machine", "unknown", ConversationKind.Assistant))
         listOf(
-            "https://open?machine=machine&session=agent", "jarvis://open/path?machine=machine&session=agent",
-            "jarvis://open?machine=machine&session=", "jarvis://open?machine=machine&session=agent&session=assistant",
-            "jarvis://open?machine=machine&session=%ZZ", "jarvis://open?machine=machine&session=agent&kind=unknown",
-            "jarvis://open?target=settings&page=unknown", "jarvis://pair.example.com", "jarvis://open#fragment",
+            "https://open?machine=machine&session=agent", "persona://open/path?machine=machine&session=agent",
+            "persona://open?machine=machine&session=", "persona://open?machine=machine&session=agent&session=assistant",
+            "persona://open?machine=machine&session=%ZZ", "persona://open?machine=machine&session=agent&kind=unknown",
+            "persona://open?target=settings&page=unknown", "persona://pair.example.com", "persona://open#fragment",
         ).forEach { assertNull(it, router.parse(RouteInput.DeepLink(it))) }
         assertNull(router.parse(RouteInput.Notification("machine/")))
         assertNull(router.parse(RouteInput.Notification("machine/unknown")))
@@ -70,12 +70,7 @@ class RouterTest {
         assertNull(router.parseDebug(mapOf("debug.openRequest" to "request")))
     }
 
-    @Test fun personaDeepLinksPreserveLegacyRoutesAndTransientCredentials() {
-        for (suffix in listOf("open?machine=machine&session=assistant", "open?machine=machine&session=agent",
-            "open?target=inbox&item=item", "open?target=settings&page=notifications")) {
-            val legacy = router.parse(RouteInput.DeepLink("jarvis://$suffix"))!!
-            assertRoute(router.parse(RouteInput.DeepLink("persona://$suffix")), legacy.tab, legacy.key)
-        }
+    @Test fun personaDeepLinksKeepCredentialsTransient() {
         val pair = "persona://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"
         val route = router.parse(RouteInput.DeepLink(pair))
         assertRoute(route, AppTab.Settings, PairingRoute)
@@ -89,14 +84,14 @@ class RouterTest {
 
     @Test fun askPersonaFocusesTheComposerOfThePersonaTabOnly() {
         val ask = router.parse(RouteInput.DeepLink(AskPersonaLink))
-        assertRoute(ask, AppTab.Jarvis, AssistantRoute)
+        assertRoute(ask, AppTab.Persona, AssistantRoute)
         assertTrue(ask!!.focusComposer)
-        assertFalse(router.parse(RouteInput.DeepLink("jarvis://open?target=tab&tab=jarvis"))!!.focusComposer)
+        assertFalse(router.parse(RouteInput.DeepLink("persona://open?target=tab&tab=persona"))!!.focusComposer)
         // Elsewhere, or with another value, the parameter is ignored rather than refusing the link.
-        val agents = router.parse(RouteInput.DeepLink("jarvis://open?target=tab&tab=agents&focus=composer"))
+        val agents = router.parse(RouteInput.DeepLink("persona://open?target=tab&tab=agents&focus=composer"))
         assertRoute(agents, AppTab.Agents, AgentsRoute)
         assertFalse(agents!!.focusComposer)
-        assertFalse(router.parse(RouteInput.DeepLink("jarvis://open?target=tab&tab=jarvis&focus=search"))!!.focusComposer)
+        assertFalse(router.parse(RouteInput.DeepLink("persona://open?target=tab&tab=persona&focus=search"))!!.focusComposer)
         assertNull(router.parse(RouteInput.DeepLink("$AskPersonaLink&focus=composer")))
         val newTodo = router.parse(RouteInput.DeepLink(NewTodoLink))
         assertEquals(AppTab.Agents, newTodo!!.tab)
@@ -114,12 +109,12 @@ class RouterTest {
         stacks.getValue(AppTab.Agents).add(old)
         router.parse(RouteInput.Internal(fromInbox))!!.restore(stacks)
         assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
-        stacks.getValue(AppTab.Jarvis).add(ChatRoute("machine", "other", ConversationKind.Assistant))
+        stacks.getValue(AppTab.Persona).add(ChatRoute("machine", "other", ConversationKind.Assistant))
         sources.forEach { source ->
             val route = router.parse(RouteInput.Internal(assistant.copy(source = source)))!!
-            assertEquals(AppTab.Jarvis, route.restore(stacks))
+            assertEquals(AppTab.Persona, route.restore(stacks))
             route.restore(stacks)
-            assertEquals(listOf(AssistantRoute, fromInbox), stacks.getValue(AppTab.Jarvis))
+            assertEquals(listOf(AssistantRoute, fromInbox), stacks.getValue(AppTab.Persona))
         }
         listOf<NavKey>(InboxItemRoute("item"), LarkChatRoute("chat"), InteractionRoute(agent, "request"),
             SettingsPageRoute(SettingsPage.Diagnostics), PairingRoute).forEach { key ->

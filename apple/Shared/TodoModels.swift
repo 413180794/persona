@@ -313,7 +313,7 @@ nonisolated enum TodosLogic {
 
     /// An agent opened by hand in herdr: not started by Persona (nor spawned through it).
     static func isManualHerdr(_ s: Session) -> Bool {
-        s.spaceKind == "herdr" && !s.startedByJarvis
+        s.spaceKind == "herdr" && !s.startedByPersona
     }
 
     private static func byDate(_ a: Session, _ b: Session) -> Bool {
@@ -420,7 +420,7 @@ nonisolated enum TodosLogic {
 
     /**
      * Format of the context attached when a todo is handed to an Agent (the same as the inbox's)
-     * `<jarvis-context kind="context" title="…" url="">notes</jarvis-context>`, the title 「待办 · <title>」
+     * `<persona-context kind="context" title="…" url="">notes</persona-context>`, the title 「待办 · <title>」
      */
     public static func formatTodoContext(title: String, notes: String?) -> String {
         let t = title
@@ -429,7 +429,7 @@ nonisolated enum TodosLogic {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
         let body = ContextText.inBlock((notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
-        return "<jarvis-context kind=\"context\" title=\"待办 · \(t)\" url=\"\">\(body)</jarvis-context>" // i18n-ignore: context sent to the agent
+        return "<persona-context kind=\"context\" title=\"待办 · \(t)\" url=\"\">\(body)</persona-context>" // i18n-ignore: context sent to the agent
     }
 }
 

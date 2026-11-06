@@ -45,8 +45,8 @@ class Page:
         self.patches = []
         self.page.on("request", lambda r: r.method == "PATCH" and "/model-config/purposes/assistant" in r.url and self.patches.append(r.post_data_json))
         self.page.goto(base + "/overview?token=" + token)
-        self.page.wait_for_function("localStorage.getItem('jarvis.token')")
-        self.page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+        self.page.wait_for_function("localStorage.getItem('persona.token')")
+        self.page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
         self.page.locator("aside").first.wait_for(state="attached")
 
     def go(self, path):
@@ -112,7 +112,7 @@ def new_agent(p):
 
 
 def conversation(p):
-    p.go(f"/j/{MAIN}")
+    p.go(f"/persona/{MAIN}")
     note = p.page.get_by_role("status").filter(has_text=FALLBACK)
     expect(note).to_be_visible()
     ok(f"{p.tag}: the main conversation says 「{FALLBACK}」 above the composer")

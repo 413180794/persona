@@ -50,7 +50,7 @@ func TestAgentStartAdoptsTheSessionThatStartedLate(t *testing.T) {
 	f.slowStart = true
 	f.onStart = func(f *fakeHub, a map[string]any) { // the node adds the session (with its launcher) while handling the late start
 		f.sessions["box"] = []proto.Session{{SessionID: "s9", MachineID: "box", Cwd: "/code/app", Agent: "claude",
-			Launcher: a["launcher"].(string), StartedByJarvis: true, Status: proto.StatusWorking,
+			Launcher: a["launcher"].(string), StartedByPersona: true, Status: proto.StatusWorking,
 			State: proto.StateWorking, UpdatedAt: time.Now().UTC()}}
 	}
 	res, err := s.runTool(context.Background(), "server", "conv1", "agent_start",
@@ -127,7 +127,7 @@ func TestAdoptStartedSessionFilters(t *testing.T) {
 	now := time.Now().UTC()
 	mk := func(id string, fn func(*proto.Session)) proto.Session {
 		sess := proto.Session{SessionID: id, MachineID: "box", Agent: "claude", Launcher: "claude-code",
-			Cwd: "/code/app", StartedByJarvis: true, UpdatedAt: now}
+			Cwd: "/code/app", StartedByPersona: true, UpdatedAt: now}
 		fn(&sess)
 		return sess
 	}
@@ -149,7 +149,7 @@ func TestAdoptStartedSessionFilters(t *testing.T) {
 		name string
 		fn   func(*proto.Session)
 	}{
-		{"not hub-started", func(s *proto.Session) { s.StartedByJarvis = false }},
+		{"not hub-started", func(s *proto.Session) { s.StartedByPersona = false }},
 		{"the assistant itself", func(s *proto.Session) { s.Assistant = true }},
 		{"other launcher", func(s *proto.Session) { s.Launcher = "codex" }},
 		{"other directory", func(s *proto.Session) { s.Cwd = "/elsewhere" }},

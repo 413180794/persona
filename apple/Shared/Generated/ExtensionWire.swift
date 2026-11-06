@@ -957,9 +957,9 @@ nonisolated struct ExtensionThemeItem: Codable, Hashable, Sendable {
 /// A look every app draws itself: Mochi (the default), Visor, Circuit.
 nonisolated enum ExtensionBuiltinLook {
     static let persona = "persona"
-    static let jarvis = "jarvis"
-    static let jarvisCircuit = "jarvis-circuit"
-    static let all = ["persona", "jarvis", "jarvis-circuit"]
+    static let personaVisor = "persona-visor"
+    static let personaCircuit = "persona-circuit"
+    static let all = ["persona", "persona-visor", "persona-circuit"]
 }
 
 /// A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
@@ -1672,12 +1672,12 @@ nonisolated struct ExtensionAssistantItem: Codable, Hashable, Sendable {
 /// as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a
 /// shell or an interpreter.
 nonisolated struct ExtensionMCPServerItem: Codable, Hashable, Sendable {
-    /// The server's name for the assistant; not jarvis or persona.
+    /// The server's name for the assistant; not persona or persona.
     var id: String
     /// Looked up on PATH, then in ~/bin.
     var command: String
-    /// A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
-    /// leave the server out.
+    /// A PERSONA_ variable (PERSONA_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false
+    /// to leave the server out.
     var env: String?
     var args: [String]?
     /// Words `<command> --help` must print; otherwise the server is left out.
@@ -5925,8 +5925,8 @@ nonisolated struct ExtensionAction: Codable, Hashable, Sendable {
     /// Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from
     /// the client.
     var reply: String?
-    /// Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
-    /// app.
+    /// Assistant only: an https URL or a validated persona/persona session, task, kb or file target, opened inside
+    /// the app.
     var open: String?
     /// Assistant only: return one page within the card.
     var pop: Bool?

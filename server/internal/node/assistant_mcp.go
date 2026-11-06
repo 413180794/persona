@@ -39,7 +39,7 @@ type mcpHelpEntry struct {
 }
 
 // assistantMCPBin finds s's command on this machine: its Env variable when set (falling back from PERSONA_ to
-// JARVIS_ via identity.LookupEnv; "" / 0 / off / false leaves the server out), then PATH, then ~/bin. "" when it is
+// PERSONA_ via identity.LookupEnv; "" / 0 / off / false leaves the server out), then PATH, then ~/bin. "" when it is
 // not there, turned off, or lacks what Requires asks for.
 func assistantMCPBin(s proto.AssistantMCPServer) string {
 	if s.Env != "" {
@@ -104,11 +104,11 @@ func mcpHasRequired(p string, requires []string) bool {
 }
 
 // assistantMCPServers are the mcpServers entries of the servers in cfg whose command is on this machine, by id, and
-// what they allow and deny as tool rules (mcp__<id>__<tool>). The jarvis server's own name is never taken.
+// what they allow and deny as tool rules (mcp__<id>__<tool>). The persona server's own name is never taken.
 func assistantMCPServers(cfg []proto.AssistantMCPServer) (servers map[string]any, allow, deny []string) {
 	servers = map[string]any{}
 	for _, s := range cfg {
-		if s.ID == "" || s.ID == "jarvis" || servers[s.ID] != nil {
+		if s.ID == "" || s.ID == "persona" || servers[s.ID] != nil {
 			continue
 		}
 		bin := assistantMCPBin(s)

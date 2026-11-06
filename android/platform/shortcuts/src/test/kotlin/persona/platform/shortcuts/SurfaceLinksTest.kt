@@ -30,7 +30,7 @@ class SurfaceLinksTest {
         assertEquals("second", request(intent))
         // The tab rides along, so a cold start does not wait for session metadata.
         assertEquals("agents", intent?.data?.getQueryParameter("tab"))
-        assertEquals("jarvis", SurfaceLinks.row(context, second) { true }?.data?.getQueryParameter("tab"))
+        assertEquals("persona", SurfaceLinks.row(context, second) { true }?.data?.getQueryParameter("tab"))
     }
 
     @Test fun aWorkingRowOpensTheConversationOnly() {

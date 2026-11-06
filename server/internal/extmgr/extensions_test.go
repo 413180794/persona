@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/voice"
 )
 
-// TestMain doubles as a plugin: re-run with JARVIS_TEST_PLUGIN=1 the test binary serves on JARVIS_PLUGIN_SOCKET.
+// TestMain doubles as a plugin: re-run with PERSONA_TEST_PLUGIN=1 the test binary serves on PERSONA_PLUGIN_SOCKET.
 // Otherwise the tests run on a database of their own (dbtest, #583).
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == sandbox.RunCommand { // a sandbox's first process (extension_sandbox_test.go)
@@ -38,63 +38,63 @@ func TestMain(m *testing.M) {
 		}
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "boxed" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "boxed" {
 		serveBoxedExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "1" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "1" {
 		serveExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "connector" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "connector" {
 		serveConnectorExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "auth" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "auth" {
 		serveAuthExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "settingscheck" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "settingscheck" {
 		serveSettingsCheckExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "errors" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "errors" {
 		serveErrorsExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "relay" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "relay" {
 		serveAuthRelayExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "ui" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "ui" {
 		serveUIExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "system" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "system" {
 		serveSystemExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "inboxui" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "inboxui" {
 		serveInboxUIExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "quota" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "quota" {
 		serveQuotaExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "messaging" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "messaging" {
 		serveMessagingExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "api" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "api" {
 		serveAPIExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "scoped" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "scoped" {
 		serveScopedExtensionForTest()
 		return
 	}
-	if os.Getenv("JARVIS_TEST_PLUGIN") == "agentsrc" {
+	if os.Getenv("PERSONA_TEST_PLUGIN") == "agentsrc" {
 		serveAgentSourceExtensionForTest()
 		return
 	}
@@ -104,7 +104,7 @@ func TestMain(m *testing.M) {
 }
 
 func serveExtensionForTest() {
-	ln, err := net.Listen("unix", os.Getenv("JARVIS_PLUGIN_SOCKET"))
+	ln, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -113,8 +113,8 @@ func serveExtensionForTest() {
 	mux.HandleFunc("GET /echo", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"path": r.URL.Path, "query": r.URL.RawQuery, "auth": r.Header.Get("Authorization"),
-			"hub": os.Getenv("JARVIS_HUB_URL"), "id": os.Getenv("JARVIS_PLUGIN_ID"), "extra": os.Getenv("EXTRA"),
-			"config": os.Getenv("JARVIS_PLUGIN_CONFIG"),
+			"hub": os.Getenv("PERSONA_HUB_URL"), "id": os.Getenv("PERSONA_PLUGIN_ID"), "extra": os.Getenv("EXTRA"),
+			"config": os.Getenv("PERSONA_PLUGIN_CONFIG"),
 		})
 	})
 	mux.HandleFunc("GET /ws", func(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +146,7 @@ func TestExtensionRelay(t *testing.T) {
 	h := newTestManager(t)
 	h.cfg = &Config{Listen: ":18999", Token: "secret", dir: h.cfg.dir}
 	h.extensions = newExtensions(dir, []ExtensionConfig{
-		{ID: "voice", Kind: "voice", Command: self, Env: map[string]string{"JARVIS_TEST_PLUGIN": "1", "EXTRA": "x"},
+		{ID: "voice", Kind: "voice", Command: self, Env: map[string]string{"PERSONA_TEST_PLUGIN": "1", "EXTRA": "x"},
 			Config: json.RawMessage(`{"providers":[]}`)},
 		{ID: "off", Kind: "voice", Command: self, Disabled: true},
 		{ID: "Bad ID", Command: self},

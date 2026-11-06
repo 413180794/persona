@@ -15,7 +15,7 @@ import persona.core.navigation.*
 @Config(sdk = [35])
 class NotificationCardLinkTest {
     private fun stacks() = mapOf<AppTab, MutableList<NavKey>>(
-        AppTab.Jarvis to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
+        AppTab.Persona to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
         AppTab.Inbox to mutableListOf(InboxRoute), AppTab.Settings to mutableListOf(SettingsRoute),
     )
 
@@ -36,8 +36,8 @@ class NotificationCardLinkTest {
         assertEquals(NotificationRoute(AppTab.Agents), NotificationRoute.card("", "script"))
         assertNull(Router().open(notificationRoute(NotificationRoute(AppTab.Agents).uri())!!)!!.card)
         // A machine without a request, or a card under the Persona tab, is not a card link.
-        assertNull(notificationRoute(Uri.parse("jarvis://open?tab=agents&machine=machine")))
-        assertNull(NotificationRoute.parse(Uri.parse("jarvis://open?tab=jarvis&machine=machine&request=script"))?.card)
+        assertNull(notificationRoute(Uri.parse("persona://open?tab=agents&machine=machine")))
+        assertNull(NotificationRoute.parse(Uri.parse("persona://open?tab=persona&machine=machine&request=script"))?.card)
     }
 
     @Test fun aConversationLinkIsUnchanged() {

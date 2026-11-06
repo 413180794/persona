@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""A fake Jarvis hub serving made-up data, for README / App Store screenshots. Nothing here is real.
+"""A fake Persona hub serving made-up data, for README / App Store screenshots. Nothing here is real.
 
     python3 scripts/mock/mock_hub.py            # listens on 127.0.0.1:18760 (PORT=… to change)
 
-Pair the app with it: -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A18760&token=mock" (any token works).
+Pair the app with it: -pairURL "persona://pair?url=http%3A%2F%2F127.0.0.1%3A18760&token=mock" (any token works).
 It serves machines, agents, conversations, interactions and the inbox, enough for the main screens; requests it
 does not know are logged to stderr as MISSING. Timestamps are relative to when it starts. See docs/testing.md.
 """
@@ -133,7 +133,7 @@ def kept(mid):
 
 def machine_uid(mid):
     # Derived from the machine id alone: two fake hubs that list the same machine id list the same computer.
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, "jarvis-mock-machine:" + mid))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "persona-mock-machine:" + mid))
 
 
 def mesh_machine(m):
@@ -275,7 +275,7 @@ MACHINES = [
      "hostname": "Studio", "os": "darwin", "arch": "arm64", "home": "/Users/me", "herdr_version": "0.9.5",
      "claude_version": "2.1.320", "last_seen": ago()},
 ]
-if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose jarvisd is another build than the hub's
+if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose personad is another build than the hub's
     MACHINES[2]["node_mismatch"] = True
 
 # ---------- workspaces (GET /api/v1/workspaces, docs/workspace-board.md) ----------
@@ -555,7 +555,7 @@ def usage_card(mid):
 
 def sess(mid, sid, title, cwd, status, state, space, sidx, slot, slidx, minutes, last, agent="claude", pending=0, **kw):
     s = {"machine_id": mid, "session_id": sid, "title": title, "cwd": cwd, "status": status, "state": state,
-         "agent": agent, "launcher": "claude", "model": "opus" if agent == "claude" else "gpt-5.5", "started_by_jarvis": True,
+         "agent": agent, "launcher": "claude", "model": "opus" if agent == "claude" else "gpt-5.5", "started_by_persona": True,
          "assistant": False, "space_kind": "herdr", "space_id": f"w{sidx}", "space_name": space, "space_index": sidx,
          "slot_id": f"w{sidx}:t{slidx}", "slot_name": slot, "slot_index": slidx, "pane_id": f"w{sidx}:p{slidx}",
          "tab_id": f"w{sidx}:t{slidx}", "workspace_id": f"w{sidx}", "updated_at": ago(minutes=minutes),
@@ -654,7 +654,7 @@ SESSIONS = [
          "计划写好了，等你批准后开始改。", pending=1, permission_mode="plan", effort="xhigh"),
     sess("server", ORDERS, "排查 /orders 接口变慢", "/home/me/code/shop-api", "working", "working", "shop-api", 1, "perf", 1, 1,
          "慢在订单列表的 N+1 查询，正在改成一次 JOIN 并补索引。", agent="codex",
-         # how Jarvis reaches it (docs/codex.md "Sessions on daemons"); MOCK_CODEX_ROUTE=terminal: the terminal, with why
+         # how Persona reaches it (docs/codex.md "Sessions on daemons"); MOCK_CODEX_ROUTE=terminal: the terminal, with why
          codex_route=os.environ.get("MOCK_CODEX_ROUTE", "app_server"),
          codex_route_note="不在共享的 app-server 上（带 -c 的启动器、在自己进程里跑的会话、没有守护进程的 0.153）"
          if os.environ.get("MOCK_CODEX_ROUTE") == "terminal" else None),
@@ -918,14 +918,14 @@ if os.environ.get("MOCK_ORCA_CHILDREN"):
         _orca("c2073000-0000-4000-8000-000000000004", "续期的文档", "refresh-docs", 4, "done", "unread", 3, "文档写好了。", parent="session-refresh"),
         _orca("c2073000-0000-4000-8000-000000000005", "登录埋点", "login-metrics", 5, "done", "unread", 6, "埋点加好了，等你看。", parent="main"),
     ]
-# MOCK_MANUAL_HERDR=1: two agents opened by hand in herdr (started_by_jarvis false) on no todo: Agents' "By to-do" lists them
+# MOCK_MANUAL_HERDR=1: two agents opened by hand in herdr (started_by_persona false) on no todo: Agents' "By to-do" lists them
 # in "Opened manually" (#2608 web, #2917 iOS / Mac).
 if os.environ.get("MOCK_MANUAL_HERDR"):
     SESSIONS += [
         sess("macbook", "a2917000-0000-4000-8000-000000000001", "试一下新的图表库", "/Users/me/code/sandbox", "working", "working",
-             "sandbox", 6, "charts", 1, 0, "在对比两个图表库的包大小。", started_by_jarvis=False),
+             "sandbox", 6, "charts", 1, 0, "在对比两个图表库的包大小。", started_by_persona=False),
         sess("studio", "a2917000-0000-4000-8000-000000000002", "整理下载文件夹", "/Users/me/Downloads", "done", "idle",
-             "downloads", 7, "tidy", 1, 25, "按类型分好了。", started_by_jarvis=False),
+             "downloads", 7, "tidy", 1, 25, "按类型分好了。", started_by_persona=False),
     ]
 # MOCK_WORK=1: stopped agents the hub triaged (docs/agent-work.md): one done with its conclusion, one waiting for a
 # deploy the hub will wake it after, one cut off by a 503 the hub retries, one waiting for the user's decision on a card;
@@ -1203,9 +1203,9 @@ def machine_online(mid):
 
 
 def assistant_sess(sid, title, minutes, last):
-    return {"machine_id": "server", "session_id": sid, "title": title, "cwd": "/home/me/.jarvis/assistant",
+    return {"machine_id": "server", "session_id": sid, "title": title, "cwd": "/home/me/.persona/assistant",
             "status": "idle", "state": "idle", "agent": "claude", "launcher": "claude", "model": "opus",
-            "started_by_jarvis": True, "assistant": True, "updated_at": ago(minutes=minutes), "last_text": last,
+            "started_by_persona": True, "assistant": True, "updated_at": ago(minutes=minutes), "last_text": last,
             "permission_mode": "default", "effort": "high",
             "pending_interactions": 0, "rev": 1000, "seen_at": ago(minutes=minutes)}
 
@@ -1241,7 +1241,7 @@ if os.environ.get("MOCK_ORIGINS") == "1":
 # The health space (docs/health.md): its conversations run in a directory of their own and carry space "health"; they
 # are listed by GET /api/v1/assistant?space=health only, and its memory is its own (?space=health).
 def health_sess(sid, title, minutes, last):
-    return {**assistant_sess(sid, title, minutes, last), "cwd": "/home/me/.jarvis/health", "space": "health"}
+    return {**assistant_sess(sid, title, minutes, last), "cwd": "/home/me/.persona/health", "space": "health"}
 
 
 ASSISTANT += [
@@ -1253,7 +1253,7 @@ ASSISTANT += [
 # The health space's reports/ (docs/health.md"Health reports"): originals with their records, an original not summarized yet,
 # a record alone (a photo sent in a conversation).
 HEALTH_REPORT_RECORD = "报告日期：2026-10-28\n机构：示例体检中心\n类型：年度体检\n\n| 项目 | 结果 | 单位 | 参考范围 | 异常 |\n| --- | --- | --- | --- | --- |\n| 总胆固醇 | 5.8 | mmol/L | < 5.2 | 偏高 |\n| 低密度脂蛋白 | 3.6 | mmol/L | < 3.4 | 偏高 |\n| 空腹血糖 | 5.1 | mmol/L | 3.9–6.1 | |\n\n结论：血脂略高，建议三个月后复查。\n"
-HEALTH_REPORTS_DIR = "/home/me/.jarvis/health/reports/"
+HEALTH_REPORTS_DIR = "/home/me/.persona/health/reports/"
 HEALTH_REPORTS = [
     {"name": "2026 年度体检-20261106-093000.pdf", "title": "2026 年度体检", "path": HEALTH_REPORTS_DIR + "2026 年度体检-20261106-093000.pdf",
      "record_path": HEALTH_REPORTS_DIR + "2026 年度体检-20261106-093000.md", "size": 2_481_000, "modified_at": ago(days=1)},
@@ -1269,7 +1269,7 @@ HEALTH_MEMORY = [
      "updated_at": ago(days=6)},
 ]
 
-# ---------- the assistant's schedule (Settings › Assistant › Act proactively; Jarvis › Info › Scheduled tasks) ----------
+# ---------- the assistant's schedule (Settings › Assistant › Act proactively; Persona › Info › Scheduled tasks) ----------
 # One list, like the hub's (assistant_schedule.go): every day at a time, every N minutes, or once. GET
 # /api/v1/assistant/tasks serves it whole; the routines (the daily tasks) and follow-ups (the enabled once / interval
 # ones, by their next run) are the hub's two older views of the same list, which the Android app reads and writes.
@@ -1279,7 +1279,7 @@ SCHEDULE_TZ = timezone(timedelta(hours=8))
 WEEKDAYS = [1, 2, 3, 4, 5]
 
 
-# MOCK_ASSISTANT_SIDEBAR=1: the Jarvis sidebar's "Recent" holds more than the 30 it shows before "View all"
+# MOCK_ASSISTANT_SIDEBAR=1: the Persona sidebar's "Recent" holds more than the 30 it shows before "View all"
 # (`AssistantSidebar.recentCount`), and one row in each state it marks at the end: waiting for you (red dot), unread
 # (blue dot), working (spinner).
 if os.environ.get("MOCK_ASSISTANT_SIDEBAR") == "1":
@@ -1360,7 +1360,7 @@ SCHEDULE = [
      "push": "asked"},  # "Notify after a run": only what a run sends (#2396, #2676); the apps mark it on the row
     {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "repeat": "daily", "time": "21:30", "weekdays": WEEKDAYS,
      "enabled": False, "last_run": prev_at("21:30", WEEKDAYS, back=1, late=timedelta(minutes=45)), "last_status": "skipped",
-     "last_error": "Jarvis 停机，错过了时间"},
+     "last_error": "Persona 停机，错过了时间"},
     {"id": "fu_review", "repeat": "once", "at": later(minutes=40), "next_run": later(minutes=40), "title": "会前准备 · 产品评审",
      "prompt": "产品评审前 10 分钟：整理上次纪要和要点。", "enabled": True, "created_by": "assistant", "machine_id": "server",
      "session_id": ASK1, "created_at": ago(hours=1)},
@@ -1411,7 +1411,7 @@ RUNS = sorted([
         prev_at("09:00", WEEKDAYS, late=timedelta(minutes=3)), machine_id="server", session_id=ASK2),
     run("run_patrol_1", "routine", "rt_patrol", "项目巡检", prev_at("22:00", [], back=1), "ok", machine_id="server", session_id=ASK4),
     run("run_evening", "routine", "evening", "晚间回顾", prev_at("21:30", WEEKDAYS, back=1), "skipped",
-        prev_at("21:30", WEEKDAYS, back=1, late=timedelta(minutes=45)), error="Jarvis 停机，错过了时间"),
+        prev_at("21:30", WEEKDAYS, back=1, late=timedelta(minutes=45)), error="Persona 停机，错过了时间"),
     run("run_morning_1", "routine", "morning", "早报", prev_at("09:00", WEEKDAYS, back=1), "ok", machine_id="server", session_id=ASK2),
     run("run_weekly", "routine", "rt_weekly", "周报", prev_at("17:00", [5]), "failed", error="assistant machine is offline"),
     run("run_morning_2", "routine", "morning", "早报", prev_at("09:00", WEEKDAYS, back=2), "ok", machine_id="server", session_id=ASK2),
@@ -1490,7 +1490,7 @@ def assistant_state(space="", archived=False):
     cfg = ASSISTANT_CONFIG
     home = next((m.get("home") for m in MACHINES if m["id"] == cfg["machine_id"]), None)
     notes = cfg["notes"] if cfg["notes"] is not None else ASSISTANT_HUB_NOTES
-    out = {"machine_id": cfg["machine_id"], "launcher": cfg["launcher"], "cwd": home + "/.jarvis/" + (space or "assistant") if home else "",
+    out = {"machine_id": cfg["machine_id"], "launcher": cfg["launcher"], "cwd": home + "/.persona/" + (space or "assistant") if home else "",
            "timezone": cfg["timezone"], "notes_effective": notes.strip(), "main_tasks_quiet": cfg["main_tasks_quiet"],
            "conversations": [s for s in ASSISTANT if s["machine_id"] == cfg["machine_id"] and s.get("space", "") == space
                              and (archived or not s.get("archived"))]}
@@ -1809,7 +1809,7 @@ def is_read_only(h):
     return False
 
 
-# ---------- the knowledge base (Jarvis › Knowledge base, docs/knowledge.md) ----------
+# ---------- the knowledge base (Persona › Knowledge base, docs/knowledge.md) ----------
 KB = {
     "projects": [
         {"kind": "projects", "id": "weather-app", "name": "天气 App", "one_line": "小组件时间线已按小时刷新，等中号布局的降雨条",
@@ -2370,9 +2370,9 @@ ITEMS[RECIPE] = [it("user", "text", 60 * 27, text="菜谱网站加个搜索")] +
 
 ITEMS[ASK1] = (
     [it("user", "text", 4, text="今天有什么需要我处理的？")]
-    + tool("mcp__jarvis__agents_list", {}, "6 个 Agent：2 个需要你，2 个工作中，1 个完成未看", 4)
-    + tool("mcp__jarvis__lark_chats", {"unread": True}, "未读 4，@我 1", 4)
-    + tool("mcp__jarvis__phone_calendar_events", {}, "今天 2 个日程", 4)
+    + tool("mcp__persona__agents_list", {}, "6 个 Agent：2 个需要你，2 个工作中，1 个完成未看", 4)
+    + tool("mcp__persona__lark_chats", {"unread": True}, "未读 4，@我 1", 4)
+    + tool("mcp__persona__phone_calendar_events", {}, "今天 2 个日程", 4)
     + [it("assistant", "text", 3, text="""今天有 **3 件事**需要你：
 
 1. **补齐网络层的单元测试**（MacBook）在等你选测试框架，我建议用 Swift Testing。
@@ -2575,23 +2575,23 @@ if MOCK_TASKS:
         TASK_FEED[ASK1].append(_feed("feed_notice", 0.5, "notice", None, {"text": "电脑和模型接好了，定时任务恢复运行，这次是「早报」"}))
     ITEMS[ASK1] = (
         [it("user", "text", 60 * 26, text="博客迁移到 Astro，在 Mac Studio 上做")]
-        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_0 is on the user's screen as a card.", 60 * 26 - 0.3)
+        + tool("mcp__persona__task_plan", {"tasks": []}, "Plan plan_mock_0 is on the user's screen as a card.", 60 * 26 - 0.3)
         + [it("assistant", "text", 60 * 26 - 0.4, text="好，计划在下面。")]
         + [it("user", "text", 45, text="小组件横屏会崩，帮我修一下；网络层的单元测试也补一下")]
-        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_1 is on the user's screen as a card.", 44)
+        + tool("mcp__persona__task_plan", {"tasks": []}, "Plan plan_mock_1 is on the user's screen as a card.", 44)
         + [it("assistant", "text", 44, text="拆成两件事，都在 MacBook 的 weather 仓库里开。")]
         + [it("user", "text", 30, text="这周的发布说明也整理一下")]
-        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 30)
+        + tool("mcp__persona__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 30)
         + [it("assistant", "text", 29.6, text="发布说明我来整理。只读、不改东西，所以直接开始了。")]
         + [it("user", "text", 8.2, text="设置页底部的按钮和列表对齐一下")]
-        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 8.1)
+        + tool("mcp__persona__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 8.1)
         + [it("user", "text", 5, text="周六上午提醒我给爸妈打电话")]
-        + tool("mcp__jarvis__phone_reminders_create", {"title": "给爸妈打电话", "due": "周六 10:00"},
+        + tool("mcp__persona__phone_reminders_create", {"title": "给爸妈打电话", "due": "周六 10:00"},
                json.dumps({"id": "mock-reminder-1", "title": "给爸妈打电话", "due": later(hours=60), "completed": False,
                            "list": "提醒事项", "priority": 0}, ensure_ascii=False), 5)
         + [it("assistant", "text", 4.5, text="加好了：周六 10:00 提醒你给爸妈打电话。")]
         + [it("user", "text", 3, text="顺便把 PR #42 的 review 意见处理掉")]
-        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_3 is on the user's screen as a card.", 2)
+        + tool("mcp__persona__task_plan", {"tasks": []}, "Plan plan_mock_3 is on the user's screen as a card.", 2)
         + [it("assistant", "text", 1.9, text="这个要改代码，计划在下面，你点开始就开。")]
     )
     # MOCK_INJECTED=1: what the hub typed in for the model (docs/protocol.md "Messages injected by Persona"): the release-notes
@@ -2616,8 +2616,8 @@ if MOCK_TASKS:
     # MOCK_RELAYED=1: a message another Persona conversation sent with conversation_send (prompts/assistant/relay.md),
     # then one you typed: only yours is the pale blue bubble (#2643).
     if os.environ.get("MOCK_RELAYED") == "1":
-        _relay = ('<jarvis-context kind="context" title="来自对话「写周报」" url="">\n这条消息不是用户本人发的，是 Persona 的另一段对话'
-                  '（b2e4d6f8-0000-4000-8000-000000000002）用 conversation_send 发来的，第 1 跳（最多 3 跳）。\n</jarvis-context>\n'
+        _relay = ('<persona-context kind="context" title="来自对话「写周报」" url="">\n这条消息不是用户本人发的，是 Persona 的另一段对话'
+                  '（b2e4d6f8-0000-4000-8000-000000000002）用 conversation_send 发来的，第 1 跳（最多 3 跳）。\n</persona-context>\n'
                   "周报草稿写好了，放在 docs/weekly.md，请转告用户过目。")
         ITEMS[ASK1] += [
             it("user", "text", 0.9, text=_relay),
@@ -2862,11 +2862,11 @@ if MAIN_ACTIONS and os.environ.get("MOCK_COMPACTION") in ("running", "done", "fa
 ITEMS[ASK2] = [it("user", "text", 60 * 5, text="⏰ 早报")] + [it("assistant", "text", 60 * 5, text="早上好！今天 2 个会议，3 封邮件需要回复。")]
 ITEMS[ASK3] = [it("user", "text", 60 * 29, text="帮我约周五和韩梅梅吃饭")] + [it("assistant", "text", 60 * 28, text="已经在日历里加好了。")]
 # MOCK_LARK_AGENT=1: the Friday scheduling request is a Feishu /agent conversation instead (prompts/lark/chat_agent.md): the
-# instructions and context in <jarvis-context> blocks, only the request outside them (the apps fold the blocks, #876).
+# instructions and context in <persona-context> blocks, only the request outside them (the apps fold the blocks, #876).
 if os.environ.get("MOCK_LARK_AGENT") == "1":
     _lark_ctx = [
         ("instructions", "给 Agent 的说明", "", "示例用户在飞书「发布群」里用 /agent 叫你。这不是在电脑上开的会话，你只知道下面给出的上下文。\n\n"
-         "他的请求是这条消息最后、所有 <jarvis-context> 标签外面的那段文字；其余标签里是 hub 收集好的上下文。\n\n## 怎么做\n\n"
+         "他的请求是这条消息最后、所有 <persona-context> 标签外面的那段文字；其余标签里是 hub 收集好的上下文。\n\n## 怎么做\n\n"
          "- 能做的直接做掉：查资料、读代码、看日志、跑命令。\n- 做完用 lark_agent_reply 回复一次。"),
         ("context", "请求的位置", "", "位置：群聊「发布群」（feed_id 7000000000000000001）；请求消息 id 7000000000000000002，2026-11-03 16:48 发出。"),
         ("context", "前面的聊天", "", "\n".join(f"11-03 16:{10 + n:02d} {'韩梅梅' if n % 2 else '李雷'}：第 {n + 1} 条讨论构建失败的消息" for n in range(30))),
@@ -2876,7 +2876,7 @@ if os.environ.get("MOCK_LARK_AGENT") == "1":
         ("context", "项目 · 周五发版", "", ""),
     ]
     _lark_text = "".join(
-        f'<jarvis-context kind="{k}" title="{t}"' + (f' url="{u}"' if u else "") + f">\n{b}\n</jarvis-context>\n"
+        f'<persona-context kind="{k}" title="{t}"' + (f' url="{u}"' if u else "") + f">\n{b}\n</persona-context>\n"
         for k, t, u, b in _lark_ctx) + "看看哪里被拦截了"
     ITEMS[ASK3] = [it("user", "text", 60 * 29, text=_lark_text),
                    it("assistant", "text", 60 * 28, text="lint 那一步被新加的隐私扫描拦下了：`site/` 里有一张截图带了内网地址。已经换成占位图，重跑通过。")]
@@ -2905,7 +2905,7 @@ INTERACTIONS = [
 if os.environ.get("MOCK_SETTINGS_INPUT"):
     INTERACTIONS.append({
         "id": "ix_settings_input", "machine_id": "macbook", "session_id": REVIEW,
-        "session_title": "检查 PR #42 的改动", "kind": "permission", "tool_name": "jarvis_settings",
+        "session_title": "检查 PR #42 的改动", "kind": "permission", "tool_name": "persona_settings",
         "summary": "添加邮箱 me@example.com，填上授权码后先连一遍再保存",
         "created_at": ago(minutes=1), "expires_at": later(minutes=15),
         "fields": [{"key": "password", "label": "密码 / 授权码", "placeholder": "填写邮箱授权码", "secret": True}],
@@ -2968,7 +2968,7 @@ if os.environ.get("MOCK_CODEX"):
 if os.environ.get("MOCK_ASSISTANT_CARDS"):
     INTERACTIONS.append(
         {"id": "ix_assistant_bash", "machine_id": "server", "session_id": ASK1, "session_title": "今天要处理的事",
-         "cwd": "/home/me/.jarvis/assistant", "kind": "permission", "created_at": ago(minutes=1), "expires_at": later(minutes=29),
+         "cwd": "/home/me/.persona/assistant", "kind": "permission", "created_at": ago(minutes=1), "expires_at": later(minutes=29),
          "tool_name": "Bash", "tool_input": {"command": "ls ~/notes"}, "summary": "ls ~/notes", "resumable": True})
     INTERACTIONS.append(
         {"id": "ix_assistant_send", "machine_id": "server", "session_id": ASK1, "session_title": "Persona",
@@ -3809,10 +3809,10 @@ PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": F
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
 # Settings › Connectors › Lark bot (GET/PUT /api/v1/bots/feishu); MOCK_BOT=pairing shows a code waiting, =off a fresh hub.
 FEISHU_BOT = {"enabled": True, "app_id": "cli_example0001", "domain": "https://open.feishu.cn", "has_secret": True,
-              "from_config": False, "connected": True, "bot_name": "Jarvis", "target": "主对话",
+              "from_config": False, "connected": True, "bot_name": "Persona", "target": "主对话",
               "features": {"main": True, "cards": True, "all_cards": False, "pushes": True, "sync": False, "agents": True},
               "owner": {"name": "我", "paired_at": int(time.time()) - 86400 * 3},
-              "agents": [{"title": "jarvis › api「修登录」 · server", "machine_id": "server", "session_id": "s1"}]}
+              "agents": [{"title": "persona › api「修登录」 · server", "machine_id": "server", "session_id": "s1"}]}
 if os.environ.get("MOCK_BOT") == "pairing":
     FEISHU_BOT.update(owner=None, agents=[], target="", pairing={"code": "482913", "expires_at": int(time.time()) + 540})
 elif os.environ.get("MOCK_BOT") == "off":
@@ -4028,7 +4028,7 @@ if os.environ.get("MOCK_IMESSAGE_INBOX"):
          "started_at": ago(minutes=12), "updated_at": ago(minutes=8), "tier": "action",
          "summary": "张三约你周五下午三点见面，等你定地方", "reason": "约时间", "read": False,
          "context": "我（10-30 07:58）：在吗\n张三（10-30 07:59）：示例：周五下午三点见，地方你定",
-         "connector": {"thread": "imessage-0a1b2c3d4e5f", "open_url": "sms:+15550100", "reply_to": "在「信息」里回复（Jarvis 不替你发）",
+         "connector": {"thread": "imessage-0a1b2c3d4e5f", "open_url": "sms:+15550100", "reply_to": "在「信息」里回复（Persona 不替你发）",
                        "rule_tier": "action"}},
     ]
 
@@ -4222,7 +4222,7 @@ if os.environ.get("MOCK_GITHUB") == "signed_out":
 if os.environ.get("MOCK_GITHUB") == "guide":  # a status with the steps to fix it (guide), as a connector may give them
     GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "not_signed_in", "via": "来自 MacBook 的 gh 登录",
                         "error": "MacBook 上的 gh 没有登录 github.com",
-                        "guide": ["在 MacBook 上打开终端", "运行 gh auth login --insecure-storage，按提示登录", "回到 Jarvis 点「重新检查」"],
+                        "guide": ["在 MacBook 上打开终端", "运行 gh auth login --insecure-storage，按提示登录", "回到 Persona 点「重新检查」"],
                         "capabilities": ["status", "hosts"], "hosts": ["github.com"]}
 # Feishu and mail as connectors (GET /api/v1/connectors?all=1, migration M6): the app draws them as their own rows.
 LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilities": ["tools", "inbox", "archive"], "enabled": True},
@@ -4889,9 +4889,9 @@ IMESSAGE_DENIED = os.environ.get("MOCK_IMESSAGE") == "denied"
 IMESSAGE_STATUS = {"machine": "MacBook", "status": "ok", "via": "ssh", "ai": True}
 if IMESSAGE_DENIED:
     IMESSAGE_STATUS = {"machine": "MacBook", "status": "no_permission", "via": "ssh",
-                       "error": "macOS 不让 Jarvis 读这台 Mac 上的「信息」：要给它「完全磁盘访问权限」",
+                       "error": "macOS 不让 Persona 读这台 Mac 上的「信息」：要给它「完全磁盘访问权限」",
                        "guide": ["在这台 Mac 上打开「系统设置 › 通用 › 共享」", "点「远程登录」右边的 ⓘ，打开「允许远程用户完全访问磁盘」",
-                                 "回到 Jarvis 刷新。注意：这样经 ssh 登录这台 Mac 的任何会话都能读整个磁盘"]}
+                                 "回到 Persona 刷新。注意：这样经 ssh 登录这台 Mac 的任何会话都能读整个磁盘"]}
 IMESSAGE_CONNECTOR = {"id": "imessage", "name": "信息", "status": IMESSAGE_STATUS["status"], "account": "MacBook",
                       "via": "MacBook 上的「信息」", "error": IMESSAGE_STATUS.get("error"), "capabilities": ["status"]}
 
@@ -5083,7 +5083,7 @@ if os.environ.get("MOCK_INBOX_LABELS") == "1":
             x["agent"] = {"state": "drafted", "task": "确认分享能否挪到周二下午",
                           "draft": "可以，周二下午三点以后都行。议程我看过了，没有问题。",
                           "note": "日历上周二下午三点以后空着；议程附件已读，没有冲突。"}
-# MOCK_NO_LIVE_AGENTS=1: every Agent is offline ("Give to AI" then only offers Jarvis).
+# MOCK_NO_LIVE_AGENTS=1: every Agent is offline ("Give to AI" then only offers Persona).
 if os.environ.get("MOCK_NO_LIVE_AGENTS") == "1":
     for x in SESSIONS:
         if not x.get("assistant"): x["status"], x["state"] = "offline", "offline"
@@ -6012,8 +6012,8 @@ LAUNCHERS = [
     {"name": "cc_old", "source": "zshrc", "base_url": "https://relay.example.com", "model": "claude-opus-4-7", "machines": ["macbook"], "hidden": True},
     {"name": "cc_test", "source": "zshrc", "base_url": "https://relay.example.com", "model": "model_api/experimental", "machines": ["macbook"], "hidden": True},
 ]
-if os.environ.get("MOCK_MANAGED_LAUNCHER"):  # one added in Jarvis (LauncherSwipeTests swipes it to "Delete")
-    LAUNCHERS.insert(0, {"name": "jv_strong", "source": "jarvis", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "has_key": True, "auth": "bearer"})
+if os.environ.get("MOCK_MANAGED_LAUNCHER"):  # one added in Persona (LauncherSwipeTests swipes it to "Delete")
+    LAUNCHERS.insert(0, {"name": "jv_strong", "source": "persona", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "has_key": True, "auth": "bearer"})
 def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, exhausted=False):
     w = {"label": label, "unit": unit}
     if ratio is not None: w["used_ratio"] = ratio
@@ -6074,13 +6074,13 @@ PROVIDER_DISCOVERED = [{"id": "example-opus", "name": "Example Opus", "context_w
                        {"id": "example-haiku", "context_window": 200000}]
 if MOCK_PROVIDERS:
     LAUNCHERS[:0] = [
-        {"name": "gw_full", "source": "jarvis", "base_url": "https://gw.example.com", "model": "example-opus", "has_key": True,
+        {"name": "gw_full", "source": "persona", "base_url": "https://gw.example.com", "model": "example-opus", "has_key": True,
          "auth": "bearer", "has_headers": True, "models": [{"id": "example-opus", "context_window": 1000000, "efforts": ["high", "max"], "default_effort": "high"},
                                                            {"id": "example-sonnet", "context_window": 200000}],
          "opus_model": "example-opus", "sonnet_model": "example-sonnet", "haiku_model": "example-haiku", "fable_model": "example-opus",
          "small_model": "example-haiku", "subagent_model": "example-sonnet", "subagent_force": True, "proxy": "http://127.0.0.1:7890",
          "no_proxy": "localhost,127.0.0.1", "timeout_ms": 600000, "compact_window": 400000, "max_context": 800000, "effort": "high"},
-        {"name": "anthropic_main", "source": "jarvis", "base_url": "https://api.anthropic.com", "model": "claude-sonnet-4-5", "has_key": True,
+        {"name": "anthropic_main", "source": "persona", "base_url": "https://api.anthropic.com", "model": "claude-sonnet-4-5", "has_key": True,
          "auth": "api_key", "models": [{"id": "claude-sonnet-4-5", "context_window": 200000}]},
     ]
 
@@ -6129,7 +6129,7 @@ def providers_route(h, method, p, q, body):
                 updated.append(imp["existing"])
             else:
                 l = {k: v for k, v in imp.items() if k not in ("aliases", "existing")}
-                l.update(source="jarvis", origin="zshrc:%s@%s" % (imp["aliases"][0], machine))
+                l.update(source="persona", origin="zshrc:%s@%s" % (imp["aliases"][0], machine))
                 LAUNCHERS.insert(0, l)
                 created.append(imp["name"])
         h.send_json({"created": created, "updated": updated}); return True
@@ -6156,13 +6156,13 @@ def providers_route(h, method, p, q, body):
             h.send_json({"error": "名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）"}, 400); return True
         if any(l["name"] == name for l in LAUNCHERS):
             h.send_json({"error": "已经有叫 %s 的启动器了" % name}, 409); return True
-        l = {"name": name, "source": "jarvis"}
+        l = {"name": name, "source": "persona"}
         _provider_apply(l, b)
         LAUNCHERS.insert(0, l)
         h.send_json({"launcher": l}); return True
     if p.startswith("/api/v1/launchers/") and method == "PUT":
         PROVIDER_LOG["put"] = _provider_redacted(b)
-        l = next((x for x in LAUNCHERS if x["name"] == unquote(p.split("/")[4]) and x["source"] == "jarvis"), None)
+        l = next((x for x in LAUNCHERS if x["name"] == unquote(p.split("/")[4]) and x["source"] == "persona"), None)
         if l is None:
             h.send_json({"error": "只能改 Persona 里加的启动器；~/.zshrc 里的请在那台电脑上改"}, 404); return True
         _provider_apply(l, b)
@@ -6300,12 +6300,12 @@ def mail_area(h, method, p, q):
     if p == "/api/v1/mail/oauth/microsoft/start" and method == "POST":
         if not MS_CONFIG["configured"]:
             h.send_json({"error": "还没有 Outlook 登录用的 client ID"}, 400); return True
-        h.send_json({"auth_url": "https://login.example.com/common/oauth2/v2.0/authorize?state=mock", "callback_scheme": "jarvis-mail-oauth", "state": "mock"})
+        h.send_json({"auth_url": "https://login.example.com/common/oauth2/v2.0/authorize?state=mock", "callback_scheme": "persona-mail-oauth", "state": "mock"})
         return True
     return False
 # ---------- end area: mail ----------
 
-MS_CONFIG = {"configured": False, "client_id": None, "source": None, "redirect_uri": "jarvis-mail-oauth://outlook"}
+MS_CONFIG = {"configured": False, "client_id": None, "source": None, "redirect_uri": "persona-mail-oauth://outlook"}
 if os.environ.get("MOCK_OUTLOOK_CLIENT"):
     MS_CONFIG.update(configured=True, client_id="11111111-2222-3333-4444-555555555555", source="app")
 
@@ -6316,11 +6316,11 @@ if os.environ.get("MOCK_LONG_SLOTS"):
         x["slot_name"] = name
 
 
-# MOCK_ASK_USER=1: Jarvis's main conversation ends with two ask_user calls (#677): one answered (a pick, and a
+# MOCK_ASK_USER=1: Persona's main conversation ends with two ask_user calls (#677): one answered (a pick, and a
 # multi-select), one the user let go; the hub's answers to the model are as assistant/tools.go writes them.
 if os.environ.get("MOCK_ASK_USER"):
     ITEMS[ASK1] = ITEMS[ASK1] + [it("user", "text", 2, text="用 ask user 问我一下先做什么")] + tool(
-        "mcp__jarvis__ask_user", {"questions": [
+        "mcp__persona__ask_user", {"questions": [
             {"question": "先处理哪项？", "header": "下一步", "options": [
                 {"label": "看日程", "description": "今天 2 个会"}, {"label": "回邮件", "description": "3 封待回"},
                 {"label": "看未读消息", "description": "飞书 4 条"}, {"label": "都不用"}]},
@@ -6329,7 +6329,7 @@ if os.environ.get("MOCK_ASK_USER"):
         "The user answered:\n- 先处理哪项？ → 看未读消息\n- 整理完发给谁？ → 组里, 只给我\n", 2) + [
         it("assistant", "text", 2, text="好，先看未读消息，整理好发到组里，也给你留一份。"),
         it("user", "text", 1, text="再问一次，这次我不回答")] + tool(
-        "mcp__jarvis__ask_user", {"questions": [{"question": "要把明早的会挪到下午吗？", "header": "日程", "options": [
+        "mcp__persona__ask_user", {"questions": [{"question": "要把明早的会挪到下午吗？", "header": "日程", "options": [
             {"label": "挪"}, {"label": "不挪"}]}]},
         "The user did not answer (dismissed or timed out). Don't go ahead with what you asked about; say what is waiting for them.", 1) + [
         it("assistant", "text", 1, text="你没有回答，明早的会先不动，等你决定。")]
@@ -6717,7 +6717,7 @@ _hcard = lambda d: "```persona-card\n" + json.dumps(d, ensure_ascii=False) + "\n
 _hdays = ["10/30", "10/31", "11/1", "11/2", "11/3", "11/4", "11/5"]
 ITEMS["hlth0001-0000-4000-8000-000000000001"] = (
     [it("user", "text", 41, text="这周我睡得怎么样？")]
-    + tool("mcp__jarvis__phone_health_summary", {"metrics": ["sleep"], "days": 7}, "7 天的睡眠：6.9、6.4、7.1、6.2、6.8、6.5、7.0 小时", 41)
+    + tool("mcp__persona__phone_health_summary", {"metrics": ["sleep"], "days": 7}, "7 天的睡眠：6.9、6.4、7.1、6.2、6.8、6.5、7.0 小时", 41)
     + [it("assistant", "text", 40, text="\n\n".join([
         "这周平均每晚睡 **6 小时 42 分**，比上周少 18 分钟；10/31 最少，只睡了 6 小时 12 分。",
         _hcard({"type": "line", "title": "近 7 天睡眠", "unit": "小时", "note": "平均 6.7 小时 · 上周 7.0 小时",
@@ -6726,7 +6726,7 @@ ITEMS["hlth0001-0000-4000-8000-000000000001"] = (
 )
 ITEMS["hlth0003-0000-4000-8000-000000000003"] = (
     [it("user", "text", 71, text="最近 7 天步数和上周比怎么样")]
-    + tool("mcp__jarvis__phone_health_summary", {"metrics": ["steps"], "days": 14}, "14 天的步数（按天）", 71)
+    + tool("mcp__persona__phone_health_summary", {"metrics": ["steps"], "days": 14}, "14 天的步数（按天）", 71)
     + [it("assistant", "text", 70, text="\n\n".join([
         "最近 7 天平均每天 **7,860 步**，比上周多 410 步，离每天 8,000 步的目标差一点；7 天里有 4 天达标。",
         _hcard({"type": "line", "title": "近 7 天步数", "unit": "步", "note": "平均 7,860 步 · 上周 7,450 步",
@@ -6792,7 +6792,7 @@ if os.environ.get("MOCK_API_ERRORS") == "1":
 # MOCK_CHAT_CONTENT=1: what a conversation draws beyond plain text (docs/android.md "Conversation content"). A "Images, files and plans"
 # session on the MacBook: photos sent from the phone (<attached_images>, one of them gone), file paths in the messages,
 # a photo-only message, a plan / a question / a sub-agent, and a reply the hub cut ("View full text" loads it). The /orders Codex
-# session gets two file changes (a patch and a new file), so its live work line shows them; a Jarvis conversation gets a
+# session gets two file changes (a patch and a new file), so its live work line shows them; a Persona conversation gets a
 # photo too. The photos are files of the MOCK_FILES tree (served without MOCK_FILES as well); the server's one only
 # without MOCK_FILES (its fallback reads the MacBook).
 CONTENT = "a1f3c2d4-0000-4000-8000-00000000000e"
@@ -6886,18 +6886,18 @@ if os.environ.get("MOCK_TITLES") == "1":
     for s, title in zip(ASSISTANT[1:], ("1029 | 定时 | 早报", "1031 | 功能 | 约周五和韩梅梅吃饭", "1028 | 研究 | 这个季度读书笔记的主题和书单整理")):
         s["title"] = title
 
-# MOCK_LONG_ASSISTANT=1: the Jarvis tab's main conversation is a long one, like the one a user keeps for weeks: sixty
+# MOCK_LONG_ASSISTANT=1: the Persona tab's main conversation is a long one, like the one a user keeps for weeks: sixty
 # exchanges, each with a few tool calls and a long Markdown reply (headings, lists, a table, a code block), for measuring
-# the Jarvis page's frames (docs/testing.md "Measuring stalls").
+# the Persona page's frames (docs/testing.md "Measuring stalls").
 if os.environ.get("MOCK_LONG_ASSISTANT") == "1":
     _long = []
     for _n in range(60):
         _m = 60 * 24 * 3 - _n * 70
         _long.append(it("user", "text", _m + 2, text="第 %d 件事：帮我看看 weather 项目第 %d 个 PR 的改动，顺便查一下今天的日程。" % (_n + 1, _n + 1)))
         _long.append(it("assistant", "thinking", _m + 2, text="先看 PR 的改动，再查日历。"))
-        _long += tool("mcp__jarvis__agents_list", {}, "6 个 Agent：2 个需要你，2 个工作中", _m + 1)
+        _long += tool("mcp__persona__agents_list", {}, "6 个 Agent：2 个需要你，2 个工作中", _m + 1)
         _long += tool("Bash", {"command": "gh pr diff %d --repo me/weather | head -200" % (_n + 1)}, "".join("+ line %d\n" % k for k in range(40)), _m + 1)
-        _long += tool("mcp__jarvis__phone_calendar_events", {}, "今天 2 个日程", _m + 1)
+        _long += tool("mcp__persona__phone_calendar_events", {}, "今天 2 个日程", _m + 1)
         _long.append(it("assistant", "text", _m, text=f"""## PR #{_n + 1} 看完了
 
 改动集中在网络层，**整体没问题**，有三处建议：
@@ -7094,30 +7094,30 @@ def port_listening(port):
         return False
 
 
-# MOCK_LINKS=1: links in the Jarvis tab's main conversation and in an inbox item, to open in the link sheet
-# (docs/android.md "Links"): a plain web page, a jarvis:// link that only navigates, and a javascript: link that is dropped.
+# MOCK_LINKS=1: links in the Persona tab's main conversation and in an inbox item, to open in the link sheet
+# (docs/android.md "Links"): a plain web page, a persona:// link that only navigates, and a javascript: link that is dropped.
 if os.environ.get("MOCK_LINKS") == "1":
     ITEMS[ASK1] = ITEMS[ASK1] + [it("assistant", "text", 1, text=(
-        "资料在 [示例页面](https://example.com/) 里；要看那个 Agent 就点 [这里](jarvis://session/macbook/" + RICH +
+        "资料在 [示例页面](https://example.com/) 里；要看那个 Agent 就点 [这里](persona://session/macbook/" + RICH +
         ")。这个不会打开：[脚本](javascript:alert(1))。"))]
     INBOX.insert(0, {"id": "mail:links:1", "source": "mail", "kind": "mail", "account": "work", "account_name": "工作邮箱",
                      "title": "评审材料", "sender": "Lucy Wang", "preview": "材料在 https://example.org/ ，评审前看一下",
                      "count": 1, "started_at": ago(minutes=8), "updated_at": ago(minutes=8), "tier": "action",
                      "summary": "评审材料的链接：https://example.org/", "read": False})
     # A web page from a mail (the HTML mail about the talk) and from the knowledge base (the weather app's profile): both open
-    # in the app, where picked text goes to Jarvis ("Give to Jarvis").
+    # in the app, where picked text goes to Persona ("Give to Persona").
     MAIL_MESSAGES[501]["html"] += '<p>议程放在 <a href="https://example.org/agenda">example.org/agenda</a>。</p>'
     KB_DETAIL[("projects", "weather-app")]["summary"] += "\n- **设计稿**：[小组件设计稿 v3](https://example.com/design/widgets)"
 
 
 # MOCK_LINK_SCHEMES=1: a fresh reply in the first Agent conversation with a link of every kind the link sheet handles
 # (docs/android.md "Terminal and links"): a web page written a minute ago (preloaded), mailto: and tel: (asked first, then
-# another app), a jarvis:// tab link (navigates), jarvis://pair (ignored in a conversation) and a javascript: link.
+# another app), a persona:// tab link (navigates), persona://pair (ignored in a conversation) and a javascript: link.
 if os.environ.get("MOCK_LINK_SCHEMES") == "1":
     _first = SESSIONS[0]["session_id"]
     ITEMS[_first] = ITEMS.get(_first, []) + [it("assistant", "text", 1, text=(
         "设计稿在 https://example.com/widget 。有问题发邮件到 [me@example.com](mailto:me@example.com)，急事打 [10086](tel:10086)。"
-        "收件箱里的那封看 [这里](jarvis://tab/inbox)；[重新配对](jarvis://pair?url=http://example.com&token=x) 和 [脚本](javascript:alert(1)) 都不会打开。"))]
+        "收件箱里的那封看 [这里](persona://tab/inbox)；[重新配对](persona://pair?url=http://example.com&token=x) 和 [脚本](javascript:alert(1)) 都不会打开。"))]
 
 PICTURE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif", ".bmp", ".tif", ".tiff"}
 
@@ -7704,7 +7704,7 @@ if os.environ.get("MOCK_FILES"):
     import mock_office
     FILES[ROOT + "/data/observations.csv"] = mock_office.csv_text(100_000)  # 5 MB: the table viewer's paging
     ITEMS[WIDGET] = ITEMS[WIDGET] + [it("assistant", "text", 0, text=(
-        "hub 上的 `~/.jarvis/personas/doudou` 不在这台电脑上，`/Users/me/code/weather/old/Removed.swift` 也已经删掉了。"
+        "hub 上的 `~/.persona/personas/doudou` 不在这台电脑上，`/Users/me/code/weather/old/Removed.swift` 也已经删掉了。"
         "其余的都在：`Sources/App.swift`、`server/handlers.go`、`data/forecast.json`、`/Users/me/code/weather/README.md`、"
         "`config/app.yaml` 和 `/Users/me/code/weather/logs/api.log`。"))]
     # MOCK_PATH_LINKS=1 (with MOCK_FILES): a question and a reply that name paths in their words, with lines, in code
@@ -7757,13 +7757,13 @@ if os.environ.get("MOCK_MERMAID"):
         "各尺寸的使用占比：\n\n```mermaid\npie title 小组件尺寸\n  \"中号\" : 58\n  \"小号\" : 31\n  \"大号\" : 11\n```\n\n"
         "这个写错了：\n\n```mermaid\nflowchart TD\n  A --> \n```")))
 
-# MOCK_SENT_VIDEO=<file>: a video the user sent from another device (#981): a <jarvis-file> card in the chat whose
+# MOCK_SENT_VIDEO=<file>: a video the user sent from another device (#981): a <persona-file> card in the chat whose
 # file is only on the machine, so a tap downloads it before the system player opens.
 SENT_VIDEO_PATH = "/tmp/录屏-20261103-101500.mov"
 if os.environ.get("MOCK_SENT_VIDEO"):
     with open(os.environ["MOCK_SENT_VIDEO"], "rb") as video:
         FILES[SENT_VIDEO_PATH] = video.read()
-    ITEMS[WIDGET].append(it("user", "text", 0, text="上次的录屏，你看下按钮那里\n\n<jarvis-file kind=\"video\" path=\"%s\" name=\"录屏.mov\" size=\"%d\" duration=\"6.0\"/>"
+    ITEMS[WIDGET].append(it("user", "text", 0, text="上次的录屏，你看下按钮那里\n\n<persona-file kind=\"video\" path=\"%s\" name=\"录屏.mov\" size=\"%d\" duration=\"6.0\"/>"
                             % (SENT_VIDEO_PATH, len(FILES[SENT_VIDEO_PATH]))))
 
 
@@ -7796,7 +7796,7 @@ def file_read(path, cwd, offset, stream=False):
 
 
 # ---------- personas (docs/persona.md) ----------
-# MOCK_PERSONAS=<dir>: the packages in it, as the hub lists and serves ~/.jarvis/personas. MOCK_PERSONAS=demo: the
+# MOCK_PERSONAS=<dir>: the packages in it, as the hub lists and serves ~/.persona/personas. MOCK_PERSONAS=demo: the
 # original placeholder (scripts/assets/make_persona.py demo), made into a temporary directory at start. With "builtin"
 # among them (MOCK_PERSONAS=builtin, demo,builtin): the packages built into personad too (server/internal/hub/personas,
 # the frog look), first, as the hub lists them. A tiered one shows MOCK_PERSONA_TIER (default: its default tier); GET
@@ -7892,8 +7892,8 @@ _LOOKS_ARG = os.environ.get("MOCK_LOOKS", "")
 LOOKS_ROOT = (os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "schema", "extension", "examples", "example-looks")
               if _LOOKS_ARG == "example" else _LOOKS_ARG)
 LOOK_CHOICE = {"id": os.environ.get("MOCK_LOOK") or None, "updated_at": "2026-11-05T12:00:00Z"}
-BUILTIN_LOOKS = [("persona", "团子", {"en": "Mochi", "ja": "だんご"}), ("jarvis", "面罩", {"en": "Visor", "ja": "バイザー"}),
-                 ("jarvis-circuit", "汇流", {"en": "Circuit", "ja": "サーキット"})]
+BUILTIN_LOOKS = [("persona", "团子", {"en": "Mochi", "ja": "だんご"}), ("persona-visor", "面罩", {"en": "Visor", "ja": "バイザー"}),
+                 ("persona-circuit", "汇流", {"en": "Circuit", "ja": "サーキット"})]
 
 
 def _ext_looks():
@@ -7987,7 +7987,7 @@ def looks_route(handler, method, p, raw):
 STREAM = os.environ.get("MOCK_STREAM") == "1"
 STREAM_STATE = {"started": False}
 
-# MOCK_ASSISTANT_RUN=1: Jarvis's main conversation is in the middle of a long turn, like a real one checking
+# MOCK_ASSISTANT_RUN=1: Persona's main conversation is in the middle of a long turn, like a real one checking
 # something across machines: a user message, then tool calls one after another. Once the app opens it, every second
 # a call starts (its tool_use alone, running) or ends (its result: long output, a cat of a memory file), and the
 # session list of its machine is pushed with a new rev, time and last line, as the real hub does on every step.
@@ -8021,7 +8021,7 @@ if ASSISTANT_RUN:
                         last_text="Read example note 11 on the hub machine")
 
 
-# MOCK_ASSISTANT_REPLAY=<items.json>:<seq>: Jarvis's main conversation is a recorded turn (a file of items as the hub
+# MOCK_ASSISTANT_REPLAY=<items.json>:<seq>: Persona's main conversation is a recorded turn (a file of items as the hub
 # serves them, kept outside the repo) up to <seq>, still running; GET /mock/replay?n=N pushes the next N items as the
 # hub would (a text item streams as deltas for a second and a half first). For replaying what one phone saw.
 REPLAY = {"left": [], "sid": None, "mid": None}
@@ -8066,7 +8066,7 @@ def replay_next(n):
 
 
 # MOCK_ECHO_SENT=1: a message sent to a session lands in its transcript a moment later, as claude writes it: for
-# Jarvis's conversations (claude -p) its pictures first, as image blocks, then its text; elsewhere the text, then the
+# Persona's conversations (claude -p) its pictures first, as image blocks, then its text; elsewhere the text, then the
 # pictures (a pasted image Claude inlined). For the chat showing what was sent once the transcript has it.
 def echo_sent(parts, body):
     if len(parts) < 7 or body.get("clear_draft"):
@@ -8105,7 +8105,7 @@ if os.environ.get("MOCK_HUB_LINKS"):
         "设计参考 [Apple 的小组件指南](https://developer.apple.com/design/human-interface-guidelines/widgets)。"))]
 
 
-# MOCK_COMPACT=1: compactions as Claude Code writes them, after the hub turned them into items: the Jarvis main
+# MOCK_COMPACT=1: compactions as Claude Code writes them, after the hub turned them into items: the Persona main
 # conversation compacted while idle after its last answer (the boundary, the summary it went on from, the idle note);
 # Review PR #42 compacted with /compact, then in the middle of a later turn (auto). For the chat's compaction divider.
 if os.environ.get("MOCK_COMPACT"):
@@ -8696,15 +8696,15 @@ if os.environ.get("MOCK_TURN_IMAGES"):
     FILES[_blog + "/docs/首页对比.md"] = "# 首页对比\n\n编造的笔记。\n".encode()
     _ask = [it("user", "text", 9, text="首页按设计稿对一下，手机和桌面都看看，差别整理成文档和表格")]
     if os.environ["MOCK_TURN_IMAGES"] == "one":
-        _ask += looked("mcp__jarvis__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
+        _ask += looked("mcp__persona__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
         _ask += [it("assistant", "text", 6, text="桌面版首页和设计稿基本一致，只有横幅的圆角大了 4pt，已经改好。\n\n"
                                                     "对比记录在 `" + _blog + "/docs/季度报告.docx`。")]
     else:
         _ask += looked("Read", {"file_path": _blog + "/design/首页.png"}, "", 9, (SHOT_DESIGN, 480, 300))
-        _ask += looked("mcp__jarvis__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
+        _ask += looked("mcp__persona__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
         _ask += looked("Read", {"file_path": _blog + "/screenshots/手机首页.png"}, "", 8, (SHOT_PHONE, 195, 422))
         _ask += tool("Read", {"file_path": _blog + "/design/横幅大图.png"}, "", 8)  # too big to keep: only its path
-        _ask += looked("mcp__jarvis__computer_state", {"machine": "studio", "app": "Safari"}, "Safari — 首页", 7, (SHOT_SCREEN, 504, 328))
+        _ask += looked("mcp__persona__computer_state", {"machine": "studio", "app": "Safari"}, "Safari — 首页", 7, (SHOT_SCREEN, 504, 328))
         _ask += looked("Read", {"file_path": _blog + "/design/首页.png"}, "", 7, (SHOT_DESIGN, 480, 300))  # the same file again
         _ask += tool("Bash", {"command": "python3 scripts/compare.py", "description": "生成对比表"}, "wrote docs/逐小时预报.xlsx", 6)
         _ask += [it("assistant", "text", 5, text="对完了，桌面版和设计稿一致，手机上有两处差别：\n\n"
@@ -8713,14 +8713,14 @@ if os.environ.get("MOCK_TURN_IMAGES"):
                                                     "- 差异表 `" + _blog + "/docs/逐小时预报.xlsx`\n- 讲解用的幻灯片 `" + _blog + "/docs/路线图.pptx`\n\n"
                                                     "笔记在 `" + _blog + "/docs/首页对比.md`。")]
         # Still at it: two pictures so far, the third call running.
-        ITEMS[WIDGET] = ITEMS[WIDGET][:-1] + looked("mcp__jarvis__computer_state", {"machine": "macbook", "app": "Simulator"},
+        ITEMS[WIDGET] = ITEMS[WIDGET][:-1] + looked("mcp__persona__computer_state", {"machine": "macbook", "app": "Simulator"},
                                                      "Simulator — 小组件", 2, (SHOT_PHONE, 195, 422)) + [
             it("assistant", "text", 1, text="小号布局截好了，降雨条比设计稿高了一点，我再看一下中号的。")] + looked(
             "Read", {"file_path": "/Users/me/code/weather/docs/icon.png"}, "", 1, (SHOT_DESIGN, 480, 300)) + [
-            it("assistant", "tool_use", 0, tool_use_id="toolu_mock_running_shot", tool_name="mcp__jarvis__computer_state",
+            it("assistant", "tool_use", 0, tool_use_id="toolu_mock_running_shot", tool_name="mcp__persona__computer_state",
                tool_input={"machine": "macbook", "app": "Simulator"})]
         ITEMS[ASK1] = ITEMS[ASK1] + [it("user", "text", 3, text="看看 Studio 上现在开着什么")] + looked(
-            "mcp__jarvis__computer_state", {"machine": "studio"}, "屏幕上：Safari（首页）、备忘录", 2, (SHOT_SCREEN, 504, 328)) + [
+            "mcp__persona__computer_state", {"machine": "studio"}, "屏幕上：Safari（首页）、备忘录", 2, (SHOT_SCREEN, 504, 328)) + [
             it("assistant", "text", 1, text="Studio 上开着 Safari（博客首页）和备忘录，备忘录里是一张发布前的检查清单。")]
     ITEMS[BLOG] = ITEMS[BLOG] + _ask  # it() numbers lines in order: appended ones come after
 # MOCK_RENDER=1: formulas and a diagram (docs/ios.md "Formulas and diagrams"): the last turn of the release-notes conversation, and the algorithm document fixture.
@@ -8736,7 +8736,7 @@ if os.environ.get("MOCK_RENDER"):
     MOCK_TREE[MOCK_REPO + "/docs/算法.md"] = "# 降雨预报的算法\n\n" + RENDER_MD + (
         "\n\n## 时序\n\n```mermaid\nsequenceDiagram\n  participant W as 小组件\n  participant A as App\n  participant S as 服务器\n"
         "  W->>A: 时间线请求\n  A->>S: GET /v1/forecast\n  S-->>A: 6 小时预报\n  A-->>W: Timeline\n```\n")
-MOCK_TREE["Desktop/"] = None  # listed, but macOS keeps it from jarvisd (mock_denied)
+MOCK_TREE["Desktop/"] = None  # listed, but macOS keeps it from personad (mock_denied)
 MOCK_COMMITS[2]["refs"] = "tag: v0.1.0"
 TIME_OFFSET = os.environ.get("MOCK_TIME_OFFSET", "")
 
@@ -8773,8 +8773,8 @@ def mock_denied(p, q):
     if not (p.startswith("/api/v1/machines/") and len(parts) == 6 and parts[5] in ("fs", "file")): return None
     home, path = mock_abs(parts[4], (q.get("path") or [""])[0], (q.get("cwd") or [""])[0])
     if not (path == home + "/Desktop" or path.startswith(home + "/Desktop/")): return None
-    return {"error": "macOS 不让 Jarvis 读「桌面」文件夹里的文件。要读的话，在这台 Mac 的「系统设置 › 隐私与安全性 › 完全磁盘访问权限」里"
-                     "打开 sshd-keygen-wrapper（Jarvis 经 ssh 在这台 Mac 上运行），或者把文件放到别的文件夹（open %s: operation not permitted）" % path}, 502
+    return {"error": "macOS 不让 Persona 读「桌面」文件夹里的文件。要读的话，在这台 Mac 的「系统设置 › 隐私与安全性 › 完全磁盘访问权限」里"
+                     "打开 sshd-keygen-wrapper（Persona 经 ssh 在这台 Mac 上运行），或者把文件放到别的文件夹（open %s: operation not permitted）" % path}, 502
 
 
 _mock_files_tree = mock_files
@@ -8876,7 +8876,7 @@ def hub_update_state():
             pinned = HUB_UPDATE_MODE == "docker-pinned"
             HUB_UPDATE.update(version="0.3.0", build=0, channel="docker", can_update=False, auto=False,
                               why_not="Docker 里的 hub 由新镜像更新（docker compose pull && docker compose up -d）",
-                              image={"name": "ghcr.io/owner/jarvis", "tag": "0.3.0" if pinned else "latest", "pinned": pinned})
+                              image={"name": "ghcr.io/owner/persona", "tag": "0.3.0" if pinned else "latest", "pinned": pinned})
             HUB_UPDATE["latest"] = {"version": "0.3.1", "build": 0, "newer": True, "bad": False}
     return HUB_UPDATE
 
@@ -9419,7 +9419,7 @@ service:
 
 def say(text, user=None, stream=False, steps=10, ms=300, late=0, drop=False):
     """A reply (after `user`'s message, if given) in every conversation an app has open (/mock/say). `stream`: the
-    message first, then the reply arrives as growing `delta` text over about 3 s, like the Jarvis assistant's. `drop`: the
+    message first, then the reply arrives as growing `delta` text over about 3 s, like the Persona assistant's. `drop`: the
     transcript grows and the session list says so (updated_at), but the items push is lost: the page has to notice (#3139)."""
     import time
     for send, subscribed in list(LIVE):
@@ -9464,8 +9464,8 @@ if os.environ.get("MOCK_COMPUTER", "") not in ("", "off"):
     # The assistant operating MacBook (#1182, #1184), in a conversation of its own: its tools read "Control computer" / "View computer", the
     # screenshot is a made-up Calculator (calculator_png), and under them VNC opens the live screen.
     _steps = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "6", "Multiply", "7", "Equals")]
-    _run = tool("mcp__jarvis__computer_run", {"machine": "macbook", "steps": _steps}, '{"ok":true,"executed":5,"total":5}', 1)
-    _look = tool("mcp__jarvis__computer_state", {"machine": "macbook", "app": "Calculator"},
+    _run = tool("mcp__persona__computer_run", {"machine": "macbook", "steps": _steps}, '{"ok":true,"executed":5,"total":5}', 1)
+    _look = tool("mcp__persona__computer_state", {"machine": "macbook", "app": "Calculator"},
                  '{"snapshot_id":"s1","tree_markdown":"- [0] AXWindow \\"Calculator\\"\\n  - AXStaticText = \\"42\\""}', 1)
     _calc = it("user", "image", 1, tool_use_id=_look[0]["tool_use_id"],
                image={"mime": "image/png", "data": base64.b64encode(calculator_png()).decode(), "width": 230, "height": 408})
@@ -9478,7 +9478,7 @@ if os.environ.get("MOCK_COMPUTER", "") not in ("", "off"):
         # in an agent's (its own Cua Driver MCP), so the running work shows "Operating MacBook · …".
         _again = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "9", "Multiply", "8")]
         ITEMS[ASK_CUA] += [it("user", "text", 0, text="再算一下 9×8"),
-                           it("assistant", "tool_use", 0, tool_use_id="toolu_mock_operating", tool_name="mcp__jarvis__computer_run",
+                           it("assistant", "tool_use", 0, tool_use_id="toolu_mock_operating", tool_name="mcp__persona__computer_run",
                               tool_input={"machine": "macbook", "steps": _again})]
         ITEMS[WIDGET] = ITEMS[WIDGET] + [it("assistant", "tool_use", 0, tool_use_id="toolu_mock_cua_click",
                                             tool_name="mcp__cua-driver__click",
@@ -9740,11 +9740,11 @@ if ENGINE_SETS:
         if _s.get("session_id") == WIDGET:
             _s["host"], _s["also_open_in"] = "herdr", ["herdr-core"]
 
-# ---------- MOCK_NEEDS / MOCK_HISTORY: the Jarvis page (docs/android.md "Jarvis page") ----------
-# By default five agent requests and several inbox items in "Needs you" wait: the Jarvis home's "Things that need you now" shows three
+# ---------- MOCK_NEEDS / MOCK_HISTORY: the Persona page (docs/android.md "Persona page") ----------
+# By default five agent requests and several inbox items in "Needs you" wait: the Persona home's "Things that need you now" shows three
 # lines and "N more items in the inbox". MOCK_NEEDS=none: nothing waits (no section); MOCK_NEEDS=two: one request, one inbox item.
-# MOCK_HISTORY=1: a long Jarvis history (46 more conversations: "Recent" lists 30, then "View all N"), one of them started
-# from "Give to Jarvis" (titled by its <jarvis-context> tag), one pinned; the hub's pins are kept as the app writes them.
+# MOCK_HISTORY=1: a long Persona history (46 more conversations: "Recent" lists 30, then "View all N"), one of them started
+# from "Give to Persona" (titled by its <persona-context> tag), one pinned; the hub's pins are kept as the app writes them.
 NEEDS_MODE = os.environ.get("MOCK_NEEDS", "")
 if NEEDS_MODE == "none":
     MOCK_INTERACTIONS.clear()
@@ -9766,7 +9766,7 @@ if HISTORY_MODE:
         ASSISTANT.append(assistant_sess("b2e4d6f8-0000-4000-8000-1%011d" % _k, "历史对话 %d" % (_k + 1),
                                         60 * 24 * (3 + _k), "第 %d 段对话的最后一句" % (_k + 1)))
     ASSISTANT.append(assistant_sess("b2e4d6f8-0000-4000-8000-200000000001",
-                                    '<jarvis-context kind="context" title="飞书 · 发布群 &quot;周五&quot;" url="">', 60 * 30,
+                                    '<persona-context kind="context" title="飞书 · 发布群 &quot;周五&quot;" url="">', 60 * 30,
                                     "我看了发布群里关于周五发布的消息……"))
     HUB_PINS["sessions"] = ["server/" + ASK3]
 
@@ -9815,11 +9815,11 @@ def pins_route(handler, p):
     return True
 
 
-# ---------- MOCK_PLUGINS: the plugin base (docs/extensions.md "Hub API") ----------
-# MOCK_PLUGINS=1 lists five made-up plugins, one of each state the app draws (needs setup, running, hub.json's,
+# ---------- MOCK_EXTENSIONS: the plugin base (docs/extensions.md "Hub API") ----------
+# MOCK_EXTENSIONS=1 lists five made-up plugins, one of each state the app draws (needs setup, running, hub.json's,
 # switched off, incompatible), with feature plugin_manager; their pages, switches, settings and secrets work in memory.
 # The form of example-notes has every kind of field. A base_url that is not a URL is refused like the hub does.
-PLUGINS_MODE = os.environ.get("MOCK_PLUGINS", "")
+PLUGINS_MODE = os.environ.get("MOCK_EXTENSIONS", "")
 _NOTES_FORM = [
     {"name": "base_url", "type": "string", "title": "服务地址", "format": "uri", "default": "https://notes.example.com", "required": True},
     {"name": "folders", "type": "array", "title": "同步哪些文件夹", "items": {"name": "items", "type": "string"},
@@ -9965,7 +9965,7 @@ if MOCK_BROWSER:
 
 
 # Messages (iMessage) as a built-in extension (#1830 step 6): which Mac's Messages the connector reads, one Mac only.
-# MOCK_PLUGINS=1 lists it on MacBook; MOCK_IMESSAGE_EXT=off lists it off with no Mac (a hub without iMessage).
+# MOCK_EXTENSIONS=1 lists it on MacBook; MOCK_IMESSAGE_EXT=off lists it off with no Mac (a hub without iMessage).
 if PLUGINS_MODE:
     _im_off = os.environ.get("MOCK_IMESSAGE_EXT") == "off"
     PLUGINS["imessage"] = {"id": "imessage", "name": "信息（iMessage）", "kind": "", "status": "disabled" if _im_off else "running",
@@ -9977,7 +9977,7 @@ if PLUGINS_MODE:
                                 "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}}]},
                            "config": {} if _im_off else {"machines": ["macbook"]}, "secrets": [], "permissions": []}
 
-# MOCK_PLUGINS=1 with MOCK_CHANNELS=1: WeChat as an installed extension that contributes the channel (its page links to
+# MOCK_EXTENSIONS=1 with MOCK_CHANNELS=1: WeChat as an installed extension that contributes the channel (its page links to
 # Settings › Channels), run in a sandbox with a few connections through the egress proxy (its Runtime isolation section, #2968).
 if PLUGINS_MODE and os.environ.get("MOCK_CHANNELS"):
     PLUGINS["wechat"] = {"id": "wechat", "name": "微信", "kind": "", "status": "running", "version": "0.3.1", "source": "installed",
@@ -9989,7 +9989,7 @@ if PLUGINS_MODE and os.environ.get("MOCK_CHANNELS"):
                                            "why": "这台机器上没有 bubblewrap，扩展照常运行、没有隔离",
                                            "egress": {"allowed": 0, "denied": 0}}
 
-# MOCK_PLUGINS=1 with MOCK_GITHUB_EXTENSION=1: GitHub as an installed extension that contributes the github connector
+# MOCK_EXTENSIONS=1 with MOCK_GITHUB_EXTENSION=1: GitHub as an installed extension that contributes the github connector
 # (#3228, #3178): its page shows the connector's "Send to inbox" switch (the same GITHUB_CONNECTOR["inbox"] as the connector
 # page's, PUT /api/v1/connectors/github/settings) and its own inbox rules in the form. MOCK_GITHUB_EXTENSION=old: a hub
 # from before the switch (the connector lists no inbox), so the page has no such section.
@@ -10023,7 +10023,7 @@ def cua_config(pl):
 _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings",
                 "auto_upgrade", "upgrade", "upgrade_note", "nodes"]
 
-# ---------- MOCK_PLUGINS: declarative UI (docs/extensions.md "Declarative UI") ----------
+# ---------- MOCK_EXTENSIONS: declarative UI (docs/extensions.md "Declarative UI") ----------
 # example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),
 # with every kind of item; its buttons answer (a toast, a new view, a link), the form's values come back.
 _UI_STATE = {"note": "", "auto": "true", "plan": "team", "refreshed": 0, "capsule_refreshed": 0}
@@ -10239,7 +10239,7 @@ def _ui_action(ui, action, values):
     return {}
 
 
-# ---------- MOCK_PLUGINS: plugin markets (docs/extensions.md "Extension market") ----------
+# ---------- MOCK_EXTENSIONS: plugin markets (docs/extensions.md "Extension market") ----------
 # Two made-up markets (a public site, a private GitHub repository with its token set); their catalog has a plugin to
 # install, one installed from the market with an upgrade, one installed elsewhere, and one this hub cannot install.
 # Previews, installs, upgrades and removals work in memory.
@@ -10357,7 +10357,7 @@ def upgrades_route(handler, p, req):
     return False
 
 
-# ---------- MOCK_PLUGINS: places outside the app (docs/extensions.md "System-level placements") ----------
+# ---------- MOCK_EXTENSIONS: places outside the app (docs/extensions.md "System-level placements") ----------
 # example-gateway draws a widget "today" (small / medium / Lock Screen and watch face complications) that opens its
 # nav_page "usage", and has two shortcuts. The hub's new paths only (these came after the rename). A sample of an
 # extension's notification with buttons is scripts/mock/apns/extension-notification.apns:
@@ -10388,7 +10388,7 @@ def _widget_view(family):
 
 
 def system_route(handler, p, req):
-    """MOCK_PLUGINS: widgets and shortcuts under /api/v1/extensions/…, and the widgets each device has. False otherwise."""
+    """MOCK_EXTENSIONS: widgets and shortcuts under /api/v1/extensions/…, and the widgets each device has. False otherwise."""
     method = handler.command
     on = "example-gateway" in PLUGINS and PLUGINS["example-gateway"]["enabled"]
     parts = p.split("/")
@@ -10423,14 +10423,14 @@ def system_route(handler, p, req):
 
 
 # ---------- MOCK_EXTENSION_OPS: installs in steps (docs/protocol.md "Extension installation, upgrade and removal progress", #3277, #3307) ----------
-# MOCK_EXTENSION_OPS=1 (with MOCK_PLUGINS): the hub says extension_operations. A preview asked for with async answers
+# MOCK_EXTENSION_OPS=1 (with MOCK_EXTENSIONS): the hub says extension_operations. A preview asked for with async answers
 # 202 {"operation"} at once and goes through download (in four parts) → verify → unpack → check, then waits at consent
 # (needs_consent, GET …/-/operations/{id} carries the preview); the install or upgrade agreed to with async goes on with
 # the same operation (install → start; nodes skipped). A removal, async or not, is recorded as an operation too.
 # =fail: the first install or upgrade of each extension stops at start (retryable: …/retry starts a new operation, its
 # download from the cache and the consent already given, so it goes on by itself); the first removal stops at remove.
 # MOCK_EXTENSION_OPS_STEP=<seconds> per step (default 0.6).
-EXT_OPS = os.environ.get("MOCK_EXTENSION_OPS", "") if os.environ.get("MOCK_PLUGINS") else ""
+EXT_OPS = os.environ.get("MOCK_EXTENSION_OPS", "") if os.environ.get("MOCK_EXTENSIONS") else ""
 EXT_OPS_STEP = float(os.environ.get("MOCK_EXTENSION_OPS_STEP", "0.6"))
 EXT_OPERATIONS = {}
 EXT_OP_JOBS = {}  # what each operation does: {"retry": fn, "preview": id, "consented": digest}
@@ -10608,7 +10608,7 @@ def _ext_ops_route(handler, p, method):
 
 
 def markets_route(handler, p, body):
-    """MOCK_PLUGINS: the markets, the catalog, installing from it, and the plugins' declarative UI. False otherwise."""
+    """MOCK_EXTENSIONS: the markets, the catalog, installing from it, and the plugins' declarative UI. False otherwise."""
     if not PLUGINS_MODE: return False
     method = handler.command
     q = {k: v[0] for k, v in parse_qs(urlparse(handler.path).query).items()}
@@ -10755,7 +10755,7 @@ def markets_route(handler, p, body):
     return False
 
 # MOCK_FILE_OPS=1 (#4883, the hub / node side is #4858): uploads into a folder (dest=dir) and rename / move / trash /
-# restore, as #4858's interface says: only home is writable, not ~/.persona, ~/.jarvis, ~/Library; a name already
+# restore, as #4858's interface says: only home is writable, not ~/.persona, ~/.persona, ~/Library; a name already
 # there is 409 `exists` unless conflict=replace|keep; the trash keeps what it took to put it back.
 FILE_OPS = bool(os.environ.get("MOCK_FILE_OPS"))
 FILE_TRASH = {}  # trash id -> (tree key, {key: value} of everything moved)
@@ -10773,7 +10773,7 @@ def file_ops_key(mid, path, cwd):
     if ab != home and not ab.startswith(home + "/"):
         return home, None, ({"error": "只有个人文件夹以内可以写", "code": "read_only"}, 409)
     rel = ab[len(home) + 1:] if ab != home else ""
-    if rel.split("/")[0] in (".persona", ".jarvis", "Library") or rel == "":
+    if rel.split("/")[0] in (".persona", "Library") or rel == "":
         return home, None, ({"error": "这个位置不能写", "code": "read_only"}, 409)
     return home, rel, None
 
@@ -10798,7 +10798,7 @@ def file_ops_dir(mid, d, cwd):
     rel = mock_rel(home, ab)
     if rel is None or not (rel == "" or rel.endswith("/")):
         return home, None, ({"error": "not a directory: %s" % ab, "code": "internal"}, 502)
-    if rel.split("/")[0] in (".persona", ".jarvis", "Library") or (ab != home and not ab.startswith(home + "/")):
+    if rel.split("/")[0] in (".persona", "Library") or (ab != home and not ab.startswith(home + "/")):
         return home, None, ({"error": "这个位置不能写", "code": "read_only"}, 409)
     return home, rel, None
 
@@ -10920,7 +10920,7 @@ def _plugin_needs(pl):
 
 
 def plugins_route(handler, p, body):
-    """MOCK_PLUGINS: GET /api/v1/plugins, a plugin's page and its switch, settings and secrets. False otherwise."""
+    """MOCK_EXTENSIONS: GET /api/v1/plugins, a plugin's page and its switch, settings and secrets. False otherwise."""
     if not PLUGINS_MODE: return False
     if (p.startswith("/api/v1/extensions/") or p.startswith("/api/v1/devices/") and p.endswith("/widgets")) and \
             system_route(handler, p, json.loads(body or b"{}") if body else {}): return True
@@ -11010,7 +11010,7 @@ def plugins_route(handler, p, body):
 # ---------- MOCK_VOICE: the hub's voice plugin (docs/extensions.md "Voice", docs/android.md "Voice chat") ----------
 # MOCK_VOICE=1 serves a running voice plugin: /api/v1/plugins, its voices and models, the model configuration of
 # plugin.voice, and a socket that answers start with ready, then talks by a script (captions, a tool, audio). Modes for
-# captures: drop (closes with 1001, a plugin restart, while Jarvis speaks), bad-model (the model configuration says the
+# captures: drop (closes with 1001, a plugin restart, while Persona speaks), bad-model (the model configuration says the
 # model cannot be used), missing-model (the configured model is not in the plugin's catalog), old-hub (no model
 # configuration for it: 404), error (a fatal error after ready), off (no running voice plugin; its socket is a 404),
 # slow (ready comes 8 s after start: the page stays "Connecting…").
@@ -11029,15 +11029,15 @@ VOICE_VOICES = {
 }
 # What --help lists after the options.
 MOCK_HELP = [
-    "MOCK_MANUAL_HERDR=1  没挂待办的 herdr Agent 算手动开的（started_by_jarvis 为假），Agents「按待办」里出「手动开的」一段（#2917）",
+    "MOCK_MANUAL_HERDR=1  没挂待办的 herdr Agent 算手动开的（started_by_persona 为假），Agents「按待办」里出「手动开的」一段（#2917）",
     "MOCK_ORCA_CHILDREN=1  MacBook 上一个 Orca 工作区带三个子工作区（其中一个还有子项，parent_space_id，#2073）",
-    "MOCK_PLUGINS=1  设置 › 插件：五个示例插件（需要设置 / 运行中 / hub.json / 已停用 / 不兼容），表单、密钥、开关在内存里",
+    "MOCK_EXTENSIONS=1  设置 › 插件：五个示例插件（需要设置 / 运行中 / hub.json / 已停用 / 不兼容），表单、密钥、开关在内存里",
     "MOCK_CONNECTOR_PLUGIN=1  设置 › 连接器：一个插件提供的通用连接器「示例笔记」，令牌 example-token 一步登录",
     "PORT=<端口>  监听端口，默认 18760；0 表示自动分配（启动时打印 mock hub on <地址>:<端口>）",
     "MOCK_HUB_ID=<id>  固定 hub_id（默认每次启动随机）：换 MOCK_* 开关重启后，已配对的 App 不用重新配对",
     "MOCK_VOICE=1|drop|bad-model|missing-model|old-hub|error|off|slow  语音插件和它的 WebSocket（docs/android.md「语音对话」）",
-    "MOCK_NEEDS=none|two  Jarvis 首页「现在要你处理的事」：什么都没有 / 一个请求加一件收件箱（默认超过三件）",
-    "MOCK_HISTORY=1  很长的 Jarvis 对话历史（最近 30 个 + 查看全部）、一段交接对话、一个置顶，置顶写入会保存",
+    "MOCK_NEEDS=none|two  Persona 首页「现在要你处理的事」：什么都没有 / 一个请求加一件收件箱（默认超过三件）",
+    "MOCK_HISTORY=1  很长的 Persona 对话历史（最近 30 个 + 查看全部）、一段交接对话、一个置顶，置顶写入会保存",
     "MOCK_MODELS_SECONDS=<秒>  新建 Agent 里列一个启动器的模型要多久（默认 0.8，CLI 起来回答的时间）",
 ]
 
@@ -11098,7 +11098,7 @@ def voice_route(handler, p, q):
 
 
 def voice_socket(h):
-    """A voice conversation by script: start -> ready, then the user asks, Jarvis looks it up and answers aloud
+    """A voice conversation by script: start -> ready, then the user asks, Persona looks it up and answers aloud
     (24 kHz silence as audio). interrupt cuts the answer (clear). The app's microphone frames are read and dropped."""
     key = h.headers.get("Sec-WebSocket-Key", "")
     accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
@@ -11123,7 +11123,7 @@ def voice_socket(h):
         except OSError: pass
         state["open"] = False
 
-    def audio():  # 20 ms of 24 kHz PCM16 silence every 20 ms while Jarvis speaks
+    def audio():  # 20 ms of 24 kHz PCM16 silence every 20 ms while Persona speaks
         chunk = bytes(960)
         while state["open"] and state["speaking"]:
             try: frame(0x2, chunk)
@@ -11728,8 +11728,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})
         if p == "/api/v1/assistant/memory":
             if parse_qs(urlparse(self.path).query).get("space", [""])[0] == "health":
-                return self.send_json({"files": HEALTH_MEMORY, "dir": "/home/me/.jarvis/health/memory"})
-            return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
+                return self.send_json({"files": HEALTH_MEMORY, "dir": "/home/me/.persona/health/memory"})
+            return self.send_json({"files": MEMORY, "dir": "/home/me/.persona/assistant/memory"})
         if p.startswith("/api/v1/machines/") and p.endswith("/health/reports"): return self.send_json({"reports": HEALTH_REPORTS})
         if p.startswith("/api/v1/machines/") and p.endswith("/file") and q.get("path", [""])[0].startswith(HEALTH_REPORTS_DIR):
             path = q["path"][0]
@@ -11982,7 +11982,7 @@ class H(BaseHTTPRequestHandler):
                 if t > float(after) and not (back and t > float(after) + float(back)):
                     return self.send_json({"error": "node macbook: not connected"}, 503)
             return self.send_json({"text": TERMINAL, "status": "idle"})
-        if p.startswith("/api/v1/kb/"):  # the knowledge base (Jarvis › Knowledge base)
+        if p.startswith("/api/v1/kb/"):  # the knowledge base (Persona › Knowledge base)
             parts = p.split("/")[4:]
             kind = parts[0]
             if len(parts) == 1:
@@ -12001,7 +12001,7 @@ class H(BaseHTTPRequestHandler):
             e = next((e for e in KB.get(kind, []) if e["id"] == parts[1]), None)
             if e is None: return self.send_json({"error": "not found"}, 404)
             # Like the hub's Detail, meta is always there (the entry's own fields unless KB_DETAIL has more).
-            d = dict({"kind": kind, "id": e["id"], "path": "/home/me/.jarvis/data/%s/%s" % (kind, e["id"]), "meta": e,
+            d = dict({"kind": kind, "id": e["id"], "path": "/home/me/.persona/data/%s/%s" % (kind, e["id"]), "meta": e,
                       "summary": e.get("one_line")}, **KB_DETAIL.get((kind, e["id"]), {}))
             out = {"detail": d}
             word = (q.get("q") or [""])[0]
@@ -12093,7 +12093,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"error": "文件超过 200 MB", "code": "too_large", "limit": 200 << 20}, 413)
         if os.environ.get("MOCK_UPLOAD_OLD_NODE"):
             self.body()
-            return self.send_json({"error": "MacBook 上的 jarvisd 太旧，不能接收文件，需要重新部署", "code": "node_outdated"}, 409)
+            return self.send_json({"error": "MacBook 上的 personad 太旧，不能接收文件，需要重新部署", "code": "node_outdated"}, 409)
         if (q.get("dest") or [""])[0] == "dir":
             return file_ops_upload(self, q, n)
         kbps = int(os.environ.get("MOCK_UPLOAD_KBPS", "2048"))
@@ -12218,7 +12218,7 @@ class H(BaseHTTPRequestHandler):
             tok = "jp_mock%d" % (len(TOKENS) + 1)
             expires = (datetime.now(timezone.utc) + timedelta(seconds=int(os.environ.get("MOCK_PAIR_SECONDS") or 600)))
             reply = {"token": tok, "expires_at": expires.isoformat().replace("+00:00", "Z"), "url": "https://hub.example.com",
-                     "pair_url": "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=" + tok, "qr": _mock_qr(tok)}
+                     "pair_url": "persona://pair?url=https%3A%2F%2Fhub.example.com&token=" + tok, "qr": _mock_qr(tok)}
             if web:
                 reply["web_url"] = web + "#token=" + tok
                 reply["web_qr"] = _mock_qr(reply["web_url"])
@@ -12496,13 +12496,13 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "bad options"}, 400)
             GITHUB_CONNECTOR.setdefault("options", {}).update({k: v for k, v in o.items() if v is not None})
             return self.send_json(GITHUB_CONNECTOR)
-        if self.command == "PUT" and p == "/api/v1/imessage/settings":  # "Give to Jarvis" on / off
+        if self.command == "PUT" and p == "/api/v1/imessage/settings":  # "Give to Persona" on / off
             body = json.loads(self.last_body or b"{}")
             if not isinstance(body.get("ai"), bool): return self.send_json({"error": "ai: true or false"}, 400)
             IMESSAGE_STATUS["ai"] = body["ai"]
             return self.send_json(IMESSAGE_STATUS)
-        if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once "Give to Jarvis" is off
-            if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Jarvis」再删除", "code": "ai_on"}, 409)
+        if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once "Give to Persona" is off
+            if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Persona」再删除", "code": "ai_on"}, 409)
             return self.send_json({"chats": 6, "people": 9, "inbox": 1})
         if p.startswith("/api/v1/machines/") and p.endswith("/browser/cookies") and MOCK_BROWSER:  # sign-ins in ego (#1304)
             return self.send_json(*cookie_call(self.command, parse_qs(urlparse(self.path).query), self.last_body))
@@ -12756,12 +12756,12 @@ class H(BaseHTTPRequestHandler):
             # conversation (assistant/start.go startMain).
             mid = body.get("machine_id") or ASSISTANT_CONFIG["machine_id"]
             home = next((m.get("home") for m in MACHINES if m["id"] == mid), None)
-            session.update(machine_id=mid, **({"cwd": home + "/.jarvis/assistant"} if home and mid != "server" else {}))
+            session.update(machine_id=mid, **({"cwd": home + "/.persona/assistant"} if home and mid != "server" else {}))
             session.update(status="working", state="working", updated_at=now, launcher=body.get("launcher") or "claude",
                            permission_mode=body.get("permission_mode") or "", effort=body.get("effort") or "")
             session["main"] = bool(body.get("main"))
             if body.get("space") == "health":
-                session.update(cwd="/home/me/.jarvis/health", space="health")
+                session.update(cwd="/home/me/.persona/health", space="health")
             if session["main"]:
                 ASSISTANT_CONFIG["main"] = sid
             ASSISTANT.append(session)
@@ -12965,7 +12965,7 @@ class H(BaseHTTPRequestHandler):
                 for k in ("kind", "api", "base_url", "small_model"): b[k] = b.get(k) or pr.get(k, "")
                 b["model"] = b.get("model") or pr.get("model") or (pr.get("models") or [{}])[0].get("id", "")
             if not b.get("base_url") or not b.get("model"): return self.send_json({"error": "要填 Base URL 和模型"}, 400)
-            l = {"name": name, "source": "jarvis", "base_url": b["base_url"], "model": b["model"], "has_key": bool(b.get("api_key"))}
+            l = {"name": name, "source": "persona", "base_url": b["base_url"], "model": b["model"], "has_key": bool(b.get("api_key"))}
             for k in ("kind", "api", "small_model", "args"):
                 if b.get(k): l[k] = b[k]
             LAUNCHERS.insert(0, l)
@@ -12973,7 +12973,7 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/launchers/") and (self.command == "DELETE" or p.endswith("/restore")):  # hide / bring back
             l = next((l for l in LAUNCHERS if l["name"] == p.split("/")[4]), None)
             if l is None: return self.send_json({"error": "没有这个启动器"}, 404)
-            if l["source"] == "jarvis" and self.command == "DELETE": LAUNCHERS.remove(l)  # a Jarvis one is deleted
+            if l["source"] == "persona" and self.command == "DELETE": LAUNCHERS.remove(l)  # a Persona one is deleted
             else: l["hidden"] = self.command == "DELETE"
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":  # the Android app's "Cancel"
@@ -13199,7 +13199,7 @@ class H(BaseHTTPRequestHandler):
             for k in ("enabled", "features", "domain"):
                 if k in body: FEISHU_BOT[k] = body[k]
             if body.get("app_id"):
-                FEISHU_BOT.update(app_id=body["app_id"], has_secret=True, connected=True, bot_name="Jarvis")
+                FEISHU_BOT.update(app_id=body["app_id"], has_secret=True, connected=True, bot_name="Persona")
             if not FEISHU_BOT["enabled"]: FEISHU_BOT["connected"] = False
             elif FEISHU_BOT["has_secret"]: FEISHU_BOT["connected"] = True
             return self.send_json({k: v for k, v in FEISHU_BOT.items() if v is not None})
@@ -13862,7 +13862,7 @@ def features():
     return _features_without_channels() + (["channels"] if CHANNELS_MODE else [])
 
 
-MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_PLUGINS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
+MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_EXTENSIONS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
 MOCK_HELP.append("MOCK_MANAGER_EXPIRED=1  设置 › 管理者：多一个安装码过期了还没装的（码已过期，可以拿新的安装码），和一个过期超过 7 天的（像 hub 一样不在名册里）")
 MOCK_HELP.append("MOCK_MANAGER_COMMANDS=1  设置 › 管理者：新建 / 换个地方装的回答带安装命令（commands.service / docker）；MOCK_MANAGERS=0 是还没有名册的旧 hub（/api/v1/managers 404）")
 MOCK_HELP.append("MOCK_SENT=1|empty|nodb|forbidden|old  Settings > Sent as you (#5278, scripts/mock/sent_ledger_mock.py): 1 is about 70 made-up rows (four ways through the gate, one text of 4000 characters), empty has none, nodb is 503 no_database, forbidden 403, old a hub from before the ledger (404 with no code)")
@@ -14021,7 +14021,7 @@ if DOC_COMMENTS:
 # event log; GET /mock/restart?gap_ms=1500&missed=todos,inbox says hub_restarting and closes every socket with 1001,
 # connections in the next gap_ms wait (the socket's backlog), the `missed` broadcasts are numbered while nobody is
 # connected and replayed after a resumed hello; &drop_post=1: the next write with an op id is done but its answer
-# lost (the old process went). Writes with X-Jarvis-Op-Id are done once: a repeat gets the first answer.
+# lost (the old process went). Writes with X-Persona-Op-Id are done once: a repeat gets the first answer.
 # GET /mock/restart (no gap_ms): what happened (restarts, connects and whether they resumed, op ids, GET hits).
 RESTART_MODE = os.environ.get("MOCK_RESTART") == "1"
 RESTART = {"stream": "mock-" + uuid.uuid4().hex[:8], "seq": 0, "log": [], "gap_until": 0.0, "drop_post": False,
@@ -14098,7 +14098,7 @@ if RESTART_MODE:
         return handler.send_json({**state, "hits": HITS})
 
     def _restart_post(handler):
-        op = (handler.headers.get("X-Jarvis-Op-Id") or "").lower()
+        op = (handler.headers.get("X-Persona-Op-Id") or "").lower()
         if not op:
             return _post_before_restart(handler)
         path = urlparse(handler.path).path
@@ -14139,7 +14139,7 @@ MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290
 
 
 # ---------- area: an inbox item's page drawn by a plugin (docs/extensions.md "Inbox items", #1681) ----------
-# MOCK_INBOX_ITEM_UI=1 (with MOCK_PLUGINS=1): a plugin example-chat draws the page of Feishu's items (inbox_item for
+# MOCK_INBOX_ITEM_UI=1 (with MOCK_EXTENSIONS=1): a plugin example-chat draws the page of Feishu's items (inbox_item for
 # connector lark), from the item it is told of (context.item): the people, the time it spans, the thing it continues
 # and its messages, a reply (files the item as replied) and "View in conversation" (persona://inbox/<item>/source: the apps open the
 # item's own chat). "Handled" stays the app's own. Items of another source are refused (403), an unknown one is 404, like
@@ -14198,7 +14198,7 @@ def features():
     return f + (["plugin_ui_slots"] if INBOX_ITEM_UI and "plugin_ui_slots" not in f else [])
 
 
-MOCK_HELP.append("MOCK_INBOX_ITEM_UI=1  （和 MOCK_PLUGINS=1 一起）收件箱里飞书的条目由插件 example-chat 画详情正文（inbox_item）：涉及的人、时间、接着哪件、消息链、回复、在会话里看（persona://inbox/<条目>/source）；群聊的条目插件出错")
+MOCK_HELP.append("MOCK_INBOX_ITEM_UI=1  （和 MOCK_EXTENSIONS=1 一起）收件箱里飞书的条目由插件 example-chat 画详情正文（inbox_item）：涉及的人、时间、接着哪件、消息链、回复、在会话里看（persona://inbox/<条目>/source）；群聊的条目插件出错")
 
 
 # ---------- MOCK_LIVE_STATUS: a working Claude's status line (session.live, #1963) ----------
@@ -14331,11 +14331,11 @@ if os.environ.get("MOCK_AGENT_PLANS") == "1":
     MOCK_HELP.append("MOCK_AGENT_PLANS=1  小组件的 Agent 计划 3/5（在复现崩溃），网络层测试的 Agent 1/4（#5302）")
 MOCK_HELP.append("MOCK_GOAL=1|stopped  macbook 上「给天气 App 加主屏幕小组件」有一个进行中的 goal（带最近一次检查的理由），「检查 PR #42 的改动」的 goal 已达成；stopped 时小组件那个 goal 用完了 token 预算（#2420）")
 
-# ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md "Naming and compatibility") ----------
+# ---------- MOCK_EXTENSIONS: a hub from #1844 on (docs/extensions.md "Naming and compatibility") ----------
 # It says `extensions` and the extension_* features beside the old ones and answers /api/v1/extensions/… with the new keys
 # (extensions, extension, extension_name; a market's count extensions), by way of the old routes above.
-# MOCK_PLUGINS_LEGACY=1: a hub from before the rename, /api/v1/plugins only.
-EXTENSIONS_API = PLUGINS_MODE and not os.environ.get("MOCK_PLUGINS_LEGACY")
+# MOCK_EXTENSIONS_LEGACY=1: a hub from before the rename, /api/v1/plugins only.
+EXTENSIONS_API = PLUGINS_MODE and not os.environ.get("MOCK_EXTENSIONS_LEGACY")
 _NEW_KEYS = {"plugins": "extensions", "plugin": "extension", "plugin_name": "extension_name"}
 
 
@@ -14462,7 +14462,7 @@ if os.environ.get("MOCK_EXTENSION_NOTIFICATIONS") == "1" and EXTENSIONS_API:
 
 
 # ---------- MOCK_EXTENSION_AUTH: CLI tools and sign-in (docs/extensions.md "Command-line programs (tools)" "Sign-in (auth)", #4507) ----------
-# MOCK_EXTENSION_AUTH=1 (with MOCK_PLUGINS and MOCK_EXTENSION_OPS): the hub says extension_auth, and the first market lists
+# MOCK_EXTENSION_AUTH=1 (with MOCK_EXTENSIONS and MOCK_EXTENSION_OPS): the hub says extension_auth, and the first market lists
 # "Example queries", which installs two command-line programs (node: the machine's own; example-cli: downloaded in four
 # parts in the operation's tools step, between consent and install) and signs in. The install ends with next "auth";
 # signing in is a QR step (=1, or =device: a device code with its link) asked again until the third poll
@@ -14621,10 +14621,10 @@ if EXT_AUTH:
         handler.send_json({"error": "not found"}, 404); return True
 
 
-MOCK_HELP.append("MOCK_EXTENSION_AUTH=1|device|installed|device-installed  （配合 MOCK_PLUGINS、MOCK_EXTENSION_OPS）扩展市场里的「Example 查询」装两个命令行程序（安装步骤多一步「安装命令行」）并要登录：装完 next=auth，登录是扫码（device：验证码和链接），第 3 次轮询登录成功（MOCK_EXTENSION_AUTH_POLLS）；installed：已经装好、未登录；MOCK_EXTENSION_AUTH_OLD=1 不说 extension_auth（旧 hub，#4507）")
+MOCK_HELP.append("MOCK_EXTENSION_AUTH=1|device|installed|device-installed  （配合 MOCK_EXTENSIONS、MOCK_EXTENSION_OPS）扩展市场里的「Example 查询」装两个命令行程序（安装步骤多一步「安装命令行」）并要登录：装完 next=auth，登录是扫码（device：验证码和链接），第 3 次轮询登录成功（MOCK_EXTENSION_AUTH_POLLS）；installed：已经装好、未登录；MOCK_EXTENSION_AUTH_OLD=1 不说 extension_auth（旧 hub，#4507）")
 
 
-# MOCK_RELAY_ACCOUNTS=<fixture> (with MOCK_PLUGINS=1): quota-relay's sidebar page "Relay accounts" as a nav_page, drawn from
+# MOCK_RELAY_ACCOUNTS=<fixture> (with MOCK_EXTENSIONS=1): quota-relay's sidebar page "Relay accounts" as a nav_page, drawn from
 # the extension's exported Views (web/src/views/extensions/testdata/relay-accounts-view.json, made-up accounts, #4576).
 if os.environ.get("MOCK_RELAY_ACCOUNTS") and PLUGINS_MODE:
     from relay_accounts import RelayAccountsMock
@@ -14636,7 +14636,7 @@ if os.environ.get("MOCK_RELAY_ACCOUNTS") and PLUGINS_MODE:
         return _plugins_route_without_relay_accounts(_relay_accounts.wrap(handler, p), p, body)
 
 
-MOCK_HELP.append("MOCK_RELAY_ACCOUNTS=<fixture.json>  （配合 MOCK_PLUGINS=1）侧边栏多一个扩展页「中转账号」，内容是 quota-relay 导出的 View（web/src/views/extensions/testdata/relay-accounts-view.json，假数据）：默认、选 Kiro、搜索、点一个账号进详情；MOCK_RELAY_ACCOUNTS_START=kiro|detail 让第一次打开就是选了 Kiro / 一个账号的详情，截图不用点（#4576）")
+MOCK_HELP.append("MOCK_RELAY_ACCOUNTS=<fixture.json>  （配合 MOCK_EXTENSIONS=1）侧边栏多一个扩展页「中转账号」，内容是 quota-relay 导出的 View（web/src/views/extensions/testdata/relay-accounts-view.json，假数据）：默认、选 Kiro、搜索、点一个账号进详情；MOCK_RELAY_ACCOUNTS_START=kiro|detail 让第一次打开就是选了 Kiro / 一个账号的详情，截图不用点（#4576）")
 
 
 # ---------- area: adding a computer from a signed-in device (#287, docs/onboarding.md 4.2, 5.3) ----------
@@ -14740,10 +14740,10 @@ if ADD_COMPUTER:
                 os_name = "mac"
             tok = "jp_mock%d" % (len(TOKENS) + 1)
             expires = datetime.now(timezone.utc) + timedelta(seconds=int(os.environ.get("MOCK_PAIR_SECONDS") or 600))
-            pair = "jarvis://link?url=https%3A%2F%2Fhub.example.com&token=" + tok + "&machine=" + m["id"]
+            pair = "persona://link?url=https%3A%2F%2Fhub.example.com&token=" + tok + "&machine=" + m["id"]
             reply = {"token": tok, "expires_at": expires.isoformat().replace("+00:00", "Z"), "url": "https://hub.example.com",
                      "machine": m["id"], "name": m["name"], "trust": "pending", "pair_url": pair,
-                     "command": "jarvis-link pair '%s'" % pair}
+                     "command": "persona-link pair '%s'" % pair}
             if added:
                 reply["added"] = True
             if not os.environ.get("MOCK_ADD_COMPUTER_NO_SITE"):
@@ -14843,7 +14843,7 @@ if READINESS:
         if _code:  # the main conversation's only turn: answered (full), or failed so
             _text = readiness_mock.ANSWER if _code == "ok" else readiness_mock.TURN_ERRORS[_code]
             _main = assistant_sess(READY_MAIN, "", 2, _text)
-            _main.update(machine_id="mbp", cwd="/Users/me/.jarvis/assistant", launcher=_launcher, main=True)
+            _main.update(machine_id="mbp", cwd="/Users/me/.persona/assistant", launcher=_launcher, main=True)
             if _code != "ok":
                 _main.update(turn_error=_text, turn_error_code=_code,
                              **({"turn_error_kind": "user"} if _code in readiness_mock.USER_TURN_ERRORS else {}))
@@ -14919,7 +14919,7 @@ def _builtin_preset_route(handler, p, body):
         handler.send_json({"error": "已经有叫 %s 的启动器了" % name}, 409)
         return True
     display = (b.get("display_name") or "").strip() or (pr.get("display_name", "") + ("" if n == 1 else " %d" % n))
-    l = {"name": name, "display_name": display, "source": "jarvis", "kind": "launcher", "api": "messages", "base_url": pr["base_url"],
+    l = {"name": name, "display_name": display, "source": "persona", "kind": "launcher", "api": "messages", "base_url": pr["base_url"],
          "auth": pr.get("auth", "api_key"), "model": b.get("model") or pr.get("model", ""), "has_key": bool(b.get("api_key")),
          "origin": "preset:" + pr["id"]}
     LAUNCHERS.insert(0, l)

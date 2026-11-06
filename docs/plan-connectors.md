@@ -163,7 +163,7 @@ type ReadTools interface {
 - Descriptions and schemas live in `server/internal/prompts/mcp/<connector>/<tool name>.md` (unchanged format from `docs/prompts.md` ("MCP tools")), read by `prompts.Tool(name)`.
 - The hub tool list comes from `Registry`: only `ok` connectors expose tools (today's two booleans in `assistantTools(withLark, withMail)` are a special case);
   `callTool` / `runAssistantTool` dispatch by prefix. `mcp_tools.*` goldens must remain byte-for-byte identical across migration.
-- Read-only tools need no approval under `--allowedTools mcp__jarvis` (like today's `lark_*`); writes do not belong here.
+- Read-only tools need no approval under `--allowedTools mcp__persona` (like today's `lark_*`); writes do not belong here.
 
 ### 7. Writes (`Actions`)
 
@@ -215,7 +215,7 @@ Lark, Moments, `mail`, GitHub. Implement the interfaces directly, release with `
 
 ### External process (reuse the plugin mechanism, code in another `repo`)
 
-Add `kind: "connector"` to plugins in `docs/extensions.md`: the hub still starts the process, supplies `JARVIS_PLUGIN_SOCKET`, checks health and restarts with backoff;
+Add `kind: "connector"` to plugins in `docs/extensions.md`: the hub still starts the process, supplies `PERSONA_PLUGIN_SOCKET`, checks health and restarts with backoff;
 remote plugins that only connect to the socket (`ssh -R`) still work. The plugin exposes over the socket:
 
 | Path | Purpose |
@@ -267,11 +267,11 @@ A `connector` uses only **one** machine (configured as `imessage.machine`), not 
 
 One PR per step, with the same checks before merging:
 
-- **All existing tests pass**: `./scripts/test/test-server.sh` (hub machine, real Postgres), `go test ./...`, App `JarvisTests` and `Inbox` / knowledge-base UI tests.
+- **All existing tests pass**: `./scripts/test/test-server.sh` (hub machine, real Postgres), `go test ./...`, App `PersonaTests` and `Inbox` / knowledge-base UI tests.
 - **Byte-identical goldens**: prompts, MCP tool lists (`mcp_tools.*`, `mail_tools`).
 - **New comparison tests** (write in M0, baseline generated with old code): fake Lark gateway + fake `mail` (synthetic data), one archive + `Inbox` collection round,
   saving results (knowledge-base directory tree and every file's content, `InboxItem` JSON) as goldens; every subsequent step must match.
-- **Real-data comparison** (read-only, print numbers only): `jarvisd dev connector-diff` (DEBUG builds / tests only), using real Lark gateway and `mail` on the hub machine;
+- **Real-data comparison** (read-only, print numbers only): `personad dev connector-diff` (DEBUG builds / tests only), using real Lark gateway and `mail` on the hub machine;
   run old and new code once each into two temporary directories (no touching `~/.persona/data`, database writes or marking read), comparing each conversation's line count/content hash and `Inbox` item id / `kind` / thread ownership.
   Print only "`match` / conversation N differs, by N lines", not content. Delete temporary directories afterwards.
 
@@ -412,7 +412,7 @@ and `repo` is sufficient, so users need not generate another token.
 - For `ssh … personad node --stdio` started by the hub, the responsible process is `sshd-keygen-wrapper`. Granting it Full Disk Access grants **every ssh session on this Mac**,
   not just personad. These Macs already do this (enabled earlier for Desktop and Documents).
 - Granting `personad` itself does not help: ssh children still belong to sshd; `personad`'s binary also `changes` on every deployment with ad-hoc signing, invalidating permission.
-- The smallest, most stable approach is a **separate helper**: `jarvisd messages-helper`, run by the user's LaunchAgent (started by `launchd`, responsible for itself),
+- The smallest, most stable approach is a **separate helper**: `personad messages-helper`, run by the user's LaunchAgent (started by `launchd`, responsible for itself),
   exposing only "read `chat.db` / contacts, fetch attachments" on a local unix socket for the node. Only the helper gets permission; signing must be stable (Developer ID, recognized by team ID, preserving permissions across versions),
   so it releases separately rather than with every `personad` deployment.
 - Recommendation: **use existing ssh permission in phase one** (already enabled, zero setup; `connector.list` reports `no_permission` and guidance on failure),
@@ -422,7 +422,7 @@ and `repo` is sufficient, so users need not generate another token.
 
 Hand to AI (#528, user 2026-11-03: "iMessage text can be given to AI, like Lark"): node `connector.changes` returns new messages incrementally by `ROWID` (first fetch starts 30 days back), `connector.search` supports assistant search;
 by default, expose only conversations with a contact-book member or in which I have spoken (exclude unsaved short-code senders such as codes, banks and delivery services). Redact verification codes in AI text, not in App-only viewing.
-Hub side (`connector/imessage/jarvis.go`): with "Share with Persona" enabled (hub setting `imessage.ai`, on by default), implement `Archive` (knowledge-base conversations `imessage-<conversation hash>`, people `imessage-<number hash>`),
+Hub side (`connector/imessage/persona.go`): with "Share with Persona" enabled (hub setting `imessage.ai`, on by default), implement `Archive` (knowledge-base conversations `imessage-<conversation hash>`, people `imessage-<number hash>`),
 `Inbox` (check recent conversations every 2 minutes: unread enters `Inbox`, direct chats need you, groups are FYI; reading elsewhere or my reply completes it; "`Reply` in Messages" is an `sms:` link, Persona does not send),
 `ReadTools` (`imessage_chats` / `imessage_read` / `imessage_search`). Disabled means none are exposed; stored data is deleted separately: `DELETE /api/v1/imessage/data` (only while disabled) calls `kb.Engine.ForgetSource("imessage")`
 to remove conversations, people, project references and their timeline entries, cursors (projects marked for rewriting, summaries rebuilt from remaining data), then index rows and `Inbox` items. Deleted conversations under compression cannot be written back.

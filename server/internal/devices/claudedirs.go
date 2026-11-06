@@ -20,7 +20,7 @@ import (
 
 func claudeDirsKey(machine string) string { return "claude_dirs/" + machine }
 
-// claudeDirsBlockedKey: the patterns of directories the user keeps out of Jarvis on that machine
+// claudeDirsBlockedKey: the patterns of directories the user keeps out of Persona on that machine
 // (proto.ClaudeDirBlocked): not looked in, not remembered, their sessions not listed.
 func claudeDirsBlockedKey(machine string) string { return "claude_dirs_blocked/" + machine }
 

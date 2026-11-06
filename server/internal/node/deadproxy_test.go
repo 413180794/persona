@@ -190,7 +190,7 @@ func TestManagedSettingsTakeAwayADeadUserProxy(t *testing.T) {
 	}{{dead, alive, true}, {alive, alive, false}, {dead, dead, false}} {
 		home := t.TempDir()
 		t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, "profile"))
-		n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+		n := &Node{home: home, dir: filepath.Join(home, ".persona"), logger: log.New(io.Discard, "", 0)}
 		writeFile(t, filepath.Join(home, "profile", "settings.json"), `{"env":{"HTTP_PROXY":"`+tc.proxy+`","https_proxy":"`+tc.proxy+`"}}`)
 		n.setManaged([]proto.ManagedLauncher{{Name: "m", Kind: "api", BaseURL: tc.gateway, Model: "m1", NoProxy: "gw.example.com",
 			Env: "HTTPS_PROXY=" + alive}})

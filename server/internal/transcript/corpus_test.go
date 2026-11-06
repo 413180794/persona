@@ -4,7 +4,7 @@ package transcript
 // of every file, so two versions of the parser can be compared file by file:
 //
 //	go test -c -o corpus.test ./internal/transcript   (on any version: corpus_shim_test.go adapts the API)
-//	./corpus.test -test.run Corpus -corpus ~/jarvis-corpus/<machine>,~/.claude/projects -out stats.jsonl
+//	./corpus.test -test.run Corpus -corpus ~/persona-corpus/<machine>,~/.claude/projects -out stats.jsonl
 //
 // Nothing here runs without -corpus.
 

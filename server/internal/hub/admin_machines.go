@@ -17,8 +17,8 @@ import (
 // The machines page: what hub.json lists and how each one is doing (with every path the center has to it, and the
 // computers it reaches through members). hub.json's machines are read when the hub starts, so adding or removing one
 // is written to hub.json and waits for a restart. New computers come in two ways (docs/plan-hub-center.md 4): the
-// computer dials the hub (kind link: a jarvis-link pairing link), or the hub dials the computer's connector (kind
-// service: its jarvis://connector link pasted here). ssh is not offered any more; hub.json entries of kind ssh keep
+// computer dials the hub (kind link: a persona-link pairing link), or the hub dials the computer's connector (kind
+// service: its persona://connector link pasted here). ssh is not offered any more; hub.json entries of kind ssh keep
 // working.
 
 var adminMachineID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
@@ -122,7 +122,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			ID       string `json:"id"`
 			Name     string `json:"name"`
 			Icon     string `json:"icon"`
-			PairLink string `json:"pair_link"` // service: the connector's jarvis://connector link
+			PairLink string `json:"pair_link"` // service: the connector's persona://connector link
 			Address  string `json:"address"`   // service: host:port, when not the link's
 			Proxy    string `json:"proxy"`     // service: socks5://host:port
 		}
@@ -256,9 +256,9 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		h.logf("admin: jarvis-link pairing link for %q", id)
+		h.logf("admin: persona-link pairing link for %q", id)
 		h.machineAudit(r.Context(), id, "code", "admin", nil)
-		writeJSON(w, map[string]any{"pair_url": p.PairURL, "expires_at": p.ExpiresAt, "command": "jarvis-link pair '" + p.PairURL + "'"})
+		writeJSON(w, map[string]any{"pair_url": p.PairURL, "expires_at": p.ExpiresAt, "command": "persona-link pair '" + p.PairURL + "'"})
 	})
 }
 
@@ -284,8 +284,8 @@ func machineEntryID(raw json.RawMessage) string {
 	return m.ID
 }
 
-// adminPairCode makes a one-time pairing code like `jarvisd hub pair` (pairing.go): for the app with machine "",
-// else for that link machine's jarvis-link.
+// adminPairCode makes a one-time pairing code like `personad hub pair` (pairing.go): for the app with machine "",
+// else for that link machine's persona-link.
 func (h *Hub) adminPairCode(r *http.Request, machine string) (*pairCode, error) {
 	return h.newPairCode(r.Context(), machine)
 }

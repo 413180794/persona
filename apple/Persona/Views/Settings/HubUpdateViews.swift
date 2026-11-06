@@ -254,7 +254,7 @@ struct HubSettingsPage: View {
             Text("New Image \(l.version)").font(Theme.Font.bodyStrong).lineLimit(1)
             if let im = s.image, im.pinned {
                 // `pull` alone keeps the version the tag names: the tag changes first.
-                Text("On the hub machine (NAS), change JARVIS_IMAGE in the .env next to the compose file to:").foregroundStyle(.secondary)
+                Text("On the hub machine (NAS), change PERSONA_IMAGE in the .env next to the compose file to:").foregroundStyle(.secondary)
                 copyRow(im.name + ":" + l.version)
                 Text("Then run this in that directory:").foregroundStyle(.secondary)
             } else {

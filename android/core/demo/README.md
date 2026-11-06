@@ -14,7 +14,7 @@ Agent 和助手消息仅在内存回显并追加体验说明；同一消息标�
 
 ## 后续接线
 
-- **入口和路由**：配对页「没有 hub？先体验一下」调用 `DemoHub.fromAssets(assets, scope)`，进入现有 `AssistantRoute`／`AppTab.Jarvis`。其余页面继续用 `AgentsRoute`、`InboxRoute`、`SettingsRoute` 和 `ChatRoute`，无需新增体验专用路由。
+- **入口和路由**：配对页「没有 hub？先体验一下」调用 `DemoHub.fromAssets(assets, scope)`，进入现有 `AssistantRoute`／`AppTab.Persona`。其余页面继续用 `AgentsRoute`、`InboxRoute`、`SettingsRoute` 和 `ChatRoute`，无需新增体验专用路由。
 - **DI**：同一实例绑定上述四个接口；`InboxAssistantConnection` 绑定 `demo.inboxConnection`。继续使用 `HubSessionsRepository`、`HubChatRepository`、`HubInteractionCenter`、`RealAssistantRepository`、`RealInboxRepository`。注册事件订阅后可调用 `reconnect()` 发布初始快照。
 - **缓存和发送**：仓库缓存、草稿、收件箱日志和 outbox 必须使用 `demo.hubScope` 的独立存储，发送用这个 scope 构造 `MessageRequest`。不能调用真实配对流程写入演示凭据，也不能复用真实 hub 的缓存和待发消息。退出时关闭演示实例及其仓库作用域、清理演示存储。
 - **提示和退出**：应用根部单独收集 `notices`，通过设计系统的提示色 Snackbar 展示；统一错误出口把 `code=demo` 识别为提示，避免再弹红色错误。设置页增加体验标识、「连接我的 hub」和「退出体验模式」；退出回配对页，配对成功关闭演示实例。只持久化是否正在体验，重启时新建实例。

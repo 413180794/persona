@@ -51,7 +51,7 @@ func (h *Hub) adminNetworkView(r *http.Request) map[string]any {
 		allowed[access] = h.adminWouldAllow(r, s)
 	}
 	return map[string]any{
-		"listen": h.cfg.Listen, "public_url": publicURL, "public_url_from_env": identity.Getenv("JARVIS_PUBLIC_URL") != "",
+		"listen": h.cfg.Listen, "public_url": publicURL, "public_url_from_env": identity.Getenv("PERSONA_PUBLIC_URL") != "",
 		"tls": tls, "advertise": advertise,
 		"advertise_ipv6": public.AdvertiseIPv6 == nil || *public.AdvertiseIPv6,
 		"advertise_lan":  public.AdvertiseLAN == nil || *public.AdvertiseLAN,
@@ -84,7 +84,7 @@ func (h *Hub) adminNetworkRoutes(mux *http.ServeMux) {
 		current := h.adminScope()
 		if current.fromEnv {
 			writeErrCode(w, http.StatusConflict, "from_env",
-				errors.New("the scope comes from JARVIS_ADMIN_ACCESS: change it where the hub is deployed"))
+				errors.New("the scope comes from PERSONA_ADMIN_ACCESS: change it where the hub is deployed"))
 			return
 		}
 		cfg := AdminConfig{Access: strings.TrimSpace(in.Access)}
@@ -158,11 +158,11 @@ func (h *Hub) adminNetworkRoutes(mux *http.ServeMux) {
 		if !readAdminJSON(w, r, &in) {
 			return
 		}
-		// JARVIS_PUBLIC_URL (Docker's .env) wins over the file and is never written into it: the page shows its value,
+		// PERSONA_PUBLIC_URL (Docker's .env) wins over the file and is never written into it: the page shows its value,
 		// sends it back unchanged with the other fields, and a change of it belongs in the deployment.
-		if env := identity.Getenv("JARVIS_PUBLIC_URL"); env != "" && in.PublicURL != nil {
+		if env := identity.Getenv("PERSONA_PUBLIC_URL"); env != "" && in.PublicURL != nil {
 			if strings.TrimSpace(*in.PublicURL) != env {
-				writeErrCode(w, http.StatusConflict, "from_env", errors.New("public_url comes from JARVIS_PUBLIC_URL: change it where the hub is deployed"))
+				writeErrCode(w, http.StatusConflict, "from_env", errors.New("public_url comes from PERSONA_PUBLIC_URL: change it where the hub is deployed"))
 				return
 			}
 			in.PublicURL = nil

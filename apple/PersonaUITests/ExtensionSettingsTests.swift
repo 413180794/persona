@@ -2,13 +2,13 @@ import XCTest
 
 /// Settings › Extensions (docs/extensions.md): the list, a plugin's page with its form drawn from its schema, a secret filled in
 /// (and never shown again), a setting the hub refuses shown beside its field. Against scripts/mock/mock_hub.py with
-/// MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the
-/// screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
+/// MOCK_EXTENSIONS=1: `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the
+/// screenshots, named by `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
 final class ExtensionSettingsTests: XCTestCase {
     @MainActor func testSetUpAnExtension() async throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)") }
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         // Take the count from the current mock's list, not the six extensions there were before later examples were added.
         var (data, response) = try await URLSession.shared.data(from: URL(string: hub + "/api/v1/extensions")!)
         if (response as? HTTPURLResponse)?.statusCode == 404 {
@@ -20,7 +20,7 @@ final class ExtensionSettingsTests: XCTestCase {
         let attention = plugins.filter { ["needs_setup", "error", "incompatible"].contains($0["status"] as? String ?? "") }.count
         let summary = "\(plugins.count) 个" + (attention > 0 ? " · \(attention) 个要处理" : "")
         func shot(_ app: XCUIApplication, _ name: String) {
-            guard let dir = env["JARVIS_SHOTS"] else { return }
+            guard let dir = env["PERSONA_SHOTS"] else { return }
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-\(name)-\(look).png"))
         }
         // The system's notification prompt, on a fresh simulator: answered so it covers nothing.
@@ -28,7 +28,7 @@ final class ExtensionSettingsTests: XCTestCase {
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings"]
         app.launchPinned()

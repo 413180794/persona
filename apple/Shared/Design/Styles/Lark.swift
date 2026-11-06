@@ -6,7 +6,7 @@ nonisolated extension ComponentSpec {
         let stroke = Color(light: 0xDEE0E3, dark: 0x373A40)
         return ComponentSpec(
             title: String(localized: "Lark [Inbox Event Views 7e4419]"), subtitle: String(localized: "Like Lark"),
-            surface: .hairline, buttons: .bordered, fontDesign: .default, previewCorner: 10, components: .jarvis,
+            surface: .hairline, buttons: .bordered, fontDesign: .default, previewCorner: 10, components: .persona,
             canvas: .neutral(page: Color(light: 0xF5F6F7, dark: 0x141414), card: Color(light: 0xFFFFFF, dark: 0x1F1F1F)),
             cardStroke: stroke,
             // The Lark gateway's --message-incoming and its card chrome.

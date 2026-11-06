@@ -1,7 +1,7 @@
 import SwiftUI
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// The file viewer's lexer (docs/ios.md「文件查看器」): what each language's words, strings and comments come out as,
 /// and what carries over from one line to the next.
@@ -95,10 +95,10 @@ struct SyntaxTests {
         #expect(kind(y[3], "&b") == .attribute)
         #expect(kind(y[3], "true") == .number)
         #expect(kind(y[4], "url") == .tag)
-        let toml = lex(.toml, "[package]", "name = \"jarvis\" # n", "edition = 2021")
+        let toml = lex(.toml, "[package]", "name = \"persona\" # n", "edition = 2021")
         #expect(kind(toml[0], "[package]") == .type)
         #expect(kind(toml[1], "name") == .tag)
-        #expect(kind(toml[1], "\"jarvis\"") == .string)
+        #expect(kind(toml[1], "\"persona\"") == .string)
         #expect(kind(toml[2], "2021") == .number)
         let j = lex(.json, #"{"name": "x", "n": -1.5, "ok": true, "v": null}"#)[0]
         #expect(kind(j, #""name""#) == .tag)

@@ -9,7 +9,7 @@ import AppKit
 #endif
 
 nonisolated enum PerfTrace {
-    private static let log = OSLog(subsystem: "Jarvis.Performance", category: .pointsOfInterest)
+    private static let log = OSLog(subsystem: "Persona.Performance", category: .pointsOfInterest)
 
     static func event(_ name: StaticString, _ detail: String = "") {
         os_signpost(.event, log: log, name: name, "%{public}@", detail as NSString)
@@ -134,7 +134,7 @@ struct PerfCountProbe: View {
     private var candidates: [Weak] = []
     private var lastScan: CFTimeInterval = 0
     private var prev: Frame?
-    private static let log = OSLog(subsystem: "Jarvis.Performance", category: "Scroll")
+    private static let log = OSLog(subsystem: "Persona.Performance", category: "Scroll")
 
     private struct Weak { weak var view: UIScrollView? }
 

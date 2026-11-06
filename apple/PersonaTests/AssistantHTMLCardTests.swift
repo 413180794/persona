@@ -3,7 +3,7 @@ import Network
 import Testing
 import UIKit
 import WebKit
-@testable import Jarvis
+@testable import Persona
 
 /// The assistant's free drawing (#2025): what a card's page may ask for, and that its sandbox reaches nothing.
 @Suite(.serialized)
@@ -65,7 +65,7 @@ struct AssistantHTMLCardTests {
             == .open(URL(string: "https://example.com/a")!))
         #expect(HTMLCardRequest.parse(["kind": "open", "url": "persona://session/my-mac/abc"], mainFrame: true) != nil)
         #expect(HTMLCardRequest.parse(["kind": "open", "url": "persona://kb/people/x.md"], mainFrame: true) != nil)
-        #expect(HTMLCardRequest.parse(["kind": "open", "url": "jarvis://task/example"], mainFrame: true) != nil)
+        #expect(HTMLCardRequest.parse(["kind": "open", "url": "persona://task/example"], mainFrame: true) != nil)
         #expect(HTMLCardRequest.parse(["kind": "open", "url": "persona://file/my-mac/%2FUsers%2Fme%2Freport.txt"], mainFrame: true) != nil)
     }
 

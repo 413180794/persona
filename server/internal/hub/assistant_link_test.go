@@ -209,9 +209,9 @@ func runNow(t *testing.T, h *Hub, id string) (proto.Session, error) {
 // testDB is the test Postgres with the assistant's schedule emptied (skipped without one).
 func testDB(t *testing.T) *db.DB {
 	t.Helper()
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
 	}
 	database, err := db.Open(context.Background(), url, db.AllSets)
 	if err != nil {

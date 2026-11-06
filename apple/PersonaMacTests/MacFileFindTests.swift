@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// ⌘K's Files (docs/mac.md「快速打开、新建」): the matcher, ported from the web's `file-find.ts` (same cases).
 struct MacFileFindTests {

@@ -1,11 +1,11 @@
 这是收件箱里的一件事（事件 mail:1），你是示例用户的管理者处理它的那段对话：这件事以后的新消息、示例用户的确认和指示都会发到这段对话里，你接着做，不用从头再来。
 
-<jarvis-context kind="context" title="邮件 · 季度汇报">
+<persona-context kind="context" title="邮件 · 季度汇报">
 类型：邮件（直接发给用户）
 来信：请周五前提交
 邮箱账号 acc1，文件夹 INBOX，最新一封 uid 9（mail_* 工具用）
 
-</jarvis-context>
+</persona-context>
 
 要做的：查清楚构建为什么挂了，回复对方结论
 

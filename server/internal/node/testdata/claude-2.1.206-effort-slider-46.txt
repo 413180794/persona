@@ -1,9 +1,9 @@
   phone_photos_recent / phone_photo_get
   工具(我的可调用工具列表中没有这些 phone_*
-  MCP 工具,jarvis server
+  MCP 工具,persona server
   也没有列出可调用资源)。
 
-  请确认 Jarvis 应用已在 iPhone 上打开、MCP
+  请确认 Persona 应用已在 iPhone 上打开、MCP
   连接正常后再让我重试。
 
 ✻ Sautéed for 29s

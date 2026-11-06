@@ -1,17 +1,17 @@
 import XCTest
 
-/// Settings › Extensions › Messages (iMessage) (#1830 step 6) against scripts/mock/mock_hub.py with MOCK_PLUGINS=1
-/// (TEST_RUNNER_JARVIS_PLUGINS_HUB): a switch per Mac, MacBook on; turning on another is refused with the one on named,
-/// and nothing changes until that one is off. JARVIS_SHOTS keeps the screenshots, named by JARVIS_PLUGINS_APPEARANCE.
+/// Settings › Extensions › Messages (iMessage) (#1830 step 6) against scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1
+/// (TEST_RUNNER_PERSONA_EXTENSIONS_HUB): a switch per Mac, MacBook on; turning on another is refused with the one on named,
+/// and nothing changes until that one is off. PERSONA_SHOTS keeps the screenshots, named by PERSONA_EXTENSIONS_APPEARANCE.
 final class IMessageExtensionTests: XCTestCase {
     @MainActor func testOneMacOnly() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else {
-            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)")
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else {
+            throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)")
         }
         continueAfterFailure = false
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "imessage"]
         app.launchPinned()
@@ -36,7 +36,7 @@ final class IMessageExtensionTests: XCTestCase {
     }
 
     private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: name + ".png"))
     }
 

@@ -1,7 +1,7 @@
 import XCTest
 
 /// Settings and what it pushes: Extensions, the extension market, Persona's settings, scheduled tasks (#5730).
-/// Mock (`scripts/app/perf-test.sh`, suite `settings`): MOCK_PLUGINS=1 MOCK_SCHEDULE=1 MOCK_AGENTS=1.
+/// Mock (`scripts/app/perf-test.sh`, suite `settings`): MOCK_EXTENSIONS=1 MOCK_SCHEDULE=1 MOCK_AGENTS=1.
 final class PerfSettingsTests: PerfTestCase {
     @MainActor private func openSettings(_ extra: [String] = []) {
         launch(["-dev.openChat", "", "-tab", "settings"] + extra)
@@ -95,7 +95,7 @@ final class PerfSettingsTests: PerfTestCase {
         measureScroll(mainScroller(), flicks: 2)
     }
 
-    /// Scheduled tasks (定时任务) scrolled.
+    /// Scheduled tasks scrolled.
     @MainActor func testRoutinesScroll() throws {
         launch(["-dev.openChat", "", "-app.tab", "assistant", "-tab", "assistant"]
                + (shell ? ["-openShellPage", "routines"] : ["-openAssistantPage", "routines"]))
@@ -103,7 +103,7 @@ final class PerfSettingsTests: PerfTestCase {
         measureScroll(mainScroller(), flicks: 2)
     }
 
-    /// The run history (运行记录) scrolled.
+    /// The run history scrolled.
     @MainActor func testRunsScroll() throws {
         launch(["-dev.openChat", "", "-app.tab", "assistant", "-tab", "assistant", "-openAssistantPage", "runs"]
                + (shell ? ["-openShellPage", "profile"] : []))

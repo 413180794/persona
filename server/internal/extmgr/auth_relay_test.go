@@ -52,7 +52,7 @@ func authRelayPackage(t *testing.T, out string) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "relay"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=relay exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "relay"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=relay exec "+self+" \"$@\"\n"), 0o755)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-relay", "name": "Example Relay", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/relay"}, "env": {"RELAY_OUT": %q}},
 		"activation_events": ["on_startup"],

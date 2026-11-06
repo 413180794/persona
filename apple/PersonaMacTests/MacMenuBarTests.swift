@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The menu bar item (docs/mac.md: Dynamic Island / Lock Screen Live Activity → menu bar): what needs you, what's working, what finished.
 @MainActor
@@ -8,7 +8,7 @@ struct MacMenuBarTests {
     private func session(_ id: String, _ state: AgentState, assistant: Bool = false, ago: TimeInterval = 0) -> Session {
         var s = try! JSON.decoder.decode(Session.self, from: Data("""
         {"machine_id":"m","session_id":"\(id)","title":"t-\(id)","cwd":"/w/proj","status":"idle","state":"\(state.rawValue)",
-         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0}
+         "started_by_persona":false,"assistant":\(assistant),"pending_interactions":0}
         """.utf8))
         s.stateSince = Date(timeIntervalSince1970: 1_000_000 - ago)
         return s

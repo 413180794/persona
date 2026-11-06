@@ -1,24 +1,20 @@
 plugins {
-    id("jarvis.android.application")
-    id("jarvis.compose")
-    id("jarvis.hilt")
+    id("persona.android.application")
+    id("persona.compose")
+    id("persona.hilt")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// The application id is personal (docs/config.md): scripts/android.sh passes it from ~/.config/jarvis/config.json.
+// The application id is personal (docs/config.md): scripts/android.sh passes it from ~/.config/persona/config.json.
 val appId = providers.gradleProperty("personaApplicationId")
-    .orElse(providers.gradleProperty("jarvisApplicationId"))
-    .getOrElse("com.example.jarvis")
+    .getOrElse("com.example.persona")
 // A different label lets two builds sit side by side on one phone (with different application ids).
 val appLabel = providers.gradleProperty("personaAppLabel")
-    .orElse(providers.gradleProperty("jarvisAppLabel"))
     .getOrElse("Persona")
 // Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (docs/mail.md "Android").
 val googleOAuthScheme = providers.gradleProperty("personaGoogleOAuthScheme")
-    .orElse(providers.gradleProperty("jarvisGoogleOAuthScheme"))
     .orNull?.takeIf { it.isNotBlank() }
     ?: System.getenv("PERSONA_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
-    ?: System.getenv("JARVIS_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
     ?: "persona.oauth.unset"
 
 // The same language resources drive the contracts, packaged translations, and Android 13's per-app picker.

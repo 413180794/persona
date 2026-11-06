@@ -60,7 +60,7 @@ func (u *uploads) beginIn(dir, name string, size, limit int64, random bool) (str
 	if size > limit {
 		return "", &rpc.Error{Code: proto.CodeTooLarge, Message: fmt.Sprintf("file is larger than %d MB", limit>>20)}
 	}
-	f, err := os.CreateTemp(dir, ".jarvis-upload-*") // 0600
+	f, err := os.CreateTemp(dir, ".persona-upload-*") // 0600
 	if err != nil {
 		return "", err
 	}

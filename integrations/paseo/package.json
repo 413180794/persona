@@ -1,5 +1,5 @@
 {
-  "name": "jarvis-paseo-runtime",
+  "name": "persona-paseo-runtime",
   "version": "0.1.0",
   "private": true,
   "description": "Paseo as a machine's engine in Persona: the bridge from the Paseo daemon to the node's runtime protocol.",

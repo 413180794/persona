@@ -1,4 +1,4 @@
-// Knowledge base (docs/knowledge.md): what Persona knows from the hub's ~/.jarvis/data — projects first, then chats, people,
+// Knowledge base (docs/knowledge.md): what Persona knows from the hub's ~/.persona/data — projects first, then chats, people,
 // docs, meetings and events, most important and most relevant first. Not a browser of Feishu: every row is Persona'
 // own digest, and the way out is handing it to Persona. The iOS app is the reference (KnowledgeView.swift).
 //

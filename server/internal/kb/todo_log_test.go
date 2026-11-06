@@ -14,9 +14,9 @@ func TestProjectsForWork(t *testing.T) {
 	}
 	e := &Engine{Store: st}
 	for name, u := range map[string]Update{
-		"天气 App": {Dirs: []string{"box:/code/weather"}},
-		"jarvis": {},
-		"notes":  {Dirs: []string{"other:/srv/notes"}},
+		"天气 App":  {Dirs: []string{"box:/code/weather"}},
+		"persona": {},
+		"notes":   {Dirs: []string{"other:/srv/notes"}},
 	} {
 		if _, err := e.Apply(KindProject, name, u); err != nil {
 			t.Fatal(err)
@@ -34,9 +34,9 @@ func TestProjectsForWork(t *testing.T) {
 		want         []string
 	}{
 		{"box", "/code/weather/server", []string{"天气-app"}},
-		{"box", "/home/me/jarvis", []string{"jarvis"}},  // no directories registered: by name
-		{"box", "/home/me/jarvis/", []string{"jarvis"}}, // a trailing slash
-		{"box", `C:\src\jarvis`, []string{"jarvis"}},
+		{"box", "/home/me/persona", []string{"persona"}},  // no directories registered: by name
+		{"box", "/home/me/persona/", []string{"persona"}}, // a trailing slash
+		{"box", `C:\src\persona`, []string{"persona"}},
 		{"box", "/home/me/notes", nil}, // notes keeps its code elsewhere: not by name
 		{"box", "/tmp/x", nil},
 		{"box", "", nil},

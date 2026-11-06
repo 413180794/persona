@@ -18,7 +18,7 @@
   "warning_bad": "这一版上次装完起不来，已经回滚过；自动更新不会再装它。",
   "warning_held": "自动更新不会装这一版：{why}。确认没问题可以手动更新。",
   "new_image": "新镜像 {version}",
-  "docker_set_image": "在 hub 所在的机器上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成：",
+  "docker_set_image": "在 hub 所在的机器上，把 compose 文件旁边 .env 里的 PERSONA_IMAGE 改成：",
   "docker_then_run": "再在那个目录里运行：",
   "docker_run": "在 hub 所在的机器上，compose 文件所在的目录里运行：",
   "docker_how": "Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行",

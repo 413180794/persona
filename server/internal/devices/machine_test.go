@@ -13,9 +13,9 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// TestFakeNode is not a test: run as a subprocess (JARVIS_FAKE_NODE=1) it is a node on stdio answering every call.
+// TestFakeNode is not a test: run as a subprocess (PERSONA_FAKE_NODE=1) it is a node on stdio answering every call.
 func TestFakeNode(t *testing.T) {
-	if os.Getenv("JARVIS_FAKE_NODE") != "1" {
+	if os.Getenv("PERSONA_FAKE_NODE") != "1" {
 		t.Skip("helper process")
 	}
 	p := rpc.New("n", os.Stdout)
@@ -36,7 +36,7 @@ func TestReconnectGivesAWorkingConnection(t *testing.T) {
 	m.nodeCmd = func(ctx context.Context) *exec.Cmd {
 		started.Add(1)
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestFakeNode$")
-		cmd.Env = append(os.Environ(), "JARVIS_FAKE_NODE=1")
+		cmd.Env = append(os.Environ(), "PERSONA_FAKE_NODE=1")
 		return cmd
 	}
 	runMachine(t, m)

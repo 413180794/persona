@@ -8,13 +8,13 @@ import (
 	"strings"
 )
 
-// A message can carry <jarvis-context kind="…" title="…" url="…"> blocks: context picked on the phone, or everything
+// A message can carry <persona-context kind="…" title="…" url="…"> blocks: context picked on the phone, or everything
 // a Feishu /agent request hands its agent (prompts/lark). The tag is being renamed <persona-context> (#3182): readers
 // take either name. The apps show only the text outside the blocks as what the
 // user wrote and fold the blocks into one row (docs/lark-agent.md "How the app shows it").
 
 // contextBlockRe is one attributed block (the bare snapshot, ContextRe, is dropped before this).
-var contextBlockRe = regexp.MustCompile(`(?s)(<(?:jarvis|persona)-context\b[^>]*>)(.*?)(</(?:jarvis|persona)-context>)`)
+var contextBlockRe = regexp.MustCompile(`(?s)(<persona-context\b[^>]*>)(.*?)(</persona-context>)`)
 
 // legacyLarkAgentRe is a Feishu /agent prompt as hub wrote it before the instructions moved into a block: an intro line,
 // then a request heading (what was asked), a context heading (blocks, plus a loose line or two), and a how-to heading (the rules).
@@ -32,7 +32,7 @@ func legacyLarkAgent(s string) string {
 	loose := strings.TrimSpace(contextBlockRe.ReplaceAllString(ctx, ""))
 	var b strings.Builder
 	// Still the old name until the apps that read <persona-context> are out (#3182).
-	b.WriteString(`<jarvis-context kind="instructions" title="给 Agent 的说明">` + "\n" + intro + "\n")
+	b.WriteString(`<persona-context kind="instructions" title="给 Agent 的说明">` + "\n" + intro + "\n")
 	if strings.HasPrefix(task, "（") { // no request written: the note in its place is for the agent
 		b.WriteString("\n" + task + "\n")
 		task = "/agent"
@@ -41,7 +41,7 @@ func legacyLarkAgent(s string) string {
 	if loose != "" {
 		b.WriteString("\n" + loose + "\n")
 	}
-	b.WriteString("</jarvis-context>\n")
+	b.WriteString("</persona-context>\n")
 	for _, bl := range blocks {
 		b.WriteString(bl + "\n")
 	}
@@ -107,15 +107,15 @@ func lightContexts(s string, limit int) (string, bool) {
 }
 
 // injectedBlockRes are the blocks Persona and Claude Code put into a user message around what the user wrote: the
-// <persona-context> (or <jarvis-context>) snapshot and attributed blocks, the <persona-view-errors> feedback, <system-reminder>s.
+// <persona-context> snapshot and attributed blocks, the <persona-view-errors> feedback, <system-reminder>s.
 var injectedBlockRes = []*regexp.Regexp{
-	regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`),
+	regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`),
 	regexp.MustCompile(`(?s)<persona-view-errors\b[^>]*>.*?</persona-view-errors>`),
 	regexp.MustCompile(`(?s)<system-reminder\b[^>]*>.*?</system-reminder>`),
 }
 
 // injectedOpenRe is one of those blocks left open: a message clipped inside it (Meta.FirstUser is) ends there.
-var injectedOpenRe = regexp.MustCompile(`<(?:jarvis-context|persona-context|persona-view-errors|system-reminder)\b`)
+var injectedOpenRe = regexp.MustCompile(`<(?:persona-context|persona-view-errors|system-reminder)\b`)
 
 // StripInjected is what the user wrote in a message, for a line that shows it (a title, a notification): without the
 // injected blocks, a block cut off by a clip, and the paste wrappers (what was pasted stays). "" when nothing is left.
@@ -134,9 +134,9 @@ func StripInjected(s string) string {
 }
 
 // injectedNames are the injected blocks' tag names, for an opening tag a clip cut inside its name.
-var injectedNames = []string{"jarvis-context", "persona-context", "persona-view-errors", "system-reminder"}
+var injectedNames = []string{"persona-context", "persona-view-errors", "system-reminder"}
 
-// cutPartialTag drops an opening tag clipped before its name ended ("…<jarvis-con…"), which injectedOpenRe cannot
+// cutPartialTag drops an opening tag clipped before its name ended ("…<persona-con…"), which injectedOpenRe cannot
 // tell from text: what follows the last "<" is a start of one of the names, behind which a clip's "…" ends the text
 // (or which is long enough not to be someone's "<p").
 func cutPartialTag(s string) string {
@@ -159,11 +159,11 @@ func cutPartialTag(s string) string {
 }
 
 // blockTitleRe is an attributed block's whole opening tag with its title.
-var blockTitleRe = regexp.MustCompile(`<(?:jarvis|persona)-context\b[^>]*?\stitle="([^"]*)"[^>]*>`)
+var blockTitleRe = regexp.MustCompile(`<persona-context\b[^>]*?\stitle="([^"]*)"[^>]*>`)
 
 // Title is a message (or a title someone made of one) as a title or a preview line: what the user wrote, else the
 // title of the first attributed block ("Continuing the old main chat" for a main conversation handed over), else "" (the caller
-// falls back to the agent's project). A tag cut off by a clip ("<jarvis-context kind="context" title="Continuing…") has
+// falls back to the agent's project). A tag cut off by a clip ("<persona-context kind="context" title="Continuing…") has
 // no title to take: it is dropped. Strip first, then clip: a clip first can end inside a tag.
 func Title(s string) string {
 	if t := StripInjected(s); t != "" {

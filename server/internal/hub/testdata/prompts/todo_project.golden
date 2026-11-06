@@ -1,4 +1,4 @@
-<jarvis-context kind="context" title="项目 · 天气 App &quot;1.3&quot; · 背景" url="">
+<persona-context kind="context" title="项目 · 天气 App &quot;1.3&quot; · 背景" url="">
 这件事属于这个项目（按你的工作目录找到的）。先看背景；下面的结论是之前同项目的任务做完时记下的，接着做的时候照着来，别再踩同样的坑。
 
 项目：天气 App 的 iOS 和安卓版
@@ -6,4 +6,4 @@
 最近几件做完的事（新的在前）：
 - 2026-11-05 10:02 「修登录页横屏崩溃」结论：修好了 https://github.com/example/weather/pull/12
 - 2026-11-04 18:30 「发 1.3 版」结论：发了 TestFlight
-</jarvis-context>
+</persona-context>

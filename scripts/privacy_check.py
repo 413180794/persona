@@ -6,8 +6,8 @@
     python3 scripts/privacy_check.py --staged --message .git/COMMIT_EDITMSG
     python3 scripts/privacy_check.py --range origin/master..HEAD   # what those commits change, and their messages
 
-What counts as private comes from this machine, never from the repo: the values of ~/.config/jarvis/config.json
-(hosts, hub address, machine names, Apple ids, emails), ~/.config/jarvis/private-words.txt (one word per line:
+What counts as private comes from this machine, never from the repo: the values of ~/.config/persona/config.json
+(hosts, hub address, machine names, Apple ids, emails), ~/.config/persona/private-words.txt (one word per line:
 internal project names, people, anything else) and CLAUDE.local.md's `code spans`. On top of that, any private IPv4
 address, any email outside example.* domains, and the names in BANNED_NAMES (vendors and internal repositories that
 only extensions may name). Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
@@ -30,7 +30,7 @@ HOME = os.path.expanduser("~")
 IGNORE = {"darwin", "linux", "local", "ssh", "true", "false", "server", "localhost"}
 # Files that may hold placeholders that look like the real thing.
 SKIP_FILES = {"scripts/privacy_check.py"}
-# Config keys whose values are published on purpose (App Store contact, the site's address, where jarvisd is published):
+# Config keys whose values are published on purpose (App Store contact, the site's address, where personad is published):
 # fine in PUBLIC_DIRS.
 PUBLIC_KEYS = {"feedback_email", "privacy_url", "site_url"}
 # Hosts many people publish on: a URL there is told apart by its path, so the term keeps the path (a privacy policy that
@@ -76,8 +76,8 @@ def standard_app(key, value):
 def config_values():
     """The config's values, and the subset that is published on purpose (PUBLIC_KEYS)."""
     out, public = set(), set()
-    paths = {os.path.join(HOME, ".config", brand, "config.json") for brand in ("persona", "jarvis")}
-    paths.update(os.path.expanduser(os.environ[key]) for key in ("PERSONA_CONFIG", "JARVIS_CONFIG") if os.environ.get(key))
+    paths = {os.path.join(HOME, ".config", brand, "config.json") for brand in ("persona",)}
+    paths.update(os.path.expanduser(os.environ[key]) for key in ("PERSONA_CONFIG",) if os.environ.get(key))
     defaults = example_values()
     for path in paths:
         try:
@@ -117,7 +117,7 @@ def private_looking(span):
 
 def word_list():
     out = set()
-    for brand in ("persona", "jarvis"):
+    for brand in ("persona",):
         try:
             with open(os.path.join(HOME, ".config", brand, "private-words.txt")) as source:
                 for line in source:

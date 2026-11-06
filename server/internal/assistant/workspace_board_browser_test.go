@@ -25,7 +25,7 @@ func TestWorkspaceBoardBrowserHarness(t *testing.T) {
 	}
 	databaseURL := os.Getenv("WORKSPACE_BOARD_QA_DATABASE_URL")
 	if databaseURL == "" {
-		databaseURL = os.Getenv("JARVIS_TEST_DATABASE_URL")
+		databaseURL = os.Getenv("PERSONA_TEST_DATABASE_URL")
 	}
 	database, err := db.Open(context.Background(), databaseURL, db.ManagerSet)
 	if err != nil {

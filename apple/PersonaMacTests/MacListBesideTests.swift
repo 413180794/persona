@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Persona's Chat History folds the history list away and the conversation takes the window (#856): macOS's three-column
 /// split turned `.detailOnly` straight back into `.all`, the empty sidebar column came out and the list stayed.

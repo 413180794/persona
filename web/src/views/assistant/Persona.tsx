@@ -25,7 +25,7 @@ import { navigate } from "../../lib/router";
 import { settingsHref } from "../settings/nav";
 import { setLookIcon } from "../../lib/look-icon";
 
-const CHOSEN_KEY = "jarvis.persona";
+const CHOSEN_KEY = "persona.persona";
 
 interface PersonaStoreState {
   list: PersonaInfo[];

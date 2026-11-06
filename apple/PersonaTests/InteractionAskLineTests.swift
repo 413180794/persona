@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The needs-you row's one-liner (#4393): a plan shows its first heading, a terminal dialog its question, so the
 /// inbox row says what each card asks instead of only Plan Awaiting Approval / Terminal Needs You.

@@ -3,19 +3,19 @@ import XCTest
 /// The iPad's Persona sidebar is the iPhone drawer's (docs/ios.md「iPad」, 2026-11-05 user): Persona (the main
 /// conversation) first, then Inbox … Machines, the conversations, New Chat + Settings at the foot above Persona's face and machine.
 /// Inbox and Settings are not tabs: Inbox opens beside the sidebar, Settings as a sheet. Against scripts/mock/mock_hub.py
-/// (JARVIS_MOCK_HUB), on an iPad simulator, portrait and landscape. TEST_RUNNER_JARVIS_SHOTS=<dir> keeps screenshots;
-/// TEST_RUNNER_JARVIS_HOLD=<seconds> stays on each page for `simctl io screenshot` (XCUITest's own turn in landscape).
+/// (PERSONA_MOCK_HUB), on an iPad simulator, portrait and landscape. TEST_RUNNER_PERSONA_SHOTS=<dir> keeps screenshots;
+/// TEST_RUNNER_PERSONA_HOLD=<seconds> stays on each page for `simctl io screenshot` (XCUITest's own turn in landscape).
 final class IPadSidebarTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad only") }
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-ui.oldLayout", "NO"]
     }
 
@@ -25,10 +25,10 @@ final class IPadSidebarTests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String) {
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("ipad-sidebar-\(name).png"))
         }
-        if let hold = ProcessInfo.processInfo.environment["JARVIS_HOLD"].flatMap(UInt32.init) { sleep(hold) }
+        if let hold = ProcessInfo.processInfo.environment["PERSONA_HOLD"].flatMap(UInt32.init) { sleep(hold) }
     }
 
     @MainActor private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }

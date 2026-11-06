@@ -42,7 +42,7 @@ func (s *scripted) sent(method string) []string {
 	return out
 }
 
-func jarvisRemote(t *testing.T, answers map[string]string) (*Remote, *scripted) {
+func personaRemote(t *testing.T, answers map[string]string) (*Remote, *scripted) {
 	t.Helper()
 	n := &scripted{answers: answers}
 	c := NewRemote(Config{Machine: "m1"}, "示例 Mac", n.call)
@@ -55,7 +55,7 @@ const zhangJSON = `{"handle":"+15550100","name":"张三"}`
 
 func TestChangesGoToTheKnowledgeBase(t *testing.T) {
 	ctx := context.Background()
-	c, n := jarvisRemote(t, map[string]string{"connector.changes": `{"next":"42","more":true,"batches":[
+	c, n := personaRemote(t, map[string]string{"connector.changes": `{"next":"42","more":true,"batches":[
  {"chat":{"id":"imessage-0123456789ab","name":"张三","members":[` + zhangJSON + `],"services":["SMS"],"last":"2026-10-30T08:00:00Z"},
   "messages":[
    {"id":"7","at":"2026-10-30T07:00:00Z","kind":"message","sender":` + zhangJSON + `,"text":"示例：周五见","service":"SMS"},
@@ -116,7 +116,7 @@ const olderPage = `{"chat":{"id":"imessage-000000000001","name":"张三","member
 
 func TestTheInboxSeesUnreadConversations(t *testing.T) {
 	ctx := context.Background()
-	c, n := jarvisRemote(t, map[string]string{"connector.chats": chatsPage(time.Now()), "connector.older": olderPage})
+	c, n := personaRemote(t, map[string]string{"connector.chats": chatsPage(time.Now()), "connector.older": olderPage})
 	var scopes []string
 	changed := func(s connector.Scope) { scopes = append(scopes, string(s)) }
 	c.look(ctx, changed)
@@ -156,7 +156,7 @@ func TestTheInboxSeesUnreadConversations(t *testing.T) {
 
 func TestToolsReadTheMac(t *testing.T) {
 	ctx := context.Background()
-	c, n := jarvisRemote(t, map[string]string{"connector.chats": chatsPage(time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC)),
+	c, n := personaRemote(t, map[string]string{"connector.chats": chatsPage(time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC)),
 		"connector.older": olderPage,
 		"connector.search": `{"hits":[{"chat":{"id":"imessage-000000000001","name":"张三","members":[],"services":[],"last":"2026-10-30T08:00:00Z"},
 		  "message":{"id":"21","at":"2026-10-30T07:59:00Z","kind":"message","sender":` + zhangJSON + `,"text":"示例：周五见"}}]}`})

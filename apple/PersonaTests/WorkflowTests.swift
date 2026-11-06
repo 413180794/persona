@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Background workflows on a session (#2935, docs/protocol.md `workflows`): read leniently, and what an older hub without
 /// them looks like.

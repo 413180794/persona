@@ -40,7 +40,7 @@ class ContentPresentationTest {
     }
 
     @Test fun preservesReferenceMetadataAndKeepsQueuedUsersApart() {
-        val text = """<jarvis-context kind="edit" title="页面 &amp; 说明" url="https://example.com/document?a=1&amp;b=2">待修改内容</jarvis-context>请修改<pasted_content id="sample">这段</pasted_content>"""
+        val text = """<persona-context kind="edit" title="页面 &amp; 说明" url="https://example.com/document?a=1&amp;b=2">待修改内容</persona-context>请修改<pasted_content id="sample">这段</pasted_content>"""
         val model = messageModel(text)
         val reference = model.contexts.single()
         assertEquals("页面 & 说明", reference.title)

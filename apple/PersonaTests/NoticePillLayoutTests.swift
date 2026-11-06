@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Render the actual notice row: its capsule begins at the row's leading edge, but does not stretch a short label.
 @MainActor struct NoticePillLayoutTests {

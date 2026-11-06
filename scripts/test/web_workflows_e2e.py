@@ -42,7 +42,7 @@ def run(browser, base, token, size, theme, shots, legacy):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(base + "/overview?token=" + token)
     page.wait_for_load_state("networkidle")
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
 
     def shot(name):
         if shots:

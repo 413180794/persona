@@ -17,7 +17,7 @@ import (
 func authNode(t *testing.T, version string) *Node {
 	t.Helper()
 	home := os.Getenv("HOME")
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona"), logger: log.New(io.Discard, "", 0)}
 	n.claudeV.set(version)
 	return n
 }

@@ -11,11 +11,11 @@ class AppNavigatorTest {
         val chat = ChatRoute(target.machineId, target.sessionId)
         val other = ChatRoute("other-machine", target.sessionId)
         stacks.getValue(AppTab.Agents).addAll(listOf(chat, TerminalRoute(target.machineId, target.sessionId)))
-        stacks.getValue(AppTab.Jarvis).add(chat.copy(kind = ConversationKind.Assistant))
+        stacks.getValue(AppTab.Persona).add(chat.copy(kind = ConversationKind.Assistant))
         stacks.getValue(AppTab.Inbox).addAll(listOf(InteractionRoute(chat, "request"), other))
         navigator.sessionClosed(target)
         assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
-        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Jarvis))
+        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Persona))
         assertEquals(listOf(InboxRoute, other), stacks.getValue(AppTab.Inbox))
         navigator.sessionClosed(target)
         navigator.back()
@@ -23,7 +23,7 @@ class AppNavigatorTest {
     }
 
     private val stacks = mapOf<AppTab, MutableList<NavKey>>(
-        AppTab.Jarvis to mutableListOf(AssistantRoute),
+        AppTab.Persona to mutableListOf(AssistantRoute),
         AppTab.Agents to mutableListOf(AgentsRoute),
         AppTab.Inbox to mutableListOf(InboxRoute),
         AppTab.Settings to mutableListOf(SettingsRoute),
@@ -60,11 +60,11 @@ class AppNavigatorTest {
         var assistantKnown = false
         val assistantChat = ChatRoute("machine", "assistant")
         val router = AppNavigator(stacks, { selected }, { selected = it }, chatTab = {
-            if (assistantKnown && it == assistantChat) AppTab.Jarvis else null
+            if (assistantKnown && it == assistantChat) AppTab.Persona else null
         })
-        router.selectTab(AppTab.Jarvis)
+        router.selectTab(AppTab.Persona)
         router.navigate(assistantChat)
-        assertEquals(AppTab.Jarvis, selected)
+        assertEquals(AppTab.Persona, selected)
         assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
         router.back()
 
@@ -73,21 +73,21 @@ class AppNavigatorTest {
         router.selectTab(AppTab.Agents)
         assistantKnown = true
         router.restoreChatTabs()
-        assertEquals(AppTab.Jarvis, selected)
-        assertEquals(listOf(AssistantRoute, assistantChat), stacks.getValue(AppTab.Jarvis))
+        assertEquals(AppTab.Persona, selected)
+        assertEquals(listOf(AssistantRoute, assistantChat), stacks.getValue(AppTab.Persona))
         assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
         router.selectTab(AppTab.Settings)
         router.navigate(assistantChat)
-        assertEquals(AppTab.Jarvis, selected)
-        assertEquals(listOf(AssistantRoute, assistantChat), stacks.getValue(AppTab.Jarvis))
+        assertEquals(AppTab.Persona, selected)
+        assertEquals(listOf(AssistantRoute, assistantChat), stacks.getValue(AppTab.Persona))
     }
 
     @Test fun restoredStackKeepsOwnershipAndSettingsGearOpensTheSettingsTab() {
         val chat = ChatRoute("machine", "assistant")
-        stacks.getValue(AppTab.Jarvis).add(chat)
+        stacks.getValue(AppTab.Persona).add(chat)
         navigator.navigate(chat)
-        assertEquals(AppTab.Jarvis, selected)
-        assertEquals(listOf(AssistantRoute, chat), stacks.getValue(AppTab.Jarvis))
+        assertEquals(AppTab.Persona, selected)
+        assertEquals(listOf(AssistantRoute, chat), stacks.getValue(AppTab.Persona))
         navigator.selectTab(AppTab.Agents)
         navigator.navigate(ConnectionSettingsRoute)
         assertEquals(AppTab.Settings, selected)
@@ -99,14 +99,14 @@ class AppNavigatorTest {
         val assistantChat = ChatRoute("machine", "assistant")
         val opened = mutableListOf<Pair<ChatRoute, Boolean>>()
         val router = AppNavigator(stacks, { selected }, { selected = it }, chatTab = {
-            if (it.sessionId == "assistant") AppTab.Jarvis else AppTab.Agents
+            if (it.sessionId == "assistant") AppTab.Persona else AppTab.Agents
         }, openAssistant = { chat, select ->
-            (chat.sessionId == "assistant").also { if (it) { opened += chat to select; if (select) selected = AppTab.Jarvis } }
+            (chat.sessionId == "assistant").also { if (it) { opened += chat to select; if (select) selected = AppTab.Persona } }
         })
         router.navigate(assistantChat)
         assertEquals(listOf(assistantChat to true), opened)
-        assertEquals(AppTab.Jarvis, selected)
-        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Jarvis))
+        assertEquals(AppTab.Persona, selected)
+        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Persona))
 
         // A page restored before metadata arrived becomes a home request, switching only if it was on screen.
         stacks.getValue(AppTab.Agents).add(assistantChat)
@@ -126,29 +126,29 @@ class AppNavigatorTest {
     @Test fun backFromAnAgentChatOpenedInThePersonaHomeReturnsToTheHome() {
         // A task card in the main conversation opens its agent's chat (#1946): it lands under Agents.
         val router = agentsOwnAgentChats()
-        selected = AppTab.Jarvis
+        selected = AppTab.Persona
         val chat = ChatRoute("machine", "agent")
         router.navigate(chat)
         assertEquals(AppTab.Agents, selected)
         assertEquals(listOf(AgentsRoute, chat), stacks.getValue(AppTab.Agents))
         router.back()
-        assertEquals(AppTab.Jarvis, selected)
+        assertEquals(AppTab.Persona, selected)
         assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
-        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Jarvis))
+        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Persona))
 
         // Already on top under Agents: back still returns to the page it was opened from.
         stacks.getValue(AppTab.Agents).add(chat)
         router.navigate(chat)
         assertEquals(listOf(AgentsRoute, chat), stacks.getValue(AppTab.Agents))
         router.back()
-        assertEquals(AppTab.Jarvis, selected)
+        assertEquals(AppTab.Persona, selected)
 
         // A chat with its kind known goes through the router, and returns the same way.
         val known = ChatRoute("machine", "known", ConversationKind.Agent)
         router.navigate(known)
         assertEquals(AppTab.Agents, selected)
         router.back()
-        assertEquals(AppTab.Jarvis, selected)
+        assertEquals(AppTab.Persona, selected)
     }
 
     @Test fun pagesPushedAboveACrossTabChatGoBackToItFirst() {
@@ -168,7 +168,7 @@ class AppNavigatorTest {
 
     @Test fun pickingATabForgetsWhereACrossTabPageCameFrom() {
         val router = agentsOwnAgentChats()
-        selected = AppTab.Jarvis
+        selected = AppTab.Persona
         val chat = ChatRoute("machine", "agent")
         router.navigate(chat)
         router.selectTab(AppTab.Inbox)

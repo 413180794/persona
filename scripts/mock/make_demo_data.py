@@ -182,7 +182,7 @@ data = {
     "items": m.ITEMS,
     "full": m.FULL,
     "interactions": m.INTERACTIONS,
-    "assistant": {"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.jarvis/assistant", "timezone": "Asia/Shanghai",
+    "assistant": {"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.persona/assistant", "timezone": "Asia/Shanghai",
                   "notes_effective": "", "conversations": m.ASSISTANT, "main": m.ASK1},
     "tasks": m.SCHEDULE,
     "runs": m.RUNS,

@@ -28932,24 +28932,24 @@
       },
       "extractionState": "manual"
     },
-    "Copy the pairing link printed by `personad hub pair` (jarvis://pair?…), then click “Paste Pairing Link”.": {
+    "Copy the pairing link printed by `personad hub pair` (persona://pair?…), then click “Paste Pairing Link”.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Copy the pairing link printed by `personad hub pair` (jarvis://pair?…), then click “Paste Pairing Link”."
+            "value": "Copy the pairing link printed by `personad hub pair` (persona://pair?…), then click “Paste Pairing Link”."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "`personad hub pair`が表示するペアリングリンク（jarvis://pair?…）をコピーし、「ペアリングリンクをペースト」をクリックしてください。"
+            "value": "`personad hub pair`が表示するペアリングリンク（persona://pair?…）をコピーし、「ペアリングリンクをペースト」をクリックしてください。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "拷贝 `personad hub pair` 打印的配对链接（jarvis://pair?…），再点「粘贴配对链接」。"
+            "value": "拷贝 `personad hub pair` 打印的配对链接（persona://pair?…），再点「粘贴配对链接」。"
           }
         }
       },
@@ -47922,24 +47922,24 @@
       },
       "extractionState": "manual"
     },
-    "It's also in the system log (Console, subsystem jarvis, category vnc).": {
+    "It's also in the system log (Console, subsystem persona, category vnc).": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "It's also in the system log (Console, subsystem jarvis, category vnc)."
+            "value": "It's also in the system log (Console, subsystem persona, category vnc)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "システムログにもあります（コンソール、サブシステムjarvis、カテゴリvnc）。"
+            "value": "システムログにもあります（コンソール、サブシステムpersona、カテゴリvnc）。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统日志里也有（控制台，子系统 jarvis，类别 vnc）。"
+            "value": "系统日志里也有（控制台，子系统 persona，类别 vnc）。"
           }
         }
       },
@@ -48128,29 +48128,6 @@
         }
       },
       "extractionState": "manual"
-    },
-    "Jarvis": {
-      "shouldTranslate": true,
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jarvis"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jarvis"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jarvis"
-          }
-        }
-      }
     },
     "Jelly": {
       "localizations": {
@@ -66288,24 +66265,24 @@
       },
       "extractionState": "manual"
     },
-    "On the hub machine (NAS), change JARVIS_IMAGE in the .env next to the compose file to:": {
+    "On the hub machine (NAS), change PERSONA_IMAGE in the .env next to the compose file to:": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On the hub machine (NAS), change JARVIS_IMAGE in the .env next to the compose file to:"
+            "value": "On the hub machine (NAS), change PERSONA_IMAGE in the .env next to the compose file to:"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ハブのマシン（NAS）で、composeファイルの隣にある.envのJARVIS_IMAGEを次のように変更します："
+            "value": "ハブのマシン（NAS）で、composeファイルの隣にある.envのPERSONA_IMAGEを次のように変更します："
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 hub 所在的机器（NAS）上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成："
+            "value": "在 hub 所在的机器（NAS）上，把 compose 文件旁边 .env 里的 PERSONA_IMAGE 改成："
           }
         }
       },
@@ -103214,24 +103191,24 @@
       },
       "extractionState": "manual"
     },
-    "Three forms: https://example.com/extensions/ (an address not ending in .json reads persona-extensions.json under it, then persona-plugins.json); github:owner/repo (the one at the repo root; private repos need a token); git:<address>[#branch] (git@host:path.git, ssh://…, https://…; uses the hub machine's own SSH credentials, no token).": {
+    "Three forms: https://example.com/extensions/ (an address not ending in .json reads persona-extensions.json under it); github:owner/repo (the one at the repo root; private repos need a token); git:<address>[#branch] (git@host:path.git, ssh://…, https://…; uses the hub machine's own SSH credentials, no token).": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Three forms: https://example.com/extensions/ (an address not ending in .json reads persona-extensions.json under it, then persona-plugins.json); github:owner/repo (the one at the repo root; private repos need a token); git:<address>[#branch] (git@host:path.git, ssh://…, https://…; uses the hub machine's own SSH credentials, no token)."
+            "value": "Three forms: https://example.com/extensions/ (an address not ending in .json reads persona-extensions.json under it); github:owner/repo (the one at the repo root; private repos need a token); git:<address>[#branch] (git@host:path.git, ssh://…, https://…; uses the hub machine's own SSH credentials, no token)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "3つの書き方：https://example.com/extensions/（.jsonで終わらない場合はその下のpersona-extensions.json、なければpersona-plugins.jsonを読みます）、github:owner/repo（リポジトリのルートにあるもの。プライベートはトークンが必要）、git:<アドレス>[#ブランチ]（git@host:path.git、ssh://…、https://…。ハブのマシン自身のSSH認証情報を使い、トークンは不要）。"
+            "value": "3つの書き方：https://example.com/extensions/（.jsonで終わらない場合はその下のpersona-extensions.jsonを読みます）、github:owner/repo（リポジトリのルートにあるもの。プライベートはトークンが必要）、git:<アドレス>[#ブランチ]（git@host:path.git、ssh://…、https://…。ハブのマシン自身のSSH認証情報を使い、トークンは不要）。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "三种写法：https://example.com/extensions/（不以 .json 结尾的读它下面的 persona-extensions.json，没有再读 persona-plugins.json）；github:owner/repo（仓库根目录的那份，私有的要 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，用 hub 机器自己的 SSH 凭据，不用 token）。"
+            "value": "三种写法：https://example.com/extensions/（不以 .json 结尾的读它下面的 persona-extensions.json）；github:owner/repo（仓库根目录的那份，私有的要 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，用 hub 机器自己的 SSH 凭据，不用 token）。"
           }
         }
       },
@@ -103969,7 +103946,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "今天的 Token"
+            "value": "今日文本用量"
           }
         }
       },
@@ -104130,7 +104107,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Token"
+            "value": "文本用量"
           }
         }
       },
@@ -118313,24 +118290,24 @@
       },
       "extractionState": "manual"
     },
-    "jarvisd is too old to read gh sign-in": {
+    "personad is too old to read gh sign-in": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "jarvisd is too old to read gh sign-in"
+            "value": "personad is too old to read gh sign-in"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "jarvisdが古いため、ghのサインインを読み取れません"
+            "value": "personadが古いため、ghのサインインを読み取れません"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "jarvisd 太旧，读不了 gh 的登录"
+            "value": "personad 太旧，读不了 gh 的登录"
           }
         }
       },
@@ -120138,24 +120115,24 @@
       },
       "extractionState": "manual"
     },
-    "“Extension, last run” updates each time the Dynamic Island redraws (identical content is written at most once every ten minutes). If it's missing, the extension may not be able to use the App Group; then only the system log has its records (Console, subsystem jarvis, category island).": {
+    "“Extension, last run” updates each time the Dynamic Island redraws (identical content is written at most once every ten minutes). If it's missing, the extension may not be able to use the App Group; then only the system log has its records (Console, subsystem persona, category island).": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "“Extension, last run” updates each time the Dynamic Island redraws (identical content is written at most once every ten minutes). If it's missing, the extension may not be able to use the App Group; then only the system log has its records (Console, subsystem jarvis, category island)."
+            "value": "“Extension, last run” updates each time the Dynamic Island redraws (identical content is written at most once every ten minutes). If it's missing, the extension may not be able to use the App Group; then only the system log has its records (Console, subsystem persona, category island)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "「拡張機能の前回の記録」はDynamic Islandが再描画されるたびに更新されます（同じ内容は最大10分に1回だけ書き込みます）。表示されない場合、拡張機能がApp Groupを使えない可能性があり、記録はシステムログにのみ残ります（コンソール、サブシステムjarvis、カテゴリisland）。"
+            "value": "「拡張機能の前回の記録」はDynamic Islandが再描画されるたびに更新されます（同じ内容は最大10分に1回だけ書き込みます）。表示されない場合、拡張機能がApp Groupを使えない可能性があり、記録はシステムログにのみ残ります（コンソール、サブシステムpersona、カテゴリisland）。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "「扩展最近一次」在灵动岛每次重画后更新（同样的内容最多十分钟写一次）。看不到它时，扩展可能用不了 App Group，这时只有系统日志里有它的记录（控制台，子系统 jarvis，类别 island）。"
+            "value": "「扩展最近一次」在灵动岛每次重画后更新（同样的内容最多十分钟写一次）。看不到它时，扩展可能用不了 App Group，这时只有系统日志里有它的记录（控制台，子系统 persona，类别 island）。"
           }
         }
       },

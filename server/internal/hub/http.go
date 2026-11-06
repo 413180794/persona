@@ -358,7 +358,7 @@ func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 func logRequests(h *Hub, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		client := parseRequestClient(r.Header.Get("X-Jarvis-Client"))
+		client := parseRequestClient(r.Header.Get("X-Persona-Client"))
 		r = r.WithContext(context.WithValue(r.Context(), requestClientKey{}, client))
 		id := requestID(r.Header.Get("X-Client-Request-Id"))
 		w.Header().Set("X-Request-Id", id)
@@ -714,7 +714,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	async := startsAsync(p.Async, p.ResumeSessionID, p.AgentType)
 	parent := r.Context()
-	if r.Header.Get("X-Jarvis-Op-Id") != "" {
+	if r.Header.Get("X-Persona-Op-Id") != "" {
 		// Finish an accepted start even if its HTTP response is lost; client_ops records the outcome.
 		parent = context.WithoutCancel(parent)
 	}

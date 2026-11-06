@@ -18,7 +18,7 @@
   "warning_bad": "このバージョンは前回インストール後に起動できず、ロールバックされました。自動更新では再インストールされません。",
   "warning_held": "自動更新ではこのバージョンをインストールしません：{why}。問題がなければ手動で更新できます。",
   "new_image": "新しいイメージ {version}",
-  "docker_set_image": "ハブのマシンで、composeファイルと同じ場所にある.envのJARVIS_IMAGEを次に変更します：",
+  "docker_set_image": "ハブのマシンで、composeファイルと同じ場所にある.envのPERSONA_IMAGEを次に変更します：",
   "docker_then_run": "続いて、そのディレクトリで実行します：",
   "docker_run": "ハブのマシンで、composeファイルのあるディレクトリで実行します：",
   "docker_how": "Dockerで動くハブは新しいイメージで更新します。新しいイメージがあれば、composeファイルのあるディレクトリで実行します：",

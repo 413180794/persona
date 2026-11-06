@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Agents list's node menu (`NodeMenu`, docs/terminal.md「节点菜单」): what it offers and what it sends.
 @MainActor struct NodeMenuTests {

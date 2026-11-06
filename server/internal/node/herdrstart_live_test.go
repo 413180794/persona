@@ -71,7 +71,7 @@ func TestLiveHerdr(t *testing.T) {
 	defer cli("server", "stop")
 
 	n, _ := testNode(t)
-	n.dir = filepath.Join(home, ".jarvis")
+	n.dir = filepath.Join(home, ".persona")
 	c := herdr.New()
 	n.hosts = herdrHosts(c)
 	var launches atomic.Int32

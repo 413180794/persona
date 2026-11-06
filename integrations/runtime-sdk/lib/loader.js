@@ -24,7 +24,7 @@ const HASH_DIR = /^[0-9a-f]{64}$/
 /**
  * @param {{ name: string, root: string, entry: string, store?: string, autoUpdate?: boolean, context?: object,
  *   log?: (msg: string) => void, idleEveryMs?: number, maxWaitMs?: number, patterns?: string[] }} opts - name: the
- *   package; patterns: its files (default package.js PACKAGES[name], which must match jarvisd's list); root: the
+ *   package; patterns: its files (default package.js PACKAGES[name], which must match personad's list); root: the
  *   integrations directory the loader ships in; entry: the implementation's path in a
  *   package ("dsh/lib/plugin.js"); store: where the versions are kept (none: the shipped files run in place, and no
  *   update is taken);
@@ -85,7 +85,7 @@ export function createLoader(opts) {
     try {
       await v?.instance?.stop?.()
     } catch (err) {
-      log(`jarvis: stopping ${name} ${short(v?.hash)}: ${err.message}`)
+      log(`persona: stopping ${name} ${short(v?.hash)}: ${err.message}`)
     }
   }
 
@@ -98,7 +98,7 @@ export function createLoader(opts) {
       try {
         dir = storeVersion(store, shippedHash, files)
       } catch (err) {
-        log(`jarvis: ${name}: cannot keep the shipped version in ${store} (${err.message}); running it in place`)
+        log(`persona: ${name}: cannot keep the shipped version in ${store} (${err.message}); running it in place`)
       }
     }
     const shipped = { hash: shippedHash, dir, shipped: true }
@@ -107,11 +107,11 @@ export function createLoader(opts) {
       current = await run(chosen)
     } catch (err) {
       if (chosen.shipped) throw err
-      log(`jarvis: ${name} ${short(chosen.hash)} from the node failed to start (${err.message}); running the shipped ${short(shipped.hash)}`)
+      log(`persona: ${name} ${short(chosen.hash)} from the node failed to start (${err.message}); running the shipped ${short(shipped.hash)}`)
       bad.add(chosen.hash)
       current = await run(shipped)
     }
-    log(`jarvis: ${name} ${short(current.hash)} (${current.shipped ? 'shipped' : 'from the node'})`)
+    log(`persona: ${name} ${short(current.hash)} (${current.shipped ? 'shipped' : 'from the node'})`)
     if (stopped) {
       await stopInstance(current)
       return
@@ -157,7 +157,7 @@ export function createLoader(opts) {
       target = hash
       if (hash === old.hash || bad.has(hash)) return
       const dir = storeVersion(store, hash, files)
-      log(`jarvis: ${name} ${short(hash)} from the node is stored; switching from ${short(old.hash)} once no card waits on the phone`)
+      log(`persona: ${name} ${short(hash)} from the node is stored; switching from ${short(old.hash)} once no card waits on the phone`)
       const since = Date.now()
       while (!gone() && current === old && old.instance.busy?.() && Date.now() - since < maxWaitMs) {
         await new Promise((r) => setTimeout(r, idleEveryMs).unref?.())
@@ -175,11 +175,11 @@ export function createLoader(opts) {
       current = next
       writeJSON(join(store, 'current.json'), { hash, shipped: shippedHash, version: typeof offer.version === 'string' ? offer.version : '', at: new Date().toISOString() })
       prune([hash, old.hash, shippedHash])
-      log(`jarvis: ${name} switched to ${short(hash)} (was ${short(old.hash)})`)
+      log(`persona: ${name} switched to ${short(hash)} (was ${short(old.hash)})`)
     } catch (err) {
       bad.add(target)
       bad.add(offer.hash)
-      log(`jarvis: ${name} update to ${short(target)} failed: ${err.message}; staying on ${short(old.hash)}`)
+      log(`persona: ${name} update to ${short(target)} failed: ${err.message}; staying on ${short(old.hash)}`)
       if (oldStopped && !gone()) {
         try {
           const again = await run(old)
@@ -187,7 +187,7 @@ export function createLoader(opts) {
           else current = again
         } catch (e) {
           if (!gone()) current = undefined
-          log(`jarvis: ${name} ${short(old.hash)} did not start again: ${e.message}`)
+          log(`persona: ${name} ${short(old.hash)} did not start again: ${e.message}`)
         }
       }
     } finally {

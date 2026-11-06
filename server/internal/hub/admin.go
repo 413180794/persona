@@ -23,7 +23,7 @@ import (
 // only from admin.access. Outside that scope neither exists: page paths fall through to the web client and API paths
 // to the app's API, exactly as on a hub without an admin UI.
 
-// processStart is when this jarvisd started (the overview's uptime).
+// processStart is when this personad started (the overview's uptime).
 var processStart = time.Now()
 
 // adminState is the admin UI's live state; hub.json's "admin" and "name" are read into it on first use and changed
@@ -32,7 +32,7 @@ type adminState struct {
 	once sync.Once
 	mu   sync.Mutex
 	file AdminConfig  // hub.json's "admin"
-	env  *AdminConfig // JARVIS_ADMIN_ACCESS / JARVIS_ADMIN_CIDRS, nil when unset
+	env  *AdminConfig // PERSONA_ADMIN_ACCESS / PERSONA_ADMIN_CIDRS, nil when unset
 	name *string      // hub.json's "name" once the admin UI changed or reloaded it; nil: h.cfg.Name
 	bad  string       // why the configured scope was refused (it then acts as loopback)
 	// personaView is assistant.persona_view once the admin UI changed it; nil: h.cfg's (admin_assistant.go).
@@ -134,7 +134,7 @@ func (h *Hub) adminRoutes(mux *http.ServeMux, api, web http.Handler) http.Handle
 	h.adminExtensionRoutes(closed)
 	// Hub mesh (docs/plan-hub-mesh.md 2.7): /peers and /routes, from the mesh's own file.
 	h.registerPeerAdmin(closed)
-	h.peerCLIRoutes(open) // jarvisd hub pair --peer, jarvisd hub peer … (peer_admin.go)
+	h.peerCLIRoutes(open) // personad hub pair --peer, personad hub peer … (peer_admin.go)
 	signedIn := jsonRouteErrors(closed)
 	mux.Handle("/api/v1/admin/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.adminInScope(r) {
@@ -163,8 +163,8 @@ func (h *Hub) adminRoutes(mux *http.ServeMux, api, web http.Handler) http.Handle
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead &&
-			subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Jarvis-CSRF")), []byte(s.CSRF)) != 1 {
-			writeErrCode(w, http.StatusForbidden, "csrf", errors.New("missing or stale X-Jarvis-CSRF"))
+			subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Persona-CSRF")), []byte(s.CSRF)) != 1 {
+			writeErrCode(w, http.StatusForbidden, "csrf", errors.New("missing or stale X-Persona-CSRF"))
 			return
 		}
 		signedIn.ServeHTTP(w, r)
@@ -291,9 +291,9 @@ func readAdminJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 // supervised is whether something restarts the hub when it exits: systemd (INVOCATION_ID), a container's restart
-// policy, or JARVIS_SUPERVISED=1 for anything else that does.
+// policy, or PERSONA_SUPERVISED=1 for anything else that does.
 func (h *Hub) supervised() bool {
-	return os.Getenv("INVOCATION_ID") != "" || identity.Getenv("JARVIS_SUPERVISED") == "1" || h.adminContainer()
+	return os.Getenv("INVOCATION_ID") != "" || identity.Getenv("PERSONA_SUPERVISED") == "1" || h.adminContainer()
 }
 
 // restartHub ends this process the way systemctl stop / docker stop would (SIGTERM: a clean shutdown); systemd's

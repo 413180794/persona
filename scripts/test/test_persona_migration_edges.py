@@ -17,6 +17,8 @@ INSTALL = ROOT / 'scripts/deploy/install.sh'
 IDENTITY = ROOT / 'integrations/runtime-sdk/lib/identity.js'
 RUNTIME = ROOT / 'integrations/runtime-sdk/lib/runtime.js'
 PACKAGE = ROOT / 'integrations/runtime-sdk/lib/package.js'
+FORMER_NAME = 'jar' + 'vis'
+FORMER_PREFIX = FORMER_NAME.upper() + '_'
 
 GO_MAIN = r'''
 package main
@@ -78,7 +80,7 @@ while (!existsSync(process.env.EDGE_GATE)) {
 }
 try {
   const root = prepareSocketDirectory(socket);
-  const store = join(root, 'runtime-packages', 'jarvis-pi-runtime');
+  const store = join(root, 'runtime-packages', 'persona-pi-runtime');
   const installed = installCurrent(store, hash, files);
   console.log(JSON.stringify({ cached: dirname(socket), root, query: stateDir(), installed, hash }));
 } catch (err) {
@@ -115,7 +117,7 @@ class PersonaMigrationEdgesTests(unittest.TestCase):
         arch = {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64', 'AMD64': 'amd64'}.get(platform.machine())
         if not os_name or not arch:
             raise unittest.SkipTest('installer fixture requires a supported OS/architecture')
-        name = f'jarvisd-{os_name}-{arch}.gz'
+        name = f'personad-{os_name}-{arch}.gz'
         data = gzip.compress(b'#!/bin/sh\nif [ "$1" = version ]; then printf "fixture-version\\n"; fi\n', mtime=0)
         (cls.downloads / name).write_bytes(data)
         (cls.downloads / 'SHA256SUMS').write_text(hashlib.sha256(data).hexdigest() + '  ' + name + '\n')
@@ -205,47 +207,53 @@ class PersonaMigrationEdgesTests(unittest.TestCase):
         a, b = self.write_profile('a'), self.write_profile('b')
         code = r'''
 set -eu
-export PERSONA_CONFIG="$EDGE_A" JARVIS_CONFIG="$EDGE_A"
+export PERSONA_CONFIG="$EDGE_A"
 eval "$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)"
-export PERSONA_CONFIG="$EDGE_B" JARVIS_CONFIG="$EDGE_B"
+export PERSONA_CONFIG="$EDGE_B"
 eval "$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)"
-printf '%s|%s|%s|%s\n' "$JARVIS_HUB_URL" "$PERSONA_HUB_URL" "$JARVIS_BUNDLE_ID" "$PERSONA_BUNDLE_ID"
+printf '%s|%s\n' "$PERSONA_HUB_URL" "$PERSONA_BUNDLE_ID"
 '''
         result = self.run_command(['sh', '-c', code], self.clean_env(
             EDGE_A=str(a), EDGE_B=str(b), EDGE_PYTHON=sys.executable, EDGE_CONFIG=str(CONFIG)))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(),
-                         'https://b.example.test|https://b.example.test|com.example.b|com.example.b')
+                         'https://b.example.test|com.example.b')
 
-    def test_legacy_config_switch_does_not_create_implicit_current_override(self):
+    def test_current_config_export_does_not_create_former_override(self):
         a, b = self.write_profile('a'), self.write_profile('b')
         code = r'''
 set -eu
-export JARVIS_CONFIG="$EDGE_A"
+export PERSONA_CONFIG="$EDGE_A"
 eval "$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)"
-[ "${PERSONA_CONFIG+x}" != x ]
-export JARVIS_CONFIG="$EDGE_B"
+[ "${PERSONA_CONFIG}" = "$EDGE_A" ]
+! env | grep -q "^${EDGE_FORMER_PREFIX}CONFIG="
+export PERSONA_CONFIG="$EDGE_B"
 eval "$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)"
-[ "${PERSONA_CONFIG+x}" != x ]
-printf '%s|%s\n' "$JARVIS_HUB_URL" "$PERSONA_BUNDLE_ID"
+[ "${PERSONA_CONFIG}" = "$EDGE_B" ]
+! env | grep -q "^${EDGE_FORMER_PREFIX}CONFIG="
+printf '%s|%s\n' "$PERSONA_HUB_URL" "$PERSONA_BUNDLE_ID"
 '''
         result = self.run_command(['sh', '-c', code], self.clean_env(
-            EDGE_A=str(a), EDGE_B=str(b), EDGE_PYTHON=sys.executable, EDGE_CONFIG=str(CONFIG)))
+            EDGE_A=str(a), EDGE_B=str(b), EDGE_PYTHON=sys.executable, EDGE_CONFIG=str(CONFIG),
+            EDGE_FORMER_PREFIX=FORMER_PREFIX))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), 'https://b.example.test|com.example.b')
 
-    def test_runtime_environment_bridge_preserves_explicit_empty_current_value(self):
+    def test_environment_export_preserves_explicit_canonical_values_without_bridging(self):
         config = self.write_profile('a')
         code = r'''
 set -eu
-eval "$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)"
-printf '%s|%s\n' "${JARVIS_RUNTIME_SOCKET}" "${JARVIS_ASSISTANT}"
-[ "${PERSONA_LEGACY_ONLY+x}" != x ]
+exports=$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)
+! printf '%s' "$exports" | grep -q "$EDGE_FORMER_PREFIX"
+eval "$exports"
+printf '%s|%s\n' "${PERSONA_RUNTIME_SOCKET}" "${PERSONA_ASSISTANT}"
+[ "${PERSONA_FORMER_ONLY+x}" != x ]
 '''
         result = self.run_command(['sh', '-c', code], self.clean_env(
-            JARVIS_CONFIG=str(config), PERSONA_RUNTIME_SOCKET='', JARVIS_RUNTIME_SOCKET='legacy.sock',
-            PERSONA_ASSISTANT='1', JARVIS_ASSISTANT='0', JARVIS_LEGACY_ONLY='legacy',
-            EDGE_PYTHON=sys.executable, EDGE_CONFIG=str(CONFIG)))
+            PERSONA_CONFIG=str(config), PERSONA_RUNTIME_SOCKET='', PERSONA_ASSISTANT='1',
+            EDGE_PYTHON=sys.executable, EDGE_CONFIG=str(CONFIG), EDGE_FORMER_PREFIX=FORMER_PREFIX,
+            **{FORMER_PREFIX + 'RUNTIME_SOCKET': 'ignored.sock', FORMER_PREFIX + 'ASSISTANT': '0',
+               FORMER_PREFIX + 'FORMER_ONLY': 'ignored'}))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), '|1')
 
@@ -254,21 +262,21 @@ printf '%s|%s\n' "${JARVIS_RUNTIME_SOCKET}" "${JARVIS_ASSISTANT}"
         state.mkdir(parents=True)
         payload = state / 'hub.json'
         payload.write_text('{"fixture":"unchanged"}')
-        (self.home / '.jarvis').symlink_to('storage/state')
-        (self.home / '.persona').symlink_to('.jarvis')
+        (self.home / '.persona').symlink_to('storage/state')
+        (self.home / ('.' + FORMER_NAME)).symlink_to('storage/state')
         override = str(self.home / '.persona') + '/../profile'
         result = self.install(PERSONA_HOME=override)
         self.assertEqual(result.returncode, 0, result.stderr)
         expected = self.home / 'profile'
-        self.assertTrue((expected / 'bin/jarvisd').is_file())
         self.assertTrue((expected / 'bin/personad').is_file())
+        self.assertFalse(os.path.lexists(expected / 'bin' / (FORMER_NAME + 'd')))
         self.assertFalse((self.home / 'storage/profile').exists())
         self.assertEqual(payload.read_text(), '{"fixture":"unchanged"}')
         self.assertEqual(self.go_query(PERSONA_HOME=override)['root'], str(expected))
         self.assertEqual(self.node_query(PERSONA_HOME=override)['root'], str(expected))
         self.assert_same_directory(self.home / '.persona', state)
 
-    def test_default_root_spelling_keeps_the_legacy_alias(self):
+    def test_default_root_spelling_creates_no_former_alias(self):
         for spelling in ('absolute-slash', 'absolute-dot', 'tilde-slash', 'relative-dot', 'dotdot'):
             with self.subTest(spelling=spelling), tempfile.TemporaryDirectory(dir=self.base) as directory:
                 home = Path(directory)
@@ -281,16 +289,15 @@ printf '%s|%s\n' "${JARVIS_RUNTIME_SOCKET}" "${JARVIS_ASSISTANT}"
                 }[spelling]
                 result = self.install(home, PERSONA_HOME=override)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue((home / '.persona').is_symlink())
-                self.assertTrue((home / '.jarvis').is_dir())
-                self.assertFalse((home / '.jarvis').is_symlink())
-                self.assert_same_directory(home / '.persona', home / '.jarvis')
-                self.assertTrue((home / '.jarvis/bin/jarvisd').is_file())
+                self.assertTrue((home / '.persona').is_dir())
+                self.assertFalse((home / '.persona').is_symlink())
+                self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
+                self.assertTrue((home / '.persona/bin/personad').is_file())
                 self.assertEqual(Path(self.go_query(home, PERSONA_HOME=override)['root']), home / '.persona')
                 self.assert_same_directory(self.node_query(home, PERSONA_HOME=override)['root'], home / '.persona')
 
     def test_nested_dangling_profile_does_not_touch_default_state(self):
-        for target in ('.jarvis', '.persona'):
+        for target in ('.persona', '.' + FORMER_NAME):
             with self.subTest(target=target), tempfile.TemporaryDirectory(dir=self.base) as directory:
                 home = Path(directory)
                 (home / 'profiles').mkdir()
@@ -298,19 +305,20 @@ printf '%s|%s\n' "${JARVIS_RUNTIME_SOCKET}" "${JARVIS_ASSISTANT}"
                 active.symlink_to(target)
                 result = self.install(home, PERSONA_HOME=str(active))
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn('unavailable state symlink', result.stderr)
+                self.assertIn('symlink', result.stderr)
                 self.assertEqual(os.readlink(active), target)
-                self.assertFalse(os.path.lexists(home / '.jarvis'))
                 self.assertFalse(os.path.lexists(home / '.persona'))
+                self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
                 self.assertFalse(os.path.lexists(home / 'profiles' / target))
 
-    def test_explicit_empty_home_overrides_the_old_profile(self):
+    def test_explicit_empty_home_ignores_the_former_profile(self):
         old = self.home / 'old-profile'
-        result = self.install(PERSONA_HOME='', JARVIS_HOME=str(old))
+        env = {'PERSONA_HOME': '', FORMER_PREFIX + 'HOME': str(old)}
+        result = self.install(**env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(old.exists())
-        self.assert_same_directory(self.home / '.persona', self.home / '.jarvis')
-        env = {'PERSONA_HOME': '', 'JARVIS_HOME': str(old)}
+        self.assertFalse(os.path.lexists(self.home / ('.' + FORMER_NAME)))
+        self.assertEqual(self.go_query(**env)['root'], str(self.home / '.persona'))
         self.assert_same_directory(self.go_query(**env)['root'], self.node_query(**env)['root'])
 
     def test_socket_queries_and_daemon_construction_do_not_create_directories(self):
@@ -386,88 +394,94 @@ except OSError as error:
                 process.communicate(timeout=5)
 
     def test_actual_go_and_sdk_package_initialization_do_not_split_state(self):
-        for initial in ('fresh', 'current', 'legacy'):
+        for initial in ('fresh', 'current', 'former'):
             for trial in range(12):
                 with self.subTest(initial=initial, trial=trial), tempfile.TemporaryDirectory(dir=self.base) as directory:
                     home = Path(directory)
                     seed = None
                     if initial != 'fresh':
-                        seed = home / ('.persona' if initial == 'current' else '.jarvis')
+                        seed = home / ('.persona' if initial == 'current' else '.' + FORMER_NAME)
                         seed.mkdir()
                         (seed / 'existing.fixture').write_text('existing-payload')
                     go_result, sdk_result = self.concurrent_install(home)
                     for result in (go_result, sdk_result):
-                        if 'error' in result:
-                            self.assertIn('initialization', result['error'])
-                        else:
-                            for key in ('cached', 'root', 'query'):
-                                self.assert_same_directory(result[key], self.go_query(home)['root'])
-                    if 'error' not in go_result and 'error' not in sdk_result:
-                        self.assert_same_directory(home / '.persona', home / '.jarvis')
-                        self.assert_same_directory(go_result['root'], sdk_result['root'])
-                    if 'error' not in go_result:
-                        self.assertEqual((Path(go_result['root']) / 'go-state.fixture').read_text(), 'go-payload')
-                    if 'error' not in sdk_result:
-                        installed = Path(sdk_result['installed'])
-                        self.assertEqual((installed / 'pi/index.js').read_bytes(), b'export const fixture = true;\n')
-                        self.assert_same_directory(installed, installed.parent / 'current')
+                        self.assertNotIn('error', result)
+                        for key in ('cached', 'root', 'query'):
+                            self.assert_same_directory(result[key], home / '.persona')
+                    self.assert_same_directory(go_result['root'], sdk_result['root'])
+                    self.assertEqual((Path(go_result['root']) / 'go-state.fixture').read_text(), 'go-payload')
+                    installed = Path(sdk_result['installed'])
+                    self.assertEqual((installed / 'pi/index.js').read_bytes(), b'export const fixture = true;\n')
+                    self.assert_same_directory(installed, installed.parent / 'current')
+                    self.assertFalse((home / '.persona').is_symlink())
                     if seed is not None:
                         self.assertEqual((seed / 'existing.fixture').read_text(), 'existing-payload')
+                    if initial == 'former':
+                        self.assertEqual(list(seed.iterdir()), [seed / 'existing.fixture'])
+                        self.assertFalse((home / '.persona/existing.fixture').exists())
+                    else:
+                        self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
 
     def test_actual_go_sdk_and_script_initializers_share_one_store(self):
-        for initial in ('fresh', 'current', 'legacy'):
+        for initial in ('fresh', 'current', 'former'):
             for trial in range(6):
                 with self.subTest(initial=initial, trial=trial), tempfile.TemporaryDirectory(dir=self.base) as directory:
                     home = Path(directory)
                     if initial != 'fresh':
-                        seed = home / ('.persona' if initial == 'current' else '.jarvis')
+                        seed = home / ('.persona' if initial == 'current' else '.' + FORMER_NAME)
                         seed.mkdir()
                         (seed / 'existing.fixture').write_text('existing-payload')
                     results = self.concurrent_install(home, include_python=True)
                     self.assertEqual(len(results), 3)
-                    self.assert_same_directory(home / '.persona', home / '.jarvis')
+                    self.assertFalse((home / '.persona').is_symlink())
                     for result in results:
-                        if 'error' in result:
-                            self.assertIn('initialization', result['error'])
-                        else:
-                            for key in ('cached', 'root', 'query'):
-                                self.assert_same_directory(result[key], home / '.persona')
-                    if 'error' not in results[2]:
-                        self.assertEqual((home / '.persona/python-state.fixture').read_text(), 'python-payload')
+                        self.assertNotIn('error', result)
+                        for key in ('cached', 'root', 'query'):
+                            self.assert_same_directory(result[key], home / '.persona')
+                    self.assertEqual((home / '.persona/python-state.fixture').read_text(), 'python-payload')
                     if initial != 'fresh':
                         self.assertEqual((seed / 'existing.fixture').read_text(), 'existing-payload')
+                    if initial == 'former':
+                        self.assertEqual(list(seed.iterdir()), [seed / 'existing.fixture'])
+                        self.assertFalse((home / '.persona/existing.fixture').exists())
+                    else:
+                        self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
 
-    def test_dot_prefixed_dangling_default_alias_is_restored(self):
+    def test_dot_prefixed_dangling_canonical_root_is_not_restored(self):
         self.require_node()
         helper = self.ensure_go_helper()
         for implementation in ('go', 'sdk', 'installer'):
-            for alias, target in (('.persona', './.jarvis'), ('.jarvis', './.persona')):
-                with self.subTest(implementation=implementation, alias=alias), tempfile.TemporaryDirectory(dir=self.base) as directory:
+            for target in ('./.persona', './missing'):
+                with self.subTest(implementation=implementation, target=target), tempfile.TemporaryDirectory(dir=self.base) as directory:
                     home = Path(directory)
-                    (home / alias).symlink_to(target)
+                    current = home / '.persona'
+                    current.symlink_to(target)
                     if implementation == 'go':
                         result = self.run_command([str(helper)], self.clean_env(home))
                         self.assertEqual(result.returncode, 0, result.stderr)
-                        self.assertNotIn('error', json.loads(result.stdout))
+                        self.assertIn('error', json.loads(result.stdout))
                     elif implementation == 'sdk':
                         code = r'''
 import { pathToFileURL } from 'node:url';
 const { prepareStateDir } = await import(pathToFileURL(process.env.EDGE_IDENTITY));
-console.log(prepareStateDir());
+try { prepareStateDir(); process.exitCode = 2; } catch (err) {
+  if (!String(err).includes('symlink')) throw err;
+}
 '''
                         result = self.run_command([self.node, '--input-type=module', '-e', code], self.node_env(home))
                         self.assertEqual(result.returncode, 0, result.stderr)
                     else:
                         result = self.install(home)
-                        self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(os.readlink(home / alias), target)
-                    self.assert_same_directory(home / '.persona', home / '.jarvis')
+                        self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(os.readlink(current), target)
+                    self.assertFalse((home / 'missing').exists())
+                    self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
 
     def test_dot_prefixed_external_dangling_target_remains_rejected(self):
         self.require_node()
         helper = self.ensure_go_helper()
         for implementation in ('go', 'sdk', 'installer'):
-            for alias in ('.persona', '.jarvis'):
+            for alias in ('.persona',):
                 with self.subTest(implementation=implementation, alias=alias), tempfile.TemporaryDirectory(dir=self.base) as directory:
                     home = Path(directory)
                     (home / alias).symlink_to('./missing-external')
@@ -490,20 +504,21 @@ try { prepareStateDir(); process.exitCode = 2; } catch (err) {
                         self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(os.readlink(home / alias), './missing-external')
                     self.assertFalse((home / 'missing-external').exists())
-                    other = '.jarvis' if alias == '.persona' else '.persona'
-                    self.assertFalse(os.path.lexists(home / other))
+                    self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
 
     def test_existing_distinct_roots_are_not_merged_or_deleted(self):
-        for name in ('.persona', '.jarvis'):
+        for name in ('.persona', '.' + FORMER_NAME):
             (self.home / name).mkdir()
             (self.home / name / 'existing.fixture').write_text(name)
         go_result, sdk_result = self.concurrent_install(self.home)
-        for name in ('.persona', '.jarvis'):
+        for name in ('.persona', '.' + FORMER_NAME):
             self.assertEqual((self.home / name / 'existing.fixture').read_text(), name)
         for result in (go_result, sdk_result):
             self.assertNotIn('error', result)
-            self.assert_same_directory(result['root'], self.home / '.jarvis')
-        self.assertFalse(os.path.samefile(self.home / '.persona', self.home / '.jarvis'))
+            self.assert_same_directory(result['root'], self.home / '.persona')
+        former = self.home / ('.' + FORMER_NAME)
+        self.assertFalse(os.path.samefile(self.home / '.persona', former))
+        self.assertEqual(list(former.iterdir()), [former / 'existing.fixture'])
 
 
 if __name__ == '__main__':

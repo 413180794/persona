@@ -19,7 +19,7 @@ final class ShellSearchTests: XCTestCase {
 
     @MainActor private func attachScreen(_ name: String) {
         let screenshot = app.screenshot()
-        if let directory = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let directory = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
             try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".png"))
         }

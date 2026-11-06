@@ -210,7 +210,7 @@ private fun SettingsHome(
             rows("where", listOf(
                 { JRow(stringResource(R.string.assistant_settings_machine), value = machineName, subtitle = machineState(machine), leadingIcon = machineIcon(machine),
                     enabled = ready, onClick = { sheet(SettingsSheet.Machine) }) },
-                { JRow(stringResource(R.string.assistant_settings_cwd), value = homeRelative(config.cwd, machine?.home).ifBlank { "~/.jarvis/assistant" },
+                { JRow(stringResource(R.string.assistant_settings_cwd), value = homeRelative(config.cwd, machine?.home).ifBlank { "~/.persona/assistant" },
                     leadingIcon = PhIcons.FolderSimple) },
                 { JRow(stringResource(R.string.assistant_settings_skills), subtitle = stringResource(R.string.assistant_settings_skills_subtitle),
                     leadingIcon = PhIcons.PuzzlePiece, onClick = { open(SettingsPart.Skills) }) },

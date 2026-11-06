@@ -1,7 +1,7 @@
 import Foundation
 import PersonaKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Channels (docs/channels.md): what the hub sends decodes (and what it leaves out falls back), the list's
 /// sections and words, a channel's changes go out as only what changed, binding is the connectors' steps on …/bind
@@ -184,7 +184,7 @@ struct ChannelsModelTests {
     }
 
     @Test func sessionsCarryTheirChannels() throws {
-        let json = #"{"machine_id":"server","session_id":"s1","title":"t","cwd":"/","status":"idle","started_by_jarvis":true,"assistant":true,"state":"idle","pending_interactions":0,"channels":["wechat","feishu"]}"#
+        let json = #"{"machine_id":"server","session_id":"s1","title":"t","cwd":"/","status":"idle","started_by_persona":true,"assistant":true,"state":"idle","pending_interactions":0,"channels":["wechat","feishu"]}"#
         let s = try JSON.decoder.decode(Session.self, from: Data(json.utf8))
         #expect(s.channels == ["wechat", "feishu"])
     }

@@ -150,7 +150,7 @@ describe("plans and questions (G017)", () => {
 
   it("ticks what was picked in the assistant's ask_user, without its result text", () => {
     const input = { questions: [{ question: "要哪些？", multiSelect: true, options: [{ label: "x" }, { label: "y" }] }, { question: "叫什么？", options: [{ label: "甲" }] }] };
-    render(step(use("mcp__jarvis__ask_user", input), result("The user answered:\n- 要哪些？ → x\n- 叫什么？ → 乙\n")));
+    render(step(use("mcp__persona__ask_user", input), result("The user answered:\n- 要哪些？ → x\n- 叫什么？ → 乙\n")));
     openRow();
     const detail = host.querySelector("[data-step-detail=ask-user]")!;
     const picked = [...detail.querySelectorAll("[data-picked]")].map((e) => e.textContent);
@@ -161,7 +161,7 @@ describe("plans and questions (G017)", () => {
 
   it("still ticks the answer when the question or option has edge whitespace", () => {
     const input = { questions: [{ question: "继续吗？ ", options: [{ label: " 是" }, { label: "否" }] }] };
-    render(step(use("mcp__jarvis__ask_user", input), result("The user answered:\n- 继续吗？  →  是\n")));
+    render(step(use("mcp__persona__ask_user", input), result("The user answered:\n- 继续吗？  →  是\n")));
     openRow();
     const picked = [...host.querySelectorAll("[data-step-detail=ask-user] [data-picked]")].map((e) => e.textContent);
     expect(picked).toEqual(["已选：是"]);
@@ -170,7 +170,7 @@ describe("plans and questions (G017)", () => {
 
   it("says so when nobody answered", () => {
     const input = { questions: [{ question: "继续吗？", options: [{ label: "是" }] }] };
-    render(step(use("mcp__jarvis__ask_user", input), result("The user did not answer (dismissed or timed out).")));
+    render(step(use("mcp__persona__ask_user", input), result("The user did not answer (dismissed or timed out).")));
     openRow();
     expect(host.querySelector("[data-step-detail=ask-user]")!.textContent).toContain("没有回答");
     expect(host.querySelector("[data-picked]")).toBeNull();

@@ -104,7 +104,7 @@ class AgentsListInfoTest {
         val claude = Interaction("ix", kind = "permission", toolName = "Bash")
         assertEquals("请求使用 Bash", claude.cardTitle(res))
         assertEquals("Codex 请求使用 Bash", claude.copy(agent = "codex").cardTitle(res))
-        assertEquals("请求使用 Persona · mail send", claude.copy(toolName = "mcp__jarvis__mail_send").cardTitle(res))
+        assertEquals("请求使用 Persona · mail send", claude.copy(toolName = "mcp__persona__mail_send").cardTitle(res))
         assertEquals("DSH 有问题等你回答", claude.copy(kind = "question", agent = "dsh", agentLabelHint = "DSH").cardTitle(res))
         assertEquals("有问题等你回答", claude.copy(kind = "question", agent = "claude").cardTitle(res))
     }

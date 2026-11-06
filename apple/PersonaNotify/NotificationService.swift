@@ -6,7 +6,7 @@ import UserNotifications
 /// the phone decrypts it and shows the real title, text and buttons. Not opened in time, no key yet (the phone has not
 /// been unlocked since it started), or a payload that does not open: the fallback stays, never anything in the clear.
 final class NotificationService: UNNotificationServiceExtension, @unchecked Sendable {
-    private static let log = Logger(subsystem: "jarvis", category: "notify")
+    private static let log = Logger(subsystem: "persona", category: "notify")
     private let completionLock = NSLock()
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var fallback: UNNotificationContent?

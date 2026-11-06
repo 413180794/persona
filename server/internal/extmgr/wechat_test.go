@@ -24,7 +24,7 @@ import (
 func TestWeChatBuiltin(t *testing.T) {
 	h := newTestManager(t)
 	reg := extension.NewRegistry(t.TempDir(), nil, nil, 0)
-	if err := reg.AddBuiltin(wechatManifest(h, "/opt/persona/jarvisd-wechat"), "/opt/persona", true); err != nil {
+	if err := reg.AddBuiltin(wechatManifest(h, "/opt/persona/personad-wechat"), "/opt/persona", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := reg.Load(context.Background()); err != nil {
@@ -49,15 +49,15 @@ func TestWeChatBuiltin(t *testing.T) {
 	if p.Record.Granted.HubAPI || !slices.Equal(p.Record.Granted.Network, []string{"*.weixin.qq.com"}) {
 		t.Fatalf("granted %+v", p.Record.Granted)
 	}
-	if filepath.Base(p.Manifest.Runtime.Command.Path) != "jarvisd-wechat" {
+	if filepath.Base(p.Manifest.Runtime.Command.Path) != "personad-wechat" {
 		t.Fatalf("runtime %+v", p.Manifest.Runtime)
 	}
 }
 
-// jarvisd-wechat's program (server/plugins/wechat, on the SDK alone), held to the plugin protocol against the manifest the hub registers it with.
+// personad-wechat's program (server/plugins/wechat, on the SDK alone), held to the plugin protocol against the manifest the hub registers it with.
 func TestWeChatProgramIsAnExtension(t *testing.T) {
 	h := newTestManager(t)
-	m := wechatManifest(h, "/opt/persona/jarvisd-wechat")
+	m := wechatManifest(h, "/opt/persona/personad-wechat")
 	progR, hubW := io.Pipe()
 	hubR, progW := io.Pipe()
 	exited := make(chan error, 1)
@@ -74,10 +74,10 @@ func TestWeChatProgramIsAnExtension(t *testing.T) {
 	}
 }
 
-// jarvisd-wechat's program as a channel (docs/channels.md "Protocol"): not bound, it has nowhere to send to yet.
+// personad-wechat's program as a channel (docs/channels.md "Protocol"): not bound, it has nowhere to send to yet.
 func TestWeChatProgramIsAChannel(t *testing.T) {
 	h := newTestManager(t)
-	m := wechatManifest(h, "/opt/persona/jarvisd-wechat")
+	m := wechatManifest(h, "/opt/persona/personad-wechat")
 	progR, hubW := io.Pipe()
 	hubR, progW := io.Pipe()
 	exited := make(chan error, 1)
@@ -93,8 +93,8 @@ func TestWeChatProgramIsAChannel(t *testing.T) {
 // on the SDK alone, cannot import the hub's spec): the same connector, channel, permissions and description.
 func TestWeChatPluginDeclaresWhatTheHubRegisters(t *testing.T) {
 	h := newTestManager(t)
-	hub := wechatManifest(h, "/opt/persona/jarvisd-wechat")
-	raw, err := json.Marshal(wechat.Manifest("1.0.0", "jarvisd-wechat")) // the hub's own version is a build's
+	hub := wechatManifest(h, "/opt/persona/personad-wechat")
+	raw, err := json.Marshal(wechat.Manifest("1.0.0", "personad-wechat")) // the hub's own version is a build's
 	if err != nil {
 		t.Fatal(err)
 	}

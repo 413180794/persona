@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UserNotifications
-@testable import Jarvis
+@testable import Persona
 
 /// Pairing receipts (#4199, docs/protocol.md「电脑的配对码」): the hub's payloads, the buttons, the requests they send,
 /// and what the user is told.

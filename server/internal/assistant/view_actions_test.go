@@ -65,9 +65,9 @@ func TestViewReplyIdempotentResponse(t *testing.T) {
 }
 
 func TestViewActionRouteUsesStoredReplyAndPreservesOutbox(t *testing.T) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	database, err := db.Open(ctx, url, db.ManagerSet)

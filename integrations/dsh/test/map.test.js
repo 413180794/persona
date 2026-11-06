@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { eventItems, itemsOf, jarvisSeq, lastText, streamText, toolInput, toolName } from '../lib/map.js'
+import { eventItems, itemsOf, personaSeq, lastText, streamText, toolInput, toolName } from '../lib/map.js'
 import { answerOf } from '../lib/dsh.js'
 import { light, PAGE_OUTPUT, summaryOf } from '../../runtime-sdk/index.js'
 
@@ -60,7 +60,7 @@ test('interrupted, failed and compacted turns leave a notice; completed ones non
 })
 
 test('seqs are DSH seqs plus one', () => {
-  assert.equal(jarvisSeq(0), 1)
+  assert.equal(personaSeq(0), 1)
 })
 
 test('long text is cut on a UTF-8 boundary with the note the apps read', () => {
@@ -104,12 +104,12 @@ test('the phone\'s answers become DSH answer batches', () => {
 
 test('the assistant\'s live snapshot is not shown; a quoted context (with attributes) is', () => {
   const ev = { type: 'user/message', seq: 3, time: 0, data: { role: 'user', source: { kind: 'user' }, content: [
-    { type: 'text', text: '<jarvis-context>\n- 现在：x\n</jarvis-context>' },
+    { type: 'text', text: '<persona-context>\n- 现在：x\n</persona-context>' },
     { type: 'text', text: '<persona-context>\n- 现在：y\n</persona-context>' },
-    { type: 'text', text: '<jarvis-context kind="context" title="t">quoted</jarvis-context> hi' },
+    { type: 'text', text: '<persona-context kind="context" title="t">quoted</persona-context> hi' },
   ] } }
   const items = eventItems(ev)
-  assert.deepEqual(items.map((i) => i.text), ['<jarvis-context kind="context" title="t">quoted</jarvis-context> hi'])
+  assert.deepEqual(items.map((i) => i.text), ['<persona-context kind="context" title="t">quoted</persona-context> hi'])
 })
 
 test('a subagent call is the apps\' Agent, with its description', () => {

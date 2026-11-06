@@ -26,7 +26,7 @@ let root: Root;
 const flush = async () => {
   for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); });
 };
-const row = () => host.querySelector<HTMLAnchorElement>('a[href="/j/review"]')!;
+const row = () => host.querySelector<HTMLAnchorElement>('a[href="/persona/review"]')!;
 const mark = () => row().querySelector('[data-state="working"]');
 
 beforeEach(() => {
@@ -59,7 +59,7 @@ afterEach(() => {
 
 async function show(active = false) {
   await act(() => refresh());
-  act(() => root.render(<Sidebar route={active ? { name: "jarvis", sid: "review" } : { name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+  act(() => root.render(<Sidebar route={active ? { name: "persona", sid: "review" } : { name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
   await flush();
 }
 

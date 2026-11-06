@@ -19,11 +19,11 @@ describe("persona packages", () => {
   it("takes what the hub takes", () => {
     expect(personaProblem(pack())).toBeNull();
     expect(personaProblem(pack({ format: 2 }))).toBe("format 2");
-    expect(personaProblem(pack({}, "jarvis"))).toMatch(/^id/);
-    expect(personaProblem(pack({}, "jarvis-circuit"))).toMatch(/^id/);
-    expect(personaProblem(pack({}, "jarvis-pixel"))).toMatch(/^id/);
     expect(personaProblem(pack({}, "persona"))).toMatch(/^id/);
-    expect(isBuiltinPersona("persona") && isBuiltinPersona("jarvis") && !isBuiltinPersona("doudou")).toBe(true);
+    expect(personaProblem(pack({}, "persona-circuit"))).toMatch(/^id/);
+    expect(personaProblem(pack({}, "persona-pixel"))).toMatch(/^id/);
+    expect(personaProblem(pack({}, "persona"))).toMatch(/^id/);
+    expect(isBuiltinPersona("persona") && isBuiltinPersona("persona") && !isBuiltinPersona("doudou")).toBe(true);
     expect(personaProblem({ ...pack(), id: "other" })).toMatch(/^id/);
     expect(personaProblem(pack({ id: "Bad_ID" }, "Bad_ID"))).toMatch(/^id/);
     expect(personaProblem(pack({ name: " " }))).toBe("no name");
@@ -123,6 +123,6 @@ describe("looks (#3200)", () => {
       { id: "doudou", source: "extension", name: "豆豆", app_icon: "persona", rev: "abc123", manifest: pack().manifest },
     ]);
     expect(got.map((p) => p.id)).toEqual(["doudou"]);
-    expect(isBuiltinPersona("jarvis-circuit")).toBe(true);
+    expect(isBuiltinPersona("persona-circuit")).toBe(true);
   });
 });

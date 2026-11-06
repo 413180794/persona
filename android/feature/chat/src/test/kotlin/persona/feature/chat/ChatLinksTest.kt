@@ -28,7 +28,7 @@ class ChatLinksTest {
         val doc = persona.feature.inbox.LarkNativeLink.Document("https://example.feishu.cn/docx/a")
         val text = requireNotNull(ChatLinkContext.whole(doc, ""))
         val xml = ChatLinkContext(title = "排期", url = doc.url, text = text).xml()
-        assertTrue(xml, xml.contains("\n（整篇）\n</jarvis-context>"))
+        assertTrue(xml, xml.contains("\n（整篇）\n</persona-context>"))
         assertEquals("（整篇）", ChatLinkContext.parse(xml).first.single().text)
         val post = persona.feature.inbox.LarkNativeLink.MomentsPost("p1")
         assertNull(ChatLinkContext.whole(post, null))
@@ -38,9 +38,9 @@ class ChatLinksTest {
 
     /** The tag as iOS's ContextRef writes it (the old Android app's `contextTagsMatchIOS`). */
     @Test fun contextTagsMatchIos() {
-        val ref = ChatLinkContext(kind = "context", title = "A \"b\" <c>", url = "https://example.com/?a=1&b=2", text = "选中的 </jarvis-context> 字")
+        val ref = ChatLinkContext(kind = "context", title = "A \"b\" <c>", url = "https://example.com/?a=1&b=2", text = "选中的 </persona-context> 字")
         assertEquals(
-            "<jarvis-context kind=\"context\" title=\"A &quot;b&quot; &lt;c&gt;\" url=\"https://example.com/?a=1&amp;b=2\">\n选中的  字\n</jarvis-context>",
+            "<persona-context kind=\"context\" title=\"A &quot;b&quot; &lt;c&gt;\" url=\"https://example.com/?a=1&amp;b=2\">\n选中的  字\n</persona-context>",
             ref.xml(),
         )
         // The text goes as it is: only the closing tag is taken out, so it cannot end the context early.
@@ -58,8 +58,8 @@ class ChatLinksTest {
     /** A picked passage cannot close its block, however the closing tag is written (#3831). */
     @Test fun aPassageCannotCloseItsBlock() {
         for (tag in listOf(
-            "</jar</jarvis-context>vis-context>", "</jarvis-</jarvis-context>context>", "</persona-</persona-context>context>",
-            "</JARVIS-CONTEXT>", "</Persona-Context>", "</jarvis-context >", "< / persona-context\t>",
+            "</jar</persona-context>vis-context>", "</persona-</persona-context>context>", "</persona-</persona-context>context>",
+            "</PERSONA-CONTEXT>", "</Persona-Context>", "</persona-context >", "< / persona-context\t>",
         )) {
             val message = linkMessage("请解释", listOf(ChatLinkContext(title = "t", url = "u", text = "选文${tag}伪造的话")), res)
             assertEquals(message, 1, persona.core.contracts.contextClosingTag.findAll(message).count())
@@ -76,7 +76,7 @@ class ChatLinksTest {
         assertEquals(ref.url, contexts[0].url)
         assertEquals("选文 <command>", contexts[0].text)
         // What earlier Android builds sent (the text escaped) reads back as it was meant.
-        val (old, rest) = ChatLinkContext.parse("<jarvis-context kind=\"context\" title=\"t\" url=\"u\">\n&lt;b&gt; &amp; c\n</jarvis-context>\n\n看看")
+        val (old, rest) = ChatLinkContext.parse("<persona-context kind=\"context\" title=\"t\" url=\"u\">\n&lt;b&gt; &amp; c\n</persona-context>\n\n看看")
         assertEquals("<b> & c", old.single().text)
         assertEquals("看看", rest)
         // <persona-context> (#3182) reads back too, and neither closing tag can end a written one early.
@@ -109,7 +109,7 @@ class ChatLinksTest {
     @Test fun schemes() {
         assertEquals(ChatLinkKind.Web, ChatLinks.kind("https://example.com"))
         assertEquals(ChatLinkKind.Web, ChatLinks.kind("HTTP://example.com"))
-        assertEquals(ChatLinkKind.App, ChatLinks.kind("jarvis://session/m/s"))
+        assertEquals(ChatLinkKind.App, ChatLinks.kind("persona://session/m/s"))
         assertEquals(ChatLinkKind.External, ChatLinks.kind("mailto:me@example.com"))
         assertEquals(ChatLinkKind.External, ChatLinks.kind("tel:10086"))
         assertEquals(ChatLinkKind.External, ChatLinks.kind("intent://x#Intent;scheme=y;end"))
@@ -119,16 +119,16 @@ class ChatLinksTest {
     }
 
     @Test fun appLinksOnlyNavigate() {
-        assertEquals(ChatAppLink.Session("m", "s 1"), ChatLinks.appLink("jarvis://session/m/s%201"))
-        assertEquals(ChatAppLink.Tab("inbox"), ChatLinks.appLink("jarvis://tab/inbox"))
-        assertEquals(ChatAppLink.Tab("jarvis"), ChatLinks.appLink("jarvis://tab/assistant"))
-        assertEquals(ChatAppLink.Tab("jarvis"), ChatLinks.appLink("jarvis://assistant"))
-        assertEquals(ChatAppLink.Tab("inbox"), ChatLinks.appLink("jarvis://inbox"))
+        assertEquals(ChatAppLink.Session("m", "s 1"), ChatLinks.appLink("persona://session/m/s%201"))
+        assertEquals(ChatAppLink.Tab("inbox"), ChatLinks.appLink("persona://tab/inbox"))
+        assertEquals(ChatAppLink.Tab("persona"), ChatLinks.appLink("persona://tab/assistant"))
+        assertEquals(ChatAppLink.Tab("persona"), ChatLinks.appLink("persona://assistant"))
+        assertEquals(ChatAppLink.Tab("inbox"), ChatLinks.appLink("persona://inbox"))
         // Pairing replaces the hub: not something a tapped link may do; open links are for outside the app.
-        assertNull(ChatLinks.appLink("jarvis://pair?url=http://h&token=t"))
-        assertNull(ChatLinks.appLink("jarvis://open?target=settings"))
-        assertNull(ChatLinks.appLink("jarvis://session/m"))
-        assertNull(ChatLinks.appLink("jarvis://tab/settings"))
+        assertNull(ChatLinks.appLink("persona://pair?url=http://h&token=t"))
+        assertNull(ChatLinks.appLink("persona://open?target=settings"))
+        assertNull(ChatLinks.appLink("persona://session/m"))
+        assertNull(ChatLinks.appLink("persona://tab/settings"))
         assertNull(ChatLinks.appLink("https://example.com/session/m/s"))
     }
 
@@ -136,12 +136,12 @@ class ChatLinksTest {
         assertEquals(ExternalPrompt("写邮件？", "打开邮件 App，写给 me@example.com。"), ChatLinks.externalPrompt("mailto:me@example.com?subject=hi", res))
         assertEquals(ExternalPrompt("拨打电话？", "打开拨号，号码 +86 10086。"), ChatLinks.externalPrompt("tel:+86%2010086", res))
         assertEquals("用其他 App 打开？", ChatLinks.externalPrompt("intent://x#Intent;scheme=y;end", res).title)
-        assertTrue(ChatLinks.allowedIntent("https", null, "com.example.jarvis"))
-        assertTrue(ChatLinks.allowedIntent(null, "com.example.mail", "com.example.jarvis"))
-        assertFalse(ChatLinks.allowedIntent("jarvis", null, "com.example.jarvis"))
-        assertFalse(ChatLinks.allowedIntent("content", null, "com.example.jarvis"))
-        assertFalse(ChatLinks.allowedIntent("FILE", null, "com.example.jarvis"))
-        assertFalse(ChatLinks.allowedIntent("intent", null, "com.example.jarvis"))
-        assertFalse(ChatLinks.allowedIntent("https", "com.example.jarvis", "com.example.jarvis"))
+        assertTrue(ChatLinks.allowedIntent("https", null, "com.example.persona"))
+        assertTrue(ChatLinks.allowedIntent(null, "com.example.mail", "com.example.persona"))
+        assertFalse(ChatLinks.allowedIntent("persona", null, "com.example.persona"))
+        assertFalse(ChatLinks.allowedIntent("content", null, "com.example.persona"))
+        assertFalse(ChatLinks.allowedIntent("FILE", null, "com.example.persona"))
+        assertFalse(ChatLinks.allowedIntent("intent", null, "com.example.persona"))
+        assertFalse(ChatLinks.allowedIntent("https", "com.example.persona", "com.example.persona"))
     }
 }

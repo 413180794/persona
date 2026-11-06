@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Muted agents and spaces stay off the watch (#4360): the phone's summary drops their cards, and the cards the watch
 /// pulls itself carry the hub's `muted` flag so the watch hides them and never buzzes — the same rule as the Agents
@@ -18,7 +18,7 @@ struct WatchMutedTests {
 
     private func session(_ id: String, space: String) throws -> Session {
         let o: [String: Any] = ["machine_id": machine, "session_id": id, "title": "agent \(id)", "cwd": "/code/\(id)",
-                                "status": "idle", "state": "working", "started_by_jarvis": false, "assistant": false,
+                                "status": "idle", "state": "working", "started_by_persona": false, "assistant": false,
                                 "pending_interactions": 0, "space_name": space]
         return try JSON.decoder.decode(Session.self, from: JSONSerialization.data(withJSONObject: o))
     }

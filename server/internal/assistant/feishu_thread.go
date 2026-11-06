@@ -194,7 +194,7 @@ func (s *Service) threadRoutes(ctx context.Context, t Todo, f FeishuFeatures) ([
 		tried = append(tried, botTarget{Kind: targetAgent, MachineID: c.MachineID, SessionID: c.SessionID})
 	}
 	if t.Origin != "" {
-		tried = append(tried, botTarget{Kind: targetJarvis, SessionID: t.Origin})
+		tried = append(tried, botTarget{Kind: targetPersona, SessionID: t.Origin})
 	}
 	tried = append(tried, botTarget{Kind: targetMain})
 	l := s.botLang(ctx)
@@ -205,7 +205,7 @@ func (s *Service) threadRoutes(ctx context.Context, t Todo, f FeishuFeatures) ([
 			last = err
 			continue
 		}
-		if c.Kind == targetJarvis {
+		if c.Kind == targetPersona {
 			// The conversation is looked for: a todo outlives the conversation that opened it.
 			if _, ok := s.session(ctx, s.settings(ctx).MachineID, c.SessionID); !ok {
 				continue

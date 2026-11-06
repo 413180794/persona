@@ -2,7 +2,7 @@ import XCTest
 
 /// Settings › Model Providers (#2455) in Demo Mode (DemoHub, no hub needed): the provider wizard walked through (Choose Provider → Connect →
 /// Choose Models → Save), Import from ~/.zshrc (a machine, its aliases ticked, imported) and a machine whose personad is too old.
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a screenshot of each step, named with TEST_RUNNER_JARVIS_APPEARANCE (light / dark).
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> keeps a screenshot of each step, named with TEST_RUNNER_PERSONA_APPEARANCE (light / dark).
 final class ProviderWizardUITests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -21,8 +21,8 @@ final class ProviderWizardUITests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
-        let look = ProcessInfo.processInfo.environment["JARVIS_APPEARANCE"] ?? "light"
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
+        let look = ProcessInfo.processInfo.environment["PERSONA_APPEARANCE"] ?? "light"
         try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "wizard-\(name)-\(look).png"))
     }
 

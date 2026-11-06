@@ -330,9 +330,9 @@ func TestTodayCardListsWhatFailed(t *testing.T) {
 
 // Kinds remembered with "Start these right away from now on" are listed and can be forgotten (Postgres: on the hub machine).
 func TestTaskTrust(t *testing.T) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
 	}
 	database, err := db.Open(context.Background(), url, db.ManagerSet)
 	if err != nil {
@@ -607,7 +607,7 @@ func TestSnapshotLinks(t *testing.T) {
 	for _, c := range []struct{ got, want string }{
 		{sessionLink(web, "mac-a", "b00502b8-82a3", false), web + "/s/mac-a/b00502b8-82a3"},
 		{sessionLink(web, "mac a", "x/y", false), web + "/s/mac%20a/x%2Fy"},
-		{sessionLink(web, "mac-a", "c1", true), web + "/j/c1"},
+		{sessionLink(web, "mac-a", "c1", true), web + "/persona/c1"},
 		{todoLink(web, "todo_1"), web + "/todos?id=todo_1"},
 		{todoLink(web, "a&b"), web + "/todos?id=a%26b"},
 		{sessionLink("", "mac-a", "c1", false), ""},

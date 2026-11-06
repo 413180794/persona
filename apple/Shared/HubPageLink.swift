@@ -1,13 +1,13 @@
 import Foundation
 
 /// A page of the hub's web app that the app has natively (#2696): the links the assistant writes into its answers
-/// (#2194: `/s/<machine>/<session>`, `/j/<conversation>`, `/todos?id=<todo>`, each optionally `?at=<item id>` for one
+/// (#2194: `/s/<machine>/<session>`, `/persona/<conversation>`, `/todos?id=<todo>`, each optionally `?at=<item id>` for one
 /// message) open here instead of the web page. The paths are web/src/lib/router.ts's; the hub writes them in
 /// server/internal/assistant (`sessionLink`, `todoLink`, `transcriptText`).
 nonisolated enum HubPage: Equatable, Hashable, Sendable {
     /// An agent's conversation (`/s/…`, `/t/…/<session>`); `item`: the message to land on.
     case agent(machine: String, session: String, item: String?)
-    /// A Persona conversation (`/j/<id>`, `/persona/<id>`).
+    /// A Persona conversation (`/persona/<id>`).
     case conversation(id: String, item: String?)
     /// A task (`/todos?id=…`, `/todos/<id>`).
     case todo(id: String)
@@ -43,7 +43,7 @@ nonisolated enum HubPageLink {
         case "t" where p.count == 5 && !p[1].isEmpty && !p[4].isEmpty:
             // /t/<machine>/<space>/<slot>/<session>: the tab's agent. Without the session it names a place, not a chat.
             return .agent(machine: p[1], session: p[4], item: at)
-        case "j", "persona":
+        case "persona":
             guard p.count == 2, !p[1].isEmpty, p[1] != "new" else { return nil }
             return .conversation(id: p[1], item: at)
         case "todos":

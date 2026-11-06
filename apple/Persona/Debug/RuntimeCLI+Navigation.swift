@@ -59,7 +59,7 @@ extension RuntimeCLI {
         for i in 0..<(AppModel.keptChats + 2) { _ = m.chat(SessionKey(machineID: "runtime-cli", sessionID: "evict-\(i)")) }
     }
 
-    /// The page a launch switch opens (JarvisApp, SettingsView.openDebugPage), on a new view tree (`rebuild`), or in
+    /// The page a launch switch opens (PersonaApp, SettingsView.openDebugPage), on a new view tree (`rebuild`), or in
     /// place with `keep`. `defaults`: launch-only switches the pages read when they are built (`openAllWork`…),
     /// registered for this run, never saved. `coldChats`, `dropChatCache`: as `reset`.
     private static func navigate(_ a: Args) async -> Reply {

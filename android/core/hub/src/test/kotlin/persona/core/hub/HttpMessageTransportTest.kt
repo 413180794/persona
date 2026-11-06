@@ -112,7 +112,7 @@ class HttpMessageTransportTest {
                         val sent = withTimeout(5000) { requests.receive() }
                         assertEquals("/api/v1/sessions/machine/session%2Fencoded/messages", (sent.path).zhAny())
                         assertEquals("Bearer test-token", (sent.getHeader("Authorization")).zhAny())
-                        assertEquals("stable-id", (sent.getHeader("X-Jarvis-Op-Id")).zhAny())
+                        assertEquals("stable-id", (sent.getHeader("X-Persona-Op-Id")).zhAny())
                         val body = JsonCodec.parseToJsonElement(sent.body.readUtf8()).jsonObject
                         assertEquals("stable-id", (body["client_msg_id"]?.jsonPrimitive?.content).zhAny())
                         assertEquals("draft", (body["clear_draft"]?.jsonPrimitive?.content).zhAny())

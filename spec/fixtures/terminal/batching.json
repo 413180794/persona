@@ -6,9 +6,9 @@
       "name": "batch_text_then_keys",
       "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
-        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
-        "ios/JarvisTests/TerminalWrapTests.swift — textThenKeysGoInOneRequest"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/PersonaTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/PersonaTests/TerminalWrapTests.swift — textThenKeysGoInOneRequest"
       ],
       "input": {
         "events": [
@@ -44,9 +44,9 @@
       "name": "batch_text_after_key",
       "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
-        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
-        "ios/JarvisTests/TerminalWrapTests.swift — textAfterAKeyWaitsForTheNextRequest"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/PersonaTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/PersonaTests/TerminalWrapTests.swift — textAfterAKeyWaitsForTheNextRequest"
       ],
       "input": {
         "events": [
@@ -91,9 +91,9 @@
       "name": "batch_pending_backspace",
       "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
-        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
-        "ios/JarvisTests/TerminalWrapTests.swift — backspaceTakesBackWhatHasNotGoneOut"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/PersonaTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/PersonaTests/TerminalWrapTests.swift — backspaceTakesBackWhatHasNotGoneOut"
       ],
       "input": {
         "events": [
@@ -126,9 +126,9 @@
       "name": "batch_backspace_after_empty",
       "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
-        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests",
-        "ios/JarvisTests/TerminalWrapTests.swift — backspaceTakesBackWhatHasNotGoneOut"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/PersonaTests/TerminalWrapTests.swift — KeyBatcherTests",
+        "ios/PersonaTests/TerminalWrapTests.swift — backspaceTakesBackWhatHasNotGoneOut"
       ],
       "input": {
         "events": [
@@ -160,8 +160,8 @@
       "name": "batch_grapheme_backspace",
       "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
-        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/PersonaTests/TerminalWrapTests.swift — KeyBatcherTests"
       ],
       "input": {
         "events": [
@@ -188,8 +188,8 @@
       "name": "batch_empty_text",
       "description": "按文本在前、键在后的请求顺序分批，并撤回未发送字符。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
-        "ios/JarvisTests/TerminalWrapTests.swift — KeyBatcherTests"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — KeyBatcher.push / take",
+        "ios/PersonaTests/TerminalWrapTests.swift — KeyBatcherTests"
       ],
       "input": {
         "events": [

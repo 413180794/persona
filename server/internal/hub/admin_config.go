@@ -81,14 +81,14 @@ func splitList(s string) []string {
 	return out
 }
 
-// adminEnv is the scope a deployment gave in the environment (JARVIS_ADMIN_ACCESS, JARVIS_ADMIN_CIDRS; Docker's
-// .env): it wins over hub.json, like the other JARVIS_* overrides, and is never written back. nil when unset.
+// adminEnv is the scope a deployment gave in the environment (PERSONA_ADMIN_ACCESS, PERSONA_ADMIN_CIDRS; Docker's
+// .env): it wins over hub.json, like the other PERSONA_* overrides, and is never written back. nil when unset.
 func adminEnv() *AdminConfig {
-	access := strings.TrimSpace(identity.Getenv("JARVIS_ADMIN_ACCESS"))
+	access := strings.TrimSpace(identity.Getenv("PERSONA_ADMIN_ACCESS"))
 	if access == "" {
 		return nil
 	}
-	return &AdminConfig{Access: access, CIDRs: splitList(identity.Getenv("JARVIS_ADMIN_CIDRS"))}
+	return &AdminConfig{Access: access, CIDRs: splitList(identity.Getenv("PERSONA_ADMIN_CIDRS"))}
 }
 
 // --- hub.json edits ---------------------------------------------------------------------------------------------
@@ -235,12 +235,12 @@ func marshalNoEscape(v any) (json.RawMessage, error) {
 }
 
 // hubJSONMu serializes this process's edits of hub.json; a lock on its directory does the same between processes
-// (the hub and `jarvisd hub admin …` on its machine). Not on hub.json itself: the rename replaces that file.
+// (the hub and `personad hub admin …` on its machine). Not on hub.json itself: the rename replaces that file.
 var hubJSONMu sync.Mutex
 
 // editHubJSON reads <dir>/hub.json (missing: an empty object), lets edit change it and writes it back atomically:
 // a temporary file in the same directory, fsync, rename over the old one, mode 0600. A file that is not a JSON
-// object is left alone (error). Values from the environment (JARVIS_PUBLIC_URL…) never get here: edit sees the file.
+// object is left alone (error). Values from the environment (PERSONA_PUBLIC_URL…) never get here: edit sees the file.
 func editHubJSON(dir string, edit func(o *jsonObject) error) error {
 	hubJSONMu.Lock()
 	defer hubJSONMu.Unlock()

@@ -48,7 +48,7 @@ function piPackage() {
 const { SessionManager } = await import(pathToFileURL(join(piPackage(), 'dist', 'index.js')).href)
 let host = arg('host') || process.env.PI_WEB_HOSTNAME || '127.0.0.1'
 if (host === '0.0.0.0' || host === '::') host = '127.0.0.1'
-const self = selfPackage(import.meta.url, 'jarvis-pi-runtime')
+const self = selfPackage(import.meta.url, 'persona-pi-runtime')
 let alive
 const piHost = createPiHost({
   SessionManager,
@@ -60,7 +60,7 @@ const piHost = createPiHost({
   update: self.store && !process.argv.includes('--no-update') ? {
     name: self.name, hash: self.hash, store: self.store,
     exit: (hash) => {
-      console.error(`jarvis pi-web companion: ${hash.slice(0, 12)} installed; exiting for the supervisor to start it`)
+      console.error(`persona pi-web companion: ${hash.slice(0, 12)} installed; exiting for the supervisor to start it`)
       clearInterval(alive)
       process.exit(0)
     },
@@ -70,5 +70,5 @@ piHost.start()
 // The SDK's timers do not hold a process (it usually lives in someone else's: DSH's, pi's). This process is only the
 // runtime: without this it would exit whenever it is not connected (no node yet, a node restarting, an older node).
 alive = setInterval(() => {}, 1 << 30)
-console.error('jarvis pi-web companion: listing pi sessions for the node')
+console.error('persona pi-web companion: listing pi sessions for the node')
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { clearInterval(alive); piHost.stop(); process.exit(0) })

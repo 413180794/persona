@@ -227,7 +227,7 @@ func isPID(s string) bool {
 	return true
 }
 
-// inDataDirs are where the folded path p is in each data folder it is in: one named .persona or .jarvis anywhere
+// inDataDirs are where the folded path p is in each data folder it is in: one named .persona or .persona anywhere
 // (this machine's, another user's, a copy), and the one PERSONA_HOME names for this node (identity.DataDir), as
 // written or with its links followed. Every one is kept, not the first: a data folder PERSONA_HOME puts below a
 // .persona folder (~/.persona/inst2) has its credentials where they are written in it, not one level below .persona.
@@ -235,7 +235,7 @@ func (n *Node) inDataDirs(p string) []string {
 	var rels []string
 	parts := strings.Split(p, "/")
 	for i, part := range parts {
-		if part == ".persona" || part == ".jarvis" {
+		if part == ".persona" {
 			rels = append(rels, strings.Join(parts[i+1:], "/"))
 		}
 	}

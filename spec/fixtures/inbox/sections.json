@@ -7,10 +7,10 @@
       "description": "未分拣事项按需要你显示，已处理事项保留分拣档位。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions",
-        "ios/JarvisTests/InboxTests.swift: decodesItemsAndOpensThem"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions",
+        "ios/PersonaTests/InboxTests.swift: decodesItemsAndOpensThem"
       ],
       "input": {
         "items": [
@@ -100,9 +100,9 @@
       "description": "分段固定为需要你、知悉即可、已折叠、已处理，已处理按处理时间倒序。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -303,9 +303,9 @@
       "description": "展开集合控制段内可见行，折叠不影响计数。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -502,9 +502,9 @@
       "description": "空收件箱不生成空段。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [],
@@ -537,9 +537,9 @@
       "description": "未处理事项保留输入顺序，界面不重新按更新时间排序。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -624,9 +624,9 @@
       "description": "外部已读或 AI 处理状态不改变分段，只有 done_at 决定已处理。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [

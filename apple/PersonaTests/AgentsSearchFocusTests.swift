@@ -1,7 +1,7 @@
 import SwiftUI
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// UIKit focus probes are not user intent; explicit activation remains a supported search entry point.
 @MainActor struct AgentsSearchFocusTests {

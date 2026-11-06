@@ -18,7 +18,7 @@ fun interface ErrorReportTransport {
     suspend fun post(body: String): Pair<Int, String>
 }
 
-/** Through the connection's authenticated route: the same token, `X-Jarvis-Client` and TLS pinning as every request. */
+/** Through the connection's authenticated route: the same token, `X-Persona-Client` and TLS pinning as every request. */
 class HttpErrorReportTransport(private val connection: OkHttpHubConnection) : ErrorReportTransport {
     override suspend fun post(body: String): Pair<Int, String> = try {
         connection.request("/api/v1/error-reports", "POST", body.toRequestBody("application/json".toMediaType())).use {

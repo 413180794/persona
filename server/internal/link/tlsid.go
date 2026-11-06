@@ -20,13 +20,13 @@ import (
 )
 
 // The connector's own TLS identity for passive mode (docs/link.md "Passive mode"): an ECDSA P-256 key that never changes
-// and a self-signed certificate renewed with it. The hub pins the key, the way the apps and jarvis-link pin the hub's,
+// and a self-signed certificate renewed with it. The hub pins the key, the way the apps and persona-link pin the hub's,
 // with the same fingerprint: SHA-256 of the SubjectPublicKeyInfo, base64url without padding. Renewing the certificate
 // keeps the pin; a new key needs pairing again.
 
 // tlsName is the only name the certificate carries: whoever reaches the port can read it, so neither the host name nor
 // an address goes in (the hub's certificate does the same, hub/tlscert.go). Nobody checks it.
-const tlsName = "connector.jarvis.invalid"
+const tlsName = "connector.persona.invalid"
 
 // Settings, not measurements: how long a certificate is valid and how long before its end it is renewed.
 const (

@@ -15,7 +15,7 @@ struct AppearanceSection: View {
         Section {
             Group {
                 NavigationLink(value: SettingsPage.persona) {
-                    SettingsRow(title: String(localized: "Avatar"), symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.cardTitle, look: .oneLine)
+                    SettingsRow(title: String(localized: "Avatar"), symbol: Theme.Icon.avatar, tint: Theme.persona, value: model.persona.cardTitle, look: .oneLine)
                 }
                 .settingsListRow(SettingsPage.persona)
                 .accessibilityIdentifier("settings-persona")

@@ -207,13 +207,13 @@ export function useAssistantMenu(session: Session | undefined): { items: MenuIte
   if (!session) return { items: [], dialogs: null };
   const isMain = assistant?.main === session.session_id;
   const launcher = effectiveLauncher({ isMain, picked, session: session.launcher, config: assistant?.launcher });
-  const cwd = session.cwd || assistant?.cwd || "~/.jarvis/assistant";
+  const cwd = session.cwd || assistant?.cwd || "~/.persona/assistant";
   const title = !isMain && session.title && session.title !== "Claude Code" ? session.title : undefined;
   const compacting = session.compaction?.state === "running";
   const items: MenuItem[] = [
     { key: "profile", label: t("assistant-assistantchat.details"), icon: "info", onSelect: () => navigate({ name: "profile" }) },
     { key: "kb", label: t("assistant-assistantchat.knowledge"), icon: "book", onSelect: () => navigate({ name: "kb" }) },
-    ...(assistant?.main && !isMain ? [{ key: "main", label: t("assistant-assistantchat.back_to_main"), icon: "home" as const, onSelect: () => navigate({ name: "jarvis", sid: assistant.main }) }] : []),
+    ...(assistant?.main && !isMain ? [{ key: "main", label: t("assistant-assistantchat.back_to_main"), icon: "home" as const, onSelect: () => navigate({ name: "persona", sid: assistant.main }) }] : []),
     ...(isMain && canCompact
       ? [{ key: "compact", label: compacting ? t("assistant-assistantchat.compacting") : t("assistant-assistantchat.compact"), icon: "layers" as const, disabled: compacting, onSelect: () => void startCompaction(session) }]
       : []),
@@ -351,7 +351,7 @@ function NewMainDialog({ open, onClose, session }: { open: boolean; onClose: () 
   const toEmptyMain = async () => {
     await refreshAssistant().catch(() => {});
     onClose();
-    navigate({ name: "jarvis" });
+    navigate({ name: "persona" });
   };
   const go = async () => {
     setBusy(true);

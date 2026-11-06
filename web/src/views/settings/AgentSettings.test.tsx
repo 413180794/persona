@@ -34,7 +34,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
   localStorage.clear();
-  localStorage.setItem("jarvis.agentSettings.applyAll", "0"); // only the shown computer, one PUT per change
+  localStorage.setItem("persona.agentSettings.applyAll", "0"); // only the shown computer, one PUT per change
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);

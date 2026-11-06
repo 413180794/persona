@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Serializable @SerialName("jarvis.platform.phonetools.PhoneToolsRoute") data object PhoneToolsRoute : NavKey
+@Serializable @SerialName("persona.platform.phonetools.PhoneToolsRoute") data object PhoneToolsRoute : NavKey
 
 @Composable
 fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {

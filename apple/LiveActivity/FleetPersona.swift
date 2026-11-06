@@ -148,7 +148,7 @@ nonisolated struct FleetFaces: Hashable, Sendable {
 }
 
 /// Where the app leaves the look and a package's pictures for the widget extension: files in the App Group container
-/// they share (Info.plist `JarvisAppGroup`), under `Fleet/`. On a phone a Live Activity's extension cannot use the
+/// they share (Info.plist `PersonaAppGroup`), under `Fleet/`. On a phone a Live Activity's extension cannot use the
 /// keychain (build 103's Dynamic Island Diagnostics, 2026-11-02: the app wrote and read back both items, the extension never reported),
 /// so nothing goes there any more. Readable on the lock screen once the phone was unlocked after boot. Tests pass a
 /// directory of their own.
@@ -163,9 +163,9 @@ nonisolated struct FleetLookStore: Sendable {
     static let facesDir = "faces"
     static let avatarName = "avatar"
 
-    /// The island's log (Console: subsystem `jarvis`, category `island`): every write on either side and every read
+    /// The island's log (Console: subsystem `persona`, category `island`): every write on either side and every read
     /// that fails, so a phone that draws the wrong persona says which step failed (docs/live-activity.md「诊断」).
-    static let log = Logger(subsystem: "jarvis", category: "island")
+    static let log = Logger(subsystem: "persona", category: "island")
 
     /// `Fleet/` in the container; nil when this bundle has none (not signed with the group: nothing is saved, and the
     /// extension draws the content's look, a package in its color).
@@ -175,7 +175,7 @@ nonisolated struct FleetLookStore: Sendable {
 
     /// The group's id, `group.<bundle id>` unless the config says otherwise, in both bundles' Info.plist.
     static var group: String? {
-        (Bundle.main.object(forInfoDictionaryKey: "JarvisAppGroup") as? String).flatMap { $0.isEmpty ? nil : $0 }
+        (Bundle.main.object(forInfoDictionaryKey: "PersonaAppGroup") as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     static var container: URL? {

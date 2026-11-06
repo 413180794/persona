@@ -7,13 +7,13 @@
             android:exported="true"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.Jarvis.Shortcut" />
+            android:theme="@style/Theme.Persona.Shortcut" />
         <!-- Debug builds only: the home-screen widget at its three sizes over the wallpaper (WidgetPreviewActivity.kt). -->
         <activity
             android:name="persona.platform.shortcuts.WidgetPreviewActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.Jarvis.WidgetPreview" />
+            android:theme="@style/Theme.Persona.WidgetPreview" />
     </application>
 </manifest>

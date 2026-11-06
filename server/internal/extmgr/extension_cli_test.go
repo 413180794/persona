@@ -30,9 +30,7 @@ func TestExtensionCommand(t *testing.T) {
 	t.Cleanup(func() { srv.Close() })
 	home := t.TempDir()
 	t.Setenv("PERSONA_HOME", home)
-	t.Setenv("JARVIS_HOME", "")
 	t.Setenv("PERSONA_LISTEN", "")
-	t.Setenv("JARVIS_LISTEN", "")
 	b, _ := json.Marshal(map[string]any{"listen": ln.Addr().String(), "token": h.cfg.Token})
 	if err := os.WriteFile(filepath.Join(home, "hub.json"), b, 0o600); err != nil {
 		t.Fatal(err)
@@ -96,9 +94,7 @@ func TestExtensionMarketTokenCommand(t *testing.T) {
 	t.Cleanup(func() { hs.Close() })
 	home := t.TempDir()
 	t.Setenv("PERSONA_HOME", home)
-	t.Setenv("JARVIS_HOME", "")
 	t.Setenv("PERSONA_LISTEN", "")
-	t.Setenv("JARVIS_LISTEN", "")
 	b, _ := json.Marshal(map[string]any{"listen": ln.Addr().String(), "token": h.cfg.Token})
 	if err := os.WriteFile(filepath.Join(home, "hub.json"), b, 0o600); err != nil {
 		t.Fatal(err)
@@ -178,9 +174,7 @@ func TestExtensionCommandUninstallWarnings(t *testing.T) {
 			defer srv.Close()
 			home := t.TempDir()
 			t.Setenv("PERSONA_HOME", home)
-			t.Setenv("JARVIS_HOME", "")
 			t.Setenv("PERSONA_LISTEN", "")
-			t.Setenv("JARVIS_LISTEN", "")
 			b, err := json.Marshal(map[string]string{"listen": strings.TrimPrefix(srv.URL, "http://"), "token": token})
 			if err != nil {
 				t.Fatal(err)

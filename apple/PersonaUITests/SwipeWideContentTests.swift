@@ -4,22 +4,22 @@ import XCTest
 /// on: a wide table or code block scrolls instead (#5737). At its right end, on a table that fits, or on a plain
 /// reply, the drag quotes as before.
 ///   PORT=18798 MOCK_WIDE=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18798 xcodebuild test … -only-testing:PersonaUITests/SwipeWideContentTests
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18798 xcodebuild test … -only-testing:PersonaUITests/SwipeWideContentTests
 final class SwipeWideContentTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] != nil else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_WIDE=1 (JARVIS_MOCK_HUB)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] != nil else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_WIDE=1 (PERSONA_MOCK_HUB)")
         }
     }
 
     @MainActor private func launch() {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        let scheme = ProcessInfo.processInfo.environment["JARVIS_SHOTS_SCHEME"] ?? "light"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let scheme = ProcessInfo.processInfo.environment["PERSONA_SHOTS_SCHEME"] ?? "light"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-0000000005e1", "-openChatsFresh", "YES", "-ui.scheme", scheme]
         app.launchPinned()
         acceptIconAlert()

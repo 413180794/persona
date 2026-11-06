@@ -245,7 +245,7 @@ describe("conversation links", () => {
     const { renderToStaticMarkup } = await import("react-dom/server");
     const { createElement } = await import("react");
     const { Markdown } = await import("./Markdown");
-    for (const scheme of ["persona", "jarvis"]) {
+    for (const scheme of ["persona"]) {
       expect(() => renderToStaticMarkup(createElement(Markdown, { text: `[会话](${scheme}://session/desktop/%E0%A4%A)` }))).not.toThrow();
     }
   });

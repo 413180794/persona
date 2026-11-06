@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Appearance › Light & Dark (ColorSchemeChoice, docs/ios.md「设计语言」): what it reads, and what it does to the windows.
 @MainActor struct ColorSchemeChoiceTests {

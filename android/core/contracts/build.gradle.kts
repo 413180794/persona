@@ -1,7 +1,7 @@
 import java.util.Properties
 
 plugins {
-    id("jarvis.jvm.library")
+    id("persona.jvm.library")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 

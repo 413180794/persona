@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// 「全部子 Agent」 (#1559): every subagent under the one that launched it, the same order as the web's `subagentTree`.
 struct SubagentTreeTests {

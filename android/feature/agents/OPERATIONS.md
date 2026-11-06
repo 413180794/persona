@@ -8,7 +8,7 @@ App 已由 `di/AgentsWiringModule.kt` 和 `AgentsEntries.kt` 提供 `LocalAgents
 - 提供 `AgentsOperationsBindings(operations, assistant, onSessionClosed)`。`assistant` 使用已有 `AssistantConversations`；会话请求继续使用现有 `MessageSender`，不另建发送队列。
 - `onSessionClosed` 在关闭已确认后触发；App 已撤回对应通知；其他返回栈中已打开会话的主动修正仍需补齐。模块内会刷新会话和交互仓储，并同步列表显示。
 - 按配对作用域重建页面和依赖；模块用 `operations.scope` 区分 ViewModel。外壳已按配对 identity 重建导航及页面作用域。
-- 「交给 Jarvis」注入共享 `MainConversationSender`，每次交接分配操作 ID，失败重试复用原 ID；入队后选择 Jarvis tab，等 outbox 绑定真实目标才以助手身份导航。交接完成后再次操作分配新 ID，不提前刷新或创建助手会话。
+- 「交给 Persona」注入共享 `MainConversationSender`，每次交接分配操作 ID，失败重试复用原 ID；入队后选择 Persona tab，等 outbox 绑定真实目标才以助手身份导航。交接完成后再次操作分配新 ID，不提前刷新或创建助手会话。
 
 未接线时，写操作会提示「会话操作尚未接入」，不会退回本机置顶或屏蔽。列表的已读标记仍沿用原来的本机实现。
 

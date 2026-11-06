@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Connectors' rows from the hub's list (`ConnectorRow.rows`, migration M6): mail and Feishu keep their rows and
 /// their place whether the hub lists them or not.

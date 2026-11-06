@@ -1,7 +1,7 @@
 import AppKit
 import QuartzCore
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The needs-you ring on the Mac is a Core Animation animation, the same breath the iPhone draws from its clock.
 @MainActor

@@ -112,7 +112,7 @@ a summary up to 40 characters, and a short reason:
 - **Per-source rules (replacement, 2026-11-04, #1644)**: sources / accounts need different standards; one global rule set cannot cover them. Connector items may include `rules`
   (the user's original words, such as Lark-plugin Triage rules `triage_rules`; `docs/connector-protocol.md`). The item **uses only its own rules**, with no global `inbox.rules` appended.
   Only items without rules use global ones. Default tier criteria above are unchanged; user rules remain last and authoritative. Rules are stored with the item (not listed), updated from each new version when activity arrives,
-  up to 4000 characters. The assistant can change plugin-source rules (`inbox.rules.<plugin>` in `jarvis_settings`, confirmed on the phone; `docs/assistant.md`). Built-in GitHub and Messages connectors do not yet have their own rules (the Telegram extension has `triage_rules`).
+  up to 4000 characters. The assistant can change plugin-source rules (`inbox.rules.<plugin>` in `persona_settings`, confirmed on the phone; `docs/assistant.md`). Built-in GitHub and Messages connectors do not yet have their own rules (the Telegram extension has `triage_rules`).
 - When uncertain between action / fyi, choose action. If the model cannot triage (unconfigured, no quota / concurrency full, error, timeout), use fallback rules (private chat / mention of me → action; everyone-only mention without me → fyi, an announcement; group → fyi; direct mail → fyi; others → noise), with reason "Rule-based."
   Connector items use their rule-provided fallback (`tier`). Model-triaged items (empty `tier`) from hub-owned connectors (GitHub, Telegram, Messages) still fall back to noise.
   **Plugin-provided connectors have no fallback**: noise would silently hide items the user must see (below).
@@ -388,7 +388,7 @@ bound to that item (`handling` on the item; chat source `inbox`, `origin_ref` = 
 Processing uses `agent.state = running`, failure `failed`; other suggestions (Agent, conclusion, handback) show no draft on old Apps (`skipped`). Previously stored AI twin drafts become version-1 reply suggestions (`handling.state = done`),
 confirmable in new Apps. `/reply`, `/done`, `/draft` unchanged.
 
-- Local model 1 verification: `JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` runs `TestInboxModelsLive`
+- Local model 1 verification: `PERSONA_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` runs `TestInboxModelsLive`
   in the manager package: `go test -run InboxModelsLive ./internal/assistant`, on the hub machine, with the key file there.
 
 ## Relationships: parents and children (#2128)
@@ -526,7 +526,7 @@ which users saw as one action: clear this batch they do not need to handle now. 
   private chats post normally; topic items (topic-group topics or topic replies in ordinary groups) reply to that message within its topic (`replyMode:"thread"`);
   group mentions outside topics quote that message; other group items post normally (unclear reply targets would make quotes odd); legacy data without `reply_to` also posts normally.
   Topic groups collect only the latest page of topic roots (P-04 unfinished), so the last message from someone else is the latest topic, not necessarily the one with new replies.
-- **Hand to AI**: attach the item as `<jarvis-context kind="context" title="Lark · Group name">` (hub `context` + feedId / mail uid, letting tools read more and
+- **Hand to AI**: attach the item as `<persona-context kind="context" title="Lark · Group name">` (hub `context` + feedId / mail uid, letting tools read more and
   reply), plus the requested action (default "Summarize this, tell me what I need to do, and suggest a reply," with two other presets). Persona opens a new chat (switch to Chats);
   an Agent (latest 8) receives it in its session (navigate there). Mark done simultaneously by default.
 - **Done**: row swipe-left, top-right ✓ in details, or alongside Send / Hand to AI.

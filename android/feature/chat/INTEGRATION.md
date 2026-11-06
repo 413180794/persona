@@ -14,7 +14,7 @@
 
 ```sh
 ./gradlew :feature:chat:compileDebugKotlin :core:hub:compileKotlin
-./gradlew -Pkotlin.compiler.execution.strategy=in-process --no-watch-fs :feature:chat:testDebugUnitTest --tests jarvis.feature.chat.ChatChromeTest :core:hub:test --tests jarvis.core.hub.HttpChatActionsTest
+./gradlew -Pkotlin.compiler.execution.strategy=in-process --no-watch-fs :feature:chat:testDebugUnitTest --tests persona.feature.chat.ChatChromeTest :core:hub:test --tests persona.core.hub.HttpChatActionsTest
 ```
 
 两个测试分别覆盖空间隔离与命令转义，以及请求路径、屏蔽数据保留、关闭结果核对后不重复提交。中文标点扫描命中零处。

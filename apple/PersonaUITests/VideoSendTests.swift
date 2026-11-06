@@ -1,16 +1,16 @@
 import XCTest
 
 /// Videos picked in Photos go as files (#981, docs/protocol.md「发送视频」), against scripts/mock/mock_hub.py with
-/// `MOCK_SENT_VIDEO=<a video>` (TEST_RUNNER_JARVIS_VIDEO_SEND_HUB=http://127.0.0.1:<port>) and a made-up video in the
+/// `MOCK_SENT_VIDEO=<a video>` (TEST_RUNNER_PERSONA_VIDEO_SEND_HUB=http://127.0.0.1:<port>) and a made-up video in the
 /// simulator's library (`xcrun simctl addmedia`). Each runs in the layout and style the environment picks
-/// (JARVIS_LAYOUT, JARVIS_UI_STYLE); JARVIS_SHOTS saves the screenshots there too.
+/// (PERSONA_LAYOUT, PERSONA_UI_STYLE); PERSONA_SHOTS saves the screenshots there too.
 final class VideoSendTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     private var hub: String {
         get throws {
-            guard let hub = ProcessInfo.processInfo.environment["JARVIS_VIDEO_SEND_HUB"] else {
-                throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SENT_VIDEO (JARVIS_VIDEO_SEND_HUB)")
+            guard let hub = ProcessInfo.processInfo.environment["PERSONA_VIDEO_SEND_HUB"] else {
+                throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SENT_VIDEO (PERSONA_VIDEO_SEND_HUB)")
             }
             return hub
         }
@@ -19,7 +19,7 @@ final class VideoSendTests: XCTestCase {
     private func launch(_ args: [String]) throws -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
         return app
@@ -74,7 +74,7 @@ final class VideoSendTests: XCTestCase {
         let deadline = Date.now.addingTimeInterval(15)
         while Date.now < deadline, try sent(hub).count == sentBefore { usleep(100_000) }
         let text = try sent(hub).last ?? ""
-        XCTAssertTrue(text.contains("<jarvis-file kind=\"video\""), text)
+        XCTAssertTrue(text.contains("<persona-file kind=\"video\""), text)
         XCTAssertTrue(text.contains("path=\"/tmp/"), text)
         XCTAssertTrue(text.contains("duration=\"6.0\""), text)
         XCTAssertTrue(text.hasPrefix("请看视频"), "an empty box sends a short note with it: \(text)")
@@ -125,14 +125,14 @@ final class VideoSendTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        let layout = ProcessInfo.processInfo.environment["JARVIS_LAYOUT"].flatMap { $0.isEmpty ? nil : $0 } ?? "tabs"
+        let layout = ProcessInfo.processInfo.environment["PERSONA_LAYOUT"].flatMap { $0.isEmpty ? nil : $0 } ?? "tabs"
         let full = "\(name)-\(UITestStyle.name)-\(layout)"
         let png = app.screenshot()
         let attachment = XCTAttachment(screenshot: png)
         attachment.name = full
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(full + ".png"))
         }
     }

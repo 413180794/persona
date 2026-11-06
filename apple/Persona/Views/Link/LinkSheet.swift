@@ -9,10 +9,10 @@ import WebKit
 // to close, with the chat behind it still usable. Feishu docs open in the native reader and company-feed links as the
 // post while the hub has them (FeishuLinks.route, LarkFeatures); any other page in a
 // WKWebView taken from a pool that preloads the links of the latest answers. Text selected on a page can go to the
-// agent as an edit request (Edit with AI) or ride along with the next message (Add as Context), both as <jarvis-context>.
+// agent as an edit request (Edit with AI) or ride along with the next message (Add as Context), both as <persona-context>.
 
 /// A piece of a page the user picked, carried in a message as
-/// `<jarvis-context kind="context|edit" title="…" url="…">text</jarvis-context>`, the text through `ContextText.inBlock`
+/// `<persona-context kind="context|edit" title="…" url="…">text</persona-context>`, the text through `ContextText.inBlock`
 /// so it cannot close the tag (#3831).
 nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
     var id = UUID()
@@ -31,12 +31,11 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
                 .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
         }
         let msgAttr = msg.isEmpty ? "" : " msg=\"\(esc(msg))\""
-        return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(ContextText.inBlock(text))\n</jarvis-context>"
+        return "<persona-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(ContextText.inBlock(text))\n</persona-context>"
     }
 
-    /// One block, its attributes in any order and any of them missing (a Feishu /agent request's context has no url);
-    /// `<persona-context>` or the old name `<jarvis-context>` (#3182).
-    private static let tagRe = try! NSRegularExpression(pattern: #"<(?:jarvis|persona)-context\b([^>]*)>\s*([\s\S]*?)\s*</(?:jarvis|persona)-context>\s*"#)
+    /// One `<persona-context>` block, its attributes in any order and any of them missing (a Lark /agent request's context has no url).
+    private static let tagRe = try! NSRegularExpression(pattern: #"<persona-context\b([^>]*)>\s*([\s\S]*?)\s*</persona-context>\s*"#)
     private static let attrRe = try! NSRegularExpression(pattern: #"(\w+)="([^"]*)""#)
 
     /// The contexts in a message and the message without them.

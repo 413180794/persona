@@ -15,7 +15,7 @@ import persona.core.domain.PathRefs
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PathLinksTest {
-    private val there = mapOf("/tmp/jarvis-tasks/1664-lark-test.md" to "file", "src/a.ts" to "file", "~/notes/" to "dir", "/Users/me/Desktop/x.md" to "denied")
+    private val there = mapOf("/tmp/persona-tasks/1664-lark-test.md" to "file", "src/a.ts" to "file", "~/notes/" to "dir", "/Users/me/Desktop/x.md" to "denied")
 
     @Test fun rewritesOnlyThePathsThereAndLeavesCodeBlocksAndLinksAlone() {
         val md = "改了 `src/a.ts:12`，见 src/a.ts:40 和 ~/notes/ 和 /tmp/other/x.md。\n\n```\ncat src/a.ts\n```\n\n" +
@@ -66,9 +66,9 @@ class PathLinksTest {
     }
 
     @Test fun plainTextLinksThePathsThereNotInsideAWebLink() {
-        val t = "读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行，别动 /tmp/other/x.md，见 https://example.com/tmp/a/b.md"
+        val t = "读 /tmp/persona-tasks/1664-lark-test.md 并完整执行，别动 /tmp/other/x.md，见 https://example.com/tmp/a/b.md"
         val links = PathLinks.plainLinks(t, PathRefs.find(t)) { there[it] != null }
-        assertEquals(listOf("/tmp/jarvis-tasks/1664-lark-test.md"), links.map { t.substring(it.start, it.end) })
+        assertEquals(listOf("/tmp/persona-tasks/1664-lark-test.md"), links.map { t.substring(it.start, it.end) })
     }
 
     @Test fun asksOnceForThePathsShownTogetherAndRemembers() = runTest {

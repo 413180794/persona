@@ -22,7 +22,7 @@ func assistantNode(t *testing.T) *Node {
 func TestAssistantWithBackgroundTasksIsNotReaped(t *testing.T) {
 	n := assistantNode(t)
 	const id = "11111111-2222-3333-4444-555555555555"
-	n.state.put(id, sessionState{Launcher: "claude", Cwd: "/home/u/.jarvis/assistant"})
+	n.state.put(id, sessionState{Launcher: "claude", Cwd: "/home/u/.persona/assistant"})
 	p := &assistantProc{id: id}
 	stream := func(lines ...string) { n.readAssistant(p, strings.NewReader(strings.Join(lines, "\n")+"\n")) }
 
@@ -59,8 +59,8 @@ func TestAssistantWithBackgroundTasksIsNotReaped(t *testing.T) {
 func TestRecoverAssistantTasksAfterRestart(t *testing.T) {
 	n := assistantNode(t)
 	const lost, alive, herdrOne = "11111111-2222-3333-4444-000000000001", "11111111-2222-3333-4444-000000000002", "11111111-2222-3333-4444-000000000003"
-	n.state.put(lost, sessionState{Cwd: "/home/u/.jarvis/assistant", Tasks: []string{"tail the deploy log", "Sleep 23 minutes"}})
-	n.state.put(alive, sessionState{Cwd: "/home/u/.jarvis/assistant", Tasks: []string{"still mine"}})
+	n.state.put(lost, sessionState{Cwd: "/home/u/.persona/assistant", Tasks: []string{"tail the deploy log", "Sleep 23 minutes"}})
+	n.state.put(alive, sessionState{Cwd: "/home/u/.persona/assistant", Tasks: []string{"still mine"}})
 	n.state.put(herdrOne, sessionState{Cwd: "/home/u/src", Tasks: []string{"not an assistant"}})
 	n.procs[alive] = &assistantProc{id: alive}
 	sent := map[string]string{}

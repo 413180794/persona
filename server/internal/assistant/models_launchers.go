@@ -57,7 +57,7 @@ type LauncherView struct {
 	API                    string   `json:"api,omitempty"`
 	Name                   string   `json:"name"`
 	DisplayName            string   `json:"display_name,omitempty"` // managed: the name shown, "" shows Name
-	Source                 string   `json:"source"`                 // zshrc | jarvis | agy
+	Source                 string   `json:"source"`                 // zshrc | persona | agy
 	BaseURL                string   `json:"base_url,omitempty"`
 	Model                  string   `json:"model,omitempty"`
 	SmallModel             string   `json:"small_model,omitempty"`
@@ -95,7 +95,7 @@ type LauncherView struct {
 
 // launcherView is a managed launcher for the app: never the key or the headers.
 func launcherView(l storedLauncher) LauncherView {
-	return LauncherView{Kind: l.Kind, Agent: l.Agent, API: l.API, Name: l.Name, DisplayName: l.DisplayName, Source: "jarvis", BaseURL: l.BaseURL, Model: l.Model, SmallModel: l.SmallModel,
+	return LauncherView{Kind: l.Kind, Agent: l.Agent, API: l.API, Name: l.Name, DisplayName: l.DisplayName, Source: "persona", BaseURL: l.BaseURL, Model: l.Model, SmallModel: l.SmallModel,
 		SubagentModel: l.SubagentModel, CustomModel: l.CustomModel, CustomModelName: l.CustomModelName,
 		CustomModelDescription: l.CustomModelDescription, Args: l.Args, HasKey: l.KeySealed != "", Auth: l.Auth,
 		Models: l.Models, OpusModel: l.OpusModel, SonnetModel: l.SonnetModel, HaikuModel: l.HaikuModel, FableModel: l.FableModel,
@@ -347,7 +347,7 @@ func (s *Service) machineLaunchers(ctx context.Context, machine string) ([]proto
 		if m.Kind == "api" {
 			continue
 		}
-		out = append(out, proto.Launcher{Name: m.Name, BaseURL: m.BaseURL, Model: m.Model, Source: "jarvis", Agent: m.Agent, Assistant: m.Agent == "agy"})
+		out = append(out, proto.Launcher{Name: m.Name, BaseURL: m.BaseURL, Model: m.Model, Source: "persona", Agent: m.Agent, Assistant: m.Agent == "agy"})
 	}
 	return out, nil
 }
@@ -1135,7 +1135,7 @@ func (s *Service) providerModels(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		found = true
-		everywhere = everywhere || v.Source == "jarvis" || len(v.Machines) == 0 // personad launch runs on every machine
+		everywhere = everywhere || v.Source == "persona" || len(v.Machines) == 0 // personad launch runs on every machine
 		has = append(has, v.Machines...)
 	}
 	if !found {

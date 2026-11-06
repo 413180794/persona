@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Pins and mutes (`PinsStore`): kept across launches, changed at once and sent to the hub, the mute rule.
 @MainActor struct PinsStoreTests {

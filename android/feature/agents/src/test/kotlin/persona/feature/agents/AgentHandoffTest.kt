@@ -29,14 +29,14 @@ class AgentHandoffTest {
         }
         val session = Session("machine", "agent", title = "检查改动", cwd = "/project", lastText = "需要核对")
         suspend fun handoff() = handoffToMain(sender, "handoff-operation", session.lastText.orEmpty(),
-            onQueued = { events += "jarvis" }, onBound = { events += "open:${it.path}" })
+            onQueued = { events += "persona" }, onBound = { events += "open:${it.path}" })
         try { handoff(); fail("The failed write must propagate") } catch (_: IllegalStateException) { }
         assertTrue(events.isEmpty())
         failWrite = false
         val pending = launch { handoff() }
         runCurrent()
         assertEquals(attempts.first(), attempts.last())
-        assertEquals(listOf("committed", "jarvis"), events)
+        assertEquals(listOf("committed", "persona"), events)
         assertTrue(pending.isActive)
         val target = SessionKey("machine", "main")
         sender.outbox.value = sender.outbox.value.map { it.copy(session = target) }
@@ -44,7 +44,7 @@ class AgentHandoffTest {
         assertEquals("open:${target.path}", events.last())
         handoff()
         assertEquals(2, attempts.size)
-        assertEquals(listOf("jarvis", "open:${target.path}"), events.takeLast(2))
+        assertEquals(listOf("persona", "open:${target.path}"), events.takeLast(2))
         val again = launch {
             handoffToMain(sender, "next-operation", session.lastText.orEmpty(), {}, {})
         }

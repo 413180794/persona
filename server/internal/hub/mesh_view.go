@@ -40,7 +40,7 @@ type recMachine struct {
 	ID   string        `json:"id"` // its id in that hub's hub.json
 	Cfg  MachineConfig `json:"cfg"`
 	Kind string        `json:"kind"` // how that hub reaches it: local | ssh | tailcat | link | service
-	// Avail: that hub can open a stream to the node now as far as it knows (its jarvis-link is up, its connector
+	// Avail: that hub can open a stream to the node now as far as it knows (its persona-link is up, its connector
 	// answers; ssh and tailcat are tried); RTTMS: that hub's last round trip on the way there, 0 unknown.
 	Avail bool `json:"avail,omitempty"`
 	RTTMS int  `json:"rtt_ms,omitempty"`

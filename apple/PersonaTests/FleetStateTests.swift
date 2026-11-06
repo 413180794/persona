@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct FleetStateTests {
     /// Exactly what hub/liveactivity_test.go pins as the FleetState JSON, read the way ActivityKit reads a push:
@@ -54,22 +54,25 @@ struct FleetStateTests {
 
     @Test func deepLinks() throws {
         let url = try #require(FleetLink.url(.init(id: "box/abc-123", title: "", kind: .working)))
-        #expect(url.absoluteString == "jarvis://open?machine=box&session=abc-123")
+        #expect(url.absoluteString == "persona://open?machine=box&session=abc-123")
         let back = try #require(FleetLink.session(url))
         #expect(back.machine == "box" && back.session == "abc-123")
-        #expect(FleetLink.session(URL(string: "jarvis://open")!) == nil)
-        #expect(FleetLink.session(URL(string: "jarvis://pair?url=x&token=y")!) == nil)
+        #expect(FleetLink.session(URL(string: "persona://open")!) == nil)
+        #expect(FleetLink.session(URL(string: "persona://pair?url=x&token=y")!) == nil)
     }
 
-    @Test func renamedDeepLinksKeepLegacyOutput() throws {
-        for scheme in ["persona", "jarvis", "PERSONA", "JARVIS"] {
+    @Test func personaDeepLinksRoundTripIgnoringCase() throws {
+        for scheme in ["persona", "PERSONA"] {
             let session = try #require(FleetLink.session(URL(string: "\(scheme)://open?machine=box&session=abc-123")!))
             #expect(session.machine == "box" && session.session == "abc-123")
             #expect(FleetLink.session(URL(string: "\(scheme)://open?machine=box")!) == nil)
             #expect(FleetLink.session(URL(string: "\(scheme)://pair?machine=box&session=abc-123")!) == nil)
         }
+        for other in ["other-product", "personas", "personad"] {
+            #expect(FleetLink.session(URL(string: "\(other)://open?machine=box&session=abc-123")!) == nil)
+        }
         #expect(FleetLink.session(URL(string: "https://open?machine=box&session=abc-123")!) == nil)
-        #expect(FleetLink.url(nil)?.absoluteString == "jarvis://open")
+        #expect(FleetLink.url(nil)?.absoluteString == "persona://open")
     }
 
     /// A tap on the lock screen opens what it shows (#4318): its one request, else the same as the whole activity.
@@ -81,12 +84,12 @@ struct FleetStateTests {
 
         // The request with buttons is the one row, names shown or not.
         let buttons = FleetState(phase: .needsYou, needsYou: 1, working: 1, items: [working, permission])
-        #expect(tap(buttons) == "jarvis://open?machine=box&session=a")
+        #expect(tap(buttons) == "persona://open?machine=box&session=a")
         var named = buttons
         named.details = true
-        #expect(tap(named) == "jarvis://open?machine=box&session=a")
+        #expect(tap(named) == "persona://open?machine=box&session=a")
         // Stale: no buttons, two rows drawn, so just the app.
-        #expect(tap(named, stale: true) == "jarvis://open")
+        #expect(tap(named, stale: true) == "persona://open")
         // Names hidden: the one nameless line (a question is waiting) is the first agent's.
         let asks = FleetState(phase: .needsYou, needsYou: 1, working: 1, items: [question, working])
         #expect(tap(asks) == FleetLink.url(question)?.absoluteString)
@@ -94,8 +97,8 @@ struct FleetStateTests {
         // Rows, or only counts: as the whole activity.
         var rows = asks
         rows.details = true
-        #expect(tap(rows) == "jarvis://open")
-        #expect(tap(FleetState(phase: .working, working: 2, items: [working, working])) == "jarvis://open")
+        #expect(tap(rows) == "persona://open")
+        #expect(tap(FleetState(phase: .working, working: 2, items: [working, working])) == "persona://open")
         #expect(tap(FleetState(phase: .working, working: 1, items: [working])) == FleetLink.url(working)?.absoluteString)
     }
 

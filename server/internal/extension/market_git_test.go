@@ -98,6 +98,21 @@ func TestGitMarket(t *testing.T) {
 	if (&Market{Spec: MarketSpec{Kind: "git", URL: bare}, Dir: t.TempDir(), Token: "x", allowLocal: true}).fetchErr() == nil {
 		t.Fatal("a git market takes no token")
 	}
+	// A repository update that removes the canonical index must not use another
+	// JSON file or the previously fetched index as an automatic fallback.
+	const alternate = "alternate-index.json"
+	if err := os.Rename(filepath.Join(work, IndexFile), filepath.Join(work, alternate)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(work, IndexFile+SigSuffix)); err != nil {
+		t.Fatal(err)
+	}
+	run(t, work, "add", "--", IndexFile, IndexFile+SigSuffix, alternate)
+	run(t, work, "commit", "-q", "-m", "alternate index fixture")
+	run(t, work, "push", "-q", bare, "main")
+	if _, _, err := m.Fetch(context.Background()); err == nil {
+		t.Fatal("a repository without the canonical index was accepted")
+	}
 	m.RemoveCheckout()
 	if _, err := os.Stat(m.checkout()); err == nil {
 		t.Fatal("the clone stays")

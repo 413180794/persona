@@ -1,20 +1,20 @@
 import XCTest
 
 /// Browser (ego lite) on a Mac's page (docs/plan-ego-browser.md), against scripts/mock/mock_hub.py with
-/// MOCK_BROWSER=<state> (`TEST_RUNNER_JARVIS_BROWSER_HUB`, `TEST_RUNNER_JARVIS_BROWSER_STATE`): not installed it installs,
-/// installed its first-run setup is steps with Open ego lite, set up it is Ready in green. JARVIS_SHOTS keeps the
-/// screenshots, named by `TEST_RUNNER_JARVIS_LOOK`.
+/// MOCK_BROWSER=<state> (`TEST_RUNNER_PERSONA_BROWSER_HUB`, `TEST_RUNNER_PERSONA_BROWSER_STATE`): not installed it installs,
+/// installed its first-run setup is steps with Open ego lite, set up it is Ready in green. PERSONA_SHOTS keeps the
+/// screenshots, named by `TEST_RUNNER_PERSONA_LOOK`.
 final class BrowserSectionTests: XCTestCase {
-    private var state: String { ProcessInfo.processInfo.environment["JARVIS_BROWSER_STATE"] ?? "ready" }
+    private var state: String { ProcessInfo.processInfo.environment["PERSONA_BROWSER_STATE"] ?? "ready" }
 
     @MainActor private func open(_ args: [String] = ["-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook"])
         throws -> (XCUIApplication, XCUIElement) {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_BROWSER_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BROWSER (JARVIS_BROWSER_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_BROWSER_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BROWSER (PERSONA_BROWSER_HUB)")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair, "-openScreenFresh", "YES"] + args // no Mac sign-in kept from another test
         app.launchPinned()
         let toggle = app.switches["browser-switch"].firstMatch
@@ -46,7 +46,7 @@ final class BrowserSectionTests: XCTestCase {
         XCTAssertTrue(importStep.label.contains("从 Chrome") && importStep.label.contains("钥匙串密码"), importStep.label)
         XCTAssertTrue(app.buttons["browser-open"].exists && app.buttons["browser-recheck"].exists && app.buttons["browser-screen"].exists)
         shot(app, "browser-setup")
-        if ProcessInfo.processInfo.environment["JARVIS_BROWSER_SCREEN"] == "1" {
+        if ProcessInfo.processInfo.environment["PERSONA_BROWSER_SCREEN"] == "1" {
             // VNC opens that Mac's live screen with only the plugin ego on for it (#1507), up to its sign-in
             // (MOCK_WEB, MOCK_SCREEN=fake).
             app.buttons["browser-screen"].tap()
@@ -72,7 +72,7 @@ final class BrowserSectionTests: XCTestCase {
         shot(app, "browser-ready")
     }
 
-    /// Settings › Extensions › Browser: a switch per Mac, how ego lite is on each. The mock serves extensions only with MOCK_PLUGINS=1
+    /// Settings › Extensions › Browser: a switch per Mac, how ego lite is on each. The mock serves extensions only with MOCK_EXTENSIONS=1
     /// as well (else the page says not found).
     @MainActor func testTheExtensionListsTheMacs() throws {
         guard state == "ready" else { throw XCTSkip("MOCK_BROWSER=ready") }
@@ -92,14 +92,14 @@ final class BrowserSectionTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        let look = ProcessInfo.processInfo.environment["JARVIS_LOOK"].map { "-" + $0 } ?? ""
+        let look = ProcessInfo.processInfo.environment["PERSONA_LOOK"].map { "-" + $0 } ?? ""
         let full = "\(name)-\(UITestStyle.name)\(look)"
         let png = app.screenshot()
         let attachment = XCTAttachment(screenshot: png)
         attachment.name = full
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(full + ".png"))
         }
     }

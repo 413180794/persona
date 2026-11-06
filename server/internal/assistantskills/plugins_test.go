@@ -11,7 +11,7 @@ import (
 // winning, gone when the plugin is; one the hub thinks this machine has but it does not is asked for again.
 func TestPluginSkills(t *testing.T) {
 	plugins, user, dir := t.TempDir(), t.TempDir(), t.TempDir()
-	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", plugins)
+	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", plugins)
 	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", plugins)
 	feed := PluginSkill{Name: "example-feed", Plugin: "example", Digest: "d1", Files: map[string][]byte{
 		"SKILL.md": []byte("---\nname: example-feed\ndescription: Read the feed.\n---\n"), "scripts/run.sh": []byte("#!/bin/sh\n")}}
@@ -27,6 +27,9 @@ func TestPluginSkills(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(user, "example-notes", "SKILL.md"), []byte("mine\n"), 0o644)
 	if err := Sync(dir, user, nil, t.Logf); err != nil {
 		t.Fatal(err)
+	}
+	if stamp, err := os.ReadFile(filepath.Join(dir, ".persona-extension-skills")); err != nil || string(stamp) != "example-feed=example d1\n" {
+		t.Fatalf("canonical copied-skill stamp: %q %v", stamp, err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "example-feed", "SKILL.md")); len(b) == 0 {
 		t.Fatal("the plugin's skill is copied in")
@@ -56,6 +59,9 @@ func TestPluginSkills(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "example-feed")); err == nil {
 		t.Fatal("still in the assistant's directory")
 	}
+	if stamp, err := os.ReadFile(filepath.Join(dir, ".persona-extension-skills")); err != nil || string(stamp) != "\n" {
+		t.Fatalf("removed skill remains in the canonical stamp: %q %v", stamp, err)
+	}
 	if _, err := ApplyPlugins(plugins, []PluginSkill{{Name: "../x", Plugin: "p", Digest: "d", Files: map[string][]byte{"a": nil}}}); err == nil {
 		t.Fatal("a name that leaves the directory")
 	}
@@ -68,7 +74,7 @@ func TestPluginSkills(t *testing.T) {
 // stays there, whatever was recorded before (#1635).
 func TestPluginSkillAfterTheUsersGoes(t *testing.T) {
 	plugins, user, dir := t.TempDir(), t.TempDir(), t.TempDir()
-	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", plugins)
+	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", plugins)
 	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", plugins)
 	sk := PluginSkill{Name: "example-feed", Plugin: "example", Digest: "d1", Files: map[string][]byte{"SKILL.md": []byte("plugin\n")}}
 	if _, err := ApplyPlugins(plugins, []PluginSkill{sk}); err != nil {

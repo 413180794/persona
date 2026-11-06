@@ -225,7 +225,7 @@ struct SettingsView: View {
                     Group {
                         let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"
                         // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
-                        let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? String(localized: "Unknown [Session Modes 4d8c1c]")
+                        let commit = Bundle.main.object(forInfoDictionaryKey: "PersonaCommit") as? String ?? String(localized: "Unknown [Session Modes 4d8c1c]")
                         if AppStyle.current.usesBeautifulUI {
                             BUIListRow(String(localized: "Version"), value: version)
                             BUIListRow(String(localized: "Build")) { EmptyView() } trailing: {

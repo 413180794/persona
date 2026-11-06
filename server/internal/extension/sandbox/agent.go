@@ -49,7 +49,7 @@ type AgentStatus struct {
 
 // AgentPlan is one agent start in the sandbox.
 type AgentPlan struct {
-	// DataDirs is the data directory under every name it goes by (identity.DataDir, ~/.persona, ~/.jarvis):
+	// DataDirs lists the configured data directory and canonical default, including explicit custom symlink paths:
 	// each is resolved to its real path and written once; one that is not there is left out.
 	DataDirs []string
 	Home     string
@@ -167,7 +167,7 @@ func DarwinAgent(plan AgentPlan) (string, error) {
 		if !slices.Contains(dirs, r) {
 			dirs = append(dirs, r)
 		}
-		// The name as written (a link such as ~/.persona -> .jarvis): replacing it would point the next start elsewhere.
+		// The name as written (a custom link such as ~/.state-link -> .persona): replacing it would point the next start elsewhere.
 		if named := filepath.Join(realPath(filepath.Dir(d)), filepath.Base(d)); named != r && !slices.Contains(names, named) {
 			names = append(names, named)
 		}

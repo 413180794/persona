@@ -3,10 +3,10 @@ import XCTest
 /// The connector setting exposes the native conversation list as an optional home page.
 final class LarkEntryTests: XCTestCase {
     @MainActor private func launch(connector: Bool = true) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", connector ? "settings" : "assistant", "-demo.on", "NO",
                                "-ui.oldLayout", "NO", "-openConnectorFeishu", connector ? "YES" : "NO",
                                "-integrations.lark.enabled", "NO"]
@@ -28,7 +28,7 @@ final class LarkEntryTests: XCTestCase {
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }

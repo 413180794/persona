@@ -71,7 +71,7 @@ export interface DoctorReport {
 export type MachineState = "active" | "pending_add" | "pending_remove";
 
 // How a hub reaches a computer (docs/plan-hub-center.md 4, 5). service: the hub dials the computer's connector; link:
-// the computer's jarvis-link dials the hub; hub: through a member hub of the group (configured on that member only).
+// the computer's persona-link dials the hub; hub: through a member hub of the group (configured on that member only).
 export type Via = "local" | "service" | "link" | "ssh" | "tailcat" | "hub";
 
 // One way to a computer (plan 5 "paths"): which hub it goes through, the hub.json entry there, whether it works now.
@@ -154,7 +154,7 @@ export interface PhonePair {
 export interface NetworkView {
   listen: string;
   public_url: string;
-  public_url_from_env?: boolean; // JARVIS_PUBLIC_URL sets it (Docker's .env): shown, not editable here
+  public_url_from_env?: boolean; // PERSONA_PUBLIC_URL sets it (Docker's .env): shown, not editable here
   tls: TLSInfo | null;
   advertise: string[];
   advertise_ipv6: boolean;

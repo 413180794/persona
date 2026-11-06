@@ -16,7 +16,7 @@ const recordTTL = 120
 // metaName is the DNS-SD service type enumeration name (RFC 6763 §9).
 var metaName = name{"_services", "_dns-sd", "_udp", "local"}
 
-// parseType turns a service type such as "_jarvis-hub._tcp" (".local." optional) into its full name.
+// parseType turns a service type such as "_persona-hub._tcp" (".local." optional) into its full name.
 func parseType(s string) (name, error) {
 	t := strings.TrimSuffix(s, ".")
 	if l := len(t) - len(".local"); l >= 0 && asciiEqualFold(t[l:], ".local") {
@@ -53,7 +53,7 @@ func cutLabel(s string, max int) string {
 	return s
 }
 
-// hostFromInstance derives a host label from the instance name: "jarvis-" plus the instance lowercased, with
+// hostFromInstance derives a host label from the instance name: "persona-" plus the instance lowercased, with
 // everything but letters and digits turned into single dashes.
 func hostFromInstance(inst string) string {
 	var b strings.Builder
@@ -77,9 +77,9 @@ func hostFromInstance(inst string) string {
 	h := strings.TrimSuffix(b.String(), "-")
 	switch {
 	case h == "":
-		return "jarvis"
-	case !strings.HasPrefix(h, "jarvis"):
-		h = "jarvis-" + h
+		return "persona"
+	case !strings.HasPrefix(h, "persona"):
+		h = "persona-" + h
 	}
 	return strings.TrimSuffix(cutLabel(h, maxLabel), "-")
 }
@@ -130,8 +130,8 @@ func decodeTXT(txt []string) map[string]string {
 // served is a validated Service with its DNS names.
 type served struct {
 	instance string
-	typ      name // _jarvis-hub._tcp.local.
-	inst     name // <instance>._jarvis-hub._tcp.local.
+	typ      name // _persona-hub._tcp.local.
+	inst     name // <instance>._persona-hub._tcp.local.
 	host     name // <host>.local.
 	port     uint16
 	txt      []string

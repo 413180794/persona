@@ -10,7 +10,7 @@ App 的 `InboxModule` 已按配对注入 `RealInboxRepository`、共享偏好／
 - `ownerScope`：当前配对的协程作用域，切页保持运行；撤销配对时取消。它持有回复编辑器，避免离页取消发送或丢掉草稿写入。
 - `connectionState`：运行中 `HubConnection.state`。`invalidations` 接收 inbox 事件；恢复在线时自动拉取列表并核对待确认回复。
 - `actions`：新 `HttpInboxActionsTransport`，使用共享 HTTP client、当前配对 token、作用域有效性判断；`endpoint` 每次返回活动连接的 HTTP 地址。下拉和刷新按钮调用 `POST /api/v1/inbox/refresh`，随后读取列表。
-- `sendToJarvis`：接统一主对话用例，根据 `Summarize` / `DraftReply` 生成总结或拟回复请求，携带事项 ID 和完整上下文。请求可靠入盘后返回，并由 App 导航到 Jarvis tab。不能直接发给来源会话。
+- `sendToPersona`：接统一主对话用例，根据 `Summarize` / `DraftReply` 生成总结或拟回复请求，携带事项 ID 和完整上下文。请求可靠入盘后返回，并由 App 导航到 Persona tab。不能直接发给来源会话。
 
 包装层在联网前读取缓存，持久保存筛选、折叠、搜索和回复草稿。成功读取空列表才清空缓存，刷新失败保留已有内容。不同筛选组合分别保存页面内的滚动位置。列表使用主题语义色，来源标位于头像角上，账号名允许完整换行，按钮文字单行。深浅色真机观感未验收，性能未实测。
 
@@ -44,8 +44,8 @@ App 的 `InboxModule` 已按配对注入 `RealInboxRepository`、共享偏好／
 `InboxScreen` 的邮件行和 `inboxEntries` 已接 MailRoute。App 已注入随配对／受信路由更新的 HttpMailTransport；邮件 AI 经仓储 sendToMain，网页链接走默认 LarkLinkHost。以下是宿主接入方式，当前默认入口已具备：
 
 - 创建与当前配对绑定的 `HttpMailTransport(scope, baseUrl, token, client, isCurrent)`。`client` 使用现有 `HubHttpClient.client`，切换或断开配对时替换实例，并让旧实例的 `isCurrent` 返回 false。通过 `inboxEntries(mailTransport = …)` 或 `LocalMailTransport` 注入。
-- 传入 `onMailAskAi`，把 `MailAiContext.text` 作为完整邮件上下文带到 Jarvis 助手。上下文包含收发件人、正文和附件清单，不含附件内容。回调只准备助手上下文，不应直接发送邮件；当前默认 AI 操作已通过共享 sendToMain 发送。
-- 页面底部是「回复」「交给 AI」和「AI 草拟」（`InboxAiActions`），和飞书会话页一致；原来的「总结 / 拟回复」（走 `askJarvis`）已换成交给 AI 浮层和原地草拟，见 `docs/android.md`「收件箱的 AI 草拟、交给 AI，知识库的六类、条目页和打标」。
+- 传入 `onMailAskAi`，把 `MailAiContext.text` 作为完整邮件上下文带到 Persona 助手。上下文包含收发件人、正文和附件清单，不含附件内容。回调只准备助手上下文，不应直接发送邮件；当前默认 AI 操作已通过共享 sendToMain 发送。
+- 页面底部是「回复」「交给 AI」和「AI 草拟」（`InboxAiActions`），和飞书会话页一致；原来的「总结 / 拟回复」（走 `askPersona`）已换成交给 AI 浮层和原地草拟，见 `docs/android.md`「收件箱的 AI 草拟、交给 AI，知识库的六类、条目页和打标」。
 - 传入 `onMailOpenLink`，通过现有应用内网页容器打开 HTTP／HTTPS 链接。邮件 WebView 不加载这些链接，不携带配对 token。
 
 详情按事项的 `mail.uids` 显示最新一封，可切换到同事项其他邮件。HTML 经标签白名单过滤，移除原始样式与图片，再用主题前景色、背景色和链接色渲染。WebView 禁用脚本、网络资源和文件访问，按内容高度展开并在退出时销毁。邮件链接只由用户点击后交给 App。未做深浅色截图，实际布局和 WebView 高度仍待真机验收。
@@ -57,7 +57,7 @@ App 的 `InboxModule` 已按配对注入 `RealInboxRepository`、共享偏好／
 - `/inbox/{id}/reply` 已支持 client_id 持久回执及原 ID 重放，丢回执和重启防重仍需真实账号验收；旧 hub 的回执能力不能仅凭新客户端推定。
 - 事项回复由服务端选择当时的最新邮件。建议增加可选的目标 UID／版本校验，防止用户编辑期间新邮件到达后回复对象变化。
 - 附件只有文件名、类型和大小，没有下载接口或稳定附件标识。当前只展示清单；下载能力需要 hub 新增接口。
-- 当前总结、拟回复和邮件上下文通过共享 sendToMain 进入 Jarvis，无需新增 AI 接口；独立 AI 分身委派不在本次入口接线范围。
+- 当前总结、拟回复和邮件上下文通过共享 sendToMain 进入 Persona，无需新增 AI 接口；独立 AI 分身委派不在本次入口接线范围。
 - 已读接口与事项采集分离，当前通过 `/inbox/refresh` 再采集对齐。同步失败时不能承诺列表已更新。
 
 ## 邮件详情验证
@@ -80,6 +80,6 @@ App 的 `InboxModule` 已按配对注入 `RealInboxRepository`、共享偏好／
 
 `InboxModule` 已在每个配对作用域创建 `HttpMailTransport`，复用活动路由和钉扎客户端。路由变化时替换传输，旧实例拒绝请求和响应；断网保留已加载的邮件内容。`inboxEntries` 从仓库取得邮件传输，邮件链接复用应用内阅读浮层，不携带配对凭据。
 
-收件箱交接、总结、拟回复和邮件交接均调用 `MainConversationSender.sendToMain`，复用 `ScopedHubData.messages`。选中内容经 XML 转义后作为上下文，邮件包含收发件人、正文和附件清单。飞书事项详情在页面打开时预取服务端上下文并保存到配对缓存；未取到时使用已加载窗口或事项预览，提示上下文可能不完整。点击发送不等待网络，不先查询或创建主对话。操作 ID 保留供失败重试，入队成功后切换 Jarvis tab；待定状态使用 `PendingBadge` 和 `PendingStatus`。
+收件箱交接、总结、拟回复和邮件交接均调用 `MainConversationSender.sendToMain`，复用 `ScopedHubData.messages`。选中内容经 XML 转义后作为上下文，邮件包含收发件人、正文和附件清单。飞书事项详情在页面打开时预取服务端上下文并保存到配对缓存；未取到时使用已加载窗口或事项预览，提示上下文可能不完整。点击发送不等待网络，不先查询或创建主对话。操作 ID 保留供失败重试，入队成功后切换 Persona tab；待定状态使用 `PendingBadge` 和 `PendingStatus`。
 
 本次沿用 `RealInboxRepository` 的配对作用域 journal 与列表偏好，没有启用上文的 `InboxExperienceRepository`；飞书列表引擎和外壳现已接通，可见已读／向后补页包装仍缺。邮件回复、已读和附件下载的 hub 限制见上文。本次不连接真实 hub，不做截图或性能验收；性能未实测。

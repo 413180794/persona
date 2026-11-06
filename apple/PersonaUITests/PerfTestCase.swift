@@ -3,12 +3,12 @@ import XCTest
 /// The base of the performance UI tests (#5730, docs/testing.md "Performance UI tests"): every page and main transition
 /// of the iPhone app measured with `XCTHitchMetric` (and the scroll / navigation signposts where they apply) against a
 /// mock hub loaded with heavy data. Each suite expects its own mock (`scripts/app/perf-test.sh` starts one per suite
-/// with the env flags listed on the suite) at `TEST_RUNNER_JARVIS_PERF_HUB=http://127.0.0.1:<port>`; without it the
+/// with the env flags listed on the suite) at `TEST_RUNNER_PERSONA_PERF_HUB=http://127.0.0.1:<port>`; without it the
 /// tests skip, so they never run in the ordinary UI test pass.
 ///
 /// Numbers only mean something from an optimized build (`SWIFT_OPTIMIZATION_LEVEL=-O`, whole module), which the script
 /// makes. The tests never assert a frame rate: a simulator's numbers vary from run to run; the report compares them.
-/// The layout follows `JARVIS_LAYOUT` like every UI test (`launchPersona()`); the script runs the shell, the
+/// The layout follows `PERSONA_LAYOUT` like every UI test (`launchPersona()`); the script runs the shell, the
 /// iPhone's default, unless `PERF_LAYOUT=old`.
 class PerfTestCase: XCTestCase {
     var hub = ""
@@ -17,14 +17,14 @@ class PerfTestCase: XCTestCase {
     /// Pairing resets the route arguments (`ComposerKeyboardTests`), so each suite pairs once with a bare launch first.
     nonisolated(unsafe) private static var pairedHubs: Set<String> = []
 
-    var shell: Bool { ProcessInfo.processInfo.environment["JARVIS_LAYOUT"] == "shell" }
-    var iterations: Int { Int(ProcessInfo.processInfo.environment["JARVIS_PERF_ITERATIONS"] ?? "") ?? 5 }
-    var pair: String { "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock" }
+    var shell: Bool { ProcessInfo.processInfo.environment["PERSONA_LAYOUT"] == "shell" }
+    var iterations: Int { Int(ProcessInfo.processInfo.environment["PERSONA_PERF_ITERATIONS"] ?? "") ?? 5 }
+    var pair: String { "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock" }
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_PERF_HUB"] else {
-            throw XCTSkip("performance tests: run scripts/app/perf-test.sh (JARVIS_PERF_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_PERF_HUB"] else {
+            throw XCTSkip("performance tests: run scripts/app/perf-test.sh (PERSONA_PERF_HUB)")
         }
         hub = h
         _ = mock("reset")
@@ -271,7 +271,7 @@ class PerfTestCase: XCTestCase {
         return big ?? app.scrollViews.firstMatch
     }
 
-    /// Back one page: the visible 返回 / Back button (a chat's own header has one outside a navigation bar), the
+    /// Back one page: the visible Back button (a chat's own header has one outside a navigation bar), the
     /// navigation bar's, or an edge swipe.
     @MainActor func back() {
         if let b = app.buttons.matching(NSPredicate(format: "label IN %@ OR identifier == %@", ["返回", "Back"], "BackButton"))

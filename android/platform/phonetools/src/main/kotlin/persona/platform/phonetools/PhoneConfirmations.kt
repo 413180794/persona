@@ -51,7 +51,7 @@ class PhoneConfirmations(context: Context) : AutoCloseable {
             if (!manager.areNotificationsEnabled() || manager.getNotificationChannel(CHANNEL).importance == NotificationManager.IMPORTANCE_NONE) return false
             fun action(allowed: Boolean): Notification.Action {
                 val intent = Intent(context, PhoneConfirmationReceiver::class.java)
-                    .setAction("jarvis.phone.confirm").setData(Uri.parse("jarvis-phone://confirmation/${current.token}/$allowed"))
+                    .setAction("persona.phone.confirm").setData(Uri.parse("persona-phone://confirmation/${current.token}/$allowed"))
                     .putExtra("token", current.token).putExtra("allowed", allowed)
                 val pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 val builder = Notification.Action.Builder(null, context.getString(if (allowed) R.string.phonetools_allow else R.string.phonetools_deny), pendingIntent)
@@ -90,7 +90,7 @@ data class PendingPhoneConfirmation(val token: String, val summary: String)
 
 class PhoneConfirmationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != "jarvis.phone.confirm") return
+        if (intent.action != "persona.phone.confirm") return
         val token = intent.getStringExtra("token") ?: return
         val allowed = intent.getBooleanExtra("allowed", false)
         if (!allowed) { PhoneConfirmations.callbacks[token]?.invoke(false); return }

@@ -29,7 +29,7 @@ nonisolated struct StyleSpec: Sendable {
 
     /// Which components draw the chat's work and the composer.
     enum Components: Sendable {
-        case jarvis
+        case persona
         /// BeautifulUI's thinking trace, tool chips and prompt bar.
         case beautiful
     }

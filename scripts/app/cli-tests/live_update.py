@@ -4,7 +4,7 @@ which stays as it is for now). The mock pushes a busy hub's updates on demand (G
 main-thread time come from the app (`perf`, launched with -perfCounts YES) instead of the hidden probe text.
 
   python3 scripts/mock/mock_scenarios.py --port 18763 --scenario churn &
-  JARVISCTL_UDID=<udid> HUB=http://127.0.0.1:18763 scripts/app/cli-tests/live_update.py 3
+  PERSONACTL_UDID=<udid> HUB=http://127.0.0.1:18763 scripts/app/cli-tests/live_update.py 3
 """
 import os
 import time

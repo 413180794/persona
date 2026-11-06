@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A failed answer puts its card back only when the hub has not ended it meanwhile (#3922).
 struct AnsweringInteractionsTests {

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Which pushes the app takes back from the notification center once their interaction is settled (#3513).
 struct NotificationWithdrawalTests {

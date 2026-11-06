@@ -2,15 +2,15 @@ import XCTest
 
 /// A task's answered card in the main conversation (#1231): one line「✓ 任务 · 回答」with a disclosure; a tap opens
 /// every question with its answer in full, another folds it. Against scripts/mock/mock_hub.py with MOCK_TASKS=1
-/// MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23 (the answered lines at the bottom) (JARVIS_MOCK_HUB). With JARVIS_SHOTS set it
-/// writes the folded and the open line there (JARVIS_SHOTS_APPEARANCE names the simulator's appearance in the file).
+/// MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23 (the answered lines at the bottom) (PERSONA_MOCK_HUB). With PERSONA_SHOTS set it
+/// writes the folded and the open line there (PERSONA_SHOTS_APPEARANCE names the simulator's appearance in the file).
 final class AnsweredLineTests: XCTestCase {
     private var hub = ""
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23 (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -22,14 +22,14 @@ final class AnsweredLineTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let appearance = env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let appearance = env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/answered-\(appearance)-\(name).png"))
     }
 
     @MainActor func testAnAnsweredLineOpensToEveryQuestionAndFolds() throws {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant", "-openAssistant", main]
         app.launchPinned()
 

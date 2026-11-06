@@ -13,13 +13,13 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// jarvis_settings: Persona changes its own settings for the user (docs/assistant.md "Operating Persona itself"). The
+// persona_settings: Persona changes its own settings for the user (docs/assistant.md "Operating Persona itself"). The
 // assistant's own ("About me", its launcher, "notify tasks the main chat starts only in the main chat") are its to read and change; the hub's (the
 // inbox's rules, the blocked Claude config directories, mail accounts…) are the hub's settings app's, which asks the
-// user itself (app.tool jarvis_settings). Reads are free; every change is a card on the phone that says what changes
+// user itself (app.tool persona_settings). Reads are free; every change is a card on the phone that says what changes
 // (before → after) and is applied only when approved.
 
-// ownSetting is one of the assistant's own settings jarvis_settings offers.
+// ownSetting is one of the assistant's own settings persona_settings offers.
 type ownSetting struct {
 	Setting
 	get func(ctx context.Context) (string, error)
@@ -83,7 +83,7 @@ func (s *Service) ownSettings() []ownSetting {
 	}
 }
 
-func (s *Service) toolJarvisSettings(ctx context.Context, call ToolCall, args json.RawMessage) proto.ToolResult {
+func (s *Service) toolPersonaSettings(ctx context.Context, call ToolCall, args json.RawMessage) proto.ToolResult {
 	var a struct {
 		Action string          `json:"action"`
 		Key    string          `json:"key"`
@@ -163,7 +163,7 @@ func (s *Service) ownSettingAction(ctx context.Context, call ToolCall, o ownSett
 	shown, _ := json.Marshal(map[string]string{"setting": title, "action": action})
 	now := time.Now().UTC()
 	r, err := s.ask(ctx, proto.Interaction{ID: "ix_" + randomHex(6), MachineID: call.MachineID, SessionID: call.SessionID,
-		Kind: proto.IxPermission, ToolName: "jarvis_settings", Summary: change.card(l), ToolInput: shown, SessionTitle: "Persona",
+		Kind: proto.IxPermission, ToolName: "persona_settings", Summary: change.card(l), ToolInput: shown, SessionTitle: "Persona",
 		CreatedAt: now, ExpiresAt: now.Add(15 * time.Minute)})
 	if err != nil {
 		return "", err

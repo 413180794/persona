@@ -6,7 +6,7 @@ Except where a section states otherwise, conclusions were tested with Claude Cod
 
 Node's `session.start`:
 
-1. Find a herdr workspace whose label equals the directory name (one workspace per project). If present, `tab create --label jarvis` inside it; otherwise `workspace create --label <directory name>`. Both use `--cwd <directory>` and `--no-focus`, without stealing focus on the computer.
+1. Find a herdr workspace whose label equals the directory name (one workspace per project). If present, `tab create --label persona` inside it; otherwise `workspace create --label <directory name>`. Both use `--cwd <directory>` and `--no-focus`, without stealing focus on the computer.
 2. `pane run <pane> "<launcher> --session-id <uuid> --mcp-config ~/.persona/mcp.json --plugin-dir ~/.persona/agent-plugin --plugin-dir ~/.persona/claude-hooks"`
    (local Claude Code ≥ 2.1; older or unreadable versions use `<launcher> --session-id <uuid> --settings ~/.persona/claude-settings.json --mcp-config ~/.persona/mcp.json`; see Hooks below). Launchers are functions in `~/.zshrc` (`<launcher-a>`, `<launcher-b>`, etc.) ending in `claude … "$@"`, so arguments pass through. Resume uses `--resume <id>`.
    Sending to a non-running session resumes it first. Launcher choice follows this order (`resumeLauncher` in `node/sendsafe.go`, #411):
@@ -21,7 +21,7 @@ Node's `session.start`:
 5. Confirm first message reached the transcript (`node/firstprompt.go`, #2423): a visible composer does not mean Claude has finished drawing startup auto-update notices or Auto mode explanations. Text typed then may be swallowed, leaving the Agent idle. A send counts only when that user message appears in the transcript. If it remains in the composer after `submitGrace`, send Enter once more. If absent after 15 seconds and Claude is not working, rerun `waitReady`, verify the composer is empty, and resend, up to 3 attempts. If still unsuccessful, a dialog is open, or other input exists, mark the session Needs you (`blocked` + explanatory `attention_reason`), not silently idle. Any later message entering the transcript, from phone or computer, restores normal state.
    Confirmation runs in the background; launch still returns immediately. Messages sent meanwhile queue behind it under the same typing lock, without mixing with first-message retries.
    This marker exists only in node memory; after node restart, herdr state is shown.
-   The first message was not made a `claude` argument: launchers may be zsh functions / aliases / `jarvisd launch`, with inconsistent argument forwarding. Variable-length options such as `--allowedTools` can swallow later positional arguments, and long messages would enter the shell command line. Transcript verification works for every launcher.
+   The first message was not made a `claude` argument: launchers may be zsh functions / aliases / `personad launch`, with inconsistent argument forwarding. Variable-length options such as `--allowedTools` can swallow later positional arguments, and long messages would enter the shell command line. Transcript verification works for every launcher.
 
 For Persona-started sessions, node state records the launcher. Manually started Claude sessions using launcher functions have no such record; inference uses `matchLauncher` in `server/internal/node/sessions.go`. Every 30 seconds, node scans running Claude processes' environment variables (also `CLAUDE_CONFIG_DIR` in the same scan, see `claudedirs.go`; only processes owned by node's user; Linux shares one `/proc` traversal with Codex discovery, see `userprocs.go`), records `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL`, and maps to sessions through `sessions/<pid>.json`. Match the launcher list (`_claude_launchers` functions and aliases calling claude):
 if exactly one launcher matches both base URL and model, use it; otherwise, if exactly one launcher has that base URL (runtime-selected model, displayed as `(claude-choose)`), use it too.
@@ -48,7 +48,7 @@ Protocol, notice-dismissal requests, and old-node `409 node_outdated`: [protocol
 ## Session IDs and transcripts
 
 - Mac has herdr's Claude integration; `agent list` includes `agent_session.value` (= Claude session ID). **The hub machine does not**, so it lacks the ID.
-- Fallback order: herdr report → `HERDR_PANE_ID`→`session_id` recorded by our hook (hook inherits pane environment; only Persona-started sessions) → **the pane's Claude process's `~/.claude/sessions/<pid>.json`** (maintained by Claude Code, includes current `sessionId`, updated after `/clear`; obtain PID with `herdr pane process-info --pane <id>`, cache one minute) → title matching AI title → newest `.jsonl` in the project directory inferred from cwd (replace every nonalphanumeric cwd character with `-`, e.g. `/Users/me/code/jarvis` → `-Users-me-code-jarvis`).
+- Fallback order: herdr report → `HERDR_PANE_ID`→`session_id` recorded by our hook (hook inherits pane environment; only Persona-started sessions) → **the pane's Claude process's `~/.claude/sessions/<pid>.json`** (maintained by Claude Code, includes current `sessionId`, updated after `/clear`; obtain PID with `herdr pane process-info --pane <id>`, cache one minute) → title matching AI title → newest `.jsonl` in the project directory inferred from cwd (replace every nonalphanumeric cwd character with `-`, e.g. `/Users/me/code/persona` → `-Users-me-code-persona`).
 - The final two are guesses and necessarily wrong for newly started Claude: `sessions/<pid>.json` appears several seconds later (four or five on Windows), and its own `.jsonl` does not exist before the first message. “Newest in directory” belongs to the preceding session, so a new tab initially shows the old session (#1980). Claude panes appearing after node startup therefore get a 20-second grace period (`freshPaneGrace`). With neither PID file nor pane binding, do not guess or list them during that period. Recheck PID files every refresh (normally missing files are retried every 5 seconds). After grace, resume guessing for old Claude Code versions without PID files. Panes already present at node startup are not new and are guessed immediately.
 - Herdr's ID comes from the Claude integration SessionStart hook, which binds the process's `HERDR_PANE_ID` to the pane. Claude processes outside that pane can report it too if they inherit this variable: a tmux server first started inside herdr (as botmux does) passes `HERDR_*` to every later Claude process. Herdr's main tab then shows a botmux session while the actual pane Claude appears offline (2026-11-04). When a terminal Claude runs a session unclaimed by any pane, node also reads its own `sessions/<pid>.json`; if it differs from herdr, trust the pane process (`setAgentsAt`, `unplaced`).
 - Transcript: `~/.claude/projects/<encoded cwd>/<session id>.jsonl`. Append a line when each content block completes (thinking, text, tool_use each on separate lines; tool_result in the next user line). Not per-token; word-by-word display comes from screen sampling.
@@ -76,7 +76,7 @@ Some computers run automation scripts launching Claude with a separate `CLAUDE_C
 - Hides only; **does not delete files**. Unblocking returns sessions under the original rules (last 7 days, at most 80 offline sessions).
 - Limits: running Claude in herdr remains listed even with its config directory blocked—that is a terminal in use. Old nodes do not understand `claude_dirs_blocked`; hub can only avoid storing / sending directories, while scans still list sessions. Full effect needs updated node. Existing knowledge archives are unchanged.
 - APIs: `GET /api/v1/machines/{mid}/claude-dirs` (node `claude.dirs.list`: each directory, source, session count, running count, blocking rule; offline / old node falls back to hub records, `live: false`); `PUT /api/v1/machines/{mid}/claude-dirs/blocked {"blocked": [...]}` replaces all rules and returns new state.
-- UI: Settings › Claude Code (iOS `ClaudeDirsSection`, web `settings/ClaudeDirs.tsx`), Blocked Configuration Directories. One row per directory with Block / Unblock. Glob-blocked rows say “Blocked by Rule …”; unblocking deletes the rule and restores all directories it covers. Manual rule entry below. Assistant uses `jarvis_settings` `agents.blocked_claude_dirs` get / add / remove, with phone confirmation before changes.
+- UI: Settings › Claude Code (iOS `ClaudeDirsSection`, web `settings/ClaudeDirs.tsx`), Blocked Configuration Directories. One row per directory with Block / Unblock. Glob-blocked rows say “Blocked by Rule …”; unblocking deletes the rule and restores all directories it covers. Manual rule entry below. Assistant uses `persona_settings` `agents.blocked_claude_dirs` get / add / remove, with phone confirmation before changes.
 - Why no Block This Directory on individual Agents list sessions: Session lacks config-directory data (would need `proto.Session` and every client changed); users usually block the source of a whole batch, clearer in directory settings with counts / running status. A later session-menu entry can reuse the API.
 
 ## Hooks (injected only into Persona-started sessions)
@@ -264,7 +264,7 @@ Assistant does not enter herdr: node directly launches `zsh -ic '<launcher> "$@"
 - One process supports consecutive turns through stdin, one `{"type":"user","message":{…}}` per line, images as base64 image blocks.
 - `stream_event` `content_block_delta/text_delta` supplies word-by-word output → WS delta; result ends the turn. Structured messages still read from transcript.
 - Hooks trigger normally, but **AskUserQuestion is unavailable in -p mode** (No such tool available … nobody in this session can answer it; PreToolUse cannot run). Assistant uses MCP `ask_user` (`docs/assistant.md`).
-- Per-process inline MCP JSON (`--mcp-config '{…}'`), carrying `JARVIS_ASSISTANT=1` and JARVIS_SESSION_ID. Process env `ENABLE_TOOL_SEARCH=false` (few, frequently used tools, no ToolSearch); `--append-system-prompt` is hub's live snapshot.
+- Per-process inline MCP JSON (`--mcp-config '{…}'`), carrying `PERSONA_ASSISTANT=1` and PERSONA_SESSION_ID. Process env `ENABLE_TOOL_SEARCH=false` (few, frequently used tools, no ToolSearch); `--append-system-prompt` is hub's live snapshot.
 - Spare: Claude waits on stdin for first message, so can launch ahead; new chats use its session ID.
 - Launcher change kills process and resumes with new launcher. Idle 20-minute processes are reclaimed; next message resumes automatically.
 - Interrupt: no stdin interrupt in -p; terminate process, resume next message.
@@ -321,7 +321,7 @@ Assistant does not enter herdr: node directly launches `zsh -ic '<launcher> "$@"
 | `<bash-input>` → `<bash-stdout>` / `<bash-stderr>` | Command run directly with ! in Claude Code: user row ! command, output as Bash tool beneath |
 | `<system-reminder>` | Remove |
 | `<attached_images>` | Phone image paths, app thumbnails |
-| `<jarvis-context>` | App reference context, displayed as reference card |
+| `<persona-context>` | App reference context, displayed as reference card |
 
 Do not push Completed when a background-task wakeup turn ends: node records whether latest turn began with a wake (`Meta.LastTurnWake` → `Session.woke_by_task`); hub `notifyFinished` skips it. Session still becomes Unread, just no iOS notification (requested 2026-10-26).
 
@@ -401,7 +401,7 @@ Hub `continueTask` does not reject cause refusal: the user's explicit Continue i
 Variable injection when disabled:
 
 - Herdr pane: prepend `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1 ` to pane run command and herdr `resume_argv` (`claudeCommandLine` in `node/herdrresume.go`). Most launchers are shell functions; env cannot run functions. Assignment + function forwards the variable to launched Claude in zsh / bash; fish differs, as in report-only hooks above. Verify each.
-- Managed launchers: `managedEnv` in `node/managed.go`, like `CLAUDE_CODE_DISABLE_ARTIFACT`; jarvisd launch carries it.
+- Managed launchers: `managedEnv` in `node/managed.go`, like `CLAUDE_CODE_DISABLE_ARTIFACT`; personad launch carries it.
 - Headless assistant: `cmd.Env` in node/assistant.go.
 - User-started computer sessions are untouched, display only. Setting changes affect only subsequently started / resumed processes; explain in UI.
 

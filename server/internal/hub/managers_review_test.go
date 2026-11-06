@@ -448,12 +448,12 @@ func TestManagerInstallScriptCarriesChecksums(t *testing.T) {
 	sum := strings.Repeat("ab", 32)
 	h.upd.mu.Lock()
 	h.upd.release = &update.Published{Manifest: &update.Manifest{Version: "1.2.3", Files: map[string]update.File{
-		"linux-amd64": {Name: "jarvisd-linux-amd64.gz", SHA256: sum}, "bad": {Name: "x';rm -rf /;'", SHA256: sum}}}}
+		"linux-amd64": {Name: "personad-linux-amd64.gz", SHA256: sum}, "bad": {Name: "x';rm -rf /;'", SHA256: sum}}}}
 	h.upd.mu.Unlock()
 	version, sums := h.releaseSums()
 	script := managerInstallScript(managerScript{ID: "m-0a1b2c", Name: "工作", Hub: "https://[fd00::20]:18662", Code: "mi_x",
 		DL: "https://dl.example/dl", Version: version, Sums: sums, HubVersion: "1.2.2"})
-	if !strings.Contains(script, "SUMS='"+sum+"  jarvisd-linux-amd64.gz\n'") || strings.Contains(script, "x';") ||
+	if !strings.Contains(script, "SUMS='"+sum+"  personad-linux-amd64.gz\n'") || strings.Contains(script, "x';") ||
 		!strings.Contains(script, "installing the published 1.2.3") {
 		t.Fatalf("script:\n%s", script)
 	}
@@ -475,7 +475,7 @@ func TestManagerInstallScriptCarriesChecksums(t *testing.T) {
 func joinInFlight(t *testing.T, code string) (commit func()) {
 	t.Helper()
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	conn, err := pgx.Connect(ctx, os.Getenv("PERSONA_TEST_DATABASE_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +524,7 @@ func revokeDuringJoin(t *testing.T, h *Hub, store *db.DB, id, code string) {
 		done <- result{ok, err}
 	}()
 	// The revoke is blocked on the row lock the join holds.
-	conn, err := pgx.Connect(context.Background(), os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	conn, err := pgx.Connect(context.Background(), os.Getenv("PERSONA_TEST_DATABASE_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,7 +615,7 @@ func TestManagerInstallScriptReadsTheReleaseAgain(t *testing.T) {
 	}
 	h.build = update.Make("v1.2.3-202611021500", update.Release, "202611021500", p.srv.URL+"/dl")
 	h.upd.client = p.srv.Client()
-	name := "jarvisd-" + runtime.GOOS + "-" + runtime.GOARCH + ".gz"
+	name := "personad-" + runtime.GOOS + "-" + runtime.GOARCH + ".gz"
 	old := strings.Repeat("ab", 32)
 	setRelease := func(read time.Time) {
 		h.upd.mu.Lock()

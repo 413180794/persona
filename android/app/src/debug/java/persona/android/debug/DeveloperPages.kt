@@ -11,7 +11,7 @@ import persona.core.navigation.Navigator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Serializable @SerialName("jarvis.android.debug.ComponentCatalogRoute") data object ComponentCatalogRoute : NavKey
+@Serializable @SerialName("persona.android.debug.ComponentCatalogRoute") data object ComponentCatalogRoute : NavKey
 
 internal object DeveloperPages : DeveloperTools {
     override val home: NavKey = ComponentCatalogRoute

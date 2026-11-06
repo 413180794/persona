@@ -1,9 +1,9 @@
 // Package dbtest gives a test binary a Postgres database of its own (#583). Every run of the server's tests used to
-// point at the one JARVIS_TEST_DATABASE_URL database (jarvis_test): several lanes and a deploy testing on the hub
+// point at the one PERSONA_TEST_DATABASE_URL database (persona_test): several lanes and a deploy testing on the hub
 // machine at once truncated and migrated each other's tables mid-test, and tests failed with empty or foreign rows.
 //
-// A package with database tests calls Main from its TestMain: it creates jarvis_test_<time>_<random> next to the
-// configured database, points JARVIS_TEST_DATABASE_URL at it for the tests (db.Open migrates it), and drops it
+// A package with database tests calls Main from its TestMain: it creates persona_test_<time>_<random> next to the
+// configured database, points PERSONA_TEST_DATABASE_URL at it for the tests (db.Open migrates it), and drops it
 // afterwards. A role that may not create databases falls back to a lock: the runs then take turns on the shared one.
 package dbtest
 
@@ -27,12 +27,12 @@ import (
 )
 
 // Env names the database the tests use; without it they skip what needs one.
-const Env = "JARVIS_TEST_DATABASE_URL"
+const Env = "PERSONA_TEST_DATABASE_URL"
 
 // stale is how old a leftover database (a run that was killed) has to be before a later run drops it.
 const stale = 6 * time.Hour
 
-var ownName = regexp.MustCompile(`^jarvis_test_(\d{10})_[0-9a-f]{8}$`)
+var ownName = regexp.MustCompile(`^persona_test_(\d{10})_[0-9a-f]{8}$`)
 
 // ownedBy says whether u is already a run's own database (set by a parent test binary).
 func ownedBy(u string) bool {
@@ -43,10 +43,6 @@ func ownedBy(u string) bool {
 // Main runs m on a database of its own and returns the exit code (os.Exit(dbtest.Main(m))).
 func Main(m *testing.M) int {
 	base := identity.Getenv(Env)
-	if base != "" {
-		_ = os.Setenv(Env, base)
-		_ = os.Setenv("PERSONA_TEST_DATABASE_URL", base)
-	}
 	if base == "" || ownedBy(base) {
 		// A test binary a test started again (a fake node, a plugin) runs on its parent's database, which the parent
 		// drops: its child is often killed before it could.
@@ -61,7 +57,6 @@ func Main(m *testing.M) int {
 	}
 	defer done()
 	_ = os.Setenv(Env, own)
-	_ = os.Setenv("PERSONA_TEST_DATABASE_URL", own)
 	return m.Run()
 }
 
@@ -79,11 +74,11 @@ func Own(ctx context.Context, base string) (string, func(), error) {
 	sweep(ctx, admin)
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
-	name := fmt.Sprintf("jarvis_test_%d_%s", time.Now().Unix(), hex.EncodeToString(b))
+	name := fmt.Sprintf("persona_test_%d_%s", time.Now().Unix(), hex.EncodeToString(b))
 	_, err = admin.Exec(ctx, `CREATE DATABASE "`+name+`"`)
 	var pe *pgconn.PgError
 	if errors.As(err, &pe) && pe.Code == "42501" { // insufficient_privilege: take turns on the shared database
-		if _, err := admin.Exec(ctx, `SELECT pg_advisory_lock(hashtext('jarvis_test'))`); err != nil {
+		if _, err := admin.Exec(ctx, `SELECT pg_advisory_lock(hashtext('persona_test'))`); err != nil {
 			_ = admin.Close(ctx)
 			return "", nil, fmt.Errorf("lock: %w", err)
 		}
@@ -112,7 +107,7 @@ func drop(ctx context.Context, admin *pgx.Conn, name string) {
 
 // sweep drops the databases runs that were killed left behind, once they are old enough not to be in use.
 func sweep(ctx context.Context, admin *pgx.Conn) {
-	rows, err := admin.Query(ctx, `SELECT datname FROM pg_database WHERE datname LIKE 'jarvis\_test\_%'`)
+	rows, err := admin.Query(ctx, `SELECT datname FROM pg_database WHERE datname LIKE 'persona\_test\_%'`)
 	if err != nil {
 		return
 	}
@@ -124,7 +119,7 @@ func sweep(ctx context.Context, admin *pgx.Conn) {
 		}
 		m := ownName.FindStringSubmatch(name)
 		if m == nil {
-			continue // not one of ours (jarvis_test_deploy…)
+			continue // not one of ours (persona_test_deploy…)
 		}
 		if at, err := strconv.ParseInt(m[1], 10, 64); err == nil && time.Since(time.Unix(at, 0)) > stale {
 			old = append(old, name)

@@ -1,8 +1,8 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
-/// Pure logic behind AskJarvisIntent / AgentTaskIntent / AgentsStatusIntent.
+/// Pure logic behind AskPersonaIntent / AgentTaskIntent / AgentsStatusIntent.
 struct SiriIntentsTests {
     private func item(_ seq: Int, role: String, kind: String = "text", text: String?) -> Item {
         var obj: [String: Any] = ["id": "i\(seq)", "seq": seq, "role": role, "kind": kind]

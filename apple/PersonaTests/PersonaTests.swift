@@ -4,7 +4,7 @@ import SwiftUI
 import Testing
 import UIKit
 import UniformTypeIdentifiers
-@testable import Jarvis
+@testable import Persona
 
 /// Personas (docs/persona.md): persona.json as the hub sends it, the colors held to the app's floors and laid over a
 /// style, and the phone's copy of a package (downloaded whole, kept per rev, the old rev removed).
@@ -54,10 +54,10 @@ struct PersonaTests {
         func problem(_ from: String, _ to: String) throws -> String? {
             try Self.decode(Self.manifest.replacingOccurrences(of: from, with: to)).problem
         }
-        #expect(try problem(#""id":"doudou""#, #""id":"jarvis""#) != nil) // the built-ins' ids
+        #expect(try problem(#""id":"doudou""#, #""id":"persona""#) != nil) // the built-ins' ids
         #expect(try problem(#""id":"doudou""#, #""id":"persona""#) != nil)
-        #expect(try problem(#""id":"doudou""#, #""id":"jarvis-circuit""#) != nil)
-        #expect(try problem(#""id":"doudou""#, #""id":"jarvis-blob""#) != nil)
+        #expect(try problem(#""id":"doudou""#, #""id":"persona-circuit""#) != nil)
+        #expect(try problem(#""id":"doudou""#, #""id":"persona-blob""#) != nil)
         #expect(try problem(#""id":"doudou""#, #""id":"Dou Dou""#) != nil)
         #expect(try problem(#""format":1"#, #""format":2"#) != nil)
         #expect(try problem(#""idle":"#, #""thinking":"#) != nil)
@@ -161,30 +161,32 @@ struct PersonaTests {
         #expect(s.chosenID == "doudou")
     }
 
-    /// Mochi became the default on 2026-11-03: a phone that never chose a persona (nothing saved) gets it, one that chose
-    /// Visor ("jarvis" saved) or Circuit keeps that, and choosing Visor again sticks across launches.
-    @Test func mochiIsTheDefaultAndAnEarlierChoiceStays() async throws {
+    /// Mochi is the default; each optional built-in has a distinct Persona-only id that stays chosen across launches.
+    @Test func mochiIsTheDefaultAndEachExplicitChoiceStays() async throws {
         let (fresh, _, freshDefaults) = store()
         #expect(freshDefaults.string(forKey: PersonaStore.chosenKey) == nil)
         #expect(fresh.chosenID == "persona" && fresh.current.id == Persona.builtinID)
         #expect(fresh.current.avatarDesign == .mochi && fresh.current.cardTitle == "团子" && fresh.current.name == "Persona")
         #expect(freshDefaults.string(forKey: PersonaStore.chosenKey) == nil) // nothing written for them
 
-        for kept in [Persona.visor, Persona.circuit] {
+        #expect(Set(Persona.builtins.map(\.id)).count == Persona.builtins.count)
+        for kept in Persona.builtins {
             let (_, root, defaults) = store()
             defaults.set(kept.id, forKey: PersonaStore.chosenKey)
             let s = PersonaStore(root: root, defaults: defaults)
-            #expect(s.current.id == kept.id)
+            #expect(s.current.id == kept.id && s.current.avatarDesign == kept.avatarDesign)
             // The hub answering doesn't move them to the new default.
             let hub = FakeHub()
             hub.on("GET", "/api/v1/personas", json: #"{"personas":[]}"#)
             await s.refresh(hub.client)
-            #expect(s.current.id == kept.id)
+            #expect(s.current.id == kept.id && s.current.avatarDesign == kept.avatarDesign)
         }
-        #expect(Persona.visor.id == "jarvis" && Persona.visor.cardTitle == "面罩")
+        #expect(Persona.visor.id == "persona-visor" && Persona.visor.cardTitle == "面罩")
 
         await fresh.choose(Persona.visor, api: nil)
-        #expect(PersonaStore(root: fresh.root, defaults: freshDefaults).current.id == "jarvis")
+        let visorAgain = PersonaStore(root: fresh.root, defaults: freshDefaults).current
+        #expect(visorAgain.id == "persona-visor" && visorAgain.avatarDesign == .visor)
+        #expect(AppearanceChoice.resolve(style: nil, color: nil, persona: visorAgain.id).color == .style)
         await fresh.choose(Persona.builtin, api: nil)
         #expect(PersonaStore(root: fresh.root, defaults: freshDefaults).current.id == Persona.builtinID)
     }
@@ -193,17 +195,17 @@ struct PersonaTests {
     /// their ids are taken from hub packages.
     @Test func pixelFacetAndBlobAreBuiltInChoices() async throws {
         let (s, _, defaults) = store()
-        #expect(Persona.builtins.map(\.id).suffix(4) == [Persona.circuit.id, "jarvis-pixel", "jarvis-facet", "jarvis-blob"])
+        #expect(Persona.builtins.map(\.id).suffix(4) == [Persona.circuit.id, "persona-pixel", "persona-facet", "persona-blob"])
         for (p, title, design) in [(Persona.pixel, "像素", AssistantAvatar.Design.pixel), (Persona.facet, "晶面", .facet), (Persona.blob, "软糖", .blob)] {
             #expect(p.isBuiltin && s.isOnPhone(p))
             #expect(p.name == "Persona" && p.cardTitle == title && p.avatarDesign == design)
             #expect(PersonaFace.Design(rawValue: p.design ?? "") != nil, "the Live Activity can draw it")
         }
         await s.choose(Persona.blob, api: nil)
-        #expect(defaults.string(forKey: PersonaStore.chosenKey) == "jarvis-blob")
-        #expect(PersonaStore(root: s.root, defaults: defaults).current.id == "jarvis-blob")
+        #expect(defaults.string(forKey: PersonaStore.chosenKey) == "persona-blob")
+        #expect(PersonaStore(root: s.root, defaults: defaults).current.id == "persona-blob")
         // The accent is still the style's: a built-in is not Match Avatar.
-        #expect(AppearanceChoice.resolve(style: nil, color: nil, persona: "jarvis-blob").color == .style)
+        #expect(AppearanceChoice.resolve(style: nil, color: nil, persona: "persona-blob").color == .style)
     }
 
     /// Circuit is offered next to the default before the hub answers (or with no hub at all), is chosen without a

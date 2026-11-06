@@ -1,7 +1,7 @@
 # Real-data verification of the message pipeline lane (stages 2–4)
 
 2026-10-29. Corpus: every Codex rollout on one dev machine, a random sample of Claude transcripts (including subagents), the 15 largest transcripts (60–332 MB),
-plus the local transcript snapshot; **435 files, 5.8 GB, 1.27 million lines** in total. The corpus lives only in `~/jarvis-corpus` on that machine and is not in the repo; only the numbers are here.
+plus the local transcript snapshot; **435 files, 5.8 GB, 1.27 million lines** in total. The corpus lives only in `~/persona-corpus` on that machine and is not in the repo; only the numbers are here.
 
 All tools are in the repo and are skipped when run without arguments:
 
@@ -10,7 +10,7 @@ All tools are in the repo and are skipped when run without arguments:
 | Parsing: items per file (by type), lines that produced no item (by line type), bad lines, Meta | `server/internal/transcript/corpus_test.go`: `go test -c -o corpus.test ./internal/transcript`, `./corpus.test -test.run 'TestCorpus$' -corpus <dir,…> -out x.jsonl`. For an old version, add one `corpus_shim_test.go` (API differences); the same tool then runs the old and new parsers file by file, and a script compares them by item id |
 | Continuity simulation | `continuity_corpus_test.go`: `-test.run CorpusContinuity -sim 3` |
 | Cold-open time, resident memory | `TestCorpus -perf -minsize 20000000` |
-| App rebuild time per event | Export with `TestCorpusDumpItems -dumpitems <dir>`, then `TEST_RUNNER_JARVIS_ITEMS_DIR=<dir> xcodebuild test` (`RebuildTests.realSessionsRebuildIncrementally`) |
+| App rebuild time per event | Export with `TestCorpusDumpItems -dumpitems <dir>`, then `TEST_RUNNER_PERSONA_ITEMS_DIR=<dir> xcodebuild test` (`RebuildTests.realSessionsRebuildIncrementally`) |
 
 ## Numbers
 

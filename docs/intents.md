@@ -7,7 +7,7 @@ They do not need the app in the foreground and do not use WebSocket: each call r
 | Intent | Title | What it does | Run mode |
 | --- | --- | --- | --- |
 | `AskClaudeIntent` | Ask Claude | Sends a message to the most recent live session on a machine, or starts a new one with the remembered directory / launcher | Background |
-| `JarvisStatusIntent` | Persona Status | "N working, M need you" + the content of the first pending item | Background |
+| `PersonaStatusIntent` | Persona Status | "N working, M need you" + the content of the first pending item | Background |
 | `ApproveFirstIntent` | Approve First Pending | Allows the oldest tool permission request, or approves a plan (`bypassPermissions`) | Background |
 | `OpenSessionIntent` | Open Session | Switches the app to the chat page and jumps to that session (`AppModel.shared.openChat`) | Foreground |
 
@@ -37,7 +37,7 @@ They do not need the app in the foreground and do not use WebSocket: each call r
 
 `ApproveFirstIntent`:
 
-- Takes the first pending item ordered by `created_at`, oldest first, from the same cards `JarvisStatusIntent` reads
+- Takes the first pending item ordered by `created_at`, oldest first, from the same cards `PersonaStatusIntent` reads
   out (`IntentPicker.waiting`, #5257), by the tab badges' rule (`TabBadges.place`): Persona's own cards count; a quiet
   task's agent's (the hub's `quiet`, #1731) and a muted agent's (itself or its space unless turned back on, from each
   group's `GET /api/v1/mutes`, or the hub's `muted` stamp on the card) are skipped. So Siri never approves a card other
@@ -69,7 +69,7 @@ The hub may only be reachable over a LAN, a VPN or an SSH tunnel: the intents us
 
 ## Phrases
 
-The three shortcuts in `JarvisShortcuts` (visible in Spotlight, Siri and the Shortcuts app):
+The three shortcuts in `PersonaShortcuts` (visible in Spotlight, Siri and the Shortcuts app):
 
 - "Ask Claude in Persona", "Persona, ask Claude", "Quick question for Claude in Persona"
 - "Persona status", "How's Persona doing", "Check progress in Persona"

@@ -30,7 +30,7 @@ func writeNode(t *testing.T) (*Node, string) {
 func TestWritableDir(t *testing.T) {
 	n, home := writeNode(t)
 	outside := t.TempDir()
-	for _, d := range []string{".persona/data", ".jarvis", "Library/Preferences", ".ssh", "proj/sub"} {
+	for _, d := range []string{".persona/data", ".persona", "Library/Preferences", ".ssh", "proj/sub"} {
 		if err := os.MkdirAll(filepath.Join(home, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +58,7 @@ func TestWritableDir(t *testing.T) {
 		{"~/.persona", "", "Persona's folder"},
 		{"~/.persona/data", "", "inside Persona's folder"},
 		{"~/.PERSONA", "", "Persona's folder in another case"},
-		{"~/.jarvis", "", "the old Persona folder"},
+		{"~/.persona", "", "the old Persona folder"},
 		{"~/Library/Preferences", "", "the Library"},
 		{"~/.ssh", "", "a secret folder"},
 		{"/", "", "the root"},
@@ -262,7 +262,6 @@ func TestWritableDirCustomDataDir(t *testing.T) {
 	n, home := writeNode(t)
 	state := filepath.Join(home, "persona-state")
 	t.Setenv("PERSONA_HOME", state)
-	t.Setenv("JARVIS_HOME", "")
 	for _, d := range []string{"persona-state/extensions/demo", "persona-state/data"} {
 		if err := os.MkdirAll(filepath.Join(home, d), 0o700); err != nil {
 			t.Fatal(err)

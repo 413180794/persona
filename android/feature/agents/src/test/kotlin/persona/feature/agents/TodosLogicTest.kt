@@ -65,9 +65,9 @@ class TodosLogicTest {
     @Test
     fun contextXmlAndHandOffPromptFormatting() {
         val xml = todoContextXml("优化冷启动", "说明内容")
-        assertTrue(xml.startsWith("<jarvis-context kind=\"context\" title=\"待办 · 优化冷启动\" url=\"\">"))
+        assertTrue(xml.startsWith("<persona-context kind=\"context\" title=\"待办 · 优化冷启动\" url=\"\">"))
         assertTrue(xml.contains("说明内容"))
-        assertTrue(xml.endsWith("</jarvis-context>"))
+        assertTrue(xml.endsWith("</persona-context>"))
 
         val promptWithInstruction = todoHandOffPrompt("优化冷启动", "说明内容", "先查 Profiler trace")
         assertTrue(promptWithInstruction.contains(xml))

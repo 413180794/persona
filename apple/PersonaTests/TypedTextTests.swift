@@ -1,7 +1,7 @@
 import SwiftUI
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// A send takes what the field shows, the keyboard's composition confirmed first (#2203: with the WeChat keyboard the
 /// main conversation sent about half of what was typed).

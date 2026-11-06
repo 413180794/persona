@@ -305,7 +305,7 @@ func TestManagersInstallCodeSurvivesAFailedSave(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	conn, err := pgx.Connect(ctx, os.Getenv("PERSONA_TEST_DATABASE_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestManagersInstallCodeSurvivesAFailedSave(t *testing.T) {
 func TestManagersExpiredInstallIsRenewed(t *testing.T) {
 	h, srv, _ := managersHub(t)
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	conn, err := pgx.Connect(ctx, os.Getenv("PERSONA_TEST_DATABASE_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}

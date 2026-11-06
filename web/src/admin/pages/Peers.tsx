@@ -394,7 +394,7 @@ function AddPeer({ target, onClose, onJoined }: { target: DiscoveredHub | true |
           <Button tone="quiet" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button tone="primary" busy={busy} disabled={!ok || !/^(?:jarvis|persona):\/\//.test(code.trim())} onClick={join}>
+          <Button tone="primary" busy={busy} disabled={!ok || !/^persona:\/\//.test(code.trim())} onClick={join}>
             {t("admin-pages-peers.link")}
           </Button>
         </>
@@ -461,7 +461,7 @@ function AddPeer({ target, onClose, onJoined }: { target: DiscoveredHub | true |
           hint={ok ? t("admin-pages-peers.code_field_hint") : probe ? t("admin-pages-peers.code_field_no_tls") : t("admin-pages-peers.code_field_check_first")}
           value={code}
           onChange={setCode}
-          placeholder="jarvis://peer?…"
+          placeholder="persona://peer?…"
           mono
           multiline
           disabled={!ok}

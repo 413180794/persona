@@ -396,7 +396,7 @@ test('the hub\'s tools become DSH tools; a call goes through the node with the c
   rt.start()
   await n.ready
   await until('registered', () => registered.size === 2)
-  const def = registered.get('mcp__jarvis__phone_calendar_events')
+  const def = registered.get('mcp__persona__phone_calendar_events')
   assert.equal(def.description, 'Calendar')
   assert.deepEqual(def.parameters.properties.day, { type: 'string' })
   const value = await def.execute({ day: 'today' }, { agent: { session: { id: 'session-c' } }, signal: AbortSignal.timeout(5000) })
@@ -410,7 +410,7 @@ test('the hub\'s tools become DSH tools; a call goes through the node with the c
   assert.equal(registered.size, 2)
   n.tools = [{ name: 'phone_reminders', description: 'Reminders', input_schema: { type: 'object' } }]
   await rt.refreshTools()
-  assert.deepEqual([...registered.keys()], ['mcp__jarvis__phone_reminders'])
+  assert.deepEqual([...registered.keys()], ['mcp__persona__phone_reminders'])
   n.setHub(false)
   await new Promise((r) => setTimeout(r, 50))
   assert.equal(registered.size, 1)
@@ -426,10 +426,10 @@ test('the assistant\'s conversations: hello says so, the snapshot goes first, th
   rt.start()
   await n.ready
   assert.equal(n.hello.caps.assistant, true)
-  const { session } = await n.peer.call('session.start', { cwd: '/home/u/.jarvis/assistant', assistant: true })
+  const { session } = await n.peer.call('session.start', { cwd: '/home/u/.persona/assistant', assistant: true })
   const id = session.session_id
-  await n.peer.call('session.send', { session_id: id, text: 'hi', assistant: true, context: '<jarvis-context>\n- 现在：x\n</jarvis-context>', mode: 'plan', memory_dir: '/m' })
-  assert.deepEqual(ctl.prompts.at(-1).content.map((b) => b.text), ['<jarvis-context>\n- 现在：x\n</jarvis-context>', 'hi'])
+  await n.peer.call('session.send', { session_id: id, text: 'hi', assistant: true, context: '<persona-context>\n- 现在：x\n</persona-context>', mode: 'plan', memory_dir: '/m' })
+  assert.deepEqual(ctl.prompts.at(-1).content.map((b) => b.text), ['<persona-context>\n- 现在：x\n</persona-context>', 'hi'])
   assert.deepEqual(set, [[id, 'read-only']])
   await n.peer.call('session.send', { session_id: id, text: 'again', assistant: true, mode: 'plan' })
   assert.equal(set.length, 1, 'the same preset is not set twice')
@@ -442,7 +442,7 @@ test('the assistant\'s conversations: hello says so, the snapshot goes first, th
 
 test('the assistant\'s approvals go to the phone even with the Web GUI open; its memory writes are not asked', async (t) => {
   const { n, ctl, ev, rt } = await setup(t, { assistant: true, liveClient: true })
-  ctl.add('session-asst', { cwd: '/home/u/.jarvis/assistant' })
+  ctl.add('session-asst', { cwd: '/home/u/.persona/assistant' })
   ctl.add('session-web', { cwd: '/w/app' })
   rt.start()
   await n.ready
@@ -466,7 +466,7 @@ test('the assistant\'s approvals go to the phone even with the Web GUI open; its
 test('a gated command in an assistant conversation\'s shell is stopped; elsewhere it runs as before', async (t) => {
   const gated = { name: 'example_api', description: 'Example', input_schema: { type: 'object' }, shell: ['ex', 'example/scripts/ex.sh'] }
   const { n, ctl, ev, rt } = await setup(t, { assistant: true, registerTool: () => () => {}, tools: [gated] })
-  ctl.add('session-asst', { cwd: '/home/u/.jarvis/assistant' })
+  ctl.add('session-asst', { cwd: '/home/u/.persona/assistant' })
   rt.start()
   await n.ready
   await until('listed', () => n.last('runtime.sessions'))
@@ -475,7 +475,7 @@ test('a gated command in an assistant conversation\'s shell is stopped; elsewher
   const denied = await pre('session-asst', 'ex GET /me')
   assert.equal(denied.kind, 'deny')
   assert.match(denied.reason, /example_api/)
-  assert.equal((await pre('session-asst', 'bash ~/.jarvis/skills/example/scripts/ex.sh POST /x')).kind, 'deny')
+  assert.equal((await pre('session-asst', 'bash ~/.persona/skills/example/scripts/ex.sh POST /x')).kind, 'deny')
   assert.equal((await pre('session-asst', 'echo exit && ls')).kind, 'allow')
   assert.equal((await pre('session-other', 'ex GET /me')).kind, 'allow')
 })
@@ -488,7 +488,7 @@ test('the assistant\'s own tools are only for its conversations, called as the a
   }
   const n0 = { tools: [{ name: 'phone_contacts', description: 'Contacts', input_schema: { type: 'object' } }] }
   const { n, ctl, rt } = await setup(t, { assistant: true, registerTool, tools: n0.tools })
-  ctl.add('session-asst', { cwd: '/home/u/.jarvis/assistant' })
+  ctl.add('session-asst', { cwd: '/home/u/.persona/assistant' })
   n.tools = n0.tools
   const plainTools = n0.tools
   const withAssistant = [...plainTools, { name: 'ask_user', description: 'Ask', input_schema: { type: 'object' } }]
@@ -499,14 +499,14 @@ test('the assistant\'s own tools are only for its conversations, called as the a
   n.peer.onRequest = ((orig) => async (m, p) => (m === 'mcp.tools' ? { tools: p?.assistant ? withAssistant : plainTools } : orig(m, p)))(n.peer.onRequest)
   await rt.refreshTools()
   await until('registered', () => registered.size === 2)
-  const ask = registered.get('mcp__jarvis__ask_user')
+  const ask = registered.get('mcp__persona__ask_user')
   assert.equal(typeof ask.opts?.when, 'function')
   assert.equal(ask.opts.when({ agent: { session: { id: 'session-asst' } } }), true)
   assert.equal(ask.opts.when({ agent: { session: { id: 'session-other' } } }), false)
-  assert.equal(registered.get('mcp__jarvis__phone_contacts').opts, undefined, 'the phone\'s tools are for every session')
+  assert.equal(registered.get('mcp__persona__phone_contacts').opts, undefined, 'the phone\'s tools are for every session')
   await ask.def.execute({}, { agent: { session: { id: 'session-asst' } } })
   assert.deepEqual(n.toolCalls.at(-1), { name: 'ask_user', args: {}, session_id: 'session-asst', assistant: true })
-  await registered.get('mcp__jarvis__phone_contacts').def.execute({}, { agent: { session: { id: 'session-other' } } })
+  await registered.get('mcp__persona__phone_contacts').def.execute({}, { agent: { session: { id: 'session-other' } } })
   assert.equal(n.toolCalls.at(-1).assistant, undefined)
 })
 

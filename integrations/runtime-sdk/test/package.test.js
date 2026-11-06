@@ -39,13 +39,13 @@ test('selfPackage: a module run from a store version (through current) knows its
     mkdirSync(join(checkout, f, '..'), { recursive: true })
     writeFileSync(join(checkout, f), f)
   }
-  const files = readShipped(checkout, PACKAGES['jarvis-pi-runtime'])
+  const files = readShipped(checkout, PACKAGES['persona-pi-runtime'])
   const hash = packageHash(files)
-  const fromCheckout = selfPackage(pathToFileURL(join(checkout, 'pi', 'index.js')).href, 'jarvis-pi-runtime')
+  const fromCheckout = selfPackage(pathToFileURL(join(checkout, 'pi', 'index.js')).href, 'persona-pi-runtime')
   assert.equal(fromCheckout.hash, hash)
   assert.equal(fromCheckout.store, undefined)
   installCurrent(store, hash, files)
-  const fromStore = selfPackage(pathToFileURL(join(store, 'current', 'pi', 'index.js')).href, 'jarvis-pi-runtime')
+  const fromStore = selfPackage(pathToFileURL(join(store, 'current', 'pi', 'index.js')).href, 'persona-pi-runtime')
   assert.equal(fromStore.hash, hash)
   assert.equal(fromStore.store, realpathSync(store)) // through current, to the version's real directory
 })

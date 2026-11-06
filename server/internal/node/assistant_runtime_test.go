@@ -62,11 +62,11 @@ func startedAssistant(t *testing.T, n *Node, host *fakeRuntime) string {
 	t.Helper()
 	host.answer = func(method string, params json.RawMessage) (any, error) {
 		if method == "session.start" {
-			return map[string]any{"session": map[string]any{"session_id": "session-a1", "cwd": filepath.Join(n.home, ".jarvis", "assistant"), "status": "idle"}}, nil
+			return map[string]any{"session": map[string]any{"session_id": "session-a1", "cwd": filepath.Join(n.home, ".persona", "assistant"), "status": "idle"}}, nil
 		}
 		return map[string]any{"ok": true}, nil
 	}
-	raw, err := nodeCall(t, n, "assistant.send", map[string]any{"launcher": "dsh", "cwd": filepath.Join(n.home, ".jarvis", "assistant"), "text": "hello"})
+	raw, err := nodeCall(t, n, "assistant.send", map[string]any{"launcher": "dsh", "cwd": filepath.Join(n.home, ".persona", "assistant"), "text": "hello"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestAssistantOnARuntimeStartsAndSendsWithTheSnapshot(t *testing.T) {
 	if !strings.Contains(p.Context, "测试时间") || !strings.Contains(p.Context, "MEMORY.md") {
 		t.Fatalf("the first message's context: %q", p.Context)
 	}
-	if st, ok := n.state.get(sid); !ok || st.Launcher != "dsh" || !strings.HasSuffix(st.Cwd, "/.jarvis/assistant") {
+	if st, ok := n.state.get(sid); !ok || st.Launcher != "dsh" || !strings.HasSuffix(st.Cwd, "/.persona/assistant") {
 		t.Fatalf("state %+v", st)
 	}
 	if !n.isAssistantSession(sid) || !n.runtimeAssistant(sid) {
@@ -185,7 +185,7 @@ func TestAssistantToolsOnlyForTheAssistantsConversations(t *testing.T) {
 	plain := dialRuntime(t, n, map[string]any{"runtime": "other", "caps": map[string]any{"send": true}})
 	sid := startedAssistant(t, n, host)
 	_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{
-		{"session_id": sid, "cwd": filepath.Join(n.home, ".jarvis", "assistant"), "status": "idle"},
+		{"session_id": sid, "cwd": filepath.Join(n.home, ".persona", "assistant"), "status": "idle"},
 		{"session_id": "session-w", "cwd": "/w/app", "status": "idle"},
 	}})
 	waitFor(t, "listed", func() bool { _, ok := listed(t, n)["session-w"]; return ok })
@@ -235,9 +235,9 @@ func TestAssistantToolsOnlyForTheAssistantsConversations(t *testing.T) {
 func TestGatedToolGoesThroughTheGate(t *testing.T) {
 	n, hub := runtimeNode(t)
 	assistantHub(hub)
-	skills := filepath.Join(n.home, ".jarvis", "skills")
-	t.Setenv("JARVIS_SKILLS_DIR", skills)
-	n.dir = filepath.Join(n.home, ".jarvis")
+	skills := filepath.Join(n.home, ".persona", "skills")
+	t.Setenv("PERSONA_SKILLS_DIR", skills)
+	n.dir = filepath.Join(n.home, ".persona")
 	script := filepath.Join(skills, "example", "scripts", "ex.sh")
 	_ = os.MkdirAll(filepath.Dir(script), 0o755)
 	_ = os.WriteFile(filepath.Join(skills, "example", "SKILL.md"), []byte("---\nname: example\n---\n"), 0o644)

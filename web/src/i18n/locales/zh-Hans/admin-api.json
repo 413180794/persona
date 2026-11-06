@@ -9,7 +9,7 @@
   "err_csrf": "页面过期了，刷新一下再试",
   "err_tls_required": "需要经 TLS 端口访问",
   "err_widen_cli_only": "放宽访问范围只能在 hub 机器上用命令行或部署脚本",
-  "err_from_env": "这里不能改：这一项是部署时用环境变量定的（JARVIS_ADMIN_ACCESS / JARVIS_PUBLIC_URL）",
+  "err_from_env": "这里不能改：这一项是部署时用环境变量定的（PERSONA_ADMIN_ACCESS / PERSONA_PUBLIC_URL）",
   "err_would_lock_you_out": "改完之后你就进不来了",
   "err_invalid_cidr": "网段格式不对，例如 192.0.2.0/24",
   "err_invalid_id": "id 只能用小写字母、数字和 - _ .，以字母或数字开头",

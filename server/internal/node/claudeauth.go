@@ -56,7 +56,7 @@ func (n *Node) claudeAuthStatus(ctx context.Context, name string) (proto.ClaudeA
 		st.Version = version
 		return st, nil
 	}
-	dir, err := os.MkdirTemp("", "jarvis-auth-")
+	dir, err := os.MkdirTemp("", "persona-auth-")
 	if err != nil {
 		return proto.ClaudeAuthStatus{}, err
 	}

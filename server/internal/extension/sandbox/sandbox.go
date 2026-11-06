@@ -294,7 +294,7 @@ func Darwin(plan Plan) (string, []string, []string) {
 	_ = os.MkdirAll(tmp, 0o700)
 	q := strconv.Quote
 	// The hub names these directories, and the program and its arguments, by paths that may go through a symlink in
-	// the home directory (~/.persona -> .jarvis). sandbox-exec checks the link itself as a read under the home
+	// the home directory (~/.persona -> .persona). sandbox-exec checks the link itself as a read under the home
 	// directory, so without these every such path fails (execvp: Operation not permitted). Each link is allowed on
 	// its own (literal): reading it gives only where it points, and what is behind it is checked by its real path.
 	var links []string

@@ -4,7 +4,7 @@
 //	go run ./cmd/pushrec 20m ~/push.jsonl
 //
 // It connects like an app with the hub token from ~/.persona/hub.json (never printed), at the address the hub listens
-// on (hub.json's listen, PERSONA_LISTEN / JARVIS_LISTEN over it), registers as nothing and opens
+// on (hub.json's listen, PERSONA_LISTEN over it), registers as nothing and opens
 // no chat, and writes one line per message: {"t": Unix ms, "msg": the message}. The file holds real sessions (titles,
 // last lines): it is created 0600 and stays on that machine.
 package main
@@ -77,7 +77,7 @@ func hubConfig(dir string) (addr, token string, err error) {
 	from := path
 	// The hub takes its listen address from the environment over hub.json's (Docker, docs/docker.md): so does pushrec.
 	if v := identity.Getenv("PERSONA_LISTEN"); v != "" {
-		cfg.Listen, from = v, "PERSONA_LISTEN / JARVIS_LISTEN"
+		cfg.Listen, from = v, "PERSONA_LISTEN"
 	}
 	addr, err = dialAddr(cfg.Listen)
 	if err != nil {

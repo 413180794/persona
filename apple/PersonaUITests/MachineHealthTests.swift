@@ -2,18 +2,18 @@ import XCTest
 
 /// What This Computer Can Do on a machine's page (#3018, docs/machines.md「自检」), against scripts/mock/mock_hub.py started with
 /// MOCK_DOCTOR=stale (hooks and MCP files out of date; Repair puts them right):
-///   TEST_RUNNER_JARVIS_DOCTOR_HUB=http://127.0.0.1:<port>
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there.
+///   TEST_RUNNER_PERSONA_DOCTOR_HUB=http://127.0.0.1:<port>
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> also saves a screenshot of each step there.
 final class MachineHealthTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_DOCTOR_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_DOCTOR=stale (JARVIS_DOCTOR_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_DOCTOR_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_DOCTOR=stale (PERSONA_DOCTOR_HUB)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook"]
         app.launchPinned()
     }
@@ -24,8 +24,8 @@ final class MachineHealthTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let look = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let look = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + look + ".png"))
         }
     }

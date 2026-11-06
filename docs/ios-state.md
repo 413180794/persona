@@ -136,7 +136,7 @@ At this point, a push changing one field of one session recomputes only the leaf
 | 2 (#620, merged) | Split volatile fields: put `rev`, `updated_at`, tokens, ports in separate small objects, read only by the leaf views displaying them (relative time, last line), following `WaitingBadge` | Pushes churning `rev` / `updated_at`: zero views recomputed except the `Text` displaying time |
 | 3 (#639, merged) | Move derived data into models: sorts, groups, filter counts, badges computed in the model and published only when results change (`AgentListOrder` moved into `AgentsFeed`) | List body runs only when order / groups / counts change; badges run only when the number changes |
 | 4 (#880, merged) | One model-layer policy for "user is interacting": during dragging, inertia, open menus, or keyboard input, merge and defer noncritical updates; critical updates go immediately; maximum delay bounded. Extract `AgentsFeed` holding into reusable `Hold`, with pages registering their state | Existing `LiveUpdateTests`, `ScrollUnderPushTests`, `ScreenTruthTests` all green; no page-specific holding code remains (source check) |
-| 5 (#913, merged) | Guardrails: performance test "a push changing one field of one session recomputes at most N views", failing above the limit; source check "non-list views don't read `allSessions`" | Both checks in `JarvisTests` / UI tests |
+| 5 (#913, merged) | Guardrails: performance test "a push changing one field of one session recomputes at most N views", failing above the limit; source check "non-list views don't read `allSessions`" | Both checks in `PersonaTests` / UI tests |
 | 6 (#270, merged, testflight lane) | Hub pushes only semantic changes (`rev` / `updated_at` churn goes via `revs` instead), or sends deltas. Implemented as `sessions_delta`: the hub remembers sessions sent per device and sends only changes and deletions | Session push traffic: 2605 KB/min → 79 KB/min |
 
 ### Step 1: separate list structure from rows
@@ -199,9 +199,9 @@ Truthfulness: time updates on every push (`AgentTime` lands with `show()` and is
 
 Two checks preserve steps 1–3; regressions turn tests red:
 - `RenderBudgetTests` changes from reporting counts to failing above budget: with the page at rest, a push changes one field in one session (average of 5 per type); views recomputed per push must stay within budget.
-  Budgets are the post-step-1–3 numbers: Agents list `rev` 1 (that row's time), `last` 2 (that row and its time), Agent chat and Jarvis chat both 0;
+  Budgets are the post-step-1–3 numbers: Agents list `rev` 1 (that row's time), `last` 2 (that row and its time), Agent chat and Persona chat both 0;
   one extra call across 5 pushes is allowed (0.2, a row's time happens to cross its refresh boundary); two extra calls count as regression.
-- `AllSessionsReadersTests` (JarvisTests, source scan): only Agent-listing views under `Jarvis/Views` and `Mac` may read `allSessions`; each file's read count and reason are registered in the test,
+- `AllSessionsReadersTests` (PersonaTests, source scan): only Agent-listing views under `Persona/Views` and `Mac` may read `allSessions`; each file's read count and reason are registered in the test,
   and adding or removing a read requires updating the registration:
   - single-session displays read `model.session(_:)` cells;
   - actions needing all sessions only when tapped (@ menus, quoting another session, next / previous Agent, terminal space switching) read `model.sessionsNow`: the same data as `allSessions`, unobserved,
@@ -334,7 +334,7 @@ Reading it:
 
 ## Back to latest: chat-page "follow latest" (reviewed 2026-11-04; #1046 implemented the plan below)
 
-Agent chats and Jarvis chats share one `ChatView`: an inverted list (latest at offset 0), with the bottom-right ↓ ("Jump to Latest") and "follow latest" handled here.
+Agent chats and Persona chats share one `ChatView`: an inverted list (latest at offset 0), with the bottom-right ↓ ("Jump to Latest") and "follow latest" handled here.
 Below are the old behavior, measured problems, and a single-source-of-truth plan compared with Vercel `useScrollToBottom`, followed by the implementation (#1046). Reproductions use `ScrollToBottomTests` (each scenario records a
 `probe.chat-rows` timeline: button, following, withholding, sentinel, distance from latest, finger, pin).
 

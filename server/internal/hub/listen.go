@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// Socket activation (docs/hub-restart.md "Zero gap"): systemd's jarvisd.socket holds the hub's listening sockets and
+// Socket activation (docs/hub-restart.md "Zero gap"): systemd's personad.socket holds the hub's listening sockets and
 // hands them to each new hub process (LISTEN_FDS). While one hub stops and the next starts, connections wait in the
 // socket's backlog instead of being refused, and nothing ever sees the port closed. Without systemd (Docker, launchd,
 // a hub run by hand) there are none and the hub listens itself, as before.
@@ -96,7 +96,7 @@ func listenTCP(addr string) (net.Listener, bool, error) {
 }
 
 // unclaimedInherited is the addresses of the sockets systemd passed that listenTCP has not handed out: ports hub.json
-// no longer listens on (the admin UI changed listen or public.tls_listen, and jarvisd.socket still has the old one).
+// no longer listens on (the admin UI changed listen or public.tls_listen, and personad.socket still has the old one).
 func unclaimedInherited() []net.Addr {
 	inheritedListeners()
 	inherited.mu.Lock()
@@ -114,7 +114,7 @@ func unclaimedInherited() []net.Addr {
 func logUnclaimedInherited(logf func(string, ...any)) {
 	for _, a := range unclaimedInherited() {
 		logf("hub: systemd passed a socket on %s that hub.json does not listen on; connections there hang: rerun "+
-			"personad hub setup (or scripts/deploy/hub-systemd.sh) to update jarvisd.socket", a)
+			"personad hub setup (or scripts/deploy/hub-systemd.sh) to update personad.socket", a)
 	}
 }
 

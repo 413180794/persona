@@ -64,9 +64,9 @@ describe("the assistant's feed among the chat's lines (docs/unified-entry.md)", 
   it("draws a reminder or an event the phone added after its exchange, not a read or a failure", () => {
     const use = (name: string, id: string) => ({ id, seq: 1, role: "assistant", kind: "tool_use", tool_name: name }) as Item;
     const res = (text: string, err = false) => ({ id: "r", seq: 2, role: "user", kind: "tool_result", text, is_error: err }) as Item;
-    const ok = quickResult(use("mcp__jarvis__phone_reminders_create", "u1"), res(JSON.stringify({ id: "R1", title: "打电话", due: "2026-11-07T10:00:00+08:00", list: "提醒事项" })));
+    const ok = quickResult(use("mcp__persona__phone_reminders_create", "u1"), res(JSON.stringify({ id: "R1", title: "打电话", due: "2026-11-07T10:00:00+08:00", list: "提醒事项" })));
     expect(ok).toMatchObject({ kind: "reminder", title: "打电话", place: "提醒事项" });
-    expect(quickResult(use("mcp__jarvis__phone_reminders_list", "u2"), res(JSON.stringify({ id: "x" })))).toBeUndefined();
+    expect(quickResult(use("mcp__persona__phone_reminders_list", "u2"), res(JSON.stringify({ id: "x" })))).toBeUndefined();
     expect(quickResult(use("phone_calendar_create_event", "u3"), res("denied", true))).toBeUndefined();
     const step = { kind: "tool" as const, id: "u1", use: use("phone_reminders_create", "u1"), result: res(JSON.stringify({ id: "R1", title: "t" })), images: [] };
     const out = displayLines([seg("s1", 5, [step])], []).map((l) => l.id);

@@ -78,7 +78,7 @@ func TestClientOps(t *testing.T) {
 	})
 	request := func(ctx context.Context, params string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "/api/v1/sessions/m/s/messages", strings.NewReader(params)).WithContext(ctx)
-		r.Header.Set("X-Jarvis-Op-Id", id)
+		r.Header.Set("X-Persona-Op-Id", id)
 		w := httptest.NewRecorder()
 		handler(w, r)
 		return w
@@ -119,7 +119,7 @@ func TestClientOps(t *testing.T) {
 	h = &Hub{store: store}
 	replayed := h.withClientOp("message", func(http.ResponseWriter, *http.Request) { calls.Add(1) })
 	r := httptest.NewRequest("POST", "/api/v1/sessions/m/s/messages", strings.NewReader(`{"text":"hello","options":{"a":1,"b":2},"client_msg_id":"`+id+`"}`))
-	r.Header.Set("X-Jarvis-Op-Id", id) // receipts are only for clients that send the header
+	r.Header.Set("X-Persona-Op-Id", id) // receipts are only for clients that send the header
 	w := httptest.NewRecorder()
 	replayed(w, r)
 	if w.Code != http.StatusCreated || w.Body.String() != body || calls.Load() != 1 {

@@ -26,7 +26,7 @@ class AssistantSettingsStateTest {
     private val MemoryEntry.typeLabel get() = typeLabel(res)
 
     private class FakeApi : AssistantSettingsApi {
-        var config = AssistantConfig(machineId = "server", launcher = "claude", cwd = "/home/me/.jarvis/assistant",
+        var config = AssistantConfig(machineId = "server", launcher = "claude", cwd = "/home/me/.persona/assistant",
             timezone = "Asia/Shanghai", notesEffective = "from hub.json", main = "main-id")
         val updates = mutableListOf<AssistantConfigUpdate>()
         var memory = listOf(
@@ -297,8 +297,8 @@ class AssistantSettingsStateTest {
     }
 
     @Test fun pathsAndZonesReadWell() {
-        assertEquals("~/.jarvis/assistant", homeRelative("/home/me/.jarvis/assistant", "/home/me"))
-        assertEquals("~/.jarvis/assistant", homeRelative("/home/me/.jarvis/assistant", "/home/me/"))
+        assertEquals("~/.persona/assistant", homeRelative("/home/me/.persona/assistant", "/home/me"))
+        assertEquals("~/.persona/assistant", homeRelative("/home/me/.persona/assistant", "/home/me/"))
         assertEquals("/srv/assistant", homeRelative("/srv/assistant", "/home/me"))
         assertEquals("/home/user/x", homeRelative("/home/user/x", "/home/me"))
         assertEquals("", homeRelative("", null))

@@ -5,7 +5,7 @@
       "name": "fold_replaces_work_and_expands_in_pages",
       "description": "fold 替换工作片段，同 id 的更长 fold 覆盖旧版后分页展开。",
       "source": [
-        "ios/JarvisTests/FoldedWorkTests.swift: aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack",
+        "ios/PersonaTests/FoldedWorkTests.swift: aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack",
         "ios/Shared/ChatStore.swift: dropFolded, unfold",
         "ios/Shared/APIClient.swift: foldedWork",
         "docs/protocol.md：折叠的工作"
@@ -700,7 +700,7 @@
       "name": "fold_preserves_steps_outside_range",
       "description": "折叠范围之外的工具调用继续接收结果。",
       "source": [
-        "ios/JarvisTests/FoldedWorkTests.swift: stepsOutsideAFoldStay",
+        "ios/PersonaTests/FoldedWorkTests.swift: stepsOutsideAFoldStay",
         "ios/Shared/ChatStore.swift: merge, dropFolded"
       ],
       "input": {

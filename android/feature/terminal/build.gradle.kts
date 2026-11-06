@@ -1,7 +1,7 @@
 plugins {
-    id("jarvis.android.library")
-    id("jarvis.compose")
-    id("jarvis.hilt")
+    id("persona.android.library")
+    id("persona.compose")
+    id("persona.hilt")
 }
 
 android { namespace = "persona.feature.terminal"

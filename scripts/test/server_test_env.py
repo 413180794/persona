@@ -10,7 +10,7 @@ import sys
 import tempfile
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-RUNTIME_PREFIXES = ("PERSONA_", "JARVIS_", "PG")
+RUNTIME_PREFIXES = ("PERSONA_", "PG")
 # Test-only inputs may configure TLS and connection behavior, never a second target or external credential source.
 DATABASE_QUERY_KEYS = {
     "sslmode", "sslrootcert", "sslcert", "sslkey", "sslpassword", "sslsni", "sslnegotiation",
@@ -34,8 +34,8 @@ def test_database_url(config_file):
     parsed = urlsplit(value)
     if parsed.scheme not in {"postgres", "postgresql"} or not parsed.netloc or parsed.fragment:
         raise ValueError("hub database_url must be a Postgres URL")
-    if parsed.path != "/jarvis":
-        raise ValueError("server tests require the production jarvis database configuration")
+    if parsed.path != "/persona":
+        raise ValueError("server tests require the production persona database configuration")
     # Go's URL query parser decodes keys and picks the first value; validating the path alone misses overrides.
     if ";" in parsed.query or re.search(r"%(?![0-9A-Fa-f]{2})", parsed.query):
         raise ValueError("invalid server test database query")
@@ -47,7 +47,7 @@ def test_database_url(config_file):
         settings[key] = setting
     for key, setting in DATABASE_QUERY_DEFAULTS.items():
         settings.setdefault(key, setting)
-    test_url = urlunsplit(parsed._replace(path="/jarvis_test", query=urlencode(settings)))
+    test_url = urlunsplit(parsed._replace(path="/persona_test", query=urlencode(settings)))
     if test_url == value:
         raise ValueError("server test database must differ from the production database")
     return test_url
@@ -57,7 +57,7 @@ def clean_environment(environment):
     cleaned = {key: value for key, value in environment.items()
                if not key.startswith(RUNTIME_PREFIXES) and key not in PROFILE_VARIABLES}
     roots = [Path(value).expanduser().resolve() for key, value in environment.items()
-             if key in {"PERSONA_HOME", "JARVIS_HOME"} and value]
+             if key in {"PERSONA_HOME"} and value]
     if roots and "PATH" in cleaned:
         entries = []
         for entry in cleaned["PATH"].split(os.pathsep):
@@ -93,7 +93,7 @@ def run_tests(config_file, command, environment=None):
         temporary = home / "tmp"
         temporary.mkdir()
         environment.update(HOME=str(home), TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary),
-                           JARVIS_TEST_DATABASE_URL=database, PERSONA_TEST_DATABASE_URL=database)
+                           PERSONA_TEST_DATABASE_URL=database)
         return subprocess.run(command, env=environment).returncode
 
 

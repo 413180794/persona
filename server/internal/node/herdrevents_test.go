@@ -180,7 +180,7 @@ func TestHerdrStatusEventsAreUrgent(t *testing.T) {
 		}
 		defer conn.Close()
 		_, _ = bufio.NewReader(conn).ReadBytes('\n')
-		_, _ = conn.Write([]byte(`{"id":"jarvis:events","result":{"type":"subscription_started"}}` + "\n" +
+		_, _ = conn.Write([]byte(`{"id":"persona:events","result":{"type":"subscription_started"}}` + "\n" +
 			status("pane.agent_status_changed", "w1:p1", "working") +
 			status("pane.agent_status_changed", "w1:p1", "blocked") +
 			status("pane.agent_status_changed", "w1:p1", "working") +

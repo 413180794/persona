@@ -3644,7 +3644,7 @@ private struct TopBar<Bar: View>: ViewModifier {
 /// the stack (#1941). Still now: at once (a launch, a notification tapped on the list), so nothing waits a turn.
 @MainActor final class StackStillWatcher {
     fileprivate weak var view: UIView?
-    private static let log = Logger(subsystem: "jarvis", category: "stack")
+    private static let log = Logger(subsystem: "persona", category: "stack")
 
     func whenStill(_ done: @escaping () -> Void) {
         let start = Date.now

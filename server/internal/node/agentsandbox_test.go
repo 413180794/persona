@@ -32,8 +32,26 @@ func agentSandboxFakes(t *testing.T, sup sandbox.Support) {
 	agentSandboxCheck = func(string) error { return nil }
 	none := filepath.Join(t.TempDir(), "none")
 	claudeManagedSettings, claudeManagedSettingsDirs, codexManagedConfig = []string{none}, []string{none}, []string{none}
-	for _, k := range []string{"PERSONA_AGENT_SANDBOX", "JARVIS_AGENT_SANDBOX", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "PERSONA_HOME", "JARVIS_HOME"} {
+	for _, k := range []string{"PERSONA_AGENT_SANDBOX", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "PERSONA_HOME"} {
 		t.Setenv(k, "")
+	}
+}
+
+func TestAgentDataDirsCanonical(t *testing.T) {
+	home := t.TempDir()
+	canonical := filepath.Join(home, ".persona")
+	t.Setenv("PERSONA_HOME", "")
+	if got := agentDataDirs(home, canonical); !slices.Equal(got, []string{canonical}) {
+		t.Fatalf("canonical root must occur once: %q", got)
+	}
+	custom := filepath.Join(home, "custom-state")
+	t.Setenv("PERSONA_HOME", custom)
+	if got := agentDataDirs(home, custom); !slices.Equal(got, []string{custom, canonical}) {
+		t.Fatalf("configured root and default: %q", got)
+	}
+	nodeRoot := filepath.Join(home, "node-state")
+	if got := agentDataDirs(home, nodeRoot); !slices.Equal(got, []string{nodeRoot, custom, canonical}) {
+		t.Fatalf("distinct configured roots: %q", got)
 	}
 }
 
@@ -73,7 +91,7 @@ func TestAssistantCLIInAgentSandbox(t *testing.T) {
 	agentSandboxFakes(t, macSandbox)
 	env := []string{"PATH=/usr/bin:/bin"}
 	plain := func(args []string) []string {
-		return append([]string{"/bin/zsh", "-ic", `claude "$@"`, "jarvis"}, args...)
+		return append([]string{"/bin/zsh", "-ic", `claude "$@"`, "persona"}, args...)
 	}
 
 	n := agentNode(t, false)

@@ -108,8 +108,11 @@ func TestExtensionLooks(t *testing.T) {
 	app := appClient(h)
 
 	_, out := call(t, mux, "GET", "/api/v1/looks", master, "")
-	if len(out["looks"].([]any)) != 3 || lookByID(t, out, "persona")["source"] != "builtin" || lookByID(t, out, "jarvis")["app_icon"] != "jarvis" {
+	if len(out["looks"].([]any)) != 3 || lookByID(t, out, "persona-visor")["source"] != "builtin" || lookByID(t, out, "persona")["app_icon"] != "persona" {
 		t.Fatalf("before: the built-in looks only: %v", out)
+	}
+	if lookByID(t, out, "persona")["name"] != "团子" || lookByID(t, out, "persona-visor")["name"] != "面罩" {
+		t.Fatalf("Mochi and Visor must retain distinct identities: %v", out)
 	}
 	if cur := out["current"].(map[string]any); cur["id"] != nil || cur["effective"] != "persona" {
 		t.Fatalf("never chosen: %v", cur)
@@ -128,7 +131,7 @@ func TestExtensionLooks(t *testing.T) {
 		aurora["names"].(map[string]any)["en"] != "Aurora" || aurora["rev"] == "" {
 		t.Fatalf("%v", aurora)
 	}
-	if p := lookByID(t, out, "pebble"); p == nil || p["app_icon"] != "jarvis-circuit" {
+	if p := lookByID(t, out, "pebble"); p == nil || p["app_icon"] != "persona-circuit" {
 		t.Fatalf("%v", p)
 	}
 	var m struct {
@@ -193,7 +196,7 @@ func TestExtensionLooks(t *testing.T) {
 		t.Fatalf("%d look broadcasts", n)
 	}
 	// A device moving its old choice up does not overwrite one already on the hub.
-	if _, cur := call(t, mux, "PUT", "/api/v1/looks/current", master, `{"id": "jarvis", "if_unset": true}`); cur["id"] != "aurora" {
+	if _, cur := call(t, mux, "PUT", "/api/v1/looks/current", master, `{"id": "persona", "if_unset": true}`); cur["id"] != "aurora" {
 		t.Fatalf("%v", cur)
 	}
 	if n := broadcasts(app, "look"); n != 0 {

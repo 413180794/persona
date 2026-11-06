@@ -154,7 +154,7 @@ fun PairingScreen(
                 catch (error: CancellationException) { throw error }
                 catch (error: Exception) {
                     // The pairing is saved and the shell refreshes on its own; a slow first list is not a failed pairing.
-                    android.util.Log.w("JarvisPairing", "machine list after pairing: " + error.javaClass.name)
+                    android.util.Log.w("PersonaPairing", "machine list after pairing: " + error.javaClass.name)
                     notice = R.string.settings_pairing_notice_list_later
                 }
                 record(PairingProgress(PairingStage.Complete))
@@ -164,7 +164,7 @@ fun PairingScreen(
             catch (error: Exception) {
                 if (!credentialsSaved) records.finishing(false)
                 // Exception messages may contain pairing links or credentials: log only types and frames.
-                android.util.Log.w("JarvisPairing", generateSequence(error as Throwable) { it.cause }.take(4)
+                android.util.Log.w("PersonaPairing", generateSequence(error as Throwable) { it.cause }.take(4)
                     .joinToString(" <- ") { e -> e.javaClass.name + " @ " + e.stackTrace.take(3).joinToString(", ") })
                 failure = pairingFailure(error)
                 if (failure == PairingFailure.Timeout && PairingLocalNetwork.needsPermission(context, request)) {

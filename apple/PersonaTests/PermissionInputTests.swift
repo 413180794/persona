@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct PermissionInputTests {
     @Test func secureFieldsRoundTripAndDisableSiriApproval() throws {

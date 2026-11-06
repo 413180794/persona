@@ -8,7 +8,7 @@
 
 ## 0. Background: Persona's Android requirements (from README / CLAUDE.md / docs/ios.md / docs/terminal.md / docs/protocol.md)
 
-- The phone connects only to a self-hosted hub (Go, `jarvisd hub`, default `:18660`), using HTTP + WebSocket and Bearer tokens (one `jd_…` token per device; Watch has the `answer` role).
+- The phone connects only to a self-hosted hub (Go, `personad hub`, default `:18660`), using HTTP + WebSocket and Bearer tokens (one `jd_…` token per device; Watch has the `answer` role).
   Hub **often uses plaintext HTTP on LAN / VPN**. JSON fields are snake_case; timestamps RFC3339.
 - Four tabs: Persona (headless Claude assistant, text streaming) / Development (Agents list + chat) / Inbox (Lark + mail, Lark cards rendered from the gateway, native Lark document reader) / Settings.
 - Chat challenges: inverted list (latest at offset 0), hundreds of work steps as independent lazy rows, turn collapsing (work rows, wakes, recap, queued messages),
@@ -108,7 +108,7 @@ Sources:
 
 | Module | Scope | Android-dependent? |
 | --- | --- | --- |
-| `build-logic/convention` | Plugins such as `jarvis.android.application`, `jarvis.android.library`, `jarvis.android.compose`, `jarvis.jvm.library`, `jarvis.hilt`, `jarvis.screenshot-test` | — |
+| `build-logic/convention` | Plugins such as `persona.android.application`, `persona.android.library`, `persona.android.compose`, `persona.jvm.library`, `persona.hilt`, `persona.screenshot-test` | — |
 | `core:model` | Protocol data classes (Machine / Session / Item / Interaction / FleetState …), kotlinx.serialization | No (pure Kotlin, KMP-ready) |
 | `core:protocol` | WebSocket envelopes, resume (since_seq / epoch+seq), capability negotiation | No |
 | `core:chat` | ChatStore merging, turn collapsing (work rows, wakes, recap, queue), display-row derivation | No (main target for golden fixtures) |
@@ -320,7 +320,7 @@ Sources:
 - Versions: Compose BOM 2026.09.00 (Compose 1.12.1, material3 1.4.0). Expressive components (SplitButton, ButtonGroup, FloatingToolbar, Flexible TopAppBar, list items, SearchBar…)
   progressively drop experimental annotations only in **material3 1.5.0-beta02** (2026-10-21); 1.4.0 requires `@OptIn(ExperimentalMaterial3ExpressiveApi::class)`.
   💭 Start with stable 1.4.0, switch after 1.5.0 stabilizes (likely 1–2 months at this pace), with limited Expressive opt-ins as needed.
-- 💭 Structure: `MaterialTheme` (colors / typography / shapes) supplies system-component defaults only. Persona's `JarvisTheme` supplies CompositionLocals for
+- 💭 Structure: `MaterialTheme` (colors / typography / shapes) supplies system-component defaults only. Persona's `PersonaTheme` supplies CompositionLocals for
   `AppStyle` (glass / claude / clay / island / lark), tokens (five Radius levels, three Fill levels, Font roles, Space, Motion), and style-independent `StatusPalette`.
   Pages call wrappers such as `Modifier.surface(tint, interactive, shape)`, `themedButton(prominent)`, `themedPage()`, corresponding to iOS `Theme`. Style switching rebuilds the tree by style key, as on iOS.
 - 💭 **One shared token source**: extract colors, radii, and contrast floors from `Theme.swift` / `StatusPalette.swift` into repository JSON or TOML,
@@ -354,7 +354,7 @@ Sources:
 
 | Library | Latest | Decision |
 | --- | --- | --- |
-| **mikepenz/multiplatform-markdown-renderer** | **0.46.0** (2026-10-13; 0.43.0 2026-06-22) | **Recommended**. KMP / Compose, built-in GFM (tables, task lists, strikethrough, autolinks, GitHub alerts), optional `-code` highlighting via Highlights, `-coil3` images. `MarkdownComponents` replaces any node renderer (tool cards, `<jarvis-context>` cards, file-path labels); async `rememberMarkdownState`, ViewModel preparse `parseMarkdownFlow`, **streaming incremental parsing (`rememberStreamingMarkdownState`, tail-only reparsing, ideal for assistant streaming)**, long-document `LazyMarkdownSuccess` |
+| **mikepenz/multiplatform-markdown-renderer** | **0.46.0** (2026-10-13; 0.43.0 2026-06-22) | **Recommended**. KMP / Compose, built-in GFM (tables, task lists, strikethrough, autolinks, GitHub alerts), optional `-code` highlighting via Highlights, `-coil3` images. `MarkdownComponents` replaces any node renderer (tool cards, `<persona-context>` cards, file-path labels); async `rememberMarkdownState`, ViewModel preparse `parseMarkdownFlow`, **streaming incremental parsing (`rememberStreamingMarkdownState`, tail-only reparsing, ideal for assistant streaming)**, long-document `LazyMarkdownSuccess` |
 | compose-richtext (halilozercan) | 1.0.0-alpha05 (2026-06) | Not recommended: always prerelease, 7–11 months between updates |
 | Markwon | 4.x (View / Spannable; no recent release visible on page) | Not recommended: TextView, not Compose |
 
@@ -388,7 +388,7 @@ Sources:
 
 | Option | Status | Decision |
 | --- | --- | --- |
-| **Custom grid + Compose Canvas (recommended)** | Port iOS `TerminalGrid` (herdr observe VT subset: CUP, ED, SGR, DECTCEM, 2026, OSC 8) into pure Kotlin `core:terminal`, sharing recorded iOS real frames (`ios/JarvisTests/Fixtures/terminal-observe.jsonl`) as fixtures | Same reasoning as iOS: input is an already-emulated herdr grid; herdr did the hard part. Ready-made views cannot display a 172-column grid wrapped at 45 columns |
+| **Custom grid + Compose Canvas (recommended)** | Port iOS `TerminalGrid` (herdr observe VT subset: CUP, ED, SGR, DECTCEM, 2026, OSC 8) into pure Kotlin `core:terminal`, sharing recorded iOS real frames (`ios/PersonaTests/Fixtures/terminal-observe.jsonl`) as fixtures | Same reasoning as iOS: input is an already-emulated herdr grid; herdr did the hard part. Ready-made views cannot display a 172-column grid wrapped at 45 columns |
 | ConnectBot **termlib** | 0.3.14, **Apache-2.0** (libvterm MIT, JNI), Compose components, 256 / true color, wide / combining characters, magnifier selection, zoom, complex text shaping; still updated 2026-10 | Consider if raw program bytes from a real PTY become available; emulation unnecessary now, plus native library cost |
 | Termux `terminal-emulator` / `terminal-view` | termux-app overall **GPLv3**; LICENSE exceptions say these libraries contain jackpal Apache-2.0 code, **not clearly that the entire libraries are Apache** | Not recommended: license ambiguity, View-based; Termux `TYPE_NULL` raw-key input breaks Chinese IME composition |
 
@@ -577,8 +577,8 @@ Sources:
 ### 9.3 Automated emulator screenshots (iOS DEBUG-launch-argument equivalent)
 
 - 💭 Debug-only Activity / Intent extras: `adb shell am start -n <pkg>/.debug.DebugEntryActivity --es openSession m/s --ez openWork true`,
-  or deep link `adb shell am start -W -a android.intent.action.VIEW -d "jarvis://debug/open?session=m/s" <pkg>`. **Entry only in `src/debug/`**, so release sources contain neither classes nor strings (10.3).
-- Pair without QR using `--es pairURL "jarvis://pair?url=…&token=mock"`.
+  or deep link `adb shell am start -W -a android.intent.action.VIEW -d "persona://debug/open?session=m/s" <pkg>`. **Entry only in `src/debug/`**, so release sources contain neither classes nor strings (10.3).
+- Pair without QR using `--es pairURL "persona://pair?url=…&token=mock"`.
 - Screenshot: `adb exec-out screencap -p > shot.png`; appearance `adb shell cmd uimode night yes|no`; fixed status time / battery through SystemUI demo
   (`adb shell settings put global sysui_demo_allowed 1`, then `am broadcast -a com.android.systemui.demo -e command clock -e hhmm 1430`, etc.).
 - Parallel Agents each use their own AVD (`emulator -avd <name> -port <even port>`, distinguished with `adb -s emulator-<port>`), matching iOS separate simulators.
@@ -614,7 +614,7 @@ Sources:
 
 ### 10.2 Signing
 
-- 💭 Release upload key outside the repository (e.g. `.jks` under `~/.config/jarvis/`); path / password in `config.json` or macOS Keychain, read by Gradle properties / environment. Personal values remain configurable, like iOS.
+- 💭 Release upload key outside the repository (e.g. `.jks` under `~/.config/persona/`); path / password in `config.json` or macOS Keychain, read by Gradle properties / environment. Personal values remain configurable, like iOS.
   **Losing the key prevents upgrades of installed Apps**, requiring reinstall, so back it up. Use Play App Signing if on Play. Developer verification registers package and signing key.
 
 ### 10.3 R8 and keeping debug-switch strings out of Release

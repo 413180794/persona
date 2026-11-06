@@ -84,7 +84,7 @@
 ### Rendering and components
 
 - Validate device icons in actual device rows, not just the icon table (2026-11-06, #3596). `IconName` comes from a string-indexed table; a missing glyph can still produce an empty SVG, and an existing glyph does not prove device-type mapping is correct. Regress visible phone / Watch outlines, active / revoked groups, and web / unknown-type fallbacks.
-- react-markdown does not render raw HTML (README `<img>`, `<br>` in exported Lark tables appear literally); default URL filtering clears `data:` / `blob:` / `jarvis:` links.
+- react-markdown does not render raw HTML (README `<img>`, `<br>` in exported Lark tables appear literally); default URL filtering clears `data:` / `blob:` / `persona:` links.
   Convert HTML to Markdown / placeholder characters first, and allow required schemes through custom `urlTransform`.
 - Keyframes such as `pop-in` animate `transform`, overriding inline `transform: translate(...)`; position overlays with CSS `translate` instead.
 - Virtualized lists lag one frame when row count decreases (formatted JSON switched to raw). Clamp the window to the new row count first to avoid out-of-bounds access.
@@ -106,7 +106,7 @@
 - Inbox item IDs contain `:`; filter Lark by `source`, not `account` (real-hub Lark items use account `feishu`, mock hub `lark`).
 - Email HTML iframe: `sandbox="allow-same-origin"`, without `allow-scripts`, allows height measurement and link interception but no scripts.
 - Sending an empty tag array to Knowledge tagging does not change hub tags (`omitempty`), so they cannot be cleared; same on iOS.
-- Other pages write `<jarvis-context>` attributes in `kind`, `title`, `url` order: iOS parsing regex requires all three in that order.
+- Other pages write `<persona-context>` attributes in `kind`, `title`, `url` order: iOS parsing regex requires all three in that order.
 
 ### Browser validation
 
@@ -273,7 +273,7 @@ Six parallel lanes (chat rendering, message actions, Agents list / Machines, Ter
 ## File links in sessions (2026-11-04, #1555)
 
 - Markdown `/workspace/report.md` is a path on the Agent computer, not a hub web page. Pass machine and working directory into Markdown for answers (including streaming) and execution text; normal clicks reuse the file sidebar, with relative paths resolved from the session directory. Real href uses machine file download, so modifier / middle-click does not produce site 404.
-- `new URL()` accepts incomplete `%` escapes, but later `decodeURIComponent()` still throws `URIError`. Model-produced `persona://session/…` / `jarvis://session/…` links are classified during rendering; decoding failures must become invalid links, not blank the whole chat. Regress through real Markdown rendering.
+- `new URL()` accepts incomplete `%` escapes, but later `decodeURIComponent()` still throws `URIError`. Model-produced `persona://session/…` / `persona://session/…` links are classified during rendering; decoding failures must become invalid links, not blank the whole chat. Regress through real Markdown rendering.
 
 ## Question cards remain after answering (2026-11-04, #1673)
 
@@ -322,7 +322,7 @@ Writes without items (titles, modes) also advance `updated_at`, returning empty 
 
 ## Context bodies must not retain closing tags (2026-11-06, #3676)
 
-- A single `replace` stripping closing tags from `<jarvis-context>` / `<persona-context>` bodies fails on nesting: removing from `</jarvis-</jarvis-context>context>` leaves another closing tag. The block ends early, making external email / message content handed from Inbox to assistant look like user-written instructions. Repeating until stable blocks this, but iterations equal nesting depth, so malicious hundreds-of-KB bodies block the main thread for seconds. Always assemble through `contextBody` in `lib/context-body.ts`: strip once, then escape newly formed `<` as `&lt;` (without deleting characters, no new tags can form). Two linear passes; matching agrees with hub `closingTag` (case and whitespace around slash / before `>`). Regression parses the whole generated message with `parseUserText`, verifying only the user's own text remains outside blocks.
+- A single `replace` stripping closing tags from `<persona-context>` / `<persona-context>` bodies fails on nesting: removing from `</persona-</persona-context>context>` leaves another closing tag. The block ends early, making external email / message content handed from Inbox to assistant look like user-written instructions. Repeating until stable blocks this, but iterations equal nesting depth, so malicious hundreds-of-KB bodies block the main thread for seconds. Always assemble through `contextBody` in `lib/context-body.ts`: strip once, then escape newly formed `<` as `&lt;` (without deleting characters, no new tags can form). Two linear passes; matching agrees with hub `closingTag` (case and whitespace around slash / before `>`). Regression parses the whole generated message with `parseUserText`, verifying only the user's own text remains outside blocks.
 
 ## Infinite CSS animations cost resources even while idle (2026-11-06, #4065)
 

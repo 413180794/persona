@@ -3,7 +3,7 @@
 > Research date: 2026-10-30 ("checked 2026-10-30" below refers to this date). Research only; no repository changes.
 > Labels: **[Fact]** has a source (URL + lookup date); **[Assessment]** is my reasoning / recommendation; **[Not found]** means searched but no reliable source found.
 > Privacy: all example addresses use documentation ranges `2001:db8::/32`, `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, and `example.com`; no real hosts, addresses, or accounts.
-> Background: the hub currently uses plaintext HTTP, listens on `:18660`, uses a Bearer token (WS also allows `?token=`), and pairs through `jarvis://pair?url=…&token=…` QR codes. It sends protocol-level pings every 20 seconds with a 15-second timeout (from the task brief; another agent is checking code details).
+> Background: the hub currently uses plaintext HTTP, listens on `:18660`, uses a Bearer token (WS also allows `?token=`), and pairs through `persona://pair?url=…&token=…` QR codes. It sends protocol-level pings every 20 seconds with a 15-second timeout (from the task brief; another agent is checking code details).
 
 ## Contents
 
@@ -367,7 +367,7 @@ Candidate IPv6 addresses must satisfy all of these:
   2. Use global IPv6 if the hub is in another /64;
   3. Last resort: explicitly connect to the hub's public address over cellular (`ConnectivityManager.requestNetwork(TRANSPORT_CELLULAR)` obtains a `Network`; OkHttp uses `network.socketFactory`). Using cellular at home costs data and power; only with user confirmation.
 - **Probes must distinguish "blocked by local-network permission" from "hub down"**: both look like TCP timeouts. At target 37, combinations of local-candidate timeout versus public-candidate success / failure on Wi-Fi, plus `checkSelfPermission(ACCESS_LOCAL_NETWORK)`, are enough to infer it. Use NDK `android_getnetworkblockedreason` for greater precision.
-- **Play policy**: target 37+ permission requests must be declared in Play Console, mandatory from 2027-08-25 (already recorded in `/tmp/jarvis-redesign/research/android-tech.md`, not reverified here).
+- **Play policy**: target 37+ permission requests must be declared in Play Console, mandatory from 2027-08-25 (already recorded in `/tmp/persona-redesign/research/android-tech.md`, not reverified here).
 
 ## 6. TLS
 
@@ -385,12 +385,12 @@ Candidate IPv6 addresses must satisfy all of these:
 - [Fact] OkHttp's default `OkHostnameVerifier` checks an IP literal only against certificate SAN **iPAddress** entries (type 7), comparing normalized values. Source: `okhttp3/internal/tls/OkHostnameVerifier.kt` (checked 2026-10-30). → Connecting by IP without that IP in SAN fails default hostname verification.
 - [Fact] Google Play rejects "trust everything" `X509TrustManager`s and `onReceivedSslError` handlers that unconditionally call `SslErrorHandler.proceed()`. It requires throwing `CertificateException` for unexpected certificates, and proceeding only when expected, otherwise cancelling. Lint `TrustAllX509TrustManager` scans bytecode, including dependencies.
   Sources: https://googlesamples.github.io/android-custom-lint-rules/checks/TrustAllX509TrustManager.md.html ; https://experienceleague.adobe.com/en/docs/experience-cloud-kcs/kbarticles/ka-17526 (quotes Google's notification) (checked 2026-10-30).
-- [Fact] Apple (when iOS follows up): manual trust evaluation handles `NSURLAuthenticationMethodServerTrust` in `urlSession(_:didReceive:completionHandler:)`, uses `.useCredential(URLCredential(trust:))` after verification, otherwise `.cancelAuthenticationChallenge`. "You cannot loosen server trust requirements for an ATS-protected domain, but you can tighten them." Recommendations: "Compare the server's credentials against a public key, instead of storing a single certificate"; "Use a set of keys or CAs, so you can rotate." Existing iOS `Info.plist` has `NSAllowsArbitraryLoads = true` (`ios/Jarvis/Resources/Info.plist`), so ATS does not restrict loosening trust.
+- [Fact] Apple (when iOS follows up): manual trust evaluation handles `NSURLAuthenticationMethodServerTrust` in `urlSession(_:didReceive:completionHandler:)`, uses `.useCredential(URLCredential(trust:))` after verification, otherwise `.cancelAuthenticationChallenge`. "You cannot loosen server trust requirements for an ATS-protected domain, but you can tighten them." Recommendations: "Compare the server's credentials against a public key, instead of storing a single certificate"; "Use a set of keys or CAs, so you can rotate." Existing iOS `Info.plist` has `NSAllowsArbitraryLoads = true` (`ios/Persona/Resources/Info.plist`), so ATS does not restrict loosening trust.
   Source: https://developer.apple.com/documentation/foundation/performing-manual-server-trust-authentication (JSON version, checked 2026-10-30).
 
 **Hub implementation [Assessment]**
 - Generate a long-lived **hub identity key** (ECDSA P-256) on first run. Like tokens under repository rules, keep it only on the hub machine (`hub.json` or a 0600 file in the same directory), not in the database.
-- Sign a self-signed certificate with it (for example, 1-year validity, automatically renewed before expiry with **the same key**—public-key pinning survives certificate renewal). SAN contains a fixed name such as `<hub_id>.jarvis.invalid`, not changing IPs.
+- Sign a self-signed certificate with it (for example, 1-year validity, automatically renewed before expiry with **the same key**—public-key pinning survives certificate renewal). SAN contains a fixed name such as `<hub_id>.persona.invalid`, not changing IPs.
 - QR / pairing data includes `fp=sha256/<base64 SPKI>` and `hub_id`. `/health` and WS `hello` also publish current `fp` and next-key `fp_next` (announced rotation; phones trust both).
 - IP-literal connections send no SNI (RFC 6066 §3: "Literal IPv4 and IPv6 addresses are not permitted in \"HostName\"", https://www.rfc-editor.org/rfc/rfc6066.html , checked 2026-10-30). Go `crypto/tls` `GetCertificate` can return this certificate when `ServerName` is empty.
 
@@ -456,10 +456,10 @@ Candidate IPv6 addresses must satisfy all of these:
 ### 7.2 Hardening checklist [Assessment, basis given per item]
 
 1. **One-time pairing credentials instead of the permanent main token in QR codes**
-   - Current behavior (`docs/protocol.md`, "Authentication"; code checked by another agent): QR codes / `jarvisd hub pair` print `hub.json`'s main token (all capabilities, never expires). Per-device `jd_…` tokens already exist (`docs/protocol.md`, "Per-device credentials").
+   - Current behavior (`docs/protocol.md`, "Authentication"; code checked by another agent): QR codes / `personad hub pair` print `hub.json`'s main token (all capabilities, never expires). Per-device `jd_…` tokens already exist (`docs/protocol.md`, "Per-device credentials").
    - Change to: `hub pair` generates a **high-entropy (≥128-bit) temporary pairing token**, stores its hash, with a **short lifetime (10–15 minutes)** and one device-token exchange. After exchange, allow a grace period before invalidation (for example, 10 minutes: iOS `pair()` concurrently connects WS and registers push. Which token `PushRegistrar` uses is **unverified**; too short a grace period may break push registration). CLI revocation supported. QR keeps `url` + `token` (**same format**) with added fields (`fp`, `hub_id`, `alt`…).
-   - **Existing iOS compatibility (flow verified in iOS code)**: after scanning, iOS uses this token for `GET /api/v1/machines` validation, WS connection, and push registration, then exchanges it through `POST /api/v1/auth/tokens` (`pair()` in `ios/Jarvis/App/AppModel.swift`, `upgradeCredentials()` in `DeviceCredentials.swift`). `ServerConfig(pairURL:)` reads only named `url` and `token`, ignoring unknown parameters. Temporary tokens must therefore **work as full Bearer tokens during their lifetime**, not only on the exchange endpoint, or old iOS cannot pair. Failed iOS exchange retries at next launch, when the temporary token may have expired; re-scan then (acceptable, or extend unexchanged temporary tokens to 24 hours).
-   - Keep `jarvisd hub pair --legacy` (prints main token) for CLI / special cases.
+   - **Existing iOS compatibility (flow verified in iOS code)**: after scanning, iOS uses this token for `GET /api/v1/machines` validation, WS connection, and push registration, then exchanges it through `POST /api/v1/auth/tokens` (`pair()` in `ios/Persona/App/AppModel.swift`, `upgradeCredentials()` in `DeviceCredentials.swift`). `ServerConfig(pairURL:)` reads only named `url` and `token`, ignoring unknown parameters. Temporary tokens must therefore **work as full Bearer tokens during their lifetime**, not only on the exchange endpoint, or old iOS cannot pair. Failed iOS exchange retries at next launch, when the temporary token may have expired; re-scan then (acceptable, or extend unexchanged temporary tokens to 24 hours).
+   - Keep `personad hub pair --legacy` (prints main token) for CLI / special cases.
    - Manual entry without scanning: short code (for example, 8 digits), strict rate limits, displayed only on the hub terminal; compare fingerprint prefix on first connection (6.2, "Pitfalls").
 2. **Authentication-failure rate limits / bans**
    - Aggregate by source: individual IPv4 address, **IPv6 /64** (a residential subscriber receives /56–/64, section 1.2; per-address IPv6 limiting is ineffective). Escalate repeated triggers to /56.
@@ -486,9 +486,9 @@ Candidate IPv6 addresses must satisfy all of these:
    - Maximum WS message size.
 7. **Host layer**:
    - Hub-machine nftables rejects external inbound IPv6 by default, allowing only hub TLS (and SSH if the user needs it);
-   - Self-check and list all ports listening on `::` / `0.0.0.0` in `jarvisd hub doctor`;
+   - Self-check and list all ports listening on `::` / `0.0.0.0` in `personad hub doctor`;
    - Bind Docker-published ports to `127.0.0.1`.
-8. **Reachability self-check**: `jarvisd hub doctor` or App diagnostics tests from outside (2.6: phone on cellular, another node outside home). Give concrete next steps: "ONT IPv6 firewall is blocking traffic", "Hub host firewall is blocking traffic", "TUN proxy swallowed replies", "Carrier blocked this port".
+8. **Reachability self-check**: `personad hub doctor` or App diagnostics tests from outside (2.6: phone on cellular, another node outside home). Give concrete next steps: "ONT IPv6 firewall is blocking traffic", "Hub host firewall is blocking traffic", "TUN proxy swallowed replies", "Carrier blocked this port".
 9. **New-device pairing notification**: when a new device obtains a token, notify paired devices: "New device 'xxx' paired. If this wasn't you, revoke it in Settings › Devices."
 
 ## 8. Background persistent-connection keepalive
@@ -593,7 +593,7 @@ Candidate IPv6 addresses must satisfy all of these:
 | Existing iOS dependency | How the new hub preserves it | Basis |
 | --- | --- | --- |
 | Plaintext `http://<private network>:18660`, `Authorization: Bearer` / WS `?token=` | Keep plaintext listener unchanged; reject plaintext only from **public sources** (private network, ULA, link-local, 100.64/10 VPN, allowlist still work) | 7.2 item 3 |
-| QR `jarvis://pair?url=…&token=…` | Same format. `url` remains a single private-network plaintext address; new information in **additional parameters** (`hub`, `fp`, `tls`, `alt`…). iOS `ServerConfig(pairURL:)` reads named `url` and `token`, ignoring extras. | `ios/Shared/APIClient.swift`, lines 7–16 |
+| QR `persona://pair?url=…&token=…` | Same format. `url` remains a single private-network plaintext address; new information in **additional parameters** (`hub`, `fp`, `tls`, `alt`…). iOS `ServerConfig(pairURL:)` reads named `url` and `token`, ignoring extras. | `ios/Shared/APIClient.swift`, lines 7–16 |
 | After scanning: `GET /machines` → WS → push registration → `POST /auth/tokens` device-token exchange | Temporary QR token acts as a full Bearer during its lifetime, with grace after device-token exchange; `--legacy` still prints the main token. | 7.2 item 1; `AppModel.pair()`, `upgradeCredentials()` |
 | Fixed 20-second protocol ping | Connections without `heartbeat` negotiation keep 20 seconds / 15 seconds. | 8.3 |
 | Unauthenticated `/api/v1/health` | Unchanged; add only nonsensitive fields (`hub_id`, TLS port, `fp`). **No candidate addresses here** (unauthenticated disclosure of the home's address); put them in authenticated endpoints and WS `hello`. | 7.1 |
@@ -617,7 +617,7 @@ Candidate IPv6 addresses must satisfy all of these:
    - Hub identity key (P-256, 0600, not in database), self-signed certificate renewed with the same key;
    - With domain + DNS token, use ACME DNS-01 (lego) to obtain a wildcard public-CA certificate with the same key;
    - No IP certificates.
-4. **Pairing**: `jarvisd hub pair` defaults to temporary tokens (high entropy, short lifetime, one exchange); QR adds `hub`, `fp`, `tls`, `alt` (only one or two most likely external candidates; fetch others after pairing to avoid dense QR codes).
+4. **Pairing**: `personad hub pair` defaults to temporary tokens (high entropy, short lifetime, one exchange); QR adds `hub`, `fp`, `tls`, `alt` (only one or two most likely external candidates; fetch others after pairing to avoid dense QR codes).
 5. **DDNS (optional)**:
    - Cloudflare / Alibaba Cloud / DNSPod / generic callback URL;
    - Advertise only stable addresses selected by 2.3;
@@ -628,7 +628,7 @@ Candidate IPv6 addresses must satisfy all of these:
    - Rate-limit authentication failures by /64;
    - HTTP timeouts;
    - New-device pairing notifications;
-   - `jarvisd hub doctor` lists listeners, firewalls, TUN proxy risks and asks an external node / phone outside home to test reachability.
+   - `personad hub doctor` lists listeners, firewalls, TUN proxy risks and asks an external node / phone outside home to test reachability.
 7. **Heartbeat negotiation** (8.3):
    - `client_hello.heartbeat` adjusts WS ping interval, pong timeout, TCP keepalive per connection;
    - Application `ping` / `pong` (hub-changes 3.8);

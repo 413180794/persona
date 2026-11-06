@@ -17,7 +17,7 @@ func newWindowsEnv(t *testing.T) (*fakeEnv, *bool) {
 	t.Helper()
 	f := newFakeEnv(t)
 	f.goos, f.user = "windows", `PC\me & co`
-	self := filepath.Join(t.TempDir(), "jarvis-link.exe")
+	self := filepath.Join(t.TempDir(), "persona-link.exe")
 	if err := os.WriteFile(self, fakePE(peSubsystemConsole), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func newWindowsEnv(t *testing.T) (*fakeEnv, *bool) {
 }
 
 func TestTaskXML(t *testing.T) {
-	x := taskXML(`PC\me & co`, `C:\Users\me & co\.persona\bin\jarvis-link-service.exe`, "supervise",
+	x := taskXML(`PC\me & co`, `C:\Users\me & co\.persona\bin\persona-link-service.exe`, "supervise",
 		time.Date(2026, 11, 4, 9, 30, 5, 0, time.Local))
 	for _, want := range []string{
 		`<LogonTrigger>
@@ -56,7 +56,7 @@ func TestTaskXML(t *testing.T) {
 		`<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>`,
 		`<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>`,
 		`<Priority>5</Priority>`,
-		`<Command>C:\Users\me &amp; co\.persona\bin\jarvis-link-service.exe</Command>`,
+		`<Command>C:\Users\me &amp; co\.persona\bin\persona-link-service.exe</Command>`,
 		`<Arguments>supervise</Arguments>`,
 	} {
 		if !strings.Contains(x, want) {
@@ -70,7 +70,7 @@ func TestTaskXML(t *testing.T) {
 
 func TestUTF16File(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "task.xml")
-	s := "<Task><Command>C:\\Users\\张三\\.persona\\bin\\jarvis-link-service.exe</Command></Task>\n"
+	s := "<Task><Command>C:\\Users\\张三\\.persona\\bin\\persona-link-service.exe</Command></Task>\n"
 	if err := writeUTF16(path, s); err != nil {
 		t.Fatal(err)
 	}
@@ -97,14 +97,14 @@ func TestInstallOnWindows(t *testing.T) {
 		}
 		return answer(call)
 	}
-	if err := install(f.env, []string{"--jarvisd", node}); err != nil {
+	if err := install(f.env, []string{"--personad", node}); err != nil {
 		t.Fatalf("%v\n%s", err, f.out)
 	}
 	if !*registered {
 		t.Fatal("task not registered")
 	}
 	bin := filepath.Join(f.home, ".persona", "bin")
-	if f.binPath() != filepath.Join(bin, "jarvis-link.exe") || f.nodeBin() != filepath.Join(bin, "jarvisd.exe") {
+	if f.binPath() != filepath.Join(bin, "persona-link.exe") || f.nodeBin() != filepath.Join(bin, "personad.exe") {
 		t.Fatal(f.binPath(), f.nodeBin())
 	}
 	if b, _ := os.ReadFile(f.nodeBin()); string(b) != "node build" {
@@ -129,7 +129,7 @@ func TestInstallOnWindows(t *testing.T) {
 	}
 	out := f.out.String()
 	for _, want := range []string{"装好了 " + f.binPath(), "装好了 " + f.nodeBin(), "装好了计划任务「Persona Link」",
-		"常驻 node 和 jarvis-link退出了几秒内重启", "连上了：「家里」"} {
+		"常驻 node 和 persona-link退出了几秒内重启", "连上了：「家里」"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -139,7 +139,7 @@ func TestInstallOnWindows(t *testing.T) {
 	}
 
 	// Again, as an upgrade: the running task is ended first (its programs cannot be replaced while they run), and
-	// install waits for the old jarvis-link to let go of the run lock.
+	// install waits for the old persona-link to let go of the run lock.
 	release, err := link.LockRun(f.configPath())
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +161,7 @@ func TestInstallOnWindows(t *testing.T) {
 	if len(f.calls) < 2 || f.calls[1] != "schtasks /End /TN Persona Link" {
 		t.Fatalf("ran %q", f.calls)
 	}
-	if strings.Contains(f.out.String(), "还有一个 jarvis-link 在运行") {
+	if strings.Contains(f.out.String(), "还有一个 persona-link 在运行") {
 		t.Fatalf("output:\n%s", f.out)
 	}
 	if x, _ := readUTF16(f.taskFile()); !strings.Contains(x, "<Arguments>supervise --no-node</Arguments>") {
@@ -179,7 +179,7 @@ func TestInstallOnWindowsWithoutTheNode(t *testing.T) {
 		t.Fatalf("task %s (%v)", x, err)
 	}
 	out := f.out.String()
-	for _, want := range []string{"常驻 node 没装好：没有 " + f.nodeBin(), "--jarvisd", "还没配对"} {
+	for _, want := range []string{"常驻 node 没装好：没有 " + f.nodeBin(), "--personad", "还没配对"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

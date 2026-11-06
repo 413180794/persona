@@ -4,15 +4,15 @@ import XCTest
 /// button and Light / Dark in a capsule on top; Share · Save and Copy in a capsule · Share Text at the bottom, every one inside
 /// the screen. Run it on the narrowest phone too (SE).
 ///   PORT=18832 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18832 xcodebuild test … -only-testing:PersonaUITests/ShareCardBarsTests
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` writes `share-card-<SHOTS_NAME>.png` (`TEST_RUNNER_JARVIS_SHOTS_NAME`, e.g. se-dark).
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18832 xcodebuild test … -only-testing:PersonaUITests/ShareCardBarsTests
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` writes `share-card-<SHOTS_NAME>.png` (`TEST_RUNNER_PERSONA_SHOTS_NAME`, e.g. se-dark).
 final class ShareCardBarsTests: XCTestCase {
     private var hub = ""
     private let session = "macbook/a1f3c2d4-0000-4000-8000-000000000006"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -20,7 +20,7 @@ final class ShareCardBarsTests: XCTestCase {
 
     @MainActor func testBarsFitTheScreen() throws {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", session, "-showShareCard", "YES"]
         app.launchPinned()
         let save = app.buttons["保存"]
@@ -44,11 +44,11 @@ final class ShareCardBarsTests: XCTestCase {
         XCTAssertEqual(app.buttons["分享"].frame.midY, app.buttons["分享文字"].frame.midY, accuracy: 2)
 
         let env = ProcessInfo.processInfo.environment
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             // A fresh install asks for notifications over the page: answer it so the shot shows the bars.
             let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
             if alert.waitForExistence(timeout: 2) { alert.buttons.element(boundBy: 0).tap() }
-            let name = env["JARVIS_SHOTS_NAME"] ?? "shot"
+            let name = env["PERSONA_SHOTS_NAME"] ?? "shot"
             try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("share-card-\(name).png"))
         }
 

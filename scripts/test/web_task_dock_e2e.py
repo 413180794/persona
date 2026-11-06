@@ -158,7 +158,7 @@ def run(p, engine, base, a):
                 if mobile and engine != "webkit":
                     opts.update(is_mobile=True, has_touch=True)
                 ctx = browser.new_context(**opts)
-                ctx.add_init_script(f"localStorage.setItem('jarvis.theme', '{theme}')")
+                ctx.add_init_script(f"localStorage.setItem('persona.theme', '{theme}')")
                 page = ctx.new_page()
                 page.set_default_timeout(15000)
                 page.goto(base + "/?token=" + a.token)

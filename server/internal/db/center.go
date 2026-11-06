@@ -30,7 +30,7 @@ type ExportedToken struct {
 	Hash string `json:"hash"`
 }
 
-// AppTokens is every live credential of an app (roles full and answer: not a jarvis-link's or another hub's), with
+// AppTokens is every live credential of an app (roles full and answer: not a persona-link's or another hub's), with
 // its hash, for the center to take over.
 func (d *DB) AppTokens(ctx context.Context) ([]ExportedToken, error) {
 	rows, err := d.pool.Query(ctx, `SELECT id, name, kind, role, created_at, last_seen, token_hash FROM device_tokens

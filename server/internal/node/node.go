@@ -59,7 +59,7 @@ type Node struct {
 	doctorAt func() DoctorOptions
 
 	home string
-	dir  string // ~/.jarvis
+	dir  string // ~/.persona
 	bin  string // absolute path of this executable
 	uid  string // the computer's own id (machineuid.go); empty when it could not be read or made
 	// managed: launchers kept by the hub (managed.go)
@@ -271,7 +271,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 }
 
 // Serve runs the node protocol for one hub connection on r / w until it ends. One Node serves one connection:
-// `jarvisd node --attach` makes a new one per connection (attach.go).
+// `personad node --attach` makes a new one per connection (attach.go).
 func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1183,7 +1183,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "skills.list": // the skills the assistant gets on this machine (docs/hub-update.md "Moving skills out of the binary")
 		cwd := p.Cwd
 		if cwd == "" {
-			cwd = n.assistantDirOf(".jarvis/assistant")
+			cwd = n.assistantDirOf(".persona/assistant")
 			key := assistantPrepareDir(cwd)
 			n.mu.Lock()
 			// Older callers omit cwd; keep discovery for a sole non-default assistant.

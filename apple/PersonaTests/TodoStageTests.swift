@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The hub's stage on a todo (#2776): one of Plan / Build / Review / Merge / Deploy / Verified, read tolerantly (a hub from before
 /// the field, or one sending a name this build does not know, draws no bar at all), and the PR it named (#2768).

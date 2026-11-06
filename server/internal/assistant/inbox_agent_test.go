@@ -397,11 +397,11 @@ func TestInboxAgentPrompt(t *testing.T) {
 }
 
 // TestInboxModelsLive runs models 1 and 2 on a sample item against a real gateway:
-// JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}' go test -run InboxModelsLive -v ./internal/assistant
+// PERSONA_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}' go test -run InboxModelsLive -v ./internal/assistant
 func TestInboxModelsLive(t *testing.T) {
-	raw := os.Getenv("JARVIS_LIVE_AI")
+	raw := os.Getenv("PERSONA_LIVE_AI")
 	if raw == "" {
-		t.Skip("JARVIS_LIVE_AI not set")
+		t.Skip("PERSONA_LIVE_AI not set")
 	}
 	var cfg ai.Config
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {

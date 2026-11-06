@@ -24,13 +24,13 @@ func TestManagerDirNames(t *testing.T) {
 	}
 	home := t.TempDir()
 	in := func(parts ...string) string { return filepath.Join(append([]string{home}, parts...)...) }
-	for p, want := range map[string]bool{in(".persona", "assistant"): true, in(".jarvis", "assistant-m-0b0b0b"): true,
-		in(".persona", "health-m-0b0b0b"): true, in(".jarvis", "assistant-bin"): false, in("code", "assistant-m-0b0b0b"): false} {
+	for p, want := range map[string]bool{in(".persona", "assistant"): true, in(".persona", "assistant-m-0b0b0b"): true,
+		in(".persona", "health-m-0b0b0b"): true, in(".persona", "assistant-bin"): false, in("code", "assistant-m-0b0b0b"): false} {
 		if got := IsAssistantDir(p); got != want {
 			t.Errorf("IsAssistantDir(%s) = %v", p, got)
 		}
 	}
-	if SpaceOf(in(".jarvis", "health-m-0b0b0b")) != SpaceHealth || SpaceOf(in(".jarvis", "assistant-m-0b0b0b")) != "" {
+	if SpaceOf(in(".persona", "health-m-0b0b0b")) != SpaceHealth || SpaceOf(in(".persona", "assistant-m-0b0b0b")) != "" {
 		t.Error("SpaceOf")
 	}
 	// Each manager's own: another's left on the machine is not.
@@ -43,8 +43,8 @@ func TestManagerDirNames(t *testing.T) {
 		{in(".persona", "assistant-m-0b0b0b"), "assistant", false},
 		{in(".persona", "assistant"), "m-0b0b0b", false},
 		{in(".persona", "assistant-m-0b0b0b"), "m-0b0b0b", true},
-		{in(".jarvis", "health-m-0b0b0b"), "m-0b0b0b", true},
-		{in(".jarvis", "health-m-0b0b0b"), "m-0c0c0c", false},
+		{in(".persona", "health-m-0b0b0b"), "m-0b0b0b", true},
+		{in(".persona", "health-m-0b0b0b"), "m-0c0c0c", false},
 	} {
 		if got := IsAssistantDirOf(c.path, c.id); got != c.want {
 			t.Errorf("IsAssistantDirOf(%s, %q) = %v", c.path, c.id, got)

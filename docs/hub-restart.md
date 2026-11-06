@@ -11,10 +11,10 @@ Code locations refer to the current files and functions (checked 2026-11-06; aft
 
 ### What a restart does
 
-- `scripts/deploy/deploy.sh:200-215` deploys the hub: `db.sh` → copy the node binary → `install_bin` (`jarvisd.new` then `mv`, an atomic replace) → extension programs → `hub-systemd.sh`.
+- `scripts/deploy/deploy.sh:200-215` deploys the hub: `db.sh` → copy the node binary → `install_bin` (`personad.new` then `mv`, an atomic replace) → extension programs → `hub-systemd.sh`.
   `install_bin` also restarts this machine's resident node (`deploy.sh:126`, `:137`, `node-launchd.sh restart`).
-- `scripts/deploy/hub-systemd.sh:34-55` rewrites `~/.config/systemd/user/jarvisd.service` every time (`Restart=always`, `RestartSec=3`, no `KillMode`,
-  i.e. control-group), then runs `systemctl --user restart jarvisd`. There is no health check beyond `is-active`.
+- `scripts/deploy/hub-systemd.sh:34-55` rewrites `~/.config/systemd/user/personad.service` every time (`Restart=always`, `RestartSec=3`, no `KillMode`,
+  i.e. control-group), then runs `systemctl --user restart personad`. There is no health check beyond `is-active`.
 - On SIGTERM (`signal.NotifyContext` in `main` of `cmd/personad/main.go`): the hub's ctx is cancelled at once, and every machine connection is killed at the same moment (the connections started by `startDevices(ctx)` in `runHub` of `hub/hub.go`).
   The shutdown order in `serveHTTP` of `hub/public.go`: close the listener first → `stopWebSockets` sends each client 1001 "hub stopping" and force-closes after 0.5 s (`stopWebSockets` in `hub/shutdown.go`)
   → `http.Server.Shutdown` (2 s per step, 8 s total budget, `defaultShutdownTimeout` / `shutdownStepTimeout` in `shutdown.go`) → wait for node connections → close the database. **The listener closes before draining**, so the port is closed during the drain.
@@ -29,11 +29,11 @@ Code locations refer to the current files and functions (checked 2026-11-06; aft
 | --- | --- | --- |
 | Client WebSocket (`/api/v1/ws`) | Receives a 1001 close; reconnects in the next 1.3 s are refused, and it only connects once the new process is up | `stopWebSockets` in `shutdown.go`, `serveWS` in `http.go` (upgrades during shutdown get 503) |
 | In-flight HTTP requests | `Shutdown` waits at most 2 s, then force-closes; new requests in that 1.3 s are refused | `serveHTTP` in `public.go` |
-| Nodes on each computer | As soon as the hub's ctx is cancelled, the `jarvisd node --stdio` / `ssh` subprocesses are killed (SIGKILL, `WaitDelay` 2 s in `open` of `devices/machine.go`), and **at the same time** the machine is marked offline, `machines` is broadcast, and non-resumable interactions on that machine are ended (`detach` in `devices/conn.go`); clients receive these broadcasts before they are disconnected | `command`, `open` in `devices/machine.go` |
+| Nodes on each computer | As soon as the hub's ctx is cancelled, the `personad node --stdio` / `ssh` subprocesses are killed (SIGKILL, `WaitDelay` 2 s in `open` of `devices/machine.go`), and **at the same time** the machine is marked offline, `machines` is broadcast, and non-resumable interactions on that machine are ended (`detach` in `devices/conn.go`); clients receive these broadcasts before they are disconnected | `command`, `open` in `devices/machine.go` |
 | Local node | A child process of the hub (`node --stdio`), killed together with the hub by systemd's cgroup | `command` in `devices/machine.go` (the `local` branch) |
 | Extensions (the Lark extension and others) | Child processes of the hub (stdio RPC), killed with the hub's cgroup and respawned by the new hub; login state lives in each extension's own directory, so a restart only loses the hub-side session and readiness state | `spawn` in `extension/host/host.go` |
 | Connector programs (telegram, wechat) | Same, restarted with a 5 s backoff | `Conn.Run` in `connector/proc/proc.go` (`restartFirst`) |
-| jarvis-link (computers of kind link) | Receives 1001, reconnects with 1–60 s exponential backoff, status text "hub restarted" | `backoff`, `summary` in `link/client.go` |
+| persona-link (computers of kind link) | Receives 1001, reconnects with 1–60 s exponential backoff, status text "hub restarted" | `backoff`, `summary` in `link/client.go` |
 
 After the new hub comes up: the local node connects within 0.2 s; a Mac over ssh takes 2–8 s (measured: one at +2.4 s, another at +8 s). During that time the machine shows as offline and its session list is empty.
 
@@ -45,10 +45,10 @@ After the new hub comes up: the local node connects within 0.2 s; a Mac over ssh
 | Reconnecting | Starts at 1 s, doubling to 20 s, no jitter (`:468-477`) | Starts at 600 ms, doubling to 15 s, ±20% jitter (`:222`) | Starts at 1 s, doubling to 20 s, ×0.8–1.0; reset only after sync completes (`:340-378`) |
 | UI | A non-online state must last 1.5 s before "Connecting…" / "Updating…" shows (`ConnectionStatus.swift:39`, `:127-151`); during a hub self-update it shows "Hub updating…" | Every disconnect switches to "Connecting" at once, and from the third failure on "Can't reach the hub. Retrying…" (`App.tsx:206-212`, `Sidebar.tsx:429`); no grace period | Leaving Online is published after a 1.5 s delay (`:797-813`), a timeout shows "Connecting" immediately, and once connected it first shows "Updating…" (`:511-513`) |
 | After reconnecting | Connection snapshot (machines, sessions, interactions) + refetch interactions, Inbox, to-dos, tasks, etc.; chats resume from `since_seq` | After `hello`, `refresh()` refetches 7 endpoints + Inbox, extension slots, terminals; chats resume from `since_seq` | Back to Online, refetches machines, sessions, interactions; chats resume from `since_seq` |
-| Writes during the disconnect | Messages go into a persistent outbox and are resent after connecting (`client_msg_id`); approvals / answers are removed optimistically and restored on failure, with no retry and no op id | Sending a message fails immediately ("not sent: can't reach the hub"); a failed approval shows "not delivered"; no op id | Messages go through a persistent outbox with `client_msg_id` and `X-Jarvis-Op-Id`, checked against receipts; approvals carry no op id and are not retried |
+| Writes during the disconnect | Messages go into a persistent outbox and are resent after connecting (`client_msg_id`); approvals / answers are removed optimistically and restored on failure, with no retry and no op id | Sending a message fails immediately ("not sent: can't reach the hub"); a failed approval shows "not delivered"; no op id | Messages go through a persistent outbox with `client_msg_id` and `X-Persona-Op-Id`, checked against receipts; approvals carry no op id and are not retried |
 
 What they share: **global live events have no sequence number**, so broadcasts during the disconnect (`todos`, `inbox`, `lark`, `revs`, `interaction_resolved`…) are all lost and can only be recovered by a full refetch after reconnecting;
-only chat content can resume from `since_seq` (`subscribe` and `sendBacklog` in `onClientMessage` of `http.go`, `docs/protocol.md` ("Continuity of items")). The hub already has idempotent receipts (`X-Jarvis-Op-Id`, `hub/clientops.go`,
+only chat content can resume from `since_seq` (`subscribe` and `sendBacklog` in `onClientMessage` of `http.go`, `docs/protocol.md` ("Continuity of items")). The hub already has idempotent receipts (`X-Persona-Op-Id`, `hub/clientops.go`,
 `docs/protocol.md` ("Operation receipts")) and `client_msg_id` dedup, but only Android's message sending uses an op id.
 
 What clients see during one restart: the web switches to "Connecting" immediately (connected again after about 1.3 s, with a full refetch); iOS / Android only show something after 1.5 s, so usually a brief flash of "Connecting…" or "Updating…";
@@ -65,7 +65,7 @@ on the Mac, ssh machines go offline for 2–8 s, and their sessions disappear fr
 - When the hub restarts: the node's connection drops → `Node.Serve` returns → `reapAssistants` stops all assistant processes (`reapAssistants` in `node/assistant.go`); the local node is killed with the hub by the cgroup anyway.
   **A resident node (`node --attach`) is no different**: one `Node` per hub connection, and a new connection stops the old one (`Attach` in `node/attach.go`), taking its assistant processes with it.
 - Background commands from Monitor and `run_in_background` are child processes of claude and die with it. The node remembers each chat's background tasks (`background_tasks_changed` → `state.put`);
-  after a restart, `recoverAssistantTasks` sends those chats a message "jarvisd just restarted… background tasks stopped" (`node/assistant.go`, `prompts/assistant/lost_tasks.md`) so it can set them up again.
+  after a restart, `recoverAssistantTasks` sends those chats a message "personad just restarted… background tasks stopped" (`node/assistant.go`, `prompts/assistant/lost_tasks.md`) so it can set them up again.
 - What the user sees: the answer in progress stops halfway (the streamed part is gone, only the blocks already written to the transcript remain), and the next message continues with `--resume`; background tasks are gone, and the chat gets a "just restarted" message.
   Agents in herdr are unaffected (herdr is a separate process; only the helper subprocesses observing it disconnect).
 
@@ -73,8 +73,8 @@ on the Mac, ssh machines go offline for 2–8 s, and their sessions disappear fr
 
 ### Zero gap: systemd socket activation
 
-The listening socket is handed to `jarvisd.socket` (`ListenStream` is hub.json's `listen`, plus a second one if `public.tls_listen` is configured), and the hub takes it from `LISTEN_FDS` at startup
-(`hub/listen.go`: matched by port; if found it is used, otherwise the hub calls `net.Listen` itself). `systemctl --user restart jarvisd` only restarts the service while the socket stays with systemd:
+The listening socket is handed to `personad.socket` (`ListenStream` is hub.json's `listen`, plus a second one if `public.tls_listen` is configured), and the hub takes it from `LISTEN_FDS` at startup
+(`hub/listen.go`: matched by port; if found it is used, otherwise the hub calls `net.Listen` itself). `systemctl --user restart personad` only restarts the service while the socket stays with systemd:
 between the old process stopping and the new one starting, new connections wait in the backlog (instead of being refused), and are accepted as soon as the new process calls `Accept`.
 
 Why this one:
@@ -86,13 +86,13 @@ Why this one:
 - **Socket activation**: standard, a few lines of code, no effect on Docker / launchd / running by hand (without `LISTEN_FDS` the hub listens itself); rolling back means deleting the socket unit.
   Cost: during the ~1 s while the old process stops, connections wait and get no immediate response, which is far within the clients' grace periods.
 
-`hub-systemd.sh` writes both units: the first time (or when the address changes) it stops the service once to hand the port to the socket (only this once is there a ~1 s gap); after that it always just runs `restart jarvisd`.
+`hub-systemd.sh` writes both units: the first time (or when the address changes) it stops the service once to hand the port to the socket (only this once is there a ~1 s gap); after that it always just runs `restart personad`.
 `TimeoutStopSec=20` (headroom beyond the 8 s shutdown budget).
 
 ### Blue-green switching: the hub's edge (`internal/hubedge`, 2026-11-06)
 
 Modeled on an account-pool relay gateway's approach: a resident edge process holds the port, with two slots behind it. The trigger was a problem reproduced on Linux on 2026-11-05: when self-update `syscall.Exec`'d the new binary in place, the listening socket passed by systemd was lost.
-`LISTEN_FDS` was cleared at startup, and the fd duplicated by `net.FileListener` had close-on-exec set, so the new process had to `bind` itself while the port was still held by `jarvisd.socket`; it exited with `address already in use`,
+`LISTEN_FDS` was cleared at startup, and the fd duplicated by `net.FileListener` had close-on-exec set, so the new process had to `bind` itself while the port was still held by `personad.socket`; it exited with `address already in use`,
 and had to wait for systemd's `Restart=always` to bring it back, needlessly burning one more start count. The self-update path also skipped the planned shutdown, so clients never got `hub_restarting`.
 
 Now `personad hub run` (Linux, macOS) is an **edge**:
@@ -174,8 +174,8 @@ a reconnected client immediately sees the answer continue, without waiting for t
 
 The assistant's claude no longer belongs to a single hub connection:
 
-- The hub machine runs a **resident node** (`scripts/deploy/node-launchd.sh install`; on Linux the systemd user service `jarvisd-node`, in its own cgroup).
-  The hub still starts `jarvisd node --stdio`, which only relays when it finds the resident node listening (`Relay` in `node/attach.go`). A hub restart only kills the relay process.
+- The hub machine runs a **resident node** (`scripts/deploy/node-launchd.sh install`; on Linux the systemd user service `personad-node`, in its own cgroup).
+  The hub still starts `personad node --stdio`, which only relays when it finds the resident node listening (`Relay` in `node/attach.go`). A hub restart only kills the relay process.
 - In the resident node, when a connection ends, its Claude and Codex chats are handed to the process-level `assistantKeeper`; the next connection's `Node`
   takes them over (`adopt`) before loading state, and from then on the chats' output (streamed text, turn ends, background task changes) is reported to the new `Node`, that is, the new hub.
   Codex approvals resume with the same interaction ID and expiry through the next connection; disconnects do not imply refusal or permission. Ordinary and connector approvals remain separate. Explicit cancellation, expiry, and the bounded reconnect window still stop waiting.
@@ -198,7 +198,7 @@ The shared client approach (done on web and Android; for iOS / Mac see the issue
   other disconnects: first retry after 300–600 ms, keeping the UI online for **8 s**, then the usual backoff and notices. If it reconnects within the grace period, nothing in the UI changes (no "Connecting" flash, no list refresh).
 - **Resume**: remember hello's `event_stream` and the largest `event_seq` received, and send them on reconnect; with `resumed: true` there is no full refetch, only the usual resubscription of open chats (`since_seq`);
   if `resumed` is not true, do a full refresh as before.
-- **Queued writes, idempotent replay**: sending messages and answers / approvals carry `X-Jarvis-Op-Id` (one UUID per logical operation, equal to `client_msg_id` when sending a message; the hub also honors this header for interrupt, close, rename,
+- **Queued writes, idempotent replay**: sending messages and answers / approvals carry `X-Persona-Op-Id` (one UUID per logical operation, equal to `client_msg_id` when sending a message; the hub also honors this header for interrupt, close, rename,
   mode switch and new session, so clients can adopt it step by step).
   On network errors or a 502 / 503 / 504 not issued by the hub itself, stay "sending" and resend with the **same id** once the connection is back, for up to 60 s; when the WebSocket is down as well (the hub is redeploying), the web keeps waiting up to the 5-minute limit of "Hub is updating" and sends as soon as the hub returns (#4174); the hub returns the first result for an op id and never executes it twice.
   Real errors from the hub (with a `code`) still fail immediately.
@@ -207,7 +207,7 @@ The shared client approach (done on web and Android; for iOS / Mac see the issue
 
 - node: between the local resident node and the hub there is only a relay; after a hub restart it reconnects within 0.2 s and takes over the chats; ssh computers still reconnect in 2–8 s, hidden from clients by the warm start.
 - A node that disconnects and comes right back (a resident node `exec`ing a new binary while idle takes about 2 s, the relay process is replaced): the running hub keeps showing that machine unchanged for **5 s**
-  (`reconnectGrace`, `detach` in the manager's `devices/conn.go`); if it comes back nothing is reported, and only if it is still gone after 5 s is it shown offline as before. jarvis-link computers are the exception: a dropped link means the computer left, so they go offline at once.
+  (`reconnectGrace`, `detach` in the manager's `devices/conn.go`); if it comes back nothing is reported, and only if it is still gone after 5 s is it shown offline as before. persona-link computers are the exception: a dropped link means the computer left, so they go offline at once.
 - While a resident node is `exec`ing, its socket file still exists but nobody listens: `Relay` in `node --stdio` waits up to 8 s on "connection refused" (`dialResident`)
   instead of taking the connection itself, which would land the assistant's chats in the hub's cgroup again. Without a socket file (no resident node installed) it handles things itself immediately, as before.
   Node-side state (session state, background tasks) is in Postgres and loaded with `state.load` after connecting; the hub re-subscribes the subscribed sessions with `session.watch` (`since_seq`).
@@ -244,17 +244,17 @@ Two deployment changes:
 
 | Change | How | Rollback |
 | --- | --- | --- |
-| Hand the hub's listener to `jarvisd.socket` | `scripts/deploy/hub-systemd.sh` (deploy.sh runs it on every deployment): write `jarvisd.socket`, add `Wants/After=jarvisd.socket` and `TimeoutStopSec=20` to the service; stop the service briefly the first time to hand the port to the socket | `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`: remove the socket unit, stop the socket, let the hub listen itself; or manually `systemctl --user stop jarvisd; systemctl --user disable --now jarvisd.socket; rm ~/.config/systemd/user/jarvisd.socket; systemctl --user daemon-reload; systemctl --user start jarvisd` |
+| Hand the hub's listener to `personad.socket` | `scripts/deploy/hub-systemd.sh` (deploy.sh runs it on every deployment): write `personad.socket`, add `Wants/After=personad.socket` and `TimeoutStopSec=20` to the service; stop the service briefly the first time to hand the port to the socket | `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`: remove the socket unit, stop the socket, let the hub listen itself; or manually `systemctl --user stop personad; systemctl --user disable --now personad.socket; rm ~/.config/systemd/user/personad.socket; systemctl --user daemon-reload; systemctl --user start personad` |
 | Install a resident node on the hub machine | `scripts/deploy/node-launchd.sh install` (once), then deploy.sh uses `restart-idle` | `scripts/deploy/node-launchd.sh uninstall`; on the hub's next reconnect it goes back to starting `node --stdio` itself |
 
 Unchanged: Docker deployment (`deploy/docker/`, no `LISTEN_FDS`, still listens itself), the hub on Mac (launchd), the database and data.
 
 After blue-green switching ("Blue-green switching" above):
 
-- Before replacing the hub binary, deploy.sh saves the old one as `jarvisd.prev`.
-- When the unit has not changed and the hub is running, `hub-systemd.sh` first runs `jarvisd hub switch --prev …`:
+- Before replacing the hub binary, deploy.sh saves the old one as `personad.prev`.
+- When the unit has not changed and the hub is running, `hub-systemd.sh` first runs `personad hub switch --prev …`:
   - Exit code 0: switch complete, restart nothing;
-  - Exit code 1: the new version could not take over, the old one keeps serving; the script restores `jarvisd.prev` and deployment fails;
+  - Exit code 1: the new version could not take over, the old one keeps serving; the script restores `personad.prev` and deployment fails;
   - Other exit codes: no edge (the first deployment of this version, an old binary), or an older edge protocol; restart the service the old way.
 - Mac (launchd) also tries switching first, then `kickstart` if that fails.
 - Rollback: run `PERSONA_HUB_EDGE=0 scripts/deploy/hub-systemd.sh` on the hub machine. It writes this variable into the unit's `Environment=`, and after the service restarts the hub listens itself;
@@ -262,7 +262,7 @@ After blue-green switching ("Blue-green switching" above):
 
 Edge caveats:
 
-- `systemctl --user stop jarvisd` stops the edge, which first releases the slot and then exits (`TimeoutStopSec=20` is enough).
+- `systemctl --user stop personad` stops the edge, which first releases the slot and then exits (`TimeoutStopSec=20` is enough).
   A stuck slot is killed only after 20 seconds; when killed, extensions in their own process groups may survive, so check `ps` before the next start.
 - Both slots write to the same log during handover, with `[slot a]` / `[slot b]` before each line; the edge's own lines start with `hub edge:`.
 
@@ -270,8 +270,8 @@ Socket activation caveats:
 
 - **Roll back the socket before switching to an old binary**: an old hub that does not understand `LISTEN_FDS` calls `net.Listen` itself while the socket holds the port, fails to start (`address already in use`) and keeps restarting.
   Run `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh` first, then replace the binary.
-- **`systemctl --user stop jarvisd` does not keep it stopped**: the socket is still listening, so the next connection starts the service again (normal socket activation behavior).
-  To really stop: `systemctl --user stop jarvisd.socket jarvisd`.
+- **`systemctl --user stop personad` does not keep it stopped**: the socket is still listening, so the next connection starts the service again (normal socket activation behavior).
+  To really stop: `systemctl --user stop personad.socket personad`.
 
 ## Verification
 
@@ -294,7 +294,7 @@ Socket activation caveats:
 
 ## Measured results (2026-11-04, this dev machine's hub, after deploying #1617)
 
-Deployment: switched the hub to `jarvisd.socket`, installed the resident node (`jarvisd-node`); that initial switch stopped it for about 1 s. Afterwards:
+Deployment: switched the hub to `personad.socket`, installed the resident node (`personad-node`); that initial switch stopped it for about 1 s. Afterwards:
 
 | Scenario | Result |
 | --- | --- |

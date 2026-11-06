@@ -21,7 +21,7 @@ func TestLocalizedActivity(t *testing.T) {
 		{act("Bash", `{"command":"echo hi","description":"Say hi"}`), "Running Say hi", "Say hiを実行中"},
 		{act("WebSearch", `{"query":"go generics"}`), "Searching the web for go generics", "Web検索中：go generics"},
 		{act("Grep", `{}`), "Searching", "検索中"},
-		{act("mcp__jarvis__mail_send", `{}`), "Calling mail_send", "mail_sendを呼び出し中"},
+		{act("mcp__persona__mail_send", `{}`), "Calling mail_send", "mail_sendを呼び出し中"},
 		{act("AskUserQuestion", `{}`), "Asking you a question", "質問しています"},
 		{"在做别的", "在做别的", "在做别的"},
 	} {

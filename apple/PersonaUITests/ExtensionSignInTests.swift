@@ -7,10 +7,10 @@ import XCTest
 /// Sign In section, only its warning and the extension's own sign-in page.
 ///
 /// Against scripts/mock/mock_hub.py, a fresh one per run:
-/// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1` → `TEST_RUNNER_JARVIS_EXT_AUTH_HUB=http://127.0.0.1:<port>`;
-/// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=installed MOCK_EXTENSION_AUTH_OLD=1` →
-/// `TEST_RUNNER_JARVIS_EXT_AUTH_OLD_HUB=…`. `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by the style and
-/// `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` (light / dark).
+/// `MOCK_EXTENSIONS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1` → `TEST_RUNNER_PERSONA_EXT_AUTH_HUB=http://127.0.0.1:<port>`;
+/// `MOCK_EXTENSIONS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=installed MOCK_EXTENSION_AUTH_OLD=1` →
+/// `TEST_RUNNER_PERSONA_EXT_AUTH_OLD_HUB=…`. `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named by the style and
+/// `TEST_RUNNER_PERSONA_SHOTS_APPEARANCE` (light / dark).
 final class ExtensionSignInTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
@@ -20,7 +20,7 @@ final class ExtensionSignInTests: XCTestCase {
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings"] + extra
         app.launchPinned()
@@ -30,8 +30,8 @@ final class ExtensionSignInTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_SHOTS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "ext-auth-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 
@@ -51,7 +51,7 @@ final class ExtensionSignInTests: XCTestCase {
     }
 
     @MainActor func testInstallToolsAndSignIn() throws {
-        let app = try launch("JARVIS_EXT_AUTH_HUB")
+        let app = try launch("PERSONA_EXT_AUTH_HUB")
         let entry = app.buttons["settings-plugins"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15) || app.staticTexts["设置"].exists, "no settings:\n\(app.debugDescription)")
         scrollTo(entry, in: app)
@@ -132,7 +132,7 @@ final class ExtensionSignInTests: XCTestCase {
     }
 
     @MainActor func testAnOlderHubKeepsTheExtensionsOwnPage() throws {
-        let app = try launch("JARVIS_EXT_AUTH_OLD_HUB", ["-openExtension", "example-lookup"])
+        let app = try launch("PERSONA_EXT_AUTH_OLD_HUB", ["-openExtension", "example-lookup"])
         let page = app.buttons["plugin-page-login"]
         XCTAssertTrue(page.waitForExistence(timeout: 20), "no sign-in page of its own:\n\(app.debugDescription)")
         XCTAssertFalse(any(app, "extension-auth-status").exists, "an older hub has no 登录 section")

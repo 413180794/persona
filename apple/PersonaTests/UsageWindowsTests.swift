@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The subscription windows' pure part (docs/usage-windows.md), the same cases as the web's lib/usage-windows.test.ts.
 struct UsageWindowsTests {

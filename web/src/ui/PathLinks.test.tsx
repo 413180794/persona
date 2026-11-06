@@ -24,7 +24,7 @@ const settle = async () => {
 };
 
 // The machine has these (relative paths in /repo).
-const there: Record<string, string> = { "/tmp/jarvis-tasks/1664-lark-test.md": "file", "src/a.ts": "file", "~/notes/": "dir" };
+const there: Record<string, string> = { "/tmp/persona-tasks/1664-lark-test.md": "file", "src/a.ts": "file", "~/notes/": "dir" };
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -64,12 +64,12 @@ describe("path presence", () => {
 
 describe("links in messages", () => {
   it("links in a user's message only the paths that are there", async () => {
-    const text = "读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/x.md";
-    askPaths("mac", "/repo", ["/tmp/jarvis-tasks/1664-lark-test.md", "/tmp/other/x.md"]);
+    const text = "读 /tmp/persona-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/x.md";
+    askPaths("mac", "/repo", ["/tmp/persona-tasks/1664-lark-test.md", "/tmp/other/x.md"]);
     await settle();
     const html = renderToStaticMarkup(<PathText text={text} mid="mac" cwd="/repo" />);
     expect(html).toContain('class="path-link"');
-    expect(html).toContain(">/tmp/jarvis-tasks/1664-lark-test.md</a>");
+    expect(html).toContain(">/tmp/persona-tasks/1664-lark-test.md</a>");
     expect(html).toContain("别动 /tmp/other/x.md");
     expect(html.match(/<a /g)).toHaveLength(1);
   });
@@ -94,7 +94,7 @@ describe("links in messages", () => {
   });
 
   it("while streaming, leaves out the word still being written", () => {
-    expect(textPaths(writtenText("写到 /tmp/jarvis-tasks/1664-lark-test.md 了，再看 /tmp/jar"))).toEqual(["/tmp/jarvis-tasks/1664-lark-test.md"]);
+    expect(textPaths(writtenText("写到 /tmp/persona-tasks/1664-lark-test.md 了，再看 /tmp/jar"))).toEqual(["/tmp/persona-tasks/1664-lark-test.md"]);
     expect(writtenText("/tmp/jar")).toBe("");
     expect(writtenText("a /tmp/x/y.md\n")).toBe("a /tmp/x/y.md");
   });

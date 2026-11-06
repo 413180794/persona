@@ -4,7 +4,7 @@ import UIKit
 #endif
 
 /// The persona's face, still (the sidebar's card, the profile, Settings): a package's avatar in a circle, or a
-/// built-in's JarvisAvatar. `persona` defaults to the one on screen.
+/// built-in's PersonaAvatar. `persona` defaults to the one on screen.
 struct PersonaAvatar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.displayScale) private var scale
@@ -37,7 +37,7 @@ struct PersonaAvatar: View {
 
 /// The animated dot in the Persona tab's top bar: the persona in a state (docs/persona.md「状态」). A package plays
 /// the state's frames in a UIImageView (Core Animation swaps them; nothing in the app runs per frame); a built-in
-/// is its JarvisAvatar moving for the state. Both hold still with Reduce Motion and in Low Power Mode.
+/// is its PersonaAvatar moving for the state. Both hold still with Reduce Motion and in Low Power Mode.
 struct PersonaDot: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

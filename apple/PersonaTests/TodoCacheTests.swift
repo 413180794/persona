@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor
 private final class TodoObservationFlag { var changed = false }

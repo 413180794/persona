@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct LarkOutboxStoreTests {
     private func folder() throws -> URL {

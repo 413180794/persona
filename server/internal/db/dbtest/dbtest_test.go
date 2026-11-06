@@ -67,8 +67,8 @@ func TestOwnDatabases(t *testing.T) {
 	buf := make([]byte, 4)
 	_, _ = rand.Read(buf)
 	tag := hex.EncodeToString(buf)
-	old := "jarvis_test_" + itoa(time.Now().Add(-7*time.Hour).Unix()) + "_" + tag
-	other := "jarvis_test_sweep_" + tag
+	old := "persona_test_" + itoa(time.Now().Add(-7*time.Hour).Unix()) + "_" + tag
+	other := "persona_test_sweep_" + tag
 	for _, n := range []string{old, other} {
 		_, _ = admin.Exec(ctx, `DROP DATABASE IF EXISTS "`+n+`"`)
 		if _, err := admin.Exec(ctx, `CREATE DATABASE "`+n+`"`); err != nil {
@@ -91,9 +91,9 @@ func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 // A test binary started again by a test (a fake node) inherits its parent's own database and makes none of its own.
 func TestOwnedBy(t *testing.T) {
 	for u, want := range map[string]bool{
-		"postgres://u:p@127.0.0.1:5432/jarvis_test_1793642187_12cf738f?sslmode=disable": true,
-		"postgres://u:p@127.0.0.1:5432/jarvis_test?sslmode=disable":                     false,
-		"postgres://u:p@127.0.0.1:5432/jarvis_test_deploy?sslmode=disable":              false,
+		"postgres://u:p@127.0.0.1:5432/persona_test_1793642187_12cf738f?sslmode=disable": true,
+		"postgres://u:p@127.0.0.1:5432/persona_test?sslmode=disable":                     false,
+		"postgres://u:p@127.0.0.1:5432/persona_test_deploy?sslmode=disable":              false,
 	} {
 		if got := ownedBy(u); got != want {
 			t.Errorf("%s: %v", u, got)

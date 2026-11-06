@@ -10,11 +10,11 @@ import (
 	"testing"
 )
 
-// The hub names the assistant's directories relative to HOME (".jarvis/assistant", ".jarvis/health", ".jarvis/guest").
+// The hub names the assistant's directories relative to HOME (".persona/assistant", ".persona/health", ".persona/guest").
 // Under a custom PERSONA_HOME they are in that root, where the hub says the assistant is (the node's data_dir, #5505):
-// nothing is written into the default ~/.jarvis. On the default layouts they stay where they always were.
+// nothing is written into the default ~/.persona. On the default layouts they stay where they always were.
 func TestAssistantDirsFollowTheDataDir(t *testing.T) {
-	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	prepare := func(t *testing.T, n *Node, method, dir string) string {
 		t.Helper()
 		params, _ := json.Marshal(map[string]any{"dir": dir, "claude_md": "# example"})
@@ -29,9 +29,9 @@ func TestAssistantDirsFollowTheDataDir(t *testing.T) {
 		return cwd
 	}
 	cases := []struct{ method, dir, sub string }{
-		{"assistant.prepare", ".jarvis/assistant", "assistant"},
-		{"assistant.prepare", ".jarvis/health", "health"},
-		{"assistant.guest_prepare", ".jarvis/guest", "guest"},
+		{"assistant.prepare", ".persona/assistant", "assistant"},
+		{"assistant.prepare", ".persona/health", "health"},
+		{"assistant.guest_prepare", ".persona/guest", "guest"},
 	}
 
 	t.Run("custom PERSONA_HOME", func(t *testing.T) {
@@ -44,16 +44,15 @@ func TestAssistantDirsFollowTheDataDir(t *testing.T) {
 				t.Errorf("%s: prepared %s, want %s", c.dir, cwd, filepath.Join(root, c.sub))
 			}
 		}
-		if _, err := os.Stat(filepath.Join(home, ".jarvis")); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(home, ".persona")); !os.IsNotExist(err) {
 			t.Errorf("the default state directory was written: %v", err)
 		}
 	})
 
-	for _, def := range []string{".jarvis", ".persona"} {
+	for _, def := range []string{".persona"} {
 		t.Run("default "+def, func(t *testing.T) {
 			n, home := testNode(t)
 			t.Setenv("PERSONA_HOME", "")
-			t.Setenv("JARVIS_HOME", "")
 			n.dir, n.logger = filepath.Join(home, def), log.New(io.Discard, "", 0)
 			for _, c := range cases {
 				if cwd := prepare(t, n, c.method, c.dir); cwd != filepath.Join(home, c.dir) {

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// An extension's settings and secrets checked before the hub saves them (#5906): a set secret's last four characters
 /// on its row, the extension's own words when it refuses a change (in the secret's sheet, under the form), and its

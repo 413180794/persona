@@ -38,38 +38,38 @@ class HubSubPathTest {
         for (root in listOf("https://hub.example.com", "https://hub.example.com/")) {
             assertEquals("https://hub.example.com/api/v1/health", (root.toHttpUrl().hubUrl("/api/v1/health").toString()).zhAny())
         }
-        for (prefixed in listOf("https://hub.example.com/jarvis", "https://hub.example.com/jarvis/")) {
+        for (prefixed in listOf("https://hub.example.com/persona", "https://hub.example.com/persona/")) {
             val base = prefixed.toHttpUrl()
-            assertEquals("https://hub.example.com/jarvis/api/v1/health", (base.hubUrl("/api/v1/health").toString()).zhAny())
-            assertEquals("https://hub.example.com/jarvis/api/v1/ws?event_seq=3", (base.hubUrl("/api/v1/ws?event_seq=3").toString()).zhAny())
-            assertEquals("/api/v1/lark/media/a", (base.hubPath("https://hub.example.com/jarvis/api/v1/lark/media/a".toHttpUrl())).zhAny())
+            assertEquals("https://hub.example.com/persona/api/v1/health", (base.hubUrl("/api/v1/health").toString()).zhAny())
+            assertEquals("https://hub.example.com/persona/api/v1/ws?event_seq=3", (base.hubUrl("/api/v1/ws?event_seq=3").toString()).zhAny())
+            assertEquals("/api/v1/lark/media/a", (base.hubPath("https://hub.example.com/persona/api/v1/lark/media/a".toHttpUrl())).zhAny())
             // Outside the prefix, another port or host is not this hub.
             assertNull(base.hubPath("https://hub.example.com/api/v1/lark/media/a".toHttpUrl()))
-            assertNull(base.hubPath("https://hub.example.com:8443/jarvis/api/v1/x".toHttpUrl()))
-            assertNull(base.hubPath("https://other.example.com/jarvis/api/v1/x".toHttpUrl()))
+            assertNull(base.hubPath("https://hub.example.com:8443/persona/api/v1/x".toHttpUrl()))
+            assertNull(base.hubPath("https://other.example.com/persona/api/v1/x".toHttpUrl()))
             // The hub's own references are absolute paths: they go under the prefix.
-            assertEquals("https://hub.example.com/jarvis/api/v1/app/android/apk",
+            assertEquals("https://hub.example.com/persona/api/v1/app/android/apk",
                 (base.hubResolve("/api/v1/app/android/apk").toString()).zhAny())
-            assertEquals("https://hub.example.com/jarvis/api/v1/app/android/apk",
-                (base.hubResolve("https://hub.example.com/jarvis/api/v1/app/android/apk").toString()).zhAny())
-            assertNull(base.hubResolve("https://other.example.com/jarvis/api/v1/app/android/apk"))
+            assertEquals("https://hub.example.com/persona/api/v1/app/android/apk",
+                (base.hubResolve("https://hub.example.com/persona/api/v1/app/android/apk").toString()).zhAny())
+            assertNull(base.hubResolve("https://other.example.com/persona/api/v1/app/android/apk"))
             assertNull(base.hubResolve("//other.example.com/api/v1/app/android/apk"))
         }
-        assertThrows(IllegalArgumentException::class.java) { "https://hub.example.com/jarvis".toHttpUrl().hubUrl("api/v1/x") }
-        assertEquals("https://hub.example.com/jarvis", (Endpoint("https://hub.example.com/jarvis").baseUrl().toString()).zhAny())
+        assertThrows(IllegalArgumentException::class.java) { "https://hub.example.com/persona".toHttpUrl().hubUrl("api/v1/x") }
+        assertEquals("https://hub.example.com/persona", (Endpoint("https://hub.example.com/persona").baseUrl().toString()).zhAny())
     }
 
     @Test fun endpointKeysKeepAPrefixAndRootKeysStayTheSame() {
         assertEquals("https://hub.example.com:443", (endpointKey("https://hub.example.com/")).zhAny())
         assertEquals("https://hub.example.com:443", (endpointKey("https://hub.example.com:443")).zhAny())
-        assertEquals("https://hub.example.com:443/jarvis", (endpointKey("https://hub.example.com/jarvis")).zhAny())
-        assertEquals(endpointKey("https://hub.example.com/jarvis/"), endpointKey("https://hub.example.com:443/jarvis"))
+        assertEquals("https://hub.example.com:443/persona", (endpointKey("https://hub.example.com/persona")).zhAny())
+        assertEquals(endpointKey("https://hub.example.com/persona/"), endpointKey("https://hub.example.com:443/persona"))
     }
 
     @Test fun aSubPathLinkWithoutFingerprintIsAccepted() {
-        val request = PairingRequest("https://hub.example.com/jarvis", "pairing-code", hub = "test-hub",
+        val request = PairingRequest("https://hub.example.com/persona", "pairing-code", hub = "test-hub",
             alt = listOf("http://192.0.2.10:18660"))
-        assertEquals(listOf("https://hub.example.com/jarvis", "http://192.0.2.10:18660/"), (HubPairingClient.addresses(request)).zhAny())
+        assertEquals(listOf("https://hub.example.com/persona", "http://192.0.2.10:18660/"), (HubPairingClient.addresses(request)).zhAny())
     }
 
     @Test fun withoutFingerprintHttpsUsesSystemTrustAndTheHostName() = runBlocking {
@@ -135,12 +135,12 @@ class HubSubPathTest {
                         assertEquals(MessageTransportResult.Accepted, sender.send(MessageRequest(pairing, session, "hello", "id", null)))
                     }
                     val received = withTimeout(5000) { List(6) { requests.receive() } }.map { it.path!! }
-                    assertEquals("/jarvis/api/v1/sessions/machine/session%2Fencoded/items?lazy_images=1&after_seq=2", (received[0]).zhAny())
-                    assertEquals("/jarvis/api/v1/lark/media/image?size=120", (received[1]).zhAny())
-                    assertEquals("/jarvis/api/v1/devices/test/sessions", (received[2]).zhAny())
-                    assertEquals("/jarvis/api/v1/app/android/latest", (received[3]).zhAny())
-                    assertEquals("/jarvis/api/v1/app/android/apk", (received[4]).zhAny())
-                    assertEquals("/jarvis/api/v1/sessions/machine/session%2Fencoded/messages", (received[5]).zhAny())
+                    assertEquals("/persona/api/v1/sessions/machine/session%2Fencoded/items?lazy_images=1&after_seq=2", (received[0]).zhAny())
+                    assertEquals("/persona/api/v1/lark/media/image?size=120", (received[1]).zhAny())
+                    assertEquals("/persona/api/v1/devices/test/sessions", (received[2]).zhAny())
+                    assertEquals("/persona/api/v1/app/android/latest", (received[3]).zhAny())
+                    assertEquals("/persona/api/v1/app/android/apk", (received[4]).zhAny())
+                    assertEquals("/persona/api/v1/sessions/machine/session%2Fencoded/messages", (received[5]).zhAny())
                     assertEquals(ConnectionState.Online, connection.state.value)
                 } finally { jobs.cancel() }
             }
@@ -150,16 +150,16 @@ class HubSubPathTest {
     @Test fun pairingWorksAtASubPath() = runBlocking {
         val requests = Channel<RecordedRequest>(Channel.UNLIMITED)
         server(requests).use { server ->
-            val address = server.url("/jarvis").newBuilder().host(loopback).build().toString()
+            val address = server.url("/persona").newBuilder().host(loopback).build().toString()
             val request = PairingRequest(address, "pairing-code", hub = "test-hub")
             HubPairingClient("test-hub", null, HubPairingClient.addresses(request), "test").use { client ->
                 val paired = client.pair("pairing-code", "phone") {}
                 assertEquals("test-hub", (paired.hubId).zhAny())
                 assertEquals("device-token", (paired.token).zhAny())
-                assertTrue(paired.address.endsWith("/jarvis"))
+                assertTrue(paired.address.endsWith("/persona"))
             }
             val paths = generateSequence { requests.tryReceive().getOrNull() }.map { it.path!! }.toList()
-            assertEquals(listOf("/jarvis/api/v1/auth/tokens", "/jarvis/api/v1/machines", "/jarvis/api/v1/endpoints"), (paths).zhAny())
+            assertEquals(listOf("/persona/api/v1/auth/tokens", "/persona/api/v1/machines", "/persona/api/v1/endpoints"), (paths).zhAny())
         }
     }
 
@@ -172,12 +172,12 @@ class HubSubPathTest {
         useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false)
     }
 
-    /** A hub reachable only under `/jarvis`, as a proxy that strips the prefix would forward it. */
+    /** A hub reachable only under `/persona`, as a proxy that strips the prefix would forward it. */
     private fun server(requests: Channel<RecordedRequest>, configure: MockWebServer.() -> Unit = {}) = MockWebServer().apply {
         configure()
         dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path!!.takeIf { it.startsWith("/jarvis/") }?.removePrefix("/jarvis")
+                val path = request.path!!.takeIf { it.startsWith("/persona/") }?.removePrefix("/persona")
                     ?: return MockResponse().setResponseCode(404)
                 if (path == "/api/v1/health") return MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
                 if (path.substringBefore('?') == "/api/v1/ws") return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
@@ -202,7 +202,7 @@ class HubSubPathTest {
         start(InetAddress.getLoopbackAddress(), 0)
     }
 
-    private fun endpoint(server: MockWebServer) = Endpoint(server.url("/jarvis").newBuilder().host(loopback).build().toString(), "name")
+    private fun endpoint(server: MockWebServer) = Endpoint(server.url("/persona").newBuilder().host(loopback).build().toString(), "name")
 
     private fun fingerprint(certificate: HeldCertificate) = Base64.getUrlEncoder().withoutPadding().encodeToString(
         MessageDigest.getInstance("SHA-256").digest(certificate.certificate.publicKey.encoded))

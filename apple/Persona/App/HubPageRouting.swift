@@ -55,7 +55,7 @@ extension AppModel {
         return SessionKey(group: group, machineID: machine, sessionID: session)
     }
 
-    /// The key of a Persona conversation a link names (`/j/<id>`): the session of that id in the group's lists, else
+    /// The key of a Persona conversation a link names (`/persona/<id>`): the session of that id in the group's lists, else
     /// on the assistant's machine when the group is the hub-level one; nil when neither says where it is.
     func linkedConversation(_ group: String, id: String) -> SessionKey? {
         for (ref, sessions) in sessionsByMachine where ref.group == group {

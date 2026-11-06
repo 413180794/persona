@@ -29,7 +29,7 @@ func TestExampleLooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	looks := m.Looks()
-	if len(looks) != 2 || looks[0].ID != "aurora" || looks[0].Names["en"] != "Aurora" || looks[1].AppIconFallback != "jarvis-circuit" {
+	if len(looks) != 2 || looks[0].ID != "aurora" || looks[0].Names["en"] != "Aurora" || looks[1].AppIconFallback != "persona-circuit" {
 		t.Fatalf("%+v", looks)
 	}
 	for _, l := range looks {

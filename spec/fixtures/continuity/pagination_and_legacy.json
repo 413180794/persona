@@ -5,7 +5,7 @@
       "name": "catch_up_cannot_end_history",
       "description": "新消息补发的 false 或缺失字段都不能关闭已有历史入口。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: catchUpNeverEndsTheHistory",
+        "ios/PersonaTests/ChatStoreTests.swift: catchUpNeverEndsTheHistory",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -1009,7 +1009,7 @@
       "description": "历史分页直接更新 has_more，忽略该页的连续性元数据。",
       "source": [
         "ios/Shared/ChatStore.swift: prepend",
-        "ios/Jarvis/App/AppModel.swift: loadOlder"
+        "ios/Persona/App/AppModel.swift: loadOlder"
       ],
       "input": {
         "initial": {
@@ -1303,7 +1303,7 @@
       "name": "legacy_batches_merge_without_gap_detection",
       "description": "老 hub 缺少范围时按 id 合并，more_after 只能触发重取。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: olderHubsWithoutSpansWorkAsBefore",
+        "ios/PersonaTests/ChatStoreTests.swift: olderHubsWithoutSpansWorkAsBefore",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"

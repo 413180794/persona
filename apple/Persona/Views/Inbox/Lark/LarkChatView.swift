@@ -197,7 +197,7 @@ struct LarkChatView: View {
                     .accessibilityIdentifier("lark.pins.open")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { Task { await askJarvis() } } label: { Label("Summarize with Persona", systemImage: Theme.Icon.ai) }
+                Button { Task { await askPersona() } } label: { Label("Summarize with Persona", systemImage: Theme.Icon.ai) }
             }
         }
         .task {
@@ -756,7 +756,7 @@ struct LarkChatView: View {
         }
     }
 
-    private static let historyLog = Logger(subsystem: "jarvis", category: "lark-history")
+    private static let historyLog = Logger(subsystem: "persona", category: "lark-history")
 
     /// Picks a message on screen and waits (a few frames at most) until it has said where it is.
     private func holdHistoryAnchor() async {
@@ -1426,7 +1426,7 @@ struct LarkChatView: View {
         }
     }
 
-    private func askJarvis() async {
+    private func askPersona() async {
         guard let api = chatAPI else { return }
         let prompt = String(localized: "Read the recent messages in my Lark chat “\(conversation.name)” (Lark gateway feedId \(conversation.id)), summarize the key points, list what I need to reply to or handle, and suggest replies.")
         do {

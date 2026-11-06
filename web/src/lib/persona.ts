@@ -10,11 +10,11 @@ import { stateName } from "./state-labels";
 /** The default, Mochi (nothing saved means it). */
 export const BUILTIN_PERSONA = "persona";
 /** Visor, the apps' default until 2026-11-03 (the page showed its own mark for this id until #3200). */
-export const MARK_PERSONA = "jarvis";
+export const MARK_PERSONA = "persona-visor";
 /** Circuit. */
-export const CIRCUIT_PERSONA = "jarvis-circuit";
+export const CIRCUIT_PERSONA = "persona-circuit";
 /** The built-ins every app draws: a package may not take their ids. */
-const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA, "jarvis-pixel", "jarvis-facet", "jarvis-blob"];
+const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA, "persona-pixel", "persona-facet", "persona-blob"];
 
 /** Whether a choice is drawn by the page rather than a package. */
 export function isBuiltinPersona(id: string): boolean {

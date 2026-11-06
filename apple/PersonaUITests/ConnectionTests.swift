@@ -2,20 +2,20 @@ import XCTest
 
 /// The title turns into Connecting… while the hub is out of reach and back afterwards, a short drop shows nothing, and a
 /// message written meanwhile waits and goes by itself (docs/ios.md「连接状态」). Against scripts/mock/mock_hub.py, whose
-/// /mock/down?s=<seconds> takes the hub away (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
+/// /mock/down?s=<seconds> takes the hub away (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>).
 final class ConnectionTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     private func hub() throws -> String {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         return hub
     }
 
     private func launch(_ hub: String, _ args: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
         // A fresh install asks for notifications first, over the page (these tests only wait, so no interruption

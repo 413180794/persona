@@ -12,13 +12,13 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>$(JARVIS_APP_GROUP)</string>
+		<string>$(PERSONA_APP_GROUP)</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)</string>
-		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push</string>
-		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look</string>
+		<string>$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)</string>
+		<string>$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push</string>
+		<string>$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).look</string>
 	</array>
 </dict>
 </plist>

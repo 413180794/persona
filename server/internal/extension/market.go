@@ -21,16 +21,12 @@ import (
 	"time"
 )
 
-// Plugin markets (docs/extensions.md "Extension market"): a repository or a website publishes an index of its plugins,
-// persona-extensions.json (formerly persona-plugins.json); a hub that registered the market lists them, and installs one by downloading its package and
-// checking it against the sha256 the index pins.
+// Extension markets (docs/extensions.md "Extension market") publish persona-extensions.json
+// at the root of a repository or website path. A registered market lists its packages
+// and pins each download's sha256.
 
-// IndexFile is a market's index, at the root of a repository or of a website's path; LegacyIndexFile is its name
-// before #1844, read when a market has no IndexFile (docs/extensions.md "Naming and compatibility").
-const (
-	IndexFile       = "persona-extensions.json"
-	LegacyIndexFile = "persona-plugins.json"
-)
+// IndexFile is the canonical market index at a repository or website root.
+const IndexFile = "persona-extensions.json"
 
 // Limits of a market.
 const (
@@ -123,7 +119,7 @@ func MarketID(s MarketSpec) string {
 	return hex.EncodeToString(sum[:5])
 }
 
-// MarketIndex is persona-extensions.json (or the older persona-plugins.json).
+// MarketIndex is the canonical extension index.
 type MarketIndex struct {
 	MarketVersion int    `json:"market_version"`
 	Name          string `json:"name"`
@@ -451,8 +447,8 @@ func (m *Market) getRepoFile(ctx context.Context, p string, w io.Writer, limit i
 		m.viaFallback = true
 		return nil
 	case errors.As(ferr, new(notFound)):
-		// Not there: a file the repository does not have (the old index name, a signature), or a private repository,
-		// which a market without a token cannot read either way. Either is what the caller needs to hear.
+		// Not there: the canonical index or its signature is missing, or the repository is private.
+		// A market without a token cannot read either way; return that failure unchanged.
 		return ferr
 	}
 	return err
@@ -536,7 +532,7 @@ func signedByAny(raw []byte, sf sigFile) bool {
 	return err == nil && verifies(k, raw, sf)
 }
 
-// fetchRaw reads the index (its new name, else its old one) and the signature next to the one it read.
+// fetchRaw reads the canonical index (or an explicitly registered JSON URL) and its adjacent signature.
 func (m *Market) fetchRaw(ctx context.Context) ([]byte, []byte, error) {
 	var b strings.Builder
 	var err error
@@ -546,26 +542,13 @@ func (m *Market) fetchRaw(ctx context.Context) ([]byte, []byte, error) {
 			return nil, nil, errors.New("git 市场用 hub 机器自己的凭据（SSH key），不收 token")
 		}
 		if err = m.syncGit(ctx); err == nil {
-			if err = m.gitFile(IndexFile, &b, IndexMost); errors.Is(err, os.ErrNotExist) {
-				b.Reset()
-				name = LegacyIndexFile
-				err = m.gitFile(LegacyIndexFile, &b, IndexMost)
-			}
+			err = m.gitFile(IndexFile, &b, IndexMost)
 		}
 	} else if m.Spec.Kind == "github" {
-		if err = m.getRepoFile(ctx, IndexFile, &b, IndexMost); errors.As(err, new(notFound)) {
-			b.Reset()
-			name = LegacyIndexFile
-			err = m.getRepoFile(ctx, LegacyIndexFile, &b, IndexMost)
-		}
+		err = m.getRepoFile(ctx, IndexFile, &b, IndexMost)
 	} else {
 		name = m.Spec.URL
 		err = m.get(ctx, m.Spec.URL, "application/json", &b, IndexMost)
-		if legacy, ok := strings.CutSuffix(m.Spec.URL, "/"+IndexFile); ok && errors.As(err, new(notFound)) {
-			b.Reset()
-			name = legacy + "/" + LegacyIndexFile
-			err = m.get(ctx, name, "application/json", &b, IndexMost)
-		}
 	}
 	if err != nil {
 		return nil, nil, err

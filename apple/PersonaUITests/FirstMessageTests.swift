@@ -4,7 +4,7 @@ import XCTest
 /// the moment it is sent; it did show at the top of the new-conversation page first, then jumped to the bottom when
 /// the chat took over. Prints `FIRST <case> <s> <y>` for each change of the bubble's top on screen (s from the send),
 /// and `FIRST <case> start|reply <epoch>` for cutting a recording to it.
-///   PORT=… MOCK_ASSISTANT_START_SECONDS=2 MOCK_ECHO_SENT=1 python3 scripts/mock/mock_hub.py  (JARVIS_MOCK_HUB)
+///   PORT=… MOCK_ASSISTANT_START_SECONDS=2 MOCK_ECHO_SENT=1 python3 scripts/mock/mock_hub.py  (PERSONA_MOCK_HUB)
 final class FirstMessageTests: XCTestCase {
     private var app: XCUIApplication!
     private var hub: String!
@@ -12,13 +12,13 @@ final class FirstMessageTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = true
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs JARVIS_MOCK_HUB") }
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs PERSONA_MOCK_HUB") }
         hub = h
     }
 
     private func launch(_ extra: [String]) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openChatsFresh", "YES"] + extra
         app.launchPinned()
         let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]

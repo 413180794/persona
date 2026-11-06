@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Terminal Settings › Use Option as Meta Key: a key press as herdr's key name (`MacTerminalKeys.name`). Off, Option types the
 /// layout's characters (they go to the input method as text); on, Option+key is alt+key, which herdr sends as ESC+key.

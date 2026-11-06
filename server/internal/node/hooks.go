@@ -30,7 +30,7 @@ func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
 	// A node from an earlier hub connection may still be shutting down; if its cleanup (or anything else) removes
 	// our socket file, hooks silently fall back to the terminal. Re-create it whenever it disappears, or when another
 	// file took its place that nothing answers on (a node that started, listened and exited without unlinking: every
-	// `jarvisd launch` then failed with "connection refused" and the assistant's messages stayed undelivered).
+	// `personad launch` then failed with "connection refused" and the assistant's messages stayed undelivered).
 	go func() {
 		t := time.NewTicker(15 * time.Second)
 		defer t.Stop()
@@ -173,7 +173,7 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		resp = n.handleAsk(ctx, req)
 	case "notify": // personad notify (scriptcli.go)
 		resp = n.handleNotify(ctx, req)
-	case "launcher.env": // jarvisd launch <name>
+	case "launcher.env": // personad launch <name>
 		resp = n.launcherEnvFor(req)
 	case "mcp.tools":
 		var res struct {

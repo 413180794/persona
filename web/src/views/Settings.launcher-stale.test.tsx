@@ -22,7 +22,7 @@ const { LauncherDetailDialog } = await import("./Settings");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const launcher = (name: string) => ({ launcher: { name, source: "jarvis", kind: "api", model: `model-${name}`, base_url: "https://api.example.com" } });
+const launcher = (name: string) => ({ launcher: { name, source: "persona", kind: "api", model: `model-${name}`, base_url: "https://api.example.com" } });
 const answer = async (path: string, method: string, v: unknown) => {
   const i = pending.findIndex((p) => p.path === path && p.method === method);
   expect(i).toBeGreaterThanOrEqual(0);

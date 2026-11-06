@@ -94,7 +94,7 @@ struct MessageShareCard: View {
 extension MarkdownUI.Theme {
     /// The chat's theme with code blocks that wrap instead of scrolling (an image can't scroll; the renderer
     /// draws no scroll views at all).
-    @MainActor static let card = MarkdownUI.Theme.jarvis
+    @MainActor static let card = MarkdownUI.Theme.persona
         .text { FontSize(15) }
         .codeBlock { config in
             config.label

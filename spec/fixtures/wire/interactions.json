@@ -199,7 +199,7 @@
     "source": [
       "server/internal/hub/http.go: Hub.broadcast",
       "server/internal/proto/proto.go: Elicitation",
-      "android/core/contracts/src/main/kotlin/jarvis/core/contracts/Elicitation.kt"
+      "android/core/contracts/src/main/kotlin/persona/core/contracts/Elicitation.kt"
     ],
     "derived": true,
     "decoder": "event",
@@ -254,7 +254,7 @@
     "source": [
       "server/internal/hub/http.go: Hub.broadcast",
       "server/internal/proto/proto.go: Elicitation",
-      "android/core/contracts/src/main/kotlin/jarvis/core/contracts/Elicitation.kt"
+      "android/core/contracts/src/main/kotlin/persona/core/contracts/Elicitation.kt"
     ],
     "derived": true,
     "decoder": "event",

@@ -75,7 +75,7 @@ func agentSourcePackage(t *testing.T, id, sourceID string) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "agents"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=agentsrc exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "agents"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=agentsrc exec "+self+" \"$@\"\n"), 0o755)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": %q, "name": "Example agents", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/agents"}},
 		"activation_events": ["on_startup"],

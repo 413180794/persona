@@ -2,7 +2,7 @@ package node
 
 // Daemons (docs/daemons.md): agent runtimes that are long-running services of their own — another system user, a
 // container, another machine — and so cannot reach runtime.sock. The node dials them instead: each one in
-// ~/.jarvis/daemons.json (beside runtime.sock) is a WebSocket endpoint with a bearer token, and once connected it speaks
+// ~/.persona/daemons.json (beside runtime.sock) is a WebSocket endpoint with a bearer token, and once connected it speaks
 // the runtime protocol unchanged (docs/protocol.md "Runtime ↔ node"), one JSON object per text message. Nothing here
 // knows any particular daemon: an integration implements the spec on its side (the runtime SDK's listen mode does it
 // for JS).
@@ -45,7 +45,7 @@ import (
 )
 
 // DaemonSubprotocol is the WebSocket subprotocol a daemon's endpoint must answer with.
-const DaemonSubprotocol = "jarvis-runtime.v1"
+const DaemonSubprotocol = "persona-runtime.v1"
 
 var (
 	// daemonIDRe: a daemon's id in daemons.json — its runtime id, space kind and session id prefix. No dots: the first
@@ -210,7 +210,7 @@ type daemonRun struct {
 	done   chan struct{}
 }
 
-// daemonsPath is the config beside the runtime socket: ~/.jarvis/daemons.json for the node's own socket.
+// daemonsPath is the config beside the runtime socket: ~/.persona/daemons.json for the node's own socket.
 func (rh *RuntimeHost) daemonsPath() string {
 	return filepath.Join(filepath.Dir(rh.path), "daemons.json")
 }

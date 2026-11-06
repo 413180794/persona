@@ -42,14 +42,14 @@ private val attribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
 /**
  * A message as a row draws it: its [parts] in order, the photos it carries (`<attached_images>` and the older notes,
  * thumbnails above the text; never "[Image]", R3), the file paths in its text (chips under it, at most six), and its
- * `<jarvis-context>` blocks ([contexts]), which are not what the user wrote: one folded row beside the bubble (#876).
+ * `<persona-context>` blocks ([contexts]), which are not what the user wrote: one folded row beside the bubble (#876).
  */
 internal data class MessageModel(
     val parts: List<MessagePart>, val images: List<String>, val files: List<String>,
     val contexts: List<MessageContext> = emptyList(),
     /** The user's answer from an assistant's card: the hub's trailing `<persona-action>` tag, not shown ("From card"). */
     val fromCard: Boolean = false,
-    /** Files sent with it as `<jarvis-file>` tags (a video, a recording…): cards above the bubble, not tag text. */
+    /** Files sent with it as `<persona-file>` tags (a video, a recording…): cards above the bubble, not tag text. */
     val attached: List<AttachedFile> = emptyList(),
 ) {
     /** What it says without its contexts: what the long-press menu copies, shares and quotes. */

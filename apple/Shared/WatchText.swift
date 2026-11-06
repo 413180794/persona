@@ -1,12 +1,12 @@
 import Foundation
 
 /// A message as the watch shows it: plain text without the markup the phone and Claude Code put into messages
-/// (`<persona-context>` / `<jarvis-context>` blocks fold into one mark, 「〔title〕」 or 「〔上下文 N 项〕」, ahead of what the user wrote, the note listing attached photos and Claude's `[Image #n]`
+/// (`<persona-context>` blocks fold into one mark, 「〔title〕」 or 「〔上下文 N 项〕」, ahead of what the user wrote, the note listing attached photos and Claude's `[Image #n]`
 /// placeholders become one 「图片」 mark, sent videos 「视频」, pasted-content tags go) and without Markdown's marks (`##`, `**`, backticks,
 /// fences, quotes, link targets; list dashes become •): the watch draws plain text, and the marks were shown as typed.
 nonisolated enum WatchText {
     private static let context = try! NSRegularExpression(
-        pattern: #"<(?:jarvis|persona)-context\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</(?:jarvis|persona)-context>\s*"#)
+        pattern: #"<persona-context\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</persona-context>\s*"#)
     /// The marks a phone shows for what the watch cannot draw, in the interface language.
     private static var rules: [(String, String)] {
         let image = String(localized: "[Photo]", comment: "Watch: stands in for an image in a message")
@@ -14,9 +14,9 @@ nonisolated enum WatchText {
         let file = String(localized: "[File] [Watch Text f29940]", comment: "Watch: stands in for a file in a message")
         return [
             (#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#, "\n" + image + "\n"),
-            // Videos sent as files (<jarvis-file kind="video" …/>, VideoAttach.swift).
-            (#"\s*<jarvis-file\b[^>]*?kind="video"[^>]*>(?:\s*</jarvis-file>)?\s*"#, "\n" + video + "\n"),
-            (#"\s*<jarvis-file\b[^>]*>(?:\s*</jarvis-file>)?\s*"#, "\n" + file + "\n"),
+            // Videos sent as files (<persona-file kind="video" …/>, VideoAttach.swift).
+            (#"\s*<persona-file\b[^>]*?kind="video"[^>]*>(?:\s*</persona-file>)?\s*"#, "\n" + video + "\n"),
+            (#"\s*<persona-file\b[^>]*>(?:\s*</persona-file>)?\s*"#, "\n" + file + "\n"),
             ("(" + NSRegularExpression.escapedPattern(for: video) + #"\s*)+"#, video + " "),
             (#"\[Image #\d+\]\s*"#, image),
             (#"</?pasted_content[^>]*>"#, ""),

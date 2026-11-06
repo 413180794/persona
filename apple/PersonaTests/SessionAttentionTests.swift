@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A botmux session's reason for waiting and its Feishu topic (attention_reason, external_url; docs/engines.md「botmux」).
 @MainActor

@@ -15,24 +15,24 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// On Windows jarvis-link runs from a scheduled task of the user's own (docs/windows.md "Install and start at login"): `install`
+// On Windows persona-link runs from a scheduled task of the user's own (docs/windows.md "Install and start at login"): `install`
 // writes the task, registers it with schtasks and starts it; `uninstall` takes it away. The task starts at sign-in
 // in the user's session and needs no administrator: Task Scheduler refuses a standard user a task that runs without
 // a sign-in (S4U), and the node has to see the user's Orca and its agents anyway. What it runs is the supervisor
-// (`jarvis-link supervise`, supervise_windows.go) from a console-less copy of jarvis-link, which keeps jarvis-link and
+// (`persona-link supervise`, supervise_windows.go) from a console-less copy of persona-link, which keeps persona-link and
 // the resident node running: the one task stands for both systemd units of Linux.
 
 const (
 	taskName        = "Persona Link"
-	serviceExe      = "jarvis-link-service.exe"
+	serviceExe      = "persona-link-service.exe"
 	taskRepeat      = "PT5M" // the task is started again this often: a no-op while the supervisor runs
 	nodeLogMax      = 10 << 20
 	taskStopTimeout = 10 * time.Second
 )
 
-func (e *env) taskFile() string       { return filepath.Join(e.jarvisDir(), "jarvis-link-task.xml") }
-func (e *env) serviceExePath() string { return filepath.Join(e.jarvisDir(), "bin", serviceExe) }
-func (e *env) serviceLog() string     { return filepath.Join(e.jarvisDir(), "link-service.log") }
+func (e *env) taskFile() string       { return filepath.Join(e.personaDir(), "persona-link-task.xml") }
+func (e *env) serviceExePath() string { return filepath.Join(e.personaDir(), "bin", serviceExe) }
+func (e *env) serviceLog() string     { return filepath.Join(e.personaDir(), "link-service.log") }
 
 // exeName is a program's file name on this computer.
 func (e *env) exeName(name string) string {
@@ -53,7 +53,7 @@ func taskXML(user, command, args string, installed time.Time) string {
 	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Persona link: keeps this computer reachable from the Persona hub and runs the resident node. Written by jarvis-link install; jarvis-link uninstall removes it.</Description>
+    <Description>Persona link: keeps this computer reachable from the Persona hub and runs the resident node. Written by persona-link install; persona-link uninstall removes it.</Description>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
@@ -146,7 +146,7 @@ func (e *env) taskStatus() (status string, ok bool) {
 	return rec[2], true
 }
 
-// stopTask ends the running task, which ends the supervisor and, with it, jarvis-link and the node (their job dies
+// stopTask ends the running task, which ends the supervisor and, with it, persona-link and the node (their job dies
 // with the supervisor), and waits for the link's run lock to come free.
 func (e *env) stopTask() {
 	if _, ok := e.taskStatus(); !ok {
@@ -158,14 +158,14 @@ func (e *env) stopTask() {
 	}
 }
 
-// installNodeBinary puts the resident node at ~/.persona/bin/jarvisd.exe. Unlike on Linux a given --jarvisd replaces
+// installNodeBinary puts the resident node at ~/.persona/bin/personad.exe. Unlike on Linux a given --personad replaces
 // one already there: Windows has no node update over the link yet (docs/node-update.md), so installing again is how
 // a Windows node is upgraded.
 func (e *env) installNodeBinary(from string) error {
 	bin := e.nodeBin()
 	if from == "" {
 		if !fileExists(bin) {
-			return fmt.Errorf("没有 %s：用 --jarvisd <personad.exe 的路径> 给一个", bin)
+			return fmt.Errorf("没有 %s：用 --personad <personad.exe 的路径> 给一个", bin)
 		}
 		return nil
 	}
@@ -193,7 +193,7 @@ func installTask(e *env, withNode bool, from string, invite *link.PairInvite) er
 	}
 	e.stopTask()
 	if link.Running(e.configPath()) {
-		fmt.Fprintln(e.stdout, "注意：还有一个 jarvis-link 在运行（不是这个计划任务起的，比如前台的 jarvis-link run）：停掉它，计划任务里的那个会接上。")
+		fmt.Fprintln(e.stdout, "注意：还有一个 persona-link 在运行（不是这个计划任务起的，比如前台的 persona-link run）：停掉它，计划任务里的那个会接上。")
 	}
 	bin, copied, err := e.installBinary()
 	if err != nil {
@@ -205,7 +205,7 @@ func installTask(e *env, withNode bool, from string, invite *link.PairInvite) er
 	args := "supervise"
 	if withNode {
 		if err := e.installNodeBinary(from); err != nil {
-			fmt.Fprintf(e.stdout, "常驻 node 没装好：%v；计划任务先只跑 jarvis-link。\n", err)
+			fmt.Fprintf(e.stdout, "常驻 node 没装好：%v；计划任务先只跑 persona-link。\n", err)
 			withNode = false
 		}
 	}
@@ -226,12 +226,12 @@ func installTask(e *env, withNode bool, from string, invite *link.PairInvite) er
 	if out, err := e.schtasks("/Run", "/TN", taskName); err != nil {
 		return fmt.Errorf("schtasks /Run 失败：%s", orErr(out, err))
 	}
-	what := "jarvis-link"
+	what := "persona-link"
 	if withNode {
-		what = "常驻 node 和 jarvis-link"
+		what = "常驻 node 和 persona-link"
 	}
 	fmt.Fprintf(e.stdout, "装好了计划任务「%s」（%s），已启动：登录 Windows 时启动，%s退出了几秒内重启，不弹窗口；日志在 %s。\n",
-		taskName, file, what, e.jarvisDir())
+		taskName, file, what, e.personaDir())
 	return waitStarted(e, started, oldPID, invite)
 }
 
@@ -255,7 +255,7 @@ func uninstallTask(e *env) {
 			break
 		}
 	}
-	fmt.Fprintf(e.stdout, "停掉并删掉了计划任务「%s」（常驻 node 和 jarvis-link 一起停了）。\n", taskName)
+	fmt.Fprintf(e.stdout, "停掉并删掉了计划任务「%s」（常驻 node 和 persona-link 一起停了）。\n", taskName)
 }
 
 // taskState is status's line about the scheduled task.
@@ -275,14 +275,14 @@ func (e *env) taskState() *serviceState {
 func taskText(s *serviceState, line func(string, ...any)) {
 	switch {
 	case s.Active == "" && !s.Installed:
-		line("后台服务：没装（jarvis-link install）")
+		line("后台服务：没装（persona-link install）")
 	case s.Active == "":
-		line("后台服务：计划任务「%s」不在了（%s 还在）：再 jarvis-link install", s.Unit, s.File)
+		line("后台服务：计划任务「%s」不在了（%s 还在）：再 persona-link install", s.Unit, s.File)
 	default:
 		line("后台服务：计划任务「%s」· %s · 登录时启动", s.Unit, s.Active)
 	}
 }
 
-// windowsNodeHint answers `jarvis-link node install|uninstall` on Windows, where the node is part of the one task.
-const windowsNodeHint = "Windows 上常驻 node 和 jarvis-link 在同一个计划任务里：jarvis-link install [--jarvisd <personad.exe 的路径>] 装上（带 node），" +
-	"jarvis-link install --no-node 只留 jarvis-link，jarvis-link uninstall 都去掉"
+// windowsNodeHint answers `persona-link node install|uninstall` on Windows, where the node is part of the one task.
+const windowsNodeHint = "Windows 上常驻 node 和 persona-link 在同一个计划任务里：persona-link install [--personad <personad.exe 的路径>] 装上（带 node），" +
+	"persona-link install --no-node 只留 persona-link，persona-link uninstall 都去掉"

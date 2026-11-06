@@ -228,6 +228,6 @@ nonisolated enum PersonalAgentIndex {
         Task.detached(priority: .utility) {
             try? await CSSearchableIndex.default().indexAppEntities(entities)
         }
-        JarvisShortcuts.updateAppShortcutParameters()
+        PersonaShortcuts.updateAppShortcutParameters()
     }
 }

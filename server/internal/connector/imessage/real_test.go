@@ -12,11 +12,11 @@ import (
 // messages, what did not decode, how long it took): never a name, a number or a word of a message. Opt-in, on the
 // Mac whose data it is:
 //
-//	JARVIS_IMESSAGE_HOME=$HOME ./imessage.test -test.run RealMessagesCounts -test.v
+//	PERSONA_IMESSAGE_HOME=$HOME ./imessage.test -test.run RealMessagesCounts -test.v
 func TestRealMessagesCounts(t *testing.T) {
-	home := os.Getenv("JARVIS_IMESSAGE_HOME")
+	home := os.Getenv("PERSONA_IMESSAGE_HOME")
 	if home == "" {
-		t.Skip("set JARVIS_IMESSAGE_HOME to a Mac home to count its messages")
+		t.Skip("set PERSONA_IMESSAGE_HOME to a Mac home to count its messages")
 	}
 	ctx := context.Background()
 	r := &Reader{Home: home, SQLite: sqlite3WithJSON(t)}

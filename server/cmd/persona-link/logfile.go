@@ -16,7 +16,7 @@ import (
 // limit for the helper's log (a setting).
 const logMax = 1 << 20
 
-// rotating is the log of `jarvis-link run --log`: appended to, moved aside to <path>.1 when it reaches max.
+// rotating is the log of `persona-link run --log`: appended to, moved aside to <path>.1 when it reaches max.
 type rotating struct {
 	mu   sync.Mutex
 	path string
@@ -68,7 +68,7 @@ func (r *rotating) Close() error {
 	return r.f.Close()
 }
 
-// logs prints the end of jarvis-link's log and, with -f, what is added to it after, across a rotation, until
+// logs prints the end of persona-link's log and, with -f, what is added to it after, across a rotation, until
 // interrupted. Without a log file and with the systemd service installed, the journal has it.
 func logs(e *env, args []string) error {
 	n, follow := 100, false

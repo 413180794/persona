@@ -71,9 +71,9 @@ func TestPublicHubID(t *testing.T) {
 }
 
 func TestPublicHubIDDatabase(t *testing.T) {
-	dsn := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	dsn := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -301,7 +301,7 @@ func TestCertificateCarriesNoAddresses(t *testing.T) {
 	h.public.mu.RLock()
 	leaf := h.public.certificate.Leaf
 	h.public.mu.RUnlock()
-	if len(leaf.IPAddresses) != 0 || len(leaf.DNSNames) != 1 || leaf.DNSNames[0] != h.hubID()+".jarvis.invalid" {
+	if len(leaf.IPAddresses) != 0 || len(leaf.DNSNames) != 1 || leaf.DNSNames[0] != h.hubID()+".persona.invalid" {
 		t.Fatalf("certificate names %v %v: anyone reaching the port can read them", leaf.DNSNames, leaf.IPAddresses)
 	}
 }

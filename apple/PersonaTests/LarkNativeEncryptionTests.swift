@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct LarkNativeEncryptionTests {
     @Test(arguments: [404, 405], ["", "not_found", "NOT_FOUND", "method_not_allowed"]) func missingNativeRoutesExplainWhichServerNeedsUpdating(_ status: Int, _ code: String) async throws {

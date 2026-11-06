@@ -167,7 +167,7 @@ func (n *Node) readFile(path, cwd string, offset int64, stream bool) (*FileConte
 const maxStatPaths = 200
 
 // PathStat is whether a path mentioned in a conversation is there on this machine: file, dir, denied (macOS keeps
-// the folder from jarvisd; opening it explains what to do) or missing (also: not resolvable, iCloud Drive).
+// the folder from personad; opening it explains what to do) or missing (also: not resolvable, iCloud Drive).
 type PathStat struct {
 	Path string `json:"path"` // as asked
 	Kind string `json:"kind"`
@@ -240,7 +240,7 @@ func (n *Node) statPath(asked, cwd string) PathStat {
 	return s
 }
 
-// protectedDirs are the folders macOS keeps from programs the user has not allowed (TCC): jarvisd, started over ssh,
+// protectedDirs are the folders macOS keeps from programs the user has not allowed (TCC): personad, started over ssh,
 // gets "operation not permitted" there even though the files are the user's own.
 var protectedDirs = map[string]string{"Desktop": "桌面", "Documents": "文稿", "Downloads": "下载"}
 

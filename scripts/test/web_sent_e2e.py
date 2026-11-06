@@ -32,7 +32,7 @@ import urllib.request
 from playwright.sync_api import expect, sync_playwright
 
 TOKEN = "mock"
-ASSISTANT_CHAT = "/j/b2e4d6f8-0000-4000-8000-000000000001"  # the chat the fake ledger's first row says asked
+ASSISTANT_CHAT = "/persona/b2e4d6f8-0000-4000-8000-000000000001"  # the chat the fake ledger's first row says asked
 WIDE = {"width": 1280, "height": 900}
 PHONE = {"width": 390, "height": 844}
 
@@ -48,7 +48,7 @@ def set_mode(hub, mode):
 
 def new_page(browser, size, theme, lang, scale=1):
     context = browser.new_context(viewport=size, color_scheme=theme, device_scale_factor=scale, permissions=["clipboard-read", "clipboard-write"])
-    context.add_init_script(f"localStorage.setItem('jarvis.theme', {theme!r}); localStorage.setItem('persona.language', {lang!r})")
+    context.add_init_script(f"localStorage.setItem('persona.theme', {theme!r}); localStorage.setItem('persona.language', {lang!r})")
     page = context.new_page()
     page.set_default_timeout(15000)
     errors = []

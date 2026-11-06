@@ -23,7 +23,7 @@ class FilesPathsTest {
         assertEquals("/Users/me/code/other/a.txt", FilesPaths.resolve("../other/a.txt", cwd))
         assertEquals("/etc/hosts", FilesPaths.resolve("/etc//hosts", cwd))
         // "~" is the machine's home: only the hub knows it, so it travels as written (folded, never joined to cwd).
-        assertEquals("~/.jarvis/personas", FilesPaths.resolve("~/.jarvis/personas/", cwd))
+        assertEquals("~/.persona/personas", FilesPaths.resolve("~/.persona/personas/", cwd))
         assertEquals("~", FilesPaths.resolve("~", cwd))
         assertEquals("~", FilesPaths.resolve("~/x/..", cwd))
         assertEquals("/", FilesPaths.resolve("/../..", cwd))

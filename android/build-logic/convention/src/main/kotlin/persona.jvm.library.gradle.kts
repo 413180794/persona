@@ -21,9 +21,9 @@ dependencies {
 }
 tasks.withType<Test>().configureEach {
     useJUnit()
-    val repositoryRoot = providers.gradleProperty("jarvisRepoRoot")
+    val repositoryRoot = providers.gradleProperty("personaRepoRoot")
         .getOrElse(rootProject.layout.projectDirectory.dir("..").asFile.absolutePath)
-    systemProperty("jarvis.repo.root", repositoryRoot)
+    systemProperty("persona.repo.root", repositoryRoot)
     inputs.files(fileTree(File(repositoryRoot, "spec/fixtures")) { include("**/*.json") })
         .withPropertyName("sharedFixtures")
         .withPathSensitivity(PathSensitivity.RELATIVE)

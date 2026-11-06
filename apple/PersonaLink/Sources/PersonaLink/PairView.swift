@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 「配对 / 修改连接」 (Pair / Change Connection): choose how this Mac and the hub find each other. Active (「我去连 hub」): paste
-/// the link the phone or the web made in 「添加电脑」 (or open it: `jarvis://link?…` fills this in), and look at or add the
+/// the link the phone or the web made in 「添加电脑」 (or open it: `persona://link?…` fills this in), and look at or add the
 /// hub's addresses. Passive (「让 hub 来连」): make the link the hub's admin page takes.
 struct PairView: View {
     let model: LinkModel
@@ -163,7 +163,7 @@ struct PairView: View {
         }
     }
 
-    /// Beside the link: which addresses are in it, and jarvis-link's line about the firewall.
+    /// Beside the link: which addresses are in it, and persona-link's line about the firewall.
     static func inviteNote(link: String, stderr: String) -> String {
         var lines: [String] = []
         let addrs = URLComponents(string: link)?.queryItems?.filter { $0.name == "addr" }.compactMap(\.value) ?? []
@@ -193,7 +193,7 @@ struct PairView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            TextField("jarvis://link?…", text: $link)
+            TextField("persona://link?…", text: $link)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.callout, design: .monospaced))
                 .truncationMode(.middle)

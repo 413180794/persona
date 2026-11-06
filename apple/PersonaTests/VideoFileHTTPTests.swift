@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 private final class VideoRangeProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()

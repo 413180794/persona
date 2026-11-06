@@ -98,7 +98,7 @@ func TestUpdateConfirmTellsTheEdge(t *testing.T) {
 // leaves the rollback for the old version to record, and only for the update under way.
 func TestRestoreUpdate(t *testing.T) {
 	dir := t.TempDir()
-	target := dir + "/jarvisd"
+	target := dir + "/personad"
 	os.WriteFile(target, []byte("new"), 0o755)
 	os.WriteFile(target+".prev", []byte("old"), 0o755)
 	pending := update.Pending{FromVersion: "v1", FromBuild: 1, ToVersion: "v2", ToBuild: 2, Target: target, Prev: target + ".prev", Auto: true}

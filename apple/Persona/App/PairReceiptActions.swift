@@ -20,7 +20,7 @@ nonisolated struct PairPush: Sendable, Equatable {
     var kind: Kind
     var deviceID: String?
     var machine: String?
-    /// The hub that sent it (`hub_id`) and the group whose key opened it (`jarvis_group`): which group's hub to ask.
+    /// The hub that sent it (`hub_id`) and the group whose key opened it (`persona_group`): which group's hub to ask.
     var hubID: String?
     var keyGroup: String?
 

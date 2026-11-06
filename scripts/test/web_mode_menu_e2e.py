@@ -19,7 +19,7 @@ from playwright.sync_api import sync_playwright
 
 SIZES = {"wide": {"width": 1440, "height": 900}, "narrow": {"width": 390, "height": 844}, "tiny": {"width": 320, "height": 640}}
 # the mock hub's Claude Code agent chat and Persona chat
-PAGES = {"agent": "/s/macbook/a1f3c2d4-0000-4000-8000-000000000001", "assistant": "/j/b2e4d6f8-0000-4000-8000-000000000002"}
+PAGES = {"agent": "/s/macbook/a1f3c2d4-0000-4000-8000-000000000001", "assistant": "/persona/b2e4d6f8-0000-4000-8000-000000000002"}
 CHIPS = {
     "permission": 'button[title="Permission mode"], button[title^="Never asks"]',
     "effort": 'button[title="Thinking effort"], button[title="Model and thinking effort"]',
@@ -88,8 +88,8 @@ def case(browser, base, size, theme, where, shots):
     page = ctx.new_page()
     page.set_default_timeout(15000)
     page.goto(base + "/overview?token=mock")
-    page.wait_for_function("localStorage.getItem('jarvis.token')")
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.wait_for_function("localStorage.getItem('persona.token')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
     page.goto(base + PAGES[where] + "?token=mock")
     for menu, sel in CHIPS.items():
         chip = page.locator(sel).first

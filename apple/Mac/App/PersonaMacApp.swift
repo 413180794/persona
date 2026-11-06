@@ -18,7 +18,7 @@ struct PersonaMacApp: App {
                 .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
                 .onOpenURL { url in model.openURL(url) }
-                // A jarvis:// link goes to the window that is open: without this every link opened another main window.
+                // A persona:// link goes to the window that is open: without this every link opened another main window.
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .handlesExternalEvents(matching: ["*"])
@@ -83,8 +83,8 @@ struct PersonaMacApp: App {
 }
 
 extension AppModel {
-    /// `jarvis://pair?…` (a link from `jarvisd hub pair`, or pasted): pair with that hub.
-    /// A `jarvis://` link from outside (MacOpenURL): open a chat, pair, or hand a computer's link to Persona Link.
+    /// `persona://pair?…` (a link from `personad hub pair`, or pasted): pair with that hub.
+    /// A `persona://` link from outside (MacOpenURL): open a chat, pair, or hand a computer's link to Persona Link.
     func openURL(_ url: URL) {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "macWindowLog") { // how many main windows a link leaves (docs/mac.md)
@@ -480,7 +480,7 @@ enum MacLaunchArguments {
                 }
             }
         }
-        // `-macOpenURL <jarvis://…>`: what handing the app that link does, 2 s in.
+        // `-macOpenURL <persona://…>`: what handing the app that link does, 2 s in.
         if let u = d.string(forKey: "macOpenURL").flatMap(URL.init(string:)) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { model.openURL(u) }
         }
@@ -518,7 +518,7 @@ enum MacLaunchArguments {
 }
 #endif
 
-/// Whether a `jarvis://pair` link (from the browser, `jarvisd hub pair`, Finder) may pair: not over a real pairing,
+/// Whether a `persona://pair` link (from the browser, `personad hub pair`, Finder) may pair: not over a real pairing,
 /// which a link from anywhere would otherwise replace without a word; Demo Mode makes way for a real hub.
 enum MacPairing {
     static func accepts(isPaired: Bool, isDemo: Bool) -> Bool { !isPaired || isDemo }

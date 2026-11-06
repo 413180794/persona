@@ -4,8 +4,8 @@ import XCTest
 /// (one try, answered and failed), B only a key (pick → paste → tested → saved, what was assigned and kept), C "Where to get a model"
 /// (Sign Up opens the signup page in the app; back from it, the key is next). Against scripts/mock/mock_scenarios.py,
 /// which restarts the mock hub with the variables each test needs:
-///   TEST_RUNNER_JARVIS_PRESET_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_PRESET_CONTROL=http://127.0.0.1:<control>
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves every screen there (light and dark) as PNG.
+///   TEST_RUNNER_PERSONA_PRESET_HUB=http://127.0.0.1:<port> TEST_RUNNER_PERSONA_PRESET_CONTROL=http://127.0.0.1:<control>
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> also saves every screen there (light and dark) as PNG.
 final class ProviderPresetWizardTests: XCTestCase {
     private let env = ProcessInfo.processInfo.environment
 
@@ -13,7 +13,7 @@ final class ProviderPresetWizardTests: XCTestCase {
 
     /// Restarts the mock hub with these MOCK_* variables (mock_scenarios.py waits until it answers).
     private func scenario(_ vars: String) throws {
-        guard let control = env["JARVIS_PRESET_CONTROL"] else { throw XCTSkip("needs mock_scenarios.py (JARVIS_PRESET_CONTROL)") }
+        guard let control = env["PERSONA_PRESET_CONTROL"] else { throw XCTSkip("needs mock_scenarios.py (PERSONA_PRESET_CONTROL)") }
         let url = URL(string: control + "/scenario?env=" + vars.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)!
         let done = expectation(description: "scenario")
         URLSession.shared.dataTask(with: url) { _, _, _ in done.fulfill() }.resume()
@@ -21,8 +21,8 @@ final class ProviderPresetWizardTests: XCTestCase {
     }
 
     @MainActor private func launch(scheme: String) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_PRESET_HUB"] else { throw XCTSkip("needs mock_scenarios.py (JARVIS_PRESET_HUB)") }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        guard let hub = env["PERSONA_PRESET_HUB"] else { throw XCTSkip("needs mock_scenarios.py (PERSONA_PRESET_HUB)") }
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-ui.scheme", scheme, "-dev.openChat", "", "-tab", "settings",
                                "-openModelLaunchers", "YES", "-openProviderWizard", "pick"]
@@ -55,7 +55,7 @@ final class ProviderPresetWizardTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("preset-wizard-\(name).png"))
         }
     }

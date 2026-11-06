@@ -3,7 +3,7 @@ import Foundation
 import Security
 import Testing
 import UserNotifications
-@testable import Jarvis
+@testable import Persona
 
 /// Several hubs on one device (docs/multi-hub.md): keys, grouping, routes, events, the merged Live Activity, the push
 /// keys. The default group's keys and JSON must stay byte for byte what they were before several hubs.

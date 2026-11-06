@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Where a Lark chat puts its time separators and avatars (`LarkChatLayout`), with a fixed clock and calendar.
 @MainActor struct LarkChatLayoutTests {

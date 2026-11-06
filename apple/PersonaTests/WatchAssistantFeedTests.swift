@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct WatchAssistantFeedTests {
     private func view(_ version: Int64, conversation: String = "conversation", fallback: String = "发布进行中") -> ExtensionAssistantView {

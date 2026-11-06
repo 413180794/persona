@@ -4,7 +4,7 @@ nonisolated extension ComponentSpec {
     /// Clay: puffy rounded surfaces with layered shadows on a pastel wash of the color, rounded type, soft buttons.
     static let clay = ComponentSpec(
         title: String(localized: "Clay", comment: "Interface style name: clay"), subtitle: String(localized: "Soft and rounded"),
-        surface: .puffy, buttons: .soft, fontDesign: .rounded, previewCorner: 24, components: .jarvis, canvas: .wash,
+        surface: .puffy, buttons: .soft, fontDesign: .rounded, previewCorner: 24, components: .persona, canvas: .wash,
         tintedShadow: true, colors: .lavender)
 }
 

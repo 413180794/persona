@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The assistant's ask_user in the chat (issue 677): it reads as Question with its question, not the tool's raw name
 /// beside an empty chip, and once answered it keeps what was asked and what the user picked.
@@ -15,7 +15,7 @@ struct AskUserToolTests {
 
     private func call(_ questions: [JSONValue], result: String?) -> ToolCall {
         let use = Item(id: "1#0", seq: 1, ts: Date(timeIntervalSince1970: 1), role: "assistant", kind: .toolUse, text: nil,
-                       toolUseID: "t1", toolName: "mcp__jarvis__ask_user", toolInput: .object(["questions": .array(questions)]),
+                       toolUseID: "t1", toolName: "mcp__persona__ask_user", toolInput: .object(["questions": .array(questions)]),
                        isError: nil, image: nil)
         let res = result.map {
             Item(id: "2#0", seq: 2, ts: Date(timeIntervalSince1970: 2), role: "user", kind: .toolResult, text: $0,

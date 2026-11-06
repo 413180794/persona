@@ -19,14 +19,14 @@ import (
 // Codex started from the phone (docs/codex.md "Starting from the phone"), the way session.start does it, against real Codex in the
 // isolated herdr: the launcher runs through codex-start with the first message in a file, the start answers with the
 // thread that message began, the pane lists as that one session, on the route its launcher implies. Env as
-// TestLiveCodexDaemon; JARVIS_CODEX_START=daemon (a 0.163 attached to the test's own app-server with --remote: the
+// TestLiveCodexDaemon; PERSONA_CODEX_START=daemon (a 0.163 attached to the test's own app-server with --remote: the
 // app-server route), plain (a Codex without the daemon: 0.153) or config (a 0.163 launcher with -c, in its own process:
 // the terminal route, and the note says why). The launchers all carry -c (no notify hook, no update check), so a plain
 // 0.163 — which would start or join the daemon of the Codex in use — is never run here.
 func TestLiveCodexStart(t *testing.T) {
-	bin, work, variant := os.Getenv("JARVIS_CODEX_BIN"), os.Getenv("JARVIS_CODEX_WORK"), os.Getenv("JARVIS_CODEX_START")
+	bin, work, variant := os.Getenv("PERSONA_CODEX_BIN"), os.Getenv("PERSONA_CODEX_WORK"), os.Getenv("PERSONA_CODEX_START")
 	if bin == "" || work == "" || variant == "" {
-		t.Skip("JARVIS_CODEX_BIN / JARVIS_CODEX_WORK / JARVIS_CODEX_START not set")
+		t.Skip("PERSONA_CODEX_BIN / PERSONA_CODEX_WORK / PERSONA_CODEX_START not set")
 	}
 	home, _ := os.UserHomeDir()
 	if variant == "plain" {
@@ -39,15 +39,15 @@ func TestLiveCodexStart(t *testing.T) {
 	words := []string{bin, "-c", "notify=[]", "-c", "check_for_update_on_startup=false"} // as startLiveCodex
 	switch variant {
 	case "daemon":
-		d := startLiveDaemon(t, bin, filepath.Join(work, "start-daemon"+os.Getenv("JARVIS_CODEX_COLS")))
+		d := startLiveDaemon(t, bin, filepath.Join(work, "start-daemon"+os.Getenv("PERSONA_CODEX_COLS")))
 		n, _ = daemonNode(t, c, d)
 		words = append(words, "--remote", "unix://"+d.sock)
 	case "plain", "config":
 		n = liveCodexNode(c)
 	default:
-		t.Fatalf("JARVIS_CODEX_START=%s", variant)
+		t.Fatalf("PERSONA_CODEX_START=%s", variant)
 	}
-	words = append(words, strings.Fields(os.Getenv("JARVIS_CODEX_ARGS"))...)
+	words = append(words, strings.Fields(os.Getenv("PERSONA_CODEX_ARGS"))...)
 	// What New gives a node and the start and the listing write to.
 	if n.logger == nil {
 		n.logger = log.New(os.Stderr, "node: ", log.Lmicroseconds)
@@ -57,15 +57,15 @@ func TestLiveCodexStart(t *testing.T) {
 	}
 	n.panePIDs, n.modes, n.driving = map[string]panePID{}, map[string]sessionModes{}, map[string]bool{}
 	n.dir = t.TempDir()
-	n.bin = os.Getenv("JARVIS_JARVISD")
+	n.bin = os.Getenv("PERSONA_PERSONAD")
 	if n.bin == "" {
-		t.Skip("JARVIS_JARVISD (a jarvisd built for this machine, for codex-start) not set")
+		t.Skip("PERSONA_PERSONAD (a personad built for this machine, for codex-start) not set")
 	}
 	launcher := "live-" + variant
-	withCodexLaunchers(t, map[string][]string{launcher: words, "missing": {"codex-not-installed-for-jarvis"}})
+	withCodexLaunchers(t, map[string][]string{launcher: words, "missing": {"codex-not-installed-for-persona"}})
 	out, _ := liveRun(bin, "--version")
 	version := strings.TrimSpace(strings.TrimPrefix(out, "codex-cli"))
-	rounds, _ := strconv.Atoi(os.Getenv("JARVIS_CODEX_ROUNDS"))
+	rounds, _ := strconv.Atoi(os.Getenv("PERSONA_CODEX_ROUNDS"))
 	rounds = max(rounds, 1)
 	failed := 0
 	for r := 1; r <= rounds; r++ {
@@ -84,7 +84,7 @@ func TestLiveCodexStart(t *testing.T) {
 	}
 	// A launcher that cannot run: the start says so at once.
 	start := time.Now()
-	dir := mkdir(t, filepath.Join(work, "start-missing"+os.Getenv("JARVIS_CODEX_COLS")))
+	dir := mkdir(t, filepath.Join(work, "start-missing"+os.Getenv("PERSONA_CODEX_COLS")))
 	_, err := n.start(bg, dir, "missing", "hi", "", "", "", "", "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "not found in PATH") || time.Since(start) > 20*time.Second {
 		failed++
@@ -110,7 +110,7 @@ func startPrompt(n int) string {
 // liveStartRound starts one Codex the phone's way in a fresh directory and checks what came of it.
 func liveStartRound(t *testing.T, n *Node, c *herdr.Client, work, launcher, variant string, r int) error {
 	lastServiceError = ""
-	dir := mkdir(t, filepath.Join(work, fmt.Sprintf("start-%s%s-%d", variant, os.Getenv("JARVIS_CODEX_COLS"), r)))
+	dir := mkdir(t, filepath.Join(work, fmt.Sprintf("start-%s%s-%d", variant, os.Getenv("PERSONA_CODEX_COLS"), r)))
 	dir, _ = filepath.EvalSymlinks(dir)
 	defer closeWorkspaceOf(c, dir)
 	prompt := startPrompt(r)

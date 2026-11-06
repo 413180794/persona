@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct AssistantActionSourceTests {
     private let tag = #"<persona-action view="item/0" action="choose">{"values":{"task":"读书"}}</persona-action>"#

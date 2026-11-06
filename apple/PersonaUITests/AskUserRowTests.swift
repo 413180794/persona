@@ -4,15 +4,15 @@ import XCTest
 /// asked and what the user picked (the card is gone once answered); a card the user let go says No answer. It used to be
 /// the tool's raw name beside an empty chip.
 ///   PORT=18797 MOCK_ASK_USER=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests
 final class AskUserRowTests: XCTestCase {
     private var hub = ""
-    /// The mock's main Jarvis conversation.
+    /// The mock's main Persona conversation.
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_ASK_USER=1 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_ASK_USER=1 (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = true
@@ -29,7 +29,7 @@ final class AskUserRowTests: XCTestCase {
 
     @MainActor func testAnAnsweredAskUserShowsTheQuestionAndThePick() {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // Every work line and tool row open: rows in the upside-down chat list do not take XCUITest's taps reliably.
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant", "-openAssistant", main,
                                "-openAllWork", "YES", "-showToolDetails", "YES"]

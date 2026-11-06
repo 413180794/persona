@@ -53,9 +53,9 @@ func init() {
 // test connects gets it opened for the manager's set (managerDB).
 func newBusHub(t *testing.T) (*Hub, *httptest.Server, *db.DB) {
 	t.Helper()
-	dsn := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	dsn := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

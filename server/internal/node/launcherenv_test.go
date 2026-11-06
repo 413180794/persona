@@ -184,7 +184,7 @@ func TestProviderEnvClear(t *testing.T) {
 	}
 }
 
-// `jarvisd launch` drops from the shell what it always did for an old launcher (its proxy and timeout stay), and
+// `personad launch` drops from the shell what it always did for an old launcher (its proxy and timeout stay), and
 // everything providerEnv may set for a provider.
 func TestEnvClearFor(t *testing.T) {
 	shell := []string{"ANTHROPIC_API_KEY=x", "CLAUDE_CODE_USE_BEDROCK=1", "CLAUDE_CODE_OAUTH_TOKEN=x", "HTTPS_PROXY=p",

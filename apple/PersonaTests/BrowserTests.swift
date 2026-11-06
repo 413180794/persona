@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The browser on a Mac (the hub's plugin ego, docs/plan-ego-browser.md): what the machine list says, the setup's
 /// steps, the plugin page's words.
@@ -40,7 +40,7 @@ struct BrowserTests {
 
     @Test func toolsReadInChinese() throws {
         let use = Item(id: "1#0", seq: 1, ts: Date(timeIntervalSince1970: 1), role: "assistant", kind: .toolUse, text: nil, toolUseID: "t1",
-                       toolName: "mcp__jarvis__browser_run",
+                       toolName: "mcp__persona__browser_run",
                        toolInput: .object(["machine": .string("macbook"), "script": .string("\nawait page.goto(\"https://example.com\");\nreturn 1")]),
                        isError: nil, image: nil)
         let run = ToolCall(use: use, result: nil)
@@ -48,6 +48,6 @@ struct BrowserTests {
         #expect(ToolPresentation.subject(run, machines: [try machine("")]) == "MacBook · await page.goto(\"https://example.com\");",
                 "the Mac's name, not its id")
         #expect(ToolPresentation.truncation(run.name) == .tail)
-        #expect(ToolPresentation.verb("mcp__jarvis__browser_look") == "看浏览器")
+        #expect(ToolPresentation.verb("mcp__persona__browser_look") == "看浏览器")
     }
 }

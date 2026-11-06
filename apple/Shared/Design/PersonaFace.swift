@@ -18,10 +18,10 @@ nonisolated enum PersonaState: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The built-in personas' faces (Mochi, Visor, Circuit, Pixel, Facet, Jelly) at one moment: everything JarvisAvatar draws for them, without the clock.
+/// The built-in personas' faces (Mochi, Visor, Circuit, Pixel, Facet, Jelly) at one moment: everything PersonaAvatar draws for them, without the clock.
 /// Shared with the widget extension, which draws the Live Activity (docs/live-activity.md「形象」) and cannot run
 /// timelines: it passes `moving: false` and gets each state's still frame (the same one Reduce Motion shows). The app
-/// wraps it in a TimelineView and passes the time (JarvisAvatar). Reads no app-only token: the tint, the brand mark and
+/// wraps it in a TimelineView and passes the time (PersonaAvatar). Reads no app-only token: the tint, the brand mark and
 /// the blink come in from the caller.
 struct PersonaFace: View {
     enum Design: String, Sendable {
@@ -37,7 +37,7 @@ struct PersonaFace: View {
     var state: PersonaState
     /// The accent it is drawn in (offline turns it gray).
     var tint: Color
-    /// The SF Symbol of the brand's star on Visor (`Theme.Icon.jarvis`).
+    /// The SF Symbol of the brand's star on Visor (`Theme.Icon.persona`).
     var mark: String
     /// Seconds (any epoch) for the moving states; ignored when not `moving`.
     var time: TimeInterval = 0

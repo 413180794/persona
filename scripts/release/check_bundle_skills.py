@@ -2,11 +2,11 @@
 """Fail if a public personad binary carries a skill Persona may not redistribute.
 
 The built-in skills a binary embeds (server/internal/assistantskills/builtin/<name>/SKILL.md) must each be a key of
-assistantskills.Redistributable; a copied skill belongs in the user's own space (~/.jarvis/skills) or comes with its
+assistantskills.Redistributable; a copied skill belongs in the user's own space (~/.persona/skills) or comes with its
 extension, never in the download. Every SKILL.md frontmatter found in the binary is checked, and the binary must
 carry at least one (else the scan itself is broken and would pass anything).
 
-  python3 scripts/release/check_bundle_skills.py path/to/jarvisd-linux-amd64
+  python3 scripts/release/check_bundle_skills.py path/to/personad-linux-amd64
 """
 import re
 import sys

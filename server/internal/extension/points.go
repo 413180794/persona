@@ -196,7 +196,7 @@ type AssistantItem struct {
 // skills' scripts do; a shell or an interpreter, which would run whatever Args say, is refused.
 type MCPServerItem struct {
 	ID string `json:"id"` // the server's name for the assistant
-	// Command is looked up on PATH, then in ~/bin; Env names a PERSONA_ variable (JARVIS_ read too) that, when set,
+	// Command is looked up on PATH, then in ~/bin; Env names a PERSONA_ variable that, when set,
 	// replaces the lookup: a path, or "" / 0 / off / false to leave the server out on that machine.
 	Command  string   `json:"command"`
 	Env      string   `json:"env,omitempty"`
@@ -289,7 +289,7 @@ func ParseGate(raw []byte) (*GateFile, error) {
 		return nil, errors.New("gate: no title")
 	}
 	for _, e := range append(append(append([]string(nil), g.Env...), g.Secret...), g.AllowedEnv...) {
-		if !gateEnv.MatchString(e) || strings.HasPrefix(e, "PERSONA_") || strings.HasPrefix(e, "JARVIS_") || e == "PATH" {
+		if !gateEnv.MatchString(e) || strings.HasPrefix(e, "PERSONA_") || e == "PATH" {
 			return nil, fmt.Errorf("gate env %q", e)
 		}
 	}
@@ -346,7 +346,7 @@ func checkPackagePath(p string) error {
 // assistant has already, which no connector's may hide.
 var (
 	cliName          = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
-	reservedCommands = []string{"personad", "jarvisd", "lark-cli", "sh", "bash", "git", "gh", "curl", "python3", "node", "claude", "codex"}
+	reservedCommands = []string{"personad", "lark-cli", "sh", "bash", "git", "gh", "curl", "python3", "node", "claude", "codex"}
 )
 
 // Points are the extension points this hub has, by name.
@@ -524,8 +524,8 @@ var Points = map[string]Point{
 		if err := strict(raw, &m); err != nil {
 			return "", err
 		}
-		if !idPattern.MatchString(m.ID) || m.ID == "jarvis" || m.ID == "persona" {
-			return m.ID, fmt.Errorf("mcp_servers id %q: a-z0-9_-, not jarvis or persona", m.ID)
+		if !idPattern.MatchString(m.ID) || m.ID == "persona" {
+			return m.ID, fmt.Errorf("mcp_servers id %q: a-z0-9_-, not persona or persona", m.ID)
 		}
 		if !cliName.MatchString(m.Command) || slices.Contains(reservedCommands, m.Command) || slices.Contains(mcpRunners, m.Command) {
 			return m.ID, fmt.Errorf("mcp_servers %s: command %q: a lowercase command name (letters, digits, -), not one the assistant has already nor a shell or interpreter", m.ID, m.Command)

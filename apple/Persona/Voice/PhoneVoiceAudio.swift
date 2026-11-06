@@ -130,7 +130,7 @@ nonisolated final class VoiceInputProbe: @unchecked Sendable {
 }
 
 @MainActor final class PhoneVoiceAudio: VoiceAudio {
-    nonisolated static let log = Logger(subsystem: "jarvis", category: "voice")
+    nonisolated static let log = Logger(subsystem: "persona", category: "voice")
 
     /// Whether the microphone runs with echo cancellation (false on the simulator and where voice processing would not start).
     private(set) var cancelsEcho = false

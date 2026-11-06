@@ -1,38 +1,44 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct APIErrorTests {
-    @Test func pairingAcceptsBothProductSchemes() throws {
-        for scheme in ["persona", "jarvis", "PERSONA", "JARVIS"] {
+    @Test func pairingAcceptsOnlyPersonaSchemeIgnoringCase() throws {
+        for scheme in ["persona", "PERSONA"] {
             let config = try #require(ServerConfig(pairURL: "\(scheme)://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"))
             #expect(config.url.absoluteString == "https://hub.example.com")
             #expect(config.token == "fixture")
         }
+        for other in ["other-product", "personas", "personad"] {
+            let link = "\(other)://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"
+            #expect(ServerConfig(pairURL: link) == nil)
+            #expect(!ServerConfig.isPairLink(link))
+            #expect(!ServerConfig.isComputerLink(URL(string: "\(other)://link?token=fixture")!))
+        }
         #expect(ServerConfig(pairURL: "https://pair?url=https%3A%2F%2Fhub.example.com&token=fixture") == nil)
         #expect(ServerConfig(pairURL: "persona://pair?url=https%3A%2F%2Fhub.example.com&token=") == nil)
         // A computer's link (「添加电脑」, Add computer) is for Persona Link on that computer: this device never pairs with it (#4198).
-        for scheme in ["persona", "jarvis", "JARVIS"] {
+        for scheme in ["persona", "PERSONA"] {
             let link = "\(scheme)://link?url=https%3A%2F%2Fhub.example.com&token=fixture&machine=macbook"
             #expect(ServerConfig(pairURL: link) == nil)
             #expect(ServerConfig.isComputerLink(URL(string: link)!))
         }
-        #expect(!ServerConfig.isComputerLink(URL(string: "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=t")!))
+        #expect(!ServerConfig.isComputerLink(URL(string: "persona://pair?url=https%3A%2F%2Fhub.example.com&token=t")!))
     }
     /// A pairing link cut short is still told apart from other links, so opening it says so instead of nothing (#4273).
     @Test func anIncompletePairingLinkIsStillAPairingLink() {
-        for link in ["persona://pair?url=https%3A%2F%2Fhub.example.com", "JARVIS://PAIR?token=fixture", "jarvis://pair", " persona://pair?url= \n"] {
+        for link in ["persona://pair?url=https%3A%2F%2Fhub.example.com", "PERSONA://PAIR?token=fixture", "persona://pair", " persona://pair?url= \n"] {
             #expect(ServerConfig(pairURL: link) == nil)
             #expect(ServerConfig.isPairLink(link), "\(link)")
         }
-        for other in ["jarvis://open?machine=m&session=s", "persona://extension/x?group=g", "https://pair?url=x&token=t", "pair", ""] {
+        for other in ["persona://open?machine=m&session=s", "persona://extension/x?group=g", "https://pair?url=x&token=t", "pair", ""] {
             #expect(!ServerConfig.isPairLink(other), "\(other)")
         }
         #expect(ServerConfig.isPairLink("persona://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"))
     }
     /// An id the caller escaped (a Knowledge project slug with Chinese in it) reaches the hub once escaped, not twice (404).
     @MainActor @Test func escapedIdsAreNotEscapedAgain() throws {
-        let cfg = try #require(ServerConfig(pairURL: "jarvis://pair?url=http%3A%2F%2Fhub.example.com%3A18660&token=t"))
+        let cfg = try #require(ServerConfig(pairURL: "persona://pair?url=http%3A%2F%2Fhub.example.com%3A18660&token=t"))
         let api = APIClient(config: cfg)
         let id = "gsb-打分平台".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"]))!
         #expect(api.url("/api/v1/kb/projects/\(id)").absoluteString

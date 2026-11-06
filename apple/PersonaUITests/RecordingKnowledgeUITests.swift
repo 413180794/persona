@@ -2,9 +2,9 @@ import XCTest
 
 /// Recordings go to the knowledge base, not the composer (#3235, docs/recording.md): a made-up transcribed recording
 /// shows under Knowledge › Recordings, reaches the hub's `/api/v1/recordings` by itself, and deleting it there deletes it on the
-/// hub; no composer's + menu offers a recording any more. Needs its own mock hub (JARVIS_MOCK_HUB), fresh per run:
-/// the hub keeps the delete's tombstone. TEST_RUNNER_JARVIS_SHOTS=<dir> saves the list, the recording and the + menu there
-/// (JARVIS_SHOTS_APPEARANCE names the simulator's appearance in the file).
+/// hub; no composer's + menu offers a recording any more. Needs its own mock hub (PERSONA_MOCK_HUB), fresh per run:
+/// the hub keeps the delete's tombstone. TEST_RUNNER_PERSONA_SHOTS=<dir> saves the list, the recording and the + menu there
+/// (PERSONA_SHOTS_APPEARANCE names the simulator's appearance in the file).
 final class RecordingKnowledgeUITests: XCTestCase {
     private let sample = "00000000-0000-0000-0000-000000000001"
 
@@ -64,18 +64,18 @@ final class RecordingKnowledgeUITests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let appearance = env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let appearance = env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/recording-\(appearance)-\(name).png"))
     }
 
     private func mockHub() throws -> String {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("需要独立 mock hub") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("需要独立 mock hub") }
         return hub
     }
 
     private func pair(_ hub: String) -> String {
-        "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
     }
 
     private func mock(_ hub: String) throws -> [String: Any] {

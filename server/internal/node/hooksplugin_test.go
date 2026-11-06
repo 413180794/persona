@@ -23,7 +23,7 @@ func withClaudeVersion(t *testing.T, v string) {
 // The node writes each set of hooks twice: in its settings file and as a plugin, the same hooks in both.
 func TestHooksPluginsCarryTheSettingsHooks(t *testing.T) {
 	home := t.TempDir()
-	n := &Node{home: home, dir: mkdir(t, filepath.Join(home, ".jarvis")), bin: "/x/jarvisd"}
+	n := &Node{home: home, dir: mkdir(t, filepath.Join(home, ".persona")), bin: "/x/personad"}
 	if err := n.writeClaudeConfig(); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestHooksPluginsCarryTheSettingsHooks(t *testing.T) {
 // alias's own or a managed launcher's env.
 func TestClaudeStartSettings(t *testing.T) {
 	home, cwd := t.TempDir(), t.TempDir()
-	n := &Node{home: home, dir: mkdir(t, filepath.Join(home, ".jarvis")), bin: "/x/jarvisd"}
+	n := &Node{home: home, dir: mkdir(t, filepath.Join(home, ".persona")), bin: "/x/personad"}
 	if err := n.writeClaudeConfig(); err != nil {
 		t.Fatal(err)
 	}
@@ -138,8 +138,8 @@ func TestHerdrStartManagedWithHooksPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitCalls(t, f, "pane.send_input", 1)
-	dir := jarvisDir(home)
-	want := "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID +
+	dir := personaDir(home)
+	want := "HERDR_AGENT=claude /tmp/persona-test/personad launch work_gw --session-id " + startID +
 		" --settings " + shellQuote(filepath.Join(dir, "launcher-settings", "work_gw-env-settings.json")) +
 		" --mcp-config " + shellQuote(filepath.Join(dir, "mcp.json")) +
 		" --plugin-dir " + shellQuote(filepath.Join(dir, "agent-plugin")) +

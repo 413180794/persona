@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A Mac registers with the hub as a desktop, never as the phone: the iPhone keeps the phone_* tools and its wake
 /// pushes (docs/mac.md「Mac 是桌面端，不是手机」).

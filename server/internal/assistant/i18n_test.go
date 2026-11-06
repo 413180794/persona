@@ -51,7 +51,7 @@ func TestAnsweredInLanguage(t *testing.T) {
 		got[0].Question != "Approve this plan?\n\nStep one" || got[0].Answer != "Approved · Accept edits automatically · Don’t ask again for these" {
 		t.Fatalf("en plan = %+v", got)
 	}
-	perm := proto.Interaction{Kind: proto.IxPermission, ToolName: "mcp__jarvis__mail_send",
+	perm := proto.Interaction{Kind: proto.IxPermission, ToolName: "mcp__persona__mail_send",
 		Fields: []proto.Field{{Key: "pw", Label: "Password", Secret: true}}}
 	if got := answeredItems(i18n.Ja, perm, proto.Resolution{Allow: &yes, Values: map[string]string{"pw": "hunter2"}}); len(got) != 1 ||
 		got[0].Question != "Persona · mail sendを使用" || got[0].Answer != "承認しました\nPassword：（入力済み、保存しません）" {

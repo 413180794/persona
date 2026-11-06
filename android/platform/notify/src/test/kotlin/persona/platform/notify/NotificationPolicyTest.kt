@@ -15,7 +15,7 @@ import java.io.File
 
 class NotificationPolicyTest {
     @Test fun notificationActionsMatchUnifiedFixtures() {
-        val fixture = File(System.getProperty("jarvis.repo.root"), "spec/fixtures/approval/unified.json")
+        val fixture = File(System.getProperty("persona.repo.root"), "spec/fixtures/approval/unified.json")
         val cases = Json.parseToJsonElement(fixture.readText()).jsonObject.getValue("cases").jsonArray
         var checked = 0
         cases.forEach { element ->

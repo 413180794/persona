@@ -2,26 +2,26 @@ import XCTest
 
 /// Settings › Extensions › GitHub (#3228): the connector it contributes gets a section with the connector's own Show in Inbox switch (the
 /// same as on Settings › Connectors › GitHub) and a row to that page; the extension's inbox rules stay in its schema form.
-/// Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1 MOCK_GITHUB_EXTENSION=1 (`TEST_RUNNER_JARVIS_PLUGINS_HUB`);
+/// Against scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1 MOCK_GITHUB_EXTENSION=1 (`TEST_RUNNER_PERSONA_EXTENSIONS_HUB`);
 /// with MOCK_GITHUB_EXTENSION=old (a hub from before the switch) the section is not there.
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`.
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE`.
 final class ExtensionConnectorInboxTests: XCTestCase {
     @MainActor func testTheConnectorsInboxSwitch() async throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else {
-            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 MOCK_GITHUB_EXTENSION=1 (JARVIS_PLUGINS_HUB)")
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else {
+            throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 MOCK_GITHUB_EXTENSION=1 (PERSONA_EXTENSIONS_HUB)")
         }
         continueAfterFailure = false
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         let hasSwitch = try await inbox(hub) != nil
         if hasSwitch { try await setInbox(hub, true) } // every run starts on, whatever the last one left
 
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openPlugin", "github"]
         app.launchPinned()
         func shot(_ name: String) {
-            guard let dir = env["JARVIS_SHOTS"] else { return }
+            guard let dir = env["PERSONA_SHOTS"] else { return }
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "extension-connector-\(name)-\(look).png"))
         }
 

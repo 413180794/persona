@@ -143,7 +143,7 @@ Agent chats currently use an inverted list; Lark uses a separate non-inverted im
 Phone connects directly to the hub over the public internet, preferring IPv6 ([README.md](README.md) D9). This round implements the following only on Android; hub cooperation is in [hub-changes.md](hub-changes.md) section 1.
 
 1. **Welcome page** (existing): Connect hub → scan QR code or enter manually.
-   - Manual entry separates address and token; pasting a complete `jarvis://pair?…` automatically splits it.
+   - Manual entry separates address and token; pasting a complete `persona://pair?…` automatically splits it.
    - QR codes come from `personad hub pair`: format unchanged, token replaced with a single-use temporary token valid for 10 minutes, adding `hub` (hub_id), `fp` (public-key fingerprint), `tls` (TLS port), and `alt` (one or two external addresses).
    - Legacy codes (`--legacy` or old hub) still work, but only over plaintext LAN; settings show "Hub version is too old for direct internet connections."
 2. **Step progress** (`StepProgress`, P0):

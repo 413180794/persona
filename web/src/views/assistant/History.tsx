@@ -238,7 +238,7 @@ function ConvChannel({ ids }: { ids?: string[] }) {
 
 function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?: boolean; now: number; onRename: (s: Conversation) => void; onArchive: (s: Conversation, on: boolean) => void }) {
   const menu = useMenu();
-  const route: Route = { name: "jarvis", sid: s.session_id };
+  const route: Route = { name: "persona", sid: s.session_id };
   const title = conversationTitle(s, main);
   const split = splitTitle(title);
   const st = stateOf(s);

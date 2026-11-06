@@ -16,7 +16,7 @@ const chat: Item[] = [
 
 describe("searchFields", () => {
   it("searches your words without the tags contexts travel in", () => {
-    const u = item("u#0", 1, "text", { role: "user", text: '<jarvis-context title="doc">secret body</jarvis-context>\nhello' });
+    const u = item("u#0", 1, "text", { role: "user", text: '<persona-context title="doc">secret body</persona-context>\nhello' });
     expect(searchFields(u)).toEqual([["text", "hello"]]);
   });
 

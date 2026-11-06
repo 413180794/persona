@@ -16,7 +16,7 @@
   "done": "Done",
   "retry": "Retry",
   "linux_step_install": "On that computer, open a terminal, paste this line and press Enter. It installs Persona's background service and connects.",
-  "linux_step_pair": "This hub doesn't know where its install script is. Install jarvis-link on that computer first, then paste this line in a terminal and press Enter.",
+  "linux_step_pair": "This hub doesn't know where its install script is. Install persona-link on that computer first, then paste this line in a terminal and press Enter.",
   "linux_install_link": "How to install",
   "linux_step_done": "Once it says it's paired, this screen moves on by itself.",
   "windows_step_get": "On that computer, put Persona's two programs (the two .exe files in the line below) in one folder. There's no installer yet, so you build them yourself; the tray app is still in the works.",

@@ -6,7 +6,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",
@@ -56,7 +56,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",
@@ -106,7 +106,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",
@@ -156,7 +156,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",
@@ -206,7 +206,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",
@@ -256,7 +256,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",
@@ -306,7 +306,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",
@@ -356,7 +356,7 @@
       "description": "推荐标记仅按已支持的结尾格式显示，发送保留原文。",
       "source": [
         "ios/Shared/Models.swift：QuestionOption.display",
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick"
       ],
       "input": {
         "profile": "ios_current",

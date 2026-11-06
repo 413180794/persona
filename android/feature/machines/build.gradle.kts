@@ -1,6 +1,6 @@
 plugins {
-    id("jarvis.android.library")
-    id("jarvis.compose")
+    id("persona.android.library")
+    id("persona.compose")
 }
 
 android { namespace = "persona.feature.machines"

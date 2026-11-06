@@ -4,29 +4,29 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Serializable @SerialName("jarvis.core.navigation.AssistantRoute") data object AssistantRoute : NavKey
-@Serializable @SerialName("jarvis.core.navigation.AgentsRoute") data object AgentsRoute : NavKey
-@Serializable @SerialName("jarvis.core.navigation.InboxRoute") data object InboxRoute : NavKey
-@Serializable @SerialName("jarvis.core.navigation.SettingsRoute") data object SettingsRoute : NavKey
-@Serializable @SerialName("jarvis.core.navigation.ConnectionSettingsRoute") data object ConnectionSettingsRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.AssistantRoute") data object AssistantRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.AgentsRoute") data object AgentsRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.InboxRoute") data object InboxRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.SettingsRoute") data object SettingsRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.ConnectionSettingsRoute") data object ConnectionSettingsRoute : NavKey
 @Serializable enum class ConversationKind { Assistant, Agent }
 
 @Serializable
-@SerialName("jarvis.core.navigation.RouteSource")
+@SerialName("persona.core.navigation.RouteSource")
 sealed interface RouteSource {
-    @Serializable @SerialName("jarvis.core.navigation.RouteSource.InboxItem") data class InboxItem(val itemId: String) : RouteSource
-    @Serializable @SerialName("jarvis.core.navigation.RouteSource.LarkConversation") data class LarkConversation(val chatId: String) : RouteSource
-    @Serializable @SerialName("jarvis.core.navigation.RouteSource.Interaction") data class Interaction(val machineId: String, val requestId: String) : RouteSource
+    @Serializable @SerialName("persona.core.navigation.RouteSource.InboxItem") data class InboxItem(val itemId: String) : RouteSource
+    @Serializable @SerialName("persona.core.navigation.RouteSource.LarkConversation") data class LarkConversation(val chatId: String) : RouteSource
+    @Serializable @SerialName("persona.core.navigation.RouteSource.Interaction") data class Interaction(val machineId: String, val requestId: String) : RouteSource
 }
 
-@Serializable @SerialName("jarvis.core.navigation.ChatRoute") data class ChatRoute(
+@Serializable @SerialName("persona.core.navigation.ChatRoute") data class ChatRoute(
     val machineId: String,
     val sessionId: String,
     val kind: ConversationKind? = null,
     val source: RouteSource? = null,
 ) : NavKey
 
-@Serializable @SerialName("jarvis.core.navigation.InboxItemRoute") data class InboxItemRoute(val itemId: String) : NavKey
+@Serializable @SerialName("persona.core.navigation.InboxItemRoute") data class InboxItemRoute(val itemId: String) : NavKey
 
 /**
  * An inbox item drawn by the extension of the connector it comes from (its `inbox_item` UI, docs/extensions.md "UI slots"):
@@ -35,17 +35,17 @@ sealed interface RouteSource {
  */
 @Serializable @SerialName("persona.core.navigation.InboxItemUiRoute")
 data class InboxItemUiRoute(val itemId: String, val extensionId: String, val uiId: String, val title: String = "") : NavKey
-@Serializable @SerialName("jarvis.core.navigation.LarkChatRoute") data class LarkChatRoute(val chatId: String) : NavKey
-@Serializable @SerialName("jarvis.core.navigation.InteractionRoute") data class InteractionRoute(val chat: ChatRoute, val requestId: String) : NavKey
-@Serializable @SerialName("jarvis.core.navigation.PairingRoute") data object PairingRoute : NavKey
-@Serializable @SerialName("jarvis.core.navigation.TodosRoute") data object TodosRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.LarkChatRoute") data class LarkChatRoute(val chatId: String) : NavKey
+@Serializable @SerialName("persona.core.navigation.InteractionRoute") data class InteractionRoute(val chat: ChatRoute, val requestId: String) : NavKey
+@Serializable @SerialName("persona.core.navigation.PairingRoute") data object PairingRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.TodosRoute") data object TodosRoute : NavKey
 /** The to-do list with "New to-do" open: the launcher's "New to-do" shortcut ([NewTodoLink], iOS AddTodoIntent). */
-@Serializable @SerialName("jarvis.core.navigation.NewTodoRoute") data object NewTodoRoute : NavKey
-@Serializable @SerialName("jarvis.core.navigation.TodoDetailRoute") data class TodoDetailRoute(val todoId: String) : NavKey
+@Serializable @SerialName("persona.core.navigation.NewTodoRoute") data object NewTodoRoute : NavKey
+@Serializable @SerialName("persona.core.navigation.TodoDetailRoute") data class TodoDetailRoute(val todoId: String) : NavKey
 @Serializable enum class SettingsPage { Diagnostics, Readiness, Notifications, PhoneData, Appearance, Devices, About, Pairing, ClaudeCode, ModelConfig, Hubs, Persona, Extensions, Mail, Feishu, Channels, HubUpdate, Translation, Triage, Capsule, Language, Codex, Providers, Storage, Desktops, Managers, FeishuBot }
-@Serializable @SerialName("jarvis.core.navigation.SettingsPageRoute") data class SettingsPageRoute(val page: SettingsPage) : NavKey
+@Serializable @SerialName("persona.core.navigation.SettingsPageRoute") data class SettingsPageRoute(val page: SettingsPage) : NavKey
 
-enum class AppTab { Jarvis, Agents, Inbox, Settings }
+enum class AppTab { Persona, Agents, Inbox, Settings }
 
 interface Navigator {
     fun navigate(key: NavKey)

@@ -2,11 +2,11 @@ import XCTest
 
 /// More › Clear All (docs/inbox.md「全部清理」): the menu says what it covers (the Lark filter here) and how many; one bulk
 /// request files them all as dismissed, with their versions; the toast's Undo brings them back. Against
-/// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which keeps the bulk requests at /mock/inbox_bulk (each test counts the
-/// ones it adds, so both run against one mock). `TEST_RUNNER_JARVIS_SHOTS=<dir>` also writes the screenshots there.
+/// scripts/mock/mock_hub.py (PERSONA_MOCK_HUB), which keeps the bulk requests at /mock/inbox_bulk (each test counts the
+/// ones it adds, so both run against one mock). `TEST_RUNNER_PERSONA_SHOTS=<dir>` also writes the screenshots there.
 final class InboxMarkAllTests: XCTestCase {
     @MainActor private func launch(_ app: XCUIApplication, pair: String, args: [String]) {
-        let scheme = ProcessInfo.processInfo.environment["JARVIS_SHOTS_SCHEME"] ?? "light"
+        let scheme = ProcessInfo.processInfo.environment["PERSONA_SHOTS_SCHEME"] ?? "light"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-ui.scheme", scheme]
         app.launchPinned()
         acceptIconAlert()
@@ -19,11 +19,11 @@ final class InboxMarkAllTests: XCTestCase {
     @MainActor func testCleanUpAllInTheFilterThenUndo() throws {
         let entry = "全部清理", action = "dismiss", doneBy = "dismissed", shotName = "inbox clean up all"
         let toast: (Int) -> String = { "已清理 \($0) 件" }
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         launch(app, pair: pair, args: ["-tab", "mail", "-inbox.kind", "", "-inbox.source", "feishu"])
         func shot(_ name: String) {
             let image = app.screenshot()
@@ -31,8 +31,8 @@ final class InboxMarkAllTests: XCTestCase {
             a.name = "\(name) \(UITestStyle.name)"
             a.lifetime = .keepAlways
             add(a)
-            if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] { // TEST_RUNNER_JARVIS_SHOTS=<dir>
-                let scheme = ProcessInfo.processInfo.environment["JARVIS_STYLE"] ?? "light" // TEST_RUNNER_JARVIS_STYLE, set with simctl ui appearance
+            if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] { // TEST_RUNNER_PERSONA_SHOTS=<dir>
+                let scheme = ProcessInfo.processInfo.environment["PERSONA_STYLE"] ?? "light" // TEST_RUNNER_PERSONA_STYLE, set with simctl ui appearance
                 let file = name.replacingOccurrences(of: " ", with: "-") + "-" + scheme + "-" + UITestStyle.name + ".png"
                 try? image.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(file))
             }
@@ -104,15 +104,15 @@ final class InboxMarkAllTests: XCTestCase {
     /// 10 items and more ask first (MOCK_INBOX_EXTRA=<n> gives the mock n more FYI mails): the dialog says how many and
     /// what it covers; Cancel leaves them, the dialog's own button does them.
     @MainActor func testManyAskFirst() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let data = try Data(contentsOf: URL(string: hub + "/api/v1/inbox")!)
         let items = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["items"] as? [[String: Any]] ?? []
         let open = items.filter { $0["done_at"] == nil }.count
         guard open >= 10 else { throw XCTSkip("needs MOCK_INBOX_EXTRA=<n> (only \(open) open)") }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         launch(app, pair: pair, args: ["-tab", "mail", "-inbox.kind", "", "-inbox.source", ""])
         let more = app.buttons["更多"].firstMatch
         XCTAssertTrue(more.waitForExistence(timeout: 20), "no 更多")
@@ -127,8 +127,8 @@ final class InboxMarkAllTests: XCTestCase {
         shot.name = "inbox clean up all confirm \(UITestStyle.name)"
         shot.lifetime = .keepAlways
         add(shot)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let scheme = ProcessInfo.processInfo.environment["JARVIS_STYLE"] ?? "light"
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let scheme = ProcessInfo.processInfo.environment["PERSONA_STYLE"] ?? "light"
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("inbox-clean-up-all-confirm-\(scheme)-\(UITestStyle.name).png"))
         }
         let confirm = app.buttons["inbox.cleanConfirm"].firstMatch

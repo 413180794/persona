@@ -34,11 +34,11 @@
 
 | Target | Source | Notes | Evidence |
 | --- | --- | --- | --- |
-| `Jarvis` (iOS App) | `Jarvis/`, `Shared/`, `LiveActivity/` | Depends on JarvisWatch, JarvisWidgets, MarkdownUI | `ios/project.yml:37-99` |
-| `JarvisWidgets` (Live Activity extension) | `JarvisWidgets/`, `LiveActivity/`, `Shared/FleetState.swift`, `Shared/StatusPalette.swift` | `WIDGET_EXTENSION` compilation condition isolates App code | `ios/project.yml:101-128` |
-| `JarvisWatch` | `JarvisWatch/`, **all of `Shared/`** | Uses only a small subset (not `LiveConnection` / `ChatStore`) | `ios/project.yml:129-154` |
-| `JarvisTests` | `JarvisTests/` | `@testable import Jarvis`, **App-hosted** (`TEST_HOST`), nonisolated by default | `ios/project.yml:155-168` |
-| `JarvisUITests` | `JarvisUITests/` | Real App + mock / real hub | `ios/project.yml:169-183` |
+| `Persona` (iOS App) | `Persona/`, `Shared/`, `LiveActivity/` | Depends on PersonaWatch, PersonaWidgets, MarkdownUI | `ios/project.yml:37-99` |
+| `PersonaWidgets` (Live Activity extension) | `PersonaWidgets/`, `LiveActivity/`, `Shared/FleetState.swift`, `Shared/StatusPalette.swift` | `WIDGET_EXTENSION` compilation condition isolates App code | `ios/project.yml:101-128` |
+| `PersonaWatch` | `PersonaWatch/`, **all of `Shared/`** | Uses only a small subset (not `LiveConnection` / `ChatStore`) | `ios/project.yml:129-154` |
+| `PersonaTests` | `PersonaTests/` | `@testable import Persona`, **App-hosted** (`TEST_HOST`), nonisolated by default | `ios/project.yml:155-168` |
+| `PersonaUITests` | `PersonaUITests/` | Real App + mock / real hub | `ios/project.yml:169-183` |
 
 - Swift 6.0 language mode, `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`, `SWIFT_APPROACHABLE_CONCURRENCY: YES` (`ios/project.yml:19-21`).
 - Release: stripping, `SWIFT_REFLECTION_METADATA_LEVEL: without-names` (`ios/project.yml:26-35`)—one source of the CLAUDE.md pitfall "DEBUG launch arguments must not share names with Swift identifiers."
@@ -48,16 +48,16 @@
 
 | Directory | Files | Lines |
 | --- | --- | --- |
-| `ios/Jarvis/App` | 13 | 2,522 |
-| `ios/Jarvis/Intents` | 7 | 519 |
-| `ios/Jarvis/PhoneTools` | 13 | 2,066 |
-| `ios/Jarvis/Views` | 69 | 26,901 |
+| `ios/Persona/App` | 13 | 2,522 |
+| `ios/Persona/Intents` | 7 | 519 |
+| `ios/Persona/PhoneTools` | 13 | 2,066 |
+| `ios/Persona/Views` | 69 | 26,901 |
 | `ios/Shared` | 17 | 4,452 |
-| `ios/LiveActivity` + `ios/JarvisWidgets` | 5 | 509 |
-| `ios/JarvisWatch` | 1 | 594 |
+| `ios/LiveActivity` + `ios/PersonaWidgets` | 5 | 509 |
+| `ios/PersonaWatch` | 1 | 594 |
 | Production total | | ≈ 37,563 |
-| `ios/JarvisTests` | 24 | 2,716 |
-| `ios/JarvisUITests` | 16 | 1,537 |
+| `ios/PersonaTests` | 24 | 2,716 |
+| `ios/PersonaUITests` | 16 | 1,537 |
 
 Views subdirectories: Chat 6,354 · Inbox (including Lark message rendering) 4,998 · Session (terminal / Git / files) 4,458 · Feishu Docs 2,336 · Settings 2,258 · Chats 1,081 · Assistant 1,035 · Machines 1,027 · Interactions 812 · Mail 552 · Knowledge 474 · Link 390 · NewChat 364.
 
@@ -75,10 +75,10 @@ Largest files: `ChatView.swift` 2,598 · `SessionPanes.swift` 1,147 · `Assistan
 ## 2. Current module graph
 
 ```
-@main JarvisApp ─┬─ AppDelegate (notification delegate / silent-push wakeup / DEBUG launch arguments)
+@main PersonaApp ─┬─ AppDelegate (notification delegate / silent-push wakeup / DEBUG launch arguments)
                  ├─ PushRegistrar.shared (APNs registration → POST /api/v1/devices)
                  └─ RootView ← .environment(AppModel.shared)
-                        │  TabView: Jarvis(AssistantView) / Agents(ChatsView) / Inbox(InboxView) / Settings
+                        │  TabView: Persona(AssistantView) / Agents(ChatsView) / Inbox(InboxView) / Settings
                         ▼
 AppModel.shared  (@Observable, MainActor, 998 lines + extensions)
  ├─ LiveConnection (WS: reconnect/heartbeat/stalled) ──decode(background thread)──► ServerEvent
@@ -104,14 +104,14 @@ Widgets: FleetLiveActivity consumes only FleetState / StatusPalette
 
 ### 2.1 Composition root and global state
 
-**[Fact] Composition root**: `JarvisApp` (`ios/Jarvis/App/JarvisApp.swift:5-38`) holds only `AppModel.shared` for environment injection; `AppDelegate.didFinishLaunching`
-(`JarvisApp.swift:41-94`) registers notification categories, dispatches about 12 DEBUG launch arguments, calls `WatchSync.activate`, `AppModel.start`, `LiveActivityController.start`,
-and `PushRegistrar.registerIfPossible`. Foreground/background transitions: disconnect WS on backgrounding, `ensureConnected` + `refresh` on foregrounding (`JarvisApp.swift:27-36`).
-Silent push `jarvis_wake`: connect WS, wait 25 seconds, then disconnect (`JarvisApp.swift:104-116`).
+**[Fact] Composition root**: `PersonaApp` (`ios/Persona/App/PersonaApp.swift:5-38`) holds only `AppModel.shared` for environment injection; `AppDelegate.didFinishLaunching`
+(`PersonaApp.swift:41-94`) registers notification categories, dispatches about 12 DEBUG launch arguments, calls `WatchSync.activate`, `AppModel.start`, `LiveActivityController.start`,
+and `PushRegistrar.registerIfPossible`. Foreground/background transitions: disconnect WS on backgrounding, `ensureConnected` + `refresh` on foregrounding (`PersonaApp.swift:27-36`).
+Silent push `persona_wake`: connect WS, wait 25 seconds, then disconnect (`PersonaApp.swift:104-116`).
 
 **[Fact] Singletons (10 `static let shared`)**: `AppModel`, `AgentSync`, `LarkSync`, `InboxStore`, `LiveActivityController`, `PushRegistrar`, `WatchSync`, `LarkMedia`, `WebViewPool`, `FrameStats`.
 
-**[Fact] `AppModel` responsibilities (`ios/Jarvis/App/AppModel.swift`)**:
+**[Fact] `AppModel` responsibilities (`ios/Persona/App/AppModel.swift`)**:
 
 | # | Responsibility | Location |
 | --- | --- | --- |
@@ -121,7 +121,7 @@ Silent push `jarvis_wake`: connect WS, wait 25 seconds, then disconnect (`Jarvis
 | 4 | Global entity cache + snapshot persistence | 17-34, `restoreSnapshot/saveSnapshot` 770-793 |
 | 5 | Navigation (tab / session to open / current assistant chat / visible sessions) | 36-63, `open(_:)` 243-251, `rememberChat` 49-52 |
 | 6 | UI feedback (toast, error display classification, haptics, phone-tool confirmation dialog) | 35-37, `show(_:)` 942-947, `notDone` 953-958, `Haptics` 993-998 |
-| 7 | Assistant (configuration, main chat, warmup, launcher switching, askJarvis) | 175-240 |
+| 7 | Assistant (configuration, main chat, warmup, launcher switching, askPersona) | 175-240 |
 | 8 | ChatStore registry + LRU eviction (retain 8) | `chat(_:)` 257-265, `evictChats` 267-283 |
 | 9 | Subscription reference counting / visible-session stack | 285-310, 370-380 |
 | 10 | History paging / gap repair / reload | `subscribeMessage…loadOlder` 382-452 |
@@ -160,7 +160,7 @@ Silent push `jarvis_wake`: connect WS, wait 25 seconds, then disconnect (`Jarvis
 - `send(_:)` **silently discards while disconnected** (`LiveConnection.swift:310-321`). [Assessment] `tool_result`, `terminal_input`, `seen`, etc. may be lost at disconnect without feedback; `markSeen` has its own HTTP fallback (`AppModel.swift:685-690`), others do not.
 - Subscription replay after reconnect: `didConnect` sends `subscribe` for every subscribed session with `since_seq = covered` (`AppModel.swift:456-474, 383-388`).
 
-**[Fact] Connection state: `ConnectionStatus`** (`ios/Jarvis/App/ConnectionStatus.swift`, 151 lines)
+**[Fact] Connection state: `ConnectionStatus`** (`ios/Persona/App/ConnectionStatus.swift`, 151 lines)
 - Four states `online / waitingForNetwork / connecting / updating`; pure `phase(network:link:stalled:catchingUp:)` (`ConnectionStatus.swift:77-82`) is testable and unit-tested;
   1.5s debounce, catch-up at most 8s (`35-37`); immediate reconnect on network recovery, immediate ping on network change (`111-123`). Catch-up completion triggers Outbox flush (`AppModel.swift:106`).
 
@@ -180,11 +180,11 @@ Silent push `jarvis_wake`: connect WS, wait 25 seconds, then disconnect (`Jarvis
 Matches `docs/protocol.md:240-248`, "Item continuity." (`docs/archive/lanes/msg-render-plan.md` already diagnosed this chain; not repeated here, only logic locations in §6.)
 
 **[Fact] Background synchronization**
-- `AgentSync` (`ios/Jarvis/App/AgentSync.swift`, 148 lines): hub `rev` (session lists / `revs`) differing from local `synced` (UserDefaults `agentSync.revs`) triggers `after_seq` reads;
+- `AgentSync` (`ios/Persona/App/AgentSync.swift`, 148 lines): hub `rev` (session lists / `revs`) differing from local `synced` (UserDefaults `agentSync.revs`) triggers `after_seq` reads;
   scope = nonoffline or updated within 24h, at most 40, concurrency 3, 300ms coalescing (`AgentSync.swift:13-15, 50-80`). Merge into in-memory ChatStore if present, otherwise update disk cache in background (`pullToDisk`, `125-147`).
-- `LarkSync` (`ios/Jarvis/App/LarkSync.swift`, 104 lines): `lark` events → `AsyncStream` to open chats + latest-page background reads into `lark-chat-<id>`; concurrency 2, at most once per 3s per chat, latest 20 on reconnect (`LarkSync.swift:11-15`).
+- `LarkSync` (`ios/Persona/App/LarkSync.swift`, 104 lines): `lark` events → `AsyncStream` to open chats + latest-page background reads into `lark-chat-<id>`; concurrency 2, at most once per 3s per chat, latest 20 on reconnect (`LarkSync.swift:11-15`).
   `LarkChatView.apply` also writes `lark-chat-<id>` (`LarkChatView.swift:247`), two writers coordinated by convention.
-- `InboxStore` (`ios/Jarvis/App/InboxStore.swift`, 149 lines, `@MainActor @Observable`): `reload` on `inbox` events / reconnect (coalesced concurrent requests), optimistic Done with rollback, one-tap AI twin draft sending;
+- `InboxStore` (`ios/Persona/App/InboxStore.swift`, 149 lines, `@MainActor @Observable`): `reload` on `inbox` events / reconnect (coalesced concurrent requests), optimistic Done with rollback, one-tap AI twin draft sending;
   every list change pushes `AppModel.shared.watchSummary()` to Watch (`InboxStore.swift:54-61`).
 
 ### 2.4 Caching and persistence [Fact]
@@ -194,12 +194,12 @@ Matches `docs/protocol.md:240-248`, "Item continuity." (`docs/archive/lanes/msg-
 | Keychain | `server` (pairing), `watch` (answer-only watch credentials) | `ios/Shared/Keychain.swift:33-48` |
 | `StateCache` (Caches/state/*.json, detached writes) | `dev` (machines/sessions/interactions/assistant snapshot), `outbox`, `drafts`, `inbox-items`, `mail-accounts`, `lark-sync`, `lark-chat-<id>` (latest 80) | `ios/Shared/StateCache.swift:5-24`; callers `AppModel.swift:779-793`, `Outbox.swift:73-94`, `SendSafety.swift:50-63`, `InboxStore.swift:16-19`, `LarkSync.swift:27-30, 90` |
 | `ChatCache` (Caches/chats-v2) | Last two turns' items + hasMore/history/covered per session; drop images above 6 MB | `ios/Shared/ChatStore.swift:786-837` |
-| `ChatImageLoader` | NSCache (96 MB cost cap) + Caches/chat-images; one download per ref (actor) | `ios/Jarvis/Views/Chat/ChatImageLoader.swift:6-73` |
-| `AttachedImageCache` | Static dictionary, **unbounded** | `ios/Jarvis/Views/Chat/MessageViews.swift:373-378` |
+| `ChatImageLoader` | NSCache (96 MB cost cap) + Caches/chat-images; one download per ref (actor) | `ios/Persona/Views/Chat/ChatImageLoader.swift:6-73` |
+| `AttachedImageCache` | Static dictionary, **unbounded** | `ios/Persona/Views/Chat/MessageViews.swift:373-378` |
 | `RowMemo` / `TextMemo` / `MarkdownMemo` | Derived results by message id / text (Markdown parsing, paths, links), caps 20,000 / 4,000 / 128, clear whole table when full | `MessageViews.swift:699-723`, `ios/Shared/TextMemo.swift` |
 | `LarkMedia`, `WebViewPool` | Lark media memory + disk; at most 6 preloaded WKWebViews (LRU) | `Views/Inbox/Lark/LarkMedia.swift:11`, `docs/ios.md:43` |
 | UserDefaults | 132 calls (30 files), about 87 literal keys, roughly 80 DEBUG launch arguments; about 20 `@AppStorage` keys and dynamic `chat.read.<session>`, `agentSync.revs`, etc. | `rg 'UserDefaults\.standard'` |
-| Storage page | Categorizes counts / clearing by directory name | `ios/Jarvis/Views/Settings/StorageView.swift:66-145` |
+| Storage page | Categorizes counts / clearing by directory name | `ios/Persona/Views/Settings/StorageView.swift:66-145` |
 
 `TextMemo` comments report derived chat-row work once took "about 15% of main-thread time in long sessions" (`ios/Shared/TextMemo.swift:3-5`, profile result, sample unspecified).
 
@@ -212,10 +212,10 @@ Refusal: 409 `input_draft` opens Clear and send dialog; `delivered: unknown` war
 
 **[Fact] Paths bypassing Outbox** (no `client_msg_id`, immediate offline failure):
 - `AppModel.send` (for `/clear`, `AppModel.swift:672-682, 642-652`);
-- `AppModel.askJarvis` (Hand to Persona from other pages, `AppModel.swift:207-223`);
-- `AssistantView.start` (first message of a new assistant chat, `ios/Jarvis/Views/Assistant/AssistantView.swift:101-123`);
+- `AppModel.askPersona` (Hand to Persona from other pages, `AppModel.swift:207-223`);
+- `AssistantView.start` (first message of a new assistant chat, `ios/Persona/Views/Assistant/AssistantView.swift:101-123`);
 - `LarkChatView.send` (Lark replies, `LarkChatView.swift:402-416`), `InboxStore.send` (AI twin drafts);
-- Siri `AskClaudeIntent.deliver` (`ios/Jarvis/Intents/AskClaudeIntent.swift:67-77`); Watch `WatchModel.send` (`ios/JarvisWatch/JarvisWatchApp.swift:107-116`).
+- Siri `AskClaudeIntent.deliver` (`ios/Persona/Intents/AskClaudeIntent.swift:67-77`); Watch `WatchModel.send` (`ios/PersonaWatch/PersonaWatchApp.swift:107-116`).
 [Assessment] Sending reliability depends on entry point; copying this into Android inherits inconsistency. Define one Core send use case (idempotent id + network waiting + refusal handling) shared by all entries.
 
 ### 2.6 Interactions and approval policies
@@ -226,42 +226,42 @@ Screen cards prefer hub-parsed `dialog` (answer by `option`, node checks `rev`);
 **[Fact] Plan approval mode is separately implemented at 5 entry points**:
 | Entry | Approval mode | Evidence |
 | --- | --- | --- |
-| In-app plan card | `bypassPermissions` (Approve and run automatically) or `acceptEdits` | `ios/Jarvis/Views/Interactions/InteractionViews.swift:466-476` |
-| Notification button | `acceptEdits` (comment: full plan unseen, commands still require individual approval) | `ios/Jarvis/App/NotificationActions.swift:42-48` |
-| Live Activity button | Reuses notification mapping → `acceptEdits` | `ios/Jarvis/App/FleetActions.swift:9-15`, `ios/LiveActivity/FleetIntents.swift:44-62` |
-| Siri Approve first | `bypassPermissions` | `ios/Jarvis/Intents/ApproveFirstIntent.swift:36-42` |
-| Watch | `bypassPermissions`; Send back uses fixed comment "请重新考虑这个计划" (Please reconsider this plan) | `ios/JarvisWatch/JarvisWatchApp.swift:364-365` |
+| In-app plan card | `bypassPermissions` (Approve and run automatically) or `acceptEdits` | `ios/Persona/Views/Interactions/InteractionViews.swift:466-476` |
+| Notification button | `acceptEdits` (comment: full plan unseen, commands still require individual approval) | `ios/Persona/App/NotificationActions.swift:42-48` |
+| Live Activity button | Reuses notification mapping → `acceptEdits` | `ios/Persona/App/FleetActions.swift:9-15`, `ios/LiveActivity/FleetIntents.swift:44-62` |
+| Siri Approve first | `bypassPermissions` | `ios/Persona/Intents/ApproveFirstIntent.swift:36-42` |
+| Watch | `bypassPermissions`; Send back uses fixed comment "请重新考虑这个计划" (Please reconsider this plan) | `ios/PersonaWatch/PersonaWatchApp.swift:364-365` |
 [Assessment] Comments explain lock-screen limited plan visibility → acceptEdits, yet Siri (also no full plan) and Watch bypass. Define and test such safety policy in one table.
 
 ### 2.7 Push, notifications, background wakeup [Fact]
-- `PushRegistrar` (`JarvisApp.swift:209-246`): request permission → APNs token → `POST /api/v1/devices` (`kind: iphone`, `apns_env`, `topic`); device id stored in UserDefaults `deviceID`.
-- Notification buttons (`NotificationActions.swift`) directly resolve in background; failures send local notifications (`JarvisApp.swift:155-172`). Delegate uses completion-handler version and dispatches to main queue (`JarvisApp.swift:118-150`, corresponding CLAUDE.md lesson).
+- `PushRegistrar` (`PersonaApp.swift:209-246`): request permission → APNs token → `POST /api/v1/devices` (`kind: iphone`, `apns_env`, `topic`); device id stored in UserDefaults `deviceID`.
+- Notification buttons (`NotificationActions.swift`) directly resolve in background; failures send local notifications (`PersonaApp.swift:155-172`). Delegate uses completion-handler version and dispatches to main queue (`PersonaApp.swift:118-150`, corresponding CLAUDE.md lesson).
 - Hub push supports only APNs (`server/internal/hub/push.go:28-63`). [Assessment] Android needs an FCM (or other) channel and device type on hub; server-side work.
 
 ### 2.8 Phone tools [Fact]
-- `PhoneTool { spec, source, confirmation?, run }` (`ios/Jarvis/PhoneTools/PhoneTool.swift:4-10`); 9 source toggles stored in UserDefaults (`PhoneTool.swift:13-66`).
+- `PhoneTool { spec, source, confirmation?, run }` (`ios/Persona/PhoneTools/PhoneTool.swift:4-10`); 9 source toggles stored in UserDefaults (`PhoneTool.swift:13-66`).
 - `PhoneToolRegistry.call` is the sole entry: unknown tool / disabled source / denial / thrown errors become bilingual Chinese-English text for Claude, **never throwing** (`PhoneToolRegistry.swift:95-119`); writes first `confirm` (`AppModel.confirm` suspends with continuation until dialog response, `AppModel.swift:578-583`).
 - On WS connection, `register_phone` declares enabled specs (`AppModel.swift:478-492`); hub sends `tool_call` only to registered phones (`docs/protocol.md:169, 181`).
-- Unit coverage: unique names / valid schema / toggles / denied confirmation / parameter clamping / date parsing (`ios/JarvisTests/PhoneToolsTests.swift`).
+- Unit coverage: unique names / valid schema / toggles / denied confirmation / parameter clamping / date parsing (`ios/PersonaTests/PhoneToolsTests.swift`).
 [Assessment] Protocol is platform-independent (client declares specs), so Android can declare its tools; shared names / parameters / result JSON shapes require one shared tool contract for assistant prompts usable on both.
 
 ### 2.9 Siri / Shortcuts [Fact]
-- Three AppShortcuts + `OpenSessionIntent` (`ios/Jarvis/Intents/JarvisShortcuts.swift`); background intents directly use `Keychain.serverConfig` + `APIClient` (`IntentSupport.swift:133-144`).
+- Three AppShortcuts + `OpenSessionIntent` (`ios/Persona/Intents/PersonaShortcuts.swift`); background intents directly use `Keychain.serverConfig` + `APIClient` (`IntentSupport.swift:133-144`).
 - Pure logic extracted into `IntentText / IntentPhrases / IntentFailure / IntentPicker` (`IntentSupport.swift:8-165`), with 14 unit tests (`IntentsTests.swift`)—the repository's best separation of logic from views.
 - `OpenSessionIntent.perform` unconditionally sets `selectedTab = .chats` (`OpenSessionIntent.swift:68-74`), while `AppModel.open` routes assistant sessions to Persona (`AppModel.swift:243-251`); `InboxView.open` copies routing again (`InboxView.swift:186-194`).
-- `JarvisStatusIntent` counts using `status == .working` (`JarvisStatusIntent.swift:24`); UI uses `AgentState`.
+- `PersonaStatusIntent` counts using `status == .working` (`PersonaStatusIntent.swift:24`); UI uses `AgentState`.
 
 ### 2.10 Watch [Fact]
 - `WatchSync` (`ios/Shared/WatchSync.swift`): iPhone pushes pairing (applicationContext + transferUserInfo) and summaries (2s throttle); Watch can proactively request pairing through `sendMessage`.
-- `WatchModel` (`JarvisWatchApp.swift:21-150`): while open, directly polls hub sessions / interactions / machines / Inbox every 8s; answers, messages, interruption, and Inbox replies also directly call hub.
-- Watch ordering: `state.priority` + `sortDate`, with filters differing from Agents (`JarvisWatchApp.swift:56-58`).
+- `WatchModel` (`PersonaWatchApp.swift:21-150`): while open, directly polls hub sessions / interactions / machines / Inbox every 8s; answers, messages, interruption, and Inbox replies also directly call hub.
+- Watch ordering: `state.priority` + `sortDate`, with filters differing from Agents (`PersonaWatchApp.swift:56-58`).
 
 ### 2.11 Live Activity (Fleet) [Fact]
-- Hub computes content (`FleetState`, Unix-second times, tolerant decoding, `ios/Shared/FleetState.swift:1-161`); foreground app applies `fleet` events and reports push-to-start and activity tokens (`ios/Jarvis/App/LiveActivityController.swift:57-171`).
+- Hub computes content (`FleetState`, Unix-second times, tolerant decoding, `ios/Shared/FleetState.swift:1-161`); foreground app applies `fleet` events and reports push-to-start and activity tokens (`ios/Persona/App/LiveActivityController.swift:57-171`).
 - Dynamic Island side algorithm `IslandCell.sides/minimal`, wording `FleetText`, device-specific `tailored` (`FleetState.swift:142-364`), 12 unit tests (`FleetStateTests.swift`).
 - Settings mirrored in UserDefaults (`LiveActivityController.swift:17-24`), authoritative on hub (`NotifyPrefs`).
 
-### 2.12 Terminal subsystem [Fact] (`ios/Jarvis/Views/Session/Terminal/`, 2,668 lines, plus `TerminalPanel` in `SessionPanes.swift`)
+### 2.12 Terminal subsystem [Fact] (`ios/Persona/Views/Session/Terminal/`, 2,668 lines, plus `TerminalPanel` in `SessionPanes.swift`)
 - `TerminalGrid` (419 lines, pure logic): VT subset for herdr's already-emulated grid (CSI cursor / erase / insert-delete / SGR 256 colors + true color / OSC 8 links), two-cell wide characters and right-half-cell rules, `scrolled(from:to:)` inferring rows scrolled off screen (`TerminalGrid.swift:393-419`).
   Choice rationale (not SwiftTerm / libghostty) in `docs/terminal.md:58-78`.
 - `TerminalWrap` (141 lines, pure logic): phone-width wrapping, hanging indent, CJK line breaks.
@@ -269,7 +269,7 @@ Screen cards prefer hub-parsed `dialog` (answer by `option`, node checks `rev`);
   Registers callbacks through `AppModel.terminalSubscribe` (`AppModel.swift:330-338`); **subscription timing depends on columns×rows measured at first view layout** (`TerminalFeed.swift:80-83`; CLAUDE.md "Wait for terminal first layout to measure phone columns × rows before takeover subscription").
 - Keys: `KeyBatcher` (coalesces text / rolls back unsent characters), `TerminalKeyBytes` (herdr key names → VT bytes, direct bytes during takeover), `TerminalModifiers` (Moshi-style sticky / locked / held), `TerminalCompletion` (screen-based completion)—all pure logic (`TerminalInput.swift:16-107`, `Views/Chat/TerminalKeys.swift:1-70`, `TerminalExtras.swift:282-320`).
 - Rendering `TerminalView` (927 lines, UIScrollView + CoreGraphics cell drawing, selection, edit menu, wheel / click reporting); `UITextInput` (Pinyin marked text).
-- Tests: `TerminalGridTests` (10), `TerminalWrapTests` (about 14, including recorded frame fixtures `ios/JarvisTests/Fixtures/terminal-*.jsonl`), `TerminalTests` (12).
+- Tests: `TerminalGridTests` (10), `TerminalWrapTests` (about 14, including recorded frame fixtures `ios/PersonaTests/Fixtures/terminal-*.jsonl`), `TerminalTests` (12).
 
 ### 2.13 View organization [Fact]
 Page directories: `Assistant / Chat / Chats / Feishu / Inbox(+Lark) / Interactions / Knowledge / Link / Machines / Mail / NewChat / Session(+Terminal) / Settings`, plus `Components.swift`, `Styling.swift`, `RootView.swift`, `ConnectionTitle.swift`.
@@ -299,7 +299,7 @@ Page directories: `Assistant / Chat / Chats / Feishu / Inbox(+Lark) / Interactio
 ### 3.1 State management [Fact]
 - **Primarily Observation**: 12 `@Observable` classes (AppModel, LiveConnection, ConnectionStatus, ChatStore, InboxStore, TerminalFeed, ChatChrome, MessageMenu, FileUploads, FeishuDocsReaderModel, LarkMedia, WatchModel).
   One legacy `ObservableObject`: `InboxAccountState` (`InboxView.swift:3-5, 18`).
-- **Global singletons coexist with environment injection**: root `.environment(AppModel.shared)` (`JarvisApp.swift:14`), yet views directly access `InboxStore.shared`, `LarkSync.shared`, etc. (e.g. `RootView.swift:99`, `LarkChatView.swift:138`).
+- **Global singletons coexist with environment injection**: root `.environment(AppModel.shared)` (`PersonaApp.swift:14`), yet views directly access `InboxStore.shared`, `LarkSync.shared`, etc. (e.g. `RootView.swift:99`, `LarkChatView.swift:138`).
 - **Environment closures as dependency injection**: 17 `@Entry` values, mostly action closures (`openFile`, `loadImage`, `loadFullText`, `attachImage`, `openLink`, `docPick`, `openSpace`, `openSubagent`, `feishuOpen`, `larkOpenFile`, `larkRefresh`, `larkOpenProfile`, `larkReact`…, `MessageViews.swift:84-98`, etc.).
   CLAUDE.md "Attach environment values to NavigationStack itself" is a pitfall of this implicit injection.
 - **Unobserved bookkeeping**: `ChatScratch` (`ChatView.swift:2534-2572`) holds scrolling writes and derived-row cache, avoiding whole-page reevaluation; `ChatChrome` separately observes header-collapse progress (`ChatView.swift:2487-2498`).
@@ -340,9 +340,9 @@ Page directories: `Assistant / Chat / Chats / Feishu / Inbox(+Lark) / Interactio
 
 ### 4.3 Duplicated / inconsistent rules [Fact]
 1. **State ordering**: `AgentState.priority` = Needs you → Unread → Working → Seen → Unknown → Not running (`Models.swift:312-324`); `ChatsView.rank` adds Waiting / Muted (`ChatsView.swift:313-322`);
-   Watch uses `priority` (`JarvisWatchApp.swift:56-58`); `docs/agent-states.md:17` says Needs you → **Working → Unread**, opposite to code (line 20 in the same file agrees with code).
+   Watch uses `priority` (`PersonaWatchApp.swift:56-58`); `docs/agent-states.md:17` says Needs you → **Working → Unread**, opposite to code (line 20 in the same file agrees with code).
 2. **Live / working detection**: `state.isLive` (ChatsView, SpaceView, MachineSpacesView, siblings), `status.isLive` (`MachinesView.swift:104`, `watchSummary` at `AppModel.swift:961`, ChatView menu 1190),
-   `status != .offline` (`AgentSync.swift:65`, `IntentSupport.swift:157`), `status == .working` (`JarvisStatusIntent.swift:24`) vs `state == .working` (many places). UI mixes herdr `SessionStatus` and hub-standardized `AgentState`.
+   `status != .offline` (`AgentSync.swift:65`, `IntentSupport.swift:157`), `status == .working` (`PersonaStatusIntent.swift:24`) vs `state == .working` (many places). UI mixes herdr `SessionStatus` and hub-standardized `AgentState`.
 3. **Fold-when-idle condition**: identical `stays` twice (`ChatsView.swift:162-165` closure and `305-308` function).
 4. **Plan approval mode**: 5 entries, 3 values (§2.6).
 5. **Deep-link routing**: `AppModel.open`, `InboxView.open`, `OpenSessionIntent` (§2.9).
@@ -404,7 +404,7 @@ Page directories: `Assistant / Chat / Chats / Feishu / Inbox(+Lark) / Interactio
 
 ## 5. Platform-independent logic (behavior Android must match)
 
-> Line counts estimate type / function ranges (including comments); complexity is my assessment (low / medium / high). Unit tests refer only to `ios/JarvisTests`.
+> Line counts estimate type / function ranges (including comments); complexity is my assessment (low / medium / high). Unit tests refer only to `ios/PersonaTests`.
 > Prerequisite facts: transcript JSONL → items, authoritative screen-dialog parsing, push policy, and AI sorting are in the Go server (`server/internal/transcript/`, `server/internal/screen/`, `server/internal/hub/`); **clients start at items**.
 
 ### A. Synchronization and data core
@@ -429,7 +429,7 @@ Page directories: `Assistant / Chat / Chats / Feishu / Inbox(+Lark) / Interactio
 | --- | --- | --- | --- | --- | --- | --- |
 | B1 | Agent state priority, list `rank` (Waiting / Muted), group `sortDate` (`state_since` for Working), space grouping, idle folding, peers (same-pane deduplication) | `Models.swift:135-147, 274-326`; `ChatsView.swift:3-49, 304-333`; `AppModel.swift:699-715` | ≈150 | Medium | **None** | Unify three orderings first (§4.3) |
 | B2 | Pin / mute (Agent toggles override space, `allowed` exceptions) | `APIClient.swift:676-709`; `AppModel.swift:795-865` | ≈100 | Low-medium | 1 (`agentOverridesItsMutedSpace`) | Same as hub rules (`APIClient.swift:685` comment) |
-| B3 | Inbox: triage fallback Needs you, type labels, AI twin drafts / working state, filtering/grouping, Watch Needs-you only | `InboxModels.swift:53-122`; `InboxView.swift:31-47, 95-101`; `InboxStore.swift:23-26`; `JarvisWatchApp.swift:65-70` | ≈60 | Low | Decoding only | |
+| B3 | Inbox: triage fallback Needs you, type labels, AI twin drafts / working state, filtering/grouping, Watch Needs-you only | `InboxModels.swift:53-122`; `InboxView.swift:31-47, 95-101`; `InboxStore.swift:23-26`; `PersonaWatchApp.swift:65-70` | ≈60 | Low | Decoding only | |
 | B4 | Approval policies and interaction wording (titles, plan titles, `(Recommended)` → localized Recommended) | `NotificationActions.swift`, `FleetActions.swift`, `ApproveFirstIntent.swift:36-50`, `InteractionViews.swift:4-27, 125-133`, `Models.swift:410-417` | ≈150 | Low (currently inconsistent) | Yes (NotificationActions / FleetIntents / Intents) | Define one policy table first |
 | B5 | Live Activity / Dynamic Island: side cells, minimal state, wording, device-specific payload trimming | `FleetState.swift:142-364` | ≈220 | Medium | Good (12) | Android persistent notifications / Live Updates can reuse wording |
 | B6 | Siri text and selection rules | `Intents/IntentSupport.swift:8-165` | ≈160 | Low | Good (14) | Android App Actions / shortcuts |
@@ -442,7 +442,7 @@ Page directories: `Assistant / Chat / Chats / Feishu / Inbox(+Lark) / Interactio
 
 | # | Logic | Location | Lines | Unit tests |
 | --- | --- | --- | --- | --- |
-| C1 | `<jarvis-context>` encoding/decoding (XML escaping) | `Views/Link/LinkSheet.swift:11-52` | ≈40 | `contextTagRoundTrips` |
+| C1 | `<persona-context>` encoding/decoding (XML escaping) | `Views/Link/LinkSheet.swift:11-52` | ≈40 | `contextTagRoundTrips` |
 | C2 | `<attached_images>` / two legacy formats / `[Image #N]` → thumbnails + display text; `UserRowText` | `MessageViews.swift:134-171, 734-749` | ≈55 | `bubbleHidesTheImageNote` |
 | C3 | Background-task wake summary (Chinese localization, failure detection) | `MessageViews.swift:484-503` | ≈20 | `wakeSummaryReadsInChinese` |
 | C4 | File-path recognition (keep `~`, exclude URLs / model names) | `Views/Chat/FileViewer.swift:36-64` | ≈30 | `keepsTildeAndFindsPaths` |
@@ -504,12 +504,12 @@ Do not copy:
 ### 6.2 Target modules
 
 ```
-JarvisKit (local SPM package; Contracts / Core / TerminalCore do not import UIKit / SwiftUI, allowing swift test on macOS)
-├─ JarvisContracts   Wire types, ServerEvent / client messages, Resolution, FleetState, Features; pure Codable, nonisolated
-├─ JarvisCore        Pure logic: Rows/Blocks/Turn/ChatLines/Frozen, continuity reducer, Outbox reducer, ordering/grouping/peers/Inbox selectors,
+PersonaKit (local SPM package; Contracts / Core / TerminalCore do not import UIKit / SwiftUI, allowing swift test on macOS)
+├─ PersonaContracts   Wire types, ServerEvent / client messages, Resolution, FleetState, Features; pure Codable, nonisolated
+├─ PersonaCore        Pure logic: Rows/Blocks/Turn/ChatLines/Frozen, continuity reducer, Outbox reducer, ordering/grouping/peers/Inbox selectors,
 │                    approval policy table, message-tag parsing, ScreenParser, Fleet / Intent text, formatting
 ├─ TerminalCore      VT grid, wrapping, scroll detection, key encoding, modifiers, frame-order / takeover state machine
-├─ JarvisClient      HubHTTP (by domain), HubRealtime (LiveConnection + ConnectionMonitor), Persistence (StateCache / ChatCache /
+├─ PersonaClient      HubHTTP (by domain), HubRealtime (LiveConnection + ConnectionMonitor), Persistence (StateCache / ChatCache /
 │                    Outbox / Drafts / Keychain), MediaCache, sync engines (SessionSync / AgentSync / LarkSync)
 ├─ DesignSystem      Theme / AppStyle / StatusPalette / Components / Styling
 ├─ Features          Agents, Chat (list engine / header / Composer / work rows), Terminal, Assistant, Inbox (+ LarkUI / FeishuDocsUI / Mail),
@@ -541,7 +541,7 @@ Constraints preserving current features:
 
 ### 6.4 Deliverables for Android
 - Client behavior specification (continuity, folding and row ids, ordering, sending / Outbox, approval policy, message tags, connection state), each rule citing fixtures.
-- Cross-platform fixtures: item-batch sequences → expected items / rows / blocks / lines; recorded terminal frames (existing `ios/JarvisTests/Fixtures/terminal-*.jsonl`) → expected grids; message text → parsing results; FleetState → text.
+- Cross-platform fixtures: item-batch sequences → expected items / rows / blocks / lines; recorded terminal frames (existing `ios/PersonaTests/Fixtures/terminal-*.jsonl`) → expected grids; message text → parsing results; FleetState → text.
 - `scripts/mock/mock_hub.py` is a platform-independent mock hub (HTTP + WS), directly usable in Android UI tests.
 - Hub work: FCM / Android device type (currently APNs only, `server/internal/hub/push.go:28-63`); platform-declared `register_phone` tool sets already supported; moving turn grouping to hub requires optional fields and old-client compatibility.
 
@@ -550,7 +550,7 @@ Constraints preserving current features:
 ## 7. Unresolved / confirmation needed
 
 - **No performance measurements**: synchronous ChatStore init disk/decode duration, RowMemo 20,000-entry memory usage, K/N incremental rebuild duration, actual unbounded `AttachedImageCache` growth.
-- Inbox 90-second fallback polling in `docs/ios.md:33`: additionally searched every `Task.sleep` and `90` literal in `ios/Jarvis/App` and `ios/Jarvis/Views/Inbox`; no such timer (Lark 60s fallback at `LarkChatView.swift:132-135`). Considered documentation drift unless hub-side.
+- Inbox 90-second fallback polling in `docs/ios.md:33`: additionally searched every `Task.sleep` and `90` literal in `ios/Persona/App` and `ios/Persona/Views/Inbox`; no such timer (Lark 60s fallback at `LarkChatView.swift:132-135`). Considered documentation drift unless hub-side.
 - `session` / `ping` in `docs/protocol.md`: searched only `"type": "…"` literals in `server/internal/hub/*.go`, not node or other construction styles.
 - Privacy scan: read only file selection and pattern portions of `scripts/privacy_check.py` (168-180, 69-79), did not run it; conclusions in §4.7.
 - Lark message / card / document, mail, and settings View logic reviewed structurally, not line-by-line; E-group lines estimated from type ranges.

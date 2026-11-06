@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import Testing
 import UserNotifications
-@testable import Jarvis
+@testable import Persona
 
 /// The notification service extension's work (PushCrypto.service, what PersonaNotify/NotificationService.swift calls) run
 /// in the app's process with the push key in the shared keychain group: `simctl push` does not run service extensions

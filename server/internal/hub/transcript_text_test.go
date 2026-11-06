@@ -127,7 +127,7 @@ func TestLocalizedTeammateAndLinks(t *testing.T) {
 		{Role: "user", Kind: proto.KindText, From: "docs", Text: "**分配任务 #3**：Write the docs\n\nDetails here"},
 		{Role: "user", Kind: proto.KindText, From: "docs", Text: "空闲，等待新的任务"},
 		{Role: "user", Kind: proto.KindText, From: "另一个会话", Text: "**计划已批准**\n\nGo ahead"},
-		{Role: "assistant", Kind: proto.KindText, Text: "Done: [打开新建的对话](jarvis://session/m1/abc)"},
+		{Role: "assistant", Kind: proto.KindText, Text: "Done: [打开新建的对话](persona://session/m1/abc)"},
 		{Role: "user", Kind: proto.KindToolResult, Text: "已加载工具 Read\n已加载工具 Grep"},
 	}
 	got := localizedItems(i18n.En, items)
@@ -136,7 +136,7 @@ func TestLocalizedTeammateAndLinks(t *testing.T) {
 		{Role: "user", Kind: proto.KindText, From: "docs", Text: "**Task #3 assigned**: Write the docs\n\nDetails here"},
 		{Role: "user", Kind: proto.KindText, From: "docs", Text: "Idle, waiting for a new task"},
 		{Role: "user", Kind: proto.KindText, From: "Another session", Text: "**Plan approved**\n\nGo ahead"},
-		{Role: "assistant", Kind: proto.KindText, Text: "Done: [Open the new chat](jarvis://session/m1/abc)"},
+		{Role: "assistant", Kind: proto.KindText, Text: "Done: [Open the new chat](persona://session/m1/abc)"},
 		{Role: "user", Kind: proto.KindToolResult, Text: "Loaded tool Read\nLoaded tool Grep"},
 	}
 	for i := range want {

@@ -6,7 +6,7 @@
       "name": "encode_case_alias",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "CONTROL+OPTION+UP"
@@ -28,7 +28,7 @@
       "name": "encode_meta_alias",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "meta+x"
@@ -46,7 +46,7 @@
       "name": "encode_return_alias",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "return"
@@ -63,7 +63,7 @@
       "name": "encode_escape_alias",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "escape"
@@ -80,8 +80,8 @@
       "name": "encode_unknown",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
-        "ios/JarvisTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode",
+        "ios/PersonaTests/TerminalWrapTests.swift — keysAreWhatATerminalSends"
       ],
       "input": {
         "name": "nonsense"
@@ -96,7 +96,7 @@
       "name": "encode_empty",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": ""
@@ -111,7 +111,7 @@
       "name": "encode_trailing_separator",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "ctrl+"
@@ -126,7 +126,7 @@
       "name": "encode_unknown_modifier",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "super+x"
@@ -143,7 +143,7 @@
       "name": "encode_duplicate_modifier",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "ctrl+ctrl+c"
@@ -160,7 +160,7 @@
       "name": "encode_unicode_base",
       "description": "直接编码键名字符串并保留别名和未知输入的现有处理。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
+        "ios/Persona/Views/Session/Terminal/TerminalInput.swift — TerminalKeyBytes.encode"
       ],
       "input": {
         "name": "中"

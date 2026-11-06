@@ -2,19 +2,19 @@ import XCTest
 
 /// Files on a machine's page and an upload into its home (#4858, docs/protocol.md "Changing files"), against
 /// scripts/mock/mock_hub.py started with MOCK_FILES=1 MOCK_FILE_OPS=1:
-///   TEST_RUNNER_JARVIS_FILES_HUB=http://127.0.0.1:<port>
+///   TEST_RUNNER_PERSONA_FILES_HUB=http://127.0.0.1:<port>
 /// The upload is the DEBUG `-showFolderUpload` file (no picker to drive); its name is taken, so the alert comes first.
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there.
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> also saves a screenshot of each step there.
 final class FolderUploadTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_FILES_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_FILES=1 MOCK_FILE_OPS=1 (JARVIS_FILES_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_FILES_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_FILES=1 MOCK_FILE_OPS=1 (PERSONA_FILES_HUB)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook",
                                "-showFolderUpload", "notes.txt"]
         app.launchPinned()
@@ -26,8 +26,8 @@ final class FolderUploadTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let look = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let look = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + look + ".png"))
         }
     }

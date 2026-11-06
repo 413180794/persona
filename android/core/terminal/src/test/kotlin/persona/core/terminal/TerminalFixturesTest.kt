@@ -125,7 +125,7 @@ class TerminalFixturesTest(private val label: String, private val kind: String, 
     companion object {
         @JvmStatic @Parameterized.Parameters(name = "{0}")
         fun fixtures(): List<Array<Any>> {
-            val root = File(requireNotNull(System.getProperty("jarvis.repo.root")), "spec/fixtures/terminal")
+            val root = File(requireNotNull(System.getProperty("persona.repo.root")), "spec/fixtures/terminal")
             val files = requireNotNull(root.listFiles { file -> file.extension == "json" }).sortedBy { it.name }
             require(files.isNotEmpty()) { "Terminal fixtures are missing" }
             return files.flatMap { file ->

@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The composer's send history (docs/mac.md「发送历史」): the web's `send-history.test.ts` cases, on the Mac's keys.
 struct MacSendHistoryTests {

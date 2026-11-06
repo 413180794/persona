@@ -26,7 +26,7 @@ Icons are all Phosphor (MIT), generated into `PhIcons` by `scripts/assets/gen_ph
 ### 1.1 Switching and saving
 
 - Entry: Settings › Interface style (`AppearanceSettings`). Each of the three options has a small preview drawn with that style's real components; tapping one applies it immediately, no restart. The preview is a one-third-size Agents page: one computer, one of its spaces and three sessions, with the style's navigation underneath (Glass's floating dock is drawn as an opaque panel, since the preview has no content to refract).
-- The choice is stored on the device (`AppStyleStore`, SharedPreferences `jarvis-appearance`), not on the hub, and survives re-pairing.
+- The choice is stored on the device (`AppStyleStore`, SharedPreferences `persona-appearance`), not on the hub, and survives re-pairing.
 - Debug builds can set it at launch: `am start … --es debug.style glass|brief|board` (used by the screenshot script).
 
 ### 1.2 Glass transparency and fallbacks
@@ -46,7 +46,7 @@ with no content underneath the edge is invisible, and empty pages (e.g. a chat j
 List pages draw the edge only when content has actually scrolled under an overlay (not while resting at the top, saving one blur); pages without a top bar (a document embedded in a link card) draw no top edge. The opaque level does not blur; it washes the content from dense to light toward the background.
 A page embedded in another (the chat inside the Persona page) fills the whole page and slides under the host's top bar and floating dock: the host tells it how much to leave via `ChromeInsets(top, bottom)`, and it draws the edges itself (the host uses `JPage(edges = false)`).
 Implementation note: Compose's `Canvas` does not clip by default, and glow centers laid out relative to the window often fall outside this page, so `AmbientLight` must `clipToBounds()`, or it paints onto the neighboring column.
-The blur input is quarter resolution (`LocalHazePerformanceMode` = `Performance` in `JarvisTheme`): measured on a phone, full resolution doubled the chat page's frame time, and the reduced version looks no different.
+The blur input is quarter resolution (`LocalHazePerformanceMode` = `Performance` in `PersonaTheme`): measured on a phone, full resolution doubled the chat page's frame time, and the reduced version looks no different.
 Performance measurements are in section 5.
 
 ## 2. Design system (`core:designsystem`)
@@ -55,15 +55,15 @@ Performance measurements are in section 5.
 
 | Accessor | Contents |
 | --- | --- |
-| `JarvisTheme.style` | current style `AppStyle` |
-| `JarvisTheme.palette` | `JarvisPalette`: background, surface (translucent in Glass), surfaceOpaque, surfaceStrong, sunken, line, ink / ink2 / ink3, action / onAction, accent, marker, per-state `StatusColors(dot, text, tint, onDot)`, diff and terminal colors |
-| `JarvisTheme.type` | `JarvisType`: largeTitle, title, headline, body, bodyStrong, callout, caption, micro (tabular digits), label, labelSmall, number, voice (the line Persona speaks), code |
-| `JarvisTheme.shapes` | corner radii for cards, panels, controls, chips, buttons, bottom sheets |
-| `JarvisTheme.motion` | durations and curves (springs in Glass); `count` is the duration for numbers rolling to a new value and chart bars growing to a new height (#2811) |
-| `JarvisTheme.glass` | the glass level actually rendered |
+| `PersonaTheme.style` | current style `AppStyle` |
+| `PersonaTheme.palette` | `PersonaPalette`: background, surface (translucent in Glass), surfaceOpaque, surfaceStrong, sunken, line, ink / ink2 / ink3, action / onAction, accent, marker, per-state `StatusColors(dot, text, tint, onDot)`, diff and terminal colors |
+| `PersonaTheme.type` | `PersonaType`: largeTitle, title, headline, body, bodyStrong, callout, caption, micro (tabular digits), label, labelSmall, number, voice (the line Persona speaks), code |
+| `PersonaTheme.shapes` | corner radii for cards, panels, controls, chips, buttons, bottom sheets |
+| `PersonaTheme.motion` | durations and curves (springs in Glass); `count` is the duration for numbers rolling to a new value and chart bars growing to a new height (#2811) |
+| `PersonaTheme.glass` | the glass level actually rendered |
 
 Material 3's ColorScheme, Typography and Shapes are also generated from the current style, so Material components not yet replaced change colors and fonts along with it, but pages should switch to the components below.
-The old `JarvisTypography.*`, `statusTone(...)`, `PrimaryButton` / `SecondaryButton` / `Card` / `EmptyState` still work and now map to the current style internally; new code uses the new components directly.
+The old `PersonaTypography.*`, `statusTone(...)`, `PrimaryButton` / `SecondaryButton` / `Card` / `EmptyState` still work and now map to the current style internally; new code uses the new components directly.
 
 ### 2.2 Components
 
@@ -105,7 +105,7 @@ The old `JarvisTypography.*`, `statusTone(...)`, `PrimaryButton` / `SecondaryBut
 | `ComposerExpandButton` / `ExpandedComposer` / `rememberComposerGrowLines` | The phone composer's grow-then-expand (#5688): the field grows to a line limit from the height above the keyboard (22% of it, 3 to 8 lines, as iOS), then scrolls and shows ↗↙ at the text's top right (the text insets by `ComposerExpandInset` only then); Expand opens the draft full screen on the same text and caret |
 | `MessageItem` / `DraftPreview` | An Inbox item, the reply Persona drafted |
 | `HubCard` | hub status at the top of the settings page |
-| `AppNavigation` / `HubAvatar` / `JarvisOrb` | Navigation of the App shell (used by `:app`) |
+| `AppNavigation` / `HubAvatar` / `PersonaOrb` | Navigation of the App shell (used by `:app`) |
 | `PageBackdrop` | The background layer shared by pages, bars and the shell: the page background color, plus in Glass the status light laid out over the whole window. Adjacent bars, nested pages and the gaps between them draw as one piece; the page scaffold and shell already use it; places that draw their own background (e.g. the chat list in wide-screen Persona) use it too, not a separate `surface`-style backing |
 | `PaneDivider` | The handle between two panes on wide screens: a translucent ink pill in Glass, a thin ink line in Brief, a small stroked cell in Board; dragging, hover cursor, TalkBack's "widen / narrow / collapse / expand left pane"; used by the shell (see section 3.1) |
 | `VoiceOrb` / `VoiceStatus` / `VoiceCaption` / `VoiceControl` / `VoiceControlBar` | Voice chat page: the orb (connecting, listening, speaking, muted, ended), status line, captions, round labeled buttons at the bottom (used by `feature:voice`, `docs/android.md` ("Voice chat")) |
@@ -119,14 +119,14 @@ when chart labels and series count are unchanged, bars / lines move to the new v
 ### 2.3 Rules for writing pages
 
 1. Assemble pages only from the components above. Do not use Material 3 visual components directly: `Scaffold`, `TopAppBar`, `NavigationBar`, the `Button` family, `Card`, `OutlinedTextField`, `FilterChip`, `AlertDialog`, `ModalBottomSheet`, or multi-item `DropdownMenu`. Primitives such as `Text`, `LazyColumn`, `Box` / `Row` / `Column` are fine.
-2. Colors come only from `JarvisTheme.palette`, font sizes only from `JarvisTheme.type`, corner radii only from `JarvisTheme.shapes`; no `Color(0x…)` or numeric font sizes. Icons use `PhIcons` + `JIcon`, not material-icons.
+2. Colors come only from `PersonaTheme.palette`, font sizes only from `PersonaTheme.type`, corner radii only from `PersonaTheme.shapes`; no `Color(0x…)` or numeric font sizes. Icons use `PhIcons` + `JIcon`, not material-icons.
 3. Page structure: root pages use `JListPage` (without `onBack`, automatically a large title); secondary pages use `JListPage(onBack = …)`; non-list content (chat, terminal, reader) uses `JPage`.
 4. Always use the padding provided by `JPage` as the scroll container's contentPadding, not just padding on the outer container (otherwise content in Glass does not slide under the overlays).
 5. Groups use `JGroupItem(GroupPosition.of(i, n))` or row components with a `position` argument, one row per lazy item; do not wrap many rows in one item (long lists will stutter).
 6. "Things for you to decide": `DecisionCard` in lists, `DecisionDock` in chats, `DecisionOption` for options (`recommended = true` for the recommended one), `DecisionButtons` for buttons, `DecisionAdvice` for Persona's suggestion.
 7. Use `JActionSheet` for long-press menus, `JMenu` for anchored menus with two or three items. Full-screen pages use `JFullScreen`, bottom action bars use `JBottomBar`; do not float text buttons directly over content.
 8. Do not join metadata strings with "·": pass machines, directories, Agent types, loops and background work as component parameters (`machine`, `folder`, `agent`, `facts`).
-9. No `if (JarvisTheme.style == …)` in pages. Style-dependent behavior belongs in components; if a component lacks a parameter, say so in the report and have the design system owner add it.
+9. No `if (PersonaTheme.style == …)` in pages. Style-dependent behavior belongs in components; if a component lacks a parameter, say so in the report and have the design system owner add it.
 10. Button text stays on one line; shorten it or use an icon when space is tight (project rule).
 
 ### 2.4 Agents list (computer → space → session)

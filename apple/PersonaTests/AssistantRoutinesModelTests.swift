@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Scheduled Tasks' view model against a FakeHub: one list of tasks (every day, every N minutes, once), the optimistic
 /// save and its rollback, delete, Run Now.

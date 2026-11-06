@@ -118,7 +118,7 @@ Other opencode plugins (notification ones) can subscribe to the event stream at 
 | `answerFirst` | `auto` | Who gets the permission card first (see above) |
 | `listDays` | `7` | How many recent days of non-running sessions to list (sessions the phone touched, running ones and waiting ones are always listed) |
 | `maxSessions` | `80` | Maximum list length |
-| `socket` | `~/.persona/runtime.sock` | node's runtime socket; `PERSONA_RUNTIME_SOCKET` (compatible with `JARVIS_RUNTIME_SOCKET`) also works |
+| `socket` | `~/.persona/runtime.sock` | node's runtime socket; `PERSONA_RUNTIME_SOCKET` (compatible with `PERSONA_RUNTIME_SOCKET`) also works |
 
 Environment variables: `PERSONA_OPENCODE_DB` (location of opencode.db), `PERSONA_OPENCODE_DEBUG=1` (plugin logs to stderr, visible in the opencode server's output).
 
@@ -147,7 +147,7 @@ Environment variables: `PERSONA_OPENCODE_DB` (location of opencode.db), `PERSONA
 - `cd integrations/opencode && npm test`: mapping (tool names and arguments, ids not shifting with results, error / interrupt / compaction / user shell), list (root sessions, archived, expired, model window, context usage), pagination (by turn, backward and forward, truncation at finalized messages),
   sending (once per `client_msg_id`, images, picking the context by directory), interrupt, rename, push continuity and streaming, event dedup and primary handover, permission cards (allow / always / deny with reason / hand back / TUI answers first), sub-agent permissions, no database, install script.
 - node: `server/internal/node/opencode_test.go` (fake herdr): a single herdr session row, state from herdr / plugin adds blocked, identifying the session from the plugin's pane, plugin not installed, terminal rows for other agents, title prefix.
-- End to end: `JARVISD=<personad> node integrations/opencode/e2e/run.mjs`: a real `opencode serve` (temporary config / data / state directories, plugin installed by `install.mjs`), a scripted fake model,
+- End to end: `PERSONAD=<personad> node integrations/opencode/e2e/run.mjs`: a real `opencode serve` (temporary config / data / state directories, plugin installed by `install.mjs`), a scripted fake model,
   a real `personad node` acting as hub: the plugin connects and lists sessions, sending a message gets an answer, a resend goes in only once, the permission card reaches the phone and is allowed / denied with a reason, streaming, interrupt, rename, pagination, sessions disappear after the server exits. 2026-11-05: 16/16 (opencode 2.0.32).
 - Web: fake hub with `MOCK_OPENCODE=1` + `scripts/test/web_opencode_e2e.py`: opencode sessions in the sidebar and terminal rows for plugin-less / unknown agents, tool calls in the chat, permission cards (wide / narrow × light / dark).
 - Not verified: a real TUI in herdr running together with herdr's opencode plugin (tests use the shape of the data herdr reports, not a live one), the user's own `opencode serve --service` (never installed into its config),

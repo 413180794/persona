@@ -20,7 +20,7 @@
 
 ```sh
 cd android
-./gradlew :feature:inbox:compileDebugKotlin :feature:inbox:testDebugUnitTest --tests jarvis.feature.inbox.LarkThreadTest :core:hub:test --tests jarvis.core.hub.LarkThreadTransportTest
+./gradlew :feature:inbox:compileDebugKotlin :feature:inbox:testDebugUnitTest --tests persona.feature.inbox.LarkThreadTest :core:hub:test --tests persona.core.hub.LarkThreadTransportTest
 ```
 
-服务端通过 `go build -buildvcs=false ./...` 和 `go test -count=1 -p 1 ./internal/hub -run 'TestLark(SendClientID|ThreadReplyReceipt)$|TestReplyReceiptsPersist$'`。持久回执测试使用 `JARVIS_TEST_DATABASE_URL`，覆盖模拟 hub 重启后的原结果重放；话题路由测试覆盖上游参数、成功与错误回执重放、目标冲突和空文本拒绝。构建关闭 VCS 版本标记，以适应 worktree 沙箱。
+服务端通过 `go build -buildvcs=false ./...` 和 `go test -count=1 -p 1 ./internal/hub -run 'TestLark(SendClientID|ThreadReplyReceipt)$|TestReplyReceiptsPersist$'`。持久回执测试使用 `PERSONA_TEST_DATABASE_URL`，覆盖模拟 hub 重启后的原结果重放；话题路由测试覆盖上游参数、成功与错误回执重放、目标冲突和空文本拒绝。构建关闭 VCS 版本标记，以适应 worktree 沙箱。

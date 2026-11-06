@@ -61,7 +61,7 @@ async function setup(t, { version = 'v1', root, store, autoUpdate } = {}) {
   return { n, root, store, host, loader, logs }
 }
 
-test('the hash is the same function as jarvisd\'s (server/internal/runtimepkg TestHashVector)', () => {
+test('the hash is the same function as personad\'s (server/internal/runtimepkg TestHashVector)', () => {
   const files = [{ path: 'b/c.js', data: Buffer.from('y') }, { path: 'a.js', data: Buffer.from('x') }]
   assert.equal(packageHash(files), 'd6f3031b914b7e5243281ea484c24fc9ef36488a09bf7fe78df53a1101f06b8f')
 })

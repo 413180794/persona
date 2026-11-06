@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Token counts in K / M / B, the same rules as the web's formatTokens (#4973), and the usage API's shapes.
 struct TokenUsageTests {

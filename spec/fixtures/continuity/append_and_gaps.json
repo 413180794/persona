@@ -5,7 +5,7 @@
       "name": "append_then_fill_lost_batch",
       "description": "正常追加后发现丢批，保留已到消息并从连续位置补齐。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: aBatchThatDoesNotContinueRevealsAHole",
+        "ios/PersonaTests/ChatStoreTests.swift: aBatchThatDoesNotContinueRevealsAHole",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -834,7 +834,7 @@
       "name": "empty_batch_advances_covered",
       "description": "没有 item 的行也推进连续位置。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: emptyBatchesMoveCoveredForward",
+        "ios/PersonaTests/ChatStoreTests.swift: emptyBatchesMoveCoveredForward",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -1255,7 +1255,7 @@
       "name": "first_line_push_is_baseline",
       "description": "从零接续的新会话推送可直接建立基线并检测后续缺口。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: aBatchFromTheFirstLineIsABaseline",
+        "ios/PersonaTests/ChatStoreTests.swift: aBatchFromTheFirstLineIsABaseline",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -1362,7 +1362,7 @@
       "name": "wait_for_first_backlog",
       "description": "首页未到时较晚的推送先保留，等待首页建立基线。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: noFillBeforeABaseline",
+        "ios/PersonaTests/ChatStoreTests.swift: noFillBeforeABaseline",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -1562,7 +1562,7 @@
       "name": "lost_first_push_after_empty_backlog",
       "description": "空首页已经到达后发现首批丢失，应改取最新页。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: aLostFirstPushOfANewSessionIsNoticed",
+        "ios/PersonaTests/ChatStoreTests.swift: aLostFirstPushOfANewSessionIsNoticed",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -1642,7 +1642,7 @@
       "name": "capped_subscription_requests_rest",
       "description": "订阅补发被截断后继续从已覆盖位置补洞。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: aCappedCatchUpAsksForTheRest",
+        "ios/PersonaTests/ChatStoreTests.swift: aCappedCatchUpAsksForTheRest",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -1921,7 +1921,7 @@
       "name": "timer_uses_current_covered",
       "description": "等待期间补发已追上时，定时器按最新 covered 发请求。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift: settle, fill",
+        "ios/Persona/App/AppModel.swift: settle, fill",
         "ios/Shared/ChatStore.swift: apply"
       ],
       "input": {
@@ -2215,7 +2215,7 @@
       "name": "eight_fill_pages_fall_back_to_latest",
       "description": "第八页仍需继续时停止补洞，改取最新页并保留越过该页的推送。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift: fill, reload",
+        "ios/Persona/App/AppModel.swift: fill, reload",
         "ios/Shared/ChatStore.swift: replace",
         "server/internal/transcript/continuity_corpus_test.go: simRun.fill",
         "docs/redesign/flows.md：第 11 张"

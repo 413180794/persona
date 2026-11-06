@@ -89,21 +89,21 @@ class OnboardingWireTest {
     @Test fun aCodeForAnotherDeviceAsksForTheBrowserLinkAtTheHubsAddress() = withHub { server, http ->
         val api = HttpDeviceSettings(server.url("/sub/").toString(), "example-token", "phone", http)
         val qr = """{"size":2,"rows":["10","01"]}"""
-        server.enqueue(MockResponse().setBody("""{"token":"jp_example","expires_at":"2026-11-06T10:10:00+08:00","pair_url":"jarvis://pair?token=jp_example",
+        server.enqueue(MockResponse().setBody("""{"token":"jp_example","expires_at":"2026-11-06T10:10:00+08:00","pair_url":"persona://pair?token=jp_example",
             "qr":$qr,"web_url":"https://hub.example.com/sub/#token=jp_example","web_qr":$qr}"""))
         val code = api.pairCode()
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("/sub/api/v1/auth/pair-codes", request.path)
         assertEquals(server.url("/sub/").toString(), JsonCodec.parseToJsonElement(request.body.readUtf8()).jsonObject["web"]!!.jsonPrimitive.content)
-        assertEquals("jarvis://pair?token=jp_example", code.pairUrl)
+        assertEquals("persona://pair?token=jp_example", code.pairUrl)
         assertEquals(java.time.OffsetDateTime.parse("2026-11-06T10:10:00+08:00").toInstant().toEpochMilli(), code.expiresAt)
         assertEquals(listOf("10", "01"), code.qr?.rows)
         assertEquals("https://hub.example.com/sub/#token=jp_example", code.webUrl)
         assertTrue("the mock server is on loopback", code.loopbackOnly)
 
         // An older hub: no QR codes and no web link; a QR code that does not add up is left out.
-        server.enqueue(MockResponse().setBody("""{"token":"jp_x","expires_at":"bad","pair_url":"jarvis://pair?token=jp_x","qr":{"size":3,"rows":["1"]}}"""))
+        server.enqueue(MockResponse().setBody("""{"token":"jp_x","expires_at":"bad","pair_url":"persona://pair?token=jp_x","qr":{"size":3,"rows":["1"]}}"""))
         val old = api.pairCode()
         assertNull(old.qr)
         assertNull(old.webUrl)
@@ -122,8 +122,8 @@ class OnboardingWireTest {
     @Test fun aComputersCodeConfirmAndReject() = withHub { server, http ->
         val api = HttpComputerPairing({ path, method, body -> http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute() })
         server.enqueue(MockResponse().setBody("""{"token":"jp_x","expires_at":"2026-11-06T02:10:00Z","machine":"macbook","name":"小林的 MacBook",
-            "trust":"pending","added":true,"pair_url":"jarvis://link?machine=macbook","command":"jarvis-link pair 'jarvis://link?machine=macbook'",
-            "install":{"linux":"curl -fsSL https://example.com/install.sh | sh -s -- --node --pair 'jarvis://link?machine=macbook'"}}"""))
+            "trust":"pending","added":true,"pair_url":"persona://link?machine=macbook","command":"persona-link pair 'persona://link?machine=macbook'",
+            "install":{"linux":"curl -fsSL https://example.com/install.sh | sh -s -- --node --pair 'persona://link?machine=macbook'"}}"""))
         val code = api.add(" 小林的 MacBook ", ComputerOs.Mac)
         val (line, sent) = body(server)
         assertEquals("POST /api/v1/auth/pair-codes", line)
@@ -134,7 +134,7 @@ class OnboardingWireTest {
         assertEquals("pending", code.trust)
         assertTrue(code.linuxInstall!!.startsWith("curl"))
 
-        server.enqueue(MockResponse().setBody("""{"token":"jp_y","expires_at":"2026-11-06T02:20:00Z","machine":"macbook","trust":"pending","pair_url":"jarvis://link?machine=macbook"}"""))
+        server.enqueue(MockResponse().setBody("""{"token":"jp_y","expires_at":"2026-11-06T02:20:00Z","machine":"macbook","trust":"pending","pair_url":"persona://link?machine=macbook"}"""))
         val again = api.again("macbook")
         assertEquals("""{"machine":"macbook"}""", body(server).second.toString())
         assertFalse(again.added)

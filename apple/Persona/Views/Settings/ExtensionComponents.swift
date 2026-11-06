@@ -116,7 +116,7 @@ struct ExtensionMarkdown: View {
 
     var body: some View {
         Markdown(text)
-            .markdownTheme(.jarvis)
+            .markdownTheme(.persona)
             .markdownImageProvider(NoImages())
             .markdownInlineImageProvider(NoImages())
             .textSelection(.enabled)

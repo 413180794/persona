@@ -9,7 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 
 /** Whether the drawer's "Automatic chats" is open (#3264), kept on this phone: folded until the user opens it. */
 internal class AssistantPreferences(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences("jarvis-assistant", Context.MODE_PRIVATE)
+    private val preferences = context.applicationContext.getSharedPreferences("persona-assistant", Context.MODE_PRIVATE)
 
     var autoOpen: Boolean
         get() = preferences.getBoolean(AUTO_OPEN, false)

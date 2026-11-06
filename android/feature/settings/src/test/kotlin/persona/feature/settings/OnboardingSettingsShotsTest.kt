@@ -88,7 +88,7 @@ class OnboardingSettingsShotsTest {
         override suspend fun revoke(credentialId: String) {}
         override suspend fun preferences() = DeviceNotificationPreferences()
         override suspend fun savePreferences(preferences: DeviceNotificationPreferences) = preferences
-        override suspend fun pairCode() = AppPairCode("jp_example", System.currentTimeMillis() + 598_000, "jarvis://pair?token=jp_example",
+        override suspend fun pairCode() = AppPairCode("jp_example", System.currentTimeMillis() + 598_000, "persona://pair?token=jp_example",
             QrImage(25, rows), "https://hub.example.com/#token=jp_example", QrImage(25, rows.reversed()))
     }
 

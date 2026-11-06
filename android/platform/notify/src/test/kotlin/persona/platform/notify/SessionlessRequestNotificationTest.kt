@@ -52,7 +52,7 @@ class SessionlessRequestNotificationTest {
         notifier().postInteraction(script)
         val notification = shown()
         assertEquals(NotificationRoute.card("machine", "script").uri(), shadowOf(notification.contentIntent).savedIntent.data)
-        assertEquals("jarvis://open?tab=agents&machine=machine&request=script", shadowOf(notification.contentIntent).savedIntent.data.toString())
+        assertEquals("persona://open?tab=agents&machine=machine&request=script", shadowOf(notification.contentIntent).savedIntent.data.toString())
         assertEquals(listOf("拒绝", "允许"), notification.actions.map { it.title.toString() })
     }
 

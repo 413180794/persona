@@ -89,10 +89,10 @@ func hookCommands(t *testing.T, s map[string]any, event string) []string {
 // was dropped and claude was "Not logged in".
 func TestClaudeSettingsMergesTheLaunchers(t *testing.T) {
 	home, cwd := t.TempDir(), t.TempDir()
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona"), logger: log.New(io.Discard, "", 0)}
 	ours := filepath.Join(n.dir, "claude-settings.json")
-	writeFile(t, ours, `{"hooks":{"PreToolUse":[{"matcher":"AskUserQuestion","hooks":[{"type":"command","command":"jarvisd hook"}]}],
-		"Stop":[{"hooks":[{"type":"command","command":"jarvisd hook"}]}]}}`)
+	writeFile(t, ours, `{"hooks":{"PreToolUse":[{"matcher":"AskUserQuestion","hooks":[{"type":"command","command":"personad hook"}]}],
+		"Stop":[{"hooks":[{"type":"command","command":"personad hook"}]}]}}`)
 	writeFile(t, filepath.Join(home, ".claude/settings.work.json"), `{"env":{"ANTHROPIC_AUTH_TOKEN":"tok","ANTHROPIC_BASE_URL":"https://gw.example.com"},
 		"model":"m1","hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"their-hook"}]}]}}`)
 	writeFile(t, filepath.Join(cwd, "rel.json"), `{"model":"rel"}`)
@@ -111,10 +111,10 @@ func TestClaudeSettingsMergesTheLaunchers(t *testing.T) {
 	if env["ANTHROPIC_AUTH_TOKEN"] != "tok" || env["ANTHROPIC_BASE_URL"] != "https://gw.example.com" || s["model"] != "m1" {
 		t.Errorf("the launcher's settings are not all there: %v", s)
 	}
-	if c := hookCommands(t, s, "PreToolUse"); len(c) != 2 || c[0] != "their-hook" || c[1] != "jarvisd hook" {
+	if c := hookCommands(t, s, "PreToolUse"); len(c) != 2 || c[0] != "their-hook" || c[1] != "personad hook" {
 		t.Errorf("PreToolUse %v, want its own then Persona's", c)
 	}
-	if c := hookCommands(t, s, "Stop"); len(c) != 1 || c[0] != "jarvisd hook" {
+	if c := hookCommands(t, s, "Stop"); len(c) != 1 || c[0] != "personad hook" {
 		t.Errorf("Stop %v", c)
 	}
 	if fi, err := os.Stat(got); err != nil || fi.Mode().Perm() != 0o600 {
@@ -138,9 +138,9 @@ func TestClaudeSettingsMergesTheLaunchers(t *testing.T) {
 // global settings (another gateway) would otherwise replace it.
 func TestManagedSettingsCarryTheLaunchersEnv(t *testing.T) {
 	home := t.TempDir()
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona"), logger: log.New(io.Discard, "", 0)}
 	ours := filepath.Join(n.dir, "claude-settings.json")
-	writeFile(t, ours, `{"env":{"ANTHROPIC_AUTH_TOKEN":"global"},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"jarvisd hook"}]}]}}`)
+	writeFile(t, ours, `{"env":{"ANTHROPIC_AUTH_TOKEN":"global"},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"personad hook"}]}]}}`)
 	n.setManaged([]proto.ManagedLauncher{{Name: "m", BaseURL: "https://gw.example.com", Model: "m1", APIKey: "k"}})
 	got := n.claudeSettings(context.Background(), "m", ours, home)
 	if got == ours {
@@ -163,7 +163,7 @@ func TestManagedSettingsCarryTheLaunchersEnv(t *testing.T) {
 // goes in, alone, and nothing is logged (#1364: a node without a logger crashed here).
 func TestManagedSettingsWithoutPersonasFile(t *testing.T) {
 	home := t.TempDir()
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis")}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona")}
 	ours := filepath.Join(n.dir, "claude-settings.json")
 	n.setManaged([]proto.ManagedLauncher{{Name: "m", BaseURL: "https://gw.example.com", Model: "m1", APIKey: "k"}})
 	got := n.claudeSettings(context.Background(), "m", ours, home)

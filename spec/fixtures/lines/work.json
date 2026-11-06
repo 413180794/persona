@@ -7,7 +7,7 @@
       "description": "非空思考作为工作叙述保留，展开时可以读到原文。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -134,7 +134,7 @@
       "description": "独立的空白和缺失文本思考不显示在工作行里。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -227,7 +227,7 @@
       "description": "夹在工具里的空思考沿用现有实现，仍是工具步骤。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -433,7 +433,7 @@
       "description": "工具前的思考单独归行，工具间与末尾思考跟随工具组。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -691,7 +691,7 @@
       "description": "没有结果的工具卡标记为运行中，但完成轮工作行不自动变成进行中。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -803,7 +803,7 @@
       "description": "失败工具按结果中的错误标记计数，不把错误文本推断成失败。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1001,7 +1001,7 @@
       "description": "下一轮才到的工具结果仍回配原调用。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1169,7 +1169,7 @@
       "description": "带调用标识的工具图片归工具卡，用户图片单独显示。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1350,7 +1350,7 @@
       "description": "当前窗口没有对应调用时，结果及工具图片不单独生成行。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1419,7 +1419,7 @@
       "description": "同一调用有多条结果时，最后一条决定内容和错误标记。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1549,7 +1549,7 @@
       "description": "工作行耗时采用用户消息到本段末条回复的时间差。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1673,7 +1673,7 @@
       "description": "用户消息没时间时从步骤找起点，完全没时间则不显示耗时。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1793,7 +1793,7 @@
       "description": "回复后仍有工具时工具保留在工作行，结束时间取末个步骤。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1917,7 +1917,7 @@
       "description": "未知类型不渲染成消息，但会结束之前连续的工具分组。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -2055,7 +2055,7 @@
       "name": "missing_start_time_uses_first_step",
       "description": "用户消息没有时间时，工作行从第一个有时间的步骤计算耗时。",
       "source": [
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines start / WorkLine.duration"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines start / WorkLine.duration"
       ],
       "derived": true,
       "input": {

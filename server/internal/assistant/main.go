@@ -49,7 +49,7 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	if cfg.DatabaseURL == "" {
 		return errors.New("no database_url in hub.json (or PERSONA_DATABASE_URL)")
 	}
-	token := strings.TrimSpace(identity.Getenv("JARVIS_ASSISTANT_TOKEN"))
+	token := strings.TrimSpace(identity.Getenv("PERSONA_ASSISTANT_TOKEN"))
 	if token == "" && stdin != nil {
 		r := bufio.NewReader(stdin)
 		line, _ := r.ReadString('\n')
@@ -67,11 +67,11 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	if token == "" {
 		return errors.New("no bus token: set PERSONA_ASSISTANT_TOKEN (personad hub assistant-token prints one)")
 	}
-	hub := strings.TrimSpace(identity.Getenv("JARVIS_ASSISTANT_HUB"))
+	hub := strings.TrimSpace(identity.Getenv("PERSONA_ASSISTANT_HUB"))
 	if hub == "" {
 		hub = localHubURL(cfg.Listen)
 	}
-	deploy := identity.Getenv("JARVIS_ASSISTANT_DEPLOY")
+	deploy := identity.Getenv("PERSONA_ASSISTANT_DEPLOY")
 	if deploy == "" {
 		deploy = "external"
 	}
@@ -327,7 +327,7 @@ type hubConfig struct {
 	Listen      string `json:"listen"`
 }
 
-// readHubConfig reads hub.json in the data directory (~/.persona, or ~/.jarvis) with the environment over it, as the
+// readHubConfig reads hub.json in the data directory (~/.persona, or ~/.persona) with the environment over it, as the
 // hub does (its envOverrides); a missing file is no error.
 func readHubConfig() (hubConfig, error) {
 	cfg := hubConfig{Listen: ":18660"}
@@ -340,10 +340,10 @@ func readHubConfig() (hubConfig, error) {
 	case !os.IsNotExist(err):
 		return cfg, err
 	}
-	if v := identity.Getenv("JARVIS_DATABASE_URL"); v != "" {
+	if v := identity.Getenv("PERSONA_DATABASE_URL"); v != "" {
 		cfg.DatabaseURL = v
 	}
-	if v := identity.Getenv("JARVIS_LISTEN"); v != "" {
+	if v := identity.Getenv("PERSONA_LISTEN"); v != "" {
 		cfg.Listen = v
 	}
 	return cfg, nil

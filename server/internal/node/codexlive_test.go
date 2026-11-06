@@ -27,22 +27,22 @@ import (
 // isolated herdr — every state of docs/codex.md "Questions and approvals" a computer can be in. scripts/test/test-codex.sh sets it up:
 //
 //	HERDR_SOCKET_PATH    the isolated herdr (never the one in use)
-//	JARVIS_CODEX_BIN     the codex under test
-//	JARVIS_CODEX_ARGS    extra arguments, space-separated (a model the login takes: -m gpt-6-astra)
-//	JARVIS_CODEX_WORK    a scratch directory: the Codex runs in a new git repo there
-//	JARVIS_CODEX_COLS    start Codex in a window this many columns wide (a small window)
-//	JARVIS_CODEX_ROUNDS  how many times every case runs (default 1)
-//	JARVIS_CODEX_CASES   only these cases (comma-separated names)
+//	PERSONA_CODEX_BIN     the codex under test
+//	PERSONA_CODEX_ARGS    extra arguments, space-separated (a model the login takes: -m gpt-6-astra)
+//	PERSONA_CODEX_WORK    a scratch directory: the Codex runs in a new git repo there
+//	PERSONA_CODEX_COLS    start Codex in a window this many columns wide (a small window)
+//	PERSONA_CODEX_ROUNDS  how many times every case runs (default 1)
+//	PERSONA_CODEX_CASES   only these cases (comma-separated names)
 func TestLiveCodexCards(t *testing.T) {
-	bin, work := os.Getenv("JARVIS_CODEX_BIN"), os.Getenv("JARVIS_CODEX_WORK")
+	bin, work := os.Getenv("PERSONA_CODEX_BIN"), os.Getenv("PERSONA_CODEX_WORK")
 	if bin == "" || work == "" {
-		t.Skip("JARVIS_CODEX_BIN / JARVIS_CODEX_WORK not set")
+		t.Skip("PERSONA_CODEX_BIN / PERSONA_CODEX_WORK not set")
 	}
 	lc := startLiveCodex(t, bin, work, liveOptions{})
-	rounds, _ := strconv.Atoi(os.Getenv("JARVIS_CODEX_ROUNDS"))
+	rounds, _ := strconv.Atoi(os.Getenv("PERSONA_CODEX_ROUNDS"))
 	rounds = max(rounds, 1)
 	only := map[string]bool{}
-	for _, c := range strings.Split(os.Getenv("JARVIS_CODEX_CASES"), ",") {
+	for _, c := range strings.Split(os.Getenv("PERSONA_CODEX_CASES"), ",") {
 		if c = strings.TrimSpace(c); c != "" {
 			only[c] = true
 		}
@@ -139,7 +139,7 @@ func startLiveCodex(t *testing.T, bin, work string, o liveOptions) *liveCodex {
 	if o.name == "" {
 		o.name = "codex-" + strings.ReplaceAll(lc.version, ".", "_")
 	}
-	lc.dir = filepath.Join(work, o.name+os.Getenv("JARVIS_CODEX_COLS"))
+	lc.dir = filepath.Join(work, o.name+os.Getenv("PERSONA_CODEX_COLS"))
 	if err := os.MkdirAll(lc.dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -155,11 +155,11 @@ func startLiveCodex(t *testing.T, bin, work string, o liveOptions) *liveCodex {
 	}
 	lc.ws, lc.pane = created.Workspace.ID, created.RootPane.ID
 	cmd := []string{shellQuote(bin), "-c", "'notify=[]'", "-c", "check_for_update_on_startup=false"}
-	for _, a := range append(strings.Fields(os.Getenv("JARVIS_CODEX_ARGS")), o.args...) {
+	for _, a := range append(strings.Fields(os.Getenv("PERSONA_CODEX_ARGS")), o.args...) {
 		cmd = append(cmd, shellQuote(strings.ReplaceAll(a, "{dir}", lc.dir)))
 	}
 	line := "exec " + strings.Join(cmd, " ")
-	if cols := os.Getenv("JARVIS_CODEX_COLS"); cols != "" {
+	if cols := os.Getenv("PERSONA_CODEX_COLS"); cols != "" {
 		line = "stty cols " + cols + " rows 32; " + line
 	}
 	if err := lc.c.PaneRun(bg, lc.pane, line); err != nil {

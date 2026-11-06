@@ -116,11 +116,11 @@ func TestExplainANameThatDoesNotResolve(t *testing.T) {
 }
 
 func TestNodeHint(t *testing.T) {
-	if got := nodeHint("dial unix /x/node.sock: connect: connection refused"); !strings.Contains(got, "jarvis-link node status") {
+	if got := nodeHint("dial unix /x/node.sock: connect: connection refused"); !strings.Contains(got, "persona-link node status") {
 		t.Fatalf("hint %q", got)
 	}
 	// The link's own words already say how to run the node.
-	if got := nodeHint("本机的" + link.NodeDownMarker + "（/x/node.sock 连不上）：jarvis-link node install（systemd 用户服务）"); got != "" {
+	if got := nodeHint("本机的" + link.NodeDownMarker + "（/x/node.sock 连不上）：persona-link node install（systemd 用户服务）"); got != "" {
 		t.Fatalf("hint %q", got)
 	}
 }
@@ -145,12 +145,12 @@ func TestStatusSaysHowToCheckAnOfflineNode(t *testing.T) {
 		hint    bool
 	}{
 		{"dial unix /x/node.sock: connect: connection refused", true},
-		{"本机的" + link.NodeDownMarker + "（/x/node.sock 连不上）：jarvis-link node install（systemd 用户服务）", false},
+		{"本机的" + link.NodeDownMarker + "（/x/node.sock 连不上）：persona-link node install（systemd 用户服务）", false},
 	} {
 		f.saveStatus(t, link.Status{State: "connected", Kind: "lan", Address: "https://192.0.2.10:18662", Node: "offline", NodeError: tc.nodeErr}, 4321)
 		f.out.Reset()
 		_ = status(f.env, nil)
-		if got := strings.Count(f.out.String(), "jarvis-link node status 看常驻 node"); got != map[bool]int{true: 1, false: 0}[tc.hint] {
+		if got := strings.Count(f.out.String(), "persona-link node status 看常驻 node"); got != map[bool]int{true: 1, false: 0}[tc.hint] {
 			t.Errorf("%q: hint %d times:\n%s", tc.nodeErr, got, f.out)
 		}
 	}

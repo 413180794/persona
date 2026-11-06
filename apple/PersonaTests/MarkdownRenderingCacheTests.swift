@@ -2,7 +2,7 @@ import Foundation
 import MarkdownUI
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Rendering helpers retain hot results without changing code text, table content or font-sensitive measurements.
 @MainActor

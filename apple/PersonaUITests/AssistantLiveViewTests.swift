@@ -2,14 +2,14 @@ import XCTest
 
 /// Live-card updates through the shared component renderer. A local mock serves the shared progress snapshots;
 /// the real app updates the same feed row and ignores a stale WebSocket version.
-/// TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests
+/// TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests
 final class AssistantLiveViewTests: XCTestCase {
     @MainActor private var app: XCUIApplication!
 
     override func setUpWithError() throws { continueAfterFailure = false }
 
     private func mock() throws -> URL {
-        guard let raw = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
+        guard let raw = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
               let url = URL(string: raw), url.scheme == "http", url.host == "127.0.0.1" else {
             throw XCTSkip("needs the dedicated loopback assistant_views_hub.py fixture")
         }

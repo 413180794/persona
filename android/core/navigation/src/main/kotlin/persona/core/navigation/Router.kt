@@ -29,10 +29,10 @@ class ResolvedRoute(
 )
 
 /** The launcher's "Ask Persona": the Persona tab with the cursor in its composer, cold start or not. */
-const val AskPersonaLink = "jarvis://open?target=tab&tab=jarvis&focus=composer"
+const val AskPersonaLink = "persona://open?target=tab&tab=persona&focus=composer"
 
 /** Agents › To-dos with a new to-do being written ([NewTodoRoute]). */
-const val NewTodoLink = "jarvis://open?target=new-todo"
+const val NewTodoLink = "persona://open?target=new-todo"
 
 class Router(
     private val conversationKind: (machineId: String, sessionId: String) -> ConversationKind? = { _, _ -> null },
@@ -48,7 +48,7 @@ class Router(
     }
 
     private fun resolve(key: NavKey): ResolvedRoute? = when (key) {
-        AssistantRoute -> ResolvedRoute(AppTab.Jarvis, key)
+        AssistantRoute -> ResolvedRoute(AppTab.Persona, key)
         AgentsRoute -> ResolvedRoute(AppTab.Agents, key)
         InboxRoute -> ResolvedRoute(AppTab.Inbox, key)
         SettingsRoute -> ResolvedRoute(AppTab.Settings, key)
@@ -80,7 +80,7 @@ class Router(
     private fun deepLink(url: String): ResolvedRoute? {
         val uri = try { URI(url) } catch (_: IllegalArgumentException) { return null }
             catch (_: java.net.URISyntaxException) { return null }
-        if (uri.scheme !in setOf("persona", "jarvis") || uri.rawAuthority !in setOf("open", "pair") ||
+        if (uri.scheme != "persona" || uri.rawAuthority !in setOf("open", "pair") ||
             !uri.rawPath.isNullOrEmpty() || uri.rawFragment != null) return null
         if (uri.host == "pair") {
             // PairingInput remains responsible for validating credentials and transport policy.
@@ -137,10 +137,10 @@ internal fun sessionPath(path: String, kind: ConversationKind?): ChatRoute? {
 }
 
 private val ConversationKind?.tab: AppTab
-    get() = if (this == ConversationKind.Assistant) AppTab.Jarvis else AppTab.Agents
+    get() = if (this == ConversationKind.Assistant) AppTab.Persona else AppTab.Agents
 
 fun tabRoot(tab: AppTab): NavKey = when (tab) {
-    AppTab.Jarvis -> AssistantRoute
+    AppTab.Persona -> AssistantRoute
     AppTab.Agents -> AgentsRoute
     AppTab.Inbox -> InboxRoute
     AppTab.Settings -> SettingsRoute

@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 )
 
-// `jarvisd hub admin …` on the hub's machine (docs/admin.md): widen or set the admin UI's scope, reset its password.
+// `personad hub admin …` on the hub's machine (docs/admin.md): widen or set the admin UI's scope, reset its password.
 
 const adminUsage = `usage:
   personad hub admin access                        show who may open the admin UI
@@ -41,7 +41,7 @@ var accessChoices = []struct{ name, meaning string }{
 	{accessAny, "任何地方经 TLS 端口都能打开（局域网照旧）。暴露在公网上，只靠管理员密码和登录限流挡着"},
 }
 
-// AdminCommand runs `jarvisd hub admin <args>`.
+// AdminCommand runs `personad hub admin <args>`.
 func AdminCommand(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errors.New(adminUsage)
@@ -100,7 +100,7 @@ func adminAccessCommand(ctx context.Context, dir string, args []string, stdout, 
 			fmt.Fprintf(stdout, "admin.cidrs：%s\n", strings.Join(current.CIDRs, ", "))
 		}
 		if env := adminEnv(); env != nil {
-			fmt.Fprintf(stdout, "环境变量 JARVIS_ADMIN_ACCESS=%s 优先于 hub.json\n", env.Access)
+			fmt.Fprintf(stdout, "环境变量 PERSONA_ADMIN_ACCESS=%s 优先于 hub.json\n", env.Access)
 		}
 		fmt.Fprintln(stdout, "\n可选：")
 		for _, c := range accessChoices {
@@ -156,7 +156,7 @@ func adminAccessCommand(ctx context.Context, dir string, args []string, stdout, 
 		}
 	}
 	if env := adminEnv(); env != nil {
-		fmt.Fprintf(stderr, "注意：环境变量 JARVIS_ADMIN_ACCESS=%s 优先于 hub.json，改它才会生效\n", env.Access)
+		fmt.Fprintf(stderr, "注意：环境变量 PERSONA_ADMIN_ACCESS=%s 优先于 hub.json，改它才会生效\n", env.Access)
 	}
 	cfg := &Config{Listen: ":18660", dir: dir}
 	if b, err := os.ReadFile(dir + "/hub.json"); err == nil {

@@ -39,4 +39,4 @@ hub 不按秒轮询数据库：派发器睡到最早一条 `scheduled` 测试的
 
 连接汇总复用 `GET /api/v1/devices/{id}/sessions?since=<RFC3339>`，默认统计最近 24 小时：`summary.disconnects` 为窗口内非 `hub_stopped` 的连接断开记录数，`summary.longest_gap_seconds` 为连接区间合并后的最长离线时间，含截至查询时仍未恢复的时段。并行连接可能各记一次断开，但连接重叠不会制造离线时段；hub 重启造成的离线时段不计入最长值。
 
-调度精度、后台存活和通知展示均未实测，需 Android 真机验收。服务端关键测试使用 `JARVIS_TEST_DATABASE_URL`，命令为 `go test -count=1 -p 1 ./internal/hub ./internal/db -run 'TestLockTest|TestDeviceSessions$'`。
+调度精度、后台存活和通知展示均未实测，需 Android 真机验收。服务端关键测试使用 `PERSONA_TEST_DATABASE_URL`，命令为 `go test -count=1 -p 1 ./internal/hub ./internal/db -run 'TestLockTest|TestDeviceSessions$'`。

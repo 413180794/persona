@@ -219,7 +219,7 @@ func TestLarkCLIRiskAndWrapper(t *testing.T) {
 
 // With lark.cli in the hub's config the assistant gets lark-cli on its PATH; without it, none.
 func TestAssistantLarkEnvLarkCLI(t *testing.T) {
-	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	bin := filepath.Join(t.TempDir(), "lark-cli")
 	_ = os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755)
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0),
@@ -235,14 +235,14 @@ func TestAssistantLarkEnvLarkCLI(t *testing.T) {
 	}
 }
 
-// The risk levels the gate relies on, read off the real lark-cli: JARVIS_LIVE_LARK_CLI=1 (lark-cli on the login
-// shell's PATH, or its path in JARVIS_LARK_CLI). Reads nothing from Feishu: only --help.
+// The risk levels the gate relies on, read off the real lark-cli: PERSONA_LIVE_LARK_CLI=1 (lark-cli on the login
+// shell's PATH, or its path in PERSONA_LARK_CLI). Reads nothing from Feishu: only --help.
 func TestLarkCLIRiskLive(t *testing.T) {
-	if os.Getenv("JARVIS_LIVE_LARK_CLI") == "" {
-		t.Skip("set JARVIS_LIVE_LARK_CLI=1 to ask the real lark-cli")
+	if os.Getenv("PERSONA_LIVE_LARK_CLI") == "" {
+		t.Skip("set PERSONA_LIVE_LARK_CLI=1 to ask the real lark-cli")
 	}
 	n := &Node{dir: t.TempDir(), logger: log.New(io.Discard, "", 0)}
-	risk := n.larkCLIRisk(proto.AssistantLark{CLI: &proto.LarkCLI{Bin: os.Getenv("JARVIS_LARK_CLI")}})
+	risk := n.larkCLIRisk(proto.AssistantLark{CLI: &proto.LarkCLI{Bin: os.Getenv("PERSONA_LARK_CLI")}})
 	for cmd, want := range map[string]string{
 		"im +chat-list": "read", "im +messages-search": "read", "docs +fetch": "read", "calendar +agenda": "read",
 		"im +messages-send": "write", "im +messages-reply": "write", "im messages delete": "high-risk-write",

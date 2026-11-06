@@ -1,7 +1,7 @@
-// Package link is jarvis-link, the small program that keeps a computer reachable from the hub when the hub cannot
-// reach it (a laptop on whatever network it is on), and the protocol it speaks with the hub. jarvis-link finds the
+// Package link is persona-link, the small program that keeps a computer reachable from the hub when the hub cannot
+// reach it (a laptop on whatever network it is on), and the protocol it speaks with the hub. persona-link finds the
 // hub, tells it which machine it is, keeps the link up and hands each stream the hub opens on it to the computer's
-// resident node (`jarvisd node --attach`), byte for byte. It does nothing else: what a node does stays in jarvisd
+// resident node (`personad node --attach`), byte for byte. It does nothing else: what a node does stays in personad
 // (docs/link.md).
 package link
 
@@ -74,11 +74,11 @@ func PingTimesMS(every, timeout int64) (time.Duration, time.Duration, bool) {
 // Message is one JSON message on the link.
 type Message struct {
 	Type string `json:"type"` // hello | endpoints | node | open | open_failed
-	// hello (jarvis-link → hub, the first message): which machine, which build, and the hub URL it went to.
+	// hello (persona-link → hub, the first message): which machine, which build, and the hub URL it went to.
 	Machine string `json:"machine,omitempty"`
 	Version string `json:"version,omitempty"`
 	Address string `json:"address,omitempty"`
-	// endpoints (hub → jarvis-link): where else to look for the hub; and, from hubs that know (hub mesh, #293),
+	// endpoints (hub → persona-link): where else to look for the hub; and, from hubs that know (hub mesh, #293),
 	// what the hub is called and how many hubs its mesh has, itself included. Older hubs send neither.
 	Endpoints []Endpoint `json:"endpoints,omitempty"`
 	HubName   string     `json:"hub_name,omitempty"`
@@ -90,9 +90,9 @@ type Message struct {
 	// endpoints: this computer waits for the user to confirm it (a signed-in device added it, docs/onboarding.md
 	// 4.2). Every endpoints message says how it is now, so a confirmed one (and an older hub) leaves it out.
 	Pending bool `json:"pending,omitempty"`
-	// node (hub → jarvis-link): whether the hub got through to the resident node.
+	// node (hub → persona-link): whether the hub got through to the resident node.
 	Online bool `json:"online,omitempty"`
-	// open (hub → jarvis-link) asks for stream ID; open_failed answers that it could not be opened.
+	// open (hub → persona-link) asks for stream ID; open_failed answers that it could not be opened.
 	ID string `json:"id,omitempty"`
 	// open_failed, node: why not.
 	Error string `json:"error,omitempty"`
@@ -103,11 +103,11 @@ type Message struct {
 type Endpoint struct {
 	URL  string `json:"url"`
 	Kind string `json:"kind"` // lan | ipv6 | name | ipv4
-	// Manual: added on this computer (jarvis-link address add); kept when the hub sends its own list.
+	// Manual: added on this computer (persona-link address add); kept when the hub sends its own list.
 	Manual bool `json:"manual,omitempty"`
 }
 
-// Config is ~/.jarvis/link.json (0600), written by `jarvis-link pair`. The fields at the top are active mode's (this
+// Config is ~/.persona/link.json (0600), written by `persona-link pair`. The fields at the top are active mode's (this
 // computer dials the hub); Passive is passive mode's (the hub dials this computer), kept apart so either mode can be
 // switched back to without pairing again.
 type Config struct {
@@ -131,8 +131,8 @@ type Config struct {
 
 // The two modes (docs/link.md "Passive mode").
 const (
-	ModeActive  = "active"  // jarvis-link dials the hub's /api/v1/link
-	ModePassive = "passive" // the hub dials the TLS port jarvis-link listens on
+	ModeActive  = "active"  // persona-link dials the hub's /api/v1/link
+	ModePassive = "passive" // the hub dials the TLS port persona-link listens on
 )
 
 // TrustSystem: the hub is checked with the system's CAs and its host name, not a pin (Config.Trust).
@@ -176,7 +176,7 @@ func Load(path string) (*Config, error) {
 		return nil, ErrUnpaired
 	}
 	if c.Token == "" || (c.FP == "" && c.Trust != TrustSystem) || c.Machine == "" {
-		return nil, fmt.Errorf("%s is incomplete: pair again (jarvis-link pair)", path)
+		return nil, fmt.Errorf("%s is incomplete: pair again (persona-link pair)", path)
 	}
 	return c, nil
 }
@@ -195,7 +195,7 @@ func Read(path string) (*Config, error) {
 	return &c, nil
 }
 
-// Update changes the file under a lock: the running link (new endpoints from the hub) and `jarvis-link address`
+// Update changes the file under a lock: the running link (new endpoints from the hub) and `persona-link address`
 // may write it at the same time.
 func Update(path string, change func(*Config) error) error {
 	if filepath.Dir(path) == appidentity.HomeDir() {

@@ -53,6 +53,6 @@ class InboxPersonaTest {
         persisted.complete(Unit)
         retry.join()
         assertEquals(listOf("stable-id", "stable-id"), ids)
-        assertEquals(listOf(AppTab.Jarvis), tabs)
+        assertEquals(listOf(AppTab.Persona), tabs)
     }
 }

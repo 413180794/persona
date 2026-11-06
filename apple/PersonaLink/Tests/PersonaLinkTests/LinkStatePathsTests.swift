@@ -3,50 +3,51 @@ import XCTest
 @testable import PersonaLink
 
 final class LinkStatePathsTests: XCTestCase {
-    func testExplicitRootsAndDefinedEmptyPrecedence() throws {
+    func testExplicitPersonaRootAndEmptyDefault() {
         let home = URL(fileURLWithPath: "/tmp/example-home")
         for (input, expected) in [("~/profile", "/tmp/example-home/profile"), ("profile/../chosen", "/tmp/example-home/chosen"),
                                   ("~", "/tmp/example-home"), ("/var/lib/a/../state", "/var/lib/state"), ("profile space", "/tmp/example-home/profile space")] {
-            XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["PERSONA_HOME": input, "JARVIS_HOME": "wrong"]).path, expected)
-            XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["JARVIS_HOME": input]).path, expected)
+            XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["PERSONA_HOME": input, "OTHER_HOME": "wrong"]).path, expected)
         }
-        XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["PERSONA_HOME": "", "JARVIS_HOME": "wrong"]).path, home.path + "/.persona")
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["PERSONA_HOME": "", "OTHER_HOME": "wrong"]).path, home.path + "/.persona")
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["OTHER_HOME": "wrong"]).path, home.path + "/.persona")
     }
 
-    func testLoginUsesTheResidentNodesStoredRootWithoutReadingCredentials() throws {
+    func testLoginUsesOnlyTheResidentNodesPersonaRootWithoutReadingCredentials() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
-        let plist = home.appendingPathComponent("Library/LaunchAgents/com.jarvis.node.plist")
+        let plist = home.appendingPathComponent("Library/LaunchAgents/com.persona.node.plist")
         try FileManager.default.createDirectory(at: plist.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let stored = ["EnvironmentVariables": ["JARVIS_HOME": "~/profile with spaces", "UNRELATED": "not-imported"]]
+        let stored = ["EnvironmentVariables": ["PERSONA_HOME": "~/profile with spaces", "OTHER_HOME": "not-imported"]]
         let data = try PropertyListSerialization.data(fromPropertyList: stored, format: .xml, options: 0)
         try data.write(to: plist)
         let environment = LinkStatePaths.serviceEnvironment(home: home, environment: ["PATH": "/usr/bin"])
-        XCTAssertEqual(environment, ["PATH": "/usr/bin", "JARVIS_HOME": "~/profile with spaces"])
+        XCTAssertEqual(environment, ["PATH": "/usr/bin", "PERSONA_HOME": "~/profile with spaces"])
         XCTAssertEqual(LinkStatePaths.root(home: home, environment: environment).path, home.path + "/profile with spaces")
         XCTAssertFalse(FileManager.default.fileExists(atPath: home.path + "/profile with spaces"))
-        let explicit = ["PERSONA_HOME": "", "JARVIS_HOME": "wrong"]
-        XCTAssertEqual(LinkStatePaths.serviceEnvironment(home: home, environment: explicit), explicit)
+        for root in ["", "~/explicit"] {
+            let explicit = ["PERSONA_HOME": root, "OTHER_HOME": "wrong"]
+            XCTAssertEqual(LinkStatePaths.serviceEnvironment(home: home, environment: explicit), explicit)
+        }
+        try PropertyListSerialization.data(fromPropertyList: ["EnvironmentVariables": ["OTHER_HOME": "wrong"]], format: .xml, options: 0).write(to: plist)
+        XCTAssertEqual(LinkStatePaths.serviceEnvironment(home: home, environment: ["PATH": "/usr/bin"]), ["PATH": "/usr/bin"])
     }
 
-    func testDefaultAliasesAndIndependentRootsDoNotMoveData() throws {
+    func testDefaultAlwaysNamesPersonaWithoutInspectingOrMovingOtherRoots() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
-        let current = home.appendingPathComponent(".persona", isDirectory: true), legacy = home.appendingPathComponent(".jarvis", isDirectory: true)
+        let current = home.appendingPathComponent(".persona", isDirectory: true)
+        let other = home.appendingPathComponent("other-state", isDirectory: true)
         XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), current)
         XCTAssertFalse(FileManager.default.fileExists(atPath: current.path))
-        try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
-        XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), legacy)
-        try FileManager.default.createSymbolicLink(at: current, withDestinationURL: legacy)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
         XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), current)
-        try FileManager.default.removeItem(at: current)
-        try FileManager.default.createDirectory(at: current, withIntermediateDirectories: true)
-        XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), legacy)
-        try FileManager.default.removeItem(at: legacy)
-        try FileManager.default.createSymbolicLink(atPath: legacy.path, withDestinationPath: "missing")
-        XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), legacy)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: current.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: current.path))
+        try FileManager.default.createSymbolicLink(at: current, withDestinationURL: other)
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), current)
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["PERSONA_HOME": "other-state"]), other)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: other.path))
     }
 }

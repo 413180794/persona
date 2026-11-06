@@ -32,9 +32,9 @@ type cardFixture struct {
 }
 
 func newCardFixture(t *testing.T) *cardFixture {
-	dsn := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	dsn := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	database, err := db.Open(ctx, dsn, db.ManagerSet)

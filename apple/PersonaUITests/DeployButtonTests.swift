@@ -1,16 +1,16 @@
 import XCTest
 
-/// Settings › Machines: a machine whose jarvisd is not the hub's build has Redeploy on its card. Tapping it (inside the card's
+/// Settings › Machines: a machine whose personad is not the hub's build has Redeploy on its card. Tapping it (inside the card's
 /// link) deploys instead of opening the machine, shows the progress, and the warning goes once the hub says it is done.
 /// Against scripts/mock/mock_hub.py with MOCK_NODE_MISMATCH=1 (Mac Studio mismatched; its deploy takes 3 s):
-///   TEST_RUNNER_JARVIS_DEPLOY_HUB=http://127.0.0.1:<port>
+///   TEST_RUNNER_PERSONA_DEPLOY_HUB=http://127.0.0.1:<port>
 final class DeployButtonTests: XCTestCase {
     @MainActor func testRedeployFromTheMachineList() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_DEPLOY_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_NODE_MISMATCH=1 (JARVIS_DEPLOY_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_DEPLOY_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_NODE_MISMATCH=1 (PERSONA_DEPLOY_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-dev.openChat", ""]
         app.launchPinned()
         let deploy = app.buttons["重新部署"]

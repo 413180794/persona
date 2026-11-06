@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The personal-agents view prefs: same arrangement as the web's arrangeSessions (web/src/lib/agents.test.ts).
 @MainActor struct PersonalAgentPrefsTests {

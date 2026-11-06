@@ -3,10 +3,10 @@
 原来处理它的那段对话不在了，下面是到现在的总结和处理链条，从这里接着做。
 {{- end}}
 
-<jarvis-context kind="context" title="{{template "inbox/agent_title" .}}">
+<persona-context kind="context" title="{{template "inbox/agent_title" .}}">
 {{template "inbox/item" .Item}}
 {{template "inbox/agent_ref" .}}
-</jarvis-context>
+</persona-context>
 {{with .Recap}}
 总结（到现在）：{{.}}
 {{end}}{{with .Chain}}
@@ -38,7 +38,7 @@
 {{.}}
 {{end}}{{end}}{{with .KB}}
 
-## 知识库里的背景（~/.jarvis/data）
+## 知识库里的背景（~/.persona/data）
 
 {{template "shared/kb_blocks" .}}
 会话 id：{{.ChatID}}。更多用 kb_get / kb_search 查。处理完如果得出了新结论（项目进展、谁负责什么、截止时间），用 kb_update 写回对应项目的 log（这是允许的写操作）。

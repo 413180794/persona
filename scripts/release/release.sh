@@ -3,16 +3,16 @@
 #
 #   ./scripts/release/release.sh [build-number]            # archive + check + upload
 #   NO_UPLOAD=1 ./scripts/release/release.sh               # archive + check + export only (build-release/export)
-#   NO_PUBLISH=1 ./scripts/release/release.sh              # TestFlight only, no jarvisd at publish.site_url (publish.sh)
+#   NO_PUBLISH=1 ./scripts/release/release.sh              # TestFlight only, no personad at publish.site_url (publish.sh)
 #   UPLOADER=asc ./scripts/release/release.sh              # export the ipa, check it, upload it with asc (asc_cli.py)
 #
 # The App Store Connect API key, bundle id and team come from the config (docs/config.md). Builds into build-release/
-# so it never touches the simulator build. The export re-signs manually with the "Jarvis App Store" / "Jarvis Watch
+# so it never touches the simulator build. The export re-signs manually with the "Persona App Store" / "Persona Watch
 # App Store" profiles (create them first with scripts/release/asc_signing.py): the App Manager API key can't cloud-sign.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-eval "$(python3 scripts/jarvis_config.py env)"
-python3 scripts/jarvis_config.py xcconfig
+eval "$(python3 scripts/persona_config.py env)"
+python3 scripts/persona_config.py xcconfig
 echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks another, docs/config.md)"
 # No private values in what is about to ship from this tree (CLAUDE.md).
 python3 scripts/privacy_check.py
@@ -59,16 +59,16 @@ if strings "$APP/Persona" | grep -qE 'runtimeCLI|RuntimeCLI|_AXSSet(Automation|R
   echo "the runtime CLI found in the Release binary" >&2; exit 1
 fi
 
-# Every bundle signed with its target's keychain groups (the app shares the Live Activity's persona with JarvisWidgets,
-# the push key with JarvisNotify): build 92 shipped without them (docs/release.md "entitlements").
+# Every bundle signed with its target's keychain groups (the app shares the Live Activity's persona with PersonaWidgets,
+# the push key with PersonaNotify): build 92 shipped without them (docs/release.md "entitlements").
 python3 scripts/release/entitlements.py check "$ARCHIVE"
 
 OPTS=$(mktemp -t export).plist
 if [ -n "$EXPORT_ONLY" ]; then
-  python3 scripts/jarvis_config.py export-options "$OPTS" export
+  python3 scripts/persona_config.py export-options "$OPTS" export
   rm -rf "$OUT/export"
 else
-  python3 scripts/jarvis_config.py export-options "$OPTS" upload
+  python3 scripts/persona_config.py export-options "$OPTS" upload
 fi
 # The archive itself is signed automatically with a development profile (that is why its aps-environment reads
 # `development`); this step re-signs both bundles with the App Store profiles, which is where the shipped binary gets
@@ -98,8 +98,8 @@ else
   echo "Build $BUILD uploaded. It appears in App Store Connect → TestFlight in ~10–30 min (python3 scripts/release/asc_testflight.py wait 45 $BUILD)."
 fi
 
-# The same release of jarvisd for anyone to install (publish.sh, docs/release.md "Publishing jarvisd"), versioned with this
+# The same release of personad for anyone to install (publish.sh, docs/release.md "Publishing personad"), versioned with this
 # build's number. Not with NO_UPLOAD or NO_PUBLISH, nor when the config has no publish.site_url.
-if [ -z "${NO_UPLOAD:-}" ] && [ -z "${NO_PUBLISH:-}" ] && [ -n "${JARVIS_PUBLISH_URL:-}" ]; then
+if [ -z "${NO_UPLOAD:-}" ] && [ -z "${NO_PUBLISH:-}" ] && [ -n "${PERSONA_PUBLISH_URL:-}" ]; then
   VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD" ./scripts/release/publish.sh
 fi

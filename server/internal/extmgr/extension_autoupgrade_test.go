@@ -37,7 +37,7 @@ func newUpgradeMarket(t *testing.T) *upgradeMarket {
 		switch {
 		case mk.down:
 			http.Error(w, "down", http.StatusBadGateway)
-		case r.URL.Path == "/plugins/persona-plugins.json":
+		case r.URL.Path == "/plugins/"+extension.IndexFile:
 			mk.reads++
 			_, _ = w.Write(mk.index)
 		case mk.pkgs[strings.TrimPrefix(r.URL.Path, "/plugins/pkg/")] != nil:
@@ -74,7 +74,7 @@ func (mk *upgradeMarket) readCount() int {
 func setUIVersion(t *testing.T, dir, v string) {
 	setVersion(t, dir, v)
 	self, _ := os.Executable()
-	_ = os.WriteFile(filepath.Join(dir, "bin", "ui"), []byte("#!/bin/sh\nEXAMPLE_UI_VERSION="+v+" JARVIS_TEST_PLUGIN=ui exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "ui"), []byte("#!/bin/sh\nEXAMPLE_UI_VERSION="+v+" PERSONA_TEST_PLUGIN=ui exec "+self+" \"$@\"\n"), 0o755)
 }
 
 // editManifest changes dir's manifest.

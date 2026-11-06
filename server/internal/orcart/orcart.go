@@ -203,7 +203,7 @@ const (
 	CloseTimeout = 10 * time.Second
 	// WorktreeTimeout bounds worktree.create: Orca refreshes the base branch from its remote before `git worktree add`.
 	WorktreeTimeout = 2 * time.Minute
-	maxLine      = 64 << 20
+	maxLine         = 64 << 20
 	// compatRecheck: how long a status.get check stands (a runtime restarted with a new version rewrites the metadata
 	// file, which is checked again anyway).
 	compatRecheck = 5 * time.Minute

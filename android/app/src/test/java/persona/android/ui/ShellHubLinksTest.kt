@@ -33,7 +33,7 @@ class ShellHubLinksTest {
         assertTrue(open("$hub/s/m1/abc?at=item%231", namespace = "gcafe00a1", sessions = sessions))
         assertEquals(listOf<NavKey>(ChatRoute("m1~gcafe00a1", "abc-123")), opened)
         assertEquals(MessageJumps.Jump("m1~gcafe00a1", "abc-123", "item#1"), MessageJumps.pending)
-        assertTrue(open("$hub/j/side-1?at=item-2"))
+        assertTrue(open("$hub/persona/side-1?at=item-2"))
         assertEquals(MessageJumps.Jump("hub-m", "side-1", "item-2"), MessageJumps.pending)
         assertEquals("item-2", MessageJumps.take("hub-m", "side-1"))
         // no message: nothing waits
@@ -56,11 +56,11 @@ class ShellHubLinksTest {
     }
 
     @Test fun assistantConversationsOpenInThePersonaHome() {
-        assertTrue(open("$hub/j/side-1"))
-        assertTrue(open("$hub/j/main-1"))
+        assertTrue(open("$hub/persona/side-1"))
+        assertTrue(open("$hub/persona/main-1"))
         assertTrue(open("$hub/"))
         // not listed yet: on the assistant's machine
-        assertTrue(open("$hub/j/new-2"))
+        assertTrue(open("$hub/persona/new-2"))
         assertEquals(listOf(
             ChatRoute("hub-m", "side-1", ConversationKind.Assistant),
             ChatRoute("hub-m", "main-1", ConversationKind.Assistant),
@@ -70,10 +70,10 @@ class ShellHubLinksTest {
     }
 
     @Test fun beforeTheAssistantIsKnown() {
-        assertTrue(open("$hub/j", snapshot = AssistantSnapshot()))
-        assertEquals(listOf(AppTab.Jarvis), tabs)
+        assertTrue(open("$hub/persona", snapshot = AssistantSnapshot()))
+        assertEquals(listOf(AppTab.Persona), tabs)
         // a conversation whose machine is not known yet stays a web page
-        assertFalse(open("$hub/j/side-1", snapshot = AssistantSnapshot()))
+        assertFalse(open("$hub/persona/side-1", snapshot = AssistantSnapshot()))
         assertTrue(opened.isEmpty())
     }
 

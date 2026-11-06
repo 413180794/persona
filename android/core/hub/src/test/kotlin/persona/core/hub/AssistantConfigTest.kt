@@ -13,7 +13,7 @@ class AssistantConfigTest {
     @Test fun readsWhereTheAssistantRunsAndIgnoresTheConversations() = runBlocking {
         MockWebServer().use { server ->
             val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient())
-            server.enqueue(MockResponse().setBody("""{"machine_id":"laptop","launcher":"claude","cwd":"/home/me/.jarvis/assistant",
+            server.enqueue(MockResponse().setBody("""{"machine_id":"laptop","launcher":"claude","cwd":"/home/me/.persona/assistant",
                 "timezone":"Asia/Shanghai","notes_effective":"from hub.json","main":"main-id",
                 "conversations":[{"machine_id":"laptop","session_id":"main-id","assistant":true}]}"""))
             val config = api.config()
@@ -23,7 +23,7 @@ class AssistantConfigTest {
             assertEquals("Bearer test-token", (get.getHeader("Authorization")).zhAny())
             assertEquals("laptop", (config.machineId).zhAny())
             assertEquals("claude", (config.launcher).zhAny())
-            assertEquals("/home/me/.jarvis/assistant", (config.cwd).zhAny())
+            assertEquals("/home/me/.persona/assistant", (config.cwd).zhAny())
             assertEquals("Asia/Shanghai", (config.timezone).zhAny())
             assertNull("never edited in the app", config.notes)
             assertEquals("from hub.json", (config.notesEffective).zhAny())

@@ -1,4 +1,4 @@
-// Package runtimepkg is the code of the runtimes jarvisd keeps up to date itself (docs/runtimes.md "Auto-update"): a
+// Package runtimepkg is the code of the runtimes personad keeps up to date itself (docs/runtimes.md "Auto-update"): a
 // runtime's plugin loaded into another program (DSH's), which that program would otherwise only reload by hand. The
 // files are copied from integrations/ at build time (go generate) and embedded, so a node carries the plugin of its
 // own build; a runtime that says it runs a package with another hash is offered this one (runtime.hello's update) and
@@ -32,17 +32,17 @@ var embedded embed.FS
 // (integrations/runtime-sdk/lib/package.js PACKAGES). Keep the two in step: a file one side counts and the other does
 // not makes every hello look like another version.
 var Packages = map[string][]string{
-	"jarvis-dsh-runtime": {"dsh/package.json", "dsh/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
-	"jarvis-pi-runtime":  {"pi/package.json", "pi/index.js", "pi/companion.mjs", "pi/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
+	"persona-dsh-runtime": {"dsh/package.json", "dsh/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
+	"persona-pi-runtime":  {"pi/package.json", "pi/index.js", "pi/companion.mjs", "pi/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
 	// The Paseo bridge is not loaded by another program: the node writes it out and runs it (node/paseobridge.go).
-	"jarvis-paseo-runtime": {"paseo/package.json", "paseo/bridge.mjs", "paseo/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
+	"persona-paseo-runtime": {"paseo/package.json", "paseo/bridge.mjs", "paseo/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
 	// The Agent SDK bridge, likewise run by the node (the assistant's agentsdk runtime): one bundled file, the SDK in it.
-	"jarvis-agent-sdk-runtime": {"agent-sdk/package.json", "agent-sdk/dist/bridge.mjs"},
+	"persona-agent-sdk-runtime": {"agent-sdk/package.json", "agent-sdk/dist/bridge.mjs"},
 }
 
 // OverrideEnv names a directory whose <package>/ trees replace the embedded ones: end-to-end runs offer a package
-// that differs from the runtime's without building another jarvisd.
-const OverrideEnv = "JARVIS_RUNTIME_PACKAGES"
+// that differs from the runtime's without building another personad.
+const OverrideEnv = "PERSONA_RUNTIME_PACKAGES"
 
 // NameRe: a package name.
 var NameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
@@ -95,7 +95,7 @@ var (
 	embeddedErr  error
 )
 
-// Load is the package this jarvisd offers under name: the override directory's when OverrideEnv is set, else the
+// Load is the package this personad offers under name: the override directory's when OverrideEnv is set, else the
 // embedded one. nil without an error: this build carries no such package (built without go generate).
 func Load(name string) (*Package, error) {
 	if !NameRe.MatchString(name) {

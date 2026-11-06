@@ -36,15 +36,15 @@ const botStateKey = "bots.feishu.state"
 // botTarget is where a message goes: the main conversation (whichever it is when the message is sent), another
 // Persona conversation, or a coding agent.
 type botTarget struct {
-	Kind      string `json:"kind"` // main | jarvis | agent
+	Kind      string `json:"kind"` // main | persona | agent
 	MachineID string `json:"machine_id,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
 }
 
 const (
-	targetMain   = "main"
-	targetJarvis = "jarvis"
-	targetAgent  = "agent"
+	targetMain    = "main"
+	targetPersona = "persona"
+	targetAgent   = "agent"
 )
 
 func (t botTarget) agent() bool { return t.Kind == targetAgent }
@@ -732,7 +732,7 @@ func (s *Service) feishuChannelTarget(ctx context.Context) channel.Target {
 	b.mu.Unlock()
 	t := channel.Target{Kind: channel.TargetMain}
 	switch cur.Kind {
-	case targetJarvis:
+	case targetPersona:
 		t = channel.Target{Kind: channel.TargetConversation, MachineID: cur.MachineID, SessionID: cur.SessionID}
 		if cur.SessionID == "" {
 			t = channel.Target{Kind: channel.TargetNew}
@@ -766,9 +766,9 @@ func (s *Service) updateFeishuChannel(ctx context.Context, enabled *bool, target
 		t := botTarget{Kind: targetMain}
 		switch target.Kind {
 		case channel.TargetNew:
-			t = botTarget{Kind: targetJarvis}
+			t = botTarget{Kind: targetPersona}
 		case channel.TargetConversation:
-			t = botTarget{Kind: targetJarvis, MachineID: target.MachineID, SessionID: target.SessionID}
+			t = botTarget{Kind: targetPersona, MachineID: target.MachineID, SessionID: target.SessionID}
 		}
 		s.setBotCurrent(t)
 	}
@@ -948,7 +948,7 @@ func (s *Service) targetLabel(ctx context.Context, t botTarget) string {
 	if err != nil {
 		return i18n.T(s.botLang(ctx), "assistant-feishu.not_found")
 	}
-	if t.Kind == targetJarvis && r.isNew {
+	if t.Kind == targetPersona && r.isNew {
 		return i18n.T(s.botLang(ctx), "assistant-feishu.new_chat_next")
 	}
 	return r.label
@@ -983,7 +983,7 @@ func (s *Service) botSendIn(ctx context.Context, ev *feishubot.MessageEvent, con
 			s.botUnreact(context.WithoutCancel(ctx), msg.MessageID, reaction)
 		}
 	}()
-	in := prompts.BotMessage{Jarvis: !t.agent(), Topic: topic != nil, Owner: s.owner(ctx), Text: content.Text}
+	in := prompts.BotMessage{Persona: !t.agent(), Topic: topic != nil, Owner: s.owner(ctx), Text: content.Text}
 	to := topic.target()
 	s.fbot.mu.Lock()
 	_, ours := s.fbot.st.Threads[msg.ParentID]
@@ -1090,15 +1090,15 @@ func (s *Service) botSendIn(ctx context.Context, ev *feishubot.MessageEvent, con
 		if err != nil {
 			return err
 		}
-		run.MachineID, run.SessionID, run.TargetKind, run.Probe = sess.MachineID, sess.SessionID, targetJarvis, ""
-		if t.Kind == targetJarvis { // /new: the chat goes on in it
-			s.setBotCurrent(botTarget{Kind: targetJarvis, MachineID: sess.MachineID, SessionID: sess.SessionID})
+		run.MachineID, run.SessionID, run.TargetKind, run.Probe = sess.MachineID, sess.SessionID, targetPersona, ""
+		if t.Kind == targetPersona { // /new: the chat goes on in it
+			s.setBotCurrent(botTarget{Kind: targetPersona, MachineID: sess.MachineID, SessionID: sess.SessionID})
 		}
 	} else {
 		sid := rt.session.SessionID
 		run.MachineID, run.SessionID, run.TargetKind = rt.machine, sid, t.Kind
 		if run.TargetKind == targetMain {
-			run.TargetKind = targetJarvis
+			run.TargetKind = targetPersona
 		}
 		run.Base = s.lastSeq(ctx, rt.machine, sid)
 		id := channel.ClientMsgID(channel.Feishu, msg.MessageID)
@@ -1202,7 +1202,7 @@ func (s *Service) botForward(ctx context.Context, id string) string {
 func botTargetOf(r *channel.Run) botTarget {
 	kind := r.TargetKind
 	if kind == "" || kind == targetMain {
-		kind = targetJarvis
+		kind = targetPersona
 	}
 	return botTarget{Kind: kind, MachineID: r.MachineID, SessionID: r.SessionID}
 }

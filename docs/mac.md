@@ -1,6 +1,6 @@
 # macOS App
 
-The native macOS version of Persona (the `PersonaMac` target in `apple/`, also used by the old `JarvisMac` scheme) shares the iOS App's logic layer (`Shared/`, `Persona/App`) and content views,
+The native macOS version of Persona (the `PersonaMac` target in `apple/`, also used by the old `PersonaMac` scheme) shares the iOS App's logic layer (`Shared/`, `Persona/App`) and content views,
 inside a Mac-specific shell (`apple/Mac/`): windows, sidebar, toolbar, menus, shortcuts and menu bar. The goal is every iOS App feature, with nothing missing,
 using native macOS interaction, with scrolling and animation at least 60 fps (120 fps on ProMotion displays).
 
@@ -63,7 +63,7 @@ and multiple windows. Do not copy the iPhone tab bar, bottom sheets or horizonta
 | Dynamic Island / lock-screen Live Activities | Menu bar icon (`MenuBarExtra`): Needs You / Working counts; click to list pending items and approve / deny / answer directly |
 | Push notifications | System notifications (same Approve / Deny / Send Back buttons); click to jump to chat |
 | Phone data (phone_*) | Not provided: Mac registers as desktop, and phone_* accepts only iPhone (2026-11-01, see "Mac is a desktop, not a phone") |
-| Camera, QR pairing | Drop / paste images; pair by pasting a `jarvis://pair` link or clicking one in a browser |
+| Camera, QR pairing | Drop / paste images; pair by pasting a `persona://pair` link or clicking one in a browser |
 | Terminal key bar (Ctrl, Esc, arrows) | Type on the real keyboard; when terminal is focused, all keys including ⌃ combinations go to it, while ⌘ combinations stay with the App. The key bar remains for now (⚡ quick commands are only accessible there); the first-open touch-gesture hint is hidden on Mac |
 | Siri / Shortcuts | App Intents are also available (Mac Shortcuts App, Spotlight) |
 
@@ -214,15 +214,15 @@ xcodebuild build -project Persona.xcodeproj -scheme PersonaMac -configuration De
 open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # or run Contents/MacOS/Persona directly with launch arguments
 ```
 
-- Without `app.bundle_id` in config, the built App crashes at launch (no bundle id in Info.plist); for local use, append `JARVIS_BUNDLE_ID=<reverse domain>` to xcodebuild (`docs/lessons/macos.md`).
+- Without `app.bundle_id` in config, the built App crashes at launch (no bundle id in Info.plist); for local use, append `PERSONA_BUNDLE_ID=<reverse domain>` to xcodebuild (`docs/lessons/macos.md`).
 
 - Launch arguments are the same as iOS (`MacLaunchArguments`, DEBUG only): `-pairURL`, `-tab dev|mail|settings|assistant`, `-openSession <machine>/<session>`,
   `-openAssistant`, `-newAssistant`, `-showNewChat`, `-openChatsFresh`, `-openAgentsFresh`, `-showLark`, `-simulateTap`; demo mode `-demo.on YES`.
-- Screenshots (**even while locked**): `scripts/app/mac_shot.sh <name> [launch arguments…]`, one light and one dark at `/tmp/jarvis-mac-shots/<name>-{light,dark}.png`.
+- Screenshots (**even while locked**): `scripts/app/mac_shot.sh <name> [launch arguments…]`, one light and one dark at `/tmp/persona-mac-shots/<name>-{light,dark}.png`.
   Post-pairing **Choose Engine** step: `-openEngineStep <machine id>` (demo's `server` works). Glass materials require real-window screenshots, see `docs/lessons/macos.md`.
   Demo mode by default; `BUILD=1` builds first, `APP=` selects the .app, `SIZE=1280x820`, `DELAY=4`, `APPEARANCES="light dark"`.
   Examples: `scripts/app/mac_shot.sh agents -tab dev -dev.openChat ""`, `scripts/app/mac_shot.sh chat -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`,
-  `scripts/app/mac_shot.sh jarvis -tab assistant`, `scripts/app/mac_shot.sh inbox -tab mail`, `scripts/app/mac_shot.sh settings -tab settings`.
+  `scripts/app/mac_shot.sh persona -tab assistant`, `scripts/app/mac_shot.sh inbox -tab mail`, `scripts/app/mac_shot.sh settings -tab settings`.
   Behind this is the DEBUG flag `-macSnapshot <png> [-macSnapshotDelay seconds] [-macSnapshotQuit YES] [-macWindowSize WxH] [-macAppearance dark|light] [-macSnapshotScroll points]` (`Mac/App/MacSnapshot.swift`):
   the App uses `cacheDisplay` to draw the window into PNG without using the screen. `-macSnapshotScroll` scrolls every vertically scrollable window list down by this many points before capture (to inspect scrolled content and the title row, #1243).
 - Batch screenshots of main-chat rich UI: DEBUG `-macSnapshot <plan.json>` uses `MacRichSnapshotBatch` to capture six shared examples × light/dark in one App launch. The plan includes `hub` (must be `http://127.0.0.1` with a port), synthetic `conversation`, and `output` (a new task temp directory via `file://`, restricted to `/tmp` or `/private/tmp`, no overwriting existing output); launch also needs the same fixture's `-pairURL` and `-openAssistant server/<synthetic conversation>`. Only loopback matching the current temporary pairing is accepted; keychain is untouched.
@@ -286,7 +286,7 @@ Limitations: SwiftUI does not recognize synthetic momentum as momentum, and the 
   Three-column split views cannot hide content; `.detailOnly` is immediately reset to `.all`, showing the empty sidebar while retaining the list (#856).
   Window minimum 920×560 (#1200): section column 210 + list minimum 340 + adjacent page minimum 360 (`macDetailMin`). As the window narrows, lists yield first: Persona `MacListBeside` and Inbox list shrink to their respective minima,
   and split detail has a minimum width. The previous minimum 820 left only about 200 for adjacent content, clipping chat and Inbox detail at the right edge. Inbox has an extra filter column, leaving about 220 for detail at minimum width; it fits but is cramped (wider requires collapsing filters, see #1169 checklist).
-  ⌘1…⌘7 switches sections; **Persona › Settings…**, ⌘, brings the main window forward and selects Settings (#1222, decided 2026-11-04: previously a separate settings window duplicated sidebar Settings; unavailable before pairing); `onOpenURL` handles `jarvis://pair`; activation runs `ensureConnected` + `refresh`.
+  ⌘1…⌘7 switches sections; **Persona › Settings…**, ⌘, brings the main window forward and selects Settings (#1222, decided 2026-11-04: previously a separate settings window duplicated sidebar Settings; unavailable before pairing); `onOpenURL` handles `persona://pair`; activation runs `ensureConnected` + `refresh`.
   The App does not disconnect its WebSocket in the background (Mac Apps remain running; the hub finds it through this connection).
 - Compatibility (`Mac/Compat/`): `UIKitTypes.swift` (UIColor / UIImage / UIFont / UIEdgeInsets aliases, UIPasteboard, UIApplication.open, UIDevice including battery,
   UIGraphicsImageRenderer, no-op haptics, UIKit semantic colors), `SwiftUICompat.swift` (same-named Mac versions of iOS-only modifiers: no-op `navigationBarTitleDisplayMode`,
@@ -299,7 +299,7 @@ Limitations: SwiftUI does not recognize synthetic momentum as momentum, and the 
   - Live Activities / Dynamic Island: no ActivityKit on macOS. Mac `LiveActivityController` only remembers hub-pushed fleet state (for future menu bar use); **Settings › Notifications** hides Live Activities, and `IslandSettingsView` is not compiled.
   - Apple Watch sync: Mac does not pair with watches; `WatchSync` is empty, and **Sync to Apple Watch** is hidden in settings (before 2026-11-01 it still showed and reported sent on click).
   - Camera (`UIImagePickerController`): `isSourceTypeAvailable(.camera)` is false; no **Take Photo** in composer; images come from files or clipboard.
-  - QR pairing (VisionKit `DataScannerViewController`): replaced by **Paste Pairing Link** (`Mac/Settings/PairingPaste+Mac.swift`) or opening a `jarvis://pair?…` link.
+  - QR pairing (VisionKit `DataScannerViewController`): replaced by **Paste Pairing Link** (`Mac/Settings/PairingPaste+Mac.swift`) or opening a `persona://pair?…` link.
   - Health data: macOS has HealthKit APIs but no data; `phone_health_summary` is not registered on Mac (`PhoneToolRegistry.healthTools`); **Settings › Connectors › This Mac** also has no health switch (`PhoneDataSource.onThisDevice`, tested), excluded from "N enabled". Footer wording is Mac-specific (requests concern this Mac). To check: long Settings footers here and in Notifications show one truncated line in captures, even with `fixedSize`; unclear whether `-macSnapshot`'s List-row redraw or actual clipping; check real screenshots unlocked.
   - **Mac is a desktop, not a phone** (decided 2026-11-01, following WeChat's "Mac WeChat signed in"): previously Mac also sent `register_phone`, and the hub had one "phone"
     (`hub.phoneClient`); always-online Mac received all phone_* calls, prevented background-iPhone wake pushes, and its tool list overwrote `phone_health_summary`.
@@ -423,7 +423,7 @@ do not push a page within the pairing sheet (it narrows and clips the form, #117
 
 Dock context menu (`apple/Mac/App/MacDockMenu.swift`, tested): **Needs You / Done** groups (same ordering as the menu bar list, at most 8 each, click opens chat), then **New Agent Chat…**.
 
-`apple/Mac/App/MacAttention.swift`, `MacMenuBar.swift`; tests in `apple/PersonaMacTests` (`JarvisMac` scheme's test).
+`apple/Mac/App/MacAttention.swift`, `MacMenuBar.swift`; tests in `apple/PersonaMacTests` (`PersonaMac` scheme's test).
 
 - While the App is open and connected: `MacAttentionWatcher` watches AppModel's sessions (persistent WebSocket),
   sending local notifications when an Agent becomes Needs You / Unread; another card while already Needs You (sub-Agent authorization, second confirmation, #4081) also gets one notification per card,
@@ -452,13 +452,13 @@ Since 2026-11-02 (#420). `apple/Persona/App/PushRegistrar.swift` (shared with iP
 - **No duplicates**: when open and connected, local notifications already exist (`MacAttentionWatcher` above), so `register_desktop` carries the push `device_id`,
   and the hub suppresses Needs You / Agent Done pushes to that Mac while connected; explicitly requested assistant reminders (`notify_user`) and hub-update notifications still push, since the App does not generate them.
   After closing or sleep disconnects (detected by hub heartbeats in about 35 seconds), normal hub pushes resume.
-- **Silent wake** (`jarvis_wake`) is not sent to Mac: it wakes iPhone for phone_* tools; Mac is desktop.
+- **Silent wake** (`persona_wake`) is not sent to Mac: it wakes iPhone for phone_* tools; Mac is desktop.
 - **Buttons**: hub push categories match iPhone and Mac registers the same set (`NotificationActions.categories`): Allow / Deny for tools, Approve / Send Back (text input) for plans, Reply (text input, #3449) for completion;
   questions and terminal have no buttons; click opens chat. Buttons and clicks route through `MacAppDelegate`, like local notifications.
 - **Sign-out**: signing out that Mac on iPhone (or revoking under **Settings › Devices**) also deletes its registered push device (registration records the associated device credential), stopping further pushes;
   notification settings are removed too; re-pairing starts from defaults. Same for iPhone revocation.
 - **Push relay** (since 2026-11-02, #432): hubs without their own APNs key use the relay; encrypted bodies (`docs/push-relay.md`) are decrypted by Mac notification-service extension
-  target `PersonaMacNotify` (module remains `JarvisNotify`) before display (same code, Info.plist and `<bundle id>.notify` bundle id as iPhone `PersonaNotify`; UNIVERSAL App ID).
+  target `PersonaMacNotify` (module remains `PersonaNotify`) before display (same code, Info.plist and `<bundle id>.notify` bundle id as iPhone `PersonaNotify`; UNIVERSAL App ID).
   - Why not decrypt in the App: connected Macs receive no hub attention pushes, so relay pushes arrive only while closed/disconnected; the system displays them directly and the App cannot change the content.
   - Private key is in the shared App/extension keychain group `<team>.<bundle id>.push` (`keychain-access-groups` in both). Mac `PushCrypto` needs
     `kSecUseDataProtectionKeychain`: the default legacy file keychain ignores access groups, making items accessible only to their creating App; the extension cannot read them and shows only **New message**.
@@ -557,7 +557,7 @@ otherwise refreshes the section's hub data (`InboxStore.refresh`, `refreshAssist
 
 `apple/Mac/Link/LinkPolicy.swift`. Mac `NSWorkspace.open` acts on a URL without asking (`file://` launches Apps, `smb://` mounts shares, other Apps' schemes),
 but links come from Agent answers and other people's messages: links not rendered by the App are handed to the system only for http / https / mailto; others are copied with a hint.
-Even `jarvis://` is blocked: clicking a message's `jarvis://pair` would switch the App to its supplied hub. Pairing links opened from browser/Finder still work,
+Even `persona://` is blocked: clicking a message's `persona://pair` would switch the App to its supplied hub. Pairing links opened from browser/Finder still work,
 but do not replace a real connected hub (hint to disconnect first under **Settings › Server**; demo yields normally), `MacPairing`.
 Chat, Lark messages/documents, link panels, scheduled-task descriptions' `.systemAction`, and compatibility `UIApplication.open` all use this on Mac (iOS unchanged).
 
@@ -604,7 +604,7 @@ chat image decoding is off-main (`ChatThumbnail` already decodes in `Task.detach
 
 Below are all iOS App features, checked individually for Mac (check each completed item).
 
-All reviewed on 2026-11-01: five parallel groups checked offscreen screenshots (demo and `scripts/mock/mock_hub.py` fake data, light/dark) and unit tests (`JarvisMacTests`), fixing what they could; a reviewer then tried to disprove every check, unchecking disproved items and stating what was and was not observed.
+All reviewed on 2026-11-01: five parallel groups checked offscreen screenshots (demo and `scripts/mock/mock_hub.py` fake data, light/dark) and unit tests (`PersonaMacTests`), fixing what they could; a reviewer then tried to disprove every check, unchecking disproved items and stating what was and was not observed.
 After review: 106 [x], 118 [ ]. Each unchecked item explains why: "check at the Mac" means unlock and click/type/look, "not done" means unimplemented, "not on Mac" means intentionally unavailable.
 From the evening of 2026-11-02, real-window checks continued on Mac mini (#403): isolated acceptance copy (separate bundle id + `CFFIXED_USER_HOME`) + demo / `scripts/mock/mock_hub.py`, cua-driver clicking/typing/viewing real windows, plus offscreen captures and mock request logs. New checks explain real-window observations, partial ones name remaining work. Now 151 [x], 71 [ ].
 Awaiting your confirmation: the `-showSampleScreen` Terminal Is Asking sample previously contained names resembling internal tools/services; commit "chore: the sample terminal dialog uses made-up names only" replaced all with invented names; old screenshots may retain old text.
@@ -672,7 +672,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac (2026-11-01): always-regular `horizontalSizeClass`, only NavigationSplitView (compact unreachable); 2000pt window shows about 400pt list, chat in detail without back arrow.
 - [x] Readable width cap (chat 760pt, welcome 560pt) — Views/Chat/ChatView.swift, Shared/Design/Theme.swift
   - Mac (2026-11-01): 2000pt window shows centered chat about 760pt, welcome (`-openWelcome`) about 560pt.
-- [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/PersonaApp.swift. Mac: `MacOpenURL` (tested), open switches to that chat even from other pages (`-macOpenURL <link>` verified), pair accepted only unpaired / demo; jarvis:// inside chat still only copies (`LinkPolicy`). External links go to the existing main window (`handlesExternalEvents`): previously each opened another main window (`open -a Jarvis.app jarvis://…` twice → 3 windows, counted with `-macWindowLog YES`).
+- [x] URL handling: `persona://pair?...` pairing, `persona://open?machine=&session=` (Live Activity) — App/PersonaApp.swift. Mac: `MacOpenURL` (tested), open switches to that chat even from other pages (`-macOpenURL <link>` verified), pair accepted only unpaired / demo; persona:// inside chat still only copies (`LinkPolicy`). External links go to the existing main window (`handlesExternalEvents`): previously each opened another main window (`open -a Persona.app persona://…` twice → 3 windows, counted with `-macWindowLog YES`).
 - [x] Scene phase: reconnect + refresh on active, disconnect socket on background — App/PersonaApp.swift
   - Mac (2026-11-03, Mac mini real window; executor operated, development checked mock logs): no requests while hidden via ⌘H; returning sends GET machines / interactions / sessions / pins / mutes / fleet (`refresh()`). Keeping WebSocket in background is intentional (phase 0). Reconnect (2026-11-03 batch 5): mock `GET /mock/down?s=20` closes connections and stops responding 20 seconds; after 4 seconds sidebar footer and avatar show spinner/Connecting…; ⌘H, wait 25 seconds; after mock recovery App reconnects `/api/v1/ws` while hidden, then refetches pins / interactions / sessions / machines / fleet on return; Connecting disappears, same content.
 - [x] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
@@ -697,7 +697,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
 - [x] Left button: history sidebar; right: new chat (disabled on new-chat page) — AssistantTopBar.swift
   - Mac (2026-11-01) dark capture: both buttons present (light glass only outlines); disabled new-chat button not captured, same iOS code.
 - [x] Sidebar: search, new chat, Persona card (online/offline + machine → profile), Scheduled Tasks / Knowledge tiles, Pinned (long-press pin, `assistant.pinned`; main chat is the list's first row, Persona with the App logo, #2004 / #5110), day groups Today/Yesterday/Last 7 Days/Earlier (8 + View All), row title + preview + time + state dot (Needs You red / Unread blue / Working spinner), context Copy Session ID / End / Pin, Settings row in drawer — Views/Assistant/AssistantSidebar.swift
-  - Mac (2026-11-03, Mac mini real window, executor): mock `MOCK_ASSISTANT_SIDEBAR=1`; row markers red Needs You, blue Unread, Working spinner, others none. Recent shows 30; View All (39) expands all and changes to Collapse. Row context: Pin, Rename…, Archive, Copy Session ID (clipboard correct), End… (Close This Agent? confirmation, cancel keeps it); main chat only Copy ID/End. Pin moves to Pinned (main chat is separate, in the top sidebar row labeled Persona, #5110), unpin restores time order. Search (§25), bottom Persona card/profile, Scheduled Tasks, Knowledge all clicked. Offline card (2026-11-03 offscreen, mock assistant moved to offline NAS via `PUT /api/v1/assistant {"machine_id":"nas"}`): gray dot Offline · NAS in both modes. No drawer Settings on Mac: `horizontalSizeClass` is always regular (`Mac/Compat/SwiftUICompat.swift`), split layout, Settings in shell. Inventory day groups/tiles are old design (same iOS); current rows title + marker. New Chat (batch 5): empty right-hand new chat (greeting, guidance cards, empty Ask Jarvis… composer follows mock avatar named Jarvis), former Main Chat selection clears; Recent chat restores it.
+  - Mac (2026-11-03, Mac mini real window, executor): mock `MOCK_ASSISTANT_SIDEBAR=1`; row markers red Needs You, blue Unread, Working spinner, others none. Recent shows 30; View All (39) expands all and changes to Collapse. Row context: Pin, Rename…, Archive, Copy Session ID (clipboard correct), End… (Close This Agent? confirmation, cancel keeps it); main chat only Copy ID/End. Pin moves to Pinned (main chat is separate, in the top sidebar row labeled Persona, #5110), unpin restores time order. Search (§25), bottom Persona card/profile, Scheduled Tasks, Knowledge all clicked. Offline card (2026-11-03 offscreen, mock assistant moved to offline NAS via `PUT /api/v1/assistant {"machine_id":"nas"}`): gray dot Offline · NAS in both modes. No drawer Settings on Mac: `horizontalSizeClass` is always regular (`Mac/Compat/SwiftUICompat.swift`), split layout, Settings in shell. Inventory day groups/tiles are old design (same iOS); current rows title + marker. New Chat (batch 5): empty right-hand new chat (greeting, guidance cards, empty Ask Persona… composer follows mock avatar named Persona), former Main Chat selection clears; Recent chat restores it.
 - [ ] Drawer gesture: pan anywhere, 45° rule, yields to horizontally scrollable content, velocity/half settle, page card scale/offset, tab bar fade (UIKit host) — AssistantSidebar.swift (DrawerPan, DrawerPageMotion, DrawerSidebarHost), Views/Assistant/DrawerProbe.swift
   - Not on Mac: window with always-regular `horizontalSizeClass`, sidebar column/toggle; `AssistantDrawer+Mac.swift` has no drag and is unreachable in main window even narrow; `DrawerPan` / `DrawerProbe` compile only on iOS.
 - [x] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
@@ -709,8 +709,8 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac (2026-11-05, #2901): Health row below Scheduled Tasks atop left list opens Health; `PersonaMac` built, captures in PR.
 - [x] Profile: identity, machine, online/working, Up Next 3 items, Proactive Work (tasks/run history), Knows You (About Me/Memory), Settings (launcher/Manage Launchers), capabilities — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)
   - Mac captures (1280×1500): identity, machine, online/next item, 3 Up Next, proactive scheduled tasks/run history, About Me/Memory, launcher/management; bottom capabilities observed in 2026-11-01 review.
-- [x] Send to Persona from other pages sends `<jarvis-context>` into main chat — AppModel.askJarvis
-  - Mac (2026-11-01) code: row menu and Agent › Send to Persona ⌘J use shared `AppModel.askJarvis`, same `<jarvis-context>` route; ⌘J in `MacMenuShortcutTests`; no real-hub send.
+- [x] Send to Persona from other pages sends `<persona-context>` into main chat — AppModel.askPersona
+  - Mac (2026-11-01) code: row menu and Agent › Send to Persona ⌘J use shared `AppModel.askPersona`, same `<persona-context>` route; ⌘J in `MacMenuShortcutTests`; no real-hub send.
 
 ## 2. Agents tab (dev list)
 - [x] Always-visible search; All/Needs You/Unread/Working filters with counts; snapshot (`kept`) semantics — Views/Chats/ChatsView.swift (QuickFilterBar, AgentsList)
@@ -761,7 +761,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac (2026-11-01), `-openMachinePage macbook`: online/projects/Agent/state counts, busy/latest line, ⓘ; no idle projects or loose Agents on this demo machine, not observed.
 
 ## 4. Chat page (Agent conversation)
-- [ ] Messages: user bubble, assistant Markdown (MarkdownUI `.jarvis`), thinking, peer From Name card, pending/sending bubble (retry/delete), sent photos, attachments — Views/Chat/MessageViews.swift (UserBubble, PeerMessage, PendingBubble, SentPhotos, AttachedImages, AssistantText, ThinkingRow, NoticeRow)
+- [ ] Messages: user bubble, assistant Markdown (MarkdownUI `.persona`), thinking, peer From Name card, pending/sending bubble (retry/delete), sent photos, attachments — Views/Chat/MessageViews.swift (UserBubble, PeerMessage, PendingBubble, SentPhotos, AttachedImages, AssistantText, ThinkingRow, NoticeRow)
   - Check at Mac: peer card/sent photos absent from mock; user bubble, Markdown, thinking, failed-send bubble/menu look correct.
 - [x] Markdown tables fitted / horizontally scrollable — Views/Chat/MarkdownTable.swift (FittedTable)
   - Mac (2026-11-01): two tables fit correctly; wide table fits even at 1280pt, so horizontal scroll unobserved.
@@ -842,8 +842,8 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac (2026-11-01): read-row links, existing chips/nonexistent plain paths in §8 FilePresence capture; this item's capture missed nonexistent side; clicks untested.
   - Mac (2026-11-02 real Mac mini): BeautifulUI answer's 6 existing paths chips, 2 missing plain; clicks remain.
   - Mac (2026-11-02 real Mac mini): answer chip and tool View File open viewer, mock `GET …/file`.
-- [ ] Bubble context reference cards (`<jarvis-context>`) — DesignSystem/QuoteViews.swift (QuoteBlock), Views/Link/LinkSheet.swift (ContextGroup)
-  - Check at Mac: link selection Use as Context/send; `-openSendMessage` sent a message with `<jarvis-context>` but absent in capture.
+- [ ] Bubble context reference cards (`<persona-context>`) — DesignSystem/QuoteViews.swift (QuoteBlock), Views/Link/LinkSheet.swift (ContextGroup)
+  - Check at Mac: link selection Use as Context/send; `-openSendMessage` sent a message with `<persona-context>` but absent in capture.
   - Mac (2026-11-02 real Mac mini): Send to Persona row message shows Context · Agent · Title, machine/session/directory; link-selection route remains.
 - [x] Send safety: computer draft refusal → show / clear-and-send — App/SendSafety.swift
   - Mac (2026-11-01), `MOCK_SEND_REFUSE=input_draft`: Computer Input Contains Text, Don't Send / Clear and Send.
@@ -901,7 +901,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac (2026-11-01) stream capture: Chinese aligned in boxes, rocket glyph spans two cells, OSC 8 underlined, 200-character line wraps.
 - [ ] Phone-size takeover (terminal_control), Take Over / View Only prompt — SessionPanes.swift, AppModel.terminalSubscribe
   - Check at Mac: `MOCK_TERMINAL_CONTROL=1` (`MOCK_TERMINAL_BUSY=1` for prompt) or real herdr resize/toggle. Window Size / Computer Size settings captured.
-- [ ] Wrap, themes (Jarvis/Solarized/Midnight/Ink), size/pinch — Terminal/TerminalWrap.swift, Terminal/TerminalTheme.swift, TerminalView.swift
+- [ ] Wrap, themes (Persona/Solarized/Midnight/Ink), size/pinch — Terminal/TerminalWrap.swift, Terminal/TerminalTheme.swift, TerminalView.swift
   - Mac real window (2026-11-03): Wrap Long Lines toggles wrapping/clipping; Solarized changes colors, Ink restored; ⌘= twice enlarges (132×24 → 116×21), ⌘- restores. Pinch remains, cua cannot simulate.
 - [ ] Selection (word/drag, Copy/Select All), OSC 8 / URL → in-app — TerminalView.swift (SelectionHandle)
   - Mac real window (2026-11-03): drag first line/⌘C copies Welcome to Claude Code, double-click selects word, ⌘A/⌘C copies screen; context Copy (disabled without selection)/Paste/Select All, system adds AutoFill. OSC 8 click remains.
@@ -921,7 +921,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac real window (2026-11-04 review): actual coordinate double-click Ctrl (AX double-click only slow AXPress twice) locks, esc retains lock, next click releases. Hold/dark contrast remain.
 - [ ] Input: field + direct typing (UIKeyInput/UITextInput, hardware arrows) — Terminal/TerminalInput.swift
   - Check at Mac: keyboard/Pinyin/arrows/⌃. Mac own keyDown mapping tested by `MacTerminalKeysTests`.
-  - Mac real window (2026-11-03 takeover): click bottom input, type hello jarvis, appears after > within 2s, Return sends; Pinyin/arrows/⌃ remain.
+  - Mac real window (2026-11-03 takeover): click bottom input, type hello persona, appears after > within 2s, Return sends; Pinyin/arrows/⌃ remain.
 - [ ] Gestures: 2-finger sibling/adjacent-space swipe, double-tap paste (multiline confirm), terminal scrolling — TerminalView.swift
   - Check at Mac: three-finger sibling swipe, ⌘V confirmation, scroll. Mac text in tested `TerminalHelpText`.
 - [ ] Quick commands (single fill/double send), settings (keys/auto-hide/theme/size/wrap), tips, pane completions — Terminal/TerminalExtras.swift (ShortcutsPanel, TerminalSettingsView, TerminalPreview, ThemeRow, SuggestionStrip), SessionPanes.swift (TerminalTips)
@@ -983,7 +983,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac (2026-11-02) mock 1280×1600 clipped to about 970 high: 4 Agents, herdr, CPU/memory/network/load/disk/swap values; lower charts await real scroll.
   - Mac real window (2026-11-04 executor): header, Agents, herdr, metrics, 1/6/24h switch updates charts, all four charts, 16-core bars, system facts, launchers/reconnect; dragging shows same-time lines/values across charts; Agent opens chat.
 - [x] OS badge — Views/Machines/OSBadge.swift; model — Shared/MachineMetrics.swift
-  - Mac (2026-11-01): Ubuntu/two Apple/Debian marks on cards/detail/monitor; `MachineMetricsTests` passed in JarvisMacTests.
+  - Mac (2026-11-01): Ubuntu/two Apple/Debian marks on cards/detail/monitor; `MachineMetricsTests` passed in PersonaMacTests.
 
 ## 12. Knowledge base
 - [x] Kind pills (Projects/Chats/People/Documents/Meetings/Events/counts), tags, project sections (Priority/Other Active/Completed/Not Projects) — Views/Knowledge/KnowledgeView.swift (KnowledgeView, KBKindBar, KBRow, KBAvatar, ImportanceBadge, KBPill)
@@ -1000,7 +1000,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Needed loaded detail/editor prefill/change/save/header; `-showKBEditor` fires before detail load, showing placeholder P2/0, only DEBUG ordering.
   - Mac real window (2026-11-04 executor): weather detail Tag prefilled P0/Relevance 92/iOS Widget/Short-term (Requirement)/Active, matching header; change P1/save updates header within 2s.
 - [x] Models — Shared/Knowledge.swift
-  - Mac (2026-11-01): `KnowledgeTests` in JarvisMacTests passed; list/detail/search decoded/rendered in captures.
+  - Mac (2026-11-01): `KnowledgeTests` in PersonaMacTests passed; list/detail/search decoded/rendered in captures.
   Mac (2026-11-01): Knowledge page/kind pills/project sections/people/detail (Ask Persona/Start Agent/profile/directory) correct; DemoHub search always empty, search/day initially unobserved; Tag sheet captured (Forms section `-showKBEditor`).
   Later checked hits/detail matches/day using invented DEBUG `App/DemoKBSample.swift`: `-macSection knowledge -showKnowledgeSearch 小组件` ("widget"), add `-showKnowledgeEntry chats/weather-team`, then `-showKnowledgeDay YES`; date duplicated on Mac, fixed title=date/subtitle=chat. Day paging initially unclicked.
 
@@ -1039,7 +1039,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
 
 ## 16. Model launchers
 - Mac (2026-11-01): Add/Edit launcher uses form-sheet size (`-macLauncherEditor YES` checked); demo lacks /api/v1/launchers, so list/detail/quota/checks use mock below.
-- [x] Launcher list (Jarvis-managed + ~/.zshrc, sources/hidden), search — Views/Settings/ModelLaunchersView.swift (ModelLaunchersView, LauncherRow)
+- [x] Launcher list (Persona-managed + ~/.zshrc, sources/hidden), search — Views/Settings/ModelLaunchersView.swift (ModelLaunchersView, LauncherRow)
   - Mac (2026-11-01), `-openModelLaunchers YES`: Managed by Persona empty hint, 3 from ~/.zshrc with model/gateway/machine, Hidden ›, +/search; `-showModelSearch <term>` narrows to one.
 - [ ] Detail: per-machine params/masked function source/Test Availability/delete-hide popover/restore — ModelLaunchersView.swift (ModelLauncherDetailView, LauncherDetailSections, LauncherCheckRow)
   - Check at Mac: real masked source, Hide in Persona (Delete for managed)/confirmation/restore. Source/Base URL/model/computer/check/retest/restore captured.
@@ -1062,7 +1062,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
 - [x] Small/Standard/Large text size over Dynamic Type — DesignSystem/TextSize.swift
   - Appearance choices captured; View Increase/Decrease/Standard ⌘+ ⌘- ⌘0 same value, tested.
 - [x] Tokens/icons/palettes/status palette — Shared/Design/Theme.swift, Icons.swift, Palette.swift, PersonaPalette.swift, Shared/StatusPalette.swift
-  - Mac (2026-11-01): `Shared/Design` compiled unchanged in JarvisMac, all captures use it (states/alerts/avatar); source token tests only iOS JarvisTests, not run here.
+  - Mac (2026-11-01): `Shared/Design` compiled unchanged in PersonaMac, all captures use it (states/alerts/avatar); source token tests only iOS PersonaTests, not run here.
 - [x] Components (StatusDot/Chip/CountBadge/EmptyStateView/Monogram…), surfaces/buttons — DesignSystem/Components.swift, DesignSystem/Styling.swift
   - Mac (2026-11-01): chips/count/monogram/buttons/cards seen; cited EmptyState capture actually showed mail, not empty.
   - Mac (2026-11-02): Needs You breathing ring uses Core Animation (`MacBreathingRing`); real sequential captures show expansion/fade, light/dark (`-macAppearance dark`), no row clipping; dark red verified by matching channel-derived opacity.
@@ -1070,7 +1070,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
 
 ## 18. Notifications & actions
 - [ ] Permission/APNs/POST /devices — App/PushRegistrar.swift (`registerIfPossible`, shared iOS/Mac)
-  - Mac (2026-11-02): `com.apple.developer.aps-environment`, `MacAppDelegate` token/kind `mac` (Remote Push section); relay registration/`JarvisMacNotify` decryption (#432). Requires TestFlight on real Mac.
+  - Mac (2026-11-02): `com.apple.developer.aps-environment`, `MacAppDelegate` token/kind `mac` (Remote Push section); relay registration/`PersonaMacNotify` decryption (#432). Requires TestFlight on real Mac.
 - [x] INTERACTION_PERMISSION (Allow requires auth / Deny), INTERACTION_PLAN (Approve / Send Back text) — App/NotificationActions.swift
 - [ ] Background action resolve/failure local notification — App/PersonaApp.swift (resolveFromNotification)
   - Check Mac: pending authorization notification hover/Options/Allow resolves without showing window; disconnected retry should notify failure. Code: `MacAppDelegate` uses shared `NotificationActions.resolution` / `reportFailure`; `NotificationActionsTests` passed Mac.
@@ -1100,8 +1100,8 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
 - [ ] MachineEntity query — Intents/MachineEntity.swift
   - Check Ask Claude machine picker lists computers/online/offline; queries hub, requires actual picker.
 - [x] Phrases — Intents/PersonaShortcuts.swift; text/picker/errors — Intents/IntentSupport.swift
-  - Mac (2026-11-01): `Metadata.appintents` includes 3 automatic App-name phrases; wording/wait/fail/hub errors in `IntentsTests`. JarvisMacTests now includes `IntentsTests`/`KnowledgeTests`/`MachineMetricsTests`/`NotificationActionsTests`/`NotifyPrefsTests` (`apple/project.yml`), all passed.
-  Mac shares code in JarvisMac; built `Metadata.appintents` has 4 actions, 3 phrases, `MachineEntity`/`SessionEntity` (checked 2026-11-01); Open Session clears Knowledge/Machines sidebar override before opening. Not actually run in Mac Shortcuts.
+  - Mac (2026-11-01): `Metadata.appintents` includes 3 automatic App-name phrases; wording/wait/fail/hub errors in `IntentsTests`. PersonaMacTests now includes `IntentsTests`/`KnowledgeTests`/`MachineMetricsTests`/`NotificationActionsTests`/`NotifyPrefsTests` (`apple/project.yml`), all passed.
+  Mac shares code in PersonaMac; built `Metadata.appintents` has 4 actions, 3 phrases, `MachineEntity`/`SessionEntity` (checked 2026-11-01); Open Session clears Knowledge/Machines sidebar override before opening. Not actually run in Mac Shortcuts.
 
 ## 21. Phone tools (phone_* MCP)
 - Mac (2026-11-01): no longer applicable—desktop registration means hub never calls its phone_* (Mac Is a Desktop, Not a Phone).
@@ -1137,8 +1137,8 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Mac captures: Demo Mode · All Data Is Made Up, Connect My Hub/Exit Demo, Settings Demo badge.
 
 ## 23. Pairing / credentials / watch
-- [ ] Welcome, QR (VisionKit), manual input, jarvis://pair — Views/Settings/SettingsView.swift (WelcomeView, PairView, QRScanner)
-  - Mac (2026-11-01): welcome link icon/Run `personad hub pair` on the Hub Machine and Copy Its Link (x-welcome2 capture); `personad hub pair` now prints `jarvis://pair` (`TestPairPrintsTheLinkForTheMac`). Connect Hub sheet (`-openPairSheet YES` + `-openWelcome YES`) has paste link/manual two fields. Real pairing via paste/⌘V/manual address-token/browser `jarvis://pair` link remains.
+- [ ] Welcome, QR (VisionKit), manual input, persona://pair — Views/Settings/SettingsView.swift (WelcomeView, PairView, QRScanner)
+  - Mac (2026-11-01): welcome link icon/Run `personad hub pair` on the Hub Machine and Copy Its Link (x-welcome2 capture); `personad hub pair` now prints `persona://pair` (`TestPairPrintsTheLinkForTheMac`). Connect Hub sheet (`-openPairSheet YES` + `-openWelcome YES`) has paste link/manual two fields. Real pairing via paste/⌘V/manual address-token/browser `persona://pair` link remains.
 - [ ] Keychain — Shared/Keychain.swift
   - Check real pairing/quit/relaunch without `-pairURL`, remain paired (allow keychain authorization if prompted). DEBUG screenshots/tests skip keychain (locked cross-build read hangs), untouched offscreen.
 - [ ] Device exchange, Settings › Devices/revoke — App/DeviceCredentials.swift (DevicesView)
@@ -1161,7 +1161,7 @@ Why: about 70% of #403's overnight tokens went to cua operation, screenshots and
   - Needed mock `/mock/down?s=20`, Allow failure/no queue.
   - Mac real window (2026-11-04 executor): `/mock/down?s=25`, Allow shows blue Cannot Reach Hub; Previous Action Did Not Take Effect, card stays; after reconnect card still there, no automatic replay.
 - [ ] Agent background delta sync (rev/after_seq, 40 sessions, concurrency 3) — App/AgentSync.swift
-  - Mac (2026-11-01): `App/AgentSync.swift` code only, no `#if`, compiled unchanged into JarvisMac; no measurements/runtime evidence.
+  - Mac (2026-11-01): `App/AgentSync.swift` code only, no `#if`, compiled unchanged into PersonaMac; no measurements/runtime evidence.
 - [ ] State cache machines/sessions/interactions/Inbox/accounts/Lark — Shared/StateCache.swift
   - Mac (2026-11-01): shared code, outbox restart used it; written-file list only verbal. Unsigned DEBUG lacks sandbox, all share `~/Library/Caches/state/`, parallel worktrees overwrite (another Agent overwrote outbox.json this run); signed builds sandboxed.
 

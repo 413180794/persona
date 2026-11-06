@@ -48,7 +48,7 @@ GENERATED = {
     "apple/Persona.xcodeproj",
     "android/app/build/outputs/apk/debug/app-debug.apk",
     "web/dist",
-    "apple/Jarvis.xcodeproj",  # the kept compatibility symlink to the generated Persona.xcodeproj
+    "apple/Persona.xcodeproj",  # the kept compatibility symlink to the generated Persona.xcodeproj
 }
 
 # Only these exact screenshot outputs are generated, and their actual producers must declare the same default.

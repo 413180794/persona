@@ -3,15 +3,15 @@ import XCTest
 /// Formulas (KaTeX) and diagrams (Mermaid) in Markdown (#1295): a reply in the chat and a Markdown file draw them as
 /// pictures; a formula KaTeX cannot read shows its source.
 ///   PORT=18785 MOCK_AGENTS=1 MOCK_RENDER=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18785 xcodebuild test … -only-testing:PersonaUITests/RenderedMarkdownTests
-/// Both layouts (TEST_RUNNER_JARVIS_LAYOUT=shell) and both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18785 xcodebuild test … -only-testing:PersonaUITests/RenderedMarkdownTests
+/// Both layouts (TEST_RUNNER_PERSONA_LAYOUT=shell) and both styles (TEST_RUNNER_PERSONA_UI_STYLE=beautiful).
 final class RenderedMarkdownTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] != nil else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_RENDER=1 (JARVIS_MOCK_HUB)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] != nil else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_RENDER=1 (PERSONA_MOCK_HUB)")
         }
     }
 
@@ -23,9 +23,9 @@ final class RenderedMarkdownTests: XCTestCase {
     }
 
     @MainActor private func launch(_ extra: [String], session: String = "a1f3c2d4-0000-4000-8000-000000000001") {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/" + session] + extra
         app.launchPinned()
     }

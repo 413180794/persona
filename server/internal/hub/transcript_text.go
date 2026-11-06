@@ -65,7 +65,7 @@ func localizedItem(l i18n.Lang, it proto.Item) (proto.Item, bool) {
 		set(&it.From, fromName(l, it.From))
 		set(&it.Text, teammateText(l, it.Text))
 	case it.Kind == proto.KindText && it.Role == "assistant" && strings.Contains(it.Text, codexNewChatLink):
-		set(&it.Text, strings.ReplaceAll(it.Text, codexNewChatLink, "["+tt(l, "open_new_chat")+"](jarvis://session/"))
+		set(&it.Text, strings.ReplaceAll(it.Text, codexNewChatLink, "["+tt(l, "open_new_chat")+"](persona://session/"))
 	case it.Kind == proto.KindToolResult && strings.Contains(it.Text, loadedToolPrefix):
 		set(&it.Text, loadedTools(l, it.Text))
 	}
@@ -247,7 +247,7 @@ func teammateHead(l i18n.Lang, label string) (string, bool) {
 }
 
 // codexNewChatLink starts the link transcript/codex.go puts where the Codex app created a thread.
-const codexNewChatLink = "[打开新建的对话](jarvis://session/"
+const codexNewChatLink = "[打开新建的对话](persona://session/"
 
 const loadedToolPrefix = "已加载工具 "
 

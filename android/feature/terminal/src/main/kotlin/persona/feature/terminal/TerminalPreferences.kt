@@ -41,9 +41,9 @@ class MemoryTerminalPreferences(
         set(value) { field = TerminalFontSize.valid(value) }
 }
 
-/** On the phone (SharedPreferences `jarvis-terminal`), shared by every pairing. */
+/** On the phone (SharedPreferences `persona-terminal`), shared by every pairing. */
 internal class SharedTerminalPreferences(context: Context) : TerminalPreferences {
-    private val stored = context.applicationContext.getSharedPreferences("jarvis-terminal", Context.MODE_PRIVATE)
+    private val stored = context.applicationContext.getSharedPreferences("persona-terminal", Context.MODE_PRIVATE)
     override var drive: Boolean
         get() = stored.getBoolean("drive", true)
         set(value) = stored.edit().putBoolean("drive", value).apply()

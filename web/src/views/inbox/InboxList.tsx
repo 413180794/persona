@@ -440,8 +440,8 @@ const IX_GLYPH: Record<Interaction["kind"], GlyphName | "list" | "terminal"> = {
  */
 const AgentRow = memo(function AgentRow({ ix }: { ix: Interaction }) {
   const to = useStore((s) => conversationRoute(ix.machine_id, ix.session_id, s.sessions, s.assistant));
-  const jarvis = to.name === "jarvis";
-  const where = useStore((s) => (jarvis ? "Persona" : machineWithHub(ix.machine_id, s.machines)));
+  const persona = to.name === "persona";
+  const where = useStore((s) => (persona ? "Persona" : machineWithHub(ix.machine_id, s.machines)));
   const ask = interactionAsk(ix);
   const glyph = IX_GLYPH[ix.kind];
   return (

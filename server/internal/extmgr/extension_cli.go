@@ -48,8 +48,8 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
   uninstall <id> [--keep-data] [--cascade] [--members]
                                     --members: a pack's members go with it
   market list                       the extension markets this hub reads
-  market add <spec> [--token]       a market: https://example.com/extensions/ (its persona-extensions.json, or the
-                                    older persona-plugins.json), a .json URL, github:owner/repo[@ref] or
+  market add <spec> [--token]       a market: https://example.com/extensions/ (its persona-extensions.json),
+                                    a .json URL, github:owner/repo[@ref] or
                                     git:<address>[#branch]; --token reads one from stdin, --token-from=<market id>
                                     uses that registered market's token (never shown)
   market set-spec <id> <spec>       the market moved (a renamed repository): same id, so what was installed from it
@@ -563,7 +563,7 @@ func localHubConfig() (*Config, error) {
 	if err := json.Unmarshal(b, cfg); err != nil {
 		return nil, err
 	}
-	if v := identity.Getenv("JARVIS_LISTEN"); v != "" {
+	if v := identity.Getenv("PERSONA_LISTEN"); v != "" {
 		cfg.Listen = v
 	}
 	return cfg, nil

@@ -517,11 +517,11 @@ export function waitingAgents(interactions: Interaction[], sessions: Record<stri
     .sort((a, b) => byTime(a.created_at, b.created_at) || a.id.localeCompare(b.id));
 }
 
-/** A conversation's page: the assistant's are in Persona (/j/<sid>), an agent's is /s/<machine>/<sid>. */
+/** A conversation's page: the assistant's are in Persona (/persona/<sid>), an agent's is /s/<machine>/<sid>. */
 export function conversationRoute(mid: string, sid: string, sessions: Record<string, Session[]>, assistant: AssistantInfo | null): Route {
   const s = (sessions[mid] ?? []).find((x) => x.session_id === sid);
   const isAssistant = s?.assistant || (assistant?.machine_id === mid && assistant.conversations.some((c) => c.session_id === sid));
-  return isAssistant ? { name: "jarvis", sid } : { name: "session", mid, sid };
+  return isAssistant ? { name: "persona", sid } : { name: "session", mid, sid };
 }
 
 // ── Hand to AI ───────────────────────────────────────────
@@ -532,9 +532,9 @@ function escAttr(s: string) {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** `<jarvis-context kind="…" title="…" url="…">` the way the app writes it (ContextRef.xml). */
+/** `<persona-context kind="…" title="…" url="…">` the way the app writes it (ContextRef.xml). */
 export function contextXML(kind: string, title: string, url: string, text: string): string {
-  return `<jarvis-context kind="${kind}" title="${escAttr(title)}" url="${escAttr(url)}">\n${contextBody(text)}\n</jarvis-context>`;
+  return `<persona-context kind="${kind}" title="${escAttr(title)}" url="${escAttr(url)}">\n${contextBody(text)}\n</persona-context>`;
 }
 
 /** The item as context the chat shows as a chip, then what to do with it (InboxHandOffSheet.message). */

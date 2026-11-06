@@ -10,7 +10,7 @@ import { t } from "../i18n";
 type ShellPage = "assistant" | "agents";
 
 const SHELL_PAGES: { page: ShellPage; label: string; to: Route }[] = [
-  { page: "assistant", label: t("shellswitch.assistant"), to: { name: "jarvis" } },
+  { page: "assistant", label: t("shellswitch.assistant"), to: { name: "persona" } },
   { page: "agents", label: t("shellswitch.agents"), to: { name: "agent-list" } },
 ];
 

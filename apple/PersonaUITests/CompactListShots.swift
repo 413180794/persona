@@ -4,7 +4,7 @@ import XCTest
 /// with many finished-unread agents and idle spaces (Mac Studio), the Unread and Needs You filters, a machine where nothing runs
 /// (Mac mini), and the cards for comparison; at each text size (Small / Standard / Large). No hub needed (`-openWelcome` drops a
 /// pairing left by other tests; the launch argument keeps Demo Mode on).
-///   TEST_RUNNER_JARVIS_SHOTS=<dir> TEST_RUNNER_JARVIS_STYLE=light|dark
+///   TEST_RUNNER_PERSONA_SHOTS=<dir> TEST_RUNNER_PERSONA_STYLE=light|dark
 /// writes `compact-<state>-<size>-<style>.png` there (docs/testing.md「Agents 列表」).
 final class CompactListShots: XCTestCase {
     private var app: XCUIApplication!
@@ -29,14 +29,14 @@ final class CompactListShots: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + style + ".png"))
         }
     }
 
     @MainActor func testShots() throws {
-        let sizes = ProcessInfo.processInfo.environment["JARVIS_TEXT_SIZES"]?.split(separator: ",").map(String.init)
+        let sizes = ProcessInfo.processInfo.environment["PERSONA_TEXT_SIZES"]?.split(separator: ",").map(String.init)
             ?? ["small", "standard", "large"]
         for size in sizes {
             launch(machine: "", compact: true, size: size)

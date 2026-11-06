@@ -96,7 +96,7 @@ func isolatedHC(t *testing.T) (string, *herdrcore.Client, *herdrCoreHost) {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "c.sock")
-	env := append(os.Environ(), "HC_SOCKET="+sock, "HC_SESSION=jarvislive",
+	env := append(os.Environ(), "HC_SOCKET="+sock, "HC_SESSION=personalive",
 		"XDG_STATE_HOME="+filepath.Join(dir, "state"), "XDG_CONFIG_HOME="+filepath.Join(dir, "cfg"), "XDG_RUNTIME_DIR=")
 	cmd := exec.Command(bin, "server", "start")
 	cmd.Env = env
@@ -128,7 +128,7 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 		Address string `json:"address"`
 	}
 	if err := c.Call(ctx, 20*time.Second, "terminal.run", map[string]any{"argv": []string{claude},
-		"cwd": dir, "labels": map[string]string{"jarvis": "live"}}, &run); err != nil {
+		"cwd": dir, "labels": map[string]string{"persona": "live"}}, &run); err != nil {
 		t.Fatal(err)
 	}
 	ref := host.PaneRef{Kind: host.HerdrCore, ID: run.Address}

@@ -99,10 +99,10 @@ func TestDeviceAddsAComputer(t *testing.T) {
 		t.Fatalf("reply %+v", c)
 	}
 	u, err := url.Parse(c.PairURL)
-	if err != nil || u.Scheme != "jarvis" || u.Host != "link" || u.Query().Get("machine") != "onb-laptop" || u.Query().Get("token") != c.Token {
+	if err != nil || u.Scheme != "persona" || u.Host != "link" || u.Query().Get("machine") != "onb-laptop" || u.Query().Get("token") != c.Token {
 		t.Fatalf("pair_url %q", c.PairURL)
 	}
-	if c.Command != "jarvis-link pair '"+c.PairURL+"'" || c.Install != nil || len(c.QR) != 0 {
+	if c.Command != "persona-link pair '"+c.PairURL+"'" || c.Install != nil || len(c.QR) != 0 {
 		t.Fatalf("command %q install %v qr %s: no site, no install line; no app QR code", c.Command, c.Install, c.QR)
 	}
 	if !h.machinePending("onb-laptop") || !slices.Contains(hubJSONIDs(t, h), "onb-laptop") || h.cfgEntry("onb-laptop") == nil {
@@ -274,7 +274,7 @@ func TestPairMachineCLIAdd(t *testing.T) {
 	if add["id"] != "study" || add["name"] != "书房" {
 		t.Fatalf("request %v", got)
 	}
-	if !strings.HasPrefix(out.String(), "jarvis://link?") || strings.Count(out.String(), "\n") != 1 || !strings.Contains(help.String(), "已添加：书房") {
+	if !strings.HasPrefix(out.String(), "persona://link?") || strings.Count(out.String(), "\n") != 1 || !strings.Contains(help.String(), "已添加：书房") {
 		t.Fatalf("out %q help %q", out.String(), help.String())
 	}
 	err := cfg.printLinkPair(context.Background(), "study", false, "", &out, &help)

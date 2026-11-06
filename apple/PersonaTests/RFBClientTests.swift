@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The native client of a Mac's Screen Sharing (#1343, RFBClient): its big numbers and Apple Remote Desktop's sign-in
 /// against values from Python and openssl, ZRLE against a Python encoder, and a whole session against a script.

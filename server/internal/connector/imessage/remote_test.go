@@ -52,7 +52,7 @@ func TestRemoteStatus(t *testing.T) {
 
 	for err, want := range map[error]string{
 		ErrOffline:             "示例 Mac 不在线",
-		ErrNodeTooOld:          "示例 Mac 上的 jarvisd 太旧，更新后才能读「信息」",
+		ErrNodeTooOld:          "示例 Mac 上的 personad 太旧，更新后才能读「信息」",
 		errors.New("whatever"): "读不了 示例 Mac 上的「信息」：whatever",
 	} {
 		n.err = err

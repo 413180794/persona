@@ -167,7 +167,7 @@ def run(browser, base, hub, token, size, theme, shots):
     page = ctx.new_page()
     page.goto(base + "/?token=" + token)
     page.wait_for_selector("main textarea", timeout=15000)  # paired
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}'); localStorage.removeItem('persona.replyMotion')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}'); localStorage.removeItem('persona.replyMotion')")
     check_reply(page, base, hub, shots, tag)
     check_bar(page, base, shots, tag)
     ctx.close()

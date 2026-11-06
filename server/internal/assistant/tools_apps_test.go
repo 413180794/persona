@@ -56,8 +56,8 @@ func TestKBToolsFormatTheData(t *testing.T) {
 		t.Fatalf("search without the messages: %q %v", out, err)
 	}
 
-	if out, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "Jarvis 发布", "project_kind": "long", "importance": "P0",
-		"relevance": 95, "tags": []string{"发布", "客户端"}, "log": "定了周五灰度", "chats": []string{"lark-f1"}}); err != nil || out != "Saved projects/jarvis-发布." {
+	if out, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "Persona 发布", "project_kind": "long", "importance": "P0",
+		"relevance": 95, "tags": []string{"发布", "客户端"}, "log": "定了周五灰度", "chats": []string{"lark-f1"}}); err != nil || out != "Saved projects/persona-发布." {
 		t.Fatalf("update: %q %v", out, err)
 	}
 	if _, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "别的"}); err != nil {
@@ -71,7 +71,7 @@ func TestKBToolsFormatTheData(t *testing.T) {
 	}
 
 	out, err = runTool(s, "c1", "kb_list", map[string]any{"kind": "projects"})
-	if err != nil || !strings.HasPrefix(out, "- jarvis-发布 · Jarvis 发布 [P0 相关95] 发布,客户端 ") || !strings.Contains(out, "\n- 别的 · 别的 [- 相关0] ") {
+	if err != nil || !strings.HasPrefix(out, "- persona-发布 · Persona 发布 [P0 相关95] 发布,客户端 ") || !strings.Contains(out, "\n- 别的 · 别的 [- 相关0] ") {
 		t.Fatalf("list: %q %v", out, err)
 	}
 	if out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "projects", "limit": 1}); err != nil || strings.Count(out, "\n") != 1 {
@@ -87,12 +87,12 @@ func TestKBToolsFormatTheData(t *testing.T) {
 		At: time.Date(2026, 11, 3, 20, 0, 0, 0, time.UTC)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	p, _ := e.Store.Project("jarvis-发布")
+	p, _ := e.Store.Project("persona-发布")
 	p.Moments = []kb.ProjectMoment{{ID: "p1", Note: "讲发布"}}
 	_ = e.Store.PutProject(p)
-	_ = e.Store.PutSummary(kb.KindProject, "jarvis-发布", "在推发布")
-	out, err = runTool(s, "c1", "kb_get", map[string]any{"kind": "projects", "id": "Jarvis 发布"})
-	if err != nil || !strings.HasPrefix(out, "Path: "+dir+"/projects/jarvis-发布\n\nmeta.json:\n{\n  \"") ||
+	_ = e.Store.PutSummary(kb.KindProject, "persona-发布", "在推发布")
+	out, err = runTool(s, "c1", "kb_get", map[string]any{"kind": "projects", "id": "Persona 发布"})
+	if err != nil || !strings.HasPrefix(out, "Path: "+dir+"/projects/persona-发布\n\nmeta.json:\n{\n  \"") ||
 		!strings.Contains(out, "}\n\n\nsummary.md:\n在推发布\n") || !strings.Contains(out, "\nlog.md (latest):\n- ") || !strings.Contains(out, "定了周五灰度") ||
 		!strings.Contains(out, "\n公司圈 posts about it (full text: moments/posts/<id>.md):\n- p1 2026-11-04 · 2 comments · 讲发布 — 发布了\n") {
 		t.Fatalf("get:\n%s (%v)", out, err)

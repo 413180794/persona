@@ -121,13 +121,13 @@ class LooksShotsTest {
         // where Robolectric's loader would not find the classes it needs to start them.
         android.graphics.BitmapFactory.decodeFile(File(example, "looks/pebble/avatar-256.png").path)
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        context.getSharedPreferences("jarvis-appearance", 0).edit().clear().putString("persona", "jarvis").commit()
+        context.getSharedPreferences("persona-appearance", 0).edit().clear().putString("persona", "persona").commit()
         val style = AppStyleStore(context)
         val hub = FakeHub(LookCurrent(null, "persona"))
         val store = PersonaStore(context, style) { hub }
         runBlocking { store.refresh() }
         // This phone's old choice ("Visor") moved up to a hub that had none.
-        assertEquals(listOf("jarvis" to true), hub.chosen)
+        assertEquals(listOf("persona" to true), hub.chosen)
         assertEquals(listOf("aurora", "pebble"), store.offered.value.map { it.id })
 
         // Another device's choice comes over.
@@ -154,7 +154,7 @@ class LooksShotsTest {
                 }
             }
         }
-        for (look in listOf("aurora", "pebble", "jarvis-circuit")) {
+        for (look in listOf("aurora", "pebble", "persona-circuit")) {
             val design = PersonaDesign.entries.firstOrNull { it.id == look }
             if (design != null) store.choose(design) else runBlocking { store.choose(store.offered.value.first { it.id == look }) }
             for (d in listOf(false, true)) {
@@ -163,6 +163,6 @@ class LooksShotsTest {
             }
         }
         // Choosing here goes to the hub, for every device.
-        rule.waitUntil(5_000) { hub.current.id == "jarvis-circuit" }
+        rule.waitUntil(5_000) { hub.current.id == "persona-circuit" }
     }
 }

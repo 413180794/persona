@@ -203,7 +203,7 @@ struct StatusBlock: View {
         default: // waiting
             var out = [Line(symbol: "personalhotspot.slash", text: "离线" + (s.retry.map { " · " + LinkText.until($0, now: now) } ?? ""),
                             primary: true, tint: .red)]
-            // jarvis-link joins the failures of the addresses it tried with 「；」: one line each.
+            // persona-link joins the failures of the addresses it tried with 「；」: one line each.
             for part in (s.error ?? "").split(separator: "；") where !part.isEmpty {
                 out.append(Line(symbol: "xmark.circle", text: String(part)))
             }

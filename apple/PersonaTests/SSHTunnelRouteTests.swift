@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The app's side of the SSH tunnel (docs/network.md「经 SSH 隧道连 hub」): a routed hub keeps its own address and only
 /// the URLs put on the wire change; pairings saved before keep decoding; picking the way asks the hub's own addresses

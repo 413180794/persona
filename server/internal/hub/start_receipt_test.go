@@ -45,9 +45,9 @@ func startReceiptNode(t *testing.T, h *Hub, start func(context.Context, json.Raw
 }
 
 func TestSessionStartReceipt(t *testing.T) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	store, err := db.Open(context.Background(), url, db.HubSet)
 	if err != nil {
@@ -83,7 +83,7 @@ func TestSessionStartReceipt(t *testing.T) {
 				r.RemoteAddr = netip.AddrFrom4([4]byte{127, 0, 0, 1}).String() + ":1234"
 				r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 				if opID != "" {
-					r.Header.Set("X-Jarvis-Op-Id", opID)
+					r.Header.Set("X-Persona-Op-Id", opID)
 				}
 				w := httptest.NewRecorder()
 				h.routes().ServeHTTP(w, r)

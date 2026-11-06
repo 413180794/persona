@@ -3,4 +3,4 @@ The Persona main conversation has stopped to wait for the user to answer a quest
 Question: What should the new project be called?
 </agent_output>
 Ask the user the question in a sentence or two, in the form "The Persona main conversation asks: <the question>?", filled in with the question above, not with this form's words.
-Until the user has answered, what they say is the answer: use ask_jarvis to hand over one line that starts with "Answer:" followed by the user's answer in their own words.
+Until the user has answered, what they say is the answer: use ask_persona to hand over one line that starts with "Answer:" followed by the user's answer in their own words.

@@ -14,8 +14,8 @@ import (
 	"time"
 )
 
-// A resident node (`jarvisd node --attach`, run by launchd in the user's login session on a Mac) and a relay
-// (`jarvisd node --stdio`, what the hub starts over ssh) share the work: when a resident node is listening, the relay
+// A resident node (`personad node --attach`, run by launchd in the user's login session on a Mac) and a relay
+// (`personad node --stdio`, what the hub starts over ssh) share the work: when a resident node is listening, the relay
 // only pipes the ssh connection to it, and the resident node serves it. Everything the node starts (the assistant's
 // claude, its key helper) then runs in the login session, where the login keychain is unlocked: an ssh session
 // can't read it, so a claude whose API key comes from the keychain fails to authenticate there (docs/server.md).
@@ -76,7 +76,7 @@ func dialResident(ctx context.Context, path string, wait time.Duration) (net.Con
 }
 
 // Attach runs a resident node: it listens on AttachSocketPath and serves one hub connection at a time, each relayed
-// by `jarvisd node --stdio`, or arriving on extra (the hub dialing in over tailcat, tailcat.go; nil: none). A new
+// by `personad node --stdio`, or arriving on extra (the hub dialing in over tailcat, tailcat.go; nil: none). A new
 // connection replaces the one being served whichever way either came (the hub reconnected, maybe the other way; the
 // old one may not have noticed yet), as a new ssh-started node used to replace the old one. newNode makes the Node
 // for a connection. runtimes, when set, is the runtime socket (runtimehost.go): opened here, once this is the one

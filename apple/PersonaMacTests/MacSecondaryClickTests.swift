@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A secondary click opens the message action bar where it happened (#501): the recognizer has to report the
 /// click's spot, which SwiftUI's coordinate converter reads through `location(in:)`.

@@ -1,6 +1,6 @@
 # Running the hub with Docker (NAS and similar)
 
-The product is Persona. The migrated version's binary is `personad` (`jarvisd` still works), and the default runtime directory is `~/.persona` (`~/.jarvis` still works). The `.env` / compose variables in this doc keep the old names used in the actual templates; migrated `PERSONA_*` variables take precedence, and `JARVIS_*` keep working. The user in the image, the database role / database name, containers, and persistent volumes must not be renamed after the product; see [Configuration and compatibility](config.md#命名与兼容).
+The product is Persona. The migrated version's binary is `personad` (`personad` still works), and the default runtime directory is `~/.persona` (`~/.persona` still works). The `.env` / compose variables in this doc keep the old names used in the actual templates; migrated `PERSONA_*` variables take precedence, and `PERSONA_*` keep working. The user in the image, the database role / database name, containers, and persistent volumes must not be renamed after the product; see [Configuration and compatibility](config.md#命名与兼容).
 
 There are two ways to deploy the hub, with the same features. Pick one based on the hub machine:
 
@@ -34,7 +34,7 @@ How computers connect:
 
 ## Image
 
-`ghcr.io/<owner>/persona` (the image name follows the repo: `<owner>` is the account or organization that owns the repo, `persona` is the repo name; put it in `JARVIS_IMAGE` in `.env`), linux/amd64 and linux/arm64, built by `.github/workflows/hub-image.yml`:
+`ghcr.io/<owner>/persona` (the image name follows the repo: `<owner>` is the account or organization that owns the repo, `persona` is the repo name; put it in `PERSONA_IMAGE` in `.env`), linux/amd64 and linux/arm64, built by `.github/workflows/hub-image.yml`:
 
 | Tag | When it exists |
 | --- | --- |
@@ -47,10 +47,10 @@ Every run first builds the amd64 image and runs a smoke test with compose (healt
 The repo is private, so images on ghcr are private by default too: on the NAS, first run `docker login ghcr.io` (username is the GitHub account, password a Personal Access Token with
 `read:packages`; if the NAS's Docker config isn't in the default location, use `docker --config <dir> login`). You can also make it public in the repo's
 Packages settings. Postgres uses `postgres:18-alpine` from Docker Hub: on networks that can't reach Docker Hub (common in mainland China), set
-`JARVIS_POSTGRES_IMAGE` in `.env` to the same image on a registry mirror or local registry (e.g. `<registry>/library/postgres:18-alpine`).
+`PERSONA_POSTGRES_IMAGE` in `.env` to the same image on a registry mirror or local registry (e.g. `<registry>/library/postgres:18-alpine`).
 
 The image contains:
-- `personad` (the hub uses the `linux/<arch>` one) and node builds for four platforms (`/opt/jarvis/nodes`, `JARVIS_NODE_BINARIES`): **Redeploy** in the App
+- `personad` (the hub uses the `linux/<arch>` one) and node builds for four platforms (`/opt/persona/nodes`, `PERSONA_NODE_BINARIES`): **Redeploy** in the App
   takes them from here, so hub and node are always the same version;
 - the web app embedded in the binary (`docs/web.md`): just open the hub's address;
 - the built-in extensions' programs (the WeChat bot, `docs/wechat.md`), the same version as personad;
@@ -58,25 +58,25 @@ The image contains:
 
 The personad in the image ships no skills (like every binary): the assistant's skills live in `~/.persona/skills/` on the machine that runs the assistant (`docs/hub-update.md` ("Taking skills out of the binary")).
 The hub in the image is on the `docker` channel: it never replaces its own binary, and prompts you to pull when a new image exists (see "Upgrading"). At build time the image name (`ghcr.io/<owner>/<repo>`) is written into the binary;
-`JARVIS_IMAGE` passed in by compose takes precedence.
+`PERSONA_IMAGE` passed in by compose takes precedence.
 
 ## Install
 
 To be clear first: **the NAS is only the hub; the AI doesn't work on the NAS**. The image has no Claude Code, so the assistant and Agents all run on another computer of yours. After installing the hub you still need to add a computer (step 5 below); until then the App can pair and browse, but the main chat can't start.
 
 1. On the NAS, create a directory (e.g. `/volume1/docker/persona`) with a `data` subdirectory inside, both created with the NAS's file manager: if `data/` belongs to you, the hub's files belong to you (if Docker creates `data/` itself, it belongs to root, and then all files belong to 1000; see the table below). Put `deploy/docker/compose.yaml` and `deploy/docker/.env.example` in the directory, rename the latter to `.env`, and fill in two lines:
-   - `JARVIS_IMAGE`: the image, `ghcr.io/<owner>/persona:latest` (see "Image" above; for a private image, `docker login ghcr.io` first).
-   - `JARVIS_PUBLIC_URL`: how the phone reaches this NAS, usually `http://<NAS LAN address>:18660`.
+   - `PERSONA_IMAGE`: the image, `ghcr.io/<owner>/persona:latest` (see "Image" above; for a private image, `docker login ghcr.io` first).
+   - `PERSONA_PUBLIC_URL`: how the phone reaches this NAS, usually `http://<NAS LAN address>:18660`.
 2. Run `docker compose up -d` in that directory.
 3. Pair the phone: `docker compose exec hub personad hub pair`, and scan the QR code in the terminal with the App.
-4. Set an admin password (optional; needed for adding computers and managing devices): open `<JARVIS_PUBLIC_URL>/admin` in a browser and enter the `first-run setup code` line from `docker compose logs hub` (if it expired, get a new one with `docker compose exec hub personad hub admin setup-code`).
-5. Add a computer to do the work: on the web app's (open `JARVIS_PUBLIC_URL` in a browser) **Machines** page, click **Add Computer**, or in the admin UI, **Computers › Add Computer**. Follow the steps to install Persona Link on that computer (`docs/link.md`), and once it connects, confirm it is your computer.
+4. Set an admin password (optional; needed for adding computers and managing devices): open `<PERSONA_PUBLIC_URL>/admin` in a browser and enter the `first-run setup code` line from `docker compose logs hub` (if it expired, get a new one with `docker compose exec hub personad hub admin setup-code`).
+5. Add a computer to do the work: on the web app's (open `PERSONA_PUBLIC_URL` in a browser) **Machines** page, click **Add Computer**, or in the admin UI, **Computers › Add Computer**. Follow the steps to install Persona Link on that computer (`docs/link.md`), and once it connects, confirm it is your computer.
 
 Filled in automatically on first start (no need to put them in `.env`; if you do, your value wins):
 
 | What | When unset | Stored where |
 | --- | --- | --- |
-| Database password (`JARVIS_DB_PASSWORD`) | Generated as 48 random hex characters on postgres's first start (no database yet). If the database already exists but the password file is gone (only `postgres/` restored, `data/` deleted, `.env` rewritten from the new template), it is not generated, and the log reminds you to put the original password in `JARVIS_DB_PASSWORD`. Leaving the password out requires an image built from this version on; if `JARVIS_IMAGE` is pinned to an earlier version, keep writing it | `data/docker/db-password` (0600); the postgres container only mounts this one subdirectory and can't see the hub's secrets. The `personad` in the image reads it on every run (including `docker compose exec`) and puts it into the database URL |
+| Database password (`PERSONA_DB_PASSWORD`) | Generated as 48 random hex characters on postgres's first start (no database yet). If the database already exists but the password file is gone (only `postgres/` restored, `data/` deleted, `.env` rewritten from the new template), it is not generated, and the log reminds you to put the original password in `PERSONA_DB_PASSWORD`. Leaving the password out requires an image built from this version on; if `PERSONA_IMAGE` is pinned to an earlier version, keep writing it | `data/docker/db-password` (0600); the postgres container only mounts this one subdirectory and can't see the hub's secrets. The `personad` in the image reads it on every run (including `docker compose exec`) and puts it into the database URL |
 | `PUID` / `PGID` | The owner of the `data/` directory; a directory Docker created itself belongs to root, in which case 1000 is used | The log prints one line saying which is used |
 | `hub.json` | A fresh-install default for containers is written (see below) | `data/hub.json` |
 
@@ -86,23 +86,23 @@ On first start (no `hub.json` in `data/` yet), the entry script writes a `hub.js
 
 | Field | Value | Why |
 | --- | --- | --- |
-| `public_url` | `""` | In the bridge network the container can't see the NAS's LAN address, and a guessed one (the container's hostname) is unreachable from the phone. `JARVIS_PUBLIC_URL` in `.env` is authoritative; when unset, the log reminds you, `hub pair` also says it needs to be set, or you can fill it in under **Network** in the admin UI |
-| `public.tls_listen` | `":18662"` | Persona Link and LAN discovery only use TLS. Inside the container it binds all addresses; which NAS addresses it's exposed on is decided by the compose port mapping (`JARVIS_TLS_PORT`) |
+| `public_url` | `""` | In the bridge network the container can't see the NAS's LAN address, and a guessed one (the container's hostname) is unreachable from the phone. `PERSONA_PUBLIC_URL` in `.env` is authoritative; when unset, the log reminds you, `hub pair` also says it needs to be set, or you can fill it in under **Network** in the admin UI |
+| `public.tls_listen` | `":18662"` | Persona Link and LAN discovery only use TLS. Inside the container it binds all addresses; which NAS addresses it's exposed on is decided by the compose port mapping (`PERSONA_TLS_PORT`) |
 | `admin.first_setup` | `"code"` | Inside the container any private address counts as LAN (see "Admin UI" below); without a setup code, anyone on the same network could set the admin password first |
 | `machines` | `[]` | The image has no herdr or Claude Code; computers are all added from outside |
 
 Other notes:
-- `JARVIS_PUBLIC_URL` can also be a VPN address, or an HTTPS address from the NAS's built-in reverse proxy. The reverse proxy must forward WebSocket Upgrade / Connection, disable response buffering, and use a longer read timeout (`docs/server.md` ("Lightweight hub and pre-deploy checks")).
-- Ports: 18660 is HTTP, 18662 is TLS; compose maps both to all NAS addresses by default. The TLS port's host port must stay 18662 (that's what the hub tells the App); to expose it on only one address, write `JARVIS_TLS_PORT=<NAS LAN address>:18662`. If 18662 is already taken on the NAS, `docker compose up` reports a port conflict: give the hub a different `public.tls_listen` port and map it the same way.
-- `PUID` / `PGID`: the container starts as root, changes the `jarvis` user to this uid / gid (any other user in the image with the same uid is removed first, or ssh would find that user's home directory), hands every file in `data/` it doesn't own to it (e.g. an old `~/.jarvis` copied in with sudo), then drops privileges;
+- `PERSONA_PUBLIC_URL` can also be a VPN address, or an HTTPS address from the NAS's built-in reverse proxy. The reverse proxy must forward WebSocket Upgrade / Connection, disable response buffering, and use a longer read timeout (`docs/server.md` ("Lightweight hub and pre-deploy checks")).
+- Ports: 18660 is HTTP, 18662 is TLS; compose maps both to all NAS addresses by default. The TLS port's host port must stay 18662 (that's what the hub tells the App); to expose it on only one address, write `PERSONA_TLS_PORT=<NAS LAN address>:18662`. If 18662 is already taken on the NAS, `docker compose up` reports a port conflict: give the hub a different `public.tls_listen` port and map it the same way.
+- `PUID` / `PGID`: the container starts as root, changes the `persona` user to this uid / gid (any other user in the image with the same uid is removed first, or ssh would find that user's home directory), hands every file in `data/` it doesn't own to it (e.g. an old `~/.persona` copied in with sudo), then drops privileges;
   `docker compose exec hub personad …` also runs as this user, so the files it creates don't belong to root. It can't be 0. Don't set the user with compose's `user:`:
   then the entry script can't change the user, PUID / PGID have no effect, and ssh won't run (the log has a warning line).
 - If you set the database password yourself, use only letters and digits (it goes into the database URL as-is); `openssl rand -hex 24` works. Postgres only uses it when the data directory is first created;
-  changing `.env` afterwards (or deleting `data/docker/db-password`) makes the database unreachable. To change it, also run `ALTER USER jarvis PASSWORD '…'` in the database.
+  changing `.env` afterwards (or deleting `data/docker/db-password`) makes the database unreachable. To change it, also run `ALTER USER persona PASSWORD '…'` in the database.
 - The hub container has `init: true`: when an ssh started by personad is killed, its ProxyCommand / ProxyJump children are reaped by init, so no zombie processes are left.
 - Directories: `data/` is the hub's `~/.persona` (`hub.json`, the built-in manager's `managers/assistant/manager.json`, secrets, tailcat key, the knowledge base `data/data`, the generated database password `data/docker/`), `postgres/` is the database. Both sit next to compose,
   visible in the NAS's file manager; back up these two directories. `hub.json` and the secret files are 0600.
-- An existing deployment (`.env` has `JARVIS_DB_PASSWORD` and `PUID` / `PGID`, `data/` has `hub.json`) behaves the same after switching to the new `compose.yaml`: it uses the password from `.env`, generates nothing, and doesn't change `hub.json`. The only additions are an empty `data/docker/` directory and the 18662 port mapping (nothing listens on it when `hub.json` hasn't enabled TLS).
+- An existing deployment (`.env` has `PERSONA_DB_PASSWORD` and `PUID` / `PGID`, `data/` has `hub.json`) behaves the same after switching to the new `compose.yaml`: it uses the password from `.env`, generates nothing, and doesn't change `hub.json`. The only additions are an empty `data/docker/` directory and the 18662 port mapping (nothing listens on it when `hub.json` hasn't enabled TLS).
 
 You can also connect a computer without the App, via tailcat (when the computer is on another internal network that the NAS can't reach):
 
@@ -119,35 +119,35 @@ then `docker compose restart hub`.
 
 | Variable | Purpose |
 | --- | --- |
-| `JARVIS_DATABASE_URL` | Database URL (assembled in compose, pointing at the `postgres` service; when `.env` has no password, the `personad` in the image fills it in from `data/docker/db-password`) |
-| `JARVIS_PUBLIC_URL` | The address the phone uses to reach the hub, which is what the pairing QR code contains; when unset, `public_url` from `hub.json` is used (written empty on first start) |
-| `JARVIS_DB_PASSWORD` | Used by compose: the database password; when unset it's generated on first start, see "Install" above |
-| `JARVIS_LISTEN` | The address the hub listens on (default `:18660`; changing it also requires changing the compose port mapping and the image's health check) |
-| `JARVIS_LOCAL_NODE=0` | Don't write the "this machine" entry on first start (already set in the image) |
-| `JARVIS_ADMIN_ACCESS`, `JARVIS_ADMIN_CIDRS` | Who can open the admin UI (`/admin`): `loopback` / `lan` / `cidrs` (comma-separated ranges) / `any`; see "Admin UI" below. When unset, the entry script prints a reminder and uses `admin.access` from hub.json (`lan` if not set) |
-| `JARVIS_NODE_BINARIES` | Where the node builds used by **Redeploy** live (`/opt/jarvis/nodes` in the image; `~/.persona/bin/nodes` for the native method) |
+| `PERSONA_DATABASE_URL` | Database URL (assembled in compose, pointing at the `postgres` service; when `.env` has no password, the `personad` in the image fills it in from `data/docker/db-password`) |
+| `PERSONA_PUBLIC_URL` | The address the phone uses to reach the hub, which is what the pairing QR code contains; when unset, `public_url` from `hub.json` is used (written empty on first start) |
+| `PERSONA_DB_PASSWORD` | Used by compose: the database password; when unset it's generated on first start, see "Install" above |
+| `PERSONA_LISTEN` | The address the hub listens on (default `:18660`; changing it also requires changing the compose port mapping and the image's health check) |
+| `PERSONA_LOCAL_NODE=0` | Don't write the "this machine" entry on first start (already set in the image) |
+| `PERSONA_ADMIN_ACCESS`, `PERSONA_ADMIN_CIDRS` | Who can open the admin UI (`/admin`): `loopback` / `lan` / `cidrs` (comma-separated ranges) / `any`; see "Admin UI" below. When unset, the entry script prints a reminder and uses `admin.access` from hub.json (`lan` if not set) |
+| `PERSONA_NODE_BINARIES` | Where the node builds used by **Redeploy** live (`/opt/persona/nodes` in the image; `~/.persona/bin/nodes` for the native method) |
 | `PUID` / `PGID`, `TZ` | See above (when `PUID` / `PGID` are unset, the owner of `data/` is used) |
-| `JARVIS_IMAGE`, `JARVIS_POSTGRES_IMAGE`, `JARVIS_PORT`, `JARVIS_TLS_PORT` | Used by compose: where to pull the two images from, and which host ports the hub's HTTP / TLS ports map to. `JARVIS_IMAGE` is also passed into the hub container: the hub checks its tags for a newer image (see "Upgrading" below) |
-| `JARVIS_REGISTRY_TOKEN` | For a private image, a token that can read it (GitHub: a Personal Access Token with `read:packages`); the hub uses it to check for new images. Not needed for public images |
+| `PERSONA_IMAGE`, `PERSONA_POSTGRES_IMAGE`, `PERSONA_PORT`, `PERSONA_TLS_PORT` | Used by compose: where to pull the two images from, and which host ports the hub's HTTP / TLS ports map to. `PERSONA_IMAGE` is also passed into the hub container: the hub checks its tags for a newer image (see "Upgrading" below) |
+| `PERSONA_REGISTRY_TOKEN` | For a private image, a token that can read it (GitHub: a Personal Access Token with `read:packages`); the hub uses it to check for new images. Not needed for public images |
 
 The native method also honors these variables (e.g. systemd's `Environment=`), but normally doesn't need them.
 
 ## Upgrading
 
 The hub never replaces its own image; when a new image exists, the App tells you (`docs/hub-update.md` ("Docker")): every hour (or any time via **Check for Updates** in Settings › hub) the hub asks the registry for
-the tags of `JARVIS_IMAGE`. If the latest release version (`X.Y.Z`, not counting `-rc`, `edge`, `sha-…`) is newer than its own, the top of the Agents page shows "New hub image: X",
+the tags of `PERSONA_IMAGE`. If the latest release version (`X.Y.Z`, not counting `-rc`, `edge`, `sha-…`) is newer than its own, the top of the Agents page shows "New hub image: X",
 and Settings › hub shows the command to run (copyable):
 
 ```sh
 docker compose pull && docker compose up -d
 ```
 
-If `JARVIS_IMAGE` in `.env` is pinned to a version (`…:1.2.0`), `pull` won't fetch anything new: first change the tag to the new version (the App gives the whole line), then run the command above.
+If `PERSONA_IMAGE` in `.env` is pinned to a version (`…:1.2.0`), `pull` won't fetch anything new: first change the tag to the new version (the App gives the whole line), then run the command above.
 Manually built `edge` and `sha-…` images have a `git describe` version that can't be compared, so only the latest release version is shown.
-If the image is private and `JARVIS_REGISTRY_TOKEN` isn't set, Settings › hub says it can't check and what to set.
-Upgrading from 0.1.1 or earlier, the App won't prompt; switch manually: back then the repo was still called jarvis and the image was `ghcr.io/<owner>/jarvis`; from 0.1.2 it's
-`ghcr.io/<owner>/persona`, and the old name won't get new versions. Change `JARVIS_IMAGE` in `.env` to the new name and version, replace `compose.yaml` with the new one
-(it passes `JARVIS_IMAGE` and `JARVIS_REGISTRY_TOKEN` to the hub, which is what lets later versions be announced), then run the command above.
+If the image is private and `PERSONA_REGISTRY_TOKEN` isn't set, Settings › hub says it can't check and what to set.
+Upgrading from 0.1.1 or earlier, the App won't prompt; switch manually: back then the repo was still called persona and the image was `ghcr.io/<owner>/persona`; from 0.1.2 it's
+`ghcr.io/<owner>/persona`, and the old name won't get new versions. Change `PERSONA_IMAGE` in `.env` to the new name and version, replace `compose.yaml` with the new one
+(it passes `PERSONA_IMAGE` and `PERSONA_REGISTRY_TOKEN` to the hub, which is what lets later versions be announced), then run the command above.
 
 ## Network
 
@@ -200,7 +200,7 @@ With the two common ways of setting up a reverse proxy on a NAS, the source seen
 
 ### Plaintext connections on Docker Desktop / OrbStack
 
-If the health check is fine but requests from the App, the web app, or an internal reverse proxy return `403 tls_required`, first check the real peer the container sees. Docker Desktop's gvisor networking may show every port-mapped connection as the same public-looking address instead of the Docker network's gateway; local and LAN clients look that way too. The entry script prints a hint about this when it detects a Desktop environment, independently of `JARVIS_ADMIN_ACCESS`.
+If the health check is fine but requests from the App, the web app, or an internal reverse proxy return `403 tls_required`, first check the real peer the container sees. Docker Desktop's gvisor networking may show every port-mapped connection as the same public-looking address instead of the Docker network's gateway; local and LAN clients look that way too. The entry script prints a hint about this when it detects a Desktop environment, independently of `PERSONA_ADMIN_ACCESS`.
 
 Keep a client connected and run in the compose directory:
 
@@ -213,15 +213,15 @@ In `netstat`'s local address column, find port 18660 and read the matching **For
 
 Prefer TLS: a newly installed hub already has TLS on and compose already maps 18662; for older installs, add `public.tls_listen` to `data/hub.json` ([network.md](network.md)). Only for trying out local HTTP:
 
-- First set `JARVIS_PORT=127.0.0.1:18660` in `.env` and run `docker compose up -d` to recreate the port mapping.
+- First set `PERSONA_PORT=127.0.0.1:18660` in `.env` and run `docker compose up -d` to recreate the port mapping.
 - Add the observed remote address to `security.trusted_cidrs` in `data/hub.json` (a single address: `/32` for IPv4, `/128` for IPv6; keep existing entries), then `docker compose restart hub`.
-- If you need the admin UI, also set `JARVIS_ADMIN_ACCESS=cidrs` and `JARVIS_ADMIN_CIDRS=<actual forwarding source>/32` (`/128` for IPv6) and run `docker compose up -d`. The admin UI's allowlist and the API's `security.trusted_cidrs` are separate.
+- If you need the admin UI, also set `PERSONA_ADMIN_ACCESS=cidrs` and `PERSONA_ADMIN_CIDRS=<actual forwarding source>/32` (`/128` for IPv6) and run `docker compose up -d`. The admin UI's allowlist and the API's `security.trusted_cidrs` are separate.
 
-When LAN clients need access, you can bind `JARVIS_PORT` to an explicit LAN address and restrict it to controlled clients with the host firewall before trusting the forwarding source. Check Docker's actual forwarding rules to make sure the internet can't get in through that port or a reverse proxy. The forwarding source may also represent internet connections, so adding it to the allowlist just because it's a fixed address would let those through. Keep TLS for the internet, and don't use `allow_public_plaintext` to work around collapsed sources.
+When LAN clients need access, you can bind `PERSONA_PORT` to an explicit LAN address and restrict it to controlled clients with the host firewall before trusting the forwarding source. Check Docker's actual forwarding rules to make sure the internet can't get in through that port or a reverse proxy. The forwarding source may also represent internet connections, so adding it to the allowlist just because it's a fixed address would let those through. Keep TLS for the internet, and don't use `allow_public_plaintext` to work around collapsed sources.
 
 ## Admin UI
 
-`<JARVIS_PUBLIC_URL>/admin` is the hub's built-in admin UI ([admin.md](admin.md)): set the admin password the first time you open it, then add computers, manage devices, and change networking on the web.
+`<PERSONA_PUBLIC_URL>/admin` is the hub's built-in admin UI ([admin.md](admin.md)): set the admin password the first time you open it, then add computers, manage devices, and change networking on the web.
 
 - **Access scope**: chosen in `.env` (`.env.example` explains the four options). Once set, it is authoritative and can't be changed on the web.
 - **In a container, `lan` means "any private address", except the gateway**: on a bridge network the container only sees Docker's own range (`172.x`), not the NAS's LAN,
@@ -229,7 +229,7 @@ When LAN clients need access, you can bind `JARVIS_PORT` to an explicit LAN addr
   including ones from the internet (IPv6 requests when Docker has no IPv6, requests forwarded by a reverse proxy on the host), so the gateway never counts as LAN. On Linux, LAN computers come in through
   iptables DNAT, the container sees their real address, and they can open it as usual. The App's API works the same way: requests from the gateway are treated as internet (can't use the main token; plaintext APIs return `403 tls_required`),
   see [network.md](network.md) ("Source checks and reverse proxies").
-- **Docker Desktop / OrbStack**: the forwarding source may be the gateway, or a public-looking address provided by gvisor. Find the real peer as in "Plaintext connections on Docker Desktop / OrbStack" above; for local trial only, bind the port to `127.0.0.1` and put the actual source in `JARVIS_ADMIN_CIDRS`. The API allowlist needs `security.trusted_cidrs` separately.
+- **Docker Desktop / OrbStack**: the forwarding source may be the gateway, or a public-looking address provided by gvisor. Find the real peer as in "Plaintext connections on Docker Desktop / OrbStack" above; for local trial only, bind the port to `127.0.0.1` and put the actual source in `PERSONA_ADMIN_CIDRS`. The API allowlist needs `security.trusted_cidrs` separately.
 - **`loopback`** inside a container means the container itself: for uses like `docker compose exec hub wget -qO- http://127.0.0.1:18660/admin`; rarely useful.
 - **`any`** requires the hub to have TLS on (`public.tls_listen` in `data/hub.json`; the `hub.json` written on first start already has it, and compose maps 18662; older installs need to add it).
 - Forgot the password: `docker compose exec hub personad hub admin reset-password`.
@@ -237,11 +237,11 @@ When LAN clients need access, you can bind `JARVIS_PORT` to an explicit LAN addr
 
 ## Migrating from the native method
 
-1. On the old machine, stop the hub (`systemctl --user stop jarvisd`) and export the database:
-   `docker exec jarvis-postgres pg_dump -U jarvis -Fc jarvis > jarvis.dump`.
-2. Copy the actual runtime directory (the new default is `~/.persona`; existing deployments may still use the compatibility directory `~/.jarvis`) to `data/` on the NAS (`bin/` can be left out). In `hub.json`, remove the `kind: local` machine (if that machine should keep running Agents,
+1. On the old machine, stop the hub (`systemctl --user stop personad`) and export the database:
+   `docker exec persona-postgres pg_dump -U persona -Fc persona > persona.dump`.
+2. Copy the actual runtime directory (the new default is `~/.persona`; existing deployments may still use the compatibility directory `~/.persona`) to `data/` on the NAS (`bin/` can be left out). In `hub.json`, remove the `kind: local` machine (if that machine should keep running Agents,
    change it to `ssh` or `tailcat`). Leave `database_url` alone (the environment variable overrides it).
-3. `docker compose up -d postgres`, then import: `docker compose exec -T postgres pg_restore -U jarvis -d jarvis --clean --if-exists < jarvis.dump`,
+3. `docker compose up -d postgres`, then import: `docker compose exec -T postgres pg_restore -U persona -d persona --clean --if-exists < persona.dump`,
    then `docker compose up -d`. The token is unchanged; paired phones only need the address changed to the new one (or scan again).
 
 ## Verification
@@ -251,7 +251,7 @@ tailcat key, web app, owner of `hub.json`. On PRs only the linux/amd64 node is b
 releases and local builds build all four by default. You can do the same locally (OrbStack / Docker Desktop):
 
 ```sh
-docker build --build-arg VERSION=dev-local -t jarvis-hub .
-cd deploy/docker && cp .env.example .env    # JARVIS_IMAGE=jarvis-hub, set JARVIS_PUBLIC_URL to this machine's address
+docker build --build-arg VERSION=dev-local -t persona-hub .
+cd deploy/docker && cp .env.example .env    # PERSONA_IMAGE=persona-hub, set PERSONA_PUBLIC_URL to this machine's address
 docker compose up -d
 ```

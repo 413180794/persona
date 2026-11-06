@@ -12,12 +12,12 @@ CONFIG_ENV=$(python3 "$SCRIPT_DIR/../persona_config.py" env) || {
   exit 1
 }
 eval "$CONFIG_ENV"
-if [ -z "${JARVIS_HUB_SSH:-}" ]; then
+if [ -z "${PERSONA_HUB_SSH:-}" ]; then
   echo "未配置 hub SSH 地址，请先配置 hub.machine 和对应机器的 SSH 地址。" >&2
   exit 1
 fi
 
-STAGING=$(mktemp -d "${TMPDIR:-/tmp}/jarvis-apk.XXXXXXXX")
+STAGING=$(mktemp -d "${TMPDIR:-/tmp}/persona-apk.XXXXXXXX")
 trap 'rm -rf "$STAGING"' EXIT
 python3 - "$STAGING" "$@" <<'PY'
 import argparse
@@ -109,6 +109,6 @@ PY
 REMOTE_STAGE=".upload-$(basename "$STAGING")"
 RESOLVER=$(python3 "$SCRIPT_DIR/../persona_identity.py" --service hub --prepare --prefix -)
 # No macOS extended attributes in the archive (see upload_web in scripts/deploy/deploy.sh).
-COPYFILE_DISABLE=1 tar --no-xattrs -C "$STAGING" -czf - . | ssh -- "$JARVIS_HUB_SSH" "$RESOLVER
+COPYFILE_DISABLE=1 tar --no-xattrs -C "$STAGING" -czf - . | ssh -- "$PERSONA_HUB_SSH" "$RESOLVER
 set -e; stage=\"\$PERSONA_HOME/apps/android/$REMOTE_STAGE\"; umask 077; mkdir -p \"\$stage\"; tar -xzf - -C \"\$stage\"; cd \"\$PERSONA_HOME/apps/android\"; mv \"\$stage\"/*.apk .; mv \"\$stage/latest.json\" latest.json; rmdir \"\$stage\""
 echo "Android 安装包已发布。"

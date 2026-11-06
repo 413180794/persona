@@ -6,10 +6,10 @@ import UniformTypeIdentifiers
 
 // Videos from Photos (docs/protocol.md「发送视频」) go as files, never as pictures: read out of the library, compressed
 // to H.264 MP4 only when they would not fit the hub's upload cap, and uploaded to the conversation's machine the way
-// Files is. The composer shows each as a card until the message goes; the message carries it as a `<jarvis-file>` tag
+// Files is. The composer shows each as a card until the message goes; the message carries it as a `<persona-file>` tag
 // after what was typed: the agent reads the path, the app draws the card from the rest.
 
-/// A file sent with a message: `<jarvis-file kind="video" path="…" name="…" size="…" duration="…"/>`.
+/// A file sent with a message: `<persona-file kind="video" path="…" name="…" size="…" duration="…"/>`.
 nonisolated struct AttachedFile: Hashable, Sendable {
     var kind = "video"
     /// Where it is on the conversation's machine.
@@ -26,7 +26,7 @@ nonisolated struct AttachedFile: Hashable, Sendable {
                 .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
         }
         let d = duration.map { String(format: " duration=\"%.1f\"", $0) } ?? ""
-        return "<jarvis-file kind=\"\(esc(kind))\" path=\"\(esc(path))\" name=\"\(esc(name))\" size=\"\(size)\"\(d)/>"
+        return "<persona-file kind=\"\(esc(kind))\" path=\"\(esc(path))\" name=\"\(esc(name))\" size=\"\(size)\"\(d)/>"
     }
 
     /// "24.1 MB · 0:12".
@@ -41,13 +41,13 @@ nonisolated struct AttachedFile: Hashable, Sendable {
         files.isEmpty ? text : text + "\n\n" + files.map(\.xml).joined(separator: "\n")
     }
 
-    private static let tagRe = try! NSRegularExpression(pattern: #"\s*<jarvis-file\b([^>]*?)/?>(?:\s*</jarvis-file>)?\s*"#)
+    private static let tagRe = try! NSRegularExpression(pattern: #"\s*<persona-file\b([^>]*?)/?>(?:\s*</persona-file>)?\s*"#)
     private static let attrRe = try! NSRegularExpression(pattern: #"(\w+)="([^"]*)""#)
     private static let memo = TextMemo<(files: [AttachedFile], rest: String)>()
 
     /// The files in a message and the message without their tags. A tag without a path is dropped, not drawn.
     static func parse(_ text: String) -> (files: [AttachedFile], rest: String) {
-        guard text.contains("<jarvis-file") else { return ([], text) }
+        guard text.contains("<persona-file") else { return ([], text) }
         return memo(text, scan)
     }
 

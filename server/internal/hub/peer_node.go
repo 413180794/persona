@@ -22,12 +22,12 @@ import (
 
 // Node streams through a member (docs/mesh.md "Routes through a member"): the center's manager reaches a computer a member has in
 // hub.json by asking the center, which asks that member over the links for a stream to its node (the center's side:
-// relayThroughHub, devices_relay.go). The request is an HTTP upgrade (Upgrade: jarvis-node) on the peer server, passed
+// relayThroughHub, devices_relay.go). The request is an HTTP upgrade (Upgrade: persona-node) on the peer server, passed
 // hop by hop like any other; the member's manager opens the node the way its hub.json says (its local node, ssh,
 // tailcat, the computer's Persona Link or connector), the member answers 101 and from then on copies bytes both ways.
 // Only the member's center may ask: a member drives none of its computers itself.
 
-const nodeUpgrade = "jarvis-node"
+const nodeUpgrade = "persona-node"
 
 // nodeOpenWait bounds how long a member's manager may take to open a node for the center (each of its ways in turn).
 const nodeOpenWait = time.Minute

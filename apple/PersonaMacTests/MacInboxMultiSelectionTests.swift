@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A multi-row inbox selection can mix items with agent requests: only items can be filed as Done, so a selection
 /// made only of agent requests must neither offer mark-done nor swallow E (#3479).

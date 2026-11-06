@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Plugins became extensions (#1844, #1859): a hub that says `extensions` is asked under /api/v1/extensions and answers
 /// with the new keys; an older one keeps its /api/v1/plugins and old keys (docs/extensions.md「命名和兼容」).

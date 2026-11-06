@@ -81,8 +81,8 @@ Publishing to production requires the branding page to link a home page, privacy
 
 Steps (for reference when recreating):
 
-1. Create a project at <https://console.cloud.google.com/projectcreate> (e.g. `jarvis-mail`).
-2. "Google Auth Platform" → Branding: app name `Jarvis`, user type "External".
+1. Create a project at <https://console.cloud.google.com/projectcreate> (e.g. `persona-mail`).
+2. "Google Auth Platform" → Branding: app name `Persona`, user type "External".
 3. Under "Data access", add the scope `https://mail.google.com/` (a restricted scope).
 4. Under "Branding", fill in the home page / privacy policy / terms of service (`https://<site domain>/`, `/privacy/`, `/terms/`), and add the site's root domain to authorized domains.
    Without these, the "Publish app" button under "Audience" is grayed out, and the page doesn't say what is missing.
@@ -103,7 +103,7 @@ catch the callback (`android/…/mail/GoogleSignIn.kt`): the system browser open
 the flow survives process death: the awaited `state` is stored in SharedPreferences, so if the process is killed while the browser is in front, the callback still completes.
 
 - Android can't register arbitrary schemes at runtime: the intent filter's scheme comes from `android.google_oauth_scheme` in the build config `~/.config/persona/config.json`
-  (`scripts/app/android.sh` passes it to gradle; the env var `JARVIS_GOOGLE_OAUTH_SCHEME` also works), never in the repo. When unset it is a placeholder;
+  (`scripts/app/android.sh` passes it to gradle; the env var `PERSONA_GOOGLE_OAUTH_SCHEME` also works), never in the repo. When unset it is a placeholder;
   the App uses `PackageManager.queryIntentActivities` to check whether it can catch the `callback_scheme` the hub returns, and if not, explains why
   and falls back to "Gmail + app-specific password" (the hub still supports `auth: password`). It falls back to the same form when the hub has no `google.client_id`.
 - Not verified on a real device: whether Google allows a callback to an iOS client's custom scheme when initiated from an Android browser (custom schemes are already disabled for the Android client type).
@@ -118,7 +118,7 @@ the system browser opens Microsoft sign-in and authorization → back to the App
 - **The client ID is not compiled in**: each user uses an app they register in Microsoft Entra themselves (free, steps below). The first time you tap "Outlook" the App asks for its
   client ID; the manager encrypts it with its own `secret.key` and stores it in Postgres (`mail.microsoft_client` in the settings table), and this hub reuses it from then on. `microsoft.client_id` in the manager's `manager.json`
   can provide a default (the one entered in the App takes priority). The client ID appears in every sign-in URL and is not a secret.
-- **Redirect URI**: the fixed custom scheme `jarvis-mail-oauth://outlook`, the same for every hub (to change it, set `microsoft.redirect_uri` in the manager's `manager.json` and change it in Entra too).
+- **Redirect URI**: the fixed custom scheme `persona-mail-oauth://outlook`, the same for every hub (to change it, set `microsoft.redirect_uri` in the manager's `manager.json` and change it in Entra too).
   The App catches this scheme with ASWebAuthenticationSession, which needs no registration in Info.plist, so **no per-hub App release is needed**.
   We didn't use `msauth.<bundle id>://auth`: it follows the App's bundle ID, which differs for everyone who builds it themselves, while a fixed scheme is the same for everyone.
 - **Public client + PKCE**, with authority `common` (personal accounts and accounts from any organization can sign in), and no client secret; the token exchange happens on the hub, and the refresh token never passes through the phone.
@@ -140,11 +140,11 @@ the system browser opens Microsoft sign-in and authorization → back to the App
    If you can't get in or don't see the menu, open <https://portal.azure.com> and search for "App registrations"; it is the same thing.
 2. On the left, "Identity" → "Applications" → "App registrations" → "New registration".
 3. Fill in three fields, then click "Register":
-   - Name: anything, e.g. `Jarvis Mail`;
+   - Name: anything, e.g. `Persona Mail`;
    - "Supported account types": choose "**Accounts in any organizational directory (Any Microsoft Entra ID tenant - Multitenant) and personal Microsoft accounts (e.g. Skype, Xbox)**";
-   - "Redirect URI": platform "**Public client/native (mobile & desktop)**", value `jarvis-mail-oauth://outlook` (use whatever the App shows; you can tap to copy it).
+   - "Redirect URI": platform "**Public client/native (mobile & desktop)**", value `persona-mail-oauth://outlook` (use whatever the App shows; you can tap to copy it).
 4. After registering, copy the "**Application (client) ID**" from the "Overview" page (looks like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
-5. On the left, "Authentication": check that `jarvis-mail-oauth://outlook` is listed under "Mobile and desktop applications"; scroll to "Advanced settings", set "**Allow public client flows**" to "Yes", and click "Save".
+5. On the left, "Authentication": check that `persona-mail-oauth://outlook` is listed under "Mobile and desktop applications"; scroll to "Advanced settings", set "**Allow public client flows**" to "Yes", and click "Save".
 6. On the left, "API permissions" → "Add a permission":
    - under "APIs my organization uses", search for `Office 365 Exchange Online` → "Delegated permissions" → tick `IMAP.AccessAsUser.All` and `SMTP.Send` → "Add permissions";
    - "Add a permission" again → "Microsoft Graph" → "Delegated permissions" → tick `offline_access`, `openid`, `email` (the default `User.Read` can stay).
@@ -169,7 +169,7 @@ the system browser opens Microsoft sign-in and authorization → back to the App
 ## Letting Persona add it (2026-11-01)
 
 The App's "Add Mail Account" page dropped "AI one-tap add" (paste some text for the model to recognize; `POST /api/v1/ai/mail-account` is gone too). Now you just tell Persona
-"add a mail account for me": the assistant adds it through `mail.accounts` of `jarvis_settings` (`hub/self_settings.go`, assistant only), a card on the phone asks the user for the password / authorization code,
+"add a mail account for me": the assistant adds it through `mail.accounts` of `persona_settings` (`hub/self_settings.go`, assistant only), a card on the phone asks the user for the password / authorization code,
 and after confirmation the hub connects once with `AddAccount` before saving, the same path as the App's form. The password never passes through the model or enters the chat; the interaction history only stores `<redacted>`.
 Cards that need input have no quick-allow button in the notification; the watch and Siri prompt you to fill it in on the iPhone; an approval missing required fields doesn't consume the card. Gmail can still only be signed in from the App.
 

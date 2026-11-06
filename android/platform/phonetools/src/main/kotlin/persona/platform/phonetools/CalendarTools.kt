@@ -193,12 +193,12 @@ internal class CalendarTools(context: Context) {
         calendars.firstOrNull()?.let { return it }
         val uri = Calendar.Calendars.CONTENT_URI.buildUpon()
             .appendQueryParameter(Calendar.CALLER_IS_SYNCADAPTER, "true")
-            .appendQueryParameter(Calendar.Calendars.ACCOUNT_NAME, "Jarvis")
+            .appendQueryParameter(Calendar.Calendars.ACCOUNT_NAME, "Persona")
             .appendQueryParameter(Calendar.Calendars.ACCOUNT_TYPE, Calendar.ACCOUNT_TYPE_LOCAL).build()
         val values = ContentValues().apply {
-            put(Calendar.Calendars.ACCOUNT_NAME, "Jarvis"); put(Calendar.Calendars.ACCOUNT_TYPE, Calendar.ACCOUNT_TYPE_LOCAL)
-            put(Calendar.Calendars.NAME, "Jarvis"); put(Calendar.Calendars.CALENDAR_DISPLAY_NAME, "Persona")
-            put(Calendar.Calendars.OWNER_ACCOUNT, "Jarvis"); put(Calendar.Calendars.CALENDAR_ACCESS_LEVEL, Calendar.Calendars.CAL_ACCESS_OWNER)
+            put(Calendar.Calendars.ACCOUNT_NAME, "Persona"); put(Calendar.Calendars.ACCOUNT_TYPE, Calendar.ACCOUNT_TYPE_LOCAL)
+            put(Calendar.Calendars.NAME, "Persona"); put(Calendar.Calendars.CALENDAR_DISPLAY_NAME, "Persona")
+            put(Calendar.Calendars.OWNER_ACCOUNT, "Persona"); put(Calendar.Calendars.CALENDAR_ACCESS_LEVEL, Calendar.Calendars.CAL_ACCESS_OWNER)
             put(Calendar.Calendars.CALENDAR_COLOR, LOCAL_CALENDAR_COLOR); put(Calendar.Calendars.VISIBLE, 1)
             put(Calendar.Calendars.SYNC_EVENTS, 1); put(Calendar.Calendars.CALENDAR_TIME_ZONE, ZoneId.systemDefault().id)
         }

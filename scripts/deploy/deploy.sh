@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build jarvisd and install it on every machine of the config (docs/config.md); (re)start the hub on its machine.
+# Build personad and install it on every machine of the config (docs/config.md); (re)start the hub on its machine.
 #   ./scripts/deploy/deploy.sh                 # all machines
 #   ./scripts/deploy/deploy.sh <hub machine>   # only the hub
 #   ./scripts/deploy/deploy.sh <machine id>    # only one machine (node binary; the hub restarts its connection)
@@ -7,14 +7,14 @@
 # The checkout must contain origin/master (it fetches it first), else nothing is deployed; PERSONA_DEPLOY_ANY_COMMIT=1
 # skips the check.
 # Who may open the hub's admin UI (docs/admin.md): --admin-access <loopback|lan|cidrs|any> [--admin-cidrs a,b] (or
-# JARVIS_ADMIN_ACCESS / JARVIS_ADMIN_CIDRS) sets it on the hub; without them a hub that never had one chosen asks on
+# PERSONA_ADMIN_ACCESS / PERSONA_ADMIN_CIDRS) sets it on the hub; without them a hub that never had one chosen asks on
 # a terminal, else keeps the default (lan) and says so.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 # The question and its explanations live in install.sh (the public installer asks the same).
 eval "$(sed -n '/^# >>> admin access/,/^# <<< admin access/p' scripts/deploy/install.sh)"
-ADMIN_ACCESS="${PERSONA_ADMIN_ACCESS-${JARVIS_ADMIN_ACCESS:-}}"
-ADMIN_CIDRS="${PERSONA_ADMIN_CIDRS-${JARVIS_ADMIN_CIDRS:-}}"
+ADMIN_ACCESS="${PERSONA_ADMIN_ACCESS:-}"
+ADMIN_CIDRS="${PERSONA_ADMIN_CIDRS:-}"
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -46,14 +46,14 @@ if [ -z "${PERSONA_DEPLOY_ANY_COMMIT:-}" ]; then
     exit 2
   fi
 fi
-eval "$(python3 scripts/jarvis_config.py env)"
+eval "$(python3 scripts/persona_config.py env)"
 cd server
 # Straight from master, for when a change cannot wait for a release: the build number is the build time (UTC), so an
 # older release never replaces it and the next release does (docs/hub-update.md "Deploying directly").
 BUILD="$(date -u +%Y%m%d%H%M)"
 VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD"
 TARGETS=("$@")
-[ ${#TARGETS[@]} -eq 0 ] && read -ra TARGETS <<< "$JARVIS_MACHINES"
+[ ${#TARGETS[@]} -eq 0 ] && read -ra TARGETS <<< "$PERSONA_MACHINES"
 
 # web_deps (in web/): npm ci when there is no node_modules or package-lock.json changed since the last install, so a
 # pull that adds or bumps a dependency builds with it. npm's own node_modules/.package-lock.json never equals
@@ -91,18 +91,18 @@ upload_web() {
   root=$(python3 ../scripts/persona_identity.py --service hub --prepare --prefix -)
   script="$root
 "'set -e; root=$PERSONA_HOME; rm -rf "$root/web.new"; mkdir -p "$root/web.new"; tar -xzf - -C "$root/web.new"; rm -rf "$root/web.old"; [ ! -d "$root/web" ] || mv "$root/web" "$root/web.old"; mv "$root/web.new" "$root/web"; rm -rf "$root/web.old"'
-  COPYFILE_DISABLE=1 tar --no-xattrs -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" "$script"
+  COPYFILE_DISABLE=1 tar --no-xattrs -C ../web/dist -czf - . | ssh "$PERSONA_HUB_SSH" "$script"
   echo "web: deployed to the hub state root"
 }
 if [ "${TARGETS[*]}" = web ]; then build_web; upload_web; exit 0; fi
-HUB="$JARVIS_HUB_MACHINE"
+HUB="$PERSONA_HUB_MACHINE"
 # Other machines first, the hub (restart) last: the hub only picks up a new node binary when it reconnects.
 ORDERED=()
 for t in "${TARGETS[@]}"; do [ "$t" != "$HUB" ] && ORDERED+=("$t"); done
 for t in "${TARGETS[@]}"; do [ "$t" = "$HUB" ] && ORDERED+=("$t"); done
 TARGETS=("${ORDERED[@]}")
 # machine <id> <field>: a field of a machine in the config (ssh host, os, arch, hostnames, via).
-field() { python3 ../scripts/jarvis_config.py machine "$1" | python3 -c "import json,sys;v=json.load(sys.stdin).get('$2','');print(' '.join(v) if isinstance(v,list) else v)"; }
+field() { python3 ../scripts/persona_config.py machine "$1" | python3 -c "import json,sys;v=json.load(sys.stdin).get('$2','');print(' '.join(v) if isinstance(v,list) else v)"; }
 state_root() { python3 ../scripts/persona_identity.py --service "${1:-hub}" --prepare; }
 state_prefix() { python3 ../scripts/persona_identity.py --service "${1:-hub}" --prepare --prefix -; }
 remote_state() {
@@ -115,14 +115,14 @@ mkdir -p bin
 # this build only when its code contains that commit (docs/hub-update.md "No rollback").
 COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
 [ -n "$COMMIT" ] && [ -n "$(git status --porcelain -- . 2>/dev/null)" ] && COMMIT="$COMMIT-dirty"
-LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$COMMIT${JARVIS_PUBLISH_URL:+ -X main.updateURL=$JARVIS_PUBLISH_URL/dl}"
-# The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
+LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$COMMIT${PERSONA_PUBLISH_URL:+ -X main.updateURL=$PERSONA_PUBLISH_URL/dl}"
+# The runtime packages personad carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
 go generate ./internal/runtimepkg
 # Every platform a machine can run, the same four the release and the Docker image build (docs/release.md): each
 # machine gets the one it runs (machine_platform), and the hub keeps all four for "Redeploy" (#3103).
 PLATFORMS=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)
 for plat in "${PLATFORMS[@]}"; do
-  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "bin/jarvisd-$plat" ./cmd/personad
+  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "bin/personad-$plat" ./cmd/personad
 done
 echo "built $VERSION"
 # The web client goes with the hub: built here with the binaries, uploaded after the hub restarts.
@@ -140,7 +140,7 @@ is_here() {
   return 1
 }
 
-# machine_platform <machine id>: the os-arch of the binary that machine runs ("<os>-<arch>", bin/jarvisd-<os>-<arch>).
+# machine_platform <machine id>: the os-arch of the binary that machine runs ("<os>-<arch>", bin/personad-<os>-<arch>).
 # `os` and `arch` in the config win; whatever it leaves out is asked of the machine itself (`uname -s` / `uname -m`,
 # the mapping scripts/deploy/install.sh makes), so an Intel Mac is not handed an Apple-silicon build and an ARM Linux
 # box not an amd64 one. A platform there is no build for is an error, never a silent install (#3103).
@@ -190,7 +190,7 @@ machine_platform() {
   case "$os-$arch" in
     linux-amd64 | linux-arm64 | darwin-amd64 | darwin-arm64) printf '%s-%s\n' "$os" "$arch" ;;
     *)
-      echo "$id: no jarvisd build for $os/$arch (linux or darwin; amd64 or arm64)" >&2
+      echo "$id: no personad build for $os/$arch (linux or darwin; amd64 or arm64)" >&2
       return 1 ;;
   esac
 }
@@ -199,7 +199,7 @@ machine_platform() {
 # onto it: a build of another platform cannot exec, and that was the deploy saying "installed" anyway (#3103).
 install_bin() {
   local id=$1 bin=$2 host via root command keep out role=node plat
-  plat=${bin##*/jarvisd-}
+  plat=${bin##*/personad-}
   [ "$id" != "$HUB" ] || role=hub
   host=$(field "$id" ssh); host=${host:-$id}
   via=$(field "$id" via)
@@ -208,18 +208,17 @@ install_bin() {
     mkdir -p "$root/bin" || return 1
     # The hub's binary before it is replaced: hub-systemd.sh switches the running edge to the new one and goes back
     # to this one if it fails while taking over (docs/hub-restart.md "Blue-green switch").
-    if [ "$role" = hub ] && [ -f "$root/bin/jarvisd" ]; then cp -p "$root/bin/jarvisd" "$root/bin/jarvisd.prev" || return 1; fi
-    { cp "$bin" "$root/bin/jarvisd.new" && mv "$root/bin/jarvisd.new" "$root/bin/jarvisd"; } || return 1
-    [ -d "$root/bin/personad" ] || ln -sfn jarvisd "$root/bin/personad" || return 1
-    if ! out=$(PERSONA_HOME="$root" JARVIS_HOME="$root" "$root/bin/jarvisd" version 2>&1); then
+    if [ "$role" = hub ] && [ -f "$root/bin/personad" ]; then cp -p "$root/bin/personad" "$root/bin/personad.prev" || return 1; fi
+    { cp "$bin" "$root/bin/personad.new" && mv "$root/bin/personad.new" "$root/bin/personad"; } || return 1
+    if ! out=$(PERSONA_HOME="$root" "$root/bin/personad" version 2>&1); then
       echo "$id: the $plat build does not run there: $out" >&2
       return 1
     fi
-    PERSONA_HOME="$root" JARVIS_HOME="$root" restart_resident
+    PERSONA_HOME="$root" restart_resident
   else
     keep=
-    [ "$role" = hub ] && keep='{ [ ! -f "$PERSONA_HOME/bin/jarvisd" ] || cp -p "$PERSONA_HOME/bin/jarvisd" "$PERSONA_HOME/bin/jarvisd.prev"; } && '
-    command=$keep'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd.new" && mv "$PERSONA_HOME/bin/jarvisd.new" "$PERSONA_HOME/bin/jarvisd" && ( [ ! -d "$PERSONA_HOME/bin/personad" ] && ln -sfn jarvisd "$PERSONA_HOME/bin/personad"; true ) && "$PERSONA_HOME/bin/jarvisd" version >/dev/null'
+    [ "$role" = hub ] && keep='{ [ ! -f "$PERSONA_HOME/bin/personad" ] || cp -p "$PERSONA_HOME/bin/personad" "$PERSONA_HOME/bin/personad.prev"; } && '
+    command=$keep'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/personad.new" && chmod 755 "$PERSONA_HOME/bin/personad.new" && mv "$PERSONA_HOME/bin/personad.new" "$PERSONA_HOME/bin/personad" && "$PERSONA_HOME/bin/personad" version >/dev/null'
     if [ -n "$via" ]; then
       local vh quoted
       vh=$(field "$via" ssh); vh=${vh:-$via}
@@ -240,28 +239,27 @@ $command")
 }
 
 # install_program <hub machine id> <os-arch> <name>: a built-in plugin's program (wechat: the WeChat bot, docs/wechat.md;
-# Telegram's connector is an extension now, #1704) next to the hub's jarvisd (only the hub runs it), the
-# same build as jarvisd: the hub starts it only when `version -v` matches.
+# Telegram's connector is an extension now, #1704) next to the hub's personad (only the hub runs it), the
+# same build as personad: the hub starts it only when `version -v` matches.
 install_program() {
   local id=$1 plat=$2 name=$3 bin
-  bin="bin/jarvisd-$name-$plat"
+  bin="bin/personad-$name-$plat"
   GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" "./cmd/personad-$name" || return 1
   if is_here "$id"; then
     local root
     root=$(state_root)
     mkdir -p "$root/bin"
-    cp "$bin" "$root/bin/jarvisd-$name.new" && mv "$root/bin/jarvisd-$name.new" "$root/bin/jarvisd-$name"
-    [ ! -d "$root/bin/personad-$name" ] && ln -sfn "jarvisd-$name" "$root/bin/personad-$name"
+    cp "$bin" "$root/bin/personad-$name.new" && mv "$root/bin/personad-$name.new" "$root/bin/personad-$name"
   else
-    remote_state "$JARVIS_HUB_SSH" "mkdir -p \"\$PERSONA_HOME/bin\" && cat > \"\$PERSONA_HOME/bin/jarvisd-$name.new\" && chmod 755 \"\$PERSONA_HOME/bin/jarvisd-$name.new\" && mv \"\$PERSONA_HOME/bin/jarvisd-$name.new\" \"\$PERSONA_HOME/bin/jarvisd-$name\" && [ ! -d \"\$PERSONA_HOME/bin/personad-$name\" ] && ln -sfn jarvisd-$name \"\$PERSONA_HOME/bin/personad-$name\"" < "$bin"
+    remote_state "$PERSONA_HUB_SSH" "mkdir -p \"\$PERSONA_HOME/bin\" && cat > \"\$PERSONA_HOME/bin/personad-$name.new\" && chmod 755 \"\$PERSONA_HOME/bin/personad-$name.new\" && mv \"\$PERSONA_HOME/bin/personad-$name.new\" \"\$PERSONA_HOME/bin/personad-$name\"" < "$bin"
   fi
 }
 
-# herdr on a machine that has none (scripts/deploy/ensure-herdr.sh; JARVIS_SKIP_HERDR=1 skips it): a first install should
+# herdr on a machine that has none (scripts/deploy/ensure-herdr.sh; PERSONA_SKIP_HERDR=1 skips it): a first install should
 # leave a machine whose Agents show up. Never fails the deploy.
 ensure_herdr() { # machine-id
   local id=$1 host via vh
-  [ "${JARVIS_SKIP_HERDR:-}" = 1 ] && return 0
+  [ "${PERSONA_SKIP_HERDR:-}" = 1 ] && return 0
   host=$(field "$id" ssh); host=${host:-$id}
   via=$(field "$id" via)
   if is_here "$id"; then
@@ -283,42 +281,42 @@ restart_resident() { ../scripts/deploy/node-launchd.sh restart-idle || true; }
 hub_admin_access() {
   local current out cmd
   if [ -z "$ADMIN_ACCESS" ]; then
-    current=$(remote_state "$JARVIS_HUB_SSH" '"$PERSONA_HOME/bin/jarvisd" hub admin access --get' 2>/dev/null || true)
+    current=$(remote_state "$PERSONA_HUB_SSH" '"$PERSONA_HOME/bin/personad" hub admin access --get' 2>/dev/null || true)
     [ -n "$current" ] && return 0
     ask_admin_access || { admin_access_reminder; return 0; }
   fi
   # Both were checked against fixed shapes (admin_access_valid) before they get into a remote command line.
-  cmd='"$PERSONA_HOME/bin/jarvisd" hub admin access '"'$ADMIN_ACCESS'"
-  [ "$ADMIN_ACCESS" = cidrs ] && cmd='"$PERSONA_HOME/bin/jarvisd" hub admin access cidrs --cidrs '"'$ADMIN_CIDRS'"
+  cmd='"$PERSONA_HOME/bin/personad" hub admin access '"'$ADMIN_ACCESS'"
+  [ "$ADMIN_ACCESS" = cidrs ] && cmd='"$PERSONA_HOME/bin/personad" hub admin access cidrs --cidrs '"'$ADMIN_CIDRS'"
   # shellcheck disable=SC2029
-  if out=$(remote_state "$JARVIS_HUB_SSH" "$cmd" 2>/dev/null); then
+  if out=$(remote_state "$PERSONA_HUB_SSH" "$cmd" 2>/dev/null); then
     echo "hub: ${out%%$'\n'*}"
   else
-    echo "hub: could not set the admin UI's scope (jarvisd hub admin access on the hub machine)" >&2
+    echo "hub: could not set the admin UI's scope (personad hub admin access on the hub machine)" >&2
   fi
 }
 
 for t in "${TARGETS[@]}"; do
   case "$t" in
     "$HUB")
-      python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/db.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'
+      python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/db.sh | ssh "$PERSONA_HUB_SSH" 'bash -s'
       for plat in "${PLATFORMS[@]}"; do
-        remote_state "$JARVIS_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin/nodes"; cat > "$PERSONA_HOME/bin/nodes/'"jarvisd-$plat"'"' < "bin/jarvisd-$plat"
+        remote_state "$PERSONA_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin/nodes"; cat > "$PERSONA_HOME/bin/nodes/'"personad-$plat"'"' < "bin/personad-$plat"
       done
       hub_plat=$(machine_platform "$t") || exit 2
-      install_bin "$t" "bin/jarvisd-$hub_plat"
+      install_bin "$t" "bin/personad-$hub_plat"
       install_program "$t" "$hub_plat" wechat
       ensure_herdr "$t"
       hub_admin_access
-      python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/hub-systemd.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'
+      python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/hub-systemd.sh | ssh "$PERSONA_HUB_SSH" 'bash -s'
       echo "$t: hub on the new binary"
       upload_web ;;
     *)
-      [[ " $JARVIS_MACHINES " == *" $t "* ]] || { echo "unknown machine $t (not in the config)" >&2; exit 2; }
+      [[ " $PERSONA_MACHINES " == *" $t "* ]] || { echo "unknown machine $t (not in the config)" >&2; exit 2; }
       # A machine that could not be asked is unreachable (asleep, no route), exactly as before: it is skipped and the
       # run still succeeds. A platform there is no build for is skipped by name and fails the run at the end (#3103).
       if plat=$(machine_platform "$t"); then
-        if install_bin "$t" "bin/jarvisd-$plat"; then echo "$t: installed"; ensure_herdr "$t"; else echo "$t: not installed, skipped" >&2; fi
+        if install_bin "$t" "bin/personad-$plat"; then echo "$t: installed"; ensure_herdr "$t"; else echo "$t: not installed, skipped" >&2; fi
       elif [ $? = 3 ]; then
         echo "$t: unreachable, skipped" >&2
       else
@@ -328,6 +326,6 @@ for t in "${TARGETS[@]}"; do
   esac
 done
 if [ -n "${NO_PLATFORM:-}" ]; then
-  echo "deploy: some machines have no jarvisd build for their platform (see above)" >&2
+  echo "deploy: some machines have no personad build for their platform (see above)" >&2
   exit 2
 fi

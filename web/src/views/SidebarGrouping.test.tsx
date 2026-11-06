@@ -133,7 +133,7 @@ describe("按待办 before the todos have loaded", () => {
   });
 
   it("does not wait under another grouping", async () => {
-    localStorage.setItem("jarvis.agentGrouping", "machine");
+    localStorage.setItem("persona.agentGrouping", "machine");
     vi.stubGlobal("fetch", hub(() => new Promise<Response>(() => {})));
     connect();
     const sock = FakeSocket.all[FakeSocket.all.length - 1];
@@ -157,16 +157,16 @@ describe("a hub without todos (GET /todos 404)", () => {
     expect(checked()).toBe("按机器");
     expect(agentsBlock().textContent).toContain("工作电脑");
     expect(agentsBlock().textContent).not.toContain("加载中…");
-    expect(localStorage.getItem("jarvis.agentGrouping")).toBeNull();
+    expect(localStorage.getItem("persona.agentGrouping")).toBeNull();
   });
 
   it("keeps a 按待办 chosen before and shows it again once the hub has todos", async () => {
-    localStorage.setItem("jarvis.agentGrouping", "todo");
+    localStorage.setItem("persona.agentGrouping", "todo");
     vi.stubGlobal("fetch", hub(() => json({ error: "not found" }, 404)));
     await refresh();
     await render();
     expect(checked()).toBe("按机器");
-    expect(localStorage.getItem("jarvis.agentGrouping")).toBe("todo");
+    expect(localStorage.getItem("persona.agentGrouping")).toBe("todo");
 
     vi.stubGlobal("fetch", hub(() => json({ todos: [todo] })));
     await act(async () => { await refresh(); });

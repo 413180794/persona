@@ -14,7 +14,7 @@ internal fun notificationRoute(uri: Uri): NotificationRoute? =
 /** The tab a notification names wins over session metadata, which may not have loaded on a cold start. */
 internal fun Router.open(route: NotificationRoute): ResolvedRoute? {
     val kind = when (route.tab) {
-        AppTab.Jarvis -> ConversationKind.Assistant
+        AppTab.Persona -> ConversationKind.Assistant
         AppTab.Agents -> ConversationKind.Agent
         else -> null
     }
@@ -34,7 +34,7 @@ internal fun Router.open(route: NotificationRoute): ResolvedRoute? {
 /** The notification module's terminal fallback (`target=terminal`); the shell keeps the conversation below it. */
 internal fun terminalLink(link: String): ResolvedRoute? {
     val uri = try { URI(link) } catch (_: URISyntaxException) { return null }
-    if (uri.scheme !in setOf("persona", "jarvis") || uri.rawAuthority != "open" || !uri.rawPath.isNullOrEmpty() || uri.rawFragment != null) return null
+    if (uri.scheme != "persona" || uri.rawAuthority != "open" || !uri.rawPath.isNullOrEmpty() || uri.rawFragment != null) return null
     val parameters = mutableMapOf<String, String>()
     try {
         for (part in uri.rawQuery.orEmpty().split('&').filter { it.isNotEmpty() }) {

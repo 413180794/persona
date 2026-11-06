@@ -499,7 +499,7 @@ func RenderAcceptanceInput(a Acceptance) string { return render("assistant/accep
 
 // WorkspaceMention is what the assistant gets for a workspace the user @-mentioned (assistant/workspace_mention,
 // #5594): where it is, the knowledge base's projects there and the agents that worked there lately. It replaces the
-// client's <jarvis-context kind="workspace"> block in the message.
+// client's <persona-context kind="workspace"> block in the message.
 type WorkspaceMention struct {
 	Title, Machine, MachineName, Cwd, Branch string
 	Online                                   bool
@@ -517,4 +517,6 @@ type WorkspaceSession struct {
 	Title, Agent, Status, When, ID, Cwd string
 }
 
-func RenderWorkspaceMention(w WorkspaceMention) string { return render("assistant/workspace_mention", w) }
+func RenderWorkspaceMention(w WorkspaceMention) string {
+	return render("assistant/workspace_mention", w)
+}

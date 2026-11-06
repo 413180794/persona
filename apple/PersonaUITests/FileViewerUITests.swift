@@ -1,6 +1,6 @@
 import XCTest
 
-/// The file viewer (docs/ios.md「文件查看器」) against scripts/mock/mock_hub.py started with MOCK_FILES=1 (JARVIS_MOCK_HUB):
+/// The file viewer (docs/ios.md「文件查看器」) against scripts/mock/mock_hub.py started with MOCK_FILES=1 (PERSONA_MOCK_HUB):
 /// only paths that are there on the conversation's machine become chips; code opens with line numbers, JSON as an
 /// outline, Markdown rendered.
 final class FileViewerUITests: XCTestCase {
@@ -9,22 +9,22 @@ final class FileViewerUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_FILES=1")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB) with MOCK_FILES=1")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", widget, "-openAgentsFresh", "YES", "-openChatsFresh", "YES"] + extra
         app.launchPinned()
         return app
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-files-\(name).png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-files-\(name).png"))
     }
 
     /// The last message names first one path on another machine and one deleted, then six files that are there, each
@@ -37,7 +37,7 @@ final class FileViewerUITests: XCTestCase {
             XCTAssertTrue(app.links[p].exists, "no link for \(p)")
             XCTAssertFalse(app.buttons["file-chip-" + p].exists, "a linked path is a chip too: \(p)")
         }
-        XCTAssertFalse(app.links["~/.jarvis/personas/doudou"].exists, "another machine's path is linked")
+        XCTAssertFalse(app.links["~/.persona/personas/doudou"].exists, "another machine's path is linked")
         XCTAssertFalse(app.links["/Users/me/code/weather/old/Removed.swift"].exists, "a deleted file is linked")
         shot(app, "links")
 
@@ -50,8 +50,8 @@ final class FileViewerUITests: XCTestCase {
     /// MOCK_PATH_LINKS=1: a question and a reply naming paths in their words, with lines (#1706). A path with a line
     /// opens the file there: line 126's text is on screen (only the lines near what is shown are made).
     @MainActor func testAPathWithALineOpensAtIt() throws {
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_PATH_LINKS"] == "1" else {
-            throw XCTSkip("needs the mock hub with MOCK_PATH_LINKS=1 (and TEST_RUNNER_JARVIS_MOCK_PATH_LINKS=1)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_PATH_LINKS"] == "1" else {
+            throw XCTSkip("needs the mock hub with MOCK_PATH_LINKS=1 (and TEST_RUNNER_PERSONA_MOCK_PATH_LINKS=1)")
         }
         let app = launch()
         let reply = app.links["server/handlers.go:126"].firstMatch
@@ -90,17 +90,17 @@ final class FileViewerUITests: XCTestCase {
 
 /// Opening times and frames while scrolling the big made-up files (`-showFilePerf YES` writes them to the app's
 /// Caches/file-perf.log; the numbers in docs/ios.md come from here). Opened from an idle conversation (a working one
-/// redraws behind the sheet). Only with JARVIS_FILE_PERF=1.
+/// redraws behind the sheet). Only with PERSONA_FILE_PERF=1.
 final class FileViewerPerfTests: XCTestCase {
     @MainActor func testOpenAndScrollBigFiles() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
-              ProcessInfo.processInfo.environment["JARVIS_FILE_PERF"] == "1" else {
-            throw XCTSkip("set JARVIS_FILE_PERF=1 and JARVIS_MOCK_HUB (MOCK_FILES=1)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
+              ProcessInfo.processInfo.environment["PERSONA_FILE_PERF"] == "1" else {
+            throw XCTSkip("set PERSONA_FILE_PERF=1 and PERSONA_MOCK_HUB (MOCK_FILES=1)")
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        // JARVIS_FILE_PERF_ONLY: one file (by a part of its name); JARVIS_FILE_PERF_ARGS: more launch arguments.
-        let only = ProcessInfo.processInfo.environment["JARVIS_FILE_PERF_ONLY"].flatMap { $0.isEmpty ? nil : $0 }
-        let extra = (ProcessInfo.processInfo.environment["JARVIS_FILE_PERF_ARGS"] ?? "").split(separator: " ").map(String.init)
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        // PERSONA_FILE_PERF_ONLY: one file (by a part of its name); PERSONA_FILE_PERF_ARGS: more launch arguments.
+        let only = ProcessInfo.processInfo.environment["PERSONA_FILE_PERF_ONLY"].flatMap { $0.isEmpty ? nil : $0 }
+        let extra = (ProcessInfo.processInfo.environment["PERSONA_FILE_PERF_ARGS"] ?? "").split(separator: " ").map(String.init)
         for file in ["server/handlers.go", "data/forecast.json", "README.md", "logs/api.log"] where only == nil || file.contains(only!) {
             let app = XCUIApplication()
             app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006",

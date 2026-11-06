@@ -1,6 +1,6 @@
 import Foundation
 
-/// The knowledge base under the hub's ~/.jarvis/data (docs/knowledge.md): projects, chats, people, docs, meetings and
+/// The knowledge base under the hub's ~/.persona/data (docs/knowledge.md): projects, chats, people, docs, meetings and
 /// events, each ranked by importance (P0–P3) and relevance to the user, with free tags.
 nonisolated enum KBKind: String, CaseIterable, Identifiable, Sendable {
     case projects, chats, people, docs, meetings, events, recordings

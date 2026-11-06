@@ -30,7 +30,7 @@ type pairCode struct {
 	FP        string    `json:"fp"`
 	TLSPort   int       `json:"tls_port"`
 	Alt       []string  `json:"alt"`
-	// Machine: made for that machine's jarvis-link (`jarvisd hub pair --machine`); the URL is then jarvis://link?….
+	// Machine: made for that machine's persona-link (`personad hub pair --machine`); the URL is then persona://link?….
 	Machine string `json:"machine,omitempty"`
 	PairURL string `json:"pair_url"`
 }
@@ -53,9 +53,9 @@ func (p pairCode) pairURL() string {
 		values.Add("alt", alt)
 	}
 	if p.Machine != "" {
-		return "jarvis://link?" + values.Encode()
+		return "persona://link?" + values.Encode()
 	}
-	return "jarvis://pair?" + values.Encode()
+	return "persona://pair?" + values.Encode()
 }
 
 // pairCodeReply is a pairing code with what a signed-in device shows for it: the QR code of the app's pairing link
@@ -98,7 +98,7 @@ func webSignInBase(raw string) (string, error) {
 	return raw, nil
 }
 
-// pairRoutes are the pairing endpoints: short-lived pairing tokens for `jarvisd hub pair`
+// pairRoutes are the pairing endpoints: short-lived pairing tokens for `personad hub pair`
 // (docs/redesign/hub-changes.md 1.3), and for a signed-in device pairing another one (#2731).
 // Also a computer's code (machines_add.go): for a link computer there is, or one added now, from the master token over
 // loopback or a signed-in full device.
@@ -122,7 +122,7 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
 			return
 		}
-		// {"machine": id} makes a code for that link machine's jarvis-link (link.go), {"add": {…}} adds the computer
+		// {"machine": id} makes a code for that link machine's persona-link (link.go), {"add": {…}} adds the computer
 		// first (machines_add.go); no body, one for an app.
 		var req struct {
 			Machine string             `json:"machine"`
@@ -193,7 +193,7 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 	})
 }
 
-// newPairCode makes a one-time pairing code: for an app (machine ""), or for that link machine's jarvis-link.
+// newPairCode makes a one-time pairing code: for an app (machine ""), or for that link machine's persona-link.
 func (h *Hub) newPairCode(ctx context.Context, machine string) (*pairCode, error) {
 	if h.store == nil {
 		return nil, errors.New("no database")
@@ -297,7 +297,7 @@ func (h *Hub) serveComputerCode(w http.ResponseWriter, r *http.Request, who prin
 		return
 	}
 	reply := pairCodeReply{pairCode: p, Trust: db.TrustConfirmed, Added: added,
-		Command: "jarvis-link pair '" + p.PairURL + "'", Install: h.computerInstall(p.PairURL)}
+		Command: "persona-link pair '" + p.PairURL + "'", Install: h.computerInstall(p.PairURL)}
 	if h.machinePending(id) {
 		reply.Trust = trustPending
 	}

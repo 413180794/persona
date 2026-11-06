@@ -1,6 +1,6 @@
 # node on Windows (herdr and Orca engines)
 
-Lets the phone see and drive Claude Code inside herdr or Orca on a Windows computer: that computer runs the resident node (`personad node --attach`) and the connector jarvis-link (active mode, see [link.md](link.md)),
+Lets the phone see and drive Claude Code inside herdr or Orca on a Windows computer: that computer runs the resident node (`personad node --attach`) and the connector persona-link (active mode, see [link.md](link.md)),
 while the hub lives elsewhere (WSL2 / Docker / another machine). Requirements and steps are in #1090; the overview of Windows support is #1179. Pitfalls we hit are in [lessons/windows.md](lessons/windows.md).
 
 ## Status
@@ -11,7 +11,7 @@ The table below is for Orca; where the herdr engine differs is in the table in t
 | Capability | Windows (Orca) | Notes |
 | --- | --- | --- |
 | Build | ✅ | `GOOS=windows go build ./...`; process groups, signals, file locks and CPU time are in `internal/osproc` and each package's `_windows.go` |
-| Resident node, jarvis-link active mode | ✅ | `jarvis-link install` installs a scheduled task that starts at logon, restarts on exit and shows no window ("Install and start at logon" below); there is no one-line install script or installer package (#1179) |
+| Resident node, persona-link active mode | ✅ | `persona-link install` installs a scheduled task that starts at logon, restarts on exit and shows no window ("Install and start at logon" below); there is no one-line install script or installer package (#1179) |
 | List Orca sessions and state | ✅ | One snapshot per second, as on macOS |
 | Read transcripts and session info | ✅ | `%USERPROFILE%\.claude\projects\<encoded directory>\<id>.jsonl`; the directory encoding is the same as Claude Code's (every non-alphanumeric becomes `-`, `C:\Users\…` → `C--Users-…`) |
 | Send messages (multi-line as one), keys, interrupt | ✅ | Bracketed paste works under ConPTY |
@@ -22,7 +22,7 @@ The table below is for Orca; where the herdr engine differs is in the table in t
 | Port forwarding, Codex / compatible Codex forks discovery | ❌ | Depends on `ps` / `lsof` / `/proc`; silently unavailable on Windows (#1179) |
 | Processes the node starts itself: managed launchers, `codex` start | ✅ | `osproc.Exec`: Windows has no exec, so it starts a child in the same console and exits with its exit code ("herdr" below) |
 | hub self-update | ❌ | Still `syscall.Exec`; the hub doesn't run natively on Windows (#1179) |
-| Updating the resident node through the hub ([node-update.md](node-update.md)) | ❌ | The node reports it as unsupported ("resident node is not managed by launchd/systemd"), and the App shows why; to upgrade, run `jarvis-link install --jarvisd <new personad.exe>` again |
+| Updating the resident node through the hub ([node-update.md](node-update.md)) | ❌ | The node reports it as unsupported ("resident node is not managed by launchd/systemd"), and the App shows why; to upgrade, run `persona-link install --personad <new personad.exe>` again |
 | Passive mode (hub connects to this machine) | Not verified | Builds, and `install --listen` takes the same path; you have to open the port in Windows Firewall yourself (`install` prints the `New-NetFirewallRule` command) |
 
 ## Install and start at logon
@@ -30,18 +30,18 @@ The table below is for Orca; where the herdr engine differs is in the table in t
 ```powershell
 cd server
 go build -o personad.exe .\cmd\personad
-go build -o jarvis-link.exe .\cmd\jarvis-link
-.\jarvis-link.exe install --jarvisd .\personad.exe --pair '<the jarvis://link?… link from the hub>'   # skip --pair if already paired
+go build -o persona-link.exe .\cmd\persona-link
+.\persona-link.exe install --personad .\personad.exe --pair '<the persona://link?… link from the hub>'   # skip --pair if already paired
 ```
 
 No administrator needed. On Windows, `install` does, in order:
 
 1. With `--pair`, pair first; `--listen` switches to passive mode (same as Linux, see [link.md](link.md), "Linux (headless)").
-2. If the scheduled task is running, end it first (a running program file can't be replaced) and wait for jarvis-link to release its run lock. If another jarvis-link is running (say, a foreground `jarvis-link run`), it asks you to stop it.
-3. Copy itself to `~/.persona/bin/jarvis-link.exe`; copy the personad given by `--jarvisd` to `~/.persona/bin/jarvisd.exe`. Unlike Linux, if one is given it is always replaced:
-   Windows can't update the node through the hub yet, so running `install` again is the upgrade. If none is given and there is no `jarvisd.exe`, only jarvis-link is installed (same as `--no-node`).
-4. Put another copy at `~/.persona/bin/jarvis-link-service.exe`: the same program, with only the subsystem in the PE header changed from console to GUI (`guicopy.go`).
-5. Write `~/.persona/jarvis-link-task.xml` (UTF-16), register the scheduled task "Persona Link" with `schtasks /Create /XML`, start it with `schtasks /Run`, and wait for it to connect to the hub (same as Linux, up to 20 seconds).
+2. If the scheduled task is running, end it first (a running program file can't be replaced) and wait for persona-link to release its run lock. If another persona-link is running (say, a foreground `persona-link run`), it asks you to stop it.
+3. Copy itself to `~/.persona/bin/persona-link.exe`; copy the personad given by `--personad` to `~/.persona/bin/personad.exe`. Unlike Linux, if one is given it is always replaced:
+   Windows can't update the node through the hub yet, so running `install` again is the upgrade. If none is given and there is no `personad.exe`, only persona-link is installed (same as `--no-node`).
+4. Put another copy at `~/.persona/bin/persona-link-service.exe`: the same program, with only the subsystem in the PE header changed from console to GUI (`guicopy.go`).
+5. Write `~/.persona/persona-link-task.xml` (UTF-16), register the scheduled task "Persona Link" with `schtasks /Create /XML`, start it with `schtasks /Run`, and wait for it to connect to the hub (same as Linux, up to 20 seconds).
 
 The "Persona Link" scheduled task:
 
@@ -50,51 +50,51 @@ The "Persona Link" scheduled task:
 - **Triggers**: at logon, plus every 5 minutes starting from install. The multiple-instances policy is "ignore new": while the supervisor is running it does nothing; if it's gone it is brought back within 5 minutes.
   The task's own "restart on failure" isn't used: it only covers the task failing to start, not the program exiting non-zero (tested on a real machine). "Repeat" on a logon trigger only starts at the next logon, so a separate time trigger is added.
 - No run-time limit (by default the task is ended after 72 hours), runs on battery, isn't stopped when idle ends, normal priority (the default 7 is "below normal", lowering both CPU and disk).
-- **What runs is the supervisor** `jarvis-link-service.exe supervise` (`supervise_windows.go`): it starts jarvis-link (`run --log ~/.persona/link.log`) with `CREATE_NO_WINDOW`
-  and the resident node (`jarvisd.exe node --attach`, log `~/.persona/node-attach.log`, moved to `.1` at 10 MB), and restarts whichever exits after 5 and 10 seconds respectively (same as `RestartSec` on the two Linux units).
-  What the supervisor itself does goes to `~/.persona/link-service.log` (jarvis-link's output when it crashes is there too). Only one supervisor runs per computer (file lock on `~/.persona/link-service.run`).
-  It starts the node first and waits for it to recreate `node-attach.sock` (it only checks the file's modification time and doesn't connect: each connection is an attach and would kick off the hub's connection; waits up to 10 seconds) before starting jarvis-link.
+- **What runs is the supervisor** `persona-link-service.exe supervise` (`supervise_windows.go`): it starts persona-link (`run --log ~/.persona/link.log`) with `CREATE_NO_WINDOW`
+  and the resident node (`personad.exe node --attach`, log `~/.persona/node-attach.log`, moved to `.1` at 10 MB), and restarts whichever exits after 5 and 10 seconds respectively (same as `RestartSec` on the two Linux units).
+  What the supervisor itself does goes to `~/.persona/link-service.log` (persona-link's output when it crashes is there too). Only one supervisor runs per computer (file lock on `~/.persona/link-service.run`).
+  It starts the node first and waits for it to recreate `node-attach.sock` (it only checks the file's modification time and doesn't connect: each connection is an attach and would kick off the hub's connection; waits up to 10 seconds) before starting persona-link.
   The other way round, the hub connects the link first and immediately opens a stream to a node that isn't listening yet, briefly reporting this machine offline, and `install` concludes "the hub can't reach this machine's node" (#1984).
 - The supervisor puts itself in a Job that "kills every process inside when the last handle closes": when the supervisor goes away (task ended, another install / uninstall, logoff, crash),
-  jarvis-link and the node go with it, so when the scheduled task brings it back it doesn't fight leftover old processes.
+  persona-link and the node go with it, so when the scheduled task brings it back it doesn't fight leftover old processes.
 
 **Why a GUI-subsystem copy**: when a scheduled task starts a console program in the user session, Windows opens a console window for it (a Windows Terminal window if Windows Terminal is the default terminal),
-which stays on the desktop. A GUI-subsystem program has no window, and the console programs it starts with `CREATE_NO_WINDOW` get a console but no window. It's a copy rather than a separate build: whether `jarvis-link.exe`
+which stays on the desktop. A GUI-subsystem program has no window, and the console programs it starts with `CREATE_NO_WINDOW` get a console but no window. It's a copy rather than a separate build: whether `persona-link.exe`
 is a release or your own `go build`, the supervisor is the same program. Approaches not used: `conhost --headless` (undocumented), a VBScript wrapper (VBScript is being removed from Windows),
 `powershell -WindowStyle Hidden` (still flashes a window).
 
 | Command | On Windows |
 | --- | --- |
-| `jarvis-link status` | An extra line "Background service: scheduled task "Persona Link" · state · starts at logon"; the state is whatever schtasks prints in the system language (Running / 正在运行, the Chinese-locale "Running"…), shown but not parsed |
-| `jarvis-link uninstall [--purge]` | Ends and deletes the scheduled task (the node stops with it), deletes `jarvis-link-task.xml` and `jarvis-link-service.exe`; `--purge` is as on Linux and also deletes the supervisor's logs and lock |
-| `jarvis-link node install` / `node uninstall` | Not installed separately: the node is in the same scheduled task; use `install` (with node) / `install --no-node` |
-| `jarvis-link node status [--json]` | Whether the scheduled task includes the node, and the task's state |
+| `persona-link status` | An extra line "Background service: scheduled task "Persona Link" · state · starts at logon"; the state is whatever schtasks prints in the system language (Running / 正在运行, the Chinese-locale "Running"…), shown but not parsed |
+| `persona-link uninstall [--purge]` | Ends and deletes the scheduled task (the node stops with it), deletes `persona-link-task.xml` and `persona-link-service.exe`; `--purge` is as on Linux and also deletes the supervisor's logs and lock |
+| `persona-link node install` / `node uninstall` | Not installed separately: the node is in the same scheduled task; use `install` (with node) / `install --no-node` |
+| `persona-link node status [--json]` | Whether the scheduled task includes the node, and the task's state |
 ## hub in Docker Desktop on the same computer
 
-During acceptance, the hub and node were on the same Windows machine: the hub ran in Docker Desktop (WSL 2), node and jarvis-link on the Windows side.
+During acceptance, the hub and node were on the same Windows machine: the hub ran in Docker Desktop (WSL 2), node and persona-link on the Windows side.
 
 - With WSL mirrored networking (`networkingMode=mirrored` in `.wslconfig`), ports published by Docker are only reachable on Windows' `127.0.0.1`; LAN and Tailscale addresses can't connect
   (opening them requires changing the Hyper-V firewall, which needs an administrator).
-- The local jarvis-link connects to `127.0.0.1`: if the hub's advertised candidate addresses include no loopback address, add it manually with `jarvis-link address add https://127.0.0.1:<hub TLS port>`.
+- The local persona-link connects to `127.0.0.1`: if the hub's advertised candidate addresses include no loopback address, add it manually with `persona-link address add https://127.0.0.1:<hub TLS port>`.
 - The phone connects over Tailscale: this machine forwards the tailnet port to localhost with `tailscale serve --bg --tcp <port> tcp://127.0.0.1:<port>` (plain TCP forwarding; TLS is still done by the hub itself,
   and the pinned certificate is still the hub's), and `public.advertise` in hub.json lists `https://<this machine's Tailscale address>:<port>`.
 - To pair the phone with a new hub, use **Settings › hub › Add Hub** in the App, not the root pairing link: that would replace the phone's existing pairing ([lessons/android.md](lessons/android.md)).
 
 ## Running it manually (for development and acceptance)
 
-On a machine with the scheduled task installed, first run `schtasks /End /TN "Persona Link"` (or `jarvis-link uninstall`); otherwise the foreground and scheduled-task copies, two jarvis-links and two nodes, will fight.
+On a machine with the scheduled task installed, first run `schtasks /End /TN "Persona Link"` (or `persona-link uninstall`); otherwise the foreground and scheduled-task copies, two persona-links and two nodes, will fight.
 
 ```powershell
 cd server
 go build -o personad.exe .\cmd\personad
-go build -o jarvis-link.exe .\cmd\jarvis-link
+go build -o persona-link.exe .\cmd\persona-link
 .\personad.exe node --attach            # resident node; keep it open in another window
-.\jarvis-link.exe pair '<the jarvis://link?… link from the hub>'
-.\jarvis-link.exe run                    # keeps the link up
+.\persona-link.exe pair '<the persona://link?… link from the hub>'
+.\persona-link.exe run                    # keeps the link up
 ```
 
 On the hub side: this machine is `kind: link` in `machines` in hub.json, with `public.tls_listen` on; get the pairing link with `personad hub pair --machine <id>` (for a Docker deployment,
-`docker compose exec hub jarvisd hub pair --machine <id>`). Once connected, set this machine's engine to Orca in the App (**Settings › Machines › Engine**).
+`docker compose exec hub personad hub pair --machine <id>`). Once connected, set this machine's engine to Orca in the App (**Settings › Machines › Engine**).
 
 ## herdr
 
@@ -120,15 +120,15 @@ herdr has a native Windows build since 0.9.5 (ConPTY panes, [official notes](htt
   ```
 
 - **herdr has to stay resident in the user's desktop session**: a `herdr server` started from an ssh session exits with that session. Run `herdr.exe server` from a scheduled task that starts at logon (current user,
-  `Interactive`, no time limit); it's the same kind as the `jarvis-link install` task.
-- **`syscall.Exec`**: `jarvisd launch` (managed launchers) and `codex-start` / `tab-start` replace themselves with claude / codex. Windows has no exec, so `osproc.Exec` starts a child in the same
+  `Interactive`, no time limit); it's the same kind as the `persona-link install` task.
+- **`syscall.Exec`**: `personad launch` (managed launchers) and `codex-start` / `tab-start` replace themselves with claude / codex. Windows has no exec, so `osproc.Exec` starts a child in the same
   console (stdin/stdout inherited as-is, so the pane shows that program), catches Ctrl+C itself without exiting (the child in the same console still receives it; only `signal.Notify` works, `Ignore` doesn't block it), and exits with the child's exit code when it ends.
 - **Claude Code's first run**: a freshly installed Claude Code first shows the theme-picking onboarding, so the node never sees the input box ("claude did not become ready"). Run
   `claude` manually once on that computer to finish onboarding, or set `"hasCompletedOnboarding": true` in `%USERPROFILE%\.claude.json`.
 ## Local sockets
 
 The node's `node.sock`, `runtime.sock` and `node-attach.sock` are still AF_UNIX socket files on Windows (available since Windows 10 1803), under `%USERPROFILE%\.persona\`.
-They weren't switched to named pipes: Go's `net` supports them directly, so the hooks, jarvis-link and `--stdio` forwarding code didn't change a line. Listening, connecting, half-close (`CloseWrite`) and replacing a leftover socket file were verified on a real Windows 11 machine.
+They weren't switched to named pipes: Go's `net` supports them directly, so the hooks, persona-link and `--stdio` forwarding code didn't change a line. Listening, connecting, half-close (`CloseWrite`) and replacing a leftover socket file were verified on a real Windows 11 machine.
 Limits: the path can't exceed 108 bytes (a very deep `%USERPROFILE%` gives `bind: invalid argument`); permission bits like `0600` mean nothing on Windows, so it relies on the user directory's own ACL.
 
 ## Orca
@@ -153,20 +153,20 @@ If Git Bash can't be found, these commands don't start (the machine info has no 
 ## Verification record: herdr engine (2026-11-04, real Windows 10 machine)
 
 - herdr 0.9.5 (official `herdr-windows-x86_64.zip`), Claude Code 2.1.311 (native `claude.exe`), Git for Windows 2.56 (PortableGit); herdr stays resident via a scheduled task that starts at logon,
-  with the pane shell set to Git Bash. The hub was on a Linux machine, running this machine's `jarvisd.exe node --stdio` over ssh.
+  with the pane shell set to Git Bash. The hub was on a Linux machine, running this machine's `personad.exe node --stdio` over ssh.
 - On the hub this machine was online: `windows/amd64`, engine herdr, herdr 0.9.5. Through the hub APIs: creating a session (`POST /api/v1/sessions`, with a first message) got a reply;
   a multi-line message was submitted as one and got a reply; asking Claude to call AskUserQuestion, the card reached the hub via the hook, and after answering with `POST /api/v1/interactions/{id}/resolve` Claude replied according to the answer;
   after `/exit` the session went offline, and on the next message the node started it with `--resume` in a new tab, and Claude remembered the earlier answer.
-- `jarvisd tab-start`: with the argv from a file, started `claude -p` (replied normally), `cmd /c exit 3` (exit code 3), and a command prefixed with `A=1` (the environment variable came through); the file is deleted after use.
+- `personad tab-start`: with the argv from a file, started `claude -p` (replied normally), `cmd /c exit 3` (exit code 3), and a command prefixed with `A=1` (the environment variable came through); the file is deleted after use.
 - Tests: `internal/herdr` (`TestPipeName`, `TestSocketPathWindows`, and the RPC / subscription tests with the test herdr switched to listening on a named pipe) and `internal/osproc` (`TestExecExitCode`, `TestExecSurvivesCtrlC`: fails when switched back to `signal.Ignore`)
   passed on this Windows machine; the few tests that use shell scripts posing as the herdr executable are skipped on Windows. On Linux, `internal/herdr`, `internal/osproc`, `internal/node` and `internal/hub` passed.
 - Not verified: the App UI (the same hub APIs the App calls were used); Codex; herdr's live terminal (herdr doesn't support it on Windows).
 ## Verification record: install and start at logon (2026-11-04, the same real Windows 11 machine)
 
-- Replaced the previously hand-added registry Run entry with `jarvis-link install --jarvisd personad.exe`: the scheduled task registered and started, connected to the hub within seconds, and the local node came online;
+- Replaced the previously hand-added registry Run entry with `persona-link install --personad personad.exe`: the scheduled task registered and started, connected to the hub within seconds, and the local node came online;
   in the hub's `GET /api/v1/machines` this machine was online with engine Orca, and `GET /api/v1/sessions` had Orca's 10 panes.
-- Processes: svchost (scheduled task) → `jarvis-link-service.exe supervise` → `jarvis-link.exe run`, `jarvisd.exe node --attach`; each of the two children has a hidden conhost, and there is no window on the desktop.
-- Killed jarvis-link: back after 5 seconds. Killed the node: back after 11 seconds. Killed the supervisor: within 2 seconds jarvis-link and the node were both gone; the next 5-minute time trigger brought them all back and the machine came back online on the hub.
+- Processes: svchost (scheduled task) → `persona-link-service.exe supervise` → `persona-link.exe run`, `personad.exe node --attach`; each of the two children has a hidden conhost, and there is no window on the desktop.
+- Killed persona-link: back after 5 seconds. Killed the node: back after 11 seconds. Killed the supervisor: within 2 seconds persona-link and the node were both gone; the next 5-minute time trigger brought them all back and the machine came back online on the hub.
 - A probe task had confirmed earlier: a non-administrator can register an `InteractiveToken` task but not an S4U one; the GUI-subsystem copy and the children it starts with `CREATE_NO_WINDOW` have no console window
   and all run in the user session; `RestartOnFailure` does not restart a program that exits with code 1.
 - Tests: `go test ./cmd/persona-link/` passes on Windows and on Linux (`golang:1.27` container); `supervise_windows_test.go` fails when the Job is removed (the child outlives the supervisor).
@@ -180,5 +180,5 @@ If Git Bash can't be found, these commands don't start (the machine info has no 
 - Real-device App (Android): joined the test hub via **Settings › hub › Add Hub** (existing pairing untouched); Agents showed this Windows machine and the sessions above. From the phone: sent messages, answered
   AskUserQuestion twice by tapping options on the screen-reading card (the transcript shows the option the phone picked), closed the Agent from the session menu (the confirmation named the Orca tab, and only that one terminal closed). The first card couldn't read the dialog, which led to the fix in the "screen-reading card" item above.
 - Linux (`golang:1.27` container): `orcart`, `osproc`, `plugin`, `transcript`, the whole `node` package, and the screen-reading card / Orca / engine / link / machine tests in `hub`: passed.
-- On Windows, all tests in `orcart`, `osproc`, `transcript` and the Orca / attach / process-scanning tests in `node`: passed. A batch of tests in the `node`, `link` and `jarvis-link` packages hard-code
+- On Windows, all tests in `orcart`, `osproc`, `transcript` and the Orca / attach / process-scanning tests in `node`: passed. A batch of tests in the `node`, `link` and `persona-link` packages hard-code
   Unix (shell scripts posing as executables, `/tmp`, permission bits) and fail on Windows; unrelated to this change, left for #1179.

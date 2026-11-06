@@ -29,8 +29,8 @@ import { Button, copyText, cx, EASE, IconButton, Loading, Menu, Spinner, toast, 
 import { ClaudeDirs } from "./ClaudeDirs";
 import { Group, Switch } from "./SettingsParts";
 
-const MACHINE_KEY = "jarvis.agentSettings.machine";
-const ALL_KEY = "jarvis.agentSettings.applyAll";
+const MACHINE_KEY = "persona.agentSettings.machine";
+const ALL_KEY = "persona.agentSettings.applyAll";
 
 const controlClass = "h-8 rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 

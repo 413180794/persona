@@ -127,7 +127,7 @@ func (d *doctorReport) problem(item, action string) {
 func (d *doctorReport) config(dir string) *Config {
 	b, err := os.ReadFile(filepath.Join(dir, "hub.json"))
 	if err != nil {
-		d.problem("配置", "无法读取 ~/.jarvis/hub.json；请确认配置存在且当前用户有读取权限")
+		d.problem("配置", "无法读取 ~/.persona/hub.json；请确认配置存在且当前用户有读取权限")
 		return nil
 	}
 	// Match the runtime's omitted-listen default, without generating a token or host name.
@@ -173,7 +173,7 @@ func (d *doctorReport) config(dir string) *Config {
 	}
 	cert, fp, err := loadTLSFiles(certFile, keyFile)
 	if err != nil {
-		d.problem("TLS 证书", "无法读取证书或密钥不匹配；请检查 ~/.jarvis/tls/ 或 public.cert_file、public.key_file。托管证书由启用 TLS 的 hub 启动时生成，自检不会创建")
+		d.problem("TLS 证书", "无法读取证书或密钥不匹配；请检查 ~/.persona/tls/ 或 public.cert_file、public.key_file。托管证书由启用 TLS 的 hub 启动时生成，自检不会创建")
 	} else {
 		detail := fmt.Sprintf("SPKI SHA-256 钉扎值 %s；到期时间 %s", fp, cert.Leaf.NotAfter.UTC().Format(time.RFC3339))
 		now := time.Now()

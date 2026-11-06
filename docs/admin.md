@@ -43,7 +43,7 @@ The admin console is only at the hub's root path: the web app can be mounted und
   So inside a container, requests from the gateway are always out of scope (the hub logs at most one line `admin: … is this container's gateway` every 10 minutes), unless the gateway is listed in
   `security.trusted_cidrs` or in `admin.cidrs` with `access: cidrs` (an explicit choice: it lets in every request coming through port mapping).
   In environments like Docker Desktop / OrbStack (trying a Docker deployment on a dev machine), where every connection comes from the gateway, the admin console cannot be opened under `lan`. Options:
-  map the port only to `127.0.0.1` (`127.0.0.1:18660:18660`) and put the gateway in `JARVIS_ADMIN_CIDRS` (then only the local machine can come in through the mapping); or use host networking;
+  map the port only to `127.0.0.1` (`127.0.0.1:18660:18660`) and put the gateway in `PERSONA_ADMIN_CIDRS` (then only the local machine can come in through the mapping); or use host networking;
   or manage it from the command line on the hub machine with `docker compose exec hub personad hub admin …`. The entrypoint script prints a one-line hint about this when it detects something like Docker Desktop / OrbStack
   (`host.docker.internal` resolves inside the container).
   The hub's existing `sourceOf` (which decides about the master token and whether plain HTTP is allowed) has the same problem; a separate issue will fix it by reusing `containerGateway`.
@@ -57,8 +57,8 @@ The admin console is only at the hub's root path: the web app can be mounted und
 - **Widening only on the hub machine**: the web page can only narrow (`any` → `lan` / `cidrs` / `loopback`, `lan` → `loopback`, `cidrs` → smaller `cidrs` / `loopback`).
   To widen, use the command line `personad hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]` or the deploy script ("Choosing at deploy time" below).
   If narrowing on the web page would leave you outside the new scope, it asks for confirmation first (the API returns 409 `would_lock_you_out` without `force`).
-- **Environment variables win**: if `JARVIS_ADMIN_ACCESS` (and `JARVIS_ADMIN_CIDRS`, comma-separated) is set, it takes precedence and is not written back to hub.json (like the other `JARVIS_*`
-  overrides, [docker.md](docker.md)); the web page then cannot change it and shows "Set by JARVIS_ADMIN_ACCESS at deploy time".
+- **Environment variables win**: if `PERSONA_ADMIN_ACCESS` (and `PERSONA_ADMIN_CIDRS`, comma-separated) is set, it takes precedence and is not written back to hub.json (like the other `PERSONA_*`
+  overrides, [docker.md](docker.md)); the web page then cannot change it and shows "Set by PERSONA_ADMIN_ACCESS at deploy time".
 - Scope changes take effect immediately without a restart: changes from the web page apply directly; after the command line writes hub.json it notifies the running hub over loopback to reload (if the hub is not running, it applies on next start).
 
 ## Admin password and sessions
@@ -68,7 +68,7 @@ The admin console is only at the hub's root path: the web app can be mounted und
   `personad hub admin reset-password` on the hub machine", so nobody can claim the password first. If two people set it at the same time, only the one written to the database first succeeds.
 - **First-time setup from local loopback needs a one-time setup code**: when a reverse proxy on the same machine (nginx's default `proxy_pass` adds no forwarding headers) forwards public requests in,
   the hub also sees the source as `127.0.0.1`, indistinguishable from someone sitting at the hub machine. So when the source is loopback (judged by the connection's own address, not headers), setting the first password also requires
-  a setup code: when the hub starts without a password, it logs a line `admin: first-run setup code XXXX-XXXX` (`journalctl --user -u jarvisd`; on Docker
+  a setup code: when the hub starts without a password, it logs a line `admin: first-run setup code XXXX-XXXX` (`journalctl --user -u personad`; on Docker
   `docker compose logs hub`), and after it expires, prints a new one when someone opens the setup page from loopback; you can also fetch one on the hub machine with `personad hub admin setup-code`
   (it asks the running hub over loopback + master token). The code is 8 characters (excluding 0 / O / 1 / I, about 40 bits of randomness), valid for 10 minutes, single use, and kept only in hub memory
   (invalid after a restart; a new one is printed at startup); wrong codes count toward login rate limiting. LAN sources still need no code; once a password is set, sign-in is unaffected.
@@ -77,11 +77,11 @@ The admin console is only at the hub's root path: the web app can be mounted und
   `#setup=` is a fragment, so it is never sent to the server or logged; the setup page reads it, pre-fills it, and then removes it from the address bar. Old hub.json files lack this field, so behavior is unchanged.
 - **Password**: at least 8 characters, at most 256 bytes; stored as an argon2id hash (m=19 MiB, t=2, p=1, PHC format) in Postgres's `admin_credentials`;
   the plaintext never touches disk or logs. At most 2 hashes are computed at once, the rest queue (so login requests cannot exhaust memory).
-- **Session cookie**: `jarvis_admin`, a 32-byte random value of which only the SHA-256 is stored; `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/admin/`,
+- **Session cookie**: `persona_admin`, a 32-byte random value of which only the SHA-256 is stored; `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/admin/`,
   plus `Secure` over TLS. Lifetime is `admin.session_hours` (default 12 hours, counted from sign-in, not extended). Every request checks the database,
   so signing out, changing the password and `reset-password` invalidate other sessions immediately.
 - **CSRF**: each session has a CSRF token, given to the web page by `GET /api/v1/admin/state`; every write (POST / PUT / DELETE) must carry
-  an `X-Jarvis-CSRF` header matching the session's. In addition, writes must be `Content-Type: application/json`; when the browser sends `Sec-Fetch-Site` it must be
+  an `X-Persona-CSRF` header matching the session's. In addition, writes must be `Content-Type: application/json`; when the browser sends `Sec-Fetch-Site` it must be
   `same-origin`; when it sends `Origin`, its host and port must match the request's `Host`. Sign-in and first-time setup check the last two as well (there is no session yet).
 - **Rate limiting**: failed sign-ins (and setup codes) use the `security` thresholds (`auth_failures` failures / `auth_window_seconds` seconds, blocked for `auth_block_seconds` seconds),
   but in a separate table, and **LAN and local loopback count too** (a password is much easier to guess than a device token; loopback may be public requests forwarded by a reverse proxy on the same machine). If the hub machine's owner
@@ -96,7 +96,7 @@ Changes made in the admin console are written back to `~/.persona/hub.json`:
 
 - **Atomic writes**: write a temp file in the same directory, `fsync`, `rename` over the original, always mode 0600; only one writer at a time (an in-process lock + flock on the `~/.persona` directory, so the command line and the hub exclude each other too).
 - **Unknown fields and order are preserved**: only the keys being changed are touched; other keys (including ones this version doesn't know and ones added by other branches) are kept as is, in the same order, with indentation normalized to two spaces.
-- **Environment variable values are not written back**: Docker's `JARVIS_PUBLIC_URL` and the like only override in memory; the admin console changes the values in the file.
+- **Environment variable values are not written back**: Docker's `PERSONA_PUBLIC_URL` and the like only override in memory; the admin console changes the values in the file.
 - **When it takes effect**:
 
   | What changes | When it takes effect |
@@ -117,7 +117,7 @@ Changes made in the admin console are written back to `~/.persona/hub.json`:
 | --- | --- | --- |
 | First-time setup / sign-in | `/admin` | Set a password if none is set, otherwise sign in with it |
 | Overview | `/admin` | hub name (editable), version, uptime, listening / TLS / fingerprint, candidate addresses, computer and device counts, **Run checks** (the results of `personad hub doctor`); when there are no computers besides the local one, a prompt at the top to **Add computer** |
-| Computers | `/admin/machines` | **Add computer** at the top, two kinds: **Computer connects** (kind link: fill in id / name, generates a jarvis-link pairing link, with install instructions for Mac / Linux / Windows) and **Hub connects** (kind service: paste the link printed by `jarvis-link pair --listen` on that computer; the address can be edited and a socks5 proxy filled in); ssh computers can no longer be added. Each computer's status (online / offline / error, connection method, node version) and **every route** (method, via which hub, usable or not, RTT, which one is in use, [mesh.md](mesh.md) ("One computer, multiple routes")); "Re-pair" when a service computer's connector has been assigned to another hub; reconnect, delete (computers configured only on a member hub cannot be deleted here) |
+| Computers | `/admin/machines` | **Add computer** at the top, two kinds: **Computer connects** (kind link: fill in id / name, generates a persona-link pairing link, with install instructions for Mac / Linux / Windows) and **Hub connects** (kind service: paste the link printed by `persona-link pair --listen` on that computer; the address can be edited and a socks5 proxy filled in); ssh computers can no longer be added. Each computer's status (online / offline / error, connection method, node version) and **every route** (method, via which hub, usable or not, RTT, which one is in use, [mesh.md](mesh.md) ("One computer, multiple routes")); "Re-pair" when a service computer's connector has been assigned to another hub; reconnect, delete (computers configured only on a member hub cannot be deleted here) |
 | Devices | `/admin/devices` | Device credential list, revoke, generate the phone pairing QR code; on a member hub it only points you to the primary hub's admin console |
 | Extensions | `/admin/extensions` (the old `/admin/plugins` still opens) | This hub's extensions: list, toggle, install (a directory or package on the hub machine, an https link with sha256, upload, remote socket; preview what it can do first, install only after agreeing), upgrade (clearly flagged when permissions grow), roll back, uninstall (optionally keeping data), and the extension market (register markets, browse the catalog, install / upgrade from a market); see "Extensions" below and [extensions.md](extensions.md) ("Admin console: extensions") |
 | Assistant cards | `/admin/assistant` | The main chat rich UI switch `assistant.persona_view`, what each client actually supports, local previews of example cards ("Assistant cards" below) |
@@ -152,7 +152,7 @@ not signed in or session expired is 401 `login_required`, a wrong CSRF token is 
 | `POST machines/{id}/connector` `{"pair_link", "address"?}` | Re-pair a service computer's connector: `{"ok", "address", "version", "restart_required"}` (a changed address needs a restart); 400 `not_service`, 502 `pair_failed` |
 | `DELETE machines/{id}` | Remove from hub.json, returns `{"ok", "restart"}` |
 | `POST machines/{id}/reconnect` | Reconnect; 409 `not_active` |
-| `POST machines/{id}/link-pair` | Generate a pairing link for a link computer's jarvis-link: `{"pair_url", "expires_at", "command"}`; 409 `tls_required` / `not_active`, 400 `not_link` |
+| `POST machines/{id}/link-pair` | Generate a pairing link for a link computer's persona-link: `{"pair_url", "expires_at", "command"}`; 409 `tls_required` / `not_active`, 400 `not_link` |
 | `GET devices` | `{"devices": [{id, name, kind, role, created_at, last_seen, machine_id}]}` |
 | `DELETE devices/{id}` | Revoke |
 | `POST devices/pair` | Phone pairing: `{"pair_url", "url", "expires_at", "fp", "qr": {"size", "rows": ["0101…"]}}` (`rows` is one string of `0` / `1` per row, without the quiet zone) |
@@ -225,9 +225,9 @@ Page `web/src/admin/pages/Assistant.tsx`, API `server/internal/hub/admin_assista
 
 | Deployment | How to choose |
 | --- | --- |
-| `scripts/deploy.sh` | `--admin-access <scope>` (plus `--admin-cidrs a,b` for `cidrs`) or `JARVIS_ADMIN_ACCESS`; if neither is given and no choice has been made on the hub, asks when a terminal exists, otherwise uses `lan` and prints a reminder |
-| `install.sh` (public version) | `curl … \| JARVIS_ADMIN_ACCESS=lan sh` or `sh -s -- --admin-access lan`; if neither is given, asks "Will this machine run the hub?" and then the scope when a terminal (`/dev/tty`) exists; otherwise prints a reminder without writing hub.json (omitted means `lan`) |
-| Docker | `JARVIS_ADMIN_ACCESS` in `.env` (plus `JARVIS_ADMIN_CIDRS` for `cidrs`); when unset, the entrypoint prints a reminder and uses hub.json (omitted means `lan`) |
+| `scripts/deploy.sh` | `--admin-access <scope>` (plus `--admin-cidrs a,b` for `cidrs`) or `PERSONA_ADMIN_ACCESS`; if neither is given and no choice has been made on the hub, asks when a terminal exists, otherwise uses `lan` and prints a reminder |
+| `install.sh` (public version) | `curl … \| PERSONA_ADMIN_ACCESS=lan sh` or `sh -s -- --admin-access lan`; if neither is given, asks "Will this machine run the hub?" and then the scope when a terminal (`/dev/tty`) exists; otherwise prints a reminder without writing hub.json (omitted means `lan`) |
+| Docker | `PERSONA_ADMIN_ACCESS` in `.env` (plus `PERSONA_ADMIN_CIDRS` for `cidrs`); when unset, the entrypoint prints a reminder and uses hub.json (omitted means `lan`) |
 
 The prompt explains all four options and their risks (see the admin access section of `scripts/deploy/install.sh`; `deploy.sh` uses it unchanged, so the public installer and deployment ask the same question).
 

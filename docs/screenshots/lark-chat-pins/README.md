@@ -20,6 +20,6 @@ The same round also verified empty lists, remove confirmation, locating regular 
 
 Model tests cover pagination deduplication, cursor loops, atomic replacement of complete pages, merging live refreshes, account isolation, late results after closing the page, no retry after an unknown write receipt, and redaction of OLK body encodings. Server tests cover role permissions, permission rechecks before writes, pin/message/chat associations, account switching, no-store, regular/thread location, and the distinction between missing resources and old APIs.
 
-To reproduce: start `scripts/mock/mock_hub.py` with `MOCK_LARK_CHAT_PINS=1`, point `TEST_RUNNER_JARVIS_MOCK_HUB` to that isolated instance, then run `PersonaUITests/LarkChatPinFlowTests`. Set `TEST_RUNNER_JARVIS_SHOTS` to choose a screenshot directory; run separately with `simctl ui <simulator> appearance light|dark`.
+To reproduce: start `scripts/mock/mock_hub.py` with `MOCK_LARK_CHAT_PINS=1`, point `TEST_RUNNER_PERSONA_MOCK_HUB` to that isolated instance, then run `PersonaUITests/LarkChatPinFlowTests`. Set `TEST_RUNNER_PERSONA_SHOTS` to choose a screenshot directory; run separately with `simctl ui <simulator> appearance light|dark`.
 
 Reading chat pins through the Lark gateway clears that chat's unread-pin marker, so this API was not smoke-tested with a real account. No real messages, pin writes, or read-status actions were performed. Everything in this directory is synthetic data, with no real chat content.

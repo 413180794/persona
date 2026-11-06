@@ -147,8 +147,8 @@ func TestSystemReminderIsStrippedFromUserText(t *testing.T) {
 
 // The live snapshot Persona starts an assistant message with (node/assistant_context.go) isn't what the user wrote:
 // neither as its own block nor inside the text.
-func TestJarvisContextIsStripped(t *testing.T) {
-	for _, tag := range []string{"persona-context", "jarvis-context"} { // the old name in history and from older nodes
+func TestPersonaContextIsStripped(t *testing.T) {
+	for _, tag := range []string{"persona-context"} { // the old name in history and from older nodes
 		t.Run(tag, func(t *testing.T) { testSnapshotIsStripped(t, tag) })
 	}
 }

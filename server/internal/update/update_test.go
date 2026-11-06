@@ -56,12 +56,12 @@ func TestNoDowngrade(t *testing.T) {
 
 func TestBuildManifest(t *testing.T) {
 	dir := t.TempDir()
-	bin := []byte("a jarvisd for linux")
+	bin := []byte("a personad for linux")
 	var gz bytes.Buffer
 	zw := gzip.NewWriter(&gz)
 	zw.Write(bin)
 	zw.Close()
-	if err := os.WriteFile(filepath.Join(dir, "jarvisd-linux-amd64.gz"), gz.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "personad-linux-amd64.gz"), gz.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m, err := BuildManifest(dir, Manifest{Version: "v1", Build: 202611021530, Protocol: 1})
@@ -70,7 +70,7 @@ func TestBuildManifest(t *testing.T) {
 	}
 	f := m.Files["linux-amd64"]
 	outer, inner := sha256.Sum256(gz.Bytes()), sha256.Sum256(bin)
-	if f.Name != "jarvisd-linux-amd64.gz" || f.Size != int64(gz.Len()) || f.SHA256 != hex.EncodeToString(outer[:]) || f.BinarySHA256 != hex.EncodeToString(inner[:]) {
+	if f.Name != "personad-linux-amd64.gz" || f.Size != int64(gz.Len()) || f.SHA256 != hex.EncodeToString(outer[:]) || f.BinarySHA256 != hex.EncodeToString(inner[:]) {
 		t.Fatalf("%+v", f)
 	}
 	b, _ := json.Marshal(m)

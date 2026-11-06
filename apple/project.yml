@@ -4,8 +4,8 @@ name: Persona
 include:
   - path: meta-wearables.yml
     enable: ${PERSONA_META_WEARABLES}
-# Bundle id and team come from Config.xcconfig, generated from the personal config by scripts/jarvis_config.py
-# (docs/config.md); this file and the Info.plists only say $(JARVIS_BUNDLE_ID).
+# Bundle id and team come from Config.xcconfig, generated from the personal config by scripts/persona_config.py
+# (docs/config.md); this file and the Info.plists only say $(PERSONA_BUNDLE_ID).
 configFiles:
   Debug: Config.xcconfig
   Release: Config.xcconfig
@@ -88,15 +88,15 @@ targets:
         # service extension shares for the push key (docs/push-relay.md).
         # Last, the one builds 92–103 left the Live Activity's persona in, only so the app can delete what is still
         # there (LiveActivityController.forgetKeychainLook): the extension could never read it on a phone.
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)", "$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push", "$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).look"]
         # Shared with the widget extension: the persona the Live Activity draws and a package's pictures, as files
         # (docs/live-activity.md「形象」). group.<bundle id> unless config.json app.app_group says otherwise; registered in
         # the developer account and put on both App IDs (docs/release.md「App Group」).
-        com.apple.security.application-groups: ["$(JARVIS_APP_GROUP)"]
+        com.apple.security.application-groups: ["$(PERSONA_APP_GROUP)"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
-        PRODUCT_MODULE_NAME: Jarvis
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID)
+        PRODUCT_MODULE_NAME: Persona
         PRODUCT_NAME: Persona
         # The entitlements the app signs with: the CarPlay voice one is added only when config.json app.carplay_voice is
         # on (scripts/persona_config.py xcconfig writes PERSONA_APP_ENTITLEMENTS; docs/carplay.md). XcodeGen keeps a
@@ -129,7 +129,7 @@ targets:
           sha=$(git -C "$SRCROOT/.." rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
           git -C "$SRCROOT/.." diff --quiet HEAD -- 2>/dev/null || sha="$sha+"
           plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
-          /usr/libexec/PlistBuddy -c "Set :JarvisCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :JarvisCommit string $sha" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :PersonaCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :PersonaCommit string $sha" "$plist"
     info:
       path: Persona/Resources/Info.plist
       properties:
@@ -140,12 +140,8 @@ targets:
         CFBundleDevelopmentRegion: en
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
-            CFBundleURLSchemes: [jarvis, persona]
+            CFBundleURLSchemes: [persona]
         ITSAppUsesNonExemptEncryption: false
-        # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
-        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
-        PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
-        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         UILaunchScreen:
           UIColorName: LaunchBackground
@@ -164,15 +160,15 @@ targets:
                 UISceneConfigurationName: CarPlay
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         # Push relay (docs/push-relay.md): where the app registers for pushes from hubs without the app's APNs key
-        # (config.json app.push_relay; empty: none), and the keychain group it shares with JarvisNotify.
+        # (config.json app.push_relay; empty: none), and the keychain group it shares with PersonaNotify.
         # The groups' prefix is the team, not $(AppIdentifierPrefix): that one is only set when Xcode signs, and an
         # archive built unsigned for a cloud-signed export left it empty (scripts/release/entitlements.py, 2026-11-02).
-        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        PersonaPushRelay: $(PERSONA_PUSH_RELAY)
         PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
-        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
+        PersonaPushKeychainGroup: $(DEVELOPMENT_TEAM).$(PERSONA_BUNDLE_ID).push
         # Where the app leaves the persona the Live Activity draws for the widget extension (FleetLookStore). An App
         # Group's id has no team prefix: the same in an archive built unsigned.
-        JarvisAppGroup: $(JARVIS_APP_GROUP)
+        PersonaAppGroup: $(PERSONA_APP_GROUP)
         # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
         NSSupportsLiveActivities: true
         # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
@@ -219,9 +215,9 @@ targets:
         # Time-sensitive pushes break through Focus on the Mac too (#1655, the iPhone's #1572); the App ID is the
         # iPhone's (UNIVERSAL), so asc_signing.py's USERNOTIFICATIONS_TIMESENSITIVE covers it.
         com.apple.developer.usernotifications.time-sensitive: true
-        # The relay's push key, shared with JarvisMacNotify (PushCrypto, in the data protection keychain on a Mac).
+        # The relay's push key, shared with PersonaMacNotify (PushCrypto, in the data protection keychain on a Mac).
         # The app's own group first: it stays the default.
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)", "$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push"]
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         # A machine's port forwarded to this Mac's loopback for the in-app browser (docs/ports.md).
@@ -235,8 +231,8 @@ targets:
         com.apple.security.device.camera: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
-        PRODUCT_MODULE_NAME: Jarvis
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID)
+        PRODUCT_MODULE_NAME: Persona
         PRODUCT_NAME: Persona
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -253,7 +249,7 @@ targets:
           sha=$(git -C "$SRCROOT/.." rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
           git -C "$SRCROOT/.." diff --quiet HEAD -- 2>/dev/null || sha="$sha+"
           plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
-          /usr/libexec/PlistBuddy -c "Set :JarvisCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :JarvisCommit string $sha" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :PersonaCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :PersonaCommit string $sha" "$plist"
     info:
       path: Mac/Resources/Info.plist
       properties:
@@ -264,12 +260,12 @@ targets:
         CFBundleDevelopmentRegion: en
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
-            CFBundleURLSchemes: [jarvis, persona]
+            CFBundleURLSchemes: [persona]
         ITSAppUsesNonExemptEncryption: false
         # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
-        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        PersonaPushRelay: $(PERSONA_PUSH_RELAY)
         PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
-        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
+        PersonaPushKeychainGroup: $(DEVELOPMENT_TEAM).$(PERSONA_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "26.0"
         NSAppTransportSecurity:
@@ -313,11 +309,11 @@ targets:
         # Time-sensitive pushes break through Focus on Apple Vision Pro too (the iPhone's #1572, the Mac's #1655); the
         # bundle id is the iPhone's, so asc_signing.py's USERNOTIFICATIONS_TIMESENSITIVE covers it.
         com.apple.developer.usernotifications.time-sensitive: true
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)", "$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
-        PRODUCT_MODULE_NAME: Jarvis
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID)
+        PRODUCT_MODULE_NAME: Persona
         PRODUCT_NAME: Persona
         TARGETED_DEVICE_FAMILY: "7"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon-Vision
@@ -333,7 +329,7 @@ targets:
           sha=$(git -C "$SRCROOT/.." rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
           git -C "$SRCROOT/.." diff --quiet HEAD -- 2>/dev/null || sha="$sha+"
           plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
-          /usr/libexec/PlistBuddy -c "Set :JarvisCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :JarvisCommit string $sha" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :PersonaCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :PersonaCommit string $sha" "$plist"
     info:
       path: Vision/Resources/Info.plist
       properties:
@@ -344,11 +340,11 @@ targets:
         CFBundleDevelopmentRegion: en
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
-            CFBundleURLSchemes: [jarvis, persona]
+            CFBundleURLSchemes: [persona]
         ITSAppUsesNonExemptEncryption: false
-        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        PersonaPushRelay: $(PERSONA_PUSH_RELAY)
         PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
-        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
+        PersonaPushKeychainGroup: $(DEVELOPMENT_TEAM).$(PERSONA_BUNDLE_ID).push
         LSApplicationCategoryType: public.app-category.productivity
         UIApplicationSupportsIndirectInputEvents: true
         # Several windows: one per conversation opened on its own (VisionScenes).
@@ -380,7 +376,7 @@ targets:
       - path: Shared/StatusPalette.swift
       - path: Shared/Design/Palette.swift
       - path: Shared/Design/IslandMetrics.swift
-      # The persona's face (the app's JarvisAvatar draws it too), on the activity's leading side.
+      # The persona's face (the app's PersonaAvatar draws it too), on the activity's leading side.
       - path: Shared/Design/PersonaFace.swift
       # The app's String Catalog and interface language (docs/ios.md「界面语言」).
       - path: Shared/Localization
@@ -388,12 +384,12 @@ targets:
       path: PersonaWidgets/PersonaWidgets.entitlements
       properties:
         # Not the keychain: a Live Activity's extension cannot read it on a phone (build 103, 2026-11-02).
-        com.apple.security.application-groups: ["$(JARVIS_APP_GROUP)"]
+        com.apple.security.application-groups: ["$(PERSONA_APP_GROUP)"]
     info:
       path: PersonaWidgets/Info.plist
       properties:
         CFBundleName: PersonaWidgets
-        JarvisAppGroup: $(JARVIS_APP_GROUP)
+        PersonaAppGroup: $(PERSONA_APP_GROUP)
         CFBundleDisplayName: Persona
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -402,8 +398,8 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).liveactivity
-        PRODUCT_MODULE_NAME: JarvisWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).liveactivity
+        PRODUCT_MODULE_NAME: PersonaWidgets
         PRODUCT_NAME: PersonaWidgets
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
@@ -426,11 +422,11 @@ targets:
     entitlements:
       path: PersonaNotify/PersonaNotify.entitlements
       properties:
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).notify
-        PRODUCT_MODULE_NAME: JarvisNotify
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).notify
+        PRODUCT_MODULE_NAME: PersonaNotify
         PRODUCT_NAME: PersonaNotify
         INFOPLIST_FILE: PersonaNotify/Info.plist
         # The system calls the extension on its own queue; the project's MainActor default does not fit its base class.
@@ -453,10 +449,10 @@ targets:
       path: PersonaShare/PersonaShare.entitlements
       properties:
         # The app's own keychain group: the paired hubs are read where the app keeps them (Shared/Hubs.swift).
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).share
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).share
         PRODUCT_MODULE_NAME: PersonaShare
         PRODUCT_NAME: PersonaShare
         INFOPLIST_FILE: PersonaShare/Info.plist
@@ -477,10 +473,10 @@ targets:
     entitlements:
       path: PersonaShare/PersonaVisionShare.entitlements
       properties:
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).share
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).share
         PRODUCT_MODULE_NAME: PersonaShare
         PRODUCT_NAME: PersonaShare
         INFOPLIST_FILE: PersonaShare/Info.plist
@@ -488,7 +484,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
-  # The Mac's JarvisNotify (#432): opens pushes that came through the relay before they are shown. Same code, Info.plist
+  # The Mac's PersonaNotify (#432): opens pushes that came through the relay before they are shown. Same code, Info.plist
   # and bundle id as the iPhone's (one UNIVERSAL App ID); a Mac extension must be sandboxed.
   PersonaMacNotify:
     type: app-extension
@@ -504,11 +500,11 @@ targets:
       path: PersonaNotify/PersonaMacNotify.entitlements
       properties:
         com.apple.security.app-sandbox: true
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).notify
-        PRODUCT_MODULE_NAME: JarvisNotify
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).notify
+        PRODUCT_MODULE_NAME: PersonaNotify
         PRODUCT_NAME: PersonaNotify
         INFOPLIST_FILE: PersonaNotify/Info.plist
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
@@ -532,15 +528,15 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: en
         WKApplication: true
-        WKCompanionAppBundleIdentifier: $(JARVIS_BUNDLE_ID)
+        WKCompanionAppBundleIdentifier: $(PERSONA_BUNDLE_ID)
         UIBackgroundModes: [audio]
         NSMicrophoneUsageDescription: "Persona records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription; only the text is saved to the knowledge base on your hub."
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).watchkitapp
-        PRODUCT_MODULE_NAME: Jarvis
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).watchkitapp
+        PRODUCT_MODULE_NAME: Persona
         PRODUCT_NAME: Persona
         TARGETED_DEVICE_FAMILY: "4"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -552,12 +548,12 @@ targets:
     platform: iOS
     sources:
       - path: PersonaTests
-        excludes: ["*.json"] # TokenBaseline.json is read from the source tree, not the bundle
+        excludes: ["*.json", "*.py"] # Static checks and TokenBaseline.json are read from the source tree, not the bundle
     dependencies:
       - target: Persona
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).tests
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Persona.app/Persona"
@@ -584,7 +580,7 @@ targets:
       - target: PersonaMac
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).mactests
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).mactests
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
@@ -601,7 +597,7 @@ targets:
       - target: Persona
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).uitests
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).uitests
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: Persona
@@ -642,34 +638,3 @@ schemes:
         PersonaVision: all
     run:
       config: Debug
-  # Legacy scheme names keep existing callers on the renamed targets.
-  Jarvis:
-    build:
-      targets:
-        Persona: all
-        PersonaTests: [test]
-        PersonaUITests: [test]
-    run:
-      config: Debug
-    test:
-      targets: [PersonaTests, PersonaUITests]
-      # The tests' expectations and the pixel / layout baselines are the Chinese UI (docs/ios.md「界面语言」).
-      language: zh-Hans
-      region: CN
-  JarvisWatch:
-    build:
-      targets:
-        PersonaWatch: all
-    run:
-      config: Debug
-  JarvisMac:
-    build:
-      targets:
-        PersonaMac: all
-        PersonaMacTests: [test]
-    run:
-      config: Debug
-    test:
-      targets: [PersonaMacTests]
-      language: zh-Hans
-      region: CN

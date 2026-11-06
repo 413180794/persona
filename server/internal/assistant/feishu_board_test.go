@@ -83,7 +83,7 @@ func newBoardEnvOn(t *testing.T, st *memStore) *boardEnv {
 	e.d = newFleetDevs()
 	e.d.add("server", "srv")
 	e.d.add("box", "box")
-	e.d.setSessions("server", []proto.Session{{SessionID: "asm", Cwd: "/home/u/.jarvis/assistant"}})
+	e.d.setSessions("server", []proto.Session{{SessionID: "asm", Cwd: "/home/u/.persona/assistant"}})
 	e.d.setSessions("box", []proto.Session{{SessionID: "ag1", Cwd: "/code", PaneID: "%1", Title: "登录修复"}, {SessionID: "ag2", Cwd: "/code2", PaneID: "%2"}})
 	e.s = withSettings(t, e.f, New(Options{Hub: e.f, Store: func() Store { return e.st }, Logf: testLogf(t), Devices: e.d}))
 	e.s.fleet.interactions = map[string]*pending{}

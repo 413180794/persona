@@ -191,7 +191,7 @@ describe("folding a block of the sidebar", () => {
     expect(segs[0].getAttribute("aria-checked")).toBe("true");
     expect(segs.every((b) => b.className.includes("whitespace-nowrap"))).toBe(true);
     act(() => segs[1].click());
-    expect(localStorage.getItem("jarvis.agentGrouping")).toBe("machine");
+    expect(localStorage.getItem("persona.agentGrouping")).toBe("machine");
     expect(segs[1].getAttribute("aria-checked")).toBe("true");
     expect(segs[0].getAttribute("aria-checked")).toBe("false");
     // no dropdown on the title row any more
@@ -199,7 +199,7 @@ describe("folding a block of the sidebar", () => {
   });
 
   it("keeps a grouping chosen before", async () => {
-    localStorage.setItem("jarvis.agentGrouping", "state");
+    localStorage.setItem("persona.agentGrouping", "state");
     act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
     await flush();
     expect(host.querySelector('[role="radio"][aria-label="按状态"]')!.getAttribute("aria-checked")).toBe("true");
@@ -235,13 +235,13 @@ describe("ordering the Agents list (G099)", () => {
     expect(item("按机器")).toBeUndefined(); // the groupings are the segments now (#2812)
     act(() => item("最近更新")!.click());
     await flush();
-    expect(localStorage.getItem("jarvis.agentSort")).toBe("updated");
+    expect(localStorage.getItem("persona.agentSort")).toBe("updated");
     expect(button("Agent 列表选项：最近更新")).toBeDefined();
   });
 
   it("is not offered under 按状态, whose sections are the states", async () => {
-    localStorage.setItem("jarvis.agentGrouping", "state");
-    localStorage.setItem("jarvis.agentSort", "updated");
+    localStorage.setItem("persona.agentGrouping", "state");
+    localStorage.setItem("persona.agentSort", "updated");
     act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
     await flush();
     expect(host.querySelector('[role="radio"][aria-label="按状态"]')!.getAttribute("aria-checked")).toBe("true");
@@ -264,7 +264,7 @@ describe("the Agents list menu (#3027)", () => {
     act(() => item("全部展开")!.click());
     await flush();
     expect(localStorage.getItem("fold:space:mac/a")).toBe("0");
-    expect(localStorage.getItem("fold:jarvis")).toBeNull();
+    expect(localStorage.getItem("fold:persona")).toBeNull();
   });
 });
 
@@ -297,7 +297,7 @@ describe("the main conversation: the column's first row, Persona with the app's 
     expect(line.compareDocumentPosition(button("页面")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(host.querySelectorAll('a[title="Persona 的主对话"]')).toHaveLength(1);
     expect(host.querySelectorAll("[data-persona-divider]")).toHaveLength(1);
-    expect(host.querySelector('a[href="/j/main"]')).toBeNull();
+    expect(host.querySelector('a[href="/persona/main"]')).toBeNull();
     // "Persona chats"starts with the other conversations, the main one not in it
     expect(block("Persona 对话").querySelector('a[title="Persona 的主对话"]')).toBeNull();
     expect(block("Persona 对话").textContent).toContain("整理周报");

@@ -1,7 +1,7 @@
 import Foundation
 import PersonaKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A streamed reply draws at most 5 times a second, always its newest text, and never an old one over the final
 /// message (`DeltaPacer`); the activity is not redrawn with what it already shows (`LiveActivityController`).

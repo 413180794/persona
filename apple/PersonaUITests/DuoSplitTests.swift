@@ -3,17 +3,17 @@ import XCTest
 /// iPhone Duo open (regular width): the Agents list is the split's sidebar and stays put while the agents it opens
 /// replace each other in the detail column (docs/ios.md「iPhone Duo」). Needs an unfolded iPhone Duo simulator and
 /// scripts/mock/mock_hub.py:
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/DuoSplitTests
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/DuoSplitTests
 final class DuoSplitTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES"]
         app.launchPinned()
         guard app.windows.firstMatch.frame.width > 600 else { throw XCTSkip("not a split: needs iPhone Duo open") }
@@ -64,7 +64,7 @@ final class DuoSplitTests: XCTestCase {
         let end = Date.now.addingTimeInterval(1.5)
         while Date.now < end { frames.append(app.screenshot().image) }
         print("DUO AFTER SECOND", app.staticTexts.allElementsBoundByIndex.filter { $0.frame.minX > sidebar.frame.maxX }.prefix(8).map { $0.label })
-        let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"]
+        let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"]
         if let dir {
             try? before.pngData()?.write(to: URL(fileURLWithPath: dir).appendingPathComponent("duo-0.png"))
             for (i, f) in frames.enumerated() {

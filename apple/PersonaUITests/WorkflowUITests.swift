@@ -2,8 +2,8 @@ import UIKit
 import XCTest
 
 /// A Claude whose turn ended while a multi-agent workflow runs in the background (#2935): the Agents list shows it as
-/// working with the workflow's name, phase and progress; its chat has a card per workflow that expands to its agents. Against scripts/mock/mock_hub.py with `MOCK_WORKFLOW=1` (JARVIS_MOCK_HUB); with JARVIS_SHOTS set the
-/// screenshots are written there too (JARVIS_SHOTS_APPEARANCE names the simulator's appearance in the file names).
+/// working with the workflow's name, phase and progress; its chat has a card per workflow that expands to its agents. Against scripts/mock/mock_hub.py with `MOCK_WORKFLOW=1` (PERSONA_MOCK_HUB); with PERSONA_SHOTS set the
+/// screenshots are written there too (PERSONA_SHOTS_APPEARANCE names the simulator's appearance in the file names).
 final class WorkflowUITests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -30,9 +30,9 @@ final class WorkflowUITests: XCTestCase {
         a.name = "\(name) \(UITestStyle.name)"
         a.lifetime = .keepAlways
         add(a)
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
-            let file = "workflow-\(device)-\(name)-\(env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown").png"
+            let file = "workflow-\(device)-\(name)-\(env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown").png"
             try? image.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: file))
         }
     }
@@ -42,11 +42,11 @@ final class WorkflowUITests: XCTestCase {
     }
 
     @MainActor func testWorkflowInTheListTheChatAndItsAgents() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_WORKFLOW=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_WORKFLOW=1 (PERSONA_MOCK_HUB)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-dev.openChat", "", "-openAgentsFresh", "YES", "-dev.grouping", "state",
                                  "-holdChromeOpen", "YES"] // the header's cards are tapped: it must not fold by itself
         app.launchPinned()
@@ -85,11 +85,11 @@ final class WorkflowUITests: XCTestCase {
     /// Three workflows (#4532, `MOCK_WORKFLOW=crowded`): the running one in full, the ended ones a line each (the stopped
     /// one's error kept); the section stays in the top part of the screen, its ten agents scroll inside it.
     @MainActor func testCrowdedWorkflowsLeaveRoomForTheChat() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_CROWDED"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_WORKFLOW=crowded (JARVIS_MOCK_HUB_CROWDED)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_CROWDED"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_WORKFLOW=crowded (PERSONA_MOCK_HUB_CROWDED)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-dev.openChat", "", "-openAgentsFresh", "YES", "-dev.grouping", "state",
                                  "-holdChromeOpen", "YES"] // the header's cards are tapped: it must not fold by itself
         app.launchPinned()

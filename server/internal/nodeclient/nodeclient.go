@@ -44,7 +44,7 @@ var ResumeWait = 2 * time.Minute
 var ResumeRetry = time.Second
 
 // ErrNoNode: nothing listens on the node socket (no hub connected to this machine).
-var ErrNoNode = errors.New("no jarvis node")
+var ErrNoNode = errors.New("no persona node")
 
 // Request is one line a client sends on the node socket; the node answers with one line.
 type Request struct {

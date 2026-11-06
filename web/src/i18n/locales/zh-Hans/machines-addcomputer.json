@@ -16,7 +16,7 @@
   "done": "完成",
   "retry": "重试",
   "linux_step_install": "在那台电脑上打开终端，粘贴下面这一行，回车。它会装好 Persona 的后台服务并连上来。",
-  "linux_step_pair": "这个 hub 不知道安装脚本在哪。先在那台电脑上装好 jarvis-link，再在终端里粘贴这一行，回车。",
+  "linux_step_pair": "这个 hub 不知道安装脚本在哪。先在那台电脑上装好 persona-link，再在终端里粘贴这一行，回车。",
   "linux_install_link": "怎么装",
   "linux_step_done": "看到「已配对」就好了，这一屏会自己往下走。",
   "windows_step_get": "在那台电脑上把 Persona 的两个程序（下面这一行里的两个 .exe）放在同一个文件夹里。目前还没有安装包，要自己编译，托盘程序也还在做。",

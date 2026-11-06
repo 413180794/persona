@@ -81,7 +81,7 @@ def new_page(browser, base, token, width, height, theme, reduced=False):
     page.set_default_timeout(10000)
     page.goto(base + "/overview?token=" + token)
     expect(page.locator("aside")).to_be_attached()
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
     page.reload()
     page.wait_for_timeout(1500)
     return ctx, page

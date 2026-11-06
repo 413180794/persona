@@ -10,7 +10,7 @@ import org.junit.Test
 class RealtimeContractTest {
     private val projection = Json(JsonCodec) { encodeDefaults = true }
     private fun shared(name: String): JsonArray = JsonCodec.parseToJsonElement(
-        File(System.getProperty("jarvis.repo.root"), "spec/fixtures/wire/$name.json").readText(),
+        File(System.getProperty("persona.repo.root"), "spec/fixtures/wire/$name.json").readText(),
     ).jsonArray
 
     private fun sample(name: String): List<ServerEvent> = JsonCodec.parseToJsonElement(

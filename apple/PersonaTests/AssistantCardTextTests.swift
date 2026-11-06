@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The assistant's cards where a reply is read as plain text (#2024): the watch and Siri get the card's words.
 struct AssistantCardTextTests {

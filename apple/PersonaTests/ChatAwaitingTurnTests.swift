@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The wait between a send and the hub saying the session works (#3853, the web's #3654): the turn counts as started
 /// while your message is the newest thing and nothing answered it, the session still idle / done, for a minute.

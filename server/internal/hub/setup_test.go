@@ -24,8 +24,8 @@ func setupTestHome(t *testing.T) string {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	for _, k := range []string{"PERSONA_HOME", "JARVIS_HOME", "PERSONA_LOCAL_NODE", "JARVIS_LOCAL_NODE",
-		"JARVIS_DATABASE_URL", "PERSONA_DATABASE_URL", "JARVIS_PUBLIC_URL", "PERSONA_PUBLIC_URL", "JARVIS_LISTEN", "PERSONA_LISTEN"} {
+	for _, k := range []string{"PERSONA_HOME", "PERSONA_LOCAL_NODE",
+		"PERSONA_DATABASE_URL", "PERSONA_PUBLIC_URL", "PERSONA_LISTEN"} {
 		t.Setenv(k, "")
 	}
 	return home
@@ -55,7 +55,7 @@ func TestLegacyHubJSONLoadsUnchanged(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			dir := filepath.Join(home, ".jarvis")
+			dir := filepath.Join(home, ".persona")
 			if err := os.MkdirAll(dir, 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -193,7 +193,7 @@ func testSetupEnv(t *testing.T, home string, o setupOptions, cmds *fakeCommands,
 	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "bin", "jarvisd"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "bin", "personad"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -259,7 +259,7 @@ func TestSetupNewInstall(t *testing.T) {
 	}
 	lan := ip4(192, 168, 1, 20)
 	if cfg.Public.TLSListen != lan+":18662" || cfg.PublicURL != "http://"+lan+":"+strconv.Itoa(port) || cfg.Admin.FirstSetup != "code" ||
-		cfg.Token == "" || len(cfg.Machines) != 1 || !strings.HasPrefix(cfg.DatabaseURL, "postgres://jarvis:") || !strings.Contains(cfg.DatabaseURL, "@127.0.0.1:18661/jarvis") {
+		cfg.Token == "" || len(cfg.Machines) != 1 || !strings.HasPrefix(cfg.DatabaseURL, "postgres://persona:") || !strings.Contains(cfg.DatabaseURL, "@127.0.0.1:18661/persona") {
 		t.Fatalf("hub.json: %s", b)
 	}
 	if fi, _ := os.Stat(filepath.Join(e.root, "hub.json")); fi.Mode().Perm() != 0o600 {
@@ -272,7 +272,7 @@ func TestSetupNewInstall(t *testing.T) {
 			run = c
 		}
 	}
-	if !strings.Contains(run, "--name jarvis-postgres") || !strings.Contains(run, "-v jarvis-pgdata:/var/lib/postgresql") ||
+	if !strings.Contains(run, "--name persona-postgres") || !strings.Contains(run, "-v persona-pgdata:/var/lib/postgresql") ||
 		!strings.Contains(run, "-p 127.0.0.1:18661:5432") || !strings.HasSuffix(run, "postgres:18-alpine") || strings.Contains(run, "POSTGRES_PASSWORD=") {
 		t.Fatalf("docker run: %q", run)
 	}
@@ -281,11 +281,11 @@ func TestSetupNewInstall(t *testing.T) {
 	}
 	// hub-systemd.sh's units; the TLS address is bound, so FreeBind.
 	unitDir := filepath.Join(home, ".config", "systemd", "user")
-	socket, _ := os.ReadFile(filepath.Join(unitDir, "jarvisd.socket"))
+	socket, _ := os.ReadFile(filepath.Join(unitDir, "personad.socket"))
 	if !strings.Contains(string(socket), "ListenStream="+strconv.Itoa(port)+"\nListenStream="+lan+":18662\n") || !strings.Contains(string(socket), "FreeBind=true") {
 		t.Fatalf("socket unit:\n%s", socket)
 	}
-	for _, c := range []string{"systemctl --user daemon-reload", "systemctl --user enable jarvisd", "systemctl --user enable jarvisd.socket", "systemctl --user start jarvisd"} {
+	for _, c := range []string{"systemctl --user daemon-reload", "systemctl --user enable personad", "systemctl --user enable personad.socket", "systemctl --user start personad"} {
 		if !cmds.called(c) {
 			t.Fatalf("no %q in %v", c, cmds.calls)
 		}
@@ -312,7 +312,7 @@ func TestSetupNewInstall(t *testing.T) {
 	}
 	var done map[string]any
 	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &done); err != nil || done["done"] != true ||
-		!strings.HasPrefix(done["pair_url"].(string), "jarvis://pair?") ||
+		!strings.HasPrefix(done["pair_url"].(string), "persona://pair?") ||
 		done["admin_url"] != "http://"+lan+":"+strconv.Itoa(port)+"/admin#setup=ABCD-EFGH" || done["setup_code"] != "ABCD-EFGH" || done["expires_at"] == "" {
 		t.Fatalf("done line %q", lines[len(lines)-1])
 	}
@@ -331,8 +331,8 @@ func TestSetupNewInstall(t *testing.T) {
 	if cmds.called("systemctl --user restart") || cmds.called("systemctl --user stop") || cmds.called("docker run") {
 		t.Fatalf("second run restarted things: %v", cmds.calls)
 	}
-	// An upgrade (install.sh --hub replaced bin/jarvisd): the units are the same, the running hub is the old one.
-	if err := os.WriteFile(filepath.Join(e.root, "bin", "jarvisd"), []byte("#!/bin/sh\n# new\n"), 0o755); err != nil {
+	// An upgrade (install.sh --hub replaced bin/personad): the units are the same, the running hub is the old one.
+	if err := os.WriteFile(filepath.Join(e.root, "bin", "personad"), []byte("#!/bin/sh\n# new\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	cmds.calls = nil
@@ -340,7 +340,7 @@ func TestSetupNewInstall(t *testing.T) {
 	if err := e.setup(context.Background()); err != nil {
 		t.Fatalf("upgrade: %v\n%s", err, out)
 	}
-	if !cmds.called("systemctl --user restart jarvisd") || cmds.called("systemctl --user stop") {
+	if !cmds.called("systemctl --user restart personad") || cmds.called("systemctl --user stop") {
 		t.Fatalf("upgrade did not restart the hub: %v", cmds.calls)
 	}
 }
@@ -362,12 +362,12 @@ func TestSetupKeepsAnExistingHubJSON(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(e.root, "hub.json")); string(b) != file {
 		t.Fatalf("hub.json changed: %s", b)
 	}
-	socket, _ := os.ReadFile(filepath.Join(home, ".config", "systemd", "user", "jarvisd.socket"))
+	socket, _ := os.ReadFile(filepath.Join(home, ".config", "systemd", "user", "personad.socket"))
 	if strings.Contains(string(socket), "18662") || strings.Contains(string(socket), "FreeBind") {
 		t.Fatalf("socket unit:\n%s", socket)
 	}
 	text := out.String()
-	for _, want := range []string{"已有的值不改", "--listen、--tls 只用于新装", "管理员密码已经设过了", "http://" + ip4(192, 168, 1, 20) + ":" + strconv.Itoa(port) + "/admin\n", "jarvis://pair?"} {
+	for _, want := range []string{"已有的值不改", "--listen、--tls 只用于新装", "管理员密码已经设过了", "http://" + ip4(192, 168, 1, 20) + ":" + strconv.Itoa(port) + "/admin\n", "persona://pair?"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("no %q in:\n%s", want, text)
 		}
@@ -378,7 +378,7 @@ func TestSetupKeepsAnExistingHubJSON(t *testing.T) {
 }
 
 // A hub installed before claude / herdr (#4083): rerunning setup once they are there adds this machine while hub.json
-// has "machines": [], and restarts the running hub so it sees it; never in a container, with JARVIS_LOCAL_NODE=0, or over
+// has "machines": [], and restarts the running hub so it sees it; never in a container, with PERSONA_LOCAL_NODE=0, or over
 // machines already there.
 func TestSetupAddsTheLocalMachineLater(t *testing.T) {
 	for _, c := range []struct {
@@ -388,7 +388,7 @@ func TestSetupAddsTheLocalMachineLater(t *testing.T) {
 	}{
 		{name: "empty list, claude", prog: "claude", machines: `,"machines":[]`, want: "local"},
 		{name: "empty list, herdr", prog: "herdr", machines: `,"machines":[]`, want: "local"},
-		{name: "JARVIS_LOCAL_NODE=0", prog: "claude", machines: `,"machines":[]`, localNode0: true},
+		{name: "PERSONA_LOCAL_NODE=0", prog: "claude", machines: `,"machines":[]`, localNode0: true},
 		{name: "in a container", prog: "claude", machines: `,"machines":[]`, container: true},
 		{name: "machines kept", prog: "claude", machines: `,"machines":[{"id":"remote1","name":"remote1","kind":"ssh"}]`, want: "ssh"},
 	} {
@@ -399,7 +399,7 @@ func TestSetupAddsTheLocalMachineLater(t *testing.T) {
 			cmds := &fakeCommands{replies: map[string]fakeReply{"loginctl show-user": {out: "yes\n"}}}
 			e, out := testSetupEnv(t, home, setupOptions{listen: ":18660", tls: ":18662"}, cmds, "systemctl", "loginctl", c.prog)
 			e.getenv = func(k string) string {
-				if k == "JARVIS_LOCAL_NODE" && c.localNode0 {
+				if k == "PERSONA_LOCAL_NODE" && c.localNode0 {
 					return "0"
 				}
 				return ""
@@ -431,7 +431,7 @@ func TestSetupAddsTheLocalMachineLater(t *testing.T) {
 				t.Fatalf("machines %+v, want one %q", cfg.Machines, c.want)
 			}
 			added := c.want == "local"
-			if strings.Contains(out.String(), "补上本机") != added || cmds.called("systemctl --user restart jarvisd") != added {
+			if strings.Contains(out.String(), "补上本机") != added || cmds.called("systemctl --user restart personad") != added {
 				t.Fatalf("added=%v: calls %v, output:\n%s", added, cmds.calls, out)
 			}
 		})
@@ -611,14 +611,14 @@ func TestSetupDockerNotUsable(t *testing.T) {
 func TestSetupReusesTheContainer(t *testing.T) {
 	home := setupTestHome(t)
 	cmds := &fakeCommands{replies: map[string]fakeReply{
-		"docker ps -a":   {out: "jarvis-postgres\n"},
+		"docker ps -a":   {out: "persona-postgres\n"},
 		"docker inspect": {out: "PATH=/usr/bin\nPOSTGRES_PASSWORD=abc123\n"},
 		"docker port":    {out: "127.0.0.1:18661\n"},
 	}}
 	e, out := testSetupEnv(t, home, setupOptions{listen: ":1", tls: ":18662", noService: true}, cmds, "docker")
 	_ = e.setup(context.Background()) // stops at health: nothing runs
 	b, _ := os.ReadFile(filepath.Join(e.root, "hub.json"))
-	if !strings.Contains(string(b), `"database_url": "postgres://jarvis:abc123@127.0.0.1:18661/jarvis?sslmode=disable"`) || cmds.called("docker run") {
+	if !strings.Contains(string(b), `"database_url": "postgres://persona:abc123@127.0.0.1:18661/persona?sslmode=disable"`) || cmds.called("docker run") {
 		t.Fatalf("%s\n%v\n%s", b, cmds.calls, out)
 	}
 	if !strings.Contains(out.String(), "personad hub run") {
@@ -676,12 +676,12 @@ func TestSetupMacLaunchAgent(t *testing.T) {
 	if err := e.setup(context.Background()); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	plist, _ := os.ReadFile(filepath.Join(home, "Library", "LaunchAgents", "com.jarvis.hub.plist"))
-	bin := filepath.Join(e.root, "bin", "jarvisd")
+	plist, _ := os.ReadFile(filepath.Join(home, "Library", "LaunchAgents", "com.persona.hub.plist"))
+	bin := filepath.Join(e.root, "bin", "personad")
 	if !strings.Contains(string(plist), "<string>"+bin+"</string><string>hub</string>") || !strings.Contains(string(plist), "<key>PERSONA_HOME</key><string>"+e.root+"</string>") {
 		t.Fatalf("plist:\n%s", plist)
 	}
-	if !cmds.called("launchctl bootstrap gui/501 " + filepath.Join(home, "Library", "LaunchAgents", "com.jarvis.hub.plist")) {
+	if !cmds.called("launchctl bootstrap gui/501 " + filepath.Join(home, "Library", "LaunchAgents", "com.persona.hub.plist")) {
 		t.Fatalf("calls %v", cmds.calls)
 	}
 	if !strings.Contains(out.String(), "▀") && !strings.Contains(out.String(), "█") {
@@ -692,12 +692,12 @@ func TestSetupMacLaunchAgent(t *testing.T) {
 // The socket unit is hub-systemd.sh's (keep the two in step); FreeBind only with an address-bound listener.
 func TestHubUnitsMatchHubSystemd(t *testing.T) {
 	want := "[Unit]\nDescription=Persona hub's listening sockets (docs/hub-restart.md)\n\n[Socket]\nListenStream=18660\nListenStream=18662\n" +
-		"Backlog=4096\nNoDelay=true\nService=jarvisd.service\n\n[Install]\nWantedBy=sockets.target\n"
+		"Backlog=4096\nNoDelay=true\nService=personad.service\n\n[Install]\nWantedBy=sockets.target\n"
 	if got := hubSocketUnit([]string{":18660", ":18662"}); got != want {
 		t.Fatalf("socket:\n%s", got)
 	}
 	svc := hubServiceUnit("/home/someone/.persona", true)
-	for _, line := range []string{`ExecStart="/home/someone/.persona/bin/jarvisd" hub`, "Wants=jarvisd.socket", `Environment="PERSONA_HOME=/home/someone/.persona"`, "Restart=always"} {
+	for _, line := range []string{`ExecStart="/home/someone/.persona/bin/personad" hub`, "Wants=personad.socket", `Environment="PERSONA_HOME=/home/someone/.persona"`, "Restart=always"} {
 		if !strings.Contains(svc, line+"\n") {
 			t.Fatalf("no %q in:\n%s", line, svc)
 		}
@@ -754,8 +754,8 @@ func TestTLSAddressGone(t *testing.T) {
 	}
 }
 
-// An agent made before names the binary through ~/.jarvis, the same directory as ~/.persona: setup finds it (as
-// hub-systemd.sh does), restarts it once for the binary it has not noted, and installs no second agent.
+// Setup finds a launch agent through a user-configured .persona symlink and does
+// not install a second agent or restart an unchanged binary twice.
 func TestSetupMacFindsAnAgentThroughASymlink(t *testing.T) {
 	home := setupTestHome(t)
 	token := "t"
@@ -763,7 +763,10 @@ func TestSetupMacFindsAnAgentThroughASymlink(t *testing.T) {
 	cmds := &fakeCommands{replies: map[string]fakeReply{}}
 	e, out := testSetupEnv(t, home, setupOptions{listen: ":" + strconv.Itoa(port), tls: ":18662"}, cmds)
 	e.goos, e.uid = "darwin", 501
-	if err := os.Symlink(".persona", filepath.Join(home, ".jarvis")); err != nil {
+	if err := os.Rename(e.root, filepath.Join(home, "state")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("state", filepath.Join(home, ".persona")); err != nil {
 		t.Fatal(err)
 	}
 	_ = os.WriteFile(filepath.Join(e.root, "hub.json"), []byte(`{"token":"t","listen":":`+strconv.Itoa(port)+`","database_url":"postgres://x"}`), 0o600)
@@ -772,7 +775,7 @@ func TestSetupMacFindsAnAgentThroughASymlink(t *testing.T) {
 	plist := `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
   <key>Label</key><string>com.example.myhub</string>
-  <key>ProgramArguments</key><array><string>~/.jarvis/bin/jarvisd</string><string>hub</string></array>
+  <key>ProgramArguments</key><array><string>~/.persona/bin/personad</string><string>hub</string></array>
   <key>KeepAlive</key><true/>
 </dict></plist>
 `
@@ -783,7 +786,7 @@ func TestSetupMacFindsAnAgentThroughASymlink(t *testing.T) {
 	if err := e.setup(context.Background()); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if _, err := os.Stat(filepath.Join(agents, "com.jarvis.hub.plist")); err == nil || cmds.called("launchctl bootstrap") {
+	if _, err := os.Stat(filepath.Join(agents, "com.persona.hub.plist")); err == nil || cmds.called("launchctl bootstrap") {
 		t.Fatalf("a second agent: %v", cmds.calls)
 	}
 	if !cmds.called("launchctl kickstart -k gui/501/com.example.myhub") {
@@ -813,8 +816,8 @@ func TestSetupMacHubRunningElsewhere(t *testing.T) {
 }
 
 func TestLaunchdJob(t *testing.T) {
-	label, args, ok := launchdJob([]byte(`<plist version="1.0"><dict><key>Label</key><string>a.b</string><key>Program</key><string>/x/jarvisd</string><key>RunAtLoad</key><true/></dict></plist>`))
-	if !ok || label != "a.b" || len(args) != 1 || args[0] != "/x/jarvisd" {
+	label, args, ok := launchdJob([]byte(`<plist version="1.0"><dict><key>Label</key><string>a.b</string><key>Program</key><string>/x/personad</string><key>RunAtLoad</key><true/></dict></plist>`))
+	if !ok || label != "a.b" || len(args) != 1 || args[0] != "/x/personad" {
 		t.Fatalf("%q %q %v", label, args, ok)
 	}
 	if _, _, ok := launchdJob([]byte("bplist00")); ok {
@@ -827,21 +830,21 @@ func TestStartContainerHostNetwork(t *testing.T) {
 	home := setupTestHome(t)
 	cmds := &fakeCommands{replies: map[string]fakeReply{"docker inspect -f {{.HostConfig.NetworkMode}}": {out: "host\n"}}}
 	e, _ := testSetupEnv(t, home, setupOptions{}, cmds, "docker")
-	if err := e.startContainer(context.Background(), "postgres://jarvis:p@127.0.0.1:5544/jarvis?sslmode=disable"); err != nil {
+	if err := e.startContainer(context.Background(), "postgres://persona:p@127.0.0.1:5544/persona?sslmode=disable"); err != nil {
 		t.Fatal(err)
 	}
-	if !cmds.called("docker exec jarvis-postgres pg_isready -h 127.0.0.1 -p 5544 ") {
+	if !cmds.called("docker exec persona-postgres pg_isready -h 127.0.0.1 -p 5544 ") {
 		t.Fatalf("%v", cmds.calls)
 	}
 	cmds.replies["docker inspect -f {{.HostConfig.NetworkMode}}"] = fakeReply{out: "bridge\n"}
 	cmds.calls = nil
-	_ = e.startContainer(context.Background(), "postgres://jarvis:p@127.0.0.1:5544/jarvis")
-	if !cmds.called("docker exec jarvis-postgres pg_isready -h 127.0.0.1 -p 5432 ") {
+	_ = e.startContainer(context.Background(), "postgres://persona:p@127.0.0.1:5544/persona")
+	if !cmds.called("docker exec persona-postgres pg_isready -h 127.0.0.1 -p 5432 ") {
 		t.Fatalf("%v", cmds.calls)
 	}
 }
 
-// jarvisd.socket binds a moved LAN address anyway (FreeBind): the hub says so instead of TLS going quiet.
+// personad.socket binds a moved LAN address anyway (FreeBind): the hub says so instead of TLS going quiet.
 func TestAddressNotLocal(t *testing.T) {
 	lan := ip4(192, 168, 1, 20)
 	addrs := func() ([]net.Addr, error) {

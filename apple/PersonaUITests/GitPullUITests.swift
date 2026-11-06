@@ -5,8 +5,8 @@ final class GitPullUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_GIT_HUB"] else {
-            throw XCTSkip("需要 MOCK_FILES=1 MOCK_GIT_PULL=1 的 mock hub 和 JARVIS_GIT_HUB")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_GIT_HUB"] else {
+            throw XCTSkip("需要 MOCK_FILES=1 MOCK_GIT_PULL=1 的 mock hub 和 PERSONA_GIT_HUB")
         }
         self.hub = hub
     }
@@ -19,7 +19,7 @@ final class GitPullUITests: XCTestCase {
 
     @MainActor private func launch() -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000001",
                                "-openPane", "git", "-openAgentsFresh", "YES", "-openChatsFresh", "YES"]
         app.launchPinned()
@@ -29,9 +29,9 @@ final class GitPullUITests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let style = env["JARVIS_UI_STYLE"] ?? "liquid"
-        let appearance = env["JARVIS_GIT_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let style = env["PERSONA_UI_STYLE"] ?? "liquid"
+        let appearance = env["PERSONA_GIT_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/git-\(style)-\(appearance)-\(name).png"))
     }
 

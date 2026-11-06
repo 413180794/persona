@@ -3,14 +3,14 @@
 a Codex pane whose turn is open listed as working? (docs/archive/lanes/session-verify.md "Sessions in progress")
 
 Run on the hub machine: python3 live_panes_check.py [machine id…]
-Reads ~/.jarvis/hub.json (token, machines), asks the hub's /api/v1/sessions, runs pane_probe.py on each machine
+Reads ~/.persona/hub.json (token, machines), asks the hub's /api/v1/sessions, runs pane_probe.py on each machine
 (locally for kind=local, else over ssh to ssh_host). Prints one line per mismatch and a RESULT line; prints no
 session content.
 """
 import json, os, subprocess, sys, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-cfg = json.load(open(os.path.expanduser("~/.jarvis/hub.json")))
+cfg = json.load(open(os.path.expanduser("~/.persona/hub.json")))
 port = cfg.get("listen", ":18660").rsplit(":", 1)[-1]
 req = urllib.request.Request(f"http://127.0.0.1:{port}/api/v1/sessions", headers={"Authorization": "Bearer " + cfg["token"]})
 listed = json.load(urllib.request.urlopen(req, timeout=60))["sessions"]

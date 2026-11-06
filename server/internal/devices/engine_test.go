@@ -227,7 +227,7 @@ func (s *failingSettings) Setting(context.Context, string, any) (bool, error) {
 
 // TestEngineNodeHelper is a node for TestEngineConnectOrder: it writes every method it is called with to a file.
 func TestEngineNodeHelper(t *testing.T) {
-	path := os.Getenv("JARVIS_TEST_ENGINE_NODE")
+	path := os.Getenv("PERSONA_TEST_ENGINE_NODE")
 	if path == "" {
 		return
 	}
@@ -265,7 +265,7 @@ func TestEngineConnectOrder(t *testing.T) {
 		m.cfg.Kind = "local"
 		m.nodeCmd = func(ctx context.Context) *exec.Cmd {
 			cmd := exec.CommandContext(ctx, bin, "-test.run", "^TestEngineNodeHelper$")
-			cmd.Env = append(os.Environ(), "JARVIS_TEST_ENGINE_NODE="+log)
+			cmd.Env = append(os.Environ(), "PERSONA_TEST_ENGINE_NODE="+log)
 			return cmd
 		}
 		ctx, cancel := context.WithCancel(context.Background())

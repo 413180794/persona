@@ -37,7 +37,7 @@ class PersonaViewBlocksTest {
     // Every case of schema/extension/examples/persona-card/ (a card and the view it becomes, or null): the same view on
     // every app (the reference is sdk/go/wire/personacard.go).
     @Test fun cardsBecomeTheSameViewsAsOnEveryApp() {
-        val dir = generateSequence(File(System.getProperty("jarvis.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
+        val dir = generateSequence(File(System.getProperty("persona.repo.root") ?: System.getProperty("user.dir")).absoluteFile) { it.parentFile }
             .map { File(it, "schema/extension/examples/persona-card") }.firstOrNull { it.isDirectory }
             ?: error("schema/extension/examples/persona-card not found")
         val cases = dir.listFiles { f -> f.name.endsWith(".json") }!!.sortedBy { it.name }

@@ -1,11 +1,11 @@
 // End-to-end check of the Persona assistant on DSH (docs/dsh.md "Assistant", docs/runtimes.md "Assistant"): a real `dsh web` with
-// the plugin (isolated DSH_HOME, DSH's own mock model), a real `jarvisd node --stdio` (the harness plays the hub). The
+// the plugin (isolated DSH_HOME, DSH's own mock model), a real `personad node --stdio` (the harness plays the hub). The
 // "hub" sends assistant messages with the DSH launcher, as the Persona tab, AI twin, Feishu /agent and scheduled tasks
 // do (all go through assistant.send): a new conversation in the assistant's directory, the live snapshot and the
 // memory with the first message, the user's skills in the assistant's directory, ask_user and the other assistant
 // tools, the permission mode, an interrupt, and the conversation going on after the node restarts.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/dsh/e2e/assistant.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/dsh/e2e/assistant.mjs
 //
 // Nothing outside fresh temp directories is touched.
 
@@ -19,9 +19,9 @@ import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness
 
 const here = dirname(fileURLToPath(import.meta.url))
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout) and PERSONAD (a personad binary)')
   process.exit(2)
 }
 const keep = process.env.KEEP === '1'
@@ -45,19 +45,19 @@ async function cleanup() {
 process.on('SIGINT', () => cleanup().finally(() => process.exit(130)))
 
 // A skill in the user's skill space, to see it linked into the assistant's directory.
-const skillDir = join(home, '.jarvis', 'skills', 'e2e-skill')
+const skillDir = join(home, '.persona', 'skills', 'e2e-skill')
 mkdirSync(join(skillDir, 'scripts'), { recursive: true })
 writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: e2e-skill\ndescription: e2e stand-in\n---\n')
 writeFileSync(join(skillDir, 'scripts', 'hello.sh'), '#!/bin/bash\necho hello\n')
 chmodSync(join(skillDir, 'scripts', 'hello.sh'), 0o755)
 
 const model = await scriptedModel(dshCheckout)
-const assistantDir = join(home, '.jarvis', 'assistant')
+const assistantDir = join(home, '.persona', 'assistant')
 
 async function startTheNode() {
-  node = await startNode({ jarvisd, keep: true, home })
+  node = await startNode({ personad, keep: true, home })
   node.assistantTools = [{ name: 'ask_user', description: 'Ask the user on the phone', input_schema: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] } }]
-  node.assistantContext = () => '- 现在：e2e 测试时间 JARVIS_E2E_SNAPSHOT\n- 在线电脑：测试机'
+  node.assistantContext = () => '- 现在：e2e 测试时间 PERSONA_E2E_SNAPSHOT\n- 在线电脑：测试机'
   node.callTool = (p) => p.name === 'ask_user' ? { content: [{ type: 'text', text: `the user answered postgres (assistant=${p.assistant === true})` }], is_error: false }
     : { content: [{ type: 'text', text: `${p.name} ran` }], is_error: false }
 }
@@ -65,7 +65,7 @@ await startTheNode()
 
 const patch = join(root, 'patch.yml')
 writeFileSync(patch, `- insert:
-    - id: jarvis-dsh-runtime
+    - id: persona-dsh-runtime
       name: ${join(here, '..', 'index.js')}
       config:
         socket: ${node.runtimeSocket}
@@ -124,7 +124,7 @@ try {
     return launchers?.find((l) => l.name === 'dsh' && l.assistant) ? launchers : undefined
   }, 120_000)
   check('DSH offers its launcher for the assistant', launchers.some((l) => l.name === 'dsh' && l.assistant === true && l.agent === 'dsh'))
-  await node.call('assistant.prepare', { dir: '.jarvis/assistant', claude_md: '# 助手（e2e）\n' })
+  await node.call('assistant.prepare', { dir: '.persona/assistant', claude_md: '# 助手（e2e）\n' })
 
   // A new conversation, as the Persona tab starts one.
   await model.script({ sequence: ['success'], successText: 'Hello from the DSH assistant' })
@@ -137,13 +137,13 @@ try {
   const shown = (await items(sid)).filter((i) => i.role === 'user' && i.kind === 'text').map((i) => i.text)
   check('the chat shows what was typed, not the snapshot', shown.length === 1 && shown[0] === 'hello assistant', JSON.stringify(shown))
   const first = userTexts(await dshEvents(sid)).join('\n')
-  check('the model got the live snapshot with the message', first.includes('JARVIS_E2E_SNAPSHOT') && first.includes('<persona-context>'))
+  check('the model got the live snapshot with the message', first.includes('PERSONA_E2E_SNAPSHOT') && first.includes('<persona-context>'))
   check('…and the memory directory with the first one', first.includes('MEMORY.md'))
   check('the skills are in the assistant\'s directory for DSH', existsSync(join(assistantDir, '.agents', 'skills', 'e2e-skill', 'scripts', 'hello.sh')))
   await idle(sid)
 
   // ask_user, the assistant's own tool: through the node to the hub as the assistant's.
-  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__jarvis__ask_user', toolArguments: JSON.stringify({ question: 'Which database?' }), successText: 'Using postgres' })
+  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__persona__ask_user', toolArguments: JSON.stringify({ question: 'Which database?' }), successText: 'Using postgres' })
   await send(sid, 'ask me which database')
   await until('the ask_user result', () => toolResult(sid, /the user answered postgres/), 60_000)
   const ask = node.toolCalls.find((c) => c.name === 'ask_user')

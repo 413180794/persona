@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Mac todo search trims the query: whitespace-only searches like an empty query (#3797).
 @MainActor

@@ -227,8 +227,8 @@ func TestStatus(t *testing.T) {
 	if ssh.State != connector.StateNoPermission || len(ssh.Guide) != 3 || !strings.Contains(ssh.Guide[1], "允许远程用户完全访问磁盘") {
 		t.Errorf("ssh: %+v", ssh)
 	}
-	launchd := (&Reader{Home: "testdata/home", SQLite: denied, Via: "launchd", Executable: "/opt/jarvis/jarvisd"}).Status(ctx)
-	if launchd.State != connector.StateNoPermission || !strings.Contains(launchd.Guide[1], "/opt/jarvis/jarvisd") {
+	launchd := (&Reader{Home: "testdata/home", SQLite: denied, Via: "launchd", Executable: "/opt/persona/personad"}).Status(ctx)
+	if launchd.State != connector.StateNoPermission || !strings.Contains(launchd.Guide[1], "/opt/persona/personad") {
 		t.Errorf("launchd: %+v", launchd)
 	}
 	if _, err := (&Reader{Home: "testdata/home", SQLite: denied}).Chats(ctx, 10, "", ""); !errors.Is(err, ErrNoPermission) {

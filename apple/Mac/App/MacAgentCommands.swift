@@ -107,7 +107,7 @@ struct MacAgentMenu: Commands {
             Button("Hand to Persona") {
                 if let key, let s = model.latest(key) { // its last line as it is now
                     MacShellState.shared.willOpen() // Knowledge / Machines make way for the Persona page
-                    Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
+                    Task { await model.askPersona(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
                 }
             }
             .keyboardShortcut("j", modifiers: .command)

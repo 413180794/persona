@@ -1,8 +1,8 @@
-<jarvis-context kind="context" title="转发的聊天记录" url="">
+<persona-context kind="context" title="转发的聊天记录" url="">
 11-02 10:00 张三：构建挂了
 11-02 10:01 李四：我看下
-</jarvis-context>
+</persona-context>
 看下这个日志
 
 附件（已存到这台电脑上）：
-/tmp/jarvis-uploads/build.log
+/tmp/persona-uploads/build.log

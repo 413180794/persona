@@ -25,20 +25,20 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The test binary is also the program: run with JARVIS_PROC_CHILD=1 it serves exampleProgram on stdin / stdout.
+// The test binary is also the program: run with PERSONA_PROC_CHILD=1 it serves exampleProgram on stdin / stdout.
 const childVersion = "v-test\nchannel dev, build 0"
 
 func TestMain(m *testing.M) {
-	if os.Getenv("JARVIS_PROC_CHILD") == "1" {
+	if os.Getenv("PERSONA_PROC_CHILD") == "1" {
 		if len(os.Args) > 1 && os.Args[1] == "version" {
 			fmt.Println(childVersion)
 			os.Exit(0)
 		}
-		if os.Getenv("JARVIS_PROC_KIND") == "loud" { // a log line far longer than a pipe holds, before it serves
+		if os.Getenv("PERSONA_PROC_KIND") == "loud" { // a log line far longer than a pipe holds, before it serves
 			fmt.Fprintf(os.Stderr, "%s\nafter the long line\n", strings.Repeat("x", 200<<10))
 		}
 		err := serve.Main(context.Background(), os.Stdin, os.Stdout, func(cfg json.RawMessage, s connector.Secrets) (connector.Connector, error) {
-			switch os.Getenv("JARVIS_PROC_KIND") {
+			switch os.Getenv("PERSONA_PROC_KIND") {
 			case "settings":
 				return &settingsProgram{}, nil
 			case "slow-tools":
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 			case "chatty":
 				return &chattyProgram{}, nil
 			}
-			return &exampleProgram{secrets: s, exitSoon: os.Getenv("JARVIS_PROC_EXIT") == "1"}, nil
+			return &exampleProgram{secrets: s, exitSoon: os.Getenv("PERSONA_PROC_EXIT") == "1"}, nil
 		})
 		if err != nil && !strings.Contains(err.Error(), "EOF") {
 			os.Exit(1)
@@ -238,7 +238,7 @@ func program(t *testing.T, s connector.Secrets, env ...string) Config {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Config{ID: "example", Name: "Example", Path: exe, Env: append([]string{"JARVIS_PROC_CHILD=1"}, env...),
+	return Config{ID: "example", Name: "Example", Path: exe, Env: append([]string{"PERSONA_PROC_CHILD=1"}, env...),
 		Version: childVersion, Secrets: s, Logf: t.Logf}
 }
 
@@ -269,7 +269,7 @@ func linked(t *testing.T, s connector.Secrets, env ...string) *Conn {
 	}
 	var c *Conn
 	p := host.Start(context.Background(), host.Spec{ID: "example-plugin", Name: "Example", Command: exe, RPC: true,
-		Env: append([]string{"JARVIS_PROC_CHILD=1"}, env...), CallTimeout: callTimeout, Logf: t.Logf,
+		Env: append([]string{"PERSONA_PROC_CHILD=1"}, env...), CallTimeout: callTimeout, Logf: t.Logf,
 		Init: func(context.Context) (extension.InitializeParams, error) {
 			return extension.InitializeParams{Extension: extension.ExtensionInfo{ID: "example-plugin", Version: "1.0.0"},
 				Active: map[string][]string{"connectors": {"example"}}}, nil
@@ -452,7 +452,7 @@ func TestProgramRestarts(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sec := &memSecrets{}
-	c := New(program(t, sec, "JARVIS_PROC_EXIT=1"))
+	c := New(program(t, sec, "PERSONA_PROC_EXIT=1"))
 	go c.Run(ctx)
 	waitUntil(t, "a restart", func() bool { _, loads := sec.get(); return loads >= 2 })
 }
@@ -544,7 +544,7 @@ func runSlow(t *testing.T, kind string) *Conn {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	c := New(program(t, &memSecrets{data: []byte("example session")}, "JARVIS_PROC_KIND="+kind))
+	c := New(program(t, &memSecrets{data: []byte("example session")}, "PERSONA_PROC_KIND="+kind))
 	go c.Run(ctx)
 	waitUntil(t, "the first refresh", func() bool { return len(c.Tools()) > 0 && c.Status(context.Background()).State == connector.StateOK })
 	return c
@@ -663,7 +663,7 @@ func (p *chattyProgram) Call(_ context.Context, name string, _ json.RawMessage) 
 func TestChattyProgramAsPlugin(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c := linked(t, &memSecrets{}, "JARVIS_PROC_KIND=chatty")
+	c := linked(t, &memSecrets{}, "PERSONA_PROC_KIND=chatty")
 	go c.Run(ctx)
 	scopes := make(chan connector.Scope, 64)
 	go func() { _ = c.Watch(ctx, func(s connector.Scope) { scopes <- s }) }()
@@ -699,7 +699,7 @@ func TestChattyProgramAsPlugin(t *testing.T) {
 func TestSharedRefreshOutlivesAnAskerWhoGaveUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c := linked(t, &memSecrets{}, "JARVIS_PROC_KIND=chatty")
+	c := linked(t, &memSecrets{}, "PERSONA_PROC_KIND=chatty")
 	go c.Run(ctx)
 	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).Account == "chatty" })
 	calls := func() int {
@@ -738,7 +738,7 @@ func TestSharedRefreshOutlivesAnAskerWhoGaveUp(t *testing.T) {
 func TestProgramWithALongLogLine(t *testing.T) {
 	var mu sync.Mutex
 	var logs []string
-	cfg := program(t, &memSecrets{data: []byte("example session")}, "JARVIS_PROC_KIND=loud")
+	cfg := program(t, &memSecrets{data: []byte("example session")}, "PERSONA_PROC_KIND=loud")
 	cfg.Logf = func(format string, args ...any) {
 		mu.Lock()
 		logs = append(logs, fmt.Sprintf(format, args...))

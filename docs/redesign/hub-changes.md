@@ -1,9 +1,9 @@
 # Hub change list
 
-> Draft v1 (2026-10-30), part of the [redesign plan](README.md). Basis: [research/jarvis-protocol.md](research/jarvis-protocol.md).
+> Draft v1 (2026-10-30), part of the [redesign plan](README.md). Basis: [research/persona-protocol.md](research/persona-protocol.md).
 > Principle: every change is **compatible with old Apps** (new fields optional, old field semantics unchanged); a new App meeting an old hub falls back to the old behavior based on capability flags.
 > **iOS is read-only this round**: every change must keep the existing iOS App working without code changes, including plaintext LAN connections, the old pairing QR format, and a single address. After every hub change, run the UI tests and a real-device pairing with the existing iOS App.
-> Migration numbers are allocated in ranges per lane (CLAUDE.md); before picking one, check `server/internal/db/migrations/` in all worktrees and `schema_migrations` in the `jarvis_test` database.
+> Migration numbers are allocated in ranges per lane (CLAUDE.md); before picking one, check `server/internal/db/migrations/` in all worktrees and `schema_migrations` in the `persona_test` database.
 
 ## 1. Public direct connection (required)
 
@@ -67,7 +67,7 @@ Go opens a dual-stack socket for the wildcard address, so IPv6 can already conne
 
 - `personad hub pair` no longer prints the master token by default. It calls the running hub over local loopback to generate a **high-entropy, short-lived (e.g. 10 minutes), single-use** temporary token, stored in the database (deployments wipe the hub's in-memory state, so persistence is required). The QR format stays the same:
 
-  `jarvis://pair?url=<LAN plaintext address>&token=<temporary token>&hub=<hub_id>&fp=<fingerprint>&tls=<TLS port>&alt=<one or two external candidates>`
+  `persona://pair?url=<LAN plaintext address>&token=<temporary token>&hub=<hub_id>&fp=<fingerprint>&tls=<TLS port>&alt=<one or two external candidates>`
 
 - **Parameter format** (all platforms implement this):
   - `hub`: hub instance id (1.5);
@@ -201,7 +201,7 @@ There is no Play Store; the hub hosts the Android package ([android.md](android.
 ### 3.3 Clients report their capabilities (two-way negotiation)
 
 - WS: after connecting, the client sends `{"type":"client_hello","device_id","platform","version","build","os":{"name","version","sdk"},"features":[…],"heartbeat":{…}}` (heartbeat negotiation in 1.6). `os` is the detected system (HyperOS, ColorOS, HarmonyOS 4…) and version; aggregated by the hub, it shows which vendor/version's Settings deep links have broken ([android.md](android.md) 5.18).
-- HTTP: include the header `X-Jarvis-Client: <platform>/<version>`.
+- HTTP: include the header `X-Persona-Client: <platform>/<version>`.
 - The hub records it on the connection for:
   - platform-based routing of push and phone tools;
   - fallback screen cards for clients that don't know a new interaction type (e.g. `elicitation`);

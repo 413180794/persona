@@ -16,7 +16,7 @@ import (
 
 // Redeploying a node from the hub (POST /api/v1/machines/{id}/deploy, the button where a machine is not the hub's
 // build): deploy.sh leaves every node binary of the build it deployed on the hub machine
-// (~/.jarvis/bin/nodes/jarvisd-<os>-<arch>), so the hub sends a machine its own build over ssh, kills the resident node
+// (~/.persona/bin/nodes/personad-<os>-<arch>), so the hub sends a machine its own build over ssh, kills the resident node
 // if there is one (launchd starts it again from the new binary; `launchctl kickstart` from an ssh session did not always
 // take, which is how two Macs kept an old node through deploys), and connects again.
 
@@ -27,7 +27,7 @@ func nodeBinary(goos, arch string) (string, error) {
 	if goos == "" || arch == "" {
 		return "", i18n.Err("devices-deploy.os_unknown")
 	}
-	p := filepath.Join(nodeBinaryDir(), "jarvisd-"+goos+"-"+arch)
+	p := filepath.Join(nodeBinaryDir(), "personad-"+goos+"-"+arch)
 	if _, err := os.Stat(p); err != nil {
 		return "", i18n.Err("devices-deploy.no_binary", i18n.Args{"os": goos, "arch": arch})
 	}
@@ -132,7 +132,7 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 	}
 	remote := m.cfg.RemoteBin
 	if remote == "" {
-		remote = "~/.jarvis/bin/jarvisd"
+		remote = "~/.persona/bin/personad"
 	}
 	host := m.cfg.SSHHost
 	if host == "" {

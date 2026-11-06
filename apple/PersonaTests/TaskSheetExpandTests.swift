@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Full Screen in the assistant's agent sheet: the sheet goes down (both of its sources cleared, so it does not rise
 /// again) and the agent is handed to the assistant page to push.

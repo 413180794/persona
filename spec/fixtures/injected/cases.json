@@ -109,7 +109,7 @@
       "description": "每天的定时任务：去掉末尾的知识库提示。",
       "source": "server/internal/prompts/assistant/task_run.md",
       "input": {
-        "text": "⏰ 早报（定时任务）\n\n整理今天的日程。\n\n再看看邮件。\n\n（知识库 ~/.jarvis/data：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；\n相关的会话档案用 kb_get 看。这次得出的新进展、新待办用 kb_update 记回对应项目的时间线。）"
+        "text": "⏰ 早报（定时任务）\n\n整理今天的日程。\n\n再看看邮件。\n\n（知识库 ~/.persona/data：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；\n相关的会话档案用 kb_get 看。这次得出的新进展、新待办用 kb_update 记回对应项目的时间线。）"
       },
       "expected": {
         "kind": "followup",
@@ -191,11 +191,11 @@
       }
     },
     {
-      "name": "snapshot_before_jarvis",
-      "description": "旧名字 \u003cjarvis-context\u003e 的快照块也认（历史消息、旧 node，#3182）。",
+      "name": "snapshot_before_persona",
+      "description": "旧名字 \u003cpersona-context\u003e 的快照块也认（历史消息、旧 node，#3182）。",
       "source": "server/internal/prompts/assistant/task_notice.md",
       "input": {
-        "text": "\u003cjarvis-context\u003e\n实时快照：……\n\u003c/jarvis-context\u003e\n🔔 任务「跑测试」做完了\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+        "text": "\u003cpersona-context\u003e\n实时快照：……\n\u003c/persona-context\u003e\n🔔 任务「跑测试」做完了\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
       },
       "expected": {
         "kind": "task_notice",

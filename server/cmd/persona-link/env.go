@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 )
 
-// env is what the commands that look after jarvis-link (install, status, logs, uninstall) need from this computer;
+// env is what the commands that look after persona-link (install, status, logs, uninstall) need from this computer;
 // tests fill it with their own.
 type env struct {
 	home, goos, user string
@@ -77,28 +77,11 @@ func (e *env) commandEnv() []string {
 
 func (e *env) stdinIsTerminal() bool { return e.terminal }
 
-func (e *env) jarvisDir() string  { return identity.DataDir(e.home) }
-func (e *env) configPath() string { return filepath.Join(e.jarvisDir(), "link.json") }
-func (e *env) logPath() string    { return filepath.Join(e.jarvisDir(), "link.log") }
-func (e *env) binPath() string    { return filepath.Join(e.jarvisDir(), "bin", e.exeName("jarvis-link")) }
-func (e *env) aliasPath() string  { return filepath.Join(e.jarvisDir(), "bin", newName) }
-
-// isLinkAlias says path is what install.sh's binary_alias made for persona-link: a symlink to jarvis-link, or (where
-// symlinks fail) the two-line script that execs the jarvis-link beside it.
-func isLinkAlias(path string) bool {
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return false
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(path)
-		return err == nil && filepath.Base(target) == legacyName
-	}
-	if !fi.Mode().IsRegular() || fi.Size() > 256 {
-		return false
-	}
-	b, err := os.ReadFile(path)
-	return err == nil && string(b) == "#!/bin/sh\nexec \"$(dirname \"$0\")/"+legacyName+"\" \"$@\"\n"
+func (e *env) personaDir() string { return identity.DataDir(e.home) }
+func (e *env) configPath() string { return filepath.Join(e.personaDir(), "link.json") }
+func (e *env) logPath() string    { return filepath.Join(e.personaDir(), "link.log") }
+func (e *env) binPath() string {
+	return filepath.Join(e.personaDir(), "bin", e.exeName("persona-link"))
 }
 
 // interruptible is a context that ends on Ctrl-C (logs -f).
@@ -111,7 +94,7 @@ func fileExists(p string) bool {
 	return err == nil
 }
 
-// installBinary puts this jarvis-link at ~/.jarvis/bin/jarvis-link, where the service runs it from, unless it is
+// installBinary puts this persona-link at ~/.persona/bin/persona-link, where the service runs it from, unless it is
 // that file already. copied says whether it had to.
 func (e *env) installBinary() (path string, copied bool, err error) {
 	self, err := e.exe()

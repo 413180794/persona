@@ -2,7 +2,7 @@ import XCTest
 
 /// A message that failed to send stays where it was written (#6023): one sent while the hub cannot reach the computer
 /// fails; the next goes through and lands below it, not above. Against scripts/mock/mock_hub.py with MOCK_AGENTS=1
-/// MOCK_ECHO_SENT=1 (JARVIS_MOCK_HUB). The failed one is deleted at the end: the outbox would keep it for a day.
+/// MOCK_ECHO_SENT=1 (PERSONA_MOCK_HUB). The failed one is deleted at the end: the outbox would keep it for a day.
 final class FailedSendPlacementTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -18,8 +18,8 @@ final class FailedSendPlacementTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
-        let look = ProcessInfo.processInfo.environment["JARVIS_APPEARANCE"] ?? "light"
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
+        let look = ProcessInfo.processInfo.environment["PERSONA_APPEARANCE"] ?? "light"
         try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "failed-send-\(name)-\(look).png"))
     }
 
@@ -34,13 +34,13 @@ final class FailedSendPlacementTests: XCTestCase {
     }
 
     @MainActor func testAFailedMessageStaysWhereItWasWritten() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_ECHO_SENT=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_ECHO_SENT=1 (PERSONA_MOCK_HUB)")
         }
         mock(hub, "send-fail?on=1")
         defer { mock(hub, "send-fail?on=0") }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
         app.launchPinned()
         send("这条没发出去")

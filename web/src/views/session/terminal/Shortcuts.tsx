@@ -6,7 +6,7 @@ import { Button, cx, Dialog, EASE, IconButton } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import { t } from "../../../i18n";
 
-const KEY = "jarvis.terminal.shortcuts";
+const KEY = "persona.terminal.shortcuts";
 const listeners = new Set<() => void>();
 let cached: { raw: string | null; list: string[] } | null = null;
 

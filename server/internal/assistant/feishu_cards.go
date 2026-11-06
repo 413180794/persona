@@ -762,7 +762,7 @@ func (s *Service) ixWhere(ctx context.Context, ix proto.Interaction) string {
 
 // openButton opens the conversation in the web app the hub serves; nil (Card.Buttons leaves it out) when the hub has
 // no http(s) address for it. Card links are documented for http(s) and AppLink
-// only: a jarvis:// link (the iPhone app) might get the whole card refused, so it is not used.
+// only: a persona:// link (the iPhone app) might get the whole card refused, so it is not used.
 func (s *Service) openButton(ctx context.Context, machine, session string) feishubot.Button {
 	st, _ := s.feishuStatusKept(ctx)
 	web := strings.TrimRight(st.PublicURL, "/")
@@ -799,13 +799,13 @@ func (s *Service) webBase(ctx context.Context) string {
 }
 
 // sessionLink is a conversation's page in the web app at web (web/src/lib/router.ts): a Persona conversation is
-// /j/<id>, an agent /s/<machine>/<id>; "" when web is.
+// /persona/<id>, an agent /s/<machine>/<id>; "" when web is.
 func sessionLink(web, machine, session string, assistant bool) string {
 	if web == "" {
 		return ""
 	}
 	if assistant {
-		return web + "/j/" + url.PathEscape(session)
+		return web + "/persona/" + url.PathEscape(session)
 	}
 	return web + "/s/" + url.PathEscape(machine) + "/" + url.PathEscape(session)
 }
@@ -1213,7 +1213,7 @@ func (s *Service) feishuPush(machine, session, title, body string) {
 			s.markPushed(session) // only after the first card lands: a failed push must not suppress the mirror
 		}
 		if session != "" {
-			s.rememberBotThread(mid, botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, title)
+			s.rememberBotThread(mid, botTarget{Kind: targetPersona, MachineID: machine, SessionID: session}, title)
 		}
 	}
 	if len(missing) > 0 {
@@ -1270,7 +1270,7 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 	// The turn is in the key: two runs an hour apart that asked and answered alike (a task's "no change") are two
 	// sends, not one Feishu drops as a repeat.
 	sum := sha256.Sum256([]byte(machine + "\x00" + session + "\x00" + turn + "\x00" + asked + "\x00" + answer))
-	m := &mirrorSend{l: l, cards: cards, target: botTarget{Kind: targetJarvis, MachineID: machine, SessionID: session}, label: label,
+	m := &mirrorSend{l: l, cards: cards, target: botTarget{Kind: targetPersona, MachineID: machine, SessionID: session}, label: label,
 		main: main, answer: answer, turn: turn, key: "m" + hex.EncodeToString(sum[:8])}
 	s.feishuMirrorPost(ctx, m, 0)
 }
@@ -1462,7 +1462,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 	switch cmd {
 	case "/help", "/帮助":
 		reply(feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.help_title"), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.help_title")).Markdown(botHelp(l, f)), "")
-	case "/main", "/jarvis", "/主对话":
+	case "/main", "/persona", "/主对话":
 		if !f.Main {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.main_off"))
 			return true, ""
@@ -1474,7 +1474,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.main_off"))
 			return true, ""
 		}
-		s.setBotCurrent(botTarget{Kind: targetJarvis})
+		s.setBotCurrent(botTarget{Kind: targetPersona})
 		if rest == "" {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.next_is_new"))
 			return true, ""
@@ -1567,7 +1567,7 @@ func (s *Service) statusCard(ctx context.Context, t botTarget) (*feishubot.Card,
 	rt, err := s.resolveBotTarget(ctx, t) // one resolve: the target line reuses its label, not targetLabel's
 	label := i18n.T(l, "assistant-feishu.not_found")
 	switch {
-	case err == nil && t.Kind == targetJarvis && rt.isNew:
+	case err == nil && t.Kind == targetPersona && rt.isNew:
 		label = i18n.T(l, "assistant-feishu.new_chat_next")
 	case err == nil:
 		label = rt.label
@@ -1682,7 +1682,7 @@ func (s *Service) stopConversation(ctx context.Context, f FeishuFeatures, t botT
 }
 
 // botCommandNames are the bot's own commands a typo is matched against (the Chinese ones are too short to mistype).
-var botCommandNames = []string{"/help", "/main", "/jarvis", "/new", "/list", "/agents", "/start", "/stop", "/status", "/tasks"}
+var botCommandNames = []string{"/help", "/main", "/persona", "/new", "/list", "/agents", "/start", "/stop", "/status", "/tasks"}
 
 // agentCommandNames are Claude Code's and Codex's own commands, and plain words, a slip off one of the bot's: they go
 // on as they are.
@@ -1765,12 +1765,12 @@ func (s *Service) conversationsCard(ctx context.Context) (*feishubot.Card, strin
 		if sess.LastText != "" {
 			line += "\n" + feishubot.EscapeMarkdown(clip(oneLine(sess.LastText), 80))
 		}
-		kind := targetJarvis
+		kind := targetPersona
 		if sess.SessionID == main {
 			kind = targetMain
 		}
 		switchBtn := feishubot.Btn(i18n.T(l, "assistant-feishu_cards.chat_here"), feishubot.Default, map[string]any{"a": "switch", "k": kind, "m": sess.MachineID, "s": sess.SessionID, "t": name})
-		// The rows are Persona conversations (conversations lists Assistant sessions), so the link is /j/<id>.
+		// The rows are Persona conversations (conversations lists Assistant sessions), so the link is /persona/<id>.
 		openBtn := s.openLinkButton(ctx, sessionLink(web, sess.MachineID, sess.SessionID, sess.Assistant))
 		c.Markdown(line).Buttons(switchBtn, openBtn)
 		fmt.Fprintf(&b, "- %s\n", fallbackText.Replace(name))

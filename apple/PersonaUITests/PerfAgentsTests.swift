@@ -27,7 +27,7 @@ final class PerfAgentsTests: PerfTestCase {
                                                              ["chat.compactTitle", "shell-composer-field"], "更多")).firstMatch
     }
 
-    /// The agent rows sit under the Needs You cards (several screens on a phone): the 未读 filter puts rows on top.
+    /// The agent rows sit under the Needs You cards (several screens on a phone): the Unread filter puts rows on top.
     @MainActor private func rowsOnTop() -> XCUIElementQuery {
         app.buttons["agents.filter.unread"].tap()
         sleep(2)
@@ -60,14 +60,14 @@ final class PerfAgentsTests: PerfTestCase {
         measureScroll(list)
     }
 
-    /// The compact rows (细列表): many more rows per screen.
+    /// The compact rows: many more rows per screen.
     @MainActor func testAgentsCompactListScroll() throws {
         openList(["-dev.grouping", "repo", "-dev.compact", "YES"])
         see(app.buttons["agents.filter.all"], "the quick filters", timeout: 30)
         measureScroll(list)
     }
 
-    /// Quick filters 全部 → 未读 → 工作中 → 全部: the list re-filtered under an animation.
+    /// Quick filters All → Unread → Working → All: the list re-filtered under an animation.
     @MainActor func testAgentsQuickFilters() throws {
         openList(["-dev.grouping", "repo"])
         let all = see(app.buttons["agents.filter.all"], "the quick filters", timeout: 30)
@@ -196,7 +196,7 @@ final class PerfAgentsTests: PerfTestCase {
         measureScroll(mainScroller(), first: .down)
     }
 
-    /// The terminal (··· › 终端, a full-screen cover) opened and closed.
+    /// The terminal (More › Terminal, a full-screen cover) opened and closed.
     @MainActor func testTerminalOpenClose() throws {
         openChat(Self.weather, ["-terminalTipsSeen", "YES"])
         let more = button(labelContains: "更多")

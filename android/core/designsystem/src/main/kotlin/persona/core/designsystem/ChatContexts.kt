@@ -42,7 +42,7 @@ fun contextIcon(kind: String): PhIcon = when (kind) {
 }
 
 /**
- * What a message carries besides what the user wrote (`<jarvis-context>` blocks: page excerpts picked on the phone,
+ * What a message carries besides what the user wrote (`<persona-context>` blocks: page excerpts picked on the phone,
  * everything a Feishu `/agent` request hands its agent), as one quiet folded row beside the bubble:
  * "Context · N items" or "Context · title". Open, it lists the titles; a title opens to its text and, when it has a link,
  * "Open" ([onOpen]). With one context the row opens straight to its text. [id] keeps what is open across scrolling.

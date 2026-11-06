@@ -22,7 +22,7 @@ func shortTitleWait(t *testing.T) {
 // writeAssistantTranscript writes the transcript Claude starts with its first turn.
 func writeAssistantTranscript(t *testing.T, home, id string) string {
 	t.Helper()
-	dir := filepath.Join(home, ".claude", "projects", "-home-me--jarvis-assistant")
+	dir := filepath.Join(home, ".claude", "projects", "-home-me--persona-assistant")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}

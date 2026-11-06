@@ -7,7 +7,7 @@ import android.net.Uri
 /**
  * The intent a link for another app may start, or null to drop it (the old Android app's rules): `intent:` URIs lose
  * their component, selector, clip data and every URI-grant flag (a page could otherwise make the app grant another app
- * its files, or start one of its own screens that are not exported); data that is the app's own (`jarvis:`), another
+ * its files, or start one of its own screens that are not exported); data that is the app's own (`persona:`), another
  * intent, a local file or provider, and this app's own package are refused.
  */
 internal fun externalIntent(url: String, ownPackage: String): Intent? {

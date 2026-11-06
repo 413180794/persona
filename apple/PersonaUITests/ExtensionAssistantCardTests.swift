@@ -5,9 +5,9 @@ import XCTest
 final class ExtensionAssistantCardTests: XCTestCase {
     @MainActor func testCardsShareTheRendererAndStayReadOnly() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("需要 MOCK_EXTENSION_CARDS=1") }
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("需要 MOCK_EXTENSION_CARDS=1") }
         continueAfterFailure = false
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant",
                                "-openAssistant", "server/b2e4d6f8-0000-4000-8000-000000000001"]
@@ -25,8 +25,8 @@ final class ExtensionAssistantCardTests: XCTestCase {
                       "只读卡片的链接保留：\n\(app.debugDescription)")
         XCTAssertFalse(app.buttons["plugin-ui-action-must-not-run"].exists)
         XCTAssertFalse(app.buttons["不应运行"].exists)
-        if let dir = env["JARVIS_SHOTS"] {
-            let appearance = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        if let dir = env["PERSONA_SHOTS"] {
+            let appearance = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
             try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir)
                 .appending(path: "assistant-cards-\(UITestStyle.name)-\(appearance).png"))
         }

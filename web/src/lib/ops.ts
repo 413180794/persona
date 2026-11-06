@@ -1,4 +1,4 @@
-// Writes that survive a hub restart (#1574): one op id per logical operation, sent as X-Jarvis-Op-Id, so the hub
+// Writes that survive a hub restart (#1574): one op id per logical operation, sent as X-Persona-Op-Id, so the hub
 // does it once however many times it arrives; a request that died on the way (the old process going, a proxy
 // answering 502/503/504) is sent again with the same id when the socket is back, or after a short wait, for up to a
 // minute before the caller shows its failure; while the socket is down too (the hub redeploying) for as long as the
@@ -8,7 +8,7 @@ import { RESTARTING_MS } from "./connection";
 import { isUUID, uuid } from "./format";
 import { isOpen, onHubEvent } from "./store";
 
-export const OP_HEADER = "X-Jarvis-Op-Id";
+export const OP_HEADER = "X-Persona-Op-Id";
 /** How long a write keeps trying through a gap before it fails. */
 export const OP_RETRY_MS = 60_000;
 /** How long it keeps trying while the socket is down as well: a hub that is away, not one that answers badly. */

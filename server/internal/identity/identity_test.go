@@ -10,133 +10,129 @@ import (
 
 func cleanRootEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"PERSONA_HOME", "JARVIS_HOME"} {
-		value, exists := os.LookupEnv(key)
-		os.Unsetenv(key)
-		t.Cleanup(func() {
-			if exists {
-				os.Setenv(key, value)
-			} else {
-				os.Unsetenv(key)
-			}
-		})
+	t.Setenv("PERSONA_HOME", "")
+	if err := os.Unsetenv("PERSONA_HOME"); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestEnvironmentCompatibility(t *testing.T) {
+func TestEnvironment(t *testing.T) {
 	cleanRootEnv(t)
-	t.Setenv("JARVIS_HOME", "legacy")
-	if Getenv("PERSONA_HOME") != "legacy" {
-		t.Fatal("legacy environment was ignored")
+	if value, ok := LookupEnv("PERSONA_HOME"); value != "" || ok {
+		t.Fatal("unset variable must remain absent")
 	}
-	t.Setenv("PERSONA_HOME", "current")
-	if Getenv("JARVIS_HOME") != "current" {
-		t.Fatal("current environment must take precedence")
+	t.Setenv("OTHER_HOME", "unrelated")
+	if value, ok := LookupEnv("PERSONA_HOME"); value != "" || ok {
+		t.Fatal("unrelated variables must not supply a root")
+	}
+	t.Setenv("PERSONA_HOME", "profile")
+	if Getenv("PERSONA_HOME") != "profile" {
+		t.Fatal("configured environment was ignored")
 	}
 	t.Setenv("PERSONA_HOME", "")
-	if value, ok := LookupEnv("JARVIS_HOME"); value != "" || !ok {
-		t.Fatal("explicit empty current value must not expose a legacy secret")
+	if value, ok := LookupEnv("PERSONA_HOME"); value != "" || !ok {
+		t.Fatal("explicit empty values must remain present")
 	}
-	base := []string{"PERSONA_SESSION_ID=wrong", "JARVIS_SESSION_ID=older", "PATH=first", "PATH=second"}
-	want := []string{"PERSONA_SESSION_ID=right", "JARVIS_SESSION_ID=right", "PATH=second"}
-	if got := Environment(base, "JARVIS_SESSION_ID=right"); !reflect.DeepEqual(got, want) {
-		t.Fatalf("environment: %v", got)
-	}
-	for _, updates := range [][]string{{"PERSONA_SESSION_ID=right", "JARVIS_SESSION_ID=obsolete"}, {"JARVIS_SESSION_ID=obsolete", "PERSONA_SESSION_ID=right"}} {
+	base := []string{"PERSONA_SESSION_ID=wrong", "PERSONA_SESSION_ID=older", "PATH=first", "PATH=second", "invalid"}
+	for _, updates := range [][]string{{"PERSONA_SESSION_ID=right"}, {"PERSONA_SESSION_ID=obsolete", "PERSONA_SESSION_ID=right", "invalid"}} {
+		want := []string{"PERSONA_SESSION_ID=right", "PATH=second"}
 		if got := Environment(base, updates...); !reflect.DeepEqual(got, want) {
-			t.Fatalf("new/old environment precedence depends on order: %v", got)
+			t.Fatalf("environment: %v", got)
 		}
 	}
-	t.Setenv("JARVIS_PERSONA_ID", "legacy-avatar")
-	t.Setenv("PERSONA_PERSONA_ID", "current-avatar")
-	if Getenv("JARVIS_PERSONA_ID") != "current-avatar" {
-		t.Fatal("brand prefixes in an environment suffix were removed twice")
+	if got := Environment(base, "PERSONA_SESSION_ID=", "NEW=value=with=equals"); !reflect.DeepEqual(got, []string{"PERSONA_SESSION_ID=", "PATH=second", "NEW=value=with=equals"}) {
+		t.Fatalf("empty values or new keys lost: %v", got)
+	}
+	t.Setenv("PERSONA_PERSONA_ID", "avatar")
+	if Getenv("PERSONA_PERSONA_ID") != "avatar" {
+		t.Fatal("environment suffix must not be rewritten")
 	}
 }
 
-func TestStateDirectoryCompatibility(t *testing.T) {
+func TestStateDirectory(t *testing.T) {
 	cleanRootEnv(t)
-	for _, scenario := range []string{"fresh", "legacy", "current", "legacy-external", "current-external", "forward-dangling", "reverse-dangling", "both", "both-aliases", "dangling-external", "file", "cycle"} {
+	for _, scenario := range []string{"fresh", "existing", "external", "relative-external", "dangling-external", "file", "symlink-file", "cycle"} {
 		t.Run(scenario, func(t *testing.T) {
 			home := t.TempDir()
-			current, legacy := filepath.Join(home, ".persona"), filepath.Join(home, ".jarvis")
+			root := filepath.Join(home, ".persona")
+			external := filepath.Join(home, "external")
 			mkdir := func(path string) {
 				t.Helper()
 				if err := os.MkdirAll(path, 0o700); err != nil {
 					t.Fatal(err)
 				}
 			}
-			link := func(target, path string) {
+			link := func(target string) {
 				t.Helper()
-				if err := os.Symlink(target, path); err != nil {
+				if err := os.Symlink(target, root); err != nil {
 					t.Fatal(err)
 				}
 			}
-			want := current
 			switch scenario {
-			case "legacy":
-				mkdir(legacy)
-			case "current":
-				mkdir(current)
-			case "legacy-external":
-				external := t.TempDir()
-				link(external, legacy)
-			case "current-external":
-				external := t.TempDir()
-				link(external, current)
-			case "forward-dangling":
-				link(".persona", legacy)
-			case "reverse-dangling":
-				link(".jarvis", current)
-			case "both":
-				mkdir(current)
-				mkdir(legacy)
-				want = legacy
-			case "both-aliases":
-				mkdir(legacy)
-				link(".jarvis", current)
+			case "existing":
+				mkdir(root)
+			case "external":
+				mkdir(external)
+				link(external)
+			case "relative-external":
+				mkdir(external)
+				link("external")
 			case "dangling-external":
-				link(filepath.Join(home, "missing-external"), legacy)
+				link(external)
 			case "file":
-				if err := os.WriteFile(legacy, []byte("not a directory"), 0o600); err != nil {
+				if err := os.WriteFile(root, []byte("not a directory"), 0o600); err != nil {
 					t.Fatal(err)
 				}
+			case "symlink-file":
+				if err := os.WriteFile(external, []byte("not a directory"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				link(external)
 			case "cycle":
-				link(".persona", legacy)
-				link(".jarvis", current)
+				link(".persona")
 			}
-			root, err := PrepareHome(home)
-			if scenario == "dangling-external" || scenario == "file" || scenario == "cycle" {
+			got, err := PrepareHome(home)
+			if scenario == "dangling-external" || scenario == "file" || scenario == "symlink-file" || scenario == "cycle" {
 				if err == nil {
-					t.Fatal("invalid existing state must not start a new store")
+					t.Fatal("invalid state directory was accepted")
+				}
+				if _, err := os.Lstat(root); err != nil {
+					t.Fatal("invalid existing state was removed", err)
+				}
+				if scenario == "dangling-external" {
+					if _, err := os.Lstat(external); !os.IsNotExist(err) {
+						t.Fatal("dangling target was created", err)
+					}
 				}
 				return
 			}
-			if err != nil || root != want {
-				t.Fatalf("root=%s want=%s err=%v", root, want, err)
-			}
-			if scenario == "both" {
-				if a, _ := os.Stat(current); !a.IsDir() {
-					t.Fatal("current directory was overwritten")
-				}
-				return
+			if err != nil || got != root {
+				t.Fatalf("root=%s want=%s err=%v", got, root, err)
 			}
 			payload := []byte("unchanged token and state")
-			if err := os.WriteFile(filepath.Join(legacy, "hub.json"), payload, 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(root, "hub.json"), payload, 0o600); err != nil {
 				t.Fatal(err)
-			}
-			got, err := os.ReadFile(filepath.Join(current, "hub.json"))
-			if err != nil || string(got) != string(payload) {
-				t.Fatalf("old/new state diverged: %q %v", got, err)
 			}
 			if _, err := PrepareHome(home); err != nil {
-				t.Fatal("repeat upgrade:", err)
+				t.Fatal("repeat initialization:", err)
 			}
-			if err := os.WriteFile(filepath.Join(current, "node.sock"), []byte("socket placeholder"), 0o600); err != nil {
-				t.Fatal(err)
+			data, err := os.ReadFile(filepath.Join(root, "hub.json"))
+			if err != nil || string(data) != string(payload) {
+				t.Fatal("state was overwritten", err)
 			}
-			if _, err := os.Stat(filepath.Join(legacy, "node.sock")); err != nil {
-				t.Fatal("old node cannot find the new socket", err)
+			entries, err := os.ReadDir(home)
+			wantEntries := 1
+			if scenario == "external" || scenario == "relative-external" {
+				wantEntries = 2
+			}
+			if err != nil || len(entries) != wantEntries {
+				t.Fatal("initialization created another state directory", err)
+			}
+			if scenario == "fresh" {
+				st, err := os.Lstat(root)
+				if err != nil || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm() != 0o700 {
+					t.Fatal("fresh state must be a private real directory", err)
+				}
 			}
 		})
 	}
@@ -146,23 +142,29 @@ func TestIndependentHomes(t *testing.T) {
 	cleanRootEnv(t)
 	home := t.TempDir()
 	root := filepath.Join(t.TempDir(), "profile")
-	t.Setenv("JARVIS_HOME", root)
+	t.Setenv("PERSONA_HOME", root)
 	if got, err := PrepareHome(home); err != nil || got != root {
 		t.Fatalf("%s %v", got, err)
 	}
-	if _, err := os.Lstat(filepath.Join(home, ".jarvis")); !os.IsNotExist(err) {
+	if _, err := os.Lstat(filepath.Join(home, ".persona")); !os.IsNotExist(err) {
 		t.Fatal("custom environment changed default state")
 	}
-	if !IsAssistantDir(filepath.Join(root, "assistant")) {
-		t.Fatal("custom assistant identity lost")
+	if SocketDir(home) != root || !IsAssistantDir(filepath.Join(root, "assistant")) {
+		t.Fatal("custom directory identity lost")
 	}
-	for _, path := range []string{"/tmp/.jarvis/assistant", "/tmp/.persona/assistant"} {
+	for _, path := range []string{"/tmp/.persona/assistant", "/tmp/.persona/health"} {
 		if !IsAssistantDir(path) {
 			t.Fatal(path)
 		}
 	}
 	if IsAssistantDir("/tmp/project/assistant") {
 		t.Fatal("ordinary project became the assistant")
+	}
+	for _, tc := range []struct{ value, want string }{{"~", home}, {"~/profile", filepath.Join(home, "profile")}, {"profile", filepath.Join(home, "profile")}, {"", filepath.Join(home, ".persona")}} {
+		t.Setenv("PERSONA_HOME", tc.value)
+		if got := DataDir(home); got != tc.want {
+			t.Fatalf("%q: %s want %s", tc.value, got, tc.want)
+		}
 	}
 }
 
@@ -180,12 +182,8 @@ func TestConcurrentFirstRun(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	a, err := os.Stat(filepath.Join(home, ".persona"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.Stat(filepath.Join(home, ".jarvis"))
-	if err != nil || !os.SameFile(a, b) {
-		t.Fatal("concurrent first run split state", err)
+	entries, err := os.ReadDir(home)
+	if err != nil || len(entries) != 1 || entries[0].Name() != ".persona" || !entries[0].IsDir() {
+		t.Fatal("concurrent initialization did not create exactly one real state directory", err)
 	}
 }

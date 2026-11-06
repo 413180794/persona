@@ -48,7 +48,7 @@ struct AssistantAvatar: View {
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
-        let _ = PerfTrace.body("JarvisAvatar")
+        let _ = PerfTrace.body("PersonaAvatar")
         #endif
         Group {
             switch design {
@@ -70,7 +70,7 @@ struct AssistantAvatar: View {
 
     private func face(_ d: PersonaFace.Design) -> some View {
         TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in
-            PersonaFace(size: size, design: d, state: state, tint: tint ?? Theme.accent, mark: Theme.Icon.jarvis,
+            PersonaFace(size: size, design: d, state: state, tint: tint ?? Theme.accent, mark: Theme.Icon.persona,
                         time: tl.date.timeIntervalSinceReferenceDate, moving: moving, blink: still || !inFront ? nil : Theme.Motion.blink)
         }
     }
@@ -81,7 +81,7 @@ struct AssistantAvatar: View {
         ZStack {
             Circle().fill(LinearGradient(colors: [accent.mix(with: .black, by: 0.72), accent.mix(with: .black, by: 0.88)],
                                          startPoint: .top, endPoint: .bottom))
-            Image(systemName: Theme.Icon.jarvis)
+            Image(systemName: Theme.Icon.persona)
                 .font(.system(size: size * 0.5, weight: .semibold))
                 .foregroundStyle(LinearGradient(colors: [accent.mix(with: .white, by: 0.45), accent], startPoint: .top, endPoint: .bottom))
         }

@@ -4,7 +4,7 @@ import XCTest
 final class ExtensionNotificationUITests: XCTestCase {
     private var environment: [String: String] { ProcessInfo.processInfo.environment }
     private var hub: String { get throws {
-        guard let value = environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("需要扩展通知专用 mock") }
+        guard let value = environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("需要扩展通知专用 mock") }
         return value
     } }
 
@@ -30,7 +30,7 @@ final class ExtensionNotificationUITests: XCTestCase {
     @MainActor private func launch(_ sample: String) async throws -> (XCUIApplication, XCUIApplication) {
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-showTestNotification", sample, "-ui.oldLayout", "NO"]
         app.launchPinned()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -54,7 +54,7 @@ final class ExtensionNotificationUITests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String) throws {
-        guard let directory = environment["JARVIS_SHOTS"] else { return }
+        guard let directory = environment["PERSONA_SHOTS"] else { return }
         try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: directory).appending(path: name + ".png"))
     }
 

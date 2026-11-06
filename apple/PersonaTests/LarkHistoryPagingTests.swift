@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Mutating calls stay outside `#expect` / `#require`: the macros capture their
 /// operands as immutable values.

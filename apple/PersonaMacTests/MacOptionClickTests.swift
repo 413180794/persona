@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// ⌥-click on a list row opens it in a window of its own (docs/mac.md「窗口」): only an option-click reaches the
 /// catcher; every other click goes to what is under it.

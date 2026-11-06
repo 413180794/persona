@@ -3,7 +3,7 @@ import Security
 
 nonisolated enum Keychain {
     // The phone app's bundle id on both phone and watch (the watch app's is <id>.watchkitapp).
-    private static let service = (Bundle.main.bundleIdentifier ?? "jarvis").replacingOccurrences(of: ".watchkitapp", with: "")
+    private static let service = (Bundle.main.bundleIdentifier ?? "persona").replacingOccurrences(of: ".watchkitapp", with: "")
 
     /// Whether it was written (callers that must not lose what they replace read it back: HubStore).
     /// `thisDeviceOnly`: never leaves this device (not restored onto another one from a backup, not synced): the SSH
@@ -38,7 +38,7 @@ nonisolated enum Keychain {
                                     kSecMatchLimit as String: kSecMatchLimitOne]
         var out: AnyObject?
         #if os(macOS) && DEBUG
-        // As in `load`: screenshots and the JarvisMacTests host never touch the keychain.
+        // As in `load`: screenshots and the PersonaMacTests host never touch the keychain.
         if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return .missing }
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return .missing }
         #endif
@@ -59,7 +59,7 @@ nonisolated enum Keychain {
         // Screenshots (`-macSnapshot`, Mac/App/MacSnapshot.swift) run while the Mac is locked, and reading an item another
         // (unsigned) build wrote then blocks in securityd for good, prompt skipped or not: they use demo data, no keychain.
         if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return nil }
-        // The same for the app hosting JarvisMacTests: on a locked Mac its launch otherwise never gets past this read
+        // The same for the app hosting PersonaMacTests: on a locked Mac its launch otherwise never gets past this read
         // ("The test runner hung before establishing connection"); no unit test needs the keychain.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return nil }
         #endif

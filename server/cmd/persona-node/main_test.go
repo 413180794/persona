@@ -63,7 +63,7 @@ func TestPersonaNodeCommandLine(t *testing.T) {
 	run := func(args ...string) (string, int) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPersonaNodeCommandLine$")
 		cmd.Env = append(os.Environ(), "PERSONA_NODE_TEST_ARGS="+strings.Join(args, "\x1f"), "HOME="+home,
-			"PERSONA_HOME="+filepath.Join(home, ".persona"), "JARVIS_HOME="+filepath.Join(home, ".jarvis"))
+			"PERSONA_HOME="+filepath.Join(home, ".persona"))
 		out, _ := cmd.CombinedOutput()
 		return string(out), cmd.ProcessState.ExitCode()
 	}

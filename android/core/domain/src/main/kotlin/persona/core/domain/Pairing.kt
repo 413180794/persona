@@ -13,26 +13,20 @@ data class Pairing(
     val alt: List<String> = emptyList(),
 ) {
     companion object {
-        /**
-         * URL schemes accepted for `pair` / `open` links. `persona` is the new name; links the hub generates
-         * stay `jarvis://` until old apps no longer need them (docs/rename.md).
-         */
-        val schemes = listOf("persona", "jarvis")
+        /** The canonical URL scheme for pairing and app navigation. */
+        const val scheme = "persona"
 
         /**
-         * Whether [text] is a full app link (`persona://` or `jarvis://`) rather than a plain hub address.
-         * The `//` is required so a bare host named after a scheme (`persona:18660`) stays an address.
+         * Whether [text] is a full app link (`persona://`) rather than a plain hub address.
+         * The `//` is required so a bare host named after the scheme (`persona:18660`) stays an address.
          */
-        fun isLink(text: String): Boolean = text.trim().let { value -> schemes.any { value.startsWith("$it://") } }
+        fun isLink(text: String): Boolean = text.trim().startsWith("$scheme://")
 
-        /**
-         * `persona://pair?url=…&token=…` or the generated `jarvis://pair?url=…&token=…`,
-         * with optional public-route metadata.
-         */
+        /** `persona://pair?url=…&token=…`, with optional public-route metadata. */
         fun parse(text: String): Pairing? {
             val link = text.trim().substringBefore('#')
-            val prefix = schemes.map { "$it://" }.firstOrNull(link::startsWith) ?: return null
-            val authority = link.removePrefix(prefix).substringBefore('/').substringBefore('?')
+            if (!isLink(link)) return null
+            val authority = link.removePrefix("$scheme://").substringBefore('/').substringBefore('?')
             if (decode(authority.substringAfterLast('@').substringBefore(':')) != "pair") return null
             val query = link.substringAfter('?', "").split('&').map {
                 it.substringBefore('=') to decode(it.substringAfter('=', ""))

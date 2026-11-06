@@ -13,7 +13,7 @@ import (
 
 // The hub's side: the connector reads through the node of one Mac (Reader runs there), so it is a thin adapter over
 // that node's connector.* RPCs. The app reads every conversation for the user (extmgr/imessage.go); with Hand to Persona on
-// (jarvis.go) the real ones also go to the knowledge base, the inbox and the assistant.
+// (persona.go) the real ones also go to the knowledge base, the inbox and the assistant.
 
 // Config is hub.json's "imessage".
 type Config struct {
@@ -27,7 +27,7 @@ func (c *Config) Configured() bool { return c != nil && c.Machine != "" }
 // Why the Mac could not be asked (Caller's errors, errors.Is); ErrNoPermission and ErrNoChat come through too.
 var (
 	ErrOffline    = errors.New("the Mac is offline")
-	ErrNodeTooOld = errors.New("the Mac's jarvisd is too old")
+	ErrNodeTooOld = errors.New("the Mac's personad is too old")
 )
 
 // Caller asks the Mac's node: method with params, the result decoded into out.
@@ -48,7 +48,7 @@ type Remote struct {
 	// Zone is the user's time zone, for the times the models read (the hub's userLocation).
 	Zone func() *time.Location
 
-	ai       atomic.Bool // "Hand to Persona" (jarvis.go)
+	ai       atomic.Bool // "Hand to Persona" (persona.go)
 	inboxMu  sync.Mutex
 	things   []connector.InboxThing
 	contexts map[string]string // conversation + newest message → its last messages as text
@@ -179,7 +179,7 @@ func (c *Remote) explain(err error) string {
 	case errors.Is(err, ErrOffline):
 		return c.machine + " 不在线"
 	case errors.Is(err, ErrNodeTooOld):
-		return c.machine + " 上的 jarvisd 太旧，更新后才能读「信息」"
+		return c.machine + " 上的 personad 太旧，更新后才能读「信息」"
 	case errors.Is(err, ErrNoPermission):
 		return "macOS 不让 Persona 读 " + c.machine + " 上的「信息」：要给它「完全磁盘访问权限」"
 	case errors.Is(err, ErrNoChat):

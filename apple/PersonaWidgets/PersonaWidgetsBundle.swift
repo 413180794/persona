@@ -10,7 +10,7 @@ struct PersonaWidgetsBundle: WidgetBundle {
 
     var body: some Widget {
         FleetLiveActivity()
-        AskJarvisControl()
-        JarvisAgentsControl()
+        AskPersonaControl()
+        PersonaAgentsControl()
     }
 }

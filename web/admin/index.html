@@ -14,7 +14,7 @@
     <script>
       // Pick the theme before the first paint so a dark page never flashes white (same setting as the web client).
       try {
-        var t = localStorage.getItem("jarvis.theme") || "system";
+        var t = localStorage.getItem("persona.theme") || "system";
         var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.classList.toggle("dark", dark);
       } catch (e) {}

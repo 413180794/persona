@@ -2,21 +2,21 @@ import XCTest
 
 /// The app's own VNC (#1343) against scripts/mock/mock_hub.py with MOCK_COMPUTER=ready MOCK_SCREEN=fake (its Screen
 /// Sharing: ARD, me / mock-pass, ZRLE; it records the pointer, clicks, keys and the clipboard), MOCK_DEVICE_TOKEN
-/// (TEST_RUNNER_JARVIS_SCREEN_HUB, TEST_RUNNER_JARVIS_FAKE_SCREEN=1): the small window (picture in picture) from VNC,
+/// (TEST_RUNNER_PERSONA_SCREEN_HUB, TEST_RUNNER_PERSONA_FAKE_SCREEN=1): the small window (picture in picture) from VNC,
 /// over the home screen, back to the whole page and down again; and on the page, the two modes, the clipboard both
-/// ways, the keyboard and Help. TEST_RUNNER_JARVIS_VNC_PAUSE slows it down for a screen recording.
+/// ways, the keyboard and Help. TEST_RUNNER_PERSONA_VNC_PAUSE slows it down for a screen recording.
 final class VNCTests: XCTestCase {
-    private var hub: String? { ProcessInfo.processInfo.environment["JARVIS_SCREEN_HUB"] }
-    private var pause: UInt32 { UInt32(ProcessInfo.processInfo.environment["JARVIS_VNC_PAUSE"] ?? "") ?? 0 }
+    private var hub: String? { ProcessInfo.processInfo.environment["PERSONA_SCREEN_HUB"] }
+    private var pause: UInt32 { UInt32(ProcessInfo.processInfo.environment["PERSONA_VNC_PAUSE"] ?? "") ?? 0 }
 
     @MainActor private func launch(_ args: [String]) throws -> XCUIApplication {
-        guard let hub, ProcessInfo.processInfo.environment["JARVIS_FAKE_SCREEN"] == "1" else {
-            throw XCTSkip("needs the mock's own Screen Sharing: MOCK_SCREEN=fake (JARVIS_FAKE_SCREEN=1)")
+        guard let hub, ProcessInfo.processInfo.environment["PERSONA_FAKE_SCREEN"] == "1" else {
+            throw XCTSkip("needs the mock's own Screen Sharing: MOCK_SCREEN=fake (PERSONA_FAKE_SCREEN=1)")
         }
         continueAfterFailure = false
         try mock(hub, "/mock/screen-password?p=mock-pass&clear=1")
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
         return app
@@ -69,7 +69,7 @@ final class VNCTests: XCTestCase {
         a.name = "vnc-pip-home"
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? screen.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("vnc-pip-home.png"))
         }
         if !pip.exists { print("SPRINGBOARD:\n\(springboard.debugDescription)") }
@@ -211,7 +211,7 @@ final class VNCTests: XCTestCase {
     /// The frame rate and latency the page measures (MOCK_SCREEN_ANIMATE=1: a box moving at ~30 frames a second, its
     /// frames stamped when sent): printed, for the record.
     @MainActor func testMeasure() throws {
-        guard ProcessInfo.processInfo.environment["JARVIS_VNC_MEASURE"] == "1" else { throw XCTSkip("JARVIS_VNC_MEASURE=1 with MOCK_SCREEN_ANIMATE=1") }
+        guard ProcessInfo.processInfo.environment["PERSONA_VNC_MEASURE"] == "1" else { throw XCTSkip("PERSONA_VNC_MEASURE=1 with MOCK_SCREEN_ANIMATE=1") }
         let (app, _) = try signedInMachinePage()
         let screen = app.descendants(matching: .any)["vnc-screen"].firstMatch
         var samples: [String] = []
@@ -260,14 +260,14 @@ final class VNCTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        let look = ProcessInfo.processInfo.environment["JARVIS_LOOK"].map { "-" + $0 } ?? ""
+        let look = ProcessInfo.processInfo.environment["PERSONA_LOOK"].map { "-" + $0 } ?? ""
         let full = "\(name)-\(UITestStyle.name)\(look)"
         let png = app.screenshot()
         let attachment = XCTAttachment(screenshot: png)
         attachment.name = full
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(full + ".png"))
         }
     }

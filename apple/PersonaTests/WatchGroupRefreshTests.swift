@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// #4369: with several hub groups on the watch, one group's failed refresh keeps that group's last cards and agents,
 /// and the same card does not buzz again when the group recovers.

@@ -1,8 +1,8 @@
 {
   "app": {
-    "bundle_id": "com.example.jarvis",
+    "bundle_id": "com.example.persona",
     "team_id": "ABCDE12345",
-    "push_relay": "https://jarvis.example.com/relay",
+    "push_relay": "https://persona.example.com/relay",
     "carplay_voice": false,
     "meta_wearables": { "enabled": false, "app_id": "", "client_token": "" }
   },
@@ -12,7 +12,7 @@
     "issuer_id": "00000000-0000-0000-0000-000000000000",
     "key_path": "~/.appstoreconnect/AuthKey_ABC123DEFG.p8",
     "testers": [{ "email": "you@example.com", "first_name": "You" }],
-    "feedback_email": "jarvis@example.com",
+    "feedback_email": "persona@example.com",
     "external": {
       "group": "Friends",
       "public_link": true,
@@ -20,7 +20,7 @@
       "privacy_url": "https://example.com/privacy/",
       "testers": [{ "email": "friend@example.com", "first_name": "Friend", "last_name": "Name" }],
       "review": {
-        "first_name": "You", "last_name": "Name", "email": "jarvis@example.com", "phone": "+1 555 0100",
+        "first_name": "You", "last_name": "Name", "email": "persona@example.com", "phone": "+1 555 0100",
         "notes": "What a reviewer needs to know to use the app."
       }
     }
@@ -34,14 +34,14 @@
     { "id": "laptop", "ssh": "laptop", "os": "darwin", "hostnames": ["MyMacBook"] }
   ],
   "publish": {
-    "site_url": "https://jarvis.example.com",
+    "site_url": "https://persona.example.com",
     "getting_started_url": "",
     "wrangler": ""
   },
   "simulator": "",
   "xcode": "",
   "android": {
-    "application_id": "com.example.jarvis",
+    "application_id": "com.example.persona",
     "google_oauth_scheme": ""
   }
 }

@@ -4,21 +4,21 @@
 > Labels: **[Fact]** = directly from code / docs, with `relative path:line`; **[Assessment]** = inference or recommendation based on facts.
 > Privacy: no real hostnames, IPs, domains, accounts, or tokens; placeholders only (`<hub address>`, `<token>`).
 
-> Paths: the first reference in a section uses the full path, later references use filenames. `hub.go`, `config.go`, `http.go`, `devicetokens.go`, `terminal.go`, and `push.go` are under `server/internal/hub/`. `APIClient.swift`, `LiveConnection.swift`, `Keychain.swift`, and `WatchSync.swift` are under `ios/Shared/`. Android `data/`, `ui/`, and `service/` are under `android/app/src/main/java/jarvis/android/`.
+> Paths: the first reference in a section uses the full path, later references use filenames. `hub.go`, `config.go`, `http.go`, `devicetokens.go`, `terminal.go`, and `push.go` are under `server/internal/hub/`. `APIClient.swift`, `LiveConnection.swift`, `Keychain.swift`, and `WatchSync.swift` are under `ios/Shared/`. Android `data/`, `ui/`, and `service/` are under `android/app/src/main/java/persona/android/`.
 > Status: complete (sections 1→9 in order; section 0 is the summary).
 
 ## 0. Summary
 
 **Current state [Fact]**
 - Listener: `listen` in `hub.json` defaults to `:18660`, with a single plaintext `http.Server` (`server/internal/hub/hub.go:189-197`), no TLS, timeouts, or header-size settings (Go defaults: no timeouts, 1 MB headers). Go wildcard listeners use a dual-stack socket, accepting IPv4 + IPv6 by default (not measured on the hub machine). `public_url` (default `http://<hostname>:18660`) appears only in QR codes and startup logs, not responses.
-- Pairing: `jarvisd hub pair` is a separate process that reads hub.json and prints `public_url`, the **main token**, and QR `jarvis://pair?token=…&url=…` (`server/internal/hub/config.go:149-162`). Main token never expires; no rotation command. Device `jd_…` tokens store only sha256, are revocable, and have a 30-second lookup cache (`server/internal/hub/devicetokens.go:57`).
+- Pairing: `personad hub pair` is a separate process that reads hub.json and prints `public_url`, the **main token**, and QR `persona://pair?token=…&url=…` (`server/internal/hub/config.go:149-162`). Main token never expires; no rotation command. Device `jd_…` tokens store only sha256, are revocable, and have a 30-second lookup cache (`server/internal/hub/devicetokens.go:57`).
 - Authentication: `Bearer` header or `?token=` on **any `/api/` route** (neither client uses it). Failures have no rate limiting or source-IP logging; `/api/v1/ws` failures have no logs at all. Unknown tokens are cached too, and the cache is never cleaned.
 - health: `{ok, version, features}`, unauthenticated. hello: `{server_version, client_id, features}`, no `client_hello`. Hub pings every 20 seconds (hardcoded 15-second timeout). Each connection has a 512-message queue: full direct-send queues disconnect; full broadcast queues **silently drop messages**.
-- iOS: Keychain stores `{url, token}`; three URLSessions have no delegates (cannot pin); `NSAllowsArbitraryLoads` on phone + Watch. Watch tokens are in Watch `UserDefaults`. Intents, notification buttons, and Live Activity buttons independently read Keychain and connect directly. `jarvis://pair` links pair without confirmation.
+- iOS: Keychain stores `{url, token}`; three URLSessions have no delegates (cannot pin); `NSAllowsArbitraryLoads` on phone + Watch. Watch tokens are in Watch `UserDefaults`. Intents, notification buttons, and Live Activity buttons independently read Keychain and connect directly. `persona://pair` links pair without confirmation.
 - Android: plaintext `{url, token}` in `SharedPreferences`; REST and WS share one OkHttp client (`pingInterval` 20 seconds); `network_security.xml` allows plaintext globally; `health()` exists but has no callers.
 
 **Changes [Assessment]** (line counts are estimates, not measurements)
-- 4a TLS: new `tlscert.go`, ECDSA P-256 self-signed certificate under `~/.jarvis/tls/` (key 0600), SPKI pinning. Add a TLS listener to `Run()`, or sniff one port. Keep plaintext for private-network / VPN only. About 150–250 lines.
+- 4a TLS: new `tlscert.go`, ECDSA P-256 self-signed certificate under `~/.persona/tls/` (key 0600), SPKI pinning. Add a TLS listener to `Run()`, or sniff one port. Keep plaintext for private-network / VPN only. About 150–250 lines.
 - 4b Multiple addresses: new `endpoints.go`, discover global unicast IPv6 (exclude ULA, link-local, temporary, TUN), plus configured `advertise`. Send via hello, `GET /endpoints`, QR, and broadcast `endpoints` on change. health includes only `hub_id`. About 150–250 lines.
 - 4c Pairing codes: new `pair_codes` table. `hub pair` calls the running hub over loopback to generate codes; unauthenticated `POST /auth/pair` exchanges them, with mandatory rate limiting; `--legacy` for old Apps. About 200 lines.
 - 4d Reject public plaintext + rate limiting: classify by `RemoteAddr`, limit IPv6 by /64 before database lookup, log WS authentication failures, bound the negative cache, add `ReadHeaderTimeout`. About 150 lines.
@@ -35,7 +35,7 @@
 | Listening address | `server/internal/hub/config.go:50` (`Config.Listen`, json `listen`) | Default `":18660"` (`config.go:90`) |
 | Advertised address | `config.go:52` (`Config.PublicURL`, json `public_url`) | Default `fmt.Sprintf("http://%s:18660", host)`, with the **full** `os.Hostname()` as `host` (`config.go:87-92`) |
 | Main token | `config.go:51` (json `token`) | Default `randomHex(24)` = 48 hex digits (`config.go:91`, `config.go:142-146`) |
-| Configuration file | `~/.jarvis/hub.json` | Directory 0700 (`config.go:101`), defaults written on first run, file 0600 (`config.go:108-112`). If an existing hub.json lacks `token` (`scripts/db.sh` writes only `database_url`), write the generated token back (`config.go:119-130`). |
+| Configuration file | `~/.persona/hub.json` | Directory 0700 (`config.go:101`), defaults written on first run, file 0600 (`config.go:108-112`). If an existing hub.json lacks `token` (`scripts/db.sh` writes only `database_url`), write the generated token back (`config.go:119-130`). |
 
 - Server-side `public_url` has **only three uses**: startup log `listening on %s (%s)` (`server/internal/hub/hub.go:196`), QR `PairURL()` (`config.go:149-151`), and `hub pair` output (`config.go:158`).
   It **never appears in HTTP / WS responses** or push. zoekt searches for `public_url` / `PublicURL` match only these locations + tests + docs.
@@ -48,7 +48,7 @@
 - **No timeout / header-size settings**: `ReadTimeout`, `ReadHeaderTimeout`, `WriteTimeout`, `IdleTimeout`, `MaxHeaderBytes` all unset (zoekt `ReadHeaderTimeout` / `MaxHeaderBytes`: zero matches).
   Go defaults: no timeout, `http.DefaultMaxHeaderBytes` = 1 MB.
 - **Client addresses unused**: zero `RemoteAddr` or `X-Forwarded-*` matches across `server/`, no source-IP logic.
-- Only this TCP listener; node `~/.jarvis/node.sock` is a Unix socket (`server/internal/node/hooks.go:80`), unrelated to phones.
+- Only this TCP listener; node `~/.persona/node.sock` is a Unix socket (`server/internal/node/hooks.go:80`), unrelated to phones.
 
 ### 1.3 Dual stack [Fact + Assessment]
 
@@ -82,20 +82,20 @@
 
 ## 2. Pairing and authentication
 
-### 2.1 `jarvisd hub pair` [Fact]
+### 2.1 `personad hub pair` [Fact]
 
-- Entry: `server/cmd/jarvisd/main.go:52-53` → `hub.Pair()` (`server/internal/hub/config.go:153-162`).
-- `Pair()` **does not connect to the running hub**. It independently calls `LoadConfig()` on `~/.jarvis/hub.json` (creates defaults if missing, `config.go:108-112`: a side effect), then prints:
+- Entry: `server/cmd/personad/main.go:52-53` → `hub.Pair()` (`server/internal/hub/config.go:153-162`).
+- `Pair()` **does not connect to the running hub**. It independently calls `LoadConfig()` on `~/.persona/hub.json` (creates defaults if missing, `config.go:108-112`: a side effect), then prints:
   ```
   Server: <public_url>
   Token:  <main token>
 
-  用 Jarvis App 扫码配对：
+  用 Persona App 扫码配对：
   <terminal QR code>
   ```
-  The Chinese line means "Scan with the Jarvis App to pair." (`config.go:158`); QR uses `qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, os.Stdout)`, error correction L (`config.go:159`).
-- QR content: `"jarvis://pair?" + url.Values{"url": {PublicURL}, "token": {Token}}.Encode()` (`config.go:149-151`), namely
-  `jarvis://pair?token=<main token>&url=<percent-encoded public_url>` (`Values.Encode` sorts by key). **Only one address: `public_url`**, no local-address discovery.
+  The Chinese line means "Scan with the Persona App to pair." (`config.go:158`); QR uses `qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, os.Stdout)`, error correction L (`config.go:159`).
+- QR content: `"persona://pair?" + url.Values{"url": {PublicURL}, "token": {Token}}.Encode()` (`config.go:149-151`), namely
+  `persona://pair?token=<main token>&url=<percent-encoded public_url>` (`Values.Encode` sorts by key). **Only one address: `public_url`**, no local-address discovery.
 - Tests: `server/internal/hub/hub_test.go:164-177` (special-character encoding), `hub_test.go:33-34` (default public_url contains `:18660`).
 
 ### 2.2 Main token [Fact]
@@ -126,8 +126,8 @@
 
 - Server: applies to **all** `/api/` routes, not just WS (`http.go:165-168`). `docs/protocol.md:7` says "WebSocket also supports `?token=`."
 - **No current clients use it**:
-  - iOS REST, uploads, images, full text, Lark docs, and WS all use `Authorization` (`ios/Shared/APIClient.swift:116`, `:150`, `:278`, `:291`; `ios/Shared/LiveConnection.swift:236`; `ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:12`). Video uses `AVURLAssetHTTPHeaderFieldsKey` (`ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift:299`).
-  - Android REST and WS also use headers (`android/app/src/main/java/jarvis/android/data/ApiClient.kt:43`, `:113`, `:122`; `data/Hub.kt:103`).
+  - iOS REST, uploads, images, full text, Lark docs, and WS all use `Authorization` (`ios/Shared/APIClient.swift:116`, `:150`, `:278`, `:291`; `ios/Shared/LiveConnection.swift:236`; `ios/Persona/Views/Feishu/Docs/FeishuDocsComponents.swift:12`). Video uses `AVURLAssetHTTPHeaderFieldsKey` (`ios/Persona/Views/Inbox/Lark/LarkMedia.swift:299`).
+  - Android REST and WS also use headers (`android/app/src/main/java/persona/android/data/ApiClient.kt:43`, `:113`, `:122`; `data/Hub.kt:103`).
   - zoekt `token=` matches only pairing links, tests, scripts.
 - [Assessment] For public exposure, restrict it to WS handshake or remove entirely (both clients already use headers), avoiding token leakage in reverse-proxy / access logs. Verify old-App dependencies before removal (none in current code).
 
@@ -187,15 +187,15 @@
 ### 4a. TLS listener, self-signed certificate, SPKI fingerprint
 
 **Current state [Fact]**: one plaintext listener, `srv.ListenAndServe()` (`server/internal/hub/hub.go:189-197`); no TLS fields in `Config` (`server/internal/hub/config.go:49-77`).
-Comparable private files already live under `~/.jarvis/`: `secret.key`, `apns_key.p8` (`docs/server.md:66-74`). Postgres occupies `127.0.0.1:18661` (`docs/server.md:48`).
+Comparable private files already live under `~/.persona/`: `secret.key`, `apns_key.p8` (`docs/server.md:66-74`). Postgres occupies `127.0.0.1:18661` (`docs/server.md:48`).
 
 **Proposal [Assessment]**:
 - New `server/internal/hub/tlscert.go`: `loadOrCreateTLS(dir) (tls.Certificate, pin string, error)`.
-  - Storage: `~/.jarvis/tls/hub.key` (PKCS#8, 0600) + `hub.crt`, directory 0700. Follows CLAUDE.md's "Secrets never in the database": a file like `secret.key`, not a JSON state file.
+  - Storage: `~/.persona/tls/hub.key` (PKCS#8, 0600) + `hub.crt`, directory 0700. Follows CLAUDE.md's "Secrets never in the database": a file like `secret.key`, not a JSON state file.
   - Algorithm: ECDSA P-256 + SHA-256 signature (meets iOS ATS key / signature requirements, 5.5); `MinVersion: tls.VersionTLS12`.
   - SAN: hostname and configured domain are enough. Clients pin SPKI rather than verify hostname, so IP addresses are fine.
   - Fingerprint: `base64(sha256(cert.RawSubjectPublicKeyInfo))` (same format as HPKP `pin-sha256`). **Pin the public key, not certificate**: renew with the same key before expiry, preserving the fingerprint. A new private key requires all devices to re-pair (or optionally announce `next_pin` in hello first).
-  - Either process (`jarvisd hub`, `jarvisd hub pair`) may generate first. Write with `O_EXCL`; on failure, read the other process's file.
+  - Either process (`personad hub`, `personad hub pair`) may generate first. Write with `O_EXCL`; on failure, read the other process's file.
   - Optional `tls.cert_file` / `tls.key_file` for user-provided trusted certificates (domain + Let's Encrypt). Clients may use system trust, but renewals often change keys, so pin the CA or disable pinning. First version can be self-signed only.
 - New hub.json `tls: {listen, cert_file?, key_file?}` (`config.go:49-77`, `defaultConfig()` at `:86-96`). **Avoid port 18661** (Postgres).
 - Two approaches to `Run()` (`hub.go:189-200`):
@@ -237,9 +237,9 @@ Comparable private files already live under `~/.jarvis/`: `secret.key`, `apns_ke
 Deployment clears hub memory (CLAUDE.md: cross-request flows must be self-contained or persisted). `POST /api/v1/auth/tokens` accepts only `full` (`devicetokens.go:137-140`).
 
 **Proposal [Assessment]**:
-- New migration `pair_codes(hash text primary key, expires_at timestamptz, used_at timestamptz, used_by text, created_at timestamptz)`. Choose its number by workstream rules (existing `0002`, `0022`, `0031`, `0041`, `0051`, `0061`; inspect all worktrees and `jarvis_test.schema_migrations` before choosing, CLAUDE.md).
-- `jarvisd hub pair` (`server/cmd/jarvisd/main.go:52-53`, `config.go:153-162`):
-  - Default: use hub.json's main token to call the **running hub over local loopback**: `POST http://127.0.0.1:<listen port>/api/v1/auth/pair-codes`. Hub generates, persists, and returns `{code, short_code, expires_at, endpoints, pin, hub_id}`. `hub pair` prints QR `jarvis://pair?v=2&code=…&pin=…&hid=…&url=…&url=…`, a short manual-entry code, fingerprint, expiry.
+- New migration `pair_codes(hash text primary key, expires_at timestamptz, used_at timestamptz, used_by text, created_at timestamptz)`. Choose its number by workstream rules (existing `0002`, `0022`, `0031`, `0041`, `0051`, `0061`; inspect all worktrees and `persona_test.schema_migrations` before choosing, CLAUDE.md).
+- `personad hub pair` (`server/cmd/personad/main.go:52-53`, `config.go:153-162`):
+  - Default: use hub.json's main token to call the **running hub over local loopback**: `POST http://127.0.0.1:<listen port>/api/v1/auth/pair-codes`. Hub generates, persists, and returns `{code, short_code, expires_at, endpoints, pin, hub_id}`. `hub pair` prints QR `persona://pair?v=2&code=…&pin=…&hid=…&url=…&url=…`, a short manual-entry code, fingerprint, expiry.
     Address discovery, certificates, and hub_id thus have one implementation in the hub process, while `hub pair` also checks it is running.
   - `--legacy`: old format (`url=` + main token) for old Apps;
   - Hub not running: ask to start it, or fall back to direct database writes (`Pair()` has `database_url`).
@@ -248,7 +248,7 @@ Deployment clears hub memory (CLAUDE.md: cross-request flows must be self-contai
   - Share issuance with `POST /auth/tokens` (extract `devicetokens.go:145-167` into `issueToken(ctx, name, kind)`), return `{id, token, role, name, hub_id}`;
   - Code length: 128 random bits in QR, 8 Crockford base32 characters (about 40 bits) for manual entry + 5-minute expiry + rate limiting;
   - Add `pair_code` to `features`.
-- Main token: retained for CLI / old Apps. Add `jarvisd hub rotate-token` (old Apps re-pair after rotation), and consider accepting main tokens only from loopback / private sources in public mode.
+- Main token: retained for CLI / old Apps. Add `personad hub rotate-token` (old Apps re-pair after rotation), and consider accepting main tokens only from loopback / private sources in public mode.
 - **Scope**: about 200 Go lines (migration, db helpers, two routes, `Pair()` rewrite, tests); both clients' parsing and manual entry page ("Address + pairing code", token field under "Advanced").
 
 ### 4d. Reject public plaintext; rate-limit authentication failures
@@ -288,16 +288,16 @@ TLS fingerprint also identifies a hub, but private plaintext has no fingerprint 
 
 ### 5.1 Pairing storage [Fact]
 
-- Type: `ServerConfig { url: URL, token: String }`, `Codable` (`ios/Shared/APIClient.swift:3-27`). `init?(pairURL:)` recognizes only `jarvis://pair?url=…&token=…` (`:7-16`); demo mode uses `https://demo.invalid` (`:25-26`).
+- Type: `ServerConfig { url: URL, token: String }`, `Codable` (`ios/Shared/APIClient.swift:3-27`). `init?(pairURL:)` recognizes only `persona://pair?url=…&token=…` (`:7-16`); demo mode uses `https://demo.invalid` (`:25-26`).
 - Keychain (`ios/Shared/Keychain.swift`): generic password, `service` = App bundle id (strip `.watchkitapp` on Watch, `:6`), `kSecAttrAccessibleAfterFirstUnlock` (`:14`), **no access group**.
   - account `server`: phone `ServerConfig`, JSON-encoded whole structure (`:42-48`);
   - account `watch`: exchanged answer-only Watch token (`:34-40`).
-- Token exchange: `AppModel.pair()` (`ios/Jarvis/App/AppModel.swift:140-156`) validates with `client.machines()`, saves Keychain, clears device credentials, reconnects, sends to Watch.
-  `upgradeCredentials()` (`ios/Jarvis/App/DeviceCredentials.swift:15-39`) uses pairing token for `POST /api/v1/auth/tokens kind=phone`, **overwrites Keychain `server` with the new token** (`:22-28`), and records device id in UserDefaults `auth.deviceID` (`:10`, `:25`), then exchanges `kind=watch` (`:33-37`). Old hubs lacking the endpoint keep using pairing token (`catch { return }`, `:29-31`).
+- Token exchange: `AppModel.pair()` (`ios/Persona/App/AppModel.swift:140-156`) validates with `client.machines()`, saves Keychain, clears device credentials, reconnects, sends to Watch.
+  `upgradeCredentials()` (`ios/Persona/App/DeviceCredentials.swift:15-39`) uses pairing token for `POST /api/v1/auth/tokens kind=phone`, **overwrites Keychain `server` with the new token** (`:22-28`), and records device id in UserDefaults `auth.deviceID` (`:10`, `:25`), then exchanges `kind=watch` (`:33-37`). Old hubs lacking the endpoint keep using pairing token (`catch { return }`, `:29-31`).
 - Pairing entry points:
-  - Scan / manual: `PairView` (`ios/Jarvis/Views/Settings/SettingsView.swift:367-428`, `connect()` at `:415`), manual fields "Server Address" and "Token";
-  - Link: `onOpenURL` parses `ServerConfig` and **directly** calls `model.pair(cfg)` (`ios/Jarvis/App/JarvisApp.swift:15-25`), without confirmation, replacing existing pairing too;
-  - DEBUG: `-pairURL` launch argument (`JarvisApp.swift:46-49`).
+  - Scan / manual: `PairView` (`ios/Persona/Views/Settings/SettingsView.swift:367-428`, `connect()` at `:415`), manual fields "Server Address" and "Token";
+  - Link: `onOpenURL` parses `ServerConfig` and **directly** calls `model.pair(cfg)` (`ios/Persona/App/PersonaApp.swift:15-25`), without confirmation, replacing existing pairing too;
+  - DEBUG: `-pairURL` launch argument (`PersonaApp.swift:46-49`).
 
 ### 5.2 URL construction [Fact]
 
@@ -306,35 +306,35 @@ TLS fingerprint also identifies a hub, but private plaintext has no fingerprint 
 | REST | `config.url.appending(path:)` + query | `APIClient.session`, default `URLSession.shared` | `APIClient.swift:89`, `:100-105`, `:107-123` |
 | Upload | Same, `/machines/{mid}/files?name=` | `APIClient.uncachedSession` | `:143-155`, `:93-98` |
 | Lazy images / full text | `itemURL()` builds `percentEncodedPath` manually (ids contain `#`, `:`) | `uncachedSession` | `:273-285`, `:288-298`, `:301-308` |
-| Lark raw-doc endpoint | `url("/api/v1/lark/raw/…")` | `self.session` | `ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:10-17` |
-| Lark media | Relative paths via `api.request` (`uncachedSession`); absolute http(s) directly via `uncachedSession.data(from:)`, **without token** | `uncachedSession` | `ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift:37-60` |
+| Lark raw-doc endpoint | `url("/api/v1/lark/raw/…")` | `self.session` | `ios/Persona/Views/Feishu/Docs/FeishuDocsComponents.swift:10-17` |
+| Lark media | Relative paths via `api.request` (`uncachedSession`); absolute http(s) directly via `uncachedSession.data(from:)`, **without token** | `uncachedSession` | `ios/Persona/Views/Inbox/Lark/LarkMedia.swift:37-60` |
 | Lark video | `AVURLAsset(url: cfg.url.appending(path:), options: [AVURLAssetHTTPHeaderFieldsKey: Authorization])` | AVFoundation networking | `LarkMedia.swift:296-302` |
 | WS | `config.url.appending(path: "/api/v1/ws")`, `https` →`wss`, otherwise `ws`; `Authorization`; handshake timeout 15 seconds; maximum message 64 MB | `LiveConnection`'s own `URLSession(configuration: .default)` | `ios/Shared/LiveConnection.swift:174`, `:222-247` |
 
 - All requests use `Authorization: Bearer`, not `?token=` (2.5).
 - Heartbeat (`LiveConnection.swift:178-181`, `:249-284`): `sendPing` every 20 seconds; no pong for 5 seconds means weak networking (then ping every 5 seconds); no data for 45 seconds disconnects; backoff 1→20 seconds (`:340-349`).
   `connected` only after the first message (hello) (`:300-306`); hello reads only `features` (`AppModel.swift:572-573`).
-- Network changes: `ConnectionStatus` uses `NWPathMonitor` (`ios/Jarvis/App/ConnectionStatus.swift:43`, `:65-66`); on recovery `reconnectNow()`, interface change `probe()` (`:118-120`).
-- Backgrounding disconnects WS (`JarvisApp.swift:27-35`). Silent push `jarvis_wake` calls `ensureConnected()`, disconnects 25 seconds later (`JarvisApp.swift:106-120`); hub waits only 20 seconds (`server/internal/hub/hub.go:737`).
+- Network changes: `ConnectionStatus` uses `NWPathMonitor` (`ios/Persona/App/ConnectionStatus.swift:43`, `:65-66`); on recovery `reconnectNow()`, interface change `probe()` (`:118-120`).
+- Backgrounding disconnects WS (`PersonaApp.swift:27-35`). Silent push `persona_wake` calls `ensureConnected()`, disconnects 25 seconds later (`PersonaApp.swift:106-120`); hub waits only 20 seconds (`server/internal/hub/hub.go:737`).
 
 ### 5.3 ATS [Fact]
 
-- iPhone App: `NSAppTransportSecurity.NSAllowsArbitraryLoads = true` (`ios/project.yml:84-86`, comment "hub usually uses plaintext HTTP on a private network"; generated `ios/Jarvis/Resources/Info.plist:38-42`).
-- Watch App: also `NSAllowsArbitraryLoads = true` (`ios/project.yml:144-145`, `ios/JarvisWatch/Info.plist:23-27`).
-- Widget / Live Activity extension `JarvisWidgets`: no ATS settings (`ios/project.yml:101-128`), and no networking. Live Activity button intents run in the App process (`ios/LiveActivity/FleetIntents.swift:4-6`, comments in `project.yml:127-128`).
+- iPhone App: `NSAppTransportSecurity.NSAllowsArbitraryLoads = true` (`ios/project.yml:84-86`, comment "hub usually uses plaintext HTTP on a private network"; generated `ios/Persona/Resources/Info.plist:38-42`).
+- Watch App: also `NSAllowsArbitraryLoads = true` (`ios/project.yml:144-145`, `ios/PersonaWatch/Info.plist:23-27`).
+- Widget / Live Activity extension `PersonaWidgets`: no ATS settings (`ios/project.yml:101-128`), and no networking. Live Activity button intents run in the App process (`ios/LiveActivity/FleetIntents.swift:4-6`, comments in `project.yml:127-128`).
 - `ITSAppUsesNonExemptEncryption: false` (`project.yml:75`). [Assessment] Pinning with system TLS (URLSession) remains exempt; no change needed. Reassess only for custom cryptographic protocols.
 
 ### 5.4 Other direct hub callers [Fact]
 
 | Caller | Configuration source | Location |
 | --- | --- | --- |
-| Watch | Phone pushes JSON `ServerConfig` through WatchConnectivity (`applicationContext` + `transferUserInfo`, `ios/Shared/WatchSync.swift:35-45`). Watch saves it in **UserDefaults `config`**, not Keychain (`ios/JarvisWatch/JarvisWatchApp.swift:34-43`), then uses `APIClient` (`URLSession.shared`) directly (`:31`, `:75-145`). | Receives `Keychain.watchConfig ?? serverConfig` (`AppModel.swift:113-117`, `:136`). |
-| Siri / Shortcuts | `IntentSupport.client()`: `Keychain.serverConfig` →`APIClient` (`ios/Jarvis/Intents/IntentSupport.swift:133-141`); error says "Check that your phone can reach the hub (same network or VPN)" (`:116-126`). | |
-| Notification buttons | `resolveFromNotification`: `Keychain.serverConfig` →`APIClient.resolve` (`JarvisApp.swift:159-176`); errors also use `host` (`ios/Jarvis/App/NotificationActions.swift:58`). | |
-| Live Activity buttons | `FleetActions.run`: `Keychain.serverConfig` →`APIClient.resolve` (`ios/Jarvis/App/FleetActions.swift:17-21`) | |
-| Push registration | `PushRegistrar.didRegister` →`AppModel.shared.api` →`POST /api/v1/devices` (`JarvisApp.swift:230-241`) | |
+| Watch | Phone pushes JSON `ServerConfig` through WatchConnectivity (`applicationContext` + `transferUserInfo`, `ios/Shared/WatchSync.swift:35-45`). Watch saves it in **UserDefaults `config`**, not Keychain (`ios/PersonaWatch/PersonaWatchApp.swift:34-43`), then uses `APIClient` (`URLSession.shared`) directly (`:31`, `:75-145`). | Receives `Keychain.watchConfig ?? serverConfig` (`AppModel.swift:113-117`, `:136`). |
+| Siri / Shortcuts | `IntentSupport.client()`: `Keychain.serverConfig` →`APIClient` (`ios/Persona/Intents/IntentSupport.swift:133-141`); error says "Check that your phone can reach the hub (same network or VPN)" (`:116-126`). | |
+| Notification buttons | `resolveFromNotification`: `Keychain.serverConfig` →`APIClient.resolve` (`PersonaApp.swift:159-176`); errors also use `host` (`ios/Persona/App/NotificationActions.swift:58`). | |
+| Live Activity buttons | `FleetActions.run`: `Keychain.serverConfig` →`APIClient.resolve` (`ios/Persona/App/FleetActions.swift:17-21`) | |
+| Push registration | `PushRegistrar.didRegister` →`AppModel.shared.api` →`POST /api/v1/devices` (`PersonaApp.swift:230-241`) | |
 | Settings address display | `model.config?.url.absoluteString` (`SettingsView.swift:27`) | |
-| WKWebView | `LinkSheet` (external links), `MailViews` (mail HTML); **no direct hub-address loads found** | `ios/Jarvis/Views/Link/LinkSheet.swift`, `ios/Jarvis/Views/Mail/MailViews.swift:189-224` |
+| WKWebView | `LinkSheet` (external links), `MailViews` (mail HTML); **no direct hub-address loads found** | `ios/Persona/Views/Link/LinkSheet.swift`, `ios/Persona/Views/Mail/MailViews.swift:189-224` |
 
 ### 5.5 iOS changes for multiple candidates + certificate pinning [Assessment]
 
@@ -348,30 +348,30 @@ TLS fingerprint also identifies a hub, but private plaintext has no fingerprint 
 3. **AVPlayer cannot use a URLSession delegate**: video in `LarkMedia.swift:296-302` uses AVFoundation directly, failing self-signed TLS. Download locally before playback (existing `file(_:name:)`, `LarkMedia.swift:68`), or use `AVAssetResourceLoaderDelegate` with custom-scheme forwarding.
 4. **Candidate selection**: shared new `HubEndpoint` type supplies current address to `APIClient.url()` (`:100-105`), `itemURL()` (`:301-308`), `LiveConnection.open()` (`:222-247`), `LarkMedia` (`:298`).
    - Probe unauthenticated cheap `GET /api/v1/health` concurrently, with new hub `hub_id` identity check. IPv6 first, IPv4 delayed (RFC 8305 recommends 250 ms attempt delay; design parameter, not measurement). First pin + `hub_id` success wins;
-   - Probe on cold start, `NWPathMonitor` changes (`ConnectionStatus.swift:65-120`), before WS reconnect, and on silent-push wake (only about 25 seconds, `JarvisApp.swift:116`; concurrent probes, not serial 15-second timeouts);
+   - Probe on cold start, `NWPathMonitor` changes (`ConnectionStatus.swift:65-120`), before WS reconnect, and on silent-push wake (only about 25 seconds, `PersonaApp.swift:116`; concurrent probes, not serial 15-second timeouts);
    - Watch, Intents, notification buttons, and Live Activity buttons run outside the App or in background, so cannot rely on App-memory current address. Write the selected address back to Keychain or probe quickly each time.
 5. **ATS** [Assessment, real-device verification needed]: custom trust for self-signed certificates still checks TLS 1.2+, forward-secret suites, certificate keys (RSA ≥2048 / ECC ≥256), and SHA-256 signatures. Hub ECDSA P-256 + SHA-256 meets these.
    Retain `NSAllowsArbitraryLoads` initially (plaintext old hubs on private networks / VPN must still work). Add an App-level rule: `http://` only for private / VPN / loopback addresses and `.local`; public addresses require `https` + pinning (android.md 5.1).
-6. **Watch**: `ServerConfig` sent by `WatchSync` automatically includes new fields; Watch `APIClient` must also use a pinned session. Current plaintext token storage in Watch UserDefaults (`JarvisWatchApp.swift:34-43`) should move to Watch Keychain for public use.
-7. **Pairing links**: direct `onOpenURL` pairing (`JarvisApp.swift:15-25`) is riskier publicly: any web / message `jarvis://pair?url=<someone else's hub>` can redirect the phone, allowing that hub to call phone tools. Add confirmation showing address / fingerprint; never silently replace existing pairing.
+6. **Watch**: `ServerConfig` sent by `WatchSync` automatically includes new fields; Watch `APIClient` must also use a pinned session. Current plaintext token storage in Watch UserDefaults (`PersonaWatchApp.swift:34-43`) should move to Watch Keychain for public use.
+7. **Pairing links**: direct `onOpenURL` pairing (`PersonaApp.swift:15-25`) is riskier publicly: any web / message `persona://pair?url=<someone else's hub>` can redirect the phone, allowing that hub to call phone tools. Add confirmation showing address / fingerprint; never silently replace existing pairing.
 8. **Error categories**: add "Certificate mismatch" to Intents (`IntentSupport.swift:116-126`), Lark docs (`FeishuDocsComponents.swift:20-30`), and PairView errors; remove "same network or VPN" wording.
 
 ## 6. First Android version (PR #84)
 
 ### 6.1 Current state [Fact]
 
-(Paths beginning `data/`, `ui/`, `service/` below are under `android/app/src/main/java/jarvis/android/`.)
+(Paths beginning `data/`, `ui/`, `service/` below are under `android/app/src/main/java/persona/android/`.)
 
 | Item | Current behavior | Location |
 | --- | --- | --- |
-| Pairing data | `data class Pairing(val url: String, val token: String)` | `android/app/src/main/java/jarvis/android/data/Pairing.kt:7` |
+| Pairing data | `data class Pairing(val url: String, val token: String)` | `android/app/src/main/java/persona/android/data/Pairing.kt:7` |
 | Storage | `PairingStore`: `SharedPreferences("pairing", MODE_PRIVATE)`, **plaintext** `url`, `token` (no Keystore) | `Pairing.kt:9-19` |
 | Backup | `android:allowBackup="false"` | `android/app/src/main/AndroidManifest.xml:19` |
-| Parsing | `PairingStore.parse()`: scheme `jarvis`, host `pair`, `url` begins with `http`, nonempty `token` | `Pairing.kt:22-30` |
-| Link pairing | Manifest `jarvis://pair` (`AndroidManifest.xml:36-42`) →`MainActivity.handle` sets `pendingPair` (`android/app/src/main/java/jarvis/android/MainActivity.kt:49-54`, `:60`) →`PairScreen` automatically pairs (`ui/PairScreen.kt:82-85`, `LaunchedEffect(link)` at `:83`). `PairScreen` appears only when unpaired (`ui/Root.kt:16-17`), so **links do not silently replace existing pairing**. | |
-| Pairing flow | Validate with `ApiClient(url, token).machines()` →`createToken(deviceName)` (404 = old hub, retain pairing token) →store `Pairing(url.trimEnd('/'), own)` →`JarvisApp.connect` | `ui/PairScreen.kt:55-76` |
+| Parsing | `PairingStore.parse()`: scheme `persona`, host `pair`, `url` begins with `http`, nonempty `token` | `Pairing.kt:22-30` |
+| Link pairing | Manifest `persona://pair` (`AndroidManifest.xml:36-42`) →`MainActivity.handle` sets `pendingPair` (`android/app/src/main/java/persona/android/MainActivity.kt:49-54`, `:60`) →`PairScreen` automatically pairs (`ui/PairScreen.kt:82-85`, `LaunchedEffect(link)` at `:83`). `PairScreen` appears only when unpaired (`ui/Root.kt:16-17`), so **links do not silently replace existing pairing**. | |
+| Pairing flow | Validate with `ApiClient(url, token).machines()` →`createToken(deviceName)` (404 = old hub, retain pairing token) →store `Pairing(url.trimEnd('/'), own)` →`PersonaApp.connect` | `ui/PairScreen.kt:55-76` |
 | Pairing errors | 401 →"Invalid token"; others →"Cannot connect … Phone and hub must be on the same network or VPN". Manual placeholder `http://<hub address>:18660`; button requires `url.startsWith("http")`. | `PairScreen.kt:69-73`, `:108-120` |
-| Connection object | `JarvisApp.connect(p)` creates `Hub(ApiClient(p.url, p.token), …)` on each pairing / launch and starts the foreground service. | `android/app/src/main/java/jarvis/android/JarvisApp.kt:29-45` (`connect` at `:39`) |
+| Connection object | `PersonaApp.connect(p)` creates `Hub(ApiClient(p.url, p.token), …)` on each pairing / launch and starts the foreground service. | `android/app/src/main/java/persona/android/PersonaApp.kt:29-45` (`connect` at `:39`) |
 | HTTP client | `ApiClient(val baseUrl: String, val token: String)`, one `OkHttpClient`: connect 10 seconds, read 110 seconds, `pingInterval(20 s)`, shared REST / WS | `data/ApiClient.kt:23-28` |
 | URLs | `url()`: `baseUrl.toHttpUrl()` then `addPathSegment` per segment. `wsUrl()`: `replaceFirst("http", "ws")` (also maps `https` →`wss`). | `ApiClient.kt:32-38` |
 | Authentication | All `Authorization: Bearer` (REST `:43`, images `:113`, full text `:122`, WS `data/Hub.kt:103`), no `?token=` | |
@@ -410,25 +410,25 @@ TLS fingerprint also identifies a hub, but private plaintext has no fingerprint 
 | `docs/config.md:35`, `:88`, `config.example.json:27` | Build `hub.url` is `http://…:18660` | Used by `sim.sh` to pair simulators; keep private plaintext, add explanation. |
 | `docs/config.md:50`, `:118-119`, `:138` | hub.json `listen`, `public_url` examples are `http://`; first-run advertised URL `http://<hostname>:18660` | Add `tls`, `advertise`, `advertise_ipv6`, `advertise_lan`, `trusted_cidrs` to examples / field table ("Hub runtime configuration" at `:114`). |
 | `docs/server.md:43` | "Listens on `:18660`" | Add TLS port, host / ONT firewall IPv6 allowances, TUN reply-routing issue. |
-| `docs/server.md:71`, `:77` | hub.json fields; pairing prints address, token, QR `jarvis://pair?url=…&token=…` | Add fields; pairing-code format and `--legacy`. |
+| `docs/server.md:71`, `:77` | hub.json fields; pairing prints address, token, QR `persona://pair?url=…&token=…` | Add fields; pairing-code format and `--legacy`. |
 | `docs/server.md:94` | `curl -H "Authorization: Bearer $TOKEN" http://<hub address>:18660/…` | Add https: `curl --pinnedpubkey 'sha256//<pin>' -k https://…` (`-k` skips CA validation, pinning still applies). |
 | `docs/server.md`, "Operations" (around `:90-100`) | Log failures / slow requests only, no query/body/token | Add rate limits, bans, WS failure-log format, source redaction. |
 | `docs/protocol.md:3` | "Hub listens on `:18660` by default" | Add TLS port |
 | `docs/protocol.md:5-21` | `Bearer`, WS `?token=`, health `{"ok":true,"version":"..."}` | Define new `?token=` scope (2.5); health `features` (already implemented), `hub_id`; new pairing-code / certificate-pinning / candidate-address subsections; rate-limit `429`. |
 | `docs/protocol.md:154-190` | WS hello only `server_version, client_id`; ping / pong documented but absent from code | Add hello `features`, `hub_id`, `endpoints`, `tls_pin`; `endpoints` event and `client_hello`; remove or implement ping / pong (hub-changes.md 3.8 / 4.12). |
 | `docs/architecture.md:17-18`, `docs/architecture.svg:3` | Diagram: "HTTPS/WS (Bearer token)", "hub machine :18660" | **Already inaccurate** (actually plaintext HTTP). Use "HTTPS (self-signed + pinning, public) / HTTP (private network, VPN)". |
-| `docs/android.md:13` | Pairing `jarvis://pair?url=…&token=…` | New format |
+| `docs/android.md:13` | Pairing `persona://pair?url=…&token=…` | New format |
 | `docs/android.md:47` | HTTP private / VPN default, `network_security.xml` allows plaintext; do not expose publicly | Private / VPN plaintext only, public TLS + pinning; explain why code-based pinning is required (6.2). |
 | `docs/android.md:84-85` | USB `adb reverse` uses `http://127.0.0.1:18660` | Keep loopback plaintext allowed |
 | `docs/intents.md:51`, `:56` | "Phone must be on the company network or VPN"; "hub uses plaintext HTTP on the company intranet" | Generalize; `.background` rationale still holds (do not launch the App when networking is unreachable). |
-| `docs/ios.md:306`, `:318-320`, `:343` | Keychain pairing data, Watch pairing, `jarvis://pair` links | Include candidates / fingerprint / hub_id; Watch token to Keychain; link-pairing confirmation. |
-| `docs/testing.md:50`, `scripts/mock/mock_hub.py:6`, UI tests | `-pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1…&token=mock"` | Continue allowing loopback + plaintext + token, or all UI tests fail. |
+| `docs/ios.md:306`, `:318-320`, `:343` | Keychain pairing data, Watch pairing, `persona://pair` links | Include candidates / fingerprint / hub_id; Watch token to Keychain; link-pairing confirmation. |
+| `docs/testing.md:50`, `scripts/mock/mock_hub.py:6`, UI tests | `-pairURL "persona://pair?url=http%3A%2F%2F127.0.0.1…&token=mock"` | Continue allowing loopback + plaintext + token, or all UI tests fail. |
 
 ### 7.2 Equivalent UI text / comments in code [Fact]
 
 - `ios/project.yml:84` (comment "hub usually uses plaintext HTTP on a private network"), `android/app/src/main/res/xml/network_security.xml:2` (equivalent comment).
-- "Same network or VPN": `ios/Jarvis/Intents/IntentSupport.swift:123`, `:127`; `ios/Jarvis/Views/Settings/SettingsView.swift:424`; `android/app/src/main/java/jarvis/android/ui/PairScreen.kt:72`.
-- "Check that your phone can reach the hub": `ios/Jarvis/Views/Feishu/Docs/FeishuDocsComponents.swift:28`.
+- "Same network or VPN": `ios/Persona/Intents/IntentSupport.swift:123`, `:127`; `ios/Persona/Views/Settings/SettingsView.swift:424`; `android/app/src/main/java/persona/android/ui/PairScreen.kt:72`.
+- "Check that your phone can reach the hub": `ios/Persona/Views/Feishu/Docs/FeishuDocsComponents.swift:28`.
 - Android manual placeholder `http://<hub address>:18660`: `PairScreen.kt:110`.
 
 ### 7.3 Additions [Assessment]
@@ -446,7 +446,7 @@ TLS fingerprint also identifies a hub, but private plaintext has no fingerprint 
 5. **New WS fields / events**: old iOS drops unknown types by returning nil (`LiveConnection.swift:130`); old Android `when` has no else (`data/Hub.kt:145-211`), so both ignore them. But iOS first decodes the whole `Envelope` (`LiveConnection.swift:42-85`). **Do not add differently typed fields whose names collide with existing keys** (`error`, `id`, `state`, `data`, `name`, `status`, `text`, etc. are strings), or the whole message fails decoding and is dropped (an object-valued `error` in hello would lose hello).
 6. **`client_hello`**: old hubs ignore unknown types (`onClientMessage` switch without default, `http.go:672-730`). New clients use `client_heartbeat` in `features` to determine negotiation support, not wait for a receipt.
 7. **Watch**: WatchConnectivity sends whole `ServerConfig` JSON (`ios/Shared/WatchSync.swift:35-45`); old Watch decoders ignore new fields and keep using `url`. If a new phone replaces `url` with self-signed TLS, old Watches fail. Watch / iPhone Apps generally update through the same TestFlight build, but timing differs: keep `url` usable by old code and put new addresses in new fields.
-8. **Rate-limit collateral damage** [Assessment]: both WS clients retry indefinitely on 401 (iOS max backoff 20 seconds, `LiveConnection.swift:340-349`; Android 30 seconds, `data/Hub.kt:76-86`), no stop-on-401 logic (only Intents says pairing expired for 401/403, `ios/Jarvis/Intents/IntentSupport.swift:112-113`). Those backoff limits imply hundreds of failures per hour from one revoked device (**not measured**, inferred only from 20 / 30 seconds).
+8. **Rate-limit collateral damage** [Assessment]: both WS clients retry indefinitely on 401 (iOS max backoff 20 seconds, `LiveConnection.swift:340-349`; Android 30 seconds, `data/Hub.kt:76-86`), no stop-on-401 logic (only Intents says pairing expired for 401/403, `ios/Persona/Intents/IntentSupport.swift:112-113`). Those backoff limits imply hundreds of failures per hour from one revoked device (**not measured**, inferred only from 20 / 30 seconds).
    IPv4 /32 limits would ban other devices behind the same home NAT too. Exclude private / VPN sources, key public limits by "source prefix + token hash", and stop client auto-reconnection on 401 with a re-pair prompt (both new clients must change).
 9. **`?token=`**: current clients do not use it (2.5), so restricting is safe. Earlier App builds **not checked** (current master only).
 10. **Debug paths**: `scripts/sim.sh:16-19` reads the main token from hub.json and pairs with configured `hub.url`; `adb reverse` in `docs/android.md:84-85` uses `http://127.0.0.1:18660`. New clients must allow loopback + plaintext + token, and the hub must treat loopback as local.
@@ -458,4 +458,4 @@ TLS fingerprint also identifies a hub, but private plaintext has no fingerprint 
 - **Real-device verification**: exact iOS restrictions on accepting self-signed certificates through custom trust with ATS on or `NSAllowsArbitraryLoads` retained; watchOS public IPv6 connectivity (phone proxy / Wi-Fi / cellular differ); Android local-network permission classification of global IPv6 on the same LAN.
 - **Not checked**: `?token=` use in earlier builds, added public-exposure risks for `mail` subroutes, Lark gateway proxy, Gmail OAuth callback (all behind `h.auth`, OAuth state encrypted and self-contained, `docs/mail.md:52`, but not individually audited). hub ↔ node SSH is outside scope.
 - **Design decisions required**: two ports vs same-port sniffing (4a), TOFU fingerprint trust over existing private channels for paired devices (8.4), retaining public version / features in `/api/v1/health` (3.1), limiting main tokens to loopback / private sources in public mode (4c).
-- **Existing source line references have drifted**: `config.go:144-147` cited by `docs/redesign/research/jarvis-protocol.md:26` is now `config.go:148-151`.
+- **Existing source line references have drifted**: `config.go:144-147` cited by `docs/redesign/research/persona-protocol.md:26` is now `config.go:148-151`.

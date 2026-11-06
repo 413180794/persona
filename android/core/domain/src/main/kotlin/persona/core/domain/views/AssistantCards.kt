@@ -200,7 +200,7 @@ sealed interface AssistantOpenTarget {
 
 object AssistantOpen {
     /**
-     * [value] as a target, or null: https without credentials, or `persona://` (the older `jarvis://` too)
+     * [value] as a target, or null: https without credentials, or `persona://`
      * `session/<machine>/<session>`, `task/<id>`, `kb/<relative path>`, `file/<machine>/<absolute path>` with each
      * segment escaped once and nothing else. Never anything to hand to another app.
      */
@@ -210,7 +210,7 @@ object AssistantOpen {
         if (uri.isOpaque || uri.rawUserInfo != null || uri.host.isNullOrEmpty()) return null
         val scheme = uri.scheme ?: return null
         if (scheme == "https") return AssistantOpenTarget.Web(value)
-        if ((scheme != "persona" && scheme != "jarvis") || uri.rawQuery != null || uri.rawFragment != null || uri.port != -1) return null
+        if (scheme != "persona" || uri.rawQuery != null || uri.rawFragment != null || uri.port != -1) return null
         val host = uri.host
         val parts = uri.rawPath.orEmpty().removePrefix("/").split('/')
         val decoded = parts.map { part ->

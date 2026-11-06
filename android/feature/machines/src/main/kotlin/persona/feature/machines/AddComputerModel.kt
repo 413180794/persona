@@ -117,11 +117,11 @@ internal fun addErrorText(error: Throwable): UiText = when (hubCodedFailure(erro
     else -> failureReasonText(error)
 }
 
-/** The line that pairs an installed jarvis-link; the hub's own when it gave one. */
-internal fun pairCommand(code: ComputerCode): String = code.command?.takeIf { it.isNotBlank() } ?: "jarvis-link pair ${quoted(code.pairUrl)}"
+/** The line that pairs an installed persona-link; the hub's own when it gave one. */
+internal fun pairCommand(code: ComputerCode): String = code.command?.takeIf { it.isNotBlank() } ?: "persona-link pair ${quoted(code.pairUrl)}"
 
-/** What PowerShell runs in the folder with jarvis-link.exe and personad.exe (docs/windows.md). */
-internal fun windowsCommand(pairUrl: String): String = ".\\jarvis-link.exe install --jarvisd .\\personad.exe --pair ${quoted(pairUrl)}"
+/** What PowerShell runs in the folder with persona-link.exe and personad.exe (docs/windows.md). */
+internal fun windowsCommand(pairUrl: String): String = ".\\persona-link.exe install --personad .\\personad.exe --pair ${quoted(pairUrl)}"
 
 // A pairing link in single quotes for sh and PowerShell; it has none of its own (it is URL-encoded).
 private fun quoted(s: String) = "'${s.replace("'", "%27")}'"
@@ -129,7 +129,7 @@ private fun quoted(s: String) = "'${s.replace("'", "%27")}'"
 /** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md decision 1). */
 internal const val PersonaLinkInstallDoc = "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md"
 
-/** How to install jarvis-link on a headless Linux when the hub has no install script (docs/link.md). */
+/** How to install persona-link on a headless Linux when the hub has no install script (docs/link.md). */
 internal const val LinkLinuxDoc = "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless"
 
 /** A computer's code lasts ten minutes, like the app's (docs/protocol.md "Computer pairing code"). */

@@ -212,7 +212,7 @@
       "description": "循环、后台任务或运行中的子代理只让空闲状态派生为待唤醒。",
       "source": [
         "ios/Shared/Models.swift: Session.isQuiet",
-        "ios/Jarvis/Views/Chats/ChatsView.swift: Session.isWaiting"
+        "ios/Persona/Views/Chats/ChatsView.swift: Session.isWaiting"
       ],
       "input": {
         "sessions": [

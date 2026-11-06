@@ -18,7 +18,7 @@ func TestHealthCardPushHidesContent(t *testing.T) {
 	if body, sub := a["body"].(string), a["subtitle"].(string); strings.Contains(body, "150") || strings.Contains(sub, "血压") || !strings.Contains(sub, "健康") {
 		t.Fatalf("health card: %v", a)
 	}
-	q := alert(proto.Interaction{Kind: proto.IxQuestion, ToolName: "ask_user", SessionTitle: "睡眠", Cwd: "/home/me/.jarvis/health",
+	q := alert(proto.Interaction{Kind: proto.IxQuestion, ToolName: "ask_user", SessionTitle: "睡眠", Cwd: "/home/me/.persona/health",
 		Questions: []proto.Question{{Question: "昨晚几点睡的？"}}})
 	if strings.Contains(q["body"].(string), "几点") {
 		t.Fatalf("health question: %v", q)

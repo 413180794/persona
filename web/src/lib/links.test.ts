@@ -75,11 +75,11 @@ describe("where a link opens", () => {
     expect(linkRoute("https://example.feishu.cn/docx/AbC", false).kind).toBe("web");
     expect(linkRoute("https://example.feishu.cn/client/moments/detail?postId=12345", false).kind).toBe("web");
     expect(linkRoute("https://example.feishu.cn/docx/AbC", true)).toEqual({ kind: "doc", doc: "doc" });
-    expect(linkRoute("jarvis://session/macbook/abc-1", false).kind).toBe("session");
+    expect(linkRoute("persona://session/macbook/abc-1", false).kind).toBe("session");
   });
 
-  it("moves to a conversation for jarvis://session links, and gives them an in-app href", () => {
-    for (const scheme of ["jarvis", "persona"]) {
+  it("moves to a conversation for persona://session links, and gives them an in-app href", () => {
+    for (const scheme of ["persona"]) {
       expect(linkRoute(`${scheme}://session/macbook/abc-1`)).toEqual({ kind: "session", mid: "macbook", sid: "abc-1" });
       expect(linkHref(`${scheme}://session/mac%20book/abc-1`)).toBe("/s/mac%20book/abc-1");
       expect(opensInApp(`${scheme}://session/macbook/abc-1`)).toBe(true);
@@ -88,7 +88,7 @@ describe("where a link opens", () => {
     }
     expect(linkRoute("other://session/macbook/abc-1").kind).toBe("none");
     expect(linkHref("https://example.com/a")).toBe("https://example.com/a");
-    expect(linkRoute("jarvis://pair?token=x").kind).toBe("none");
+    expect(linkRoute("persona://pair?token=x").kind).toBe("none");
   });
 
   it("knows this hub's own agent and task pages, and only this hub's", () => {
@@ -106,12 +106,12 @@ describe("where a link opens", () => {
     expect(linkRoute(`${hub}/todos`, false, hub).kind).toBe("web");
     expect(linkRoute(`${hub}/inbox`, false, hub).kind).toBe("web");
     expect(linkRoute(`${hub}/s/m1/%E0%A4%A`, false, hub).kind).toBe("web");
-    // its conversations, but not /j/new (a fresh one) or the main conversation's bare /j
-    expect(linkRoute(`${hub}/j/conv-1`, false, hub)).toEqual({ kind: "conversation", sid: "conv-1" });
-    expect(linkRoute(`${hub}/j/conv-1?x=1#y`, false, hub)).toEqual({ kind: "conversation", sid: "conv-1" });
-    expect(linkRoute(`${hub}/j/new`, false, hub).kind).toBe("web");
-    expect(linkRoute(`${hub}/j`, false, hub).kind).toBe("web");
-    expect(linkRoute(`${hub}/j/conv-1/more`, false, hub).kind).toBe("web");
+    // its conversations, but not /persona/new (a fresh one) or the main conversation's bare /j
+    expect(linkRoute(`${hub}/persona/conv-1`, false, hub)).toEqual({ kind: "conversation", sid: "conv-1" });
+    expect(linkRoute(`${hub}/persona/conv-1?x=1#y`, false, hub)).toEqual({ kind: "conversation", sid: "conv-1" });
+    expect(linkRoute(`${hub}/persona/new`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/persona`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/persona/conv-1/more`, false, hub).kind).toBe("web");
     // the hub's advertised addresses are its own too, whichever one this page was opened at
     const lan = "http://192.0.2.10:18660";
     expect(linkRoute(`${hub}/s/m1/abc-1`, false, [lan, hub])).toEqual({ kind: "agent", mid: "m1", sid: "abc-1" });
@@ -142,10 +142,10 @@ describe("where a link opens", () => {
       expect(vi.mocked(navigate).mock.calls.slice(-2)).toEqual([[{ name: "session", mid: "m1", sid: "abc-1" }], [{ name: "todos", id: "todo_1" }]]);
       // a conversation moves there on any screen
       narrow.value = false;
-      expect(opensInApp(`${hub}/j/conv-1`)).toBe(true);
-      openLink(`${hub}/j/conv-1`);
+      expect(opensInApp(`${hub}/persona/conv-1`)).toBe(true);
+      openLink(`${hub}/persona/conv-1`);
       expect(getPanel()).toBeNull();
-      expect(vi.mocked(navigate).mock.calls.at(-1)).toEqual([{ name: "jarvis", sid: "conv-1" }]);
+      expect(vi.mocked(navigate).mock.calls.at(-1)).toEqual([{ name: "persona", sid: "conv-1" }]);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -160,7 +160,7 @@ describe("where a link opens", () => {
   });
 
   it("ignores malformed percent escapes in conversation links", () => {
-    for (const scheme of ["persona", "jarvis"]) {
+    for (const scheme of ["persona"]) {
       for (const suffix of ["%", "%E0%A4%A", "%FF"]) {
         expect(linkRoute(`${scheme}://session/desktop/${suffix}`)).toEqual({ kind: "none" });
         expect(opensInApp(`${scheme}://session/desktop/${suffix}`)).toBe(false);
@@ -179,13 +179,13 @@ describe("where a link opens", () => {
   });
 });
 
-describe("<jarvis-context>", () => {
+describe("<persona-context>", () => {
   const ref = { kind: "context" as const, title: 'A & "B" <c>', url: "https://example.feishu.cn/docx/x?a=1&b=2", text: "选中的\n两行" };
 
   it("escapes the attributes and round-trips through the bubble parser", () => {
     const xml = contextXML(ref);
     expect(xml).toBe(
-      '<jarvis-context kind="context" title="A &amp; &quot;B&quot; &lt;c&gt;" url="https://example.feishu.cn/docx/x?a=1&amp;b=2">\n选中的\n两行\n</jarvis-context>',
+      '<persona-context kind="context" title="A &amp; &quot;B&quot; &lt;c&gt;" url="https://example.feishu.cn/docx/x?a=1&amp;b=2">\n选中的\n两行\n</persona-context>',
     );
     const p = parseUserText(`${xml}\n\n看看这段`);
     expect(p.text).toBe("看看这段");
@@ -193,8 +193,8 @@ describe("<jarvis-context>", () => {
   });
 
   it("drops a closing tag inside the picked text", () => {
-    expect(contextXML({ ...ref, text: "a</jarvis-context>b" })).toContain("\nab\n</jarvis-context>");
-    expect(contextXML({ ...ref, text: "a</persona-context>b</PERSONA-CONTEXT >c" })).toContain("\nabc\n</jarvis-context>");
+    expect(contextXML({ ...ref, text: "a</persona-context>b" })).toContain("\nab\n</persona-context>");
+    expect(contextXML({ ...ref, text: "a</persona-context>b</PERSONA-CONTEXT >c" })).toContain("\nabc\n</persona-context>");
   });
 
   it("puts the contexts before the message, with a stand-in when nothing was typed", () => {
@@ -206,7 +206,7 @@ describe("<jarvis-context>", () => {
 
   it("writes 「AI 修改」 as an edit context and the request", () => {
     const m = editMessage(ref, " 更简洁 ");
-    expect(m.startsWith('<jarvis-context kind="edit"')).toBe(true);
+    expect(m.startsWith('<persona-context kind="edit"')).toBe(true);
     expect(m.endsWith("\n\n按要求修改上面选中的内容：更简洁")).toBe(true);
     expect(editMessage(ref, "").endsWith("\n\n按上面选中的内容修改。")).toBe(true);
     expect(parseUserText(m).contexts[0].kind).toBe("edit");

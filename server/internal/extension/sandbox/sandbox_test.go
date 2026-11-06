@@ -255,20 +255,20 @@ func TestLinksOn(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(os.MkdirAll(filepath.Join(root, ".jarvis", "extensions", "data"), 0o700))
+	must(os.MkdirAll(filepath.Join(root, "state", "extensions", "data"), 0o700))
 	must(os.MkdirAll(filepath.Join(root, "dotfiles", "real"), 0o700))
-	must(os.Symlink(".jarvis", filepath.Join(root, ".persona")))
-	must(os.Symlink(filepath.Join(root, "dotfiles", "real"), filepath.Join(root, ".jarvis", "extensions", "data", "x")))
+	must(os.Symlink("state", filepath.Join(root, ".persona")))
+	must(os.Symlink(filepath.Join(root, "dotfiles", "real"), filepath.Join(root, ".persona", "extensions", "data", "x")))
 	got := linksOn(filepath.Join(root, ".persona", "extensions", "data", "x", "tmp"))
 	// t.TempDir may itself be reached through a link (/var -> private/var on macOS); every link is named by its real
 	// directory.
 	real, err := filepath.EvalSymlinks(root)
 	must(err)
-	want := append(linksOn(root), filepath.Join(real, ".persona"), filepath.Join(real, ".jarvis", "extensions", "data", "x"))
+	want := append(linksOn(root), filepath.Join(real, ".persona"), filepath.Join(real, "state", "extensions", "data", "x"))
 	if !slices.Equal(got, want) {
 		t.Errorf("linksOn = %v, want %v", got, want)
 	}
-	if got := linksOn(filepath.Join(real, ".jarvis", "extensions")); len(got) != 0 {
+	if got := linksOn(filepath.Join(real, "state", "extensions")); len(got) != 0 {
 		t.Errorf("a real path has links %v", got)
 	}
 	if got := linksOn("relative/path"); got != nil {
@@ -281,7 +281,7 @@ func TestLinksOn(t *testing.T) {
 }
 
 // TestDarwinSandboxForReal runs a copy of this binary under sandbox-exec from a home directory whose state directory
-// is a symlink (~/.persona -> .jarvis), as the hub names it: it runs, writes its data and temp directories, cannot read
+// is a symlink to a user-chosen state directory: it runs, writes its data and temp directories, cannot read
 // or write the rest of the home directory (also not through the link), cannot dial out, and reaches through the
 // proxy only the host it may, and the machine's loopback only as egress.LocalHost (Go's http.Get straight to
 // 127.0.0.1 skips the proxy and is refused, #2942).
@@ -297,10 +297,10 @@ func TestDarwinSandboxForReal(t *testing.T) {
 	state := filepath.Join(home, ".persona")
 	pkg, data, run := filepath.Join(state, "extensions", "installed", "probe"), filepath.Join(state, "extensions", "data", "probe"),
 		filepath.Join(state, "extensions", "run", "probe")
-	if err := os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, "state"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(".jarvis", state); err != nil {
+	if err := os.Symlink("state", state); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range []string{pkg, data, run} {
@@ -310,7 +310,7 @@ func TestDarwinSandboxForReal(t *testing.T) {
 	}
 	// The protected fixture is in the real state directory, named through the link.
 	const contents = "synthetic protected home contents"
-	fixture := filepath.Join(home, ".jarvis", homeFixtureName)
+	fixture := filepath.Join(home, "state", homeFixtureName)
 	if err := os.WriteFile(fixture, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}

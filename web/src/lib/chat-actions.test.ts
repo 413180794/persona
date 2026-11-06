@@ -174,7 +174,7 @@ describe("@ mentions", () => {
 
   it("quotes a session with its folder and last words", () => {
     const q = sessionQuote(sess("a", { title: "修登录", cwd: "/code/app", last_text: "  改好了  " }));
-    expect(q.url).toBe("jarvis://session/m/a");
+    expect(q.url).toBe("persona://session/m/a");
     expect(q.title).toBe("修登录");
     expect(q.text).toBe("另一个会话：修登录（Claude）\n目录：/code/app\n它最近说：改好了");
   });
@@ -237,7 +237,7 @@ describe("@ workspaces (#5594)", () => {
   it("writes the computer, folder and branch as attributes, escaped", () => {
     const c = workspaceContext(ws("a", 'say "hi"', "/c/<x>", { branch: "main" }), name);
     const xml = contextXML({ kind: "workspace", ...c });
-    expect(xml.split("\n")[0]).toBe('<jarvis-context kind="workspace" title="say &quot;hi&quot;" url="" machine="box" cwd="/c/&lt;x&gt;" branch="main">');
+    expect(xml.split("\n")[0]).toBe('<persona-context kind="workspace" title="say &quot;hi&quot;" url="" machine="box" cwd="/c/&lt;x&gt;" branch="main">');
     expect(c.text).toContain("Work laptop");
   });
 });

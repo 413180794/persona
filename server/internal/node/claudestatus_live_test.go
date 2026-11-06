@@ -11,12 +11,12 @@ import (
 	"github.com/nwverse/persona/server/internal/herdr"
 )
 
-// Against a working claude pane (read only): JARVIS_LIVE_PANE=<pane> go test -tags herdrlive -run TestLiveClaudeStatus
+// Against a working claude pane (read only): PERSONA_LIVE_PANE=<pane> go test -tags herdrlive -run TestLiveClaudeStatus
 // ./internal/node/ -v — logs the status line parsed off the screen next to the screen's own line.
 func TestLiveClaudeStatus(t *testing.T) {
-	pane := os.Getenv("JARVIS_LIVE_PANE")
+	pane := os.Getenv("PERSONA_LIVE_PANE")
 	if pane == "" {
-		t.Skip("JARVIS_LIVE_PANE not set")
+		t.Skip("PERSONA_LIVE_PANE not set")
 	}
 	n := &Node{hosts: herdrHosts(herdr.New())}
 	text, err := n.readPane(context.Background(), pane, "visible", liveLines)

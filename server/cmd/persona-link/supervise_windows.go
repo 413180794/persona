@@ -18,15 +18,15 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// Restart delays, as the Linux units have them (RestartSec): jarvis-link 5 s, the node 10 s.
+// Restart delays, as the Linux units have them (RestartSec): persona-link 5 s, the node 10 s.
 var linkRestart, nodeRestart = 5 * time.Second, 10 * time.Second
 
-// supervise is `jarvis-link supervise [--no-node]`, what the scheduled task runs (winservice.go), from the
-// console-less copy jarvis-link-service.exe. It keeps jarvis-link (`run --log`) and, unless --no-node, the resident
+// supervise is `persona-link supervise [--no-node]`, what the scheduled task runs (winservice.go), from the
+// console-less copy persona-link-service.exe. It keeps persona-link (`run --log`) and, unless --no-node, the resident
 // node (`node --attach`) running: each started with CREATE_NO_WINDOW, so it has a console but no window, and started
 // again a few seconds after it exits, however it exits. Both are in a job that kills them when the supervisor ends:
 // ending the task (install, uninstall, signing out) ends them too, and a supervisor the task starts again never finds
-// the old ones still running. It writes what it does to link-service.log, jarvis-link's own errors included; the
+// the old ones still running. It writes what it does to link-service.log, persona-link's own errors included; the
 // node's log goes to node-attach.log, as on Linux.
 func supervise(e *env, args []string) error {
 	withNode := true
@@ -36,7 +36,7 @@ func supervise(e *env, args []string) error {
 		}
 		withNode = false
 	}
-	root := e.jarvisDir()
+	root := e.personaDir()
 	release, err := link.LockRun(filepath.Join(root, "link-service")) // one supervisor per computer
 	if err != nil {
 		return err
@@ -52,10 +52,10 @@ func supervise(e *env, args []string) error {
 	if err := killWithMe(); err != nil {
 		logger.Printf("job object: %v (what it starts may outlive it)", err)
 	}
-	vars := append(os.Environ(), "PERSONA_HOME="+root, "JARVIS_HOME="+root)
+	vars := append(os.Environ(), "PERSONA_HOME="+root)
 	ctx := context.Background()
 	var wg sync.WaitGroup
-	// The node first: jarvis-link up before it, the hub would open a stream to a node not listening yet, call this
+	// The node first: persona-link up before it, the hub would open a stream to a node not listening yet, call this
 	// computer's node offline and show it so for a moment.
 	if withNode {
 		nlog, err := openRotating(e.nodeLog(), nodeLogMax)
@@ -74,13 +74,13 @@ func supervise(e *env, args []string) error {
 			})
 		}()
 		if !waitListening(link.AttachSocket(), began, nodeListenWait) {
-			logger.Printf("node has not made %s within %s; starting jarvis-link anyway", link.AttachSocket(), nodeListenWait)
+			logger.Printf("node has not made %s within %s; starting persona-link anyway", link.AttachSocket(), nodeListenWait)
 		}
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		keepRunning(ctx, logger, "jarvis-link", linkRestart, func() *exec.Cmd {
+		keepRunning(ctx, logger, "persona-link", linkRestart, func() *exec.Cmd {
 			cmd := exec.Command(e.binPath(), "run", "--log", e.logPath())
 			cmd.Env, cmd.Stderr = vars, slog // its log goes to link.log; what reaches stderr is a crash
 			return cmd
@@ -90,7 +90,7 @@ func supervise(e *env, args []string) error {
 	return nil
 }
 
-// nodeListenWait: how long jarvis-link waits for a node that is starting (it listens within a second here).
+// nodeListenWait: how long persona-link waits for a node that is starting (it listens within a second here).
 const nodeListenWait = 10 * time.Second
 
 // waitListening waits, up to timeout, for a socket file made at or after began: the node removes a leftover one and
@@ -108,7 +108,7 @@ func waitListening(sock string, began time.Time, timeout time.Duration) bool {
 }
 
 // keepRunning starts what mk makes, waits for it to exit and starts it again delay later, until ctx ends (the
-// supervisor's never does). Its stdout goes nowhere: jarvis-link's status lines are for the menu bar app.
+// supervisor's never does). Its stdout goes nowhere: persona-link's status lines are for the menu bar app.
 func keepRunning(ctx context.Context, logger *log.Logger, name string, delay time.Duration, mk func() *exec.Cmd) {
 	for ctx.Err() == nil {
 		cmd := mk()

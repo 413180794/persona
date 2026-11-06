@@ -6,7 +6,7 @@ import SwiftUI
 // rest of the app. The library's own palette is never used.
 
 extension BUITheme {
-    static func jarvis(_ spec: StyleSpec = .current) -> BUITheme {
+    static func persona(_ spec: StyleSpec = .current) -> BUITheme {
         // Secondary text: tertiaryLabel is 1.9:1 on white, under the 3:1 the visual pass brought every word to, so the
         // library's third ink is secondaryLabel too (3.4:1 light, 6.4:1 dark).
         let secondary = Color(uiColor: .secondaryLabel)
@@ -46,7 +46,7 @@ extension BUITheme {
                              window: Theme.Radius.panel)
         // The library's sizes are the web original's (13 pt labels); ×1.2 puts its labels at Persona' tool rows (15).
         // Entrances off: the chat list rebuilds rows as they scroll in, and an opened history would fade up at once.
-        return BUITheme(colors: colors, radii: radii, typeScale: 1.2, entrances: false, strings: .jarvis)
+        return BUITheme(colors: colors, radii: radii, typeScale: 1.2, entrances: false, strings: .persona)
     }
 
     /// For code and diffs: on the code background, at the code size Persona already uses (12–13).
@@ -60,7 +60,7 @@ extension BUITheme {
 
 extension BUIStrings {
     /// What the components show and VoiceOver says. The open state uses the Agents list's words.
-    static let jarvis: BUIStrings = {
+    static let persona: BUIStrings = {
         var w = BUIStrings(expanded: String(localized: "Expanded"), collapsed: String(localized: "Collapsed [Readiness Card ee6046]"))
         w.prompt = String(localized: "Input Field")
         w.listening = String(localized: "Listening…")

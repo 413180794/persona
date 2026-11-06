@@ -5,7 +5,7 @@
       "name": "history_changes_reset_local_items",
       "description": "新历史的首页直接替换本地，后续另一历史的接续批次清空后重取。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: anotherHistoryStartsOver",
+        "ios/PersonaTests/ChatStoreTests.swift: anotherHistoryStartsOver",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -480,7 +480,7 @@
       "name": "latest_page_replaces_distant_cache",
       "description": "最新页与缓存不相接时替换缓存，随后重叠页继续合并。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: aLatestPageThatDoesNotReachTheCacheReplacesIt",
+        "ios/PersonaTests/ChatStoreTests.swift: aLatestPageThatDoesNotReachTheCacheReplacesIt",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -931,7 +931,7 @@
       "name": "reload_keeps_overtaking_pushes",
       "description": "重新取页时保留同一历史中超过该页末尾的推送。",
       "source": [
-        "ios/JarvisTests/ChatStoreTests.swift: theLatestPageKeepsPushesThatOvertookIt",
+        "ios/PersonaTests/ChatStoreTests.swift: theLatestPageKeepsPushesThatOvertookIt",
         "ios/Shared/ChatStore.swift: apply, merge",
         "docs/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
@@ -1109,7 +1109,7 @@
       "name": "reconnect_subscribes_from_covered",
       "description": "重连使用连续位置而非最后一条 item 的位置。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift: subscribeMessage, didConnect",
+        "ios/Persona/App/AppModel.swift: subscribeMessage, didConnect",
         "docs/protocol.md：items 的连续性"
       ],
       "input": {
@@ -1310,7 +1310,7 @@
       "name": "reconnect_without_baseline_omits_since_seq",
       "description": "没有基线时订阅不带 since_seq，等待末尾分页。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift: subscribeMessage"
+        "ios/Persona/App/AppModel.swift: subscribeMessage"
       ],
       "input": {
         "initial": {

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor @Suite struct AlwaysGrantsModelTests {
     private let list = "/api/v1/assistant/conversations/c1/always"

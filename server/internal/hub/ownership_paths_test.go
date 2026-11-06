@@ -263,7 +263,7 @@ func TestAppCallOnlyOnItsOwn(t *testing.T) {
 	}
 	_, _, b := pathsHub(t, settings("A"), settings("B"))
 	call := func(machine string) (json.RawMessage, error) {
-		params, _ := json.Marshal(map[string]any{"name": "jarvis_settings", "machine_id": machine, "session_id": "s",
+		params, _ := json.Marshal(map[string]any{"name": "persona_settings", "machine_id": machine, "session_id": "s",
 			"arguments": map[string]any{"action": "get", "key": "mail.accounts"}})
 		var out json.RawMessage
 		err := b.call(t, assistantwire.MethodApp, assistantwire.AppCall{AppID: assistantwire.AppSettings, Method: assistantwire.AppTool, Params: params}, &out)

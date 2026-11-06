@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Git diff's colored lines on the Mac: an NSTextView fills a line's background to the view's edge only from its
 /// line break, so every line, the last one too, ends in one (or the last added / removed line stops half way).

@@ -9,15 +9,15 @@ import (
 	"time"
 )
 
-// What jarvis-link keeps next to link.json besides the credential: the lock that says one is running, the status it
-// last reported (for `jarvis-link status`, which cannot ask it) and its log.
+// What persona-link keeps next to link.json besides the credential: the lock that says one is running, the status it
+// last reported (for `persona-link status`, which cannot ask it) and its log.
 
 var errBusy = errors.New("locked")
 
-// ErrRunning: another jarvis-link holds the run lock of this link.json.
+// ErrRunning: another persona-link holds the run lock of this link.json.
 var ErrRunning = errors.New("这台电脑上已经有一个 Persona Link 在运行")
 
-// LockRun takes the run lock of the link.json at path: one jarvis-link per computer, or two would keep taking the
+// LockRun takes the run lock of the link.json at path: one persona-link per computer, or two would keep taking the
 // link from each other. ErrRunning when another one has it; release gives it back (exiting does too).
 func LockRun(path string) (release func(), err error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -37,8 +37,8 @@ func LockRun(path string) (release func(), err error) {
 	return func() { f.Close() }, nil
 }
 
-// Running says whether a jarvis-link is running with the link.json at path: whether its run lock is held. It takes the
-// lock for an instant to find out, so a jarvis-link starting in that instant fails and is restarted by whatever runs it.
+// Running says whether a persona-link is running with the link.json at path: whether its run lock is held. It takes the
+// lock for an instant to find out, so a persona-link starting in that instant fails and is restarted by whatever runs it.
 func Running(path string) bool {
 	f, err := os.OpenFile(path+".run", os.O_RDWR, 0)
 	if err != nil {
@@ -48,7 +48,7 @@ func Running(path string) bool {
 	return errors.Is(lockFile(f, false), errBusy)
 }
 
-// SavedStatus is the last Status a running jarvis-link reported, as it keeps it on disk for `jarvis-link status`.
+// SavedStatus is the last Status a running persona-link reported, as it keeps it on disk for `persona-link status`.
 // State is also "stopped" there once it has exited by itself.
 type SavedStatus struct {
 	Status
@@ -57,12 +57,12 @@ type SavedStatus struct {
 	Updated time.Time `json:"updated"`
 }
 
-// StatusPath is where the jarvis-link of the link.json at path keeps its status: link.status.json beside it.
+// StatusPath is where the persona-link of the link.json at path keeps its status: link.status.json beside it.
 func StatusPath(path string) string {
 	return strings.TrimSuffix(path, ".json") + ".status.json"
 }
 
-// LogPath is jarvis-link's log beside the link.json at path: the menu bar app sends the helper's there too.
+// LogPath is persona-link's log beside the link.json at path: the menu bar app sends the helper's there too.
 func LogPath(path string) string {
 	return filepath.Join(filepath.Dir(path), "link.log")
 }
@@ -81,7 +81,7 @@ func WriteStatus(path string, s SavedStatus) error {
 	return os.Rename(tmp, file)
 }
 
-// ReadStatus reads the saved status; the error wraps fs.ErrNotExist when no jarvis-link has run here yet.
+// ReadStatus reads the saved status; the error wraps fs.ErrNotExist when no persona-link has run here yet.
 func ReadStatus(path string) (*SavedStatus, error) {
 	b, err := os.ReadFile(StatusPath(path))
 	if err != nil {
@@ -94,7 +94,7 @@ func ReadStatus(path string) (*SavedStatus, error) {
 	return &s, nil
 }
 
-// Ranked is the order jarvis-link tries the candidates in.
+// Ranked is the order persona-link tries the candidates in.
 func Ranked(eps []Endpoint) []Endpoint { return ranked(eps) }
 
 // KindOf says what kind of address a URL is: lan | ipv6 | name | ipv4.

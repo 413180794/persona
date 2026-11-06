@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The main conversation's dock shows the agents opened by hand after its tasks (#1113): only the main conversation,
 /// only the ones waiting or working, never one a task already stands for.
@@ -9,7 +9,7 @@ struct DockAgentTests {
     private func session(_ id: String, state: String, assistant: Bool = false, todo: String? = nil, since: String? = nil,
                          title: String? = nil, group: String? = nil) throws -> Session {
         var o: [String: Any] = ["machine_id": "box", "session_id": id, "title": title ?? "agent \(id)", "cwd": "/code/\(id)",
-                                "status": "idle", "state": state, "started_by_jarvis": false, "assistant": assistant,
+                                "status": "idle", "state": state, "started_by_persona": false, "assistant": assistant,
                                 "pending_interactions": 0]
         if let todo { o["todo"] = ["id": todo, "title": "t"] }
         if let since { o["state_since"] = since }

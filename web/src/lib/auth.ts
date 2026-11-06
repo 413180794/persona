@@ -10,7 +10,7 @@ function browserName() {
 
 /** Where this browser keeps the id of its device token at the hub, to revoke it on signing out and to have it
  *  replaced when it signs in again. */
-export const TOKEN_ID_KEY = "jarvis.tokenId";
+export const TOKEN_ID_KEY = "persona.tokenId";
 
 /** The name this browser's device token goes by on the hub, with the day it signed in: two browsers of the same kind
  *  (or one browser on two days) can be told apart in Settings › Devices. */
@@ -19,7 +19,7 @@ export function deviceName(now: Date = new Date()) {
 }
 
 // pairToken turns what was pasted on the login page into the token to try: a bare token (the hub's, `jp_…`, `jd_…`)
-// as it is; the token in a `persona://pair?…` / `jarvis://pair?…` link (what `personad hub pair` prints for the app);
+// as it is; the token in a `persona://pair?…` / `persona://pair?…` link (what `personad hub pair` prints for the app);
 // or the token in any link carrying `?token=…` or `#token=…`. Anything else comes back trimmed, so the hub turns it
 // down as before.
 export function pairToken(input: string): string {

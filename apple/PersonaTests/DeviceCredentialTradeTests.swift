@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// After pairing, the device trades the pairing token for its own (docs/protocol.md「临时配对」), and the hub drops the
 /// pairing token a couple of minutes later. Every socket on it has to move to the device token, whatever address or route

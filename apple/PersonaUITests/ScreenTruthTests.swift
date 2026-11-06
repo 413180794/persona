@@ -12,12 +12,12 @@ import XCTest
 /// - no lost taps: a row tapped opens the agent it showed;
 /// - stale is visible: with the hub out of reach the title says so.
 ///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/ScreenTruthTests
-/// Both layouts (TEST_RUNNER_JARVIS_LAYOUT=shell) and both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).
+///   TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/ScreenTruthTests
+/// Both layouts (TEST_RUNNER_PERSONA_LAYOUT=shell) and both styles (TEST_RUNNER_PERSONA_UI_STYLE=beautiful).
 final class ScreenTruthTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
-    private var shell: Bool { ProcessInfo.processInfo.environment["JARVIS_LAYOUT"] == "shell" }
+    private var shell: Bool { ProcessInfo.processInfo.environment["PERSONA_LAYOUT"] == "shell" }
 
     /// What `probe.agents-list` and `/mock/truth` hold.
     private struct Shown: Decodable {
@@ -29,8 +29,8 @@ final class ScreenTruthTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = true
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (JARVIS_CHURN_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_CHURN_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (PERSONA_CHURN_HUB)")
         }
         hub = h
         _ = mock("reset")
@@ -49,7 +49,7 @@ final class ScreenTruthTests: XCTestCase {
     /// The Agents list, paired with the mock (pairing a new hub starts the app over on Assistant: pair, then open it).
     private func launch() {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair]
         app.launchPinned()
         sleep(3)
@@ -227,10 +227,10 @@ final class ScreenTruthTests: XCTestCase {
     }
 
     // Converging: a seeded random mix of pushes and what the user does; then the screen is the hub's within 8 s
-    // (a reconnect included). The seed is printed: a failure replays with TEST_RUNNER_JARVIS_SEED.
+    // (a reconnect included). The seed is printed: a failure replays with TEST_RUNNER_PERSONA_SEED.
     func testAnyMixConverges() {
         launch()
-        let seed = UInt64(ProcessInfo.processInfo.environment["JARVIS_SEED"] ?? "") ?? 7
+        let seed = UInt64(ProcessInfo.processInfo.environment["PERSONA_SEED"] ?? "") ?? 7
         var rng = SplitMix(seed)
         print("TRUTH seed \(seed)")
         let w = app.windows.firstMatch

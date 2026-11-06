@@ -52,15 +52,15 @@ class AssistantLinesTest {
         result?.let { LineItem(Item("res-$name", kind = "tool_result", text = it, isError = failed)) }, emptyList())
 
     @Test fun quickResultsComeOnlyFromThePhonesWritesAndFollowTheirWork() {
-        val ok = call("mcp__jarvis__phone_reminders_create", """{"id":"R1","title":"打电话","due":"2026-11-07T10:00:00+08:00","list":"提醒事项"}""")
+        val ok = call("mcp__persona__phone_reminders_create", """{"id":"R1","title":"打电话","due":"2026-11-07T10:00:00+08:00","list":"提醒事项"}""")
         val r = QuickResult.of(ok)
         assertNotNull(r); assertEquals(true, r!!.reminder); assertEquals("打电话", (r.title).zhAny()); assertEquals("提醒事项", (r.place).zhAny())
-        assertNull(QuickResult.of(call("mcp__jarvis__phone_reminders_list", """{"id":"x"}""")))
+        assertNull(QuickResult.of(call("mcp__persona__phone_reminders_list", """{"id":"x"}""")))
         assertNull(QuickResult.of(call("phone_calendar_create_event", "denied", failed = true)))
         assertNull(QuickResult.of(call("phone_reminders_create", null)))
         val work = ChatLine.Work("wt-1", listOf(WorkItem.Tool(ok)), live = false, start = now, end = now, open = false)
         val out = AssistantLines.lines(listOf(user("u1", 6), work, reply("a1", 4)), emptyList(), ZoneOffset.UTC).map { it.id }
-        assertEquals(listOf("u1", "wt-1", "quick-use-mcp__jarvis__phone_reminders_create", "a1"), (out.filterNot { it.startsWith("day-") }).zhAny())
+        assertEquals(listOf("u1", "wt-1", "quick-use-mcp__persona__phone_reminders_create", "a1"), (out.filterNot { it.startsWith("day-") }).zhAny())
     }
 
     @Test fun aTasksStateFollowsItsAgents() {

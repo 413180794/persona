@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct EngineSelectionTests {
     private func machine(_ extra: String = "") throws -> Machine {

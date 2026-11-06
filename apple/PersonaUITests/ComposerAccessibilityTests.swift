@@ -2,8 +2,8 @@ import XCTest
 
 /// The chat's composer in the liquid glass style is laid out on its own (`LayoutIsland`, a hosting controller of its
 /// own): its field, + and send must still be in the accessibility tree, where VoiceOver and the UI tests find them.
-/// The island showed as an `Other` with nothing under it in every launch (#995: an agent's chat, #1006: Jarvis's in
-/// the four tabs). Against scripts/mock/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
+/// The island showed as an `Other` with nothing under it in every launch (#995: an agent's chat, #1006: Persona's in
+/// the four tabs). Against scripts/mock/mock_hub.py (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>).
 final class ComposerAccessibilityTests: XCTestCase {
     private let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001"
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
@@ -14,10 +14,10 @@ final class ComposerAccessibilityTests: XCTestCase {
     }
 
     private func pairURL() throws -> String {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
-        return "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        return "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
     }
 
     @MainActor private func attachScreen(_ name: String) {
@@ -90,7 +90,7 @@ final class ComposerAccessibilityTests: XCTestCase {
         }
     }
 
-    /// Jarvis's main conversation in the four tabs, where its composer is in an island too (#1006; in the shell Assistant
+    /// Persona's main conversation in the four tabs, where its composer is in an island too (#1006; in the shell Assistant
     /// has a composer of its own).
     @MainActor func testTheAssistantsComposerIsInTheTreeInTheFourTabs() throws {
         let pair = try pairURL()
@@ -99,7 +99,7 @@ final class ComposerAccessibilityTests: XCTestCase {
             app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "YES", "-app.tab", "assistant", "-tab", "assistant",
                                    "-openAssistant", main]
             app.launchPinned()
-            expectComposer("Jarvis, four tabs #\(round)")
+            expectComposer("Persona, four tabs #\(round)")
             app.terminate()
         }
     }

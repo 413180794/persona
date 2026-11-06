@@ -41,7 +41,7 @@ func TestAssistantDirectoriesAreTheMachinesManagers(t *testing.T) {
 	b.report(t, devicewire.State{Machine: proto.Machine{ID: "mb", Name: "mb"}, Info: info})
 	eventually(t, 5*time.Second, "ma, mb", func() bool { return h.localMachine("ma") != nil && h.localMachine("mb") != nil })
 	ma, mb := h.localMachine("ma"), h.localMachine("mb")
-	if ma.assistantCwd() != "/home/me/.jarvis/assistant" || mb.assistantCwd() != "/home/me/.jarvis/assistant-m-0b0b0b" {
+	if ma.assistantCwd() != "/home/me/.persona/assistant" || mb.assistantCwd() != "/home/me/.persona/assistant-m-0b0b0b" {
 		t.Fatalf("directories: %q %q", ma.assistantCwd(), mb.assistantCwd())
 	}
 	for _, c := range []struct {
@@ -49,12 +49,12 @@ func TestAssistantDirectoriesAreTheMachinesManagers(t *testing.T) {
 		cwd  string
 		want bool
 	}{
-		{ma, "/home/me/.jarvis/assistant", true},
+		{ma, "/home/me/.persona/assistant", true},
 		{ma, "/home/me/.persona/health", true},
-		{ma, "/home/me/.jarvis/assistant-m-0b0b0b", false},
-		{mb, "/home/me/.jarvis/assistant-m-0b0b0b", true},
-		{mb, "/home/me/.jarvis/health-m-0b0b0b", true},
-		{mb, "/home/me/.jarvis/assistant", false}, // the built-in's, left from before mb moved
+		{ma, "/home/me/.persona/assistant-m-0b0b0b", false},
+		{mb, "/home/me/.persona/assistant-m-0b0b0b", true},
+		{mb, "/home/me/.persona/health-m-0b0b0b", true},
+		{mb, "/home/me/.persona/assistant", false}, // the built-in's, left from before mb moved
 		{mb, "/home/me/code", false},
 	} {
 		if got := c.m.isAssistant(proto.Session{SessionID: "s", Cwd: c.cwd}); got != c.want {
@@ -67,7 +67,7 @@ func TestAssistantDirectoriesAreTheMachinesManagers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if code, out := ownershipGet(t, h, srv, http.MethodGet, "/api/v1/skills?manager=m-0b0b0b", nil); code != http.StatusOK ||
-		!strings.Contains(b.log(), `"cwd":"/home/me/.jarvis/assistant-m-0b0b0b"`) {
+		!strings.Contains(b.log(), `"cwd":"/home/me/.persona/assistant-m-0b0b0b"`) {
 		t.Fatalf("B's skills: %d %v\n%s", code, out, b.log())
 	}
 }

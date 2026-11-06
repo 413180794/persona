@@ -361,7 +361,7 @@ func writeRaw(w http.ResponseWriter, status int, body []byte) {
 }
 
 // resumesWithoutLauncher: a message to this session resumes it (it is not running) and nothing on its machine says
-// which launcher it ran with (started outside Jarvis, no launcher matches its base URL and model). The node would
+// which launcher it ran with (started outside Persona, no launcher matches its base URL and model). The node would
 // fall back to plain claude, which may not be signed in there (node/sendsafe.go resumeLauncher).
 func resumesWithoutLauncher(s proto.Session) bool {
 	return s.Status == proto.StatusOffline && s.Launcher == "" && !s.Assistant && s.SourceKind == "" &&

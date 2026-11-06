@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/update"
 )
 
-// runRelease is `jarvisd release …`, what scripts/release/publish.sh runs to describe a release (docs/hub-update.md "Publishing").
+// runRelease is `personad release …`, what scripts/release/publish.sh runs to describe a release (docs/hub-update.md "Publishing").
 func runRelease(args []string) error {
 	if len(args) == 0 {
 		return usageError(releaseUsage())
@@ -22,7 +22,7 @@ func runRelease(args []string) error {
 	switch args[0] {
 	case "manifest":
 		fs := flag.NewFlagSet("release manifest", flag.ContinueOnError)
-		dir := fs.String("dir", "", "where the jarvisd-<os>-<arch>.gz are")
+		dir := fs.String("dir", "", "where the personad-<os>-<arch>.gz are")
 		ver := fs.String("version", "", "the version")
 		num := fs.String("build", "", "the build number (UTC YYYYMMDDHHMM)")
 		commit := fs.String("commit", "", "the commit (full id; run in its repository: its ancestors go in too)")

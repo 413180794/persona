@@ -76,7 +76,7 @@ func connectDirsNode(t *testing.T, m *Machine) *dirsNode {
 	return f
 }
 
-// dirsStore keeps settings and drops the interactions jarvis_settings records.
+// dirsStore keeps settings and drops the interactions persona_settings records.
 type dirsStore struct{ *settingsStore }
 
 func (dirsStore) InsertInteraction(context.Context, proto.Interaction) error { return nil }

@@ -39,7 +39,7 @@ type MachineConfig struct {
 	Proxy       string `json:"proxy,omitempty"`
 	TailcatAddr string `json:"tailcat_addr,omitempty"`
 	Icon        string `json:"icon,omitempty"`
-	// RemoteBin is the jarvisd path on the remote machine (default ~/.jarvis/bin/jarvisd).
+	// RemoteBin is the personad path on the remote machine (default ~/.persona/bin/personad).
 	RemoteBin        string   `json:"remote_bin,omitempty"`
 	ClaudeConfigDirs []string `json:"claude_config_dirs,omitempty"`
 	Botmux           *bool    `json:"botmux,omitempty"`
@@ -52,7 +52,7 @@ type MachineConfig struct {
 	UsageWindows *bool `json:"usage_windows,omitempty"`
 }
 
-// Machine is the manager's connection to one node: a local subprocess, `ssh host jarvisd node --stdio`, a tailcat
+// Machine is the manager's connection to one node: a local subprocess, `ssh host personad node --stdio`, a tailcat
 // connection to its resident node, a stream on the Persona Link it keeps to the hub (kind link, link.go), a
 // connector's stream (kind service), or a stream through a member hub (a derived machine).
 type Machine struct {
@@ -252,7 +252,7 @@ func (m *Machine) command(ctx context.Context) *exec.Cmd {
 	}
 	bin := m.cfg.RemoteBin
 	if bin == "" {
-		bin = "~/.jarvis/bin/jarvisd"
+		bin = "~/.persona/bin/personad"
 	}
 	host := m.cfg.SSHHost
 	if host == "" {

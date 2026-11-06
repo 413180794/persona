@@ -2,14 +2,14 @@ import Foundation
 import XCTest
 @testable import PersonaLink
 
-/// `jarvis://link?…` / `persona://link?…` opened from outside (#4198): fills in the pairing window, never pairs.
+/// `persona://link?…` opened from outside (#4198): fills in the pairing window, never pairs.
 @MainActor
 final class PairLinkTests: XCTestCase {
-    private let full = "jarvis://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_example&machine=macbook&hub=h_example&fp=Zm9v&tls=18662"
+    private let full = "persona://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_example&machine=macbook&hub=h_example&fp=Zm9v&tls=18662"
 
-    func testBothSchemesParse() throws {
-        for scheme in ["jarvis", "persona", "JARVIS"] {
-            let raw = full.replacingOccurrences(of: "jarvis://", with: "\(scheme)://")
+    func testOnlyPersonaSchemeParsesIgnoringCase() throws {
+        for scheme in ["persona", "PERSONA"] {
+            let raw = full.replacingOccurrences(of: "persona://", with: "\(scheme)://")
             guard case .link(let l) = PairLink.parse(URL(string: raw)!) else { return XCTFail("\(scheme) not parsed") }
             XCTAssertEqual(l.raw, raw)
             XCTAssertEqual(l.machine, "macbook")
@@ -27,20 +27,23 @@ final class PairLinkTests: XCTestCase {
     }
 
     func testOtherHostsAreForOtherApps() throws {
-        XCTAssertEqual(PairLink.parse("jarvis://pair?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_example"), .otherApp)
+        XCTAssertEqual(PairLink.parse("persona://pair?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_example"), .otherApp)
         XCTAssertEqual(PairLink.parse("persona://open?machine=a&session=b"), .otherApp)
-        XCTAssertEqual(PairLink.parse("jarvis://connector?addr=192.0.2.20%3A18663&code=jc_x"), .otherApp)
+        XCTAssertEqual(PairLink.parse("persona://connector?addr=192.0.2.20%3A18663&code=jc_x"), .otherApp)
         XCTAssertNotNil(PairLink.notice(for: .otherApp))
         XCTAssertTrue(PairLink.notice(for: .otherApp)!.contains("这是给手机 / Mac App 用的链接"))
     }
 
     func testMissingTokenIsIncomplete() throws {
-        XCTAssertEqual(PairLink.parse("jarvis://link?url=http%3A%2F%2F192.0.2.10%3A18660&machine=macbook"), .incomplete)
-        XCTAssertEqual(PairLink.parse("jarvis://link?url=http%3A%2F%2F192.0.2.10%3A18660&token="), .incomplete)
+        XCTAssertEqual(PairLink.parse("persona://link?url=http%3A%2F%2F192.0.2.10%3A18660&machine=macbook"), .incomplete)
+        XCTAssertEqual(PairLink.parse("persona://link?url=http%3A%2F%2F192.0.2.10%3A18660&token="), .incomplete)
         XCTAssertNotNil(PairLink.notice(for: .incomplete))
     }
 
     func testNotOurs() throws {
+        for other in ["other-product", "personas", "personad"] {
+            XCTAssertEqual(PairLink.parse("\(other)://link?token=fixture"), .notOurs)
+        }
         XCTAssertEqual(PairLink.parse("https://example.com/link?token=x"), .notOurs)
         XCTAssertEqual(PairLink.parse("not a url"), .notOurs)
         XCTAssertNil(PairLink.notice(for: .notOurs))
@@ -63,7 +66,7 @@ final class PairLinkTests: XCTestCase {
         let m = LinkModel()
         m.openLink(URL(string: full)!)
         m.clearIncoming()
-        m.openLink(URL(string: "jarvis://pair?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_example")!)
+        m.openLink(URL(string: "persona://pair?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_example")!)
         XCTAssertNil(m.incoming)
         XCTAssertNotNil(m.incomingNotice)
         XCTAssertEqual(m.pairRuns, 0)

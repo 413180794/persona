@@ -93,7 +93,7 @@ func (b *fakeCodexBus) serve(conn net.Conn) {
 		case m["type"] == "client-discovery-response":
 			b.asked <- true
 		case method == "initialize":
-			ok(map[string]any{"clientId": "jarvis"})
+			ok(map[string]any{"clientId": "persona"})
 			busWrite(conn, map[string]any{"type": "client-discovery-request", "requestId": "q1", "request": map[string]any{"method": "ide-context"}})
 		case method == "thread-owner-discovery" && version == 1 && (params["conversationId"] == b.owned || b.opened.Load() && params["conversationId"] == b.later):
 			ok(map[string]any{"supportsUntrustedAppInput": true})

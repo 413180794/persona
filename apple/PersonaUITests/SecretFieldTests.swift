@@ -4,23 +4,23 @@ import XCTest
 /// form looks like to AutoFill), its page goes away, and iOS does not offer to save it as a password (#1598, after
 /// #1512 for the plugin pages). Each test also checks the secret still reached the hub.
 ///
-/// Against scripts/mock/mock_hub.py with `MOCK_PLUGINS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1`:
-/// `TEST_RUNNER_JARVIS_SECRETS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by
-/// `TEST_RUNNER_JARVIS_SECRETS_APPEARANCE` (light / dark) and the style.
+/// Against scripts/mock/mock_hub.py with `MOCK_EXTENSIONS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1`:
+/// `TEST_RUNNER_PERSONA_SECRETS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named by
+/// `TEST_RUNNER_PERSONA_SECRETS_APPEARANCE` (light / dark) and the style.
 final class SecretFieldTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
     private var hub = ""
 
     @MainActor private func launch(_ args: [String]) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_SECRETS_HUB"] else {
-            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1 (JARVIS_SECRETS_HUB)")
+        guard let hub = env["PERSONA_SECRETS_HUB"] else {
+            throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1 (PERSONA_SECRETS_HUB)")
         }
         self.hub = hub
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
@@ -30,8 +30,8 @@ final class SecretFieldTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_SECRETS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_SECRETS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "secret-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 

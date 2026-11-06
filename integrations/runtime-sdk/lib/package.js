@@ -1,5 +1,5 @@
 // Runtime packages (docs/runtimes.md "Auto-update"): the code of a runtime's plugin as files with one hash, the same as
-// jarvisd's (server/internal/runtimepkg). The loader (loader.js) hashes the copy it ships with, keeps the versions the
+// personad's (server/internal/runtimepkg). The loader (loader.js) hashes the copy it ships with, keeps the versions the
 // node sends in a store and checks every one before it runs it.
 
 import { createHash, randomBytes } from 'node:crypto'
@@ -9,20 +9,20 @@ import { fileURLToPath } from 'node:url'
 
 /**
  * The packages and the files each is made of, relative to the integrations directory (`*` only in the last segment).
- * Must stay the same as jarvisd's runtimepkg.Packages: a file one side counts and the other does not makes every
+ * Must stay the same as personad's runtimepkg.Packages: a file one side counts and the other does not makes every
  * hello look like another version.
  */
 export const PACKAGES = {
-  'jarvis-dsh-runtime': ['dsh/package.json', 'dsh/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
-  'jarvis-pi-runtime': ['pi/package.json', 'pi/index.js', 'pi/companion.mjs', 'pi/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
-  'jarvis-paseo-runtime': ['paseo/package.json', 'paseo/bridge.mjs', 'paseo/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
-  'jarvis-agent-sdk-runtime': ['agent-sdk/package.json', 'agent-sdk/dist/bridge.mjs'],
+  'persona-dsh-runtime': ['dsh/package.json', 'dsh/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
+  'persona-pi-runtime': ['pi/package.json', 'pi/index.js', 'pi/companion.mjs', 'pi/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
+  'persona-paseo-runtime': ['paseo/package.json', 'paseo/bridge.mjs', 'paseo/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
+  'persona-agent-sdk-runtime': ['agent-sdk/package.json', 'agent-sdk/dist/bridge.mjs'],
 }
 
-/** A package name, as jarvisd takes it. */
+/** A package name, as personad takes it. */
 export const NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/
 
-/** Bounds a package (all its files), as jarvisd does. */
+/** Bounds a package (all its files), as personad does. */
 export const MAX_SIZE = 8 << 20
 
 /** A file's path in a package: relative, slash-separated, no empty / . / .. segments. */

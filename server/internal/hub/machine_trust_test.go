@@ -260,7 +260,7 @@ func TestMachineErrorCode(t *testing.T) {
 		{"online, another build it can update", proto.Machine{Online: true, NodeMismatch: true, CanDeploy: &yes}, kindLink, ""},
 		{"online, too old to update from here", proto.Machine{Online: true, NodeMismatch: true, CanDeploy: &no}, kindLink, errCodeNodeOutdated},
 		{"the hub's own machine", proto.Machine{Online: true, NodeMismatch: true, CanDeploy: &no}, "local", ""},
-		{"node service down", proto.Machine{Error: "Persona Link: 本机的常驻 node 没在运行（/home/u/.jarvis/node-attach.sock 连不上）：jarvis-link node install",
+		{"node service down", proto.Machine{Error: "Persona Link: 本机的常驻 node 没在运行（/home/u/.persona/node-attach.sock 连不上）：persona-link node install",
 			LastSeen: seen}, kindLink, errCodeNodeServiceDown},
 		{"node service down, the link's own words", proto.Machine{Error: "Persona Link: 本机的" + link.NodeDownMarker + "（127.0.0.1:1 连不上）",
 			LastSeen: seen}, kindService, errCodeNodeServiceDown},

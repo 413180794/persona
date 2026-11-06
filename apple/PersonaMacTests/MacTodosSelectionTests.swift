@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Mac todos page moves its selection when the selected todo is deleted (#3471): list context menu,
 /// the detail page's own delete button, and a push delete from another device all only change `store.todos`.

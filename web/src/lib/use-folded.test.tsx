@@ -24,7 +24,7 @@ beforeEach(() => {
   root = createRoot(host);
   act(() => root.render(
     <>
-      <Group k="jarvis" />
+      <Group k="persona" />
       <Group k="recent" scope={AGENTS_FOLD} />
       <FoldScope.Provider value={AGENTS_FOLD}>
         <Group k="space:mac/a" />
@@ -41,12 +41,12 @@ afterEach(() => {
 describe("folding one block", () => {
   it("folds and opens the Agents block's groups, not the others", () => {
     act(() => setAgentsFolded(true));
-    expect([state("jarvis"), state("recent"), state("space:mac/a")]).toEqual(["open", "folded", "folded"]);
-    expect(localStorage.getItem("fold:jarvis")).toBeNull();
+    expect([state("persona"), state("recent"), state("space:mac/a")]).toEqual(["open", "folded", "folded"]);
+    expect(localStorage.getItem("fold:persona")).toBeNull();
     act(() => setAllFolded(true));
-    expect(state("jarvis")).toBe("folded");
+    expect(state("persona")).toBe("folded");
     act(() => setAgentsFolded(false));
-    expect([state("jarvis"), state("recent"), state("space:mac/a")]).toEqual(["folded", "open", "open"]);
+    expect([state("persona"), state("recent"), state("space:mac/a")]).toEqual(["folded", "open", "open"]);
   });
 });
 

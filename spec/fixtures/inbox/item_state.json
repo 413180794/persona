@@ -7,7 +7,7 @@
       "description": "事项的分拣状态与完成状态分别派生。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/JarvisTests/InboxTests.swift: decodesItemsAndOpensThem"
+        "ios/PersonaTests/InboxTests.swift: decodesItemsAndOpensThem"
       ],
       "input": {
         "sessions": [],

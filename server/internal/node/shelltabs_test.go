@@ -37,7 +37,7 @@ func TestShellTabSweepClosesPersonaTabsLeftWithAShell(t *testing.T) {
 		shellPane("w1:p3", "w1:t3", "w1", cwd, sidB), // something else runs in front
 		shellPane("w1:p4", "w1:t4", "w1", cwd, sidC), // split: only this pane goes
 		shellPane("w1:p5", "w1:t4", "w1", cwd, ""),
-		shellPane("w1:p7", "w1:t7", "w1", cwd, "agent"), // typed into between the looks
+		shellPane("w1:p7", "w1:t7", "w1", cwd, "agent"),                      // typed into between the looks
 		claudeAgent(sidD, proto.StatusIdle, "w1:p6", "w1:t6", "w1", cwd, ""), // a running agent's pane
 	}))
 	f.handle("pane.process_info", func(p map[string]any) any {

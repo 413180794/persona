@@ -2,7 +2,7 @@
 
 When a machine connects to the hub actively through Persona Link (`kind: link`), or the hub connects to the computer (`kind: service`), the resident personad is updated over the existing node RPC. Link still only forwards byte streams: no new listening port, no SSH required, and it is not responsible for installing anything.
 
-This updates the executable used by the resident node; it does not update the connector jarvis-link or the Mac menu bar App itself. Implementation: `server/internal/devices/deploy_rpc.go`, `server/internal/node/update.go`, `server/internal/nodeupdate/`. The old SSH / tailcat deploy entry points stay.
+This updates the executable used by the resident node; it does not update the connector persona-link or the Mac menu bar App itself. Implementation: `server/internal/devices/deploy_rpc.go`, `server/internal/node/update.go`, `server/internal/nodeupdate/`. The old SSH / tailcat deploy entry points stay.
 
 ## Usage
 
@@ -20,8 +20,8 @@ When the web Machines page or machine detail shows a version mismatch, click **R
 A new protocol cannot make an old node that does not know it update itself. When a machine does not report the update capability, the web page does not offer a button that is bound to fail; it explains that the resident node must first be upgraded once on the computer.
 
 1. Get a personad that includes this capability and fits the machine's OS and architecture, and make sure it includes the features and custom changes this machine uses.
-2. On the computer, find where the resident node is actually installed: `bin` in `jarvis-link node status --json`. Respect the existing service's runtime root, launch arguments and environment; do not guess from the default directory alone.
-3. Replace that binary through the original install or deploy channel, then restart the corresponding resident node service. On Linux the standard user service is `jarvisd-node`; on Mac the standard LaunchAgent label is `com.jarvis.node`.
+2. On the computer, find where the resident node is actually installed: `bin` in `persona-link node status --json`. Respect the existing service's runtime root, launch arguments and environment; do not guess from the default directory alone.
+3. Replace that binary through the original install or deploy channel, then restart the corresponding resident node service. On Linux the standard user service is `personad-node`; on Mac the standard LaunchAgent label is `com.persona.node`.
 4. Go back to the Machines page and confirm the node is connected and supports remote updates; later upgrades can then be done from the client.
 
 Reinstalling the Persona Link App on Mac currently does not replace an installed resident node automatically; upgrading the menu bar App does not count as doing this step. The first migration should use a node artifact that includes this capability.
@@ -57,6 +57,6 @@ After reconnecting, the hub first confirms the node can read sessions normally, 
 ## Verification
 
 - hub: `TestLinkedDeploy*`, `TestUpdateNodesQueuesOfflineLinkedMachine`, covering chunking, resume position, bad confirm positions, no update while busy, becoming busy before commit, target version confirmation, recovery after a hub restart, and offline targets.
-- node / local updater: isolated executable and temporary HOME, covering a complete package, a corrupt package, the wrong version, concurrent requests, resident process restart, confirmation and rollback on failure. Never install or stop the dev machine's real `com.jarvis.node` service.
+- node / local updater: isolated executable and temporary HOME, covering a complete package, a corrupt package, the wrong version, concurrent requests, resident process restart, confirmation and rollback on failure. Never install or stop the dev machine's real `com.persona.node` service.
 - Web: `machine-deploy.test.ts` covers old and new hubs, the update capability and each phase; anonymized data is checked in real screenshots in light / dark, list / detail and narrow screens.
 - The full server suite uses an isolated test database on real Postgres and follows the test environment isolation rules in `docs/testing.md`.

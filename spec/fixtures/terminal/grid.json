@@ -6,8 +6,8 @@
       "name": "erase_and_overwrite",
       "description": "清除行尾、覆盖宽字符右半并保留擦除背景。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi",
-        "ios/JarvisTests/TerminalGridTests.swift — erasesAndOverwrites"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi",
+        "ios/PersonaTests/TerminalGridTests.swift — erasesAndOverwrites"
       ],
       "input": {
         "cols": 10,
@@ -205,8 +205,8 @@
       "name": "wide_redraw_in_place",
       "description": "同位置重画宽字符保留新字，错位覆盖清除旧字两半。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.put / putRightHalf",
-        "ios/JarvisTests/TerminalWrapTests.swift — overwritingAWideCharacterInPlaceKeepsIt"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.put / putRightHalf",
+        "ios/PersonaTests/TerminalWrapTests.swift — overwritingAWideCharacterInPlaceKeepsIt"
       ],
       "input": {
         "cols": 10,
@@ -298,8 +298,8 @@
       "name": "unknown_sequences",
       "description": "同步输出、字符集、标题和未知 CSI 不写进网格。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi",
-        "ios/JarvisTests/TerminalGridTests.swift — unknownSequencesAreSkipped"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi",
+        "ios/PersonaTests/TerminalGridTests.swift — unknownSequencesAreSkipped"
       ],
       "input": {
         "cols": 20,
@@ -340,7 +340,7 @@
       "name": "right_edge_does_not_wrap",
       "description": "写满行后丢弃越界字符，换行只由控制序列触发。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.printChar / control"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.printChar / control"
       ],
       "input": {
         "cols": 4,
@@ -415,7 +415,7 @@
       "name": "wide_left_half_replaced",
       "description": "窄字符覆盖宽字符左半时清空右半。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.put"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.put"
       ],
       "input": {
         "cols": 10,
@@ -507,7 +507,7 @@
       "name": "wide_overlaps_next_wide",
       "description": "新宽字符的右半覆盖下一宽字符左半时清空其右半。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.putRightHalf"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.putRightHalf"
       ],
       "input": {
         "cols": 10,
@@ -609,7 +609,7 @@
       "name": "grapheme_widths_in_grid",
       "description": "组合字、肤色 emoji 和连接序列按字素写入网格。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.width / printChar"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.width / printChar"
       ],
       "input": {
         "cols": 16,
@@ -679,7 +679,7 @@
       "name": "combining_across_frames",
       "description": "下一帧的孤立组合音标追加到前一窄字符。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.printChar"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.printChar"
       ],
       "input": {
         "cols": 6,
@@ -781,7 +781,7 @@
       "name": "cursor_motion_and_clamping",
       "description": "CUP、相对移动和绝对列行定位都限制在网格范围内。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi"
       ],
       "input": {
         "cols": 6,
@@ -1096,7 +1096,7 @@
       "name": "control_characters",
       "description": "回车、换行、退格、制表符和无效控制字符保持现有语义。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.control"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.control"
       ],
       "input": {
         "cols": 12,
@@ -1239,7 +1239,7 @@
       "name": "lf_bottom_scroll",
       "description": "底部 LF 上移网格并保留当前列。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.lineFeed"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.lineFeed"
       ],
       "input": {
         "cols": 4,
@@ -1311,7 +1311,7 @@
       "name": "erase_display_modes",
       "description": "ED 清除光标后、光标前或整屏但不移动光标。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.eraseDisplay"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.eraseDisplay"
       ],
       "input": {
         "cols": 6,
@@ -1429,7 +1429,7 @@
       "name": "erase_line_modes",
       "description": "EL 按范围清空当前行，整行清除保留光标。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.eraseLine"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.eraseLine"
       ],
       "input": {
         "cols": 8,
@@ -1489,7 +1489,7 @@
       "name": "erase_wide_half_is_literal",
       "description": "擦除右半格保留左半宽字符，记录现有逐格擦除行为。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.blank"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.blank"
       ],
       "input": {
         "cols": 6,
@@ -1586,7 +1586,7 @@
       "name": "insert_delete_characters",
       "description": "插入和删除字符移动已存格子，插入超出列宽时截断。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.deleteChars / insertChars"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.deleteChars / insertChars"
       ],
       "input": {
         "cols": 8,
@@ -1688,7 +1688,7 @@
       "name": "insert_delete_and_scroll_rows",
       "description": "插入行、删除行、上滚和下滚移动整行并补空行。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi"
       ],
       "input": {
         "cols": 4,
@@ -1880,7 +1880,7 @@
       "name": "split_csi_and_osc",
       "description": "CSI 和 OSC 状态跨帧保留，链接在结束标记后关闭。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.Parser.step / osc / sgr"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.Parser.step / osc / sgr"
       ],
       "input": {
         "cols": 8,
@@ -1999,7 +1999,7 @@
       "name": "osc_bel_and_escape_termination",
       "description": "OSC 支持 BEL 和 ESC 终止，非反斜杠字符重新进入解析。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.Parser.step / osc"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.Parser.step / osc"
       ],
       "input": {
         "cols": 6,
@@ -2047,7 +2047,7 @@
       "name": "alternate_screen_is_ignored",
       "description": "备用屏模式在镜像子集中被忽略，不保存另一份网格。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed / csi"
       ],
       "input": {
         "cols": 8,
@@ -2107,7 +2107,7 @@
       "name": "visibility_and_reset",
       "description": "重置清空网格、样式、解析状态并恢复可见光标。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.reset / csi"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.reset / csi"
       ],
       "input": {
         "cols": 8,
@@ -2207,7 +2207,7 @@
       "name": "minimum_grid_size",
       "description": "非正尺寸按一行一列初始化。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.init / printChar"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.init / printChar"
       ],
       "input": {
         "cols": 0,
@@ -2246,7 +2246,7 @@
       "name": "utf8_replacement_per_frame",
       "description": "每帧独立解码 UTF-8，跨帧拆开的多字节字符不会缓冲。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed(Data)"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.feed(Data)"
       ],
       "input": {
         "cols": 8,

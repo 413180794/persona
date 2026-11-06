@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @Suite("Pinned conversations scrolling and pull arbitration")
 struct LarkPinnedInteractionTests {

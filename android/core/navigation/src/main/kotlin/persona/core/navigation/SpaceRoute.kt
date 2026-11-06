@@ -9,5 +9,5 @@ import kotlinx.serialization.Serializable
  * a wide window shows the page beside the list, a phone pushes it. [title] is the space's name when it was opened, for
  * the page's first frame (before the sessions are read).
  */
-@Serializable @SerialName("jarvis.core.navigation.SpaceRoute")
+@Serializable @SerialName("persona.core.navigation.SpaceRoute")
 data class SpaceRoute(val spaceId: String, val title: String = "") : NavKey

@@ -474,7 +474,7 @@ func TestMCPServersPoint(t *testing.T) {
 		t.Fatalf("%+v", s)
 	}
 	for name, change := range map[string]func(map[string]any){
-		"the assistant's own name": func(s map[string]any) { s["id"] = "jarvis" },
+		"the assistant's own name": func(s map[string]any) { s["id"] = "persona" },
 		"a path as command":        func(s map[string]any) { s["command"] = "/usr/bin/x" },
 		"a reserved command":       func(s map[string]any) { s["command"] = "bash" },
 		"env name":                 func(s map[string]any) { s["env"] = "lower" },

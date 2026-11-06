@@ -22,7 +22,7 @@ import (
 
 // Dialing a peer (docs/mesh.md "Dialing"): every paired hub is dialed until there is a link to it, whichever side made
 // it. The hub with the larger hub_id waits a moment before each try so the two rarely connect at once. Candidates are
-// tried as jarvis-link does: LAN first, then public IPv6, names, public IPv4, one every 300 ms, the first that works
+// tried as persona-link does: LAN first, then public IPv6, names, public IPv4, one every 300 ms, the first that works
 // wins; the TLS key must be the one pinned at pairing. http:// candidates (mesh.plaintext, peer_plain.go) come after
 // the https ones, and only at allowed addresses. Backoff: 1 s doubling to a minute, randomized; 5 minutes after
 // the other hub refused the credential. These are settings, not measurements.

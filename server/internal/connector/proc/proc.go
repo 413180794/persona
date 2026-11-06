@@ -2,7 +2,7 @@
 // implements every capability and declares what the program said it has (a proxy's manifest): the hub uses only
 // those. The program is either a plugin's, run by the plugin host (Config.Link: the hub's way, docs/extensions.md), or
 // started here with the connector protocol's own opening (Config.Path). The Telegram extension is one (#1704): its
-// dependencies would double jarvisd's size (docs/archive/plan-telegram.md).
+// dependencies would double personad's size (docs/archive/plan-telegram.md).
 package proc
 
 import (
@@ -59,7 +59,7 @@ type Config struct {
 	// still lists its capabilities and can be signed in to and out of. The program's own (at init) is checked against
 	// it, a difference logged; this one is used. Without capabilities here, the program's is used once it runs.
 	Manifest connector.Manifest
-	Path     string // the program (next to jarvisd)
+	Path     string // the program (next to personad)
 	Args     []string
 	Env      []string // added to the hub's environment
 	// Version is what `<Path> version -v` must print (the hub's own): the two come from one build. "" skips it.

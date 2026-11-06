@@ -4,10 +4,10 @@ import XCTest
 /// account chips, a chat of the second account, and its inbox item opening in that account. Never a Feishu account.
 final class LarkAccountsFlowTests: XCTestCase {
     @MainActor private func launch(_ extra: [String] = []) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs a MOCK_LARK_ACCOUNTS mock") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs a MOCK_LARK_ACCOUNTS mock") }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-demo.on", "NO", "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES",
                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"] + extra
         app.launchPinned()
@@ -17,7 +17,7 @@ final class LarkAccountsFlowTests: XCTestCase {
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }

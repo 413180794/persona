@@ -3,7 +3,7 @@ import Foundation
 /// Settings › Model (docs/launchers.md): every launcher, from each machine's ~/.zshrc or added in Persona.
 nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var name: String
-    var source: String // zshrc | jarvis
+    var source: String // zshrc | persona
     var baseURL: String?
     var model: String?
     var smallModel: String?
@@ -48,7 +48,7 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var id: String { name }
     /// What a person reads: the display name, else the name.
     var title: String { displayName.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? name }
-    var managed: Bool { source == "jarvis" }
+    var managed: Bool { source == "persona" }
     /// A wrapper script on a computer's PATH (#5954) rather than a ~/.zshrc function.
     var pathScript: Bool { source == "path" }
 

@@ -65,7 +65,7 @@ func TestLiveActivityPayload(t *testing.T) {
 	now := time.Unix(1761700000, 0)
 	st := FleetState{Phase: "needsYou", NeedsYou: 2, Working: 3}
 	start := liveActivityPayload("start", st, now)["aps"].(map[string]any)
-	if start["event"] != "start" || start["attributes-type"] != "JarvisActivityAttributes" || start["timestamp"] != now.Unix() {
+	if start["event"] != "start" || start["attributes-type"] != "PersonaActivityAttributes" || start["timestamp"] != now.Unix() {
 		t.Fatalf("start %v", start)
 	}
 	if start["alert"].(map[string]any)["body"] != "2 个需要你 · 3 个在工作" {
@@ -264,13 +264,13 @@ func TestLiveActivityTokenAPI(t *testing.T) {
 	}
 }
 
-// TestManualLiveActivityPush sends one real update through APNs (sandbox) with this machine's ~/.jarvis/apns.json, to
-// check a running activity end to end (docs/testing.md). Opt-in: JARVIS_LA_TOKEN=<activity push token>
-// JARVIS_LA_TOPIC=<app bundle id>.
+// TestManualLiveActivityPush sends one real update through APNs (sandbox) with this machine's ~/.persona/apns.json, to
+// check a running activity end to end (docs/testing.md). Opt-in: PERSONA_LA_TOKEN=<activity push token>
+// PERSONA_LA_TOPIC=<app bundle id>.
 func TestManualLiveActivityPush(t *testing.T) {
-	token, topic := os.Getenv("JARVIS_LA_TOKEN"), os.Getenv("JARVIS_LA_TOPIC")
+	token, topic := os.Getenv("PERSONA_LA_TOKEN"), os.Getenv("PERSONA_LA_TOPIC")
 	if token == "" || topic == "" {
-		t.Skip("set JARVIS_LA_TOKEN and JARVIS_LA_TOPIC")
+		t.Skip("set PERSONA_LA_TOKEN and PERSONA_LA_TOPIC")
 	}
 	p := newPusher(dataDir(), nil, t.Logf)
 	if p.direct == nil {

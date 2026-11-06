@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Which chats' waiting messages go out, by group (#4704): a group's messages go once its own link is up, whatever the
 /// hub-level group's link is doing, and a group that is sending already or out of reach keeps no other group back.

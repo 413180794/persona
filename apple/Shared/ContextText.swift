@@ -1,14 +1,14 @@
 import Foundation
 
-/// A text made safe to go inside a `<jarvis-context>` / `<persona-context>` block: nothing left in it closes the
+/// Text made safe to go inside a `<persona-context>` block: nothing left in it closes the
 /// block, so what follows cannot sit outside it as the user's own words (an inbox item handed to the AI comes from
 /// someone else, #3831). The same output as the hub's `prompts.ContextBody`, the web's `contextBody` and Android's.
 nonisolated enum ContextText {
-    /// What a reader may take as the end of a block: either name, any case, spaces around the slash and before `>`.
+    /// What a reader may take as the end of a block: any case, spaces around the slash and before `>`.
     static let closingTag = try! NSRegularExpression(
-        pattern: #"<(\s*/\s*(?:jarvis|persona)-context\s*>)"#, options: [.caseInsensitive])
+        pattern: #"<(\s*/\s*persona-context\s*>)"#, options: [.caseInsensitive])
 
-    /// Closing tags are removed, and one that the removal itself puts together (`</jarvis-</jarvis-context>context>`)
+    /// Closing tags are removed, and one that the removal itself puts together (`</persona-</persona-context>context>`)
     /// has its `<` written as `&lt;`, which joins nothing. Two passes, linear in the text.
     static func inBlock(_ text: String) -> String {
         let removed = replace(text, with: "")

@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A standalone inbox-item window must not drive the main window's shared `reading` state: opening a link or closing
 /// the window used to fold and clear the inbox page's filters and list (#3477).

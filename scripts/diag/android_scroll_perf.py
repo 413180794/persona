@@ -5,7 +5,7 @@ dumpsys gfxinfo for every run (docs/android.md, "Performance of UI styles").
 
 Each run: open the page through the debug entry (debug.style, debug.automation: no frame-drop fallback), wait, reset
 gfxinfo, fling up and down twice, then read the summary (total / janky frames, percentiles) and the framestats rows
-(frame time = FrameCompleted - IntendedVsync). The conversation is the Jarvis tab unless CHAT=<machine>/<session>; ONLY=chat,inbox limits the scenarios.
+(frame time = FrameCompleted - IntendedVsync). The conversation is the Persona tab unless CHAT=<machine>/<session>; ONLY=chat,inbox limits the scenarios.
 The last style passed stays selected in the app: end with the one the phone should keep."""
 import json, re, statistics, subprocess, sys, time
 
@@ -97,8 +97,8 @@ if __name__ == "__main__":
             if os.environ.get("ONLY") and name not in os.environ["ONLY"].split(","):
                 continue
             if name == "chat":
-                # Without a session path, the Jarvis tab: the assistant's long-running main conversation.
-                extras = ["debug.openSession", chat, "debug.conversationKind", "agent"] if chat else ["debug.openTab", "Jarvis"]
+                # Without a session path, the Persona tab: the assistant's long-running main conversation.
+                extras = ["debug.openSession", chat, "debug.conversationKind", "agent"] if chat else ["debug.openTab", "Persona"]
             runs = run_scenario(style, name, extras)
             frames = [f for r in runs for f in r["frames"]]
             jank = [100.0 * r["janky"] / r["total"] for r in runs if r["total"]]

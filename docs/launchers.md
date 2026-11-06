@@ -61,7 +61,7 @@ and fails only after 3 minutes. herdr's wrapper mechanism is `HERDR_AGENT=<agent
 Supported since herdr 0.7.1 (Linux) / 0.7.5 (macOS); ignored by older herdr and on Windows.
 
 - When starting Claude in a herdr pane, node types `HERDR_AGENT=claude <launcher> --session-id … --mcp-config …` (for `claude_start_dir`,
-  `HERDR_AGENT=claude CLAUDE_CONFIG_DIR=… claude …`; for Persona-managed launchers, `HERDR_AGENT=claude jarvisd launch <name> …`). This also applies to panes chosen with “Run Agent here.”
+  `HERDR_AGENT=claude CLAUDE_CONFIG_DIR=… claude …`; for Persona-managed launchers, `HERDR_AGENT=claude personad launch <name> …`). This also applies to panes chosen with “Run Agent here.”
   `resume_argv` used after herdr restarts (`eval "… --resume <id> …"`, `node/herdrresume.go`) has the same prefix. Launchers declared by hub as Codex use `HERDR_AGENT=codex <launcher> …`;
   see `docs/codex.md`, “Creating sessions from the phone.” The internal Codex fork and pi get no prefix (herdr has no names for them). Other engines (Orca…) and headless runs (assistant, availability tests, model listing) get none either.
 - Prefix only shells supporting `VAR=val cmd`: bash, zsh, fish (since 3.1), sh, dash, ksh, mksh. For a new tab, the shell interpreting this line is the one herdr uses to open the pane
@@ -84,34 +84,34 @@ Supported since herdr 0.7.1 (Linux) / 0.7.5 (macOS); ignored by older herdr and 
 
 - Stored in settings `launchers.managed`; the manager AES-GCM encrypts API keys with its own `secret.key` (the built-in manager's `~/.persona/managers/assistant/secret.key`, the same key used for email credentials, `server/internal/secretkey`). **The API never returns keys**.
 - When nodes connect and after every change, the manager pushes full settings (including keys) through hub to all nodes (`launchers.managed`). node keeps them only in memory; hub neither stores nor decrypts them.
-- At startup, node types `jarvisd launch <name> …` into a herdr pane (or executes it for the headless assistant). This subcommand gets settings through local node.sock
+- At startup, node types `personad launch <name> …` into a herdr pane (or executes it for the headless assistant). This subcommand gets settings through local node.sock
   (`launcher.env`), removes inherited `ANTHROPIC_*` and related shell variables, sets `ANTHROPIC_BASE_URL`, the key (see “Authentication method” below), and model tiers
   (`ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`; the small model goes to haiku / small fast; the sub-Agent model to `CLAUDE_CODE_SUBAGENT_MODEL`, following the primary model if empty;
   custom model options go to `ANTHROPIC_CUSTOM_MODEL_OPTION` and its name / description), then execs claude.
-  Keys never enter the terminal or command line. You can also type `jarvisd launch <name>` directly in a terminal.
-- **Only `jarvisd launch` gets the settings** (#5588). Every agent's hooks and MCP servers have to reach node.sock, so being able to connect proves nothing.
+  Keys never enter the terminal or command line. You can also type `personad launch <name>` directly in a terminal.
+- **Only `personad launch` gets the settings** (#5588). Every agent's hooks and MCP servers have to reach node.sock, so being able to connect proves nothing.
   `launcher.env` answers only a request that carries the machine's launch key, a random value the node keeps in `launch.key` beside node.sock
-  (0600, written when the node starts listening, kept across restarts). `jarvisd launch` reads the file and sends the key, so every start works as before:
+  (0600, written when the node starts listening, kept across restarts). `personad launch` reads the file and sends the key, so every start works as before:
   from the node, typed into a herdr pane, herdr's `resume_argv` after a herdr restart, and typed by hand in a terminal.
   Any other request gets one error, whatever launcher it names, with none of the settings in it. That includes a process that cannot read the data directory
-  (an agent in a sandbox that hides it, #5357) and a `jarvisd` older than the node, which does not send the key (run the node's own binary instead).
+  (an agent in a sandbox that hides it, #5357) and a `personad` older than the node, which does not send the key (run the node's own binary instead).
   - The check is exactly as strong as the file boundary. A process of the same user outside such a sandbox can read `launch.key`, but it can also read the
     `launcher-settings` files below, which hold the keys themselves. A sandbox for agents must keep `launch.key` hidden along with `secret.key`,
-    and must start where `jarvisd launch` execs the agent, not around `jarvisd launch`, which has to read the key first.
+    and must start where `personad launch` execs the agent, not around `personad launch`, which has to read the key first.
   - Why not a one-time nonce from the node: it cannot reach a launch typed in a terminal, or herdr's stored resume command, which herdr runs on its own after it restarts.
-    Checking the peer process (uid, pid ancestry) adds nothing either. The socket is already 0600, `jarvisd launch` runs whatever `claude` comes first in PATH, and a herdr pane's
+    Checking the peer process (uid, pid ancestry) adds nothing either. The socket is already 0600, `personad launch` runs whatever `claude` comes first in PATH, and a herdr pane's
     start shares its ancestry with the agents' own tool processes.
 - Settings `env` overrides process environment. A different gateway in the user's global `~/.claude/settings.json` `env` would override these variables, so Persona also writes the same variables (including the key)
   to `~/.persona/launcher-settings/<name>-env-settings.json` (0600) and passes it through `--settings` (`node/launcher_settings.go`). On older Claude Code, this is merged with
   Persona hooks in `<name>-<claude|assistant>-settings.json`. These files are rewritten on every start; manual edits are lost.
 - **A proxy that does not answer** (#5953): a provider with no `proxy` of its own keeps the proxy the shell gives it, since a gateway may be reachable only through it.
   But a proxy app that has quit, still named in the shell or in the Claude config directory's `settings.json` `env`, held every request until it timed out.
-  So when the gateway itself takes a direct TCP connection (its Base URL's host and port; none: `api.anthropic.com:443`), `jarvisd launch` drops an inherited
+  So when the gateway itself takes a direct TCP connection (its Base URL's host and port; none: `api.anthropic.com:443`), `personad launch` drops an inherited
   `HTTP(S)_PROXY` / `ALL_PROXY` (either case) whose address takes no TCP connection within a second, twice, and says so on stderr; the settings file above sets such a
   variable from `settings.json` empty (settings `env` cannot unset), noted in the node log; the main conversation through the Agent SDK does the same.
   A gateway that does not answer directly either keeps every proxy: nothing would be gained, and the proxy may come back while the session runs.
   Variables the launcher sets itself (`proxy`, `env`) are never touched (`node/deadproxy.go`).
-- **Artifacts are always disabled**: claude started by a Persona-managed launcher gets `CLAUDE_CODE_DISABLE_ARTIFACT=1` (both in `jarvisd launch` environment and the settings `env` above).
+- **Artifacts are always disabled**: claude started by a Persona-managed launcher gets `CLAUDE_CODE_DISABLE_ARTIFACT=1` (both in `personad launch` environment and the settings `env` above).
   The settings file also sets `"enableArtifact": false` (Claude Code honors disabling it through `--settings`). Artifacts publish to claude.ai and cannot work with a gateway + API key anyway.
   Since 2.1.26x, Claude Code enables them by default, adding Artifacts skill instructions to system messages in interactive sessions. Some gateways reject this in capability checks
   (`400 request is not representable on this edge: Claude Code Artifacts are enabled`), failing a new herdr Agent's first turn; `claude -p` is unaffected.
@@ -125,12 +125,12 @@ Supported since herdr 0.7.1 (Linux) / 0.7.5 (macOS); ignored by older herdr and 
   to empty, both in the environment and the `--settings` above. An explicitly empty variable is not refilled from user settings (tested with Claude Code 2.1.308 on 2026-11-04). Without a key, neither is set, as before.
 - Interactive Claude Code asks “Do you want to use this API key?” the first time it sees a key in `ANTHROPIC_API_KEY`, with “No (recommended)” selected by default.
   Enter (or selecting the default on a phone dialog card) records the key as rejected, leaving later sessions from this launcher without credentials. The user entered the key themselves in Settings › Models,
-  so before execing claude, `jarvisd launch` records it as approved, equivalent to selecting Yes in the dialog: the key's last 20 characters (Claude Code's key identifier) are written to
+  so before execing claude, `personad launch` records it as approved, equivalent to selecting Yes in the dialog: the key's last 20 characters (Claude Code's key identifier) are written to
   `customApiKeyResponses.approved` in Claude's global configuration (`$CLAUDE_CONFIG_DIR` or `.claude.json` under home; old `~/.claude/.config.json` when in use),
   and removed from `rejected` (`node/apikeyapproval.go`). Writes use Claude's own configuration lock
   (`<config path>.lock` directory, stale after 10 seconds), avoiding concurrent writes with running claude. Already approved keys are not rewritten; no write occurs before a configuration file exists (first run,
   when Claude handles onboarding). Write failures print one line to stderr and startup continues. Headless `-p` (assistant) does not ask in the first place.
-- Before settings arrive after a hub restart or node reconnection, `jarvisd launch` reports “hub 还没发过来” (“hub hasn't sent them yet”).
+- Before settings arrive after a hub restart or node reconnection, `personad launch` reports “hub 还没发过来” (“hub hasn't sent them yet”).
 
 ## Parameters on the launcher page (`node/launcherprobe.go`)
 
@@ -222,7 +222,7 @@ Persona-managed providers add these fields following cindy's model (`proto.Manag
 - **Headers and the environment are secrets, like keys**: The manager encrypts them with the same key into `headers_sealed` / `env_sealed`, decrypting only when sending to node; GET returns only `has_headers` / `has_env`.
   PUT without `headers` (`env`) retains the value; an empty string clears it. Other new fields behave the same way: omission leaves them unchanged (old apps editing providers do not clear them).
 - **Validate on write**: Valid Base URL; thinking level only low / medium / high / xhigh / max, with each model's default level included in its supported levels; no negative numbers; no empty or duplicate model IDs; each header line must contain “:”; each environment line must be `NAME=value` with a shell variable's name. Errors never quote a line.
-- On read, `source` stays `jarvis` / `zshrc`; provider origin (`zshrc:<alias>@<machine>`, `preset:<id>`) lives in `origin`.
+- On read, `source` stays `persona` / `zshrc`; provider origin (`zshrc:<alias>@<machine>`, `preset:<id>`) lives in `origin`.
 - Names `test`, `discover`, `import`, `presets`, and `claude` are reserved for APIs and cannot be used.
 
 **Connection tests and model discovery** request the gateway directly from the manager (`assistant/models_probe.go`) (following cindy's `buildProbeRequest` / `provider-model-fetch`), also available before saving a new provider:

@@ -40,7 +40,7 @@ function dshImporter(dir) {
 
 const dshDir = arg('dsh') || process.env.DSH_DIR
 if (!dshDir) {
-  console.error('jarvis DSH companion: --dsh <DSH install or checkout> is required')
+  console.error('persona DSH companion: --dsh <DSH install or checkout> is required')
   process.exit(2)
 }
 const home = resolve(arg('home') || process.env.DSH_HOME || join(homedir(), '.dsh'))
@@ -79,7 +79,7 @@ const files = createDshFiles({
     }
   },
   wake: wakeCommand ? () => new Promise((done, fail) => {
-    log('jarvis DSH companion: waking DSH')
+    log('persona DSH companion: waking DSH')
     const child = spawn('/bin/sh', ['-c', wakeCommand], { stdio: 'ignore' })
     const timer = setTimeout(() => child.kill('SIGTERM'), 30_000)
     child.once('error', (err) => { clearTimeout(timer); fail(err) })
@@ -90,5 +90,5 @@ const files = createDshFiles({
 files.start()
 // The SDK's timers do not hold a process; this one is only the runtime.
 const alive = setInterval(() => {}, 1 << 30)
-log(`jarvis DSH companion: listing the sessions in ${join(home, 'sessions')}`)
+log(`persona DSH companion: listing the sessions in ${join(home, 'sessions')}`)
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { clearInterval(alive); files.stop(); process.exit(0) })

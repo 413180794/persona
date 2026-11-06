@@ -9,10 +9,10 @@ import (
 // script Windows does not have (#1984).
 func TestNodeMissingSaysHowThisComputerRunsTheNode(t *testing.T) {
 	for goos, want := range map[string]string{
-		"windows": "jarvis-link install --jarvisd",
+		"windows": "persona-link install --personad",
 		"darwin":  "菜单栏 App「Persona Link」",
-		"linux":   "jarvis-link node install",
-		"freebsd": "jarvisd node --attach",
+		"linux":   "persona-link node install",
+		"freebsd": "personad node --attach",
 	} {
 		msg := nodeMissing(goos, "/home/u/.persona/node-attach.sock").Error()
 		if !strings.HasPrefix(msg, "本机的常驻 node 没在运行（/home/u/.persona/node-attach.sock 连不上）：") || !strings.Contains(msg, want) {

@@ -9,7 +9,7 @@ mkdir -p $out
 shoot() { # shoot <out.png> <style> <wait> <args…>
   local png=$1 style=$2 wait=$3; shift 3
   xcrun simctl terminate $S $APP 2>/dev/null
-  xcrun simctl launch $S $APP -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A${PORT:-18897}&token=mock" -ui.style $style "$@" >/dev/null
+  xcrun simctl launch $S $APP -pairURL "persona://pair?url=http%3A%2F%2F127.0.0.1%3A${PORT:-18897}&token=mock" -ui.style $style "$@" >/dev/null
   sleep $wait
   xcrun simctl io $S screenshot $png >/dev/null 2>&1
   xcrun simctl terminate $S $APP 2>/dev/null

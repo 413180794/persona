@@ -14,7 +14,7 @@ fun inboxReplyReceiptId(target: ReplyTarget, clientId: String): String {
         is ReplyTarget.Inbox -> "inbox_reply"
         is ReplyTarget.Lark -> if (target.feedId.startsWith("thread:")) "lark_thread_reply" else "lark_send"
     }
-    val bytes = MessageDigest.getInstance("SHA-256").digest("jarvis:reply:$kind:$clientId".toByteArray())
+    val bytes = MessageDigest.getInstance("SHA-256").digest("persona:reply:$kind:$clientId".toByteArray())
     bytes[6] = ((bytes[6].toInt() and 15) or 128).toByte()
     bytes[8] = ((bytes[8].toInt() and 63) or 128).toByte()
     val buffer = ByteBuffer.wrap(bytes)

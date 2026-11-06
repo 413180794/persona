@@ -2,16 +2,16 @@ import XCTest
 
 /// Extensions' main-navigation pages (nav_page) opened straight from the navigation (#2961): the new shell's drawer on
 /// iPhone, the sidebar column on iPad, after the places to go, with the extension's badge. Against
-/// scripts/mock/mock_hub.py with MOCK_PLUGINS=1 (its example-gateway › Usage, badge 3): `TEST_RUNNER_JARVIS_PLUGINS_HUB=
-/// http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by
-/// `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
+/// scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1 (its example-gateway › Usage, badge 3): `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=
+/// http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named by
+/// `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` and the style.
 final class ExtensionNavEntryTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
     private let entry = "sidebar-extension-example-gateway-usage"
 
     @MainActor private func launch(_ args: [String]) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)") }
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
@@ -21,8 +21,8 @@ final class ExtensionNavEntryTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir)
             .appending(path: "nav-entry-\(device)-\(name)-\(UITestStyle.name)-\(look).png"))

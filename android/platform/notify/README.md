@@ -11,7 +11,7 @@
 ## 下一轮 App 接线
 
 - 保留 `Notify.install(application, connection.events)` 和 `Notify.viewing(session)`，继续使用共享连接与当前可见会话。
-- 冷启动和 `onNewIntent` 均用 `core:navigation` 的 `NotificationRoute.parse(uri)` 读取通知链接。`tab=jarvis` 回助手，`tab=agents` 回 Agents；使用 `chat` 打开对应会话。明确给出的 tab 应优先于旧返回栈的归属判断。
+- 冷启动和 `onNewIntent` 均用 `core:navigation` 的 `NotificationRoute.parse(uri)` 读取通知链接。`tab=persona` 回助手，`tab=agents` 回 Agents；使用 `chat` 打开对应会话。明确给出的 tab 应优先于旧返回栈的归属判断。
 - 未拿到会话元数据时，通知不会猜测 tab。此时 `route.tab` 为 null，App 需按会话元数据确定归属后再打开，避免先进入错误的 tab。
 - App 设置车道已通过 `DeviceSettingsModule` 绑定 `NotificationPreferencesSource`，与设置页共用当前配对的设备 ID 和受信 HTTP client。展示前刷新本机 hub 偏好：`input=false` 拦截交互提醒，`done=off` 拦截完成提醒；`long/always` 的条件继续由 hub 决策。读取失败或当前设备服务尚不可用时，不展示业务提醒。
 

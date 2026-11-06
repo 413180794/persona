@@ -16,7 +16,7 @@ The new request parameters and socket feature are opt-in. No client implementati
 
 ## Reproduction
 
-Configure a real isolated Postgres test database using `JARVIS_TEST_DATABASE_URL`, as in the server test setup, then run from `server/`:
+Configure a real isolated Postgres test database using `PERSONA_TEST_DATABASE_URL`, as in the server test setup, then run from `server/`:
 
 ```sh
 go test -p 1 -timeout 8m ./internal/hub ./internal/extmgr ./internal/agents ./internal/sessionlist ./internal/i18n ./internal/proto -count=1

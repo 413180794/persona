@@ -32,7 +32,7 @@ object GlassFrameMonitor {
             if (frames >= WINDOW) {
                 if (frames >= MIN_FRAMES && janky.toDouble() / frames > JANK_SHARE) {
                     activity.runOnUiThread { GlassThrottle.lower() }
-                    Log.i("JarvisGlass", "glass lowered after $janky slow frames of $frames")
+                    Log.i("PersonaGlass", "glass lowered after $janky slow frames of $frames")
                 }
                 frames = 0
                 janky = 0

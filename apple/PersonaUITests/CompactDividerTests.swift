@@ -3,14 +3,14 @@ import XCTest
 /// Where the context was compacted, the chat draws one divider (「以上内容已压缩 · 来源 · 压缩前 N 万 token」, as the web and Android, #1762), not the two notices and
 /// the idle note in a work line of their own (2026-11-04, the user's screenshot); a tap shows the notes.
 ///   PORT=18797 MOCK_COMPACT=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/CompactDividerTests
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/CompactDividerTests
 final class CompactDividerTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_COMPACT=1 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_COMPACT=1 (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -23,7 +23,7 @@ final class CompactDividerTests: XCTestCase {
 
     private func launch(_ args: [String]) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openChatsFresh", "YES"] + args
         app.launchPinned()
         let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
@@ -60,8 +60,8 @@ final class CompactDividerTests: XCTestCase {
         divider.tap()
     }
 
-    /// Jarvis's main conversation, compacted while idle after its last answer.
-    func testJarvisIdleCompaction() {
+    /// Persona's main conversation, compacted while idle after its last answer.
+    func testPersonaIdleCompaction() {
         launch(["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", "server/b2e4d6f8-0000-4000-8000-000000000001"])
         // It opens at the start of the latest answer (finished, not seen): down to the newest, where the divider is.
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "今天的日程")).firstMatch.waitForExistence(timeout: 20))
@@ -69,11 +69,11 @@ final class CompactDividerTests: XCTestCase {
         if down.waitForExistence(timeout: 3) { down.tap() } else { app.swipeUp(velocity: .slow) }
         sleep(1)
         let d = dividers.firstMatch
-        if !d.waitForExistence(timeout: 8) { print("TREE " + app.debugDescription.replacingOccurrences(of: "\n", with: "\nTREE ")); shot("jarvis-missing") }
+        if !d.waitForExistence(timeout: 8) { print("TREE " + app.debugDescription.replacingOccurrences(of: "\n", with: "\nTREE ")); shot("persona-missing") }
         XCTAssertTrue(d.exists, "the divider")
         XCTAssertTrue(d.label.hasPrefix("以上内容已压缩 · 空闲时 · 压缩前 15.1 万 token"), d.label)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "后台通知")).firstMatch.exists, "no work line of notices")
-        checkNotes(d, "jarvis", last: true)
+        checkNotes(d, "persona", last: true)
     }
 
     /// An Agents chat: /compact, then a compaction in the middle of a later turn's work.

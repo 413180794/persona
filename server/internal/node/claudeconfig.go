@@ -162,7 +162,7 @@ func writeSetting(path, key string, value any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp := path + ".jarvis.tmp"
+	tmp := path + ".persona.tmp"
 	mode := os.FileMode(0o644)
 	if st, err := os.Stat(path); err == nil {
 		mode = st.Mode().Perm()

@@ -26,7 +26,7 @@ def ok(msg):
 
 def run(browser, base, token):
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, locale="zh-CN", is_mobile=True, has_touch=True)
-    ctx.add_init_script(f"localStorage.setItem('jarvis.token', {token!r})")
+    ctx.add_init_script(f"localStorage.setItem('persona.token', {token!r})")
     page = ctx.new_page()
     page.set_default_timeout(15000)
     chat = f"{base}/s/{MID}/{SID}"

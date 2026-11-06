@@ -103,7 +103,7 @@ func TestAgentFiltersLeaveCodexRunsOut(t *testing.T) {
 		{"0f000000-0000-4000-8000-0000000000a2", `{"originator":"codex-bot","source":{"subagent":{"thread_spawn":{"parent_thread_id":"0f000000-0000-4000-8000-0000000000a1"}}}}`, "look at the logs", false},
 		{"0f000000-0000-4000-8000-0000000000a3", `{"originator":"codex-bot","source":"vscode","cwd":"/home/me"}`, "", false},
 		{"0f000000-0000-4000-8000-0000000000a4", `{"originator":"some-bridge","source":"vscode","cwd":"/home/me"}`, "You are running as an agent in a bot workspace chat.", false},
-		{"0f000000-0000-4000-8000-0000000000b1", `{"originator":"jarvis","source":"vscode","cwd":"/work/app"}`, "fix the build", true},
+		{"0f000000-0000-4000-8000-0000000000b1", `{"originator":"persona","source":"vscode","cwd":"/work/app"}`, "fix the build", true},
 		{"0f000000-0000-4000-8000-0000000000b2", `{"originator":"codex-tui","source":"cli","cwd":"/work/mine"}`, "why does the bot start so many codex runs", true},
 		{"0f000000-0000-4000-8000-0000000000b3", `{"originator":"Codex Desktop","source":"vscode","cwd":"/work/app"}`, "", true},
 		{"0f000000-0000-4000-8000-0000000000b4", `{"originator":"codex-bot","source":"vscode","cwd":"/home/me"}`, "kept by the hub", true},

@@ -29,9 +29,9 @@ import (
 const (
 	roleFull   = "full"
 	roleAnswer = "answer"
-	// roleLink is a jarvis-link credential (link.go): it opens its machine's link and nothing else.
+	// roleLink is a persona-link credential (link.go): it opens its machine's link and nothing else.
 	roleLink = "link"
-	// roleLinkPair is a pairing code made for one machine's jarvis-link (`jarvisd hub pair --machine`): all it can
+	// roleLinkPair is a pairing code made for one machine's persona-link (`personad hub pair --machine`): all it can
 	// do is become that credential.
 	roleLinkPair = "link_pair"
 )
@@ -287,7 +287,7 @@ func (h *Hub) picksFreeText(id string, r proto.Resolution) bool {
 
 func (h *Hub) tokenRoutes(api *http.ServeMux) {
 	// Trade the caller's credential for a device token. kind "watch" gets an answer-only one; kind "link" a
-	// jarvis-link credential for the link machine named in "machine" (link.go). A browser signing in again names its
+	// persona-link credential for the link machine named in "machine" (link.go). A browser signing in again names its
 	// earlier credential in "replaces", and that one is revoked once the new one is made, when it is a web one: a
 	// browser keeps one device instead of a row of them with the same name (docs/protocol.md "Authentication").
 	api.HandleFunc("POST /api/v1/auth/tokens", func(w http.ResponseWriter, r *http.Request) {
@@ -311,7 +311,7 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 			return
 		}
 		kind, role, machine := req.Kind, roleFull, ""
-		if p.Role == roleLinkPair { // made for one machine's jarvis-link: that credential, and no other
+		if p.Role == roleLinkPair { // made for one machine's persona-link: that credential, and no other
 			if req.Machine != "" && req.Machine != p.Machine {
 				writeErr(w, http.StatusForbidden, fmt.Errorf("this pairing code is for machine %q", p.Machine))
 				return

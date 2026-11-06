@@ -122,7 +122,7 @@ func scopesOf(h http.Header) ([]string, bool) {
 
 // MachineLogin is how a computer's gh login looks to GitHub.
 type MachineLogin struct {
-	// State: signed_in, not_signed_in (gh has no login, or GitHub refused it), no_gh, too_old (its jarvisd),
+	// State: signed_in, not_signed_in (gh has no login, or GitHub refused it), no_gh, too_old (its personad),
 	// offline, error.
 	State   string          `json:"state"`
 	Account string          `json:"account,omitempty"`

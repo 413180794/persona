@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sync"
 	"strings"
+	"sync"
 
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"

@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Storage: which caches folder counts as which kind.
 struct StorageUsageTests {

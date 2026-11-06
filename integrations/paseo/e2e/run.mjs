@@ -1,11 +1,11 @@
 // End-to-end check of Paseo as a machine's engine (docs/paseo.md "Verification"): a real Paseo daemon (its own home and port,
-// a Claude Code provider whose model is the scripted one in model.mjs), a real `jarvisd node --stdio` started by the
+// a Claude Code provider whose model is the scripted one in model.mjs), a real `personad node --stdio` started by the
 // runtime SDK's harness (it plays the hub), and the bridge the node itself writes out and runs once the engine is set
 // to Paseo. It starts a session from the "phone", watches it, sends to it, answers a permission, a question and a
 // plan, switches the mode, interrupts, renames, has a card answered in Paseo's own app, closes, takes a closed
 // session over, and lives through Paseo restarting.
 //
-//   JARVISD=<jarvisd binary, built after go generate> CLAUDE_BIN=<a Claude Code binary> [PASEO_BIN=paseo] \
+//   PERSONAD=<personad binary, built after go generate> CLAUDE_BIN=<a Claude Code binary> [PASEO_BIN=paseo] \
 //     node integrations/paseo/e2e/run.mjs
 //
 // Nothing outside a fresh temp directory is touched: the daemon's home, the node's HOME (which is also the HOME Claude
@@ -22,11 +22,11 @@ import { daemonTarget } from '../lib/discover.js'
 import { PaseoClient } from '../lib/paseo.js'
 import { startModel } from './model.mjs'
 
-const jarvisd = process.env.JARVISD
+const personad = process.env.PERSONAD
 const claudeBin = process.env.CLAUDE_BIN
 const paseoBin = process.env.PASEO_BIN || 'paseo'
-if (!jarvisd || !claudeBin) {
-  console.error('set JARVISD (a jarvisd binary built after go generate ./internal/runtimepkg) and CLAUDE_BIN (a Claude Code binary)')
+if (!personad || !claudeBin) {
+  console.error('set PERSONAD (a personad binary built after go generate ./internal/runtimepkg) and CLAUDE_BIN (a Claude Code binary)')
   process.exit(2)
 }
 const keep = process.env.KEEP === '1'
@@ -99,7 +99,7 @@ check('Paseo runs in its own home, on its own port', daemonTarget(paseoHome).tar
 
 // ---- the node, with the engine set to Paseo: it runs the bridge ----
 
-node = await startNode({ jarvisd, home, env: { PASEO_HOME: paseoHome, ...quiet } })
+node = await startNode({ personad, home, env: { PASEO_HOME: paseoHome, ...quiet } })
 await node.call('engine.use', { engine: 'paseo' })
 const engine = await until('the Paseo engine available', async () => {
   const info = await node.call('node.info', {})

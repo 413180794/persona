@@ -8,11 +8,11 @@ set -u
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 SIM=${SIM:?SIM=<simulator udid>}; PORT=${PORT:-18831}; OUT=${OUT:-/tmp/stream-shots}; mkdir -p "$OUT"
 CASES=${*:-testFollowingWhileAReplyStreams testFollowingWhenTheClearComesFirst testReadingWhileAReplyStreams testArrowWhileAReplyStreams testDragAwayWhileAReplyStreams testFollowingARunningTurn testFollowingAnAgentAtWork testReadingWhileAnAgentWorks}
-BUNDLE=$(cd "$ROOT" && python3 scripts/jarvis_config.py env | sed -n 's/^export JARVIS_BUNDLE_ID=//p')
-cd "$ROOT" && eval "$(python3 scripts/jarvis_config.py env)" >/dev/null
+BUNDLE=$(cd "$ROOT" && python3 scripts/persona_config.py env | sed -n 's/^export PERSONA_BUNDLE_ID=//p')
+cd "$ROOT" && eval "$(python3 scripts/persona_config.py env)" >/dev/null
 SIM=$(scripts/app/sim-boot.sh "$SIM") || { echo "RESULT no simulator"; exit 1; }
 cd apple && xcodegen generate -q
-COMMON=(-project Persona.xcodeproj -scheme Jarvis -destination "id=$SIM" -derivedDataPath "$ROOT/build/DerivedData")
+COMMON=(-project Persona.xcodeproj -scheme Persona -destination "id=$SIM" -derivedDataPath "$ROOT/build/DerivedData")
 [ -n "${SPM:-}" ] && COMMON+=(-clonedSourcePackagesDirPath "$SPM" -disableAutomaticPackageResolution)
 perl -e 'alarm 1800; exec @ARGV' xcodebuild build-for-testing "${COMMON[@]}" > "$OUT/build.log" 2>&1 || { echo "RESULT build failed ($OUT/build.log)"; exit 1; }
 for c in $CASES; do
@@ -26,8 +26,8 @@ for c in $CASES; do
   REC=$!
   # The recording starts about a second before this is written (analyze.sh allows for it).
   sleep 1; python3 -c 'import time; print("%.3f" % time.time())' > "$OUT/$c.recstart"
-  env TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:$PORT TEST_RUNNER_JARVIS_RUN_HUB=http://127.0.0.1:$PORT \
-    TEST_RUNNER_JARVIS_LAYOUT=${LAYOUT:-shell} TEST_RUNNER_JARVIS_UI_STYLE=${STYLE:-glass} \
+  env TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:$PORT TEST_RUNNER_PERSONA_RUN_HUB=http://127.0.0.1:$PORT \
+    TEST_RUNNER_PERSONA_LAYOUT=${LAYOUT:-shell} TEST_RUNNER_PERSONA_UI_STYLE=${STYLE:-glass} \
     perl -e 'alarm 600; exec @ARGV' xcodebuild test-without-building "${COMMON[@]}" -only-testing:PersonaUITests/StreamingScrollTests/$c > "$OUT/$c.log" 2>&1
   rc=$?
   kill -INT $REC; wait $REC 2>/dev/null

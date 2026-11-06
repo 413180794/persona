@@ -6,8 +6,8 @@
       "name": "recorded_sample_output",
       "description": "回放白名单核查后的示例输出帧，跳过含命令路径的帧。",
       "source": [
-        "ios/JarvisTests/Fixtures/terminal-observe.jsonl — 原始帧索引 0、2、3",
-        "ios/JarvisTests/TerminalGridTests.swift — mirrorsWhatHerdrShows / keepsColorsAndStyles / wideCharactersTakeTwoCells / readsLinks"
+        "ios/PersonaTests/Fixtures/terminal-observe.jsonl — 原始帧索引 0、2、3",
+        "ios/PersonaTests/TerminalGridTests.swift — mirrorsWhatHerdrShows / keepsColorsAndStyles / wideCharactersTakeTwoCells / readsLinks"
       ],
       "input": {
         "cols": 172,

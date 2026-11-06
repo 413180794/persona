@@ -266,7 +266,7 @@ func (c *Client) AgentStatus(ctx context.Context, t Target) (*AgentStatus, error
 }
 
 // ClientID is how Persona names itself to Orca as the driver of its input (terminal.send's client.id, required).
-const ClientID = "jarvis"
+const ClientID = "persona"
 
 // client is the driver terminal.send names: Persona as a desktop client (the only type Orca pastes agent prompts for).
 func client() map[string]any { return map[string]any{"id": ClientID, "type": "desktop"} }

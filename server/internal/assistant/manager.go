@@ -216,8 +216,8 @@ func RunManager(ctx context.Context, build update.Build, dir string) error {
 	}
 	// What it starts (extensions, tools) finds its data directory, not the hub's.
 	_ = os.Setenv("PERSONA_HOME", dir)
-	_ = os.Setenv("JARVIS_HOME", dir)
-	deploy := identity.Getenv("JARVIS_ASSISTANT_DEPLOY")
+	_ = os.Setenv("PERSONA_HOME", dir)
+	deploy := identity.Getenv("PERSONA_ASSISTANT_DEPLOY")
 	if deploy == "" {
 		deploy = "external"
 		if _, err := os.Stat("/.dockerenv"); err == nil {

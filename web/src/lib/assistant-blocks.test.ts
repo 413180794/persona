@@ -83,7 +83,7 @@ describe("open 目标（CheckAssistantOpen）", () => {
   it("opens https and the persona targets", () => {
     expect(openTarget("https://example.com/a?b=1")).toEqual({ kind: "web", url: "https://example.com/a?b=1" });
     expect(openTarget("persona://session/m1/s%201")).toEqual({ kind: "session", mid: "m1", sid: "s 1" });
-    expect(openTarget("jarvis://task/t1")).toEqual({ kind: "task", id: "t1" });
+    expect(openTarget("persona://task/t1")).toEqual({ kind: "task", id: "t1" });
     expect(openTarget("persona://kb/people/a.md")).toEqual({ kind: "kb", path: ["people", "a.md"] });
     expect(openTarget("persona://file/m1/%2Ftmp%2Fa.txt")).toEqual({ kind: "file", mid: "m1", path: "/tmp/a.txt" });
   });

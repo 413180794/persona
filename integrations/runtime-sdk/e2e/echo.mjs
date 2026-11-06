@@ -1,19 +1,19 @@
-// End-to-end acceptance of the echo example (docs/runtimes.md "Acceptance") against a real `jarvisd node`: the template a new
+// End-to-end acceptance of the echo example (docs/runtimes.md "Acceptance") against a real `personad node`: the template a new
 // runtime copies for its own e2e (replace starting the echo runtime with starting yours).
 //
-//   JARVISD=<jarvisd binary> node integrations/runtime-sdk/e2e/echo.mjs
+//   PERSONAD=<personad binary> node integrations/runtime-sdk/e2e/echo.mjs
 
 import { randomUUID } from 'node:crypto'
 import { createEchoRuntime } from '../examples/echo-runtime.mjs'
 import { checks, startNode, until } from '../testing/node-harness.mjs'
 
-const jarvisd = process.env.JARVISD
-if (!jarvisd) {
-  console.error('set JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!personad) {
+  console.error('set PERSONAD (a personad binary)')
   process.exit(2)
 }
 const { check, summary } = checks()
-const node = await startNode({ jarvisd, keep: process.env.KEEP === '1' })
+const node = await startNode({ personad, keep: process.env.KEEP === '1' })
 const { runtime } = createEchoRuntime({ socketPath: node.runtimeSocket, retryMs: 100, answerFirst: 'phone' })
 try {
   runtime.start()

@@ -1,6 +1,6 @@
 import XCTest
 
-/// Settings › Appearance › Avatar (docs/persona.md), against scripts/mock/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
+/// Settings › Appearance › Avatar (docs/persona.md), against scripts/mock/mock_hub.py started with MOCK_PERSONAS=demo (PERSONA_MOCK_HUB): the
 /// hub's persona is offered next to the built-in Persona; choosing it downloads it, and the Persona tab's top bar takes
 /// its name and face; choosing Persona again brings the name back. The built-in Circuit is offered too and keeps the name
 /// (and puts its home screen icon on: the system's alert is accepted).
@@ -11,8 +11,8 @@ final class PersonaPickerTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_PERSONAS=demo")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB) with MOCK_PERSONAS=demo")
         }
         self.hub = hub
     }
@@ -22,7 +22,7 @@ final class PersonaPickerTests: XCTestCase {
         if let hub {
             // `-openPersona persona` takes effect as the app starts.
             let app = XCUIApplication()
-            let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+            let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
             app.launchArguments = ["-pairURL", pair, "-openPersona", "persona"]
             app.launchPinned()
             // Back on Mochi's icon, if a test left another: the system's alert.
@@ -37,14 +37,14 @@ final class PersonaPickerTests: XCTestCase {
     /// On the Persona tab's main conversation. `-openPersona persona`: from the built-in, whatever the last run chose.
     @MainActor private func launch() -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openAssistant", main, "-openPersona", "persona"]
         app.launchPinned()
         return app
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-persona-\(name).png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-persona-\(name).png"))
     }
 
     @MainActor private func waitSelected(_ e: XCUIElement, _ why: String) {
@@ -54,7 +54,7 @@ final class PersonaPickerTests: XCTestCase {
 
     @MainActor private func topBarName(_ app: XCUIApplication) -> String {
         app.tabBars.buttons["Persona"].tap()
-        let face = app.buttons["jarvis-avatar"]
+        let face = app.buttons["persona-avatar"]
         XCTAssertTrue(face.waitForExistence(timeout: 15), "no face in the top bar:\n\(app.debugDescription)")
         return face.label
     }
@@ -68,7 +68,7 @@ final class PersonaPickerTests: XCTestCase {
         row.tap()
     }
 
-    @MainActor func testChoosingAPersonaChangesJarvis() throws {
+    @MainActor func testChoosingAPersonaChangesPersona() throws {
         let app = launch()
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "the bar should start on the built-in")
         openAppearance(app)
@@ -77,7 +77,7 @@ final class PersonaPickerTests: XCTestCase {
         XCTAssertTrue(demo.waitForExistence(timeout: 20), "the hub's persona is not offered:\n\(app.debugDescription)")
         XCTAssertTrue(builtin.isSelected, "the built-in should be the one on screen")
         XCTAssertTrue(app.descendants(matching: .any)["persona-states"].exists, "no state preview")
-        shot(app, "settings-jarvis")
+        shot(app, "settings-persona")
 
         demo.tap()
         waitSelected(app.buttons["persona-demo"], "choosing the hub's persona did not take")
@@ -99,23 +99,23 @@ final class PersonaPickerTests: XCTestCase {
     @MainActor func testChoosingCircuitKeepsTheName() throws {
         let app = launch()
         openAppearance(app)
-        let circuit = app.buttons["persona-jarvis-circuit"]
+        let circuit = app.buttons["persona-persona-circuit"]
         XCTAssertTrue(circuit.waitForExistence(timeout: 10), "汇流 is not offered:\n\(app.debugDescription)")
         XCTAssertTrue(app.buttons["persona-persona"].isSelected, "the default should be 团子")
         circuit.tap()
         acceptIconAlert() // the home screen icon follows the avatar (AppIconTests)
-        waitSelected(app.buttons["persona-jarvis-circuit"], "choosing 汇流 did not take")
+        waitSelected(app.buttons["persona-persona-circuit"], "choosing 汇流 did not take")
         shot(app, "settings-circuit")
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "汇流 should keep the name Persona")
         shot(app, "topbar-circuit")
 
         // Visor, the default until 2026-11-03, is still there to choose.
         openAppearance(app)
-        let visor = app.buttons["persona-jarvis"]
+        let visor = app.buttons["persona-persona"]
         XCTAssertTrue(visor.waitForExistence(timeout: 10), "面罩 is not offered:\n\(app.debugDescription)")
         visor.tap()
         acceptIconAlert()
-        waitSelected(app.buttons["persona-jarvis"], "choosing 面罩 did not take")
+        waitSelected(app.buttons["persona-persona"], "choosing 面罩 did not take")
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "面罩 should keep the name Persona")
     }
 }

@@ -341,9 +341,9 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
   });
 
   it("没挂待办、在 herdr 里手动开的单独一段「手动开的」，在「未归属」前面，展开 (#2608)", () => {
-    const sOnTodo = mockSession("mac-1", "on-todo", "working", { space_kind: "herdr", started_by_jarvis: false, todo: { id: "todo-a", title: "A" } });
-    const sManual = mockSession("mac-1", "manual-herdr", "idle", { space_kind: "herdr", started_by_jarvis: false });
-    const sByPersona = mockSession("mac-1", "persona-herdr", "idle", { space_kind: "herdr", started_by_jarvis: true });
+    const sOnTodo = mockSession("mac-1", "on-todo", "working", { space_kind: "herdr", started_by_persona: false, todo: { id: "todo-a", title: "A" } });
+    const sManual = mockSession("mac-1", "manual-herdr", "idle", { space_kind: "herdr", started_by_persona: false });
+    const sByPersona = mockSession("mac-1", "persona-herdr", "idle", { space_kind: "herdr", started_by_persona: true });
     const sBotmux = mockSession("mac-1", "botmux-chat", "idle", { space_kind: "botmux" });
     const todos: Todo[] = [
       { id: "todo-a", title: "待办 A", created_at: "2026-11-02T10:00:00Z", updated_at: "", agents: [{ machine_id: "mac-1", session_id: "on-todo", linked_at: "" }] },
@@ -450,15 +450,15 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
 });
 
 describe("格式化上下文标签 (formatTodoContext)", () => {
-  it("转义 HTML 特殊字符并拼装标准 jarvis-context", () => {
+  it("转义 HTML 特殊字符并拼装标准 persona-context", () => {
     const xml = formatTodoContext('天气 "App" <1.3>', "测试重试 & 超时\n周五前完成");
     expect(xml).toBe(
-      '<jarvis-context kind="context" title="待办 · 天气 &quot;App&quot; &lt;1.3&gt;" url="">测试重试 & 超时\n周五前完成</jarvis-context>',
+      '<persona-context kind="context" title="待办 · 天气 &quot;App&quot; &lt;1.3&gt;" url="">测试重试 & 超时\n周五前完成</persona-context>',
     );
   });
   it("说明里的结束标签（新旧两个名字）不会提前闭合 (#3182)", () => {
-    expect(formatTodoContext("t", "a</persona-context>b</jarvis-context>c")).toBe(
-      '<jarvis-context kind="context" title="待办 · t" url="">abc</jarvis-context>',
+    expect(formatTodoContext("t", "a</persona-context>b</persona-context>c")).toBe(
+      '<persona-context kind="context" title="待办 · t" url="">abc</persona-context>',
     );
   });
 });

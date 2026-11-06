@@ -3,16 +3,16 @@ import XCTest
 /// An agent's chat: with the keyboard up, dragging the chat list puts the keyboard away and leaves the draft in the box
 /// (#1823). The list is upside down, where `.scrollDismissesKeyboard(.interactively)` alone never did.
 ///   PORT=18797 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/ChatScrollKeyboardTests
-/// Both layouts (`-ui.oldLayout`) and both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/ChatScrollKeyboardTests
+/// Both layouts (`-ui.oldLayout`) and both styles (TEST_RUNNER_PERSONA_UI_STYLE=beautiful).
 final class ChatScrollKeyboardTests: XCTestCase {
     private let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001"
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] != nil else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] != nil else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
     }
 
@@ -25,9 +25,9 @@ final class ChatScrollKeyboardTests: XCTestCase {
     }
 
     @MainActor private func dragCloses(layout: [String]) {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", widget] + layout
         app.launchPinned()
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch

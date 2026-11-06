@@ -175,7 +175,7 @@ class HubHttpClient(
                     throw HubFailure(HubError.Protocol, retryable = false)
                 }
                 // The language the app shows, so the hub answers in it (docs/i18n.md); also on WebSocket upgrades.
-                val builder = request.newBuilder().header("X-Jarvis-Client", "android/$version")
+                val builder = request.newBuilder().header("X-Persona-Client", "android/$version")
                     .header("Accept-Language", persona.core.contracts.ClientLanguage.tag)
                 if (!request.url.isHttps) {
                     // WebSocket upgrades skip network interceptors. Freeze the checked DNS
@@ -243,7 +243,7 @@ class HubHttpClient(
 }
 
 /**
- * The endpoint's base: its origin and, for a hub behind a reverse proxy at a sub-path (`https://hub.example.com/jarvis`,
+ * The endpoint's base: its origin and, for a hub behind a reverse proxy at a sub-path (`https://hub.example.com/persona`,
  * the proxy strips the prefix), that path prefix. Every API URL is built from it with [hubUrl], never with
  * `resolve("/api/…")`, which would drop the prefix.
  */
@@ -255,13 +255,13 @@ internal fun Endpoint.baseUrl(): HttpUrl = try {
     throw HubFailure(HubError.Protocol, retryable = false, cause = error)
 }
 
-/** The base's path prefix without its trailing slash: "" at the root, "/jarvis" under a sub-path. */
+/** The base's path prefix without its trailing slash: "" at the root, "/persona" under a sub-path. */
 private val HttpUrl.hubPrefix: String get() = encodedPath.trimEnd('/')
 
 /**
  * The URL of the hub's [path] (absolute and already encoded, `/api/v1/…`, optionally with `?query`) under this base,
- * keeping the base's path prefix: `https://hub.example.com/jarvis` + `/api/v1/ws` is
- * `https://hub.example.com/jarvis/api/v1/ws`. A trailing slash on the base makes no difference.
+ * keeping the base's path prefix: `https://hub.example.com/persona` + `/api/v1/ws` is
+ * `https://hub.example.com/persona/api/v1/ws`. A trailing slash on the base makes no difference.
  */
 fun HttpUrl.hubUrl(path: String): HttpUrl {
     require(path.startsWith("/") && !path.startsWith("//") && '#' !in path) { "Expected an absolute hub path" }

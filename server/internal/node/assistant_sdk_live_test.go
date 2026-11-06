@@ -107,7 +107,7 @@ func liveSetup(t *testing.T) *liveFix {
 
 	f.sdkFixture = &sdkFixture{n: codexTestNode(t), log: &lockedBuf{}}
 	f.n.dir = filepath.Join(f.scratch, "node")
-	f.n.bin = "/usr/bin/true"                       // the jarvis MCP server and hooks: present, doing nothing
+	f.n.bin = "/usr/bin/true"                       // the persona MCP server and hooks: present, doing nothing
 	if err := f.n.writeClaudeConfig(); err != nil { // the hooks and settings the node writes when it starts
 		t.Fatal(err)
 	}

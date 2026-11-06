@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// A source's own triage rules (#1644) for jarvis_settings: a plugin whose settings declare triage_rules (a string at
+// A source's own triage rules (#1644) for persona_settings: a plugin whose settings declare triage_rules (a string at
 // the top of its schema) sends them as its inbox things' rules, which replace inbox.rules for its items. The entry
 // reads and writes that setting the way Settings › Extensions does (the registry's SetConfig: held to the schema, the
 // plugin restarts). The hub's own connectors (GitHub, iMessage) carry no rules yet.

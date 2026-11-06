@@ -1,5 +1,5 @@
 import XCTest
-@testable import Jarvis
+@testable import Persona
 
 /// Bulk filing's arithmetic (InboxBulk: Clear All, a section's Mark All Seen / Clear All, Undo): what a request moves, how the list shows it before and after the hub's
 /// answer, the toast, and the scope line in the menu.

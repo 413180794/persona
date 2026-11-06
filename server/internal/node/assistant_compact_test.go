@@ -108,7 +108,7 @@ func TestHandoffReadsTheLastSummaryAndWhatCameAfter(t *testing.T) {
 
 	items := []proto.Item{
 		{Seq: 1, Role: "user", Kind: proto.KindText, Text: "压缩前的问题"},
-		{Seq: 5, Role: "user", Kind: proto.KindText, Text: "<jarvis-context kind=\"context\" title=\"接上旧主对话\" url=\"\">\n更早的\n</jarvis-context>\n<jarvis-context>\n快照\n</jarvis-context>\n之后的问题"},
+		{Seq: 5, Role: "user", Kind: proto.KindText, Text: "<persona-context kind=\"context\" title=\"接上旧主对话\" url=\"\">\n更早的\n</persona-context>\n<persona-context>\n快照\n</persona-context>\n之后的问题"},
 		{Seq: 6, Role: "assistant", Kind: proto.KindToolUse, Text: "工具"},
 		{Seq: 7, Role: "assistant", Kind: proto.KindText, Text: strings.Repeat("长", handoffTurnMax+50)},
 		{Seq: 8, Role: "system", Kind: proto.KindNotice, Text: "提示"},

@@ -88,7 +88,7 @@ func TestExtensionLooksRefused(t *testing.T) {
 	for name, edit := range map[string]func(dir string){
 		"a built-in id": func(dir string) {
 			b, _ := os.ReadFile(filepath.Join(dir, "persona-extension.json"))
-			_ = os.WriteFile(filepath.Join(dir, "persona-extension.json"), []byte(strings.Replace(string(b), `"id": "pebble"`, `"id": "jarvis"`, 1)), 0o644)
+			_ = os.WriteFile(filepath.Join(dir, "persona-extension.json"), []byte(strings.Replace(string(b), `"id": "pebble"`, `"id": "persona"`, 1)), 0o644)
 		},
 		"a picture that is not a PNG": func(dir string) {
 			_ = os.WriteFile(filepath.Join(dir, "looks", "pebble", "avatar-256.png"), []byte("gif"), 0o644)

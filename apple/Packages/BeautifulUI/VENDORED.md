@@ -1,6 +1,6 @@
 # BeautifulUI（拷入的副本）
 
-来源：BeautifulUI 仓库的 `d22da54`（`jarvis-full-refactor` 分支，在 `jarvis-host-hooks` 的 `02907da` 之后：胶囊放不下时可以截断（`BUIPill(truncates:)`）、单行的任务行、状态胶囊、筛选 chip、分段切换、工具组表头和改动文件 chip、审批卡和上下文卡片的宿主选项、列表行和分组、空状态、读数卡、侧边栏的行和搜索框；iOS 上转圈和扫光用 Core Animation），`BeautifulUI/` 目录原样拷入，
+来源：BeautifulUI 仓库的 `d22da54`（`persona-full-refactor` 分支，在 `persona-host-hooks` 的 `02907da` 之后：胶囊放不下时可以截断（`BUIPill(truncates:)`）、单行的任务行、状态胶囊、筛选 chip、分段切换、工具组表头和改动文件 chip、审批卡和上下文卡片的宿主选项、列表行和分组、空状态、读数卡、侧边栏的行和搜索框；iOS 上转圈和扫光用 Core Animation），`BeautifulUI/` 目录原样拷入，
 作为本地 Swift Package 由 `apple/project.yml` 引用。许可：`LICENSE`、`LICENSE-beautifului`、`NOTICE`，根目录的
 `THIRD_PARTY_NOTICES.md` 也有一份。
 
@@ -11,7 +11,7 @@ rm -r apple/Packages/BeautifulUI   # 先看一眼 git status，确认这里没�
 git -C <BeautifulUI 仓库> archive --format=tar <提交> BeautifulUI | tar -x -C apple/Packages/
 ```
 
-然后把上面的来源提交改掉。Jarvis 用到的宿主接口（`typeScale`、`entrances`、`ToolChipRow`、`ToolChipGroup`……）见库的 README
+然后把上面的来源提交改掉。Persona 用到的宿主接口（`typeScale`、`entrances`、`ToolChipRow`、`ToolChipGroup`……）见库的 README
 「给宿主 App 的接口」。
 
 ## 本地补丁（还没进 BeautifulUI 仓库）

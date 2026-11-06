@@ -15,9 +15,9 @@ type browseFixture struct {
 }
 
 func newFixture(t *testing.T) browseFixture {
-	typ := mustType(t, "_jarvis-hub._tcp")
+	typ := mustType(t, "_persona-hub._tcp")
 	inst := append(name{"Hub A"}, typ...)
-	host := name{"jarvis-a", "local"}
+	host := name{"persona-a", "local"}
 	return browseFixture{
 		typ:  typ,
 		inst: inst,
@@ -65,7 +65,7 @@ func TestBrowserAggregates(t *testing.T) {
 		t.Fatalf("SRV + TXT: found %+v", found)
 	}
 	e := found[0]
-	if e.Instance != "Hub A" || e.Host != "jarvis-a.local." || e.Port != 8443 || e.Addrs != nil ||
+	if e.Instance != "Hub A" || e.Host != "persona-a.local." || e.Port != 8443 || e.Addrs != nil ||
 		!maps.Equal(e.TXT, map[string]string{"hub_id": "a"}) || e.TTL != 120*time.Second || !e.Seen.Equal(t1) {
 		t.Errorf("SRV + TXT: got %+v", e)
 	}
@@ -179,9 +179,9 @@ func TestBrowserHostMove(t *testing.T) {
 	now := time.Unix(1_000_000, 0)
 	b.apply(resp(f.ptr, f.srv, f.a4), "", now)
 	moved := f.srv
-	moved.target = name{"jarvis-b", "local"}
+	moved.target = name{"persona-b", "local"}
 	found, _ := b.apply(resp(moved), "", now.Add(time.Second))
-	if len(found) != 1 || found[0].Host != "jarvis-b.local." || len(found[0].Addrs) != 0 {
+	if len(found) != 1 || found[0].Host != "persona-b.local." || len(found[0].Addrs) != 0 {
 		t.Errorf("host move: got %+v", found)
 	}
 }

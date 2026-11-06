@@ -2,16 +2,16 @@ import XCTest
 
 /// Back from a chat opened at launch stays at the Agents list (#1868: a turn later the list opened the chat it had just
 /// closed again), whether it was opened with `-openSession` or as the remembered chat (`-dev.openChat`, a launch
-/// argument that cannot be removed). Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
+/// argument that cannot be removed). Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB).
 final class ChatBackTests: XCTestCase {
     private let recipe = "macbook/a1f3c2d4-0000-4000-8000-000000000007" // 「菜谱网站加搜索」
 
     @MainActor func testBackStaysAtTheList() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         continueAfterFailure = false
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         for opened in [["-openSession", recipe], ["-dev.openChat", recipe]] {
             let app = XCUIApplication()
             app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-holdChromeOpen", "YES"] + opened

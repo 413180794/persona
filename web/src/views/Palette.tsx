@@ -46,7 +46,7 @@ type Row =
 // The words every page answers to in any UI language (the Mac's quick open matches English and Chinese alike);
 // the catalog's words_* add the UI language's own synonyms. Search data, never shown: i18n-ignore.
 const PLACE_WORDS: Record<string, string> = {
-  persona: "jarvis assistant persona main 助手 主对话", // i18n-ignore
+  persona: "persona assistant persona main 助手 主对话", // i18n-ignore
   history: "history chats conversations 对话 历史", // i18n-ignore
   home: "home overview 总览 首页", // i18n-ignore
   inbox: "inbox mail lark feishu 邮件 飞书 收件箱", // i18n-ignore
@@ -146,7 +146,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
   const pagesKey = pages.map((p) => [p.k, p.label, p.icon, href(p.to)].join("\u0001")).join("\n");
   const places = useMemo<PlaceInput[]>(
     () => [
-      ...(hasAssistant ? [{ key: "persona", title: t("palette.place_persona"), icon: "spark" as const, to: { name: "jarvis" } as Route }, { key: "history", title: t("sidebar.all_chats"), icon: "list" as const, to: { name: "history" } as Route }] : []),
+      ...(hasAssistant ? [{ key: "persona", title: t("palette.place_persona"), icon: "spark" as const, to: { name: "persona" } as Route }, { key: "history", title: t("sidebar.all_chats"), icon: "list" as const, to: { name: "history" } as Route }] : []),
       ...pages.map((p) => ({ key: p.k, title: p.label, icon: p.icon, to: p.to })),
     ].map((p) => ({ ...p, words: placeWords(p.key) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `pages` is new each render; pagesKey says what it holds
@@ -196,8 +196,8 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
       if (sc) out.push({ key: `s:${s.machine_id}/${s.session_id}`, s, to: { name: "session", mid: s.machine_id, sid: s.session_id }, score: sc + (stateOf(s) === "offline" ? 0 : 5) });
     }
     for (const s of assistant?.conversations ?? []) {
-      const sc = score(s, query, "jarvis");
-      if (sc) out.push({ key: `j:${s.session_id}`, s, to: { name: "jarvis", sid: s.session_id }, assistant: true, score: sc });
+      const sc = score(s, query, "persona");
+      if (sc) out.push({ key: `j:${s.session_id}`, s, to: { name: "persona", sid: s.session_id }, assistant: true, score: sc });
     }
     const all: (Row & { score: number; at: string })[] = [
       ...out.map((h) => ({ kind: "session" as const, key: h.key, hit: h, score: h.score, at: h.s.updated_at ?? "" })),

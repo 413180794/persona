@@ -110,8 +110,8 @@ final class ShellPagerTests: XCTestCase {
     /// row's Close, from the band at the right edge it still pages on to Messages. Needs the mock hub: Demo Mode has no Feishu
     /// chats, so no Messages page.
     @MainActor func testRowSwipeLeftStaysTheRowsWithMessages() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-demo.on", "NO", "-ui.oldLayout", "NO", "-probes", "YES", "-newAssistant", "YES",
                                "-dev.openChat", "", "-tab", "assistant", "-integrations.lark.enabled", "YES"]
@@ -154,10 +154,10 @@ final class ShellPagerTests: XCTestCase {
     }
 
     /// A herdr tab's group row (#2668) has no swipe of its own: a drag to the right along it pages back to Assistant rather
-    /// than doing nothing. Needs the mock hub with `MOCK_TAB_PANES=1` (JARVIS_MOCK_HUB_TABS).
+    /// than doing nothing. Needs the mock hub with `MOCK_TAB_PANES=1` (PERSONA_MOCK_HUB_TABS).
     @MainActor func testTabGroupRowPagesBack() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_TABS"] else { throw XCTSkip("needs the tab panes mock") }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_TABS"] else { throw XCTSkip("needs the tab panes mock") }
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-demo.on", "NO", "-ui.oldLayout", "NO", "-probes", "YES", "-newAssistant", "YES",
                                "-dev.openChat", "", "-tab", "assistant"]

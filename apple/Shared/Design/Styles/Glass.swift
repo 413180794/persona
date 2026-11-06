@@ -11,7 +11,7 @@ nonisolated extension ComponentSpec {
     /// Liquid Glass: iOS 26's own look, Liquid Glass on the system's pages.
     static let glass = ComponentSpec(
         title: String(localized: "Liquid Glass"), subtitle: Self.glassSubtitle,
-        surface: .glass, buttons: .glass, fontDesign: .default, previewCorner: 20, components: .jarvis, workList: .timeline,
+        surface: .glass, buttons: .glass, fontDesign: .default, previewCorner: 20, components: .persona, workList: .timeline,
         canvas: .system,
         larkOtherBubble: StyleSpec.larkGrayBubble, colors: .blue)
 }

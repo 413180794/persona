@@ -1,5 +1,5 @@
 // Contexts waiting in a composer (picked in the link panel): one chip each above the input — what it is, the passage
-// (or the page's title for a whole document; a workspace's name), × to drop it. They go with the next message as <jarvis-context>.
+// (or the page's title for a whole document; a workspace's name), × to drop it. They go with the next message as <persona-context>.
 import { removeContext, useContexts, WHOLE } from "../../lib/links";
 import { EASE } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";

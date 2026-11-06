@@ -21,7 +21,7 @@ fun Router.parseDebug(arguments: Map<String, String>): ResolvedRoute? {
         )
         "debug.openPairing" in arguments -> {
             val value = arguments.getValue("debug.openPairing")
-            if (listOf("persona://pair", "jarvis://pair").any(value::startsWith)) return parse(RouteInput.DeepLink(value))
+            if (listOf("persona://pair", "persona://pair").any(value::startsWith)) return parse(RouteInput.DeepLink(value))
             if (value != "true") return null
             PairingRoute
         }

@@ -43,7 +43,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
- * A sent video and recording (`<jarvis-file>`) as cards above the bubble, and an answer's documents as cards with their
+ * A sent video and recording (`<persona-file>`) as cards above the bubble, and an answer's documents as cards with their
  * first page (`file/thumb`), in every style, light and dark. PNGs in `build/file-card-shots/`.
  */
 @RunWith(AndroidJUnit4::class)
@@ -71,8 +71,8 @@ class ChatFileCardsShotsTest {
         photos = null, pictures = { emptyList() }, openImages = { _, _ -> }, menu = null, retryLineId = null, onRetry = {}, paths = presence,
         thumbnails = { path -> "mac\n$path" to { _: Int -> thumbs += path; if (path.endsWith(".pptx")) null else page() } })
 
-    private val user = "看看这段录屏，哪里卡了\n\n<jarvis-file kind=\"video\" path=\"/Users/me/.persona/uploads/screen.mov\" name=\"录屏 11-05.mov\" size=\"24100000\" duration=\"72.4\"/>\n" +
-        "<jarvis-file kind=\"audio\" path=\"/Users/me/.persona/uploads/note.m4a\" name=\"语音备忘.m4a\" size=\"480000\" duration=\"9\"/>"
+    private val user = "看看这段录屏，哪里卡了\n\n<persona-file kind=\"video\" path=\"/Users/me/.persona/uploads/screen.mov\" name=\"录屏 11-05.mov\" size=\"24100000\" duration=\"72.4\"/>\n" +
+        "<persona-file kind=\"audio\" path=\"/Users/me/.persona/uploads/note.m4a\" name=\"语音备忘.m4a\" size=\"480000\" duration=\"9\"/>"
     private val reply = "整理好了：/Users/me/report/plan.docx 、/Users/me/report/q3.xlsx 和 /Users/me/report/deck.pptx，日志在 /Users/me/report/run.log。"
 
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/file-card-shots").also { it.mkdirs() }
@@ -100,7 +100,7 @@ class ChatFileCardsShotsTest {
         }
         rule.waitForIdle()
         // No tag text left in the bubble; the cards say name and "size · length".
-        rule.onNodeWithText("jarvis-file", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("persona-file", substring = true).assertDoesNotExist()
         rule.onNodeWithText("24.1 MB · 1:12").assertExists()
         rule.onNodeWithText("录屏 11-05.mov").performClick()
         assertEquals(listOf("/Users/me/.persona/uploads/screen.mov"), opened)

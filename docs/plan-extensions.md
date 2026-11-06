@@ -10,7 +10,7 @@ permissions modeled on Chrome (explicit declaration, shown at install time), and
 
 | | hub extensions (`docs/extensions.md`) | Connector protocol v2 (`docs/connector-protocol.md`) |
 | --- | --- | --- |
-| Where they come from | `extensions[]` in hub.json, written by hand by the owner | Only Telegram: `jarvisd-telegram` is registered whenever it sits next to personad, hard-coded |
+| Where they come from | `extensions[]` in hub.json, written by hand by the owner | Only Telegram: `personad-telegram` is registered whenever it sits next to personad, hard-coded |
 | Process | Started by the hub, 2 s to start, restarted with backoff up to 60 s; or only a `socket` is given and it runs elsewhere | Started by `connector/proc`, 5 s to start, backoff up to 5 minutes; stopped when the connector is turned off |
 | How they talk | The extension serves HTTP on a unix socket, and the hub forwards `/api/v1/extensions/<id>/…` as is; `GET /health` checks liveness | One JSON per line on stdin / stdout (`internal/rpc`), `init` → manifest → methods; conformance tests |
 | Config | `config` (arbitrary JSON) passed in the environment variable `PERSONA_EXTENSION_CONFIG` | `init` carries its section of hub.json |
@@ -57,7 +57,7 @@ Each has half: hub extensions have generic process management and HTTP forwardin
   `extension/serve` (the program side), `extension/conformance`; migration `0291`; hub endpoints and `personad extension`; voice (hub.json) and Telegram (built-in) moved over;
   `connector/serve` recognizes the extension handshake, `connector/proc` can talk through an extension process (`Link`); docs `docs/extensions.md`, `docs/connector-protocol.md`.
 - [x] **1b: App Settings › Extensions** (iOS, page shared with Mac): list, details (permissions, contributions, about), config form drawn from `form.fields`, write-only secrets, switch;
-  mock hub `MOCK_PLUGINS=1`, UI tests and unit tests, screenshots checked in default / BeautifulUI styles × light and dark (`docs/extensions.md` ("App: Settings › Extensions")).
+  mock hub `MOCK_EXTENSIONS=1`, UI tests and unit tests, screenshots checked in default / BeautifulUI styles × light and dark (`docs/extensions.md` ("App: Settings › Extensions")).
 - [x] The admin UI's **Extensions** page (#1208): list, switch, install (directory / package / https / upload / remote, preview first), upgrade (an explicit warning when permissions grow), rollback, uninstall (data can be kept).
 - [x] The web extensions page (#1207).
 - [x] The Android extensions page (#1206, `docs/android.md` ("Extensions (Settings › Extensions)")).
@@ -141,7 +141,7 @@ Moving the old hub.json config into the extension: after installing the extensio
 ### Voice extensions (`extensions[]` in hub.json)
 
 - Each hub.json entry is still read as before, and the hub synthesizes a manifest for it: `{id, name, version: <hub build number>, runtime: {command, args, env, rpc: "none", http: true}, contributes: {<kind>: [{id}]}, permissions: {hub_api: true}}`;
-  an entry with only `socket` is `remote:` and the hub starts no process. The meanings of `dir`, `env`, `config`, `disabled`, and `command: "personad" / "jarvisd"` are unchanged.
+  an entry with only `socket` is `remote:` and the hub starts no process. The meanings of `dir`, `env`, `config`, `disabled`, and `command: "personad" / "personad"` are unchanged.
 - Behavior is unchanged: socket paths, environment variables (including the hub token), `/health` liveness checks, stripping App credentials when forwarding, 403 for read-only devices such as watches, and `plugin.<id>` model config.
   The only change is that the maximum backoff rises from 60 seconds to 5 minutes.
 - Old fields in `GET /api/v1/extensions` are unchanged (Android's voice entry looks for `kind == "voice"` and `status == "running"`); only fields are added.
@@ -150,7 +150,7 @@ Moving the old hub.json config into the extension: after installing the extensio
 
 ### Telegram (connector v2)
 
-- Becomes a built-in extension: its manifest is compiled into personad (`id: "telegram"`, `runtime.command` is `jarvisd-telegram` next to personad, `contributes.connectors: [spec.Manifest()]`),
+- Becomes a built-in extension: its manifest is compiled into personad (`id: "telegram"`, `runtime.command` is `personad-telegram` next to personad, `contributes.connectors: [spec.Manifest()]`),
   registered only when the program is present, as today; `engines` requires the same build as the hub (the current `version -v` check stays).
 - The connector id, session in `connector_secrets`, switches and options in connector settings, and default-off behavior are unchanged. Enabling the built-in extension and the connector's own switch are two layers: the extension is enabled by default, and normally users touch only the connector's switch.
 - Connector conformance tests (GitHub, Messages, Telegram) keep running, once for each of `connector/serve`'s two handshakes; Telegram proc tests change to start the program through the extension host.

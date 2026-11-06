@@ -53,7 +53,7 @@ Pitfalls hit while integrating DSH (`docs/dsh.md`) and node's runtime support (`
 - **When a test hangs, check whether something was never started** (same day): the companion process's unit test didn't call `host.start()`, so `await n.ready` never resolved; `npm test` hung for three minutes and left a temp directory behind when killed.
   Wrap unit test runs in a timeout too (`perl -e 'alarm 300; exec @ARGV' npm test`).
 
-- **DSH plugin management can't be called from a session driven by the phone** (2026-11-02): when enabling `jarvis-dsh-runtime` in plugin management, DSH's hot reload uses `AsyncLocalStorage` to mark "inside a transaction",
+- **DSH plugin management can't be called from a session driven by the phone** (2026-11-02): when enabling `persona-dsh-runtime` in plugin management, DSH's hot reload uses `AsyncLocalStorage` to mark "inside a transaction",
   and the socket the plugin creates inside the transaction carries that mark into every later callback. Every turn started by a message coming in through the plugin (sent from the phone) is treated as "still inside the transaction", so `plugin_manager`'s
   `set_bundle` always reports `HMR transactions cannot be nested`, and sending a sub-agent to call it fails the same way (it inherits the same context). Messages sent from the DSH web page are unaffected.
   Plugins installed by link aren't in hot reload's watched directory either, so swapping files doesn't reload them. So the plugin updates itself (`docs/dsh.md` ("Auto-update")) instead of relying on plugin management.
@@ -61,5 +61,5 @@ Pitfalls hit while integrating DSH (`docs/dsh.md`) and node's runtime support (`
   the `lib/dsh.js` imported earlier is still the first copy, and the new version is swapped in for nothing. So the loader loads from `<store>/<hash>/`, and the bundled copy is copied there first too: when the content changes, the path changes.
   The loader's unit test found this (change the bundled file, start another loader in the same process, and it still runs the old version).
 - **When a pi extension sends itself a `/command`, a command that doesn't exist becomes a message to the model** (2026-11-02, pi auto-update): pi only gives extensions `reload()` inside a command context, so to switch versions the extension
-  registers a command and runs it on itself with `pi.sendUserMessage("/jarvis-reload", {expandPromptTemplates: true})`. pi looks for an extension command first and, if none is found, hands the string to the model as a user message,
+  registers a command and runs it on itself with `pi.sendUserMessage("/persona-reload", {expandPromptTemplates: true})`. pi looks for an extension command first and, if none is found, hands the string to the model as a user message,
   so only send it to sessions that really registered the command (an old pi without `registerCommand` doesn't switch). pi-web rejects reload while it is replying; wait until between turns.

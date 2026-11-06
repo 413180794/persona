@@ -28,7 +28,7 @@ const (
 	microsoftScopes = "https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access openid email"
 	// DefaultMicrosoftRedirect is the redirect URI every hub uses unless hub.json says otherwise: a custom scheme the
 	// app catches with ASWebAuthenticationSession, so no release per hub and nothing in Info.plist.
-	DefaultMicrosoftRedirect = "jarvis-mail-oauth://outlook"
+	DefaultMicrosoftRedirect = "persona-mail-oauth://outlook"
 
 	microsoftClientSetting = "mail.microsoft_client" // the client ID the user entered, encrypted (settings table)
 )

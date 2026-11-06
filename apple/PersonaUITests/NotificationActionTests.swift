@@ -2,14 +2,14 @@ import XCTest
 
 /// Interaction pushes carry buttons (NotificationActions): the app posts a look-alike local notification
 /// (`-showTestNotification`), the test expands it on SpringBoard and taps 「拒绝」, and the mock hub
-/// (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB=http://127.0.0.1:<port>) must have received the resolve.
+/// (scripts/mock/mock_hub.py, PERSONA_MOCK_HUB=http://127.0.0.1:<port>) must have received the resolve.
 final class NotificationActionTests: XCTestCase {
     @MainActor func testDenyFromTheNotification() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-showTestNotification", "permission"]
         app.launchPinned()

@@ -45,7 +45,7 @@ func TestHubConfig(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("JARVIS_LISTEN", "")
+			t.Setenv("PERSONA_LISTEN", "")
 			t.Setenv("PERSONA_LISTEN", c.env)
 			dir := t.TempDir()
 			if c.file != "" {
@@ -70,13 +70,12 @@ func TestHubConfig(t *testing.T) {
 	}
 }
 
-// The legacy JARVIS_LISTEN still counts when PERSONA_LISTEN is not set, as for the hub.
-func TestHubConfigLegacyEnv(t *testing.T) {
-	t.Setenv("PERSONA_LISTEN", "") // restored after the test
-	os.Unsetenv("PERSONA_LISTEN")
-	t.Setenv("JARVIS_LISTEN", "127.0.0.1:18663")
+// An explicitly empty listen override keeps the file's address.
+func TestHubConfigEmptyEnv(t *testing.T) {
+	t.Setenv("PERSONA_LISTEN", "")
+	t.Setenv("OTHER_LISTEN", "127.0.0.1:18664")
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(`{"token": "secret-token"}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(`{"token": "secret-token", "listen": "127.0.0.1:18663"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if addr, _, err := hubConfig(dir); err != nil || addr != "127.0.0.1:18663" {

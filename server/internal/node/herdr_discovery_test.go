@@ -120,7 +120,7 @@ func TestHerdrListPlacesAgentsInSpacesAndSlots(t *testing.T) {
 			t.Errorf("A placed in %+v", a)
 		}
 		if a.Agent != "claude" || a.Status != proto.StatusWorking || a.PaneID != "w1:p1" || a.TabID != "w1:t1" ||
-			a.WorkspaceID != "w1" || a.Title != "fix the build" || a.Cwd != "/tmp/repo" || a.StartedByJarvis {
+			a.WorkspaceID != "w1" || a.Title != "fix the build" || a.Cwd != "/tmp/repo" || a.StartedByPersona {
 			t.Errorf("A = %+v", a)
 		}
 		b := m[sidB]
@@ -246,9 +246,9 @@ func TestHerdrUnnamedClaudeIsGuessed(t *testing.T) {
 	f.reply("pane.process_info", processInfo(1<<30)) // no sessions/<pid>.json for it
 	f.reply("session.snapshot", snapshot(nil, nil, []any{
 		claudeAgent("", proto.StatusIdle, "w1:p1", "w1:t1", "w1", cwd, "fix the flaky test"), // title match: A
-		claudeAgent("", proto.StatusIdle, "w1:p2", "w1:t2", "w1", cwd, "something else"),    // newest unclaimed: B
+		claudeAgent("", proto.StatusIdle, "w1:p2", "w1:t2", "w1", cwd, "something else"),     // newest unclaimed: B
 		claudeAgent("", proto.StatusIdle, "w1:p3", "w1:t3", "w1", cwd, "fix the flaky test"), // its binding: C
-		claudeAgent("", proto.StatusIdle, "w1:p4", "w1:t4", "w1", "", ""),                   // no cwd: nothing
+		claudeAgent("", proto.StatusIdle, "w1:p4", "w1:t4", "w1", "", ""),                    // no cwd: nothing
 	}, nil))
 	list := listSessions(t, n)
 	want := map[string]string{sidA: "w1:p1", sidB: "w1:p2", sidC: "w1:p3"}

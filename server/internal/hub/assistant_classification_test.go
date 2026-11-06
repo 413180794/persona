@@ -19,7 +19,7 @@ func TestAssistantClassificationAcrossSessionLists(t *testing.T) {
 	h, n := conversationsHub(t)
 	n.m.setSessions([]proto.Session{
 		{SessionID: "pane", Cwd: convDir, PaneID: "w1:p1", Status: proto.StatusIdle, Title: "terminal title"},
-		{SessionID: "symlink-pane", Cwd: "/data/home/me/.jarvis/assistant", PaneID: "w1:p2", Status: proto.StatusIdle},
+		{SessionID: "symlink-pane", Cwd: "/data/home/me/.persona/assistant", PaneID: "w1:p2", Status: proto.StatusIdle},
 		{SessionID: "headless", Cwd: convDir, Status: proto.StatusWorking},
 		{SessionID: "runtime", Cwd: convDir, SourceKind: "runtime", Status: proto.StatusWorking},
 		{SessionID: "offline-assistant", Cwd: convDir, Status: proto.StatusOffline},

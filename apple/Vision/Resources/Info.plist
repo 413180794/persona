@@ -25,7 +25,6 @@
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>jarvis</string>
 				<string>persona</string>
 			</array>
 		</dict>
@@ -34,10 +33,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>JarvisPushKeychainGroup</key>
-	<string>$(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push</string>
-	<key>JarvisPushRelay</key>
-	<string>$(JARVIS_PUSH_RELAY)</string>
+	<key>PersonaPushKeychainGroup</key>
+	<string>$(DEVELOPMENT_TEAM).$(PERSONA_BUNDLE_ID).push</string>
+	<key>PersonaPushRelay</key>
+	<string>$(PERSONA_PUSH_RELAY)</string>
 	<key>PersonaGettingStartedURL</key>
 	<string>$(PERSONA_GETTING_STARTED_URL)</string>
 	<key>LSApplicationCategoryType</key>

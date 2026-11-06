@@ -3,25 +3,25 @@ import XCTest
 /// Background tasks reporting back inside a chat (Item.task): a background heredoc finishing, a test run failing, a
 /// Monitor's events between two commands and its end. Each is one line in the tools' look — the heredoc's notice used
 /// to be the whole heredoc in a centered capsule, screens tall, its `>` still `&gt;`. The call that started a task says
-/// how it went, and a notice leads back to that call. Against scripts/mock/mock_hub.py with MOCK_TASKS=1 (JARVIS_MOCK_HUB).
+/// how it went, and a notice leads back to that call. Against scripts/mock/mock_hub.py with MOCK_TASKS=1 (PERSONA_MOCK_HUB).
 final class BackgroundNoticeTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-bg-\(name).png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-bg-\(name).png"))
     }
 
     @MainActor func testBackgroundNoticesAreOneLineAndLeadToTheirCall() throws {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000009"]
         app.launchPinned()
 

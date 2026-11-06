@@ -6,7 +6,7 @@
 
 import { basename, join } from 'node:path'
 import { createRuntime, page, RpcError } from '../../runtime-sdk/index.js'
-import { eventItems, itemsOf, jarvisSeq } from './map.js'
+import { eventItems, itemsOf, personaSeq } from './map.js'
 import { RUNTIME_VERSION } from './dsh.js'
 
 const DISK_EVERY = 30_000 // ms: list the store at most this often (a list reads every session's header)
@@ -83,7 +83,7 @@ export function createDshFiles(deps, options) {
         agent: 'dsh',
         agent_label: label,
         updated_at: new Date(updatedAt || Date.now()).toISOString(),
-        rev: c.seq !== undefined ? jarvisSeq(c.seq) : Math.round(updatedAt),
+        rev: c.seq !== undefined ? personaSeq(c.seq) : Math.round(updatedAt),
       }
       if (cwd) {
         row.space_id = cwd
@@ -126,7 +126,7 @@ export function createDshFiles(deps, options) {
     const id = params.session_id
     const events = await eventsOf(id)
     const last = events.at(-1)
-    return page(itemsOf(events), params, { history: `dsh:${id}`, toSeq: last ? jarvisSeq(last.seq) : 0 })
+    return page(itemsOf(events), params, { history: `dsh:${id}`, toSeq: last ? personaSeq(last.seq) : 0 })
   }
 
   async function item(params) {
@@ -143,7 +143,7 @@ export function createDshFiles(deps, options) {
     if (waking) return waking
     if (Date.now() - wokeAt < WAKE_AGAIN) return Promise.resolve()
     wokeAt = Date.now()
-    waking = deps.wake().catch((err) => log(`jarvis: waking DSH: ${err.message}`)).finally(() => { waking = undefined })
+    waking = deps.wake().catch((err) => log(`persona: waking DSH: ${err.message}`)).finally(() => { waking = undefined })
     return waking
   }
 

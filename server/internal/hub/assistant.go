@@ -30,7 +30,7 @@ func (m *Machine) assistantCwdOf(id string) string {
 	if m.info.DataDir != "" {
 		return path.Join(m.info.DataDir, name)
 	}
-	return path.Join(m.info.Home, ".jarvis", name)
+	return path.Join(m.info.Home, ".persona", name)
 }
 
 // isAssistant: s is one of the headless conversations of m's manager's assistant (its own directory or its health

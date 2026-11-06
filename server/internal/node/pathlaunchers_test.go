@@ -142,7 +142,7 @@ func TestScriptLauncherIsReadNotRun(t *testing.T) {
 	writeScript(t, filepath.Join(bin, "claude-fixed"), "#!/bin/sh\nexec claude --model pinned \"$@\"\n", 0o755)
 	writeFile(t, filepath.Join(home, ".claude", "providers", "demo.settings.json"), `{"env":{"API_TIMEOUT_MS":"600000"}}`)
 	withScripts(t, map[string]string{"claude-demo": filepath.Join(bin, "claude-demo"), "claude-fixed": filepath.Join(bin, "claude-fixed")})
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis")}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona")}
 	ctx := context.Background()
 
 	p, err := n.launcherProbe(ctx, "claude-demo", "--model", "glm-5-air")
@@ -267,7 +267,7 @@ func TestScriptProbeExpandsAndBranches(t *testing.T) {
 	writeScript(t, filepath.Join(bin, "claude-if"), "#!/bin/sh\nif [ -n \"$FAST\" ]; then\n  exec claude --model fast \"$@\"\nfi\nexec claude \"$@\"\n", 0o755)
 	writeFile(t, filepath.Join(home, "s.json"), `{"env":{"ANTHROPIC_BASE_URL":"https://gw.example.com","ANTHROPIC_AUTH_TOKEN":"`+scriptKey+`"}}`)
 	withScripts(t, map[string]string{"claude-s": filepath.Join(bin, "claude-s"), "claude-if": filepath.Join(bin, "claude-if")})
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis")}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona")}
 	p, err := n.launcherProbe(context.Background(), "claude-s")
 	if err != nil || !slices.Equal(p.Args, []string{"--settings", "$HOME/s.json"}) || p.Env["ANTHROPIC_BASE_URL"] != "https://gw.example.com" {
 		t.Fatalf("probe %+v (%v)", p, err)

@@ -28,7 +28,7 @@ func TestPairListenPrintsOnlyTheLinkOnStdout(t *testing.T) {
 		t.Fatalf("stdout %q: %v", out, err)
 	}
 	for _, want := range []string{"让 hub 来连", "监听 :18663", "电脑 › 添加电脑 › hub 来连", "10 分钟内有效", "只对 hub 放行 TCP 18663",
-		"jarvis-link install --listen"} {
+		"persona-link install --listen"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Errorf("stderr lacks %q:\n%s", want, stderr.String())
 		}
@@ -65,7 +65,7 @@ func TestModeCommand(t *testing.T) {
 	if err := modeCmd(f.env, []string{"passive", "--listen", "18700"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"改好了：让 hub 来连（被动），监听 :18700", "jarvis-link pair --listen", "只对 hub 放行 TCP 18700"} {
+	for _, want := range []string{"改好了：让 hub 来连（被动），监听 :18700", "persona-link pair --listen", "只对 hub 放行 TCP 18700"} {
 		if !strings.Contains(f.out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, f.out)
 		}
@@ -123,7 +123,7 @@ func TestPassiveStatus(t *testing.T) {
 	out := f.out.String()
 	for _, want := range []string{"模式：让 hub 来连（被动），监听 :18663\n", "链路：在监听，等 hub 连进来\n", "hub「家里」（1 天 2 小时前配对）\n",
 		"上一次 hub 连进来：3 分钟前，来自 192.0.2.10\n", "这台电脑：hub 上的「example-workstation」\n", "连接器指纹：", "  · [fd00::10]:18663\n",
-		"后台服务：没装（jarvis-link install）", "进程：pid 77"} {
+		"后台服务：没装（persona-link install）", "进程：pid 77"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -160,7 +160,7 @@ func TestInstallPassive(t *testing.T) {
 	f := newFakeEnv(t)
 	f.linger = true
 	f.onCommand = func(call string) (string, error) {
-		if call == "systemctl --user restart jarvis-link.service" {
+		if call == "systemctl --user restart persona-link.service" {
 			f.saveStatus(t, link.Status{State: "unpaired", Mode: link.ModePassive, Listen: ":18663"}, 60)
 		}
 		return "", nil
@@ -170,7 +170,7 @@ func TestInstallPassive(t *testing.T) {
 	}
 	out := f.out.String()
 	for _, want := range []string{"等它开始监听…", "在监听 :18663，等 hub 来配对。", "电脑 › 添加电脑 › hub 来连",
-		"jarvis://connector?addr=workstation.example.com%3A18663&fp=", "只对 hub 放行 TCP 18663"} {
+		"persona://connector?addr=workstation.example.com%3A18663&fp=", "只对 hub 放行 TCP 18663"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -188,7 +188,7 @@ func TestInstallPassive(t *testing.T) {
 	}
 	f.out.Reset()
 	f.onCommand = func(call string) (string, error) {
-		if call == "systemctl --user restart jarvis-link.service" {
+		if call == "systemctl --user restart persona-link.service" {
 			f.saveStatus(t, link.Status{State: "listening", Mode: link.ModePassive, Listen: ":18663", HubName: "家里"}, 61)
 		}
 		return "", nil
@@ -196,7 +196,7 @@ func TestInstallPassive(t *testing.T) {
 	if err := install(f.env, []string{"--listen"}); err != nil {
 		t.Fatal(err)
 	}
-	if out := f.out.String(); strings.Contains(out, "jarvis://connector") || !strings.Contains(out, "已经和 hub「家里」配对过") ||
+	if out := f.out.String(); strings.Contains(out, "persona://connector") || !strings.Contains(out, "已经和 hub「家里」配对过") ||
 		!strings.Contains(out, "在监听 :18663，等 hub「家里」连进来。") {
 		t.Fatalf("output:\n%s", out)
 	}
@@ -208,30 +208,30 @@ func TestInstallPassive(t *testing.T) {
 func TestNodeServiceLinux(t *testing.T) {
 	linuxPaths(t)
 	f := newFakeEnv(t)
-	jarvisd := filepath.Join(t.TempDir(), "jarvisd")
-	_ = os.WriteFile(jarvisd, []byte("#!/bin/sh\n# jarvisd\n"), 0o755)
-	if err := nodeCmd(f.env, []string{"install"}); err == nil || !strings.Contains(err.Error(), "--jarvisd") {
-		t.Fatalf("without jarvisd: %v", err)
+	personad := filepath.Join(t.TempDir(), "personad")
+	_ = os.WriteFile(personad, []byte("#!/bin/sh\n# personad\n"), 0o755)
+	if err := nodeCmd(f.env, []string{"install"}); err == nil || !strings.Contains(err.Error(), "--personad") {
+		t.Fatalf("without personad: %v", err)
 	}
-	if err := nodeCmd(f.env, []string{"install", "--jarvisd", jarvisd}); err != nil {
+	if err := nodeCmd(f.env, []string{"install", "--personad", personad}); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(f.nodeBin()); !strings.Contains(string(b), "# jarvisd") {
-		t.Fatal("jarvisd not copied")
+	if b, _ := os.ReadFile(f.nodeBin()); !strings.Contains(string(b), "# personad") {
+		t.Fatal("personad not copied")
 	}
 	unit := mustRead(t, f.nodeUnitPath())
 	if !strings.Contains(unit, `ExecStart="`+f.nodeBin()+`" node --attach`) || !strings.Contains(unit, "StandardError=append:"+f.nodeLog()) ||
 		strings.Contains(unit, "network-online") {
 		t.Fatalf("unit:\n%s", unit)
 	}
-	if strings.Join(f.calls, "\n") != "systemctl --user show-environment\nsystemctl --user daemon-reload\nsystemctl --user enable --now jarvisd-node.service" {
+	if strings.Join(f.calls, "\n") != "systemctl --user show-environment\nsystemctl --user daemon-reload\nsystemctl --user enable --now personad-node.service" {
 		t.Fatalf("calls %q", f.calls)
 	}
 	// There already (installed by hand, by scripts/deploy/node-launchd.sh): left as it is.
 	_ = os.WriteFile(f.nodeUnitPath(), []byte("mine"), 0o644)
 	f.calls = nil
 	f.out.Reset()
-	if err := nodeInstall(f.env, jarvisd); err != nil || mustRead(t, f.nodeUnitPath()) != "mine" || len(f.calls) != 0 ||
+	if err := nodeInstall(f.env, personad); err != nil || mustRead(t, f.nodeUnitPath()) != "mine" || len(f.calls) != 0 ||
 		!strings.Contains(f.out.String(), "保持原样") {
 		t.Fatalf("%v %q %s", err, f.calls, f.out)
 	}
@@ -244,24 +244,24 @@ func TestInstallSetsUpTheNodeToo(t *testing.T) {
 	f := newFakeEnv(t)
 	f.pairHere(t)
 	f.linger = true
-	jarvisd := filepath.Join(t.TempDir(), "jarvisd")
-	_ = os.WriteFile(jarvisd, []byte("x"), 0o755)
+	personad := filepath.Join(t.TempDir(), "personad")
+	_ = os.WriteFile(personad, []byte("x"), 0o755)
 	f.onCommand = func(call string) (string, error) {
-		if call == "systemctl --user restart jarvis-link.service" {
+		if call == "systemctl --user restart persona-link.service" {
 			f.saveStatus(t, link.Status{State: "connected", Mode: link.ModeActive, Kind: "lan", Address: "https://192.0.2.10:18662", Node: "online"}, 9)
 		}
 		return "", nil
 	}
-	if err := install(f.env, []string{"--jarvisd", jarvisd}); err != nil {
+	if err := install(f.env, []string{"--personad", personad}); err != nil {
 		t.Fatalf("%v\n%s", err, f.out)
 	}
 	calls := strings.Join(f.calls, "\n")
-	if !strings.Contains(calls, "enable --now jarvisd-node.service") || !strings.Contains(calls, "restart jarvis-link.service") ||
+	if !strings.Contains(calls, "enable --now personad-node.service") || !strings.Contains(calls, "restart persona-link.service") ||
 		!strings.Contains(f.out.String(), "装好了常驻 node 的服务") || !strings.Contains(f.out.String(), "本机 node 在线") {
 		t.Fatalf("calls %q\n%s", f.calls, f.out)
 	}
 	f.calls = nil
-	if err := install(f.env, []string{"--no-node"}); err != nil || strings.Contains(strings.Join(f.calls, "\n"), "jarvisd-node") {
+	if err := install(f.env, []string{"--no-node"}); err != nil || strings.Contains(strings.Join(f.calls, "\n"), "personad-node") {
 		t.Fatalf("--no-node: %v %q", err, f.calls)
 	}
 }
@@ -269,8 +269,8 @@ func TestInstallSetsUpTheNodeToo(t *testing.T) {
 func TestNodeServiceMac(t *testing.T) {
 	f := newFakeEnv(t)
 	f.goos, f.uid = "darwin", 501
-	jarvisd := filepath.Join(t.TempDir(), "jarvisd")
-	_ = os.WriteFile(jarvisd, []byte("x"), 0o755)
+	personad := filepath.Join(t.TempDir(), "personad")
+	_ = os.WriteFile(personad, []byte("x"), 0o755)
 	f.onCommand = func(call string) (string, error) {
 		if strings.HasPrefix(call, "launchctl print") {
 			return "", exec.ErrNotFound
@@ -280,14 +280,14 @@ func TestNodeServiceMac(t *testing.T) {
 	if st := nodeStatus(f.env); st.Installed || st.HasBin {
 		t.Fatalf("%+v", st)
 	}
-	if err := nodeInstall(f.env, jarvisd); err != nil {
+	if err := nodeInstall(f.env, personad); err != nil {
 		t.Fatal(err)
 	}
 	plist := f.nodePlistPath()
-	if plist != filepath.Join(f.home, "Library", "LaunchAgents", "com.jarvis.node.plist") {
+	if plist != filepath.Join(f.home, "Library", "LaunchAgents", "com.persona.node.plist") {
 		t.Fatal(plist)
 	}
-	if strings.Join(f.calls, "\n") != "launchctl bootout gui/501/com.jarvis.node\nlaunchctl bootstrap gui/501 "+plist {
+	if strings.Join(f.calls, "\n") != "launchctl bootout gui/501/com.persona.node\nlaunchctl bootstrap gui/501 "+plist {
 		t.Fatalf("calls %q", f.calls)
 	}
 	body := mustRead(t, plist)
@@ -303,7 +303,7 @@ func TestNodeServiceMac(t *testing.T) {
 		t.Fatalf("%+v", st)
 	}
 	// A home with characters XML cares about still makes a valid plist.
-	if p := nodePlist("/Users/a&b/<x>/jarvisd", "/tmp/l"); !strings.Contains(p, "/Users/a&amp;b/&lt;x&gt;/jarvisd") {
+	if p := nodePlist("/Users/a&b/<x>/personad", "/tmp/l"); !strings.Contains(p, "/Users/a&amp;b/&lt;x&gt;/personad") {
 		t.Fatal(p)
 	}
 }

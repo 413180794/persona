@@ -9,9 +9,9 @@ and answers on --control (127.0.0.1 only):
     GET /scenario?name=agents          restart the hub with that scenario's variables (below), wait until it answers
     GET /scenario?env=MOCK_X=1,MOCK_Y=2  any set of MOCK_* variables
     GET /scenario?name=offline         no hub at all: the app goes "Connecting..." / "Waiting for network"
-The app reconnects by itself (`jarvisctl.py scenario` waits for `online`). A hub that exits by itself (another agent's
+The app reconnects by itself (`personactl.py scenario` waits for `online`). A hub that exits by itself (another agent's
 `pkill -f mock_hub.py` took one down mid-run) is started again with the same scenario within a second; GET /scenario
-lists those restarts (`restarts`: when, exit code, scenario) and `jarvisctl.py online` reports them. Standard library
+lists those restarts (`restarts`: when, exit code, scenario) and `personactl.py online` reports them. Standard library
 only; nothing in mock_hub.py changes, and it can still be run on its own as before.
 """
 import argparse

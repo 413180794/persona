@@ -1,1 +1,1 @@
-scripts/release/publish.sh puts the built web client (web/dist) here before building a published jarvisd.
+scripts/release/publish.sh puts the built web client (web/dist) here before building a published personad.

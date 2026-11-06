@@ -66,7 +66,7 @@ func newSettingsHiccup(t *testing.T) (ft *fleetTest, st *settingFailing, fail fu
 func TestMainTitleSurvivesSettingsReadFailure(t *testing.T) {
 	ft, _, fail := newSettingsHiccup(t)
 	ft.s.publish(context.Background())
-	ft.sessions("mac", proto.Session{SessionID: "m1", Cwd: "/home/u/.jarvis/assistant", Title: "first message"})
+	ft.sessions("mac", proto.Session{SessionID: "m1", Cwd: "/home/u/.persona/assistant", Title: "first message"})
 	title := func() string {
 		for _, s := range ft.lastList("mac") {
 			if s.SessionID == "m1" {

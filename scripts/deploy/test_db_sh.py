@@ -8,13 +8,13 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parent
 
-# A fake docker for an existing jarvis-postgres container: `inspect` answers its network mode ($TEST_NETWORK), and
+# A fake docker for an existing persona-postgres container: `inspect` answers its network mode ($TEST_NETWORK), and
 # `exec … pg_isready` answers like the real one for a Postgres listening on $TEST_LISTEN_PORT inside the container:
 # ready when the port it asks (PGPORT, else 5432) is that one. Every call is logged to $TEST_LOG.
 FAKE_DOCKER = r'''#!/bin/bash
 printf '%s\n' "$*" >> "$TEST_LOG"
 case "$1" in
-  ps) echo jarvis-postgres ;;
+  ps) echo persona-postgres ;;
   start) ;;
   inspect) echo "$TEST_NETWORK" ;;
   exec)
@@ -48,7 +48,7 @@ class DbShTestCase(unittest.TestCase):
 
     def run_db(self, network, listen_port, url_port):
         (self.state / "hub.json").write_text(json.dumps(
-            {"database_url": "postgres://jarvis:pw@127.0.0.1:%d/jarvis?sslmode=disable" % url_port}))
+            {"database_url": "postgres://persona:pw@127.0.0.1:%d/persona?sslmode=disable" % url_port}))
         env = {"PATH": str(self.tools) + os.pathsep + os.defpath, "HOME": str(self.root),
                "_PERSONA_STATE_DIR": str(self.state), "TEST_LOG": str(self.log),
                "TEST_NETWORK": network, "TEST_LISTEN_PORT": str(listen_port)}
@@ -59,14 +59,14 @@ class DbShTestCase(unittest.TestCase):
         result = self.run_db("host", 25432, 25432)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("postgres ready", result.stdout)
-        self.assertIn("exec -e PGPORT=25432 jarvis-postgres pg_isready", self.log.read_text())
+        self.assertIn("exec -e PGPORT=25432 persona-postgres pg_isready", self.log.read_text())
 
     def test_the_container_db_sh_creates_is_asked_on_5432_not_the_published_port(self):
         # -p 127.0.0.1:$PORT:5432: database_url has the published port, Postgres in the container listens on 5432
         result = self.run_db("bridge", 5432, 15432)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("exec -e PGPORT=5432 jarvis-postgres pg_isready", self.log.read_text())
-        self.assertIn("exec -e PGPORT=5432 jarvis-postgres psql", self.log.read_text())
+        self.assertIn("exec -e PGPORT=5432 persona-postgres pg_isready", self.log.read_text())
+        self.assertIn("exec -e PGPORT=5432 persona-postgres psql", self.log.read_text())
 
     def test_a_database_that_never_answers_stops_the_deploy_with_the_reason(self):
         result = self.run_db("host", 5432, 25432)

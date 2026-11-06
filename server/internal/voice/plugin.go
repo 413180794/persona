@@ -108,11 +108,11 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	hubURL := identity.Getenv("JARVIS_HUB_URL")
+	hubURL := identity.Getenv("PERSONA_HUB_URL")
 	if hubURL == "" {
 		hubURL = "http://127.0.0.1:18660"
 	}
-	pl := New(cfg, hubURL, identity.Getenv("JARVIS_HUB_TOKEN"), logger)
+	pl := New(cfg, hubURL, identity.Getenv("PERSONA_HUB_TOKEN"), logger)
 	_ = os.Remove(socket)
 	ln, err := net.Listen("unix", socket)
 	if err != nil {

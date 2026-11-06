@@ -181,7 +181,7 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
           <span className="max-w-[220px] truncate">{machineName || t("settings-assistantsettings.machine_none")}</span>
         </Row>
         <Row label={t("settings-assistantsettings.cwd")} mono>
-          <span className="max-w-[300px] truncate" title={info?.cwd}>{info?.cwd || "~/.jarvis/assistant"}</span>
+          <span className="max-w-[300px] truncate" title={info?.cwd}>{info?.cwd || "~/.persona/assistant"}</span>
         </Row>
         {info?.timezone && <Row label={t("settings-assistantsettings.timezone")}>{info.timezone}</Row>}
       </Group>

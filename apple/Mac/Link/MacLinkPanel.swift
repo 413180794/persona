@@ -246,7 +246,7 @@ struct MacLinkPanel: View {
             model.composerContexts[destination, default: []].append(ref)
             model.toast = Toast(key == nil ? String(localized: "Added as context. It will be sent with your next message to Persona.") : String(localized: "Added as context. It'll be sent with your next message."), style: .success)
         } else {
-            Task { await model.askJarvis(ref.xml + "\n\n先记下这段，我接着说。") } // i18n-ignore: sent to the assistant
+            Task { await model.askPersona(ref.xml + "\n\n先记下这段，我接着说。") } // i18n-ignore: sent to the assistant
         }
     }
 
@@ -254,7 +254,7 @@ struct MacLinkPanel: View {
         guard let ref = editing else { return }
         let ask = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         let text = ref.xml + "\n\n" + (ask.isEmpty ? "按上面选中的内容修改。" : "按要求修改上面选中的内容：" + ask) // i18n-ignore: instruction sent to the agent
-        if let key { model.sendNow(key, text: text) } else { Task { await model.askJarvis(text) } }
+        if let key { model.sendNow(key, text: text) } else { Task { await model.askPersona(text) } }
         instruction = ""
         editing = nil
     }

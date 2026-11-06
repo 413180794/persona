@@ -94,7 +94,7 @@ func (p *settingsProgram) SetAuth(ctx context.Context, a serve.AuthSource) (serv
 func TestSettingsAndSignInSource(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfg := program(t, &memSecrets{}, "JARVIS_PROC_KIND=settings")
+	cfg := program(t, &memSecrets{}, "PERSONA_PROC_KIND=settings")
 	cfg.Manifest = (&settingsProgram{}).Manifest()
 	c := New(cfg)
 	// Set before the program runs: kept, and given to it when it starts.
@@ -175,7 +175,7 @@ func (p *flakySettingsProgram) SetAuth(ctx context.Context, a serve.AuthSource) 
 func TestSyncOptionsRetriesAfterFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfg := program(t, &memSecrets{}, "JARVIS_PROC_KIND=flaky-settings")
+	cfg := program(t, &memSecrets{}, "PERSONA_PROC_KIND=flaky-settings")
 	cfg.Manifest = (&settingsProgram{}).Manifest()
 	c := New(cfg)
 	if err := c.SetOptions(json.RawMessage(`{"user":1}`)); err != nil {

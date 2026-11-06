@@ -24,7 +24,7 @@ class ScrollbackGridTest {
      * seconds of the one sent before go out as one: the diffs run on, a whole frame drops what came before it).
      */
     private fun frames(gate: Double = 0.0): List<Frame> {
-        val file = File(requireNotNull(System.getProperty("jarvis.repo.root")), "apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl")
+        val file = File(requireNotNull(System.getProperty("persona.repo.root")), "apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl")
         val all = file.readLines().filter { it.startsWith("{") }.map { line ->
             val o = Json.parseToJsonElement(line).jsonObject
             Frame(o.getValue("t").jsonPrimitive.double, o.getValue("full").jsonPrimitive.boolean, o.getValue("width").jsonPrimitive.int,

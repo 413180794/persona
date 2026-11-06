@@ -81,4 +81,4 @@ SettingsScreen(
 
 本次改动文件：core/navigation/Routes.kt；settings 的 SettingsScreen.kt、SettingsNavigation.kt、SettingsNavigationTest.kt 和本文；agents 的 AgentsScreen.kt、AgentSelection.kt、AgentSelectionTest.kt；inbox 的 InboxScreen.kt、InboxSelection.kt、InboxSelectionTest.kt、LarkScreen.kt、LarkDocumentReader.kt；chat 的 ChatScreen.kt、ChatLinkHost.kt、FullTextReader.kt。
 
-指定五个模块共 85 项单测通过（navigation 2、settings 13、agents 22、inbox 19、chat 29），覆盖新增映射和详情选中规则。App 编译仍被宿主 `app/src/main/java/jarvis/android/ui/Root.kt:329` 的旧枚举穷举阻塞：需要用 `route.page.toInitialPage()` 替换旧的 `when`，并传入导航回调。该文件属于协调者，未修改。没有缺失的组件参数；未使用模拟器或真机，三套风格、双栏和桌面姿态的视觉验收由协调者完成。
+指定五个模块共 85 项单测通过（navigation 2、settings 13、agents 22、inbox 19、chat 29），覆盖新增映射和详情选中规则。App 编译仍被宿主 `app/src/main/java/persona/android/ui/Root.kt:329` 的旧枚举穷举阻塞：需要用 `route.page.toInitialPage()` 替换旧的 `when`，并传入导航回调。该文件属于协调者，未修改。没有缺失的组件参数；未使用模拟器或真机，三套风格、双栏和桌面姿态的视觉验收由协调者完成。

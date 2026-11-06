@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Extension Market: a GitHub market read without a token is the one GitHub's per-network limit stops, so the catalog's
 /// "Couldn't load" for it comes with "add a token" and why (public repositories included); a token, or another kind of market,

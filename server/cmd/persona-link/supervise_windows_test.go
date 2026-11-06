@@ -78,7 +78,7 @@ func TestKeepRunningStartsItAgain(t *testing.T) {
 	}
 }
 
-// jarvis-link starts once the node has made its socket anew; a leftover socket file from before does not count.
+// persona-link starts once the node has made its socket anew; a leftover socket file from before does not count.
 func TestWaitListening(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "node-attach.sock")
 	if err := os.WriteFile(sock, nil, 0o600); err != nil {

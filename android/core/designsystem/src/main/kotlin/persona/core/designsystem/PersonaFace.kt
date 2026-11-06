@@ -83,13 +83,13 @@ enum class PersonaState(val wire: String, @StringRes val labelRes: Int) {
 /**
  * The built-in faces (docs/persona.md "Built-in looks"), chosen in Settings › Appearance › Persona look; [id] is the persona id iOS and the
  * hub use. None is a download. Mochi ([Mochi], the default since 2026-11-03) keeps the app icon's colours; Visor (the
- * default before, id `jarvis`) and Circuit are drawn in the theme's colour. The choice is only saved when one is tapped,
- * so a phone that never chose gets the default and one that chose Visor keeps it ([AppStyleStore.personaId]).
+ * default before, id `persona-visor`) and Circuit are drawn in the theme's colour. The choice is only saved when one is tapped,
+ * so a phone that never chose gets the default ([AppStyleStore.personaId]).
  */
 enum class PersonaDesign(val id: String, @StringRes val titleRes: Int, @StringRes val summaryRes: Int) {
     Mochi("persona", R.string.designsystem_face_mochi, R.string.designsystem_face_mochi_summary),
-    Visor("jarvis", R.string.designsystem_face_visor, R.string.designsystem_face_visor_summary),
-    Circuit("jarvis-circuit", R.string.designsystem_face_circuit, R.string.designsystem_face_circuit_summary);
+    Visor("persona-visor", R.string.designsystem_face_visor, R.string.designsystem_face_visor_summary),
+    Circuit("persona-circuit", R.string.designsystem_face_circuit, R.string.designsystem_face_circuit_summary);
 
     val title: String @Composable get() = stringResource(titleRes)
     val summary: String @Composable get() = stringResource(summaryRes)

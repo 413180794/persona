@@ -21,7 +21,7 @@ import (
 )
 
 // Launchers kept by the hub ("Settings › Model", docs/launchers.md): the hub sends them (keys included) on connect and on
-// every change; they live only in this process's memory. A managed launcher runs as `jarvisd launch <name> …`, which
+// every change; they live only in this process's memory. A managed launcher runs as `personad launch <name> …`, which
 // asks this node over the local socket for its settings and execs claude with them: the key is never written to a
 // file, typed into a terminal or put on a command line.
 
@@ -52,7 +52,7 @@ func (n *Node) managedLauncher(name string) (proto.ManagedLauncher, bool) {
 }
 
 // launcherCommand is what starts claude for a launcher name in a shell: the name itself (a ~/.zshrc function, or
-// claude), or `jarvisd launch <name>` for a managed one. Plain claude gets the machine's claude_start_dir as its
+// claude), or `personad launch <name>` for a managed one. Plain claude gets the machine's claude_start_dir as its
 // CLAUDE_CONFIG_DIR when one is set: a computer whose claude is logged in under a profile directory, not ~/.claude,
 // would otherwise answer every agent with "Not logged in" (#1459).
 func (n *Node) launcherCommand(name string) string { return n.launcherCommandQ(name, shellQuote) }
@@ -131,7 +131,7 @@ func envNames(env []string) []string {
 // interactive session then sends the Artifact skills in its system message; a gateway that cannot carry them refuses
 // the first request ("400 request is not representable on this edge: Claude Code Artifacts are enabled"), so every
 // Agent started in herdr through it failed on its first turn while `claude -p` went on working. The environment
-// variable reaches `jarvisd launch` (headless runs) and the settings env alike; the settings file also says
+// variable reaches `personad launch` (headless runs) and the settings env alike; the settings file also says
 // enableArtifact: false (mergeManagedSettings): off in --settings wins over the other settings sources.
 const artifactsOff = "CLAUDE_CODE_DISABLE_ARTIFACT=1"
 
@@ -142,7 +142,7 @@ func managedSettingsEnv(l proto.ManagedLauncher) map[string]string {
 }
 
 // claudeExecutable finds claude: PATH first, then the usual install spots. A node started by launchd (macOS) has a
-// minimal PATH that misses /opt/homebrew/bin, and nothing in `jarvisd launch`'s own path adds it.
+// minimal PATH that misses /opt/homebrew/bin, and nothing in `personad launch`'s own path adds it.
 func agentExecutable(bin string) (string, error) {
 	if p, err := exec.LookPath(bin); err == nil {
 		return p, nil
@@ -159,11 +159,11 @@ func agentExecutable(bin string) (string, error) {
 
 func claudeExecutable() (string, error) { return agentExecutable("claude") }
 
-// Launch is `jarvisd launch <name> [claude args…]`: the managed launcher's settings from the local node, then claude.
+// Launch is `personad launch <name> [claude args…]`: the managed launcher's settings from the local node, then claude.
 func Launch(ctx context.Context, name string, args []string) error {
 	line, err := nodeclient.Dial(ctx, launcherEnvRequest(name))
 	if err != nil {
-		return fmt.Errorf("jarvisd launch %s: %w", name, err)
+		return fmt.Errorf("personad launch %s: %w", name, err)
 	}
 	var resp struct {
 		Agent string   `json:"agent"`
@@ -177,7 +177,7 @@ func Launch(ctx context.Context, name string, args []string) error {
 		return err
 	}
 	if resp.Error != "" {
-		return errors.New("jarvisd launch " + name + ": " + resp.Error)
+		return errors.New("personad launch " + name + ": " + resp.Error)
 	}
 	agent := resp.Agent
 	if agent == "" {
@@ -185,7 +185,7 @@ func Launch(ctx context.Context, name string, args []string) error {
 	}
 	exe, err := agentExecutable(agent)
 	if err != nil {
-		return fmt.Errorf("jarvisd launch: %w", err)
+		return fmt.Errorf("personad launch: %w", err)
 	}
 	var env []string
 	if agent == "claude" {
@@ -196,9 +196,9 @@ func Launch(ctx context.Context, name string, args []string) error {
 		env = append(withoutEnv(os.Environ(), resp.Clear), resp.Env...)
 		// A proxy the shell still names that no longer answers would hold every request (deadproxy.go, #5953).
 		env = withoutDeadProxies(env, resp.Env, envValue(resp.Env, "ANTHROPIC_BASE_URL"),
-			func(msg string) { fmt.Fprintf(os.Stderr, "jarvisd launch %s: %s\n", name, msg) })
+			func(msg string) { fmt.Fprintf(os.Stderr, "personad launch %s: %s\n", name, msg) })
 		if err := approveClaudeAPIKey(env); err != nil { // apikeyapproval.go: else Claude asks whether to use the key, default No
-			fmt.Fprintf(os.Stderr, "jarvisd launch %s: could not mark the API key as approved for Claude Code: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, "personad launch %s: could not mark the API key as approved for Claude Code: %v\n", name, err)
 		}
 	} else {
 		// What the launcher sets replaces the shell's: with both, the agent would read the shell's (the first).
@@ -265,7 +265,7 @@ func launchExec(agent, exe string, argv, env []string) (string, []string, []stri
 	return wrapped[0], wrapped, wenv, st
 }
 
-// launcherEnv answers `jarvisd launch` on the local socket.
+// launcherEnv answers `personad launch` on the local socket.
 func (n *Node) launcherEnv(name string) map[string]any {
 	l, ok := n.managedLauncher(name)
 	if !ok {

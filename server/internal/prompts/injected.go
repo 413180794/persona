@@ -19,7 +19,7 @@ var (
 	followupHeadRe = regexp.MustCompile(`^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$`)
 	wakeHeadRe     = regexp.MustCompile(`^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」`)
 	superviseRe    = regexp.MustCompile(`^📋 督办：你派出去的任务有 (\d+) 个要你处理$`)
-	leadContextRe  = regexp.MustCompile(`^(?s)\s*<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
+	leadContextRe  = regexp.MustCompile(`^(?s)\s*<persona-context\b[^>]*>.*?</persona-context>`)
 )
 
 // noticeMarker is in every task notice (assistant/task_notice): a first line alone could be the user's.

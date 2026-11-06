@@ -3,11 +3,10 @@ import SwiftUI
 import WidgetKit
 
 /// Control Center / Lock Screen / Action Button: open the assistant to ask something.
-// Compatibility: the system addresses this type by its original module/type identity.
-struct AskJarvisControl: ControlWidget {
+struct AskPersonaControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "jarvis.control.ask") {
-            ControlWidgetButton(action: OpenJarvisAssistantIntent()) {
+        StaticControlConfiguration(kind: "persona.control.ask") {
+            ControlWidgetButton(action: OpenPersonaAssistantIntent()) {
                 Label("Ask Persona", systemImage: "sparkles")
             }
         }
@@ -17,11 +16,10 @@ struct AskJarvisControl: ControlWidget {
 }
 
 /// Control: open the Agents page.
-// Compatibility: the system addresses this type by its original module/type identity.
-struct JarvisAgentsControl: ControlWidget {
+struct PersonaAgentsControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "jarvis.control.agents") {
-            ControlWidgetButton(action: OpenJarvisAgentsIntent()) {
+        StaticControlConfiguration(kind: "persona.control.agents") {
+            ControlWidgetButton(action: OpenPersonaAgentsIntent()) {
                 Label("Agents", systemImage: "person.crop.circle.badge.checkmark")
             }
         }

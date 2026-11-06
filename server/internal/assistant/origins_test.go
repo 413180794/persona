@@ -169,7 +169,7 @@ func TestGuessOrigin(t *testing.T) {
 		{"x", "这是收件箱里的一件事，你作为我的 AI 分身先处理它…", "", OriginInbox, ""},
 		{"x", "⏰ 早报（定时任务）", "", OriginTask, ""},
 		{"x", relay, titleAuto, OriginSpawned, "abcd-1234"},
-		{"x", `<jarvis-context kind="instructions" title="给 Agent 的说明">` + "\n我在飞书「群」里用 /agent 叫你。", titleAuto, OriginLarkAgent, ""},
+		{"x", `<persona-context kind="instructions" title="给 Agent 的说明">` + "\n我在飞书「群」里用 /agent 叫你。", titleAuto, OriginLarkAgent, ""},
 		{"x", "帮我看看明天的会", titleAuto, OriginUser, ""},
 		{"x", "", "", OriginUser, ""},
 	} {

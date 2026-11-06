@@ -55,7 +55,7 @@ func (n *Node) launcherOwnSettings(ctx context.Context, launcher string) string 
 		return ""
 	}
 	if _, ok := n.managedLauncher(launcher); ok {
-		return "" // jarvisd launch sets its environment and execs claude: no settings of its own
+		return "" // personad launch sets its environment and execs claude: no settings of its own
 	}
 	launcherCache.Lock()
 	loaded := !launcherCache.at.IsZero()

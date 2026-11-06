@@ -147,7 +147,7 @@ internal class ChatWebViewPool(private val context: Context) {
                 val target = request.url.toString()
                 if (ChatLinks.webUrl(target) != null) return false
                 // Another app's link (mailto:, tel:, intent:): only for a tap on a page that is on screen, and only after
-                // asking. Preloaded pages and scripts cannot start apps; this app's own jarvis: links never come from a page.
+                // asking. Preloaded pages and scripts cannot start apps; this app's own persona: links never come from a page.
                 if (ChatLinks.kind(target) == ChatLinkKind.External && request.hasGesture() && view.parent != null) page.onExternal?.invoke(target)
                 else if (request.isForMainFrame) failure = view.context.getString(R.string.chat_web_cannot_open)
                 return true

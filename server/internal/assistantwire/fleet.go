@@ -50,7 +50,7 @@ const (
 // Answered in the manager's process (internal/extmgr channels_bus.go).
 const InteractionsOwnerAction = "interactions.owner_action"
 
-// MethodFleetAsk is a card one of the hub's own features asks the user (a mail send, Cua's apps, jarvis_settings):
+// MethodFleetAsk is a card one of the hub's own features asks the user (a mail send, Cua's apps, persona_settings):
 // {interaction} → proto.Resolution, when it is answered, expires or the call ends.
 const MethodFleetAsk = "fleet.ask"
 

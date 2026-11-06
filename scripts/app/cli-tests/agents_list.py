@@ -4,7 +4,7 @@ which stays as it is for now). One launch for every case and run; each case star
 saved look forgotten on a new view tree, instead of a relaunch.
 
   python3 scripts/mock/mock_scenarios.py --port 18761 --scenario agents &
-  JARVISCTL_UDID=<udid> HUB=http://127.0.0.1:18761 scripts/app/cli-tests/agents_list.py 3
+  PERSONACTL_UDID=<udid> HUB=http://127.0.0.1:18761 scripts/app/cli-tests/agents_list.py 3
 """
 import os
 

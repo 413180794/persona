@@ -1,6 +1,6 @@
 # Lessons index
 
-The product name is Persona everywhere (formerly Jarvis). Old paths, commands, logs, signatures, and source identifiers in past lessons keep the values they had at the time. They are compatibility / historical references, not the default directory of a new install. For `personad`, `~/.persona`, and how configuration is chosen in the migrated version, see [Naming and compatibility](../config.md#命名与兼容).
+The product name is Persona. This version has no previous-brand runtime compatibility; current contracts and the approval-gated operational migration are in [the naming contract](../rename.md) and [the cutover](../persona-cutover.md). Historical verification records do not authorize deployment.
 
 Pitfalls, odd behavior, and design trade-offs, one file per topic. Read the matching file before touching an area. Write new lessons into the matching section on the spot (if none fits, start a new section or a new file and register it here).
 The most common, cross-module ones also get one line in `CLAUDE.md` ("Most common pitfalls"). Design conclusions tied to a specific feature go into that feature's doc (`docs/<topic>.md`); this directory only records pitfalls.
@@ -8,7 +8,7 @@ The most common, cross-module ones also get one line in `CLAUDE.md` ("Most commo
 | File | When to read |
 | --- | --- |
 | `workflow.md` | Several Agents changing the repo at once: simulators, mock ports, worktrees, rebase, migration numbers, scripts that wait on background tasks |
-| `rename.md` | The product rename: a fixed audit baseline, keeping source / display / system identities apart, target vs. module, ActivityAttributes, dual schemes / header parser, the XcodeGen source and update bundle IDs |
+| `rename.md` | Persona-only cutover: collision safety, distinct avatar IDs, central generation, registered app identities, platform upgrade risks and approval-gated data migration |
 | `agents.md` | Changing the parts of node that drive Claude Code / Codex / an internal Codex variant: herdr's behavior, identifying panes and sessions, config directories, sending, `/effort`, image generation, launch timeouts |
 | `paseo.md` | Changing the Paseo engine bridge (`integrations/paseo`) or the node code that runs it, testing against a real Paseo: only trust the address in `paseo.pid`, where the plan text lives, requests get trimmed, read-only commands don't ask for permission, replies that can't wait, a subscription and a reply read in the same pass |
 | `dsh.md` | Changing the DSH plugin (`integrations/dsh`) or runtime integration (`runtime.sock`, `integrations/runtime-sdk`): DSH's response chain, event sources, seq, log format, end-to-end test pitfalls |

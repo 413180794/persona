@@ -17,12 +17,12 @@ On the DSH side, a plugin installed into `dsh web` uses the same services as the
 
 ```
  App ── hub ── node ──┬── herdr (Claude / Codex / a custom Codex fork)
-                      └── ~/.persona/runtime.sock ◄── jarvis-dsh-runtime plugin (inside the dsh web process)
+                      └── ~/.persona/runtime.sock ◄── persona-dsh-runtime plugin (inside the dsh web process)
                                                     ├─ sessionController: list / page / prompt / cancel / create / rename
                                                     ├─ session/event, agent/assistant-stream, api-session/*
                                                     ├─ approval/request, user-questions/request response chains
                                                     └─ tools.register: hub tools (phone_*, mail_*) for DSH Agents
-                                        ◄── jarvis DSH companion process companion.mjs (runtime `dsh-files`, lists disk sessions when DSH is not running)
+                                        ◄── persona DSH companion process companion.mjs (runtime `dsh-files`, lists disk sessions when DSH is not running)
 ```
 
 ## Installation
@@ -31,7 +31,7 @@ Install on the computer running `dsh web`, which must appear in the hub's machin
 (`runtime.sock` is 0600).
 
 - **Install into a profile** (long-term use): install the `integrations/dsh` bundle in DSH (Web GUI plugin management, or ask the DSH Agent to use `plugin_manager`
-  `install_bundle`, with target set to this directory's absolute path). The bundle includes `cordis.patch.yml`, which inserts the `jarvis-dsh-runtime` entry on installation.
+  `install_bundle`, with target set to this directory's absolute path). The bundle includes `cordis.patch.yml`, which inserts the `persona-dsh-runtime` entry on installation.
   The plugin uses the repository's `integrations/runtime-sdk/` via relative paths, so install from a Persona repository checkout (local directory installs are symlinks, not copies); do not copy `integrations/dsh` alone.
 - **Subsequent updates are automatic**: `index.js` is only a loader; node supplies the plugin code ("Automatic updates" below). Reload once in DSH after installation
   (or upgrading from an old version without a loader); later hub updates and following node updates switch the plugin automatically, without clicking in DSH again.
@@ -39,7 +39,7 @@ Install on the computer running `dsh web`, which must appear in the hub's machin
 
   ```yaml
   - insert:
-      - id: jarvis-dsh-runtime
+      - id: persona-dsh-runtime
         name: /<Persona repository>/integrations/dsh/index.js
         config:
           interactions: auto
@@ -73,7 +73,7 @@ node <Persona repository>/integrations/dsh/companion.mjs --dsh <DSH installation
 | Field | Default | Description |
 | --- | --- | --- |
 | `interactions` | `auto` | Who gets authorizations and questions first: `phone` always tries the phone first; `browser` never uses the phone (Persona only reads and sends); `auto` is described below |
-| `socket` | `~/.persona/runtime.sock` | Node runtime socket; environment variable `JARVIS_RUNTIME_SOCKET` also works |
+| `socket` | `~/.persona/runtime.sock` | Node runtime socket; environment variable `PERSONA_RUNTIME_SOCKET` also works |
 | `listDays` | `7` | List sessions active within this many days (running or waiting-for-user sessions are always listed) |
 | `maxSessions` | `80` | Maximum count; sessions messaged or created from the phone (most recent 50) bypass both limits and stay listed |
 | `runtime` / `name` / `launcher` | `dsh` / `DSH` / `dsh` | This DSH's runtime id, display name, and launcher name in Persona. A second DSH on the same computer needs distinct values; sessions with a changed id still display as DSH Agents (`agent: "dsh"`) |
@@ -81,17 +81,17 @@ node <Persona repository>/integrations/dsh/companion.mjs --dsh <DSH installation
 | `assistant` | `true` | Allow the DSH launcher to run Persona's assistant ("Assistant" below); `false` disables this |
 | `presets` | See "Assistant" | Maps Persona permission modes in assistant chats to DSH permission presets, e.g. `{default: workspace-write, plan: read-only}` |
 | `autoUpdate` | `true` (`false` as a daemon) | Accept plugin versions supplied by node ("Automatic updates") |
-| `listen` | Unset | Daemon mode (`docs/daemons.md`): `{port, host?, path?, token \| token_file}`; instead of connecting to `socket`, expose a WebSocket endpoint for node to connect (default `127.0.0.1`, path `/jarvis/runtime`). Use when DSH runs under another user, in a container, or on another machine; node's `daemons.json` specifies the same address and token, with names and launchers determined there. Daemons have no phone tools and cannot run the assistant |
+| `listen` | Unset | Daemon mode (`docs/daemons.md`): `{port, host?, path?, token \| token_file}`; instead of connecting to `socket`, expose a WebSocket endpoint for node to connect (default `127.0.0.1`, path `/persona/runtime`). Use when DSH runs under another user, in a container, or on another machine; node's `daemons.json` specifies the same address and token, with names and launchers determined there. Daemons have no phone tools and cannot run the assistant |
 
 ### Automatic updates
 
 The plugin has two layers (generic approach in `docs/runtimes.md`, "Automatic updates"): DSH loads `index.js`, a stable loader; each version of plugin code (`lib/plugin.js`, `lib/dsh.js`… and
-`runtime-sdk`) lives in `~/.persona/runtime-packages/jarvis-dsh-runtime/<hash>/`, imported by the loader. personad embeds these files in its binary at build time.
+`runtime-sdk`) lives in `~/.persona/runtime-packages/persona-dsh-runtime/<hash>/`, imported by the loader. personad embeds these files in its binary at build time.
 The plugin reports its hash when connecting to node; if node ships a different hash, it offers the package. The plugin fetches and verifies it, waits until it has no cards on the phone, stops the old version, and loads the new one. DSH sessions and Web GUI are unaffected
 (the plugin is only an observer; the phone list pauses for a few seconds during switching). This bypasses DSH plugin management and hot reload entirely: symlinked plugins are outside the hot-reload watch directory, so file changes do not take effect;
 plugin management inside phone-driven sessions also reports `HMR transactions cannot be nested` (when the plugin starts inside a plugin-management transaction, that transaction context follows its connection; a DSH problem).
 
-- Running version: node log `runtime dsh <version> #N connected`, plugin logs `jarvis: jarvis-dsh-runtime <hash> (shipped / from the node)` and `switched to …`;
+- Running version: node log `runtime dsh <version> #N connected`, plugin logs `persona: persona-dsh-runtime <hash> (shipped / from the node)` and `switched to …`;
   `current.json` records the node-supplied version.
 - A manually installed new version (changed checkout files) has a hash differing from `current.json` and runs first on the next load; if node supplies another version, it switches again.
 - To disable automatic updates: `autoUpdate: false`. Daemon mode (`listen`) defaults to no updates; restart DSH to switch versions.
@@ -110,7 +110,7 @@ plugin management inside phone-driven sessions also reports `HMR transactions ca
 | Create | Select launcher `dsh` when creating in the app (available only while DSH is connected) → `sessionController.create {cwd}` |
 | Rename | Session name → `sessionController.rename`; ignore tab names |
 | Close | `workspaceRegistry.archiveSession(id, {stopActivity: true})`: same as Web GUI archiving; stop the current turn, subagents, background tasks, and scheduled tasks together; then omit from the list. Can be unarchived in DSH |
-| Phone tools | Hub tools (`mcp.tools` forwarded by node) register in DSH as `mcp__jarvis__<name>`; calls go through node `mcp.call` to the hub with the calling session attached. Result text becomes tool output; error results become tool failures |
+| Phone tools | Hub tools (`mcp.tools` forwarded by node) register in DSH as `mcp__persona__<name>`; calls go through node `mcp.call` to the hub with the calling session attached. Result text becomes tool output; error results become tool failures |
 
 ## Authorization, questions, and plan approval
 
@@ -152,7 +152,7 @@ The assistant computer (hub computer, or `assistant.machine`) must run persisten
 | Continue / after restart | A chat is a DSH session (`session-<uuid>`), persisted by DSH; node restarts do not affect it (recognized as an assistant session by directory), and the next message after a DSH restart automatically resumes it |
 | Stop | `session.interrupt` → `sessionController.cancel`; closing a chat stops only the active turn, leaving the session in DSH |
 | Interject during a reply | Already in the plugin: steer into the active turn |
-| Persona MCP tools | Hub assistant tools (`ask_user`, `notify_user`, `schedule_*`, `agents_*`, `kb_*`…) register as `mcp__jarvis__<name>`, only for assistant chats (`tools.register` `when`); calls carry assistant identity through node, which checks that the session belongs to DSH and is an assistant chat |
+| Persona MCP tools | Hub assistant tools (`ask_user`, `notify_user`, `schedule_*`, `agents_*`, `kb_*`…) register as `mcp__persona__<name>`, only for assistant chats (`tools.register` `when`); calls carry assistant identity through node, which checks that the session belongs to DSH and is an assistant chat |
 | ask_user | Same tool; session id is already known |
 | DSH questions / plans | Already in the plugin: question chain, including plan cards and late answers; assistant chats always use phone first |
 | Command / file-edit approval | `approval/request` chain, always phone first for assistant chats (DSH asks only for cases such as leaving the sandbox) |
@@ -165,7 +165,7 @@ The assistant computer (hub computer, or `assistant.machine`) must run persisten
 | Memory | **The same files** as Claude and Codex: the first message of a new chat is prefixed with memory directory, format, and current index (`prompts/assistant/runtime_instructions.md`); edits in that directory do not prompt outside Plan mode |
 | Background tasks | DSH's own tasks (`job_*`), with running ones listed in session `background` (see "Subagents and background tasks"); whether completion wakes the chat follows DSH rules, with no separate node bookkeeping |
 | Warmup | Unnecessary: `dsh web` is persistent, and new chats call `sessionController.create` directly |
-| Live snapshots | Attached to each message like Claude and Codex (`<jarvis-context>`, changed sections only), hidden in the chat (`map.js` strips attribute-free `<jarvis-context>` blocks) |
+| Live snapshots | Attached to each message like Claude and Codex (`<persona-context>`, changed sections only), hidden in the chat (`map.js` strips attribute-free `<persona-context>` blocks) |
 
 Differences from the Claude version: persistent `dsh web` required, and a `dsh web` restart interrupts the active turn; assistant chats also appear in DSH's Web GUI (continue viewing on the computer).
 DSH authorization has only "Allow once"; the Lark gate's "Always allow in this chat" is still remembered by node; denial reasons are steered to the model; switching a chat to Claude / Codex requires a new chat.
@@ -208,13 +208,13 @@ Offline sessions listed by the companion (when DSH is not running) omit subagent
 - Node: `go test ./internal/node -run 'TestRuntime'` (runtime id conflicts, same-process reconnection, single-owner launchers, three handover outcomes: `runtimes_identity_test.go`;
   subagent/background rows, `<session>@<child>` calls and pushes routed to the parent's runtime: `TestRuntimeSubagentsAndBackground`; daemon prefixes: `TestDaemonSubagentIDs`).
   Plugin: subagent / workflow / background task start and finish, pagination and watch using parent addresses, child authorizations and questions attached to the parent, recovering preexisting children from catalogs and job tables (last three in `dsh.test.js`).
-- End-to-end: `DSH_CHECKOUT=<built dsh source> JARVISD=<jarvisd> node integrations/dsh/e2e/run.mjs`. Starts real `dsh web` in a temporary directory
+- End-to-end: `DSH_CHECKOUT=<built dsh source> PERSONAD=<personad> node integrations/dsh/e2e/run.mjs`. Starts real `dsh web` in a temporary directory
   (independent `DSH_HOME`, model played by DSH's `llm-mock-server`) and real `personad node --stdio`, with the script acting as hub: create a session from the "phone," send messages,
   inspect reasoning and replies, paginate history, approve a command (actually executed), answer a question, inspect streaming, interrupt, check push continuity, then have the DSH Agent call a phone tool (hub receives call and session,
   result returns to Agent), delegate a background subagent (parent turn ends; child is running in `subagents` with its launching call, not separately listed; paginate/watch through `<parent>@<child>`;
   after completion the list reports finished and the parent wakes), run a background command (listed in `background` after the turn ends, removed on exit), then close from the phone (removed from list, present in DSH archive).
-  Child and parent requests interleave; the mock model separates them using prompt markers (`scriptedModel().scriptWhen`). On 2026-11-02, 31/31 passed; daemon mode (`JARVIS_E2E_DAEMON=1`) also 31/31.
-  The script installs a test-only DSH rule (commands containing `JARVIS_E2E_ASK` require authorization) and an "unsandboxed but requires authorization" permission preset:
+  Child and parent requests interleave; the mock model separates them using prompt markers (`scriptedModel().scriptWhen`). On 2026-11-02, 31/31 passed; daemon mode (`PERSONA_E2E_DAEMON=1`) also 31/31.
+  The script installs a test-only DSH rule (commands containing `PERSONA_E2E_ASK` require authorization) and an "unsandboxed but requires authorization" permission preset:
   DSH cannot start its own sandbox inside another sandbox (such as an Agent shell).
 - Old sessions dropped from the list: `node integrations/dsh/e2e/older-session.mjs` (same two environment variables). Limit the plugin to 1 session, create A and B,
   restart DSH so the plugin forgets phone interaction with A, then message A; require delivery to DSH, reply push, and no herdr routing. 2026-11-01: new version 5/5, deployed old version 3/5.
@@ -222,7 +222,7 @@ Offline sessions listed by the companion (when DSH is not running) omit subagent
 - When DSH is not running: `node integrations/dsh/e2e/files.mjs` (same two environment variables). Run one turn in real `dsh web`, stop it, have the companion list the session from disk as offline and paginate its content;
   no files in `DSH_HOME` change before/after. Send again from the "phone"; the companion starts DSH through a wake script, node hands the message to the plugin, the reply returns, and the plugin owns the session again. On 2026-11-02, 7/7 passed.
 
-- Automatic updates: `node integrations/dsh/e2e/update.mjs` (same two environment variables). Node packages come from a directory (`JARVIS_RUNTIME_PACKAGES`), avoiding another personad build:
+- Automatic updates: `node integrations/dsh/e2e/update.mjs` (same two environment variables). Node packages come from a directory (`PERSONA_RUNTIME_PACKAGES`), avoiding another personad build:
   with matching node/plugin versions, node offers nothing and the plugin runs its bundled copy from the package directory. Switch to a node shipping a new plugin (as a hub update would); the plugin is offered, fetches files, and switches itself;
   a new session messaged from the "phone" replies normally. After DSH restarts, it directly runs the node-supplied copy without fetching again. On 2026-11-02, 7/7 passed. Loader itself: `cd integrations/runtime-sdk && npm test`
   (`loader.test.js`: version switches, no switch on hash mismatch, fallback if startup fails, waiting for phone cards, priority for manual installs, no daemon switches).
@@ -236,5 +236,5 @@ Offline sessions listed by the companion (when DSH is not running) omit subagent
 Platforms built on DSH that do not run `dsh web` can implement a runtime on their side using the same SDK (`integrations/runtime-sdk`), reuse `integrations/dsh/lib/map.js` mappings,
 and connect as daemons (`docs/daemons.md`), without additional Persona code.
 
-Daemon end-to-end: run the same `e2e/run.mjs` with `JARVIS_E2E_DAEMON=1` (plugin configured with `listen`, node connects through `daemons.json`). Checks stay the same except for two differences: session ids carry the `dsh.` prefix; the phone-tools case becomes "daemon cannot access phone tools; calls cannot reach the hub."
+Daemon end-to-end: run the same `e2e/run.mjs` with `PERSONA_E2E_DAEMON=1` (plugin configured with `listen`, node connects through `daemons.json`). Checks stay the same except for two differences: session ids carry the `dsh.` prefix; the phone-tools case becomes "daemon cannot access phone tools; calls cannot reach the hub."
 On 2026-11-02, 21/21 passed (socket mode also 21/21).

@@ -1,13 +1,13 @@
 import XCTest
 
 /// A sealed message on a messaging source (#2138, docs/extension-messaging.md「七」) against scripts/mock/mock_hub.py with
-/// MOCK_MESSAGING=1 MOCK_LARK_NATIVE_OLK=1 (JARVIS_MOCK_HUB): the app asks the source's `compose` what it needs and shows
+/// MOCK_MESSAGING=1 MOCK_LARK_NATIVE_OLK=1 (PERSONA_MOCK_HUB): the app asks the source's `compose` what it needs and shows
 /// exactly that (unlock the vault, then the cover as a choice), then sends with the token it gave; the sealed chunks
 /// reach the vendor, and the message shows as sealed. No password or text goes anywhere but the mock.
 final class MessagingSealedFlowTests: XCTestCase {
     @MainActor private func open(_ hub: String) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "feishu", "-demo.on", "NO", "-ui.oldLayout", "NO",
                                "-integrations.lark.enabled", "YES", "-showLarkSendFresh", "YES"]
         app.launchPinned()
@@ -23,7 +23,7 @@ final class MessagingSealedFlowTests: XCTestCase {
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }
@@ -38,8 +38,8 @@ final class MessagingSealedFlowTests: XCTestCase {
     }
 
     @MainActor func testComposeAsksThenSendsSealed() async throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"], ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_MESSAGING=1 MOCK_LARK_NATIVE_OLK=1 (JARVIS_MOCK_HUB, JARVIS_MESSAGING=1)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"], ProcessInfo.processInfo.environment["PERSONA_MESSAGING"] == "1" else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_MESSAGING=1 MOCK_LARK_NATIVE_OLK=1 (PERSONA_MOCK_HUB, PERSONA_MESSAGING=1)")
         }
         continueAfterFailure = false
         try await post(hub, "/test/lark-encryption/reset", ["locked": true])

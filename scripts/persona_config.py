@@ -2,12 +2,12 @@
 """Reads the personal build / deploy config (docs/config.md) so no script hard-codes one person's setup.
 
 The config lives outside the repository so clean worktrees (releases) see it too:
-  $JARVIS_CONFIG, else ~/.config/jarvis/config.json   (template: config.example.json)
+  $PERSONA_CONFIG, else ~/.config/persona/config.json   (template: config.example.json)
 
-  python3 scripts/jarvis_config.py env              # shell exports: eval "$(python3 scripts/jarvis_config.py env)"
-  python3 scripts/jarvis_config.py xcconfig         # writes apple/Config.xcconfig (bundle id, team) for XcodeGen / Xcode
-  python3 scripts/jarvis_config.py export-options <out.plist> [upload|export]
-  python3 scripts/jarvis_config.py get <dotted.key>  # one value, e.g. hub.url
+  python3 scripts/persona_config.py env              # shell exports: eval "$(python3 scripts/persona_config.py env)"
+  python3 scripts/persona_config.py xcconfig         # writes apple/Config.xcconfig (bundle id, team) for XcodeGen / Xcode
+  python3 scripts/persona_config.py export-options <out.plist> [upload|export]
+  python3 scripts/persona_config.py get <dotted.key>  # one value, e.g. hub.url
 """
 import json
 import os
@@ -19,26 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def path() -> str:
-    for key in ("PERSONA_CONFIG", "JARVIS_CONFIG"):
-        if key in os.environ:
-            return os.path.expanduser(os.environ[key])
-    current = os.path.expanduser("~/.config/persona/config.json")
-    legacy = os.path.expanduser("~/.config/jarvis/config.json")
-    return current if os.path.lexists(current) or not os.path.lexists(legacy) else legacy
-
-
-def config_alias(p: str):
-    current = os.path.expanduser("~/.config/persona")
-    legacy = os.path.expanduser("~/.config/jarvis")
-    parent = os.path.dirname(os.path.abspath(p))
-    if parent not in (current, legacy):
-        return
-    alias = legacy if parent == current else current
-    if not os.path.lexists(alias):
-        try:
-            os.symlink(os.path.basename(parent), alias)
-        except OSError:
-            pass
+    return os.path.expanduser(os.environ.get("PERSONA_CONFIG", "~/.config/persona/config.json"))
 
 
 def load() -> dict:
@@ -47,7 +28,6 @@ def load() -> dict:
         sys.exit(f"missing {p}\nCopy config.example.json there and fill it in (docs/config.md).")
     with open(p) as f:
         cfg = json.load(f)
-    config_alias(p)
     return cfg
 
 
@@ -72,31 +52,27 @@ def env(cfg: dict) -> dict:
     hub = cfg.get("hub", {})
     hub_ssh = machine(cfg, hub["machine"]).get("ssh", hub["machine"]) if hub.get("machine") else ""
     out = {
-        "JARVIS_BUNDLE_ID": get(cfg, "app.bundle_id", ""),
-        "JARVIS_TEAM_ID": get(cfg, "app.team_id", ""),
+        "PERSONA_BUNDLE_ID": get(cfg, "app.bundle_id", ""),
+        "PERSONA_TEAM_ID": get(cfg, "app.team_id", ""),
         "ASC_KEY_ID": store.get("key_id", ""),
         "ASC_ISSUER_ID": store.get("issuer_id", ""),
         "ASC_KEY_PATH": os.path.expanduser(store.get("key_path", "")),
         "ASC_APP_ID": str(store.get("app_id", "")),
-        "JARVIS_HUB_MACHINE": hub.get("machine", ""),
-        "JARVIS_HUB_SSH": hub_ssh,
-        "JARVIS_HUB_URL": hub.get("url", ""),
-        "JARVIS_MACHINES": " ".join(m["id"] for m in cfg.get("machines", [])),
-        "JARVIS_SIM": cfg.get("simulator", ""),
-        # Where scripts/release/publish.sh puts jarvisd and install.sh (the site/ worker's domain), and the wrangler to run.
-        "JARVIS_PUBLISH_URL": get(cfg, "publish.site_url", "").rstrip("/"),
-        "JARVIS_WRANGLER": os.path.expanduser(get(cfg, "publish.wrangler", "")),
+        "PERSONA_HUB_MACHINE": hub.get("machine", ""),
+        "PERSONA_HUB_SSH": hub_ssh,
+        "PERSONA_HUB_URL": hub.get("url", ""),
+        "PERSONA_MACHINES": " ".join(m["id"] for m in cfg.get("machines", [])),
+        "PERSONA_SIM": cfg.get("simulator", ""),
+        # Where scripts/release/publish.sh puts personad and install.sh (the site/ worker's domain), and the wrangler to run.
+        "PERSONA_PUBLISH_URL": get(cfg, "publish.site_url", "").rstrip("/"),
+        "PERSONA_WRANGLER": os.path.expanduser(get(cfg, "publish.wrangler", "")),
         # Meta glasses (docs/meta-glasses.md): the project.yml include that adds the Meta Wearables SDK is on only for YES.
-        "JARVIS_META_WEARABLES": "YES" if get(cfg, "app.meta_wearables.enabled", False) is True else "NO",
+        "PERSONA_META_WEARABLES": "YES" if get(cfg, "app.meta_wearables.enabled", False) is True else "NO",
     }
     # Which Xcode builds (and releases) the app; a DEVELOPER_DIR already in the environment wins. iPhone Duo needs
     # Xcode 27 or later: built with an older one, the app does not reach under the status bar and the camera.
     if cfg.get("xcode") and not os.environ.get("DEVELOPER_DIR"):
         out["DEVELOPER_DIR"] = os.path.join(os.path.expanduser(cfg["xcode"]), "Contents", "Developer")
-    for key, value in list(out.items()):
-        if key.startswith("JARVIS_"):
-            current = "PERSONA_" + key[len("JARVIS_"):]
-            out[current] = out[key] = value
     return out
 
 
@@ -124,19 +100,16 @@ def app_entitlements(cfg: dict) -> str:
 
 
 def xcconfig(cfg: dict):
-    # Generated, git-ignored: the committed project only says $(JARVIS_BUNDLE_ID).
+    # Generated, git-ignored: the committed project only says $(PERSONA_BUNDLE_ID).
     out = os.path.join(ROOT, "apple", "Config.xcconfig")
     with open(out, "w") as f:
-        f.write("// Generated from %s by scripts/jarvis_config.py; do not edit or commit.\n" % path())
-        f.write("JARVIS_BUNDLE_ID = %s\n" % get(cfg, "app.bundle_id", ""))
+        f.write("// Generated from %s by scripts/persona_config.py; do not edit or commit.\n" % path())
+        f.write("PERSONA_BUNDLE_ID = %s\n" % get(cfg, "app.bundle_id", ""))
         # The App Group the app shares files with the widget extension (docs/release.md "App Group").
-        f.write("JARVIS_APP_GROUP = %s\n" % app_group(cfg))
-        f.write("PERSONA_BUNDLE_ID = $(JARVIS_BUNDLE_ID)\n")
-        f.write("PERSONA_APP_GROUP = $(JARVIS_APP_GROUP)\n")
-        f.write("PERSONA_PUSH_RELAY = $(JARVIS_PUSH_RELAY)\n")
+        f.write("PERSONA_APP_GROUP = %s\n" % app_group(cfg))
         f.write("DEVELOPMENT_TEAM = %s\n" % get(cfg, "app.team_id", ""))
         # The push relay the app registers with (docs/push-relay.md); "//" starts a comment in xcconfig, hence $().
-        f.write("JARVIS_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
+        f.write("PERSONA_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
         # Which entitlements the app signs with (app_entitlements; docs/carplay.md).
         f.write("PERSONA_APP_ENTITLEMENTS = %s\n" % app_entitlements(cfg))
         # "No hub yet?" on the first screen opens this page (docs/getting-started.md published; empty: the row is hidden).
@@ -180,13 +153,13 @@ def export_options(cfg: dict, out: str, destination: str = "upload"):
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>{bid}</key>
-		<string>Jarvis App Store</string>
+		<string>Persona App Store</string>
 		<key>{bid}.watchkitapp</key>
-		<string>Jarvis Watch App Store</string>
+		<string>Persona Watch App Store</string>
 		<key>{bid}.liveactivity</key>
-		<string>Jarvis Live Activity App Store</string>
+		<string>Persona Live Activity App Store</string>
 		<key>{bid}.notify</key>
-		<string>Jarvis Notify App Store</string>
+		<string>Persona Notify App Store</string>
 		<key>{bid}.share</key>
 		<string>Persona Share App Store</string>
 	</dict>
@@ -210,10 +183,6 @@ def main():
         generated = env(cfg)
         for k, v in generated.items():
             print(f"export {k}={shlex.quote(v)}")
-        for key in sorted(os.environ):
-            if key.startswith("PERSONA_") and key not in generated and key.isascii() and key.replace("_", "").isalnum():
-                legacy = "JARVIS_" + key[len("PERSONA_"):]
-                print(f'export {legacy}="${{{key}}}"')
     elif args[:1] == ["xcconfig"]:
         xcconfig(cfg)
     elif args[:1] == ["export-options"] and len(args) >= 2:

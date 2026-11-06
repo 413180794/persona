@@ -442,8 +442,8 @@ func TestConnectorNodeUnavailableSaidOnce(t *testing.T) {
 		_, _ = io.WriteString(rec, `{"error":"node_unavailable","message":`+strconv.Quote(message)+`}`)
 		return connectorError(rec.Result()).Error()
 	}
-	now := link.NodeDownSelf + link.NodeDownMarker + "（/tmp/node-attach.sock 连不上）：jarvis-link node install（systemd 用户服务）"
-	if got, want := answer(now), "这台电脑的"+link.NodeDownMarker+"（/tmp/node-attach.sock 连不上）：jarvis-link node install（systemd 用户服务）"; got != want {
+	now := link.NodeDownSelf + link.NodeDownMarker + "（/tmp/node-attach.sock 连不上）：persona-link node install（systemd 用户服务）"
+	if got, want := answer(now), "这台电脑的"+link.NodeDownMarker+"（/tmp/node-attach.sock 连不上）：persona-link node install（systemd 用户服务）"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 	// An older connector's own words follow the hub's sentence, which the hub still reads as node_service_down.

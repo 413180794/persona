@@ -1,6 +1,6 @@
 // Persona runtime for DeepSeek Harness (docs/dsh.md): a Host plugin for the `dsh web` profile that hangs DSH's sessions
-// into the jarvisd node on this machine (~/.jarvis/runtime.sock, docs/runtimes.md), so the Persona apps list them, show
-// their work, send to them and answer their approvals and questions. It does nothing until a jarvisd node listens.
+// into the personad node on this machine (~/.persona/runtime.sock, docs/runtimes.md), so the Persona apps list them, show
+// their work, send to them and answer their approvals and questions. It does nothing until a personad node listens.
 //
 // This file is only the loader, and stays as it is: DSH keeps it for as long as the plugin is enabled. The runtime
 // itself (lib/plugin.js and what it imports) comes from a versioned directory — the copy shipped next to this file, or
@@ -13,7 +13,7 @@ import { prepareSocketDirectory } from '../runtime-sdk/lib/identity.js'
 import { defaultSocketPath } from '../runtime-sdk/index.js'
 import { createLoader } from '../runtime-sdk/lib/loader.js'
 
-export const name = 'jarvis-dsh-runtime'
+export const name = 'persona-dsh-runtime'
 
 /** The integrations directory this loader ships in (dsh/ and runtime-sdk/ side by side). */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -42,7 +42,7 @@ export function apply(ctx, config = {}) {
       root: ROOT,
       entry: 'dsh/lib/plugin.js',
       // The versions (the shipped one too: a reload in the same process must not get cached code) live beside the
-      // node's socket, in the user's own ~/.jarvis. Without updates (a daemon) there is none: the shipped files run in
+      // node's socket, in the user's own ~/.persona. Without updates (a daemon) there is none: the shipped files run in
       // place, and a new copy takes a DSH restart.
       store,
       autoUpdate,
@@ -50,8 +50,8 @@ export function apply(ctx, config = {}) {
       log,
     })
     scope.effect(() => {
-      loader.start().catch((err) => (scope.logger?.warn ?? log)(`jarvis-dsh-runtime: ${err.message}`))
+      loader.start().catch((err) => (scope.logger?.warn ?? log)(`persona-dsh-runtime: ${err.message}`))
       return () => void loader.stop()
-    }, 'jarvis-dsh-runtime: DSH sessions in Persona')
+    }, 'persona-dsh-runtime: DSH sessions in Persona')
   })
 }

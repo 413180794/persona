@@ -1,10 +1,10 @@
 // End-to-end check of pi's self-update (docs/pi.md "Auto-update"): a real pi-web with this package installed from a store
 // (settings.json packages: <store>/current/pi — the one-time switch), the companion run from there under a supervisor
 // that starts it again when it exits (launchd's KeepAlive), DSH's llm-mock-server as the model, and a real
-// `jarvisd node --stdio` whose packages come from a directory (JARVIS_RUNTIME_PACKAGES), so it can carry another
+// `personad node --stdio` whose packages come from a directory (PERSONA_RUNTIME_PACKAGES), so it can carry another
 // version than the one installed.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/pi/e2e/update.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/pi/e2e/update.mjs
 //
 // 1. The node carries the installed version: nothing is offered; a session from the phone runs in pi-web.
 // 2. A node carrying a newer version replaces it (a hub update does this): the extension in pi-web installs it and,
@@ -23,19 +23,19 @@ import { installCurrent, PACKAGES, packageHash, readShipped } from '../../runtim
 const here = dirname(fileURLToPath(import.meta.url))
 const integrations = resolve(here, '..', '..')
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and PERSONAD (a personad binary)')
   process.exit(2)
 }
-const NAME = 'jarvis-pi-runtime'
+const NAME = 'persona-pi-runtime'
 const root = mkdtempSync(join('/tmp', 'jpi-upd-'))
 const agentDir = join(root, 'agent')
 const work = join(root, 'work')
 const home = join(root, 'home')
 const pkgs = join(root, 'packages')
 for (const d of [agentDir, work, home]) mkdirSync(d, { recursive: true })
-const store = join(home, '.jarvis', 'runtime-packages', NAME)
+const store = join(home, '.persona', 'runtime-packages', NAME)
 const { check, summary } = checks()
 const freePort = () => new Promise((r) => { const s = netServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)) }) })
 
@@ -64,17 +64,17 @@ writeFileSync(join(agentDir, 'models.json'), JSON.stringify({ providers: { mock:
   models: [{ id: 'mock-model', name: 'Mock', input: ['text'], contextWindow: 200000, maxTokens: 8192, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }],
 } } }))
 writeFileSync(join(agentDir, 'settings.json'), JSON.stringify({ defaultProvider: 'mock', defaultModel: 'mock-model', quietStartup: true, packages: [join(store, 'current', 'pi')] }))
-writeFileSync(join(agentDir, 'jarvis.json'), JSON.stringify({ askUser: false }))
+writeFileSync(join(agentDir, 'persona.json'), JSON.stringify({ askUser: false }))
 
 // ---- the node, pi-web and the supervised companion ----
 let node
-const startTheNode = async () => { node = await startNode({ jarvisd, keep: true, home, env: { JARVIS_RUNTIME_PACKAGES: pkgs } }) }
+const startTheNode = async () => { node = await startNode({ personad, keep: true, home, env: { PERSONA_RUNTIME_PACKAGES: pkgs } }) }
 const nodeLog = () => node.log.join('')
 carry()
 await startTheNode()
 const port = await freePort()
-const env = { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, JARVIS_RUNTIME_SOCKET: node.runtimeSocket, PI_OFFLINE: '1',
-  PI_WEB_NO_OPEN: '1', PI_WEB_SKIP_VERSION_CHECK: '1', PI_WEB_IDLE_TIMEOUT_MS: '600000', JARVIS_PI_DEBUG: '1' }
+const env = { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, PERSONA_RUNTIME_SOCKET: node.runtimeSocket, PI_OFFLINE: '1',
+  PI_WEB_NO_OPEN: '1', PI_WEB_SKIP_VERSION_CHECK: '1', PI_WEB_IDLE_TIMEOUT_MS: '600000', PERSONA_PI_DEBUG: '1' }
 const logs = { web: [], companion: [] }
 const web = spawn('pi-web', ['--port', String(port)], { cwd: work, env, stdio: ['ignore', 'pipe', 'pipe'] })
 web.stdout.on('data', (d) => logs.web.push(String(d)))
@@ -142,11 +142,11 @@ try {
   await until('answered', async () => (await node.call('session.items', { session_id: sid, turns: 1 })).items.some((i) => i.text === 'Hello from pi-web'), 60_000)
   check('after the switch it answers from the phone', true)
   const all = await node.call('session.items', { session_id: sid, turns: 10 })
-  check('the reload ran as a command, never as a message to the model', !all.items.some((i) => /jarvis-reload/.test(i.text ?? '')))
+  check('the reload ran as a command, never as a message to the model', !all.items.some((i) => /persona-reload/.test(i.text ?? '')))
 } catch (err) {
   check('run', false, err.message)
   console.log('--- node log ---\n' + nodeLog().split('\n').filter((l) => !/herdr/.test(l)).slice(-30).join('\n'))
-  console.log('--- pi-web log ---\n' + logs.web.join('').split('\n').filter((l) => /jarvis|error/i.test(l)).slice(-30).join('\n'))
+  console.log('--- pi-web log ---\n' + logs.web.join('').split('\n').filter((l) => /persona|error/i.test(l)).slice(-30).join('\n'))
   console.log('--- companion log ---\n' + logs.companion.join('').slice(-1500))
 }
 await cleanup()

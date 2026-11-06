@@ -3,8 +3,8 @@ import XCTest
 /// Every tappable thing on the machine pages (Settings › Machines, a machine's details, an Agents list's machine menu, a
 /// machine's projects, New Chat's machine / directory / launcher), against scripts/mock/mock_hub.py started with
 /// MOCK_MACHINES=1 (an offline machine that reconnect brings back, a machine with 36 agents):
-///   TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:<port>
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「机器页面」).
+///   TEST_RUNNER_PERSONA_MACHINES_HUB=http://127.0.0.1:<port>
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「机器页面」).
 final class MachinePagesTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
     private var hub = ""
@@ -12,8 +12,8 @@ final class MachinePagesTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MACHINES_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_MACHINES=1 (JARVIS_MACHINES_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MACHINES_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_MACHINES=1 (PERSONA_MACHINES_HUB)")
         }
         hub = h
         _ = mock("reset") // the offline machine offline again, no sessions started
@@ -29,7 +29,7 @@ final class MachinePagesTests: XCTestCase {
 
     private func launch(_ args: [String]) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // Nothing kept from an earlier run: the last dev chat (reopened at launch), New Chat's last machine and launcher. The argument domain wins over what the app saves, so only for values the test never changes.
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-newChat.machine", "macbook", "-launcher.macbook", ""] + args
         app.launchPinned()
@@ -45,8 +45,8 @@ final class MachinePagesTests: XCTestCase {
     private func shot(_ name: String) {
         let s = app.screenshot()
         add(attachment(XCTAttachment(screenshot: s), name))
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + style + ".png"))
         }
     }

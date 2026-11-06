@@ -28,7 +28,7 @@ describe("folding every group", () => {
   });
 
   it("opens the spaces and tab groups folded by hand that are not drawn when the Agents list opens all", () => {
-    const kept = new Map<string, string>([["fold:space:mac/a", "1"], ["fold:tree:mac/ws/1", "1"], ["fold:tree:mac", "0"], ["fold:jarvis", "1"], ["fold:term:m:mac", "1"], ["other", "1"]]);
+    const kept = new Map<string, string>([["fold:space:mac/a", "1"], ["fold:tree:mac/ws/1", "1"], ["fold:tree:mac", "0"], ["fold:persona", "1"], ["fold:term:m:mac", "1"], ["other", "1"]]);
     const store = { get length() { return kept.size; }, key: (i: number) => [...kept.keys()][i] ?? null, getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
     const seen: boolean[] = [];
     const off = onFoldAll((f) => seen.push(f), AGENTS_FOLD);
@@ -37,7 +37,7 @@ describe("folding every group", () => {
     setAgentsFolded(false, store);
     off();
     expect(seen).toEqual([true, false]);
-    expect(Object.fromEntries(kept)).toEqual({ "fold:space:mac/a": "0", "fold:tree:mac/ws/1": "0", "fold:tree:mac": "0", "fold:jarvis": "1", "fold:term:m:mac": "1", other: "1" });
+    expect(Object.fromEntries(kept)).toEqual({ "fold:space:mac/a": "0", "fold:tree:mac/ws/1": "0", "fold:tree:mac": "0", "fold:persona": "1", "fold:term:m:mac": "1", other: "1" });
   });
 });
 

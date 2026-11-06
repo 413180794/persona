@@ -35,8 +35,8 @@ final class LiveActivityController {
     private var endTask: Task<Void, Never>?
     private var started = false
 
-    private var activity: Activity<JarvisActivityAttributes>? {
-        Activity<JarvisActivityAttributes>.activities.first { $0.activityState == .active || $0.activityState == .stale }
+    private var activity: Activity<PersonaActivityAttributes>? {
+        Activity<PersonaActivityAttributes>.activities.first { $0.activityState == .active || $0.activityState == .stale }
     }
 
     /// The device's settings changed (or were loaded from the hub): remember them, and apply at once — off ends the
@@ -67,14 +67,14 @@ final class LiveActivityController {
         guard !started else { return }
         started = true
         Task {
-            for await token in Activity<JarvisActivityAttributes>.pushToStartTokenUpdates {
+            for await token in Activity<PersonaActivityAttributes>.pushToStartTokenUpdates {
                 report(.init(pushToStartToken: token.hex))
             }
         }
         Task {
-            for await activity in Activity<JarvisActivityAttributes>.activityUpdates { watch(activity) }
+            for await activity in Activity<PersonaActivityAttributes>.activityUpdates { watch(activity) }
         }
-        for activity in Activity<JarvisActivityAttributes>.activities { watch(activity) }
+        for activity in Activity<PersonaActivityAttributes>.activities { watch(activity) }
     }
 
     /// The hub's current fleet (the `fleet` event, or GET /api/v1/fleet on becoming active).
@@ -184,14 +184,14 @@ final class LiveActivityController {
     /// phone; keychain items outlive the app, so they go once a launch (the group stays in the app's entitlements
     /// for this).
     private static let forgetKeychainLook: Void = {
-        let status = SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "jarvis.look"] as CFDictionary)
+        let status = SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "persona.look"] as CFDictionary)
         if status == errSecSuccess { FleetLookStore.log.notice("deleted the keychain look of an older build") }
     }()
 
     func endAll() {
         endTask?.cancel()
         endTask = nil
-        for activity in Activity<JarvisActivityAttributes>.activities {
+        for activity in Activity<PersonaActivityAttributes>.activities {
             nonisolated(unsafe) let a = activity
             Task { await a.end(nil, dismissalPolicy: .immediate) }
         }
@@ -205,7 +205,7 @@ final class LiveActivityController {
         shown != state || (staleDate ?? .distantPast) < now.addingTimeInterval(5 * 60)
     }
 
-    private static func update(_ activity: Activity<JarvisActivityAttributes>, _ content: ActivityContent<FleetState>) {
+    private static func update(_ activity: Activity<PersonaActivityAttributes>, _ content: ActivityContent<FleetState>) {
         nonisolated(unsafe) let a = activity
         Task { await a.update(content) }
     }
@@ -220,23 +220,23 @@ final class LiveActivityController {
 
     private func request(_ content: ActivityContent<FleetState>) {
         do {
-            watch(try Activity.request(attributes: JarvisActivityAttributes(), content: content, pushType: .token))
+            watch(try Activity.request(attributes: PersonaActivityAttributes(), content: content, pushType: .token))
         } catch {
             // The simulator without APNs, or the user turned Live Activities off for Persona.
-            if let local = try? Activity.request(attributes: JarvisActivityAttributes(), content: content, pushType: nil) {
+            if let local = try? Activity.request(attributes: PersonaActivityAttributes(), content: content, pushType: nil) {
                 watch(local)
             }
         }
     }
 
-    private func watch(_ activity: Activity<JarvisActivityAttributes>) {
+    private func watch(_ activity: Activity<PersonaActivityAttributes>) {
         guard watching.insert(activity.id).inserted else { return }
         let id = activity.id
         Task {
             for await token in activity.pushTokenUpdates {
                 #if DEBUG
                 // For pushing to the simulator by hand (docs/testing.md, TestManualLiveActivityPush).
-                Logger(subsystem: "jarvis", category: "live-activity").notice("activity push token \(token.hex, privacy: .public)")
+                Logger(subsystem: "persona", category: "live-activity").notice("activity push token \(token.hex, privacy: .public)")
                 #endif
                 report(.init(activityID: id, pushToken: token.hex))
             }
@@ -265,7 +265,7 @@ final class LiveActivityController {
 extension LiveActivityController {
     /// `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`-fleetDetails YES` for names on the lock screen,
     /// `-fleetIsland b`, `c` or `custom:assistant,load` for the island's sides, `-showFleetCount 12` for that many in
-    /// each kind there is; `-openPersona jarvis-circuit` for the persona): starts the activity with made-up agents, no
+    /// each kind there is; `-openPersona persona-circuit` for the persona): starts the activity with made-up agents, no
     /// hub needed, for screenshots. `thinking` is only the assistant answering (beside one finished agent);
     /// `assistant` is the assistant alone, nothing to count (the minimal island then shows the persona); `offline` is
     /// the working sample made stale once it shows.

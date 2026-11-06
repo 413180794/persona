@@ -3,7 +3,7 @@
 every combo (<style>:<light|dark>) × scene: set the style, the appearance, go to the scene on a new view tree (`navigate`
 resets it, as a launch would), wait for the screen to settle, `simctl io screenshot`. Same file names as id-old.sh; the time per shot in <out dir>/times.tsv.
 
-  JARVISCTL_UDID=<udid> id-cli.py out/cli glass:light glass:dark …    (mock hub on 127.0.0.1:18897, as id-old.sh)
+  PERSONACTL_UDID=<udid> id-cli.py out/cli glass:light glass:dark …    (mock hub on 127.0.0.1:18897, as id-old.sh)
 
 FREEZE=1: `freeze` before each shot (Reduce Motion, running animations removed: the same pixels run after run; a
 needs-you dot is then drawn still, so compare such shots with shots taken the same way, not with id-old.sh's).
@@ -13,7 +13,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from jarvisctl import Ctl, CtlError  # noqa: E402
+from personactl import Ctl, CtlError  # noqa: E402
 
 ERR = "server/b2e4d6f8-0000-4000-8000-000000000001"
 CHAT = "macbook/a1f3c2d4-0000-4000-8000-000000000001"

@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Paging the Mac image viewer (#3481): a single click schedules the close after `NSEvent.doubleClickInterval` so a
 /// double click can cancel it. Swapping the image before that delay fired used to leave the old work item alive, so

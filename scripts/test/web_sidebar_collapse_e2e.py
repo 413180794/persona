@@ -55,12 +55,12 @@ def shoot(page, shots, name):
     if not shots:
         return
     for theme in ("light", "dark"):
-        page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+        page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
         page.reload()
         page.wait_for_selector(f"{FOLD}, {UNFOLD}")
         page.wait_for_timeout(800)
         page.screenshot(path=os.path.join(shots, f"{name}-{theme}.png"))
-    page.evaluate("localStorage.removeItem('jarvis.theme')")
+    page.evaluate("localStorage.removeItem('persona.theme')")
     page.reload()
     page.wait_for_selector(f"{FOLD}, {UNFOLD}")
 
@@ -120,7 +120,7 @@ def steps(page, base, token, shots):
     # 3. the blocks fold under their titles and stay folded
     page.goto(base + "/overview")
     page.wait_for_selector(FOLD)
-    page.evaluate("localStorage.setItem('jarvis.agentGrouping', 'state')")
+    page.evaluate("localStorage.setItem('persona.agentGrouping', 'state')")
     page.reload()
     page.wait_for_selector(FOLD)
     pages = title(page, "页面")
@@ -167,7 +167,7 @@ def steps(page, base, token, shots):
     page.locator("main button[aria-label='侧边栏']").first.click()
     expect(page.locator('[role="dialog"][aria-label="侧边栏"]')).to_be_visible()
     ok("a narrow screen still opens the full drawer, without the fold button")
-    page.evaluate("localStorage.removeItem('persona.sidebarCollapsed'); localStorage.removeItem('jarvis.agentGrouping')")
+    page.evaluate("localStorage.removeItem('persona.sidebarCollapsed'); localStorage.removeItem('persona.agentGrouping')")
 
 
 if __name__ == "__main__":

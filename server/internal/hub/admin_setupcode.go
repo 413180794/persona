@@ -14,7 +14,7 @@ import (
 // the internet through a reverse proxy on this machine that adds no forwarding header (nginx's proxy_pass by
 // default): both look the same. So setting the first password from loopback takes a one-time code that only someone
 // who can work on the hub's machine sees: the hub logs one when it starts without a password, and
-// `jarvisd hub admin setup-code` gets a fresh one. LAN sources do not need it, unless hub.json says admin.first_setup
+// `personad hub admin setup-code` gets a fresh one. LAN sources do not need it, unless hub.json says admin.first_setup
 // "code" (new installs from `personad hub setup`: on a shared LAN anyone could otherwise set the password first);
 // the installer prints the admin URL with the code in its fragment (#setup=…), which the page reads.
 
@@ -100,7 +100,7 @@ func (h *Hub) adminStartup(ctx context.Context) {
 	h.logSetupCode(h.newSetupCode())
 }
 
-// setupCodeRoute is `jarvisd hub admin setup-code`: a fresh code, for the master token over loopback only.
+// setupCodeRoute is `personad hub admin setup-code`: a fresh code, for the master token over loopback only.
 func (h *Hub) setupCodeRoute(open *http.ServeMux) {
 	open.HandleFunc("POST /api/v1/admin/setup-code", func(w http.ResponseWriter, r *http.Request) {
 		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")

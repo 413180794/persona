@@ -47,7 +47,7 @@ func TestCodexShellZsh(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			args := []string{"-c", "model_provider=\"test provider\"", ""}
-			cmd := exec.CommandContext(ctx, zsh, append([]string{"-ic", codexShell(tt.launcher), "jarvis"}, args...)...)
+			cmd := exec.CommandContext(ctx, zsh, append([]string{"-ic", codexShell(tt.launcher), "persona"}, args...)...)
 			cmd.Env = []string{"HOME=" + home, "ZDOTDIR=" + home, "PATH=" + bin + ":/usr/bin:/bin"}
 			out, err := cmd.Output()
 			if err != nil {

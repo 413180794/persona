@@ -33,17 +33,17 @@ func fakeClaudeHome(t *testing.T, script string) {
 	t.Setenv("PATH", bin+":/usr/bin:/bin")
 }
 
-// A launcher that exits before reading the message (its node socket gone: "no jarvis node") lost it: the send says
+// A launcher that exits before reading the message (its node socket gone: "no persona node") lost it: the send says
 // so with what it printed, instead of answering ok and leaving the message at "Delivering" for good.
 func TestAssistantSendFailsWhenTheLauncherDoesNotStart(t *testing.T) {
-	fakeClaudeHome(t, "printf '\\033[31mERROR\\033[0m: gitstatus failed\\n\\n' >&2\necho 'jarvisd launch opus: no jarvis node: dial unix node.sock: connect: connection refused' >&2\nexit 1\n")
+	fakeClaudeHome(t, "printf '\\033[31mERROR\\033[0m: gitstatus failed\\n\\n' >&2\necho 'personad launch opus: no persona node: dial unix node.sock: connect: connection refused' >&2\nexit 1\n")
 	n := codexTestNode(t)
 	withFakeHub(t, n)
 	_, err := n.assistantSend(context.Background(), "", t.TempDir(), "claude", "hello", nil, "", "")
 	if err == nil {
 		t.Fatal("a launcher that did not start answered ok")
 	}
-	if msg := err.Error(); !strings.Contains(msg, "没有启动起来") || !strings.Contains(msg, "no jarvis node") || strings.Contains(msg, "\x1b") {
+	if msg := err.Error(); !strings.Contains(msg, "没有启动起来") || !strings.Contains(msg, "no persona node") || strings.Contains(msg, "\x1b") {
 		t.Fatalf("error: %q", msg)
 	}
 	n.mu.Lock()

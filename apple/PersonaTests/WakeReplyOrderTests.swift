@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A reply a background task woke the assistant for (#3783: "it showed while it streamed, then was gone until the chat
 /// was opened again"): whatever order its last events come in, it is on screen all along — its live copy while it

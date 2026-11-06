@@ -91,7 +91,7 @@ func TestAssistantSendSaysTheCommandIsMissing(t *testing.T) {
 
 // A launcher that fails for another reason is not started again: it would fail the same way, only later.
 func TestAssistantSendDoesNotRetryOtherStartFailures(t *testing.T) {
-	fakeClaudeHome(t, "echo 'jarvisd launch opus: no jarvis node' >&2\nexit 1\n")
+	fakeClaudeHome(t, "echo 'personad launch opus: no persona node' >&2\nexit 1\n")
 	shortStartRetries(t, 2*time.Second)
 	n := codexTestNode(t)
 	withFakeHub(t, n)
@@ -117,7 +117,7 @@ func TestMissingFrom(t *testing.T) {
 		{"cc_gone", []string{"zsh:1: command not found: cc_gone"}, true, proto.CodeLauncherMissing},
 		{"cc_gone", []string{"bash: line 1: cc_gone: command not found"}, true, proto.CodeLauncherMissing},
 		{"claude", []string{"bash: claude: command not found"}, true, proto.CodeClaudeMissing},
-		{"work", []string{"jarvisd launch: claude not found in PATH or the usual install locations"}, false, proto.CodeClaudeMissing},
+		{"work", []string{"personad launch: claude not found in PATH or the usual install locations"}, false, proto.CodeClaudeMissing},
 		{"claude", nil, true, proto.CodeClaudeMissing},
 		{"cc_gone", nil, true, proto.CodeLauncherMissing},
 		{"claude", []string{"Error: unknown option '--plugin-dir'"}, false, ""},

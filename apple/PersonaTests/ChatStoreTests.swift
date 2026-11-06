@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor
 struct ChatStoreTests {
@@ -66,7 +66,7 @@ struct ChatStoreTests {
     }
 
     @Test func pairURL() {
-        let c = ServerConfig(pairURL: "jarvis://pair?url=http%3A%2F%2Fhost%3A18660&token=abc")
+        let c = ServerConfig(pairURL: "persona://pair?url=http%3A%2F%2Fhost%3A18660&token=abc")
         #expect(c?.url.absoluteString == "http://host:18660")
         #expect(c?.token == "abc")
     }
@@ -80,9 +80,9 @@ struct ChatStoreTests {
 
 struct FilePathTests {
     @Test func keepsTildeAndFindsPaths() {
-        let text = "cat > ~/.config/systemd/user/jarvisd.service 并读 /tmp/jarvis-tasks/05-image-viewer.md 和 ios/Persona/Foo.swift，网址 https://example.com/a/b 不算"
+        let text = "cat > ~/.config/systemd/user/personad.service 并读 /tmp/persona-tasks/05-image-viewer.md 和 ios/Persona/Foo.swift，网址 https://example.com/a/b 不算"
         let paths = FilePaths.find(in: text)
-        #expect(paths == ["~/.config/systemd/user/jarvisd.service", "/tmp/jarvis-tasks/05-image-viewer.md", "ios/Persona/Foo.swift"])
+        #expect(paths == ["~/.config/systemd/user/personad.service", "/tmp/persona-tasks/05-image-viewer.md", "ios/Persona/Foo.swift"])
         #expect(FilePaths.find(in: "模型 deepseek/v4.1-flash-chain 和 model_hub/es1_orange_o50").isEmpty)
     }
 }
@@ -501,21 +501,21 @@ struct TurnTests {
 
     /// A Feishu /agent request (prompts/lark): instructions and context in blocks without a url, the request outside.
     static let larkAgentMessage = """
-        <jarvis-context kind="instructions" title="给 Agent 的说明">
+        <persona-context kind="instructions" title="给 Agent 的说明">
         示例用户在飞书「发布群」里用 /agent 叫你。
 
         ## 怎么做
 
         - 做完回复一次。
-        </jarvis-context>
-        <jarvis-context kind="context" title="请求的位置">
+        </persona-context>
+        <persona-context kind="context" title="请求的位置">
         位置：群聊「发布群」
-        </jarvis-context>
-        <jarvis-context kind="doc" title="文档 · 手册" url="https://example.com/d">
+        </persona-context>
+        <persona-context kind="doc" title="文档 · 手册" url="https://example.com/d">
         第一步
-        </jarvis-context>
-        <jarvis-context kind="context" title="项目 · 发布">
-        </jarvis-context>
+        </persona-context>
+        <persona-context kind="context" title="项目 · 发布">
+        </persona-context>
         看下构建为什么挂了
         """
 
@@ -529,15 +529,14 @@ struct TurnTests {
         #expect(ContextRef.summary([parsed.refs[1]]) == "上下文 · 请求的位置")
         #expect(UserRowText(Self.larkAgentMessage).shown == "看下构建为什么挂了")
         // Attributes in another order still read.
-        let swapped = ContextRef.parse("<jarvis-context url=\"https://x\" title=\"T\" kind=\"edit\">x</jarvis-context>改短")
+        let swapped = ContextRef.parse("<persona-context url=\"https://x\" title=\"T\" kind=\"edit\">x</persona-context>改短")
         #expect(swapped.refs.first?.kind == "edit" && swapped.refs.first?.title == "T" && swapped.rest == "改短")
         #expect(WatchText.shown(Self.larkAgentMessage) == "〔上下文 4 项〕\n看下构建为什么挂了")
-        // The new name, and the two mixed (#3182).
-        let renamed = Self.larkAgentMessage.replacingOccurrences(of: "jarvis-context", with: "persona-context")
-        #expect(ContextRef.parse(renamed).refs.map(\.title) == parsed.refs.map(\.title))
-        #expect(UserRowText(renamed).shown == "看下构建为什么挂了")
-        #expect(WatchText.shown(renamed) == "〔上下文 4 项〕\n看下构建为什么挂了")
-        let mixed = ContextRef.parse("<persona-context kind=\"doc\" title=\"A\">a</persona-context>\n<jarvis-context kind=\"context\" title=\"B\">b</jarvis-context>\n问题")
-        #expect(mixed.refs.map(\.title) == ["A", "B"] && mixed.rest == "问题")
+        // Only Persona context blocks fold; an unrelated tag remains message text.
+        let foreign = Self.larkAgentMessage.replacingOccurrences(of: "persona-context", with: "other-context")
+        #expect(ContextRef.parse(foreign).refs.isEmpty)
+        #expect(ContextRef.parse(foreign).rest == foreign)
+        let adjacent = ContextRef.parse("<persona-context kind=\"doc\" title=\"A\">a</persona-context>\n<persona-context kind=\"context\" title=\"B\">b</persona-context>\n问题")
+        #expect(adjacent.refs.map(\.title) == ["A", "B"] && adjacent.rest == "问题")
     }
 }

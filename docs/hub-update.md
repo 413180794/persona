@@ -14,11 +14,11 @@ Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten a
   - One binary: there are no longer files that differ by `public` (`TestOneBuild`); publish.sh keeps `-tags public` only as a marker for the privacy scan (the scan uses it to recognize dependency constants it can skip).
   - Channel and build number: `main.channel`, `main.build`, `main.updateURL`; publish.sh and deploy.sh stamp `release`, Docker stamps `docker`;
     `personad version -v` shows the channel and build number; `/api/v1/health` and `hello` carry `channel`, `build`, `protocol`, `min_app_build`.
-  - Version manifest: `internal/update` (manifest, `CheckNext`, no downgrade `TestNoDowngrade`), `jarvisd release manifest|check-next`;
+  - Version manifest: `internal/update` (manifest, `CheckNext`, no downgrade `TestNoDowngrade`), `personad release manifest|check-next`;
     publish.sh publishes `latest.json` (sha256 of each file), and before publishing checks that the build number increases and that the live version's commit is an ancestor of this one.
     Step 1 originally had ed25519 signatures; after the user changed their mind, step 2 removed them (see "Security").
 - **Step 2 (hub update and rollback) done**: `hub/selfupdate.go` (check, download and verify, wait for idle and "Update Now", replace, confirm or roll back, bad versions, update history, node updating along),
-  `internal/update`'s download / replace / watchdog, `jarvisd update-watch`; APIs in section 12.
+  `internal/update`'s download / replace / watchdog, `personad update-watch`; APIs in section 12.
 - **Step 3 (App) done**: `apple/Shared/HubUpdate.swift` (state, history, Skills, compatibility check `HubCompat`, which banner to show `HubNotice`),
   `Views/Settings/HubUpdateViews.swift` (Settings › hub, banner, Skills page); after an automatic update is installed or rolled back, the hub sends a regular notification. Section 10 has been rewritten as the current state.
 - **Step 4 (Docker check and notice) done**: a Docker hub asks the registry every hour which tags its image has (`internal/update/image.go`);
@@ -67,7 +67,7 @@ Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten a
   3. Built-in skills shipped in the binary (only ones we may redistribute; currently none) are still copied in by version stamp; a same-named skill in the user space wins.
   4. The gate command is only put on PATH when a skill that carries it is installed; the section about it in the assistant's prompt (`prompts/assistant/claude_md.md`) is also only written in when it is installed.
 - **Migration**: two ways, each done only once.
-  - **Automatic**: when node starts the assistant, each real directory under `<assistant dir>/.claude/skills/` installed by an old personad (with a `.jarvis-skills` version stamp next to it) that has no same-named entry in `~/.persona/skills/` yet
+  - **Automatic**: when node starts the assistant, each real directory under `<assistant dir>/.claude/skills/` installed by an old personad (with a `.persona-skills` version stamp next to it) that has no same-named entry in `~/.persona/skills/` yet
     is moved to `~/.persona/skills/<name>`, replaced in place with a symlink, and one log line is written; if a same-named user skill already exists, the user's wins.
   - **Manual** (on our hub, done by the main session): copy from the assistant directory's `.claude/skills/<name>` to `~/.persona/skills/<name>`.
     (Since #1571 such skills are provided by the Lark extension, see the top of `docs/lark-agent.md`; no more manual copying.)
@@ -120,7 +120,7 @@ The binary gets three more `-X` variables (`cmd/personad`):
   "protocol": 3,
   "notes": "Highlights of this version",
   "files": {
-    "linux-amd64": {"name": "jarvisd-linux-amd64.gz", "size": 12345678, "sha256": "<of the archive>", "binary_sha256": "<after decompression>"},
+    "linux-amd64": {"name": "personad-linux-amd64.gz", "size": 12345678, "sha256": "<of the archive>", "binary_sha256": "<after decompression>"},
     "linux-arm64": {}, "darwin-arm64": {}, "darwin-amd64": {}
   },
   "ancestors": "<base64>"
@@ -128,9 +128,9 @@ The binary gets three more `-X` variables (`cmd/personad`):
 ```
 
 - `ancestors`: all commits reachable from this commit (`git rev-list <commit>`), the first 6 bytes of each, sorted, then base64 ("no regression").
-- `programs`: programs published together with personad that the hub runs alongside (`update.ProgramNames`: `jarvisd-wechat`, `docs/wechat.md`;
-  Telegram's `jarvisd-telegram` was also here up to #1704; after that it is an extension and goes through the extension market):
-  `{"jarvisd-wechat": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`. Old hubs ignore this field and still only swap personad.
+- `programs`: programs published together with personad that the hub runs alongside (`update.ProgramNames`: `personad-wechat`, `docs/wechat.md`;
+  Telegram's `personad-telegram` was also here up to #1704; after that it is an extension and goes through the extension market):
+  `{"personad-wechat": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`. Old hubs ignore this field and still only swap personad.
 
 - A downloaded file must match both `sha256` (archive) and `binary_sha256` (decompressed), and the new binary's `version -v` must report the version and build number in the manifest.
   `SHA256SUMS` stays for install.sh.
@@ -171,7 +171,7 @@ The existing path of building from master and deploying directly (`deploy.sh`, p
 - The main session's deploy script lives outside the repo and must add the same four `-X` flags to its `go build` (the report gives the line to add).
 - **Deploy only from a working tree that contains master** (#1314): `deploy.sh` first runs `git fetch origin master`; if the current HEAD does not contain it, nothing is deployed and it exits 2 (same if master cannot be fetched);
   deploying a branch that is behind would swap changes someone else just deployed (hub and web) back to old ones. For a deliberate rollback, use `PERSONA_DEPLOY_ANY_COMMIT=1`. See `docs/lessons/server.md` ("Deploying from a branch that is behind").
-- The hub machine also needs `jarvisd-wechat` (the WeChat bot program, `docs/wechat.md`): `deploy.sh` builds the same version for the hub and puts it next to personad; nodes do not need it.
+- The hub machine also needs `personad-wechat` (the WeChat bot program, `docs/wechat.md`): `deploy.sh` builds the same version for the hub and puts it next to personad; nodes do not need it.
   Telegram is not here: it is an extension (#1704), installed and upgraded on the hub from the extension market.
 - No staged rollout: after a release all hubs (ours included) update at the same time when idle; problems are handled by each hub's own rollback and bad-version marking.
 
@@ -197,7 +197,7 @@ Comparing only build numbers can go backwards: a directly deployed hub runs comm
 - When the manifest has `programs` for this hub's platform, they are downloaded and verified (same sha256, and `version -v` must be this version), then swapped in together with personad: placed next to personad,
   existing ones kept as `.prev`, and ones that did not exist before recorded as newly installed. If any one fails to download or verify, the whole update is skipped.
 - Rollback (the new version does not start, the watchdog, an error during the swap) swaps them back together with personad and deletes the newly installed ones (`update.RestoreAll`, `programs` in `pending.json`).
-- The first update that carries programs: the watchdog running is the old jarvisd, which does not know `programs`, so a rollback only swaps personad back; the new programs left behind do not match the old hub version, and the hub will not start them
+- The first update that carries programs: the watchdog running is the old personad, which does not know `programs`, so a rollback only swaps personad back; the new programs left behind do not match the old hub version, and the hub will not start them
   (status says "not the same version"), until the next update.
 
 ## 7. Checking for updates
@@ -240,7 +240,7 @@ Download → Verify → Prepare → Wait for idle → Replace → Restart → Co
    - For a manual update, the App shows "what is still busy" (which chats, on which machine), and offers **Update Now** in a second confirmation:
      the confirmation states, "This interrupts anything waiting on the hub (the assistant's current turn, uploads in progress, terminal connections). Agents in herdr aren't affected and reconnect on their own."
      After confirmation, skip waiting for idle; all other steps (verification, rollback) stay the same.
-5. **Replace**: backups and temporary files still use the compatible names `jarvisd.prev` / `jarvisd.new`; atomically replace the actual server binary in the same directory. The target path follows the installation layout and runtime migration implementation; the product becoming Persona does not mean the updater has already renamed these files.
+5. **Replace**: backups and temporary files still use the compatible names `personad.prev` / `personad.new`; atomically replace the actual server binary in the same directory. The target path follows the installation layout and runtime migration implementation; the product becoming Persona does not mean the updater has already renamed these files.
 6. **Restart**:
    - **With an entry process** (`personad hub run` on Linux and macOS, since 2026-11-06), use blue-green switching ([hub-restart.md](hub-restart.md), "Blue-green switching"):
      - The hub asks the entry process to switch to the new binary and gives it the expected build number;
@@ -263,7 +263,7 @@ Download → Verify → Prepare → Wait for idle → Replace → Restart → Co
      exit with code 75 so the entry process immediately restarts the restored old version at the same path. In the two cases below, the entry process handles rollback: restore the files from pending, write the rollback marker, start the old version:
      - The new version fails to activate;
      - The new version does not report "confirmed" within 3 minutes.
-   - **Watchdog** (without an entry process; code from the old binary, `jarvisd update-watch`, started separately before exec and detached from the process group):
+   - **Watchdog** (without an entry process; code from the old binary, `personad update-watch`, started separately before exec and detached from the process group):
      if it does not see the new build number and "confirmed" from the local `/api/v1/health` within 3 minutes, it rolls back itself:
      - Under systemd (with `INVOCATION_ID`) or launchd: restore `.prev`, kill the main process, and let the service manager start the old binary;
      - Without a service manager: after restoring it, start the old hub in the background with the original arguments.
@@ -288,12 +288,12 @@ Download → Verify → Prepare → Wait for idle → Replace → Restart → Co
 
 ### Docker (step 4)
 
-- **Which image to check**: compose passes `.env`'s `JARVIS_IMAGE` into the container, and that is what the hub checks; if absent (old compose files), use the build-time
+- **Which image to check**: compose passes `.env`'s `PERSONA_IMAGE` into the container, and that is what the hub checks; if absent (old compose files), use the build-time
   `main.image` (`hub-image.yml` passes `ghcr.io/<owner>/<repo>`, not hard-coded).
 - **How to check**: registry `GET /v2/<repo>/tags/list`; first obtain a pull token as directed by its `WWW-Authenticate` response (public images allow anonymous access, both ghcr.io
   and Docker Hub do this), and follow `Link` for pagination. Only recognize `X.Y.Z`, and take the highest; it counts as a "new image" only if newer than the hub's own version. Its own version must also be `X.Y.Z`
   (or a prerelease such as `-rc1`): a manually built `edge` image uses `git describe`, is newer than the tag, and cannot be compared, so only the latest stable version is shown.
-- **Private images**: when the repo is private, its ghcr image is private by default too, so anonymous access cannot get a token. Set `JARVIS_REGISTRY_TOKEN` in `.env` (a token that can read this image),
+- **Private images**: when the repo is private, its ghcr image is private by default too, so anonymous access cannot get a token. Set `PERSONA_REGISTRY_TOKEN` in `.env` (a token that can read this image),
   or make the image public; when unset, Settings › hub explains why it cannot check and what to set. It does not read credentials saved by `docker login` on the NAS (they are on the host, not in the container).
 - **App**: at the top of Agents, "New hub image: X", with only × (remembered per version; the next version is shown again). Settings › hub gives the commands; when a version tag is pinned, first show the line to edit `.env`.
 - Not done: pulling images or recreating containers for the user (requires mounting the Docker socket, effectively handing the NAS to the hub).

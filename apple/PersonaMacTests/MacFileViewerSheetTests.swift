@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A Mac sheet opens at its content's smallest size. The file viewer's has to be the large sheet's: wrapped in the
 /// link panel's GeometryReader it was the toolbar's alone, a 470 × 80 sheet with nothing of the file in it (#1502).

@@ -62,7 +62,7 @@ Public IPv4 counts per address; IPv6 aggregates by /64. Ban checks precede token
 
 ## TLS and public-key pinning
 
-Without custom certificate files, hub creates ECDSA P-256 identity key `hub.key` and self-signed `hub.crt` in `~/.persona/tls/`. Directory permissions 0700, files 0600. The certificate contains only `<hub_id>.jarvis.invalid`, no local hostname or LAN addresses. Minimum TLS version 1.2.
+Without custom certificate files, hub creates ECDSA P-256 identity key `hub.key` and self-signed `hub.crt` in `~/.persona/tls/`. Directory permissions 0700, files 0600. The certificate contains only `<hub_id>.persona.invalid`, no local hostname or LAN addresses. Minimum TLS version 1.2.
 
 Managed certificates last 365 days, renewed with the same key when roughly less than 30 days remain; also reissued if not yet valid or SAN mismatches. Hub certificate refresh timer is 2 minutes, a scheduling configuration, **not a measured refresh delay**. Custom certificates are reread, but hub does not obtain or renew them; no automatic ACME flow currently.
 
@@ -80,7 +80,7 @@ Replacing a certificate while keeping the private key preserves the pin. Replaci
 
 Default pairing tokens last 10 minutes and redeem a device token once. After redemption they remain at most 2 more minutes, never beyond original expiry. This supports old iOS pairing; see [protocol](protocol.md#临时配对). Only `hub pair --legacy` prints the main token; public sources always reject it.
 
-Computer links (jarvis-link, [link.md](link.md)) also use only this TLS port and pin the fingerprint obtained at pairing, including on LAN; hub rejects their plaintext requests except loopback.
+Computer links (persona-link, [link.md](link.md)) also use only this TLS port and pin the fingerprint obtained at pairing, including on LAN; hub rejects their plaintext requests except loopback.
 TLS terminates at hub, which authenticates link credentials and forwards the connection unchanged to the computer-connection manager (2026-11-04, [machines.md](machines.md), "Who connects computers").
 Forwarding uses `GET /api/v1/bus/relay` with the manager's own bus token (same as the bus: only `Authorization: Bearer jb_…`, TLS required for public sources; device credentials cannot open it, nor can it open app endpoints).
 
@@ -170,7 +170,7 @@ Without `proxy_protocol`, hub reads no PROXY headers and behaves exactly as befo
 - **Loopback header source with nonloopback upstream** (another machine forwarding its local programs) uses the upstream address; that machine's "local" is not hub-local.
 - **Timeout / size**: complete header within 5 seconds (unmeasured policy default); v1 at most 107 bytes (spec limit), v2 address + TLV at most 4096 bytes, TLVs discarded after reading. Read on the connection's own goroutine at first read / write / peer lookup, never in Accept, so slow / silent connections do not block others.
 - **Local address remains the socket's**, not header destination, which belongs to the upstream (proxy listener, possibly another machine). Hub uses local address to determine entry through a local VPN interface (`100.64.0.0/10` classification). Proxied shared-space sources are therefore public—stricter, never looser; add `trusted_cidrs` if needed.
-- Apply equally to systemd `jarvisd.socket` listeners and hub-created listeners.
+- Apply equally to systemd `personad.socket` listeners and hub-created listeners.
 
 **Preserve the source through every hop**: upstream headers contain the source it sees. If it is the public entry point, enable PROXY on its connection to hub (`proxy_protocol on;` in nginx `stream`). If another forwarding layer (tunnel client, another port forward) connects to it, it again sees loopback; that layer must also send PROXY, and the upstream must receive, trust, and pass it onward. nginx `stream` example (requires `ngx_stream_realip_module`, `--with-stream_realip_module` in `nginx -V`; example addresses / ports):
 
@@ -207,7 +207,7 @@ See the previous layer's docs for enabling PROXY (often "proxy protocol" / "send
 
 Hub can live under a reverse-proxy subpath (`public_url: https://<hub-address>/<prefix>`, with the proxy stripping the prefix before forwarding to hub's plaintext port). Hub then has no TLS itself and no `fp` in `hub pair` links; the proxy uses a public-CA certificate. iOS and web already verify HTTPS through system trust. Web requires proxy `X-Forwarded-Prefix: /<prefix>`; hub adjusts `index.html` `<base>`, placing APIs, WebSocket, images, and routes under it ([web.md](web.md), "Subpaths"; admin UI only at root). Android:
 
-- **Prefixed addresses**: pairing and hub candidates may have path prefixes; every request (REST, WebSocket `/api/v1/ws`, media, installer downloads) appends under it (`hubUrl` / `hubPath` / `hubResolve` in `core/hub`). Hub `/api/…` references also gain the prefix; same-origin checks additionally require being inside it. Candidate keys include prefix (`https://host:443/jarvis`); root keys unchanged. Manual candidates still stop at the port.
+- **Prefixed addresses**: pairing and hub candidates may have path prefixes; every request (REST, WebSocket `/api/v1/ws`, media, installer downloads) appends under it (`hubUrl` / `hubPath` / `hubResolve` in `core/hub`). Hub `/api/…` references also gain the prefix; same-origin checks additionally require being inside it. Candidate keys include prefix (`https://host:443/persona`); root keys unchanged. Manual candidates still stop at the port.
 - **HTTPS without `fp` uses system trust**: pairings with `fp` still accept only pinned public keys, never fallback to system CA. Without `fp`, HTTPS uses system trust (`network_security.xml`: system CA only, not user-installed certificates) and hostname verification, consistently for pairing, persistent connections, Settings tests, and update downloads.
 - **Trade-off**: pinning trusts one public key; system trust accepts every system CA, any of which can impersonate hub by issuing for its domain (compromised / misissuing CA, device management installing system certificates). Same as browser access: better than plaintext, weaker than pinning. Prefer hub TLS + `fp` when available. Pairing codes appear only when scanned / pasted; hub identity still checked by `hub_id`.
 

@@ -59,7 +59,7 @@ describe("which links open", () => {
   });
 
   it("refuses every other scheme, however the program wrote it", () => {
-    for (const u of ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,x", "ftp://example.com/a", "ssh://host", "jarvis://session/a/b", "mailto:a@example.com", "vbscript:x"]) {
+    for (const u of ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,x", "ftp://example.com/a", "ssh://host", "persona://session/a/b", "mailto:a@example.com", "vbscript:x"]) {
       expect(webLink(u), u).toBeNull();
     }
   });

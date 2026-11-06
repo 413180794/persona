@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
 val LocalInboxRepository = staticCompositionLocalOf<InboxRepository?> { null }
 internal val LocalInboxNavigator = staticCompositionLocalOf<Navigator?> { null }
 
-@Serializable @SerialName("jarvis.feature.inbox.LarkRoute")
+@Serializable @SerialName("persona.feature.inbox.LarkRoute")
 data class LarkRoute(val feedId: String, val itemId: String? = null, val startPosition: Long? = null) : NavKey
 
 fun EntryProviderScope<NavKey>.inboxEntries(
@@ -74,10 +74,10 @@ fun EntryProviderScope<NavKey>.inboxEntries(
     }
 }
 
-@Serializable @SerialName("jarvis.feature.inbox.MailRoute")
+@Serializable @SerialName("persona.feature.inbox.MailRoute")
 data class MailRoute(val itemId: String) : NavKey
 
-@Serializable @SerialName("jarvis.feature.inbox.LarkMomentRoute")
+@Serializable @SerialName("persona.feature.inbox.LarkMomentRoute")
 data class LarkMomentRoute(val postId: String, val itemId: String? = null) : NavKey
 
 /** The own page of an item that is neither a chat, a Moments post nor a mail: a Feishu document's notice, or an unknown item. */

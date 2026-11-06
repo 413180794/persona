@@ -243,7 +243,7 @@ func (l assistantLink) appCallFrom(ctx context.Context, from string, p assistant
 }
 
 // appTool runs the one of the assistant's tools that is still the hub's to run for manager from: the hub's own
-// settings (jarvis_settings without the assistant's, settings_tool.go there).
+// settings (persona_settings without the assistant's, settings_tool.go there).
 func (h *Hub) appTool(ctx context.Context, from, app string, params json.RawMessage) (json.RawMessage, error) {
 	var a struct {
 		Name      string          `json:"name"`
@@ -260,12 +260,12 @@ func (h *Hub) appTool(ctx context.Context, from, app string, params json.RawMess
 	var res string
 	var err error
 	switch app + " " + a.Name {
-	case assistantwire.AppSettings + " jarvis_settings":
+	case assistantwire.AppSettings + " persona_settings":
 		m := h.localMachine(a.MachineID)
 		if m == nil {
 			return nil, fmt.Errorf("%w %q", assistantwire.ErrNoDevice, a.MachineID)
 		}
-		res, err = h.toolJarvisSettings(ctx, from, m, a.SessionID, a.Arguments)
+		res, err = h.toolPersonaSettings(ctx, from, m, a.SessionID, a.Arguments)
 	default:
 		return nil, fmt.Errorf("app %s has no tool %s", app, a.Name)
 	}
@@ -565,7 +565,7 @@ func (h *Hub) assistantToolsNow() []proto.Tool {
 	return st.tools
 }
 
-// Tool runs one of the assistant's tools (assistant.tool). ask_user and jarvis_settings wait for the phone: up to
+// Tool runs one of the assistant's tools (assistant.tool). ask_user and persona_settings wait for the phone: up to
 // the question's half hour, and then some.
 func (a assistantRemote) Tool(ctx context.Context, call assistantwire.ToolCall) proto.ToolResult {
 	ctx, cancel := context.WithTimeout(ctx, time.Hour)

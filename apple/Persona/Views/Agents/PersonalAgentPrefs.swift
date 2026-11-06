@@ -158,7 +158,7 @@ nonisolated enum PersonalAgentArrange {
 @MainActor @Observable
 final class PersonalAgentPrefsStore {
     static let shared = PersonalAgentPrefsStore()
-    private static let key = "jarvis.agents.prefs"
+    private static let key = "persona.agents.prefs"
 
     private(set) var prefs: PersonalAgentPrefs
     private var hubBacked = true

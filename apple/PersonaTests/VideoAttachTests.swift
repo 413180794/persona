@@ -2,7 +2,7 @@ import AVFoundation
 import CoreMedia
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Videos sent as files (VideoAttach.swift, docs/protocol.md「发送视频」).
 struct VideoAttachTests {
@@ -10,7 +10,7 @@ struct VideoAttachTests {
 
     @Test func theTagGoesAfterWhatWasTypedAndComesBack() {
         let text = AttachedFile.message("看看这段", files: [clip])
-        #expect(text == "看看这段\n\n<jarvis-file kind=\"video\" path=\"/tmp/IMG_0001-20261103-150102.MOV\" name=\"IMG_0001.MOV\" size=\"25270000\" duration=\"12.4\"/>")
+        #expect(text == "看看这段\n\n<persona-file kind=\"video\" path=\"/tmp/IMG_0001-20261103-150102.MOV\" name=\"IMG_0001.MOV\" size=\"25270000\" duration=\"12.4\"/>")
         let parsed = AttachedFile.parse(text)
         #expect(parsed.files == [clip])
         #expect(parsed.rest == "看看这段")
@@ -22,7 +22,7 @@ struct VideoAttachTests {
         let parsed = AttachedFile.parse(AttachedFile.message("x", files: [odd, clip]))
         #expect(parsed.files == [odd, clip])
         // Written by hand (or by an older build): no name, a closing tag, no duration; one without a path is dropped.
-        let loose = AttachedFile.parse("<jarvis-file path=\"/tmp/v.mp4\" size=\"12\"></jarvis-file>\n<jarvis-file kind=\"video\"/>\n好")
+        let loose = AttachedFile.parse("<persona-file path=\"/tmp/v.mp4\" size=\"12\"></persona-file>\n<persona-file kind=\"video\"/>\n好")
         #expect(loose.files == [AttachedFile(path: "/tmp/v.mp4", name: "v.mp4", size: 12, duration: nil)])
         #expect(loose.rest == "好")
         #expect(AttachedFile.parse("没有附件").files.isEmpty)
@@ -36,7 +36,7 @@ struct VideoAttachTests {
     }
 
     @Test func theBubbleShowsTheTextAndACardNotTheTag() {
-        let raw = "<jarvis-context kind=\"context\" title=\"T\" url=\"\">x</jarvis-context>\n\n看看 /tmp/notes.md\n\n" + clip.xml
+        let raw = "<persona-context kind=\"context\" title=\"T\" url=\"\">x</persona-context>\n\n看看 /tmp/notes.md\n\n" + clip.xml
         let row = UserRowText(raw)
         #expect(row.shown == "看看 /tmp/notes.md")
         #expect(row.attached == [clip])
@@ -46,7 +46,7 @@ struct VideoAttachTests {
 
     @Test func theWatchSaysVideo() {
         #expect(WatchText.shown(AttachedFile.message("请看视频", files: [clip, clip])) == "请看视频\n〔视频〕")
-        #expect(WatchText.shown("<jarvis-file kind=\"doc\" path=\"/tmp/a.pdf\"/>") == "〔文件〕")
+        #expect(WatchText.shown("<persona-file kind=\"doc\" path=\"/tmp/a.pdf\"/>") == "〔文件〕")
     }
 
     @Test func compressionTriesTheSizesThatFit() {

@@ -23,11 +23,11 @@
 
 | Item | Finding | Evidence |
 | --- | --- | --- |
-| QR content | `jarvis://pair?url=<public_url>&token=<pairing token>` (query encoded with `url.Values`) | `server/internal/hub/config.go:144-147` |
-| Generator | `jarvisd hub pair` on the hub computer prints address, token, terminal QR (qrterminal) | `config.go:149-158`, `server/cmd/jarvisd/main.go:25-56` |
+| QR content | `persona://pair?url=<public_url>&token=<pairing token>` (query encoded with `url.Values`) | `server/internal/hub/config.go:144-147` |
+| Generator | `personad hub pair` on the hub computer prints address, token, terminal QR (qrterminal) | `config.go:149-158`, `server/cmd/personad/main.go:25-56` |
 | Pairing token | `token` in `hub.json`: random 24-byte hex on first run, **permanent, not single-use**, full role (all operations) | `config.go:82-92`, `server/internal/hub/devicetokens.go:69-71` |
-| Client parsing | Scheme must be `jarvis`; read nonempty query `url`, `token` | `ios/Shared/APIClient.swift:7-16` |
-| Per-device credentials | Immediately after pairing, `POST /api/v1/auth/tokens {"name","kind"}` → `{"id":"dev_…","token":"jd_…","role","name"}`; use new token thereafter, discard pairing token | `devicetokens.go:126-168`, `ios/Jarvis/App/DeviceCredentials.swift:15-31` |
+| Client parsing | Scheme must be `persona`; read nonempty query `url`, `token` | `ios/Shared/APIClient.swift:7-16` |
+| Per-device credentials | Immediately after pairing, `POST /api/v1/auth/tokens {"name","kind"}` → `{"id":"dev_…","token":"jd_…","role","name"}`; use new token thereafter, discard pairing token | `devicetokens.go:126-168`, `ios/Persona/App/DeviceCredentials.swift:15-31` |
 | kind → role | `phone` → `full`; `watch` → `answer`; all others `kind:"other"`, `role:"full"`; only full can create tokens (otherwise 403); 503 without database | `devicetokens.go:137-152` |
 | Default names | Empty name or over 80 characters: phone "iPhone", watch "Apple Watch", other "设备" (Device); **Apple names hardcoded**, Android must supply name | `devicetokens.go:153-159` |
 | Storage | Hub stores token sha256 only (`device_tokens.token_hash`), plaintext returned only once at creation | `devicetokens.go:59-62,160-167`, `server/internal/db/migrations/hub/0031_device_tokens.sql` |
@@ -41,7 +41,7 @@
 | Re-pair | Scan same QR again (unchanged token unless hub.json edited); revoked devices must rescan | Same as above |
 
 Notes:
-- **Push device_id and credential id are separate**: push / notification settings use the app-generated UUID (`PushRegistrar.deviceID`, `ios/Jarvis/App/JarvisApp.swift:239-245`),
+- **Push device_id and credential id are separate**: push / notification settings use the app-generated UUID (`PushRegistrar.deviceID`, `ios/Persona/App/PersonaApp.swift:239-245`),
   credentials use hub-issued `dev_…` (`DeviceCredentials.swift:10-13`). Android can follow this, but they are unlinked: hub cannot associate a push device with a credential (revocation does not remove push registration).
 - Security: QR contains permanent master token, granting full access to anyone who obtains it; rotation requires changing hub.json and re-pairing all clients still using the pairing token. Optional improvement in section 11.
 
@@ -211,13 +211,13 @@ accounts (GET / POST / DELETE / test / mailboxes), `oauth/google/start`, `oauth/
 ### 4.1 Connection
 - URL: `ws(s)://<hub address>/api/v1/ws`, authentication as HTTP (header or `?token=`). Server `websocket.Accept(... InsecureSkipVerify: true)` does not validate Origin (`http.go:558-563`).
 - On connection, server immediately sends in order: `hello{server_version, client_id, features}` → `machines` → one `sessions` per machine → one `interaction` per pending request (`http.go:616-623`).
-  Thus reconnect replays full state; clients need not fetch lists again (iOS still calls `GET /interactions` to reconcile, `ios/Jarvis/App/AppModel.swift:456-474`).
+  Thus reconnect replays full state; clients need not fetch lists again (iOS still calls `GET /interactions` to reconcile, `ios/Persona/App/AppModel.swift:456-474`).
 - Heartbeat: hub sends protocol-level WebSocket ping every 20 s (15 s timeout, closes on failure, `http.go:589-613`). **No JSON ping/pong**: protocol.md's `ping` / `pong`
   do not exist in code (server emits no `{"type":"ping"}` and ignores received `{"type":"pong"}`, `http.go:663-718`). iOS also pings every 20 s, 5 s on weak network,
   and reconnects after 45 s without messages (`ios/Shared/LiveConnection.swift:167-170,230-265`). OkHttp `pingInterval(20s)` suffices (coder/websocket automatically pongs).
 - Backpressure (constant): 512-message send queue per connection. `broadcast` / `toSubscribers` **silently drops the message** when full; `sendJSON` and terminal `sendTerm` **disconnect immediately**
   ("too slow"), requiring client reconnect/catch-up (`http.go:448-459,461-501`, `terminal.go:479-491`). → read promptly, decode off main thread (iOS callback-thread decoding, `LiveConnection.swift:267-277`).
-- Disconnect cleanup: unsubscribe all connection sessions and terminals (`http.go:571-587`). iOS disconnects on backgrounding so a suspended socket does not make hub think the phone is online (`JarvisApp.swift:27-35`).
+- Disconnect cleanup: unsubscribe all connection sessions and terminals (`http.go:571-587`). iOS disconnects on backgrounding so a suspended socket does not make hub think the phone is online (`PersonaApp.swift:27-35`).
 
 ### 4.2 Server → client (all types actually emitted)
 | type | Fields | Recipient | Evidence |
@@ -268,7 +268,7 @@ protocol.md's `session` (single state change) has **no emitter** in code and nee
 - **Lists**: full `sessions` pushes for any field change; lightweight `revs` pushes when only transcript grows and visible fields stay unchanged (node checks every second, protocol.md "Hub ↔ node RPC").
   `rev` = transcript byte count (`proto.go:227-229`). Full session list is about 130 KB, so rev changes do not resend it (`CLAUDE.md` documented figure, not measured this round).
 - **Contents**: unopened sessions pull `after_seq=<local covered>` increments (iOS `AgentSync`: live Agents + used within 24 hours, max 40, concurrency 3; client-policy constants,
-  `ios/Jarvis/App/AgentSync.swift:13-15`). Open sessions use WS live subscription + `since_seq` gap repair on subscribing. **Do not subscribe to all sessions for background sync**: subscription makes node refresh transcript every 250 ms (`CLAUDE.md` lesson).
+  `ios/Persona/App/AgentSync.swift:13-15`). Open sessions use WS live subscription + `since_seq` gap repair on subscribing. **Do not subscribe to all sessions for background sync**: subscription makes node refresh transcript every 250 ms (`CLAUDE.md` lesson).
 - **Continuity** (`docs/protocol.md`, "Item continuity"): batches carry `history` (file identity; change means discard/reload), `to_seq` (last read line, including lines with no items),
   `from_seq` (continuous batches only). Maintain `covered`: `from_seq <= covered` → `covered = to_seq`; otherwise gap, wait 1.5 s then repair through `after_seq=covered`, switching to latest above 8 pages
   (`AppModel.swift:402-439`). Process empty `items` with `to_seq` too (advance covered).
@@ -293,7 +293,7 @@ protocol.md's `session` (single state change) has **no emitter** in code and nee
 - `resolve`: success `{ok:true}`; no longer pending 410; screen card 409 `prompt_changed`; other proxy errors 502/503.
 - Restart resilience: retain `resumable` interactions for 3 minutes after node disconnect (`hub.go:125-127`), restoring same id; app deduplicates by id.
 - Assistant `ask_user` is a `question`, `tool_name:"ask_user"`, push title "Persona 在问你" (Persona is asking you) (`push.go:316-318`).
-- iOS notification actions (`ios/Jarvis/App/NotificationActions.swift`): authorization Allow `{allow:true}` / Deny `{allow:false}`, plan Approve `{approve:true, mode:"acceptEdits"}` /
+- iOS notification actions (`ios/Persona/App/NotificationActions.swift`): authorization Allow `{allow:true}` / Deny `{allow:false}`, plan Approve `{approve:true, mode:"acceptEdits"}` /
   Send back `{approve:false, feedback:<input>}`. Allow, Approve, and Send back for revision require unlocking (`.authenticationRequired`); only permission Deny does not. Questions/terminal cards have no buttons (open to handle). Failure (410 handled, disconnected) shows local notification guidance.
 - Docs say hooks allow immediately if no app online (`docs/architecture.md`, "Answering questions / approving plans"), but node `ask` directly calls `interaction.create` and waits until expiry,
   with no no-app-online bypass found (`server/internal/node/hooks.go:312-336`, `hub.go:396-429`). Code is authoritative; docs may be stale.
@@ -305,12 +305,12 @@ protocol.md's `session` (single state change) has **no emitter** in code and nee
 ### 7.1 Route and protocol (`docs/phone-tools.md`, `server/internal/hub/hub.go:631-765`)
 1. Registration: after WS connects, client sends `register_phone{device_name, tools, simulator}` (iOS `didConnect`, `AppModel.swift:456-492`). `tools` are MCP definitions
    `{name, description, input_schema}`, **only user-enabled data sources**. Hub stores in memory and replaces all Postgres `phone_tools` (Claude still sees tools when phone is offline, `hub.go:647-656`, migration `0001_init.sql`).
-2. Exposure to Claude: `jarvisd mcp` → node.sock → node → hub `mcp.tools` → `mcpTools()` = phone + mail tools (+ additional assistant tools for assistant sessions) (`hub.go:658-669`, `machine.go:465-470`).
+2. Exposure to Claude: `personad mcp` → node.sock → node → hub `mcp.tools` → `mcpTools()` = phone + mail tools (+ additional assistant tools for assistant sessions) (`hub.go:658-669`, `machine.go:465-470`).
 3. Call: `mcp.call` → `callTool` (`phone_` prefix to `callPhone`) → `phoneClient()` chooses **real devices before simulators, then most recently registered** (`http.go:542-556`) →
    no online phone triggers `wakePhone` (silent push, at most once per 30 s, wait up to 20 s, check connection every 300 ms, `hub.go:722-753`) →
    send `tool_call{call_id, name, args}` → wait at most 2 minutes (`hub.go:693-720`, constant).
 4. Result: `tool_result{call_id, content:[{type:"text",text} | {type:"image",data,mime_type}], is_error}` (`proto.go:383-401`). All failures become `is_error` + explanation for the model;
-   client never throws (`ios/Jarvis/PhoneTools/PhoneToolRegistry.swift:95-120`).
+   client never throws (`ios/Persona/PhoneTools/PhoneToolRegistry.swift:95-120`).
 5. Write confirmation: **on phone, not through hub**. Tools carry a `confirmation` summary; app prompts before execution. Denial → `is_error`, content `The user declined on the phone.`;
    confirmation covers only that call (`PhoneToolRegistry.swift:107-112`, `AppModel.swift:570-583`). Disabled sources reject calls even from old sessions (`PhoneToolRegistry.swift:103-106`).
    (Hub-mediated confirmation is only `mail_send`, `lark_send`, creating `permission` interactions, `hub.go:683-691`.)
@@ -318,7 +318,7 @@ protocol.md's `session` (single state change) has **no emitter** in code and nee
 
 Measurement (single sample, `docs/assistant.md`, "Capability measurements," n=1, not a baseline): calling a phone tool while locked, APNs accepted silent push in 259 ms, phone connected after 900 ms, tool result in 3.2 seconds; another run returned in 2.8 seconds.
 
-### 7.2 Existing iOS tools (`ios/Jarvis/PhoneTools/*.swift` specs) and Android equivalents
+### 7.2 Existing iOS tools (`ios/Persona/PhoneTools/*.swift` specs) and Android equivalents
 (Android column is platform knowledge, **not checked online this round**; Verify items require official documentation / real-device checks before implementation.)
 
 | Tool (source) | Parameters (schema) | Confirmation | Android equivalent | Differences / risks |
@@ -357,7 +357,7 @@ app usage time (UsageStatsManager). These fill `docs/phone-tools.md` ("iOS limit
 ## 8. Push
 
 ### 8.1 Current: APNs only (all of `server/internal/hub/push.go`)
-- Config: `~/.jarvis/apns.json` (`key_id, team_id, key_path, topic`) + p8 key; absent means push disabled (`push.go:28-92`). ES256 JWT cached 40 minutes (`push.go:107-126`).
+- Config: `~/.persona/apns.json` (`key_id, team_id, key_path, topic`) + p8 key; absent means push disabled (`push.go:28-92`). ES256 JWT cached 40 minutes (`push.go:107-126`).
 - `devices` table: `device_id, name, kind, apns_token, apns_env, topic, prefs(jsonb), updated_at` (`0001_init.sql`, `0021_device_prefs.sql`);
   `POST /api/v1/devices` decodes directly to `db.Device` (`http.go:104-112`), **no platform / push-provider field**; registration preserves prefs (`push.go:94-105`).
   `apns_env` chooses sandbox / production host, per-device `topic` (`push.go:133-138,254-262`); 410 / BadDeviceToken / Unregistered removes device (`push.go:284-297`).
@@ -369,7 +369,7 @@ app usage time (UsageStatsManager). These fill `docs/phone-tools.md` ("iOS limit
 | Needs you (interaction) | Immediately on new interaction; muted Agents excluded | `alert{title, subtitle:"<session name> · <machine>", body}`, `sound`, `thread-id=<session_id>`, `category=INTERACTION_<KIND>`, `interruption-level=time-sensitive`; custom `interaction_id, machine_id, session_id`; `apns-collapse-id=<interaction id>`, priority 10 | `prefs.input` | `push.go:305-340`, `hub.go:376-384` |
 | Complete | After working → done/idle, wait `done_delay_seconds` (60); resumed work is same turn. No push if seen (herdr idle or app `seen`), muted, assistant `notify_user` within 3 minutes, Inbox Agent, or background-woken turn. With background tasks, wait through their reporting turn (max `background_hold_minutes` 120) | `alert{title:"✅ <title>", subtitle:"machine · space › tab", body:<last reply>}`, `thread-id`; keys `machine_id, session_id` | `prefs.done`: off / long (≥`long_turn_seconds` 60) / always | `machine.go:500-536`, `notify.go:11-267` |
 | Assistant `notify_user` | Explicit assistant call | Same as Complete, subtitle Persona | All devices | `assistant_tools.go:116-125` |
-| Silent wake | `phone_*` call without connected phone; once per 30 s | `{"aps":{"content-available":1},"jarvis_wake":"tool"}`, background push-type, priority 5 | All token-bearing devices | `push.go:227-231`, `hub.go:722-753` |
+| Silent wake | `phone_*` call without connected phone; once per 30 s | `{"aps":{"content-available":1},"persona_wake":"tool"}`, background push-type, priority 5 | All token-bearing devices | `push.go:227-231`, `hub.go:722-753` |
 | Live Activity (Fleet) | See 8.3 | liveactivity push-type, topic `<bundle>.push-type.liveactivity` | `prefs.live_activity` with activity / push-to-start token | `liveactivity.go` |
 
 - Timing in `hub.json` `notify` (`notify.go:20-50`, defaults are constants); per-device push choices in `devices.prefs` (`notify.go:52-137`).
@@ -415,7 +415,7 @@ Android equivalent (Android 16 Live Updates, details to verify):
 - **No server-direct activity channel** like APNs activity tokens / push-to-start: hub can only send FCM data (`{type:"fleet", state:"<FleetState JSON>"}`), and app locally updates / cancels notification.
 - Map phase + counts → short capsule text (e.g. "💬2", "⚙3"), analogous to `island.left`; first actionable request → notification Allow / Deny / Approve buttons (as `FleetIntents`);
   `workingSince` → `setUsesChronometer(true)` + `setWhen()` for local timing; stale → `setTimeoutAfter(15 minutes)`; `lock_details` → `VISIBILITY_PRIVATE` + counts-only public version;
-  tap → `jarvis://open?machine=&session=` for one item, otherwise `jarvis://open`.
+  tap → `persona://open?machine=&session=` for one item, otherwise `persona://open`.
 - Below Android 16: regular ongoing notification (low-importance channel). Verify whether Samsung / Xiaomi / OPPO capsules/focus notifications support Live Updates APIs.
 - Push budget: FCM lacks APNs activity budget but high priority can be downgraded; count changes NORMAL, new Needs you HIGH (reuse `urgent`).
 
@@ -429,7 +429,7 @@ Android equivalent (Android 16 Live Updates, details to verify):
   fetching thumbnails through `GET /machines/{mid}/file?path=` from the session computer (`docs/ios.md`, "Sent images"). Android should compress before sending.
 - **Send files**: `POST /machines/{mid}/files?name=`, raw bytes, required `Content-Length` (OkHttp known-length RequestBody, no chunked body, otherwise 411); cancellation → hub `file.upload.abort`
   deletes partial file. Success returns absolute path, inserted in composer (single-quoted for spaces/quotes), **not automatically sent** (`docs/protocol.md`, "Sending files"; `upload.go`).
-- **Client-parsed message tags**: `<attached_images>`, `<jarvis-context kind="context|edit" title url>…</jarvis-context>` (in-app web text selection AI edit / Use as context),
+- **Client-parsed message tags**: `<attached_images>`, `<persona-context kind="context|edit" title url>…</persona-context>` (in-app web text selection AI edit / Use as context),
   `<cross-session-message from-name>` (`docs/protocol.md`, "Message tags"); also remove Claude `[Image #N]` placeholders and long-paste `<pasted_content id=…>` wrappers (`CLAUDE.md` lesson).
 - **Chat file paths**: open through `GET /machines/{mid}/file` (≤2 MB, binary base64, render PDFs/images locally).
 
@@ -453,14 +453,14 @@ Android equivalent (Android 16 Live Updates, details to verify):
 - IME: iOS custom `UITextInput` (Pinyin marked text, `CLAUDE.md` lesson); Android custom View `onCreateInputConnection` / composing text.
 
 ### 9.4 Deep links
-- `jarvis://pair?url=<hub>&token=<token>`: QR / external pairing (`JarvisApp.swift:15-25`).
-- `jarvis://open` returns to app; `jarvis://open?machine=<id>&session=<id>` opens session (Live Activities, `ios/LiveActivity/JarvisActivityAttributes.swift:12-31`).
-- Notification taps use payload `machine_id` / `session_id` (`JarvisApp.swift:195-206`).
-- Android: `jarvis` intent-filter with pair / open hosts; scan pairing codes in-app (system camera custom-scheme behavior varies, Verify).
+- `persona://pair?url=<hub>&token=<token>`: QR / external pairing (`PersonaApp.swift:15-25`).
+- `persona://open` returns to app; `persona://open?machine=<id>&session=<id>` opens session (Live Activities, `ios/LiveActivity/PersonaActivityAttributes.swift:12-31`).
+- Notification taps use payload `machine_id` / `session_id` (`PersonaApp.swift:195-206`).
+- Android: `persona` intent-filter with pair / open hosts; scan pairing codes in-app (system camera custom-scheme behavior varies, Verify).
 
 ### 9.5 Watch
 - No Apple Watch-specific APIs: answer-role token (`kind:"watch"`), pairing/summary pushed from iPhone over WatchConnectivity; while open, directly fetch hub every 8 seconds (sessions / interactions / machines / Inbox),
-  and directly call answers / messages / interruption / Inbox done/reply / `seen` / `items?turns=2` (`ios/JarvisWatch/JarvisWatchApp.swift:75-133,461-469`, `docs/ios.md`, "Data flow"). Watch does not register push.
+  and directly call answers / messages / interruption / Inbox done/reply / `seen` / `items?turns=2` (`ios/PersonaWatch/PersonaWatchApp.swift:75-133,461-469`, `docs/ios.md`, "Data flow"). Watch does not register push.
 - Wear OS can follow: answer token + Wearable Data Layer pairing transfer; system bridges phone notifications (buttons, RemoteInput included) to watch (Verify). Hub needs only platform-neutral default device names (section 11).
 
 ### 9.6 Siri / Shortcuts → Android
@@ -479,7 +479,7 @@ Android equivalent (Android 16 Live Updates, details to verify):
 ## 10. Android client protocol checklist
 
 **A. Pairing and credentials**
-1. Parse `jarvis://pair?url=&token=` (in-app scanner + deep links); `GET /api/v1/health` validation and `features`.
+1. Parse `persona://pair?url=&token=` (in-app scanner + deep links); `GET /api/v1/health` validation and `features`.
 2. Exchange with `POST /api/v1/auth/tokens {name:<model name>, kind:"phone"}`, Keystore-encrypted storage, discard pairing token; 404 old hub retains pairing token and retries next launch.
 3. Settings › Devices: `GET/DELETE /api/v1/auth/tokens`; revoke self = unpair. Wear OS `kind:"watch"` (answer role).
 
@@ -539,7 +539,7 @@ Android equivalent (Android 16 Live Updates, details to verify):
 | 8 | Withdraw notifications after resolution: currently empty `Pusher.clear`; Android NORMAL `interaction_resolved` data lets app cancel | `push.go:356`, `hub.go:572-580` |
 | 9 | Push carries `tool_call`, HTTP result (new e.g. `POST /api/v1/phone/calls/{call_id}/result`, reuse `toolResult`), avoiding background WS setup | `hub.go:693-765`, new `http.go` route |
 | 10 | Android Gmail login: Web-type OAuth client (secret file), server-auth-code exchange, account-client-type refresh secret | `config.go:32-38`, `server/internal/mail/oauth.go:107-154,320-326`, `server/internal/mail/http.go`, `docs/mail.md` |
-| 11 | Single-use pairing code instead of permanent QR master token (`jarvisd hub pair` short-lived code, `POST /api/v1/auth/pair {code}` exchanges device token) | `config.go:144-158`, `devicetokens.go` |
+| 11 | Single-use pairing code instead of permanent QR master token (`personad hub pair` short-lived code, `POST /api/v1/auth/pair {code}` exchanges device token) | `config.go:144-158`, `devicetokens.go` |
 | 12 | Link credentials to push devices (`device_tokens` platform / push device_id), remove push/tools on credential revocation | `devicetokens.go`, `db.go`, migration |
 | 13 | No-GMS devices: UnifiedPush provider (hub POSTs to registered endpoint) | `push.go` abstraction |
 | 14 | Align docs: add **[Undocumented]** APIs/WS events (`assistant_schedule`, `hook_event`, `error`, `seen`, `queue`, `info`, `file`, `lark/raw`, etc.) to protocol.md; remove absent `session` / `ping` / `pong`; check architecture.md claim of immediate hook allow without online app | `docs/protocol.md`, `docs/architecture.md` |

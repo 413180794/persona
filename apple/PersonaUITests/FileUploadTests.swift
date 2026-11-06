@@ -1,16 +1,16 @@
 import XCTest
 
 /// Files sent to an agent (docs/protocol.md「发送文件」), against scripts/mock/mock_hub.py
-/// (TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:<port>; MOCK_UPLOAD_KBPS slows it down enough to see the bar).
+/// (TEST_RUNNER_PERSONA_UPLOAD_HUB=http://127.0.0.1:<port>; MOCK_UPLOAD_KBPS slows it down enough to see the bar).
 final class FileUploadTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     private func launch(_ args: [String]) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_UPLOAD_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_UPLOAD_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_UPLOAD_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_UPLOAD_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget] + args
         app.launchPinned()
         return app
@@ -18,7 +18,7 @@ final class FileUploadTests: XCTestCase {
 
     /// How many times the mock was asked for `path` (GET, any query).
     private func hits(_ path: String) -> Int {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_UPLOAD_HUB"],
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_UPLOAD_HUB"],
               let data = try? Data(contentsOf: URL(string: hub + "/mock/hits")!),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return 0 }
         return (obj["hits"] as? [String: Int])?["GET " + path] ?? 0

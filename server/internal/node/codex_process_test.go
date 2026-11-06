@@ -18,9 +18,9 @@ import (
 
 // Exercises the built CLI, not just n.handle. Its HOME, registry and servers are independent of the user's runtime.
 func TestCodexRemoteNodeProcess(t *testing.T) {
-	bin := os.Getenv("JARVIS_CODEX_NODE_BINARY")
+	bin := os.Getenv("PERSONA_CODEX_NODE_BINARY")
 	if bin == "" {
-		t.Skip("set JARVIS_CODEX_NODE_BINARY to the built jarvisd")
+		t.Skip("set PERSONA_CODEX_NODE_BINARY to the built personad")
 	}
 	home := t.TempDir()
 	profile := t.TempDir()

@@ -174,9 +174,9 @@ func TestAssistantPersonaViewGetter(t *testing.T) {
 // Live through the assistant process: its card action route asks Hello on every request, so the admin UI's switch
 // opens and closes it without a restart (on: past the switch, to the body's check; off: 403 again).
 func TestAdminAssistantSwitchReachesTheAssistant(t *testing.T) {
-	connection := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	connection := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if connection == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set") // the assistant keeps its settings in the store
+		t.Skip("PERSONA_TEST_DATABASE_URL not set") // the assistant keeps its settings in the store
 	}
 	database, err := db.Open(context.Background(), connection, db.AllSets)
 	if err != nil {

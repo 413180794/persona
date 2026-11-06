@@ -3,19 +3,19 @@ import XCTest
 /// Machines (docs/machines.md「App」): the Agents list's machine menu opens every machine on one page, what needs a look
 /// first (the offline NAS, then the busy server called out); a card opens the machine's page: its agents on top (one
 /// opens the chat), the charts below, the range switches, the system last. Against scripts/mock/mock_hub.py
-/// (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>); TEST_RUNNER_JARVIS_SHOT_DIR=<dir> also saves the screens
+/// (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>); TEST_RUNNER_PERSONA_SHOT_DIR=<dir> also saves the screens
 /// there as PNG for a look.
 final class MachinesPageTests: XCTestCase {
     private func hub() throws -> String {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         return hub
     }
 
     private func launch(_ hub: String, _ args: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-dev.openChat", ""] + args
         app.launchPinned()
         return app
@@ -27,7 +27,7 @@ final class MachinesPageTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOT_DIR"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOT_DIR"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }
@@ -43,7 +43,7 @@ final class MachinesPageTests: XCTestCase {
 
     @MainActor func testListThenMachineThenRange() throws {
         let app = launch(try hub())
-        if ProcessInfo.processInfo.environment["JARVIS_LAYOUT"] == "shell" {
+        if ProcessInfo.processInfo.environment["PERSONA_LAYOUT"] == "shell" {
             // The shell (the iPhone's default): its drawer's Machines.
             let drawer = app.buttons["assistant-sidebar-button"]
             XCTAssertTrue(drawer.waitForExistence(timeout: 15), app.debugDescription)
@@ -75,7 +75,7 @@ final class MachinesPageTests: XCTestCase {
         XCTAssertLessThan(nas.frame.minY, server.frame.minY, "the offline NAS goes first")
         XCTAssertLessThan(server.frame.minY, macBook.frame.minY, "the busy server before MacBook")
         shot("list")
-        // With MOCK_NODE_MISMATCH=1 Mac Studio's card says its jarvisd is not the hub's deploy, with Redeploy
+        // With MOCK_NODE_MISMATCH=1 Mac Studio's card says its personad is not the hub's deploy, with Redeploy
         // (DeployButtonTests taps it); a look at it, then back up.
         let redeploy = app.buttons["重新部署"]
         if redeploy.exists {

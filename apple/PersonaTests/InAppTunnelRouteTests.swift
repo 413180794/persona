@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The app's side of the in-app tunnel (docs/network.md「经 App 内隧道连 hub」): only a hub with an extension that
 /// contributes a tunnel, switched on, has one; its name titles the tunnel and its settings say where it goes.

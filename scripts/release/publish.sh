@@ -1,6 +1,6 @@
 #!/bin/bash
-# Publish jarvisd for anyone to install (docs/release.md "Publishing jarvisd"): build the four binaries with the web client
-# inside (no skills in them: those live in each machine's ~/.jarvis/skills), and the connector jarvis-link for the
+# Publish personad for anyone to install (docs/release.md "Publishing personad"): build the four binaries with the web client
+# inside (no skills in them: those live in each machine's ~/.persona/skills), and the connector persona-link for the
 # same four (the node service, docs/link.md), check them for private values, write the release manifest latest.json
 # (every file's sha256, docs/hub-update.md "Publishing"), then deploy the site/ worker with dl/ and install.sh added, at the
 # config's publish.site_url. Every hub of the release channel updates itself to it. The worker also runs the push
@@ -22,21 +22,21 @@
 # uploading to TestFlight.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-eval "$(python3 scripts/jarvis_config.py env)"
-[ -n "$JARVIS_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/config.md)" >&2; exit 2; }
-WRANGLER="${JARVIS_WRANGLER:-}"
-DL_BUCKET="${JARVIS_DL_BUCKET:-persona-dl}" # the r2_buckets binding DL in site/wrangler.jsonc
+eval "$(python3 scripts/persona_config.py env)"
+[ -n "$PERSONA_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/config.md)" >&2; exit 2; }
+WRANGLER="${PERSONA_WRANGLER:-}"
+DL_BUCKET="${PERSONA_DL_BUCKET:-persona-dl}" # the r2_buckets binding DL in site/wrangler.jsonc
 # wr <dir> <args…>: wrangler in <dir> (a copy of site/, for its account).
 wr() { local dir="$1"; shift; (cd "$dir" && if [ -n "$WRANGLER" ]; then "$WRANGLER" "$@"; else npx wrangler "$@"; fi); }
 # check_served <SHA256SUMS> <slot>: what the site serves now is that release: dl/SLOT, and every download at its size.
 check_served() {
   local sums="$1" slot="$2" dir name size got
   dir="$(dirname "$sums")"
-  [ "$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/SLOT" 2>/dev/null)" = "$slot" ] || { echo "served dl/SLOT is not $slot" >&2; return 1; }
+  [ "$(curl -fsSL "$PERSONA_PUBLISH_URL/dl/SLOT" 2>/dev/null)" = "$slot" ] || { echo "served dl/SLOT is not $slot" >&2; return 1; }
   while read -r _ name; do
     size=""
     [ -f "$dir/$name" ] && size="$(wc -c <"$dir/$name" | tr -d ' ')"
-    got="$(curl -fsSI "$JARVIS_PUBLISH_URL/dl/$name" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}')"
+    got="$(curl -fsSI "$PERSONA_PUBLISH_URL/dl/$name" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}')"
     [ -n "$got" ] || { echo "served dl/$name is missing" >&2; return 1; }
     [ -z "$size" ] || [ "$got" = "$size" ] || { echo "served dl/$name is $got bytes, not $size" >&2; return 1; }
   done < "$sums"
@@ -52,8 +52,8 @@ settled() {
   done
   "$@" || { echo "$what still differs about two minutes after the deploy" >&2; return 1; }
 }
-served_is() { [ "$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/$1" 2>/dev/null)" = "$(cat "$2")" ]; }
-same_as_served() { curl -fsSL "$JARVIS_PUBLISH_URL/$1" | cmp -s - "$2"; }
+served_is() { [ "$(curl -fsSL "$PERSONA_PUBLISH_URL/dl/$1" 2>/dev/null)" = "$(cat "$2")" ]; }
+same_as_served() { curl -fsSL "$PERSONA_PUBLISH_URL/$1" | cmp -s - "$2"; }
 # deploy_site <dir>: deploy that copy of site/ (with dl/ and install.sh in it), the log in <dir>/../deploy.log.
 deploy_site() {
   local dir="$1" log="$1/../deploy.log"
@@ -73,7 +73,7 @@ if [ -n "${SITE_ONLY:-}" ]; then
   OUT=build-publish-site
   rm -rf "$OUT"
   mkdir -p "$OUT/dl"
-  get() { curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 --max-time 60 "$JARVIS_PUBLISH_URL/$1" -o "$2"; }
+  get() { curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 --max-time 60 "$PERSONA_PUBLISH_URL/$1" -o "$2"; }
   for f in VERSION SHA256SUMS latest.json; do get "dl/$f" "$OUT/dl/$f"; done
   get install.sh "$OUT/install.sh"
   get dl/SLOT "$OUT/dl/SLOT" 2>/dev/null || { echo "the site serves no dl/SLOT (a release from before the bucket, #2541): run a full publish" >&2; exit 1; }
@@ -87,14 +87,14 @@ if [ -n "${SITE_ONLY:-}" ]; then
   cp -R "$OUT/dl" "$OUT/site/public/dl"
   cp "$OUT/install.sh" "$OUT/site/public/install.sh"
   python3 scripts/deploy/check_asset_sizes.py "$OUT/site/public"
-  if [ -n "${NO_DEPLOY:-}" ]; then echo "site with jarvisd $VERSION ready in $OUT/site (not deployed)."; exit 0; fi
+  if [ -n "${NO_DEPLOY:-}" ]; then echo "site with personad $VERSION ready in $OUT/site (not deployed)."; exit 0; fi
   deploy_site "$OUT/site"
   for f in VERSION SHA256SUMS latest.json; do
     settled "served dl/$f" same_as_served "dl/$f" "$OUT/dl/$f" || exit 1
   done
   settled "served install.sh" same_as_served install.sh "$OUT/install.sh" || exit 1
   settled "the served downloads" check_served "$OUT/dl/SHA256SUMS" "$SLOT" || exit 1
-  echo "site deployed with jarvisd $VERSION unchanged: $JARVIS_PUBLISH_URL"
+  echo "site deployed with personad $VERSION unchanged: $PERSONA_PUBLISH_URL"
   exit 0
 fi
 
@@ -121,61 +121,61 @@ cleanup() { find "$WEBDIST" -mindepth 1 ! -name README.md -exec rm -rf {} + 2>/d
 trap cleanup EXIT
 # The public registry, whatever this machine's npm is set to: package-lock.json resolves there, and a mirror can miss
 # a package (2026-11-06 one lacked elkjs and the release stopped here).
-NPM_REGISTRY="${JARVIS_NPM_REGISTRY:-https://registry.npmjs.org/}"
+NPM_REGISTRY="${PERSONA_NPM_REGISTRY:-https://registry.npmjs.org/}"
 (cd web && { [ -d node_modules ] || npm ci --no-audit --no-fund --registry="$NPM_REGISTRY"; } && npm run build) >/dev/null
 cleanup
 cp -R web/dist/. "$WEBDIST/"
 
 # Public dependency constants are classified by build-info checksums; verify the actual module cache before building.
 (cd server && go mod verify)
-LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$STAMP -X main.updateURL=$JARVIS_PUBLISH_URL/dl"
-# The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
+LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$STAMP -X main.updateURL=$PERSONA_PUBLISH_URL/dl"
+# The runtime packages personad carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
 (cd server && go generate ./internal/runtimepkg)
 # -tags public changes no code (no file builds differently with it, TestOneBuild): it marks the binary for
 # check_bundle_privacy.py, which then knows the dependency constants it may skip.
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
-    -o "../$OUT/bin/jarvisd-${t%/*}-${t#*/}" ./cmd/personad)
+    -o "../$OUT/bin/personad-${t%/*}-${t#*/}" ./cmd/personad)
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
-    -o "../$OUT/bin/jarvis-link-${t%/*}-${t#*/}" ./cmd/jarvis-link)
+    -o "../$OUT/bin/persona-link-${t%/*}-${t#*/}" ./cmd/persona-link)
 done
-# The programs released with jarvisd (update.ProgramNames): built the same way, on the same platforms; a hub swaps
-# them with jarvisd. jarvisd-wechat is the WeChat bot (docs/wechat.md), a plugin of its own. (Telegram's connector is
+# The programs released with personad (update.ProgramNames): built the same way, on the same platforms; a hub swaps
+# them with personad. personad-wechat is the WeChat bot (docs/wechat.md), a plugin of its own. (Telegram's connector is
 # an extension now, released from the extension market: #1704.)
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   for p in wechat; do
     (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
-      -o "../$OUT/bin/jarvisd-$p-${t%/*}-${t#*/}" "./cmd/personad-$p")
+      -o "../$OUT/bin/personad-$p-${t%/*}-${t#*/}" "./cmd/personad-$p")
   done
 done
 cleanup
-sed "s|@JARVIS_DL@|$JARVIS_PUBLISH_URL/dl|" scripts/deploy/install.sh > "$OUT/install.sh"
+sed "s|@PERSONA_DL@|$PERSONA_PUBLISH_URL/dl|" scripts/deploy/install.sh > "$OUT/install.sh"
 
 # Anyone can download these: no private values in them (CLAUDE.md), and no copied skill (only the built-in ones
-# assistantskills.Redistributable lists; a copied skill lives in the user's ~/.jarvis/skills or comes with its
+# assistantskills.Redistributable lists; a copied skill lives in the user's ~/.persona/skills or comes with its
 # extension). install.sh is the repo's (scripts/privacy_check.py covers it) plus the site's address, which is public
 # on purpose.
 python3 scripts/release/check_bundle_privacy.py --whole-short "$OUT/bin"
-python3 scripts/release/check_bundle_skills.py "$OUT/bin/jarvisd-linux-amd64"
-host_bin="$OUT/bin/jarvisd-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
-[ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built jarvisd does not report $VERSION" >&2; exit 1; }
-host_link="$OUT/bin/jarvis-link-${host_bin##*/jarvisd-}"
-[ "$("$host_link" version)" = "$VERSION" ] || { echo "the built jarvis-link does not report $VERSION" >&2; exit 1; }
-"$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built jarvisd is not release build $BUILD" >&2; exit 1; }
+python3 scripts/release/check_bundle_skills.py "$OUT/bin/personad-linux-amd64"
+host_bin="$OUT/bin/personad-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+[ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built personad does not report $VERSION" >&2; exit 1; }
+host_link="$OUT/bin/persona-link-${host_bin##*/personad-}"
+[ "$("$host_link" version)" = "$VERSION" ] || { echo "the built persona-link does not report $VERSION" >&2; exit 1; }
+"$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built personad is not release build $BUILD" >&2; exit 1; }
 for p in wechat; do
-  host_p="$OUT/bin/jarvisd-$p-${host_bin##*/jarvisd-}"
-  [ "$("$host_p" version -v)" = "$("$host_bin" version -v)" ] || { echo "jarvisd-$p is not the same build as jarvisd" >&2; exit 1; }
+  host_p="$OUT/bin/personad-$p-${host_bin##*/personad-}"
+  [ "$("$host_p" version -v)" = "$("$host_bin" version -v)" ] || { echo "personad-$p is not the same build as personad" >&2; exit 1; }
 done
 
 # Releases only move forward: a larger build number than the one served, and the served commit an ancestor of this one.
-curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/null || : > "$OUT/served.json"
+curl -fsSL "$PERSONA_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/null || : > "$OUT/served.json"
 "$host_bin" release check-next "$OUT/served.json" --build "$BUILD" --commit "$COMMIT" || exit 1
 
 # The privacy scan checked the raw binaries; only the gzipped ones are published (to the bucket, see above).
-for bin in "$OUT/bin"/jarvisd-* "$OUT/bin"/jarvis-link-*; do
+for bin in "$OUT/bin"/personad-* "$OUT/bin"/persona-link-*; do
   gzip -n -9 -c "$bin" > "$bin.gz"
 done
-(cd "$OUT/bin" && shasum -a 256 jarvisd-*.gz jarvis-link-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
+(cd "$OUT/bin" && shasum -a 256 personad-*.gz persona-link-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
 # The manifest hubs update from: version, build number, commit and every download's sha256 (not signed, the user's
 # call: it guards against a broken download over HTTPS, docs/hub-update.md "Security").
@@ -186,7 +186,7 @@ rm -rf "$OUT/site"
 cp -R site "$OUT/site"
 mkdir -p "$OUT/site/public/dl"
 # The slot not served now (a when nothing is): the release before stays in the other one until the next release.
-served_slot="$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/SLOT" 2>/dev/null || true)"
+served_slot="$(curl -fsSL "$PERSONA_PUBLISH_URL/dl/SLOT" 2>/dev/null || true)"
 SLOT=a
 [ "$served_slot" = a ] && SLOT=b
 printf '%s\n' "$SLOT" > "$OUT/bin/SLOT"
@@ -194,7 +194,7 @@ cp "$OUT/bin/SHA256SUMS" "$OUT/bin/VERSION" "$OUT/bin/latest.json" "$OUT/bin/SLO
 cp "$OUT/install.sh" "$OUT/site/public/install.sh"
 python3 scripts/deploy/check_asset_sizes.py "$OUT/site/public"
 if [ -n "${NO_DEPLOY:-}" ]; then
-  echo "jarvisd $VERSION built and checked in $OUT (not deployed)."
+  echo "personad $VERSION built and checked in $OUT (not deployed)."
   exit 0
 fi
 # The downloads first, into the slot no one is served from; then the deploy that points dl/SLOT at it.
@@ -212,8 +212,8 @@ deploy_site "$OUT/site"
 
 # What is served now is what was built (allowing the site a moment to switch over).
 settled "served dl/VERSION" served_is VERSION "$OUT/bin/VERSION" \
-  || { echo "deployed, but $JARVIS_PUBLISH_URL/dl/VERSION says '$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/VERSION" 2>/dev/null)'" >&2; exit 1; }
+  || { echo "deployed, but $PERSONA_PUBLISH_URL/dl/VERSION says '$(curl -fsSL "$PERSONA_PUBLISH_URL/dl/VERSION" 2>/dev/null)'" >&2; exit 1; }
 settled "served dl/SHA256SUMS" same_as_served dl/SHA256SUMS "$OUT/bin/SHA256SUMS" || exit 1
 settled "served dl/latest.json" same_as_served dl/latest.json "$OUT/bin/latest.json" || exit 1
 settled "the served downloads" check_served "$OUT/bin/SHA256SUMS" "$SLOT" || exit 1
-echo "jarvisd $VERSION published: curl -fsSL $JARVIS_PUBLISH_URL/install.sh | sh"
+echo "personad $VERSION published: curl -fsSL $PERSONA_PUBLISH_URL/install.sh | sh"

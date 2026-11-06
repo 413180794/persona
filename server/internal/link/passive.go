@@ -19,10 +19,10 @@ import (
 	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
-// Passive mode (docs/link.md "Passive mode"): the hub dials this computer instead. jarvis-link listens on a TLS port with its
+// Passive mode (docs/link.md "Passive mode"): the hub dials this computer instead. persona-link listens on a TLS port with its
 // own identity (tlsid.go) and offers three things there, nothing else: pairing, a little about itself, and streams
 // to the resident node (listen.go). Pairing goes the other way round from active mode, as the computer may not reach
-// the hub: `jarvis-link pair --listen` makes a one-time code and prints a link for the hub's admin page; the hub dials
+// the hub: `persona-link pair --listen` makes a one-time code and prints a link for the hub's admin page; the hub dials
 // in, trades the code for a credential it made up, and opens streams with that credential from then on.
 
 // Passive mode's endpoints and port.
@@ -57,12 +57,12 @@ func pingFromHeader(v string) (every, timeout time.Duration, ok bool) {
 	return PingTimesMS(e, t)
 }
 
-// PairCodeLife is how long a pairing code from `jarvis-link pair --listen` is good for (a setting).
+// PairCodeLife is how long a pairing code from `persona-link pair --listen` is good for (a setting).
 const PairCodeLife = 10 * time.Minute
 
 // Passive is passive mode's part of link.json.
 type Passive struct {
-	// Listen is where jarvis-link listens ("" means DefaultListen).
+	// Listen is where persona-link listens ("" means DefaultListen).
 	Listen string `json:"listen,omitempty"`
 	// The hub that paired, as it said: its id and name, and what it calls this computer.
 	HubID   string `json:"hub_id,omitempty"`
@@ -283,7 +283,7 @@ func normalizeAddr(raw, listen string) (string, error) {
 // ErrNoAddress: no address of this computer to put in a pairing link.
 var ErrNoAddress = errors.New("找不到 hub 能连的本机地址（只有回环、隧道或临时地址）：用 --addr 指定，比如 --addr 这台的域名")
 
-// PairInvite is what `jarvis-link pair --listen` hands the person: the link for the hub's admin page and what is in it.
+// PairInvite is what `persona-link pair --listen` hands the person: the link for the hub's admin page and what is in it.
 type PairInvite struct {
 	Link    string    `json:"link"`
 	Addrs   []string  `json:"addrs"`
@@ -349,10 +349,10 @@ func PairListen(path, listen string, addrs []string, now time.Time) (*PairInvite
 	return &PairInvite{Link: ConnectorLink(out, fp, code), Addrs: out, FP: fp, Listen: listen, Expires: expires}, nil
 }
 
-// ConnectorLink is the pairing link of passive mode: jarvis://connector?addr=…[&addr=…]&fp=…&code=…, addresses best first.
+// ConnectorLink is the pairing link of passive mode: persona://connector?addr=…[&addr=…]&fp=…&code=…, addresses best first.
 func ConnectorLink(addrs []string, fp, code string) string {
 	var b strings.Builder
-	b.WriteString("jarvis://connector?")
+	b.WriteString("persona://connector?")
 	for _, a := range addrs {
 		b.WriteString("addr=" + url.QueryEscape(a) + "&")
 	}
@@ -363,8 +363,8 @@ func ConnectorLink(addrs []string, fp, code string) string {
 // ParseConnectorLink reads a link ConnectorLink made: the addresses (host:port, best first), the pin and the code.
 func ParseConnectorLink(raw string) (addrs []string, fp, code string, err error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (u.Scheme != "jarvis" && u.Scheme != "persona") || u.Host != "connector" {
-		return nil, "", "", errors.New("这不是 jarvis-link pair --listen 给的链接（jarvis://connector?…）")
+	if err != nil || u.Scheme != "persona" || u.Host != "connector" {
+		return nil, "", "", errors.New("这不是 persona-link pair --listen 给的链接（persona://connector?…）")
 	}
 	q := u.Query()
 	fp, code = q.Get("fp"), q.Get("code")
@@ -380,7 +380,7 @@ func ParseConnectorLink(raw string) (addrs []string, fp, code string, err error)
 }
 
 // SetMode switches the link.json at path to mode (ModeActive or ModePassive), keeping what either mode was paired
-// with. listen, when not "", is where passive mode listens from now on. A running jarvis-link follows within a
+// with. listen, when not "", is where passive mode listens from now on. A running persona-link follows within a
 // second or two.
 func SetMode(path, mode, listen string) (*Config, error) {
 	if mode != ModeActive && mode != ModePassive {

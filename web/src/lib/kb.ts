@@ -632,12 +632,12 @@ export function parseRecent(text?: string): RecentDay[] {
 // ── Ask Persona ────────────────────────────────────────
 
 /**
- * `<jarvis-context kind="…" title="…" url="…">text</jarvis-context>`, attributes in this order: the app's parser
+ * `<persona-context kind="…" title="…" url="…">text</persona-context>`, attributes in this order: the app's parser
  * (ContextRef) expects all three, so the card shows in the conversation on the phone too.
  */
 export function contextXml(c: { kind: string; title: string; url?: string; text: string }): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return `<jarvis-context kind="${esc(c.kind)}" title="${esc(c.title)}" url="${esc(c.url ?? "")}">\n${contextBody(c.text)}\n</jarvis-context>`;
+  return `<persona-context kind="${esc(c.kind)}" title="${esc(c.title)}" url="${esc(c.url ?? "")}">\n${contextBody(c.text)}\n</persona-context>`;
 }
 
 /** An entry as context: its profile, recent timeline and folder. */
@@ -710,6 +710,3 @@ export function tagUpdate(kind: string, f: TagForm): KBUpdate {
   }
   return u;
 }
-
-// Source compatibility for integrations written before the product rename.
-export const askJarvisText = askPersonaText;

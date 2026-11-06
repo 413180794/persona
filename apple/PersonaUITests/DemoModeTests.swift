@@ -4,7 +4,7 @@ import XCTest
 /// through — Agents (filters, Compact List, a Claude and a Codex session, cards, a table, the terminal), the machines and
 /// their 24-hour charts, Persona (sidebar, a conversation, Scheduled Tasks), the inbox (a Feishu chat, a mail) — and back out to
 /// the pairing page from Settings. Needs no mock hub.
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> saves a screenshot of each step there (with TEST_RUNNER_JARVIS_STYLE in the name).
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> saves a screenshot of each step there (with TEST_RUNNER_PERSONA_STYLE in the name).
 final class DemoModeTests: XCTestCase {
     private var app: XCUIApplication!
     /// The agent at the top of the demo's list (weather's, needing you). The list is lazy: an agent further down (the
@@ -32,8 +32,8 @@ final class DemoModeTests: XCTestCase {
     @MainActor private func shot(_ name: String) {
         let s = app.screenshot()
         add(attachment(XCTAttachment(screenshot: s), name))
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("demo-" + name + style + ".png"))
         }
     }
@@ -234,14 +234,14 @@ final class DemoModeTests: XCTestCase {
         // Persona: a conversation, the sidebar, Scheduled Tasks.
         tab("Persona")
         see(text("今天有"), "the main conversation", timeout: 10)
-        noErrors("jarvis")
-        shot("jarvis")
+        noErrors("persona")
+        shot("persona")
         see(app.buttons["历史对话"], "历史对话").tapCenter()
         see(app.descendants(matching: .any)["assistant-sidebar"], "the sidebar")
-        shot("jarvis-sidebar")
+        shot("persona-sidebar")
         see(app.buttons["assistant-drawer-close"], "the drawer's close card").tapCenter()
         sleep(1)
-        see(app.buttons["jarvis-avatar"], "the avatar").tapCenter()
+        see(app.buttons["persona-avatar"], "the avatar").tapCenter()
         see(app.buttons["详细信息"], "详细信息").tap()
         let routines = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "定时任务")).firstMatch
         for _ in 0..<4 where !(routines.exists && routines.isHittable) { app.swipeUp() }

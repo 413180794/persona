@@ -4,12 +4,12 @@ import type { Route } from "./router";
 import type { Session } from "./types";
 import { byTime } from "./times";
 
-/** The sidebar row a route selects. Persona's main conversation is one row, under `/`, `/j` and `/j/<main>` alike. */
+/** The sidebar row a route selects. Persona's main conversation is one row, under `/`, `/persona` and `/persona/<main>` alike. */
 export function sidebarActiveKey(route: Route, main?: string): string {
   switch (route.name) {
     case "session":
       return `s:${route.mid}/${route.sid}`;
-    case "jarvis":
+    case "persona":
       return !route.sid || route.sid === main ? "persona" : `j:${route.sid}`;
     case "persona-new":
       return "j:new";

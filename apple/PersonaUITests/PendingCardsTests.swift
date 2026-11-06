@@ -4,8 +4,8 @@ import XCTest
 /// a permission: more than half the page) scroll on their own under 「3 个待处理」, the permission first and in sight,
 /// while the chat's header and back button stay on screen: they were pushed off the top, out of reach.
 ///   PORT=18797 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/PendingCardsTests
-/// Both layouts (TEST_RUNNER_JARVIS_LAYOUT=shell) and both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/PendingCardsTests
+/// Both layouts (TEST_RUNNER_PERSONA_LAYOUT=shell) and both styles (TEST_RUNNER_PERSONA_UI_STYLE=beautiful).
 final class PendingCardsTests: XCTestCase {
     private var app: XCUIApplication!
     /// The mock's agent with three cards waiting, and one with none.
@@ -14,15 +14,15 @@ final class PendingCardsTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] != nil else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 (JARVIS_MOCK_HUB)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] != nil else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 (PERSONA_MOCK_HUB)")
         }
     }
 
     private func launch(chat: String, _ extra: [String] = []) {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev",
                                "-openAgentsFresh", "YES", "-openChatsFresh", "YES"] + extra
         app.launchPinned()
@@ -33,10 +33,10 @@ final class PendingCardsTests: XCTestCase {
         a.name = "cards \(name) \(UITestStyle.name)"
         a.lifetime = .keepAlways
         add(a)
-        // TEST_RUNNER_JARVIS_SHOTS keeps them as files too, named by TEST_RUNNER_JARVIS_SHOT_TAG (layout, look, device).
+        // TEST_RUNNER_PERSONA_SHOTS keeps them as files too, named by TEST_RUNNER_PERSONA_SHOT_TAG (layout, look, device).
         let env = ProcessInfo.processInfo.environment
-        if let dir = env["JARVIS_SHOTS"] {
-            let tag = env["JARVIS_SHOT_TAG"].map { "-" + $0 } ?? ""
+        if let dir = env["PERSONA_SHOTS"] {
+            let tag = env["PERSONA_SHOT_TAG"].map { "-" + $0 } ?? ""
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "cards-\(name)-\(UITestStyle.name)\(tag).png"))
         }
     }

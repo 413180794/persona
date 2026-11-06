@@ -117,7 +117,7 @@ func (h *Hub) configuredHubName() string {
 	return strings.TrimSpace(h.cfg.Name)
 }
 
-// adminReload reads hub.json's "admin" and "name" again: what `jarvisd hub admin access` changed on this machine.
+// adminReload reads hub.json's "admin" and "name" again: what `personad hub admin access` changed on this machine.
 func (h *Hub) adminReload() error {
 	o, err := readHubJSON(h.cfg.dir)
 	if err != nil {
@@ -221,7 +221,7 @@ func (h *Hub) adminHubRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/restart", func(w http.ResponseWriter, r *http.Request) {
 		if !h.supervised() {
 			writeErrCode(w, http.StatusConflict, "not_supervised",
-				errors.New("nothing would start the hub again: restart it where it runs (systemctl --user restart jarvisd, docker compose restart hub)"))
+				errors.New("nothing would start the hub again: restart it where it runs (systemctl --user restart personad, docker compose restart hub)"))
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
@@ -241,7 +241,7 @@ type doctorItem struct {
 	Detail string `json:"detail"`
 }
 
-// parseDoctor turns `jarvisd hub doctor`'s report (doctor.go: "OK | item: detail", "Problem | item: action", then "Next:"
+// parseDoctor turns `personad hub doctor`'s report (doctor.go: "OK | item: detail", "Problem | item: action", then "Next:"
 // and its - lines) into items for the page; any other line is information about the item before it.
 func parseDoctor(text string) (items []doctorItem, next []string) {
 	items, next = []doctorItem{}, []string{}

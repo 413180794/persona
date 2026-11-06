@@ -27,7 +27,7 @@ describe("adminApi", () => {
     expect(calls[0].init.method).toBe("GET");
     expect(calls[0].init.body).toBeUndefined();
     expect(calls[0].init.credentials).toBe("same-origin");
-    expect((calls[0].init.headers as Record<string, string>)["X-Jarvis-CSRF"]).toBeUndefined();
+    expect((calls[0].init.headers as Record<string, string>)["X-Persona-CSRF"]).toBeUndefined();
   });
 
   it("sends JSON and the CSRF token on writes, {} when there is nothing to send", async () => {
@@ -37,7 +37,7 @@ describe("adminApi", () => {
     await adminApi("/hub", "PUT", { name: "x" });
     const h0 = calls[0].init.headers as Record<string, string>;
     expect(h0["Content-Type"]).toBe("application/json");
-    expect(h0["X-Jarvis-CSRF"]).toBe("tok");
+    expect(h0["X-Persona-CSRF"]).toBe("tok");
     expect(calls[0].init.body).toBe("{}");
     expect(calls[1].init.body).toBe('{"name":"x"}');
   });
@@ -51,7 +51,7 @@ describe("adminApi", () => {
     expect(gone).toHaveBeenCalledOnce();
     const calls = stub(200, {});
     await adminApi("/logout", "POST");
-    expect((calls[0].init.headers as Record<string, string>)["X-Jarvis-CSRF"]).toBeUndefined();
+    expect((calls[0].init.headers as Record<string, string>)["X-Persona-CSRF"]).toBeUndefined();
   });
 
   it("does not treat a wrong password as a lost session", async () => {
@@ -103,14 +103,14 @@ describe("the center and connectors", () => {
   it("adds a computer either way", async () => {
     const calls = stub(200, { machine: {}, restart: { required: false, reasons: [] } });
     await addLinkMachine({ id: "air", name: "Air", icon: "laptop" });
-    await addServiceMachine({ id: "example-workstation", name: "开发机", icon: "server", pair_link: "jarvis://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
+    await addServiceMachine({ id: "example-workstation", name: "开发机", icon: "server", pair_link: "persona://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
     expect(body(calls[0])).toEqual({ kind: "link", id: "air", name: "Air", icon: "laptop" });
-    expect(body(calls[1])).toEqual({ kind: "service", id: "example-workstation", name: "开发机", icon: "server", pair_link: "jarvis://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
+    expect(body(calls[1])).toEqual({ kind: "service", id: "example-workstation", name: "开发机", icon: "server", pair_link: "persona://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
     await linkPair("air");
     expect(calls[2].url).toBe("/api/v1/admin/machines/air/link-pair");
-    await repairConnector("example-workstation", "jarvis://connector?fp=f&code=c", "");
+    await repairConnector("example-workstation", "persona://connector?fp=f&code=c", "");
     expect(calls[3].url).toBe("/api/v1/admin/machines/example-workstation/connector");
-    expect(body(calls[3])).toEqual({ pair_link: "jarvis://connector?fp=f&code=c" });
+    expect(body(calls[3])).toEqual({ pair_link: "persona://connector?fp=f&code=c" });
   });
 
   it("shows the hub's own words for a failed pairing and a member's refusal", async () => {
@@ -139,7 +139,7 @@ describe("extensions", () => {
     expect(calls[1].url).toBe("/api/v1/admin/extensions/upload?name=notes+1.0.tar.gz&upgrade=example-notes");
     const h = calls[1].init.headers as Record<string, string>;
     expect(h["Content-Type"]).toBe("application/octet-stream");
-    expect(h["X-Jarvis-CSRF"]).toBe("tok");
+    expect(h["X-Persona-CSRF"]).toBe("tok");
     expect(calls[1].init.body).toBe(file);
     await uploadExtension(file);
     expect(calls[2].url).toBe("/api/v1/admin/extensions/upload?name=notes+1.0.tar.gz");
@@ -196,6 +196,6 @@ describe("usage sources (docs/usage-windows.md「账号池网关」)", () => {
     ]);
     expect(JSON.parse(String(calls[1].init.body))).toEqual({ enabled: false, poll_minutes: 15 });
     expect(JSON.parse(String(calls[4].init.body))).toEqual({ id: "s1", type: "generic", url: "https://gateway.example.com/u" });
-    for (const c of calls.slice(1)) expect((c.init.headers as Record<string, string>)["X-Jarvis-CSRF"]).toBe("tok");
+    for (const c of calls.slice(1)) expect((c.init.headers as Record<string, string>)["X-Persona-CSRF"]).toBe("tok");
   });
 });

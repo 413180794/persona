@@ -47,7 +47,7 @@ def main() -> int:
         browser = p.chromium.launch(executable_path=a.executable) if a.executable else p.chromium.launch()
         for theme in ("light", "dark"):
             ctx = browser.new_context(viewport={"width": w, "height": h}, color_scheme=theme)
-            ctx.add_init_script(f"localStorage.setItem('jarvis.theme', '{theme}')")
+            ctx.add_init_script(f"localStorage.setItem('persona.theme', '{theme}')")
             page = ctx.new_page()
             page.goto(a.base + "/?token=" + a.token)
             page.wait_for_selector('[data-testid="task-dock-board"]', timeout=20000)

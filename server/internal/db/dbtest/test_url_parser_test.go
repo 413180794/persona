@@ -37,7 +37,7 @@ func TestServerTestDatabaseURLParsing(t *testing.T) {
 		if err != nil {
 			t.Fatalf("anonymous isolated driver parse failed: %v", err)
 		}
-		if cfg.Database != "jarvis_test" || cfg.User != "fixture" || cfg.Password != "synthetic" || cfg.Host != "127.0.0.1" {
+		if cfg.Database != "persona_test" || cfg.User != "fixture" || cfg.Password != "synthetic" || cfg.Host != "127.0.0.1" {
 			t.Fatal("isolated driver did not retain the explicit anonymous test target")
 		}
 		return
@@ -49,13 +49,13 @@ func TestServerTestDatabaseURLParsing(t *testing.T) {
 		}
 	}
 	const noProfile = "&passfile=&sslcert=&sslkey=&sslrootcert="
-	for _, option := range []string{"dbname=jarvis", "database=jarvis", "db%6Eame=jarvis", "dbname=jarvis&dbname=jarvis_test"} {
+	for _, option := range []string{"dbname=persona", "database=persona", "db%6Eame=persona", "dbname=persona&dbname=persona_test"} {
 		t.Run("driver-overrides-path/"+option, func(t *testing.T) {
-			cfg, err := pgconn.ParseConfig("postgres://fixture:synthetic@127.0.0.1/jarvis_test?" + option + noProfile)
+			cfg, err := pgconn.ParseConfig("postgres://fixture:synthetic@127.0.0.1/persona_test?" + option + noProfile)
 			if err != nil {
 				t.Fatalf("anonymous driver parse failed: %v", err)
 			}
-			if cfg.Database != "jarvis" {
+			if cfg.Database != "persona" {
 				t.Fatalf("driver database = %q; update the isolation regression if precedence changes", cfg.Database)
 			}
 		})
@@ -115,40 +115,40 @@ except ValueError:
 		name, source string
 		accept       bool
 	}{
-		{"no-query", "postgres://fixture:synthetic@127.0.0.1/jarvis", true},
-		{"postgresql", "postgresql://fixture:synthetic@[::1]:5432/jarvis?sslmode=disable", true},
-		{"tls-require", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=require", true},
-		{"tls-allow", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=allow", true},
-		{"tls-prefer", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=prefer", true},
-		{"tls-verify-ca", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=verify-ca", true},
-		{"tls-verify-full", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=verify-full", true},
-		{"tls-explicit-root", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=require&sslrootcert=" + explicitRoot, true},
-		{"tls-explicit-client", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=verify-full&sslrootcert=" + explicitRoot + "&sslcert=" + explicitRoot + "&sslkey=" + explicitKey, true},
+		{"no-query", "postgres://fixture:synthetic@127.0.0.1/persona", true},
+		{"postgresql", "postgresql://fixture:synthetic@[::1]:5432/persona?sslmode=disable", true},
+		{"tls-require", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=require", true},
+		{"tls-allow", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=allow", true},
+		{"tls-prefer", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=prefer", true},
+		{"tls-verify-ca", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=verify-ca", true},
+		{"tls-verify-full", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=verify-full", true},
+		{"tls-explicit-root", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=require&sslrootcert=" + explicitRoot, true},
+		{"tls-explicit-client", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=verify-full&sslrootcert=" + explicitRoot + "&sslcert=" + explicitRoot + "&sslkey=" + explicitKey, true},
 
-		{"encoded-password", "postgres://fixture:p%40ss@127.0.0.1/jarvis?sslmode=disable", true},
-		{"encoded-safe-key", "postgres://fixture:synthetic@127.0.0.1/jarvis?ssl%6dode=disable", true},
-		{"timeout", "postgres://fixture:synthetic@127.0.0.1/jarvis?connect_timeout=3&application_name=fixture", true},
-		{"target-attrs", "postgres://fixture:synthetic@127.0.0.1/jarvis?target_session_attrs=read-write", true},
-		{"empty-certificates", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslcert=&sslkey=&sslrootcert=", true},
-		{"dbname", "postgres://fixture:synthetic@127.0.0.1/jarvis?dbname=jarvis", false},
-		{"database", "postgres://fixture:synthetic@127.0.0.1/jarvis?database=jarvis", false},
-		{"encoded-dbname", "postgres://fixture:synthetic@127.0.0.1/jarvis?db%6Eame=jarvis", false},
-		{"encoded-database", "postgres://fixture:synthetic@127.0.0.1/jarvis?%64atabase=jarvis", false},
-		{"mixed-case-dbname", "postgres://fixture:synthetic@127.0.0.1/jarvis?DbName=jarvis", false},
-		{"duplicate-dbname", "postgres://fixture:synthetic@127.0.0.1/jarvis?dbname=jarvis_test&dbname=jarvis", false},
-		{"alias-overrides", "postgres://fixture:synthetic@127.0.0.1/jarvis?database=jarvis&dbname=jarvis_test", false},
-		{"service", "postgres://fixture:synthetic@127.0.0.1/jarvis?service=fixture", false},
-		{"encoded-service", "postgres://fixture:synthetic@127.0.0.1/jarvis?serv%69ce=fixture", false},
-		{"servicefile", "postgres://fixture:synthetic@127.0.0.1/jarvis?servicefile=/synthetic/service", false},
-		{"passfile", "postgres://fixture:synthetic@127.0.0.1/jarvis?passfile=/synthetic/passfile", false},
-		{"host", "postgres://fixture:synthetic@127.0.0.1/jarvis?host=example.invalid", false},
-		{"unknown-options", "postgres://fixture:synthetic@127.0.0.1/jarvis?options=fixture", false},
-		{"duplicate-safe-key", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=disable&ssl%6dode=require", false},
-		{"bad-escape", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=%xx", false},
-		{"bad-utf8", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=%ff", false},
-		{"semicolon", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=disable;dbname=jarvis", false},
-		{"missing-equals", "postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode", false},
-		{"fragment", "postgres://fixture:synthetic@127.0.0.1/jarvis#dbname=jarvis", false},
+		{"encoded-password", "postgres://fixture:p%40ss@127.0.0.1/persona?sslmode=disable", true},
+		{"encoded-safe-key", "postgres://fixture:synthetic@127.0.0.1/persona?ssl%6dode=disable", true},
+		{"timeout", "postgres://fixture:synthetic@127.0.0.1/persona?connect_timeout=3&application_name=fixture", true},
+		{"target-attrs", "postgres://fixture:synthetic@127.0.0.1/persona?target_session_attrs=read-write", true},
+		{"empty-certificates", "postgres://fixture:synthetic@127.0.0.1/persona?sslcert=&sslkey=&sslrootcert=", true},
+		{"dbname", "postgres://fixture:synthetic@127.0.0.1/persona?dbname=persona", false},
+		{"database", "postgres://fixture:synthetic@127.0.0.1/persona?database=persona", false},
+		{"encoded-dbname", "postgres://fixture:synthetic@127.0.0.1/persona?db%6Eame=persona", false},
+		{"encoded-database", "postgres://fixture:synthetic@127.0.0.1/persona?%64atabase=persona", false},
+		{"mixed-case-dbname", "postgres://fixture:synthetic@127.0.0.1/persona?DbName=persona", false},
+		{"duplicate-dbname", "postgres://fixture:synthetic@127.0.0.1/persona?dbname=persona_test&dbname=persona", false},
+		{"alias-overrides", "postgres://fixture:synthetic@127.0.0.1/persona?database=persona&dbname=persona_test", false},
+		{"service", "postgres://fixture:synthetic@127.0.0.1/persona?service=fixture", false},
+		{"encoded-service", "postgres://fixture:synthetic@127.0.0.1/persona?serv%69ce=fixture", false},
+		{"servicefile", "postgres://fixture:synthetic@127.0.0.1/persona?servicefile=/synthetic/service", false},
+		{"passfile", "postgres://fixture:synthetic@127.0.0.1/persona?passfile=/synthetic/passfile", false},
+		{"host", "postgres://fixture:synthetic@127.0.0.1/persona?host=example.invalid", false},
+		{"unknown-options", "postgres://fixture:synthetic@127.0.0.1/persona?options=fixture", false},
+		{"duplicate-safe-key", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=disable&ssl%6dode=require", false},
+		{"bad-escape", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=%xx", false},
+		{"bad-utf8", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=%ff", false},
+		{"semicolon", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode=disable;dbname=persona", false},
+		{"missing-equals", "postgres://fixture:synthetic@127.0.0.1/persona?sslmode", false},
+		{"fragment", "postgres://fixture:synthetic@127.0.0.1/persona#dbname=persona", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -171,13 +171,16 @@ except ValueError:
 				return
 			}
 			if err != nil {
+				if failure, ok := err.(*exec.ExitError); ok {
+					t.Fatalf("anonymous launcher input failed: %v: %s", err, failure.Stderr)
+				}
 				t.Fatalf("anonymous launcher input failed: %v", err)
 			}
 			cfg, err := pgconn.ParseConfig(strings.TrimSpace(string(output)))
 			if err != nil {
 				t.Fatalf("anonymous sanitized URL failed driver parse: %v", err)
 			}
-			if cfg.Database != "jarvis_test" {
+			if cfg.Database != "persona_test" {
 				t.Fatalf("actual driver database = %q, not the dedicated test database", cfg.Database)
 			}
 			if cfg.User != "fixture" || cfg.Password == "" {
@@ -220,11 +223,11 @@ except ValueError:
 	t.Run("isolated-environment-with-real-driver", func(t *testing.T) {
 		directory := t.TempDir()
 		service := filepath.Join(directory, "service.conf")
-		if err := os.WriteFile(service, []byte("[live]\ndbname=jarvis\nhost=example.invalid\nuser=live-user\n"), 0600); err != nil {
+		if err := os.WriteFile(service, []byte("[live]\ndbname=persona\nhost=example.invalid\nuser=live-user\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
 		for key, value := range map[string]string{
-			"PGDATABASE": "jarvis", "PGUSER": "live-user", "PGPASSWORD": "synthetic-live-password",
+			"PGDATABASE": "persona", "PGUSER": "live-user", "PGPASSWORD": "synthetic-live-password",
 			"PGHOST": "example.invalid", "PGSERVICE": "live", "PGSERVICEFILE": service,
 			"PGPASSFILE": filepath.Join(directory, "passwords"), "PGOPTIONS": "synthetic",
 			"SERVER_TEST_DB_PARSER_CHILD": "1",
@@ -232,7 +235,7 @@ except ValueError:
 			t.Setenv(key, value)
 		}
 		config := filepath.Join(directory, "hub.json")
-		if err := os.WriteFile(config, []byte(`{"database_url":"postgres://fixture:synthetic@127.0.0.1/jarvis?sslmode=disable"}`), 0600); err != nil {
+		if err := os.WriteFile(config, []byte(`{"database_url":"postgres://fixture:synthetic@127.0.0.1/persona?sslmode=disable"}`), 0600); err != nil {
 			t.Fatal(err)
 		}
 		executable, err := os.Executable()

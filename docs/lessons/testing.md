@@ -47,7 +47,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 
 - `@MainActor` does not serialize Swift Testing (2026-11-06, #2025). Async `@Test`s interleave at await; the old real-WebView suite lacked `.serialized`, and mixed execution with the security suite timed out loading the network-positive-control page. Declare resource suites `@Suite(.serialized)` and validate the two WebKit suites in separate batches. Preserve original page-wait bounds, network positive controls, and zero-connection assertions; no extra time or skipped controls to pass.
 
-- Network-isolation regression listeners can also be probed by Agent port discovery (2026-11-06, #2025). `server/internal/node/ports.go` finds listeners in Agent process trees and sends `GET /`, `User-Agent: jarvis-ports` to actual bind addresses; another loopback address does not guarantee isolation. Attribute the noise only after an independent listener without WebView receives the same requests. Isolate only this task's test processes, retaining reachable-network controls and zero-new-connection assertions. Do not filter by UA or stop/change real node; preserve original failures.
+- Network-isolation regression listeners can also be probed by Agent port discovery (2026-11-06, #2025). `server/internal/node/ports.go` finds listeners in Agent process trees and sends `GET /`, `User-Agent: persona-ports` to actual bind addresses; another loopback address does not guarantee isolation. Attribute the noise only after an independent listener without WebView receives the same requests. Isolate only this task's test processes, retaining reachable-network controls and zero-new-connection assertions. Do not filter by UA or stop/change real node; preserve original failures.
 - Security acceptance covers only the source actually tested (2026-11-06, #2025). The normal Mac matrix verified #2778's exact sandbox. A candidate adding only `loaded != nil` duplicate protection in the content-process-exit callback still cannot inherit that matrix as tested evidence for its branch. Record source hash and diff; untested platforms retain fallback. A normal matrix is not infinite-loop or real OS-termination acceptance.
 
 - Detaching test processes from an Agent process tree does not isolate WebKit resources (2026-11-06, #2025). Double-fork prevents local port discovery from probing listeners, but WebKit helpers still use XPC in the shared login session. Public APIs cannot target this WebView's content process for retrieval/termination or set CPU quotas. Do not run literal loops in shared user sessions or kill by global process name. Infinite-loop acceptance needs a disposable Mac VM / test login session destroyable externally. Record normal matrices, public-delegate fault injection, and real OS termination separately; keep fallback until complete.
@@ -77,7 +77,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   For pure SwiftUI symbol/text/geometry layouts, use public `ImageRenderer.render(rasterizationScale:renderer:)` to draw directly into the test's CGContext, explicitly preserving point-to-pixel scale. Retain nonempty, radius, bounds, and four-digit overflow assertions; calibrate with rectangles of known sizes/offsets. No production UI changes or loosened thresholds.
   Parameterized-case xcresult summaries count methods, not expanded arguments. Verify completeness from test-tree Arguments nodes, ensuring every digit range executed. If postprocessing counts are wrong, fix reading only; retain original script exit code separately from actual XCTest results.
 
-- Validate display names separately from persisted identity during compatible renaming (2026-11-04, #1189). After `persona-link` / `Persona Link` shipped, compressed-install regressions still asserted old display names, causing full release exit 1. Update only display contracts, while verifying real `jarvis-link` files, legacy download names, old/new executable commands, and actual installer calls; never blindly rename compatibility identities. Script tests must discover `scripts/test`, `release`, `deploy`, `mock`, and `app` separately; rename-only subsets miss old assertions elsewhere. Preserve original failed freeze/exit code; after merge, rerun with a new build number.
+- Validate display names separately from persisted identity during compatible renaming (2026-11-04, #1189). After `persona-link` / `Persona Link` shipped, compressed-install regressions still asserted old display names, causing full release exit 1. Update only display contracts, while verifying real `persona-link` files, legacy download names, old/new executable commands, and actual installer calls; never blindly rename compatibility identities. Script tests must discover `scripts/test`, `release`, `deploy`, `mock`, and `app` separately; rename-only subsets miss old assertions elsewhere. Preserve original failed freeze/exit code; after merge, rerun with a new build number.
 
 - Do not use computer-use to click simulators for screenshots (Mac lock screen hides windows; unlocked it steals the user's mouse). Use DEBUG launch arguments (`docs/ios.md`) to open pages directly, then capture.
 - `xcodebuild test` launches the app without `-pairURL` and requests notification permission; subsequent screenshots are covered by that dialog. Restart the simulator after tests before screenshots.
@@ -87,12 +87,12 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   (Operation not permitted). UI tests tap Allow in springboard after launch (`ShellAvatarTests.launch`); run such a test once before manual screenshots.
 - System permission dialogs left by a previous launch survive app uninstall/reinstall; restart with `simctl shutdown` (manual `simctl launch` without `-pairURL` triggers notification permission).
 - `xcrun simctl launch` only foregrounds an already-running app; new launch arguments do not apply. Use `--terminate-running-process` before screenshots.
-- `MOCK_PLUGINS=1` keeps plugin settings, secrets, and switches in process memory (2026-11-04, #1711). After light-mode `ExtensionSettingsTests`, "Example Notes" is configured;
+- `MOCK_EXTENSIONS=1` keeps plugin settings, secrets, and switches in process memory (2026-11-04, #1711). After light-mode `ExtensionSettingsTests`, "Example Notes" is configured;
   an immediate dark run fails at the start of `testSetUpAnExtension` because "Needs setup" is absent, looking like broken code. Restart the mock by port between modes/reruns (like `MOCK_WECHAT`).
 - All UI tests launch with `app.launchPinned()` (`UITestStyle`). The app remembers prior test styles; BeautifulUI looks different, so unspecified tests inherit someone else's appearance
-  (LongSessionTests failed after BeautifulStyleTests). Default is Liquid Glass; `TEST_RUNNER_JARVIS_UI_STYLE=beautiful` runs the whole suite in BeautifulUI.
-  Style-specific tests pass `-ui.style` themselves. It launches through `launchJarvis()`; tests without a layout choice still use the old four-tab layout. `UITestStyleTests` scans source (`launch()` and `launchJarvis()` both count as omissions).
-- Do not run JarvisTests on a simulator paired to a real hub (the one paired by `jarvis-sim` / `sim.sh`). iOS test hosts do not skip keychain (only Mac does, `Shared/Keychain.swift`),
+  (LongSessionTests failed after BeautifulStyleTests). Default is Liquid Glass; `TEST_RUNNER_PERSONA_UI_STYLE=beautiful` runs the whole suite in BeautifulUI.
+  Style-specific tests pass `-ui.style` themselves. It launches through `launchPersona()`; tests without a layout choice still use the old four-tab layout. `UITestStyleTests` scans source (`launch()` and `launchPersona()` both count as omissions).
+- Do not run PersonaTests on a simulator paired to a real hub (the one paired by `persona-sim` / `sim.sh`). iOS test hosts do not skip keychain (only Mac does, `Shared/Keychain.swift`),
   so launch uses pairing to connect to hub, registers phone tools as that simulator, and shows notification permission. On 2026-11-02 three consecutive runs reported "test runner hung before establishing connection"
   (not locked, same after simulator restart); a simulator that had never installed the app passed first try. Exact hang cause was not pursued. Pick a simulator never used for Persona from `simctl list devices`.
 - UI tests can leave simulator screens locked (Home does not unlock simulators; swipe up), causing the next `xcodebuild test` to report "test runner hung before establishing connection".
@@ -133,14 +133,14 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 - Missing screenshots (Read opens PNG with no image, model says "tool had no output") are not a directory issue (2026-10-31: `$TMPDIR`, `/tmp`, and repository images all behaved alike).
   The model gateway drops images from tool results, retaining only text. Send a known image directly to the gateway in both a user message and tool_result, then compare recognition.
   UI changes must be delivered only after actually seeing screenshots; fix this path first if images are invisible. Gateway details/fix live in `CLAUDE.local.md`.
-- Manually passed XCUITest environment variables use command-line `TEST_RUNNER_<variable>`, with the test process reading the unprefixed name (2026-11-03, #697). `JARVIS_MOCK_HUB=... xcodebuild test` did not reach the runner, so cases skipped for lack of mock address while still printing `TEST SUCCEEDED`. Verify actual case execution, skip counts, and assertions, not just exit code; after correcting the environment, four legacy-interface configuration regressions genuinely failed.
-- Before manual `xcodebuild test` / `build-for-testing`, run `eval "$(python3 scripts/jarvis_config.py env)"`: only this converts configured `xcode` to `DEVELOPER_DIR`.
+- Manually passed XCUITest environment variables use command-line `TEST_RUNNER_<variable>`, with the test process reading the unprefixed name (2026-11-03, #697). `PERSONA_MOCK_HUB=... xcodebuild test` did not reach the runner, so cases skipped for lack of mock address while still printing `TEST SUCCEEDED`. Verify actual case execution, skip counts, and assertions, not just exit code; after correcting the environment, four legacy-interface configuration regressions genuinely failed.
+- Before manual `xcodebuild test` / `build-for-testing`, run `eval "$(python3 scripts/persona_config.py env)"`: only this converts configured `xcode` to `DEVELOPER_DIR`.
   Direct invocation uses system-default Xcode; an older SDK reports "no exact matches in call to initializer" for `toolbarVerticalEdge`, etc. (2026-10-31, mistaken for someone else's broken code, costing an afternoon).
 - Measuring UI jumps / flicker needs VNC: record with `simctl io recordVideo`, split frames with ffmpeg, and track a pixel frame by frame. One-frame jumps are visible only this way.
   App position logs can disagree with actual pixels (2026-10-31: logs said the header stayed put while the page shifted 10pt). Trust the image.
 - XCUITest `element.tap()` on iOS 27.0 simulators taps about 4pt inside the frame's top-left (27.1 taps within the circle). Circular `contentShape(.circle)` buttons
   (Persona header glass circles "Chat history", "New chat") get taps outside the circle and do nothing, appearing broken (2026-10-31 iPhone 17 Pro `testButtonsAndPickingAConversation`
-  also failed on master). Fingers and VoiceOver target centers; real devices are unaffected. Use `tapCenter()` (`JarvisUITests/TapCenter.swift`).
+  also failed on master). Fingers and VoiceOver target centers; real devices are unaffected. Use `tapCenter()` (`PersonaUITests/TapCenter.swift`).
   After tapping, assert the page actually changed, not just content shared by both pages (new-chat and chat both have "Ask Persona…", so missed taps pass and failure gets blamed on the next step).
 - Do not measure scroll frame rate with XCUITest drags: each gesture first captures accessibility on the app main thread, itself causing 40–100 ms frames (every 3 seconds, looking like stutter).
   Use in-app constant-speed scrolling (`AutoScroller`, `-showFileAutoScroll`) and frame counting (`FrameMeter`), opened from an idle session (running sessions redraw each second behind it).
@@ -171,10 +171,10 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   App bundles recognize only the complete configured HTTPS `/relay` URL with no credentials/query. The same domain elsewhere, appended paths/parameters, emails, or credentials still reject;
   public Go binaries get no exception. Do not remove the whole domain from the private-term list; regress adjacent and extended URLs.
 
-- On 2026-11-02, after fixing privacy scanning, public jarvisd still failed to deploy: networking dependencies made raw binaries about 35–37 MiB, exceeding Workers' 25 MiB per-static-asset limit, not expired cf authentication.
+- On 2026-11-02, after fixing privacy scanning, public personad still failed to deploy: networking dependencies made raw binaries about 35–37 MiB, exceeding Workers' 25 MiB per-static-asset limit, not expired cf authentication.
   Publish `.gz` downloads (about 12–14 MiB), scan uncompressed binaries first, and verify compressed archives before installer decompression; check every asset size before upload. `NO_DEPLOY=1` must also check sizes; build/scan alone is not deployment validation.
   Do not suggest signing in again for every failure. Report successful TestFlight upload separately from failed server publication, and finish internal/external distribution of uploaded builds.
-- On 2026-11-02, public jarvisd privacy false positives included SSH global-request names mistaken for emails, official contact links in Tailscale embedded pages, complete RFC1918 ranges, and cloud-metadata constants mistaken for personal data.
+- On 2026-11-02, public personad privacy false positives included SSH global-request names mistaken for emails, official contact links in Tailscale embedded pages, complete RFC1918 ranges, and cloud-metadata constants mistaken for personal data.
   Go concatenates read-only strings, even one CIDR immediately after another, so printable-string boundaries are unreliable. Trace matches to dependency source using actual compiler inputs first; never log raw matches.
   `check_bundle_privacy.py --whole-short` classifies only exact protocol/HTML/network contexts in dependencies built with the `public` tag, without replace, and with checksums matching `server/go.sum`;
   `publish.sh` first runs `go mod verify`. Configuration/private-term matching still takes precedence on raw text. Missing dependencies, checksum mismatches, or changed context reject; no whole email-domain or private-range exemptions.
@@ -207,9 +207,9 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   Not a database-config issue. Download the toolchain first in the repo with `GOPROXY=https://goproxy.cn,direct GOSUMDB=sum.golang.google.cn go version`,
   then put `~/go/pkg/mod/golang.org/toolchain@v0.0.1-go<version>.linux-amd64/bin` in PATH and run the same command with `GOTOOLCHAIN=local`, `GOPROXY=https://goproxy.cn,direct`.
 - Only hub-cached dependencies build: if `proxy.golang.org` is unreachable, other packages report `[setup failed]`, making it look as though half the tests are broken.
-- If hub Postgres is system-installed (no `jarvis-postgres` container), `db.sh` cannot create `jarvis_test` (its output is discarded), and role `jarvis` lacks CREATEDB:
-  `internal/db`, `internal/db/dbtest`, `internal/hub` report `database "jarvis_test" does not exist`, while others pass.
-  Run these three packages against temporary local `postgres:18-alpine` (`-p 127.0.0.1:<port>:5432`) with `JARVIS_TEST_DATABASE_URL`, then remove the container.
+- If hub Postgres is system-installed (no `persona-postgres` container), `db.sh` cannot create `persona_test` (its output is discarded), and role `persona` lacks CREATEDB:
+  `internal/db`, `internal/db/dbtest`, `internal/hub` report `database "persona_test" does not exist`, while others pass.
+  Run these three packages against temporary local `postgres:18-alpine` (`-p 127.0.0.1:<port>:5432`) with `PERSONA_TEST_DATABASE_URL`, then remove the container.
 
 ## Running iOS locally on a Mac with only macOS 15 (2026-11-04, #984)
 
@@ -251,11 +251,11 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   Shared config and privacy scanning stay top-level; privacy scanning locates the root from its own repository, not the caller's cwd, which might select another checkout.
 - `unittest discover -s scripts` does not discover subdirectories without package markers automatically. Discover `test/`, `release/`, `deploy/`, and `mock/` separately and check counts.
   Compatibility shell entry points only `exec` forward. Test paths with spaces, empty arguments, stdin, environment, and nonzero exits; do not actually publish or restart services to verify forwarding.
-- After adding old/new environment-variable aliases, subprocess fixtures clear both before injecting config. Overriding only `JARVIS_CONFIG` inherits higher-priority `PERSONA_CONFIG`,
+- After adding old/new environment-variable aliases, subprocess fixtures clear both before injecting config. Overriding only `PERSONA_CONFIG` inherits higher-priority `PERSONA_CONFIG`,
   accidentally reading release configuration. Cross-directory import regressions cover new variables, legacy fallback, and new-variable precedence on conflict; all paths target synthetic fixtures, never change production precedence for tests.
-- Server-test launchers restore the service root only to prepare databases. Before Go, clear all `PERSONA_*` / `JARVIS_*` runtime variables and explicitly inject only both variable sets for the same dedicated test DB,
+- Server-test launchers restore the service root only to prepare databases. Before Go, clear all `PERSONA_*` / `PERSONA_*` runtime variables and explicitly inject only both variable sets for the same dedicated test DB,
   with independent temporary `HOME` / `TMPDIR` and cleared Agent / XDG external-config roots. Preserve build caches/toolchains separately, preventing tests without fixtures from reading real defaults.
-  `server_test_env.py` parses URLs to confirm `jarvis` → `jarvis_test`; custom DB names, identical targets, or parse failures fail closed, never assume isolation from string replacement.
+  `server_test_env.py` parses URLs to confirm `persona` → `persona_test`; custom DB names, identical targets, or parse failures fail closed, never assume isolation from string replacement.
   URL paths are not necessarily the driver's final database: pgx query `dbname` / `database` (including encoded keys) overrides them. The test launcher permits only explicit TLS/connection parameters, rejects unknown/duplicate keys, service/credential-file options, and invalid queries; clears all `PG*` environment; explicitly disables implicit password/TLS files in OS user directories. Anonymous `pgconn.ParseConfig` regressions check actual `Database` exactly, without connecting; do not infer past real configurations were affected.
   Validate the launcher itself with fake resolver / SSH / Go, not just cleanup functions. Production-root inheritance on 2026-11-03 opened the real DB and started sources/knowledge cleanup before the test hub failed to listen,
   deleting at least 14 old single-post JSON files. Healthy status, occupied ports, or eventual test failure do not prove no data changes. Preserve protected original logs, investigate read-only, never automatically restore/delete production data.
@@ -286,7 +286,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   run `xcrun simctl keychain <udid> reset`.
   Within one xcodebuild, an earlier mock-paired test makes later `-demo.on YES` tests use mock data too. If mock is down (2026-11-03, old launch paths broke after moving into `scripts/mock/`),
   they all show "Connecting…", a 32pt status row, and untappable back. More pending cards after #622 fill an Agents screen, hiding Agent rows and pushing chat headers away;
-  master shell tests failed too. `launchJarvis()` now automatically adds `-openWelcome YES` for `-demo.on YES` without `-pairURL` (clearing pairing and cached list), so demo mode is truly demo mode.
+  master shell tests failed too. `launchPersona()` now automatically adds `-openWelcome YES` for `-demo.on YES` without `-pairURL` (clearing pairing and cached list), so demo mode is truly demo mode.
   Test scripts also verify listening ports with `lsof` after starting mock and fail immediately if absent.
 
 ## New UI tests
@@ -307,7 +307,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   `ConnectionTests.testWaitingMessageAfterRelaunch` then fails consistently (no "Send automatically when connected" after reopen, zero hub receipts), while the `waiting` message remains in `Library/Caches/state/outbox.json`,
   looking like an outbox-restoration bug and costing multiple people half a day. Default simulator signing (`sim.sh`, or `xcodebuild build-for-testing` without signing overrides)
   passed on both iOS 27.2 and 26.0. If pairing, outbox, and chat lists all fail to restore, check build mode first: no output from `otool -l <App>/<executable> | grep __entitlements` means unsigned.
-- Always launch with `app.launchPinned()` (pinning style), not `launchJarvis()`; `UITestStyleTests` scans source to enforce this.
+- Always launch with `app.launchPinned()` (pinning style), not `launchPersona()`; `UITestStyleTests` scans source to enforce this.
 - In zsh, `for v in "dark shell" …; do set -- $v` does not split on spaces (no default word splitting); `$1` is the whole string and `$2` empty, breaking appearance/layout arguments
   while tests stay green. Run such loops in `bash -c '…'`.
 - When new clients move model selection to a separate API, legacy-feature save requests omit model fields to avoid stale drafts overwriting selections. But old-hub PUT may interpret omission as clearing, so first verify unified-config capability and retain original fields for old hubs. FakeHub tests cover both protocols, not only the new endpoint.
@@ -331,7 +331,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 - **On smaller iPhones, list rows can sit under the floating tab bar** (2026-11-02, #488). `row.swipeLeft()` starts at the row center,
   which can land on Liquid Glass's tab bar and drag its selection to leftmost Persona. Tests only see "can't reveal Close", though the row is still
   `exists` / `hittable`. One test passed on iPhone 18 Pro Max and failed 100% on iPhone 18 Pro, initially blamed on #382 (pre-#382 commits also fail on Pro).
-  Before row swipes/taps, use `app.bringAboveTabBar(row)` (`JarvisUITests/AgentsSearch.swift`). Compare simulator models first for lane-only UI failures.
+  Before row swipes/taps, use `app.bringAboveTabBar(row)` (`PersonaUITests/AgentsSearch.swift`). Compare simulator models first for lane-only UI failures.
 - **With the keyboard up, `app.collectionViews.firstMatch` is not the list** (2026-11-05, #2189). The 44pt candidate/input accessory strip is itself a collection view,
   ordered before the list, outside `app.keyboards` frame (SE keyboard starts at 451, strip is 407–451). `swipeUp` there leaves the list still,
   looking like pinned filters and once described as "keyboard blocks element swipes". Find the list by its elements (`collectionViews.containing(.button, identifier:)`).
@@ -351,7 +351,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   In BeautifulUI's new shell, use `probe.chat` (page `agents`) to detect open chats, not Back.
 - Chat-content UI tests always use `-openChatsFresh YES` (clear disk chat caches). Every mock reset starts chats at the same seq; prior churn-generated steps
   stay cached at this round's `/mock/say` seq, hiding new replies as "already present", leaving previous "Tool 21 · Reply 5" onscreen.
-  On 2026-11-02 `ChatFollowTests.testJarvisChatFollows` failed after `ScrollUnderPushTests` / `ScreenTruthTests`, resembling missing Persona replies in the new shell but actually environmental. Real hub seq positions in transcripts increase without reuse.
+  On 2026-11-02 `ChatFollowTests.testPersonaChatFollows` failed after `ScrollUnderPushTests` / `ScreenTruthTests`, resembling missing Persona replies in the new shell but actually environmental. Real hub seq positions in transcripts increase without reuse.
 - Tests selecting rows by "where one swipe stops" change results after row-height/font changes (#245 changed new-shell text sizes) (2026-11-02, #339).
   `testScrolledListHoldsStillThroughUpdates` previously happened to stop on a space whose rank did not change, missing replacement of the reader's screen. Bisect landed on a font-only commit, but the real issue was failure to preserve the reader's row.
   A bisected commit shows where the issue became visible, not necessarily its cause; check whether its edits explain the symptom. Find rows by title, not whole accessibility labels containing "3 minutes ago", which change across minutes.
@@ -368,11 +368,11 @@ Tests check target text and subscribe to write notifications under the same lock
 
 After `PersonaVision` was added to `apple/project.yml`, `test_apple_rename.py` still had the original fixed target set, misclassifying legitimate visionOS targets as rename regressions. Register both target and module identity when adding a platform, and verify canonical source directories and schemes. Adding only an allowlist without module checks misses identity regressions.
 
-Retain strict checks for the complete target set, existing modules, artifact paths, and legacy schemes, not subset containment or skipping new platforms. visionOS target is `PersonaVision`, source `apple/Vision/`, shared module still `Jarvis`.
+Retain strict checks for the complete target set, existing modules, artifact paths, and legacy schemes, not subset containment or skipping new platforms. visionOS target is `PersonaVision`, source `apple/Vision/`, shared module still `Persona`.
 
 ## Go tests requiring macOS built-in commands (2026-11-02)
 
-- The Messages connector reads `chat.db` with macOS `/usr/bin/sqlite3` (jarvisd has no cgo). The Linux hub lacks `sqlite3`, so these tests skip there.
+- The Messages connector reads `chat.db` with macOS `/usr/bin/sqlite3` (personad has no cgo). The Linux hub lacks `sqlite3`, so these tests skip there.
   If the development Mac has no Go, cross-compile on hub: `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go test -c -o x.test ./internal/connector/imessage`,
   copy to Mac, and run **in the package directory** (`testdata` is relative). Use the same approach for macOS-dependent `node` tests.
 - `sqlite3 -json` prints nothing for no rows, not `[]`; check empty before parsing.
@@ -395,7 +395,7 @@ Retain strict checks for the complete target set, existing modules, artifact pat
 
 ## Mac acceptance in real windows (2026-11-02, #403)
 
-- On unsigned simulator builds (`CODE_SIGNING_ALLOWED=NO`), JarvisTests `NotificationServiceTests.opensWithTheKeyInTheSharedGroup` always fails: no signature means no keychain group,
+- On unsigned simulator builds (`CODE_SIGNING_ALLOWED=NO`), PersonaTests `NotificationServiceTests.opensWithTheKeyInTheSharedGroup` always fails: no signature means no keychain group,
   so `PushCrypto.ensureKey()` returns nil. Same on master; do not blame your changes.
 - To verify **View › Refresh** (⌘R), foreground the app with the main window as key window. Without one, only section-level hub data refreshes (`MacViewCommands.refreshTarget`).
   Background cua `invoke_menu` makes Inbox/Knowledge look unrefreshed (fake-hub logs show only sessions/machines), but the method is wrong.
@@ -508,7 +508,7 @@ Use separate simulators for unit tests and screenshots; delete/recreate contamin
 
 ## Local port discovery probes fake model servers in tests (2026-11-04)
 
-`TestInboxTriageWaitsOutAnExhaustedQuota` occasionally reports "20 items used 21 requests". The extra request is `GET /`, `User-Agent: jarvis-ports`,
+`TestInboxTriageWaitsOutAnExhaustedQuota` occasionally reports "20 items used 21 requests". The extra request is `GET /`, `User-Agent: persona-ports`,
 from the local development node finding Agent listeners (`docs/ports.md`) and probing the `httptest` port. Count only your own API
 (`POST /v1/messages`); return 404 without counting other paths (`assistant/inbox_limit_test.go`). Use this pattern for similar fakes or they become flaky on node-running machines.
 `TestOpenMacLeavesAgentAlertsToTheApp` also occasionally got an extra "push" with token `/` for the same reason; fake APNs counts only `POST /3/device/…` (`hub/liveactivity_test.go`).
@@ -557,7 +557,7 @@ so SIGTTOU / SIGTTIN stops it forever (goroutine stack at `launcherRepair` → `
 On test hangs, send `kill -QUIT` to the test process first, identify the test and blocked syscall, then judge environment issues. Interactive-shell children need either a new session or no separate process group.
 ## Testing extensions with a test hub on a Linux development machine (#3136, 2026-11-06)
 
-- Without `machines` in hub.json, hub treats startup as first run and auto-connects local node (probing local herdr/claude). Test hubs set `"machines": []` and launch with `JARVIS_LOCAL_NODE=0`.
+- Without `machines` in hub.json, hub treats startup as first run and auto-connects local node (probing local herdr/claude). Test hubs set `"machines": []` and launch with `PERSONA_LOCAL_NODE=0`.
 - Extensions are sandboxed by default, outbound hosts limited to the manifest through hub's proxy, so they cannot reach a local `127.0.0.1:<port>` proxy. If GitHub extension Proxy points at a local proxy, run `personad extension sandbox github off` on the test hub.
 - Extension package.sh outputs packages to `dist/`; a private extension repository's `packages/` contains published packages, so do not install those by mistake (same-version packages do not reinstall either).
 - Empty SDK `ext.Page.Action` results mean "redraw entire page". UI version 5 `lines` / `items` already count as a response; when nothing needs drawing (marked Seen), return non-nil empty `Items`.
@@ -583,9 +583,9 @@ The test binary does not recognize `voice`, reruns the whole package recursively
 
 ## Making fake Claude call Persona tools in isolated-hub e2e tests (2026-11-06, #5073)
 
-- Inbox handling chats submit results only through the MCP tool (`inbox_suggest`); a fake Claude returning plain text cannot test this. Read `mcpServers.jarvis` command / args / env from fake Claude's own `--mcp-config`
+- Inbox handling chats submit results only through the MCP tool (`inbox_suggest`); a fake Claude returning plain text cannot test this. Read `mcpServers.persona` command / args / env from fake Claude's own `--mcp-config`
   (the JSON node passes to headless assistant chats), launch `personad mcp`, and send `initialize`,
-  `notifications/initialized`, and `tools/call`. The tool identifies the chat by `JARVIS_SESSION_ID`, following the real node → hub → manager path. A test-written plan file decides which tool to call by matching a phrase in the message.
+  `notifications/initialized`, and `tools/call`. The tool identifies the chat by `PERSONA_SESSION_ID`, following the real node → hub → manager path. A test-written plan file decides which tool to call by matching a phrase in the message.
 - `prompts.TestEveryTemplateIsUsed` searches Go and templates for quoted full template names (`"inbox/handling/sent"`); names built by concatenation (`"inbox/handling/" + name`) look unused. Write full names in constants.
 - The old Inbox e2e cases in `run.py` for "hub keeps reading sources after the manager stops" no longer apply after sources moved into managers on 2026-11-05. The same six cases fail on master; run master first when comparing.
 
@@ -618,7 +618,7 @@ On a Linux development machine without the Android SDK or Xcode, pure-logic clie
 
 ## macOS bash 3.2 can report an executable failure as exit 1 under `set -e` (#4467)
 
-The Mac-only `test_hub_restart_mac.py` fixture used an empty, non-executable `jarvisd` file. After blue-green switching was added, `hub-systemd.sh` executed it before restarting launchd. With `set -e`, macOS bash 3.2 returned 1 for `"$f" … || rc=$?`, which the script interpreted as a failed switch, rather than 126 for an executable failure. Bash 5 returned 126.
+The Mac-only `test_hub_restart_mac.py` fixture used an empty, non-executable `personad` file. After blue-green switching was added, `hub-systemd.sh` executed it before restarting launchd. With `set -e`, macOS bash 3.2 returned 1 for `"$f" … || rc=$?`, which the script interpreted as a failed switch, rather than 126 for an executable failure. Bash 5 returned 126.
 
 Use an executable fixture that logs calls and returns the documented result: 0 for a successful switch, 3 for no edge to switch. Assert that success avoids launchd and that the no-edge case restarts only the hub agent, skipping node agents. Run this Mac-only suite on macOS; Linux CI skips it: `cd scripts/test && python3 -B -m unittest -v test_hub_restart_mac`.
 

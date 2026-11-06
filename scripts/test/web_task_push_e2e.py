@@ -44,8 +44,8 @@ def case(browser, base, hub, token, size, theme, shots):
     page = ctx.new_page()
     page.set_default_timeout(15000)
     page.goto(base + "/overview?token=" + token)
-    page.wait_for_function("localStorage.getItem('jarvis.token')")
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.wait_for_function("localStorage.getItem('persona.token')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
     page.goto(base + "/routines")
     if page.locator('[role="button"]', has_text=TASK).filter(has_text="只在提醒时推送").count():
         fail(f"{tag}: {TASK} is marked before it was switched")

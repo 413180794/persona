@@ -1,11 +1,11 @@
 import Foundation
 
-/// A pairing link handed to the app from outside (Notes, AirDrop, Mail, Safari): `jarvis://link?…` or
-/// `persona://link?…`, the link a signed-in phone or the web makes for one computer (docs/onboarding.md 4.2).
+/// A pairing link handed to the app from outside (Notes, AirDrop, Mail, Safari): `persona://link?…`,
+/// the link a signed-in phone or the web makes for one computer (docs/onboarding.md 4.2).
 /// Opening one only fills in the pairing window: the user sees which hub it is and pairs by tapping 「配对」 (Pair). A forwarded
 /// or forged link must never hand this computer to someone else's hub by itself.
 struct PairLink: Equatable {
-    /// The link as it came, for `jarvis-link pair -`.
+    /// The link as it came, for `persona-link pair -`.
     var raw: String
     /// The machine id the hub made the link for; nil when the link names none.
     var machine: String?
@@ -17,7 +17,7 @@ struct PairLink: Equatable {
     enum Parsed: Equatable {
         /// A link for Persona Link: fill in the window.
         case link(PairLink)
-        /// One of ours, for another app (`jarvis://pair?…` for the phone and the Mac app, `open`, …): do nothing.
+        /// One of ours, for another app (`persona://pair?…` for the phone and the Mac app, `open`, …): do nothing.
         case otherApp
         /// A link for Persona Link without what pairing needs (no token).
         case incomplete
@@ -25,7 +25,7 @@ struct PairLink: Equatable {
         case notOurs
     }
 
-    static let schemes: Set<String> = ["jarvis", "persona"]
+    static let schemes: Set<String> = ["persona"]
 
     static func parse(_ url: URL) -> Parsed {
         parse(url.absoluteString)

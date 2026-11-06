@@ -3,21 +3,21 @@ import XCTest
 /// Extension Market › an extension installed and removed step by step (#3307): the steps and the one going on, the step it
 /// failed at with why, Retry from there, the failure still there after leaving the page (and on the list's row), and a
 /// removal that failed done again. Against scripts/mock/mock_hub.py with
-/// `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=fail`: `TEST_RUNNER_JARVIS_PLUGINS_OPS_HUB=http://127.0.0.1:<port>` (restart the mock
-/// before each run: it fails each thing once). `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by
-/// `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark) and the style.
+/// `MOCK_EXTENSIONS=1 MOCK_EXTENSION_OPS=fail`: `TEST_RUNNER_PERSONA_EXTENSIONS_OPS_HUB=http://127.0.0.1:<port>` (restart the mock
+/// before each run: it fails each thing once). `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named by
+/// `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` (light / dark) and the style.
 final class ExtensionInstallProgressTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
-    @MainActor private func launch(hub key: String = "JARVIS_PLUGINS_OPS_HUB") throws -> XCUIApplication {
+    @MainActor private func launch(hub key: String = "PERSONA_EXTENSIONS_OPS_HUB") throws -> XCUIApplication {
         guard let hub = env[key] else {
-            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 and MOCK_EXTENSION_OPS=fail (\(key))")
+            throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 and MOCK_EXTENSION_OPS=fail (\(key))")
         }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings"]
         app.launchPinned()
@@ -27,8 +27,8 @@ final class ExtensionInstallProgressTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "ext-op-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 
@@ -127,10 +127,10 @@ final class ExtensionInstallProgressTests: XCTestCase {
         XCTAssertTrue(install.waitForExistence(timeout: 20), "not removed after 重试:\n\(app.debugDescription)")
     }
 
-    /// A hub from before operations (MOCK_PLUGINS=1 MOCK_EXTENSION_INSTALL_DELAY=4,
-    /// `TEST_RUNNER_JARVIS_PLUGINS_OLD_HUB`): no steps, but the page says it is installing and for how long, then it is.
+    /// A hub from before operations (MOCK_EXTENSIONS=1 MOCK_EXTENSION_INSTALL_DELAY=4,
+    /// `TEST_RUNNER_PERSONA_EXTENSIONS_OLD_HUB`): no steps, but the page says it is installing and for how long, then it is.
     @MainActor func testAnOlderHubSaysWhatItIsDoing() throws {
-        let app = try launch(hub: "JARVIS_PLUGINS_OLD_HUB")
+        let app = try launch(hub: "PERSONA_EXTENSIONS_OLD_HUB")
         let entry = app.buttons["settings-plugins"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15) || app.staticTexts["设置"].exists, "no settings:\n\(app.debugDescription)")
         scrollTo(entry, in: app)

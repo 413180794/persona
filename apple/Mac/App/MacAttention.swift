@@ -113,7 +113,7 @@ extension MacAttention {
         let object: [String: Any] = [
             "machine_id": ix.machineID, "session_id": ix.sessionID, "title": ix.sessionTitle ?? "Agent",
             "cwd": ix.cwd ?? "", "status": "idle", "state": AgentState.needsYou.rawValue,
-            "started_by_jarvis": false, "assistant": ix.toolName == "ask_user", "pending_interactions": 1,
+            "started_by_persona": false, "assistant": ix.toolName == "ask_user", "pending_interactions": 1,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: object),
               let standIn = try? JSON.decoder.decode(Session.self, from: data) else { return nil }

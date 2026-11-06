@@ -18,17 +18,17 @@ import (
 	"github.com/nwverse/persona/server/internal/tunnel"
 )
 
-// The whole way with real jarvisd binaries over Tailscale's public relays: a machine the hub cannot ssh to is set up
-// with `jarvisd node tailcat init`, its resident node serves the hub over tailcat, and "Redeploy" sends it the hub's
-// build over tailcat too. Needs the network and two builds of jarvisd:
+// The whole way with real personad binaries over Tailscale's public relays: a machine the hub cannot ssh to is set up
+// with `personad node tailcat init`, its resident node serves the hub over tailcat, and "Redeploy" sends it the hub's
+// build over tailcat too. Needs the network and two builds of personad:
 //
-//	go build -ldflags "-X main.version=v1" -o /tmp/jarvisd-v1 ./cmd/jarvisd
-//	go build -ldflags "-X main.version=v2" -o /tmp/jarvisd-v2 ./cmd/jarvisd
-//	JARVIS_TEST_TAILCAT=1 JARVIS_TEST_V1=/tmp/jarvisd-v1 JARVIS_TEST_V2=/tmp/jarvisd-v2 go test ./internal/devices -run TailcatEndToEnd
+//	go build -ldflags "-X main.version=v1" -o /tmp/personad-v1 ./cmd/personad
+//	go build -ldflags "-X main.version=v2" -o /tmp/personad-v2 ./cmd/personad
+//	PERSONA_TEST_TAILCAT=1 PERSONA_TEST_V1=/tmp/personad-v1 PERSONA_TEST_V2=/tmp/personad-v2 go test ./internal/devices -run TailcatEndToEnd
 func TestTailcatEndToEnd(t *testing.T) {
-	v1, v2 := os.Getenv("JARVIS_TEST_V1"), os.Getenv("JARVIS_TEST_V2")
-	if os.Getenv("JARVIS_TEST_TAILCAT") != "1" || v1 == "" || v2 == "" {
-		t.Skip("needs the network and two jarvisd builds: see the comment")
+	v1, v2 := os.Getenv("PERSONA_TEST_V1"), os.Getenv("PERSONA_TEST_V2")
+	if os.Getenv("PERSONA_TEST_TAILCAT") != "1" || v1 == "" || v2 == "" {
+		t.Skip("needs the network and two personad builds: see the comment")
 	}
 	short := func(prefix string) string { // unix socket paths must stay short (node-attach.sock)
 		d, err := os.MkdirTemp("/tmp", prefix)
@@ -46,8 +46,8 @@ func TestTailcatEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The node's machine: jarvisd v1 installed where deploy puts it, set up for tailcat with this hub's key.
-	nodeBin := filepath.Join(nodeHome, ".jarvis", "bin", "jarvisd")
+	// The node's machine: personad v1 installed where deploy puts it, set up for tailcat with this hub's key.
+	nodeBin := filepath.Join(nodeHome, ".persona", "bin", "personad")
 	copyFile(t, v1, nodeBin)
 	nodeEnv := append(os.Environ(), "HOME="+nodeHome, "XDG_CONFIG_HOME="+filepath.Join(nodeHome, ".config"))
 	initCmd := exec.Command(nodeBin, "node", "tailcat", "init", "--hub", hk.Public())
@@ -98,7 +98,7 @@ func TestTailcatEndToEnd(t *testing.T) {
 	h := newTestDevices(t)
 	h.cfg.HubVersion = "v2"
 	h.logf = log.New(logTo(t), "", 0).Printf
-	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "ssh", SSHHost: "jarvis-e2e.invalid", TailcatAddr: addr})
+	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "ssh", SSHHost: "persona-e2e.invalid", TailcatAddr: addr})
 	runDone := make(chan struct{})
 	go func() { defer close(runDone); m.run(ctx) }()
 	t.Cleanup(func() { cancel(); <-runDone })
@@ -121,7 +121,7 @@ func TestTailcatEndToEnd(t *testing.T) {
 	ccancel()
 
 	// "Redeploy" over tailcat: the hub's build v2 replaces v1, the node restarts on it and comes back.
-	copyFile(t, v2, filepath.Join(nodeBinaryDir(), "jarvisd-"+runtime.GOOS+"-"+runtime.GOARCH))
+	copyFile(t, v2, filepath.Join(nodeBinaryDir(), "personad-"+runtime.GOOS+"-"+runtime.GOARCH))
 	if err := m.startDeploy(); err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The hub's own links opening their page in the app (#2696, HubPageLink): which links are the hub's, and which page.
 struct HubPageLinkTests {
@@ -30,11 +30,11 @@ struct HubPageLinkTests {
     }
 
     @Test func conversations() {
-        #expect(page("http://hub.example.com:18660/j/c-123") == .conversation(id: "c-123", item: nil))
-        #expect(page("http://hub.example.com:18660/j/c-123?at=u1") == .conversation(id: "c-123", item: "u1"))
         #expect(page("http://hub.example.com:18660/persona/c-123") == .conversation(id: "c-123", item: nil))
-        #expect(page("http://hub.example.com:18660/j/new") == nil) // the new-conversation page
-        #expect(page("http://hub.example.com:18660/j") == nil)
+        #expect(page("http://hub.example.com:18660/persona/c-123?at=u1") == .conversation(id: "c-123", item: "u1"))
+        #expect(page("http://hub.example.com:18660/persona/new") == nil) // the new-conversation page
+        #expect(page("http://hub.example.com:18660/persona") == nil)
+        #expect(page("http://hub.example.com:18660/j/c-123") == nil) // no abbreviated product route
     }
 
     @Test func todos() {
@@ -56,14 +56,14 @@ struct HubPageLinkTests {
         #expect(page("http://hub.example.com/s/box1/abc") == nil) // port 80 is not 18660
         #expect(page("http://evil.example.com/?u=http://hub.example.com:18660/s/box1/abc") == nil)
         #expect(page("http://hub.example.com.evil.example:18660/s/box1/abc") == nil)
-        #expect(page("jarvis://hub.example.com:18660/s/box1/abc") == nil)
+        #expect(page("persona://hub.example.com:18660/s/box1/abc") == nil)
         #expect(page("http://hub.example.com:18660/s/box1/abc", hubs: []) == nil)
         // Host case, IPv6 brackets, the scheme of the hub's TLS port.
         #expect(page("http://HUB.Example.com:18660/s/box1/abc") != nil)
         #expect(page("https://[2001:DB8::1]:18443/todos?id=t") == .todo(id: "t"))
         #expect(page("http://hub.example.com:18660/s/box1/abc", hubs: [URL(string: "https://hub.example.com:18660")!]) != nil)
         // Default ports written or not.
-        #expect(page("https://hub.example.com/j/c", hubs: [URL(string: "https://hub.example.com:443")!]) == .conversation(id: "c", item: nil))
+        #expect(page("https://hub.example.com/persona/c", hubs: [URL(string: "https://hub.example.com:443")!]) == .conversation(id: "c", item: nil))
     }
 
     @Test func hubUnderASubPath() {

@@ -1,6 +1,6 @@
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// A field that grew taller must not stay scrolled down a line, showing only its last line (#909).
 @MainActor struct TextViewScrollTests {

@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Keys and pastes to the Mac's Screen Sharing in the order they were made (#2374, RFBInputQueue): a paste's clipboard
 /// write takes a while (the hub), and nothing made after it may overtake its ⌘V; a failed write sends no ⌘V.

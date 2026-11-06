@@ -81,8 +81,8 @@ open class ActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        internal const val RESOLVE = "jarvis.notify.resolve"
-        internal const val RESUME = "jarvis.notify.resume"
+        internal const val RESOLVE = "persona.notify.resolve"
+        internal const val RESUME = "persona.notify.resume"
         internal const val EXTRA_MACHINE = "machine_id"
         internal const val EXTRA_SESSION = "session_id"
         internal const val EXTRA_ASSISTANT = "assistant"

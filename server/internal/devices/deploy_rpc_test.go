@@ -142,7 +142,7 @@ func linkedDeployFixture(t *testing.T, kind string) (*Devices, *Machine, *updati
 	t.Cleanup(func() { cancel(); toNode.Close(); toHub.Close() })
 	go m.peer.Serve(ctx, toHub)
 	go nodePeer.Serve(ctx, toNode)
-	bin := filepath.Join(t.TempDir(), "jarvisd-linux-amd64")
+	bin := filepath.Join(t.TempDir(), "personad-linux-amd64")
 	if err := os.WriteFile(bin, n.expected, 0o755); err != nil {
 		t.Fatal(err)
 	}

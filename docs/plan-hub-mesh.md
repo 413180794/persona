@@ -44,7 +44,7 @@ Deduplication needs to know "whether two hubs connect to the same computer." Mac
 
 ### 2.1 Discovery
 
-- **Automatic LAN discovery**: each hub broadcasts `_jarvis-hub._tcp` via mDNS. TXT contains only `hub_id`, name, TLS port, public-key fingerprint `fp`, and version—no credentials.
+- **Automatic LAN discovery**: each hub broadcasts `_persona-hub._tcp` via mDNS. TXT contains only `hub_id`, name, TLS port, public-key fingerprint `fp`, and version—no credentials.
   Docker bridge networking prevents multicast from getting out, so hubs must be added manually (document this; `network_mode: host` works).
 - **Manual addition**: enter the peer address, then request its `GET /api/v1/health` to get `hub_id`, `tls_port`, and `fp` for user verification.
 - Discovery only lists hubs; it **does not link them automatically**. Linking requires confirmation in the admin UI and entering the other hub's linking code.
@@ -98,7 +98,7 @@ existing endpoints and pushes continue to work.
   `hops` counts the mesh links between the hub the client connects to and the owning hub (0 = directly connected to this hub). Omit `rtt_ms` if unmeasured.
 - Sessions, interactions, items, terminals, files, port forwarding, uploads: unchanged shapes, with machine ids following the above rule. The hub transparently forwards requests for remote machines.
 - **Hub name**: new top-level `name` field in `hub.json` (editable in the admin UI). If absent, use the hub machine's short hostname (strip `.local` / domain suffix).
-  If the short hostname looks like a Docker container id (12 hex digits), or `JARVIS_LOCAL_NODE=0`, use `hub-<first 6 characters of hub_id>`.
+  If the short hostname looks like a Docker container id (12 hex digits), or `PERSONA_LOCAL_NODE=0`, use `hub-<first 6 characters of hub_id>`.
   Code always calls `func (h *Hub) hubName() string` (`server/internal/hub/hub_info.go`, added by L6 first); use `meshHubCount()` for the number of hubs in the group (L6 initially returns 1, L1 wires it up).
 - hello and `GET /api/v1/health` add `hub_name`; **authenticated** hello adds `mesh` (unauthenticated health does not):
 
@@ -124,7 +124,7 @@ Behind admin authentication (section 5), with prefix `/api/v1/admin/peers`:
 | --- | --- |
 | `GET /api/v1/admin/peers` | `{"peers":[{hub_id,name,state,address,rtt_ms,since,error,machines}],"discovered":[{hub_id,name,addresses,fp,version}]}`; `state`: `connected` / `connecting` / `offline` / `refused` (the peer rejects our credentials; display as offline + error). `machines` is the number of computers directly connected to that hub. Omit absent fields. |
 | `POST /api/v1/admin/peers/probe` | Verification before manual addition: `{"address":"https://<address>:<port>"}` (or `<host>:<port>`) → `{hub_id,name,tls_port,fp,version}`. Requests only the peer's `/api/v1/health`, with no redirect following, a timeout, and a response-size limit. Without TLS, the peer returns `tls_port` 0 and an empty `fp`. |
-| `POST /api/v1/admin/peers/code` | Generates this hub's linking code: `{"code":"jarvis://peer?…","expires_at":"…"}` |
+| `POST /api/v1/admin/peers/code` | Generates this hub's linking code: `{"code":"persona://peer?…","expires_at":"…"}` |
 | `POST /api/v1/admin/peers` | `{"code":"…"}` links using the peer's code; returns that peer entry on success. |
 | `DELETE /api/v1/admin/peers/{hub_id}` | Disconnects and revokes credentials. |
 | `GET /api/v1/admin/routes` | Debugging: all computers in the group, their owning hubs, and candidate routes. |
@@ -136,7 +136,7 @@ Whichever workstream merges later wires the two together. If mesh merges before 
 
 - **ssh node**: unchanged.
 - **link**: current behavior in [link.md](link.md). This round:
-  - **Linux headless**: `jarvis-link` does not depend on a GUI and installs with one command (`jarvis-link install`: writes a systemd user service and prompts for `loginctl enable-linger`;
+  - **Linux headless**: `persona-link` does not depend on a GUI and installs with one command (`persona-link install`: writes a systemd user service and prompts for `loginctl enable-linger`;
     provides alternatives without systemd), with `status` / `logs` / `uninstall`, and `pair` supporting links from stdin. Runs on servers, NAS devices, and Raspberry Pi.
   - **Mac menu bar**: shows the connected hub (`hub_name`) and the number of hubs in its linked group; otherwise unchanged.
   - **Windows tray**: handed off to a session in a Windows environment (#299). personad currently does not compile on Windows, and herdr has no Windows version; that workstream defines the approach first.
@@ -174,7 +174,7 @@ Whichever workstream merges later wires the two together. If mesh merges before 
   Reset a forgotten password on the hub machine with `personad hub admin reset-password`. Administrator credentials live in Postgres (migration **0161**).
 - **Two cases where the source is not trustworthy**: inside a container, its gateway address (connections through docker-proxy, potentially from the public Internet) does not count as LAN unless listed in `admin.cidrs` / `security.trusted_cidrs`;
   for loopback sources (a same-machine reverse proxy without forwarding headers makes public requests appear to come from loopback), first-time setup requires a one-time setup code (in startup logs, or obtained with `personad hub admin setup-code`).
-- **Deployment prompts for scope**: `scripts/deploy.sh`, the public `install.sh`, and Docker (`JARVIS_ADMIN_ACCESS` in `.env`; if absent, the entrypoint prints a reminder and uses the default) must let users choose access scope;
+- **Deployment prompts for scope**: `scripts/deploy.sh`, the public `install.sh`, and Docker (`PERSONA_ADMIN_ACCESS` in `.env`; if absent, the entrypoint prints a reminder and uses the default) must let users choose access scope;
   ask interactively with a terminal, otherwise use an argument / environment variable. If none is supplied, use `lan` and print a reminder.
 - **Pages**:
   - Overview: version, uptime, listening / TLS / candidate addresses, doctor results;
@@ -193,12 +193,12 @@ Whichever workstream merges later wires the two together. If mesh merges before 
 
 ## 7. Workstreams
 
-| Workstream | Scope | Issue | Worktree (`~/code/self/jarvis-mesh/`) | Exclusive resources |
+| Workstream | Scope | Issue | Worktree (`~/code/self/persona-mesh/`) | Exclusive resources |
 | --- | --- | --- | --- | --- |
-| L1 | Linked hubs (sections 1, 2) | #294 | `l1-mesh` | Migration 0151, test database `jarvis_test_mesh` |
+| L1 | Linked hubs (sections 1, 2) | #294 | `l1-mesh` | Migration 0151, test database `persona_test_mesh` |
 | L2 | iOS multi-hub (section 4) | #256 | `l2-ios` | Its own simulator, mock hub ports 18760–18762; adds mesh fields to `scripts/mock/mock_hub.py` |
 | L3 | Android multi-hub (section 4) | #295 | `l3-android` | Its own AVD, mock hub ports 18770–18772; does not edit `mock_hub.py` (ask L2 / coordinator for changes) |
-| L4 | Admin UI + deployment scope selection (section 5) | #296 | `l4-admin` | Migration 0161, test database `jarvis_test_admin`, `web/src/admin/`, dev server port 5274 |
+| L4 | Admin UI + deployment scope selection (section 5) | #296 | `l4-admin` | Migration 0161, test database `persona_test_admin`, `web/src/admin/`, dev server port 5274 |
 | L5 | Web app parity (section 6) | #297 | `l5-web` | Dev server port 5275, mock hub port 18780 |
 | L6 | links: Linux headless, Mac menu bar (section 3) | #298 | `l6-link` | — |
 | — | links: Windows tray | #299 | Handed off to a session in a Windows environment | — |

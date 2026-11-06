@@ -20,7 +20,7 @@ func withWebBot(f *fakeHub, publicURL string) {
 	})
 }
 
-// A resolved interaction card carries the conversation's web link: /j/<id> for a Persona conversation and
+// A resolved interaction card carries the conversation's web link: /persona/<id> for a Persona conversation and
 // /s/<machine>/<id> for a coding agent's; without a public URL it carries no link at all (#4073).
 func TestAnsweredCardOpenButton(t *testing.T) {
 	for _, tc := range []struct {
@@ -29,7 +29,7 @@ func TestAnsweredCardOpenButton(t *testing.T) {
 		session string
 		wantURL string // "" means no open_url button
 	}{
-		{"persona conversation", "https://hub.example.com", "a1", "https://hub.example.com/j/a1"},
+		{"persona conversation", "https://hub.example.com", "a1", "https://hub.example.com/persona/a1"},
 		{"agent session", "https://hub.example.com", "g1", "https://hub.example.com/s/server/g1"},
 		{"no web address", "", "a1", ""},
 	} {
@@ -107,7 +107,7 @@ func TestFeishuAnswerOpenButtonOnLastPiece(t *testing.T) {
 					t.Fatalf("card %d of %d: link=%v, want %v", i+1, len(cards), hasLink, wantLink)
 				}
 			}
-			if tc.web != "" && !strings.Contains(cards[len(cards)-1], "https://hub.example.com/j/c1") {
+			if tc.web != "" && !strings.Contains(cards[len(cards)-1], "https://hub.example.com/persona/c1") {
 				t.Fatalf("the last card's link is wrong: %s", cards[len(cards)-1])
 			}
 		})
@@ -131,7 +131,7 @@ func TestConversationsCardOpenButtons(t *testing.T) {
 		if n := strings.Count(got, "open_url"); n != 2 {
 			t.Fatalf("open_url count=%d, want one button per row: %s", n, got)
 		}
-		for _, want := range []string{"https://hub.example.com/j/main0", "https://hub.example.com/j/c1"} {
+		for _, want := range []string{"https://hub.example.com/persona/main0", "https://hub.example.com/persona/c1"} {
 			if !strings.Contains(got, want) {
 				t.Fatalf("card missing %q: %s", want, got)
 			}
@@ -176,7 +176,7 @@ func TestConversationsCardOpenButtons(t *testing.T) {
 		if len(got) >= listCardMaxBytes {
 			t.Fatalf("/list card %d bytes, want under %d", len(got), listCardMaxBytes)
 		}
-		if !strings.Contains(got, "/j/c00") || strings.Contains(got, "/j/c08") {
+		if !strings.Contains(got, "/persona/c00") || strings.Contains(got, "/persona/c08") {
 			t.Fatalf("the first rows must stay whole and later rows be dropped: %s", got)
 		}
 	})

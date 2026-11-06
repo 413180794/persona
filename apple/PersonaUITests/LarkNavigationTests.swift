@@ -4,10 +4,10 @@ import XCTest
 /// Film the same flows for bar-material continuity; an accessibility tree cannot prove that a blur stayed visible.
 final class LarkNavigationTests: XCTestCase {
     @MainActor private func launch(oldLayout: Bool, inbox: String? = nil) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", inbox == nil ? "assistant" : "mail", "-demo.on", "NO",
                                "-ui.oldLayout", oldLayout ? "YES" : "NO", "-integrations.lark.enabled", "YES",
                                "-inbox.kind", inbox.map { $0.contains("f3") ? "group" : "dm" } ?? "", "-inbox.source", ""]
@@ -40,7 +40,7 @@ final class LarkNavigationTests: XCTestCase {
         let shot = app.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let directory = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let directory = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? shot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".png"))
         }
     }

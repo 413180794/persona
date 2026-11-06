@@ -7,8 +7,8 @@
       "description": "唤醒前的完整回复比后续短回复长时保留在主列表。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/ChatStoreTests.swift: backgroundWakeKeepsTheSubstantialAnswer"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/ChatStoreTests.swift: backgroundWakeKeepsTheSubstantialAnswer"
       ],
       "input": {
         "items": [
@@ -210,8 +210,8 @@
       "description": "唤醒后的完整回复更长时，之前的回复和唤醒并入工作行。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/ChatStoreTests.swift: backgroundWakeKeepsTheSubstantialAnswer"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/ChatStoreTests.swift: backgroundWakeKeepsTheSubstantialAnswer"
       ],
       "input": {
         "items": [
@@ -438,8 +438,8 @@
       "description": "未唤醒的后台通知只算普通工作过程。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/ChatStoreTests.swift: backgroundWakeKeepsTheSubstantialAnswer"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/ChatStoreTests.swift: backgroundWakeKeepsTheSubstantialAnswer"
       ],
       "input": {
         "items": [
@@ -559,8 +559,8 @@
       "description": "回顾后的后台唤醒仍归原轮，回顾标记位置保持不变。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/ChatStoreTests.swift: wakeAfterARecapStaysInItsExchange"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/ChatStoreTests.swift: wakeAfterARecapStaysInItsExchange"
       ],
       "input": {
         "items": [
@@ -729,7 +729,7 @@
       "description": "多次唤醒只保留最长候选回复，之后内容进入抽屉。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -989,7 +989,7 @@
       "description": "候选回复等长时取后一次唤醒后的回复。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1162,7 +1162,7 @@
       "description": "每次唤醒之间只以最后一条回复参加长度比较。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1350,7 +1350,7 @@
       "description": "没有回复的唤醒轮保留工作过程和抽屉入口。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1529,7 +1529,7 @@
       "description": "窗口从唤醒通知开始时，把通知放在工作行前。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1644,7 +1644,7 @@
       "description": "主回复已确定后，后续运行状态由唤醒入口承接。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1786,7 +1786,7 @@
       "description": "进行中且最长回复在唤醒后时，最后工作段保持进行中。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1993,8 +1993,8 @@
       "description": "唤醒后被吸收的图片保留在用户消息处，不进入后续抽屉。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/ChatStoreTests.swift: picturesSentAfterAWakeStayWithTheirMessage"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/ChatStoreTests.swift: picturesSentAfterAWakeStayWithTheirMessage"
       ],
       "input": {
         "items": [

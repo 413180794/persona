@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Messages (Settings › Connectors › Messages): pages from the hub as Go writes them, paging both ways, and how a conversation is laid out.
 /// Every name, number and text is made up.

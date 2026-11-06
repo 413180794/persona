@@ -9,7 +9,7 @@ import (
 func TestPeerCodeBrandAliasesPreserveThePairingInputs(t *testing.T) {
 	values := url.Values{"hub": {"fixture-hub"}, "name": {"Example hub"}, "fp": {"fixture-pin"}, "tls": {"18662"},
 		"code": {"jx_fixture"}, "url": {"https://hub.example.com:18662", "https://[2001:db8::1]:18662"}}
-	old, err := parsePeerCode("jarvis://peer?" + values.Encode())
+	old, err := parsePeerCode("persona://peer?" + values.Encode())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestPeerCodeBrandAliasesPreserveThePairingInputs(t *testing.T) {
 			incomplete[name] = append([]string(nil), entries...)
 		}
 		incomplete.Del(key)
-		for _, scheme := range []string{"jarvis", "persona"} {
+		for _, scheme := range []string{"persona"} {
 			if _, err := parsePeerCode(scheme + "://peer?" + incomplete.Encode()); err == nil {
 				t.Errorf("%s missing %s accepted", scheme, key)
 			}

@@ -3,8 +3,8 @@ import XCTest
 /// The iPad draws the iPhone's composer (`ShellComposerBar`, #2779): one line, [+] the field [mic], that grows into a
 /// card while typing, in an agent's conversation and the assistant's, no wider than the conversation and centered on it.
 /// Old Layout keeps its own composer, so these launch with it off (UI tests default to it on).
-/// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), on an iPad simulator; skipped on iPhone.
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a screenshot of each.
+/// Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB), on an iPad simulator; skipped on iPhone.
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> keeps a screenshot of each.
 final class IPadComposerTests: XCTestCase {
     private var app: XCUIApplication!
     private var pair = ""
@@ -15,11 +15,11 @@ final class IPadComposerTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad only") }
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         app = XCUIApplication()
-        pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
     }
 
     override func tearDown() {
@@ -28,7 +28,7 @@ final class IPadComposerTests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("ipad-composer-\(name).png"))
     }
 

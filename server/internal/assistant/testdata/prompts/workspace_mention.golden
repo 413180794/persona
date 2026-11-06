@@ -1,4 +1,4 @@
-<jarvis-context kind="workspace" title="weather" url="" machine="box" cwd="/code/weather">
+<persona-context kind="workspace" title="weather" url="" machine="box" cwd="/code/weather">
 用户 @ 了这个工作区：这条消息说的事默认就在这里。派活（task_plan、agent_start）时 machine 填 box、cwd 填 /code/weather，查代码、看 agent、回答也以这里为准；用户在消息里另说了地方时听用户的。
 工作区：weather
 电脑：Work laptop（box），现在离线
@@ -9,4 +9,4 @@
 最近在这个目录的 agent（新的在前，agent_read 可看）：
 - 「Fix login」codex，working，11-06 09:30，session ios，在 /code/weather/ios
 - 「Old work」claude，idle，11-05 18:02，session old
-</jarvis-context>
+</persona-context>

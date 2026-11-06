@@ -56,7 +56,7 @@ nonisolated enum AssistantViewLink {
         switch components.scheme?.lowercased() {
         case "https":
             return url.host()?.isEmpty == false
-        case "persona", "jarvis":
+        case "persona":
             guard let host = components.host?.lowercased(), places.contains(host),
                   components.port == nil, components.query == nil, components.fragment == nil else { return false }
             let path = components.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)

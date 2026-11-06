@@ -2,7 +2,7 @@ import XCTest
 
 /// Starting a Persona conversation from another page (Inbox › Hand to AI) opens it on the message as sent, not on No messages yet
 /// until claude has written its transcript; once it has, the message is there once (#511, #527). Against
-/// scripts/mock/mock_hub.py with MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 (JARVIS_MOCK_HUB): the mock answers the start
+/// scripts/mock/mock_hub.py with MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 (PERSONA_MOCK_HUB): the mock answers the start
 /// request at once and writes the first line that much later, as the node does.
 final class NewConversationEntryTests: XCTestCase {
     @MainActor func testInboxHandOffOpensOnTheSentMessage() throws {
@@ -14,11 +14,11 @@ final class NewConversationEntryTests: XCTestCase {
     }
 
     @MainActor private func handOff(layout: [String], name: String) throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "", "-inbox.source", "",
                                "-openInboxItem", "mail:acc1:t1:501", "-showInboxAction", "handoff"] + layout
         app.launchPinned()
@@ -27,7 +27,7 @@ final class NewConversationEntryTests: XCTestCase {
             a.name = "\(name) \(UITestStyle.name)"
             a.lifetime = .keepAlways
             add(a)
-            if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+            if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
                 try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: name + ".png"))
             }
         }

@@ -39,7 +39,7 @@ struct IslandDiagnosticsView: View {
                     Label("Copy All [V N C Pi P Diagnostics 75c393]", systemImage: Theme.Icon.copy).lineLimit(1)
                 }
             } footer: {
-                Text("“Extension, last run” updates each time the Dynamic Island redraws (identical content is written at most once every ten minutes). If it's missing, the extension may not be able to use the App Group; then only the system log has its records (Console, subsystem jarvis, category island).")
+                Text("“Extension, last run” updates each time the Dynamic Island redraws (identical content is written at most once every ten minutes). If it's missing, the extension may not be able to use the App Group; then only the system log has its records (Console, subsystem persona, category island).")
             }
         }
         .themedPage()

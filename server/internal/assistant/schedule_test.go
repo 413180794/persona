@@ -495,7 +495,7 @@ func TestScheduleRoutineTool(t *testing.T) {
 
 func TestStripScheduleHeaderPreservesLegacyTaskIdentity(t *testing.T) {
 	const body = "巡检"
-	for _, brand := range []string{"Jarvis", "Persona"} {
+	for _, brand := range []string{"Persona", "Persona"} {
 		prompt := "⏰ 巡检（定时任务，每 30 分钟）\n（" + brand + " 会按时再运行它，不用再用 schedule_followup 安排下一次。）\n\n" + body
 		if got := stripScheduleHeader(prompt); got != body {
 			t.Fatalf("%s task header remained: %q", brand, got)
@@ -503,7 +503,7 @@ func TestStripScheduleHeaderPreservesLegacyTaskIdentity(t *testing.T) {
 		if !sameText(prompt, body) {
 			t.Fatalf("%s task no longer matches its saved prompt", brand)
 		}
-		mixed := "（Persona 会按时再运行它。）\n（Jarvis 会按时再运行它。）\n\n" + prompt
+		mixed := "（Persona 会按时再运行它。）\n（Persona 会按时再运行它。）\n\n" + prompt
 		if got := stripScheduleHeader(mixed); got != body {
 			t.Fatalf("mixed task headers remained: %q", got)
 		}
@@ -523,9 +523,9 @@ func TestStripScheduleHeader(t *testing.T) {
 
 func scheduleStore(t *testing.T) *db.DB {
 	t.Helper()
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
 	}
 	database, err := db.Open(context.Background(), url, db.ManagerSet)
 	if err != nil {

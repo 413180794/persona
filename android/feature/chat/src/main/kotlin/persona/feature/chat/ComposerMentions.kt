@@ -13,7 +13,7 @@ import persona.core.contracts.SessionKey
 /**
  * The composer's @ menu (iOS `PromptItems.files` / `sessions`, web `lib/mentions.ts`): files this chat's tools read or
  * wrote (picking one types `@path`, which Claude Code and Codex read as that file), then other agents' sessions
- * (picking one quotes it as a `<jarvis-context>` before the message, not as text).
+ * (picking one quotes it as a `<persona-context>` before the message, not as text).
  */
 @Immutable
 data class ComposerMentions(
@@ -109,5 +109,5 @@ internal fun sessionQuote(session: Session, resources: Resources): ChatLinkConte
         add(resources.getString(R.string.chat_mention_quote_cwd, session.cwd))
         session.lastText?.trim()?.takeIf(String::isNotEmpty)?.let { add(resources.getString(R.string.chat_mention_quote_last, it.take(600))) }
     }
-    return ChatLinkContext("context", session.displayTitle, "jarvis://session/${session.machineId}/${session.sessionId}", lines.joinToString("\n"))
+    return ChatLinkContext("context", session.displayTitle, "persona://session/${session.machineId}/${session.sessionId}", lines.joinToString("\n"))
 }

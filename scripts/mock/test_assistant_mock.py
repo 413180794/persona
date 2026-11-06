@@ -1,4 +1,4 @@
-"""A new Jarvis conversation on the mock hub behaves like the hub's (#511): the session list is pushed at once, the
+"""A new Persona conversation on the mock hub behaves like the hub's (#511): the session list is pushed at once, the
 transcript is empty until claude has written the first message, and then that message is pushed to the open chat."""
 import base64
 from datetime import datetime, timezone

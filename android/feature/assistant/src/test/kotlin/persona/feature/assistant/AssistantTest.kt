@@ -48,25 +48,23 @@ class AssistantTest {
     }
 
     @Test fun handoffConversationTitle() {
-        // From the old app's InboxTest: the hub names a hand-off after its first message, a <jarvis-context> tag.
-        val s = Session(machineId = "m", sessionId = "x", title = "<jarvis-context kind=\"context\" title=\"飞书 · 发布群\">(feed_id=f2)")
+        // From the old app's InboxTest: the hub names a hand-off after its first message, a <persona-context> tag.
+        val s = Session(machineId = "m", sessionId = "x", title = "<persona-context kind=\"context\" title=\"飞书 · 发布群\">(feed_id=f2)")
         assertEquals("交给 Persona：飞书 · 发布群", s.conversationTitle(words))
-        val escaped = Session(machineId = "m", sessionId = "z", title = "<jarvis-context kind=\"context\" title=\"飞书 · a&quot;b &lt;c&gt; &amp;amp;\" url=\"\">")
+        val escaped = Session(machineId = "m", sessionId = "z", title = "<persona-context kind=\"context\" title=\"飞书 · a&quot;b &lt;c&gt; &amp;amp;\" url=\"\">")
         assertEquals("交给 Persona：飞书 · a\"b <c> &amp;", escaped.conversationTitle(words))
         assertEquals("早报", Session(machineId = "m", sessionId = "y", title = "早报").conversationTitle(words))
         // No title on the tag, or an empty one: still a hand-off, not the raw tag.
-        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "a", title = "<jarvis-context kind=\"context\">").conversationTitle(words))
-        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "b", title = "<jarvis-context title=\"\" url=\"\">").conversationTitle(words))
+        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "a", title = "<persona-context kind=\"context\">").conversationTitle(words))
+        assertEquals("交给 Persona", Session(machineId = "m", sessionId = "b", title = "<persona-context title=\"\" url=\"\">").conversationTitle(words))
         // Untitled: the last message's first line, read before it is cut to 30 characters.
         val untitled = Session(machineId = "m", sessionId = "c", title = "Claude Code",
-            lastText = "\n<jarvis-context kind=\"context\" title=\"项目 · 一个名字很长很长很长很长很长很长的项目\" url=\"\">\n正文")
+            lastText = "\n<persona-context kind=\"context\" title=\"项目 · 一个名字很长很长很长很长很长很长的项目\" url=\"\">\n正文")
         assertEquals("交给 Persona：项目 · 一个名字很长很长很长很长很长很长的项目", untitled.conversationTitle(words))
         assertEquals("a".repeat(30), Session(machineId = "m", sessionId = "d", lastText = "a".repeat(40)).conversationTitle(words))
-        assertNull(handoffTitle("早报 <jarvis-context", words))
-        // <persona-context> (#3182) names a hand-off the same way.
-        assertEquals("交给 Persona：飞书 · 发布群", handoffTitle("<persona-context kind=\"context\" title=\"飞书 · 发布群\">(feed_id=f2)", words))
-        assertEquals("交给 Persona", handoffTitle(" <persona-context kind=\"context\">", words))
         assertNull(handoffTitle("早报 <persona-context", words))
+        // Bare canonical tags use the same handoff title.
+        assertEquals("交给 Persona", handoffTitle(" <persona-context kind=\"context\">", words))
     }
 
     // #3264: the hub's own conversations leave "Recent" for "Automatic chats" (a search still finds them), pinned ones stay pinned.

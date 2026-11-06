@@ -21,7 +21,7 @@ Used Xcode 27.1; Xcode 26.0 was unavailable locally and was not built against. T
 
 The GitHub Actions runner was disabled during this task, so CI did not run and is not reported as passed. Under the project's environment-failure policy, local verification is the merge gate.
 
-The simulator used `scripts/mock/mock_hub.py` on an independent port with `MOCK_PLUGINS=1`, `MOCK_EXTENSION_MANAGEMENT=1`, and `MOCK_EXTENSION_CARDS=1`. Fixtures toggle, install, and uninstall only in memory and record every write request; they did not connect to the production hub. Tests launched with `app.launchPinned()`, explicitly specifying style and light/dark mode, and shut down their own simulator afterward.
+The simulator used `scripts/mock/mock_hub.py` on an independent port with `MOCK_EXTENSIONS=1`, `MOCK_EXTENSION_MANAGEMENT=1`, and `MOCK_EXTENSION_CARDS=1`. Fixtures toggle, install, and uninstall only in memory and record every write request; they did not connect to the production hub. Tests launched with `app.launchPinned()`, explicitly specifying style and light/dark mode, and shut down their own simulator afterward.
 
 ## Behaviors covered
 

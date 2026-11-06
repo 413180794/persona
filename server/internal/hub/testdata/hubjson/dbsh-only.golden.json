@@ -3,7 +3,7 @@
   "listen": ":18660",
   "token": "<generated token>",
   "public_url": "http://<host>:18660",
-  "database_url": "postgres://jarvis:secret@127.0.0.1:18661/jarvis?sslmode=disable",
+  "database_url": "postgres://persona:secret@127.0.0.1:18661/persona?sslmode=disable",
   "machines": [
     {
       "id": "<host>",
@@ -23,6 +23,6 @@
 }
 // hub.json after loading
 {
-  "database_url": "postgres://jarvis:secret@127.0.0.1:18661/jarvis?sslmode=disable",
+  "database_url": "postgres://persona:secret@127.0.0.1:18661/persona?sslmode=disable",
   "token": "<generated token>"
 }

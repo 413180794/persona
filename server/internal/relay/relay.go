@@ -1,4 +1,4 @@
-// Package relay is the push relay (jarvisd relay, docs/push-relay.md): it holds the app's APNs key and pushes for
+// Package relay is the push relay (personad relay, docs/push-relay.md): it holds the app's APNs key and pushes for
 // hubs that have none. Phones register their device token and get a grant; a hub pushes with the grant and a payload
 // sealed to the phone's key (pushcrypto), which the relay cannot read. The relay writes the aps envelope itself, so a
 // grant cannot be used to show arbitrary text. Live Activity updates are the exception: iOS reads their content-state
@@ -33,7 +33,7 @@ import (
 	"github.com/nwverse/persona/server/internal/relayproto"
 )
 
-// Config is ~/.jarvis/relay.json.
+// Config is ~/.persona/relay.json.
 type Config struct {
 	Listen     string      `json:"listen"`
 	APNs       apns.Config `json:"apns"`
@@ -53,7 +53,7 @@ type Sender interface {
 
 const (
 	maxBody    = 8 << 10
-	grantAAD   = "jarvis relay grant v1"
+	grantAAD   = "persona relay grant v1"
 	pushPerMin = 120
 	pushBurst  = 30
 	regPerMin  = 20
@@ -368,7 +368,7 @@ func (l *limiter) allow(key string, now time.Time) bool {
 	return true
 }
 
-// Run is `jarvisd relay`: reads the config, loads the key and the secret, serves until ctx ends.
+// Run is `personad relay`: reads the config, loads the key and the secret, serves until ctx ends.
 func Run(ctx context.Context, path string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {

@@ -12,7 +12,7 @@ struct PathRefsTests {
     private func slice(_ t: String, _ r: PathRef) -> String { (t as NSString).substring(with: r.range) }
 
     @Test func findsAbsoluteHomeAndRelativePathsWithAFolder() {
-        #expect(paths("读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行这个任务") == ["/tmp/jarvis-tasks/1664-lark-test.md"])
+        #expect(paths("读 /tmp/persona-tasks/1664-lark-test.md 并完整执行这个任务") == ["/tmp/persona-tasks/1664-lark-test.md"])
         #expect(paths("看 ~/code/app/README.md 和 web/src/lib/api.ts") == ["~/code/app/README.md", "web/src/lib/api.ts"])
         #expect(paths("目录 /var/log/ 里") == ["/var/log/"])
     }
@@ -75,7 +75,7 @@ struct PathRefsTests {
     }
 
     @Test func whileStreamingLeavesOutTheWordStillBeingWritten() {
-        #expect(PathRefs.unique(PathRefs.find(in: PathRefs.written("写到 /tmp/jarvis-tasks/1664-lark-test.md 了，再看 /tmp/jar"))) == ["/tmp/jarvis-tasks/1664-lark-test.md"])
+        #expect(PathRefs.unique(PathRefs.find(in: PathRefs.written("写到 /tmp/persona-tasks/1664-lark-test.md 了，再看 /tmp/jar"))) == ["/tmp/persona-tasks/1664-lark-test.md"])
         #expect(PathRefs.written("/tmp/jar") == "")
         #expect(PathRefs.written("a /tmp/x/y.md\n") == "a /tmp/x/y.md")
     }
@@ -107,9 +107,9 @@ struct PathMarkdownTests {
     }
 
     @Test func linksOnlyThePathsThatAreThere() {
-        let md = "读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/x.md"
-        let out = PathMarkdown(md).linked { $0 == "/tmp/jarvis-tasks/1664-lark-test.md" }
-        #expect(out.markdown == "读 [/tmp/jarvis-tasks/1664-lark-test.md](\(link("/tmp/jarvis-tasks/1664-lark-test.md"))) 并完整执行这个任务，别动 /tmp/other/x.md")
+        let md = "读 /tmp/persona-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/x.md"
+        let out = PathMarkdown(md).linked { $0 == "/tmp/persona-tasks/1664-lark-test.md" }
+        #expect(out.markdown == "读 [/tmp/persona-tasks/1664-lark-test.md](\(link("/tmp/persona-tasks/1664-lark-test.md"))) 并完整执行这个任务，别动 /tmp/other/x.md")
         // nothing there (or no answer yet): the same Markdown
         #expect(PathMarkdown(md).linked { _ in false }.markdown == md)
     }

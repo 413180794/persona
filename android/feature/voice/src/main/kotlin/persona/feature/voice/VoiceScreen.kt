@@ -203,7 +203,7 @@ private fun Captions(lines: List<Line>, modifier: Modifier, bottom: Dp) {
         contentPadding = PaddingValues(start = side, end = side, top = Tokens.Space.l, bottom = bottom + Tokens.Space.l),
         verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
     ) {
-        items(shown, key = { it.id }, contentType = { if (it.user) "user" else "jarvis" }) { VoiceCaption(it.text, it.user, it.final) }
+        items(shown, key = { it.id }, contentType = { if (it.user) "user" else "persona" }) { VoiceCaption(it.text, it.user, it.final) }
         item("end") { Spacer(Modifier.height(Tokens.Space.xxs)) }
     }
 }

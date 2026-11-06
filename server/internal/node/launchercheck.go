@@ -34,7 +34,7 @@ func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherChe
 			agent = d.Agent
 		}
 	}
-	dir, err := os.MkdirTemp("", "jarvis-check-")
+	dir, err := os.MkdirTemp("", "persona-check-")
 	if err != nil {
 		return proto.LauncherCheck{Error: err.Error()}
 	}

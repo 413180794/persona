@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The agents of one herdr tab as one group (#2320, `TabPanes`): their order, the Started It, which ones share a tab, and
 /// how the Agents list and the chat's tabs show them. The same rules as the web's `herdr-tree.ts`.
@@ -10,7 +10,7 @@ struct TabPanesTests {
                          place: Int? = nil, agent: String? = nil, state: String = "idle", machine: String = "box",
                          spaceName: String? = "app", updated: String? = nil) throws -> Session {
         var o: [String: Any] = ["machine_id": machine, "session_id": id, "title": "agent \(id)", "cwd": "/code/app",
-                                "status": "idle", "state": state, "started_by_jarvis": false, "assistant": false,
+                                "status": "idle", "state": state, "started_by_persona": false, "assistant": false,
                                 "pending_interactions": 0]
         if let slot { o["slot_id"] = slot }
         if let slotIndex { o["slot_index"] = slotIndex }

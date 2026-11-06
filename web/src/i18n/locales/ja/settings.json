@@ -41,7 +41,7 @@
   "add_provider": "プロバイダーを追加",
   "no_matching_providers": "「{query}」に一致するプロバイダーはありません",
   "managed_title": "Persona が管理 {count}",
-  "managed_footer": "キーはハブに暗号化して保存されます。直接 API はハブが呼び出し、ランチャーは jarvisd launch <名前> で実行されます。",
+  "managed_footer": "キーはハブに暗号化して保存されます。直接 API はハブが呼び出し、ランチャーは personad launch <名前> で実行されます。",
   "managed_empty": "まだありません。「プロバイダーを追加」から1つ選んでキーを貼り付けるだけで使えます。用途は「モデル設定」で選びます。",
   "zshrc_title": "~/.zshrc と PATH から {count}",
   "zshrc_footer": "各コンピューターの ~/.zshrc にある関数と PATH 上のラッパースクリプトのうち claude を起動するもので、このページを開くたびに同期されます。追加したものは自動で表示されます。",

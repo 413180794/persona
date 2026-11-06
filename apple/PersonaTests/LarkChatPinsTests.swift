@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct LarkChatPinsTests {
     private func pin(_ id: String) -> LarkChatPin { .init(id: id, messageID: "m" + id) }

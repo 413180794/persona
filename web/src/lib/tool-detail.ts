@@ -19,7 +19,7 @@ export function patchDiffs(patch: string, change?: string): Op[][] {
   return out.filter((d) => d.length);
 }
 
-/** The base name of a tool: an MCP tool's own name (mcp__jarvis__ask_user → ask_user). */
+/** The base name of a tool: an MCP tool's own name (mcp__persona__ask_user → ask_user). */
 export function baseToolName(name: string): string {
   return name.startsWith("mcp__") ? (name.split("__").pop() ?? name) : name;
 }

@@ -2,7 +2,7 @@
 # package on every run reached master unnoticed (#2089). Kept out of ci.yml so the path filter below can skip it on
 # PRs that cannot affect the server: the paths are the server module, its replaced sdk/go module, and the repo files
 # server tests read (fixtures, schema examples, integrations, the test-env launcher).
-# No Postgres here: those tests skip without JARVIS_TEST_DATABASE_URL; scripts/test/test-server.sh runs them on the hub.
+# No Postgres here: those tests skip without PERSONA_TEST_DATABASE_URL; scripts/test/test-server.sh runs them on the hub.
 name: server test
 
 on:

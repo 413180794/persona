@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// LarkChatRows (#921): Feishu's messages and mine on their way in one list, mine where they were written.
 struct LarkChatRowsTests {

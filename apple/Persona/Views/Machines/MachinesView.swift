@@ -12,7 +12,7 @@ struct MachineDetailRoute: Hashable {
 }
 
 /// What brings a machine to the top of Machines (docs/machines.md「App」), most pressing first: it is offline, a value is
-/// too high, an agent there needs you, its jarvisd is not the hub's build.
+/// too high, an agent there needs you, its personad is not the hub's build.
 enum MachineConcern: Int, Comparable {
     case pending, offline, critical, warning, needsYou, mismatch
 
@@ -557,7 +557,7 @@ struct AlertChip: View {
     }
 }
 
-/// A machine whose jarvisd is not the hub's build: says so, and Redeploy has the hub install its own build there.
+/// A machine whose personad is not the hub's build: says so, and Redeploy has the hub install its own build there.
 struct DeployRow: View {
     @Environment(AppModel.self) private var model
     var machine: Machine

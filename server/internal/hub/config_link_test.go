@@ -16,12 +16,13 @@ import (
 // hub.json's link section is read as written; a first run does not write one.
 func TestLoadConfigReadsTheLinkHeartbeat(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	if _, err := LoadConfig(); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(home, ".jarvis", "hub.json")
+	path := filepath.Join(home, ".persona", "hub.json")
 	if b, _ := os.ReadFile(path); strings.Contains(string(b), `"link"`) {
 		t.Fatalf("a first run wrote a link section: %s", b)
 	}

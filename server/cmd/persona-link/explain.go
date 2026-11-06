@@ -17,7 +17,7 @@ func explain(err error) string {
 	raw := err.Error()
 	switch {
 	case rejected(err):
-		return "hub 不认这条配对链接（过期了、用过了或被撤销了）：在 hub 机器上运行 personad hub pair --machine <这台的 id> --add 拿一条新链接，再 jarvis-link pair '<链接>'\n（原始错误：" + raw + "）"
+		return "hub 不认这条配对链接（过期了、用过了或被撤销了）：在 hub 机器上运行 personad hub pair --machine <这台的 id> --add 拿一条新链接，再 persona-link pair '<链接>'\n（原始错误：" + raw + "）"
 	case unreachable(err):
 		return "连不上 hub（" + strings.Join(hostsOf(err), "、") + "）：检查 hub 在不在跑、地址对不对、这台电脑的网络通不通，再试一次\n（原始错误：" + raw + "）"
 	}
@@ -100,5 +100,5 @@ func nodeHint(nodeErr string) string {
 	if strings.Contains(nodeErr, link.NodeDownMarker) {
 		return ""
 	}
-	return "：运行 jarvis-link node status 看常驻 node 在不在跑"
+	return "：运行 persona-link node status 看常驻 node 在不在跑"
 }

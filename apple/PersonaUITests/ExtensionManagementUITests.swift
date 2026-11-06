@@ -4,7 +4,7 @@ import XCTest
 final class ExtensionManagementUITests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
     private var hub: String { get throws {
-        guard let value = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("需要 MOCK_EXTENSION_MANAGEMENT=1 的专用 mock") }
+        guard let value = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("需要 MOCK_EXTENSION_MANAGEMENT=1 的专用 mock") }
         return value
     } }
 
@@ -26,7 +26,7 @@ final class ExtensionManagementUITests: XCTestCase {
 
     @MainActor private func launch(_ arguments: [String]) throws -> XCUIApplication {
         continueAfterFailure = false
-        let pair = "jarvis://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-ui.color", "style"] + arguments
         app.launchPinned()
@@ -59,9 +59,9 @@ final class ExtensionManagementUITests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
+        guard let dir = env["PERSONA_SHOTS"] else { return }
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir)
-            .appending(path: "management-\(name)-\(UITestStyle.name)-\(env["JARVIS_PLUGINS_APPEARANCE"] ?? "light").png"))
+            .appending(path: "management-\(name)-\(UITestStyle.name)-\(env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light").png"))
     }
 
     @MainActor func testContributionKeepsDraftAndCascadeNeedsConfirmation() async throws {

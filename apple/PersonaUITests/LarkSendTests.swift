@@ -4,27 +4,27 @@ import XCTest
 /// with a spinner beside it, Feishu's own copy takes its place, and one that did not go out has a failed mark that offers
 /// Resend; replies (quoted in the chat, or in a thread sheet) go the same way. The marks are found by their identifiers
 /// (lark.outgoing.sending / .failed), not their wording. Against scripts/mock/mock_hub.py
-/// (JARVIS_MOCK_HUB), whose Feishu send takes 2 seconds (longer where a case asks it to) and fails for a text with "#fail".
+/// (PERSONA_MOCK_HUB), whose Feishu send takes 2 seconds (longer where a case asks it to) and fails for a text with "#fail".
 final class LarkSendTests: XCTestCase {
     private var hub: String!
     private var slowedSend = false
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
-    /// A failed case leaves the screen it failed on in JARVIS_SHOTS (the attachments only record events).
+    /// A failed case leaves the screen it failed on in PERSONA_SHOTS (the attachments only record events).
     /// No draft and no failed or unsent message from an earlier run (`-showLarkSendFresh`, #1627): they are kept on
     /// disk, and an earlier run's failed messages filled the chat and its leftover draft hid the thread box's placeholder.
     static let fresh = ["-showLarkSendFresh", "YES"]
 
     override func tearDown() {
         if slowedSend { _ = try? mockSendDelay(nil) } // the cases after this one see the mock's own 2 s
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"], (testRun?.totalFailureCount ?? 0) > 0 {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"], (testRun?.totalFailureCount ?? 0) > 0 {
             let name = name.components(separatedBy: " ").last?.trimmingCharacters(in: CharacterSet(charactersIn: "]")) ?? "test"
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("failed-\(name).png"))
         }
@@ -47,7 +47,7 @@ final class LarkSendTests: XCTestCase {
 
     @MainActor private func openChat() -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "mention", "-inbox.source", "", "-openInboxFirst", "YES"] + Self.fresh
         app.launchPinned()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "The new icon set")).firstMatch.waitForExistence(timeout: 20),
@@ -122,7 +122,7 @@ final class LarkSendTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }
@@ -152,7 +152,7 @@ final class LarkSendTests: XCTestCase {
     /// In the chat with 「韩梅梅」, which no test sends to: its last message stays the mock's.
     @MainActor func testLastMessageStaysAboveKeyboardAndQuoteBar() {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f1:100"] + Self.fresh
         app.launchPinned()
         XCTAssertTrue(app.staticTexts["能赶上，下午三点前给你确认"].waitForExistence(timeout: 20), "the 韩梅梅 chat did not open")
@@ -319,7 +319,7 @@ final class LarkSendTests: XCTestCase {
     /// opens the chat to find its own draft.
     @MainActor private func openHikingChat(sendingLeftover: Bool = true, fresh: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"] + (fresh ? Self.fresh : [])
         app.launchPinned()
         let target = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "那我也带一个")).firstMatch
@@ -465,7 +465,7 @@ final class LarkSendTests: XCTestCase {
         for i in 1...3 { send(app, "连发第 \(i) 条 " + tag) }
         assertAllOut(app, sent: (1...3).map { "连发第 \($0) 条 " + tag }, within: 12, failedBefore: failedBefore, "in the chat")
         let thread = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         thread.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"] + Self.fresh
         thread.launchPinned()
         let open = thread.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "条回复")).firstMatch
@@ -513,7 +513,7 @@ final class LarkSendTests: XCTestCase {
     /// The thread sheet has its own box: a reply there goes into the thread, shows at once, and its copy takes over.
     @MainActor func testThreadSheetRepliesInTheThread() {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"] + Self.fresh
         app.launchPinned()
         let thread = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "条回复")).firstMatch

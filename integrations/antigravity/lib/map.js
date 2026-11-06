@@ -35,7 +35,7 @@ export function toAgyId(personaId) {
 }
 
 const USER_REQ_RE = /<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/
-const JARVIS_CTX_RE = /<(?:jarvis|persona)-context>[\s\S]*?<\/(?:jarvis|persona)-context>\s*/g
+const PERSONA_CTX_RE = /<persona-context>[\s\S]*?<\/persona-context>\s*/g
 
 export function cleanUserText(raw) {
   if (typeof raw !== 'string') return ''
@@ -44,7 +44,7 @@ export function cleanUserText(raw) {
   let prev
   do {
     prev = body
-    body = body.replace(JARVIS_CTX_RE, '').replace(/^\s*<\/(?:jarvis|persona)-context>\s*/i, '')
+    body = body.replace(PERSONA_CTX_RE, '').replace(/^\s*<\/persona-context>\s*/i, '')
   } while (body !== prev)
   return body.trim()
 }

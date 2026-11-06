@@ -3,7 +3,7 @@ import Security
 import SwiftUI
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// The persona on the Live Activity (docs/live-activity.md「形象」): which state it shows for a fleet, and the look
 /// the app hands the widget extension.

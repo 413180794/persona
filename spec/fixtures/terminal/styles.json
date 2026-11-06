@@ -6,7 +6,7 @@
       "name": "sgr_flags_and_resets",
       "description": "SGR 设置和关闭各样式，重置后字符恢复默认样式。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr"
       ],
       "input": {
         "cols": 8,
@@ -141,7 +141,7 @@
       "name": "sgr_color_modes",
       "description": "保留基本色、亮色、索引色和真彩色，并支持默认色复位。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr"
       ],
       "input": {
         "cols": 8,
@@ -241,7 +241,7 @@
       "name": "sgr_colon_and_clamp",
       "description": "冒号参数按分号处理，颜色分量限制在字节范围。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr / Parser.step"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.sgr / Parser.step"
       ],
       "input": {
         "cols": 4,
@@ -298,7 +298,7 @@
       "name": "sgr_link_survives_reset",
       "description": "SGR 复位保留 OSC 链接，关闭链接后新字符不再关联。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.osc / sgr"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — TerminalGrid.osc / sgr"
       ],
       "input": {
         "cols": 8,

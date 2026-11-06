@@ -14,7 +14,7 @@ What runs at the same time:
 
 Usage (on the hub's machine):
   python3 scripts/test/hub_restart_seamless.py --restarts 3 --converse
-  python3 scripts/test/hub_restart_seamless.py --hub http://127.0.0.1:18660 --restart-cmd 'systemctl --user restart jarvisd'
+  python3 scripts/test/hub_restart_seamless.py --hub http://127.0.0.1:18660 --restart-cmd 'systemctl --user restart personad'
 
 Always ends with one line: PASS / FAIL / TIMEOUT and the numbers, exit 0 only on PASS.
 """
@@ -39,8 +39,8 @@ except ImportError:  # pragma: no cover
 
 
 def hub_json():
-    root = os.environ.get("PERSONA_HOME") or os.environ.get("JARVIS_HOME")
-    for d in [root, os.path.expanduser("~/.persona"), os.path.expanduser("~/.jarvis")]:
+    root = os.environ.get("PERSONA_HOME") or os.environ.get("PERSONA_HOME")
+    for d in [root, os.path.expanduser("~/.persona"), os.path.expanduser("~/.persona")]:
         if d and os.path.exists(os.path.join(d, "hub.json")):
             with open(os.path.join(d, "hub.json")) as f:
                 return json.load(f)
@@ -208,7 +208,7 @@ async def main():
     ap.add_argument("--token", default=os.environ.get("PERSONA_HUB_TOKEN") or cfg.get("token"))
     ap.add_argument("--restarts", type=int, default=3)
     ap.add_argument("--interval", type=float, default=15, help="seconds between restarts")
-    ap.add_argument("--restart-cmd", default="systemctl --user restart jarvisd")
+    ap.add_argument("--restart-cmd", default="systemctl --user restart personad")
     ap.add_argument("--max-outage", type=float, default=8, help="the apps' grace before they show a lost connection")
     ap.add_argument("--converse", action="store_true", help="also stream an assistant conversation through the restarts")
     ap.add_argument("--count", type=int, default=300, help="--converse: how many numbered lines the answer has")
@@ -273,7 +273,7 @@ async def main():
                 rep.fail(f"the streamed answer is incomplete: {len(missing)} of {args.count} lines missing (first {missing[:5]})")
             if "restart-check-bg-done" not in text:
                 rep.fail("the background command never reported back (lost in a restart?)")
-            if re.search(r"jarvisd 刚重启过|persona 刚重启过|后台任务.*停了", text, re.I):
+            if re.search(r"personad 刚重启过|persona 刚重启过|后台任务.*停了", text, re.I):
                 rep.fail("the conversation was told its background tasks were lost in a restart")
             print(f"conversation: {len(set(numbers) & set(want))}/{args.count} lines, background done: {'restart-check-bg-done' in text}", flush=True)
         if verdict is None and time.monotonic() > deadline:

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The knowledge-search sample the demo answers with for screenshots (`-showKnowledgeSearch`, `-showKnowledgeDay`):
 /// nothing without the flags, and with them answers the app's own types decode, so the search hits, an entry's

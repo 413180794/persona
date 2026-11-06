@@ -51,7 +51,7 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 	if _, err := s.prepare(ctx, "server"); err != nil {
 		t.Fatal(err)
 	}
-	if got := bare.prepared[0]["claude_md"]; got != s.claudeMD(ctx, "server", true) || bare.prepared[0]["dir"] != ".jarvis/assistant" {
+	if got := bare.prepared[0]["claude_md"]; got != s.claudeMD(ctx, "server", true) || bare.prepared[0]["dir"] != ".persona/assistant" {
 		t.Fatalf("assistant.prepare: %v", bare.prepared[0])
 	}
 }
@@ -94,7 +94,7 @@ func TestAssistantPromptUsesReportedStorageRoots(t *testing.T) {
 			t.Fatalf("reported storage root missing: %s", want)
 		}
 	}
-	if strings.Contains(text, "~/.jarvis/") || strings.Contains(text, "~/.persona/") {
+	if strings.Contains(text, "~/.persona/") || strings.Contains(text, "~/.persona/") {
 		t.Fatal("hardcoded default root overrides reported storage roots")
 	}
 	if !strings.Contains(text, "也可以用文件工具直接读取此目录") {

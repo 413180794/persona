@@ -150,7 +150,7 @@ See [research/](research/) for detailed evidence; every point below has a code l
 
 ### 2.3 Main current Persona iOS issues
 
-| Issue | Evidence (details in [research/jarvis-ios-arch.md](research/jarvis-ios-arch.md)) |
+| Issue | Evidence (details in [research/persona-ios-arch.md](research/persona-ios-arch.md)) |
 | --- | --- |
 | `AppModel` is a god object | 998 lines + 3 extension files, 22 responsibilities; cyclic `.shared` calls with `AgentSync` / `LarkSync` / `InboxStore` |
 | Core logic in Views, without unit tests | `chatLines` folding is about 285 lines in a private `ChatView` method; Agents `rank` in `ChatsView`; Inbox grouping in `InboxView`; Lark read reporting in `LarkChatView` `@State` |
@@ -269,7 +269,7 @@ Optional (P2): all Agent-targeted writes carry a **target-instance fingerprint**
 ### D5. Capability negotiation and compatibility
 
 - **hub → client**: retain `features`, delivered in `/health` and WS `hello`.
-- **Client → hub**: add two places. Send `{"type":"client_hello","platform":"android|ios|watch","version","build","features":[…]}` after WebSocket connection; HTTP includes `X-Jarvis-Client: <platform>/<version>`. hub uses them to:
+- **Client → hub**: add two places. Send `{"type":"client_hello","platform":"android|ios|watch","version","build","features":[…]}` after WebSocket connection; HTTP includes `X-Persona-Client: <platform>/<version>`. hub uses them to:
   - Route pushes and phone tools by platform.
   - Downgrade unfamiliar new interaction types to screen cards.
   - Log for diagnostics.
@@ -368,13 +368,13 @@ Under the chosen premise, phones away from home (cellular, others' Wi-Fi) must c
 
 ### 4.1 Module mapping (Android ↔ future iOS)
 
-| Responsibility | iOS (local SPM package `ios/JarvisKit`) | Android (Gradle) | Contents |
+| Responsibility | iOS (local SPM package `ios/PersonaKit`) | Android (Gradle) | Contents |
 | --- | --- | --- | --- |
-| Contracts | `JarvisContracts` | `:core:contracts` (pure Kotlin) | Wire types (Codable / `@Serializable`, explicit field names), WS events, capabilities, error codes, narrow interfaces (`SessionsReading`, `MessageSending`, `InteractionResolving`…) |
-| Pure logic | `JarvisCore` | `:core:domain` (pure Kotlin) | Continuity reducer; items → Rows → Blocks → Turn → Lines folding; frozen snapshots; outbox state machine; sorting/grouping/companions/Inbox selectors; approval-policy table; message-tag parsing; screen-dialog parsing; formatting; Fleet / shortcut copy |
+| Contracts | `PersonaContracts` | `:core:contracts` (pure Kotlin) | Wire types (Codable / `@Serializable`, explicit field names), WS events, capabilities, error codes, narrow interfaces (`SessionsReading`, `MessageSending`, `InteractionResolving`…) |
+| Pure logic | `PersonaCore` | `:core:domain` (pure Kotlin) | Continuity reducer; items → Rows → Blocks → Turn → Lines folding; frozen snapshots; outbox state machine; sorting/grouping/companions/Inbox selectors; approval-policy table; message-tag parsing; screen-dialog parsing; formatting; Fleet / shortcut copy |
 | Terminal core | `TerminalCore` | `:core:terminal` (pure Kotlin) | VT-subset grid, wide characters, wrapping, scroll detection, key names → bytes, modifier state machine, frame ordering/takeover state machine |
 | Networking | `HubClient` | `:core:hub` | Domain-specific HTTP clients (sessions, interactions, machines, files, Inbox, Lark, mail, assistant, knowledge, devices), WebSocket, connection monitor, error classification |
-| Data | `JarvisData` | `:core:data` | Secure storage, generic operation log (outbox / op / drafts), caches, media caches, sync engines (session subscriptions, AgentSync, LarkSync, InboxSync), `HubScope` |
+| Data | `PersonaData` | `:core:data` | Secure storage, generic operation log (outbox / op / drafts), caches, media caches, sync engines (session subscriptions, AgentSync, LarkSync, InboxSync), `HubScope` |
 | Design system | `DesignSystem` | `:core:designsystem` | Generated tokens, components (Section 5) |
 | Chat | `ChatFeature` | `:feature:chat` | List engine, message/work rows, interaction panels, composer, search, task progress; shared by Agents and assistant |
 | Agents | `AgentsFeature` | `:feature:agents` | List, spaces, machines, new sessions, request Inbox |
@@ -386,7 +386,7 @@ Under the chosen premise, phones away from home (cellular, others' Wi-Fi) must c
 | Settings | `SettingsFeature` | `:feature:settings` | Pairing/onboarding, devices, notifications, phone data, storage, styles |
 | Platform | `PlatformKit` | `:platform:notify` (foreground service, notifications, Live Updates), `:platform:phonetools`, `:platform:shortcuts` | Push registration/actions, Live Activities / Live Updates, phone tools, shortcuts/share target, haptics |
 | Composition root | App target (`AppContainer`, `Router`, `DebugHooks`) | `:app` (DI, NavHost, debug entries in `src/debug`) | Only place knowing every implementation |
-| Watch/extensions | Watch and Widgets targets link only `JarvisContracts` + `JarvisCore` + required HubClient/tokens | — | Stop compiling the entire `Shared/` source into them |
+| Watch/extensions | Watch and Widgets targets link only `PersonaContracts` + `PersonaCore` + required HubClient/tokens | — | Stop compiling the entire `Shared/` source into them |
 
 ### 4.2 What replaces `AppModel`
 
@@ -498,7 +498,7 @@ Full list in [hub-changes.md](hub-changes.md). On LAN, Android basics (Agents, i
 | --- | --- |
 | **Required** (public connectivity, D9) | New TLS port (hub-signed certificate, public-key fingerprint, renewal with same key); address discovery/distribution (`/endpoints`, new `hello` fields, `endpoints` event); short-lived temporary QR token (format unchanged); reject public cleartext, /64 authentication-failure limiting; `hub_id`; per-connection heartbeat negotiation; `personad hub doctor`; optional recommended DDNS; new `docs/network.md` |
 | **Required** (first Android release) | Per-device phone-tool registration/routing: current `register_phone` overwrites the whole table and calls the latest device, making iPhone/Android overwrite each other; hub-hosted APK and in-app update checks; per-device connected/disconnected intervals (background self-tests and overnight measurements) |
-| **Recommended** (with first Android release) | hub-detected completion/other notifications by WS to persistent devices (`notify`), replacing phone calculation; application ping/pong for weak-network detection; `client_hello`, `X-Jarvis-Client`; unified errors |
+| **Recommended** (with first Android release) | hub-detected completion/other notifications by WS to persistent devices (`notify`), replacing phone calculation; application ping/pong for weak-network detection; `client_hello`, `X-Persona-Client`; unified errors |
 | **Recommended** (reliability, P3 with both clients' outboxes) | `client_ops` + `GET /api/v1/ops/{id}`, durable message/one-shot deduplication; Lark sends pass clientId, messages carry `clientId` / `localState`, pages carry `syncState` |
 | **Optional** (other) | Replace hardcoded iPhone text with phone; withdraw iOS notifications after interaction handling; complete omitted APIs/events in `docs/protocol.md`; move client prompt templates to hub |
 

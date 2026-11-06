@@ -48,9 +48,9 @@ def fresh(page, base, token, theme="light", grouping=None):
     page.goto(base + "/overview?token=" + token)
     # signed in (the link's token traded for this browser's) before the reload, or the reload lands on the login form
     expect(page.locator("aside")).to_be_visible(timeout=30000)
-    page.evaluate(f"Object.keys(localStorage).filter(k => k.startsWith('fold:') || k === 'jarvis.agentGrouping' || k === 'jarvis.agentFilter').forEach(k => localStorage.removeItem(k)); localStorage.setItem('jarvis.theme', '{theme}')")
+    page.evaluate(f"Object.keys(localStorage).filter(k => k.startsWith('fold:') || k === 'persona.agentGrouping' || k === 'persona.agentFilter').forEach(k => localStorage.removeItem(k)); localStorage.setItem('persona.theme', '{theme}')")
     if grouping:
-        page.evaluate(f"localStorage.setItem('jarvis.agentGrouping', '{grouping}')")
+        page.evaluate(f"localStorage.setItem('persona.agentGrouping', '{grouping}')")
     page.reload()
 
 
@@ -156,21 +156,21 @@ def desktop(browser, base, token, shots):
     ok("a gone tab falls back to its pane, else shows the empty state")
 
     # 8. Grouping picked before stays; the other groupings still render.
-    page.evaluate("localStorage.setItem('jarvis.agentGrouping', 'state')")
+    page.evaluate("localStorage.setItem('persona.agentGrouping', 'state')")
     page.reload()
     expect(page.get_by_role("radio", name="按状态")).to_have_attribute("aria-checked", "true")
-    page.evaluate("localStorage.removeItem('jarvis.agentGrouping')")
+    page.evaluate("localStorage.removeItem('persona.agentGrouping')")
     ok("a grouping picked before is kept")
 
     if shots:
-        page.evaluate("localStorage.setItem('jarvis.theme', 'dark')")
+        page.evaluate("localStorage.setItem('persona.theme', 'dark')")
         page.goto(base + TAB1)
         expect(page.locator("main").get_by_text("有两处会吞掉错误，要我直接改吗？").first).to_be_visible()
         tree_header(page, "NAS").scroll_into_view_if_needed()
         page.mouse.move(900, 400)  # the sidebar's highlight sits on the open tab, not where the pointer was
         page.wait_for_timeout(500)
         page.screenshot(path=os.path.join(shots, "desktop-dark.png"))
-        page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
+        page.evaluate("localStorage.setItem('persona.theme', 'light')")
     ctx.close()
 
 

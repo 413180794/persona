@@ -13,7 +13,7 @@ import { createRuntime, Peer, SUBPROTOCOL } from '../index.js'
 import { until } from '../testing/fake-node.js'
 
 // The node's end of a daemon connection: a WebSocket client wrapped as the socket wire.js's Peer reads, so the test
-// answers hello and calls the runtime like jarvisd does.
+// answers hello and calls the runtime like personad does.
 function dialNode(url, { token, protocols = [SUBPROTOCOL] } = {}) {
   const ws = new WebSocket(url, { protocols, headers: token ? { authorization: `Bearer ${token}` } : {} })
   const handlers = { data: [], close: [], error: [] }
@@ -82,15 +82,15 @@ function toy(extra = {}) {
   return { driver, sent }
 }
 
-test('the echo daemon CLI honors current, legacy and explicitly empty token environments', async (t) => {
+test('the echo daemon CLI honors only the Persona token environment, including an explicitly empty value', async (t) => {
   for (const [name, values, accepted] of [
-    ['legacy', { JARVIS_DAEMON_TOKEN: 'legacy-fixture-token' }, 'legacy-fixture-token'],
-    ['current', { PERSONA_DAEMON_TOKEN: 'current-fixture-token', JARVIS_DAEMON_TOKEN: 'ignored-fixture-token' }, 'current-fixture-token'],
-    ['empty', { PERSONA_DAEMON_TOKEN: '', JARVIS_DAEMON_TOKEN: 'ignored-fixture-token' }, undefined],
+    ['current', { PERSONA_DAEMON_TOKEN: 'current-fixture-token', PREVIOUS_DAEMON_TOKEN: 'ignored-fixture-token' }, 'current-fixture-token'],
+    ['empty', { PERSONA_DAEMON_TOKEN: '', PREVIOUS_DAEMON_TOKEN: 'ignored-fixture-token' }, undefined],
+    ['missing', { PREVIOUS_DAEMON_TOKEN: 'ignored-fixture-token' }, undefined],
   ]) {
     await t.test(name, async (t) => {
       const home = mkdtempSync(join(tmpdir(), 'persona-echo-cli-'))
-      const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PERSONA_') && !key.startsWith('JARVIS_')))
+      const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PERSONA_') && !key.startsWith('PERSONA_')))
       const child = spawn(process.execPath, [fileURLToPath(new URL('../examples/echo-runtime.mjs', import.meta.url)), '--listen', '0'],
         { env: { ...env, HOME: home, ...values }, stdio: ['ignore', 'ignore', 'pipe'] })
       const exited = once(child, 'exit')
@@ -109,15 +109,15 @@ test('the echo daemon CLI honors current, legacy and explicitly empty token envi
         })])
         assert.equal(code, 2)
         assert.match(log, /PERSONA_DAEMON_TOKEN/)
-        assert.ok(!log.includes(values.JARVIS_DAEMON_TOKEN))
+        assert.ok(!log.includes(values.PREVIOUS_DAEMON_TOKEN))
         return
       }
       await until('echo CLI ready or exited', () => /echo daemon: ws:/.test(log) || child.exitCode !== null, 5000)
       const url = log.match(/echo daemon: (ws:\/\/\S+);/)?.[1]
       assert.ok(url, 'the daemon must listen rather than exit')
       assert.ok(!log.includes(accepted), 'the token must not appear in logs')
-      if (values.JARVIS_DAEMON_TOKEN !== accepted) {
-        assert.equal(await refusedStatus(url, { token: values.JARVIS_DAEMON_TOKEN }), 401)
+      if (values.PERSONA_DAEMON_TOKEN !== accepted) {
+        assert.equal(await refusedStatus(url, { token: values.PERSONA_DAEMON_TOKEN }), 401)
       }
       const node = dialNode(url, { token: accepted })
       t.after(() => node.ws.close())
@@ -133,7 +133,7 @@ test('a listening runtime serves its endpoint: the node dials in with the token 
   t.after(() => rt.stop())
   const addr = await rt.start()
   assert.equal(addr.address, '127.0.0.1', 'loopback by default')
-  const n = dialNode(`ws://127.0.0.1:${addr.port}/jarvis/runtime`, { token: 'tok-1' })
+  const n = dialNode(`ws://127.0.0.1:${addr.port}/persona/runtime`, { token: 'tok-1' })
   t.after(() => n.ws.close())
   await until('hello', () => n.hello, 3000)
   assert.equal(n.hello.runtime, 'toy')
@@ -155,10 +155,10 @@ test('a wrong token, a missing subprotocol or another path is refused before the
   t.after(() => rt.stop())
   const { port } = await rt.start()
   for (const [url, opts, status] of [
-    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'wrong-fixture-token' }, 401],
-    [`ws://127.0.0.1:${port}/jarvis/runtime`, {}, 401],
-    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'tok-R4ND0M', protocols: [] }, 400],
-    [`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'tok-R4ND0M', protocols: ['something-else'] }, 400],
+    [`ws://127.0.0.1:${port}/persona/runtime`, { token: 'removed-secret-value' }, 401],
+    [`ws://127.0.0.1:${port}/persona/runtime`, {}, 401],
+    [`ws://127.0.0.1:${port}/persona/runtime`, { token: 'tok-R4ND0M', protocols: [] }, 400],
+    [`ws://127.0.0.1:${port}/persona/runtime`, { token: 'tok-R4ND0M', protocols: ['something-else'] }, 400],
     [`ws://127.0.0.1:${port}/elsewhere`, { token: 'tok-R4ND0M' }, 404],
   ]) {
     assert.equal(await refusedStatus(url, opts), status)
@@ -174,9 +174,9 @@ test('a newer connection from the node replaces the last one', async (t) => {
   const rt = createRuntime(driver, { runtime: 'toy', listen: { port: 0, token: 'tok' }, refreshMs: 0 })
   t.after(() => rt.stop())
   const { port } = await rt.start()
-  const a = dialNode(`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'tok' })
+  const a = dialNode(`ws://127.0.0.1:${port}/persona/runtime`, { token: 'tok' })
   await until('first hello', () => a.hello, 3000)
-  const b = dialNode(`ws://127.0.0.1:${port}/jarvis/runtime`, { token: 'tok' })
+  const b = dialNode(`ws://127.0.0.1:${port}/persona/runtime`, { token: 'tok' })
   t.after(() => b.ws.close())
   await until('second hello', () => b.hello, 3000)
   await until('the first closed', () => a.closed, 3000)
@@ -192,12 +192,12 @@ test('mounted on the runtime\'s own HTTP server through accept(), with a token r
   assert.equal(await rt.start(), undefined)
   const server = createServer((req, res) => res.end('the daemon\'s own API'))
   server.on('upgrade', (req, socket, head) => {
-    if (req.url === '/api/jarvis') rt.accept(req, socket, head)
+    if (req.url === '/api/persona') rt.accept(req, socket, head)
     else socket.destroy()
   })
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
   t.after(() => server.close())
-  const url = `ws://127.0.0.1:${server.address().port}/api/jarvis`
+  const url = `ws://127.0.0.1:${server.address().port}/api/persona`
   current = 'two' // rotated
   assert.equal(await refusedStatus(url, { token: 'one' }), 401)
   assert.equal(rt.connected, false)
@@ -224,7 +224,7 @@ async function rawConnect(port, token) {
   const key = randomBytes(16).toString('base64')
   const sock = connect(port, '127.0.0.1')
   await new Promise((r) => sock.once('connect', r))
-  sock.write(`GET /jarvis/runtime HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\n`
+  sock.write(`GET /persona/runtime HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\n`
     + `Sec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: ${SUBPROTOCOL}\r\nAuthorization: Bearer ${token}\r\n\r\n`)
   let buf = Buffer.alloc(0)
   sock.on('data', (d) => { buf = Buffer.concat([buf, d]) })

@@ -114,7 +114,7 @@ nonisolated final class VideoFileCache: @unchecked Sendable {
         self.source = source
         self.info = info
         self.progress = progress
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("jarvis-video-" + UUID().uuidString, isDirectory: true)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("persona-video-" + UUID().uuidString, isDirectory: true)
         url = directory.appendingPathComponent((name as NSString).lastPathComponent)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         do {

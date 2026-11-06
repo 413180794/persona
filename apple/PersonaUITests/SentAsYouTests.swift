@@ -5,15 +5,15 @@ import XCTest
 /// Earlier, the connector chips, and the empty / no database / no full access / older hub / unreachable states. Against
 /// scripts/mock/mock_hub.py with MOCK_SENT=1 (scripts/mock/sent_ledger_mock.py: about seventy made-up rows, newest id 70):
 ///   PORT=<port> MOCK_SENT=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SentAsYouTests
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SentAsYouTests
 /// Each test first puts the mock back to its rows (`GET /mock/sent?mode=1`), then switches it to another state where it needs one.
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots of the page, light and dark (`testScreenshots`).
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots of the page, light and dark (`testScreenshots`).
 final class SentAsYouTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     /// The mock, back at its rows.
     private func freshMock() throws -> String {
-        guard let hub = env["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SENT=1 (JARVIS_MOCK_HUB)") }
+        guard let hub = env["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SENT=1 (PERSONA_MOCK_HUB)") }
         try setMode(hub, "1")
         return hub
     }
@@ -30,7 +30,7 @@ final class SentAsYouTests: XCTestCase {
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
@@ -56,7 +56,7 @@ final class SentAsYouTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
+        guard let dir = env["PERSONA_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name).png"))
     }
 
@@ -305,11 +305,11 @@ final class SentAsYouTests: XCTestCase {
 
     // MARK: screenshots
 
-    /// The page in light and dark for the docs (`TEST_RUNNER_JARVIS_SHOTS`): ios-sent-as-you-light.png, ios-sent-as-you-dark.png.
+    /// The page in light and dark for the docs (`TEST_RUNNER_PERSONA_SHOTS`): ios-sent-as-you-light.png, ios-sent-as-you-dark.png.
     /// Light / dark is the app's own setting (`-ui.scheme`), which makes the system ask about the new home screen icon: OK first.
     @MainActor func testScreenshots() throws {
         let hub = try freshMock()
-        guard env["JARVIS_SHOTS"] != nil else { throw XCTSkip("set JARVIS_SHOTS for the screenshots") }
+        guard env["PERSONA_SHOTS"] != nil else { throw XCTSkip("set PERSONA_SHOTS for the screenshots") }
         for look in ["light", "dark"] {
             let app = openPage(hub, extra: ["-ui.scheme", look])
             XCTAssertTrue(app.buttons["sent.row.70"].waitForExistence(timeout: 20), "no rows (\(look)):\n\(app.debugDescription)")

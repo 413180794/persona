@@ -68,7 +68,7 @@ class AssistantShotsTest {
         var dark by mutableStateOf(false)
         val main = Session(machineId = "hub", sessionId = "main", title = "main", status = "idle",
             updatedAt = minutesAgo(2), lastText = "OK")
-        val pinned = Session(machineId = "hub", sessionId = "p1", title = "<jarvis-context kind=\"context\" title=\"Lark · #release\">",
+        val pinned = Session(machineId = "hub", sessionId = "p1", title = "<persona-context kind=\"context\" title=\"Lark · #release\">",
             status = "done", updatedAt = minutesAgo(30))
         val recent = (1..32).map { Session(machineId = "hub", sessionId = "r$it", title = "Claude Code", status = "idle",
             updatedAt = minutesAgo(5L * it)) }

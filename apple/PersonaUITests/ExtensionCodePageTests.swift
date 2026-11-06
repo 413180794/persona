@@ -3,19 +3,19 @@ import XCTest
 /// The code-hosting page (#2961, docs/extensions.md「UI 版本 4」) on the schema's shared snapshots
 /// (schema/extension/examples/showcase/code-*.json), through the mock's showcase extension: iPad side by side (the file
 /// tree beside the diffs, landscape and portrait), the phone a directory at a time with the diffs pushed; a line
-/// number opens the inline comment box. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
-/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named
-/// by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
+/// number opens the inline comment box. Against scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1:
+/// `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named
+/// by `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` and the style.
 final class ExtensionCodePageTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
     private var pad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     @MainActor private func launch() throws -> XCUIApplication {
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)") }
         continueAfterFailure = false
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-ui.scheme", look]
         app.launchPinned()
         acceptIconAlert()
@@ -34,8 +34,8 @@ final class ExtensionCodePageTests: XCTestCase {
         attachment.name = "code-preview-" + name
         attachment.lifetime = .keepAlways
         add(attachment)
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         let o = XCUIDevice.shared.orientation.isLandscape ? "-landscape" : ""
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir)
             .appending(path: "code-\(pad ? "ipad" : "iphone")\(o)-\(name)-\(UITestStyle.name)-\(look).png"))

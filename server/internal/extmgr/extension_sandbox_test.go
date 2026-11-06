@@ -112,7 +112,7 @@ func boxedPackageWith(t *testing.T, permissions string) string {
 	}
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "bin", "self"), b, 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "boxed"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=boxed exec \"$(dirname \"$0\")/self\" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "boxed"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=boxed exec \"$(dirname \"$0\")/self\" \"$@\"\n"), 0o755)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "boxed", "name": "Boxed", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/boxed"}, "http": true, "resources": {"memory_mb": 256}},
 		"activation_events": ["on_startup"], "contributes": {"api": [{"id": "x", "prefix": "boxedx"}]},
@@ -474,7 +474,7 @@ func TestExtensionSandboxMissing(t *testing.T) {
 	if !st.Enabled || st.Active || !strings.Contains(st.Why, "bwrap") {
 		t.Fatalf("%+v", st)
 	}
-	s := host.Spec{StartEnv: func() []string { return []string{"JARVIS_HUB_URL=http://127.0.0.1:1"} }}
+	s := host.Spec{StartEnv: func() []string { return []string{"PERSONA_HUB_URL=http://127.0.0.1:1"} }}
 	if err := ps.confine(context.Background(), p, &hubExtension{}, &s); err != nil {
 		t.Fatal(err)
 	}
@@ -482,7 +482,7 @@ func TestExtensionSandboxMissing(t *testing.T) {
 		t.Fatal("wrapped without a sandbox")
 	}
 	env := strings.Join(s.StartEnv(), " ")
-	if !strings.Contains(env, "HTTPS_PROXY=http://ext:") || !strings.Contains(env, "JARVIS_HUB_URL=http://127.0.0.1:1") {
+	if !strings.Contains(env, "HTTPS_PROXY=http://ext:") || !strings.Contains(env, "PERSONA_HUB_URL=http://127.0.0.1:1") {
 		t.Fatalf("env %s", env)
 	}
 	if v := ps.view(context.Background(), p); v.Sandbox == nil || !strings.Contains(strings.Join(v.Warnings, " "), "bwrap") {

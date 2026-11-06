@@ -139,7 +139,7 @@ enum AddComputerText {
 
     /// The line that pairs an installed Persona Link; the hub's own when it gave one.
     static func pairCommand(_ code: APIClient.ComputerCode) -> String {
-        code.command.flatMap { $0.isEmpty ? nil : $0 } ?? "jarvis-link pair " + quoted(code.pairLink)
+        code.command.flatMap { $0.isEmpty ? nil : $0 } ?? "persona-link pair " + quoted(code.pairLink)
     }
 
     /// What a Linux computer runs: the line that installs and pairs, or only the pairing when the hub has no site.
@@ -150,7 +150,7 @@ enum AddComputerText {
 
     /// What Windows runs in PowerShell, in the folder with the two programs (docs/windows.md).
     static func windowsCommand(_ code: APIClient.ComputerCode) -> String {
-        #".\jarvis-link.exe install --jarvisd .\personad.exe --pair "# + quoted(code.pairLink)
+        #".\persona-link.exe install --personad .\personad.exe --pair "# + quoted(code.pairLink)
     }
 
     /// A pairing link in single quotes for sh and PowerShell; it has none of its own (it is URL-encoded).

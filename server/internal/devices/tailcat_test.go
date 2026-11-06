@@ -53,7 +53,7 @@ func sshDown(ctx context.Context) *exec.Cmd {
 
 func sshUp(ctx context.Context) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestFakeNode$")
-	cmd.Env = append(os.Environ(), "JARVIS_FAKE_NODE=1")
+	cmd.Env = append(os.Environ(), "PERSONA_FAKE_NODE=1")
 	return cmd
 }
 

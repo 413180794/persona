@@ -22,7 +22,7 @@ final class ShellLaunchTests: XCTestCase {
     @MainActor private func expectOnce(_ args: [String], page: String, _ what: String, hub: String? = nil) {
         let app = XCUIApplication()
         // Paired with scripts/mock/mock_hub.py, or Demo Mode.
-        let source = hub.map { ["-pairURL", "jarvis://pair?url=" + $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"] }
+        let source = hub.map { ["-pairURL", "persona://pair?url=" + $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"] }
             ?? ["-demo.on", "YES"]
         app.launchArguments = source + ["-ui.oldLayout", "NO", "-probes", "YES", "-dev.folded", ""] + args
         app.launchPinned()
@@ -63,11 +63,11 @@ final class ShellLaunchTests: XCTestCase {
         expectOnce(["-openSession", Self.agentChat, "-showConnectionCycle", "connecting:1:1"], page: "agents", "连接中… coming and going")
     }
 
-    /// Paired with a hub (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB): what ConnectionTests launches into, where the chat was
+    /// Paired with a hub (scripts/mock/mock_hub.py, PERSONA_MOCK_HUB): what ConnectionTests launches into, where the chat was
     /// seen to appear three times.
     @MainActor func testAChatOpenedAtLaunchAgainstAHubAppearsOnce() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         expectOnce(["-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000001"], page: "agents", "paired with a hub", hub: hub)
     }

@@ -177,7 +177,7 @@ extension View {
             .tint(Theme.accent)
             .fontDesign(model.style.fontDesign)
             .dynamicTypeSize(model.textSize.applied(to: .large))
-            .buiTheme(.jarvis())
+            .buiTheme(.persona())
             .scrollIndicators(.automatic)
             // Every iOS Form in the window grouped (System Settings' look; a sheet is its own window and needs
             // `macSheet()`, 2026-11-02): the Mac's default two-column

@@ -43,7 +43,7 @@ func TestTasksCommandShowsOverviewCard(t *testing.T) {
 		t.Run(cmd, func(t *testing.T) {
 			s, d, posts := overviewHub(t, "https://hub.example.com")
 			d.setSessions("server", []proto.Session{
-				{SessionID: "asm", Cwd: "/home/u/.jarvis/assistant"},
+				{SessionID: "asm", Cwd: "/home/u/.persona/assistant"},
 				{SessionID: "pane", Cwd: "/code", PaneID: "%1"}})
 			addPending(s, "ixA", "server", "asm", "主对话的问题")
 			addPending(s, "ixB", "server", "pane", "Agent 的问题")
@@ -56,7 +56,7 @@ func TestTasksCommandShowsOverviewCard(t *testing.T) {
 			}
 			card := (*posts)[0]["card"].(string)
 			for _, want := range []string{"等你拍板", "在途任务", "主对话的问题", "手工建的任务",
-				`"default_url":"https://hub.example.com/j/asm"`,
+				`"default_url":"https://hub.example.com/persona/asm"`,
 				`"default_url":"https://hub.example.com/s/server/pane"`,
 				`"default_url":"https://hub.example.com/todos?id=todo_1"`} {
 				if !strings.Contains(card, want) {

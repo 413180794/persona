@@ -66,18 +66,18 @@ class DiagnosticsStateTest {
         val attempts = PairingAttempts()
         val controller = DiagnosticsState(connection, connection, null, attempts)
         assertNull(controller.pairing.value)
-        val request = PairingRequest("https://hub.example.com/jarvis", "secret-code", hub = "test-hub")
+        val request = PairingRequest("https://hub.example.com/persona", "secret-code", hub = "test-hub")
         val handshake = javax.net.ssl.SSLHandshakeException("PKIX path building failed").apply {
             initCause(java.security.cert.CertificateException("secret-code is not trusted"))
         }
         val error = PairingException(PairingFailure.Certificate).apply {
             initCause(persona.core.hub.HubFailure(persona.core.hub.HubError.CertificateMismatch, cause = handshake))
         }
-        val candidates = listOf(ConnectionCandidate("https://hub.example.com/jarvis", "name", persona.core.contracts.CoreText.plain("证书指纹不符")))
+        val candidates = listOf(ConnectionCandidate("https://hub.example.com/persona", "name", persona.core.contracts.CoreText.plain("证书指纹不符")))
         attempts.record(pairingAttempt(request, error, PairingStage.Probe, candidates, java.time.Instant.parse("2026-11-05T01:02:03Z")))
         val attempt = requireNotNull(controller.pairing.value)
         assertTrue(attempt.failed)
-        assertEquals("https://hub.example.com/jarvis", attempt.address)
+        assertEquals("https://hub.example.com/persona", attempt.address)
         assertEquals(PairingAttemptStep.Tls, attempt.step)
         assertEquals("2026-11-05T01:02:03Z", attempt.at)
         assertEquals(candidates, attempt.candidates)

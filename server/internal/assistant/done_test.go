@@ -52,7 +52,7 @@ func TestDoneSignals(t *testing.T) {
 }
 
 func TestSameRequest(t *testing.T) {
-	if !sameRequest("<jarvis-context kind=\"context\">x</jarvis-context>\niPad 横屏时登录页崩溃，修好并补测试", "iPad 横屏时登录页崩溃，修好并补测试") ||
+	if !sameRequest("<persona-context kind=\"context\">x</persona-context>\niPad 横屏时登录页崩溃，修好并补测试", "iPad 横屏时登录页崩溃，修好并补测试") ||
 		sameRequest("再把「全部 N」挪到最左边", "iPad 横屏时登录页崩溃，修好并补测试") {
 		t.Fatal("sameRequest")
 	}

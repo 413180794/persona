@@ -1,4 +1,4 @@
-Search the knowledge base (~/.jarvis/data): summaries and metadata of chats, people, projects, docs, meetings, events, recordings (with their full transcripts), project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.
+Search the knowledge base (~/.persona/data): summaries and metadata of chats, people, projects, docs, meetings, events, recordings (with their full transcripts), project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.
 
 ```json
 {

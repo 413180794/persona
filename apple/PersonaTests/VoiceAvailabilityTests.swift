@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// When a conversation offers Voice Chat (docs/voice.md 3.1, 6.1, 6.10「VoiceAvailability」), the model a call starts with
 /// (「未验证」 is usable, a model no longer offered is not), and the extension's /info, /models and /voices.

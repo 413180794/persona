@@ -1,6 +1,6 @@
 # iOS refactoring steps
 
-> Draft v1 (2026-10-30), part of the [redesign plan](README.md). Basis: [research/jarvis-ios-arch.md](research/jarvis-ios-arch.md).
+> Draft v1 (2026-10-30), part of the [redesign plan](README.md). Basis: [research/persona-ios-arch.md](research/persona-ios-arch.md).
 >
 > **Not executed this round** (decided 2026-10-30: Android and hub only; iOS read-only). Kept for later iOS work. At that point, R0 need not export fixtures from iOS again: use `spec/fixtures` created on Android in this round.
 
@@ -9,30 +9,30 @@
 ```
 ios/
 ├─ project.yml                 App / Watch / Widgets / test targets (XcodeGen, retained)
-├─ JarvisKit/                  Local SPM package (new)
+├─ PersonaKit/                  Local SPM package (new)
 │  ├─ Package.swift
 │  ├─ Sources/
-│  │  ├─ JarvisContracts/      Wire types, ServerEvent / client messages, Resolution, FleetState, MachineMetrics models, capability bits, error codes, narrow protocols
-│  │  ├─ JarvisCore/           Pure logic (R0 / R1 lists in section 3)
+│  │  ├─ PersonaContracts/      Wire types, ServerEvent / client messages, Resolution, FleetState, MachineMetrics models, capability bits, error codes, narrow protocols
+│  │  ├─ PersonaCore/           Pure logic (R0 / R1 lists in section 3)
 │  │  ├─ TerminalCore/         TerminalGrid, TerminalWrap, key encoding, modifiers, frame order, takeover state machine
 │  │  ├─ HubClient/            Domain-specific HTTP clients, Realtime (LiveConnection), ConnectionMonitor, error classification
-│  │  ├─ JarvisData/           Secure storage, shared operation log (outbox / op / drafts), StateCache, ChatCache, media cache, sync engine, HubScope
+│  │  ├─ PersonaData/           Secure storage, shared operation log (outbox / op / drafts), StateCache, ChatCache, media cache, sync engine, HubScope
 │  │  ├─ DesignSystem/         Generated/Tokens.swift, Theme adapter, Styling, Components
 │  │  ├─ ChatFeature/  AgentsFeature/  AssistantFeature/  InboxFeature/
 │  │  ├─ TerminalFeature/  ReadersFeature/  MachinesFeature/  SettingsFeature/
 │  │  └─ PlatformKit/          Push, Live Activity bridge, WatchConnectivity, phone tools, App Intents support, haptics
 │  └─ Tests/                   One test target per module; swift test on macOS without launching the app
-├─ Jarvis/                     App target: AppContainer (composition root), Router, DebugHooks, resources, Info.plist
-├─ JarvisWatch/                Depends only on JarvisContracts + JarvisCore + part of HubClient + DesignSystem tokens
-├─ JarvisWidgets/ LiveActivity/ Depends only on JarvisContracts (FleetState) + tokens
-├─ JarvisTests/                Tests needing a host app (gradually emptied)
-└─ JarvisUITests/              Unchanged
+├─ Persona/                     App target: AppContainer (composition root), Router, DebugHooks, resources, Info.plist
+├─ PersonaWatch/                Depends only on PersonaContracts + PersonaCore + part of HubClient + DesignSystem tokens
+├─ PersonaWidgets/ LiveActivity/ Depends only on PersonaContracts (FleetState) + tokens
+├─ PersonaTests/                Tests needing a host app (gradually emptied)
+└─ PersonaUITests/              Unchanged
 ```
 
 Dependency rules:
 
-- `*Feature` depends only on `JarvisContracts`, `JarvisCore`, `DesignSystem`, `ReadersFeature` (shared readers), and necessary `TerminalCore`. **No `HubClient` / `JarvisData` dependencies**; services injected through narrow protocols.
-- `JarvisContracts`, `JarvisCore`, `TerminalCore` import neither UIKit nor SwiftUI; types are `nonisolated` values or pure functions.
+- `*Feature` depends only on `PersonaContracts`, `PersonaCore`, `DesignSystem`, `ReadersFeature` (shared readers), and necessary `TerminalCore`. **No `HubClient` / `PersonaData` dependencies**; services injected through narrow protocols.
+- `PersonaContracts`, `PersonaCore`, `TerminalCore` import neither UIKit nor SwiftUI; types are `nonisolated` values or pure functions.
 - Package targets explicitly set default isolation (Feature MainActor, Core nonisolated), replacing reliance on "whole app defaults MainActor, pure data manually marked nonisolated."
 
 ## 2. Constraints (at every step)
@@ -52,7 +52,7 @@ Dependency rules:
 
 | Work | Current location | Destination | Tests to add |
 | --- | --- | --- | --- |
-| Chat row folding: `chatLines`, `segments`, `workItems`, `photos`, `wakeLines`, `unfoldWork`, `prefixCount`, frozen `Frozen`, `ChatLine` / `WorkItem` / `WorkSummary` | `ChatView.swift` (private, about 285 lines) | `ChatLinesBuilder` (initially `ios/Shared`, then `JarvisCore` in R1) | Property tests using `RebuildTests` random-session generator: expansion / collapse preserves existing row IDs; shown rows unchanged across freezing; ID rules (`w-` / `wt-` / `-h` / `-end` / `wk-` / `img-` / `mu-`) |
+| Chat row folding: `chatLines`, `segments`, `workItems`, `photos`, `wakeLines`, `unfoldWork`, `prefixCount`, frozen `Frozen`, `ChatLine` / `WorkItem` / `WorkSummary` | `ChatView.swift` (private, about 285 lines) | `ChatLinesBuilder` (initially `ios/Shared`, then `PersonaCore` in R1) | Property tests using `RebuildTests` random-session generator: expansion / collapse preserves existing row IDs; shown rows unchanged across freezing; ID rules (`w-` / `wt-` / `-h` / `-end` / `wk-` / `img-` / `mu-`) |
 | Agent sorting / grouping: `rank`, `ordered`, `stays` (duplicated), `SpaceGroup.build`, `isWaiting`, peer `siblings` | `ChatsView.swift`, `AppModel.swift` | `AgentListSelectors` | Every state combination order, idle folding, mute interactions |
 | Inbox filtering / grouping, mixed "Agents waiting for you" | `InboxView.swift` | `InboxSelectors` | Sections, filters, Watch Needs-you-only |
 | Question-answer rules (multiple-choice joining, Other override, immediate single-question single-choice submission), three screen-card answers | `InteractionViews.swift` | `InteractionAnswers` | All branches |
@@ -62,10 +62,10 @@ After R0, Android uses `spec/fixtures` as acceptance criteria.
 
 ### R1 Create package and move code
 
-- Create `ios/JarvisKit`, add local package dependency in `project.yml`.
+- Create `ios/PersonaKit`, add local package dependency in `project.yml`.
 - Move bottom-up by dependencies:
-  1. `Models` / `DevModels` / `InboxModels` / `FleetState` / `MachineMetrics` / `Knowledge` / `JSONValue` to `JarvisContracts`, including `LiveConnection` event envelopes;
-  2. pure `ChatStore` logic (Rows / Blocks / Turn / continuity reducer / `ScreenParser`), R0 selectors, text / tag parsing (`jarvis-context`, `attached_images`, paths, Watch plain text), formatting (`Fmt`, `IntentText`, `FleetText`, `AssistantScheduleText`) to `JarvisCore`;
+  1. `Models` / `DevModels` / `InboxModels` / `FleetState` / `MachineMetrics` / `Knowledge` / `JSONValue` to `PersonaContracts`, including `LiveConnection` event envelopes;
+  2. pure `ChatStore` logic (Rows / Blocks / Turn / continuity reducer / `ScreenParser`), R0 selectors, text / tag parsing (`persona-context`, `attached_images`, paths, Watch plain text), formatting (`Fmt`, `IntentText`, `FleetText`, `AssistantScheduleText`) to `PersonaCore`;
   3. `TerminalGrid`, `TerminalWrap`, `TerminalKeyBytes`, `KeyBatcher`, `TerminalModifiers`, `TerminalCompletion`, `BoxDrawing` geometry to `TerminalCore`.
 - **Type names unchanged**, callers only add `import`.
 - Move unit tests to package test targets, no app launch or simulator (also eliminates "xcodebuild test launches app and prompts for notifications").

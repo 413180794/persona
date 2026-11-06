@@ -10,7 +10,7 @@ enum FleetPalette {
     static var workingText: Color { StatusPalette.working.text }
     /// The app icon's coral (the app's `Theme.brand`): the island's number symbols, nothing to tap.
     static let coral = Palette.coral
-    /// The brand's four-point star (`Theme.Icon.jarvis`, which the extension does not build): the Visor persona's glint.
+    /// The brand's four-point star (`Theme.Icon.persona`, which the extension does not build): the Visor persona's glint.
     static let mark = "sparkle"
     /// System blue, the app's accent: the keyline and the system's action buttons.
     static let accent = Palette.systemBlue

@@ -14,7 +14,7 @@ Markdown is parsed with goldmark (MIT). We borrowed ideas from Anthropic's offic
 ## skill (persona-office)
 
 Built-in skill `server/internal/assistantskills/builtin/persona-office`: SKILL.md says when to use it, how to write the source file, to look at `check` after generating, and to write the file's absolute path in the reply.
-The skill's own `office.sh` finds the local personad (first `PERSONA_BIN`, then `~/.persona/bin`, `~/.jarvis/bin`, `/opt/jarvis/bin`, finally PATH; if none, exit code 3).
+The skill's own `office.sh` finds the local personad (first `PERSONA_BIN`, then `~/.persona/bin`, `~/.persona/bin`, `/opt/persona/bin`, finally PATH; if none, exit code 3).
 
 Who gets it (decided by the user 2026-11-04): **only the assistant and Agents started by Persona**. It is not written into the machine's user-level Claude / Codex skills directories, so sessions the user opens themselves are unaffected.
 
@@ -29,7 +29,7 @@ Who gets it (decided by the user 2026-11-04): **only the assistant and Agents st
 
 The generate command does not pop an approval card on the user's phone: when Persona starts claude, it allows this one command with `--allowedTools`, matching only the absolute path and valid only for that session.
 - Agents started by Persona: `Bash(sh <node dir>/agent-plugin/skills/persona-office/scripts/office.sh *)`, added together with the `--plugin-dir` that loads the plugin (Claude Code 2.1 and later).
-- Assistant: the same rule for `.claude/skills/persona-office/scripts/office.sh` in its directory, appended after its existing `--allowedTools mcp__jarvis`.
+- Assistant: the same rule for `.claude/skills/persona-office/scripts/office.sh` in its directory, appended after its existing `--allowedTools mcp__persona`.
 - Not written into any settings file. Sessions the user opens themselves are unaffected, and the launcher's own `--settings` still applies (since #1462 Persona only passes `--settings` to managed launchers).
 
 Why it works this way (tried on real claude on 2026-11-04):

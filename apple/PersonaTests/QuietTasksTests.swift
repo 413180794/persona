@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Tasks the main conversation starts with "notify about main-chat tasks only in the main chat" on (#1731): the hub's `quiet` decodes (missing is
 /// false, for a hub from before), and their agents stay off the Live Activity, the watch and the To-dos badge.
@@ -11,7 +11,7 @@ struct QuietTasksTests {
     private func session(_ id: String, machine: String = "box", state: String = "working", quiet: Bool? = nil,
                          todo: String? = nil) throws -> Session {
         var o: [String: Any] = ["machine_id": machine, "session_id": id, "title": "agent \(id)", "cwd": "/code/\(id)",
-                                "status": "idle", "state": state, "started_by_jarvis": true, "assistant": false,
+                                "status": "idle", "state": state, "started_by_persona": true, "assistant": false,
                                 "pending_interactions": 0]
         if let quiet { o["quiet"] = quiet }
         if let todo { o["todo"] = ["id": todo, "title": "t"] }

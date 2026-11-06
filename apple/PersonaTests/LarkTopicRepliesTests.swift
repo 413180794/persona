@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A topic group's cards show their topics' newest replies (`LarkTopicReplies`, #1087): which replies and how many
 /// earlier ones (the Lark gateway's topic-reply-preview cases), what a reply's line says (Message Tweaks, encryption), at most three

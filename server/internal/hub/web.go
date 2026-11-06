@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// webDist is the web client built into a published jarvisd (scripts/release/publish.sh copies web/dist here before building);
+// webDist is the web client built into a published personad (scripts/release/publish.sh copies web/dist here before building);
 // in other builds only the placeholder is there.
 //
 //go:embed all:webdist
@@ -21,7 +21,7 @@ var webDist embed.FS
 
 // webApp serves the web client (web/, docs/web.md) from <data dir>/web on the hub's own port, so it shares the
 // API's origin: no CORS, and the WebSocket and images authenticate the same way. Without that directory the copy built
-// into jarvisd serves (published builds), and without either every non-API path is a 404, as before. Paths without a
+// into personad serves (published builds), and without either every non-API path is a 404, as before. Paths without a
 // file fall back to index.html (client-side routes).
 func webApp(dir string) http.Handler {
 	embedded, _ := fs.Sub(webDist, "webdist")

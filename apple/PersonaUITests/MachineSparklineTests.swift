@@ -4,10 +4,10 @@ import XCTest
 final class MachineSparklineTests: XCTestCase {
     @MainActor func testLightAndDarkMachineGrid() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("requires the mock hub (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("requires the mock hub (PERSONA_MOCK_HUB)")
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-ui.oldLayout", "NO"]
         app.launchPinned()

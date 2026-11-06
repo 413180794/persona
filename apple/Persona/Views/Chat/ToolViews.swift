@@ -110,7 +110,7 @@ enum ToolPresentation {
         case "browser_look": return mac() ?? ""
         case "browser_run": return [mac(), s("script").map { firstLine($0.trimmingCharacters(in: .whitespacesAndNewlines)) }].compactMap { $0 }.joined(separator: " · ")
         case "computer_run": return [mac(), ComputerSteps.describe(call.name, input: i)].compactMap { $0 }.joined(separator: " · ")
-        // ask_user is the Jarvis assistant's own question tool (docs/assistant.md); it takes the same questions.
+        // ask_user is the Persona assistant's own question tool (docs/assistant.md); it takes the same questions.
         case "AskUserQuestion", "ask_user": return i["questions"]?.array?.first?["question"]?.string ?? ""
         case "ExitPlanMode": return PlanText.title(s("plan") ?? "")
         case "TodoWrite": return PlanProgress.text(i["todos"]?.array ?? [])
@@ -498,7 +498,7 @@ struct ToolDetail: View {
             case "Read", "NotebookEdit":
                 path(i["file_path"]?.string ?? i["notebook_path"]?.string)
             case "ExitPlanMode":
-                Markdown(MarkdownMemo.content(i["plan"]?.string ?? "")).markdownTheme(.jarvis)
+                Markdown(MarkdownMemo.content(i["plan"]?.string ?? "")).markdownTheme(.persona)
                     #if os(macOS)
                     .textSelection(.enabled)
                     #endif

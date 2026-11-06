@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// SF Symbols go through `Theme.Icon` (Shared/Design/Icons.swift): one meaning, one symbol. These read the sources next to
 /// this file (apple/Persona, apple/PersonaWatch, apple/Shared) and look at what is passed as `systemName:`, `systemImage:` or

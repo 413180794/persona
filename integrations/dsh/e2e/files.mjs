@@ -1,10 +1,10 @@
 // End-to-end check of the DSH companion (docs/dsh.md "While DSH is not running"): a real `dsh web` with the plugin (isolated
 // DSH_HOME, DSH's own mock model) runs a turn and stops; the companion then lists that session from the store as
 // offline and pages it; a message from the "phone" wakes DSH through the configured command and is handed over to
-// the plugin, which runs it and takes the session back. A real `jarvisd node --stdio` sits in between (the harness
+// the plugin, which runs it and takes the session back. A real `personad node --stdio` sits in between (the harness
 // plays the hub).
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/dsh/e2e/files.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/dsh/e2e/files.mjs
 //
 // Nothing outside fresh temp directories is touched.
 
@@ -18,9 +18,9 @@ import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness
 
 const here = dirname(fileURLToPath(import.meta.url))
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout) and PERSONAD (a personad binary)')
   process.exit(2)
 }
 const keep = process.env.KEEP === '1'
@@ -79,12 +79,12 @@ async function cleanup() {
 process.on('SIGINT', () => cleanup().finally(() => process.exit(130)))
 
 const model = await scriptedModel(dshCheckout)
-node = await startNode({ jarvisd, keep })
+node = await startNode({ personad, keep })
 
 // DSH with the plugin, started by the same script the companion runs to wake it.
 const patch = join(root, 'patch.yml')
 writeFileSync(patch, `- insert:
-    - id: jarvis-dsh-runtime
+    - id: persona-dsh-runtime
       name: ${join(here, '..', 'index.js')}
       config:
         socket: ${node.runtimeSocket}

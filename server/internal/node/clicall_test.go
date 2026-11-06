@@ -133,8 +133,8 @@ func TestCLICallOnlyForTheAssistant(t *testing.T) {
 	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", t.TempDir())
 	n.dir, n.bin, n.logger = t.TempDir(), "/opt/example/personad", log.New(io.Discard, "", 0)
-	first := prepareAssistantForTest(t, n, ".jarvis/assistant", []string{"example"}, nil)
-	second := prepareAssistantForTest(t, n, ".jarvis/managers/second/assistant", []string{"other"}, nil)
+	first := prepareAssistantForTest(t, n, ".persona/assistant", []string{"example"}, nil)
+	second := prepareAssistantForTest(t, n, ".persona/managers/second/assistant", []string{"other"}, nil)
 	// This test is no assistant process, whatever it says.
 	if res := ask("example_list"); !res.IsError || !strings.Contains(res.Content[0].Text, "只能在助手的对话里用") || len(asked) != 0 {
 		t.Fatalf("not the assistant: %+v, the hub was asked %v", res, asked)
@@ -180,12 +180,12 @@ func TestCLICallOnlyForTheAssistant(t *testing.T) {
 // The tg an older node wrote for the built-in Telegram (personad tg) goes at the next message, Telegram signed in or
 // not: Telegram's command line is its extension's now (#1704), which the hub names in clis like any connector's.
 func TestPrepareTakesAwayTheBuiltInTg(t *testing.T) {
-	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	n, _ := testNode(t)
 	n.dir, n.bin, n.logger = t.TempDir(), "/opt/example/personad", log.New(io.Discard, "", 0)
 	prepare := func(conns []string, clis map[string]string) {
 		t.Helper()
-		params, _ := json.Marshal(map[string]any{"dir": ".jarvis/assistant", "claude_md": "# 示例", "connectors": conns, "clis": clis})
+		params, _ := json.Marshal(map[string]any{"dir": ".persona/assistant", "claude_md": "# 示例", "connectors": conns, "clis": clis})
 		if _, err := n.handle(context.Background(), "assistant.prepare", params); err != nil {
 			t.Fatal(err)
 		}
@@ -204,7 +204,7 @@ func TestPrepareTakesAwayTheBuiltInTg(t *testing.T) {
 		t.Fatalf("the extension's tg: %q %v", b, err)
 	}
 	prepare(nil, nil)
-	if n.mayCall(n.assistantDirOf(".jarvis/assistant"), "telegram_list_chats") {
+	if n.mayCall(n.assistantDirOf(".persona/assistant"), "telegram_list_chats") {
 		t.Fatal("Telegram signed out, its tools are still called")
 	}
 }
@@ -214,17 +214,17 @@ func TestPrepareTakesAwayTheBuiltInTg(t *testing.T) {
 // command lines call that connector's tools, and takes away only the command lines it wrote once the connector is
 // signed out (a plugin's gate commands live there too).
 func TestConnectorCommandLines(t *testing.T) {
-	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	n, _ := testNode(t)
 	n.dir, n.bin, n.logger = t.TempDir(), "/opt/example/personad", log.New(io.Discard, "", 0)
 	prepare := func(conns []string, clis map[string]string) {
 		t.Helper()
-		params, _ := json.Marshal(map[string]any{"dir": ".jarvis/assistant", "claude_md": "# 示例", "connectors": conns, "clis": clis})
+		params, _ := json.Marshal(map[string]any{"dir": ".persona/assistant", "claude_md": "# 示例", "connectors": conns, "clis": clis})
 		if _, err := n.handle(context.Background(), "assistant.prepare", params); err != nil {
 			t.Fatal(err)
 		}
 	}
-	cwd := n.assistantDirOf(".jarvis/assistant")
+	cwd := n.assistantDirOf(".persona/assistant")
 	bin := filepath.Join(n.dir, "assistant-bin")
 	_ = os.MkdirAll(bin, 0o755)
 	gate := filepath.Join(bin, "ol") // a plugin's gate command: not the node's to take away

@@ -1,6 +1,6 @@
 plugins {
-    id("jarvis.android.library")
-    id("jarvis.compose")
+    id("persona.android.library")
+    id("persona.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 

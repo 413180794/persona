@@ -3,7 +3,7 @@ import XCTest
 /// Expand in the shell's composer (#5685): a draft grows to its viewport-dependent line limit, then offers an icon in
 /// the text area's upper-right corner. The full-page editor holds the same text and quotes; edits and cursor position
 /// survive collapse, and Send sends once. The assistant's and an agent's conversation, keyboard up and down.
-/// Against scripts/mock/composer_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=…). Screenshots are kept as xcresult attachments.
+/// Against scripts/mock/composer_hub.py (TEST_RUNNER_PERSONA_MOCK_HUB=…). Screenshots are kept as xcresult attachments.
 final class ComposerExpandTests: XCTestCase {
     private var app: XCUIApplication!
     private var hub = ""
@@ -12,12 +12,12 @@ final class ComposerExpandTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
-        // TEST_RUNNER_JARVIS_ORIENTATION=landscape: the same on its side (the folded iPhone Duo's side status bar).
-        if ProcessInfo.processInfo.environment["JARVIS_ORIENTATION"] == "landscape" { XCUIDevice.shared.orientation = .landscapeLeft }
+        // TEST_RUNNER_PERSONA_ORIENTATION=landscape: the same on its side (the folded iPhone Duo's side status bar).
+        if ProcessInfo.processInfo.environment["PERSONA_ORIENTATION"] == "landscape" { XCUIDevice.shared.orientation = .landscapeLeft }
     }
 
     override func tearDown() {
@@ -27,7 +27,7 @@ final class ComposerExpandTests: XCTestCase {
             tree.lifetime = .keepAlways
             add(tree)
         }
-        if ProcessInfo.processInfo.environment["JARVIS_ORIENTATION"] == "landscape" { XCUIDevice.shared.orientation = .portrait }
+        if ProcessInfo.processInfo.environment["PERSONA_ORIENTATION"] == "landscape" { XCUIDevice.shared.orientation = .portrait }
         super.tearDown()
     }
 
@@ -38,7 +38,7 @@ final class ComposerExpandTests: XCTestCase {
     /// Discover the real threshold rather than assuming a device-specific line count. Capture the four acceptance states.
     @MainActor func testAdaptiveThresholdAndFourStates() {
         open(isAssistant: true)
-        if ProcessInfo.processInfo.environment["JARVIS_ORIENTATION"] == "landscape" {
+        if ProcessInfo.processInfo.environment["PERSONA_ORIENTATION"] == "landscape" {
             XCTAssertGreaterThan(app.frame.width, app.frame.height, "the app did not actually rotate to landscape")
         }
         startTyping()
@@ -49,7 +49,7 @@ final class ComposerExpandTests: XCTestCase {
         let unreservedWidth = field.frame.width
         field.typeText("\nDraft line 2")
         sleep(1)
-        let landscape = ProcessInfo.processInfo.environment["JARVIS_ORIENTATION"] == "landscape"
+        let landscape = ProcessInfo.processInfo.environment["PERSONA_ORIENTATION"] == "landscape"
         XCTAssertFalse(expand.exists, "two lines must fit without an expand button, including landscape")
         XCTAssertGreaterThan(field.frame.height, oneLineHeight, "typing another line did not grow the field")
         if !expand.exists { shot("01-below-threshold") }
@@ -65,7 +65,7 @@ final class ComposerExpandTests: XCTestCase {
         }
         XCTAssertTrue(expand.exists, "no expand icon at the maximum line count")
         print("RESULT: composer threshold=\(threshold), orientation=\(landscape ? "landscape" : "portrait"), language=\(language)")
-        if let expected = ProcessInfo.processInfo.environment["JARVIS_EXPECTED_LINES"].flatMap(Int.init) {
+        if let expected = ProcessInfo.processInfo.environment["PERSONA_EXPECTED_LINES"].flatMap(Int.init) {
             XCTAssertEqual(threshold, expected, "the viewport did not select the expected line limit")
         }
         assertCorner()
@@ -116,7 +116,7 @@ final class ComposerExpandTests: XCTestCase {
         XCTAssertLessThanOrEqual(expand.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
     }
 
-    private var language: String { ProcessInfo.processInfo.environment["JARVIS_UI_LANGUAGE"] ?? "zh-Hans" }
+    private var language: String { ProcessInfo.processInfo.environment["PERSONA_UI_LANGUAGE"] ?? "zh-Hans" }
     private var expandLabel: String {
         ["zh-Hans": "展开输入框", "en": "Expand the message box", "ja": "入力欄を広げる"][language]!
     }
@@ -205,9 +205,9 @@ final class ComposerExpandTests: XCTestCase {
     /// sheet is off meanwhile.
     @MainActor func testCommandReturnSendsFromThePage() throws {
         // On the iOS 26.5 simulators here (Xcode 27.2) a synthesized ⌘⏎ never reached the page's shortcut; run it where
-        // the simulator has a hardware keyboard: TEST_RUNNER_JARVIS_HARDWARE_KEYS=1.
-        guard ProcessInfo.processInfo.environment["JARVIS_HARDWARE_KEYS"] == "1" else {
-            throw XCTSkip("needs a hardware keyboard on the simulator (JARVIS_HARDWARE_KEYS=1)")
+        // the simulator has a hardware keyboard: TEST_RUNNER_PERSONA_HARDWARE_KEYS=1.
+        guard ProcessInfo.processInfo.environment["PERSONA_HARDWARE_KEYS"] == "1" else {
+            throw XCTSkip("needs a hardware keyboard on the simulator (PERSONA_HARDWARE_KEYS=1)")
         }
         open(isAssistant: false)
         startTyping()
@@ -228,9 +228,9 @@ final class ComposerExpandTests: XCTestCase {
         assertSentOnce(marker)
     }
 
-    /// TEST_RUNNER_JARVIS_NO_DRAG=1: no synthesized drags (the unfolded iPhone Duo upright, where XCUITest takes the
+    /// TEST_RUNNER_PERSONA_NO_DRAG=1: no synthesized drags (the unfolded iPhone Duo upright, where XCUITest takes the
     /// screen for portrait upside down and a drag lands elsewhere); the steps behind them are left out.
-    private var drags: Bool { ProcessInfo.processInfo.environment["JARVIS_NO_DRAG"] != "1" }
+    private var drags: Bool { ProcessInfo.processInfo.environment["PERSONA_NO_DRAG"] != "1" }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any).matching(identifier: id).firstMatch }
     private var field: XCUIElement { element("shell-composer-field") }
@@ -239,7 +239,7 @@ final class ComposerExpandTests: XCTestCase {
 
     /// `quotes`: `-showSampleQuotes`, only where the test sends (unsent, they stay with the conversation for the next).
     @MainActor private func open(isAssistant: Bool, quotes: Bool = false) {
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app = XCUIApplication()
         // Pair first on its own: a first pairing resets the route arguments (as ComposerKeyboardTests).
         app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "NO", "-AppleLanguages", "(\(language))"]
@@ -405,10 +405,10 @@ final class ComposerExpandTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
-        let appearance = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
+        let appearance = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"] ?? "light"
         let device = (UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone")
-            + (ProcessInfo.processInfo.environment["JARVIS_ORIENTATION"] == "landscape" ? "-landscape" : "")
+            + (ProcessInfo.processInfo.environment["PERSONA_ORIENTATION"] == "landscape" ? "-landscape" : "")
         try? screenshot.pngRepresentation
             .write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(device)-\(UITestStyle.name)-\(appearance)-\(name).png"))
     }

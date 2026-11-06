@@ -83,7 +83,7 @@ struct NotificationSettingsView: View {
                             Text("One Live Activity sums up agents that need you, are working, or are done").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: Theme.Icon.jarvis).foregroundStyle(Theme.brand)
+                        Image(systemName: Theme.Icon.persona).foregroundStyle(Theme.brand)
                     }
                 }
                 Toggle(isOn: binding(\.lockDetails)) {

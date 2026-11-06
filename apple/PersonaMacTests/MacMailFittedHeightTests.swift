@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Late remote images give the mail web view its real height only after `didFinish`, so remeasurements keep arriving.
 /// Accepting them (and ignoring rounding jitter) is pure logic in `FittedHeight`, tested here without a WKWebView:

@@ -20,7 +20,7 @@ func TestSubcommandHelpExitsZero(t *testing.T) {
 	run := func(args ...string) (string, int) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestSubcommandHelpExitsZero$")
 		cmd.Env = append(os.Environ(), "PERSONAD_TEST_HELP_ARGS="+strings.Join(args, "\x1f"), "HOME="+home,
-			"PERSONA_HOME="+filepath.Join(home, ".persona"), "JARVIS_HOME="+filepath.Join(home, ".jarvis"))
+			"PERSONA_HOME="+filepath.Join(home, ".persona"))
 		out, err := cmd.CombinedOutput()
 		code := 0
 		if ee, ok := err.(*exec.ExitError); ok {

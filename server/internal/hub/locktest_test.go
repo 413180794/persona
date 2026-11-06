@@ -17,9 +17,9 @@ import (
 
 func lockTestHub(t *testing.T) (*Hub, *db.DB) {
 	t.Helper()
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	d, err := db.Open(context.Background(), url, db.HubSet)
 	if err != nil {

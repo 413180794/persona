@@ -56,7 +56,7 @@ func TestSyncLinksTheUsersSkills(t *testing.T) {
 	}
 }
 
-// What an older jarvisd copied in (a skill, with its stamp) moves to the user's space once and is linked back.
+// What an older personad copied in (a skill, with its stamp) moves to the user's space once and is linked back.
 func TestSyncMovesTheOldCopy(t *testing.T) {
 	user, dir := filepath.Join(t.TempDir(), "skills"), t.TempDir()
 	skill(t, dir, "lark-gateway", "Feishu through a Lark gateway")
@@ -103,7 +103,7 @@ func TestSyncOldCopyGivesWayToTheUsers(t *testing.T) {
 	}
 }
 
-// An extension's skill copied in next to the old stamp stays the extension's: only what the old jarvisd left moves.
+// An extension's skill copied in next to the old stamp stays the extension's: only what the old personad left moves.
 func TestSyncOldCopyLeavesExtensionSkills(t *testing.T) {
 	user, dir := t.TempDir(), t.TempDir()
 	skill(t, dir, "from-extension", "an extension's")
@@ -127,7 +127,7 @@ func TestNoStampNoMove(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(user, "lark-gateway")); !os.IsNotExist(err) {
-		t.Fatal("moved a directory jarvisd never put there")
+		t.Fatal("moved a directory personad never put there")
 	}
 }
 
@@ -141,7 +141,7 @@ func TestBuiltinsAreRedistributable(t *testing.T) {
 }
 
 func TestListAndDescriptions(t *testing.T) {
-	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", t.TempDir()) // not this machine's plugins' skills
+	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", t.TempDir()) // not this machine's plugins' skills
 	user := t.TempDir()
 	skill(t, user, "alpha", `"quoted one"`)
 	if err := os.MkdirAll(filepath.Join(user, "folded"), 0o755); err != nil {
@@ -204,7 +204,7 @@ func TestConnectorSkillFollowsItsConnector(t *testing.T) {
 // goes, and the extension's skill of the same name comes in, with Telegram still signed in.
 func TestABuiltinSkillNoLongerCarriedGivesWayToAPlugins(t *testing.T) {
 	user, dir, plugins := t.TempDir(), t.TempDir(), t.TempDir()
-	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", plugins)
+	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", plugins)
 	skill(t, dir, "telegram", "built in")
 	if err := os.WriteFile(filepath.Join(dir, builtinStamp), []byte("0123456789ab persona-office,telegram\n"), 0o644); err != nil {
 		t.Fatal(err)

@@ -1,4 +1,4 @@
-/* Jarvis Android redesign preview.
+/* Persona Android redesign preview.
    Each screen is a function returning HTML; the hash (#screen=…&theme=…&w=…&only=phone) picks one, so screenshots
    can be scripted. Every name, address and number on these screens is made up. */
 (() => {
@@ -74,7 +74,7 @@
     wifi_off: 'M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z',
   };
   const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[n]}"/></svg>`;
-  // The Jarvis mark: a four-point star inside a coral ring.
+  // The Persona mark: a four-point star inside a coral ring.
   const star = () => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c.6 5.2 4.8 9.4 10 10-5.2.6-9.4 4.8-10 10-.6-5.2-4.8-9.4-10-10 5.2-.6 9.4-4.8 10-10z"/></svg>';
 
   /* ---------- building blocks ---------- */
@@ -90,7 +90,7 @@
     </div>`;
 
   const TABS = [
-    { id: 'jarvis', label: 'Jarvis', icon: 'auto_awesome' },
+    { id: 'persona', label: 'Persona', icon: 'auto_awesome' },
     { id: 'agents', label: 'Agents', icon: 'terminal', count: 3 },
     { id: 'inbox', label: '收件箱', icon: 'inbox', count: 3 },
     { id: 'settings', label: '设置', icon: 'settings' },
@@ -181,7 +181,7 @@
   add({
     id: 'welcome', group: '接入', title: '欢迎',
     notes: [
-      '主路径是「扫码配对」；手动输入时地址和配对码分两个框，粘贴整条 <code>jarvis://pair?…</code> 会自动拆开（ux.md 3.7）。',
+      '主路径是「扫码配对」；手动输入时地址和配对码分两个框，粘贴整条 <code>persona://pair?…</code> 会自动拆开（ux.md 3.7）。',
       '「先体验一下」进体验模式：App 里一个假的 hub，数据和 iOS 共用同一份（android.md 5.16）。',
       '最下面一行回答「没有 Google 服务能不能收通知」。',
     ],
@@ -189,12 +189,12 @@
       <div class="scroll">
         <div class="hero">
           <div class="brandmark"><div class="ring">${star()}</div></div>
-          <h1>Jarvis</h1>
+          <h1>Persona</h1>
           <p>在手机上看各台电脑上的 Agent，<br>需要你拍板时，第一时间知道。</p>
         </div>
         <div class="feat"><span class="fi">${icon('terminal')}</span><div><div class="ft">Agents</div><div class="fd">实时看过程，回答提问、审批计划、批准工具</div></div></div>
         <div class="feat"><span class="fi">${icon('inbox')}</span><div><div class="ft">收件箱</div><div class="fd">飞书和邮件合成一个列表，AI 先分拣、草拟回复</div></div></div>
-        <div class="feat"><span class="fi">${icon('auto_awesome')}</span><div><div class="ft">Jarvis</div><div class="fd">能读你的知识库和手机数据的助手</div></div></div>
+        <div class="feat"><span class="fi">${icon('auto_awesome')}</span><div><div class="ft">Persona</div><div class="fd">能读你的知识库和手机数据的助手</div></div></div>
       </div>
       <div class="actions">
         <button class="btn filled block" data-go="scan">${icon('qr')}扫码配对</button>
@@ -207,7 +207,7 @@
   add({
     id: 'scan', group: '接入', title: '扫码', chrome: 'dark',
     notes: [
-      '二维码由 hub 机器上的 <code>jarvisd hub pair</code> 打印：格式不变，token 换成 10 分钟内有效、只能用一次的临时配对码，另带 hub_id、公钥指纹、TLS 端口和一两个外部地址（ux.md 3.7，流程图 2）。',
+      '二维码由 hub 机器上的 <code>personad hub pair</code> 打印：格式不变，token 换成 10 分钟内有效、只能用一次的临时配对码，另带 hub_id、公钥指纹、TLS 端口和一两个外部地址（ux.md 3.7，流程图 2）。',
       '现有 iOS 照样能扫这个二维码（只用里面的内网地址和 token），iOS 不用改。',
       '相机权限被拒时这一页换成手动输入，不反复弹授权。',
     ],
@@ -219,7 +219,7 @@
           <button class="iconbtn" aria-label="手电筒">${icon('flash')}</button>
         </div>
         <div class="qrframe"><div class="qrfake">${fakeQr()}</div><i></i><i></i><i></i><i></i><div class="scanline"></div></div>
-        <div class="scanhint">在 hub 机器上运行 <code>jarvisd hub pair</code>，<br>扫它打印的二维码；配对码 10 分钟内有效</div>
+        <div class="scanhint">在 hub 机器上运行 <code>personad hub pair</code>，<br>扫它打印的二维码；配对码 10 分钟内有效</div>
         <div class="scanbar"><div class="sbt">扫不了？可以手动输入地址和配对码</div><button class="btn tonal small" data-go="connect">手动输入</button></div>
       </div>`,
   });
@@ -273,7 +273,7 @@
         ])}</div>
         <div class="todo">
           <div class="ti"><span class="n">1</span><span>在光猫或路由器的 IPv6 防火墙里放行 hub 的 TLS 端口 <code>18662</code> 入站，只放行这一个端口</span></div>
-          <div class="ti"><span class="n">2</span><span>确认 hub 机器自己的防火墙也放行了 <code>18662</code>；在 hub 上运行 <code>jarvisd hub doctor</code> 能看出卡在哪</span></div>
+          <div class="ti"><span class="n">2</span><span>确认 hub 机器自己的防火墙也放行了 <code>18662</code>；在 hub 上运行 <code>personad hub doctor</code> 能看出卡在哪</span></div>
           <div class="ti"><span class="n">3</span><span>或者先连到和 hub 同一个 Wi-Fi，用内网地址配对</span></div>
         </div>
       </div>
@@ -300,8 +300,8 @@
         <div class="card list">
           ${li({ ic: 'notifications', cls: 'ok', t: '通知', s: '横幅、锁屏都已允许', tail: okMark })}
           ${li({ ic: 'battery', cls: 'warn', t: '电池「无限制」', s: '不放开的话，锁屏一阵子后连接会被系统断开，「需要你」会晚到', tail: btn('去设置') })}
-          ${li({ ic: 'power', cls: 'warn', t: '自启动', s: '不开的话，手机重启后要先打开一次 Jarvis', tail: btn('去设置') })}
-          ${li({ ic: 'sweep', t: '锁屏清理', s: '在最近任务里锁住 Jarvis，一键清理时就不会被关掉', tail: btn('怎么做', 'text small') })}
+          ${li({ ic: 'power', cls: 'warn', t: '自启动', s: '不开的话，手机重启后要先打开一次 Persona', tail: btn('去设置') })}
+          ${li({ ic: 'sweep', t: '锁屏清理', s: '在最近任务里锁住 Persona，一键清理时就不会被关掉', tail: btn('怎么做', 'text small') })}
           ${li({ ic: 'notifications', t: '锁屏测试', s: '锁屏 30 秒后 hub 发一条测试通知，看响不响、亮不亮屏', tail: btn('开始') })}
           ${li({ ic: 'wifi', cls: 'ok', t: '后台连接', s: '已连接 · 公网 IPv6', tail: okMark })}
           ${li({ ic: 'dns', cls: 'ok', t: '电脑', s: '3 台在线，版本一致', tail: okMark })}
@@ -777,7 +777,7 @@
 
   const appIcon = `<span class="appi">${star()}</span>`;
   const fleet = (label = '已连接 hub') => `
-    <div class="nh">${appIcon}<span>Jarvis · ${label}</span><span class="grow"></span>${icon('expand_less', 'xs')}</div>
+    <div class="nh">${appIcon}<span>Persona · ${label}</span><span class="grow"></span>${icon('expand_less', 'xs')}</div>
     <div class="metrics"><div class="m crit"><b>3</b><span>需要你</span></div><div class="m"><b>2</b><span>工作中</span></div><div class="m"><b>1</b><span>完成未看</span></div></div>`;
   const shade = reply => () => `
     <div class="shade-head"><div><div class="big">10:24</div><div class="date">10月30日 周四</div></div><span class="grow"></span><button class="iconbtn" aria-label="设置">${icon('settings')}</button></div>
@@ -788,7 +788,7 @@
         <div class="nb first">先处理：web-shop › 前端 · 允许运行 Bash</div>
       </div>
       <div class="notif" data-go="perm">
-        <div class="nh">${appIcon}<span>Jarvis · 需要你 · 刚刚</span></div>
+        <div class="nh">${appIcon}<span>Persona · 需要你 · 刚刚</span></div>
         <div class="nt">允许运行命令？</div>
         <div class="nb">web-shop › 前端 · 工作站</div>
         <div class="nb"><code>npm run e2e -- --project=checkout</code></div>
@@ -799,7 +799,7 @@
         <div class="nmore">另外 2 件：批准计划 · 回答提问</div>
       </div>
       <div class="notif">
-        <div class="nh">${appIcon}<span>Jarvis · 做完了 · 2 分钟前</span></div>
+        <div class="nh">${appIcon}<span>Persona · 做完了 · 2 分钟前</span></div>
         <div class="nt">整理错误码文档</div>
         <div class="nb">工作站 · web-shop › 文档</div>
         <div class="nb">38 个错误码按模块整理成了表格，放在 docs/errors.md。</div>
@@ -837,7 +837,7 @@
       <div class="clock">${icon('lock', 's')}<div class="hm">10:24</div><div class="date">10月30日 周四</div></div>
       <div class="locknotes">
         <div class="notif">
-          <div class="nh">${appIcon}<span>Jarvis · 刚刚</span></div>
+          <div class="nh">${appIcon}<span>Persona · 刚刚</span></div>
           <div class="nt">3 件事需要你</div>
           <div class="nb">内容已隐藏，解锁后查看</div>
         </div>
@@ -846,12 +846,12 @@
       <div class="lockfoot">上滑解锁</div>`,
   });
 
-  // Jarvis
+  // Persona
 
-  const jarvisHome = () => `
+  const personaHome = () => `
     <div class="jtop">
       <button class="iconbtn" data-go="drawer" aria-label="对话列表">${icon('menu')}</button>
-      <div class="who"><div class="pill"><span class="face">${star()}</span><b>Jarvis</b>${icon('expand_more', 'xs')}</div></div>
+      <div class="who"><div class="pill"><span class="face">${star()}</span><b>Persona</b>${icon('expand_more', 'xs')}</div></div>
       <button class="iconbtn" aria-label="新对话">${icon('add_comment')}</button>
     </div>
     <div class="scroll">
@@ -872,29 +872,29 @@
     </div>
     <div class="bottomzone">
       <div class="jchips"><button class="chip">${icon('lock', 'xs')}默认权限</button><button class="chip">${icon('lightbulb', 'xs')}思考：中</button></div>
-      ${composer({ placeholder: '问 Jarvis…', end: 'mic' })}
+      ${composer({ placeholder: '问 Persona…', end: 'mic' })}
     </div>
-    ${navbar('jarvis')}`;
+    ${navbar('persona')}`;
 
   add({
-    id: 'jarvis', group: 'Jarvis', title: 'Jarvis 首页', nav: true,
+    id: 'persona', group: 'Persona', title: 'Persona 首页', nav: true,
     notes: [
       '结构和 iOS 一样：主对话、历史在左边的抽屉里（ModalNavigationDrawer），宽屏时是常驻的一列（ux.md 9）。',
       '首句发送和普通消息一样走统一的发送：断网时排队，不直接报错（ux.md 3.9）。',
     ],
-    render: jarvisHome,
+    render: personaHome,
   });
 
   add({
-    id: 'drawer', group: 'Jarvis', title: '对话抽屉', nav: true,
+    id: 'drawer', group: 'Persona', title: '对话抽屉', nav: true,
     notes: ['抽屉：主对话、定时任务、知识库，然后是置顶和最近的对话；系统返回或点空白关闭。'],
-    render: jarvisHome,
+    render: personaHome,
     layer: () => `
-      <div class="overlay" data-go="jarvis"></div>
+      <div class="overlay" data-go="persona"></div>
       <div class="drawer">
-        <div class="dtitle">Jarvis</div>
+        <div class="dtitle">Persona</div>
         <div class="dsearch">${icon('search', 's')}<span>搜索对话</span></div>
-        <div class="di on" data-go="jarvis">${icon('chat', 's')}<span class="grow">主对话</span></div>
+        <div class="di on" data-go="persona">${icon('chat', 's')}<span class="grow">主对话</span></div>
         <div class="di">${icon('alarm', 's')}<span class="grow">定时任务</span><small>3</small></div>
         <div class="di">${icon('book', 's')}<span class="grow">知识库</span></div>
         <div class="dh">置顶</div>
@@ -911,10 +911,10 @@
     <div class="li opt ${sel ? 'sel' : ''}" data-opt><span class="radio"></span><span class="lic">${icon(ic)}</span><div class="lb"><div class="lt">${t}</div><div class="ls">${s}</div></div></div>`;
 
   add({
-    id: 'share', group: 'Jarvis', title: '分享到 Jarvis', chip: '需要你 3',
+    id: 'share', group: 'Persona', title: '分享到 Persona', chip: '需要你 3',
     notes: [
-      'Android 独有、首版就做：任何 App 里的文字、链接、图片、文件「分享 → Jarvis」，选发给主对话还是某个 Agent（android.md 6.3）。',
-      '默认作为 &lt;jarvis-context&gt; 附在消息里，不单独成一条。',
+      'Android 独有、首版就做：任何 App 里的文字、链接、图片、文件「分享 → Persona」，选发给主对话还是某个 Agent（android.md 6.3）。',
+      '默认作为 &lt;persona-context&gt; 附在消息里，不单独成一条。',
       '状态栏左上的「需要你 3」是 Live Update 的胶囊（Android 16+），在别的 App 里也看得到。',
     ],
     backdrop: () => `
@@ -927,11 +927,11 @@
       <div class="overlay"></div>
       <div class="sheet">
         <div class="handle"></div>
-        <div class="sh-title">发给 Jarvis</div>
+        <div class="sh-title">发给 Persona</div>
         <div class="sharecard"><span class="thumb"></span><div class="lb"><div class="sct">用 hook 收拢表单校验的 5 个理由</div><div class="scu">example.com · 文章链接</div></div></div>
         <div class="pad16"><textarea class="field-area" rows="2" placeholder="补一句（可选）">参考这篇，看看我们的 useCheckoutForm 还缺什么</textarea></div>
         <div class="sec">发到</div>
-        ${target('auto_awesome', '主对话', 'Jarvis', true)}
+        ${target('auto_awesome', '主对话', 'Persona', true)}
         ${target('terminal', 'web-shop › 前端', '工作站 · 需要你')}
         ${target('terminal', 'data-pipeline › api', '笔记本 · 需要你')}
         ${li({ t: '作为上下文附在消息里', s: '带上链接、标题和选中的文字', tail: '<span class="switch" data-switch></span>' })}
@@ -1062,7 +1062,7 @@
         <div class="card list">
           ${li({ ic: 'error', cls: 'bad', t: '需要你', s: '重要 · 横幅和声音', tail: chev })}
           ${li({ ic: 'check_circle', cls: 'ok', t: '做完了', s: '默认', tail: chev })}
-          ${li({ ic: 'auto_awesome', t: 'Jarvis', s: '默认 · 助手主动找你', tail: chev })}
+          ${li({ ic: 'auto_awesome', t: 'Persona', s: '默认 · 助手主动找你', tail: chev })}
           ${li({ ic: 'wifi', t: '实时状态', s: '低 · 常驻的那一条，可以调成静默', tail: chev })}
         </div>
         <div class="sec">锁屏和状态栏</div>
@@ -1113,7 +1113,7 @@
 
   const $ = id => document.getElementById(id);
   const el = { device: $('device'), screen: $('screen'), backdrop: $('backdrop'), statusbar: $('statusbar'), content: $('content'), layer: $('layer'), dir: $('dir'), notes: $('notes') };
-  const GROUPS = ['接入', 'Agents', '对话', '交互', '通知', 'Jarvis', '收件箱', '设置'];
+  const GROUPS = ['接入', 'Agents', '对话', '交互', '通知', 'Persona', '收件箱', '设置'];
 
   const readHash = () => {
     const q = new URLSearchParams(location.hash.slice(1));
@@ -1162,7 +1162,7 @@
       if (f) s.scrollTop = f.offsetTop - s.offsetTop - (f.dataset.focus === 'top' ? 0 : s.clientHeight / 2 - f.offsetHeight / 2);
     });
     el.screen.querySelectorAll('textarea').forEach(syncField);
-    document.title = `${scr.title} · Jarvis Android 预览`;
+    document.title = `${scr.title} · Persona Android 预览`;
 
     el.dir.innerHTML = GROUPS.map(g => `<h3>${g}</h3><ul>${SCREENS.filter(s => s.group === g).map(s =>
       `<li><button class="${s.id === scr.id ? 'on' : ''}" data-screen="${s.id}">${s.title}</button></li>`).join('')}</ul>`).join('');

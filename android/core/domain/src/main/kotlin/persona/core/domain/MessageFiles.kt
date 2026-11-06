@@ -1,7 +1,7 @@
 package persona.core.domain
 
 /**
- * One `<jarvis-file kind="video" path="…" name="…" size="…" duration="…"/>` tag of a message (docs/protocol.md "Sending video",
+ * One `<persona-file kind="video" path="…" name="…" size="…" duration="…"/>` tag of a message (docs/protocol.md "Sending video",
  * iOS `AttachedFile`, web `parseUserText`): a file the phone uploaded to the session's machine. [kind] is `video`,
  * `audio` or `file`; [size] 0 and [duration] null when the tag does not say.
  */
@@ -10,19 +10,19 @@ data class AttachedFile(val kind: String, val path: String, val name: String, va
     fun toXml(): String {
         fun esc(s: String) = s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
         val d = duration?.let { " duration=\"" + "%.1f".format(java.util.Locale.ROOT, it) + "\"" }.orEmpty()
-        return "<jarvis-file kind=\"${esc(kind)}\" path=\"${esc(path)}\" name=\"${esc(name)}\" size=\"$size\"$d/>"
+        return "<persona-file kind=\"${esc(kind)}\" path=\"${esc(path)}\" name=\"${esc(name)}\" size=\"$size\"$d/>"
     }
 }
 
-private val fileTag = Regex("\\s*<jarvis-file\\b([^>]*?)/?>(?:\\s*</jarvis-file>)?\\s*")
+private val fileTag = Regex("\\s*<persona-file\\b([^>]*?)/?>(?:\\s*</persona-file>)?\\s*")
 private val fileAttribute = Regex("(\\w+)=\"([^\"]*)\"")
 
 /**
- * The files [text] carries as `<jarvis-file>` tags, in order, and the text without them (each tag a line break, the
+ * The files [text] carries as `<persona-file>` tags, in order, and the text without them (each tag a line break, the
  * whole trimmed). A tag without a path is dropped, not drawn.
  */
 fun parseAttachedFiles(text: String): Pair<List<AttachedFile>, String> {
-    if (!text.contains("<jarvis-file")) return emptyList<AttachedFile>() to text
+    if (!text.contains("<persona-file")) return emptyList<AttachedFile>() to text
     val files = fileTag.findAll(text).mapNotNull { match ->
         val a = fileAttribute.findAll(match.groupValues[1]).associate { it.groupValues[1] to decodeXmlEntities(it.groupValues[2]) }
         val path = a["path"]?.takeIf(String::isNotEmpty) ?: return@mapNotNull null

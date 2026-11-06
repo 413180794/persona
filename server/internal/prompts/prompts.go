@@ -1,4 +1,4 @@
-// Package prompts holds every prompt jarvisd writes for a model: one file per prompt under a directory per scene
+// Package prompts holds every prompt personad writes for a model: one file per prompt under a directory per scene
 // (assistant/, bot/, lark/, inbox/, kb/, tools/, shared/, voice/, wechat/, todo/), Go text/template syntax, embedded in the
 // binary. Callers pass data (machines, the owner's name, collected context…) to a typed render function here; no
 // prompt text is put together with fmt or + anywhere else. See docs/prompts.md.

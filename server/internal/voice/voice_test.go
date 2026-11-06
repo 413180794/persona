@@ -302,7 +302,7 @@ func TestLiveDialectConversation(t *testing.T) {
 	a.until(func(f map[string]any) bool { return f["type"] == "tool" && f["id"] == "d1" && f["done"] == true })
 	a.protocolOne()
 	msgs := hub.messages()
-	if len(msgs) != 1 || !strings.HasPrefix(msgs[0].Text, "明天有什么会\n") || !strings.Contains(msgs[0].Text, `<jarvis-context kind="context" title="语音对话"`) ||
+	if len(msgs) != 1 || !strings.HasPrefix(msgs[0].Text, "明天有什么会\n") || !strings.Contains(msgs[0].Text, `<persona-context kind="context" title="语音对话"`) ||
 		!isVoiceID(msgs[0].ID) {
 		t.Fatalf("main conversation got %+v", msgs)
 	}

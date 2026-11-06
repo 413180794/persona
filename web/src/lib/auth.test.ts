@@ -20,15 +20,15 @@ describe("pairToken", () => {
     expect(pairToken("jd_cafe00a1")).toBe("jd_cafe00a1");
   });
   it("takes the token from the app's pairing link, percent-decoded", () => {
-    expect(pairToken("jarvis://pair?token=jp_example%2B%26&url=http%3A%2F%2Fhub.example%3A18660")).toBe("jp_example+&");
+    expect(pairToken("persona://pair?token=jp_example%2B%26&url=http%3A%2F%2Fhub.example%3A18660")).toBe("jp_example+&");
     expect(pairToken("persona://pair?url=http%3A%2F%2Fhub.example%3A18660&token=a%26b%3D%2B+%3F")).toBe("a&b=+ ?");
   });
   it("takes it from ?token= or #token= in an ordinary link", () => {
     expect(pairToken("http://hub.example:18660/?token=t0k&tab=x")).toBe("t0k");
-    expect(pairToken("https://hub.example/j#a=1&token=t0k")).toBe("t0k");
+    expect(pairToken("https://hub.example/persona#a=1&token=t0k")).toBe("t0k");
   });
   it("passes anything else through, so the hub turns it down", () => {
-    expect(pairToken("jarvis://pair?url=http%3A%2F%2Fhub.example")).toBe("jarvis://pair?url=http%3A%2F%2Fhub.example");
+    expect(pairToken("persona://pair?url=http%3A%2F%2Fhub.example")).toBe("persona://pair?url=http%3A%2F%2Fhub.example");
     expect(pairToken("not a token")).toBe("not a token");
     expect(pairToken("http://[bad")).toBe("http://[bad");
   });
@@ -49,18 +49,18 @@ describe("pair", () => {
     const trade = calls.list.find((c) => c.path === "/auth/tokens");
     expect(trade?.json?.kind).toBe("web");
     expect(trade?.json).not.toHaveProperty("replaces");
-    expect(stored["jarvis.tokenId"]).toBe("dev1");
+    expect(stored["persona.tokenId"]).toBe("dev1");
   });
   it("has the hub replace the device this browser had before", async () => {
     calls.good = "jp_example";
-    stored["jarvis.tokenId"] = "dev_old";
+    stored["persona.tokenId"] = "dev_old";
     await pair("jp_example");
     expect(calls.list.find((c) => c.path === "/auth/tokens")?.json?.replaces).toBe("dev_old");
-    expect(stored["jarvis.tokenId"]).toBe("dev1");
+    expect(stored["persona.tokenId"]).toBe("dev1");
   });
   it("checks and trades the token from a pasted pairing link", async () => {
     calls.good = "jp_example";
-    await pair("jarvis://pair?url=http%3A%2F%2Fhub.example%3A18660&token=jp_example");
+    await pair("persona://pair?url=http%3A%2F%2Fhub.example%3A18660&token=jp_example");
     expect(calls.list.map((c) => [c.path, c.token])).toEqual([
       ["/machines", "jp_example"],
       ["/auth/tokens", "jp_example"],
@@ -75,7 +75,7 @@ describe("pair", () => {
   });
   it("throws what the hub said for a link without a token", async () => {
     calls.good = "jp_example";
-    await expect(pair("jarvis://pair?url=http%3A%2F%2Fhub.example")).rejects.toThrow("invalid token");
+    await expect(pair("persona://pair?url=http%3A%2F%2Fhub.example")).rejects.toThrow("invalid token");
     expect(setToken).not.toHaveBeenCalled();
   });
 });
@@ -95,8 +95,8 @@ describe("takeToken", () => {
     expect(takeToken("http://hub.example:18660/?token=t0k")).toEqual({ token: "t0k", rest: "/" });
   });
   it("takes it from the fragment too", () => {
-    expect(takeToken("http://hub.example:18660/j#token=t0k")).toEqual({ token: "t0k", rest: "/j" });
-    expect(takeToken("http://hub.example:18660/j#a=1&token=t0k")).toEqual({ token: "t0k", rest: "/j#a=1" });
+    expect(takeToken("http://hub.example:18660/persona#token=t0k")).toEqual({ token: "t0k", rest: "/persona" });
+    expect(takeToken("http://hub.example:18660/persona#a=1&token=t0k")).toEqual({ token: "t0k", rest: "/persona#a=1" });
   });
   it("leaves links without one alone, and strips an empty one", () => {
     expect(takeToken("http://hub.example:18660/settings?tab=models")).toBeNull();

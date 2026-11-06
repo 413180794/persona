@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Dynamic Island's pieces fit the room the system gives them, with one, two, three and four digits
 /// (docs/live-activity.md「和其他 App 共用灵动岛」). Each view is drawn at its own size (outside limited mode the island

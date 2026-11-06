@@ -440,7 +440,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         method: "POST",
         json: { prompt },
       });
-      navigate({ name: "jarvis", sid: r.session.session_id });
+      navigate({ name: "persona", sid: r.session.session_id });
     } catch (e) {
       toast(t("inbox-larkthread.summary_failed", { error: errorText(e) }), "error");
     } finally {

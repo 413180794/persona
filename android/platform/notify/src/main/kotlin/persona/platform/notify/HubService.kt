@@ -184,7 +184,7 @@ open class HubService : Service() {
         fun start(context: Context): Boolean {
             starts.requested()
             return try {
-                ContextCompat.startForegroundService(context, Intent(context, jarvis.platform.notify.HubService::class.java))
+                ContextCompat.startForegroundService(context, Intent(context, persona.platform.notify.HubService::class.java))
                 true
             } catch (failure: RuntimeException) {
                 starts.failed()
@@ -200,7 +200,7 @@ open class HubService : Service() {
          * and the user's stop itself after promoting.
          */
         fun stop(context: Context) {
-            if (!starts.deferStop() && running) context.stopService(Intent(context, jarvis.platform.notify.HubService::class.java))
+            if (!starts.deferStop() && running) context.stopService(Intent(context, persona.platform.notify.HubService::class.java))
         }
     }
 }

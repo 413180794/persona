@@ -3,20 +3,20 @@ import XCTest
 /// The live screen as a drawer (#1343): while a chat's model operates a Mac its running work says so
 /// (「正在操作 MacBook · 点 AC → 9 → × → 8」) and opens the screen like the terminal's drawer, over it the step, dragged down it
 /// closes; the ··· menus have VNC whether or not the model is at it. Against scripts/mock/mock_hub.py with
-/// MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake MOCK_WEB=web/dist (`TEST_RUNNER_JARVIS_SCREEN_HUB`):
+/// MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake MOCK_WEB=web/dist (`TEST_RUNNER_PERSONA_SCREEN_HUB`):
 /// without MOCK_SCREEN=fake the screen is this Mac's own Screen Sharing, and with it off the drawer only says the hub
-/// would not connect. JARVIS_SHOTS keeps the screenshots, named by `TEST_RUNNER_JARVIS_LOOK`.
+/// would not connect. PERSONA_SHOTS keeps the screenshots, named by `TEST_RUNNER_PERSONA_LOOK`.
 final class ScreenDrawerTests: XCTestCase {
     private let calc = "server/b2e4d6f8-0000-4000-8000-0000000000c1"
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
 
     @MainActor private func launch(_ args: [String]) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_SCREEN_HUB"] else {
-            throw XCTSkip("needs mock_hub.py with MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake (JARVIS_SCREEN_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_SCREEN_HUB"] else {
+            throw XCTSkip("needs mock_hub.py with MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake (PERSONA_SCREEN_HUB)")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair, "-openScreenFresh", "YES"] + args // no Mac sign-in kept from another test
         app.launchPinned()
         return app
@@ -73,7 +73,7 @@ final class ScreenDrawerTests: XCTestCase {
 
     @MainActor func testTheMenusHaveTheScreen() throws {
         let app = try launch(["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", calc])
-        let face = app.buttons["jarvis-avatar"].firstMatch
+        let face = app.buttons["persona-avatar"].firstMatch
         XCTAssertTrue(face.waitForExistence(timeout: 30))
         face.tap()
         let item = app.buttons["VNC · MacBook"].firstMatch
@@ -90,14 +90,14 @@ final class ScreenDrawerTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        let look = ProcessInfo.processInfo.environment["JARVIS_LOOK"].map { "-" + $0 } ?? ""
+        let look = ProcessInfo.processInfo.environment["PERSONA_LOOK"].map { "-" + $0 } ?? ""
         let full = "\(name)-\(UITestStyle.name)\(look)"
         let png = app.screenshot()
         let attachment = XCTAttachment(screenshot: png)
         attachment.name = full
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(full + ".png"))
         }
     }

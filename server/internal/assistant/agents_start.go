@@ -130,8 +130,8 @@ func tabSlug(s string) string {
 	return strings.Trim(b.String()[:min(b.Len(), 24)], "-")
 }
 
-// defaultTabName: a name nobody chose — the old fixed "jarvis", herdr's numbers, the agent-<n> fallback.
-var defaultTabName = regexp.MustCompile(`^(jarvis(-\d+)?|\d+|agent-\d+)?$`)
+// defaultTabName: a name nobody chose — the old fixed "persona", herdr's numbers, the agent-<n> fallback.
+var defaultTabName = regexp.MustCompile(`^(persona(-\d+)?|\d+|agent-\d+)?$`)
 
 // TabRename is one tab of POST /api/v1/tabs/autoname: renamed, or (dry run) what it would be called.
 type TabRename struct {

@@ -7,7 +7,7 @@
 #   ./scripts/app/android.sh apk        # debug APK only (android/app/build/outputs/apk/debug/app-debug.apk)
 # shots takes optional environment variables for repeatable, pixel-comparable captures (docs/android.md):
 #   SHOTS_STYLE=glass|brief|board  pass debug.style on every launch
-#   SHOTS_PLUGINS=1                the mock hub serves MOCK_PLUGINS (Settings › Plugins) and the plugin pages are captured too
+#   SHOTS_PLUGINS=1                the mock hub serves MOCK_EXTENSIONS (Settings › Plugins) and the plugin pages are captured too
 #                                  (a plugin's own page, the plugin market and a launcher's page with a plugin's section);
 #                                  off by default because its running voice plugin adds the voice button to Persona
 #   SHOTS_MOCK_PORT=<port>         run the mock hub on this port instead of a random one
@@ -16,7 +16,7 @@
 #                                  capture each page only once it has held still
 #   SHOTS_SETTLE=<seconds>         wait after each launch before the capture (default 2)
 # Compare two capture directories with scripts/app/android_shots_diff.py.
-# The application id comes from ~/.config/jarvis/config.json: android.application_id, else app.bundle_id.
+# The application id comes from ~/.config/persona/config.json: android.application_id, else app.bundle_id.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 COMMAND=install
@@ -31,11 +31,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 if [ "$COMMAND" = shots ]; then
-  APP_ID=com.example.jarvis.shots
+  APP_ID=com.example.persona.shots
 else
-APP_ID=$(python3 scripts/jarvis_config.py get android.application_id 2>/dev/null || true)
-[ -n "$APP_ID" ] || APP_ID=$(python3 scripts/jarvis_config.py get app.bundle_id 2>/dev/null || true)
-APP_ID=${APP_ID:-com.example.jarvis}
+APP_ID=$(python3 scripts/persona_config.py get android.application_id 2>/dev/null || true)
+[ -n "$APP_ID" ] || APP_ID=$(python3 scripts/persona_config.py get app.bundle_id 2>/dev/null || true)
+APP_ID=${APP_ID:-com.example.persona}
 fi
 ADB_ARGS=()
 [ -z "$SERIAL" ] || ADB_ARGS=(-s "$SERIAL")
@@ -78,7 +78,7 @@ if moment.tzinfo is None or moment.microsecond: sys.exit(1)
 print(moment.astimezone(timezone.utc).strftime("%m%d%H%M%Y.%S"))' "$SHOTS_FROZEN" 2>/dev/null) || {
       echo "SHOTS_FROZEN 必须是带时区、精确到秒的 ISO 时间，例如 2026-11-02T04:00:00+00:00。" >&2; exit 2; }
   fi
-  OUTPUT=${OUTPUT:-/tmp/jarvis-android-shots-$(date +%Y%m%d-%H%M%S)}
+  OUTPUT=${OUTPUT:-/tmp/persona-android-shots-$(date +%Y%m%d-%H%M%S)}
   mkdir -p "$OUTPUT"
   OUTPUT=$(cd "$OUTPUT" && pwd)
 fi
@@ -101,7 +101,7 @@ case "$COMMAND" in
     SAVED_SETTINGS=""
     DEMO_SINCE=0
     CLOCK_PID=""
-    CLOCK_STOP=/data/local/tmp/jarvis-shots-clock.stop
+    CLOCK_STOP=/data/local/tmp/persona-shots-clock.stop
     STYLE_ARGS=()
     [ -z "${SHOTS_STYLE:-}" ] || STYLE_ARGS=(--es debug.style "$SHOTS_STYLE")
     demo() { "$ADB" -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command "$@" >/dev/null; }
@@ -172,7 +172,7 @@ case "$COMMAND" in
     cd ..
     PLUGINS_MODE=""
     [ "${SHOTS_PLUGINS:-}" != 1 ] || PLUGINS_MODE=1
-    PORT=${SHOTS_MOCK_PORT:-0} MOCK_FROZEN=${SHOTS_FROZEN:-} MOCK_PLUGINS=$PLUGINS_MODE python3 -u - >"$OUTPUT/mock-hub.log" 2>&1 <<'MOCK_PY' &
+    PORT=${SHOTS_MOCK_PORT:-0} MOCK_FROZEN=${SHOTS_FROZEN:-} MOCK_EXTENSIONS=$PLUGINS_MODE python3 -u - >"$OUTPUT/mock-hub.log" 2>&1 <<'MOCK_PY' &
 import ast, os, re, sys, types
 from pathlib import Path
 if os.environ.get('MOCK_FROZEN'):
@@ -251,13 +251,13 @@ if requests:
     r = requests[0]
     print('request\t%s\t%s/%s' % (r['id'], r['machine_id'], r['session_id']))
 quote = lambda value: urllib.parse.quote(value, safe='')
-print('terminal\tjarvis://open?target=terminal&machine=%s&session=%s' % (quote(agent['machine_id']), quote(agent['session_id'])))
+print('terminal\tpersona://open?target=terminal&machine=%s&session=%s' % (quote(agent['machine_id']), quote(agent['session_id'])))
 inbox = get('/api/v1/inbox')
 items = inbox.get('items', []) if isinstance(inbox, dict) else inbox
 lark = next((i for i in items if (i.get('lark') or {}).get('feed_id')), None)
 mail = next((i for i in items if i.get('source') == 'mail'), None)
-if lark: print('lark\tjarvis://open?target=lark&chat=%s' % quote(lark['lark']['feed_id']))
-if mail: print('mail\tjarvis://open?target=inbox&item=%s' % quote(mail['id']))
+if lark: print('lark\tpersona://open?target=lark&chat=%s' % quote(lark['lark']['feed_id']))
+if mail: print('mail\tpersona://open?target=inbox&item=%s' % quote(mail['id']))
 SHOTS_PY
     "$ADB" -s "$SERIAL" shell pm grant "$APP_ID" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
     freeze_clock
@@ -303,7 +303,7 @@ SHOTS_PY
       [ -s "$OUTPUT/$theme-$name.png" ] || { echo "截图失败：$name" >&2; exit 1; }
     }
     for theme in light dark; do
-      for tab in Jarvis Agents Inbox Settings; do capture "$theme" "$tab" --es debug.openTab "$tab"; done
+      for tab in Persona Agents Inbox Settings; do capture "$theme" "$tab" --es debug.openTab "$tab"; done
       while IFS=$'\t' read -r page target request_session <&3; do
         case "$page" in
           chat) capture "$theme" chat --es debug.openSession "$target" --es debug.conversationKind agent ;;
@@ -315,20 +315,20 @@ SHOTS_PY
       done 3<"$OUTPUT/fixture.tsv"
       capture "$theme" pairing --es debug.openPairing true
       capture "$theme" diagnostics --es debug.openDiagnostics true
-      for page in notifications readiness; do capture "$theme" "settings-$page" --es debug.openLink "'jarvis://open?target=settings&page=$page'"; done
+      for page in notifications readiness; do capture "$theme" "settings-$page" --es debug.openLink "'persona://open?target=settings&page=$page'"; done
       for page in machines knowledge phone catalog; do capture "$theme" "$page" --es debug.openPage "$page"; done
       # Settings › Managers (docs/managers.md): the mock's roster, a manager on another computer and the hub's own (Delete off).
       # The install code sheet is drawn by ManagersShotsTest (feature/settings, build/managers-shots/).
       capture "$theme" settings-managers --es debug.openPage managers
       for id in m-3fa21c assistant; do capture "$theme" "manager-$id" --es debug.openPage "manager:$id"; done
       # Settings › Model configuration and Add model provider, typed in and from a plugin's preset (the mock offers two example presets).
-      capture "$theme" settings-modelconfig --es debug.openLink "'jarvis://open?target=settings&page=modelconfig'"
+      capture "$theme" settings-modelconfig --es debug.openLink "'persona://open?target=settings&page=modelconfig'"
       for mode in manual preset; do
-        capture "$theme" "new-provider-$mode" --es debug.openLink "'jarvis://open?target=settings&page=modelconfig'" --es debug.newProvider "$mode"
+        capture "$theme" "new-provider-$mode" --es debug.openLink "'persona://open?target=settings&page=modelconfig'" --es debug.newProvider "$mode"
       done
       if [ -n "$PLUGINS_MODE" ]; then
         # Settings › Plugins and three of the mock's plugins: one to set up (every kind of field), hub.json's, a broken one.
-        capture "$theme" settings-plugins --es debug.openLink "'jarvis://open?target=settings&page=plugins'"
+        capture "$theme" settings-plugins --es debug.openLink "'persona://open?target=settings&page=plugins'"
         for id in example-notes voice example-weather example-gateway; do capture "$theme" "plugin-$id" --es debug.openPage "plugin:$id"; done
         # A page a plugin draws (every kind of item), the plugin market (the catalog, an upgradable plugin, one this hub cannot
         # install, the markets) and a launcher's page with a plugin's section (#1329).

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The order of Machines (docs/machines.md「App」): what needs a look first, otherwise the hub's order.
 @MainActor struct MachineConcernTests {

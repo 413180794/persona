@@ -111,10 +111,10 @@ func TestTaskOutcomeRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(res.Text, `<jarvis-context kind="context" title="项目 · 天气 App · 背景" url="">`) ||
+	if !strings.HasPrefix(res.Text, `<persona-context kind="context" title="项目 · 天气 App · 背景" url="">`) ||
 		!strings.Contains(res.Text, "项目：天气 App 的 iOS 和安卓版") ||
 		!strings.Contains(res.Text, "「修 登录页横屏崩溃」结论：修好登录页横屏崩溃，PR 已合并") ||
-		!strings.HasSuffix(res.Text, "</jarvis-context>\n\n加深色模式") {
+		!strings.HasSuffix(res.Text, "</persona-context>\n\n加深色模式") {
 		t.Fatalf("handoff = %q", res.Text)
 	}
 	// To an agent already running (no New), or for another directory: as it was.
@@ -233,11 +233,11 @@ func TestAgentStartCarriesProjectContext(t *testing.T) {
 		t.Fatalf("starts = %+v", f.starts)
 	}
 	p, _ := f.starts[0]["prompt"].(string)
-	if !strings.HasPrefix(p, `<jarvis-context kind="context" title="项目 · 天气 App · 背景"`) || !strings.Contains(p, "结论：修好了") ||
+	if !strings.HasPrefix(p, `<persona-context kind="context" title="项目 · 天气 App · 背景"`) || !strings.Contains(p, "结论：修好了") ||
 		!strings.HasSuffix(p, "\n\n加深色模式") {
 		t.Fatalf("prompt = %q", p)
 	}
-	if len(f.tabAsked) == 0 || strings.Contains(f.tabAsked[len(f.tabAsked)-1], "jarvis-context") {
+	if len(f.tabAsked) == 0 || strings.Contains(f.tabAsked[len(f.tabAsked)-1], "persona-context") {
 		t.Fatalf("tab named from %q", f.tabAsked)
 	}
 }

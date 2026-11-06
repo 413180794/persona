@@ -261,7 +261,7 @@ function Shell() {
   // the keyboard shortcuts (⌘K and the rest, lib/shortcuts.ts): what they do here, and the listener that runs them
   useShortcuts({ route, pane, narrow, toggleDrawer: toggle, closeDrawer: close });
 
-  useEffect(() => setDrawer(false), [route.name, pane ? pane.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
+  useEffect(() => setDrawer(false), [route.name, pane ? pane.sid : route.name === "persona" ? route.sid : route.name === "agents" ? route.id : ""]);
   // a session's files / Git belong to that conversation: moving to another page closes them (a link and a task stay),
   // and coming back to it opens them again where they were (#5150, lib/panel-memory.ts)
   const at = pane ? `${pane.mid}/${pane.sid}` : route.name;
@@ -269,7 +269,7 @@ function Shell() {
 
   const extensionTitle = useExtensionPlace(route.name === "extension" ? route.extension : "", route.name === "extension" ? route.ui : "")?.title;
   const title =
-    pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? t("app.title_new_chat") : route.name === "history" ? t("app.title_history") : route.name === "health" ? t("app.title_health") : route.name === "profile" ? t("app.title_profile") : route.name === "inbox" ? t("app.title_inbox") : route.name === "messages" ? t("app.title_messages")
+    pane ? "Agent" : route.name === "persona" ? "Persona" : route.name === "persona-new" ? t("app.title_new_chat") : route.name === "history" ? t("app.title_history") : route.name === "health" ? t("app.title_health") : route.name === "profile" ? t("app.title_profile") : route.name === "inbox" ? t("app.title_inbox") : route.name === "messages" ? t("app.title_messages")
       : route.name === "routines" ? t("app.title_routines") : route.name === "kb" ? t("app.title_kb") : route.name === "workspace-board" ? t("app.title_workspace_board") : route.name === "todos" ? t("app.title_todos") : route.name === "machines" || route.name === "machine" ? t("app.title_machines") : route.name === "space" ? route.space : route.name === "terminal" ? t("app.title_terminal") : route.name === "settings" ? t("app.title_settings")
       : route.name === "agents" ? t("app.title_agents") : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || t("app.title_extension") : t("app.title_home");
 
@@ -287,7 +287,7 @@ function Shell() {
         : launch ? <StartingAgent launch={launch} onToggleSidebar={toggle} />
         : <ChatView key={`${pane.mid}/${pane.sid}`} mid={pane.mid} sid={pane.sid} starting={starting} onToggleSidebar={toggle} inPage />;
       break;
-    case "jarvis":
+    case "persona":
       main = <PersonaAssistant sid={route.sid} onToggleSidebar={toggle} />;
       break;
     case "persona-new":

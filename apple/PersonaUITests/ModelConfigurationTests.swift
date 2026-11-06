@@ -6,7 +6,7 @@ final class ModelConfigurationTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let value = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+        guard let value = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py")
         }
         hub = value
@@ -14,7 +14,7 @@ final class ModelConfigurationTests: XCTestCase {
 
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""] + extra
         app.launchPinned()
         return app
@@ -60,7 +60,7 @@ final class ModelConfigurationTests: XCTestCase {
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let directory = ProcessInfo.processInfo.environment["JARVIS_MODEL_SHOTS"] {
+        if let directory = ProcessInfo.processInfo.environment["PERSONA_MODEL_SHOTS"] {
             try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent("\(state).png"))
         }
     }

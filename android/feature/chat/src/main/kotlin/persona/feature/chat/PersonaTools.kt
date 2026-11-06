@@ -11,14 +11,11 @@ import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * Persona's own MCP tools (server `jarvis`: `mcp__jarvis__agent_read`…) on a step: which one is ask_user, and their
- * icons. Their words are `core:domain` `namedToolVerb` (#3100). Display only: the wire keeps `jarvis`.
+ * Persona's own MCP tools (server `persona`: `mcp__persona__agent_read`…) on a step: which one is ask_user, and their
+ * icons. Their words are `core:domain` `namedToolVerb` (#3100). Display only: the wire keeps `persona`.
  */
 internal object PersonaTools {
-    /** The MCP server names that are Persona itself (`jarvis` today; `persona` if the server is ever renamed). */
-    private val servers = setOf("jarvis", "persona")
-
-    /** The server of an MCP tool's full name ("mcp__jarvis__agent_read" → "jarvis"), null for any other tool. */
+    /** The server of an MCP tool's full name ("mcp__persona__agent_read" → "persona"), null for any other tool. */
     fun server(name: String): String? {
         if (!name.startsWith("mcp__")) return null
         val rest = name.removePrefix("mcp__")
@@ -29,7 +26,7 @@ internal object PersonaTools {
     /** The tool's own name: what follows the last `__` of an MCP tool, the name itself otherwise. */
     fun base(name: String): String = if (name.startsWith("mcp__")) name.substringAfterLast("__") else name
 
-    fun isPersona(name: String): Boolean = server(name) in servers
+    fun isPersona(name: String): Boolean = server(name) == "persona"
 
     /** ask_user: the assistant's own question tool (docs/assistant.md), which takes AskUserQuestion's questions. */
     fun isAskUser(name: String): Boolean = isPersona(name) && base(name) == "ask_user"

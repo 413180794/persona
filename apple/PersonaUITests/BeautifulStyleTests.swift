@@ -2,24 +2,24 @@ import XCTest
 
 /// The BeautifulUI style (Settings › Interface Style): its prompt bar sends what was typed (it once cleared the draft before the send
 /// read it, and nothing went out), and the chat shows its components only there. Against scripts/mock/mock_hub.py
-/// (JARVIS_MOCK_HUB), which records sends at /mock/sent.
+/// (PERSONA_MOCK_HUB), which records sends at /mock/sent.
 final class BeautifulStyleTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(style: String, session: String = "macbook/a1f3c2d4-0000-4000-8000-000000000006") -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-ui.style", style, "-tab", "dev",
                                "-openSession", session]
-        app.launchJarvis()
+        app.launchPersona()
         return app
     }
 
@@ -76,9 +76,9 @@ final class BeautifulStyleTests: XCTestCase {
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: v.count + 2))
     }
 
-    /// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps a screenshot of each step.
+    /// `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps a screenshot of each step.
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("slash-\(name).png"))
     }
 

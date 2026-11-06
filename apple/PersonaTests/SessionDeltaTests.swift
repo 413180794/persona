@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Session lists from both kinds of hub (docs/protocol.md「会话增量」): an older one sends whole lists, a newer one a
 /// snapshot without the Codex history, then deltas; GET /api/v1/sessions (FakeHub) brings the history. Either way the

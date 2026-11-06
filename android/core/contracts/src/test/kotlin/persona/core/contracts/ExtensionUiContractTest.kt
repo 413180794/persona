@@ -55,7 +55,7 @@ class ExtensionUiContractTest {
     // The schema's own example of every UI version 3 component (schema/extension/examples/View.components-v3.json) reads
     // into the app's types with nothing left behind: every key of every component lands in a field.
     @Test fun theSchemasVersionThreeExampleReads() {
-        val file = java.io.File(System.getProperty("jarvis.repo.root"), "schema/extension/examples/View.components-v3.json")
+        val file = java.io.File(System.getProperty("persona.repo.root"), "schema/extension/examples/View.components-v3.json")
         val raw = JsonCodec.parseToJsonElement(file.readText())
         val view = JsonCodec.decodeFromJsonElement(persona.core.contracts.api.ExtensionView.serializer(), raw)
         val strict = Json { ignoreUnknownKeys = false }

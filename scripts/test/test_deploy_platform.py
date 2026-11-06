@@ -106,7 +106,7 @@ machine_platform m
     def test_a_platform_without_a_build_is_an_error_not_a_guess(self):
         result, _ = self.platform('windows', 'amd64')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('no jarvisd build for windows/amd64', result.stderr)
+        self.assertIn('no personad build for windows/amd64', result.stderr)
 
     def test_a_machine_that_cannot_be_asked_is_unreachable_not_a_platform(self):
         # 3, not 1: a laptop that is asleep is a normal deploy (`unreachable, skipped`), not a platform the hub has no
@@ -133,7 +133,7 @@ class DeployBuildsEveryPlatformTests(unittest.TestCase):
         text = DEPLOY.read_text()
         self.assertIn('PLATFORMS=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)', text)
         self.assertIn('for plat in "${PLATFORMS[@]}"; do\n  GOOS=${plat%-*} GOARCH=${plat#*-}', text)
-        self.assertIn('for plat in "${PLATFORMS[@]}"; do\n        remote_state "$JARVIS_HUB_SSH"', text)
+        self.assertIn('for plat in "${PLATFORMS[@]}"; do\n        remote_state "$PERSONA_HUB_SSH"', text)
 
     def test_the_hub_and_the_nodes_do_not_pick_a_build_from_os_alone(self):
         text = DEPLOY.read_text()

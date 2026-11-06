@@ -21,9 +21,9 @@ To reproduce (replace the device ID; generate the local config and the Xcode pro
 ```sh
 MOCK_LARK_PINS=1 PORT=18826 python3 scripts/mock/mock_hub.py
 xcrun simctl ui <simulator-id> appearance light
-TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18826 \
-TEST_RUNNER_JARVIS_UI_STYLE=beautiful \
-TEST_RUNNER_JARVIS_SHOTS=/tmp/pins-light \
+TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18826 \
+TEST_RUNNER_PERSONA_UI_STYLE=beautiful \
+TEST_RUNNER_PERSONA_SHOTS=/tmp/pins-light \
 xcodebuild -project apple/Persona.xcodeproj -scheme Persona \
   -destination 'platform=iOS Simulator,id=<simulator-id>' \
   -parallel-testing-enabled NO \

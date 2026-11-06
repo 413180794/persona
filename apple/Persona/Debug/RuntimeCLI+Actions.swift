@@ -4,7 +4,7 @@ import UIKit
 
 /// Acting on the app (docs/runtime-cli.md「动作和截图」): `activate`, `scroll`, `type`, `dismiss-keyboard`, `snapshot`,
 /// `pasteboard`, `share`.
-/// A real touch (a menu's items, which take no accessibility activation) is `jarvisctl.py tap`'s fallback: `idb`.
+/// A real touch (a menu's items, which take no accessibility activation) is `personactl.py tap`'s fallback: `idb`.
 extension RuntimeCLI {
     static let actionCommands: [String: Command] = [
         "activate": { a in activate(a) },

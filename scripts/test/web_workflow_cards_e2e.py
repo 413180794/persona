@@ -66,7 +66,7 @@ def run(browser, base, hub, token, size, theme, shots, reduce):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(base + "/overview?token=" + token)
     page.wait_for_load_state("networkidle")
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
     prefix = f"workflow-cards-{size}-{theme}{'-reduced' if reduce else ''}"
 
     def shot(name, el=None):
@@ -113,7 +113,7 @@ def run(browser, base, hub, token, size, theme, shots, reduce):
     expect(bar).to_be_visible()
     expect(bar.locator("[data-running-verb]")).to_have_text("后台 workflow · Verify · 6/9+ · 还有 1 个")
     elapsed = bar.locator("[data-running-elapsed]").inner_text()
-    started = page.evaluate("""async () => { const r = await fetch('/api/v1/sessions', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('jarvis.token') || 'mock') } });
+    started = page.evaluate("""async () => { const r = await fetch('/api/v1/sessions', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('persona.token') || 'mock') } });
       const all = (await r.json()).sessions; const s = all.find((x) => x.session_id === '%s');
       return (Date.now() - Date.parse(s.workflows[0].started_at)) / 60000; }""" % CHAT.split("/")[-1])
     minutes = int(elapsed.split(" 分")[0]) if " 分" in elapsed else -1

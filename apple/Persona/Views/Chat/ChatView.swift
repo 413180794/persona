@@ -4172,7 +4172,7 @@ struct Composer: View, Equatable {
         let ctx = model.composerContexts[key] ?? []
         let files = videos.ready
         guard !t.isEmpty || !images.isEmpty || !files.isEmpty || !ctx.isEmpty else { return }
-        // Picked page excerpts ride along as <jarvis-context> tags before what was typed, videos as <jarvis-file> after.
+        // Picked page excerpts ride along as <persona-context> tags before what was typed, videos as <persona-file> after.
         let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "See the context above.") : String(localized: "Please look at the image [Assistant View a3e0a0]")) : String(localized: "Please look at the image [Assistant View 5ad878]")) : t, files: files)
         let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
         // Routed to a task ("Tell “xx”"): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).

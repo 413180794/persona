@@ -5,7 +5,7 @@ import { requestCrumb } from "./error-reports";
 import { currentLanguage, t } from "../i18n";
 import type { Item } from "./types";
 
-const TOKEN_KEY = "jarvis.token";
+const TOKEN_KEY = "persona.token";
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? "";
@@ -41,7 +41,7 @@ export function handleUnauthorized(fn: () => void) {
 
 /**
  * Who this page is to the hub: the platform and version its socket's client_hello names, and every request's
- * X-Jarvis-Client. The hub answers a request with what this page's socket declared (MCP forms and links: only to a
+ * X-Persona-Client. The hub answers a request with what this page's socket declared (MCP forms and links: only to a
  * request whose platform and version match a connection that declared them, docs/protocol.md "MCP elicitation").
  */
 export const CLIENT_PLATFORM = "web";
@@ -98,7 +98,7 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown; to
   headers.set("Authorization", `Bearer ${init.token ?? getToken()}`);
   // the hub writes its error and status text in the interface language (docs/i18n.md "Protocol")
   if (!headers.has("Accept-Language")) headers.set("Accept-Language", currentLanguage());
-  headers.set("X-Jarvis-Client", `${CLIENT_PLATFORM}/${CLIENT_VERSION}`);
+  headers.set("X-Persona-Client", `${CLIENT_PLATFORM}/${CLIENT_VERSION}`);
   let body = init.body;
   if (init.json !== undefined) {
     headers.set("Content-Type", "application/json");

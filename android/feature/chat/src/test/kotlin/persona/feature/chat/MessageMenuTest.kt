@@ -64,12 +64,12 @@ class MessageMenuTest {
     @Test fun aQuoteGoesOverTheBoxAndLeavesTheDraft() {
         // "Quote" is a context over the composer now (iOS #986, ComposerParityTest): the words are not typed into the draft.
         val quotes = withQuote(emptyList(), ChatLinkContext.quote("第一行\n第二行", "我", "m"))
-        assertEquals("<jarvis-context kind=\"quote\" title=\"我\" url=\"\" msg=\"m\">\n第一行\n第二行\n</jarvis-context>\n\nmine",
+        assertEquals("<persona-context kind=\"quote\" title=\"我\" url=\"\" msg=\"m\">\n第一行\n第二行\n</persona-context>\n\nmine",
             linkMessage("mine", quotes, res))
     }
 
     @Test fun handingToPersonaSendsTheMessageAsContext() {
-        assertEquals("<jarvis-context kind=\"context\" title=\"修复登录 · 消息\" url=\"\">\n原文\n</jarvis-context>\n\n看看这条消息，告诉我该怎么处理。",
+        assertEquals("<persona-context kind=\"context\" title=\"修复登录 · 消息\" url=\"\">\n原文\n</persona-context>\n\n看看这条消息，告诉我该怎么处理。",
             handoffMessage("修复登录", "原文", res))
         val context = messageContext("修复登录", "原文", res)
         assertEquals(listOf("context", "修复登录 · 消息", "", "原文"), listOf(context.kind, context.title, context.url, context.text))
@@ -89,11 +89,11 @@ class MessageMenuTest {
         val main = FakeMain()
         val events = mutableListOf<String>()
         val pending = launch {
-            handToPersona(main, "看看", "op-1", onQueued = { events += "jarvis" }, onBound = { events += "open:${it.path}" })
+            handToPersona(main, "看看", "op-1", onQueued = { events += "persona" }, onBound = { events += "open:${it.path}" })
         }
         runCurrent()
         assertEquals(listOf("op-1"), main.sent)
-        assertEquals(listOf("jarvis"), events)
+        assertEquals(listOf("persona"), events)
         val target = SessionKey("server", "main")
         main.outbox.value = main.outbox.value.map { it.copy(session = target) }
         pending.join()

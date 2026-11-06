@@ -1,18 +1,18 @@
 import XCTest
 
-/// A picture sent to Jarvis shows in the chat, as in an Agents chat: at once in the message being sent, still there once
+/// A picture sent to Persona shows in the chat, as in an Agents chat: at once in the message being sent, still there once
 /// the transcript has it, and after the chat is opened again; a tap opens the image viewer (2026-11-03: it vanished as
 /// soon as the transcript's copy came, claude -p writing the picture before the message's text).
 ///   PORT=18797 MOCK_ECHO_SENT=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AssistantSentPhotoTests
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AssistantSentPhotoTests
 final class AssistantSentPhotoTests: XCTestCase {
     private var hub = ""
-    /// The mock's main Jarvis conversation.
+    /// The mock's main Persona conversation.
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_ECHO_SENT=1 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_ECHO_SENT=1 (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -28,7 +28,7 @@ final class AssistantSentPhotoTests: XCTestCase {
 
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant", "-openAssistant", main] + extra
         app.launchPinned()
         return app
@@ -48,7 +48,7 @@ final class AssistantSentPhotoTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label == %@", "图片 1，点按查看大图")).firstMatch
     }
 
-    @MainActor func testAPictureSentToJarvisShowsAndStays() {
+    @MainActor func testAPictureSentToPersonaShowsAndStays() {
         let app = launch(["-showComposerPhoto", "YES"])
         let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
         if allow.waitForExistence(timeout: 8) { allow.tap() }

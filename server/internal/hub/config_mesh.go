@@ -3,7 +3,7 @@ package hub
 import "time"
 
 // MeshConfig tunes the hub mesh (docs/mesh.md). The peers themselves and the group's center are in Postgres (paired in
-// the admin page or with `jarvisd hub peer add`), not here.
+// the admin page or with `personad hub peer add`), not here.
 type MeshConfig struct {
 	// Discovery: advertise this hub on the LAN over mDNS and list the hubs found there (default on). Docker's bridge
 	// network does not pass multicast: there it finds nothing (network_mode: host does).

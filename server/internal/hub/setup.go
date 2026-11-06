@@ -52,10 +52,10 @@ type setupOptions struct {
 
 // The database `personad hub setup` creates: scripts/deploy/db.sh's container, so deploy.sh keeps working with it.
 const (
-	setupDBContainer = "jarvis-postgres"
-	setupDBVolume    = "jarvis-pgdata"
+	setupDBContainer = "persona-postgres"
+	setupDBVolume    = "persona-pgdata"
 	setupDBPort      = 18661
-	hubLaunchdLabel  = "com.jarvis.hub" // like com.jarvis.node (jarvis-link's nodesvc.go)
+	hubLaunchdLabel  = "com.persona.hub" // like com.persona.node (persona-link's nodesvc.go)
 )
 
 // SetupCommand is `personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service] [--json]`.
@@ -448,7 +448,7 @@ func (e *setupEnv) isInsideContainer() bool {
 }
 
 func (e *setupEnv) hasAgents() bool {
-	if e.getenv("JARVIS_LOCAL_NODE") == "0" || e.isInsideContainer() {
+	if e.getenv("PERSONA_LOCAL_NODE") == "0" || e.isInsideContainer() {
 		return false
 	}
 	return e.hasProgram("herdr") || e.hasProgram("claude")
@@ -569,7 +569,7 @@ func (e *setupEnv) database(ctx context.Context, cfg *setupConfig) error {
 		var err error
 		if password, err = pg.Password(ctx); err != nil {
 			return e.fail("database", "已有数据库容器 "+e.dbContainer+"，但 hub.json 里没有它的地址，也读不出它的密码",
-				"把 database_url 写回 hub.json（postgres://jarvis:<密码>@127.0.0.1:"+strconv.Itoa(e.dbPort)+"/jarvis?sslmode=disable）再重跑")
+				"把 database_url 写回 hub.json（postgres://persona:<密码>@127.0.0.1:"+strconv.Itoa(e.dbPort)+"/persona?sslmode=disable）再重跑")
 		}
 	}
 	if err := e.startContainer(ctx, ""); err != nil {
@@ -610,7 +610,7 @@ func (e *setupEnv) pingUntil(ctx context.Context, dbURL string) error {
 func (e *setupEnv) noDocker() error {
 	if !e.portFree(5432) {
 		return e.fail("database", "没有 Docker；这台电脑的 5432 端口上像是有 Postgres",
-			"在它里面建用户 jarvis 和库 jarvis，把 postgres://jarvis:<密码>@127.0.0.1:5432/jarvis 写进 "+e.hubJSON()+
+			"在它里面建用户 persona 和库 persona，把 postgres://persona:<密码>@127.0.0.1:5432/persona 写进 "+e.hubJSON()+
 				" 的 database_url，再重跑（docs/server.md「数据库」）；或者装 Docker 后重跑")
 	}
 	if e.goos == "darwin" {
@@ -626,7 +626,7 @@ func (e *setupEnv) startDockerHint() string {
 	return "运行 sudo systemctl start docker，再重跑"
 }
 
-// pg is the database container setup makes (jarvis-postgres unless a trial run named another).
+// pg is the database container setup makes (persona-postgres unless a trial run named another).
 func (e *setupEnv) pg() *pgdocker.Container {
 	return &pgdocker.Container{Name: e.dbContainer, Volume: e.dbVolume, Port: e.dbPort, Run: e.run, Sleep: e.sleep, Wait: e.dbWait}
 }
@@ -656,7 +656,7 @@ func (e *setupEnv) health(ctx context.Context, cfg *setupConfig) error {
 		}
 		e.sleep(time.Second)
 	}
-	next := "运行 journalctl --user -u jarvisd -n 50 看 hub 的日志"
+	next := "运行 journalctl --user -u personad -n 50 看 hub 的日志"
 	switch {
 	case e.o.noService:
 		next = "在另一个终端运行 personad hub run，起来后重跑 personad hub setup --no-service"

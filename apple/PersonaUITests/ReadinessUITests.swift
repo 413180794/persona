@@ -1,30 +1,30 @@
 import XCTest
 
 /// The main conversation's readiness on a new user's hub (#4193, docs/onboarding.md 4.4, 5.1, 5.2): against
-/// scripts/mock/mock_hub.py with MOCK_READINESS=<scenario> (JARVIS_MOCK_HUB; JARVIS_READINESS names the scenario for the
+/// scripts/mock/mock_hub.py with MOCK_READINESS=<scenario> (PERSONA_MOCK_HUB; PERSONA_READINESS names the scenario for the
 /// screenshots). A new conversation shows the card for the missing step; with something typed, send says what to do
-/// first, goes there, and the draft stays. JARVIS_SHOTS=<dir> writes the screenshots.
+/// first, goes there, and the draft stays. PERSONA_SHOTS=<dir> writes the screenshots.
 final class ReadinessUITests: XCTestCase {
     @MainActor private func launch() throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_READINESS (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_READINESS (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant"]
         app.launchPinned()
         return app
     }
 
-    private var scenario: String { ProcessInfo.processInfo.environment["JARVIS_READINESS"] ?? "scenario" }
+    private var scenario: String { ProcessInfo.processInfo.environment["PERSONA_READINESS"] ?? "scenario" }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot())
         a.name = "\(name) \(UITestStyle.name)"
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let look = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let look = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"] ?? "light"
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name)-\(look).png"))
         }
     }
@@ -75,7 +75,7 @@ final class ReadinessUITests: XCTestCase {
 
     /// MOCK_START_ERROR=<code> on a ready hub: the refused start is a card with the hub's words, not a red line.
     @MainActor func testARefusedStartIsACard() throws {
-        guard ProcessInfo.processInfo.environment["JARVIS_START_ERROR"] != nil else { throw XCTSkip("needs MOCK_START_ERROR") }
+        guard ProcessInfo.processInfo.environment["PERSONA_START_ERROR"] != nil else { throw XCTSkip("needs MOCK_START_ERROR") }
         let app = try launch()
         openNew(app)
         let field = app.textViews.firstMatch.waitForExistence(timeout: 15) ? app.textViews.firstMatch : app.textFields.firstMatch
@@ -87,16 +87,16 @@ final class ReadinessUITests: XCTestCase {
         let card = app.descendants(matching: .any)["readiness-card"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 15), "no card for the refused start:\n\(app.debugDescription)")
         sleep(1)
-        shot(app, "readiness-start-\(ProcessInfo.processInfo.environment["JARVIS_START_ERROR"] ?? "")")
+        shot(app, "readiness-start-\(ProcessInfo.processInfo.environment["PERSONA_START_ERROR"] ?? "")")
     }
 
     /// The main conversation of MOCK_READINESS=not_logged_in / bad_key: its failed turn is a Model Not Connected card, not
     /// Claude Code's words as an answer, and the readiness card sits over its composer.
     @MainActor func testTheMainConversationShowsTheFix() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
-              let main = ProcessInfo.processInfo.environment["JARVIS_MAIN"] else { throw XCTSkip("needs JARVIS_MOCK_HUB and JARVIS_MAIN") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
+              let main = ProcessInfo.processInfo.environment["PERSONA_MAIN"] else { throw XCTSkip("needs PERSONA_MOCK_HUB and PERSONA_MAIN") }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant"]
         app.launchPinned()
         // The first launch after pairing lands on the new conversation whatever is asked: pair, then open the page.

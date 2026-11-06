@@ -10,7 +10,7 @@ import org.junit.Test
 /** The Persona home's "Needs you now" opens a request in its conversation and an inbox item in the inbox. */
 class NeedsYouLinksTest {
     private val stacks = mapOf<AppTab, MutableList<NavKey>>(
-        AppTab.Jarvis to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
+        AppTab.Persona to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
         AppTab.Inbox to mutableListOf(InboxRoute), AppTab.Settings to mutableListOf(SettingsRoute),
     )
 
@@ -18,7 +18,7 @@ class NeedsYouLinksTest {
         val line = NeedsYouLine.Agent(SessionKey("m", "s"), "r1", "plan", null, "迁移", "计划等你批准")
         assertEquals(AppTab.Agents, needsYouRoute(line).open(stacks))
         assertEquals(ChatRoute("m", "s", ConversationKind.Agent), stacks.getValue(AppTab.Agents).last())
-        assertEquals(listOf<NavKey>(AssistantRoute), stacks.getValue(AppTab.Jarvis))
+        assertEquals(listOf<NavKey>(AssistantRoute), stacks.getValue(AppTab.Persona))
     }
 
     @Test fun anInboxItemOpensOnTheInbox() {

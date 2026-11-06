@@ -1,9 +1,9 @@
 import XCTest
 
 /// The grouping menu beside the quick filters and the cap on long runs (#5766), against the long mock list:
-/// `PORT=<port> MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py`, TEST_RUNNER_JARVIS_GROUPING_HUB=<mock URL>.
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> saves each grouping's screenshot (TEST_RUNNER_JARVIS_STYLE names them, e.g. light / dark;
-/// TEST_RUNNER_JARVIS_SCHEME=light|dark draws in it).
+/// `PORT=<port> MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py`, TEST_RUNNER_PERSONA_GROUPING_HUB=<mock URL>.
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> saves each grouping's screenshot (TEST_RUNNER_PERSONA_STYLE names them, e.g. light / dark;
+/// TEST_RUNNER_PERSONA_SCHEME=light|dark draws in it).
 final class AgentsGroupingTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
@@ -19,8 +19,8 @@ final class AgentsGroupingTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let url = ProcessInfo.processInfo.environment["JARVIS_GROUPING_HUB"] else {
-            throw XCTSkip("needs the long mock list (JARVIS_GROUPING_HUB, MOCK_AGENTS=1)")
+        guard let url = ProcessInfo.processInfo.environment["PERSONA_GROUPING_HUB"] else {
+            throw XCTSkip("needs the long mock list (PERSONA_GROUPING_HUB, MOCK_AGENTS=1)")
         }
         hub = url
     }
@@ -41,11 +41,11 @@ final class AgentsGroupingTests: XCTestCase {
 
     private func launch(fresh: Bool) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // No -dev.grouping: a launch argument would win over the choice this test makes and checks after a restart.
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", "", "-tab", "dev"]
             + (fresh ? ["-openAgentsFresh", "YES"] : [])
-        if let scheme = ProcessInfo.processInfo.environment["JARVIS_SCHEME"] { app.launchArguments += ["-ui.scheme", scheme] }
+        if let scheme = ProcessInfo.processInfo.environment["PERSONA_SCHEME"] { app.launchArguments += ["-ui.scheme", scheme] }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow", "好", "OK"] where alert.buttons[label].exists {
                 alert.buttons[label].tap()
@@ -111,8 +111,8 @@ final class AgentsGroupingTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + style + ".png"))
         }
     }

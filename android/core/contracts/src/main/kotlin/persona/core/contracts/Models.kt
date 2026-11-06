@@ -59,7 +59,7 @@ data class Machine(
     @SerialName("engine") val engine: String = "herdr",
     /** What the node found there; empty from older hubs and nodes, and while the machine is offline. */
     @SerialName("engines") val engines: List<DetectedEngine> = emptyList(),
-    /** The hub is installing its own jarvisd build there ("Redeploy"). */
+    /** The hub is installing its own personad build there ("Redeploy"). */
     @SerialName("deploying") val deploying: Boolean = false,
     /** Why the last "Redeploy" did not work. */
     @SerialName("deploy_error") val deployError: String? = null,
@@ -268,7 +268,7 @@ data class Session(
     @SerialName("tab_id") val tabId: String? = null,
     @SerialName("workspace_id") val workspaceId: String? = null,
     @SerialName("agent_name") val agentName: String? = null,
-    @SerialName("started_by_jarvis") val startedByPersona: Boolean = false,
+    @SerialName("started_by_persona") val startedByPersona: Boolean = false,
     val effort: String? = null,
     @SerialName("space_kind") val spaceKind: String? = null,
     @SerialName("space_index") val spaceIndex: Int? = null,

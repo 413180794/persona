@@ -3,15 +3,15 @@ import XCTest
 /// Opening a long session: its last exchange ran 650 commands, folded on screen into one work line
 /// (「工具 650 · …」). The first page must not carry that work (it was 1400 rows and a megabyte of a real Codex session,
 /// a long blank wait on a weak network); opening the work line fetches it. Against scripts/mock/mock_hub.py with MOCK_BIG=1
-/// (JARVIS_MOCK_HUB), which records what each batch of the session weighed at /mock/served.
+/// (PERSONA_MOCK_HUB), which records what each batch of the session weighed at /mock/served.
 final class LongSessionTests: XCTestCase {
     private var hub: String!
     private let session = "server/a1f3c2d4-0000-4000-8000-000000000008"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BIG=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BIG=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
@@ -30,11 +30,11 @@ final class LongSessionTests: XCTestCase {
     @MainActor func testOpeningALongSessionLoadsLightAndUnfoldsOnDemand() throws {
         guard (try? served()) != nil else { throw XCTSkip("the mock hub has no /mock/served (start it with MOCK_BIG=1)") }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // The default style: under BeautifulUI (left set by another test) the steps fold into chips and none shows.
         app.launchArguments = ["-pairURL", pair, "-ui.style", "glass", "-tab", "dev", "-openSession", session]
         let opened = Date.now
-        app.launchJarvis()
+        app.launchPersona()
 
         let answer = app.staticTexts["构建脚本整理完了：650 个步骤都过了一遍。"]
         XCTAssertTrue(answer.waitForExistence(timeout: 20), "the chat did not open:\n\(app.debugDescription)")
@@ -51,18 +51,18 @@ final class LongSessionTests: XCTestCase {
         let work = app.buttons["work-head"].firstMatch // a layout pass can briefly hold the line twice
         XCTAssertTrue(work.waitForExistence(timeout: 5), "no work line")
         XCTAssertTrue((work.value as? String ?? "").contains("工具 650"), "the work line says \(work.value ?? "nothing")")
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-long-folded.png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-long-folded.png"))
 
         // Opening the work line fetches the steps it folds (on a slow network: a row says they are loading).
         _ = try? Data(contentsOf: URL(string: hub + "/mock/delay?s=3")!)
         work.tap()
         let loading = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "正在载入")).firstMatch
         XCTAssertTrue(loading.waitForExistence(timeout: 3), "nothing shows the steps are loading:\n\(app.debugDescription)")
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-long-loading.png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-long-loading.png"))
         _ = try? Data(contentsOf: URL(string: hub + "/mock/delay?s=0")!)
         let step = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "make step-")).firstMatch
         XCTAssertTrue(step.waitForExistence(timeout: 15), "the steps did not load:\n\(app.debugDescription)")
         XCTAssertTrue(try served().contains { $0.via == "range" }, "the steps came without a fetch")
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-long-open.png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-long-open.png"))
     }
 }

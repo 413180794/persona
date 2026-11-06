@@ -48,8 +48,8 @@ def run(browser, base, hub, token, size, theme, shots):
     posts = []
     page.on("request", lambda r: r.method == "POST" and r.url.endswith("/retry") and posts.append(r.url))
     page.goto(base + "/overview?token=" + token)
-    page.wait_for_function("localStorage.getItem('jarvis.token')")
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.wait_for_function("localStorage.getItem('persona.token')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
     page.goto(base + "/")
 
     def shot(name):

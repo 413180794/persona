@@ -212,7 +212,7 @@ New computers often lack herdr (#2847); previously Start only said "herdr not in
 ### Resuming Persona-started sessions after restart
 
 herdr restores workspaces, tabs, panes after server restart, then **after a client attaches** resumes Agents using built-in commands (`session.resume_agents_on_restore`, default on),
-for Claude Code plain `claude --resume <id>`. Persona-created Claude uses launchers (`jarvisd launch <name>`, ~/.zshrc functions),
+for Claude Code plain `claude --resume <id>`. Persona-created Claude uses launchers (`personad launch <name>`, ~/.zshrc functions),
 `--settings`, `--mcp-config`, Persona hooks; plain resume loses all of these, switching gateway to user's subscription and dropping MCP / hooks.
 
 Persona therefore reports its own recovery command for each Claude pane (`resume_argv`, only this pane):

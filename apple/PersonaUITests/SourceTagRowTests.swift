@@ -4,8 +4,8 @@ import XCTest
 /// style: not before the title, which it pushed onto two lines, nor in the badge's 24 pt column (#3004), which spilled
 /// both ways (the badge half out of the capsule, the tag over the title's first characters).
 ///   MOCK_BOTMUX=1 PORT=<port> python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SourceTagRowTests
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the list (`…_SHOTS_APPEARANCE` names the simulator's appearance).
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SourceTagRowTests
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the list (`…_SHOTS_APPEARANCE` names the simulator's appearance).
 final class SourceTagRowTests: XCTestCase {
     /// The capsule's own padding and the badge's column (`TaskRow.badgeColumn` less its gap): a tag starts after them.
     private static let badgeColumnEnd: CGFloat = 10 + 24
@@ -16,17 +16,17 @@ final class SourceTagRowTests: XCTestCase {
 
     @MainActor private func check(style: String) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)") }
+        guard let hub = env["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)") }
         continueAfterFailure = false
         _ = try Data(contentsOf: URL(string: hub + "/mock/reset")!)
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-ui.style", style]
         app.launchPersona()
 
         // The Needs You cards fill the first screen: the list's own Terminal / Lark Group filters bring those rows up.
         for (filter, label) in [("terminal", "终端"), ("feishu", "飞书群")] {
-            if filter == "feishu" && env["JARVIS_BOTMUX"] == nil { continue }
+            if filter == "feishu" && env["PERSONA_BOTMUX"] == nil { continue }
             let chip = app.buttons["agents.filter." + filter]
             XCTAssertTrue(chip.waitForExistence(timeout: 20), "no \(label) filter:\n\(app.debugDescription)")
             chip.tap()
@@ -61,8 +61,8 @@ final class SourceTagRowTests: XCTestCase {
         a.lifetime = .keepAlways
         add(a)
         let env = ProcessInfo.processInfo.environment
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_SHOTS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("source-tag-\(name)-\(look).png"))
     }
 }

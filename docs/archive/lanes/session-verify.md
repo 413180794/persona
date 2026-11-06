@@ -1,7 +1,7 @@
 # Real-data verification of session reading and message sending (2026-10-31)
 
 User: "The session reading logic doesn't feel right. Use my large session history to test whether the current Claude Code and Codex reading logic is right, and whether the message sending logic is right",
-adding "and also the message sending path". The corpus is real sessions from 6 machines, kept only locally in `~/jarvis-corpus/verify` and not in the repo; this doc has only numbers and made-up reproductions.
+adding "and also the message sending path". The corpus is real sessions from 6 machines, kept only locally in `~/persona-corpus/verify` and not in the repo; this doc has only numbers and made-up reproductions.
 
 ## 1. Reading: cross-check
 
@@ -66,12 +66,12 @@ POST /api/v1/sessions/{mid}/{sid}/messages  {text, images, client_msg_id}   time
 hub sendMessage (hub/send.go)
   · client_msg_id dedup: in-flight in memory + Postgres sent_messages (one day)
   · sending is not cancelled when the app disconnects; 90 s deadline
-  ▼  JSON-lines RPC over `ssh -C … jarvisd node --stdio` (LAN round trip ~5 ms)
+  ▼  JSON-lines RPC over `ssh -C … personad node --stdio` (LAN round trip ~5 ms)
 node session.send
   · one at a time per session (typingLocks)
   · session not running: Claude is started with --resume via its original launcher (~5 s); Codex / compatible Codex forks return an error
   · read the screen (ANSI, 60 lines, ~10 ms): dialog → 409 dialog_open; draft → 409 input_draft (our own just-typed text: wait for it to be taken)
-  · images saved to ~/.jarvis/uploads, paths written into <attached_images>
+  · images saved to ~/.persona/uploads, paths written into <attached_images>
   ▼  herdr unix socket (10 s deadline per call; CLI only if the socket is unreachable)
 herdr agent.prompt (Claude, Codex): paste the whole text (bracketed paste) → ~300 ms → Enter; compatible Codex forks: send_text + 150 ms + enter
   ▼

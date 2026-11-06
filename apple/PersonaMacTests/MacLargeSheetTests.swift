@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The terminal cover, the file viewer and the Git sheets open as large as their window on the Mac (they opened at
 /// a form sheet's 640 pt, the file viewer at 470 × 280), never past it and never below a form sheet.

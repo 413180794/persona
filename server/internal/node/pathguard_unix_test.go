@@ -19,7 +19,7 @@ import (
 func TestPathGuardManagerDirEdges(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("PERSONA_HOME", filepath.Join(t.TempDir(), "persona-state"))
-	t.Setenv("JARVIS_HOME", "")
+	t.Setenv("PERSONA_HOME", "")
 	n := &Node{home: home}
 	write := func(p, body string) {
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {

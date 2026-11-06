@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Rewind to Here (#2915): which message the node is told about, when the chat offers it, the request it sends.
 struct RewindTests {

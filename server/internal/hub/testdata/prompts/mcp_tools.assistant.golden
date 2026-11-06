@@ -668,7 +668,7 @@
   },
   {
     "name": "kb_search",
-    "description": "Search the knowledge base (~/.jarvis/data): summaries and metadata of chats, people, projects, docs, meetings, events, recordings (with their full transcripts), project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.",
+    "description": "Search the knowledge base (~/.persona/data): summaries and metadata of chats, people, projects, docs, meetings, events, recordings (with their full transcripts), project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -865,7 +865,7 @@
     }
   },
   {
-    "name": "jarvis_settings",
+    "name": "persona_settings",
     "description": "Read and change Persona's own settings for the user: their inbox sorting rules, how their inbox items link to their tasks, 关于我 (what you know about them), your default launcher (model), their mail accounts, which Claude Code config directories each machine keeps out of Agents. Start with action list (what there is, what each takes); get reads one. set / add / remove put a card on the user's phone that says what changes (before → after) and nothing changes until they approve; what the card needs filled in, like a mail password, the user types there, so never ask for passwords in the conversation. Change only what the user asked for.",
     "input_schema": {
       "type": "object",

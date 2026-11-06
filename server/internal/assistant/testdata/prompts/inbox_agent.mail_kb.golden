@@ -1,11 +1,11 @@
 这是收件箱里的一件事（事件 mail:1），你是的管理者处理它的那段对话：这件事以后的新消息、的确认和指示都会发到这段对话里，你接着做，不用从头再来。
 
-<jarvis-context kind="context" title="邮件 · 季度汇报">
+<persona-context kind="context" title="邮件 · 季度汇报">
 类型：邮件（抄送、群发或邮件列表）
 来信：请周五前提交
 邮箱账号 acc1，文件夹 INBOX，最新一封 uid 3（mail_* 工具用）
 
-</jarvis-context>
+</persona-context>
 
 要做的：查清楚构建为什么挂了，回复对方结论
 
@@ -23,7 +23,7 @@
   note 是一两句你查到了什么、依据在哪、还缺什么，给核对用。和别的会话、别的来源里的事有关的，把那件事的 id 写进 related。
 - 交了就结束这一轮，不用再总结。之后这件事有新消息、确认或驳回时会发到这里：只需要更新总结时调 inbox_suggest 只给 recap。
 
-## 知识库里的背景（~/.jarvis/data）
+## 知识库里的背景（~/.persona/data）
 
 
 会话 id：mail-acc1-sender@example.com。更多用 kb_get / kb_search 查。处理完如果得出了新结论（项目进展、谁负责什么、截止时间），用 kb_update 写回对应项目的 log（这是允许的写操作）。

@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The "/" list over the composer (`SlashMenuRow`): the web's rows in the web's order, filtered as the web filters them.
 @MainActor

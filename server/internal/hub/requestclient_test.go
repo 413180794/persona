@@ -41,7 +41,7 @@ func TestRequestClientContextAndLogs(t *testing.T) {
 				writeErr(w, 401, errors.New("invalid token"))
 			}))
 			r := httptest.NewRequest("GET", path+"?token=example-secret", nil)
-			r.Header.Set("X-Jarvis-Client", "android/1.2")
+			r.Header.Set("X-Persona-Client", "android/1.2")
 			r.Header.Set("X-Client-Request-Id", "1234abcd")
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, r)

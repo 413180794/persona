@@ -86,11 +86,11 @@ func connectMachine(t *testing.T, d *Devices, cfg MachineConfig, n *buildNode) *
 func hubNodeBinary(t *testing.T, goos, arch string) {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "jarvisd-"+goos+"-"+arch), []byte("the hub's node"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "personad-"+goos+"-"+arch), []byte("the hub's node"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PERSONA_NODE_BINARIES", dir)
-	t.Setenv("JARVIS_NODE_BINARIES", dir)
+	t.Setenv("PERSONA_NODE_BINARIES", dir)
 }
 
 // fakeSSH puts an ssh first on PATH that records its arguments and fails: a machine the hub cannot reach that way.

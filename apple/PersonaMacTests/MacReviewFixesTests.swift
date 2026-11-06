@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The first review round's findings on the Mac shell (docs/mac.md).
 @MainActor
@@ -30,9 +30,9 @@ struct MacReviewFixesTests {
         #expect(MacShellState.shared.section == nil)
     }
 
-    /// A `jarvis://pair` link is not one a click in a message may follow: it would move the app to another hub.
+    /// A `persona://pair` link is not one a click in a message may follow: it would move the app to another hub.
     @Test func pairingLinksAreNotFollowedFromMessages() {
-        #expect(!LinkPolicy.opensOnMac(URL(string: "jarvis://pair?url=https://elsewhere.example&token=x")!))
+        #expect(!LinkPolicy.opensOnMac(URL(string: "persona://pair?url=https://elsewhere.example&token=x")!))
     }
 
     /// A pairing link while paired to a real hub does not switch hubs silently.

@@ -3,7 +3,7 @@ import XCTest
 /// Writes only to the opt-in Pin fixture; no real Feishu state is touched.
 final class LarkChatPinFlowTests: XCTestCase {
     private func fixture(_ change: [String: Any]? = nil) async throws -> [String: Any] {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
               let url = URL(string: hub + "/test/lark-chat-pins/state") else { throw XCTSkip("needs chat Pin mock") }
         var request = URLRequest(url: url)
         if let change { request.httpMethod = "POST"; request.httpBody = try JSONSerialization.data(withJSONObject: change) }
@@ -14,9 +14,9 @@ final class LarkChatPinFlowTests: XCTestCase {
     @MainActor private func open(large: Bool = false, change: [String: Any] = [:]) async throws -> XCUIApplication {
         continueAfterFailure = false
         _ = try await fixture(["reset": true, "live": false].merging(change) { _, v in v })
-        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"])
         let app = XCUIApplication()
-        app.launchArguments = ["-pairURL", "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock",
+        app.launchArguments = ["-pairURL", "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock",
             "-tab", "feishu", "-demo.on", "NO", "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES",
             "-UIPreferredContentSizeCategoryName", large ? "UICTContentSizeCategoryAccessibilityXXXL" : "UICTContentSizeCategoryL"]
         app.launchPinned()
@@ -40,7 +40,7 @@ final class LarkChatPinFlowTests: XCTestCase {
     }
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }
@@ -86,7 +86,7 @@ final class LarkChatPinFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["lark.pins.retry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["lark.pin.1000"].exists)
         shot(app, "chat-pins-offline-keeps-rows")
-        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] != "1" { // an old hub: the old /api/v1/lark only (#2138)
+        if ProcessInfo.processInfo.environment["PERSONA_MESSAGING"] != "1" { // an old hub: the old /api/v1/lark only (#2138)
             _ = try await fixture(["offline": false, "error": "hub"])
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "升级 Hub")).firstMatch.waitForExistence(timeout: 10))
             shot(app, "chat-pins-upgrade-hub")

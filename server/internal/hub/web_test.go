@@ -61,7 +61,7 @@ func TestWebAppServesFilesAndFallsBackToIndex(t *testing.T) {
 	}
 }
 
-// Without a data dir copy, the web client built into jarvisd serves; the data dir wins when it has one.
+// Without a data dir copy, the web client built into personad serves; the data dir wins when it has one.
 func TestWebAppFallsBackToTheEmbeddedCopy(t *testing.T) {
 	embedded := fstest.MapFS{"index.html": {Data: []byte("<html>embedded</html>")}, "assets/b-2.js": {Data: []byte("ejs")}}
 	dir := t.TempDir()

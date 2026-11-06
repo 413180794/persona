@@ -69,7 +69,7 @@ func systemPackage(t *testing.T) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "sys"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=system exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "sys"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=system exec "+self+" \"$@\"\n"), 0o755)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-sys", "name": "Example System", "version": "1.0.0",
 		"engines": {"extension_protocol": 1}, "runtime": {"command": {%q: "bin/sys"}}, "activation_events": ["on_startup"],
 		"contributes": {

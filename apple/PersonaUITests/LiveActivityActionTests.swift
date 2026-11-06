@@ -2,15 +2,15 @@ import XCTest
 
 /// The Fleet activity's Deny button on the lock screen resolves the request: the app starts a sample activity
 /// (`-showFleetSample needsYou`, request `ix_sample`), the test locks the phone, taps Deny and asks the mock hub
-/// (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB) whether the resolve arrived.
+/// (scripts/mock/mock_hub.py, PERSONA_MOCK_HUB) whether the resolve arrived.
 final class LiveActivityActionTests: XCTestCase {
     @MainActor func testDenyFromTheLockScreen() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-showFleetSample", "needsYou"]
         app.launchPinned()
         sleep(4)

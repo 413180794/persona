@@ -31,7 +31,7 @@ import (
 type MachineConfig struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	// Kind: local | service (the hub dials the computer's connector, service.go) | link (the computer's jarvis-link
+	// Kind: local | service (the hub dials the computer's connector, service.go) | link (the computer's persona-link
 	// dials the hub, link.go) | ssh | tailcat (tailcat only, no ssh). ssh and tailcat are kept for hub.json files that
 	// have them (docs/plan-hub-center.md 4).
 	Kind    string `json:"kind"`
@@ -40,11 +40,11 @@ type MachineConfig struct {
 	// socks5://host:port the hub dials it through (a computer reachable only from behind another machine).
 	Address string `json:"address,omitempty"`
 	Proxy   string `json:"proxy,omitempty"`
-	// TailcatAddr is the machine's tailcat address (`jarvisd node tailcat init` there): the way in when ssh does not
+	// TailcatAddr is the machine's tailcat address (`personad node tailcat init` there): the way in when ssh does not
 	// work, e.g. a computer behind NAT (tailcat.go, docs/server.md "tailcat hole punching"). A secret, like the token.
 	TailcatAddr string `json:"tailcat_addr,omitempty"`
 	Icon        string `json:"icon,omitempty"`
-	// RemoteBin is the jarvisd path on the remote machine (default ~/.jarvis/bin/jarvisd).
+	// RemoteBin is the personad path on the remote machine (default ~/.persona/bin/personad).
 	RemoteBin string `json:"remote_bin,omitempty"`
 	// ClaudeConfigDirs are Claude Code config directories (CLAUDE_CONFIG_DIR of launchers) besides ~/.claude to look
 	// in for sessions; those of running claudes are found by themselves. "~/" is the remote home.
@@ -79,7 +79,7 @@ type MachineConfig struct {
 }
 
 // TailcatConfig: DERPMapURL is a DERP map of your own relays (a derper) instead of Tailscale's public ones; the nodes
-// were set up with the same (`jarvisd node tailcat init --derp-map-url`).
+// were set up with the same (`personad node tailcat init --derp-map-url`).
 type TailcatConfig struct {
 	DERPMapURL string `json:"derp_map_url,omitempty"`
 }
@@ -144,9 +144,9 @@ func dataDir() string {
 	return identity.DataDir(home)
 }
 
-// defaultConfig is what a first run writes to ~/.jarvis/hub.json: this machine only, reachable by its host name.
+// defaultConfig is what a first run writes to ~/.persona/hub.json: this machine only, reachable by its host name.
 // Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/config.md). With
-// JARVIS_LOCAL_NODE=0 (the Docker image, docs/docker.md) there is no machine at all: the hub's own has no herdr or
+// PERSONA_LOCAL_NODE=0 (the Docker image, docs/docker.md) there is no machine at all: the hub's own has no herdr or
 // claude to drive, every computer is added to hub.json.
 func defaultLocalMachine() MachineConfig {
 	host, _ := os.Hostname()
@@ -157,7 +157,7 @@ func defaultLocalMachine() MachineConfig {
 func defaultConfig() *Config {
 	host, _ := os.Hostname()
 	machines := []MachineConfig{defaultLocalMachine()}
-	if identity.Getenv("JARVIS_LOCAL_NODE") == "0" {
+	if identity.Getenv("PERSONA_LOCAL_NODE") == "0" {
 		machines = []MachineConfig{}
 	}
 	return &Config{
@@ -174,9 +174,9 @@ var envOverrides = []struct {
 	name string
 	to   func(*Config) *string
 }{
-	{"JARVIS_DATABASE_URL", func(c *Config) *string { return &c.DatabaseURL }},
-	{"JARVIS_PUBLIC_URL", func(c *Config) *string { return &c.PublicURL }},
-	{"JARVIS_LISTEN", func(c *Config) *string { return &c.Listen }},
+	{"PERSONA_DATABASE_URL", func(c *Config) *string { return &c.DatabaseURL }},
+	{"PERSONA_PUBLIC_URL", func(c *Config) *string { return &c.PublicURL }},
+	{"PERSONA_LISTEN", func(c *Config) *string { return &c.Listen }},
 }
 
 func (c *Config) applyEnv() {
@@ -187,7 +187,7 @@ func (c *Config) applyEnv() {
 	}
 }
 
-// LoadConfig reads ~/.jarvis/hub.json, creating it with defaults (and a fresh token) on first run.
+// LoadConfig reads ~/.persona/hub.json, creating it with defaults (and a fresh token) on first run.
 func LoadConfig() (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -213,7 +213,7 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
 		// A hub.json written by someone else first (scripts/deploy/db.sh only puts database_url in it) has no token: keep
-		// the generated one, or every start (and `jarvisd hub pair`) would make up a different one.
+		// the generated one, or every start (and `personad hub pair`) would make up a different one.
 		var raw map[string]any
 		if err := json.Unmarshal(b, &raw); err == nil {
 			if _, ok := raw["token"]; !ok {
@@ -235,7 +235,7 @@ func LoadConfig() (*Config, error) {
 
 // noPublicURLHint is what `hub pair` says when hub.json's public_url is empty.
 const noPublicURLHint = "hub 还不知道手机从哪个地址连它（public_url 是空的）：Docker 里在 .env 写上 " +
-	"JARVIS_PUBLIC_URL=http://<这台机器的局域网地址>:18660，再运行 docker compose up -d；" +
+	"PERSONA_PUBLIC_URL=http://<这台机器的局域网地址>:18660，再运行 docker compose up -d；" +
 	"不用 Docker 的，在 hub.json 里填 public_url 后重启 hub。也可以在管理界面的「网络」里填地址"
 
 func randomHex(n int) string {
@@ -246,7 +246,7 @@ func randomHex(n int) string {
 
 // PairURL is what the app's QR scanner understands.
 func (c *Config) PairURL() string {
-	return "jarvis://pair?" + url.Values{"url": {c.PublicURL}, "token": {c.Token}}.Encode()
+	return "persona://pair?" + url.Values{"url": {c.PublicURL}, "token": {c.Token}}.Encode()
 }
 
 func Pair(legacy bool, android ...bool) error {
@@ -282,8 +282,8 @@ func (c *Config) printPair(ctx context.Context, legacy bool, out io.Writer, andr
 	return nil
 }
 
-// PairMachine prints a pairing link for one link machine's jarvis-link (docs/link.md): the link alone on stdout,
-// so it can be piped (`… | jarvis-link pair -`), what to do with it on stderr. add: hub.json gets the machine first
+// PairMachine prints a pairing link for one link machine's persona-link (docs/link.md): the link alone on stdout,
+// so it can be piped (`… | persona-link pair -`), what to do with it on stderr. add: hub.json gets the machine first
 // when it has none of that id (named name; confirmed: the master token over loopback added it).
 func PairMachine(machine string, add bool, name string) error {
 	cfg, err := LoadConfig()
@@ -320,7 +320,7 @@ func (c *Config) printLinkPair(ctx context.Context, machine string, add bool, na
 		fmt.Fprintf(help, "\n已添加：%s\n", shown)
 	}
 	fmt.Fprintf(help, "\n这是给「%s」的 Persona Link 用的配对链接，%d 分钟内有效，只能用一次。\n"+
-		"在那台电脑上：菜单栏的 Persona Link › 配对 / 修改连接… 里粘贴；或者运行 jarvis-link pair '<链接>'（新装的也可以用 persona-link）。\n",
+		"在那台电脑上：菜单栏的 Persona Link › 配对 / 修改连接… 里粘贴；或者运行 persona-link pair '<链接>'（新装的也可以用 persona-link）。\n",
 		shown, max(1, int(time.Until(p.ExpiresAt).Round(time.Minute).Minutes())))
 	return nil
 }

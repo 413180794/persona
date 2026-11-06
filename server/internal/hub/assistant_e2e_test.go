@@ -208,8 +208,8 @@ func TestAssistantOverTheBus(t *testing.T) {
 // environment; when it exits it is started again.
 func TestAssistantProcessIsSupervised(t *testing.T) {
 	h, srv, _ := newBusHub(t)
-	t.Setenv("JARVIS_TEST_ASSISTANT", "1") // the test binary is the assistant (TestMain)
-	t.Setenv("JARVIS_DATABASE_URL", os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	t.Setenv("PERSONA_TEST_ASSISTANT", "1") // the test binary is the assistant (TestMain)
+	t.Setenv("PERSONA_DATABASE_URL", os.Getenv("PERSONA_TEST_DATABASE_URL"))
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -270,7 +270,7 @@ func TestAssistantStopsWithItsHub(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(exe, "-test.run=^$")
-	cmd.Env = append(os.Environ(), "JARVIS_TEST_ASSISTANT=1", "JARVIS_DATABASE_URL="+os.Getenv("JARVIS_TEST_DATABASE_URL"),
+	cmd.Env = append(os.Environ(), "PERSONA_TEST_ASSISTANT=1", "PERSONA_DATABASE_URL="+os.Getenv("PERSONA_TEST_DATABASE_URL"),
 		"PERSONA_ASSISTANT_HUB="+srv.URL, "PERSONA_ASSISTANT_DEPLOY=child")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

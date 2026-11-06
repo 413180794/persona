@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// jarvis_settings agents.blocked_claude_dirs: the Claude Code config directories kept out of Agents, per machine
+// persona_settings agents.blocked_claude_dirs: the Claude Code config directories kept out of Agents, per machine
 // (claudedirs.go). Same as the machine settings page (PUT /api/v1/machines/{mid}/claude-dirs/blocked).
 
 func (h *Hub) blockedClaudeDirsSetting() selfSetting {

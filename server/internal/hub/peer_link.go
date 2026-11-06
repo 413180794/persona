@@ -23,7 +23,7 @@ import (
 // dialed by the smaller hub_id stays. On it runs the node protocol's RPC (internal/rpc): records one way (rec), calls
 // both ways (hello, relay, stream.open, unpair), and streams (internal/streams) carrying HTTP between the hubs: the
 // apps' requests a member passes on to the center, the node streams the center opens through a member (peer_http.go,
-// peer_node.go). Heartbeats and reconnecting follow jarvis-link (link.PingEvery, link.PingTimeout).
+// peer_node.go). Heartbeats and reconnecting follow persona-link (link.PingEvery, link.PingTimeout).
 
 const (
 	peerPath     = "/api/v1/peer"

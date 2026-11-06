@@ -89,7 +89,7 @@ func startMicrosoft(t *testing.T, s *Service) (state, challenge string) {
 	}
 	u, _ := url.Parse(st.AuthURL)
 	q := u.Query()
-	if u.Host != "login.microsoftonline.com" || !strings.HasPrefix(u.Path, "/common/") || st.CallbackScheme != "jarvis-mail-oauth" ||
+	if u.Host != "login.microsoftonline.com" || !strings.HasPrefix(u.Path, "/common/") || st.CallbackScheme != "persona-mail-oauth" ||
 		q.Get("redirect_uri") != DefaultMicrosoftRedirect || q.Get("client_id") != testMSClient || q.Get("code_challenge_method") != "S256" ||
 		!strings.Contains(q.Get("scope"), "offline_access") || q.Get("state") != st.State || q.Get("login_hint") != "me@example.com" {
 		t.Fatalf("auth url = %s, scheme = %s", st.AuthURL, st.CallbackScheme)
@@ -255,7 +255,7 @@ func TestMicrosoftHTTP(t *testing.T) {
 	if code, out := do("PUT", "/api/v1/mail/oauth/microsoft/config", `{"client_id":"`+testMSClient+`"}`); code != 200 || out["source"] != "app" {
 		t.Fatalf("%d %v", code, out)
 	}
-	if code, out := do("POST", "/api/v1/mail/oauth/microsoft/start", `{"login_hint":"me@example.com"}`); code != 200 || out["callback_scheme"] != "jarvis-mail-oauth" {
+	if code, out := do("POST", "/api/v1/mail/oauth/microsoft/start", `{"login_hint":"me@example.com"}`); code != 200 || out["callback_scheme"] != "persona-mail-oauth" {
 		t.Fatalf("%d %v", code, out)
 	}
 }

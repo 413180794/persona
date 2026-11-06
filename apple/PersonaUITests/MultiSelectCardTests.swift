@@ -2,17 +2,17 @@ import XCTest
 
 /// A multi-select question read off the terminal (docs/protocol.md「终端对话框」「多选」): the card starts from what the
 /// computer shows and sends every tick and the free text together. Against scripts/mock/mock_hub.py started with
-/// MOCK_SCREEN_MULTI=1 (TEST_RUNNER_JARVIS_MULTI_HUB=http://127.0.0.1:<port>); both styles
-/// (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).
+/// MOCK_SCREEN_MULTI=1 (TEST_RUNNER_PERSONA_MULTI_HUB=http://127.0.0.1:<port>); both styles
+/// (TEST_RUNNER_PERSONA_UI_STYLE=beautiful).
 final class MultiSelectCardTests: XCTestCase {
     private let review = "a1f3c2d4-0000-4000-8000-000000000006"
 
     @MainActor func testTicksAndTextGoTogether() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MULTI_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SCREEN_MULTI=1 (JARVIS_MULTI_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MULTI_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SCREEN_MULTI=1 (PERSONA_MULTI_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + review]
         app.launchPinned()
         // 「手机」 and 「电脑」 are ticked at the computer; 「手表」 is ticked here.
@@ -42,11 +42,11 @@ final class MultiSelectCardTests: XCTestCase {
     /// View Terminal brings up the session's whole live terminal (#563), not a small one inside the card; closing it is
     /// the card again.
     @MainActor func testViewTerminalOpensTheFullTerminal() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MULTI_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SCREEN_MULTI=1 (JARVIS_MULTI_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MULTI_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_SCREEN_MULTI=1 (PERSONA_MULTI_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + review]
         app.launchPinned()
         let open = app.buttons["screen-card-terminal"]

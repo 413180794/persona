@@ -11,7 +11,7 @@
 
 `android/` is a single `:app` module, about 2.7 thousand lines of Kotlin, with no server changes:
 
-- **Pairing**: QR scanning (zxing), `jarvis://pair` deep links, manual entry; exchanges for a device token.
+- **Pairing**: QR scanning (zxing), `persona://pair` deep links, manual entry; exchanges for a device token.
 - **Agents list**: sorted by state, in three sections: "Needs you / Running / Last 7 days."
 - **Chat page**:
   - `turns=2` pagination;
@@ -106,7 +106,7 @@ The PR is small; retain parts validated on real devices. Reorganize using these 
 ```
 android/
 ├─ settings.gradle.kts / gradle/libs.versions.toml / gradle/gradle-daemon-jvm.properties
-├─ build-logic/convention/   jarvis.android.application / .library / .compose / jarvis.jvm.library / jarvis.hilt / jarvis.screenshot-test
+├─ build-logic/convention/   persona.android.application / .library / .compose / persona.jvm.library / persona.hilt / persona.screenshot-test
 ├─ core/
 │  ├─ contracts/             Pure Kotlin: wire types (@Serializable, explicit @SerialName), WS events, capability bits, error codes, narrow interfaces
 │  ├─ domain/                Pure Kotlin: continuity reducer, fold, items → Rows → Blocks → Turn → Lines, frozen snapshots, outbox state machine,
@@ -114,7 +114,7 @@ android/
 │  ├─ terminal/              Pure Kotlin: VT-subset grid, wrapping, scroll detection, key encoding, modifiers, frame sequencing / takeover state machine
 │  ├─ hub/                   JVM: domain-specific OkHttp clients, WebSocket, connection monitoring (network state injected by Android layer), error classification
 │  ├─ data/                  Android: Room (items, cursors, outbox, op log, drafts, cached snapshots), DataStore + Tink, sync engine, HubScope
-│  └─ designsystem/          Android: generated Tokens.kt, JarvisTheme, components (ux.md section 4)
+│  └─ designsystem/          Android: generated Tokens.kt, PersonaTheme, components (ux.md section 4)
 ├─ feature/                  chat, agents, assistant, inbox, terminal, readers, machines, settings
 ├─ platform/                 notify (foreground service, notifications, Live Updates), phonetools, shortcuts (tiles, shortcuts, share targets, widgets)
 ├─ app/                      Composition root (Hilt), NavDisplay, four tabs, deep links; src/debug: entry points, component catalog, mock switches
@@ -124,7 +124,7 @@ android/
 - Same dependency rules as iOS ([README.md](README.md) D2):
   - features depend only on `core:contracts`, `core:domain`, `core:designsystem`, and `feature:readers`;
   - features do not depend on `core:hub` or `core:data`; services are injected through interfaces.
-- **Pure Kotlin modules** (`contracts` / `domain` / `terminal`) use the `jarvis.jvm.library` plugin without `android.*` dependencies. Run `spec/fixtures` tests on the JVM in seconds; a future KMP conversion changes only the plugin.
+- **Pure Kotlin modules** (`contracts` / `domain` / `terminal`) use the `persona.jvm.library` plugin without `android.*` dependencies. Run `spec/fixtures` tests on the JVM in seconds; a future KMP conversion changes only the plugin.
 - **Configuration** follows PR #84: `android.application_id` in `~/.config/persona/config.json` (falls back to `app.bundle_id`). Add two settings, documented in `docs/config.md` and `config.example.json`; actual values are not committed:
   - `android.signing`: keystore path and alias; password from keychain or environment;
   - `android.avd`: AVD name for screenshots.
@@ -151,7 +151,7 @@ android/
   - run Compose compiler reports regularly to check unstable parameters.
 - **Navigation**:
   - Navigation 3; one back stack per tab. Files / Git on the chat page use an in-page segment switch, not the back stack.
-  - Deep links (`jarvis://pair`, `jarvis://open?machine=&session=`) and notification taps share one `Router`.
+  - Deep links (`persona://pair`, `persona://open?machine=&session=`) and notification taps share one `Router`.
   - Wide screens use list-detail panes, corresponding to iOS iPhone Duo panes.
 
 ## 5. Key subsystems
@@ -255,7 +255,7 @@ The phone connects directly to hub over the public internet, preferring IPv6. Us
   - tables: horizontal scrolling;
   - links: `Router`, opening in-app;
   - file paths: recognized as tappable labels;
-  - `<jarvis-context>`: reference cards;
+  - `<persona-context>`: reference cards;
   - `<attached_images>`: square thumbnails.
 - Cache parsed results by message ID; prewarm in the background after loading messages. Use streaming parsing for incremental assistant output, reparsing only the tail.
 - `SelectionContainer` enables in-place selection across paragraphs. No "Select" item needed in the long-press action bar.
@@ -357,7 +357,7 @@ Notification rules:
 
 ### 5.11 Terminal (P1)
 
-- `:core:terminal` ports iOS `TerminalGrid` / `TerminalWrap` / key encoding / modifiers, using existing real recorded frames (`ios/JarvisTests/Fixtures/terminal-*.jsonl`, moved to `spec/fixtures/terminal/`) for shared tests.
+- `:core:terminal` ports iOS `TerminalGrid` / `TerminalWrap` / key encoding / modifiers, using existing real recorded frames (`ios/PersonaTests/Fixtures/terminal-*.jsonl`, moved to `spec/fixtures/terminal/`) for shared tests.
 - Rendering: Compose Canvas by cells (wide characters take two; box-drawing / block characters become lines and rectangles), `TextMeasurer` cached by run.
 - Input: custom `InputConnection` (`PlatformTextInputModifierNode`, or a custom View's `onCreateInputConnection` in AndroidView), correctly handling `setComposingText` / `finishComposingText` / `commitText` (iOS marked text equivalent). Use `TYPE_CLASS_TEXT | TYPE_TEXT_FLAG_NO_SUGGESTIONS`, not `TYPE_NULL`, which breaks Chinese IME composition.
 - Modifiers (tap to stick, double-tap to lock, hold), scroll-wheel forwarding, and two-finger Agent switching are detected in `pointerInput`.
@@ -480,7 +480,7 @@ Based on [research/android-cn-roms.md](research/android-cn-roms.md) (market shar
 
 | Capability | Recommendation |
 | --- | --- |
-| **Share to Persona** | **First version (P0)**: text, links, images, files from any app via Share → Persona, then choose main chat or an Agent; attach as `<jarvis-context>` or attachments. `ACTION_SEND` intent-filter, low cost, directly supports "bring information together and hand it to AI" |
+| **Share to Persona** | **First version (P0)**: text, links, images, files from any app via Share → Persona, then choose main chat or an Agent; attach as `<persona-context>` or attachments. `ACTION_SEND` intent-filter, low cost, directly supports "bring information together and hand it to AI" |
 | Persistent connection | Already default (5.8) |
 | Quick Settings tiles, widgets | Second batch |
 | Large-screen / foldable panes | P2 (5.17) |
@@ -511,7 +511,7 @@ PR #84 coverage of first-version P0 (use during reorganization to identify what 
 - **Flow UI**: Compose UI tests; instrumentation uses `adb reverse tcp:18660 tcp:18660` to connect to `scripts/mock/mock_hub.py` (PR #84 lesson).
 - **Debug entry points**: only in `src/debug/`.
   - command: `adb shell am start -n <package>/.debug.DebugEntryActivity --es openSession m/s`;
-  - pairing: `--es pairURL "jarvis://pair?url=…&token=mock"`;
+  - pairing: `--es pairURL "persona://pair?url=…&token=mock"`;
   - dark mode: `adb shell cmd uimode night yes`;
   - fixed status bar: SystemUI demo mode;
   - switch names use collision-free prefixes such as `debug.open…`; Kotlin enum names remain as strings in dex.

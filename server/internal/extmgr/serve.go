@@ -419,7 +419,7 @@ func (h *Manager) hubCall(ctx context.Context, method string, params json.RawMes
 	case extwire.HubSettingsList:
 		return map[string]any{"settings": h.settingsList()}, nil
 	case extwire.HubSettingsTool:
-		text, err := h.toolJarvisSettings(ctx, a.MachineID, a.SessionID, a.Arguments)
+		text, err := h.toolPersonaSettings(ctx, a.MachineID, a.SessionID, a.Arguments)
 		return map[string]any{"text": text}, err
 	}
 	return nil, fmt.Errorf("extensions: no hub call %q", method)

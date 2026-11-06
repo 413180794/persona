@@ -83,7 +83,7 @@ describe("the pinned Persona row", () => {
   });
 
   it("keeps its selected state and its own hover fill (the gliding highlight passes under the pinned box)", async () => {
-    act(() => root.render(<Sidebar route={{ name: "jarvis" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    act(() => root.render(<Sidebar route={{ name: "persona" }} onSearch={() => {}} onNewAgent={() => {}} />));
     await flush();
     expect(row().getAttribute("aria-current")).toBe("page");
     expect(row().className).toContain("bg-hover-2");
@@ -138,7 +138,7 @@ describe("the Persona shortcut on the row", () => {
   it("in the narrow drawer it closes the drawer too, also when Persona is already open", async () => {
     const close = vi.fn();
     function Shell() {
-      useShortcuts({ route: { name: "jarvis" }, narrow: true, toggleDrawer: () => {}, closeDrawer: close });
+      useShortcuts({ route: { name: "persona" }, narrow: true, toggleDrawer: () => {}, closeDrawer: close });
       return null;
     }
     act(() => root.render(<Shell />));

@@ -34,7 +34,7 @@ func TestPathGuard(t *testing.T) {
 	write(".ssh/config", "Host x")
 	write(".persona/hub.json", `{"token":"x"}`)
 	write(".persona/hub.json.bak-20261031", `{"token":"x"}`)
-	write(".jarvis/apns_key.p8", "key")
+	write(".persona/apns_key.p8", "key")
 	write(".persona/secret.key", "key")
 	write(".persona/data/people/a.md", "# a")
 	write("code/repo/id_rsa", "key")
@@ -52,7 +52,7 @@ func TestPathGuard(t *testing.T) {
 		"~/code/keys/id_ed25519", // a link to ~/.ssh
 		"~/.persona/hub.json",
 		"~/.persona/hub.json.bak-20261031",
-		"~/.jarvis/apns_key.p8",
+		"~/.persona/apns_key.p8",
 		"~/.persona/secret.key",
 		"~/code/repo/id_rsa",
 		"~/.persona/data/people/a.md",
@@ -177,7 +177,6 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 	home := t.TempDir()
 	state := filepath.Join(t.TempDir(), "persona-state")
 	t.Setenv("PERSONA_HOME", state)
-	t.Setenv("JARVIS_HOME", "")
 	n := &Node{home: home}
 	write := func(p, body string) {
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
@@ -189,7 +188,7 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 	}
 	refused := []string{
 		filepath.Join(home, ".persona/link.json"),
-		filepath.Join(home, ".jarvis/link.json"),
+		filepath.Join(home, ".persona/link.json"),
 		filepath.Join(home, ".persona/tailcat.json"),
 		filepath.Join(home, ".persona/tailcat-hub.json"),
 		filepath.Join(home, ".persona/daemons.json"),
@@ -218,7 +217,7 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 	// Key backups remain secret in default, legacy, custom and manager data folders.
 	for _, dir := range []string{
 		filepath.Join(home, ".persona"),
-		filepath.Join(home, ".jarvis"),
+		filepath.Join(home, ".persona"),
 		state,
 		filepath.Join(state, "managers/m1"),
 	} {
@@ -256,7 +255,6 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 func TestPathGuardDataDirIsHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("PERSONA_HOME", "~")
-	t.Setenv("JARVIS_HOME", "")
 	n := &Node{home: home}
 	refused := []string{
 		"hub.json", "hub.json.bak-20261106", "secret.key", "handles.key", "link.json", "tailcat.json", "tailcat-hub.json",
@@ -308,13 +306,12 @@ func TestPathGuardDataDirIsHome(t *testing.T) {
 func TestPathGuardDataDirDefaultLayout(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("PERSONA_HOME", "")
-	t.Setenv("JARVIS_HOME", "")
 	n := &Node{home: home}
 	refused := []string{
 		".persona/hub.json", ".persona/hub.json.bak-20261106", ".persona/secret.key", ".persona/handles.key",
 		".persona/link.json", ".persona/tailcat.json", ".persona/tailcat-hub.json", ".persona/daemons.json",
 		".persona/relay.json", ".persona/relay.secret", ".persona/devices.json", ".persona/mail_accounts.json.migrated",
-		".persona/apns.json", ".jarvis/apns_key.p8", ".persona/managers/m1/manager.json", ".persona/managers/m1/secret.key",
+		".persona/apns.json", ".persona/apns_key.p8", ".persona/managers/m1/manager.json", ".persona/managers/m1/secret.key",
 		".persona/launcher-settings/work-env-settings.json", ".persona/tls/hub.key", ".persona/tls/hub.crt",
 		".persona/link-tls/link.key", ".persona/link-tls/link.crt",
 	}
@@ -351,12 +348,11 @@ func TestPathGuardDataDirDefaultLayout(t *testing.T) {
 	}
 }
 
-// A data folder PERSONA_HOME puts below a .persona or .jarvis folder (a second instance, ~/.persona/inst2) keeps its
+// A data folder PERSONA_HOME puts below a .persona or .persona folder (a second instance, ~/.persona/inst2) keeps its
 // credentials refused: they are matched where they are written in it, not only one level below the .persona folder.
 func TestPathGuardDataDirNestedInPersona(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("PERSONA_HOME", "~/.persona/inst2")
-	t.Setenv("JARVIS_HOME", "")
 	n := &Node{home: home}
 	refused := []string{
 		".persona/inst2/hub.json", ".persona/inst2/secret.key", ".persona/inst2/tls/hub.key",
@@ -391,7 +387,7 @@ func TestPathGuardDataDirNestedInPersona(t *testing.T) {
 func TestPathGuardManagerDirAnywhere(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("PERSONA_HOME", filepath.Join(t.TempDir(), "persona-state"))
-	t.Setenv("JARVIS_HOME", "")
+	t.Setenv("PERSONA_HOME", "")
 	n := &Node{home: home}
 	mgr := filepath.Join(t.TempDir(), "srv", "mgr2")
 	project := filepath.Join(home, "code", "app")

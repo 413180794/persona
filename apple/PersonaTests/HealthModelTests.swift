@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Health (docs/health.md) against a FakeHub: the space's conversations come from `GET /api/v1/assistant?space=health`,
 /// its memory from `?space=health`, a new one is started with `"space":"health"`; pushes go over the list, and the
@@ -11,7 +11,7 @@ struct HealthModelTests {
                                 title: String? = nil) -> Session {
         let spaceField = space.map { #","space":"\#($0)""# } ?? ""
         let json = """
-        {"machine_id":"m","session_id":"\(id)","title":"\(title ?? id)","cwd":"/home/me/.jarvis/health","status":"idle",
+        {"machine_id":"m","session_id":"\(id)","title":"\(title ?? id)","cwd":"/home/me/.persona/health","status":"idle",
          "state":"idle","assistant":true,"archived":\(archived)\(spaceField),
          "updated_at":"\(ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: updated)))"}
         """
@@ -27,7 +27,7 @@ struct HealthModelTests {
         hub.on("GET", "/api/v1/assistant") { req in
             #expect(req.query["space"] == "health")
             return Data(#"""
-                {"machine_id":"m","launcher":"ccc","cwd":"/home/me/.jarvis/health","conversations":[
+                {"machine_id":"m","launcher":"ccc","cwd":"/home/me/.persona/health","conversations":[
                  {"session_id":"h1","title":"睡眠","status":"idle","state":"idle","assistant":true,"space":"health"}]}
                 """#.utf8)
         }

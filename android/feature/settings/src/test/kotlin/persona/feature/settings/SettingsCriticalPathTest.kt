@@ -9,7 +9,7 @@ import org.junit.Test
 
 class SettingsCriticalPathTest {
     @Test fun pairingMetadataAndInvalidInput() {
-        val request = PairingInput.parse("jarvis://pair?url=https%3A%2F%2Fexample.com&token=example-token&hub=example-hub&fp=$fingerprint&tls=443&alt=https%3A%2F%2Fexample.com%3A8443&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D")
+        val request = PairingInput.parse("persona://pair?url=https%3A%2F%2Fexample.com&token=example-token&hub=example-hub&fp=$fingerprint&tls=443&alt=https%3A%2F%2Fexample.com%3A8443&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D")
         assertEquals("https://example.com", request.url)
         assertEquals("example-token", request.token)
         assertEquals("example-hub", request.hub)
@@ -18,10 +18,10 @@ class SettingsCriticalPathTest {
         assertEquals(2, request.alt.size)
         assertFalse(request.toString().contains(request.token))
         listOf(
-            "jarvis://pair?url=http-broken&token=example",
-            "jarvis://pair?url=https%3A%2F%2Fexample.com&token=example&tls=no",
-            "jarvis://pair?url=https%3A%2F%2Fexample.com&token=example&token=duplicate",
-            "jarvis://other?url=https%3A%2F%2Fexample.com&token=example",
+            "persona://pair?url=http-broken&token=example",
+            "persona://pair?url=https%3A%2F%2Fexample.com&token=example&tls=no",
+            "persona://pair?url=https%3A%2F%2Fexample.com&token=example&token=duplicate",
+            "persona://other?url=https%3A%2F%2Fexample.com&token=example",
         ).forEach { link -> assertThrows(PairingException::class.java) { PairingInput.parse(link) } }
     }
 
@@ -42,7 +42,7 @@ class SettingsCriticalPathTest {
         val privateRanges = listOf(intArrayOf(10, 0, 0, 2), intArrayOf(192, 168, 1, 2), intArrayOf(172, 16, 0, 2), intArrayOf(169, 254, 0, 2))
             .map { it.joinToString(".") }
         for (host in listOf("100.101.102.103", "100.64.0.1", "192.0.2.10") + privateRanges + "127.0.0.1") {
-            val link = "jarvis://pair?url=http%3A%2F%2F$host%3A18660&token=fixture"
+            val link = "persona://pair?url=http%3A%2F%2F$host%3A18660&token=fixture"
             val allowed = LocalAddressPolicy().allows(java.net.InetAddress.getByName(host))
             val outcome = runCatching { PairingInput.parse(link) }.exceptionOrNull()
             if (allowed) assertNull(host, outcome)
@@ -53,11 +53,10 @@ class SettingsCriticalPathTest {
     @Test fun personaPairingStillUsesTransportAndCredentialValidation() {
         val link = "persona://pair?url=https%3A%2F%2Fhub.example.com&token=fixture&tls=443&alt=https%3A%2F%2Fhub.example.com%3A8443"
         val parsed = PairingInput.parse(link)
-        val legacy = PairingInput.parse(link.replaceFirst("persona://", "jarvis://"))
-        assertEquals(legacy.url, parsed.url)
-        assertEquals(legacy.token, parsed.token)
-        assertEquals(legacy.tls, parsed.tls)
-        assertEquals(legacy.alt, parsed.alt)
+        assertEquals("https://hub.example.com", parsed.url)
+        assertEquals("fixture", parsed.token)
+        assertEquals(443, parsed.tls)
+        assertEquals(listOf("https://hub.example.com:8443"), parsed.alt)
         assertEquals(parsed.url, PairingInput.manual(link, "").url)
         for (suffix in listOf("pair?url=http-broken&token=fixture", "pair?url=https://hub.example.com&token=fixture&tls=no",
             "pair?url=https://hub.example.com&token=fixture&token=duplicate", "other?url=https://hub.example.com&token=fixture")) {
@@ -65,9 +64,9 @@ class SettingsCriticalPathTest {
         }
     }
 
-    @Test fun manualAddressFieldParsesPersonaAndLegacyLinks() {
+    @Test fun manualAddressFieldParsesPersonaLinks() {
         val scanned = PairingRequest("https://old.example.com", "old-token", hub = "old-hub", fp = "old-fingerprint", tls = 443)
-        for (scheme in listOf("persona", "jarvis")) {
+        for (scheme in listOf("persona")) {
             val link = "$scheme://pair?url=https%3A%2F%2Fhub.example.com&token=fixture&hub=example-hub"
             // Pasting into the address field: the link is detected, and no stale metadata keeps the raw link or old token.
             assertTrue(PairingInput.isLink(link))
@@ -83,15 +82,15 @@ class SettingsCriticalPathTest {
         val edited = PairingInput.editedAddress(scanned, "https://new.example.com")
         assertEquals(scanned.copy(url = "https://new.example.com"), edited)
         assertNull(PairingInput.editedAddress(null, "https://new.example.com"))
-        for (address in listOf("https://hub.example.com", "hub.example.com", "persona.example.com", "jarvis.local:18660",
-            "persona:18660", "jarvis:18660", "")) {
+        for (address in listOf("https://hub.example.com", "hub.example.com", "persona.example.com", "persona.local:18660",
+            "persona:18660", "")) {
             assertFalse(address, PairingInput.isLink(address))
         }
         // A machine named "persona" is an address: typing it keeps the metadata, and without a scheme it fails
         // exactly like any other scheme-less host:port instead of taking the pairing-link path.
         assertEquals(scanned.copy(url = "persona:18660"), PairingInput.editedAddress(scanned, "persona:18660"))
         val plain = assertThrows(PairingException::class.java) { PairingInput.manual("hub:18660", "tok") }.reason
-        for (address in listOf("persona:18660", "jarvis:18660")) {
+        for (address in listOf("persona:18660")) {
             assertEquals(plain, assertThrows(PairingException::class.java) { PairingInput.manual(address, "tok") }.reason)
         }
         assertEquals("https://persona:18660", PairingInput.manual("https://persona:18660", "tok").url)

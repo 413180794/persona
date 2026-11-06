@@ -1,7 +1,7 @@
 import Foundation
 import PersonaKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 // The app's side of what moved to PersonaKit (#2095): the table view's cell widths, the fences drawn as pictures, the
 // chips' list of paths. DocumentText, TableParsing, MathMarkdown and Links themselves are tested in PersonaKit.

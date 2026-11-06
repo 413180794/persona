@@ -3,31 +3,31 @@ import XCTest
 /// The main conversation's dock with the agents opened by hand (#1113): after the task pills, counted in All, waiting
 /// ones tinted like a waiting task, and a tap opens the agent's page in the task's sheet. Against
 /// scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 and MOCK_TASKS_DOCK unset (four tasks, two agents) or
-/// =pair (one task, one agent) (JARVIS_MOCK_HUB; JARVIS_DOCK_MODE names which). With JARVIS_SHOTS set it writes the
-/// dock, the board and the agent's sheet there (JARVIS_DOCK_APPEARANCE names the simulator's appearance in the file).
+/// =pair (one task, one agent) (PERSONA_MOCK_HUB; PERSONA_DOCK_MODE names which). With PERSONA_SHOTS set it writes the
+/// dock, the board and the agent's sheet there (PERSONA_DOCK_APPEARANCE names the simulator's appearance in the file).
 final class TaskDockAgentTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let mode = env["JARVIS_DOCK_MODE"] ?? "default"
-        let appearance = env["JARVIS_DOCK_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let mode = env["PERSONA_DOCK_MODE"] ?? "default"
+        let appearance = env["PERSONA_DOCK_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/dock-\(mode)-\(appearance)-\(name).png"))
     }
 
     @MainActor func testAgentsFollowTheTasks() throws {
-        let pair = ProcessInfo.processInfo.environment["JARVIS_DOCK_MODE"] == "pair"
+        let pair = ProcessInfo.processInfo.environment["PERSONA_DOCK_MODE"] == "pair"
         let app = XCUIApplication()
-        let url = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let url = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", url]
         app.launchPinned()
 

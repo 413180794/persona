@@ -44,7 +44,7 @@ private enum class LinkDetent { Full, Peek, Hidden }
 
 /**
  * Shared URI boundary for Agent, assistant, and other conversation surfaces. http(s) opens in the sheet (the hub's own
- * pages the app has a screen for navigate instead, [LocalChatHubLinks]), `jarvis://` links navigate ([LocalChatAppLinks]), mailto: / tel: / other apps' links go out after asking, the rest is refused.
+ * pages the app has a screen for navigate instead, [LocalChatHubLinks]), `persona://` links navigate ([LocalChatAppLinks]), mailto: / tel: / other apps' links go out after asking, the rest is refused.
  *
  * In a conversation ([onContext], [onEdit]) text picked on a page becomes "Use as context" or "AI edit"; with [onHandToPersona]
  * (pages with no conversation behind them: the app shell, the knowledge base) it is "Hand to Persona" instead.

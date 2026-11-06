@@ -4,12 +4,12 @@ import XCTest
 final class ExtensionShowcaseTests: XCTestCase {
     @MainActor func testEverySharedSnapshot() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"], let dir = env["JARVIS_SHOTS"] else {
-            throw XCTSkip("需要 MOCK_PLUGINS=1 和截图目录")
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"], let dir = env["PERSONA_SHOTS"] else {
+            throw XCTSkip("需要 MOCK_EXTENSIONS=1 和截图目录")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "showcase", "-openExtensionPage", "snapshots"]
         app.launchPinned()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -31,7 +31,7 @@ final class ExtensionShowcaseTests: XCTestCase {
             XCTAssertTrue(app.descendants(matching: .any)["extension-ui-ready"].waitForExistence(timeout: 10),
                           "快照未加载：\(name)\n\(app.debugDescription)")
             let screenshot = app.screenshot()
-            let appearance = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+            let appearance = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
             try screenshot.pngRepresentation.write(to: URL(fileURLWithPath: dir)
                 .appending(path: "showcase-\(name)-\(UITestStyle.name)-\(appearance).png"))
             if name == "row" || name == "field" || name == "chart" || name == "stat_grid" || name == "table" {

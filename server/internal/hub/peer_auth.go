@@ -134,7 +134,7 @@ func (h *Hub) meshLocalCall(ctx context.Context, from, method string, params jso
 		}
 		return map[string]any{"revoked": len(ids)}, nil
 	}
-	if method == "pair.code" { // a member's `jarvisd hub pair`: the app pairs with the center
+	if method == "pair.code" { // a member's `personad hub pair`: the app pairs with the center
 		if !h.isCenter() {
 			return nil, errors.New("this hub is not the center")
 		}

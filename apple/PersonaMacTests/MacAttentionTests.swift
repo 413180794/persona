@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// When the Mac posts a notification for an agent (it has no APNs; docs/mac.md push notifications → system notifications), following the
 /// same Settings › Notifications choices the hub uses for the phone (NotifyPrefs).
@@ -13,7 +13,7 @@ struct MacAttentionTests {
         let last = lastText.map { ",\"last_text\":\"\($0)\"" } ?? ""
         var s = try! JSON.decoder.decode(Session.self, from: Data("""
         {"machine_id":"m","session_id":"\(id)","title":"t-\(id)","cwd":"/w/proj","status":"idle","state":"\(state.rawValue)",
-         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0\(last)}
+         "started_by_persona":false,"assistant":\(assistant),"pending_interactions":0\(last)}
         """.utf8))
         s.stateSince = now.addingTimeInterval(-since)
         return s
@@ -67,7 +67,7 @@ struct MacAttentionTests {
         #expect(ping([session("a", .working)], [session("a", .needsYou)], muted: ["a"]).isEmpty)
     }
 
-    @Test func jarvisAsksButItsRepliesDoNotPing() {
+    @Test func personaAsksButItsRepliesDoNotPing() {
         let old = [session("j", .working, assistant: true), session("k", .working, assistant: true)]
         let new = [session("j", .needsYou, assistant: true), session("k", .unread, assistant: true)]
         #expect(ping(old, new) == ["j:needs_you"])

@@ -70,7 +70,7 @@ def check_shape(shape, kind, before):
 
 def check(browser, base, width, theme, shots, before):
     context = browser.new_context(viewport={"width": width, "height": 900}, color_scheme=theme, locale="zh-CN")
-    context.add_init_script("localStorage.setItem('jarvis.theme', " + repr(theme) + ")")
+    context.add_init_script("localStorage.setItem('persona.theme', " + repr(theme) + ")")
     context.route("**/api/v1/auth/tokens", lambda route: route.fulfill(
         status=200, content_type="application/json",
         body=json.dumps({"tokens": DEVICES, "current": "sample-web"})))

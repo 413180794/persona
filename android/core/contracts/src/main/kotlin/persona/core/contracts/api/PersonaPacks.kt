@@ -129,7 +129,7 @@ data class PersonaManifest(
     companion object {
         const val FORMAT = 1
         /** The built-in faces' ids; a package may not take them. */
-        val BUILT_IN = setOf("persona", "jarvis", "jarvis-circuit", "jarvis-pixel", "jarvis-facet", "jarvis-blob")
+        val BUILT_IN = setOf("persona", "persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob")
         private val ID = Regex("^[a-z0-9][a-z0-9-]{0,31}$")
     }
 }

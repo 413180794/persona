@@ -3,8 +3,8 @@ import XCTest
 /// Machines › Add Computer (#4196, docs/onboarding.md 4.2): from no computer at all to one confirmed and online, and the list's
 /// pending computer and error_code. Against scripts/mock/mock_scenarios.py, which restarts the mock hub with the
 /// variables each test needs:
-///   TEST_RUNNER_JARVIS_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_ADD_CONTROL=http://127.0.0.1:<control>
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves every screen there (light and dark) as PNG.
+///   TEST_RUNNER_PERSONA_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_PERSONA_ADD_CONTROL=http://127.0.0.1:<control>
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> also saves every screen there (light and dark) as PNG.
 final class AddComputerTests: XCTestCase {
     private let env = ProcessInfo.processInfo.environment
 
@@ -12,7 +12,7 @@ final class AddComputerTests: XCTestCase {
 
     /// Restarts the mock hub with these MOCK_* variables (mock_scenarios.py waits until it answers).
     private func scenario(_ vars: String) throws {
-        guard let control = env["JARVIS_ADD_CONTROL"] else { throw XCTSkip("needs mock_scenarios.py (JARVIS_ADD_CONTROL)") }
+        guard let control = env["PERSONA_ADD_CONTROL"] else { throw XCTSkip("needs mock_scenarios.py (PERSONA_ADD_CONTROL)") }
         let url = URL(string: control + "/scenario?env=" + vars.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)!
         let done = expectation(description: "scenario")
         URLSession.shared.dataTask(with: url) { _, _, _ in done.fulfill() }.resume()
@@ -20,12 +20,12 @@ final class AddComputerTests: XCTestCase {
     }
 
     @MainActor private func launch(_ args: [String], scheme: String) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_ADD_HUB"] else { throw XCTSkip("needs mock_scenarios.py (JARVIS_ADD_HUB)") }
+        guard let hub = env["PERSONA_ADD_HUB"] else { throw XCTSkip("needs mock_scenarios.py (PERSONA_ADD_HUB)") }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow", "好", "OK"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-ui.scheme", scheme, "-dev.openChat", ""] + args
         app.launchPinned()
@@ -53,7 +53,7 @@ final class AddComputerTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("add-computer-\(name).png"))
         }
     }

@@ -1,7 +1,7 @@
 import XCTest
 
 /// A plugin's connector the app has no wording of its own for (#1426), against scripts/mock/mock_hub.py started with
-/// MOCK_CONNECTOR_PLUGIN=examplechat (TEST_RUNNER_JARVIS_MOCK_HUB_PLUGIN_CONNECTOR): Settings › Connectors › Example Chat signs in with its
+/// MOCK_CONNECTOR_PLUGIN=examplechat (TEST_RUNNER_PERSONA_MOCK_HUB_PLUGIN_CONNECTOR): Settings › Connectors › Example Chat signs in with its
 /// server's address and an app key, its footers and its sign-out confirmation say nothing of Telegram, and the
 /// confirmation says the authorization stays at the service. The mock is left signed out.
 final class PluginConnectorTests: XCTestCase {
@@ -15,9 +15,9 @@ final class PluginConnectorTests: XCTestCase {
     }
 
     @MainActor func testPluginConnectorSaysItsOwnWords() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_PLUGIN_CONNECTOR"] else { throw XCTSkip("needs a mock with MOCK_CONNECTOR_PLUGIN=examplechat") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_PLUGIN_CONNECTOR"] else { throw XCTSkip("needs a mock with MOCK_CONNECTOR_PLUGIN=examplechat") }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""]
         app.launchPinned()
         let any = app.descendants(matching: .any)

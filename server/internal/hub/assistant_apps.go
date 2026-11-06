@@ -9,7 +9,7 @@ import (
 )
 
 // The hub's plain capabilities the assistant asks for its directory and its settings (app.call, assistantwire): the
-// where the knowledge base keeps its files and the hub's own settings for jarvis_settings (the connectors' and the
+// where the knowledge base keeps its files and the hub's own settings for persona_settings (the connectors' and the
 // extensions' parts are the manager's own: internal/extmgr). Nothing here knows what the
 // assistant does with them.
 

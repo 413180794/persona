@@ -215,7 +215,7 @@ func TestMarketSetSpec(t *testing.T) {
 	index := marketIndex(t, "Moving market", marketEntry(t, dir, "pkg/example-ui.tar.gz", pkg))
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/old/persona-plugins.json", "/new/persona-extensions.json":
+		case "/old/" + extension.IndexFile, "/new/" + extension.IndexFile:
 			_, _ = w.Write(index)
 		default:
 			http.NotFound(w, r)

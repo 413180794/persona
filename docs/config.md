@@ -4,7 +4,7 @@ The repo hard-codes nobody's machines, accounts, domains, or preferences. Everyt
 
 | Config | Location | Read by | Covers |
 | --- | --- | --- | --- |
-| Build / deploy config | `~/.config/persona/config.json` on the dev machine (point elsewhere with `PERSONA_CONFIG`; the old `JARVIS_CONFIG` still works), template `config.example.json` at the repo root | `scripts/*` (via `scripts/persona_config.py`), XcodeGen (via the generated `apple/Config.xcconfig`) | The App's bundle id and team, the App Store Connect account, TestFlight testers, which machine / address the hub is on, machines to deploy to, simulators |
+| Build / deploy config | `~/.config/persona/config.json` on the dev machine (point elsewhere with `PERSONA_CONFIG`), template `config.example.json` at the repo root | `scripts/*` (via `scripts/persona_config.py`), XcodeGen (via the generated `apple/Config.xcconfig`) | The App's bundle id and team, the App Store Connect account, TestFlight testers, which machine / address the hub is on, machines to deploy to, simulators |
 | hub runtime config | `~/.persona/hub.json` on the hub machine (0600, contains the token and database password; generated automatically the first time `personad hub` runs) | `personad hub` | Listen address, public address, which machines to connect, push timings, whether the hub starts the built-in manager, the card formats its apps get |
 | Manager config | `~/.persona/managers/assistant/manager.json` for the built-in manager, `~/.persona/managers/<id>/manager.json` for one made in the app (0600) | the manager (`personad assistant`, `personad manager run`) | Whose assistant it is and what it should know, where it runs by default, the AI gateway and models, the Agents' triage, question delegation and launcher health, the Inbox and its AI twin, the knowledge base, how long hook cards wait; connectors, extensions written by hand, bots, mail sign-ins and the Gmail proxy, Lark and lark-cli, usage sources ("manager.json" below) |
 
@@ -13,28 +13,15 @@ The configs live outside the repo: releases run in a clean worktree (`docs/relea
 
 <a id="命名与兼容"></a>
 
-## Naming and compatibility
+## Naming and configuration
 
-The product name is **Persona** (formerly Jarvis), and the repo is `nwverse/persona`. The new default names in this document apply to the #277 migration release; updating the docs alone doesn't change installed binaries or scripts, and older versions keep using the old entry points.
+Persona is the only supported spelling. The canonical binary is `personad`, the connector is `persona-link`, runtime state defaults to `~/.persona`, and build/deploy configuration defaults to `~/.config/persona/config.json`. `PERSONA_HOME` and `PERSONA_CONFIG` are the only brand-prefixed overrides. No previous-brand variable, directory, command or URL aliases are read or created.
 
-| Purpose | New name (preferred) | Compatible name |
-| --- | --- | --- |
-| Server binary | `personad` | `jarvisd`; existing subcommands mean the same |
-| Default runtime directory | `~/.persona` | `~/.jarvis`; upgrades keep the existing config, keys, knowledge base, and pairing identity |
-| Default build / deploy config | `~/.config/persona/config.json` | `~/.config/jarvis/config.json` |
-| Config file override | `PERSONA_CONFIG` | `JARVIS_CONFIG` |
-| Migrated environment variables | The corresponding `PERSONA_*` | `JARVIS_*`; when both are set the new name wins, including an explicit empty value |
-| Config script | `scripts/persona_config.py` | `scripts/jarvis_config.py`, a symlink to the same implementation |
-| Service runtime root resolver | `scripts/persona_identity.py --service hub\|node\|link` | Recovers the root of the installed service for that role without reading the build config; only HOME is extracted from environment files, and old services without HOME keep their original default storage |
-| DEBUG App command tool | `scripts/app/personactl.py` | `scripts/app/jarvisctl.py`, same implementation; the old command and cache location are kept |
+See [the naming contract](rename.md) and [the approval-gated cutover](persona-cutover.md). Existing installations require explicit, one-time service/config/data/MCP migration before running this version. A source merge does not change live services. Back up and identify the actual storage first; two independent stores must never be merged automatically.
 
-For the full list of source paths, Xcode project / schemes, and system identities, see [compatibility migration](rename.md#源码位置构建入口与兼容名字). #773's [recovering the runtime directory per service](rename.md#部署脚本按服务恢复运行目录) explains the boundaries of role, reset / drop-in / XDG, SameFile, and external EnvironmentFile / UnsetEnvironment; the latter two only handle the HOME field and removal rules, and never execute or return other environment fields; it stops when a required file is missing or the root field can't be parsed, and the actual root can also be given explicitly. Accepting new and old URL schemes and generating the old format are verified separately; renaming in the docs is no substitute for client acceptance testing.
+Actual registered bundle / application IDs, App Groups, iCloud containers and keychain access groups come from private configuration and stay unchanged. Naming their carrier variables `PERSONA_*` does not change their values. Other runtime contracts, caches and persisted preferences need the cutover described above. The avatar model remains `persona`: Mochi's ID is `persona`, Visor's is `persona-visor`.
 
-Compatibility with and migration from the old directories are handled by the runtime / installer. Before upgrading, back up the data directory and Postgres actually in use; don't manually delete the old directory, merge the two, or regenerate keys just because of the rename. If both directories already exist, or you use custom paths, first confirm which one is actually loaded, so you don't start an empty hub. Historical measurements, signing profiles, source paths, package IDs, protocol fields, cache keys, and systemd / launchd names in the docs may still say Jarvis; they are not the new public product name and should not be migrated by find-and-replace.
-
-Bundle IDs, App Groups, keychain groups, signing profiles, App Store records, database roles / databases / containers / volumes, public domains, and install / relay addresses all keep their existing identities. The avatar (`persona`) is still the concept of name / picture / status dot and is not renamed along with the product.
-
-The old `JARVIS_*`, xcconfig / Gradle identifiers, and protocol names are still listed below for compatible configs and for reading the source; that doesn't mean every code identifier can be mechanically swapped for `PERSONA_*`. The migration release's implementation is authoritative for the actual entry points.
+The role-specific root resolver reads only canonical service definitions, including HOME-only environment-file overrides; it does not execute shell configuration or expose credentials. Missing required files fail closed. Queries are read-only, and `--prepare` initializes only the selected root without compatibility links.
 
 ## Quick start: connecting several machines
 
@@ -45,8 +32,8 @@ An always-on Linux machine runs the hub, and every other computer is connected b
 
 | Machine | Needs |
 | --- | --- |
-| hub machine (Linux) | docker (the Postgres container; without Docker, use the system's Postgres, see `docs/server.md` ("Database")), systemd user services, herdr; the phone must be able to reach the hub: same network, a VPN you set up yourself, or direct public access (IPv6 preferred, with the TLS port open). On a NAS, or when it only serves as a hub without running Agents, it can also run entirely in Docker (`docs/docker.md`); steps 1 and 2 below are then only for installing `jarvisd` on each computer |
-| Each computer to connect | Claude Code (or Codex); `~/.persona/bin/personad` and herdr (the deploy script in step 2 copies them over; if herdr is missing, install it into `~/.local/bin` with its official installer, or set `JARVIS_SKIP_HERDR=1` if you use another engine and don't want it) |
+| hub machine (Linux) | docker (the Postgres container; without Docker, use the system's Postgres, see `docs/server.md` ("Database")), systemd user services, herdr; the phone must be able to reach the hub: same network, a VPN you set up yourself, or direct public access (IPv6 preferred, with the TLS port open). On a NAS, or when it only serves as a hub without running Agents, it can also run entirely in Docker (`docs/docker.md`); steps 1 and 2 below are then only for installing `personad` on each computer |
+| Each computer to connect | Claude Code (or Codex); `~/.persona/bin/personad` and herdr (the deploy script in step 2 copies them over; if herdr is missing, install it into `~/.local/bin` with its official installer, or set `PERSONA_SKIP_HERDR=1` if you use another engine and don't want it) |
 | SSH | The hub machine can log in to every computer **without a password** (the hub uses `BatchMode=yes`, so keys only), with an alias for each in the hub machine's `~/.ssh/config`; the dev machine also needs SSH to each one (for deploying) |
 
 For computers behind NAT that the hub can't reach (e.g. a Mac at home, a machine on another private network), use **tailcat** (`docs/server.md` ("tailcat hole punching")):
@@ -86,10 +73,10 @@ open ports, or a Tailscale account; the hub tries ssh first and falls back to ta
    ```
 
    `ssh_host` is the host name the **hub machine** uses to SSH to this one (each side has its own `~/.ssh/config`, so it can differ from `ssh` in step 1); `id` should match step 1;
-   `name` is the name shown in the App; `icon` is `server` / `laptop` / `desktop`. `remote_bin` is the path of `personad` on that computer; when omitted the hub uses `~/.jarvis/bin/jarvisd` (the `jarvisd` the deploy script installs, with `personad` as a symlink to it); set it if installed elsewhere.
-   Whose assistant it is and what it should know (`assistant.owner`, `assistant.notes`) go into the built-in manager's `~/.persona/managers/assistant/manager.json` (make it, 0600, if it isn't there yet; see "manager.json" below). For direct public access add `public.tls_listen` and `public.advertise` and open the TLS port per the [network doc](network.md); keep `public_url` as an address old Apps can use.
+   `name` is the name shown in the App; `icon` is `server` / `laptop` / `desktop`. `remote_bin` is the path of `personad` on that computer; when omitted the hub uses `~/.persona/bin/personad` (the canonical binary the deploy script installs); set it if installed elsewhere.
+   Whose assistant it is and what it should know (`assistant.owner`, `assistant.notes`) go into the built-in manager's `~/.persona/managers/assistant/manager.json` (make it, 0600, if it isn't there yet; see "manager.json" below). For direct public access add `public.tls_listen` and `public.advertise` and open the TLS port per the [network doc](network.md); keep `public_url` as a reachable private-network address.
 
-4. **Restart the hub so it reads the new config**: `./scripts/deploy/deploy.sh <hub machine id>` (or `systemctl --user restart jarvisd` on the hub machine).
+4. **Restart the hub so it reads the new config**: `./scripts/deploy/deploy.sh <hub machine id>` (or `systemctl --user restart personad` on the hub machine).
 
 5. **Pair the phone**: run `~/.persona/bin/personad hub pair` on the hub machine and scan the QR code with the App. The command gets a temporary token from the hub running locally; it is valid for 10 minutes, can be redeemed for a device token only once, and after redemption has at most a 2-minute grace period for requests still in the middle of pairing. Only `--legacy` prints the main token.
 
@@ -99,7 +86,7 @@ open ports, or a Tailscale account; the hub tries ssh first and falls back to ta
 To add a computer later: add a line to `machines` in both configs and run `./scripts/deploy/deploy.sh <new machine id> <hub machine id>`.
 
 **Recommended: install the node service on the other computers** (2026-11-02, [plan-hub-center.md](plan-hub-center.md) section 0): install only one hub for the whole household; the other computers skip SSH and
-install a resident node plus the connector jarvis-link, with one command or one App, see [link.md](link.md) ("Installing the node service"):
+install a resident node plus the connector persona-link, with one command or one App, see [link.md](link.md) ("Installing the node service"):
 
 - Linux: `curl -fsSL <site>/install.sh | sh -s -- --node --pair '<link from personad hub pair --machine <id>>'` (this computer connects to the hub; in `machines` it is
   `{"id":"laptop","name":"Laptop","kind":"link","icon":"laptop"}`, and the hub needs `public.tls_listen`), or `… --node --listen` (the hub connects to it;
@@ -117,14 +104,14 @@ No `ssh_host`, and no SSH setup on the hub. The SSH setup in steps 1–6 above s
 
 ```json
 {
-  "app": { "bundle_id": "com.example.jarvis", "team_id": "ABCDE12345" },
+  "app": { "bundle_id": "com.example.persona", "team_id": "ABCDE12345" },
   "app_store": {
     "app_id": "1234567890",
     "key_id": "ABC123DEFG",
     "issuer_id": "00000000-0000-0000-0000-000000000000",
     "key_path": "~/.appstoreconnect/AuthKey_ABC123DEFG.p8",
     "testers": [{ "email": "you@example.com", "first_name": "You" }],
-    "feedback_email": "jarvis@example.com"
+    "feedback_email": "persona@example.com"
   },
   "hub": { "machine": "server", "url": "http://hub.example.com:18660" },
   "machines": [
@@ -138,10 +125,10 @@ No `ssh_host`, and no SSH setup on the hub. The SSH setup in steps 1–6 above s
 
 | Field | Purpose |
 | --- | --- |
-| `app.bundle_id` | The iPhone App's bundle id; the watch is `<id>.watchkitapp`, tests are `<id>.tests`. Written to `JARVIS_BUNDLE_ID` in `apple/Config.xcconfig` |
+| `app.bundle_id` | The iPhone App's bundle id; the watch is `<id>.watchkitapp`, tests are `<id>.tests`. Written to `PERSONA_BUNDLE_ID` in `apple/Config.xcconfig` |
 | `app.team_id` | Developer team, written to `DEVELOPMENT_TEAM` in `Config.xcconfig`; the ExportOptions used for export also use it |
-| `app.app_group` | The App Group through which the App and the Dynamic Island extension share files (avatar and avatar pack images, `docs/live-activity.md` ("Avatar")), written to `JARVIS_APP_GROUP` in `Config.xcconfig`. Defaults to `group.<app.bundle_id>`; it must be registered on the developer site first (`docs/release.md` ("App Group")) |
-| `app.push_relay` | Push relay address (e.g. `https://<relay domain>/relay`), written to `JARVIS_PUSH_RELAY` in `Config.xcconfig` and `JarvisPushRelay` in Info.plist: the App registers with it, and hubs without an APNs key push through it (`docs/push-relay.md`). Without it the App doesn't register, and only hubs with `apns.json` can push |
+| `app.app_group` | The App Group through which the App and the Dynamic Island extension share files (avatar and avatar pack images, `docs/live-activity.md` ("Avatar")), written to `PERSONA_APP_GROUP` in `Config.xcconfig`. Defaults to `group.<app.bundle_id>`; it must be registered on the developer site first (`docs/release.md` ("App Group")) |
+| `app.push_relay` | Push relay address (e.g. `https://<relay domain>/relay`), written to `PERSONA_PUSH_RELAY` in `Config.xcconfig` and `PersonaPushRelay` in Info.plist: the App registers with it, and hubs without an APNs key push through it (`docs/push-relay.md`). Without it the App doesn't register, and only hubs with `apns.json` can push |
 | `app.carplay_voice` | Boolean, default `false`: enabling adds the CarPlay voice-conversation entitlement (`com.apple.developer.carplay-voice-based-conversation`) to signing, making Persona visible in the car. Apply to Apple first and enable it on the App ID after approval; do not enable before approval or signing fails. `scripts/persona_config.py xcconfig` generates `apple/PersonaCarPlay.entitlements` and writes `PERSONA_APP_ENTITLEMENTS` (see `docs/carplay.md`) |
 | `app.meta_wearables` | Meta glasses (`docs/meta-glasses.md`): when `enabled` is true, `persona_config.py env` exports `PERSONA_META_WEARABLES=YES`, and only then does xcodegen merge `apple/meta-wearables.yml` (Meta's DAT SDK and the Info.plist keys it needs) into the project; `app_id` and `client_token` are the app's ID and Client Token from the Wearables Developer Center, written to `PERSONA_META_APP_ID` and `PERSONA_META_CLIENT_TOKEN` in `Config.xcconfig`; they can be left empty while the glasses are in Developer Mode (`app_id` 0). Off by default: it needs Xcode 26.4 or later, and carries risk in external TestFlight / App Store review |
 | `app.tunnel_core` | Directory containing the in-App tunnel core (`libpersonatunnel.a`, `module.modulemap`, headers; [network.md](network.md) ("Connecting to the hub through an in-App tunnel")). Only when set does it write `PERSONA_TUNNEL_INCLUDE` and `PERSONA_TUNNEL_LDFLAGS` into `Config.xcconfig`; only hardware builds link it. Missing files cause `xcconfig` to fail immediately. Omitted means no in-App tunnel |
@@ -156,11 +143,11 @@ No `ssh_host`, and no SSH setup on the hub. The SSH setup in steps 1–6 above s
 | `xcode` | Optional: which Xcode to build and release with (path to the `.app`); `persona_config.py env` exports `DEVELOPER_DIR` from it (a value already in the environment wins). Supporting iPhone Duo needs Xcode 27 or later; Apps built with older versions don't extend under the status bar and camera on Duo |
 | `android.application_id` | The Android App's application id (`scripts/app/android.sh`, `docs/android.md`); defaults to `app.bundle_id` |
 | `android.google_oauth_scheme` | The scheme the Android App uses for the Google sign-in callback for Gmail: the reversed client ID of the hub's `google.client_id` (`docs/mail.md` ("Android")); without it Gmail can only be added with an app-specific password |
-| `mac.link_bundle_id` | Bundle id of the Mac menu bar App "Persona Link" (`scripts/app/mac-link.sh`, `docs/link.md`); the env var `PERSONA_LINK_BUNDLE_ID` (old `JARVIS_LINK_BUNDLE_ID`) wins; defaults to the placeholder `com.example.jarvis.link` |
+| `mac.link_bundle_id` | Bundle id of the Mac menu bar App "Persona Link" (`scripts/app/mac-link.sh`, `docs/link.md`); the env var `PERSONA_LINK_BUNDLE_ID` wins; defaults to the placeholder `com.example.persona.link` |
 
 `python3 scripts/persona_config.py env` prints shell variables (scripts `eval` it at the top), and `xcconfig` generates `apple/Config.xcconfig`;
 `sim.sh` / `release.sh` generate it automatically. Before running `xcodegen` directly or opening Xcode, run `python3 scripts/persona_config.py xcconfig` once.
-The committed `project.yml` and `Info.plist` only reference `$(JARVIS_BUNDLE_ID)` / `$(PRODUCT_BUNDLE_IDENTIFIER)`, and the keychain service uses the bundle id at runtime.
+The committed `project.yml` and `Info.plist` only reference `$(PERSONA_BUNDLE_ID)` / `$(PRODUCT_BUNDLE_IDENTIFIER)`, and the keychain service uses the bundle id at runtime.
 
 ## Multiple Codex app-server instances
 
@@ -211,12 +198,12 @@ The sections that are a manager's (whose assistant it is, `ai`, `agents`, `inbox
 - `security.proxy_protocol` (optional, omitted by default): with same-machine port forwarding, a reverse tunnel, or nginx `stream` passthrough in front of the hub, public connections all look like loopback to the hub.
   Set `{"from": ["127.0.0.1/32"]}`: connections from these upstreams must carry a PROXY header (v1 / v2), and the hub checks the real source in the header; `listeners` defaults to only `tls`.
   Syntax, rules, and self-checks in [network.md](network.md#proxy-protocol).
-- `name` (optional): the hub's display name (e.g. "Home"), shown by jarvis-link on computers (Mac menu bar) and by future linked-hub and multi-hub clients.
-  Defaults to the short host name of the hub machine; if the host name is a Docker container id or `JARVIS_LOCAL_NODE=0`, it uses `hub-<first 6 chars of hub_id>`. Manual file edits require a hub restart;
+- `name` (optional): the hub's display name (e.g. "Home"), shown by persona-link on computers (Mac menu bar) and by future linked-hub and multi-hub clients.
+  Defaults to the short host name of the hub machine; if the host name is a Docker container id or `PERSONA_LOCAL_NODE=0`, it uses `hub-<first 6 chars of hub_id>`. Manual file edits require a hub restart;
   edits in the admin UI's "Overview" take effect immediately ([admin.md](admin.md)).
 - `admin` (optional): hub admin UI (`<hub address>/admin`, [admin.md](admin.md)). `access` controls who can open it: `loopback` / `lan` (default) / `cidrs` / `any`
   (requires TLS); `cidrs` lists networks allowed with `access: cidrs`; `session_hours` is the login expiry (default 12); `first_setup: "code"` (written by a fresh `personad hub setup` install) requires a setup code even from LAN sources to set the first password; without it only loopback requires one. Access can only be broadened on the hub machine with
-  `personad hub admin access <scope>` (or the deploy script); the web UI can only narrow it. Env vars `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` take precedence.
+  `personad hub admin access <scope>` (or the deploy script); the web UI can only narrow it. Env vars `PERSONA_ADMIN_ACCESS` / `PERSONA_ADMIN_CIDRS` take precedence.
   The admin UI writes hub.json atomically and preserves unknown fields ([admin.md](admin.md) ("Editing hub.json")).
 - `mesh` (optional, linked hubs, [mesh.md](mesh.md)): `discovery` (default true: advertise itself with mDNS on the LAN and list discovered hubs; unavailable inside a Docker bridge network),
   `path_switch_seconds` (default 60: when a computer has a better path, it must stay better this long before the primary switches; broken paths switch immediately),
@@ -231,18 +218,18 @@ The sections that are a manager's (whose assistant it is, `ai`, `agents`, `inbox
   Older Persona Link versions do not recognize these settings and still ping at their own 10 seconds / 5 seconds (active mode only pings the connection itself; passive mode also pings every stream); upgrade both together. Manual file edits require a hub restart.
 - `machines`: since 2026-11-04 these are defaults handed by the hub to the manager (the assistant process) at handshake, and **the manager connects them** ([machines.md](machines.md) ("Who connects computers")). Where the text below says "the hub dials" or "the hub connects",
   the manager actually dials (on the hub machine it is the hub's child process using the same HOME: ssh config and its keys in `~/.persona/managers/assistant/` are all this machine's). Computers added in the admin UI at runtime are also handed to it and connected immediately.
-- `machines[].kind`: `local` (the hub's own machine), `service` (the hub dials this connector's passive port, "Hub connects", see the next item), `link` (this machine's jarvis-link
+- `machines[].kind`: `local` (the hub's own machine), `service` (the hub dials this connector's passive port, "Hub connects", see the next item), `link` (this machine's persona-link
   actively connects to the hub, "Computer connects", [link.md](link.md)); `ssh` (the hub connects via `ssh_host`) and `tailcat` (tailcat only, see the item after next) are retained only for existing configs,
   no longer added through the admin UI; migration steps in [mesh.md](mesh.md) ("SSH / tailcat: compatibility"). One computer may have several entries (e.g. a service and a link); the hub recognizes
   the same computer by machine_uid, lists it once, and uses the best path ([mesh.md](mesh.md) ("Multiple paths to one computer")).
-- `machines[].address`, `machines[].proxy` (kind `service`): the connector's `host:port` (included in the link from `jarvis-link pair --listen`; paste it under **Add computer ›
+- `machines[].address`, `machines[].proxy` (kind `service`): the connector's `host:port` (included in the link from `persona-link pair --listen`; paste it under **Add computer ›
   Hub connects** in the admin UI to fill it in); optional `proxy`, `socks5://[user:password@]host:port`, lets the hub connect through this SOCKS proxy (when the computer is only reachable through another machine).
   The connector's public-key fingerprint and the credentials the hub gives it are not in hub.json: pairing stores them in Postgres (credentials encrypted with `~/.persona/secret.key`).
 - `machines[].tailcat_addr` (optional): the `tc…` address printed by `personad node tailcat init` on that computer; the hub connects through tailcat when ssh fails
   (`docs/server.md` ("tailcat hole punching")). The address is a secret (includes the WireGuard preshared key); keep it only in hub.json, like the token. `kind: "tailcat"` means
   tailcat only, no ssh attempt (no `ssh_host`); `kind: "ssh"` plus `tailcat_addr` means ssh first, tailcat on failure.
-- Env vars `JARVIS_DATABASE_URL`, `JARVIS_PUBLIC_URL`, `JARVIS_LISTEN`, `JARVIS_ADMIN_ACCESS` override the corresponding settings (new `PERSONA_*` names win, not written back to the file); Docker deployments use them. A nonempty `JARVIS_ADMIN_ACCESS` replaces the whole `admin` access scope together with `JARVIS_ADMIN_CIDRS`; setting only `JARVIS_ADMIN_CIDRS` has no effect
-  (`docs/docker.md` ("Environment variables")); with `JARVIS_LOCAL_NODE=0`, first run does not write the local machine.
+- Env vars `PERSONA_DATABASE_URL`, `PERSONA_PUBLIC_URL`, `PERSONA_LISTEN`, `PERSONA_ADMIN_ACCESS` override the corresponding settings (new `PERSONA_*` names win, not written back to the file); Docker deployments use them. A nonempty `PERSONA_ADMIN_ACCESS` replaces the whole `admin` access scope together with `PERSONA_ADMIN_CIDRS`; setting only `PERSONA_ADMIN_CIDRS` has no effect
+  (`docs/docker.md` ("Environment variables")); with `PERSONA_LOCAL_NODE=0`, first run does not write the local machine.
 - `tailcat.derp_map_url` (optional): the DERP map URL when using a self-hosted DERP relay (derper, see `docs/server.md` ("Self-hosted relay")) instead of Tailscale's public relays; each computer's
   `init` must use the same `--derp-map-url`.
 - `machines[].claude_config_dirs` (optional): Claude Code config directories on this machine besides `~/.claude` (`CLAUDE_CONFIG_DIR` set by launchers,
@@ -319,7 +306,7 @@ A manager's own sections of the configuration are in its `manager.json`, not in 
   },
   "google": { "client_id": "…", "proxy": "" },
   "lark": { "account": 2 },
-  "extensions": [{ "id": "voice", "command": "jarvisd", "args": ["voice"] }]
+  "extensions": [{ "id": "voice", "command": "personad", "args": ["voice"] }]
 }
 ```
 
@@ -380,14 +367,14 @@ A manager's own sections of the configuration are in its `manager.json`, not in 
   Edit in the admin UI at `/admin/usage` (the hub forwards to the manager) for immediate effect; manual edits require a hub restart (which restarts the manager too), or opening this admin page (the manager adopts the version on disk).
 - `microsoft` (optional): Outlook's "Sign In with Microsoft" (`docs/mail.md` ("Outlook integration")). `client_id` is the default client ID
   (usually unnecessary: the user enters their own Microsoft Entra-registered one in the App, encrypted in the hub and preferred over this); `redirect_uri` defaults to
-  `jarvis-mail-oauth://outlook`, and changes must match the registration in Entra.
+  `persona-mail-oauth://outlook`, and changes must match the registration in Entra.
 - `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token` (old syntax, **no longer effective**): since #1571, integration through the Lark gateway is provided by an extension
   (start of `docs/feishu.md`, `docs/extensions.md`). The manager still reads these keys, but doesn't connect to the Lark gateway with them; if `token` or `container` is set,
   it logs one warning at startup. Set the Agent token, container, address, and separate encrypted-message authorization (`native_olk_token`) in the Lark extension's settings instead; these keys can be removed.
 - `lark.account` (optional integer, still effective): the default Lark gateway account number, `1` for the main account, `2` for the second; omitted or `0` uses the main account, valid range 1–999999999,
   e.g. `"lark": {"account": 2}`. The number comes from the `id` in the Lark gateway's `/accounts`, not the Lark user ID. Operations on Inbox Lark items from the default account omit `ol_account`,
   while other accounts pass their own number; the Inbox Agent also uses this default when handling Lark items (`docs/feishu.md` ("Multiple accounts")). The Lark extension's default account is authoritative (`default` in its messaging source's `GET accounts`, #5098):
-  if the extension cannot be queried, use the last retrieved value; only if none has been retrieved since the manager started is this field used. Restart the hub after changing (`systemctl --user restart jarvisd`).
+  if the extension cannot be queried, use the last retrieved value; only if none has been retrieved since the manager started is this field used. Restart the hub after changing (`systemctl --user restart personad`).
   Server-side Inbox records are isolated and retained per account, available again when switching back.
 - `lark.cli` (optional): Lark's official open-platform CLI, lark-cli, as a second Lark source besides the Lark extension (gateway) (`docs/plan-lark-cli.md`):
   `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`. `bin` is a command name or absolute path, default `lark-cli`; non-absolute paths are found in a login shell
@@ -430,7 +417,7 @@ A manager's own sections of the configuration are in its `manager.json`, not in 
   for people who do not want to enter them in the App. Values saved in the App (**Settings › Connectors › Lark Bot**) win; switches, pairing, and all features are in the App (`docs/bots.md`).
 - `extensions` (old `plugins` key still read): extensions hand-written in manager.json, started by the manager and forwarded to the App (voice chat, etc.): `id`, `name`, `kind`, `command` + `args` (or only `socket` for an extension running elsewhere),
   `dir` (working directory), `env` (extra environment variables), `disabled` (`true` disables while keeping the config), `config` (the extension's own settings), see `docs/extensions.md` ("Extensions in manager.json");
-  extensions installed with `personad extension install` are registered in the database, not here. For personad's built-in voice extension (GPT-Live), use `"command": "jarvisd", "args": ["voice"]`,
+  extensions installed with `personad extension install` are registered in the database, not here. For personad's built-in voice extension (GPT-Live), use `"command": "personad", "args": ["voice"]`,
   with upstreams in `config.providers` (`docs/extensions.md` ("Built-in voice extension")). Restart the hub after changes.
 - `trusted_extension_markets` (optional): signing public keys of additional trusted extension markets (key id, or `ed25519:…` from `market.pub`); extensions installed from these markets default to no sandbox, just like the official market (`docs/extensions.md` ("Sandbox")).
 

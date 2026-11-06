@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// How soon the shell's top bar fades as the search field comes up into its row (#4928).
 struct AgentsTopBarFadeTests {

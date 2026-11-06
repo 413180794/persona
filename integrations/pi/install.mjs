@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { prepareSocketDirectory } from '../runtime-sdk/lib/identity.js'
 import { defaultSocketPath, installCurrent, PACKAGES, packageHash, readShipped } from '../runtime-sdk/index.js'
 
-const NAME = 'jarvis-pi-runtime'
+const NAME = 'persona-pi-runtime'
 const i = process.argv.indexOf('--socket')
 const socket = (i > 0 && process.argv[i + 1]) || defaultSocketPath()
 const store = join(prepareSocketDirectory(socket), 'runtime-packages', NAME)

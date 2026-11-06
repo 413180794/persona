@@ -2,7 +2,7 @@
 
 > Completed 2026-11-05: Telegram connector moved out of open-source repository into telegram extension (#1704), initially private extension marketplace, since 0.1.3 in `nwverse/persona-extensions` (#2057).
 > Connector ID unchanged; login, Inbox, knowledge continue. Code, tg CLI (now `personad tool --cli telegram`), telegram skill all in extension.
-> Historical design record only; paths `connector/telegram`, `jarvisd-telegram`, personad tg no longer exist here.
+> Historical design record only; paths `connector/telegram`, `personad-telegram`, personad tg no longer exist here.
 
 Status: design agreed, work started 2026-11-03. User decided own account (MTProto user client, not bot), message text may go to AI and knowledge / Inbox like Lark; assistant can search / summarize, with settings switches. First version **read-only**. Framework `docs/plan-connectors.md` (Connector, Registry, gate); only Telegram-specific parts here.
 After completion, merge design into `docs/connectors.md` or plan's Telegram section and delete this document.
@@ -18,17 +18,17 @@ After completion, merge design into `docs/connectors.md` or plan's Telegram sect
 
 Choose gotd/td: one Go dependency, no release-flow changes; own session storage encrypts naturally into Postgres. Use raw `tg.Client` API, auth, `tgerr.FloodWait` only.
 
-## Architecture: separate `jarvisd-telegram` (option B, decided 2026-11-03)
+## Architecture: separate `personad-telegram` (option B, decided 2026-11-03)
 
 Gotd adds 35 MB, so Telegram stays out of personad in separate program, keeping core size unchanged.
 
 - **Code**: `server/internal/connector/telegram` uses gotd; `server/cmd/personad-telegram`, same module / build. Hub sends no Telegram config; credentials / session in `connector_secrets` accessed via secrets.*. Personad does not import it; test requires no gotd in go list -deps ./cmd/personad.
-- **Hub integration**: enabled → launch `jarvisd-telegram` beside personad using existing bidirectional stdin / stdout JSON-lines RPC (`internal/rpc`). Generic subprocess connector adapter `connector/proc` converts status / login / archive / Inbox / read-only tools / events to RPC; `connector/serve` exposes any Go connector over stdio. Reverse encrypted storage: child calls hub `secrets.load / save / delete`; plaintext sessions only both processes' memory, never child disk. Exit restarts with backoff; disable stops. Future heavy connectors can reuse.
-- **Version alignment**: before launch, `jarvisd-telegram version -v` must match personad version / build; otherwise no launch, status `jarvisd-telegram` and Hub Versions Differ.
+- **Hub integration**: enabled → launch `personad-telegram` beside personad using existing bidirectional stdin / stdout JSON-lines RPC (`internal/rpc`). Generic subprocess connector adapter `connector/proc` converts status / login / archive / Inbox / read-only tools / events to RPC; `connector/serve` exposes any Go connector over stdio. Reverse encrypted storage: child calls hub `secrets.load / save / delete`; plaintext sessions only both processes' memory, never child disk. Exit restarts with backoff; disable stops. Future heavy connectors can reuse.
+- **Version alignment**: before launch, `personad-telegram version -v` must match personad version / build; otherwise no launch, status `personad-telegram` and Hub Versions Differ.
 - **Hub only**: nodes do not need it; `deploy.sh` hub only, bundled in Docker hub image too.
 - **Release / self-update**:
-  - `publish.sh` builds `jarvisd-telegram-<os>-<arch>.gz` for four platforms, ~10 MB each under 25 MiB, same privacy / size checks.
-  - `latest.json` `programs: {"jarvisd-telegram": {"<os>-<arch>": {name, size, sha256, binary_sha256}}}`; old hub ignores, updates personad only.
+  - `publish.sh` builds `personad-telegram-<os>-<arch>.gz` for four platforms, ~10 MB each under 25 MiB, same privacy / size checks.
+  - `latest.json` `programs: {"personad-telegram": {"<os>-<arch>": {name, size, sha256, binary_sha256}}}`; old hub ignores, updates personad only.
   - Hub downloads / verifies `version -v` / replaces both together, retains each `.prev`; failed startup rolls both back.
 - **Deployment**: `deploy.sh` and main-chat `deploy-hub.sh` add program on hub, written as .new.
 
@@ -39,7 +39,7 @@ Gotd adds 35 MB, so Telegram stays out of personad in separate program, keeping 
 - **Display**: api_id visible, api_hash masked except last 4; status via example api_id <API ID> · api_hash ••••<suffix>. Neither appears in logs / errors / responses; connector errors redact first.
 - **Login**, Settings › Connectors › Telegram: API credentials → phone number → code on other Telegram devices / SMS → two-step password if enabled. First validate credentials through `help.getConfig`; invalid stays with api_id or api_hash Is Incorrect. Hub then forwards `auth.sendCode` → `auth.signIn` → `SESSION_PASSWORD_NEEDED` `account.getPassword` / SRP. Intermediate `phone_code_hash` memory only; restart begins at phone. Password discarded after memory use.
 - **Logout**: `auth.logOut` removes upstream session, then `connector_secrets` row deletes credentials / session. Logout / login to change credentials.
-- **Off by default**: hubs with jarvisd-telegram register disabled connector via T1 addConnectorOff. Enable in settings, then login.
+- **Off by default**: hubs with personad-telegram register disabled connector via T1 addConnectorOff. Enable in settings, then login.
 - Hub directly connects Telegram data centers (TCP 443 / web.telegram.org tested reachable 2026-11-03). Proxy for inaccessible networks later, not this version.
 
 ## What to read
@@ -133,7 +133,7 @@ User requested feishu-cli-inspired command design and skill for flexible Agent T
 Some users already run account-hosting Telethon / TDLib CLI or service. Like iMessage, node could be local connector (`docs/plan-connectors.md`, section 2 option 3), reading local service commands; hub registers connector while credentials / sessions stay on computer, e.g. keychain, not hub.
 - Benefit: no second login / Telegram device session; reuse authorized service.
 - Cost: service-specific commands / output require adapters, limited exposed reads, offline computer has no data, service owns rate limits.
-- Not now; finish jarvisd-telegram first. Demand later adds telegram local source via iMessage-style `connector.*` RPC.
+- Not now; finish personad-telegram first. Demand later adds telegram local source via iMessage-style `connector.*` RPC.
 
 ## Tests
 
@@ -149,7 +149,7 @@ Some users already run account-hosting Telethon / TDLib CLI or service. Like iMe
 | --- | --- |
 | T1 | Framework Login, Secrets / `connector_secrets`, `SetEnabled` / disabled, hub login / logout / enable APIs, checked with Ovis |
 | T2a | Subprocess connector: `connector/proc`, `connector/serve`, RPC / version alignment / restart backoff / enable lifecycle, fake subprocess tests |
-| T2b | `jarvisd-telegram` gotd client, credentials → phone → code → password, hub-encrypted credentials / session, logout, status exposes only api_id; no-gotd personad test |
+| T2b | `personad-telegram` gotd client, credentials → phone → code → password, hub-encrypted credentials / session, logout, status exposes only api_id; no-gotd personad test |
 | T2c | `deploy.sh` / `publish.sh` build, scan, size, programs manifest; coordinated self-update / rollback, Docker, `deploy-hub.sh.new` |
 | T3 | T3a incremental knowledge archive + live kick; T3b read tools / prompts; T3c delete stored knowledge / Inbox / cursors |
 | T4 | Inbox |

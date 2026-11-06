@@ -438,7 +438,7 @@ func (ph *pluginHost) run(s proto.PluginNodeStart, sum string) (*pluginRun, erro
 		spec.Name = id
 	}
 	for k, v := range s.Env {
-		if strings.HasPrefix(k, "PERSONA_") || strings.HasPrefix(k, "JARVIS_") {
+		if strings.HasPrefix(k, "PERSONA_") {
 			continue // the hub checked the manifest; this only keeps a node from being told otherwise
 		}
 		spec.Env = append(spec.Env, k+"="+v)

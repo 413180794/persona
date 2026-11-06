@@ -13,7 +13,7 @@ import javax.net.ssl.SSLException
 object PairingInput {
     fun parse(link: String): PairingRequest {
         val uri = runCatching { URI(link.trim()) }.getOrNull()
-        if (uri?.scheme !in Pairing.schemes || uri?.rawAuthority != "pair") invalid()
+        if (uri?.scheme != Pairing.scheme || uri?.rawAuthority != "pair") invalid()
         val parsed = Pairing.parse(link) ?: invalid()
         val keys = uri.rawQuery.orEmpty().split('&').map { it.substringBefore('=') }
         if (keys.filter { it != "alt" }.groupingBy { it }.eachCount().any { it.value > 1 }) invalid()
@@ -21,7 +21,7 @@ object PairingInput {
         return validate(PairingRequest(parsed.url, parsed.token, parsed.hub, parsed.fp, parsed.tls, parsed.alt))
     }
 
-    /** A full pairing link (`persona://` or `jarvis://`) is parsed whole instead of being treated as a hub address. */
+    /** A full pairing link (`persona://`) is parsed whole instead of being treated as a hub address. */
     fun isLink(value: String): Boolean = Pairing.isLink(value)
 
     fun manual(address: String, token: String): PairingRequest =

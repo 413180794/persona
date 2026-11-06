@@ -1,9 +1,9 @@
 // End-to-end check of the pi runtime (docs/pi.md "Verification"): a real `pi --mode rpc` with this extension (isolated agent
-// directory, the model played by DSH's llm-mock-server over Anthropic's API) and a real `jarvisd node --stdio` started
+// directory, the model played by DSH's llm-mock-server over Anthropic's API) and a real `personad node --stdio` started
 // by the runtime SDK's harness, which plays the hub. It sends from the "phone", streams, answers an approval and an
 // ask_user question there, and interrupts.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/pi/e2e/run.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/pi/e2e/run.mjs
 //
 // (DSH_CHECKOUT only for its mock model server.) Nothing outside a fresh temp directory is touched.
 
@@ -17,10 +17,10 @@ import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness
 
 const here = dirname(fileURLToPath(import.meta.url))
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
+const personad = process.env.PERSONAD
 const piBin = process.env.PI_BIN || 'pi'
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and JARVISD (a jarvisd binary)')
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and PERSONAD (a personad binary)')
   process.exit(2)
 }
 const root = mkdtempSync(join('/tmp', 'jpi-e2e-'))
@@ -40,14 +40,14 @@ writeFileSync(join(agentDir, 'models.json'), JSON.stringify({ providers: { mock:
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }],
 } } }))
 writeFileSync(join(agentDir, 'settings.json'), JSON.stringify({ defaultProvider: 'mock', defaultModel: 'mock-model', quietStartup: true }))
-writeFileSync(join(agentDir, 'jarvis.json'), JSON.stringify({ approve: ['bash'], askUser: true, answerFirst: 'phone' }))
+writeFileSync(join(agentDir, 'persona.json'), JSON.stringify({ approve: ['bash'], askUser: true, answerFirst: 'phone' }))
 
 // ---- the node (the harness plays the hub) and pi with the extension ----
-const node = await startNode({ jarvisd })
+const node = await startNode({ personad })
 const piLog = []
 const pi = spawn(piBin, ['--mode', 'rpc', '-e', join(here, '..', 'index.js'), '--no-skills', '--offline'], {
   cwd: work,
-  env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, JARVIS_RUNTIME_SOCKET: node.runtimeSocket, PI_OFFLINE: '1' },
+  env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, PERSONA_RUNTIME_SOCKET: node.runtimeSocket, PI_OFFLINE: '1' },
   stdio: ['pipe', 'pipe', 'pipe'], // stdin stays open: pi's RPC mode runs until it closes
 })
 pi.stdout.on('data', (d) => piLog.push(String(d)))

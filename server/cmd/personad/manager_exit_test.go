@@ -47,7 +47,7 @@ func TestManagerWithoutDatabaseExits2(t *testing.T) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestManagerWithoutDatabaseExits2$")
 		env := []string{}
 		for _, kv := range os.Environ() {
-			if !strings.HasPrefix(kv, "PERSONA_") && !strings.HasPrefix(kv, "JARVIS_") && !strings.HasPrefix(kv, "PATH=") {
+			if !strings.HasPrefix(kv, "PERSONA_") && !strings.HasPrefix(kv, "PATH=") {
 				env = append(env, kv)
 			}
 		}

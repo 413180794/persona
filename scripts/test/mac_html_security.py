@@ -31,7 +31,7 @@ def prepare(output):
     a = tests.index("    /// Run only as a separate test-without-building command")
     b = tests.index("    // MARK: Bounded, public-API WebView harness", a)
     tests = tests[:a] + tests[b:]
-    tests = tests.replace("import UIKit\n", "import AppKit\n").replace("@testable import Jarvis", "@testable import Sandbox")
+    tests = tests.replace("import UIKit\n", "import AppKit\n").replace("@testable import Persona", "@testable import Sandbox")
     tests = replace_once(tests, "#expect(card.root.presentedViewController == nil)", "#expect(card.window.attachedSheet == nil)")
     tests = replace_once(tests, "        let root = UIViewController()\n        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 480))",
                          "        let root = NSViewController()\n        let window: NSWindow")
@@ -190,7 +190,7 @@ def main():
     package = prepare(output)
     env = os.environ.copy()
     for key in list(env):
-        if key.startswith(("PERSONA_", "JARVIS_")):
+        if key.startswith(("PERSONA_")):
             env.pop(key)
     env.update(HOME=str(output / "home"), CFFIXED_USER_HOME=str(output / "home"),
                XDG_CACHE_HOME=str(output / "cache"), SWIFTPM_MODULECACHE_OVERRIDE=str(output / "cache/modules"))

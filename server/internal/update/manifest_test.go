@@ -21,7 +21,7 @@ func TestManifestHasNoMinNodeBuild(t *testing.T) {
 // A latest.json published before it went away still reads: the old key is ignored, not an error.
 func TestParseManifestIgnoresALegacyMinNodeBuild(t *testing.T) {
 	b := []byte(`{"version":"v1","build":202611021530,"protocol":1,"min_node_build":209901010000,
-		"files":{"linux-amd64":{"name":"jarvisd-linux-amd64.gz","size":1,"sha256":"a","binary_sha256":"b"}}}`)
+		"files":{"linux-amd64":{"name":"personad-linux-amd64.gz","size":1,"sha256":"a","binary_sha256":"b"}}}`)
 	m, err := ParseManifest(b)
 	if err != nil {
 		t.Fatalf("a manifest with min_node_build does not read: %v", err)

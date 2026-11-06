@@ -2,7 +2,7 @@
   // Deploy it only with scripts/release/publish.sh (SITE_ONLY=1 for the pages alone): it adds dl/ (the public personad)
   // and install.sh to a copy of this directory. A plain `wrangler deploy` here serves without them, and every hub's
   // update check and install.sh 404.
-  "name": "jarvis-site",
+  "name": "persona-site",
   "compatibility_date": "2026-10-01",
   "account_id": "2de3432934ff3b7c3cb742a2f09635a1",
   // Static files, except /relay/* (the push relay, docs/push-relay.md), which worker.mjs forwards, and /dl/*.gz (the

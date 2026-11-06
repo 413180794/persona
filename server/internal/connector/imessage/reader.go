@@ -1,6 +1,6 @@
 // Package imessage reads the Messages app's data on a Mac (docs/plan-connectors.md "5. iMessage connector"):
 // ~/Library/Messages/chat.db and the address book for names, read-only, through macOS's own /usr/bin/sqlite3
-// (jarvisd is built without cgo). It runs in the node of the Mac the hub was told to read (imessage.machine): the
+// (personad is built without cgo). It runs in the node of the Mac the hub was told to read (imessage.machine): the
 // files are protected by macOS (Full Disk Access), and nothing here writes to them, marks anything read or sends.
 //
 // Conversations are what the user sees in Messages: a person's chats over iMessage, SMS and RCS are one, a group is
@@ -37,9 +37,9 @@ type Reader struct {
 	// SQLite is the sqlite3 to run; macOS's own when empty.
 	SQLite string
 	// Via is how this node runs, for the permission guide: "launchd" (a resident node: Full Disk Access goes to
-	// jarvisd) or "ssh" (it goes to sshd-keygen-wrapper, through the "Remote Login" switch).
+	// personad) or "ssh" (it goes to sshd-keygen-wrapper, through the "Remote Login" switch).
 	Via string
-	// Executable is this jarvisd's path, for the launchd guide.
+	// Executable is this personad's path, for the launchd guide.
 	Executable string
 
 	mu       sync.Mutex
@@ -157,12 +157,12 @@ func (r *Reader) denied(st Status) Status {
 	if r.Via == "launchd" {
 		exe := r.Executable
 		if exe == "" {
-			exe = "jarvisd"
+			exe = "personad"
 		}
 		st.Guide = []string{
 			"在这台 Mac 上打开「系统设置 › 隐私与安全性 › 完全磁盘访问权限」",
 			"点「+」，按 ⇧⌘G 输入 " + exe + "，选中它，打开它的开关",
-			"回到 Persona 刷新。jarvisd 更新后如果又读不了，把它的开关关了再打开",
+			"回到 Persona 刷新。personad 更新后如果又读不了，把它的开关关了再打开",
 		}
 	} else {
 		st.Guide = []string{

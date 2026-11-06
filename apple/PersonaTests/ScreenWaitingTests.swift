@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Agents card of a terminal waiting with no dialog to read (`ScreenParser.waitingOn`): the tool call and its last
 /// output line, without Claude Code's tree glyphs.

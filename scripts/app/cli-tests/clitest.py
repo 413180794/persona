@@ -18,9 +18,9 @@ import urllib.request
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from personactl import Ctl, CtlError  # noqa: E402,F401
 
-# What XCUITest's launchPinned() + launchJarvis() pass: the old tab-bar layout (unless JARVIS_LAYOUT=shell) and the
+# What XCUITest's launchPinned() + launchPersona() pass: the old tab-bar layout (unless PERSONA_LAYOUT=shell) and the
 # pinned style. The cases launch the same way, or they would test another layout.
-PINNED = ["-ui.oldLayout", "YES", "-ui.style", os.environ.get("JARVIS_UI_STYLE", "glass")]
+PINNED = ["-ui.oldLayout", "YES", "-ui.style", os.environ.get("PERSONA_UI_STYLE", "glass")]
 
 
 class Fail(Exception):

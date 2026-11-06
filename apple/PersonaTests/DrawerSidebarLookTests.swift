@@ -1,7 +1,7 @@
 import SwiftUI
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// The drawer's sidebar takes its look from the window it is drawn in (#4496). It is rendered by a hosting controller of
 /// its own (`DrawerSidebarHost`) with a copy of the page's environment, and the copy's color scheme was only as new as

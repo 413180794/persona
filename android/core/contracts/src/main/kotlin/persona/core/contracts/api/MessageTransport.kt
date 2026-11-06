@@ -12,12 +12,12 @@ data class MessageRequest(
     val clearDraft: String? = null,
     val todoId: String? = null,
     /**
-     * The operation id this attempt goes under (X-Jarvis-Op-Id, and the body's client_msg_id): the message's own id
+     * The operation id this attempt goes under (X-Persona-Op-Id, and the body's client_msg_id): the message's own id
      * until the hub answered an attempt as not delivered, then a new one (the hub replays the first answer for an id).
      */
     val opId: String = clientMessageId,
 ) {
-    val headers: Map<String, String> get() = mapOf("X-Jarvis-Op-Id" to opId)
+    val headers: Map<String, String> get() = mapOf("X-Persona-Op-Id" to opId)
 }
 
 sealed interface MessageTransportResult {
@@ -39,7 +39,7 @@ interface MessageTransport {
     /** True only after the connection's initial catch-up has completed. */
     val readyToSend: StateFlow<Boolean>
     val supportsClientOps: Boolean
-    /** Forward request.headers, including X-Jarvis-Op-Id, on every attempt. */
+    /** Forward request.headers, including X-Persona-Op-Id, on every attempt. */
     suspend fun send(request: MessageRequest): MessageTransportResult
     /** Read authoritative evidence even before readyToSend is released. Null means unresolved. */
     suspend fun reconcile(request: MessageRequest, createdAt: Long, allowTextMatch: Boolean = true): MessageEvidence? = null

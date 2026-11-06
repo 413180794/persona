@@ -62,7 +62,7 @@ class ParityLogicTest {
     }
 
     private val launchers = listOf(
-        HubLauncher("team", source = "jarvis", model = "example-pro", baseUrl = "https://gateway.example.com/v1"),
+        HubLauncher("team", source = "persona", model = "example-pro", baseUrl = "https://gateway.example.com/v1"),
         HubLauncher("cc_work", source = "zshrc", machines = listOf("mac")),
         HubLauncher("cc_old", source = "zshrc", hidden = true),
     )
@@ -82,7 +82,7 @@ class ParityLogicTest {
     private class Fake(var fail: Boolean = false) : ProviderSetup {
         val calls = mutableListOf<String>()
         var list = listOf(
-            HubLauncher("team", source = "jarvis"),
+            HubLauncher("team", source = "persona"),
             HubLauncher("cc_work", source = "zshrc"),
         )
         override suspend fun presets() = emptyList<ProviderPreset>()
@@ -178,7 +178,7 @@ class ParityLogicTest {
             write(cache, "files-pdf/g.pdf", 5)
             write(cache, "files-share/h.txt", 5)
             write(cache, "shared/i.png", 5)
-            write(cache, "jarvis-update-1.apk", 5)
+            write(cache, "persona-update-1.apk", 5)
             val downloading = write(cache, "hub-data/h/1/inbox-media/cache-1.part", 20)
             val inUse = write(cache, "hub-data/h/1/images/open.png", 8)
             // The data layer keeps what it has open (CacheClearing): here, one pinned image.

@@ -21,7 +21,7 @@ The code lives in the Lark extension (formerly the hub's lark_agent.go); configu
 
 ## Context handed to the Agent (`larkAgentContext`)
 
-This is the biggest difference from the listener in herdr: a request can come from anywhere and the Agent starts knowing nothing, so the hub gathers context first and puts it in the first message (`<jarvis-context>` tags):
+This is the biggest difference from the listener in herdr: a request can come from anywhere and the Agent starts knowing nothing, so the hub gathers context first and puts it in the first message (`<persona-context>` tags):
 
 | Content | Source |
 | --- | --- |
@@ -35,7 +35,7 @@ Each chat log line is "month-day hour:minute name: text"; the request line is ma
 
 ## How it shows in the App (#876)
 
-In the first message to the Agent, **only the sentence at the end, outside all `<jarvis-context>` tags, is what the user wrote** (the request after `/agent`, or the prefix itself if nothing was written);
+In the first message to the Agent, **only the sentence at the end, outside all `<persona-context>` tags, is what the user wrote** (the request after `/agent`, or the prefix itself if nothing was written);
 the instructions for the Agent (`kind="instructions"`) and every context item in the table above are inside tags. The bubbles on web, iOS / Mac and Android show only that sentence,
 and the tags collapse into one line next to the bubble, "Context · N items", folded by default; expanding shows a list of titles only, and tapping an item shows its body (with links that can be opened); the watch shows "[N context items]".
 

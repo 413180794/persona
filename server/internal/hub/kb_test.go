@@ -49,8 +49,8 @@ func TestKBToolsAndTheHubsReads(t *testing.T) {
 	e := withKB(t, h)
 	c := &kb.Chat{ID: kb.ChatID("lark", "f1"), Source: "lark", SourceID: "f1", Kind: "group", Name: "发布群", Created: time.Now()}
 	_ = e.Store.PutChat(c)
-	_ = e.Store.AppendMessages(c, []kb.Line{{At: time.Now(), Sender: "张三", Text: "周五灰度 Jarvis"}})
-	_ = e.Store.PutSummary(kb.KindChat, c.ID, "# 发布群\n\n在推 Jarvis 发布")
+	_ = e.Store.AppendMessages(c, []kb.Line{{At: time.Now(), Sender: "张三", Text: "周五灰度 Persona"}})
+	_ = e.Store.PutSummary(kb.KindChat, c.ID, "# 发布群\n\n在推 Persona 发布")
 	connectAssistant(t, h)
 	tool := func(name, args string) string {
 		t.Helper()
@@ -60,13 +60,13 @@ func TestKBToolsAndTheHubsReads(t *testing.T) {
 		}
 		return textOf(r)
 	}
-	if out := tool("kb_update", `{"kind":"projects","id":"Jarvis 发布","project_kind":"long","importance":"P0","relevance":95,"log":"定了周五灰度","chats":["lark-f1"],"dirs":["server:/code/jarvis"]}`); !strings.Contains(out, "projects/jarvis-发布") {
+	if out := tool("kb_update", `{"kind":"projects","id":"Persona 发布","project_kind":"long","importance":"P0","relevance":95,"log":"定了周五灰度","chats":["lark-f1"],"dirs":["server:/code/persona"]}`); !strings.Contains(out, "projects/persona-发布") {
 		t.Fatalf("update: %q", out)
 	}
-	if p, _ := e.Store.Project("jarvis-发布"); p == nil || p.Kind != "long" || !p.Locked || p.Dirs[0] != "server:/code/jarvis" {
+	if p, _ := e.Store.Project("persona-发布"); p == nil || p.Kind != "long" || !p.Locked || p.Dirs[0] != "server:/code/persona" {
 		t.Fatalf("project: %+v", p)
 	}
-	if out := tool("kb_get", `{"kind":"projects","id":"Jarvis 发布"}`); !strings.Contains(out, "定了周五灰度") {
+	if out := tool("kb_get", `{"kind":"projects","id":"Persona 发布"}`); !strings.Contains(out, "定了周五灰度") {
 		t.Fatalf("get project by name: %q", out)
 	}
 	if out := tool("kb_search", `{"query":"灰度"}`); !strings.Contains(out, "messages/") {
@@ -74,10 +74,10 @@ func TestKBToolsAndTheHubsReads(t *testing.T) {
 	}
 
 	// The triage's projects of a directory: that machine's only.
-	if got := h.kbProjectNames(context.Background(), "server", "/code/jarvis/server"); len(got) != 1 || got[0] != "Jarvis 发布" {
+	if got := h.kbProjectNames(context.Background(), "server", "/code/persona/server"); len(got) != 1 || got[0] != "Persona 发布" {
 		t.Fatalf("dir match: %v", got)
 	}
-	if got := h.kbProjectNames(context.Background(), "laptop", "/code/jarvis"); len(got) != 0 {
+	if got := h.kbProjectNames(context.Background(), "laptop", "/code/persona"); len(got) != 0 {
 		t.Fatalf("other machine matched: %v", got)
 	}
 }

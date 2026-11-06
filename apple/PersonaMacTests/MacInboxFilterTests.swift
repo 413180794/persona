@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Mac inbox's sidebar @Me filter is the iPhone's (`InboxView.matches`): docs and the Moments posts whose
 /// newest notice @-mentions the user count; other company-circle posts do not (#3889).

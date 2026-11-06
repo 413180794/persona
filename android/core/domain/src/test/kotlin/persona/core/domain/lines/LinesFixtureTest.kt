@@ -93,14 +93,14 @@ class LinesFixtureTest(private val name: String, private val fixture: FixtureRea
 
 /** Reuse A0's reader without changing its version-only schema or any shared fixture files. */
 private fun readLineFixtures(): List<FixtureReader.Case> {
-    val root = System.getProperty("jarvis.repo.root")?.let(::File) ?: generateSequence(File(".").canonicalFile) { it.parentFile }
+    val root = System.getProperty("persona.repo.root")?.let(::File) ?: generateSequence(File(".").canonicalFile) { it.parentFile }
         .first { File(it, "spec/fixtures/lines").isDirectory }
     val source = File(root, "spec/fixtures/lines")
     check(source.isDirectory) { "Missing lines fixture directory" }
     val files = source.listFiles { file -> file.isFile && file.extension == "json" }!!.sortedBy { it.name }
     check(files.isNotEmpty()) { "Missing lines JSON fixtures" }
     val temp = Files.createTempDirectory("lines-fixtures-").toFile()
-    val oldRoot = System.getProperty("jarvis.repo.root")
+    val oldRoot = System.getProperty("persona.repo.root")
     try {
         val target = File(temp, "spec/fixtures/lines").also { it.mkdirs() }
         for (file in files) {
@@ -109,10 +109,10 @@ private fun readLineFixtures(): List<FixtureReader.Case> {
             check(value.text("domain") == "lines")
             File(target, file.name).writeText(JsonObject(value + ("version" to JsonPrimitive(1))).toString())
         }
-        System.setProperty("jarvis.repo.root", temp.absolutePath)
+        System.setProperty("persona.repo.root", temp.absolutePath)
         return FixtureReader.read("lines").also { check(it.isNotEmpty()) }
     } finally {
-        if (oldRoot == null) System.clearProperty("jarvis.repo.root") else System.setProperty("jarvis.repo.root", oldRoot)
+        if (oldRoot == null) System.clearProperty("persona.repo.root") else System.setProperty("persona.repo.root", oldRoot)
         temp.deleteRecursively()
     }
 }

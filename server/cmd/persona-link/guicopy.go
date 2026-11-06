@@ -10,8 +10,8 @@ import (
 // guiCopy writes a copy of the Windows program at src to dst that runs without a console window: the same bytes with
 // the PE optional header's Subsystem changed from console (3) to GUI (2). Task Scheduler gives a console program
 // started in the user's session a console window of its own (a Windows Terminal one where that is the default
-// terminal); a GUI one gets none. The service's supervisor runs from this copy, and starts jarvis-link and the node
-// with CREATE_NO_WINDOW (winservice.go). A copy rather than a second build: whatever jarvis-link.exe is installed,
+// terminal); a GUI one gets none. The service's supervisor runs from this copy, and starts persona-link and the node
+// with CREATE_NO_WINDOW (winservice.go). A copy rather than a second build: whatever persona-link.exe is installed,
 // from a release or from `go build`, the supervisor is the same program.
 func guiCopy(src, dst string) error {
 	b, err := os.ReadFile(src)

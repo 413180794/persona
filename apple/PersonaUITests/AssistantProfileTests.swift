@@ -2,21 +2,21 @@ import XCTest
 
 /// Persona's profile (Details in its avatar's menu on the Persona tab) and its schedule: one list of tasks (every day, every
 /// 30 minutes, once), a task's page, Run Now for a daily task and for a follow-up, and a task's permission mode (Allow Everything
-/// asks first). Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which records what was run at /mock/schedule.
+/// asks first). Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB), which records what was run at /mock/schedule.
 final class AssistantProfileTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-newAssistant", "YES"] + extra
         app.launchPinned()
         return app
@@ -24,7 +24,7 @@ final class AssistantProfileTests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let suffix = ProcessInfo.processInfo.environment["SHOT_SUFFIX"].map { "-" + $0 } ?? ""
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-profile-\(name)\(suffix).png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-profile-\(name)\(suffix).png"))
     }
 
     /// What the mock hub was asked to run.
@@ -36,7 +36,7 @@ final class AssistantProfileTests: XCTestCase {
 
     @MainActor private func openProfile(_ app: XCUIApplication) {
         // The face in the top bar opens a menu; Details is the profile.
-        let avatar = app.buttons["jarvis-avatar"]
+        let avatar = app.buttons["persona-avatar"]
         XCTAssertTrue(avatar.waitForExistence(timeout: 15), "no avatar on the Persona tab:\n\(app.debugDescription)")
         avatar.tap()
         XCTAssertTrue(app.buttons["详细信息"].waitForExistence(timeout: 3), "no 详细信息 in the avatar's menu")
@@ -81,7 +81,7 @@ final class AssistantProfileTests: XCTestCase {
         while try !ran().contains("morning"), Date() < deadline { usleep(200_000) }
         XCTAssertTrue(try ran().contains("morning"), "立即运行 did not reach the hub")
         // It opens the conversation it started: the profile is gone.
-        XCTAssertTrue(app.buttons["jarvis-avatar"].waitForExistence(timeout: 5), "not back on the conversation")
+        XCTAssertTrue(app.buttons["persona-avatar"].waitForExistence(timeout: 5), "not back on the conversation")
         XCTAssertFalse(app.staticTexts["历史记录"].exists, "still on the routine page")
     }
 
@@ -164,7 +164,7 @@ final class AssistantProfileTests: XCTestCase {
         reach(runNow)
         runNow.tap()
         // The shell's top bar has the Assistant | Agents switch where the old one has Persona's face.
-        XCTAssertTrue(app.buttons[shell ? "shell-assistant" : "jarvis-avatar"].waitForExistence(timeout: 8), "not back on the conversation")
+        XCTAssertTrue(app.buttons[shell ? "shell-assistant" : "persona-avatar"].waitForExistence(timeout: 8), "not back on the conversation")
         XCTAssertTrue(app.staticTexts["什么时候"].waitForNonExistence(timeout: 5), "still on the task's page")
         XCTAssertNotNil(try tasks().first(where: { $0["id"] as? String == "morning" })?["run_session_id"], "the run's conversation is not the task's")
     }

@@ -91,7 +91,7 @@
   <g class="hub">
     <rect class="panel" x="420" y="90" width="270" height="350" rx="14" stroke-width="1"/>
     <rect class="accent" x="440" y="106" width="4" height="34" rx="2"/>
-    <text class="t" x="454" y="120" font-size="15" font-weight="700">hub <tspan class="m mono" font-size="12" font-weight="400">jarvisd hub</tspan></text>
+    <text class="t" x="454" y="120" font-size="15" font-weight="700">hub <tspan class="m mono" font-size="12" font-weight="400">personad hub</tspan></text>
     <text class="m" x="454" y="137" font-size="11.5">An always-on Linux machine</text>
 
     <rect class="card" x="440" y="152" width="230" height="46" rx="10" stroke-width="1"/>
@@ -126,7 +126,7 @@
     <text class="t" x="856" y="173" font-size="13.5" font-weight="600">On each computer</text>
     <g font-size="12" text-anchor="middle">
       <rect class="chip" x="856" y="184" width="178" height="28" rx="7"/>
-      <text class="chip-t mono" x="945" y="202">jarvisd node</text>
+      <text class="chip-t mono" x="945" y="202">personad node</text>
       <line class="wire" x1="945" y1="213" x2="945" y2="225" stroke-width="1.5" marker-end="url(#head)"/>
       <rect class="chip" x="856" y="228" width="178" height="28" rx="7"/>
       <text class="chip-t" x="945" y="246">herdr</text>

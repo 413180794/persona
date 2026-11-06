@@ -2,18 +2,18 @@ import XCTest
 
 /// Long-press a message: the Copy / Select Text / Quote / Share bar must stay up after the finger lifts, whatever the press
 /// length; a tap on the list or a scroll still closes it. Runs against scripts/mock/mock_hub.py:
-///   TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests
+///   TEST_RUNNER_PERSONA_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests
 final class MessageMenuTests: XCTestCase {
     private let answer = "PR #42 看完了"
     private let question = "看一下 PR #42"
 
     @MainActor private func launch() throws -> XCUIApplication {
-        guard let mock = ProcessInfo.processInfo.environment["JARVIS_MOCK_URL"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_URL)")
+        guard let mock = ProcessInfo.processInfo.environment["PERSONA_MOCK_URL"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_URL)")
         }
         let url = mock.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? mock
         let app = XCUIApplication()
-        app.launchArguments = ["-pairURL", "jarvis://pair?url=\(url)&token=mock", "-tab", "dev",
+        app.launchArguments = ["-pairURL", "persona://pair?url=\(url)&token=mock", "-tab", "dev",
                                "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
         app.launchPinned()
         return app
@@ -75,7 +75,7 @@ final class MessageMenuTests: XCTestCase {
     }
 
     /// Branch to New Chat (#2137): ⋯ at the end of a reply's bar opens a menu that stays (the list's tap-to-close must not take
-    /// it away), and its item opens the new conversation. `TEST_RUNNER_JARVIS_SHOTS=<dir>` also saves the two screens.
+    /// it away), and its item opens the new conversation. `TEST_RUNNER_PERSONA_SHOTS=<dir>` also saves the two screens.
     @MainActor func testForkFromAReply() throws {
         let app = try launch()
         answerPoint(app).press(forDuration: 0.5)
@@ -97,7 +97,7 @@ final class MessageMenuTests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         let mode = XCUIDevice.shared.appearance == .dark ? "dark" : "light"
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name)-\(mode).png"))
     }

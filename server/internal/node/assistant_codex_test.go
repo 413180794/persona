@@ -294,7 +294,7 @@ func TestCodexStartAndTurns(t *testing.T) {
 
 	// Idle: a new turn, with the mode and effort the app chose.
 	n.noteModes(testThread, "auto", "high")
-	if err := c.deliver(ctx, "<jarvis-context>\nx\n</jarvis-context>", "你好", nil); err != nil {
+	if err := c.deliver(ctx, "<persona-context>\nx\n</persona-context>", "你好", nil); err != nil {
 		t.Fatal(err)
 	}
 	ts := f.sent("turn/start")
@@ -303,7 +303,7 @@ func TestCodexStartAndTurns(t *testing.T) {
 	}
 	var turn map[string]any
 	_ = json.Unmarshal(ts[0].Params, &turn)
-	if in, _ := turn["input"].([]any); len(in) != 2 || in[0].(map[string]any)["text"] != "<jarvis-context>\nx\n</jarvis-context>" || in[1].(map[string]any)["text"] != "你好" {
+	if in, _ := turn["input"].([]any); len(in) != 2 || in[0].(map[string]any)["text"] != "<persona-context>\nx\n</persona-context>" || in[1].(map[string]any)["text"] != "你好" {
 		t.Fatalf("input %v: the live context first, then the message", turn["input"])
 	}
 	sb, _ := turn["sandboxPolicy"].(map[string]any)
@@ -433,8 +433,8 @@ func TestCodexApprovals(t *testing.T) {
 		a, _ := res["action"].(string)
 		return a
 	}
-	if a := elicit(5, "jarvis"); a != "accept" || len(fh.interactions()) != 2 {
-		t.Fatalf("jarvis tool: %s, asked %d", a, len(fh.interactions()))
+	if a := elicit(5, "persona"); a != "accept" || len(fh.interactions()) != 2 {
+		t.Fatalf("persona tool: %s, asked %d", a, len(fh.interactions()))
 	}
 	if a := elicit(6, "other"); a != "decline" || len(fh.interactions()) != 3 {
 		t.Fatalf("other tool: %s, asked %d", a, len(fh.interactions()))
@@ -508,14 +508,14 @@ func TestUnwrapShell(t *testing.T) {
 }
 
 func TestCodexArgsAndShell(t *testing.T) {
-	args := strings.Join(codexArgs("/home/me/.jarvis/bin/jarvisd", "proc-ab"), " ")
-	for _, want := range []string{`mcp_servers.jarvis.command="/home/me/.jarvis/bin/jarvisd"`, `JARVIS_SESSION_ID="proc-ab"`,
+	args := strings.Join(codexArgs("/home/me/.persona/bin/personad", "proc-ab"), " ")
+	for _, want := range []string{`mcp_servers.persona.command="/home/me/.persona/bin/personad"`, `PERSONA_SESSION_ID="proc-ab"`,
 		"tool_timeout_sec=86400", "ignore_default_excludes=true"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("args lack %s: %s", want, args)
 		}
 	}
-	if sh := codexShell("cx_gpt"); !strings.Contains(sh, `codex "$@" app-server "${__jarvis_args[@]}"`) || !strings.HasSuffix(sh, "cx_gpt") {
+	if sh := codexShell("cx_gpt"); !strings.Contains(sh, `codex "$@" app-server "${__persona_args[@]}"`) || !strings.HasSuffix(sh, "cx_gpt") {
 		t.Errorf("shell: %s", sh)
 	}
 }
@@ -553,7 +553,7 @@ func TestQuickMetaFindsAFirstPromptPastLongInstructions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "rollout-2026-11-01T01-27-25-"+testThread+".jsonl")
 	big := strings.Repeat("x", 70*1024)
 	lines := []string{
-		`{"timestamp":"2026-11-01T00:00:00Z","type":"session_meta","payload":{"id":"` + testThread + `","cwd":"/home/me/.jarvis/assistant"}}`,
+		`{"timestamp":"2026-11-01T00:00:00Z","type":"session_meta","payload":{"id":"` + testThread + `","cwd":"/home/me/.persona/assistant"}}`,
 		`{"timestamp":"2026-11-01T00:00:00Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"` + big + `"}]}}`,
 		`{"timestamp":"2026-11-01T00:00:01Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u1","content":[{"type":"text","text":"今天有什么会"}]}}}`,
 	}
@@ -618,14 +618,14 @@ func TestCodexSharesTheAssistantMemory(t *testing.T) {
 	if change(4, "fc4", filepath.Join(mem, "y.md")); len(fh.interactions()) != 3 {
 		t.Fatalf("plan mode writes nothing unasked: asked %d", len(fh.interactions()))
 	}
-	if !strings.Contains(strings.Join(codexArgs("/bin/jarvisd", "k"), " "), "features.memories=false") {
+	if !strings.Contains(strings.Join(codexArgs("/bin/personad", "k"), " "), "features.memories=false") {
 		t.Fatal("Codex's own memories not turned off")
 	}
 }
 
 func TestReadsOnlyMemory(t *testing.T) {
-	const mem = "/home/me/.claude/projects/-home-me--jarvis-assistant/memory"
-	const cwd = "/home/me/.jarvis/assistant"
+	const mem = "/home/me/.claude/projects/-home-me--persona-assistant/memory"
+	const cwd = "/home/me/.persona/assistant"
 	for cmd, want := range map[string]bool{
 		"cat " + mem + "/MEMORY.md":                                     true,
 		"timeout 20 head -n 100 " + mem + "/a.md " + mem + "/MEMORY.md": true,
@@ -653,8 +653,8 @@ func TestReadsOnlyMemory(t *testing.T) {
 }
 
 // Codex's macOS sandbox refuses a writable root with a symlink in it, so the workspace and the memory directory reach
-// it resolved (#1751): the state directory is reached through the old name (~/.jarvis → .persona) and the Claude
-// config directory is often a link into dotfiles. Plain directories go as they are.
+// it resolved (#1751): .persona may be a symlink to a user-chosen state directory,
+// and the Claude config directory is often a link into dotfiles. Plain directories go as they are.
 func TestCodexGetsRealWritableRoots(t *testing.T) {
 	noLinks := func(what, p string) {
 		t.Helper()
@@ -674,10 +674,13 @@ func TestCodexGetsRealWritableRoots(t *testing.T) {
 			}
 			claude := filepath.Join(home, ".claude")
 			if linked {
-				if err := os.Symlink(".persona", filepath.Join(home, ".jarvis")); err != nil {
+				if err := os.Rename(filepath.Join(home, ".persona"), filepath.Join(home, "state")); err != nil {
 					t.Fatal(err)
 				}
-				cwd = filepath.Join(home, ".jarvis", "assistant")
+				if err := os.Symlink("state", filepath.Join(home, ".persona")); err != nil {
+					t.Fatal(err)
+				}
+				cwd = filepath.Join(home, ".persona", "assistant")
 				claude = filepath.Join(home, "dotfiles", "claude")
 				if err := os.Symlink(claude, filepath.Join(home, ".claude")); err != nil {
 					t.Fatal(err)

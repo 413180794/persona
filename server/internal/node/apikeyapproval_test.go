@@ -71,7 +71,7 @@ func TestLaunchApprovesTheLaunchersKeyForClaude(t *testing.T) {
 	if after, _ := os.ReadFile(path); string(after) != string(before) {
 		t.Error("an approved key rewrote the config")
 	}
-	if left, _ := filepath.Glob(filepath.Join(home, ".claude.json.jarvis-*")); len(left) > 0 {
+	if left, _ := filepath.Glob(filepath.Join(home, ".claude.json.persona-*")); len(left) > 0 {
 		t.Errorf("temporary files left: %v", left)
 	}
 }

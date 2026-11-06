@@ -4,11 +4,11 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
     var url: URL
     var token: String
 
-    /// Parses both `persona://pair?url=…&token=…` and the legacy `jarvis://` link. Not a computer's `…://link?…`
+    /// Parses `persona://pair?url=…&token=…`. Not a computer's `…://link?…`
     /// (`isComputerLink`, for Persona Link on that computer): its one-time code would pair this device in its place.
     init?(pairURL: String) {
         guard let comps = URLComponents(string: pairURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-              ["persona", "jarvis"].contains(comps.scheme?.lowercased() ?? ""),
+              comps.scheme?.lowercased() == "persona",
               comps.host?.lowercased() != "link",
               let u = comps.queryItems?.first(where: { $0.name == "url" })?.value, let url = URL(string: u),
               let token = comps.queryItems?.first(where: { $0.name == "token" })?.value, !token.isEmpty
@@ -17,17 +17,17 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
         self.token = token
     }
 
-    /// A `persona://pair` / `jarvis://pair` link, whether or not `init(pairURL:)` can read it: one cut short (no `url`
+    /// A `persona://pair` link, whether or not `init(pairURL:)` can read it: one cut short (no `url`
     /// or no `token`: copied in part, wrapped in a chat) is still someone trying to pair, and is told so (#4273).
     static func isPairLink(_ link: String) -> Bool {
         guard let comps = URLComponents(string: link.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
-        return ["persona", "jarvis"].contains(comps.scheme?.lowercased() ?? "") && comps.host?.lowercased() == "pair"
+        return comps.scheme?.lowercased() == "persona" && comps.host?.lowercased() == "pair"
     }
 
-    /// `jarvis://link?…` / `persona://link?…`: the pairing link a signed-in device made for one computer (「添加电脑」, Add computer).
+    /// `persona://link?…`: the pairing link a signed-in device made for one computer (「添加电脑」, Add computer).
     /// It is opened on that computer, by Persona Link; a phone or the Mac app only says so.
     static func isComputerLink(_ url: URL) -> Bool {
-        ["persona", "jarvis"].contains(url.scheme?.lowercased() ?? "") && url.host()?.lowercased() == "link"
+        url.scheme?.lowercased() == "persona" && url.host()?.lowercased() == "link"
     }
 
     init(url: URL, token: String) {
@@ -47,7 +47,7 @@ nonisolated struct LocalRequest: Sendable {
     var path: String
     var query: [String: String]
     var body: Data?
-    /// The headers that change what the hub does (`X-Jarvis-Op-Id`); the rest of a real request's are not kept.
+    /// The headers that change what the hub does (`X-Persona-Op-Id`); the rest of a real request's are not kept.
     var headers: [String: String] = [:]
 }
 
@@ -178,7 +178,7 @@ nonisolated struct APIClient: Sendable {
         return q
     }
 
-    /// `opID`: the write's op id (`X-Jarvis-Op-Id`, docs/protocol.md「操作回执」): the hub does it once however often
+    /// `opID`: the write's op id (`X-Persona-Op-Id`, docs/protocol.md「操作回执」): the hub does it once however often
     /// it arrives. A repeat it cannot answer yet comes back `202 {"state":"pending" | "unknown"}`: thrown as an
     /// APIError with `OpReceipt.pendingCode` / `unknownCode`, so no caller takes it for done.
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
@@ -523,7 +523,7 @@ nonisolated struct APIClient: Sendable {
         try await get("/api/v1/machines/\(machine)/dirs", query: ["path": path])
     }
     func reconnect(machine: String) async throws { try await post("/api/v1/machines/\(machine)/reconnect") }
-    /// The hub installs its own jarvisd build on the machine and reconnects; progress comes with the machine list.
+    /// The hub installs its own personad build on the machine and reconnects; progress comes with the machine list.
     func deploy(machine: String) async throws { try await post("/api/v1/machines/\(machine)/deploy") }
 
     /// Every machine's latest sample and its last hour by minute (docs/machines.md).
@@ -770,7 +770,7 @@ nonisolated struct APIClient: Sendable {
         nonisolated struct Install: Decodable, Hashable, Sendable { var linux: String? }
         var token: String
         var expiresAt: Date
-        /// `jarvis://link?…`: what the computer's Persona Link pairs with.
+        /// `persona://link?…`: what the computer's Persona Link pairs with.
         var pairLink: String
         /// The machine id the hub gave it (from the name).
         var machine: String

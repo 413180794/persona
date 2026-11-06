@@ -73,7 +73,7 @@ func (s *Service) launcherHTTP(ctx context.Context, name, machine string, r *quo
 	if view == nil {
 		return nil, &rpc.Error{Code: assistantwire.CodeNoLauncher, Message: "no such launcher"}
 	}
-	if view.Source == "jarvis" {
+	if view.Source == "persona" {
 		for _, l := range s.storedLaunchers(ctx) {
 			if l.Name != name {
 				continue

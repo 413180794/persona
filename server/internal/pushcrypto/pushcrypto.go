@@ -12,7 +12,7 @@ import (
 )
 
 // Info binds a sealed payload to this use; both sides pass the same bytes.
-const Info = "jarvis push v1"
+const Info = "persona push v1"
 
 // EncLen is the encapsulated key's length (an uncompressed P-256 point) at the start of a sealed payload; MinSealed is
 // the shortest a sealed payload can be (that plus the AES-GCM tag, for an empty plaintext).

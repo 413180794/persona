@@ -1,7 +1,7 @@
 # Linked hubs (mesh): one primary
 
 Pair several hubs into a group with **exactly one primary hub**: it serves all Apps, stores all state, and connects all computers. The other hubs are **members**, doing only two things:
-forward App requests unchanged to the primary, and hand the node streams of their connected computers to the primary. Computers connect through a preinstalled service (resident node + jarvis-link connector), not SSH;
+forward App requests unchanged to the primary, and hand the node streams of their connected computers to the primary. Computers connect through a preinstalled service (resident node + persona-link connector), not SSH;
 a computer reachable through several paths appears only once and uses the best path. The proposal is in [plan-hub-center.md](plan-hub-center.md) (overview #293, this track's issue #435).
 This document covers the implementation: protocol, tradeoffs, and verification.
 
@@ -13,7 +13,7 @@ This document covers the implementation: protocol, tradeoffs, and verification.
                  │    ▲                                  │    ▲
  Hub connects (service)│    │Computer connects (link)        │    │  Member's computers: primary opens node streams through the member link
                  ▼    │                                  ▼    │
-              Computer: resident node + jarvis-link connector
+              Computer: resident node + persona-link connector
 ```
 
 Code in `server/internal/hub/`: `mesh.go` (records, view loop), `mesh_view.go` (records and routing), `mesh_group.go` (primary, term, roles),
@@ -32,7 +32,7 @@ The first version (#394, peer-to-peer mesh: each computer had an owning hub, eve
 ## Pairing and trust
 
 - **Linking code**: generated on hub B (admin UI **Advanced › Linked hubs › Generate linking code**, or `personad hub pair --peer`), single-use, 10 minutes:
-  `jarvis://peer?hub=<hub_id>&name=<name>&fp=<public-key fingerprint>&tls=<TLS port>&url=<https candidate>…&code=jx_<64 hex digits>`.
+  `persona://peer?hub=<hub_id>&name=<name>&fp=<public-key fingerprint>&tls=<TLS port>&url=<https candidate>…&code=jx_<64 hex digits>`.
   Only the hash is stored (`peer_codes`). A hub without TLS can neither generate a code nor use another hub's (409, with instructions to enable TLS).
 - **Redeem** (A receives B's code, `POST /api/v1/admin/peers {"code"}` or `personad hub peer add`):
   1. A signs a linking credential for B (device credential, kind / role both `peer`, `machine_id` stores B's hub_id);
@@ -60,7 +60,7 @@ The first version (#394, peer-to-peer mesh: each computer had an owning hub, eve
   - HTTP/1.1 runs on streams: App requests forwarded by members to the primary, and node streams opened by the primary via members (`peer_http.go`, `peer_node.go`). The peer has an `http.Server` accepting only these streams
     (no listening socket), so these requests can only come from authenticated links.
 - **One link per pair of hubs**: both dial. The lower hub_id dials immediately; the higher waits 0.5–2 seconds each time. If both connect, keep the one dialed by the lower hub_id and close the other with 4011.
-- Heartbeat and reconnect follow jarvis-link: both sides ping every 10 seconds, disconnect after 5 seconds without pong; exponential backoff from 1 second to at most 1 minute, randomized from half to the full delay; credentials rejected (401 / 403 / 4012) wait 5 minutes.
+- Heartbeat and reconnect follow persona-link: both sides ping every 10 seconds, disconnect after 5 seconds without pong; exponential backoff from 1 second to at most 1 minute, randomized from half to the full delay; credentials rejected (401 / 403 / 4012) wait 5 minutes.
   These are configured values, not measured. Ping round-trip time is the link RTT (used in admin UI and path selection).
 - Close codes: 4011 duplicate link, 4012 unpaired, 4013 cannot send (send queue full, 8192 messages), 1001 hub shutdown.
 
@@ -100,10 +100,10 @@ launchers, Claude / Codex settings, but no ssh host, tailcat address, connector 
 (`peer_http.go`.)
 
 - `/api/` requests received by a member (including WebSocket), except those it answers itself, are forwarded **unchanged** (including `Authorization`) over the link to the primary (hop by hop for multi-hop routes).
-  Answered locally: `/api/v1/health`, jarvis-link's `/api/v1/link`, `/api/v1/link/stream`, hub-to-hub `/api/v1/peer`, `/api/v1/peer/pair`,
+  Answered locally: `/api/v1/health`, persona-link's `/api/v1/link`, `/api/v1/link/stream`, hub-to-hub `/api/v1/peer`, `/api/v1/peer/pair`,
   admin `/api/v1/admin/…`, `/api/v1/auth/pair-codes` (`personad hub pair`), and `/api/v1/auth/tokens` for **its own link computers** exchanging pairing codes for credentials
   (codes it issued, carrying a machine id). Web static files and `/admin` pages are not forwarded.
-- **Source classification finishes at the member**: public plaintext requests are already rejected by its gate; the member puts the result in `X-Jarvis-Peer-Source: <lan|public> <client address> <tls|plain>`,
+- **Source classification finishes at the member**: public plaintext requests are already rejected by its gate; the member puts the result in `X-Persona-Peer-Source: <lan|public> <client address> <tls|plain>`,
   trusted by the primary (the link endpoints are paired, and the header can only arrive over the link; same-name incoming headers and `X-Forwarded-For` are stripped before forwarding). The primary uses this address as `RemoteAddr`,
   so logs and source-dependent checks use the real client. Loopback at the member counts as LAN (the main token accepts only loopback on the primary's own machine).
 - **Rate limiting is at the member**: blocked sources receive 429 directly; when the primary returns 401, the member records one failure for that source (`codeWriter`). The primary does not count forwarded requests again, avoiding double counting.
@@ -115,7 +115,7 @@ launchers, Claude / Codex settings, but no ssh host, tailcat address, connector 
 
 - **Credentials handed to the primary**: once a member can reach the primary (once per primary and term; failures retry after 30 seconds), it hands over all its valid App credentials (role `full` / `answer`: id, name,
   kind, role, hash, creation time, not the credential itself) via `creds.import`. The primary deduplicates by id / hash and stores them in its `device_tokens`. Afterwards only the primary authenticates credentials;
-  phones already paired to a member need not re-pair. jarvis-link and mesh credentials remain on their respective hubs (they open only that hub's links).
+  phones already paired to a member need not re-pair. persona-link and mesh credentials remain on their respective hubs (they open only that hub's links).
 - On primary changes, the former primary likewise hands its credentials (including those members originally handed it) to the new primary.
 - **Revocations reach every copy**: each hub database has a credential copy; revoking only on one would leave another copy usable when that hub becomes primary or leaves the group. So the hub sends revoked App credentials
   (`creds.revoked`, the entire list) to every reachable hub in the group: on revocation, when a hub becomes reachable, and every 5 minutes (to fill in lost messages).
@@ -133,8 +133,8 @@ project refresh, Moments fetching, and Live Activity push. Member hub-level data
 (`peer_node.go`. Since 2026-11-04, the computers at each end belong to their respective managers ([machines.md](machines.md) ("Who connects computers")): the primary's manager asks the primary hub for this stream
 (`GET /api/v1/bus/relay?hub=<member>&machine=<id>`); the member hub hands it to its own manager to open (`devices.accept` kind `node`). References below to a "hub" opening a node mean that hub's manager.)
 When the primary connects a computer listed only in a member's hub.json (or also listed locally, but the member's path is currently better), it sends an HTTP upgrade request over the link:
-`GET /api/v1/peer/node`, headers `Upgrade: jarvis-node`, `X-Jarvis-Peer-Node: <member hub_id>/<its machine id>`, `X-Jarvis-Peer-From: <primary>`, forwarded hop by hop to that member.
-The member checks that the request comes from its primary, it is a member, and its hub.json lists the machine, then opens the node using hub.json's method (local node, ssh, tailcat, that machine's jarvis-link, connector).
+`GET /api/v1/peer/node`, headers `Upgrade: persona-node`, `X-Persona-Peer-Node: <member hub_id>/<its machine id>`, `X-Persona-Peer-From: <primary>`, forwarded hop by hop to that member.
+The member checks that the request comes from its primary, it is a member, and its hub.json lists the machine, then opens the node using hub.json's method (local node, ssh, tailcat, that machine's persona-link, connector).
 Only after opening does it return `101 Switching Protocols`; bytes are then copied unchanged in both directions. Failure returns 502, with `error` holding the reason (displayed by the primary on that machine). The primary runs the node protocol on this byte stream, just as on other paths. The member does not drive the computer itself.
 
 ## Multiple paths to one computer
@@ -156,7 +156,7 @@ which other hubs are reachable and how far away, and computers in member records
 - **Stickiness**: keep a healthy active path. On failure, select the next usable path immediately. Switch only if another path is **clearly better** (better class, or same class with RTT over 30% lower and at least 5 ms lower) and stays so for
   `mesh.path_switch_seconds` (default 60 seconds): connect via the new path, receive `node.info`, then release the old one (the resident node's new attach displaces the old, which ends itself).
   The App never sees offline in between (interactions and terminals follow reconnect behavior: resumable interactions are reclaimed by hooks, terminals prompt to resubscribe). If switching fails, count a failure for that path and retain the original.
-- **RTT**: ping the node on the active path every 30 seconds. Inactive paths: service uses connector-info round-trip time; link uses jarvis-link connection ping; via member uses link RTT to that member
+- **RTT**: ping the node on the active path every 30 seconds. Inactive paths: service uses connector-info round-trip time; link uses persona-link connection ping; via member uses link RTT to that member
   plus the member's reported segment. These are measured single values, not percentiles, used only for comparison and not cited elsewhere.
 - **Fields for Apps** ([protocol.md](protocol.md) ("Data types")): `hub_id` / `hub_name` identify the hub currently used to reach this computer (the primary for direct connections, that member for member routes);
   `route {via: local|service|link|ssh|tailcat|hub, hops: 0|1, rtt_ms}`; with more than one path (or only via member), add `paths`: each path is
@@ -170,7 +170,7 @@ which other hubs are reachable and how far away, and computers in member records
 - hub.json: `{"id":"example-workstation","name":"Dev machine","kind":"service","address":"<host>:18663","proxy":"socks5://<host>:1080"}`, with optional `proxy`.
   Connector fingerprints and credentials are in Postgres `connector_credentials` (migration 0191), not hub.json: credentials are sealed with the hub's own `~/.persona/secret.key` AES-GCM before storage (the manager seals model-provider keys with its own, [managers.md](managers.md) ("The built-in manager's own files"))
   and mail credentials.
-- **Pairing**: on the computer, `jarvis-link pair --listen` (or installer `--node --listen`, menu bar "Let hub connect") prints `jarvis://connector?addr=…&fp=…&code=…`;
+- **Pairing**: on the computer, `persona-link pair --listen` (or installer `--node --listen`, menu bar "Let hub connect") prints `persona://connector?addr=…&fp=…&code=…`;
   paste under **Computers › Add computer › Hub connects** in the admin UI (address editable, proxy optional). The hub parses with `link.ParseConnectorLink`, pins by `fp` (TLS 1.2+, ALPN http/1.1,
   SPKI fingerprint only, no name verification), tries addresses in link order, and sends `POST /api/v1/connector/pair {code, token, machine, hub_id, hub_name}`. The hub generates the credential:
   `jc_` + 64 hex digits; the connector stores only its hash. Write hub.json only on success; the machine connects immediately without restart. Wrong / expired code, 401: "Invalid pairing code…"; pin mismatch: error, nothing sent.
@@ -192,7 +192,7 @@ which other hubs are reachable and how far away, and computers in member records
   and the computer list marks them "ssh is no longer recommended". Removal comes later.
 - For link / service / via-member computers, "Redeploy" now instructs you to update the node service on that computer (pushing updates through the connector is #284).
 - **Migrate ssh to service (same id)**:
-  1. Install the node service there and let the hub connect: `install.sh --node --listen` (Linux) or the Persona Link menu bar App; get a link from `jarvis-link pair --listen`;
+  1. Install the node service there and let the hub connect: `install.sh --node --listen` (Linux) or the Persona Link menu bar App; get a link from `persona-link pair --listen`;
   2. change this machine's `kind` in hub.json to `service`, replace `ssh_host` with `"address": "<host>:18663"`, restart the hub;
   3. the admin UI shows "Connector not paired… re-pair"; tap "Re-pair" and paste the link.
   If changing the id is fine, it is simpler: add a new id under **Add computer › Hub connects**. Two paths to the same computer merge automatically (using the first id in hub.json);
@@ -201,7 +201,7 @@ which other hubs are reachable and how far away, and computers in member records
 
 ## Discovery (mDNS)
 
-- TLS-enabled hubs advertise `_jarvis-hub._tcp` over mDNS (instance name hub_id); TXT contains only `hub_id`, `name`, `tls` (TLS port), `fp`, `v` (version), never credentials.
+- TLS-enabled hubs advertise `_persona-hub._tcp` over mDNS (instance name hub_id); TXT contains only `hub_id`, `name`, `tls` (TLS port), `fp`, `v` (version), never credentials.
   They also browse that type; the admin UI's "Discovered hubs" lists unpaired hubs heard within 10 minutes. Discovery only lists them, never links automatically.
 - `internal/mdns`: only the standard library and `golang.org/x/net`, sharing 5353 with system mDNSResponder / avahi; implements only a subset of RFC 6762 / 6763. No sending or receiving on point-to-point interfaces.
 - Docker bridge networks cannot send multicast out, so use "Add hub" and enter an address (`network_mode: host` works). Disable with hub.json `mesh.discovery: false`.
@@ -225,7 +225,7 @@ Admin UI ([admin.md](admin.md)):
 
 The CLI on the hub machine uses the same APIs (prefix `/api/v1/admin/cli/`, accepts only loopback + main token): `personad hub pair --peer`, `personad hub peer add '<linking code>'|-`,
 `personad hub peer list` (first reports whether this hub is primary or member), `personad hub peer remove <hub_id>`, `personad hub peer center [<hub_id>] [--confirm]`.
-Docker deployment on NAS: `sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub …`.
+Docker deployment on NAS: `sudo /usr/local/bin/docker exec personad /opt/persona/bin/personad hub …`.
 
 ## Plaintext links (optional, #4514)
 
@@ -275,7 +275,7 @@ All optional; `plaintext` is covered in "Plaintext links". Peer relationships, t
 - Linking trust is mutual: paired hubs can send any App request over the link to the primary (with their claimed source) and ask members to open node streams to their computers (members recognize only their own primary).
   Link only your own hubs; compromising one compromises the whole group.
 - Links use TLS and fingerprint pinning (except addresses in `mesh.plaintext.allow`, which have neither encryption nor pinning, see "Plaintext links"); linking codes are single-use, 10 minutes; credentials are stored only as hashes (issued) or encrypted (received).
-- The forwarding HTTP server has no listener and accepts streams only from authenticated links, so `X-Jarvis-Peer-*` headers cannot be forged from outside; incoming same-name client headers are removed or overwritten before member forwarding (`X-Jarvis-Peer-Node` and `-From` removed, `-Source` and `-Ttl` overwritten).
+- The forwarding HTTP server has no listener and accepts streams only from authenticated links, so `X-Persona-Peer-*` headers cannot be forged from outside; incoming same-name client headers are removed or overwritten before member forwarding (`X-Persona-Peer-Node` and `-From` removed, `-Source` and `-Ttl` overwritten).
   Older members do not strip these two headers, so upgrade every hub: the primary refuses node streams with `-From` set to itself (valid streams originate only at the primary and can bounce back only during a route change; the origin retries after backoff), but an old member cannot block this when its next hop is not the primary.
 - Members do not authenticate credentials: the primary is the sole authority; revocations take effect there immediately (revocation clears the lookup cache; a concurrent lookup may allow up to 30 more seconds), and propagate to the other group hubs ("Credentials and push").
 - Connectors: the hub pins to the pairing fingerprint and stores credentials encrypted in the database; connectors open only streams to the resident node.
@@ -297,10 +297,10 @@ All optional; `plaintext` is covered in "Plaintext links". Peer relationships, t
     marks re-pair and stops probing; wrong database credentials show connector rejection.
   - Also `TestMeshDuplicateLink`, `TestMeshPairingCode`; `internal/db`'s `TestPeersAndPeerCodes`, `TestMeshGroupAndConnectors`,
     `TestAppTokensMoveToTheCenter` (require database); `internal/mdns` unit tests.
-  - Run: `cd server && go test -count=1 -p 1 -run 'TestCenter|TestMesh|TestPeer' ./internal/hub/`; `JARVIS_MESH_LOG=1` prints each hub's logs.
+  - Run: `cd server && go test -count=1 -p 1 -run 'TestCenter|TestMesh|TestPeer' ./internal/hub/`; `PERSONA_MESH_LOG=1` prints each hub's logs.
 - Local smoke test with two real hubs (2026-11-02, no real `~/.persona` touched): separate temporary HOMEs, different ports and `public.tls_listen` in hub.json, separate schemas in the test database
-  (`database_url` adds `&search_path=<schema>`), `public.advertise` set to `https://localhost:<TLS port>`, `JARVIS_LOCAL_NODE=0`, started with `env -i`.
-  A third temporary HOME runs real `personad node --attach` and `jarvis-link pair --listen 127.0.0.1:<port>` + `jarvis-link run`. Verified:
+  (`database_url` adds `&search_path=<schema>`), `public.advertise` set to `https://localhost:<TLS port>`, `PERSONA_LOCAL_NODE=0`, started with `env -i`.
+  A third temporary HOME runs real `personad node --attach` and `persona-link pair --listen 127.0.0.1:<port>` + `persona-link run`. Verified:
   paste connector link in admin API → paired, immediately online via service; App credential lists the machine and reads its directories; after `personad hub pair --peer | personad hub peer add -`,
   `peer list` shows one primary and one member; member-issued credentials handed to the primary work through the member and directly at the primary; `personad hub pair` on the member produces the primary's code; primary stops, member returns 503;
   `peer center --confirm` switches primary; old primary restarts as a member, and the new primary reaches the computer through it (its connector). Headless Chrome inspected the primary's "Computers" and "Linked hubs", and the member's "Overview" and "Computers" (light and dark).

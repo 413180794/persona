@@ -12,7 +12,7 @@ import { byTime, timeMs } from "./times";
 
 export type AgentSort = "state" | "updated";
 
-export const AGENT_SORT_KEY = "jarvis.agentSort";
+export const AGENT_SORT_KEY = "persona.agentSort";
 
 export const AGENT_SORTS: { key: AgentSort; label: string }[] = [
   { key: "state", label: t("lib-agent-sort.state") },

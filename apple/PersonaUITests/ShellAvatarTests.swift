@@ -3,7 +3,7 @@ import XCTest
 /// The shell's top-left button is the persona's face (docs/ios.md「新外壳」): it opens the drawer on Assistant and on Agents,
 /// and carries the inbox's dot while the inbox has something for the user (Demo Mode's has). The old layout keeps its ☰
 /// and the face in the middle of the bar. The empty-inbox case needs scripts/mock/mock_hub.py started with
-/// MOCK_INBOX=empty (JARVIS_EMPTY_INBOX_HUB).
+/// MOCK_INBOX=empty (PERSONA_EMPTY_INBOX_HUB).
 final class ShellAvatarTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -52,10 +52,10 @@ final class ShellAvatarTests: XCTestCase {
 
     /// Nothing in the inbox: the face alone.
     @MainActor func testNoMarkWithAnEmptyInbox() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_EMPTY_INBOX_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_INBOX=empty (JARVIS_EMPTY_INBOX_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_EMPTY_INBOX_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_INBOX=empty (PERSONA_EMPTY_INBOX_HUB)")
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         launch(["-pairURL", pair, "-ui.oldLayout", "NO", "-newAssistant", "YES"])
         let face = app.buttons["assistant-sidebar-button"].firstMatch
         XCTAssertTrue(face.waitForExistence(timeout: 15), "no face on 助手")
@@ -68,7 +68,7 @@ final class ShellAvatarTests: XCTestCase {
     @MainActor func testOldLayoutKeepsItsBar() {
         launch(["-demo.on", "YES", "-ui.oldLayout", "YES", "-tab", "assistant"])
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15), "no tab bar in the old layout")
-        XCTAssertTrue(app.buttons["jarvis-avatar"].firstMatch.waitForExistence(timeout: 10), "no face in the old bar's middle")
+        XCTAssertTrue(app.buttons["persona-avatar"].firstMatch.waitForExistence(timeout: 10), "no face in the old bar's middle")
         let menu = app.buttons["assistant-sidebar-button"].firstMatch
         XCTAssertTrue(menu.exists, "no ☰ in the old bar")
         XCTAssertEqual(value(menu), "", "the old bar's ☰ became the face")

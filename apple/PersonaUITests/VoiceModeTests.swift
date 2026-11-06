@@ -3,10 +3,10 @@ import XCTest
 /// The voice mode in the main conversation and an agent's chat (docs/voice.md 6.2, 6.8, #3508), against
 /// scripts/mock/mock_hub.py with MOCK_VOICE=1 (scripts/mock/voice_mock.py):
 ///   MOCK_VOICE=1 PORT=<port> python3 scripts/mock/mock_hub.py
-///   TEST_RUNNER_JARVIS_VOICE_HUB=http://127.0.0.1:<port>
-///   TEST_RUNNER_JARVIS_SHOTS=<dir>                 screenshots, named by style, appearance, page, text size, state
-///   TEST_RUNNER_JARVIS_VOICE_APPEARANCE=light|dark  for the names only (`simctl ui <udid> appearance` sets it)
-///   TEST_RUNNER_JARVIS_UI_STYLE=beautiful           the BeautifulUI style (`launchPinned`)
+///   TEST_RUNNER_PERSONA_VOICE_HUB=http://127.0.0.1:<port>
+///   TEST_RUNNER_PERSONA_SHOTS=<dir>                 screenshots, named by style, appearance, page, text size, state
+///   TEST_RUNNER_PERSONA_VOICE_APPEARANCE=light|dark  for the names only (`simctl ui <udid> appearance` sets it)
+///   TEST_RUNNER_PERSONA_UI_STYLE=beautiful           the BeautifulUI style (`launchPinned`)
 /// The matrix tests open each `-showVoiceSample` state (no socket, no microphone); `testOpenVoiceWalksTheScript` takes
 /// the real path (`-openVoice silent`: the real socket and bar, no audio, which a simulator may not have).
 final class VoiceModeTests: XCTestCase {
@@ -21,8 +21,8 @@ final class VoiceModeTests: XCTestCase {
 
     private var hub: String {
         get throws {
-            guard let hub = ProcessInfo.processInfo.environment["JARVIS_VOICE_HUB"] else {
-                throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_VOICE=1 (JARVIS_VOICE_HUB)")
+            guard let hub = ProcessInfo.processInfo.environment["PERSONA_VOICE_HUB"] else {
+                throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_VOICE=1 (PERSONA_VOICE_HUB)")
             }
             return hub
         }
@@ -30,7 +30,7 @@ final class VoiceModeTests: XCTestCase {
 
     private func launch(_ args: [String], large: Bool = false) throws -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + (try hub).addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "NO", "-AppleLanguages", "(zh-Hans)",
                                "-UIPreferredContentSizeCategoryName", large ? "UICTContentSizeCategoryAccessibilityXL" : "UICTContentSizeCategoryL"] + args
         app.launchPinned()
@@ -39,8 +39,8 @@ final class VoiceModeTests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let env = ProcessInfo.processInfo.environment
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = [UITestStyle.name, env["JARVIS_VOICE_APPEARANCE"] ?? "light"].joined(separator: "-")
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = [UITestStyle.name, env["PERSONA_VOICE_APPEARANCE"] ?? "light"].joined(separator: "-")
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/voice-\(look)-\(name).png"))
     }

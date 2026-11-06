@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The checklist after pairing and Settings' steps-left row (#4195, docs/onboarding.md 4.5), the expired-code message, and the
 /// first screen's getting-started link.

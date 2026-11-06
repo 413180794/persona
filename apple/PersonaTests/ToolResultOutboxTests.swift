@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Phone tool results the socket cannot take yet are kept and sent once it connects (#4456).
 @MainActor

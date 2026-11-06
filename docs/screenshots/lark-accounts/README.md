@@ -18,9 +18,9 @@ To reproduce (substitute your device ID; generate the local config and the Xcode
 ```sh
 MOCK_LARK_ACCOUNTS=1 PORT=<port> python3 scripts/mock/mock_hub.py
 xcrun simctl ui <simulator-id> appearance light      # or dark
-TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> \
-TEST_RUNNER_JARVIS_SHOTS=/tmp/lark-accounts \
-TEST_RUNNER_JARVIS_UI_STYLE=beautiful \               # drop this line for the default style
+TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> \
+TEST_RUNNER_PERSONA_SHOTS=/tmp/lark-accounts \
+TEST_RUNNER_PERSONA_UI_STYLE=beautiful \               # drop this line for the default style
 xcodebuild test -project apple/Persona.xcodeproj -scheme Persona \
   -destination 'platform=iOS Simulator,id=<simulator-id>' \
   -only-testing:PersonaUITests/LarkAccountsFlowTests

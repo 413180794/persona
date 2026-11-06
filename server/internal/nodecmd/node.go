@@ -54,11 +54,11 @@ type UsageError string
 
 func (e UsageError) Error() string { return string(e) }
 
-// CommandName is the program's name in what it prints: jarvisd or persona-node when run under that name (jarvisd is
+// CommandName is the program's name in what it prints: personad or persona-node when run under that name (personad is
 // the compatibility alias, docs/rename.md), otherwise personad.
 func CommandName() string {
 	switch n := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe"); n {
-	case "jarvisd", "persona-node":
+	case "personad", "persona-node":
 		return n
 	}
 	return "personad"
@@ -88,7 +88,7 @@ func exitNodeUsage(err error) {
 	os.Exit(2)
 }
 
-// runResident is `jarvisd node --attach`: relays over ssh, and the hub over tailcat when this machine is set up for
+// runResident is `personad node --attach`: relays over ssh, and the hub over tailcat when this machine is set up for
 // it. A new binary arriving over tailcat ends it (exit 0): its supervisor starts the new one.
 func runResident(ctx context.Context, b Build) error {
 	// tailcat stops only after Attach has closed the hub's connection: torn down first, the close would never reach
@@ -105,7 +105,7 @@ func runResident(ctx context.Context, b Build) error {
 	}
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	conns, stopped, err := node.ServeTailcat(tctx, logger, func() {
-		logger.Printf("tailcat: a new jarvisd is installed; exiting so it starts")
+		logger.Printf("tailcat: a new personad is installed; exiting so it starts")
 		cancel()
 	})
 	if err != nil {
@@ -156,7 +156,7 @@ func runResident(ctx context.Context, b Build) error {
 	}
 }
 
-// runNodeTailcat is `jarvisd node tailcat init|addr`.
+// runNodeTailcat is `personad node tailcat init|addr`.
 func runNodeTailcat(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		exitNodeUsage(fmt.Errorf("node tailcat 要跟 init 或 addr（%s node -h 看用法）", CommandName()))
@@ -269,7 +269,7 @@ func runSysmon(ctx context.Context, n int) {
 		100*cpu.Seconds()/wall.Seconds())
 }
 
-// resetMachineUID makes a new ~/.jarvis/machine-uid; the node picks it up when it starts again.
+// resetMachineUID makes a new ~/.persona/machine-uid; the node picks it up when it starts again.
 func resetMachineUID() error {
 	home, err := os.UserHomeDir()
 	if err != nil {

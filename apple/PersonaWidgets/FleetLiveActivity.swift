@@ -18,7 +18,7 @@ struct FleetLiveActivity: Widget {
     static let lockFace = IslandMetrics.lockFace
 
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: JarvisActivityAttributes.self) { context in
+        ActivityConfiguration(for: PersonaActivityAttributes.self) { context in
             FleetLockScreen(state: context.state, stale: context.isStale)
                 // The lock screen is cut at about 160 pt: larger text would push the rows off it.
                 .dynamicTypeSize(...DynamicTypeSize.large)

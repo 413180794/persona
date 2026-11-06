@@ -139,7 +139,7 @@ Once set up, every computer shows as online in **Settings › Machines**, and **
 > No hub yet? Tap **No hub? Try a demo** on the app's pairing screen to walk through every feature with built-in demo data, without connecting to any server.
 
 > [!NOTE]
-> Persona used to be called Jarvis. `jarvisd`, `~/.jarvis`, `~/.config/jarvis/config.json` and `JARVIS_*` still work, and existing pairings, signing and database identities are unchanged.
+> Persona used to be called Persona. `personad`, `~/.persona`, `~/.config/persona/config.json` and `PERSONA_*` still work, and existing pairings, signing and database identities are unchanged.
 > Before upgrading, read [naming and compatibility](docs/config.md#命名与兼容) and the [migration checklist](docs/rename.md).
 
 ## Platforms and connectors

@@ -591,7 +591,7 @@ func (h *Manager) registerConnectors() {
 	// (applyIMessage, startConnectors).
 }
 
-// siblingProgram is a program released with jarvisd (update.ProgramNames) next to the running jarvisd ("" when there
+// siblingProgram is a program released with personad (update.ProgramNames) next to the running personad ("" when there
 // is none).
 func siblingProgram(name string) string {
 	exe, err := os.Executable()

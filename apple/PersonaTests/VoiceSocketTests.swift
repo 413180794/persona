@@ -1,7 +1,7 @@
 import Foundation
 import Network
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// `HubVoiceSocket` against a loopback server that refuses the WebSocket handshake (docs/voice.md 1.3, 6.5). A call
 /// sends `start` the moment it opens, so the failed send, the ping and the receive all race to report the close: the

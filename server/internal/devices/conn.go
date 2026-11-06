@@ -556,7 +556,7 @@ func (m *Machine) nodeUID() string {
 	return m.uid
 }
 
-// tellLinks says on the links of this computer's jarvis-links (its own entry's and those of entries with the same
+// tellLinks says on the links of this computer's persona-links (its own entry's and those of entries with the same
 // computer) whether the hub got through to the resident node.
 func (m *Machine) tellLinks(online bool, err string) {
 	for _, p := range m.d.pathsOf(m) {

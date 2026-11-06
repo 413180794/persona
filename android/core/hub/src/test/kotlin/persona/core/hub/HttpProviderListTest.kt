@@ -24,7 +24,7 @@ class HttpProviderListTest {
     }
 
     @Test fun listsAndReadsProviders() = withHub { server, api ->
-        server.enqueue(MockResponse().setBody("""{"launchers":[{"name":"team","source":"jarvis","base_url":"https://gateway.example.com","model":"m",
+        server.enqueue(MockResponse().setBody("""{"launchers":[{"name":"team","source":"persona","base_url":"https://gateway.example.com","model":"m",
             "has_key":true,"models":[{"id":"m"},{"id":"n","context_window":1000}]},{"name":"cc_a","source":"zshrc","machines":["mac"],"hidden":true}]}"""))
         val list = api.launchers()
         assertEquals("/api/v1/launchers", server.takeRequest().path)

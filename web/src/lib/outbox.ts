@@ -165,15 +165,12 @@ export async function askPersona(text: string): Promise<void> {
     a = getState().assistant;
   }
   if (a?.main) {
-    navigate({ name: "jarvis", sid: a.main });
+    navigate({ name: "persona", sid: a.main });
     void sendToSession(a.machine_id, a.main, { text }, { launcher: pickedLauncher(outboxKey(a.machine_id, a.main)), model: pickedModel(outboxKey(a.machine_id, a.main)) });
     return;
   }
   const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: text, main: true } });
   noteSent(r.session.machine_id, r.session.session_id, { text });
   void refreshAssistant().catch(() => {});
-  navigate({ name: "jarvis", sid: r.session.session_id });
+  navigate({ name: "persona", sid: r.session.session_id });
 }
-
-// Source compatibility for integrations written before the product rename.
-export const askJarvis = askPersona;

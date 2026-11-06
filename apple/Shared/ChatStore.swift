@@ -320,7 +320,7 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
                     current!.ordered.append(row)
                 }
             case .image(let item) where item.role == "user" && item.toolUseID == nil && item.seq != messageSeq:
-                // A picture sent with no text (claude -p writes Jarvis such a message as image blocks alone): a
+                // A picture sent with no text (claude -p writes Persona such a message as image blocks alone): a
                 // message of its own, not the end of the exchange before it.
                 close()
                 current = Turn(id: row.id, ordered: [row])
@@ -776,7 +776,7 @@ final class ChatStore {
     var livePreview: [String] { ScreenParser.activity(screen) }
     var spinnerLine: String? { ScreenParser.spinner(screen) }
 
-    /// Pictures the user sent come after the text of their message. claude -p writes a message sent to Jarvis with its
+    /// Pictures the user sent come after the text of their message. claude -p writes a message sent to Persona with its
     /// pictures first (image blocks, then the text), where a picture pasted in an Agents chat comes after the text:
     /// first, a picture went to the exchange before its own message (into its work, out of sight) and the chat no
     /// longer showed what was sent once the transcript's copy replaced the one being sent.
@@ -1159,7 +1159,7 @@ nonisolated enum ChatCache {
     /// notices stayed centered blocks). v4: Codex unknown events are retained and external sources have distinct identities.
     /// v5: several groups of hubs (docs/multi-hub.md): the default group's copies at the top, another group's in
     /// `group-<id>/`. v6: a Feishu /agent request's first message is rewritten by the hub (its instructions in a
-    /// <jarvis-context> block, #876), so v5's copies would keep showing the old text: they are dropped, not moved
+    /// <persona-context> block, #876), so v5's copies would keep showing the old text: they are dropped, not moved
     /// (`dropOlder`). v7: items carry `client_msg_id`, the message sent from the phone they came from (#968).
     /// v8: folds carry the images their work looked at (`Fold.images`); v7's folds had none, and their turns no strip.
     /// v9: user lines Persona typed in for the model carry `injected` (docs/protocol.md「Persona 注入的消息」, #2358).

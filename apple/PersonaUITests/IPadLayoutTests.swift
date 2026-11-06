@@ -1,19 +1,19 @@
 import XCTest
 
 /// iPad (docs/ios.md「iPad」): the app runs natively (not the phone-sized window), the lists sit in a sidebar wide
-/// enough for their cards, in portrait and landscape. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), on an iPad
-/// simulator; skipped on iPhone. TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a screenshot of each.
+/// enough for their cards, in portrait and landscape. Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB), on an iPad
+/// simulator; skipped on iPhone. TEST_RUNNER_PERSONA_SHOTS=<dir> keeps a screenshot of each.
 final class IPadLayoutTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad only") }
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-dev.openChat", "", "-openAgentsFresh", "YES"]
     }
 
@@ -23,7 +23,7 @@ final class IPadLayoutTests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("ipad-\(name).png"))
     }
 
@@ -47,9 +47,9 @@ final class IPadLayoutTests: XCTestCase {
             XCTAssertTrue(empty.waitForNonExistence(timeout: 10), "\(name): the chat did not open in the detail column")
             XCTAssertTrue(search.exists, "\(name): the list went away when the chat opened")
             shot("chat-\(name)")
-            // TEST_RUNNER_JARVIS_HOLD=<seconds>: stay on each page so `simctl io screenshot` can take it (XCUITest's own
+            // TEST_RUNNER_PERSONA_HOLD=<seconds>: stay on each page so `simctl io screenshot` can take it (XCUITest's own
             // screenshot comes out turned in landscape).
-            if let hold = ProcessInfo.processInfo.environment["JARVIS_HOLD"].flatMap(UInt32.init) { sleep(hold) }
+            if let hold = ProcessInfo.processInfo.environment["PERSONA_HOLD"].flatMap(UInt32.init) { sleep(hold) }
             app.terminate()
         }
     }
@@ -88,7 +88,7 @@ final class IPadLayoutTests: XCTestCase {
         for (name, tint) in [("glass", "style"), ("glass", "coral")] {
             let style = "\(name)-\(tint)"
             app.launchArguments = base + ["-ui.style", name, "-ui.color", tint]
-            app.launchJarvis() // this test names its styles itself
+            app.launchPersona() // this test names its styles itself
             XCTAssertTrue(app.staticTexts["选一个 Agent"].waitForExistence(timeout: 20))
             sleep(1)
             var image = app.screenshot().image

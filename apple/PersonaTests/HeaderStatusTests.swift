@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Agents chat header's status line (docs/plan-chat-topbar.md ③) and the tab names of its strip.
 struct HeaderStatusTests {

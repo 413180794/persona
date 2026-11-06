@@ -49,7 +49,7 @@ const session = (s: Partial<Session> = {}) => {
 
 const LINK = "https://auth.example.com/authorize?state=1";
 const urlIx: Interaction = {
-  id: "ix_url", machine_id: "m", session_id: "s", kind: "elicitation", mcp_server_name: "plugin_jarvis",
+  id: "ix_url", machine_id: "m", session_id: "s", kind: "elicitation", mcp_server_name: "plugin_persona",
   elicitation: { mode: "url", message: "登录一下", url: LINK },
 };
 const formIx = (schema: Record<string, unknown>): Interaction => ({

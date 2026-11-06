@@ -2,19 +2,19 @@ import XCTest
 
 /// Feishu documents in the inbox (docs/inbox.md「云文档」): a row's status menu moves the status in the document, and
 /// Send on the AI twin's draft makes its proposed move with the comment. Against scripts/mock/mock_hub.py with MOCK_DOCS=1
-/// (JARVIS_MOCK_HUB), which records replies at /mock/sent and keeps the rows' status.
+/// (PERSONA_MOCK_HUB), which records replies at /mock/sent and keeps the rows' status.
 final class InboxDocTests: XCTestCase {
     private var hub: String!
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "mention", "-inbox.source", ""]
         app.launchPinned()
     }

@@ -58,14 +58,14 @@ func TestBotStepLines(t *testing.T) {
 		{"Glob", `{"pattern":"**/*.md"}`, "搜 `**/*.md`"},
 		{"Task", `{"description":"查代码","subagent_type":"Explore"}`, "派子任务 · 查代码（Explore）"},
 		{"TodoWrite", `{"todos":[{"content":"a","status":"completed"},{"content":"跑测试","activeForm":"正在跑测试","status":"in_progress"}]}`, "更新待办 · 正在跑测试"},
-		{"mcp__jarvis__phone_calendar_events", `{"start":"2026-01-01"}`, "查日历"},
-		{"mcp__jarvis__phone_contacts_search", `{"query":"张三"}`, "查通讯录 `张三`"},
-		{"mcp__jarvis__phone_reminders_list", `{}`, "查提醒事项"},
-		{"mcp__jarvis__phone_reminders_complete", `{"id":"r1"}`, "完成提醒 `r1`"},
-		{"mcp__jarvis__phone_reminders_create", `{"title":"买菜"}`, "加提醒 `买菜`"},
-		{"mcp__jarvis__mail_search", `{"query":"发票"}`, "查邮件 `发票`"},
-		{"mcp__jarvis__mail_send", `{"to":"me@example.com"}`, "发邮件 `me@example.com`"},
-		{"mcp__jarvis__kb_search", `{"query":"周报"}`, "查知识库 `周报`"},
+		{"mcp__persona__phone_calendar_events", `{"start":"2026-01-01"}`, "查日历"},
+		{"mcp__persona__phone_contacts_search", `{"query":"张三"}`, "查通讯录 `张三`"},
+		{"mcp__persona__phone_reminders_list", `{}`, "查提醒事项"},
+		{"mcp__persona__phone_reminders_complete", `{"id":"r1"}`, "完成提醒 `r1`"},
+		{"mcp__persona__phone_reminders_create", `{"title":"买菜"}`, "加提醒 `买菜`"},
+		{"mcp__persona__mail_search", `{"query":"发票"}`, "查邮件 `发票`"},
+		{"mcp__persona__mail_send", `{"to":"me@example.com"}`, "发邮件 `me@example.com`"},
+		{"mcp__persona__kb_search", `{"query":"周报"}`, "查知识库 `周报`"},
 		{"mcp__github__github_read", `{"url":"https://example.com/x"}`, "github_read `https://example.com/x`"},
 	} {
 		it := proto.Item{Kind: proto.KindToolUse, ToolName: c.tool, ToolInput: json.RawMessage(c.in)}
@@ -102,14 +102,14 @@ func TestBotStepAndStripContext(t *testing.T) {
 	if s := botStep("", proto.Item{Kind: proto.KindText}); s != "" {
 		t.Fatalf("text step %q", s)
 	}
-	in := "<jarvis-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</jarvis-context>\n真正的问题"
+	in := "<persona-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</persona-context>\n真正的问题"
 	if got := stripContext(in); got != "真正的问题" {
 		t.Fatalf("strip %q", got)
 	}
 	for in, want := range map[string]string{
-		"<persona-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</persona-context>\n真正的问题":          "真正的问题",
-		"<persona-context>\n快照\n</persona-context>\n<jarvis-context kind=\"doc\">文档</jarvis-context>\n问题": "问题",
-		"问题\n<persona-context kind=\"context\">\n被截断":                                                     "问题",
+		"<persona-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</persona-context>\n真正的问题":            "真正的问题",
+		"<persona-context>\n快照\n</persona-context>\n<persona-context kind=\"doc\">文档</persona-context>\n问题": "问题",
+		"问题\n<persona-context kind=\"context\">\n被截断":                                                       "问题",
 	} {
 		if got := stripContext(in); got != want {
 			t.Fatalf("strip %q = %q, want %q", in, got, want)
@@ -125,7 +125,7 @@ func TestBotCommandsPassTheRestOn(t *testing.T) {
 	if h, rest := s.botCommand(ctx, FeishuFeatures{Main: true}, "om", "/new 帮我写周报", "", ""); h || rest != "帮我写周报" {
 		t.Fatalf("/new with text: handled=%v rest=%q", h, rest)
 	}
-	if got := s.botTargetFor("", ""); got.Kind != targetJarvis || got.SessionID != "" {
+	if got := s.botTargetFor("", ""); got.Kind != targetPersona || got.SessionID != "" {
 		t.Fatalf("/new points the chat at a new conversation: %+v", got)
 	}
 	if h, rest := s.botCommand(ctx, FeishuFeatures{}, "om", "/compact", "", ""); h || rest != "/compact" {
@@ -269,7 +269,7 @@ func TestFeishuLegacyRunsMove(t *testing.T) {
 	st := &memStore{}
 	ctx := context.Background()
 	_ = st.PutSetting(ctx, botStateKey, map[string]any{"current": map[string]any{"kind": "main"}, "seen": []string{"om_1"},
-		"runs": []map[string]any{{"id": "fb_om_2", "message_id": "om_2", "target": map[string]any{"kind": "jarvis", "machine_id": "server", "session_id": "c1"},
+		"runs": []map[string]any{{"id": "fb_om_2", "message_id": "om_2", "target": map[string]any{"kind": "persona", "machine_id": "server", "session_id": "c1"},
 			"base": 7, "card": "om_card", "reaction": "rx"}}})
 	s := newServiceOn(t, newFakeHub().withMachine(), st)
 	runs := s.channelRuns(channel.Feishu)
@@ -370,7 +370,7 @@ func TestFeishuChatStartsAfreshWithANewPairing(t *testing.T) {
 	}
 	// A state from before: the pairing now is recorded, nothing reset.
 	st2 := &memStore{}
-	_ = st2.PutSetting(ctx, botStateKey, botState{Current: botTarget{Kind: targetJarvis, MachineID: "server", SessionID: "c1"}})
+	_ = st2.PutSetting(ctx, botStateKey, botState{Current: botTarget{Kind: targetPersona, MachineID: "server", SessionID: "c1"}})
 	f2, _ := feishuHub("ou_b", time.Unix(200, 0))
 	s2 := newServiceOn(t, f2, st2)
 	_, _ = s2.feishuStatus(ctx)
@@ -897,7 +897,7 @@ func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {
 	if !strings.Contains(first, "晚报") || !strings.Contains(first, `"header"`) {
 		t.Fatalf("no header: %s", first)
 	}
-	if got := s.botTargetFor("om_card", ""); got.Kind != targetJarvis || got.SessionID != "m1" {
+	if got := s.botTargetFor("om_card", ""); got.Kind != targetPersona || got.SessionID != "m1" {
 		t.Fatalf("thread %+v", got)
 	}
 }
@@ -905,7 +905,7 @@ func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {
 // Without the hub's web address (no public_url) a card carries no "Open web version" button with an empty link, which does
 // nothing and may get the whole card refused; a question card keeps its answer buttons. With one, the button is there.
 func TestFeishuOpenButtonNeedsAWebAddress(t *testing.T) {
-	for _, web := range []string{"", "jarvis://x", "https://hub.example.com/"} {
+	for _, web := range []string{"", "persona://x", "https://hub.example.com/"} {
 		f, posts := feishuHub("ou_a", time.Unix(100, 0))
 		f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
 			return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_a", PairedAt: time.Unix(100, 0), PublicURL: web, Features: FeishuFeatures{Main: true, Cards: true}}, nil
@@ -927,7 +927,7 @@ func TestFeishuOpenButtonNeedsAWebAddress(t *testing.T) {
 		if strings.Contains(card, `"default_url":""`) || hasLink != strings.HasPrefix(web, "https://") {
 			t.Fatalf("%q: link %v in %s", web, hasLink, card)
 		}
-		if hasLink && !strings.Contains(card, "https://hub.example.com/j/a1") {
+		if hasLink && !strings.Contains(card, "https://hub.example.com/persona/a1") {
 			t.Fatalf("link %s", card)
 		}
 	}
@@ -973,7 +973,7 @@ func TestFeishuPushIsLaidOutAndWhole(t *testing.T) {
 			t.Fatalf("card of %d bytes", len(c))
 		}
 	}
-	if got := s.botTargetFor("om_card", ""); got.Kind != targetJarvis || got.SessionID != "m1" {
+	if got := s.botTargetFor("om_card", ""); got.Kind != targetPersona || got.SessionID != "m1" {
 		t.Fatalf("thread %+v", got)
 	}
 }
@@ -1342,9 +1342,9 @@ func TestNewConversationsFirstMessageFoldedIsAnswered(t *testing.T) {
 	s := withSettings(t, f, New(Options{Hub: h, Store: func() Store { return &memStore{} }, Logf: testLogf(t)}))
 	// As feishu.go's rt.isNew path leaves it, then as its session.send path does.
 	s.startChannelRun(&channel.Run{ID: "fb_om1", Channel: channel.Feishu, ReplyTo: "om1", MachineID: "server", SessionID: "s1",
-		TargetKind: targetJarvis, Started: time.Now().UTC(), Ext: map[string]string{}})
+		TargetKind: targetPersona, Started: time.Now().UTC(), Ext: map[string]string{}})
 	s.startChannelRun(&channel.Run{ID: "fb_om2", Channel: channel.Feishu, ReplyTo: "om2", MachineID: "server", SessionID: "s1",
-		TargetKind: targetJarvis, Base: 3, MsgIDs: []string{"feishu-om2"}, Probe: "second", Started: time.Now().UTC(),
+		TargetKind: targetPersona, Base: 3, MsgIDs: []string{"feishu-om2"}, Probe: "second", Started: time.Now().UTC(),
 		Ext: map[string]string{}})
 	runs := s.channelRuns(channel.Feishu)
 	if len(runs) != 1 || runs[0].ID != "fb_om2" || len(runs[0].Folded) != 1 {

@@ -23,10 +23,10 @@ func agentDial(path string) int {
 	return 0
 }
 
-// agentFixture is a fake home whose data directory is ~/.jarvis, also named ~/.persona (a link), with a file of each
+// agentFixture is a fake home with ~/.persona and an explicit custom .state-link symlink, with a file of each
 // kind the agent sandbox closes or leaves open. Nothing in it is a real secret.
 type agentFixture struct {
-	home, dir, alias string // dir: the real data directory; alias: ~/.persona
+	home, dir, alias string // dir: the real data directory; alias: an explicit custom .state-link
 	ours, theirs     string // this start's launcher settings, another launcher's
 }
 
@@ -39,7 +39,7 @@ func newAgentFixture(t *testing.T) agentFixture {
 	}
 	t.Cleanup(func() { os.RemoveAll(tmp) })
 	home := realPath(tmp)
-	f := agentFixture{home: home, dir: filepath.Join(home, ".jarvis"), alias: filepath.Join(home, ".persona")}
+	f := agentFixture{home: home, dir: filepath.Join(home, ".persona"), alias: filepath.Join(home, ".state-link")}
 	f.ours = filepath.Join(f.dir, "launcher-settings", "claude-ours.json")
 	f.theirs = filepath.Join(f.dir, "launcher-settings", "other-claude-settings.json")
 	files := map[string]string{
@@ -66,7 +66,7 @@ func newAgentFixture(t *testing.T) agentFixture {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Symlink(".jarvis", f.alias); err != nil {
+	if err := os.Symlink(".persona", f.alias); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -120,7 +120,7 @@ func TestDarwinAgentProfile(t *testing.T) {
 	if strings.Contains(got, `"`+f.alias+`/`) {
 		t.Error("a rule names the data directory by its link, not its real path")
 	}
-	if !strings.Contains(re, `\.jarvis`) {
+	if !strings.Contains(re, `\.persona`) {
 		t.Errorf("not escaped: %s", re)
 	}
 }
@@ -187,8 +187,8 @@ func TestWrapAgentFallsBack(t *testing.T) {
 	}
 }
 
-// TestDarwinAgentSandboxForReal runs shell commands under the real profile in a fake data directory (~/.jarvis, also
-// named ~/.persona): the secrets cannot be read (directly, through the link, through a link elsewhere, as backups,
+// TestDarwinAgentSandboxForReal runs shell commands under the real profile in a fake data directory (~/.persona, also
+// named by a custom .state-link): the secrets cannot be read (directly, through the link, through a link elsewhere, as backups,
 // at any depth, in another case), the data directory cannot be moved, the extensions' sockets cannot be dialed; what
 // an agent needs works (Persona's own files, its socket, this start's launcher settings, personad, git, the network).
 // ps is a setuid program and does not start in a sandbox (a known side effect). The control runs the must-fail
@@ -254,36 +254,36 @@ func TestDarwinAgentSandboxForReal(t *testing.T) {
 		return strings.TrimSpace(string(out)), err
 	}
 	mustFail := map[string]string{
-		"cat secret.key":                    "cat " + q(D+"/secret.key"),
-		"cat secret.key through ~/.persona": "cat " + q(alias+"/secret.key"),
-		"cat secret.key through a link":     "cat " + q(elsewhere),
-		"cat secret.key.bak":                "cat " + q(D+"/secret.key.bak"),
-		"cat handles.key":                   "cat " + q(D+"/handles.key"),
-		"cat launch.key":                    "cat " + q(D+"/launch.key"),
-		"cat hub.json":                      "cat " + q(D+"/hub.json"),
-		"cat link.json":                     "cat " + q(D+"/link.json"),
-		"cat HUB.JSON":                      "cat " + q(D+"/HUB.JSON"),
-		"cat hub.json.bak":                  "cat " + q(D+"/hub.json.bak"),
-		"cat .hub.json.12345":               "cat " + q(D+"/.hub.json.12345"),
-		"cat link-tls/id.key":               "cat " + q(D+"/link-tls/id.key"),
-		"cat tls/hub.key":                   "cat " + q(D+"/tls/hub.key"),
-		"cat tls/.tls-1":                    "cat " + q(D+"/tls/.tls-1"),
-		"cat managers/m1/manager.json":      "cat " + q(D+"/managers/m1/manager.json"),
-		"cat extensions/data":               "cat " + q(D+"/extensions/data/notes/token"),
-		"cat another launcher's settings":   "cat " + q(f.theirs),
-		"mv extensions/ and read its data":  "mv " + q(D+"/extensions") + " " + q(D+"/ext2") + " && cat " + q(D+"/ext2/data/notes/token") + " && mv " + q(D+"/ext2") + " " + q(D+"/extensions"),
-		"cp secret.key":                     "cp " + q(D+"/secret.key") + " " + q(work+"/k"),
-		"mv the data directory":             "mv " + q(D) + " " + q(D+"2") + " && mv " + q(D+"2") + " " + q(D),
-		"mv the folder above it":            "mv " + q(f.home) + " " + q(f.home+"2") + " && mv " + q(f.home+"2") + " " + q(f.home),
-		"replace ~/.persona":                "rm " + q(alias) + " && ln -s .jarvis " + q(alias),
-		"rm the switch":                     "rm " + q(D+"/"+AgentOnFile) + " && touch " + q(D+"/"+AgentOnFile),
-		"dial an extension's proxy":         q(self) + " agent-dial " + q(proxySock),
-		"dial the hub's edge socket":        q(self) + " agent-dial " + q(edgeSock),
-		"python reads secret.key":           "python3 -c " + q("open('"+D+"/secret.key').read()"),
+		"cat secret.key":                     "cat " + q(D+"/secret.key"),
+		"cat secret.key through .state-link": "cat " + q(alias+"/secret.key"),
+		"cat secret.key through a link":      "cat " + q(elsewhere),
+		"cat secret.key.bak":                 "cat " + q(D+"/secret.key.bak"),
+		"cat handles.key":                    "cat " + q(D+"/handles.key"),
+		"cat launch.key":                     "cat " + q(D+"/launch.key"),
+		"cat hub.json":                       "cat " + q(D+"/hub.json"),
+		"cat link.json":                      "cat " + q(D+"/link.json"),
+		"cat HUB.JSON":                       "cat " + q(D+"/HUB.JSON"),
+		"cat hub.json.bak":                   "cat " + q(D+"/hub.json.bak"),
+		"cat .hub.json.12345":                "cat " + q(D+"/.hub.json.12345"),
+		"cat link-tls/id.key":                "cat " + q(D+"/link-tls/id.key"),
+		"cat tls/hub.key":                    "cat " + q(D+"/tls/hub.key"),
+		"cat tls/.tls-1":                     "cat " + q(D+"/tls/.tls-1"),
+		"cat managers/m1/manager.json":       "cat " + q(D+"/managers/m1/manager.json"),
+		"cat extensions/data":                "cat " + q(D+"/extensions/data/notes/token"),
+		"cat another launcher's settings":    "cat " + q(f.theirs),
+		"cp secret.key":                      "cp " + q(D+"/secret.key") + " " + q(work+"/k"),
+		"mv the data directory":              "mv " + q(D) + " " + q(D+"2") + " && mv " + q(D+"2") + " " + q(D),
+		"mv the folder above it":             "mv " + q(f.home) + " " + q(f.home+"2") + " && mv " + q(f.home+"2") + " " + q(f.home),
+		"replace .state-link":                "rm " + q(alias) + " && ln -s .persona " + q(alias),
+		"rm the switch":                      "rm " + q(D+"/"+AgentOnFile) + " && touch " + q(D+"/"+AgentOnFile),
+		"dial an extension's proxy":          q(self) + " agent-dial " + q(proxySock),
+		"dial the hub's edge socket":         q(self) + " agent-dial " + q(edgeSock),
+		"python reads secret.key":            "python3 -c " + q("open('"+D+"/secret.key').read()"),
+		"mv extensions/ and read its data":   "mv " + q(D+"/extensions") + " " + q(D+"/ext2") + " && cat " + q(D+"/ext2/data/notes/token") + " && mv " + q(D+"/ext2") + " " + q(D+"/extensions"),
 	}
 	mustWork := map[string]string{
 		"cat mcp.json":              "cat " + q(D+"/mcp.json"),
-		"cat through ~/.persona":    "cat " + q(alias+"/claude-settings.json"),
+		"cat through .state-link":   "cat " + q(alias+"/claude-settings.json"),
 		"cat our launcher settings": "cat " + q(f.ours),
 		"cat data/talk.key":         "cat " + q(D+"/data/talk.key"),
 		"cat data/proj/link.json":   "cat " + q(D+"/data/proj/link.json"),

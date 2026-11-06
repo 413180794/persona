@@ -100,7 +100,7 @@ const inputs = () => hub.sent.filter((m) => m.type === "herdr_input");
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
-  localStorage.setItem("jarvis.terminal.fullHint", "1");
+  localStorage.setItem("persona.terminal.fullHint", "1");
   hub.open = true;
   hub.conn = "online";
   hub.sent.length = 0;

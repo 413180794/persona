@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The SSH tunnels' ends (#2379): removing a group closes its hubs' tunnels (not another group's), and a tunnel
 /// adopted under the paired hub's id has its phase written there, not under the id it was started with.

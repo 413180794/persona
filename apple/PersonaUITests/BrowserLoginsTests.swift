@@ -1,15 +1,15 @@
 import XCTest
 
-/// Browser Sign-ins on a Mac's page (#1304) against scripts/mock/mock_hub.py with MOCK_BROWSER=ready (JARVIS_MOCK_HUB): the
+/// Browser Sign-ins on a Mac's page (#1304) against scripts/mock/mock_hub.py with MOCK_BROWSER=ready (PERSONA_MOCK_HUB): the
 /// sites ego lite keeps sign-ins for, a cookie file's sites to tick (none at first; the expired one cannot be), the
-/// import, and clearing a site. `-openCookieFile` stands in for the system's file picker. With JARVIS_SHOTS each step is
-/// saved there (JARVIS_SHOTS_APPEARANCE names them).
+/// import, and clearing a site. `-openCookieFile` stands in for the system's file picker. With PERSONA_SHOTS each step is
+/// saved there (PERSONA_SHOTS_APPEARANCE names them).
 final class BrowserLoginsTests: XCTestCase {
     private var hub = ""
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BROWSER=ready (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BROWSER=ready (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -21,8 +21,8 @@ final class BrowserLoginsTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/cookies-\(env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown")-\(name).png"))
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/cookies-\(env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown")-\(name).png"))
     }
 
     @MainActor func testSitesImportAndClear() throws {
@@ -31,7 +31,7 @@ final class BrowserLoginsTests: XCTestCase {
              ".shop.example.org\tTRUE\t/\tFALSE\t2000000000\tcart\tmade-up-3", ".news.example.net\tTRUE\t/\tFALSE\t1000\told\tmade-up-4"]
             .joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openCookieFile", file.path]
         app.launchPinned()
 
@@ -63,14 +63,14 @@ final class BrowserLoginsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["example.com"].waitForNonExistence(timeout: 10), "the site was not cleared")
     }
 
-    /// The node could not read ego's sign-ins (#1926; mock MOCK_COOKIES_FAIL=1, JARVIS_COOKIES_FAIL=1): a sentence and
+    /// The node could not read ego's sign-ins (#1926; mock MOCK_COOKIES_FAIL=1, PERSONA_COOKIES_FAIL=1): a sentence and
     /// Try Again, which reads them again.
     @MainActor func testAFailedReadSaysSoAndTriesAgain() throws {
-        guard ProcessInfo.processInfo.environment["JARVIS_COOKIES_FAIL"] == "1" else {
-            throw XCTSkip("needs the mock with MOCK_COOKIES_FAIL=1 (JARVIS_COOKIES_FAIL=1)")
+        guard ProcessInfo.processInfo.environment["PERSONA_COOKIES_FAIL"] == "1" else {
+            throw XCTSkip("needs the mock with MOCK_COOKIES_FAIL=1 (PERSONA_COOKIES_FAIL=1)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook"]
         app.launchPinned()
         let retry = app.buttons["browser-logins-retry"]

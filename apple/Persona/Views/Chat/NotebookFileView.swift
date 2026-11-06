@@ -29,7 +29,7 @@ private struct NotebookCellView: View {
     var body: some View {
         switch cell.kind {
         case .markdown:
-            Markdown(MarkdownMemo.content(cell.source)).markdownTheme(.jarvis)
+            Markdown(MarkdownMemo.content(cell.source)).markdownTheme(.persona)
         case .raw:
             Text(cell.source)
                 .font(Theme.Font.code)
@@ -41,7 +41,7 @@ private struct NotebookCellView: View {
                     .font(Theme.Font.label)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                Markdown(MarkdownMemo.content(notebook.fenced(cell))).markdownTheme(.jarvis)
+                Markdown(MarkdownMemo.content(notebook.fenced(cell))).markdownTheme(.persona)
                 ForEach(Array(cell.outputs.enumerated()), id: \.offset) { _, output in
                     NotebookOutputView(output: output)
                 }

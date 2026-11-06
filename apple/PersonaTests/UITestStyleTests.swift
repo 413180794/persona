@@ -1,9 +1,9 @@
 import Foundation
 import Testing
 
-/// Every UI test launches in a style it names (`UITestStyle` in JarvisUITests): the app keeps the style the last run
+/// Every UI test launches in a style it names (`UITestStyle` in PersonaUITests): the app keeps the style the last run
 /// left, and the BeautifulUI style draws its own components, so a test that leaves it out finds another test's looks.
-/// A launch is `launchPinned()` (not `launch()` or `launchJarvis()`), or the file passes `-ui.style` itself (a test about
+/// A launch is `launchPinned()` (not `launch()` or `launchPersona()`), or the file passes `-ui.style` itself (a test about
 /// one style). Another app (`XCUIApplication(bundleIdentifier:)`, e.g. LiveActivityShots' peer) has no style to pin.
 /// Reads the sources.
 struct UITestStyleTests {
@@ -18,7 +18,7 @@ struct UITestStyleTests {
             let others = try NSRegularExpression(pattern: #"let (\w+) = XCUIApplication\(bundleIdentifier:"#)
                 .matches(in: text, range: NSRange(text.startIndex..., in: text))
                 .compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) + ".launch()" } }
-            for (i, line) in text.components(separatedBy: "\n").enumerated() where line.contains(".launch()") || line.contains(".launchJarvis()") || line.contains(".launchPersona()") {
+            for (i, line) in text.components(separatedBy: "\n").enumerated() where line.contains(".launch()") || line.contains(".launchPersona()") || line.contains(".launchPersona()") {
                 if others.contains(where: { line.contains($0) }) { continue }
                 found.append("\(f.lastPathComponent):\(i + 1): \(line.trimmingCharacters(in: .whitespaces))")
             }

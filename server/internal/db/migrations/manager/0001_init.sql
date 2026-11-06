@@ -1,6 +1,6 @@
 -- The manager's part of the first migration (the hub's is migrations/hub/0001_init.sql).
 
--- Sessions Jarvis started on each machine: launcher, directory and the herdr pane they run in.
+-- Sessions Persona started on each machine: launcher, directory and the herdr pane they run in.
 CREATE TABLE node_sessions (
     machine_id  text NOT NULL,
     session_id  text NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE node_sessions (
 );
 
 -- Mail accounts. data holds the non-secret fields as JSON; secrets are AES-GCM ciphertext made by the mail
--- package with ~/.jarvis/secret.key, which never enters the database.
+-- package with ~/.persona/secret.key, which never enters the database.
 CREATE TABLE mail_accounts (
     id            text PRIMARY KEY,
     email         text NOT NULL UNIQUE,

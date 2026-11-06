@@ -28,7 +28,7 @@ export class AgyAcpClient extends EventEmitter {
 
   async _start() {
     const home = process.env.HOME || '/root'
-    const extraPath = [`${home}/.persona/assistant/.bin`, `${home}/.jarvis/assistant/.bin`, `${home}/.local/bin`].join(':')
+    const extraPath = [`${home}/.persona/assistant/.bin`, `${home}/.persona/assistant/.bin`, `${home}/.local/bin`].join(':')
     const child = spawn(this.bin, this.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PATH: `${extraPath}:${process.env.PATH || ''}` },

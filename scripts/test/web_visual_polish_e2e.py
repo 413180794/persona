@@ -84,7 +84,7 @@ def new_context(browser, theme, size, reduce, touch=False):
         is_mobile=touch,
     )
     # (the resource buffer holds 250 entries by default, fewer than the dev server's modules: ATOMS reads it)
-    ctx.add_init_script(f"performance.setResourceTimingBufferSize(5000); localStorage.setItem('jarvis.theme', '{theme}'); localStorage.setItem('agent.details', '1');")
+    ctx.add_init_script(f"performance.setResourceTimingBufferSize(5000); localStorage.setItem('persona.theme', '{theme}'); localStorage.setItem('agent.details', '1');")
     return ctx
 
 

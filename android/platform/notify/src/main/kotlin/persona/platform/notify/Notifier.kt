@@ -162,7 +162,7 @@ class Notifier @Inject constructor(
                 open(request.session, request = request.interaction)).build()
         val intent = Intent(context, ActionReceiver::class.java).apply {
             this.action = ActionReceiver.RESOLVE
-            data = Uri.Builder().scheme("jarvis-notify").authority("ongoing")
+            data = Uri.Builder().scheme("persona-notify").authority("ongoing")
                 .appendPath(request.interaction).appendPath(key).build()
             request.session?.let { session ->
                 putExtra(ActionReceiver.EXTRA_MACHINE, session.machineId)
@@ -211,7 +211,7 @@ class Notifier @Inject constructor(
     private fun action(ix: Interaction, action: NotificationAction): NotificationCompat.Action {
         val intent = Intent(context, ActionReceiver::class.java).apply {
             this.action = ActionReceiver.RESOLVE
-            data = Uri.Builder().scheme("jarvis-notify").authority("resolve")
+            data = Uri.Builder().scheme("persona-notify").authority("resolve")
                 .appendPath(ix.id).appendPath(action.key).build()
             putExtra(ActionReceiver.EXTRA_MACHINE, ix.machineId)
             putExtra(ActionReceiver.EXTRA_SESSION, ix.sessionId)
@@ -265,7 +265,7 @@ class Notifier @Inject constructor(
 
     fun retractSession(session: SessionKey) {
         context.getSystemService(NotificationManager::class.java).activeNotifications
-            .filter { it.id == EVENT_ID && it.notification.extras.getString("jarvis.session") == session.path }
+            .filter { it.id == EVENT_ID && it.notification.extras.getString("persona.session") == session.path }
             .forEach { manager.cancel(it.tag, it.id) }
     }
 
@@ -295,7 +295,7 @@ class Notifier @Inject constructor(
     fun retractSeen(session: SessionKey) = NotificationPolicy.resultTags(session).forEach { manager.cancel(it, EVENT_ID) }
 
     private fun NotificationCompat.Builder.forSession(session: SessionKey?) = apply {
-        session?.let { addExtras(android.os.Bundle().apply { putString("jarvis.session", it.path) }) }
+        session?.let { addExtras(android.os.Bundle().apply { putString("persona.session", it.path) }) }
     }
 
     fun failure(id: String, session: SessionKey?, assistant: Boolean? = null) = resultNotice(
@@ -374,6 +374,6 @@ class Notifier @Inject constructor(
         private const val EVENT_ID = 2
         private const val INTERACTION_PREFIX = "interaction:"
         private fun interactionTag(id: String) = "$INTERACTION_PREFIX$id"
-        private const val EXTRA_REQUEST = "jarvis.request"
+        private const val EXTRA_REQUEST = "persona.request"
     }
 }

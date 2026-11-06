@@ -4,7 +4,7 @@ import "strings"
 
 // TodoDecisions is the context a handoff to an agent carries for a todo's decisions in effect (todo/decisions,
 // #1618, docs/todos.md "Decision log"). The caller leaves out the closing tags
-// ("</persona-context>", "</jarvis-context>") from the texts.
+// ("</persona-context>") from the texts.
 type TodoDecisions struct {
 	Title     string
 	Decisions []TodoDecision
@@ -89,9 +89,9 @@ type TodoOutcomeReply struct {
 
 func RenderTodoOutcomeInput(in TodoOutcomeInput) string { return render("todo/outcome_input", in) }
 
-// TodoProject is the <jarvis-context> a new agent gets before its first prompt when its directory belongs to a
+// TodoProject is the <persona-context> a new agent gets before its first prompt when its directory belongs to a
 // project (todo/project, #2820): the project's one line and the outcomes of its latest finished todos, newest first.
-// The caller leaves out "</jarvis-context>" from the texts.
+// The caller leaves out "</persona-context>" from the texts.
 type TodoProject struct {
 	Name, OneLine string
 	Outcomes      []TodoProjectOutcome

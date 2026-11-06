@@ -89,7 +89,7 @@ class CapsuleRuntime @Inject constructor(
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP))
     }
     private fun openExtension(route: ExtensionUiRoute) {
-        launchApp(Uri.Builder().scheme("jarvis").authority("open").appendQueryParameter("target", "extension")
+        launchApp(Uri.Builder().scheme("persona").authority("open").appendQueryParameter("target", "extension")
             .appendQueryParameter("extension", route.extensionId).appendQueryParameter("ui", route.uiId)
             .appendQueryParameter("title", route.title).apply { route.state?.let { appendQueryParameter("state", it) } }.build())
     }

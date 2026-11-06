@@ -25,7 +25,7 @@ const FileViewerPanel = lazy(() => import("./session/FileViewer").then((m) => ({
 const GitPanel = lazy(() => import("./session/GitPanel").then((m) => ({ default: m.GitPanel })));
 const LinkPanel = lazy(() => import("./link/LinkPanel").then((m) => ({ default: m.LinkPanel })));
 
-const WIDTH_KEY = "jarvis.panelWidth";
+const WIDTH_KEY = "persona.panelWidth";
 const MIN = 360;
 const DEFAULT_WIDTH = 600;
 /** How far one arrow key press moves the resize handle. */

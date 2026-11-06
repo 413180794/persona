@@ -7,9 +7,9 @@
       "description": "来源与类型条件取交集，群聊类型兼容机器人。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -152,9 +152,9 @@
       "description": "来源与类型条件取交集，群聊类型兼容机器人。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -273,9 +273,9 @@
       "description": "来源与类型条件取交集，群聊类型兼容机器人。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -402,9 +402,9 @@
       "description": "来源与类型条件取交集，群聊类型兼容机器人。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -523,9 +523,9 @@
       "description": "来源与类型条件取交集，群聊类型兼容机器人。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -652,9 +652,9 @@
       "description": "来源与类型条件取交集，群聊类型兼容机器人。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -773,9 +773,9 @@
       "description": "来源与类型条件取交集，群聊类型兼容机器人。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -875,9 +875,9 @@
       "description": "搜索标题、发件人、预览和摘要，不搜索上下文或分拣理由。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -1024,9 +1024,9 @@
       "description": "来源筛选比较 account 字段而非 source 字段。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [

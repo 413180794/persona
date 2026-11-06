@@ -1,4 +1,4 @@
-// Package mcpserver is the stdio MCP server Claude Code starts (`jarvisd mcp`); it proxies tools to the local node.
+// Package mcpserver is the stdio MCP server Claude Code starts (`personad mcp`); it proxies tools to the local node.
 package mcpserver
 
 import (
@@ -167,7 +167,7 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		return map[string]any{
 			"protocolVersion": p.ProtocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
-			"serverInfo":      map[string]any{"name": "jarvis", "version": version},
+			"serverInfo":      map[string]any{"name": "persona", "version": version},
 			"instructions": "Persona tools reach the user's iPhone (phone_* tools: contacts, calendar, reminders, location, health, photos, " +
 				"clipboard, notifications) and email accounts (mail_* tools). phone_* tools need the Persona app to be open on the iPhone. " +
 				"mail_send asks the user to approve on the phone before sending." + assistantInstructions(),
@@ -313,16 +313,16 @@ func listToolsOnce(ctx context.Context) ([]map[string]any, error) {
 	return tools, nil
 }
 
-// The assistant's processes start this server with JARVIS_ASSISTANT / JARVIS_SESSION_ID (node/assistant.go):
+// The assistant's processes start this server with PERSONA_ASSISTANT / PERSONA_SESSION_ID (node/assistant.go):
 // they get the assistant-only tools, and the hub knows which conversation a call (e.g. ask_user) belongs to.
-func isAssistant() bool { return identity.Getenv("JARVIS_ASSISTANT") == "1" }
+func isAssistant() bool { return identity.Getenv("PERSONA_ASSISTANT") == "1" }
 
 // isGuest: a guest conversation's process (node/assistant_guest.go). The hub knows its guests itself; this is its word
 // for one the hub cannot tell about, which then gets nothing.
-func isGuest() bool { return identity.Getenv("JARVIS_GUEST") == "1" }
+func isGuest() bool { return identity.Getenv("PERSONA_GUEST") == "1" }
 
 func sessionID() string {
-	if id := identity.Getenv("JARVIS_SESSION_ID"); id != "" {
+	if id := identity.Getenv("PERSONA_SESSION_ID"); id != "" {
 		return id
 	}
 	return os.Getenv("CLAUDE_SESSION_ID")

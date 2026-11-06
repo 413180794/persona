@@ -3,7 +3,7 @@
 // `personad node` in an isolated HOME that plays the hub's side. Nothing outside the temp directory is touched; the
 // user's own opencode server, config and database are never opened.
 //
-//   JARVISD=<personad binary> [OPENCODE=<opencode binary>] [KEEP=1] node integrations/opencode/e2e/run.mjs
+//   PERSONAD=<personad binary> [OPENCODE=<opencode binary>] [KEEP=1] node integrations/opencode/e2e/run.mjs
 
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -13,9 +13,9 @@ import { fileURLToPath } from 'node:url'
 import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness.mjs'
 import { install } from '../install.mjs'
 
-const jarvisd = process.env.JARVISD
-if (!jarvisd) {
-  console.error('set JARVISD (a personad binary)')
+const personad = process.env.PERSONAD
+if (!personad) {
+  console.error('set PERSONAD (a personad binary)')
   process.exit(2)
 }
 const opencode = process.env.OPENCODE || 'opencode'
@@ -35,7 +35,7 @@ const run = (cmd, args, env = {}) => {
   return c
 }
 
-const node = await startNode({ jarvisd, keep: process.env.KEEP === '1' })
+const node = await startNode({ personad, keep: process.env.KEEP === '1' })
 let server
 try {
   writeFileSync(join(root, 'cfg/opencode/opencode.json'), JSON.stringify({

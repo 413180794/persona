@@ -6,10 +6,10 @@
       "name": "rank_all_states_and_mutes",
       "description": "需要你即使屏蔽仍在最前，屏蔽的已看会话仍归已看。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -222,10 +222,10 @@
       "name": "working_since_then_id",
       "description": "工作中先用状态开始时间，缺失时用更新时间，同时间按 session_id。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -364,10 +364,10 @@
       "name": "working_since_then_id_reversed",
       "description": "倒序输入仍得到相同的时间及标识排序。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -506,10 +506,10 @@
       "name": "quick_filter_ignores_rank",
       "description": "快速筛选的组内只按排序时间和标识排列。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -641,10 +641,10 @@
       "name": "mute_allow_and_explicit_override",
       "description": "空间屏蔽可被单会话允许覆盖，但显式屏蔽仍优先。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -802,10 +802,10 @@
       "name": "pinned_sessions_use_pin_order_once",
       "description": "置顶会话按置顶数组顺序单独出现一次。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -961,10 +961,10 @@
       "name": "pinned_offline_is_visible",
       "description": "置顶的离线会话仍显示在置顶段。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -1060,7 +1060,7 @@
       "name": "cross_machine_same_session_id",
       "description": "会话标识和时间同时相同后补完整 id 比较，确保跨机器次序确定。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: ordered(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: ordered(_:)",
         "CLAUDE.md: 同一时间再按 id"
       ],
       "derived": true,
@@ -1168,7 +1168,7 @@
       "name": "cross_machine_same_session_id_reversed",
       "description": "会话标识和时间同时相同后补完整 id 比较，确保跨机器次序确定。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: ordered(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: ordered(_:)",
         "CLAUDE.md: 同一时间再按 id"
       ],
       "derived": true,

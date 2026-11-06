@@ -21,7 +21,7 @@ extension MarkdownUI.Theme {
     /// Markdown messages inside a chat bubble: body size, tight paragraphs.
     @MainActor static var larkMessage: MarkdownUI.Theme { larkMessageAtScale.value }
     @MainActor private static let larkMessageAtScale = PerTextScale {
-        MarkdownUI.Theme.jarvis
+        MarkdownUI.Theme.persona
             .text { FontSize(Theme.Level.body.size * Theme.Font.scale) } // the body level, as Lark messages are (LarkTextBase)
             .link { ForegroundColor(LarkColor.blue) }
             .paragraph { config in

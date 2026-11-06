@@ -144,7 +144,7 @@ internal class DemoAssistantRepository(private val words: DemoWords) : Assistant
 
 /**
  * A conversation's name in the history: its title, else the first line of its last message (30 characters), else
- * "Chat". A conversation started from "Hand to Persona" begins with a `<jarvis-context … title="X">` tag, and Claude names it
+ * "Chat". A conversation started from "Hand to Persona" begins with a `<persona-context … title="X">` tag, and Claude names it
  * after that message: it reads "Hand to Persona: X" instead of the raw tag.
  */
 internal fun Session.conversationTitle(words: ConversationWords): String {
@@ -162,9 +162,9 @@ internal data class ConversationWords(val untitled: String, val handoff: String,
 internal fun conversationWords() = ConversationWords(stringResource(R.string.assistant_untitled),
     stringResource(R.string.assistant_handoff), stringResource(R.string.assistant_handoff_named))
 
-private val handoffTag = Regex("""<(?:jarvis|persona)-context\b[^>]*?\btitle="([^"]*)"""")
+private val handoffTag = Regex("""<persona-context\b[^>]*?\btitle="([^"]*)"""")
 
-/** "Hand to Persona: X" for text that is a `<persona-context title="X">` tag (or the older `<jarvis-context>`) (attributes decoded), null for any other text. */
+/** "Hand to Persona: X" for text that is a `<persona-context title="X">` tag (attributes decoded), null for any other text. */
 internal fun handoffTitle(text: String, words: ConversationWords): String? {
     handoffTag.find(text)?.let { match ->
         val title = match.groupValues[1].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">")
@@ -172,7 +172,7 @@ internal fun handoffTitle(text: String, words: ConversationWords): String? {
         return if (title.isEmpty()) words.handoff else words.handoff(title)
     }
     val start = text.trimStart()
-    return if (start.startsWith("<jarvis-context") || start.startsWith("<persona-context")) words.handoff else null
+    return if (start.startsWith("<persona-context")) words.handoff else null
 }
 
 internal fun Session.conversationStatus(): Status = when (agentState) {

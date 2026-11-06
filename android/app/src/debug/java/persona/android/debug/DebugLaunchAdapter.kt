@@ -21,12 +21,12 @@ import java.net.URI
 /** Pages without a public deep link, for direct captures. */
 private val pages = mapOf(
     "machines" to ResolvedRoute(AppTab.Agents, MachinesRoute),
-    "knowledge" to ResolvedRoute(AppTab.Jarvis, KnowledgeRoute),
+    "knowledge" to ResolvedRoute(AppTab.Persona, KnowledgeRoute),
     "phone" to ResolvedRoute(AppTab.Settings, PhoneToolsRoute),
     "mail" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Mail)),
     "feishu" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Feishu)),
     "catalog" to ResolvedRoute(AppTab.Settings, ComponentCatalogRoute),
-    "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),  // i18n-ignore: debug launch arguments, developer-only
+    "voice" to ResolvedRoute(AppTab.Persona, persona.core.navigation.VoiceRoute("voice", "语音")),  // i18n-ignore: debug launch arguments, developer-only
     "channels" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Channels)),
     "feishu-bot" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.FeishuBot)),
     "managers" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Managers)),
@@ -67,7 +67,7 @@ class DebugLaunchAdapter : LaunchAdapter {
         val page = arguments.remove("debug.openPage")?.let { requireNotNull(pages[it] ?: managementPage(it)) { "Unknown debug page" } }
         // Settings › Assistant opens one of its parts for captures: notes, memory, memory-file, memory-edit, memory-delete, machine, launcher, timezone, move.
         arguments.remove("debug.assistantSettings")?.let { persona.feature.assistant.settings.AssistantSettingsPreview.open = it }
-        // "Model configuration" opens "Add model provider" (manual | preset) with jarvis://open?target=settings&page=modelconfig.
+        // "Model configuration" opens "Add model provider" (manual | preset) with persona://open?target=settings&page=modelconfig.
         arguments.remove("debug.newProvider")?.let { persona.feature.settings.NewProviderPreview.open = it }
         arguments.remove("debug.translateChats")?.let { persona.feature.settings.TranslationPreview.picking = it == "1" }
         // "New session" (debug.openPage new-agent) takes steps once loaded: launcher:<name>, effort:<level>, model:<id>, models[:<query>].

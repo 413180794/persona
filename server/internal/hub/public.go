@@ -103,7 +103,7 @@ func (h *Hub) startPublic(ctx context.Context) error {
 	if h.cfg.Public.TLSListen != "" && ln != nil {
 		if activated {
 			h.logf("hub TLS: listening on the socket systemd passed (%s)", ln.Addr())
-			// jarvisd.socket binds with FreeBind, so a LAN address DHCP has moved still "listens", reaching nobody.
+			// personad.socket binds with FreeBind, so a LAN address DHCP has moved still "listens", reaching nobody.
 			if host, ok := addressNotLocal(h.cfg.Public.TLSListen, net.InterfaceAddrs); ok {
 				h.logf("hub TLS: %s is not an address of this machine now (has the LAN address changed?): TLS cannot be "+
 					"reached; set public.tls_listen to this machine's LAN address, or \":%s\" (every address), and rerun "+

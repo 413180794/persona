@@ -154,8 +154,8 @@ func TestCommandLine(t *testing.T) {
 		t.Errorf("version -v = %q", stdout.String())
 	}
 	stdout.Reset()
-	CommandLine("jarvisd-wechat", b, []string{"--help"}, false, &stdout, &bytes.Buffer{})
-	if !strings.Contains(stdout.String(), "jarvisd-wechat version -v") || strings.Contains(stdout.String(), "personad-wechat") {
-		t.Errorf("the compat name's usage = %q", stdout.String())
+	CommandLine("personad-wechat", b, []string{"--help"}, false, &stdout, &bytes.Buffer{})
+	if !strings.Contains(stdout.String(), "usage: personad-wechat") || !strings.Contains(stdout.String(), "personad-wechat version -v") {
+		t.Errorf("canonical command usage = %q", stdout.String())
 	}
 }

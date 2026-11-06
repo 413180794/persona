@@ -18,7 +18,7 @@ func TestItemsOfStartingSession(t *testing.T) {
 	n := &Node{home: home, paths: map[string]string{}, files: map[string]*transcript.File{}, procs: map[string]*assistantProc{},
 		agents: map[string]host.Agent{}, state: &stateFile{Sessions: map[string]sessionState{}}}
 	const started = "11111111-2222-3333-4444-555555555555"
-	n.state.put(started, sessionState{Cwd: home + "/.jarvis/assistant"})
+	n.state.put(started, sessionState{Cwd: home + "/.persona/assistant"})
 	res, err := n.handle(context.Background(), "session.items", json.RawMessage(`{"session_id":"`+started+`","turns":2}`))
 	if err != nil {
 		t.Fatalf("a starting session should not fail: %v", err)

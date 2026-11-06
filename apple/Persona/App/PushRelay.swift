@@ -5,11 +5,11 @@ import os
 /// have none. The phone registers its device token here and hands the grant it gets, with its public key, to its own hub;
 /// the relay never sees the key, so it cannot read what the hub seals.
 nonisolated enum PushRelay {
-    static let log = Logger(subsystem: "jarvis", category: "push-relay")
+    static let log = Logger(subsystem: "persona", category: "push-relay")
 
-    /// From the build config (`app.push_relay`, Info.plist `JarvisPushRelay`); nil: this build uses no relay.
+    /// From the build config (`app.push_relay`, Info.plist `PersonaPushRelay`); nil: this build uses no relay.
     static var url: URL? {
-        guard let s = Bundle.main.object(forInfoDictionaryKey: "JarvisPushRelay") as? String,
+        guard let s = Bundle.main.object(forInfoDictionaryKey: "PersonaPushRelay") as? String,
               !s.isEmpty, let u = URL(string: s), u.scheme == "https" else { return nil } // the grant must not cross in the clear
         return u
     }

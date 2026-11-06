@@ -1,5 +1,5 @@
 plugins {
-    id("jarvis.android.library")
+    id("persona.android.library")
     alias(libs.plugins.ksp)
     id("org.jetbrains.kotlin.plugin.serialization")
 }

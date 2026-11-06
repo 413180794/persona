@@ -197,7 +197,7 @@ func TestSDKOptionsMapTheCLIFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := sdkStart{id: "id-1", cwd: "/w", model: "m1", permissionMode: proto.ModeBypass, resume: true,
-		mcp: map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": "personad"}}}, allowedTools: "a,b",
+		mcp: map[string]any{"mcpServers": map[string]any{"persona": map[string]any{"command": "personad"}}}, allowedTools: "a,b",
 		settings: settings, plugin: "/hooks", launcherArgs: []string{"--model", "x", "--fallback-model", "m2", "--strict", "--max-turns=3", "word"},
 		env: map[string]string{"ANTHROPIC_MODEL": "m1"}}
 	o, err := s.options("/bin/claude")
@@ -206,7 +206,7 @@ func TestSDKOptionsMapTheCLIFlags(t *testing.T) {
 	}
 	b, _ := json.Marshal(o)
 	want := `{"allowedTools":["a","b"],"cwd":"/w","extraArgs":{"fallback-model":"m2","max-turns":"3","strict":null},` +
-		`"includePartialMessages":true,"mcpServers":{"jarvis":{"command":"personad"}},"model":"m1",` +
+		`"includePartialMessages":true,"mcpServers":{"persona":{"command":"personad"}},"model":"m1",` +
 		`"pathToClaudeCodeExecutable":"/bin/claude","permissionMode":"bypassPermissions","plugins":[{"path":"/hooks","type":"local"}],` +
 		`"resume":"id-1","settings":{"env":{"ANTHROPIC_MODEL":"m1","KEEP":"1"},"hooks":{"Stop":[]}}}`
 	if string(b) != want {
@@ -236,7 +236,7 @@ func TestAssistantSDKStartKeepsTheKeyOffTheCommandLine(t *testing.T) {
 	if ex, _ := o["extraArgs"].(map[string]any); ex["fallback-model"] != "m2" {
 		t.Fatalf("the launcher's args: %v", o["extraArgs"])
 	}
-	if m, _ := o["mcpServers"].(map[string]any); m["jarvis"] == nil {
+	if m, _ := o["mcpServers"].(map[string]any); m["persona"] == nil {
 		t.Fatalf("mcpServers: %v", o["mcpServers"])
 	}
 	env, _ := o["settings"].(map[string]any)["env"].(map[string]any)

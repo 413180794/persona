@@ -26,7 +26,7 @@ type Published struct {
 // Check reads latest.json from base (the publisher's dl/).
 func Check(ctx context.Context, client *http.Client, base string) (*Published, error) {
 	if base == "" {
-		return nil, errors.New("this jarvisd has nowhere to look for releases")
+		return nil, errors.New("this personad has nowhere to look for releases")
 	}
 	data, err := get(ctx, client, strings.TrimSuffix(base, "/")+"/latest.json", 1<<20)
 	if err != nil {
@@ -170,11 +170,11 @@ func CheckBinary(ctx context.Context, bin string, m *Manifest) error {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "version", "-v").Output()
 	if err != nil {
-		return fmt.Errorf("the new jarvisd does not run here: %w", err)
+		return fmt.Errorf("the new personad does not run here: %w", err)
 	}
 	want := fmt.Sprintf("%s\nchannel %s, build %d", m.Version, Release, m.Build)
 	if got := strings.TrimSpace(string(bytes.TrimSpace(out))); got != want {
-		return fmt.Errorf("the new jarvisd says %q, not %q", got, want)
+		return fmt.Errorf("the new personad says %q, not %q", got, want)
 	}
 	return nil
 }

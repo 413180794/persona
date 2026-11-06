@@ -1,7 +1,7 @@
 import Foundation
 import HealthKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The registry is main-actor isolated (the app target defaults to MainActor),
 /// so every test that touches a tool runs on the main actor.

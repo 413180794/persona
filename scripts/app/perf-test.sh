@@ -46,7 +46,7 @@ mock_env() {
     agents) echo "MOCK_AGENTS=1 MOCK_BIG=1 MOCK_CHAT_LINES=1 MOCK_SUBAGENT_CARDS=1 MOCK_FILES=1 MOCK_MACHINES=1 MOCK_TURN_IMAGES=many" ;;
     assistant) echo "MOCK_LONG_ASSISTANT=1 MOCK_AGENTS=1 MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_DOCK=many MOCK_ASSISTANT_SIDEBAR=1 MOCK_KB_MANY_LINKS=1" ;;
     inbox) echo "MOCK_LARK=1 MOCK_LARK_RICH=1 MOCK_LARK_TOPIC=1 MOCK_INBOX_EXTRA=150 MOCK_MAIL=1 MOCK_AGENTS=1" ;;
-    settings) echo "MOCK_PLUGINS=1 MOCK_SCHEDULE=1 MOCK_AGENTS=1" ;;
+    settings) echo "MOCK_EXTENSIONS=1 MOCK_SCHEDULE=1 MOCK_AGENTS=1" ;;
     machines) echo "MOCK_PERF_MACHINES=24 MOCK_PERF_METRIC_STEP=50 MOCK_AGENTS=1" ;;
     *) return 1 ;;
   esac
@@ -148,8 +148,8 @@ for s in "${SUITES[@]}"; do
     trap '\''xcrun simctl shutdown "$UDID" 2>/dev/null'\'' EXIT
     "'"$ROOT"'/scripts/app/sim-boot.sh" "$UDID" >/dev/null || exit 1
     "$@"' _ "$UDID" \
-    env TEST_RUNNER_JARVIS_PERF_HUB="http://127.0.0.1:$port" TEST_RUNNER_JARVIS_LAYOUT="$LAYOUT" \
-      TEST_RUNNER_JARVIS_PERF_ITERATIONS="$ITER" \
+    env TEST_RUNNER_PERSONA_PERF_HUB="http://127.0.0.1:$port" TEST_RUNNER_PERSONA_LAYOUT="$LAYOUT" \
+      TEST_RUNNER_PERSONA_PERF_ITERATIONS="$ITER" \
     "${SLOT[@]}" timeout 5400 xcodebuild test-without-building -project apple/Persona.xcodeproj -scheme Persona \
       -destination "id=$UDID" -derivedDataPath "$DD" -parallel-testing-enabled NO \
       -resultBundlePath "$OUT/$s.xcresult" "${only[@]}" >"$OUT/test-$s.log" 2>&1

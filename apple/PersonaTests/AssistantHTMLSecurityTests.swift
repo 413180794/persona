@@ -3,7 +3,7 @@ import Network
 import Testing
 import UIKit
 import WebKit
-@testable import Jarvis
+@testable import Persona
 
 /// Additional #2025 acceptance probes. Every page and HTTP response is synthetic and loopback-only.
 /// These tests exercise a real WebView, not a JavaScript DOM substitute or a mocked message handler.

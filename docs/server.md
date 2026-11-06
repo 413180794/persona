@@ -1,14 +1,14 @@
 # Server: personad
 
-`personad` is the new name; `jarvisd` remains a compatibility alias. New default runtime directory: `~/.persona`; old `~/.jarvis` remains supported. Existing systemd / launchd, database / container / volume, and release-file identities in this document are retained rather than rebuilt for the rename. Migration-version differences: [Configuration and compatibility](config.md#命名与兼容).
+`personad` is the new name; `personad` remains a compatibility alias. New default runtime directory: `~/.persona`; old `~/.persona` remains supported. Existing systemd / launchd, database / container / volume, and release-file identities in this document are retained rather than rebuilt for the rename. Migration-version differences: [Configuration and compatibility](config.md#命名与兼容).
 
 Go, single binary, `server/cmd/personad`. Modes: `docs/architecture.md`; protocol: docs/protocol.md.
 
 Programs (`server/cmd/`):
 
-- `personad` (alias `jarvisd`): everything, and the compatibility entry. Its device commands (`node …`, `hook`, `mcp`, `ask`, `notify`, `tool`, `launch`, `codex-start`, `tab-start`, `office`, `sysmon`, `node-update-check`, `node-update-watch`) are `internal/nodecmd`'s.
+- `personad` (alias `personad`): everything, and the compatibility entry. Its device commands (`node …`, `hook`, `mcp`, `ask`, `notify`, `tool`, `launch`, `codex-start`, `tab-start`, `office`, `sysmon`, `node-update-check`, `node-update-watch`) are `internal/nodecmd`'s.
 - `persona-node`: the device's program, `internal/nodecmd` alone. It takes the same commands and arguments and gives the same output and exit codes as `personad`, and links neither the hub, the manager nor the database (`cmd/persona-node/main_test.go` guards that on every platform it ships for). The node writes `<its own binary> hook` / `mcp` into the settings it manages, so either program serves what it wrote.
-- `persona-link` (directory alias `cmd/jarvis-link`): the connector, `docs/link.md`.
+- `persona-link` (directory alias `cmd/persona-link`): the connector, `docs/link.md`.
 
 ## Code
 
@@ -54,7 +54,7 @@ Question, permission, and plan cards, including appearance, answer, replacement,
 | Push to app | WebSocket immediately queues per connection; APNs sends immediately; Needs you Dynamic Island changes are not coalesced or limited to 30 s interval |
 | App renders | Apply to model on receipt; Needs you / questions land even while Agents list updates are held (`landCritical`, `docs/ios-state.md`); chat reads model directly |
 
-Measurements (2026-11-03, isolated herdr + real Claude Code 2.1.317, no Jarvis hook; node / hub in same process linked like SSH, `hub/cardlatency_live_test.go`):
+Measurements (2026-11-03, isolated herdr + real Claude Code 2.1.317, no Persona hook; node / hub in same process linked like SSH, `hub/cardlatency_live_test.go`):
 
 | | Before | After |
 | --- | --- | --- |
@@ -69,8 +69,8 @@ Sources of delay:
 - Herdr 0.9 dotted events were not recognized by underscore-only node code, losing status-event identification.
 - Hub always waited 1.5 s per screen card for a hook card that unhooked sessions would never send.
 
-Measurement: `HERDR_SOCKET_PATH=<isolated herdr socket> JARVIS_LIVE_CARD_PANE=<Claude pane> go test -tags herdrlive -run TestLiveCardLatency ./internal/hub/`
-(`JARVIS_LIVE_CARD_TWO=1` asks two questions; `JARVIS_LIVE_CARD_TRACE=1` prints hop timeline). Without local Go, cross-compile test binary on hub and copy back.
+Measurement: `HERDR_SOCKET_PATH=<isolated herdr socket> PERSONA_LIVE_CARD_PANE=<Claude pane> go test -tags herdrlive -run TestLiveCardLatency ./internal/hub/`
+(`PERSONA_LIVE_CARD_TWO=1` asks two questions; `PERSONA_LIVE_CARD_TRACE=1` prints hop timeline). Without local Go, cross-compile test binary on hub and copy back.
 App hop guarded by UI tests: `ScreenTruthTests.testWhatNeedsTheUserShowsUnderTheFinger` (within 1 s even with finger held on list), `LiveUpdateTests.testAScreenCardInTheOpenConversation` (appears within 1 s, disappears within 1 s of computer answer).
 
 ## Connecting to herdr-core
@@ -89,7 +89,7 @@ Read-only integration: `go test -tags orcalive -run OrcaLive ./internal/node/ -v
 
 Two equivalent hub deployment modes: **native binary** (below, `systemd --user` + Postgres container) and **Docker** (hub + Postgres containers, for NAS / hub-only computers, `docs/docker.md`). Nodes remain `~/.persona/bin/personad` regardless of hub deployment.
 
-New users without repository: `curl -fsSL <website>/install.sh | sh -s -- --hub`, then personad hub setup ([onboarding.md](onboarding.md), 4.1). Writes `hub.json` (new-install defaults only for new files), creates same-name / same-volume Postgres as `db.sh` or uses existing configured database, installs same socket-activation units as `hub-systemd.sh` (Mac LaunchAgent `com.jarvis.hub`), waits for hub, prints only problematic self-checks, then phone QR code and admin URL with #setup=. Safe to rerun: retain existing values and do not restart unchanged services. `--json` gives one line per step for Persona Link.
+New users without repository: `curl -fsSL <website>/install.sh | sh -s -- --hub`, then personad hub setup ([onboarding.md](onboarding.md), 4.1). Writes `hub.json` (new-install defaults only for new files), creates same-name / same-volume Postgres as `db.sh` or uses existing configured database, installs same socket-activation units as `hub-systemd.sh` (Mac LaunchAgent `com.persona.hub`), waits for hub, prints only problematic self-checks, then phone QR code and admin URL with #setup=. Safe to rerun: retain existing values and do not restart unchanged services. `--json` gives one line per step for Persona Link.
 
 ```sh
 ./scripts/deploy/deploy.sh                    # Build linux / darwin × amd64 / arm64, install native binary on each machine, restart hub
@@ -97,7 +97,7 @@ New users without repository: `curl -fsSL <website>/install.sh | sh -s -- --hub`
 ```
 
 - Binary: each machine `~/.persona/bin/personad`. Hub launches node through `ssh <alias> ~/.persona/bin/personad node --stdio`; no persistent Mac service required. Platform from configured os / arch; if absent, query machine `uname -s` / uname -m. Run version after installation; failure reports error, not installed. All four binaries also live in hub `bin/nodes/`; app Redeploy selects machine's platform (`docs/config.md`).
-- Hub: `systemd --user` jarvisd on hub machine; HTTP listen default `:18660`, TLS via `public.tls_listen`, e.g. :18662. Expose only TLS publicly. IPv6 inbound, firewall, TUN return-path troubleshooting: [Network](network.md). Logs: journalctl --user -u jarvisd -f. Docker hub is not managed by `deploy.sh`: omit hub machine from machines, or deploy only computers with `deploy.sh` <machine id>. Upgrade pulls image; Redeploy uses image's node builds.
+- Hub: `systemd --user` personad on hub machine; HTTP listen default `:18660`, TLS via `public.tls_listen`, e.g. :18662. Expose only TLS publicly. IPv6 inbound, firewall, TUN return-path troubleshooting: [Network](network.md). Logs: journalctl --user -u personad -f. Docker hub is not managed by `deploy.sh`: omit hub machine from machines, or deploy only computers with `deploy.sh` <machine id>. Upgrade pulls image; Redeploy uses image's node builds.
 - Replacing node binary does not reconnect existing hub links automatically. `deploy.sh` <hub machine id> restarts hub, or Reconnect on app Machines page.
 - Admin scope (`<hub address>/admin`, [admin.md](admin.md)): `deploy.sh --admin-access <loopback|lan|cidrs|any>`, plus `--admin-cidrs a,b` for cidrs. If omitted and never chosen on hub, ask in terminal; without terminal default lan with warning. Later use personad hub admin access to view / change, `personad hub admin reset-password` to reset admin password. First-run local setup code in hub logs, `admin: first-run setup code …`, or `personad hub admin setup-code` ([admin.md](admin.md), “First-run setup”).
 
@@ -115,7 +115,7 @@ PowerShell piping shell scripts may append CR, causing remote `$'\r': command no
 
 ## NAS (Docker) deployment and upgrades (compatibility example)
 
-This records existing deployment operations. `~/.jarvis`, jarvisd, container / image names, and backup filenames retain old compatibility identities, not new-install defaults. Upgrade / rollback must use actual deployed paths / services; do not globally replace names and run commands.
+This records existing deployment operations. `~/.persona`, personad, container / image names, and backup filenames retain old compatibility identities, not new-install defaults. Upgrade / rollback must use actual deployed paths / services; do not globally replace names and run commands.
 
 Another option is `deploy/docker` compose ([docker.md](docker.md)); this section records two manually run containers on the current NAS.
 
@@ -127,30 +127,30 @@ DSM pitfalls: full path `sudo /usr/local/bin/docker`, absent from noninteractive
 ### Build and upload (developer machine, repository)
 
 ```sh
-git worktree add --detach /tmp/jarvis-build <commit>
-(cd /tmp/jarvis-build/server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
-  -ldflags "-s -w -X main.version=$(git describe --always)-$(date +%Y%m%d%H%M)" -o /tmp/jarvisd-linux-amd64 ./cmd/personad)
-git worktree remove /tmp/jarvis-build
-ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new && chmod 755 ~/.jarvis/bin/jarvisd.new' < /tmp/jarvisd-linux-amd64
+git worktree add --detach /tmp/persona-build <commit>
+(cd /tmp/persona-build/server && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
+  -ldflags "-s -w -X main.version=$(git describe --always)-$(date +%Y%m%d%H%M)" -o /tmp/personad-linux-amd64 ./cmd/personad)
+git worktree remove /tmp/persona-build
+ssh <nas> 'umask 077; mkdir -p ~/.persona/bin && cat > ~/.persona/bin/personad.new && chmod 755 ~/.persona/bin/personad.new' < /tmp/personad-linux-amd64
 ```
 
 ### Initial deployment (NAS)
 
-1. Postgres: `jarvis-postgres` container, `jarvis-pgdata` volume, published only at 127.0.0.1:18661. Creation password is only for initialization; generate a separate random actual password, set with ALTER ROLE, write only to hub.json.
+1. Postgres: `persona-postgres` container, `persona-pgdata` volume, published only at 127.0.0.1:18661. Creation password is only for initialization; generate a separate random actual password, set with ALTER ROLE, write only to hub.json.
 
    ```sh
    D="sudo /usr/local/bin/docker"
-   $D volume create jarvis-pgdata
-   $D run -d --name jarvis-postgres --restart unless-stopped -p 127.0.0.1:18661:5432 \
-     -v jarvis-pgdata:/var/lib/postgresql -e POSTGRES_USER=jarvis -e POSTGRES_DB=jarvis \
+   $D volume create persona-pgdata
+   $D run -d --name persona-postgres --restart unless-stopped -p 127.0.0.1:18661:5432 \
+     -v persona-pgdata:/var/lib/postgresql -e POSTGRES_USER=persona -e POSTGRES_DB=persona \
      -e POSTGRES_PASSWORD="$(python3 -c 'import secrets;print(secrets.token_hex(24))')" \
      --log-driver json-file --log-opt max-size=20m --log-opt max-file=3 postgres:18-alpine
-   until $D exec jarvis-postgres pg_isready -h 127.0.0.1 -U jarvis -d jarvis >/dev/null; do sleep 1; done
+   until $D exec persona-postgres pg_isready -h 127.0.0.1 -U persona -d persona >/dev/null; do sleep 1; done
    export PW=$(python3 -c 'import secrets;print(secrets.token_hex(24))')
-   echo "ALTER ROLE jarvis WITH PASSWORD '$PW';" | $D exec -i jarvis-postgres psql -U jarvis -d jarvis -q
+   echo "ALTER ROLE persona WITH PASSWORD '$PW';" | $D exec -i persona-postgres psql -U persona -d persona -q
    ```
 
-2. `~/.jarvis/hub.json` (0600; machines initially empty, later fill per `docs/config.md`):
+2. `~/.persona/hub.json` (0600; machines initially empty, later fill per `docs/config.md`):
 
    ```sh
    python3 - <<'PY'
@@ -159,19 +159,19 @@ ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new 
        "listen": ":18660",
        "token": secrets.token_hex(24),
        "public_url": "http://<LAN address>:18660",
-       "database_url": "postgres://jarvis:%s@127.0.0.1:18661/jarvis?sslmode=disable" % os.environ["PW"],
+       "database_url": "postgres://persona:%s@127.0.0.1:18661/persona?sslmode=disable" % os.environ["PW"],
        "machines": [],
        "public": {"tls_listen": ":18662", "advertise_ipv6": True, "advertise_lan": True},
        "security": {"trusted_cidrs": [], "allow_public_plaintext": False},
    }
-   fd = os.open(os.path.expanduser("~/.jarvis/hub.json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+   fd = os.open(os.path.expanduser("~/.persona/hub.json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
    with open(fd, "w") as f:
        json.dump(cfg, f, indent=2)
    PY
    unset PW
    ```
 
-3. Runtime image `jarvisd-runtime:alpine3.22`: no bundled jarvisd (mount binary from `~/.jarvis/bin`), includes SSH client for computers and `netcat-openbsd` for SSH ProxyCommand via SOCKS (step 7; busybox nc lacks proxy support). `~/.jarvis/docker/Dockerfile`:
+3. Runtime image `personad-runtime:alpine3.22`: no bundled personad (mount binary from `~/.persona/bin`), includes SSH client for computers and `netcat-openbsd` for SSH ProxyCommand via SOCKS (step 7; busybox nc lacks proxy support). `~/.persona/docker/Dockerfile`:
 
    ```dockerfile
    FROM alpine:3.22
@@ -185,36 +185,36 @@ ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new 
    ENV HOME=$HOME_DIR
    WORKDIR $HOME_DIR
    USER $UID:$GID
-   ENTRYPOINT ["/opt/jarvis/bin/jarvisd"]
+   ENTRYPOINT ["/opt/persona/bin/personad"]
    CMD ["hub"]
    ```
 
    ```sh
-   cd ~/.jarvis/docker && $D build --network host --build-arg UID=$(id -u) --build-arg GID=$(id -g) \
-     --build-arg USER_NAME=$(id -un) --build-arg HOME_DIR=$HOME -t jarvisd-runtime:alpine3.22 .
+   cd ~/.persona/docker && $D build --network host --build-arg UID=$(id -u) --build-arg GID=$(id -g) \
+     --build-arg USER_NAME=$(id -un) --build-arg HOME_DIR=$HOME -t personad-runtime:alpine3.22 .
    ```
 
-4. Jarvisd container (save as `~/.jarvis/docker/run-jarvisd.sh` for recreation): host network, `--init`, current user's UID. Read/write `~/.jarvis`, read-only `~/.jarvis/bin` → `/opt/jarvis/bin`, mounted `~/.ssh`; container HOME matches NAS.
+4. Personad container (save as `~/.persona/docker/run-personad.sh` for recreation): host network, `--init`, current user's UID. Read/write `~/.persona`, read-only `~/.persona/bin` → `/opt/persona/bin`, mounted `~/.ssh`; container HOME matches NAS.
 
    ```sh
-   mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd
+   mv ~/.persona/bin/personad.new ~/.persona/bin/personad
    REAL_HOME=$(readlink -f "$HOME")
-   $D run -d --name jarvisd --restart unless-stopped --network host --init \
+   $D run -d --name personad --restart unless-stopped --network host --init \
      --user "$(id -u):$(id -g)" -e TZ="$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')" \
      --log-driver json-file --log-opt max-size=20m --log-opt max-file=5 \
-     -v "$REAL_HOME/.jarvis:$HOME/.jarvis" -v "$REAL_HOME/.jarvis/bin:/opt/jarvis/bin:ro" \
+     -v "$REAL_HOME/.persona:$HOME/.persona" -v "$REAL_HOME/.persona/bin:/opt/persona/bin:ro" \
      -v "$REAL_HOME/.ssh:$HOME/.ssh" \
-     jarvisd-runtime:alpine3.22 hub
+     personad-runtime:alpine3.22 hub
    ```
 
 5. Checks:
 
    ```sh
-   $D exec jarvis-postgres psql -U jarvis -d jarvis -tAc "select max(version), count(*) from schema_migrations"
+   $D exec persona-postgres psql -U persona -d persona -tAc "select max(version), count(*) from schema_migrations"
    curl -s http://127.0.0.1:18660/api/v1/health    # ok, version, fp
    openssl s_client -connect 127.0.0.1:18662 </dev/null 2>/dev/null | openssl x509 -pubkey -noout |
      openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '='   # Must equal fp
-   (umask 077; $D exec jarvisd /opt/jarvis/bin/jarvisd hub pair > ~/.jarvis/pair-$(date +%Y%m%d-%H%M%S).txt)  # Contains token, valid 10 minutes
+   (umask 077; $D exec personad /opt/persona/bin/personad hub pair > ~/.persona/pair-$(date +%Y%m%d-%H%M%S).txt)  # Contains token, valid 10 minutes
    ```
 
 6. Public direct connection: DSM firewall permits `18662/tcp`, not 18660; router permits inbound IPv6; [Network](network.md).
@@ -231,25 +231,25 @@ ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new 
      ProxyCommand nc -X 5 -x 127.0.0.1:<SOCKS port> %h %p
    ```
 
-   - This nc is container `netcat-openbsd`; NAS nc may not support -X. Test inside container too, e.g. temporary same-image `--entrypoint sh`, running hub's `ssh -T -o BatchMode=yes … <alias> '~/.jarvis/bin/jarvisd node --stdio'`.
+   - This nc is container `netcat-openbsd`; NAS nc may not support -X. Test inside container too, e.g. temporary same-image `--entrypoint sh`, running hub's `ssh -T -o BatchMode=yes … <alias> '~/.persona/bin/personad node --stdio'`.
    - Hub uses `BatchMode=yes`; prepopulate ~/.ssh/known_hosts. Prefer public key from an already trusted connection to that computer, indexed by `HostKeyAlias`; do not blindly accept first connection.
-   - Restrict key on computer `authorized_keys` to node only: `restrict,command="~/.jarvis/bin/jarvisd node --stdio" ssh-ed25519 …`.
-   - Dockerfile changes require image and container rebuild. Timestamp-tag old image for rollback, build, then `$D stop jarvisd && $D rm jarvisd && ~/.jarvis/docker/run-jarvisd.sh`. Docker restart still uses old image.
+   - Restrict key on computer `authorized_keys` to node only: `restrict,command="~/.persona/bin/personad node --stdio" ssh-ed25519 …`.
+   - Dockerfile changes require image and container rebuild. Timestamp-tag old image for rollback, build, then `$D stop personad && $D rm personad && ~/.persona/docker/run-personad.sh`. Docker restart still uses old image.
 
 ### Upgrade
 
-Follow Build and Upload to transfer new binary as `~/.jarvis/bin/jarvisd.new`, then on NAS:
+Follow Build and Upload to transfer new binary as `~/.persona/bin/personad.new`, then on NAS:
 
 ```sh
-~/.jarvis/docker/upgrade.sh ~/.jarvis/bin/jarvisd.new
+~/.persona/docker/upgrade.sh ~/.persona/bin/personad.new
 ```
 
 Script steps:
 
 1. Verify new binary runs on NAS with version.
 2. Stop container.
-3. Copy current binary to ~/.jarvis/bin/jarvisd.bak-<time>.
-4. Container `pg_dump -Fc` → ~/.jarvis/backups/jarvis-<time>.dump, 0600. Dump after stopping service to match old binary's final state.
+3. Copy current binary to ~/.persona/bin/personad.bak-<time>.
+4. Container `pg_dump -Fc` → ~/.persona/backups/persona-<time>.dump, 0600. Dump after stopping service to match old binary's final state.
 5. Replace binary with mv; start container.
 6. Wait for `/api/v1/health`; verify new version and unchanged TLS public-key fingerprint.
 7. Print latest three migrations and logs since start, hiding known Lark gateway errors.
@@ -258,35 +258,35 @@ Script steps:
 ### Rollback
 
 ```sh
-~/.jarvis/docker/rollback.sh --check ~/.jarvis/bin/jarvisd.bak-<time> ~/.jarvis/backups/jarvis-<time>.dump   # Verify only, leave hub untouched
-~/.jarvis/docker/rollback.sh ~/.jarvis/bin/jarvisd.bak-<time> ~/.jarvis/backups/jarvis-<time>.dump
-sudo /usr/local/bin/docker exec jarvis-postgres dropdb -U jarvis jarvis_before_rollback_<time>   # After confirming rollback succeeded
+~/.persona/docker/rollback.sh --check ~/.persona/bin/personad.bak-<time> ~/.persona/backups/persona-<time>.dump   # Verify only, leave hub untouched
+~/.persona/docker/rollback.sh ~/.persona/bin/personad.bak-<time> ~/.persona/backups/persona-<time>.dump
+sudo /usr/local/bin/docker exec persona-postgres dropdb -U persona persona_before_rollback_<time>   # After confirming rollback succeeded
 ```
 
 Script steps:
 
 1. Restore dump into a new database; restoration failure changes nothing.
 2. Stop container.
-3. Rename original database jarvis_before_rollback_<time>, retaining writes made after dump only there.
-4. Rename restored database jarvis.
+3. Rename original database persona_before_rollback_<time>, retaining writes made after dump only there.
+4. Rename restored database persona.
 5. Restore old binary, start container, wait for health.
 
 ### Logs
 
 ```sh
-sudo /usr/local/bin/docker logs -f jarvisd
-sudo /usr/local/bin/docker restart jarvisd    # After hub.json changes
+sudo /usr/local/bin/docker logs -f personad
+sudo /usr/local/bin/docker restart personad    # After hub.json changes
 ```
 
 Old hub versions log repeated Lark gateway token-read failures when `hub.json` lacks lark; operation unaffected. Lark gateway integration now belongs to its extension: enable agent API on gateway, fill extension address / token per extension instructions. Hub container has no Docker CLI and cannot read other containers' environment.
 
-## Computers hub cannot reach (jarvis-link)
+## Computers hub cannot reach (persona-link)
 
-For laptops with changing networks, kind link in `hub.json`: hub does not SSH; jarvis-link (Mac menu-bar Persona Link) connects outbound to TLS port, then streams to persistent node, which must be installed (next section). Pair with `personad hub pair --machine <id>`; NAS: sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine <id>. Details: [link.md](link.md).
+For laptops with changing networks, kind link in `hub.json`: hub does not SSH; persona-link (Mac menu-bar Persona Link) connects outbound to TLS port, then streams to persistent node, which must be installed (next section). Pair with `personad hub pair --machine <id>`; NAS: sudo /usr/local/bin/docker exec personad /opt/persona/bin/personad hub pair --machine <id>. Details: [link.md](link.md).
 
 ## Hub connects inbound (kind service)
 
-For fixed-address servers / workstations hub can reach, kind service: computer connector in passive `jarvis-link pair --listen` mode listens on TLS. Hub dials with paired fingerprint pinning and streams to persistent node, no SSH, optionally `socks5://` proxy. Paste printed link into admin Computers › Add Computer › Hub Connects; effective immediately. Credentials encrypted in Postgres. [mesh.md](mesh.md) (“kind service”), [link.md](link.md) (“Passive mode”).
+For fixed-address servers / workstations hub can reach, kind service: computer connector in passive `persona-link pair --listen` mode listens on TLS. Hub dials with paired fingerprint pinning and streams to persistent node, no SSH, optionally `socks5://` proxy. Paste printed link into admin Computers › Add Computer › Hub Connects; effective immediately. Credentials encrypted in Postgres. [mesh.md](mesh.md) (“kind service”), [link.md](link.md) (“Passive mode”).
 Existing SSH computers remain usable, but are no longer recommended or addable in admin; migration: [mesh.md](mesh.md) (“SSH / tailcat: compatibility”).
 
 ## Linked hubs
@@ -295,7 +295,7 @@ Prefer one hub and node services elsewhere. If several hubs are needed, pair int
 
 ## Restart without interrupting clients ([hub-restart.md](hub-restart.md))
 
-- `jarvisd.socket` owns listener (socket activation, `hub-systemd.sh`); `systemctl --user restart jarvisd` leaves port open, queues connections for new process. Without `LISTEN_FDS` (Docker, launchd, manual), hub listens itself. Rollback: `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh` **before** restoring old binary without `LISTEN_FDS` support, otherwise port conflict. Full stop: `systemctl --user stop jarvisd.socket jarvisd`.
+- `personad.socket` owns listener (socket activation, `hub-systemd.sh`); `systemctl --user restart personad` leaves port open, queues connections for new process. Without `LISTEN_FDS` (Docker, launchd, manual), hub listens itself. Rollback: `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh` **before** restoring old binary without `LISTEN_FDS` support, otherwise port conflict. Full stop: `systemctl --user stop personad.socket personad`.
 - SIGTERM planned shutdown sends `hub_restarting`, hands machines / sessions as the managers reported them to next hub (`hub_settings` `hub.devices_warm`), suppresses shutdown-induced offline broadcasts, then hands off event log (settings `hub.event_log`) so next hub continues sequence.
 - Persistent node on hub machine (next section) keeps assistant Claude outside hub cgroup, surviving restart. Deploy with `node-launchd.sh restart-idle`; replace binary only when node idle.
 
@@ -303,7 +303,7 @@ Prefer one hub and node services elsewhere. If several hubs are needed, pair int
 
 Hub launches node via SSH (`personad node --stdio`), which launches assistant Claude. SSH cannot read macOS **login keychain**; Claude keys stored there through `apiKeyHelper` `security find-generic-password` give assistant 401. Herdr Agents do not, since herdr runs in login session.
 
-- Run `scripts/deploy/node-launchd.sh install` on Mac: installs user LaunchAgent `com.jarvis.node`, persistent `personad node --attach` after login, listening ~/.persona/node-attach.sock.
+- Run `scripts/deploy/node-launchd.sh install` on Mac: installs user LaunchAgent `com.persona.node`, persistent `personad node --attach` after login, listening ~/.persona/node-attach.sock.
 - Hub still SSH-launches `personad node --stdio`; detecting persistent listener, it forwards SSH I/O only (Relay in `internal/node/attach.go`). Persistent node handles connection; its assistant Claude / key helper inherit login session and keychain access. Hub unchanged, cannot distinguish.
 - Without persistent node (not installed, exited, stale socket), stdio handles itself as before.
 - One connection at a time: new hub reconnect replaces old connection's node; waiting hooks ask new one, as with replaced SSH node. Only one persistent node.
@@ -332,13 +332,13 @@ Computers unreachable by hub SSH (NAT, other LAN, no public IP) use [tailcat](ht
   5. Switch hub `tailcat.derp_map_url`; computer node tailcat `init --hub` <key> `--derp-map-url` <map URL>. Keys unchanged but new-map region reselection changes address; update each `tailcat_addr`, restart node / hub. Map certificate / port changes also require both restart.
   6. Verify machine `tailcat_path` still direct; node log DERP region 9xx; personad peers connect only to derper port, not public relays (`ss -tnp` / `lsof -i`).
 - **Hub ↔ node only**: phone / web still need reachable hub public_url.
-- Integration (internet required): `JARVIS_TEST_TAILCAT=1 go test ./internal/tunnel -run EndToEnd`, real relay dialing / authentication / upload, plus commands in `internal/devices/tailcat_e2e_test.go` header (two real personad versions: SSH fails → tailcat online → deploy new version and reconnect). `JARVIS_TAILCAT_DEBUG=1` enables otherwise muted Tailscale logs, several lines per second during hole punching.
+- Integration (internet required): `PERSONA_TEST_TAILCAT=1 go test ./internal/tunnel -run EndToEnd`, real relay dialing / authentication / upload, plus commands in `internal/devices/tailcat_e2e_test.go` header (two real personad versions: SSH fails → tailcat online → deploy new version and reconnect). `PERSONA_TAILCAT_DEBUG=1` enables otherwise muted Tailscale logs, several lines per second during hole punching.
 
 ## Database (Postgres)
 
-Hub Docker container `jarvis-postgres`, `postgres:18-alpine`, listening only `127.0.0.1:18661`, `jarvis-pgdata` volume, --restart unless-stopped. `scripts/deploy/db.sh` idempotently creates / starts it, initially generates password into `hub.json` `database_url`; `deploy.sh` <hub machine id> runs it first each time. Hub startup applies outstanding migrations, `schema_migrations` records, advisory lock prevents concurrency.
+Hub Docker container `persona-postgres`, `postgres:18-alpine`, listening only `127.0.0.1:18661`, `persona-pgdata` volume, --restart unless-stopped. `scripts/deploy/db.sh` idempotently creates / starts it, initially generates password into `hub.json` `database_url`; `deploy.sh` <hub machine id> runs it first each time. Hub startup applies outstanding migrations, `schema_migrations` records, advisory lock prevents concurrency.
 
-Without Docker, use system Postgres (Ubuntu postgresql, version 16 tested, localhost only). Create jarvis user and jarvis / `jarvis_test` databases, both owned by jarvis; test database for test-server.sh. Put `postgres://jarvis:<password>@127.0.0.1:5432/jarvis?sslmode=disable` in 0600 hub.json. Without Docker, `db.sh` only checks configured address with `pg_isready`; `deploy.sh` / `test-server.sh` unchanged. Replace docker exec … psql below with `psql "<database_url>"`.
+Without Docker, use system Postgres (Ubuntu postgresql, version 16 tested, localhost only). Create persona user and persona / `persona_test` databases, both owned by persona; test database for test-server.sh. Put `postgres://persona:<password>@127.0.0.1:5432/persona?sslmode=disable` in 0600 hub.json. Without Docker, `db.sh` only checks configured address with `pg_isready`; `deploy.sh` / `test-server.sh` unchanged. Replace docker exec … psql below with `psql "<database_url>"`.
 
 | Table | Content |
 | --- | --- |
@@ -354,8 +354,8 @@ Without Docker, use system Postgres (Ubuntu postgresql, version 16 tested, local
 | `manager_outbox` | A manager's pushes and the apps' live updates made while the hub was away, in order, until the hub took them (bounded; [hub-restart.md](hub-restart.md) ("The manager while the hub is away")) |
 | `handed_over` | The hub's record of what each manager handed it lately (pushes, outbox items) by manager and id, so an item that comes again is delivered once, also by the next hub process (two hours) |
 
-Connect: `ssh <hub machine> 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`.
-Tests: `./scripts/test/test-server.sh` syncs to hub and runs all; local without Docker skips DB tests. `JARVIS_TEST_DATABASE_URL` pointing `jarvis_test` is only a starting point: each test binary creates adjacent private database and deletes afterward (`server/internal/db/dbtest`), isolating concurrent runs. Jarvis role needs database creation (container superuser; system Postgres grant CREATEDB). Without privilege, fallback queues on jarvis_test.
+Connect: `ssh <hub machine> 'docker exec -it persona-postgres psql -U persona -d persona'`.
+Tests: `./scripts/test/test-server.sh` syncs to hub and runs all; local without Docker skips DB tests. `PERSONA_TEST_DATABASE_URL` pointing `persona_test` is only a starting point: each test binary creates adjacent private database and deletes afterward (`server/internal/db/dbtest`), isolating concurrent runs. Persona role needs database creation (container superuser; system Postgres grant CREATEDB). Without privilege, fallback queues on persona_test.
 
 Legacy `phone_tools.json`, `devices.json`, `mail_accounts.json`, `sessions.json` auto-import on first start, renamed *.migrated.
 
@@ -370,7 +370,7 @@ The migrations are two sets, one per side (`server/internal/db/migrations/`):
 
 `schema_migrations` has a row per migration a part applied, with `part` `hub` or `manager`. Rows from before the split have `part` NULL and stand for both parts, so a database migrated by an older build runs nothing again, whichever side opens it first, and a build from before the split still reads and adds records there. Three early migrations are in both sets and frozen that way: `0001_init.sql` made tables for both sides and is split into each side's part; `0071_sent_messages.sql` and `0241_sent_echo.sql` make `sent_messages`, which each side keeps in its own database (the hub's sends from the apps, the manager's from the inbox). On a database both sides share, that table is one.
 
-Settings are each side's own too: the hub's in `hub_settings` (`0421_hub_settings.sql`, which on a database shared with the default manager copies the hub's keys out of `settings` once and leaves the rows there for an older build), a manager's in `settings`. On such a shared database the hub also keeps its keys in `settings` for a hub build from before `hub_settings`: each write goes to both tables in one transaction, and at start (or once the table appears, on a fresh install) the hub takes up the keys an older build wrote there later than it did (an event log hand-over too: it stays in both tables until a hub takes it, which removes both; its own that an older build took meanwhile is dropped), and writes its other values in effect back (`db.sharedWithOlderHub`; the shared table is locked first, as every write of a hub key starts there). A hand-over this build left before the shared table existed (a fresh install) was never an older build's to take and is resumed. A known gap: a build from between `hub_settings` and this mirroring (#5710 alone) that takes a hand-over and then crashes leaves the mirrored copy, which is resumed. A switch back starts from current values, and switching forward again keeps what the older build changed. `db.DB.Setting` and the rest use the table of the side the database was opened for (`db.HubSet` alone: `hub_settings`). Neither side reads the other's keys; what one needs of the other comes over the bus: the mutes go in every manager's `manager.hello` answer and with `fleet.mutes` (once more on its first word after the handshake, which the answer cannot overtake, and after each change; not sent while the hub cannot read them, so a manager keeps the last ones), the computers waiting to be confirmed with the devices handover, and the hub hands its next process the machines as the managers reported them (`hub.devices_warm`) instead of reading the manager's warm start. The inbox's rules (`inbox.rules`, `inbox.agent_rules`) are the manager's settings (listed among its `jarvis_settings`). `TestSettingsKeysAreOneSidesOwn` (`internal/hub`) fails when the hub and a manager package use the same literal key.
+Settings are each side's own too: the hub's in `hub_settings` (`0421_hub_settings.sql`, which on a database shared with the default manager copies the hub's keys out of `settings` once and leaves the rows there for an older build), a manager's in `settings`. On such a shared database the hub also keeps its keys in `settings` for a hub build from before `hub_settings`: each write goes to both tables in one transaction, and at start (or once the table appears, on a fresh install) the hub takes up the keys an older build wrote there later than it did (an event log hand-over too: it stays in both tables until a hub takes it, which removes both; its own that an older build took meanwhile is dropped), and writes its other values in effect back (`db.sharedWithOlderHub`; the shared table is locked first, as every write of a hub key starts there). A hand-over this build left before the shared table existed (a fresh install) was never an older build's to take and is resumed. A known gap: a build from between `hub_settings` and this mirroring (#5710 alone) that takes a hand-over and then crashes leaves the mirrored copy, which is resumed. A switch back starts from current values, and switching forward again keeps what the older build changed. `db.DB.Setting` and the rest use the table of the side the database was opened for (`db.HubSet` alone: `hub_settings`). Neither side reads the other's keys; what one needs of the other comes over the bus: the mutes go in every manager's `manager.hello` answer and with `fleet.mutes` (once more on its first word after the handshake, which the answer cannot overtake, and after each change; not sent while the hub cannot read them, so a manager keeps the last ones), the computers waiting to be confirmed with the devices handover, and the hub hands its next process the machines as the managers reported them (`hub.devices_warm`) instead of reading the manager's warm start. The inbox's rules (`inbox.rules`, `inbox.agent_rules`) are the manager's settings (listed among its `persona_settings`). `TestSettingsKeysAreOneSidesOwn` (`internal/hub`) fails when the hub and a manager package use the same literal key.
 
 Switching back: a database the hub and the default manager share (every install before the split, and a fresh one after it, since both sets run there) can be opened again by a build from before the split. A database that got only one set (a manager's own, made by a build with the split) cannot: a build from before records 0001 as done and then misses the other side's tables. Don't switch such a manager below the split.
 
@@ -442,7 +442,7 @@ Foreground app keeps WebSocket to hub, receiving change broadcasts. A 19-minute 
 
 `channel=release` hubs check release site's `latest.json` every hour. New version waits until assistant / Agents idle, replaces binary / restarts, rolls back if unable to start.
 - Files under `~/.persona/update/`: `<build>/` downloads, node binaries in `nodes/` later copied to `~/.persona/bin/nodes/`; `pending.json` ongoing update, deleted after confirmation; `rolledback.json` latest rollback, recorded by old version, marked bad then deleted; `watch.log` watchdog output, `hub.log` rollback hub output without service manager.
-- Previous binary ~/.persona/bin/jarvisd.prev. Manual restore: `cp ~/.persona/bin/jarvisd.prev ~/.persona/bin/personad && systemctl --user restart jarvisd`; launchd uses launchctl kickstart -k. Disable auto-update in app afterward to avoid reinstall (rolled-back builds already excluded automatically).
+- Previous binary ~/.persona/bin/personad.prev. Manual restore: `cp ~/.persona/bin/personad.prev ~/.persona/bin/personad && systemctl --user restart personad`; launchd uses launchctl kickstart -k. Disable auto-update in app afterward to avoid reinstall (rolled-back builds already excluded automatically).
 - Disable in app Settings or `PUT /api/v1/hub/update/settings {"auto": false}`.
 - Notifications: confirmed auto-update pushes Hub Updated to X; recorded rollback pushes Hub Update Failed + reason (`updater.notify`, all devices, thread `hub_update`). Manual updates no separate push.
 - Direct `deploy.sh` / main-session scripts use compile-time build number newer than current public release, so no downgrade. Direct deployment during update is not undone by watchdog.
@@ -455,6 +455,6 @@ Foreground app keeps WebSocket to hub, receiving change broadcasts. A 19-minute 
 - Public auth failures including WS handshake log auth source=… path=… status=… code=… failures=… suppressed=…. Mask sources IPv4 /24, IPv6 /64; fixed API paths only, no tokens. Rate limit 429 / `Retry-After`; `security.auth_log_interval_seconds` controls log throttling.
 - Network issues: read-only personad hub doctor on hub machine, [Network troubleshooting](network.md#网络排查).
 - Admin failed login: admin: wrong password from <masked source>. Password set / change, scope changes, computer add / remove, device revocation, pairing-code generation each `admin: …` log, no passwords / codes. Admin 401 / 404 uses request IDs too.
-- Request IDs: `X-Request-Id` on every response, reusing app `X-Client-Request-Id` if present. Hub logs only ≥400 failures / >2-second slow requests, `[<id>] method path -> status (duration)`, no query / body / token. App 5xx adds “(Request <id>)”; find corresponding `journalctl --user -u jarvisd` line.
+- Request IDs: `X-Request-Id` on every response, reusing app `X-Client-Request-Id` if present. Hub logs only ≥400 failures / >2-second slow requests, `[<id>] method path -> status (duration)`, no query / body / token. App 5xx adds “(Request <id>)”; find corresponding `journalctl --user -u personad` line.
 - Compression (#2149, `gzip.go`): `Accept-Encoding: gzip` gets gzip for >1 KB JSON / JS / CSS / HTML / SVG / plain text (Lark chat 2.9 MB → 70 KB). App, web, Go clients decompress automatically. WebSocket upgrade, persistent connections, Range, HEAD, event-stream, images / binaries, already encoded / cookie-setting responses unchanged. Admin `/admin` and `/api/v1/admin/` uncompressed to avoid cookie / CSRF size leakage (BREACH). Layer outside `logRequests`; handlers still receive logging statusWriter. Debug `curl --compressed` or `-H 'Accept-Encoding: gzip'` and inspect Content-Encoding.
 - Unreachable herdr socket / restart: node logs `herdr: … failed` at most once per 30 seconds, with failure count, then reachable again; SSH stderr enters hub log.

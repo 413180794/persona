@@ -5,7 +5,7 @@ const paths = (t: string) => findPathRefs(t).map((r) => (r.line ? `${r.path}:${r
 
 describe("findPathRefs", () => {
   it("finds absolute, ~ and relative paths with a folder, where a message names them", () => {
-    expect(paths("读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行这个任务")).toEqual(["/tmp/jarvis-tasks/1664-lark-test.md"]);
+    expect(paths("读 /tmp/persona-tasks/1664-lark-test.md 并完整执行这个任务")).toEqual(["/tmp/persona-tasks/1664-lark-test.md"]);
     expect(paths("看 ~/code/app/README.md 和 web/src/lib/api.ts")).toEqual(["~/code/app/README.md", "web/src/lib/api.ts"]);
     expect(paths("目录 /var/log/ 里")).toEqual(["/var/log/"]);
   });

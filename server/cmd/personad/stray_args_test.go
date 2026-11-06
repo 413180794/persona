@@ -34,7 +34,7 @@ func TestStrayArgsRefused(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStrayArgsRefused$")
 		cmd.Env = append(os.Environ(), "PERSONAD_TEST_MAIN_ARGS="+strings.Join(tc.args, "\x1f"), "HOME="+home,
-			"PERSONA_HOME="+filepath.Join(home, ".persona"), "JARVIS_HOME="+filepath.Join(home, ".jarvis"))
+			"PERSONA_HOME="+filepath.Join(home, ".persona"))
 		var stdout, stderr strings.Builder
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		err := cmd.Run()

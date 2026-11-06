@@ -2,24 +2,24 @@ import XCTest
 
 /// quota-relay's sidebar page 「中转账号」 (#4576) opened from the shell's drawer, on the extension's exported
 /// fixture: the default view, the Kiro type picked, a search, one account's page. Against scripts/mock/mock_hub.py with
-/// `MOCK_PLUGINS=1 MOCK_RELAY_ACCOUNTS=apple/PersonaTests/Fixtures/relay-accounts-view.json`:
-/// `TEST_RUNNER_JARVIS_RELAY_ACCOUNTS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots,
-/// named by `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` and the style.
+/// `MOCK_EXTENSIONS=1 MOCK_RELAY_ACCOUNTS=apple/PersonaTests/Fixtures/relay-accounts-view.json`:
+/// `TEST_RUNNER_PERSONA_RELAY_ACCOUNTS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots,
+/// named by `TEST_RUNNER_PERSONA_SHOTS_APPEARANCE` and the style.
 final class RelayQuotaAccountsPageUITests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_SHOTS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir)
             .appending(path: "relay-quota-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 
     @MainActor func testTheAccountsPage() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "the shell's drawer is the phone's")
-        guard let hub = env["JARVIS_RELAY_ACCOUNTS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_RELAY_ACCOUNTS (JARVIS_RELAY_ACCOUNTS_HUB)") }
+        guard let hub = env["PERSONA_RELAY_ACCOUNTS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_RELAY_ACCOUNTS (PERSONA_RELAY_ACCOUNTS_HUB)") }
         continueAfterFailure = false
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-ui.oldLayout", "NO", "-tab", "assistant", "-dev.openChat", ""]
         app.launchPinned()

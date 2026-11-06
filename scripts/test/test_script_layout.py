@@ -24,11 +24,12 @@ ALIASES = {
 
 
 class ScriptLayoutTests(unittest.TestCase):
-    def test_top_level_contains_only_shared_tools_and_compatibility_entries(self):
+    def test_top_level_contains_only_shared_tools_and_generic_relocation_entries(self):
         files = {p.name for p in SCRIPTS.iterdir() if p.is_file()}
-        self.assertEqual(files, {"README.md", "persona_config.py", "persona_identity.py", "jarvis_config.py", "privacy_check.py", *ALIASES})
+        self.assertEqual(files, {"README.md", "persona_config.py", "persona_identity.py", "privacy_check.py", *ALIASES})
         directories = {p.name for p in SCRIPTS.iterdir() if p.is_dir() and p.name != "__pycache__"}
-        self.assertEqual(directories, {"app", "assets", "deploy", "diag", "gen", "hooks", "i18n", "mock", "release", "test"})
+        self.assertEqual(directories, {"app", "assets", "deploy", "diag", "gen", "hooks", "i18n", "migrate", "mock", "release", "test"})
+        self.assertFalse((SCRIPTS / (('jar' + 'vis') + '_config.py')).exists())
 
     def test_compatibility_entries_preserve_arguments_environment_stdin_and_exit(self):
         for alias, target in ALIASES.items():
@@ -108,24 +109,25 @@ class ScriptLayoutTests(unittest.TestCase):
     def test_release_modules_import_shared_config_from_another_directory(self):
         with tempfile.TemporaryDirectory(prefix="script-import-test-") as directory:
             config = Path(directory) / "config.json"
-            config.write_text(json.dumps({"app": {"bundle_id": "com.example.jarvis", "team_id": "ABCDE12345"},
+            config.write_text(json.dumps({"app": {"bundle_id": "com.example.persona", "team_id": "ABCDE12345"},
                                           "app_store": {"app_id": "1234567890"}}))
             code = (
                 "import importlib.util,pathlib,sys; "
                 "sys.path.insert(0,sys.argv[1]); "
                 "import asc,asc_signing,asc_testflight,check_bundle_privacy; "
-                "assert pathlib.Path(asc.jarvis_config.ROOT)==pathlib.Path(sys.argv[2]); "
+                "assert pathlib.Path(asc.persona_config.ROOT)==pathlib.Path(sys.argv[2]); "
                 "print(asc_testflight.APP_ID)"
             )
             legacy_config = Path(directory) / "legacy-config.json"
-            legacy_config.write_text(json.dumps({"app": {"bundle_id": "com.example.jarvis", "team_id": "ABCDE12345"},
+            legacy_config.write_text(json.dumps({"app": {"bundle_id": "com.example.persona", "team_id": "ABCDE12345"},
                                                  "app_store": {"app_id": "9876543210"}}))
+            former_prefix = ('jar' + 'vis').upper() + '_'
             environment = {key: value for key, value in os.environ.items()
-                           if key not in {"PERSONA_CONFIG", "JARVIS_CONFIG"}}
+                           if key not in {"PERSONA_CONFIG", former_prefix + "CONFIG"}}
+            environment['HOME'] = directory
             cases = {
-                "legacy fallback": {"JARVIS_CONFIG": str(config)},
                 "current config": {"PERSONA_CONFIG": str(config)},
-                "current takes precedence": {"PERSONA_CONFIG": str(config), "JARVIS_CONFIG": str(legacy_config)},
+                "former config ignored": {"PERSONA_CONFIG": str(config), former_prefix + "CONFIG": str(legacy_config)},
             }
             for name, variables in cases.items():
                 with self.subTest(name=name):
@@ -135,8 +137,9 @@ class ScriptLayoutTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stdout.strip(), "1234567890")
 
-    def test_runtime_cli_help_preserves_both_entries(self):
-        for name in ("personactl.py", "jarvisctl.py"):
+    def test_runtime_cli_has_one_canonical_entry(self):
+        self.assertFalse((SCRIPTS / 'app' / (('jar' + 'vis') + 'ctl.py')).exists())
+        for name in ("personactl.py",):
             with self.subTest(entry=name):
                 result = subprocess.run([sys.executable, "-I", str(SCRIPTS / "app" / name), "--help"],
                                         capture_output=True, text=True, timeout=15)

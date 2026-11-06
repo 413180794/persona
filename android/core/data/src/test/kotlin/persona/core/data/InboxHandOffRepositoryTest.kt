@@ -137,9 +137,9 @@ class InboxHandOffRepositoryTest {
                 }
             }
             val repository = repository(ItemsTransport(JsonArray(emptyList())), directory, backgroundScope, main = main, agents = agents, actions = actions)
-            repository.handOff(InboxHandOffRequest("item", "<jarvis-context …>\n\n总结一下", operationId = "op-main"))
+            repository.handOff(InboxHandOffRequest("item", "<persona-context …>\n\n总结一下", operationId = "op-main"))
             repository.handOff(InboxHandOffRequest("item", "交给 Agent", "laptop", "s1", "op-agent"))
-            assertEquals(listOf("op-main" to "<jarvis-context …>\n\n总结一下"), main.sent)
+            assertEquals(listOf("op-main" to "<persona-context …>\n\n总结一下"), main.sent)
             assertEquals(listOf(Triple(SessionKey("laptop", "s1"), "交给 Agent", "op-agent")), agents.sent)
             assertEquals("能赶上，周五前给你。", repository.draftReply("item", "在这版上改：能"))
             assertEquals(listOf("item" to "在这版上改：能"), instructions)

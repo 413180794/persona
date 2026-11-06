@@ -32,7 +32,7 @@ fun handOffItem(record: InboxRecord, context: String?): HandOffItem = HandOffIte
 )
 
 /**
- * The item as a `<jarvis-context>` tag the chat shows as a card, then the request (iOS `InboxHandOffSheet.message`):
+ * The item as a `<persona-context>` tag the chat shows as a card, then the request (iOS `InboxHandOffSheet.message`):
  * attributes escaped, and the item's text can't close the tag early.
  */
 fun handoffPrompt(res: Resources, item: HandOffItem, ask: String = ""): String {
@@ -44,11 +44,11 @@ fun handoffPrompt(res: Resources, item: HandOffItem, ask: String = ""): String {
     return contextTag(title, text) + "\n\n" + ask.trim().ifEmpty { handoffPresets(res)[0] }
 }
 
-/** `<jarvis-context kind="context" title="…" url="">`, as iOS `ContextRef.xml` writes it. */
+/** `<persona-context kind="context" title="…" url="">`, as iOS `ContextRef.xml` writes it. */
 internal fun contextTag(title: String, text: String, url: String = ""): String {
     fun escape(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
-    return "<jarvis-context kind=\"context\" title=\"${escape(title)}\" url=\"${escape(url)}\">\n" +
-        contextBody(text) + "\n</jarvis-context>"
+    return "<persona-context kind=\"context\" title=\"${escape(title)}\" url=\"${escape(url)}\">\n" +
+        contextBody(text) + "\n</persona-context>"
 }
 
 /** An agent "Hand to AI" can send to: the most recently active live ones, never Persona itself (iOS: eight). */
@@ -75,7 +75,7 @@ class HandOffAttempt {
     private var last: Pair<String, String>? = null
 
     fun operationId(text: String, target: HandOffTarget?): String {
-        val key = (target?.key ?: "jarvis") + "\n" + text
+        val key = (target?.key ?: "persona") + "\n" + text
         last?.takeIf { it.first == key }?.let { return it.second }
         return java.util.UUID.randomUUID().toString().also { last = key to it }
     }

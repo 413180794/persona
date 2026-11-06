@@ -55,7 +55,7 @@ struct VNCPiPDiagnostics: View {
                         Label("Copy All [V N C Pi P Diagnostics 75c393]", systemImage: Theme.Icon.copy).lineLimit(1)
                     }
                 } footer: {
-                    Text("It's also in the system log (Console, subsystem jarvis, category vnc).")
+                    Text("It's also in the system log (Console, subsystem persona, category vnc).")
                 }
             }
             .themedPage()

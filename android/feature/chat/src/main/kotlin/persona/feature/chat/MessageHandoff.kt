@@ -61,7 +61,7 @@ fun rememberHandToPersona(sender: MainConversationSender?, navigator: Navigator)
                 scope.launch {
                     try {
                         handToPersona(main, text, UUID.randomUUID().toString(),
-                            onQueued = { navigator.selectTab(AppTab.Jarvis) },
+                            onQueued = { navigator.selectTab(AppTab.Persona) },
                             onBound = { navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = ConversationKind.Assistant)) })
                     } catch (e: CancellationException) {
                         throw e

@@ -434,7 +434,7 @@ final class LiveConnection {
         nextTry = nil
     }
 
-    /// A silent push (`jarvis_wake`) in the background: connect for the hub's call, though suspended.
+    /// A silent push (`persona_wake`) in the background: connect for the hub's call, though suspended.
     func wake() {
         suspended = false
         ensureConnected()

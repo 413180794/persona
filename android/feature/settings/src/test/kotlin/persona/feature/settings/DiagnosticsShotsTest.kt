@@ -43,9 +43,9 @@ class DiagnosticsShotsTest {
     @Test fun showsTheLastFailedPairing() {
         val attempts = PairingAttempts()
         val handshake = javax.net.ssl.SSLHandshakeException("Trust anchor for certification path not found.")
-        attempts.record(pairingAttempt(PairingRequest("https://hub.example.com/jarvis", "code"),
+        attempts.record(pairingAttempt(PairingRequest("https://hub.example.com/persona", "code"),
             PairingException(PairingFailure.Certificate).apply { initCause(handshake) }, PairingStage.Probe,
-            listOf(ConnectionCandidate("https://hub.example.com/jarvis", "name", persona.core.contracts.CoreText.plain("证书指纹不符"), java.time.Instant.now().toString()))))
+            listOf(ConnectionCandidate("https://hub.example.com/persona", "name", persona.core.contracts.CoreText.plain("证书指纹不符"), java.time.Instant.now().toString()))))
         val unpaired = demoSettingsServices(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources).let { demo ->
             demo.copy(connection = object : HubConnection by demo.connection {
                 override val state = MutableStateFlow(ConnectionState.Connecting)

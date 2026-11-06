@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A sidebar heading draws its ⋯ only when the menu has items (#778: Pin with only the main conversation pinned had
 /// a ⋯ that opened nothing).

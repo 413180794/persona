@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// docs/i18n.md「选哪种语言」: the system's first language decides, by its language subtag only.
 struct AppLanguageTests {

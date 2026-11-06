@@ -19,7 +19,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")
 SRC = os.path.join(ROOT, "docs", "redesign", "flows.md")
 OUT = os.path.join(ROOT, "prototypes", "android", "flows.html")
 CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-CACHE = os.environ.get("MERMAID_CACHE", os.path.join(tempfile.gettempdir(), "jarvis-mermaid"))
+CACHE = os.environ.get("MERMAID_CACHE", os.path.join(tempfile.gettempdir(), "persona-mermaid"))
 MERMAID = os.path.join(CACHE, "node_modules", "mermaid", "dist", "mermaid.min.js")
 
 THEME = {
@@ -97,7 +97,7 @@ def page(md, svgs):
     return f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jarvis Android：主要功能流程图</title>
+<title>Persona Android：主要功能流程图</title>
 <style>
 :root{{color-scheme:light dark;--bg:#f6f6f8;--fg:#1c1c1e;--sub:#6b6b70;--card:#fff;--line:#e3e3e8;--tint:#3a6df0}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#111214;--fg:#ececf0;--sub:#9a9aa2;--card:#1c1d20;--line:#2c2d31;--tint:#8aa8ff}}}}
@@ -116,7 +116,7 @@ code{{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(127,
 .fig{{background:#fff;color:#1c1c1e;border-radius:12px;padding:12px;overflow-x:auto;text-align:center}}
 .fig svg{{max-width:100%;height:auto}}
 </style></head><body>
-<header><h1>Jarvis Android：主要功能流程图</h1>{head}</header>
+<header><h1>Persona Android：主要功能流程图</h1>{head}</header>
 <nav>{toc}</nav>
 <main>{cards}</main>
 </body></html>"""

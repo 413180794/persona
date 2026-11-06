@@ -1,9 +1,9 @@
 // End-to-end check of pi-web in Persona (docs/pi.md "Verification"): a real pi-web on a spare port with this package installed
-// the way a user installs it (settings.json packages), the companion (companion.mjs), a real `jarvisd node --stdio`
+// the way a user installs it (settings.json packages), the companion (companion.mjs), a real `personad node --stdio`
 // played as the hub by the runtime SDK's harness, and DSH's llm-mock-server as the model. pi-web's idle reaping is
 // cut to a few seconds so the run sees a session go back to disk and wake up again on the next send.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/pi/e2e/pi-web.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/pi/e2e/pi-web.mjs
 
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -17,9 +17,9 @@ import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness
 const here = dirname(fileURLToPath(import.meta.url))
 const pkg = resolve(here, '..')
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and PERSONAD (a personad binary)')
   process.exit(2)
 }
 const root = mkdtempSync(join('/tmp', 'jpiweb-e2e-'))
@@ -39,12 +39,12 @@ writeFileSync(join(agentDir, 'models.json'), JSON.stringify({ providers: { mock:
 } } }))
 // The package as a user installs it (pi install <dir> writes the same line).
 writeFileSync(join(agentDir, 'settings.json'), JSON.stringify({ defaultProvider: 'mock', defaultModel: 'mock-model', quietStartup: true, packages: [pkg] }))
-writeFileSync(join(agentDir, 'jarvis.json'), JSON.stringify({ askUser: false }))
+writeFileSync(join(agentDir, 'persona.json'), JSON.stringify({ askUser: false }))
 
 // ---- the node, pi-web and the companion ----
-const node = await startNode({ jarvisd })
+const node = await startNode({ personad })
 const port = await freePort()
-const env = { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, JARVIS_RUNTIME_SOCKET: node.runtimeSocket, PI_OFFLINE: '1',
+const env = { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, PERSONA_RUNTIME_SOCKET: node.runtimeSocket, PI_OFFLINE: '1',
   PI_WEB_NO_OPEN: '1', PI_WEB_SKIP_VERSION_CHECK: '1', PI_WEB_IDLE_TIMEOUT_MS: '6000' }
 const logs = { web: [], companion: [] }
 const web = spawn('pi-web', ['--port', String(port)], { cwd: work, env, stdio: ['ignore', 'pipe', 'pipe'] })

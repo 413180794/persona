@@ -26,14 +26,14 @@ type voiceTestStore interface {
 	extension.Store
 }
 
-// onVoiceStores runs f on the in-memory store, and on Postgres when JARVIS_TEST_DATABASE_URL is set
+// onVoiceStores runs f on the in-memory store, and on Postgres when PERSONA_TEST_DATABASE_URL is set
 // (scripts/test/test-server.sh): the rows and the sealed key of the extensions ids, cleared before and after.
 func onVoiceStores(t *testing.T, ids []string, f func(t *testing.T, store voiceTestStore)) {
 	t.Run("memory", func(t *testing.T) { f(t, newExtensionStore()) })
 	t.Run("postgres", func(t *testing.T) {
-		url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+		url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 		if url == "" {
-			t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
+			t.Skip("PERSONA_TEST_DATABASE_URL not set (scripts/test/test-server.sh runs this on the hub machine)")
 		}
 		database, err := db.Open(context.Background(), url, db.ManagerSet)
 		if err != nil {
@@ -174,7 +174,7 @@ func TestVoiceTakesOverTheHubJSONEntry(t *testing.T) {
 
 		env := envOf(t, h, "talk")
 		if env["PERSONA_VOICE_HUB_CONFIG"] != string(voiceEntry("talk").Config) || env["VOICE_TEST_ENV"] != "from-hub-json" ||
-			env["PERSONA_EXTENSION_SECRETS"] != "{}" || env["JARVIS_HUB_TOKEN"] != h.cfg.Token || env["PERSONA_EXTENSION_ID"] != "talk" ||
+			env["PERSONA_EXTENSION_SECRETS"] != "{}" || env["PERSONA_HUB_TOKEN"] != h.cfg.Token || env["PERSONA_EXTENSION_ID"] != "talk" ||
 			env["PERSONA_EXTENSION_SOCKET"] != filepath.Join(h.extensions.root, "talk.sock") {
 			t.Fatalf("env %v", env)
 		}

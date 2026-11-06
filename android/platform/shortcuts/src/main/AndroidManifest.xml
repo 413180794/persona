@@ -9,7 +9,7 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/jarvis_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/persona_widget_info" />
         </receiver>
         <service
             android:name="persona.platform.shortcuts.PersonaTileService"
@@ -29,6 +29,6 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|uiMode"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.Jarvis.Shortcut" />
+            android:theme="@style/Theme.Persona.Shortcut" />
     </application>
 </manifest>

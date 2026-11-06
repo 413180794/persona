@@ -95,11 +95,11 @@ func TestSaveInboxFallsBackOneByOne(t *testing.T) {
 	}
 }
 
-// BenchmarkSaveInbox is saveInbox writing a round's n changed items to Postgres (JARVIS_TEST_DATABASE_URL).
+// BenchmarkSaveInbox is saveInbox writing a round's n changed items to Postgres (PERSONA_TEST_DATABASE_URL).
 func BenchmarkSaveInbox(b *testing.B) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		b.Skip("JARVIS_TEST_DATABASE_URL not set")
+		b.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	database, err := db.Open(ctx, url, db.ManagerSet)

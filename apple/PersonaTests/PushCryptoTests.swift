@@ -2,14 +2,14 @@ import CryptoKit
 import Foundation
 import Testing
 import UserNotifications
-@testable import Jarvis
+@testable import Persona
 
 /// Pushes through the relay (docs/push-relay.md): what the hub seals in Go opens here, and only then does the
 /// notification show more than 「有新消息」.
 struct PushCryptoTests {
     // Sealed by the hub's pushcrypto package (server/internal/pushcrypto/pushcrypto_test.go, the same vector).
     static let priv = "el2PlP5fa1q1OuNd1M8/leos7rSG4OzZEtfcyKlg6+c="
-    static let sealed = "BCggIsspkEoE9Iv+kSeqwGyPHxVNL0Cuto0IV/ZcubpAjXlNzTrF6T60wHSyaJiGj9b4udL2LnPDJEydaRAUnm/4syS2NCzzS/iffzfQTIx+WpKnYO5yqff6oDa/z7t7ow2jocpUOakeY4YKHS7ExN0Vwf5lnqWtOl282TY2JPHGUhI1ZKSiwB0RM8CzPIEzgHF0NWJldVg2pWRuHMGetwweyi8TUM2Zq0AzFPWvfbp8XWjshd1QjOQtoarB/ICzOKNLgXgpyJumYwxSvLw8m1+A6IZpF7Xl8UQwOK1Ytf/OoXJWgenoHY1XmFXBTr66RK0A3QgkM/1scEeQIvyL28MeDJzHdDO5u6n5Em3BuZLvaB8OSehyZHbPHPeMlabYso/z/lTsI4mPA0cP+6vNd+I5M6yUAPmi"
+    static let sealed = "BPiOTTGm5iJ8tQtSQqbHrovSzSW2yT+HV5ZEVWNfR5MxHcfJwmgfSpX9ObAWjgpGZDtRFUECe+QM3aLYLNx8tpxnkHQpRVbQB7BPH5sM3hC3TnI2ytruFlACROnZ5eckOeENMvMR95KJh7/d65/VCaK+zcafUX8sfqLHz8JCMfHOhPpFiBHMNej4OmTTkZ1ri6s81YWRb6PJ0D2gqe8PYnI9BE5vliK+hABGKhOQs+mUmXVhK2MbZerzwkFRCzYMJQEHd/NzaBHB78QCDQMy/hCRITH6EQyH8N2DX/79GZ1GKzqYC3f6oJYFZIZw/sKbbkmGlUnqOrN9gRCSERHyW+Lbc1fpeBqoDVV6F86z8xcTWygZ79I4ssqh2poGguuxeZWaMF6+hyE+xK3Ou9CVXLcGXiYSxCh9"
     static let plain = #"{"aps":{"alert":{"title":"Claude 在问你","subtitle":"重构 · 笔记本","body":"要继续吗？"},"category":"INTERACTION_QUESTION","thread-id":"s1"},"interaction_id":"ix1","machine_id":"m1","session_id":"s1","iat":1798000000}"#
     static let sealedAt = Date(timeIntervalSince1970: 1_798_000_000)
 

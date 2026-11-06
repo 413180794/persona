@@ -90,13 +90,13 @@ describe("ActionRow", () => {
     const verb = (name: string, input: Record<string, unknown> = {}) => presentAction(use("v", name, input)).verb;
     expect([verb("Edit", { file_path: "/a" }), verb("Write", { file_path: "/a" }), verb("Grep", { pattern: "x" }), verb("WebFetch", { url: "u" }), verb("mcp__github__create_issue")]).toEqual(["编辑", "创建", "搜索", "访问", "调用"]);
     expect(presentAction(use("v", "mcp__github__create_issue", {})).param!.text).toBe("github · create issue");
-    expect(presentAction(use("v", "mcp__jarvis__unknown_tool", {})).param).toEqual({ text: "Persona · unknown tool", title: "mcp__jarvis__unknown_tool" });
+    expect(presentAction(use("v", "mcp__persona__unknown_tool", {})).param).toEqual({ text: "Persona · unknown tool", title: "mcp__persona__unknown_tool" });
   });
 
   it("Persona's own tools read as their verb, then what they were given", () => {
-    expect(presentAction(use("p", "mcp__jarvis__agent_read", {}))).toEqual({ verb: "读 Agent 对话" });
-    expect(presentAction(use("p", "mcp__jarvis__kb_search", { query: "周报" }))).toEqual({ verb: "查知识库", param: { text: "周报", title: "mcp__jarvis__kb_search" } });
-    expect(presentAction(use("p", "mcp__jarvis__phone_contacts_search", { query: "Alice" }))).toEqual({ verb: "iPhone", param: { text: "contacts search · Alice", title: "mcp__jarvis__phone_contacts_search" } });
+    expect(presentAction(use("p", "mcp__persona__agent_read", {}))).toEqual({ verb: "读 Agent 对话" });
+    expect(presentAction(use("p", "mcp__persona__kb_search", { query: "周报" }))).toEqual({ verb: "查知识库", param: { text: "周报", title: "mcp__persona__kb_search" } });
+    expect(presentAction(use("p", "mcp__persona__phone_contacts_search", { query: "Alice" }))).toEqual({ verb: "iPhone", param: { text: "contacts search · Alice", title: "mcp__persona__phone_contacts_search" } });
     expect(presentAction(use("p", "mcp__github__create_issue", {})).verb).toBe("调用");
   });
 

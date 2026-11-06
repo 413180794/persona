@@ -133,7 +133,7 @@ The prototype is the UI and interaction standard; compare screen by screen durin
 
 ### Quiet tasks (#1731)
 
-Settings › Assistant › "Notify main-chat tasks only in the main chat" (`main_tasks_quiet` in settings `assistant`, `assistant.main_tasks_quiet` in `jarvis_settings`, **on by default**).
+Settings › Assistant › "Notify main-chat tasks only in the main chat" (`main_tasks_quiet` in settings `assistant`, `assistant.main_tasks_quiet` in `persona_settings`, **on by default**).
 When enabled, tasks dispatched from the main chat (`task_plan`; also `agent_start`, below) are **quiet**: to-do `quiet: true`, set at creation and stored in `todos.quiet`. Later setting changes do not affect existing tasks.
 
 - **No interruptions**: hub sends no task pushes for their Agents (completion, needs you, errors), no `notify` events, and no Lark bot / channel cards. They do not enter Live Activities / Dynamic Island (`liveActivities.snapshot` skips them).

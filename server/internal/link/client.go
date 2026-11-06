@@ -43,14 +43,14 @@ const NodeDownSelf = "本机的"
 // nodeMissing says the resident node is not answering at target, and how this computer runs it (docs/link.md "Installing
 // the node service"): the hub shows it on the machine's page.
 func nodeMissing(goos, target string) error {
-	how := "让 jarvisd node --attach 一直跑"
+	how := "让 personad node --attach 一直跑"
 	switch goos {
 	case "windows":
-		how = "jarvis-link install --jarvisd <personad.exe 的路径> 装成登录时启动的计划任务（docs/windows.md）"
+		how = "persona-link install --personad <personad.exe 的路径> 装成登录时启动的计划任务（docs/windows.md）"
 	case "darwin":
-		how = "菜单栏 App「Persona Link」里的「安装本机 node 服务」，或者 jarvis-link node install"
+		how = "菜单栏 App「Persona Link」里的「安装本机 node 服务」，或者 persona-link node install"
 	case "linux":
-		how = "jarvis-link node install（systemd 用户服务）"
+		how = "persona-link node install（systemd 用户服务）"
 	}
 	return fmt.Errorf("%s%s（%s 连不上）：%s", NodeDownSelf, NodeDownMarker, target, how)
 }
@@ -61,7 +61,7 @@ const (
 	dialTimeout = 8 * time.Second        // one candidate: TCP, TLS and the WebSocket handshake
 	checkPing   = 3 * time.Second        // a ping after the network changed
 	refusedWait = 5 * time.Minute        // after the hub refused the credential, unless link.json changes
-	replaceWait = 30 * time.Second       // after another jarvis-link of this machine took over
+	replaceWait = 30 * time.Second       // after another persona-link of this machine took over
 )
 
 var (
@@ -69,8 +69,8 @@ var (
 	errRedial = errors.New("手动重连")
 )
 
-// Status is what jarvis-link reports: Run hands one to Options.Status every time something changes, and
-// cmd/jarvis-link prints each as a JSON line for the menu bar app.
+// Status is what persona-link reports: Run hands one to Options.Status every time something changes, and
+// cmd/persona-link prints each as a JSON line for the menu bar app.
 type Status struct {
 	// State: unpaired | connecting | connected | waiting | refused; passive mode: unpaired | listening (paired, no
 	// stream from the hub open) | connected (one is) | waiting (cannot listen).
@@ -268,7 +268,7 @@ func race[T any](ctx context.Context, eps []Endpoint, try func(context.Context, 
 	eps = ranked(eps)
 	var zero T
 	if len(eps) == 0 {
-		return zero, Endpoint{}, errors.New("没有 hub 的候选地址：重新配对，或用 jarvis-link address add 加一个")
+		return zero, Endpoint{}, errors.New("没有 hub 的候选地址：重新配对，或用 persona-link address add 加一个")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -315,12 +315,12 @@ func race[T any](ctx context.Context, eps []Endpoint, try func(context.Context, 
 	return zero, Endpoint{}, errors.Join(errs...)
 }
 
-// parsePairLink reads what `jarvisd hub pair` printed: jarvis://link?… (made for one machine) or jarvis://pair?…
+// parsePairLink reads what `personad hub pair` printed: persona://link?… (made for one machine) or persona://pair?…
 // (the apps' link; then the machine is named on the command line).
 func parsePairLink(raw string) (token string, c Config, err error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (u.Scheme != "jarvis" && u.Scheme != "persona") || (u.Host != "link" && u.Host != "pair") {
-		return "", c, errors.New("这不是 jarvisd hub pair 给的配对链接（jarvis://link?… 或 jarvis://pair?…）")
+	if err != nil || u.Scheme != "persona" || (u.Host != "link" && u.Host != "pair") {
+		return "", c, errors.New("这不是 personad hub pair 给的配对链接（persona://link?… 或 persona://pair?…）")
 	}
 	q := u.Query()
 	token, c.Hub, c.FP, c.Machine = q.Get("token"), q.Get("hub"), q.Get("fp"), q.Get("machine")
@@ -331,7 +331,7 @@ func parsePairLink(raw string) (token string, c Config, err error) {
 		// The hub's own TLS port, pinned: url names the host, tls the port (the hub serves the API at its root).
 		port := q.Get("tls")
 		if port == "" {
-			return "", c, errors.New("配对链接有指纹却没有 TLS 端口：在 hub 上重新运行 jarvisd hub pair --machine")
+			return "", c, errors.New("配对链接有指纹却没有 TLS 端口：在 hub 上重新运行 personad hub pair --machine")
 		}
 		if base, err := url.Parse(q.Get("url")); err == nil && base.Hostname() != "" {
 			u := "https://" + net.JoinHostPort(base.Hostname(), port)
@@ -538,7 +538,7 @@ func (r *reporter) set(change func(*Status)) {
 }
 
 // Run keeps this computer reachable from the hub until ctx ends: in active mode by keeping the link to the hub up,
-// in passive mode by listening for it (listen.go). It follows link.json: switched to the other mode (jarvis-link
+// in passive mode by listening for it (listen.go). It follows link.json: switched to the other mode (persona-link
 // mode, pair, pair --listen), it changes over within a second or two.
 func Run(ctx context.Context, o Options) error {
 	if o.Logf == nil {

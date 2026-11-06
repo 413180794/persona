@@ -33,7 +33,7 @@ internal object AppInstaller {
         val checksum = requireNotNull(update.sha256) { "Missing SHA-256" }
         require(checksum.matches(Regex("[a-fA-F0-9]{64}"))) { "Invalid SHA-256" }
         check(context.packageManager.canRequestPackageInstalls()) { "Install permission required" }
-        val apk = File.createTempFile("jarvis-update-", ".apk", context.cacheDir)
+        val apk = File.createTempFile("persona-update-", ".apk", context.cacheDir)
         try {
             apk.outputStream().use { updates.download(update, it) }
             check(apk.inputStream().use { verifySha256(it, checksum) }) { "SHA-256 mismatch" }

@@ -316,7 +316,7 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 
 	// The turn runs, then ends: the watcher sees working and then idle.
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
-		Cwd: "/home/me/.jarvis/assistant"})
+		Cwd: "/home/me/.persona/assistant"})
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestTaskSilentTurnFailsAndRetriesOnce(t *testing.T) {
 	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
-		Cwd: "/home/me/.jarvis/assistant"})
+		Cwd: "/home/me/.persona/assistant"})
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestTaskPromptOnlyTurnIsNotJudgedSilent(t *testing.T) {
 	h.turnPoll = 200 * time.Millisecond
 	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusIdle, State: proto.StateIdle, Assistant: true,
-		Cwd: "/home/me/.jarvis/assistant"})
+		Cwd: "/home/me/.persona/assistant"})
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +465,7 @@ func TestTaskFlapMidTurnIsNotJudgedSilent(t *testing.T) {
 	// No items yet when the run is sent: the watcher's "before" is the empty conversation, so the prompt landing
 	// changes the last item, which is what made the old order end the wait on the first idle poll.
 	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
-	working := proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true, Cwd: "/home/me/.jarvis/assistant"}
+	working := proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true, Cwd: "/home/me/.persona/assistant"}
 	idle := working
 	idle.Status, idle.State = proto.StatusIdle, proto.StateIdle
 	n.setSessions("server", working)
@@ -537,7 +537,7 @@ func TestTaskTurnEndingInSessionTurnErrorFailsAndRetriesOnce(t *testing.T) {
 
 	// The turn runs, then ends: the session carries TurnError and no assistant text item.
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
-		Cwd: "/home/me/.jarvis/assistant"})
+		Cwd: "/home/me/.persona/assistant"})
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)
 	}
@@ -615,7 +615,7 @@ func TestTaskSwitchedOffOrDeletedAfterFailureIsNotRetried(t *testing.T) {
 			n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
 			setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 			n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
-				Cwd: "/home/me/.jarvis/assistant"})
+				Cwd: "/home/me/.persona/assistant"})
 			if _, err := runNow(t, h, "p"); err != nil {
 				t.Fatal(err)
 			}
@@ -665,7 +665,7 @@ func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {
 	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
 	n.items = []proto.Item{{ID: "before", Role: "assistant", Kind: "text", Text: "old"}}
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusOffline, State: proto.StateIdle, Assistant: true,
-		Cwd: "/home/me/.jarvis/assistant"})
+		Cwd: "/home/me/.persona/assistant"})
 	from := n.callCount()
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)

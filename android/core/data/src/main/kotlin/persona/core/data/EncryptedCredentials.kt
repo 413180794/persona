@@ -91,7 +91,7 @@ internal class EncryptedCredentials(context: Context) {
     private fun createAead(): Aead {
         AeadConfig.register()
         val keyset = AtomicFile(File(root, "keyset.enc"))
-        val uri = "android-keystore://jarvis.hub-data.master"
+        val uri = "android-keystore://persona.hub-data.master"
         val handle = if (keyset.baseFile.exists()) {
             // A missing or unusable Keystore key must fail closed, preserving the original ciphertext.
             val master = AndroidKeystoreKmsClient().getAead(uri)

@@ -19,7 +19,7 @@ struct AllowPermissionIntent: LiveActivityIntent {
     nonisolated func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
         guard let interactionID, !interactionID.isEmpty else {
-            Logger(subsystem: "jarvis", category: "live-activity").warning("AllowPermissionIntent performed without interactionID")
+            Logger(subsystem: "persona", category: "live-activity").warning("AllowPermissionIntent performed without interactionID")
             return .result()
         }
         await FleetActions.run(.allow, interactionID)
@@ -41,7 +41,7 @@ struct DenyPermissionIntent: LiveActivityIntent {
     nonisolated func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
         guard let interactionID, !interactionID.isEmpty else {
-            Logger(subsystem: "jarvis", category: "live-activity").warning("DenyPermissionIntent performed without interactionID")
+            Logger(subsystem: "persona", category: "live-activity").warning("DenyPermissionIntent performed without interactionID")
             return .result()
         }
         await FleetActions.run(.deny, interactionID)
@@ -65,7 +65,7 @@ struct ApprovePlanIntent: LiveActivityIntent {
     nonisolated func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
         guard let interactionID, !interactionID.isEmpty else {
-            Logger(subsystem: "jarvis", category: "live-activity").warning("ApprovePlanIntent performed without interactionID")
+            Logger(subsystem: "persona", category: "live-activity").warning("ApprovePlanIntent performed without interactionID")
             return .result()
         }
         await FleetActions.run(.approvePlan, interactionID)

@@ -28,7 +28,7 @@ import (
 // (docs/prompts.md).
 var toolNames = []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
 	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_interrupt", "agent_start", "agent_supervise", "interaction_answer", "inbox_suggest", "inbox_draft",
-	"kb_search", "kb_list", "kb_get", "kb_update", "jarvis_settings",
+	"kb_search", "kb_list", "kb_get", "kb_update", "persona_settings",
 	"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
 	"conversation_new", "conversation_send", "task_plan", "task_review"}
 
@@ -58,8 +58,8 @@ func (s *Service) Tool(ctx context.Context, call ToolCall) proto.ToolResult {
 		args = json.RawMessage(`{}`)
 	}
 	switch call.Name {
-	case "jarvis_settings":
-		return s.toolJarvisSettings(ctx, call, args) // settings_tool.go
+	case "persona_settings":
+		return s.toolPersonaSettings(ctx, call, args) // settings_tool.go
 	}
 	res, err := s.runTool(ctx, call.MachineID, call.SessionID, call.Name, args)
 	if err != nil {
@@ -381,7 +381,7 @@ func (s *Service) adoptStartedSession(ctx context.Context, m Device, launcher, c
 		var best proto.Session
 		found := false
 		for _, sess := range list {
-			if knownIDs[sess.SessionID] || !sess.StartedByJarvis || sess.Assistant || sess.Launcher != launcher ||
+			if knownIDs[sess.SessionID] || !sess.StartedByPersona || sess.Assistant || sess.Launcher != launcher ||
 				(sess.Cwd != cwd && sess.WorkspaceCwd != cwd) || sess.UpdatedAt.IsZero() {
 				continue
 			}

@@ -17,7 +17,7 @@ export const AGENT_GROUPINGS: { key: AgentGrouping; label: string; short: string
   { key: "state", label: t("lib-agent-groups.by_state"), short: t("lib-agent-groups.seg_state") },
 ];
 
-// the grouping this browser chose last (jarvis.agentGrouping, #1836); by todo until it chooses (#2812, was by machine, #1990)
+// the grouping this browser chose last (persona.agentGrouping, #1836); by todo until it chooses (#2812, was by machine, #1990)
 export function agentGrouping(value: string | null): AgentGrouping {
   return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "todo";
 }

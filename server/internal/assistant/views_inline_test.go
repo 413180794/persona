@@ -16,9 +16,9 @@ import (
 )
 
 func TestInlineViewsUseOnlyTrustedAssistantItems(t *testing.T) {
-	connection := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	connection := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if connection == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	database, err := db.Open(ctx, connection, db.ManagerSet)
@@ -105,9 +105,9 @@ func (h inlineFullHub) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 }
 
 func TestInlineTurnRegistersWithoutAnAppAndReadsFullText(t *testing.T) {
-	connection := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	connection := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if connection == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	database, err := db.Open(ctx, connection, db.ManagerSet)

@@ -202,8 +202,8 @@ final class DemoHub {
             let runs = data["runs"]?.array ?? []
             return ["runs": .array(q["ref"].map { ref in runs.filter { $0["ref_id"]?.string == ref } } ?? runs)]
         case ["assistant", "memory"]:
-            if q["space"] == "health" { return ["files": .array([]), "dir": "/home/me/.jarvis/health/memory"] }
-            return ["files": .array(memory), "dir": "/home/me/.jarvis/assistant/memory"]
+            if q["space"] == "health" { return ["files": .array([]), "dir": "/home/me/.persona/health/memory"] }
+            return ["files": .array(memory), "dir": "/home/me/.persona/assistant/memory"]
         case ["inbox"]: return ["items": .array(inbox)]
         case ["todos"]: return ["todos": .array(todos)]
         case ["mail", "accounts"]: return ["accounts": data["mail_accounts"] ?? .array([])]
@@ -594,8 +594,8 @@ final class DemoHub {
         let sid = String(format: "d0e0a0b0-0000-4000-8000-%012d", made)
         let title = String(prompt.prefix(20))
         sessions.append(["machine_id": "server", "session_id": .string(sid), "title": .string(title.isEmpty ? "新对话" : title), // i18n-ignore
-                         "cwd": "/home/me/.jarvis/assistant", "status": "working", "state": "working", "agent": "claude",
-                         "launcher": "claude", "model": "opus", "started_by_jarvis": true, "assistant": true,
+                         "cwd": "/home/me/.persona/assistant", "status": "working", "state": "working", "agent": "claude",
+                         "launcher": "claude", "model": "opus", "started_by_persona": true, "assistant": true,
                          "updated_at": .string(Self.iso(.now)), "last_text": "", "permission_mode": "default", "effort": "high",
                          "pending_interactions": 0, "rev": 1000])
         _ = append(sid, ["role": "user", "kind": "text", "text": .string(prompt)])

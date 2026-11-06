@@ -17,11 +17,10 @@ func TestAskTextTitleWithoutInjectedBlocks(t *testing.T) {
 		Options: []proto.QuestionOption{{Label: "发"}, {Label: "先不发"}}}}
 	input, _ := json.Marshal(map[string]any{"questions": q})
 	for title, want := range map[string]string{
-		`<jarvis-context kind="context" title="接上…`:                      "【demo】",
-		`<persona-context kind="context" title="接上…`:                     "【demo】",
-		`<jarvis-context kind="context" title="接上旧主对话" url="">` + "\n摘要": "【接上旧主对话】",
-		"<jarvis-con…": "【demo】",
-		"修一下登录":        "【修一下登录】",
+		`<persona-context kind="context" title="別の…`:                      "【demo】",
+		`<persona-context kind="context" title="接上旧主对话" url="">` + "\n摘要": "【接上旧主对话】",
+		"<persona-con…": "【demo】",
+		"修一下登录":         "【修一下登录】",
 	} {
 		ix := proto.Interaction{ID: "ix_1", Kind: proto.IxQuestion, SessionTitle: title, Cwd: "/work/demo", ToolName: "AskUserQuestion",
 			ToolInput: input, Questions: q}

@@ -212,7 +212,7 @@ func (s *Service) channelTarget(ctx context.Context, id string) (resolvedTarget,
 	c.mu.Unlock()
 	switch t.Kind {
 	case channel.TargetNew:
-		return s.resolveBotTarget(ctx, botTarget{Kind: targetJarvis})
+		return s.resolveBotTarget(ctx, botTarget{Kind: targetPersona})
 	case channel.TargetConversation:
 		d, ok := s.device(ctx, t.MachineID)
 		if !ok {
@@ -748,10 +748,10 @@ func stripContext(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// contextBlockRe and contextOpenRe are a <persona-context> block, or one with the old name <jarvis-context> (#3182).
+// contextBlockRe and contextOpenRe are a <persona-context> block.
 var (
-	contextBlockRe = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
-	contextOpenRe  = regexp.MustCompile(`<(?:jarvis|persona)-context\b`)
+	contextBlockRe = regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`)
+	contextOpenRe  = regexp.MustCompile(`<persona-context\b`)
 )
 
 func firstNonEmpty(s ...string) string {

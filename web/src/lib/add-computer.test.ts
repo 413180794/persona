@@ -5,7 +5,7 @@ import {
 import { ApiError } from "./api";
 import type { Machine } from "./types";
 
-const PAIR = "jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_x&machine=mac";
+const PAIR = "persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_x&machine=mac";
 const m = (over: Partial<Machine> = {}): Machine => ({ id: "mac", name: "我的 MacBook", online: false, ...over });
 
 describe("canAddComputer", () => {
@@ -28,16 +28,16 @@ describe("commands", () => {
       line: "curl -fsSL https://example.com/install.sh | sh",
       installs: true,
     });
-    expect(linuxCommand({ pair_url: PAIR, command: `jarvis-link pair '${PAIR}'` })).toEqual({ line: `jarvis-link pair '${PAIR}'`, installs: false });
+    expect(linuxCommand({ pair_url: PAIR, command: `persona-link pair '${PAIR}'` })).toEqual({ line: `persona-link pair '${PAIR}'`, installs: false });
   });
 
   it("builds the pairing line when the hub gave none, and keeps a quote out of the quotes", () => {
-    expect(pairCommand({ pair_url: PAIR })).toBe(`jarvis-link pair '${PAIR}'`);
-    expect(pairCommand({ pair_url: "jarvis://link?x='y" })).toBe("jarvis-link pair 'jarvis://link?x=%27y'");
+    expect(pairCommand({ pair_url: PAIR })).toBe(`persona-link pair '${PAIR}'`);
+    expect(pairCommand({ pair_url: "persona://link?x='y" })).toBe("persona-link pair 'persona://link?x=%27y'");
   });
 
-  it("runs jarvis-link install with personad beside it on Windows (docs/windows.md)", () => {
-    expect(windowsCommand(PAIR)).toBe(`.\\jarvis-link.exe install --jarvisd .\\personad.exe --pair '${PAIR}'`);
+  it("runs persona-link install with personad beside it on Windows (docs/windows.md)", () => {
+    expect(windowsCommand(PAIR)).toBe(`.\\persona-link.exe install --personad .\\personad.exe --pair '${PAIR}'`);
   });
 });
 

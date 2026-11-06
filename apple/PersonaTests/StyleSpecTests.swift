@@ -1,7 +1,7 @@
 import SwiftUI
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// Every style in every color (Interface Style × Theme Color, a persona's included) against the readability floors in docs/ios.md
 /// (「设计语言」): white words on the accent (solid buttons, selected chips) ≥ 3.5:1, the words on the user's own bubble
@@ -170,7 +170,7 @@ struct StyleSpecTests {
         #expect(C.resolve(style: nil, color: nil, persona: nil) == C(style: .glass, color: .style))
         #expect(C.resolve(style: "clay", color: nil, persona: nil) == C(style: .clay, color: .style))
         #expect(C.resolve(style: "claude", color: nil, persona: nil) == C(style: .glass, color: .coral))
-        #expect(C.resolve(style: "island", color: nil, persona: "jarvis") == C(style: .island, color: .style))
+        #expect(C.resolve(style: "island", color: nil, persona: "persona") == C(style: .island, color: .style))
         // A persona chosen colored the app: it still does.
         #expect(C.resolve(style: "clay", color: nil, persona: "doudou") == C(style: .clay, color: .persona))
         #expect(C.resolve(style: "claude", color: nil, persona: "doudou") == C(style: .glass, color: .persona))

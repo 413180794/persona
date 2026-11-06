@@ -1,17 +1,17 @@
 import XCTest
 
 /// Knowledge search: a hit opens its entry at what was found, and coming back shows the results again (no error).
-/// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB); JARVIS_MOCK_TOKEN and JARVIS_KB_QUERY point it at another hub.
+/// Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB); PERSONA_MOCK_TOKEN and PERSONA_KB_QUERY point it at another hub.
 final class KnowledgeSearchTests: XCTestCase {
     @MainActor func testAHitOpensAtTheMatchAndBackKeepsTheResults() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let env = ProcessInfo.processInfo.environment
-        let token = env["JARVIS_MOCK_TOKEN"] ?? "mock"
-        let query = env["JARVIS_KB_QUERY"] ?? "灰度"
+        let token = env["PERSONA_MOCK_TOKEN"] ?? "mock"
+        let query = env["PERSONA_KB_QUERY"] ?? "灰度"
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
             + "&token=" + token.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistantPage", "knowledge"]
         app.launchPinned()

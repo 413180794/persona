@@ -74,7 +74,7 @@ def run(browser, base, token, shots):
     page.set_default_timeout(10000)
     page.goto(base + "/overview?token=" + token)
     expect(page.locator(HEADERS).first).to_be_visible()  # signed in: the token is exchanged and kept
-    page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('fold:')).forEach(k => localStorage.removeItem(k)); localStorage.setItem('jarvis.agentGrouping', 'space'); localStorage.setItem('jarvis.theme', 'light')")
+    page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('fold:')).forEach(k => localStorage.removeItem(k)); localStorage.setItem('persona.agentGrouping', 'space'); localStorage.setItem('persona.theme', 'light')")
     page.reload()
 
     # 1. "Other agents" is a toggle with a count; with an agent in it that wants a look it starts open.
@@ -100,7 +100,7 @@ def run(browser, base, token, shots):
 
     # 3. Folded stays folded after a reload, in both themes; a click opens it again.
     for theme in ("light", "dark"):
-        page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+        page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
         page.reload()
         expect(header(page, LOOSE)).to_have_attribute("aria-expanded", "false")
         settled(page)
@@ -118,11 +118,11 @@ def run(browser, base, token, shots):
     page.reload()
     expect(header(page, LOOSE)).to_have_attribute("aria-expanded", "true")
     ok("a click opens it again, and open stays open after a reload")
-    page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
+    page.evaluate("localStorage.setItem('persona.theme', 'light')")
 
     # 4. Under every grouping each group's title folds and opens it.
     for grouping in ("repo", "space", "state", "machine", "todo"):
-        page.evaluate(f"localStorage.setItem('jarvis.agentGrouping', '{grouping}')")
+        page.evaluate(f"localStorage.setItem('persona.agentGrouping', '{grouping}')")
         page.reload()
         heads = page.locator(HEADERS)
         expect(page.locator('aside a[href^="/s/"]').first).to_be_attached()  # the agents are in
@@ -141,7 +141,7 @@ def run(browser, base, token, shots):
             expect(h).to_have_attribute("aria-expanded", was)
             names.append(h.inner_text().strip().splitlines()[0])
         ok(f"{grouping}: every group folds from its title ({', '.join(names)})")
-    page.evaluate("localStorage.setItem('jarvis.agentGrouping', 'space')")
+    page.evaluate("localStorage.setItem('persona.agentGrouping', 'space')")
     ctx.close()
 
     # 5. On a touch screen (no hover) the fold arrow is shown, not only on hover.
@@ -152,7 +152,7 @@ def run(browser, base, token, shots):
     page.goto(base + "/overview?token=" + token)
     expect(page.locator("main").get_by_role("button", name="侧边栏").first).to_be_visible()
     # "Other agents" is "By project"'s (a new browser groups "By to-do"; under "By machine" the machines' titles fold the same way)
-    page.evaluate("localStorage.setItem('jarvis.agentGrouping', 'space')")
+    page.evaluate("localStorage.setItem('persona.agentGrouping', 'space')")
     page.reload()
     page.locator("main").get_by_role("button", name="侧边栏").first.click()
     arrow = header(page, LOOSE).locator("svg").last

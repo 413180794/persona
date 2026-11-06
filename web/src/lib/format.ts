@@ -221,7 +221,7 @@ export function bytes(n?: number): string {
 
 /**
  * A random (v4) UUID. crypto.randomUUID only exists in a secure context (HTTPS, localhost): a hub opened over plain
- * http gets one from getRandomValues, which is everywhere. The hub takes only UUIDs as op ids (X-Jarvis-Op-Id, #1651).
+ * http gets one from getRandomValues, which is everywhere. The hub takes only UUIDs as op ids (X-Persona-Op-Id, #1651).
  */
 export function uuid(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();

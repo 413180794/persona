@@ -2,7 +2,7 @@ import XCTest
 
 /// The machine pages against a real hub: a local test hub (fake HOME, its own database, an isolated herdr session;
 /// docs/testing.md「机器页面」), never the one in use, since this reconnects machines and starts a session.
-///   TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=<token>
+///   TEST_RUNNER_PERSONA_LIVE_MACHINES_HUB=http://127.0.0.1:<port> TEST_RUNNER_PERSONA_LIVE_MACHINES_TOKEN=<token>
 /// The hub needs one online `local` machine and one ssh machine that cannot connect.
 final class MachinePagesLiveTests: XCTestCase {
     private var hub = ""
@@ -12,8 +12,8 @@ final class MachinePagesLiveTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         let env = ProcessInfo.processInfo.environment
-        guard let h = env["JARVIS_LIVE_MACHINES_HUB"], let t = env["JARVIS_LIVE_MACHINES_TOKEN"] else {
-            throw XCTSkip("needs a local test hub (JARVIS_LIVE_MACHINES_HUB, JARVIS_LIVE_MACHINES_TOKEN)")
+        guard let h = env["PERSONA_LIVE_MACHINES_HUB"], let t = env["PERSONA_LIVE_MACHINES_TOKEN"] else {
+            throw XCTSkip("needs a local test hub (PERSONA_LIVE_MACHINES_HUB, PERSONA_LIVE_MACHINES_TOKEN)")
         }
         hub = h
         token = t
@@ -35,7 +35,7 @@ final class MachinePagesLiveTests: XCTestCase {
 
     private func launch(_ args: [String]) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + token
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + token
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", ""] + args
         app.launchPinned()
     }
@@ -100,14 +100,14 @@ final class MachinePagesLiveTests: XCTestCase {
     }
 
     /// New Session on the online machine: pick a directory in the browser and start: the chat opens and the hub has the
-    /// session. The test closes it again. JARVIS_LIVE_MACHINES_CODE is a directory on that machine holding `demo`
+    /// session. The test closes it again. PERSONA_LIVE_MACHINES_CODE is a directory on that machine holding `demo`
     /// (the browser starts there; the node's recent directories are the machine's real ones).
     @MainActor func testNewSessionOnTheLocalMachine() throws {
         let machines = (api("/api/v1/machines")["machines"] as? [[String: Any]]) ?? []
         let local = try XCTUnwrap(machines.first { $0["online"] as? Bool == true })
         let mid = local["id"] as! String
         let before = Set(((api("/api/v1/sessions")["sessions"] as? [[String: Any]]) ?? []).compactMap { $0["session_id"] as? String })
-        let code = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_LIVE_MACHINES_CODE"], "JARVIS_LIVE_MACHINES_CODE")
+        let code = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_LIVE_MACHINES_CODE"], "PERSONA_LIVE_MACHINES_CODE")
         launch(["-tab", "dev", "-newChat.machine", mid, "-cwd.\(mid)", code])
         see(app.buttons["新建会话"], "新建会话").tap()
         see(button(local["name"] as! String), "the online machine's card").tap()

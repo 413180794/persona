@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The relay's answer, per path: "/refused/…" a 403 in its words, "/moved/…" a 301 to its new address.
 private final class RelayStub: URLProtocol, @unchecked Sendable {

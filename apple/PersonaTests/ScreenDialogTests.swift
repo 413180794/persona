@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct ScreenDialogTests {
     /// Several questions: the TUI's tab bar is steps, not text above the question (it showed as a grey code box).

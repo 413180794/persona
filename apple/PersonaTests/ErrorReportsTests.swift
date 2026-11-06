@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Errors and crashes for the hub's error reports (#5621, docs/protocol.md "Error reports"): the queue on disk, the
 /// feature gate, batching and what each answer does to the batch.

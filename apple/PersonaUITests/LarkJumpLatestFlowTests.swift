@@ -4,7 +4,7 @@ import XCTest
 /// date from the hub without pulling a reader back down.
 final class LarkJumpLatestFlowTests: XCTestCase {
     private func fixture(_ change: [String: Any]? = nil) async throws -> [String: Any] {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
               let url = URL(string: hub + "/test/lark-history/state") else { throw XCTSkip("needs history mock") }
         var r = URLRequest(url: url)
         if let change { r.httpMethod = "POST"; r.httpBody = try JSONSerialization.data(withJSONObject: change) }
@@ -15,9 +15,9 @@ final class LarkJumpLatestFlowTests: XCTestCase {
 
     @MainActor private func launch() throws -> XCUIApplication {
         continueAfterFailure = false
-        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"])
         let app = XCUIApplication()
-        app.launchArguments = ["-pairURL", "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock",
+        app.launchArguments = ["-pairURL", "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock",
             "-tab", "feishu", "-demo.on", "NO", "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES",
             "-larkTop", "NO", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launchPinned()
@@ -55,7 +55,7 @@ final class LarkJumpLatestFlowTests: XCTestCase {
     }
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }

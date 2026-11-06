@@ -475,7 +475,7 @@ func TestCredsRevokedTakesOnlyAppCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	if dt, _ := center.store.DeviceTokenByHash(ctx, hash("link")); dt == nil {
-		t.Fatal("a jarvis-link credential was revoked")
+		t.Fatal("a persona-link credential was revoked")
 	}
 	if n, err := center.store.ImportDeviceTokens(ctx, []db.ExportedToken{gone}); err != nil || n != 0 {
 		t.Fatalf("handing over a revoked credential: %d %v", n, err)
@@ -595,8 +595,8 @@ func newFakeConnector(t *testing.T, node *meshNode) *fakeConnector {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "connector.jarvis.invalid"},
-		DNSNames: []string{"connector.jarvis.invalid"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "connector.persona.invalid"},
+		DNSNames: []string{"connector.persona.invalid"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
 		t.Fatal(err)
@@ -623,7 +623,7 @@ func (fc *fakeConnector) addr() string { return fc.ln.Addr().String() }
 
 func (fc *fakeConnector) link() string {
 	q := url.Values{"addr": {fc.addr()}, "fp": {fc.fp}, "code": {fc.code}}
-	return "jarvis://connector?" + q.Encode()
+	return "persona://connector?" + q.Encode()
 }
 
 func (fc *fakeConnector) authorized(r *http.Request) bool {

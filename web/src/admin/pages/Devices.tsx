@@ -1,4 +1,4 @@
-// "Devices": every device credential the hub issued (phones, watches, browsers, jarvis-links), revoking one, and a pairing
+// "Devices": every device credential the hub issued (phones, watches, browsers, persona-links), revoking one, and a pairing
 // QR code for a new phone. On a member hub the center issues and revokes them all (409 member_hub): this page says so.
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";

@@ -155,7 +155,7 @@ extension Theme {
         /// Translate, and what was translated.
         static let translate = "translate"
         /// Settings › Appearance › Avatar.
-        static let persona = "person.crop.artframe"
+        static let avatar = "person.crop.artframe"
         /// Settings › Appearance › Interface Style.
         static let style = "paintpalette"
         /// Settings › Appearance › Theme Color.
@@ -259,7 +259,7 @@ extension Theme {
         /// The phone's own health trends (steps, sleep, weight drawn from Apple Health, #3272).
         static let healthTrends = "chart.line.uptrend.xyaxis"
         /// Persona itself (the brand's four-point star).
-        static let jarvis = "sparkle"
+        static let persona = "sparkle"
         /// AI does it: summaries, drafts, AI edits, hand to Persona.
         static let ai = "sparkles"
         /// The Agents tab and what stands for it.
@@ -362,7 +362,7 @@ extension Theme {
         static let hostKeyTrusted = "touchid"
         /// The hub has a newer version, or is updating itself (docs/hub-update.md).
         static let hubUpdate = "arrow.down.to.line.circle"
-        /// The assistant's skills (~/.jarvis/skills).
+        /// The assistant's skills (~/.persona/skills).
         static let skills = "puzzlepiece.extension"
         /// A plugin of the hub's (Settings › Extensions, docs/extensions.md).
         static let plugins = "powerplug"
@@ -483,7 +483,7 @@ extension Theme {
         static let memory = "brain"
         /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
-        /// The knowledge base (~/.jarvis/data).
+        /// The knowledge base (~/.persona/data).
         static let knowledge = "books.vertical"
         /// Health: the health space (docs/health.md), its entry and its conversations' mark.
         static let health = "heart"

@@ -22,7 +22,7 @@ Planned Discord support (the user's own bot, extension, #2828) is in `docs/plan-
 | `github` | GitHub | In the hub (`connector/github`) | `Archive` (`updated_at` cursor) | Yes, rule-based tiers + noise reduction (`rules.go`) | `github_search/read/diff/checks` | `github_comment`, `github_review` (gated) | Reads `gh` login from a computer (`credential.gh_token`) |
 | `imessage` | Messages | Reads on the Mac's node, with an RPC-forwarding adapter in the hub (`connector/imessage`) | `Archive` (ROWID) | Yes | `imessage_chats/read/search` | None | None (grant personad Full Disk Access on the Mac) |
 | `telegram` | Telegram | Extension `telegram` in the `nwverse/persona-extensions` marketplace (#1704, #2057, code outside this repo), called by the hub over the process extension protocol (`connector/proc`) | `Archive` | Yes | Read-only tools; reads through the `tg` CLI (`Unlisted`) | `telegram_send/forward/react/mark_read` (`tg` CLI, `Unlisted`, gated) | Stepwise `Login` (phone number, code, two-step verification password), session encrypted in `connector_secrets` |
-| `wechat` | WeChat | Separate built-in extension program `jarvisd-wechat` (`docs/wechat.md`): a bot in WeChat, not a data source but a channel (`docs/channels.md`); the connector handles only binding and status | None | None | None | None | QR `Login` (`kind: qr`), token encrypted in `connector_secrets` |
+| `wechat` | WeChat | Separate built-in extension program `personad-wechat` (`docs/wechat.md`): a bot in WeChat, not a data source but a channel (`docs/channels.md`); the connector handles only binding and status | None | None | None | None | QR `Login` (`kind: qr`), token encrypted in `connector_secrets` |
 | `lark` | Lark | Registered by the Lark extension since #1571 (formerly the hub's lark_connector.go wrapping the original Lark gateway code) | `Chats` (one cursor per conversation) + `Items` (documents, meetings, events) | Inbox blocks from the extension (block types in `assistant/inbox_blocks.go`; formerly the hub's inbox_own.go) | `lark_chats/messages/search` | Through the Lark extension's skill + the node's Bash gate (rules below) | Log in through the Lark gateway on the hub machine |
 | `mail` | Mail | In the hub (`extmgr/mail_connector.go`) | `Archive` (UID per account) | The hub's own Inbox blocks | `mail_accounts/search/read` | `mail_send` (gated) | Its own API: password / Gmail and Outlook OAuth (`/api/v1/mail/…`) |
 
@@ -307,7 +307,7 @@ Size: **medium**. Hub Inbox, GitHub, Telegram, Messages; the App's mute menu is 
 **Agreed; v2 records but does not merge. Hints store only HMAC hashes, are hidden from models, and are used only to recognize people (decided).**
 
 Current state: knowledge-base people (`Person` in `kb/store.go`) have only one `Source` + `SourceID`; the same person has separate entries in Lark, mail, Messages and Telegram.
-To keep numbers off disk, Messages already uses a phone/email hash as the person id (`PersonKey` in `connector/imessage/jarvis.go`).
+To keep numbers off disk, Messages already uses a phone/email hash as the person id (`PersonKey` in `connector/imessage/persona.go`).
 
 Proposal:
 
@@ -369,7 +369,7 @@ Current state (unchanged):
 - Lark writes are the exception: commands and lark-cli in the Lark extension's skill are classified by the node's Bash hook (rules also in `connector_gate` after M5), requiring confirmation regardless of permission mode.
 - User skills in `~/.persona/skills` are linked into the assistant directory; their scripts follow Claude Code's permission flow.
 
-The former proposal generalized `larkgate.go` command classification to every skill (declare write scripts in `jarvis.json`, confirm on the phone at execution, #654 / #657).
+The former proposal generalized `larkgate.go` command classification to every skill (declare write scripts in `persona.json`, confirm on the phone at execution, #654 / #657).
 The user's decision: Claude Code already authorizes skill writes; Claude judges for itself and asks when a user decision is needed. "Do not over-engineer this." So it was not implemented or merged.
 
 The rule to make writes connector actions remains: Telegram send, reply, forward, reaction and mark-read became actions such as `telegram_send` (#988),

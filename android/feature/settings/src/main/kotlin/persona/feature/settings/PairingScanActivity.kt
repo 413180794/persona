@@ -33,6 +33,6 @@ class PairingScanActivity : CaptureActivity() {
     }
 
     companion object {
-        const val ManualInput = "jarvis.feature.settings.manual_input"
+        const val ManualInput = "persona.feature.settings.manual_input"
     }
 }

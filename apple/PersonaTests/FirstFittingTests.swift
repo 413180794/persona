@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// `FirstFitting` draws what `ViewThatFits(in: .horizontal)` draws (#1337): the same candidate at every width, to the
 /// pixel, and picks the way it does.

@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The long-press bar's emoji (`LarkQuickReactions`): the hub's quick list, each once, as many as the row shows.
 struct LarkQuickReactionsTests {

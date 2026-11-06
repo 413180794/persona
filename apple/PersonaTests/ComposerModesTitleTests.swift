@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The shell composer's model button (#1091): the short model names and "model · effort".
 @MainActor

@@ -1,7 +1,7 @@
 import AudioToolbox
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// How a call opens the microphone (docs/voice.md 6.4, #5029): nothing reads `AVAudioEngine.inputNode` unless the session
 /// has an input that may be recorded and, on the simulator, a short recording started; the simulator records without

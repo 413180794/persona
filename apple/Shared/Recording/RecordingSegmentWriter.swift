@@ -25,7 +25,7 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
     var onSegment: (@Sendable (Segment) -> Void)?
 
     private let engine = AVAudioEngine()
-    private let queue = DispatchQueue(label: "jarvis.recording-writer", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "persona.recording-writer", qos: .userInitiated)
     private let outFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: RecordingAudioSpec.sampleRate, channels: 1, interleaved: false)!
 
     // Writer state: only touched on `queue`.

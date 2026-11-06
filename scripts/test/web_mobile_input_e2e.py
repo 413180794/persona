@@ -213,7 +213,7 @@ def run(base, shots):
         ok("scrolled up: Step N / M and 跳到底部 side by side; 跳到底部 still goes to the end")
         if shots:
             for theme in ("dark", "light"):  # light last: the checks below go on in it
-                page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+                page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
                 page.reload()
                 page.wait_for_selector("[data-chat-cards]", state="attached")
                 page.wait_for_timeout(900)

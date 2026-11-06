@@ -2,20 +2,19 @@ import ActivityKit
 import Foundation
 
 /// The one Live Activity Persona runs: the "Fleet" (docs/live-activity.md). Built into the app (starts it, reports its
-/// tokens) and the widget extension (draws it). The hub push-starts it with `attributes-type: JarvisActivityAttributes`
+/// tokens) and the widget extension (draws it). The hub push-starts it with `attributes-type: PersonaActivityAttributes`
 /// and `attributes: {"kind": "fleet"}`, so neither name may change.
-// Compatibility: the system addresses this type by its original module/type identity.
-nonisolated struct JarvisActivityAttributes: ActivityAttributes {
+nonisolated struct PersonaActivityAttributes: ActivityAttributes {
     typealias ContentState = FleetState
     var kind = "fleet"
 }
 
-/// Deep links the activity opens: `jarvis://open?machine=<id>&session=<id>`.
+/// Deep links the activity opens: `persona://open?machine=<id>&session=<id>`.
 nonisolated enum FleetLink {
     static func url(_ item: FleetState.Item?) -> URL? {
-        guard let key = item?.key else { return URL(string: "jarvis://open") }
+        guard let key = item?.key else { return URL(string: "persona://open") }
         var c = URLComponents()
-        c.scheme = "jarvis"
+        c.scheme = "persona"
         c.host = "open"
         c.queryItems = [URLQueryItem(name: "machine", value: key.machine), URLQueryItem(name: "session", value: key.session)]
         return c.url
@@ -25,7 +24,7 @@ nonisolated enum FleetLink {
     /// app, where it was (list or chat, same scroll position) — with several agents, landing in whichever came first
     /// was a guess.
     static func whole(_ state: FleetState) -> URL? {
-        state.items.count == 1 ? url(state.items.first) : URL(string: "jarvis://open")
+        state.items.count == 1 ? url(state.items.first) : URL(string: "persona://open")
     }
 
     /// A tap on the lock screen, by what `FleetLockScreen` draws: one request alone (the first a button settles, or
@@ -37,9 +36,9 @@ nonisolated enum FleetLink {
         return whole(state)
     }
 
-    /// The session a link opens, or nil for anything else (`jarvis://open` alone just opens the app).
+    /// The session a link opens, or nil for anything else (`persona://open` alone just opens the app).
     static func session(_ url: URL) -> (machine: String, session: String)? {
-        guard ["persona", "jarvis"].contains(url.scheme?.lowercased() ?? ""), url.host == "open",
+        guard url.scheme?.lowercased() == "persona", url.host == "open",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
               let m = items.first(where: { $0.name == "machine" })?.value, !m.isEmpty,
               let s = items.first(where: { $0.name == "session" })?.value, !s.isEmpty else { return nil }

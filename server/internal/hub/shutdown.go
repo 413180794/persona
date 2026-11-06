@@ -99,7 +99,7 @@ func (h *Hub) stopWebSockets(ctx context.Context) error {
 	if h.stopping.Load() {
 		closeReason = "hub restarting" // after hub_restarting (restart.go)
 	}
-	links := h.stopLinks() // their streams end now; jarvis-link comes back to the next hub on the 1001
+	links := h.stopLinks() // their streams end now; persona-link comes back to the next hub on the 1001
 	h.stopPeerLinks()      // the other hubs of the mesh group hear a 1001 too (peer_link.go)
 	buses := h.stopBus()   // the services reconnect to the next hub on the 1001 (bus.go)
 

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Add Mail Account's form (`MailAccountForm`): the request it makes.
 @MainActor struct MailAccountFormTests {

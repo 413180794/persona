@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// The upload port takes a new jarvisd for the node, what the hub's "Redeploy" sends over ssh otherwise (devices/deploy.go):
+// The upload port takes a new personad for the node, what the hub's "Redeploy" sends over ssh otherwise (devices/deploy.go):
 // one JSON line {"size","sha256"} of the binary, the binary gzipped, then the node answers one JSON line
 // {"ok"} or {"error"}. On ok the node has replaced its own executable and exits, and its supervisor (launchd,
 // systemd: scripts/deploy/node-launchd.sh) starts the new one.
@@ -194,7 +194,7 @@ func Upload(ctx context.Context, c net.Conn, path string) error {
 	return nil
 }
 
-// Executable is the file a running jarvisd was started from, symlinks resolved: what an upload replaces.
+// Executable is the file a running personad was started from, symlinks resolved: what an upload replaces.
 func Executable() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {

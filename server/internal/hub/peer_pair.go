@@ -21,7 +21,7 @@ import (
 )
 
 // Pairing two hubs (docs/plan-hub-mesh.md 2.2, docs/mesh.md "Pairing"): hub B makes a one-time code good for 10 minutes
-// (admin page, `jarvisd hub pair --peer`), a link carrying B's addresses, hub_id and key pin. Hub A, given the code,
+// (admin page, `personad hub pair --peer`), a link carrying B's addresses, hub_id and key pin. Hub A, given the code,
 // connects to B pinned to that key, hands over a credential it issued for B and its own pin and addresses, and gets
 // B's credential for A in return. Both sides then pin each other, hold each other's credential and dial each other.
 // A credential of kind and role peer opens /api/v1/peer and nothing else; only its hash is kept.
@@ -34,7 +34,7 @@ const (
 
 // peerCode is a pairing code as the admin page shows it.
 type peerCode struct {
-	Code      string    `json:"code"` // jarvis://peer?…
+	Code      string    `json:"code"` // persona://peer?…
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
@@ -104,7 +104,7 @@ func (h *Hub) newPeerCode(ctx context.Context) (*peerCode, error) {
 		}
 		q.Add("url", e)
 	}
-	return &peerCode{Code: "jarvis://peer?" + q.Encode(), ExpiresAt: expires}, nil
+	return &peerCode{Code: "persona://peer?" + q.Encode(), ExpiresAt: expires}, nil
 }
 
 var errNoTLS = i18n.Err("hub-peer_pair.no_tls")
@@ -117,7 +117,7 @@ type parsedPeerCode struct {
 
 func parsePeerCode(raw string) (*parsedPeerCode, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (u.Scheme != "jarvis" && u.Scheme != "persona") || u.Host != "peer" {
+	if err != nil || u.Scheme != "persona" || u.Host != "peer" {
 		return nil, i18n.Err("hub-peer_pair.not_a_code")
 	}
 	q := u.Query()

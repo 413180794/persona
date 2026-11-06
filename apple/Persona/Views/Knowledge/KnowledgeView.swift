@@ -3,7 +3,7 @@ import MarkdownUI
 import PersonaKit
 import SwiftUI
 
-/// What Persona knows (the hub's ~/.jarvis/data, docs/knowledge.md): projects first, then chats, people, docs, meetings and
+/// What Persona knows (the hub's ~/.persona/data, docs/knowledge.md): projects first, then chats, people, docs, meetings and
 /// events, most important and most relevant first. Not a browser of Feishu: every row is Persona' own digest, and the
 /// way out is handing it to Persona or an Agent.
 ///
@@ -634,7 +634,7 @@ struct KnowledgeDetailView: View {
                 // Empty once the header's parts are taken out (a summary that is just the one line): no blank card.
                 if let sum = d.summary, case let profile = Self.profile(sum, oneLine: shown.oneLine), !profile.isEmpty {
                     Section("Profile") {
-                        Markdown(Links.markdown(MathMarkdown.rewrite(profile))).markdownTheme(.jarvis).textSelection(.enabled)
+                        Markdown(Links.markdown(MathMarkdown.rewrite(profile))).markdownTheme(.persona).textSelection(.enabled)
                             .padding(.vertical, Theme.Space.sm)
                     }
                 }
@@ -974,7 +974,7 @@ struct KnowledgeDetailView: View {
     }
 
     private func ask() async {
-        await model.askJarvis(context.xml + "\n\n说说「\(shown.name)」现在怎么样了：最新进展、在等我的事、接下来该做什么，能替我处理的先处理。") // i18n-ignore
+        await model.askPersona(context.xml + "\n\n说说「\(shown.name)」现在怎么样了：最新进展、在等我的事、接下来该做什么，能替我处理的先处理。") // i18n-ignore
     }
 
     private func load() async {
@@ -1036,7 +1036,7 @@ struct KBMomentView: View {
                 }
                 if let chunks {
                     ForEach(Array(chunks.enumerated()), id: \.offset) { _, c in
-                        Markdown(c).markdownTheme(.jarvis)
+                        Markdown(c).markdownTheme(.persona)
                     }
                 } else if let error {
                     Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption)

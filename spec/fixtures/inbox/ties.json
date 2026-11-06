@@ -7,9 +7,9 @@
       "description": "同时间按标识排序是本任务补充规则，并单列 iOS 当前次序。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -254,9 +254,9 @@
       "description": "补充的同时间标识排序不随输入顺序变化。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [

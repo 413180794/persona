@@ -23,7 +23,7 @@ import (
 // Without Node.js 22+, the package, or claude, or for a launcher that is a shell command the SDK can't run, the
 // conversation runs on the CLI and says why (proto.Session.RuntimeFallback).
 
-const sdkPackage = "jarvis-agent-sdk-runtime"
+const sdkPackage = "persona-agent-sdk-runtime"
 
 // sdkBridgePath is the bridge script inside the package.
 var sdkBridgePath = filepath.Join("agent-sdk", "dist", "bridge.mjs")
@@ -225,7 +225,7 @@ func extraArgs(args []string) map[string]any {
 }
 
 // sdkCommand is the bridge's command and its first stdin line. base is the assistant's environment; a managed
-// launcher's provider env replaces whatever the node inherited for a gateway, as `jarvisd launch` does. Nothing secret
+// launcher's provider env replaces whatever the node inherited for a gateway, as `personad launch` does. Nothing secret
 // goes on the command line: the key is in the environment and in the persona_start line.
 func (n *Node) sdkCommand(b sdkBridge, launcher string, s sdkStart, base []string) (*exec.Cmd, []byte, error) {
 	if l, managed := n.managedLauncher(launcher); managed {
@@ -234,7 +234,7 @@ func (n *Node) sdkCommand(b sdkBridge, launcher string, s sdkStart, base []strin
 		base = withoutEnv(base, envClearFor(l))
 		own := envList(s.env)
 		base = append(base, own...)
-		// as `jarvisd launch` does: a proxy inherited that no longer answers holds every request (deadproxy.go)
+		// as `personad launch` does: a proxy inherited that no longer answers holds every request (deadproxy.go)
 		base = withoutDeadProxies(base, own, l.BaseURL, func(msg string) { n.logf("assistant: launcher %s: %s", launcher, msg) })
 	} else if d := n.claudeStartDir.Load(); d != nil && *d != "" { // plain claude: as launcherCommand
 		base = append(base, "CLAUDE_CONFIG_DIR="+proto.ExpandHome(*d, userHome()))

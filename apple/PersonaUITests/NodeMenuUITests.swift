@@ -3,14 +3,14 @@ import XCTest
 /// The Agents list's node menu (#3098, docs/ios.md「节点菜单」): an agent row's long press splits its pane, runs Git in its
 /// folder and closes its tab after asking; a space's ⋯ runs an agent in one of its shells.
 ///   MOCK_TERMINAL_PANES=1 PORT=<port> python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/NodeMenuUITests
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps a picture of each step (`…_SHOTS_APPEARANCE` names the simulator's appearance).
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/NodeMenuUITests
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps a picture of each step (`…_SHOTS_APPEARANCE` names the simulator's appearance).
 final class NodeMenuUITests: XCTestCase {
     private var hub = ""
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TERMINAL_PANES=1 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TERMINAL_PANES=1 (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -26,7 +26,7 @@ final class NodeMenuUITests: XCTestCase {
 
     @MainActor private func launch() -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES"]
         app.launchPinned()
         return app
@@ -37,8 +37,8 @@ final class NodeMenuUITests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
-        let look = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"] ?? "light"
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
+        let look = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("node-\(name)-\(look).png"))
     }
 

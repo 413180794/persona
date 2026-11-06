@@ -59,7 +59,7 @@ def run(browser, base, hub, shots):
     page.goto(base + "/?token=mock")
     page.wait_for_function("() => !location.search.includes('token=')")
     page.wait_for_timeout(500)
-    page.evaluate("localStorage.setItem('lark.homeMessages', '1'); localStorage.setItem('jarvis.theme', 'light')")
+    page.evaluate("localStorage.setItem('lark.homeMessages', '1'); localStorage.setItem('persona.theme', 'light')")
     list_ = lambda: page.locator("div.overflow-y-auto:has([data-mid])").last  # noqa: E731
     row = lambda i: page.locator(f'[data-mid="history-{i}"]')  # noqa: E731
 
@@ -71,10 +71,10 @@ def run(browser, base, hub, shots):
         if not shots:
             return
         for theme in ("light", "dark"):
-            page.evaluate(f"document.documentElement.classList.toggle('dark', '{theme}' === 'dark'); localStorage.setItem('jarvis.theme', '{theme}')")
+            page.evaluate(f"document.documentElement.classList.toggle('dark', '{theme}' === 'dark'); localStorage.setItem('persona.theme', '{theme}')")
             page.wait_for_timeout(300)
             page.screenshot(path=os.path.join(shots, f"{name}-{theme}.png"))
-        page.evaluate("document.documentElement.classList.remove('dark'); localStorage.setItem('jarvis.theme', 'light')")
+        page.evaluate("document.documentElement.classList.remove('dark'); localStorage.setItem('persona.theme', 'light')")
 
     # 1. Opens at the newest; a first page shorter than the list asks for one more by itself, then stops.
     state(hub, reset=True)

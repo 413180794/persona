@@ -14,7 +14,7 @@ type PairToken struct {
 	ExpiresAt time.Time
 	UsedAt    *time.Time
 	DeviceID  string
-	// MachineID: made for one machine's jarvis-link (`jarvisd hub pair --machine`); it redeems only that credential.
+	// MachineID: made for one machine's persona-link (`personad hub pair --machine`); it redeems only that credential.
 	MachineID string
 }
 

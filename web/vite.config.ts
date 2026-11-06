@@ -9,9 +9,9 @@ import { classicWorkerProblem } from "./src/sw-entry-check";
 import { i18nCatalogs } from "./i18n-catalogs";
 import { pageTokensPlugin } from "./page-tokens";
 
-// `npm run dev` talks to a hub through Vite's proxy: JARVIS_HUB_URL (eval "$(python3 ../scripts/jarvis_config.py env)").
+// `npm run dev` talks to a hub through Vite's proxy: PERSONA_HUB_URL (eval "$(python3 ../scripts/persona_config.py env)").
 const environment = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-const hub = (environment.PERSONA_HUB_URL ?? environment.JARVIS_HUB_URL) || "http://127.0.0.1:18660";
+const hub = environment.PERSONA_HUB_URL || "http://127.0.0.1:18660";
 
 // The hub admin UI (docs/admin.md) is its own page, admin/index.html. Its code goes under admin/assets/, which the hub
 // serves only to sources inside admin.access; the client's bundle never references it.

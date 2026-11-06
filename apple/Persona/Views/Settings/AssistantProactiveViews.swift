@@ -1186,7 +1186,7 @@ struct AssistantMemoryDetail: View {
                     Divider()
                 }
                 Markdown(entry.body.isEmpty ? String(localized: "(Empty)") : Links.markdown(entry.body))
-                    .markdownTheme(.jarvis)
+                    .markdownTheme(.persona)
                     .textSelection(.enabled)
                     .environment(\.openURL, OpenURLAction { url in
                         #if os(macOS)

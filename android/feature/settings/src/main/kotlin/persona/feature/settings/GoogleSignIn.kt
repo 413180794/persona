@@ -27,7 +27,7 @@ import persona.core.contracts.api.MicrosoftFinish
  * the page says so and offers Gmail with an app password.
  */
 object GoogleSignIn {
-    /** Whose sign-in is waiting: Google's (Gmail) or Microsoft's (Outlook, `jarvis-mail-oauth://outlook`). */
+    /** Whose sign-in is waiting: Google's (Gmail) or Microsoft's (Outlook, `persona-mail-oauth://outlook`). */
     enum class Provider { Google, Microsoft }
 
     sealed interface Result {

@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
     private val launchAdapter: LaunchAdapter? by lazy {
         // A legacy launcher alias does not inherit target metadata; always query the canonical Activity.
         packageManager.getActivityInfo(ComponentName(this, MainActivity::class.java), PackageManager.GET_META_DATA).metaData
-            ?.getString("jarvis.launchAdapter")
+            ?.getString("persona.launchAdapter")
             ?.let { Class.forName(it).getDeclaredConstructor().newInstance() as LaunchAdapter }
     }
 

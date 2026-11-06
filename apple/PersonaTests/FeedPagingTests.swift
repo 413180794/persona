@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// When reading a conversation's feed asks for one more page (#4642).
 struct FeedPagingTests {

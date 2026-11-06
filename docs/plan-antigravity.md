@@ -114,7 +114,7 @@ Compared against the table in `docs/assistant.md` ("Codex"). ✅ = documented as
 | Resume / after restart | ✅ `--conversation <id>` | ✅ `session/resume`, `session/load` | [D3][C1] |
 | Stop | ❌ no control messages (`control_request` errors out and exits); only SIGINT to kill the process | ✅ `session/cancel` | [D3][D5] |
 | Messages mid-reply | ❌ every input is a new turn | ✅ a prompt sent while running is inserted into the current turn | [D3][D5] |
-| Persona MCP tools | ✅ the workdir's `.agents/mcp_config.json` or global config; unconfigured MCP tools need approval by default, add an `mcp(jarvis/*)` rule to allow them | ✅ same; whether the `mcpServers` passed with `session/new` is honored is not documented (it only says HTTP MCP configured by the editor needs `--process-per-session`) ❓ | [D8][D5] |
+| Persona MCP tools | ✅ the workdir's `.agents/mcp_config.json` or global config; unconfigured MCP tools need approval by default, add an `mcp(persona/*)` rule to allow them | ✅ same; whether the `mcpServers` passed with `session/new` is honored is not documented (it only says HTTP MCP configured by the editor needs `--process-per-session`) ❓ | [D8][D5] |
 | `ask_user` waiting on the phone | ✅ MCP tool calls time out after 180 seconds by default; `timeoutSeconds: -1` disables it | Same | [D8] |
 | Its own questions | ❌ decides on its own when headless, does not ask | ✅ elicitation forms | [C2][D5] |
 | Command / file-edit approval on the phone | ❌ everything needing approval is soft-denied (a line on stderr + `denied_actions`); only a `PreToolUse` hook can ask the phone | ✅ permission requests go to the client | [D3][C2][D5] |

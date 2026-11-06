@@ -39,7 +39,7 @@ type Device = db.Device
 // kindMac is a Mac app's device (PushRegistrar on macOS): it gets alerts, not the phone's wake pushes.
 const kindMac = "mac"
 
-// apnsConfig lives in ~/.jarvis/apns.json; without it the hub pushes through the relay each phone registered with
+// apnsConfig lives in ~/.persona/apns.json; without it the hub pushes through the relay each phone registered with
 // (docs/push-relay.md), and with neither push is off.
 type apnsConfig = apns.Config
 
@@ -656,7 +656,7 @@ func (p *Pusher) ready() bool {
 // Best effort: the system throttles these and never delivers them to a force-quit app. Phones only: the phone_*
 // tools run on the iPhone (a Mac registers as a desktop, docs/mac.md).
 func (p *Pusher) wake(reason string) {
-	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5",
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "persona_wake": reason}, "", "background", "5",
 		func(d Device) bool { return d.Kind != kindMac })
 }
 
@@ -674,7 +674,7 @@ func (p *Pusher) wakeDevices(reason string, ids map[string]bool) {
 		}
 	}
 	p.mu.Unlock()
-	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5",
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "persona_wake": reason}, "", "background", "5",
 		func(d Device) bool {
 			return d.Kind != kindMac && (ids[d.DeviceID] || (d.CredentialID != "" && ids[d.CredentialID]) || (!bound && ids["legacy"] && d.CredentialID == "" && d.Kind != "watch"))
 		})

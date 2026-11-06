@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Model Providers' wizard (ProviderWizardModel), Import from ~/.zshrc (LauncherImportModel) and Main Chat's How It Runs
 /// (#2455), against FakeHub: what each sends, and what the hub's answers come to.
@@ -21,7 +21,7 @@ struct ProviderWizardTests {
 
     private static func existing(headers: Bool = true, env: Bool = false) throws -> LauncherView {
         let json = #"""
-        {"name":"jv_glm","source":"jarvis","kind":"launcher","base_url":"https://gateway.example.com","model":"glm-5","has_key":true,
+        {"name":"jv_glm","source":"persona","kind":"launcher","base_url":"https://gateway.example.com","model":"glm-5","has_key":true,
          "auth":"bearer","has_headers":\#(headers),"has_env":\#(env),"models":[{"id":"glm-5","context_window":200000}],"opus_model":"glm-5-plus",
          "timeout_ms":600000,"origin":"zshrc:cc_glm@macbook"}
         """#
@@ -252,7 +252,7 @@ struct ProviderWizardTests {
         #expect(AssistantRuntime.status(runtime: "cli", fallback: " ") == nil)
         #expect(AssistantRuntime.status(runtime: "agentsdk", fallback: nil) == "Agent SDK")
         #expect(AssistantRuntime.status(runtime: nil, fallback: "找不到 Node.js 22+") == "已退回 CLI：找不到 Node.js 22+")
-        let s = try JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"s1","runtime_fallback":"找不到 Node.js 22+","assistant":true,"started_by_jarvis":true,"pending_interactions":0,"state":"idle"}"#.utf8))
+        let s = try JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"s1","runtime_fallback":"找不到 Node.js 22+","assistant":true,"started_by_persona":true,"pending_interactions":0,"state":"idle"}"#.utf8))
         #expect(s.runtimeFallback == "找不到 Node.js 22+" && s.runtime == nil)
     }
 
@@ -317,9 +317,9 @@ struct ProviderWizardTests {
         #expect(w.presets[1].signup == nil && w.signupPresets.map(\.id) == ["builtin/glm"])
         #expect(!w.presets[2].isBuiltin && w.presets[2].title == "示例网关" && w.presets[2].auth == nil)
         #expect(!w.presets[3].testable)
-        let view = try JSON.decoder.decode(LauncherView.self, from: Data(#"{"name":"glm","source":"jarvis","display_name":"智谱 GLM"}"#.utf8))
+        let view = try JSON.decoder.decode(LauncherView.self, from: Data(#"{"name":"glm","source":"persona","display_name":"智谱 GLM"}"#.utf8))
         #expect(view.displayName == "智谱 GLM" && view.title == "智谱 GLM")
-        let older = try JSON.decoder.decode(LauncherView.self, from: Data(#"{"name":"glm","source":"jarvis"}"#.utf8))
+        let older = try JSON.decoder.decode(LauncherView.self, from: Data(#"{"name":"glm","source":"persona"}"#.utf8))
         #expect(older.displayName == nil && older.title == "glm")
     }
 
@@ -393,7 +393,7 @@ struct ProviderWizardTests {
     @Test func savingSendsThePresetAndAssignWithTheNameEmpty() async throws {
         let hub = FakeHub()
         hub.on("POST", "/api/v1/launchers", json: #"""
-        {"launcher":{"name":"glm","display_name":"智谱 GLM","source":"jarvis","has_key":true},
+        {"launcher":{"name":"glm","display_name":"智谱 GLM","source":"persona","has_key":true},
          "assigned":["assistant","agent.new"],"kept":[]}
         """#)
         let w = await loadedPresets(hub)
@@ -415,7 +415,7 @@ struct ProviderWizardTests {
         hub.on("POST", "/api/v1/launchers") { req in
             let b = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data()).object ?? [:]
             let shown = b["display_name"]?.string ?? ""
-            return Data(#"{"launcher":{"name":"glm","display_name":"\#(shown)","source":"jarvis"},"assigned":[],"kept":[]}"#.utf8)
+            return Data(#"{"launcher":{"name":"glm","display_name":"\#(shown)","source":"persona"},"assigned":[],"kept":[]}"#.utf8)
         }
         let w = await loadedPresets(hub)
         w.presetID = "builtin/glm"
@@ -432,7 +432,7 @@ struct ProviderWizardTests {
 
     @Test func whatWasKeptSaysWhy() throws {
         let r = try JSON.decoder.decode(LauncherAdded.self, from: Data(#"""
-        {"launcher":{"name":"glm","source":"jarvis"},"assigned":["agent.new"],
+        {"launcher":{"name":"glm","source":"persona"},"assigned":["agent.new"],
          "kept":[{"purpose":"assistant","reason":"customized"},{"purpose":"agent.new","reason":"incompatible"},
                  {"purpose":"assistant","reason":"failed"},{"purpose":"later.use","reason":"new_reason"}]}
         """#.utf8))
@@ -454,7 +454,7 @@ struct ProviderWizardTests {
         hub.on("POST", "/api/v1/launchers/test", json: #"""
         {"ok":false,"ms":120,"model":"glm-5","code":"region_blocked","error":"Anthropic 不对这个地区提供服务：换 Key 也没用，换一个在这里能直接用的供应商"}
         """#)
-        hub.on("POST", "/api/v1/launchers", json: #"{"launcher":{"name":"glm","source":"jarvis"},"assigned":[],"kept":[]}"#)
+        hub.on("POST", "/api/v1/launchers", json: #"{"launcher":{"name":"glm","source":"persona"},"assigned":[],"kept":[]}"#)
         let w = await loadedPresets(hub)
         w.presetID = "builtin/glm"
         w.presetKey = "sk-test-0123456789"

@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// `jarvis://link?…` reaching the Mac app (#4198): both this app and Persona Link register `jarvis` / `persona`, and
+/// `persona://link?…` reaching the Mac app (#4198): both this app and Persona Link register `persona` / `persona`, and
 /// Launch Services picks one of them. The link is for Persona Link on the computer joining the hub, never a pairing
 /// of this app: it goes on to Persona Link when that is installed, else the app says to install it.
 nonisolated enum PersonaLinkHandoff {
@@ -10,8 +10,8 @@ nonisolated enum PersonaLinkHandoff {
 
     /// The executable Persona Link's bundle keeps (docs/rename.md), whatever bundle id it was built with
     /// (`mac.link_bundle_id`, docs/config.md): how it is told apart from this app among the scheme's handlers.
-    static let executable = "JarvisLink"
-    static let bundleName = "Jarvis Link.app"
+    static let executable = "PersonaLink"
+    static let bundleName = "Persona Link.app"
 
     /// The bundle is Persona Link.
     static func isPersonaLink(_ info: [String: Any]?) -> Bool {

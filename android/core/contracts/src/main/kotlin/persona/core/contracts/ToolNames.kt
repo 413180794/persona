@@ -1,7 +1,7 @@
 package persona.core.contracts
 
-/** The MCP server's name as shown: Persona's own server keeps its old id `jarvis` (allow lists and hooks match it). */
-fun mcpServerLabel(server: String): String = server.removePrefix("plugin_").let { if (it == "jarvis") "Persona" else it }
+/** The MCP server's name as shown: Persona's own server keeps its old id `persona` (allow lists and hooks match it). */
+fun mcpServerLabel(server: String): String = server.removePrefix("plugin_").let { if (it == "persona") "Persona" else it }
 
 /**
  * A tool's name for a sentence (a permission card): an MCP tool as "Persona · mail send", others as written; null

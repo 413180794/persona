@@ -2,7 +2,7 @@
 
 For Persona and the AI twin to "work in my place", they first need to know as much as I do: who is who, what each group does, where each project stands, and what concerns me.
 This doc explains how Lark and email data become a knowledge base with **files as the primary store and a database as the index**, shared by Persona, the AI twin and Agents.
-(Direction decided 2026-10-30: all data ultimately settles in `.jarvis`; files first, database for indexing; text retained 365 days, attachments 30 days.)
+(Direction decided 2026-10-30: all data ultimately settles in `.persona`; files first, database for indexing; text retained 365 days, attachments 30 days.)
 Since 2026-11-04 the knowledge base belongs to the manager (the assistant process `personad assistant`); since 2026-11-05 sources (connectors) also belong to the manager and feed the knowledge base in the same process (`server/internal/extmgr`, `docs/extensions.md` ("Who owns what")); see below.
 
 ## Who owns what (2026-11-04)
@@ -257,14 +257,14 @@ no more updates, snapshots or prompts; the app groups them under **Not projects*
   and since 2026-11-04 so does the knowledge base, so they call the engine directly (formerly bus calls to hub `kb.search` / `kb.list` / `kb.get` / `kb.update`).
 - **Main chat**: hub settings `assistant.main` stores its session id (set by `POST /api/v1/assistant/conversations` with `main: true`,
   cleared by `PUT /api/v1/assistant {"main":"-"}`). When requesting a snapshot per message, node passes the session id to `assistant.context`; main-chat snapshots start with "This is the main chat".
-- **AI twin**: Agent prompts end with this chat's profile and its first 3 projects (`<jarvis-context>`), requiring new conclusions to be written back to the project timeline through `kb_update`.
+- **AI twin**: Agent prompts end with this chat's profile and its first 3 projects (`<persona-context>`), requiring new conclusions to be written back to the project timeline through `kb_update`.
 - **Scheduled tasks** (morning briefing, evening review and user-created): every run's prompt ends with instructions to review important projects first, report by project and record new progress.
 - **Agent finishes**: after an Agent in herdr ends a turn (before notification decisions), its final words go into the timeline of the project owning its directory
   ("Agent · Title · Machine", once per Agent within 30 minutes), triggering a summary rewrite. Once the hub decides the turn stopped, it sends `kb.agent_turn` to the manager,
   queuing it while disconnected (see "Who owns what" above).
 - **Task finishes** (#2820): when a task dispatched by the main chat completes (automatically or by user action), the assistant extracts a one-line conclusion and links from the Agent's final reply and adds them to the project timeline for the working directory ("To-do · Title";
   if no registered code directory matches, use the directory name to find a project without registered directories). This bypasses the 30-minute limit above; the next Agent started in this project's directory receives the project description and latest 5 "To-do ·" conclusions as
-  `<jarvis-context>` before its first message. See `docs/todos.md` ("Record conclusions on completion").
+  `<persona-context>` before its first message. See `docs/todos.md` ("Record conclusions on completion").
 - **Agents**: project `dirs` stores `<machine>:<path>`; `GET /api/v1/kb/projects/<slug>` returns Agents running there. Starting an Agent from a project in the app,
   or asking Persona, includes the project profile as context.
 

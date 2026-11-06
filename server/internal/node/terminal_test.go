@@ -58,7 +58,7 @@ func TestTerminalWatchStreamsFramesAndStartsOver(t *testing.T) {
 	n := &Node{agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}, procs: map[string]*assistantProc{}, state: newState(),
 		hosts: herdrHosts(&herdr.Client{Bin: fakeObserveHerdr(t)})}
 	// A host pane may have been resumed from the assistant's working directory.
-	n.state.put("s1", sessionState{Cwd: filepath.Join(t.TempDir(), ".jarvis", "assistant")})
+	n.state.put("s1", sessionState{Cwd: filepath.Join(t.TempDir(), ".persona", "assistant")})
 	ctx, cancel := context.WithCancel(context.Background())
 	n2hR, n2hW := io.Pipe()
 	h2nR, h2nW := io.Pipe()

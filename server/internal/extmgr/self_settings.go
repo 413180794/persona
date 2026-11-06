@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The manager's part of jarvis_settings (docs/assistant.md "Operating Persona itself"): the settings of what moved here
+// The manager's part of persona_settings (docs/assistant.md "Operating Persona itself"): the settings of what moved here
 // from the hub — the inbox's rules, the mail accounts, a source's own triage rules (self_settings_sources.go). The hub lists them with
 // its own (extwire.HubSettingsList) and hands an action on one of them here (extwire.HubSettingsTool); the card on
 // the phone is the hub's (waitInteraction). The registry is the hub's, moved as it was.
@@ -304,7 +304,7 @@ func (h *Manager) removeMailAccount(_ context.Context, id string) (*selfChange, 
 	return nil, fmt.Errorf("no mail account %q (get lists them)", id)
 }
 
-func (h *Manager) toolJarvisSettings(ctx context.Context, machineID, sessionID string, args json.RawMessage) (string, error) {
+func (h *Manager) toolPersonaSettings(ctx context.Context, machineID, sessionID string, args json.RawMessage) (string, error) {
 	var a struct {
 		Action string          `json:"action"`
 		Key    string          `json:"key"`
@@ -346,7 +346,7 @@ func (h *Manager) toolJarvisSettings(ctx context.Context, machineID, sessionID s
 	}
 	shown, _ := json.Marshal(map[string]string{"setting": s.title, "action": a.Action})
 	ix := proto.Interaction{ID: "ix_" + randomHex(6), MachineID: machineID, SessionID: sessionID, Kind: proto.IxPermission,
-		ToolName: "jarvis_settings", Summary: change.summary, ToolInput: shown, Fields: change.fields, SessionTitle: "Persona",
+		ToolName: "persona_settings", Summary: change.summary, ToolInput: shown, Fields: change.fields, SessionTitle: "Persona",
 		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC()}
 	r, err := h.waitInteraction(ctx, ix)
 	if err != nil {

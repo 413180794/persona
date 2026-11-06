@@ -3,10 +3,10 @@
 #   ./scripts/test/test-server.sh [go test args...]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-eval "$(python3 scripts/jarvis_config.py env)"
-H="$JARVIS_HUB_SSH"
+eval "$(python3 scripts/persona_config.py env)"
+H="$PERSONA_HUB_SSH"
 # One copy per checkout: worktrees testing at the same time must not rsync over each other.
-D=".cache/jarvis-test-$(basename "$PWD")"
+D=".cache/persona-test-$(basename "$PWD")"
 python3 scripts/persona_identity.py --service hub --prepare --prefix scripts/deploy/db.sh | ssh "$H" 'bash -s' >/dev/null
 ssh "$H" "mkdir -p ~/$D/sdk ~/$D/schema"
 rsync -a --delete --exclude bin server/ "$H":"$D/server/"

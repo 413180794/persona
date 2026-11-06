@@ -46,8 +46,8 @@ import (
 // Service is what this host advertises.
 type Service struct {
 	Instance string            // unique instance label, e.g. the hub_id (UTF-8, <= 63 bytes; longer is cut)
-	Type     string            // e.g. "_jarvis-hub._tcp" (without ".local.")
-	Host     string            // host label without ".local.", e.g. "jarvis-1a2b3c4d"; empty: derived from Instance
+	Type     string            // e.g. "_persona-hub._tcp" (without ".local.")
+	Host     string            // host label without ".local.", e.g. "persona-1a2b3c4d"; empty: derived from Instance
 	Port     int               // 1..65535
 	TXT      map[string]string // key=value pairs; keep it small (each pair <= 255 bytes, keys printable ASCII without '=')
 }
@@ -55,7 +55,7 @@ type Service struct {
 // Entry is one instance seen on the network.
 type Entry struct {
 	Instance string            // the raw instance label (may contain spaces and dots; nothing escaped)
-	Host     string            // e.g. "jarvis-1a2b3c4d.local." (presentation format: '.' and '\' escaped, space as \032)
+	Host     string            // e.g. "persona-1a2b3c4d.local." (presentation format: '.' and '\' escaped, space as \032)
 	Addrs    []netip.Addr      // A / AAAA seen for Host, sorted (IPv6 link-local carries the receiving interface as zone)
 	Port     int               // from the SRV record
 	TXT      map[string]string // keys lowercased; a string without '=' is a key with an empty value

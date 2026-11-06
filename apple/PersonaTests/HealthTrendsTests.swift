@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Health Trends (#3272): the phone's per-day steps, sleep and weight become the ```persona-card a health answer would draw.
 @MainActor

@@ -1,19 +1,19 @@
 import Foundation
 
-/// What a `jarvis://` link handed to the app does (`onOpenURL`).
+/// What a `persona://` link handed to the app does (`onOpenURL`).
 nonisolated enum MacOpenURL {
     enum Route: Equatable {
         case session(SessionKey)
         case app
         case pair
-        /// `jarvis://link?…`: a computer's pairing link, for Persona Link on the computer joining the hub; this app
+        /// `persona://link?…`: a computer's pairing link, for Persona Link on the computer joining the hub; this app
         /// hands it over (or says to install Persona Link) and never pairs with it (#4198).
         case computerLink
         case ignore
     }
 
     static func route(_ url: URL) -> Route {
-        guard ["persona", "jarvis"].contains(url.scheme?.lowercased() ?? "") else { return .ignore }
+        guard url.scheme?.lowercased() == "persona" else { return .ignore }
         switch url.host()?.lowercased() {
         case "open":
             // The same query as the iPhone's Live Activity links (FleetLink).

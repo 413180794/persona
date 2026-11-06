@@ -41,7 +41,7 @@
   "add_provider": "新增供应商",
   "no_matching_providers": "没有和「{query}」相关的供应商",
   "managed_title": "Persona 管理 {count}",
-  "managed_footer": "Key 加密存在 hub；直接 API 由 hub 调用，启动器以 jarvisd launch <名字> 运行。",
+  "managed_footer": "Key 加密存在 hub；直接 API 由 hub 调用，启动器以 personad launch <名字> 运行。",
   "managed_empty": "还没有。点「新增供应商」，选一家、粘贴 Key 就能用；用途在「模型配置」中选择。",
   "zshrc_title": "来自 ~/.zshrc 和 PATH {count}",
   "zshrc_footer": "各台电脑 ~/.zshrc 里的函数和 PATH 上的包装脚本中启动 claude 的那些，每次打开这页时同步；新加的会自动出现。",

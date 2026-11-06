@@ -53,10 +53,16 @@ func agentSandboxOn(dir string) (bool, string) {
 	return false, ""
 }
 
-// agentDataDirs are the names the data directory dir goes by: itself, ~/.persona and ~/.jarvis (the sandbox package
-// keeps the ones that are there, each once by its real path).
+// agentDataDirs includes the node's root, the configured root and the canonical default, each once.
+// The sandbox package resolves existing custom symlinks to real paths; it creates no directory aliases.
 func agentDataDirs(home, dir string) []string {
-	return []string{dir, identity.DataDir(home), filepath.Join(home, ".persona"), filepath.Join(home, ".jarvis")}
+	var dirs []string
+	for _, path := range []string{dir, identity.DataDir(home), filepath.Join(home, ".persona")} {
+		if !slices.Contains(dirs, path) {
+			dirs = append(dirs, path)
+		}
+	}
+	return dirs
 }
 
 // wrapAgent is sandbox.WrapAgent for one start (where: what started it, for the log and the doctor) when the switch is

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The inbox's dot on the shell's face (`ShellPersonaButton.dotShift`): on the face's lower right at 45°, inside the
 /// round face (nothing past it, nothing below the face: the old mark lay over Agents' search field, 2026-11-02), at

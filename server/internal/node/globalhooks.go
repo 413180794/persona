@@ -31,7 +31,7 @@ import (
 // it is one variable, and a machine that already has another tool's folder in it (in the settings `env` block, which
 // is where such tools put it) would need that tool's value edited.
 
-// globalHookFlag is the argument that makes `jarvisd hook` report only; it is also what marks an entry as Persona's.
+// globalHookFlag is the argument that makes `personad hook` report only; it is also what marks an entry as Persona's.
 const globalHookFlag = nodeclient.GlobalHookFlag
 
 // globalHookTimeout is how long Claude Code lets a report-only hook run (seconds); the hook itself gives up sooner.

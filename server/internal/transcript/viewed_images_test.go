@@ -49,7 +49,7 @@ func TestViewedImages(t *testing.T) {
 	page = append(page, proto.Item{ID: "l1#0", Seq: seq, TS: ts, Role: "user", Kind: proto.KindText, Text: "look"})
 	call("a", "Read", map[string]any{"file_path": "/work/shot.png"})
 	result("a", false, pngOf(t, 4, 3))
-	call("b", "mcp__jarvis__computer_state", map[string]any{"machine": "m1", "app": "Notes"})
+	call("b", "mcp__persona__computer_state", map[string]any{"machine": "m1", "app": "Notes"})
 	result("b", false, pngOf(t, 16, 10))
 	call("c", "Read", map[string]any{"file_path": "/work/shot.png"}) // the same file again
 	result("c", false, pngOf(t, 4, 3))
@@ -59,9 +59,9 @@ func TestViewedImages(t *testing.T) {
 	result("e", false)
 	call("f", "Read", map[string]any{"file_path": "/work/gone.png"})
 	result("f", true)
-	call("g", "mcp__jarvis__browser_look", map[string]any{"machine": "m2"})
+	call("g", "mcp__persona__browser_look", map[string]any{"machine": "m2"})
 	result("g", false, pngOf(t, 8, 5))
-	call("h", "mcp__jarvis__computer_state", map[string]any{"machine": "m1"}) // the screen had not changed
+	call("h", "mcp__persona__computer_state", map[string]any{"machine": "m1"}) // the screen had not changed
 	result("h", false, pngOf(t, 16, 10))
 	call("i", "mcp__other__snap", map[string]any{})
 	result("i", false, pngOf(t, 2, 2), pngOf(t, 3, 2))
@@ -78,9 +78,9 @@ func TestViewedImages(t *testing.T) {
 	}
 	want := []string{
 		"a l3#1 read Read /work/shot.png  4x3 true",
-		"b l5#1 screenshot mcp__jarvis__computer_state  m1 16x10 true",
+		"b l5#1 screenshot mcp__persona__computer_state  m1 16x10 true",
 		"d  read Read /work/big.JPG  0x0 false",
-		"g l15#1 browser mcp__jarvis__browser_look  m2 8x5 true",
+		"g l15#1 browser mcp__persona__browser_look  m2 8x5 true",
 		"i l19#1 mcp mcp__other__snap   2x2 true",
 		"i l19#2 mcp mcp__other__snap   3x2 true",
 	}

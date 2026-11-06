@@ -4,22 +4,22 @@ import XCTest
 /// the description, reviews, a comment on a line with its diff, the checks with a failure's log, and a comment (or a
 /// quote reply) sent from the box at the bottom. A CI run, which is no thread, still opens as the text the hub read.
 ///   PORT=18797 MOCK_GITHUB_INBOX=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/GitHubThreadTests
-/// Both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful), dark and light.
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/GitHubThreadTests
+/// Both styles (TEST_RUNNER_PERSONA_UI_STYLE=beautiful), dark and light.
 final class GitHubThreadTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] != nil else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_GITHUB_INBOX=1 (JARVIS_MOCK_HUB)")
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] != nil else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_GITHUB_INBOX=1 (PERSONA_MOCK_HUB)")
         }
     }
 
     @MainActor private func open(_ item: String) {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "", "-inbox.source", "", "-openInboxItem", item]
         app.launchPinned()
     }
@@ -52,7 +52,7 @@ final class GitHubThreadTests: XCTestCase {
     }
 
     @MainActor private func sent() -> String {
-        let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"]!
+        let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"]!
         let deadline = Date.now.addingTimeInterval(8)
         while Date.now < deadline {
             if let data = try? Data(contentsOf: URL(string: hub + "/mock/sent")!), let s = String(data: data, encoding: .utf8),

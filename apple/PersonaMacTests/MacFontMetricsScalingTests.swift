@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The no-traits `UIFontMetrics.scaledValue(for:)` on the Mac follows the app's Small / Standard / Large setting (#3612): the
 /// code/file viewer makes its font with it (`CodeMetrics.font`), and that variant used to return the value unchanged,

@@ -3,7 +3,7 @@ import XCTest
 /// The Persona tab's top bar and its sidebar (docs/ios.md「Persona 顶栏和侧边栏」): the avatar's menu (Knowledge, Details, the
 /// copy items), Chat History on the left opening the sidebar, a swipe to the right anywhere on the page doing the same,
 /// New Chat on the right, picking a conversation in the sidebar, and the bar staying put while a long chat scrolls.
-/// Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): its main conversation is「今天要处理的事」, the long one is ASK4.
+/// Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB): its main conversation is「今天要处理的事」, the long one is ASK4.
 final class AssistantTopBarTests: XCTestCase {
     private var hub: String!
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
@@ -11,15 +11,15 @@ final class AssistantTopBarTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(_ open: String?, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant"]
             + (open.map { ["-openAssistant", $0] } ?? ["-newAssistant", "YES"]) + extra
         app.launchPinned()
@@ -28,11 +28,11 @@ final class AssistantTopBarTests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let suffix = ProcessInfo.processInfo.environment["SHOT_SUFFIX"].map { "-" + $0 } ?? ""
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-topbar-\(name)\(suffix).png"))
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-topbar-\(name)\(suffix).png"))
     }
 
     @MainActor private func avatar(_ app: XCUIApplication) -> XCUIElement {
-        let a = app.buttons["jarvis-avatar"]
+        let a = app.buttons["persona-avatar"]
         XCTAssertTrue(a.waitForExistence(timeout: 15), "no avatar in the top bar:\n\(app.debugDescription)")
         return a
     }
@@ -174,7 +174,7 @@ final class AssistantTopBarTests: XCTestCase {
 
         // The tab bar still switches tabs.
         app.tabBars.buttons["Agents"].tap()
-        waitGone(app.buttons["jarvis-avatar"], "the tab bar did not switch")
+        waitGone(app.buttons["persona-avatar"], "the tab bar did not switch")
     }
 
     /// Scrolling a long conversation leaves the top bar where it was.

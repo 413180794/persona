@@ -3,22 +3,22 @@ import XCTest
 /// Auto Chats in Persona's sidebar (#3264): the conversations Persona opened by itself (Inbox's AI twin, scheduled tasks,
 /// Lark /agent…) are not in Recent but in one row, closed at first, that still says one waits for the user; open, a row for
 /// each source, which opens All Chats filtered to it. Against scripts/mock/mock_hub.py with
-/// MOCK_AUTO_CONVERSATIONS=1 (JARVIS_MOCK_HUB). SHOT_DIR keeps the screenshots (closed, open, the list).
+/// MOCK_AUTO_CONVERSATIONS=1 (PERSONA_MOCK_HUB). SHOT_DIR keeps the screenshots (closed, open, the list).
 final class AutoConversationsTests: XCTestCase {
     private var hub: String!
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AUTO_CONVERSATIONS=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AUTO_CONVERSATIONS=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(shell: Bool = false) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-newAssistant", "YES", "-dev.openChat", ""]
             + (shell ? ["-ui.oldLayout", "NO"] : [])
         app.launchPinned()

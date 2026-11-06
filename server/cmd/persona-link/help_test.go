@@ -9,10 +9,10 @@ import (
 )
 
 func TestSubcommandHelp(t *testing.T) {
-	for sub, want := range map[string]string{"install": "--no-node", "node": "jarvisd-node", "mode": "两种模式的配对", "status": "退出码 0，否则 1",
-		"log": "jarvis-link logs ", "address": "address remove"} {
+	for sub, want := range map[string]string{"install": "--no-node", "node": "personad-node", "mode": "两种模式的配对", "status": "退出码 0，否则 1",
+		"log": "persona-link logs ", "address": "address remove"} {
 		got := subcommandHelp(sub)
-		if !strings.Contains(got, want) || got == usage || strings.Contains(got, "jarvis-link pair ") {
+		if !strings.Contains(got, want) || got == usage || strings.Contains(got, "persona-link pair ") {
 			t.Errorf("%s: %q", sub, got)
 		}
 	}
@@ -24,16 +24,16 @@ func TestSubcommandHelp(t *testing.T) {
 // TestSubcommandHelpExitsZero runs main in a child process (this test binary, re-executed): `<sub> -h` prints that
 // subcommand's help on stdout and exits 0; an unknown subcommand and a wrong flag still exit 2.
 func TestSubcommandHelpExitsZero(t *testing.T) {
-	if args := os.Getenv("JARVIS_LINK_TEST_HELP_ARGS"); args != "" {
-		os.Args = append([]string{"jarvis-link"}, strings.Split(args, "\x1f")...)
+	if args := os.Getenv("PERSONA_LINK_TEST_HELP_ARGS"); args != "" {
+		os.Args = append([]string{"persona-link"}, strings.Split(args, "\x1f")...)
 		main()
 		os.Exit(0)
 	}
 	home := t.TempDir()
 	runAs := func(name string, args ...string) (string, string, int) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestSubcommandHelpExitsZero$")
-		cmd.Env = append(os.Environ(), "JARVIS_LINK_TEST_HELP_ARGS="+strings.Join(args, "\x1f"), "HOME="+home,
-			"PERSONA_HOME="+filepath.Join(home, ".persona"), "JARVIS_HOME="+filepath.Join(home, ".jarvis"), "PERSONA_LINK_NAME="+name)
+		cmd.Env = append(os.Environ(), "PERSONA_LINK_TEST_HELP_ARGS="+strings.Join(args, "\x1f"), "HOME="+home,
+			"PERSONA_HOME="+filepath.Join(home, ".persona"), "PERSONA_LINK_NAME="+name)
 		var stdout, stderr strings.Builder
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		err := cmd.Run()
@@ -48,7 +48,7 @@ func TestSubcommandHelpExitsZero(t *testing.T) {
 	run := func(args ...string) (string, string, int) { return runAs("", args...) }
 	for _, args := range [][]string{{"install", "-h"}, {"node", "-h"}, {"node", "install", "--help"}, {"mode", "-h"}, {"status", "-h"}, {"status", "--json", "-help"}} {
 		out, _, code := run(args...)
-		if code != 0 || !strings.Contains(out, "jarvis-link "+args[0]) || strings.Contains(out, "jarvis-link discover") {
+		if code != 0 || !strings.Contains(out, "persona-link "+args[0]) || strings.Contains(out, "persona-link discover") {
 			t.Errorf("%q: exit %d, stdout %q", args, code, out)
 		}
 	}

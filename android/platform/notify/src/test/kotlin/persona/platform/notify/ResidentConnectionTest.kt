@@ -41,7 +41,7 @@ class ResidentConnectionTest {
     // on top of the runtime's, which reconnects only when the network really changed: each change dropped the
     // connection twice. The service must not watch the network itself.
     @Test fun theServiceDoesNotWatchTheNetwork() {
-        val source = java.io.File(System.getProperty("jarvis.repo.root"),
+        val source = java.io.File(System.getProperty("persona.repo.root"),
             "android/platform/notify/src/main/kotlin/persona/platform/notify/HubService.kt").readText()
         assertEquals(false, source.contains("NetworkCallback"))
     }

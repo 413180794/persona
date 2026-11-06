@@ -1,8 +1,8 @@
 // The composer's @ menu (iOS PromptComposer.swift PromptItems, BeautifulUI PromptToken): files this chat's tools
 // read or wrote and the session's folder (picking one types `@path`, which Claude Code and Codex read as that file),
-// then, in the Persona assistant, workspaces (picking one sends it as a <jarvis-context kind="workspace">, which the
+// then, in the Persona assistant, workspaces (picking one sends it as a <persona-context kind="workspace">, which the
 // hub fills in so the assistant works there), then other agents' sessions (picking one quotes it as a
-// <jarvis-context> before the message). No DOM here.
+// <persona-context> before the message). No DOM here.
 
 import { t } from "../i18n";
 import { shortPath } from "./format";
@@ -121,12 +121,12 @@ export function sessionDetail(s: Session): string {
   return [agentLabel(s), folderName(s.cwd)].filter(Boolean).join(" · ");
 }
 
-/** The quote for a picked session, sent as a <jarvis-context> before the message (PromptItems.quote). */
+/** The quote for a picked session, sent as a <persona-context> before the message (PromptItems.quote). */
 export function sessionQuote(s: Session): { title: string; url: string; text: string } {
   const lines = [t("lib-mentions.quote_session", { title: displayTitle(s), agent: agentLabel(s) }), t("lib-mentions.quote_cwd", { cwd: s.cwd })];
   const last = s.last_text?.trim();
   if (last) lines.push(t("lib-mentions.quote_last", { text: [...last].slice(0, 600).join("") }));
-  return { title: displayTitle(s), url: `jarvis://session/${s.machine_id}/${s.session_id}`, text: lines.join("\n") };
+  return { title: displayTitle(s), url: `persona://session/${s.machine_id}/${s.session_id}`, text: lines.join("\n") };
 }
 
 /** Workspaces (GET /workspaces, docs/workspace-board.md) matching the query by title, folder or computer: ones whose
@@ -156,7 +156,7 @@ export function workspaceDetail(w: Workspace, machineName: (id: string) => strin
   return [machineName(w.machine_id), shortPath(w.cwd), w.branch].filter(Boolean).join(" · ");
 }
 
-/** The context for a picked workspace: `<jarvis-context kind="workspace" machine="…" cwd="…">`. The hub reads the two
+/** The context for a picked workspace: `<persona-context kind="workspace" machine="…" cwd="…">`. The hub reads the two
  * attributes and adds what it knows about the place (docs/assistant.md "Workspace mentions"); the body is for people
  * and clients that show it as is. */
 export function workspaceContext(w: Workspace, machineName: (id: string) => string): { title: string; url: string; text: string; attrs: Record<string, string> } {

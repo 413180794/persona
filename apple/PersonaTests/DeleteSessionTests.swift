@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Delete Chat (issue #1749): which conversations offer it, what the confirmation says, the request it sends.
 struct DeleteSessionTests {

@@ -513,7 +513,7 @@ export function Composer({
     setAtts([]);
     refs.forEach((r) => removeContext(draftKey, r.id));
     setQuotes(draftKey, []);
-    // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md "Tags in messages"), the quote as `> ` lines
+    // picked contexts ride in front as <persona-context> tags (docs/protocol.md "Tags in messages"), the quote as `> ` lines
     const ok = await onSend({ text: withContexts(refs, withQuoteBlock(q, text), sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) }, true);
     setSending(false);
     if (ok) {

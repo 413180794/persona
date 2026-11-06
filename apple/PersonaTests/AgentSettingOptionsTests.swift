@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Claude Code / Codex options read in words, not their raw values (#3835).
 struct AgentSettingOptionsTests {

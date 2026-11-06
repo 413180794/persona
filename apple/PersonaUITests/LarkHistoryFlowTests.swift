@@ -3,7 +3,7 @@ import XCTest
 /// Real scroll gestures and row coordinates against the isolated history mock.
 final class LarkHistoryFlowTests: XCTestCase {
     private func fixture(_ change: [String: Any]? = nil) async throws -> [String: Any] {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
               let url = URL(string: hub + "/test/lark-history/state") else { throw XCTSkip("needs history mock") }
         var r = URLRequest(url: url)
         if let change { r.httpMethod = "POST"; r.httpBody = try JSONSerialization.data(withJSONObject: change) }
@@ -16,9 +16,9 @@ final class LarkHistoryFlowTests: XCTestCase {
                                  size: String = "UICTContentSizeCategoryL") async throws -> XCUIApplication {
         continueAfterFailure = false
         _ = try await fixture(["reset": true].merging(change) { _, value in value })
-        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"])
         let app = XCUIApplication()
-        app.launchArguments = ["-pairURL", "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock",
+        app.launchArguments = ["-pairURL", "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock",
             "-tab", "feishu", "-demo.on", "NO", "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES",
             "-larkTop", "NO", "-UIPreferredContentSizeCategoryName", size]
         app.launchPinned()
@@ -43,7 +43,7 @@ final class LarkHistoryFlowTests: XCTestCase {
     }
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }
@@ -115,7 +115,7 @@ final class LarkHistoryFlowTests: XCTestCase {
     @MainActor func testOldHubAndChangedAccountShowSpecificMessages() async throws {
         // An old hub's answers (no account on the page): the old /api/v1/lark only; a messaging source always says
         // its account (#2138).
-        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
+        if ProcessInfo.processInfo.environment["PERSONA_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
         let app = try await open(["legacy": true])
         top(app)
         let retry = app.buttons["lark.history.retry"]
@@ -271,7 +271,7 @@ final class LarkHistoryFlowTests: XCTestCase {
     @MainActor func testLargeTextKeepsTheHeaderOnOneLine() async throws {
         // An old hub's answers (no account on the page): the old /api/v1/lark only; a messaging source always says
         // its account (#2138).
-        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
+        if ProcessInfo.processInfo.environment["PERSONA_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
         let app = try await open(["legacy": true], waitFor: 48, size: "UICTContentSizeCategoryAccessibilityXXXL")
         let retry = app.buttons["lark.history.retry"]
         // Rows are tall at this size: a quick flick each time to reach the top.

@@ -5,7 +5,7 @@
 `apple/Persona/Resources/Assets.xcassets/Brands` and `apple/PersonaWatch/Assets.xcassets/Brands` hold other products' marks
 (`web/src/views/inbox/lark.svg` is a copy of `brand-lark` for the web inbox, and
 `android/core/designsystem/src/main/res/drawable/brand_lark.xml` the same mark as an Android vector drawable),
-shown next to the service Jarvis connects to. The marks are trademarks of their owners; using them here does not imply
+shown next to the service Persona connects to. The marks are trademarks of their owners; using them here does not imply
 endorsement. They are drawn as published: not recolored (the one-color OS marks take the distribution's color), not
 redrawn.
 
@@ -16,7 +16,7 @@ redrawn.
 | `brand-lark` | 飞书 / Lark | github.com/larksuite/lark-samples, `public/svg/icon.svg` (viewBox cropped to the mark) | Lark user agreement; no public logo guidelines found |
 | `brand-google` | Google G | developers.google.com/identity/branding-guidelines, `signin-assets.zip` (the G matted from the light and dark buttons) | Google Sign-In branding guidelines |
 | `brand-gmail` | Gmail | gstatic.com Google product icon `gmail_2020q4_512dp.png` | Google brand terms |
-| `ios-app-*` | Apple 通讯录、日历、提醒事项、健康、照片、地图 app icons | App Store artwork of each app (iTunes lookup `artworkUrl512`, fetched at 240×240), shown next to the data Jarvis reads from that app | Apple trademarks; Apple's terms for its marks |
+| `ios-app-*` | Apple 通讯录、日历、提醒事项、健康、照片、地图 app icons | App Store artwork of each app (iTunes lookup `artworkUrl512`, fetched at 240×240), shown next to the data Persona reads from that app | Apple trademarks; Apple's terms for its marks |
 | `web/src/ui/brands/claude.svg` | Claude (Anthropic), agent mark in the web client | Same file as `brand-claude` | Anthropic's brand guidelines |
 | `web/src/ui/brands/codex.svg` | OpenAI Blossom, the Codex agent mark in the web client | Same file as `brand-openai` | openai.com/brand |
 | `web/src/ui/brands/opencode.svg` | OpenCode, agent mark in the web client | Simple Icons 16.36.0 `opencode.svg` (CC0 for the file; viewBox cropped to the mark); upstream github.com/anomalyco/opencode `packages/identity/mark.svg` (the project is MIT) | OpenCode's trademark |
@@ -156,7 +156,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 The package directory keeps both licenses (`LICENSE`, `LICENSE-beautifului`) and `NOTICE`.
 
 The web client (`web/`) uses Beautiful UI's design tokens, keyframes and component grammar directly (`web/src/styles.css`,
-the views under `web/src/`), reimplemented in React against Jarvis's data; Beautiful UI's license is the one in
+the views under `web/src/`), reimplemented in React against Persona's data; Beautiful UI's license is the one in
 `apple/Packages/BeautifulUI/LICENSE-beautifului` (MIT, Copyright (c) 2026 Shane Levine).
 
 BeautifulUI — MIT License, Copyright (c) 2026 ChrisPan

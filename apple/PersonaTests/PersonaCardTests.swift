@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The assistant's cards (docs/extensions.md「助手的卡片」): a ```persona-card (#886) becomes the components every app
 /// turns it into (`schema/extension/examples/persona-card/`: a card and the View it becomes, null when it stays a code

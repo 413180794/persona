@@ -31,7 +31,7 @@ import (
 // exits, until the engine changes. The bridge dials the runtime socket like any runtime.
 
 // paseoPackage is the bridge's package (runtimepkg.Packages).
-const paseoPackage = "jarvis-paseo-runtime"
+const paseoPackage = "persona-paseo-runtime"
 
 // paseoRuntimeID is the runtime id the bridge says hello with (the engine's sessions' space kind).
 const paseoRuntimeID = proto.EnginePaseo

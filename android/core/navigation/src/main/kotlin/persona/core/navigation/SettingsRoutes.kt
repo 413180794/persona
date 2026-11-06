@@ -8,13 +8,13 @@ import kotlinx.serialization.Serializable
  * One model use of Settings › Model configuration (docs/model-config.md), by the hub's purpose id: `agent.new`, `task.<id>`,
  * `plugin.<id>` (a voice extension's model, which the voice page also opens).
  */
-@Serializable @SerialName("jarvis.core.navigation.ModelPurposeRoute") data class ModelPurposeRoute(val purposeId: String) : NavKey
+@Serializable @SerialName("persona.core.navigation.ModelPurposeRoute") data class ModelPurposeRoute(val purposeId: String) : NavKey
 
 /**
  * One extension of Settings › Extensions (docs/extensions.md "App: Settings › Extensions"), by the hub's extension id; [signIn] opens it with
  * its sign-in started (just installed and not signed in, #4507).
  */
-@Serializable @SerialName("jarvis.core.navigation.PluginRoute") data class ExtensionRoute(val extensionId: String, val signIn: Boolean = false) : NavKey
+@Serializable @SerialName("persona.core.navigation.PluginRoute") data class ExtensionRoute(val extensionId: String, val signIn: Boolean = false) : NavKey
 
 /**
  * A page an extension draws (its `extension_page` UI, docs/extensions.md "Declarative UI"), opened from the extension's page.

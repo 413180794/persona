@@ -7,8 +7,8 @@
       "description": "完成轮里被吸收的消息照样按消息分段，各自带工作行和回复。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/ChatStoreTests.swift: finishedTurnGathersQueuedMessagesAndKeepsTheLastAnswer"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/ChatStoreTests.swift: finishedTurnGathersQueuedMessagesAndKeepsTheLastAnswer"
       ],
       "input": {
         "items": [
@@ -279,7 +279,7 @@
       "description": "多消息轮展开各条消息的工作行，每条用户消息各有自己的工作段和回复。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -621,7 +621,7 @@
       "description": "进行中被吸收的消息留在发送位置，最后一段标记为进行中。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -833,7 +833,7 @@
       "description": "多条连续被吸收的消息没有工具时也各自一行。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -931,7 +931,7 @@
       "description": "窗口首条被吸收的消息独立开启一轮。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -998,7 +998,7 @@
       "description": "普通用户图片显示在消息上方并从工作过程排除。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [
@@ -1085,7 +1085,7 @@
       "description": "被吸收的图片留在对应消息的上方，保持图片顺序。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
       ],
       "input": {
         "items": [

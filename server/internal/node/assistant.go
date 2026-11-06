@@ -53,7 +53,7 @@ const assistantTaskMaxIdle = 12 * time.Hour
 // assistantAllowedTools run without asking: Persona's own tools (the hub asks the phone itself before the ones that
 // send something on the user's behalf — mail_send, phone writes; Feishu writes through an extension's gated command pass larkgate.go). Without this every notify_user or
 // schedule_followup waited for a tap on the phone, so a follow-up firing at night just stalled.
-const assistantAllowedTools = "mcp__jarvis"
+const assistantAllowedTools = "mcp__persona"
 
 // A spare process started when the app opens the "Chat" tab, so the first message skips claude's startup.
 // It is only adopted while fresh (what it loaded at start — CLAUDE.md, memory, tools — may have changed since).
@@ -300,7 +300,7 @@ func (n *Node) isAssistantSession(id string) bool {
 	if st, ok := n.state.get(id); ok && identity.IsAssistantDir(st.Cwd) {
 		return true
 	}
-	if p := n.transcriptPath(id); p != "" && (strings.Contains(filepath.Base(filepath.Dir(p)), "-jarvis-assistant") ||
+	if p := n.transcriptPath(id); p != "" && (strings.Contains(filepath.Base(filepath.Dir(p)), "-persona-assistant") ||
 		isAssistantProject(filepath.Base(filepath.Dir(p)), n.assistantProject())) {
 		return true
 	}
@@ -666,8 +666,8 @@ func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolF
 		return n.guestMCPAndTools(id, guest)
 	}
 	// Per-process MCP config: the assistant-only tools (ask_user, agents_*, lark_*…) and the conversation they act for.
-	servers := map[string]any{"jarvis": map[string]any{
-		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
+	servers := map[string]any{"persona": map[string]any{
+		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "PERSONA_SESSION_ID": id},
 	}}
 	// The extensions' MCP servers whose command is on this machine (assistant_mcp.go).
 	extra, allow, deny := assistantMCPServers(n.assistantLark(context.Background()).MCPServers)
@@ -693,7 +693,7 @@ func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolF
 // A managed launcher's shell is not wrapped: it runs `personad launch`, which fetches the launcher's settings outside
 // the sandbox and wraps only the agent it execs (launchExec).
 func (n *Node) assistantCLICommand(shell, launcher, cwd string, args, env []string) *exec.Cmd {
-	argv := append([]string{shell, "-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)
+	argv := append([]string{shell, "-ic", n.launcherCommand(launcher) + ` "$@"`, "persona"}, args...)
 	if _, managed := n.managedLauncher(launcher); !managed {
 		base := env
 		argv, env, _ = wrapAgent("assistant", n.home, n.dir, cwd, settingsArgs(args),
@@ -770,8 +770,8 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if bridge.script != "" {
 		// The Agent SDK runtime gets only Persona's own MCP server: it has no --disallowedTools, so the Lark extension's
 		// control tools (whose approval_decide must stay off) are not mounted here.
-		mcpConfig := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{
-			"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
+		mcpConfig := map[string]any{"mcpServers": map[string]any{"persona": map[string]any{
+			"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "PERSONA_SESSION_ID": id},
 		}}}
 		start := sdkStart{id: id, cwd: cwd, model: execution.Model, permissionMode: startMode, resume: resume, mcp: mcpConfig,
 			allowedTools: strings.Join(append([]string{n.assistantTools()}, healthReportRules(cwd)...), ","), deny: n.healthDenyRules(cwd), settings: settings, plugin: hooks}

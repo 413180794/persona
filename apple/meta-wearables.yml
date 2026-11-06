@@ -20,7 +20,7 @@ targets:
       path: Persona/Resources/Info.plist
       properties:
         # The URL the Meta AI app calls back to (registration and camera permission); the app's own URL scheme
-        # (CFBundleURLSchemes in project.yml: jarvis, persona) is the one it is sent to.
+        # (CFBundleURLSchemes in project.yml: persona) is the one it is sent to.
         MWDAT:
           AppLinkURLScheme: "persona://"
           # Filled from config.json app.meta_wearables by scripts/persona_config.py xcconfig (0: Developer Mode).

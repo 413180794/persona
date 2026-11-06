@@ -72,7 +72,7 @@ func inboxUIPackage(t *testing.T) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "bin", "chat"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=inboxui exec "+self+" \"$@\"\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "bin", "chat"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=inboxui exec "+self+" \"$@\"\n"), 0o755)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-chat", "name": "Example Chat", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/chat"}}, "activation_events": ["on_startup"],
 		"configuration": {"type": "object", "properties": {"triage_rules": {"type": "string", "title": "分拣规则"}}},

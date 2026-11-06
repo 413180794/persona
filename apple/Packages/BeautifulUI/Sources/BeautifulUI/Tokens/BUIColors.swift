@@ -96,7 +96,7 @@ public extension BUIColors {
     )
 }
 
-/// Internal on purpose: host apps (Jarvis included) tend to define the same initialisers,
+/// Internal on purpose: host apps (Persona included) tend to define the same initialisers,
 /// and exporting these would make their calls ambiguous. Hosts build `BUIColors` from their
 /// own colours instead.
 extension Color {

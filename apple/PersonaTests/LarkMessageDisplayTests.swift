@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct LarkMessageDisplayTests {
     private func message() throws -> LarkMessage {

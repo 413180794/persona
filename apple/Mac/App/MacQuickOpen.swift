@@ -120,7 +120,7 @@ enum MacQuickOpen {
     /// The window's sections, with the other words they answer to.
     private static func places(_ q: String, supportsTodos: Bool, showsMessages: Bool) -> [Hit] {
         let words: [MacSection: [String]] = [
-            .assistant: ["jarvis", "assistant", "助手", "主对话"], // i18n-ignore: search alias
+            .assistant: ["persona", "assistant", "助手", "主对话"], // i18n-ignore: search alias
             .agents: ["agents", "claude", "codex", "会话"], // i18n-ignore: search alias
             .inbox: ["inbox", "mail", "lark", "邮件", "飞书"], // i18n-ignore: search alias
             .todos: ["todo", "todos", "待办"], // i18n-ignore: search alias
@@ -140,8 +140,8 @@ enum MacQuickOpen {
         let all: [(String, String, String, Target, [String])] = [
             ("a:new-agent", String(localized: "New Agent [Mac Quick Open 0587b9]"), String(localized: "Start Claude Code / Codex on a computer  ⌘N"), .newAgent,
              ["new agent", "start", "启动", "claude", "codex"]), // i18n-ignore
-            ("a:new-jarvis", String(localized: "New Persona Chat"), String(localized: "Ask Persona  ⇧⌘N"), .newConversation,
-             ["new chat", "jarvis", "对话", "助手"]), // i18n-ignore
+            ("a:new-persona", String(localized: "New Persona Chat"), String(localized: "Ask Persona  ⇧⌘N"), .newConversation,
+             ["new chat", "persona", "对话", "助手"]), // i18n-ignore
         ]
         return all.compactMap { id, title, sub, target, words in
             let sc = score(title: title, hay: words, query: q)

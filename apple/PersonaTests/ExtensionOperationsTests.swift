@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Installs, upgrades and removals in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3307): what the hub
 /// pushes decodes (unknown states and steps kept), a hub with `extension_operations` previews in the background, waits

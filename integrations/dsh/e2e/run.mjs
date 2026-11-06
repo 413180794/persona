@@ -1,11 +1,11 @@
 // End-to-end check of the DSH runtime (docs/dsh.md "Verification", the acceptance list of docs/runtimes.md): a real `dsh web`
 // (isolated DSH_HOME, the model played by DSH's own llm-mock-server) with this plugin loaded through --patch, a real
-// `jarvisd node --stdio` started by the runtime SDK's harness, which plays the hub. It starts a session from the
+// `personad node --stdio` started by the runtime SDK's harness, which plays the hub. It starts a session from the
 // "phone", sends to it, and answers an approval and a question.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/dsh/e2e/run.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/dsh/e2e/run.mjs
 //
-// With JARVIS_E2E_DAEMON=1 the plugin is a daemon instead (docs/daemons.md): it serves a WebSocket endpoint and the
+// With PERSONA_E2E_DAEMON=1 the plugin is a daemon instead (docs/daemons.md): it serves a WebSocket endpoint and the
 // node dials it from daemons.json, as for a DSH that cannot reach runtime.sock; the same checks run.
 //
 // Nothing outside fresh temp directories is touched: DSH_HOME, the node's HOME and the workspace all live there.
@@ -22,9 +22,9 @@ import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness
 
 const here = dirname(fileURLToPath(import.meta.url))
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout) and PERSONAD (a personad binary)')
   process.exit(2)
 }
 const keep = process.env.KEEP === '1'
@@ -57,7 +57,7 @@ const modelURL = `${model.url}/v1`
 
 // Daemon mode: the node's HOME carries daemons.json (the same names as the plugin's, so the checks below hold; the
 // session ids get the daemon's prefix), the plugin listens on a free port with the token from a file.
-const daemon = process.env.JARVIS_E2E_DAEMON === '1'
+const daemon = process.env.PERSONA_E2E_DAEMON === '1'
 let pluginConn = '' // how the plugin reaches the node: its socket, or listening for it
 let home
 if (daemon) {
@@ -70,12 +70,12 @@ if (daemon) {
   const tokenFile = join(root, 'token')
   writeFileSync(tokenFile, randomUUID(), { mode: 0o600 })
   home = join(root, 'home')
-  mkdirSync(join(home, '.jarvis'), { recursive: true })
-  writeFileSync(join(home, '.jarvis', 'daemons.json'), JSON.stringify({ daemons: [{ id: 'dsh', name: 'DSH', launcher: 'dsh',
-    url: `ws://127.0.0.1:${port}/jarvis/runtime`, token_file: tokenFile }] }), { mode: 0o600 })
+  mkdirSync(join(home, '.persona'), { recursive: true })
+  writeFileSync(join(home, '.persona', 'daemons.json'), JSON.stringify({ daemons: [{ id: 'dsh', name: 'DSH', launcher: 'dsh',
+    url: `ws://127.0.0.1:${port}/persona/runtime`, token_file: tokenFile }] }), { mode: 0o600 })
   pluginConn = `listen:\n          port: ${port}\n          token_file: ${tokenFile}`
 }
-node = await startNode({ jarvisd, keep, home })
+node = await startNode({ personad, keep, home })
 check('the node starts without herdr', typeof node.info.version === 'string')
 if (!daemon) pluginConn = `socket: ${node.runtimeSocket}`
 // The hub's tools (the phone's): DSH's agents get them through the plugin (docs/dsh.md "Phone tools").
@@ -86,16 +86,16 @@ const patch = join(root, 'patch.yml')
 const askPlugin = join(root, 'e2e-ask.js')
 writeFileSync(askPlugin, `export const name = 'e2e-ask'
 export function apply(ctx) {
-  // Test fixture: a command containing JARVIS_E2E_ASK needs approval, so the run exercises the approval chain.
+  // Test fixture: a command containing PERSONA_E2E_ASK needs approval, so the run exercises the approval chain.
   ctx.on('tools/pre-execute', (exec, next) => {
     const cmd = exec?.arguments?.command
-    if (exec?.name === 'bash' && typeof cmd === 'string' && cmd.includes('JARVIS_E2E_ASK')) return { kind: 'ask', reason: 'e2e approval' }
+    if (exec?.name === 'bash' && typeof cmd === 'string' && cmd.includes('PERSONA_E2E_ASK')) return { kind: 'ask', reason: 'e2e approval' }
     return next()
   })
 }
 `)
 writeFileSync(patch, `- insert:
-    - id: jarvis-dsh-runtime
+    - id: persona-dsh-runtime
       name: ${join(here, '..', 'index.js')}
       config:
         ${pluginConn}
@@ -144,20 +144,20 @@ try {
     ask: { tool: 'ask_user_question', args: (question, options) => ({ questions: [{ id: 'db', question, options: options.map((label) => ({ label })) }] }) },
     history: (h) => h === `dsh:${dshSid}`,
   })
-  check('the card is DSH\'s, with DSH\'s reason beside the command', approval.agent === 'dsh' && approval.agent_label === 'DSH' && approval.reason === 'e2e approval' && approval.summary === 'echo JARVIS_E2E_ASK ran', JSON.stringify({ agent: approval.agent, label: approval.agent_label, reason: approval.reason, summary: approval.summary }))
+  check('the card is DSH\'s, with DSH\'s reason beside the command', approval.agent === 'dsh' && approval.agent_label === 'DSH' && approval.reason === 'e2e approval' && approval.summary === 'echo PERSONA_E2E_ASK ran', JSON.stringify({ agent: approval.agent, label: approval.agent_label, reason: approval.reason, summary: approval.summary }))
 
   // A phone tool, called by DSH's agent: through the node to the hub, with the session, and its result back.
   await until('the turn after the interrupt ends', async () => node.status(sid) === 'done', 30_000).catch(() => {})
-  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__jarvis__phone_echo', toolArguments: JSON.stringify({ text: 'JARVIS_E2E_PHONE' }), successText: 'The phone answered' })
+  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__persona__phone_echo', toolArguments: JSON.stringify({ text: 'PERSONA_E2E_PHONE' }), successText: 'The phone answered' })
   await node.call('session.send', { session_id: sid, text: 'ask the phone', client_msg_id: randomUUID() })
   if (daemon) {
     // A daemon gets no phone tools (docs/daemons.md "Isolation"): the agent's call never reaches the hub.
     await until('the reply after the tool call', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
     check('a daemon\'s agent gets no phone tools: nothing reaches the hub', !node.toolCalls.some((c) => c.name === 'phone_echo'), JSON.stringify(node.toolCalls))
   } else {
-    await until('the phone tool result', () => node.items(sid).some((i) => i.kind === 'tool_result' && /the phone echoes JARVIS_E2E_PHONE/.test(i.text ?? '')), 60_000)
+    await until('the phone tool result', () => node.items(sid).some((i) => i.kind === 'tool_result' && /the phone echoes PERSONA_E2E_PHONE/.test(i.text ?? '')), 60_000)
     const call = node.toolCalls.find((c) => c.name === 'phone_echo')
-    check('a phone tool reaches the hub with the calling session, and its result reaches the agent', call?.session_id === sid && call?.args?.text === 'JARVIS_E2E_PHONE', JSON.stringify(call))
+    check('a phone tool reaches the hub with the calling session, and its result reaches the agent', call?.session_id === sid && call?.args?.text === 'PERSONA_E2E_PHONE', JSON.stringify(call))
     await until('the reply after the phone tool', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
   }
 
@@ -168,10 +168,10 @@ try {
   await until('idle before the subagent', async () => node.status(sid) === 'done', 30_000).catch(() => {})
   const rowNow = async () => ((await node.call('sessions.list')).sessions ?? []).find((s) => s.session_id === sid)
   node.resolve = (ix) => (ix.kind === 'permission' ? { allow: true } : { dismiss: true })
-  await model.scriptWhen('JARVIS_E2E_CHILD', { sequence: ['tool_call_success', 'success'], toolName: 'bash',
+  await model.scriptWhen('PERSONA_E2E_CHILD', { sequence: ['tool_call_success', 'success'], toolName: 'bash',
     toolArguments: JSON.stringify({ command: 'sleep 8; echo E2E_SUBAGENT_OUTPUT', description: 'e2e' }), successText: 'The child mapped it' })
   await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'subagent',
-    toolArguments: JSON.stringify({ description: 'E2E child', prompt: 'JARVIS_E2E_CHILD map the workspace' }), successText: 'The child is on it' })
+    toolArguments: JSON.stringify({ description: 'E2E child', prompt: 'PERSONA_E2E_CHILD map the workspace' }), successText: 'The child is on it' })
   await node.call('session.send', { session_id: sid, text: 'hand it to a subagent', client_msg_id: randomUUID() })
   const waiting = await until('the parent done while its subagent runs', async () => {
     const r = await rowNow()
@@ -184,7 +184,7 @@ try {
   const listedNow = (await node.call('sessions.list')).sessions ?? []
   check('the subagent is not a session of its own in the list', !listedNow.some((s) => s.session_id.endsWith(sub.id)))
   const childPage = await node.call('session.items', { session_id: sub.session_id, turns: 2 })
-  check('the phone reads the subagent as "<parent>@<child>"', childPage.items.some((i) => i.role === 'user' && /JARVIS_E2E_CHILD/.test(i.text ?? '')), JSON.stringify(childPage.items.map((i) => i.kind)))
+  check('the phone reads the subagent as "<parent>@<child>"', childPage.items.some((i) => i.role === 'user' && /PERSONA_E2E_CHILD/.test(i.text ?? '')), JSON.stringify(childPage.items.map((i) => i.kind)))
   await node.call('session.watch', { session_id: sub.session_id, since_seq: childPage.to_seq })
   await until('the subagent\'s command output, pushed live', () => node.items(sub.session_id).some((i) => i.kind === 'tool_result' && /E2E_SUBAGENT_OUTPUT/.test(i.text ?? '')), 60_000)
   check('its new content is pushed live under its own id', true)

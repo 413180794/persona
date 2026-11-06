@@ -8,7 +8,7 @@
 
 import { fontLoadQuery, settleWithin, withFamily } from "../../../lib/terminal";
 
-const FAMILY = "JarvisTermCJK";
+const FAMILY = "PersonaTermCJK";
 // local() matches a font's full or PostScript name: the system Chinese fonts of macOS, Windows and Linux desktops.
 const LOCAL = [
   "PingFang SC Regular", "PingFangSC-Regular", "Hiragino Sans GB W3", "HiraginoSansGB-W3", "Microsoft YaHei", "MicrosoftYaHei",

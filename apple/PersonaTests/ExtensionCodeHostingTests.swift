@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// UI version 4's code-hosting parts on Apple (#2961, docs/extensions.md「UI 版本 4」): the schema's examples read
 /// with every component known, a diff's lines numbered and paired, a file tree built from paths, the page's blocks

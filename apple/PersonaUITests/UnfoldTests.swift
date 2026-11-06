@@ -2,7 +2,7 @@ import XCTest
 
 /// Opening and folding a work line, a tool step and a thought in the chat (#1123): how far the tapped row moves on
 /// screen and how many frames come late, each tap measured by the app itself (`UnfoldTrace`, `probe.unfold`).
-///   Agents chat:  PORT=… MOCK_LONG_HISTORY=1 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py  (JARVIS_MOCK_HUB)
+///   Agents chat:  PORT=… MOCK_LONG_HISTORY=1 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py  (PERSONA_MOCK_HUB)
 /// Prints `UNFOLD <case> <what>: moved … end … hitches … worst … ms` per tap.
 final class UnfoldTests: XCTestCase {
     private var app: XCUIApplication!
@@ -26,9 +26,9 @@ final class UnfoldTests: XCTestCase {
     }
 
     private func launch(chat: String) throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs JARVIS_MOCK_HUB") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs PERSONA_MOCK_HUB") }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-probes", "YES", "-unfoldTrace", "YES", "-scrollTrace", "YES", "-perfCounts", "YES", "-openChatsFresh", "YES"] + (ProcessInfo.processInfo.environment["X1123"].map { ["-" + $0, "YES"] } ?? []) + [
                                "-app.tab", "chats", "-tab", "dev", "-dev.openChat", chat]
         app.launchPinned()

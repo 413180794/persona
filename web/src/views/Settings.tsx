@@ -70,7 +70,7 @@ interface LauncherDetail {
 /** GET /api/v1/launchers' entry: a managed provider's fields (lib/providers.ts) plus the ~/.zshrc ones'. */
 interface LauncherView extends ProviderView {
   /** zshrc: a ~/.zshrc function or alias; path: a wrapper script on the computer's PATH (#5954). */
-  source: "zshrc" | "path" | "jarvis" | "agy" | string;
+  source: "zshrc" | "path" | "persona" | "agy" | string;
   agent?: "claude" | "codex" | "agy" | string;
   machines?: string[];
   hidden?: boolean;
@@ -451,16 +451,16 @@ function Models() {
     if (!list || !q) return list ?? [];
     return list.filter((l) => [l.name, l.model, l.small_model, l.base_url, ...(l.machines ?? []).map(name)].some((v) => v?.toLowerCase().includes(q)));
   }, [list, query, machines]);
-  const managed = shown.filter((l) => l.source === "jarvis");
-  const zshrc = shown.filter((l) => l.source !== "jarvis" && !l.hidden);
-  const hidden = shown.filter((l) => l.source !== "jarvis" && l.hidden);
+  const managed = shown.filter((l) => l.source === "persona");
+  const zshrc = shown.filter((l) => l.source !== "persona" && !l.hidden);
+  const hidden = shown.filter((l) => l.source !== "persona" && l.hidden);
 
   const row = (l: LauncherView) => (
     <button key={l.name} type="button" onClick={() => setOpen(l.name)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           {l.display_name ? <span className="truncate text-[13px] font-medium text-ink">{l.display_name}</span> : <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>}
-          {l.source === "jarvis" && <Pill tone="accent">Persona</Pill>}
+          {l.source === "persona" && <Pill tone="accent">Persona</Pill>}
           {l.source === "agy" && <Pill>Antigravity Runtime</Pill>}
           {l.kind === "api" && <Pill>{t("settings.direct_api")}</Pill>}
         </div>
@@ -576,7 +576,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
     return out;
   }, [l]);
 
-  const testOn = l?.source === "jarvis" ? [""] : (l?.machines ?? []).filter((id) => machines.find((m) => m.id === id)?.online !== false);
+  const testOn = l?.source === "persona" ? [""] : (l?.machines ?? []).filter((id) => machines.find((m) => m.id === id)?.online !== false);
   const running = Object.values(checks).some((c) => c === null);
   const check = async () => {
     if (!l) return;
@@ -599,7 +599,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
     if (!l) return;
     try {
       await api(enLauncher(l.name), { method: "DELETE" });
-      toast(l.source === "jarvis" ? t("settings.deleted", { name: l.name }) : t("settings.hid", { name: l.name }), "ok");
+      toast(l.source === "persona" ? t("settings.deleted", { name: l.name }) : t("settings.hid", { name: l.name }), "ok");
       onChanged();
       onClose();
     } catch (e) {
@@ -633,21 +633,21 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
               </Button>
             ) : (
               <span className="relative">
-                <Button tone="quiet" icon={l.source === "jarvis" ? "x" : undefined} onClick={() => setConfirm((c) => !c)} className="text-red enabled:hover:text-red">
-                  {l.source === "jarvis" ? t("settings.delete_provider") : t("settings.hide_in_persona")}
+                <Button tone="quiet" icon={l.source === "persona" ? "x" : undefined} onClick={() => setConfirm((c) => !c)} className="text-red enabled:hover:text-red">
+                  {l.source === "persona" ? t("settings.delete_provider") : t("settings.hide_in_persona")}
                 </Button>
                 {/* the confirmation comes up right at the button (like the app), not as another dialog */}
                 {confirm && (
                   <span className="absolute bottom-full left-0 mb-1.5 rounded-control bg-surface p-1 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both` }}>
                     <Button tone="danger" onClick={() => void remove()}>
-                      {l.source === "jarvis" ? t("settings.confirm_delete") : t("settings.confirm_hide")}
+                      {l.source === "persona" ? t("settings.confirm_delete") : t("settings.confirm_hide")}
                     </Button>
                   </span>
                 )}
               </span>
             )}
             <span className="flex-1" />
-            {l.source === "jarvis" && (
+            {l.source === "persona" && (
               <Button tone="secondary" onClick={() => onEdit(l)}>
                 {t("settings.edit")}
               </Button>
@@ -664,7 +664,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
       {l && (
         <div className="flex max-h-[62vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Pill tone={l.source === "jarvis" ? "accent" : undefined}>{l.source === "jarvis" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : l.source === "path" ? t("settings.path_script") : t("settings.zshrc_function")}</Pill>
+            <Pill tone={l.source === "persona" ? "accent" : undefined}>{l.source === "persona" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : l.source === "path" ? t("settings.path_script") : t("settings.zshrc_function")}</Pill>
             {(l.machines ?? []).map((id) => (
               <Pill key={id}>{mname(id)}</Pill>
             ))}
@@ -672,7 +672,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
           </div>
 
           {/* how much is left comes before trying it, as in the app */}
-          {l.kind !== "api" && (l.source === "jarvis" || l.source === "zshrc" || l.source === "path") && <LauncherQuota name={l.name} />}
+          {l.kind !== "api" && (l.source === "persona" || l.source === "zshrc" || l.source === "path") && <LauncherQuota name={l.name} />}
 
           {Object.keys(checks).length > 0 && (
             <KV title={t("settings.availability")}>
@@ -697,7 +697,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
             </KV>
           )}
 
-          {l.source === "jarvis" && (
+          {l.source === "persona" && (
             <KV title={t("settings.config")}>
               <KVRow k={t("settings.access")} v={l.kind === "api" ? t("settings.direct_api") : l.agent === "codex" ? "Codex" : l.agent === "agy" ? "Antigravity (agy)" : t("settings.launcher")} />
               {l.kind === "api" && <KVRow k={t("settings.protocol")} v={l.api === "responses" ? "Responses" : "Messages"} />}
@@ -725,7 +725,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
             </KV>
           )}
 
-          {hasExtensions && <LauncherExtensionSections launcher={l.name} machine={l.source === "jarvis" ? undefined : testOn[0] || undefined} />}
+          {hasExtensions && <LauncherExtensionSections launcher={l.name} machine={l.source === "persona" ? undefined : testOn[0] || undefined} />}
 
           {groups.map((g) => (
             <DetailBlock key={g.ids.join()} d={g.d} place={groups.length > 1 ? formatList(g.ids.map(mname), { type: "conjunction", style: "narrow" }) : undefined} />

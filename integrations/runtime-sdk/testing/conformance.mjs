@@ -14,7 +14,7 @@ import { until } from './fake-node.js'
  * @param {string} t.sid - the session.
  * @param {{ script(opts: object): Promise<void> }} t.model - scriptedModel().
  * @param {(command: string) => object} t.bashArgs - the runtime's bash tool arguments for a command (the run makes
- *   commands containing JARVIS_E2E_ASK need approval).
+ *   commands containing PERSONA_E2E_ASK need approval).
  * @param {{ tool: string, args(question: string, options: string[]): object }} t.ask - its question tool.
  * @param {(history: string) => boolean} [t.history] - what a page's history should look like.
  * @param {(status: string) => boolean} [t.ended] - a status that means the turn ended (default: done).
@@ -43,23 +43,23 @@ export async function conformance(t) {
 
   // An approval allowed on the phone: the command runs and the turn goes on.
   node.resolve = (ix) => (ix.kind === 'permission' ? { allow: true } : { dismiss: true })
-  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'bash', toolArguments: JSON.stringify(t.bashArgs('echo JARVIS_E2E_ASK ran')), successText: 'The command ran' })
+  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'bash', toolArguments: JSON.stringify(t.bashArgs('echo PERSONA_E2E_ASK ran')), successText: 'The command ran' })
   await send('run the command')
   const approval = await until('the approval', () => node.asked.find((i) => i.kind === 'permission'), 60_000)
-  check('the approval reaches the phone with the command', approval.tool_name === 'Bash' && approval.tool_input?.command === 'echo JARVIS_E2E_ASK ran', JSON.stringify({ tool: approval.tool_name, input: approval.tool_input }))
-  await until('the tool result', () => node.items(sid).some((i) => i.kind === 'tool_result' && /JARVIS_E2E_ASK ran/.test(i.text ?? '')), 60_000)
+  check('the approval reaches the phone with the command', approval.tool_name === 'Bash' && approval.tool_input?.command === 'echo PERSONA_E2E_ASK ran', JSON.stringify({ tool: approval.tool_name, input: approval.tool_input }))
+  await until('the tool result', () => node.items(sid).some((i) => i.kind === 'tool_result' && /PERSONA_E2E_ASK ran/.test(i.text ?? '')), 60_000)
   check('the allowed command runs and its output comes back', true)
   await until('the follow-up reply', () => assistantText('The command ran'), 60_000)
   check('the turn goes on after the approval', true)
 
   // A refusal with words: the command does not run, the words reach the agent.
-  node.resolve = (x) => (x.kind === 'permission' ? { allow: false, message: 'not this one, JARVIS_E2E_WHY' } : { dismiss: true })
+  node.resolve = (x) => (x.kind === 'permission' ? { allow: false, message: 'not this one, PERSONA_E2E_WHY' } : { dismiss: true })
   const asked = node.asked.length
-  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'bash', toolArguments: JSON.stringify(t.bashArgs('echo JARVIS_E2E_ASK again')), successText: 'Understood' })
+  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'bash', toolArguments: JSON.stringify(t.bashArgs('echo PERSONA_E2E_ASK again')), successText: 'Understood' })
   await send('run it again')
   await until('the second approval', () => node.asked.length > asked, 60_000)
-  await until('the words in the conversation', () => node.items(sid).some((i) => /JARVIS_E2E_WHY/.test(i.text ?? '')), 60_000)
-  check('a refusal with words reaches the agent, and the command does not run', !node.items(sid).some((i) => i.kind === 'tool_result' && !i.is_error && /JARVIS_E2E_ASK again/.test(i.text ?? '')))
+  await until('the words in the conversation', () => node.items(sid).some((i) => /PERSONA_E2E_WHY/.test(i.text ?? '')), 60_000)
+  check('a refusal with words reaches the agent, and the command does not run', !node.items(sid).some((i) => i.kind === 'tool_result' && !i.is_error && /PERSONA_E2E_ASK again/.test(i.text ?? '')))
   await until('the turn after the refusal ends', async () => ended(await status(sid)), 60_000).catch(() => {})
 
   // A question answered on the phone: the agent gets the answer.

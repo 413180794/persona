@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor
 struct RebuildTests {
@@ -94,11 +94,11 @@ struct RebuildTests {
         #expect(built?.rows == ChatStore.buildRows(items))
     }
 
-    /// Real sessions (exported by the server's TestCorpusDumpItems; `TEST_RUNNER_JARVIS_ITEMS_DIR=<dir> xcodebuild test`):
+    /// Real sessions (exported by the server's TestCorpusDumpItems; `TEST_RUNNER_PERSONA_ITEMS_DIR=<dir> xcodebuild test`):
     /// the last 200 items arrive one by one; the incremental rebuild must equal the full one at every step. Prints
     /// the cost of both per event. Skipped without the directory.
     @Test func realSessionsRebuildIncrementally() throws {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_ITEMS_DIR"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_ITEMS_DIR"] else { return }
         let files = try FileManager.default.contentsOfDirectory(atPath: dir).filter { $0.hasSuffix(".json") }.sorted()
         var lines: [String] = []
         for name in files {

@@ -22,9 +22,9 @@ Supported since 2026-11-02 (issue #325). The node-side code is in `server/intern
 
 1. **Endpoint**: one WebSocket address (`ws://` or `wss://`); the daemon picks the path.
 2. **Handshake**:
-   - The node's request carries `Authorization: Bearer <token>` and the subprotocol `jarvis-runtime.v1`.
+   - The node's request carries `Authorization: Bearer <token>` and the subprotocol `persona-runtime.v1`.
    - Reply 401 when the token is wrong.
-   - The daemon must answer `jarvis-runtime.v1` in `Sec-WebSocket-Protocol`; the node treats an endpoint that does not as not a daemon and does not connect.
+   - The daemon must answer `persona-runtime.v1` in `Sec-WebSocket-Protocol`; the node treats an endpoint that does not as not a daemon and does not connect.
    - No extensions (compression) are needed.
 3. **Frames**: each WebSocket text message is one JSON object, matching one line on runtime.sock one to one:
    - request `{id, method, params}`;
@@ -55,8 +55,8 @@ The config file is `daemons.json` next to `runtime.sock`, i.e. `~/.persona/daemo
     {
       "id": "acme",
       "name": "Acme",
-      "url": "wss://<daemon address>/jarvis/runtime",
-      "token_file": "~/.config/acme/jarvis-token",
+      "url": "wss://<daemon address>/persona/runtime",
+      "token_file": "~/.config/acme/persona-token",
       "agent": "dsh",
       "launcher": "acme"
     }
@@ -115,13 +115,13 @@ A daemon is not necessarily trustworthy, e.g. a multi-tenant platform, or someth
 ```js
 import { createRuntime } from '<Persona>/integrations/runtime-sdk/index.js'
 
-// The SDK opens its own endpoint (default 127.0.0.1, path /jarvis/runtime; port 0 picks any free port):
+// The SDK opens its own endpoint (default 127.0.0.1, path /persona/runtime; port 0 picks any free port):
 const rt = createRuntime(driver, { runtime: 'acme', name: 'Acme', listen: { port: 7311, token } })
 const addr = await rt.start()
 
 // Or mount it on the daemon's existing HTTP server:
 const rt2 = createRuntime(driver, { runtime: 'acme', listen: true, token: () => readToken() })
-server.on('upgrade', (req, socket, head) => { if (req.url === '/api/jarvis') rt2.accept(req, socket, head) })
+server.on('upgrade', (req, socket, head) => { if (req.url === '/api/persona') rt2.accept(req, socket, head) })
 ```
 
 - The handshake (constant-time token comparison, subprotocol check) and server-side WebSocket framing (fragmentation, ping, 64 MiB limit, rejecting unmasked frames) are all in `lib/listen.js`, with no other package dependencies.
@@ -149,8 +149,8 @@ Daemons not written in JS implement the "Spec" section above themselves: one Web
   - a new connection replaces the old one;
   - fragmented messages, a ping in the middle of a message, unmasked frames.
 - End to end:
-  - `JARVISD=<jarvisd> node integrations/runtime-sdk/e2e/daemon.mjs`: uses a real `personad node`, the echo example as the daemon, and the script plays the hub. Covers: launcher name, start, session id prefix, row fields, sending (a resend goes in only once), permission cards, streamed output, paging, interrupt, rejected terminal calls, a local runtime grabbing a reserved id, the same runtime on the socket and as a daemon at once, a wrong token, config changes taking effect, reconnecting after a daemon restart, removal from the config, hub reconnect under a resident node. 22/22 passed on 2026-11-02.
-  - `JARVIS_E2E_DAEMON=1 DSH_CHECKOUT=<built dsh source> JARVISD=<jarvisd> node integrations/dsh/e2e/run.mjs`: uses a real `dsh web` with the DSH plugin as the daemon (`listen` in its config), runs the full runtime acceptance (`conformance()`: text turn, approve, deny with a reason, question, streamed output, interrupt, continuous pushes), plus closing from the phone (archives in DSH) and "the daemon cannot get phone tools". 21/21 passed on 2026-11-02; the original socket way also 21/21.
+  - `PERSONAD=<personad> node integrations/runtime-sdk/e2e/daemon.mjs`: uses a real `personad node`, the echo example as the daemon, and the script plays the hub. Covers: launcher name, start, session id prefix, row fields, sending (a resend goes in only once), permission cards, streamed output, paging, interrupt, rejected terminal calls, a local runtime grabbing a reserved id, the same runtime on the socket and as a daemon at once, a wrong token, config changes taking effect, reconnecting after a daemon restart, removal from the config, hub reconnect under a resident node. 22/22 passed on 2026-11-02.
+  - `PERSONA_E2E_DAEMON=1 DSH_CHECKOUT=<built dsh source> PERSONAD=<personad> node integrations/dsh/e2e/run.mjs`: uses a real `dsh web` with the DSH plugin as the daemon (`listen` in its config), runs the full runtime acceptance (`conformance()`: text turn, approve, deny with a reason, question, streamed output, interrupt, continuous pushes), plus closing from the phone (archives in DSH) and "the daemon cannot get phone tools". 21/21 passed on 2026-11-02; the original socket way also 21/21.
 
 Once a new daemon is connected, write its own end-to-end test based on `e2e/daemon.mjs`: replace the part that starts the echo daemon with starting your own service.
 

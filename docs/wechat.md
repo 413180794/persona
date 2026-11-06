@@ -8,7 +8,7 @@ It uses **iLink** (`ilinkai.weixin.qq.com`), the AI bot API Tencent opened up fo
 
 ## Why an extension
 
-Things that only make sense for one service are built as extensions (`docs/extensions.md`), not added to the hub. This one is a separate program next to personad, `jarvisd-wechat`, registered as a **built-in extension**
+Things that only make sense for one service are built as extensions (`docs/extensions.md`), not added to the hub. This one is a separate program next to personad, `personad-wechat`, registered as a **built-in extension**
 `wechat` just like Telegram (shipped in the same build and swapped together on auto-update; if its `version -v` differs from the hub's, it doesn't start). It is a **channel** (`docs/channels.md`): the program only talks to WeChat.
 "Which chat a message goes into, waiting for the turn to finish, sending the answer back, Agent questions" are all the shared pipeline (the same one as the Lark bot; since 2026-11-04 the assistant manages the chat side, and since 2026-11-05 sending/receiving and the WeChat program are in the managers too, see `docs/channels.md` ("Who owns what")).
 
@@ -24,7 +24,7 @@ the plugin no longer holds a hub token or subscribes to events. What used to liv
 
 The process follows the connector's toggle: WeChat messages are only received while it is on.
 
-Code: the plugin is `server/plugins/wechat`, a plugin like any other: it speaks the plugin protocol through the Go SDK (`sdk/go`: `ext` and the `schema/extension` wire types) and uses no other code of this repository. `server/plugins/guard_test.go` reads every file, whatever its build constraints, and also fails when the plugin is imported by anything but a program of its own, such as `server/cmd/personad-wechat`: a directory of `server/cmd/` whose code uses only the SDK and the plugin (`_test.go` files may import it). Program entry `server/cmd/personad-wechat` (the old name `jarvisd-wechat` is an alias), built, released and bundled with personad as before;
+Code: the plugin is `server/plugins/wechat`, a plugin like any other: it speaks the plugin protocol through the Go SDK (`sdk/go`: `ext` and the `schema/extension` wire types) and uses no other code of this repository. `server/plugins/guard_test.go` reads every file, whatever its build constraints, and also fails when the plugin is imported by anything but a program of its own, such as `server/cmd/personad-wechat`: a directory of `server/cmd/` whose code uses only the SDK and the plugin (`_test.go` files may import it). Program entry `server/cmd/personad-wechat` (the old name `personad-wechat` is an alias), built, released and bundled with personad as before;
 the iLink protocol is `server/plugins/wechat/ilink` (stateless, no logging, accepts only Tencent's HTTPS origins); the bot is `server/plugins/wechat` (`wechat.go` main loop and storage, `login.go` QR login, `chat.go` receiving, sending, "typing", `program.go` the SDK program, its manifest and `version -v`), with its own texts in `locales/<lang>.json` (en, zh-Hans, ja).
 The hub registers the built-in from `server/internal/wechat/spec` (connector and channel, known before the program runs) in `server/internal/extmgr/wechat.go`; `TestWeChatPluginDeclaresWhatTheHubRegisters` holds the two to the same declarations. The pipeline is in `server/internal/assistant/channels*.go` (the extension side is `extmgr/channels_extension.go`), rules in `server/internal/channel`,
 and the note added when sending into a chat is `server/internal/prompts/channel/message.md`.

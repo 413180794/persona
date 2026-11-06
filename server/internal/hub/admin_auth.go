@@ -118,9 +118,9 @@ func adminPasswordProblem(password string) error {
 // sign-in from being stored (browsers do not let http overwrite a Secure cookie of the same name).
 func adminCookieName(r *http.Request) string {
 	if r.TLS != nil {
-		return "jarvis_admin_tls"
+		return "persona_admin_tls"
 	}
-	return "jarvis_admin"
+	return "persona_admin"
 }
 
 const adminCookiePath = "/api/v1/admin/"
@@ -203,7 +203,7 @@ func truncateRunes(s string, n int) string {
 // adminRetry is how long this source must wait before trying a password or setup code again (0: go ahead). The same
 // thresholds as the app's tokens (security.auth_*), but its own table, and LAN and loopback sources count too: a
 // password is far easier to guess than a token, and loopback may be a reverse proxy relaying the internet (the hub's
-// own owner, locked out for a while, still has jarvisd hub admin on the machine). Sources outside the LAN also share
+// own owner, locked out for a while, still has personad hub admin on the machine). Sources outside the LAN also share
 // one budget of ten times that, against many addresses guessing together.
 func (h *Hub) adminRetry(r *http.Request) time.Duration {
 	now := h.adminNow()
@@ -401,7 +401,7 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true})
 	}))
 	h.setupCodeRoute(open)
-	// `jarvisd hub admin access` on this machine: read admin.access again after writing it (admin_cli.go).
+	// `personad hub admin access` on this machine: read admin.access again after writing it (admin_cli.go).
 	open.HandleFunc("POST /api/v1/admin/reload", func(w http.ResponseWriter, r *http.Request) {
 		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !remoteIP(r).IsLoopback() || tok == "" || subtle.ConstantTimeCompare([]byte(tok), []byte(h.cfg.Token)) != 1 {

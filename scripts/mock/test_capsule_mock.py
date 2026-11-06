@@ -21,7 +21,7 @@ class CapsuleMockTests(unittest.TestCase):
         log = tempfile.TemporaryFile()
         env = {k: v for k, v in os.environ.items() if not k.startswith("MOCK_")}
         if plugins:
-            env["MOCK_PLUGINS"] = "1"
+            env["MOCK_EXTENSIONS"] = "1"
         process = subprocess.Popen([sys.executable, "-I", str(Path(__file__).with_name("mock_hub.py"))],
                                    env=dict(env, PORT=str(port)), stdout=log, stderr=log)
 

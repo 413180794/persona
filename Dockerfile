@@ -1,10 +1,10 @@
-# The hub as a container image (docs/docker.md): jarvisd hub with the web client inside, and every node build for the
+# The hub as a container image (docs/docker.md): personad hub with the web client inside, and every node build for the
 # app's "Redeploy". Built for linux/amd64 and linux/arm64 (.github/workflows/hub-image.yml); the binaries are cross
 # compiled on the build machine, only the last stage runs on the target platform.
 #
-#   docker build -t jarvis-hub .
+#   docker build -t persona-hub .
 #
-# No skills are inside: the assistant's come from ~/.jarvis/skills on its machine (docs/hub-update.md "Skills out of the binary").
+# No skills are inside: the assistant's come from ~/.persona/skills on its machine (docs/hub-update.md "Skills out of the binary").
 
 FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /src/web
@@ -38,7 +38,7 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /src/web/dist/ internal/hub/webdist/
-# The runtime packages jarvisd carries and keeps its runtimes on (docs/runtimes.md "Auto-update"): the DSH plugin's and
+# The runtime packages personad carries and keeps its runtimes on (docs/runtimes.md "Auto-update"): the DSH plugin's and
 # the pi extension's, the Paseo bridge's and the Agent SDK bridge's code.
 COPY integrations/agent-sdk/ /src/integrations/agent-sdk/
 COPY integrations/dsh/ /src/integrations/dsh/
@@ -46,43 +46,42 @@ COPY integrations/paseo/ /src/integrations/paseo/
 COPY integrations/pi/ /src/integrations/pi/
 COPY integrations/runtime-sdk/ /src/integrations/runtime-sdk/
 RUN go generate ./internal/runtimepkg
-# NODE_PLATFORMS: the node builds in /opt/jarvis/nodes. It must include linux/<the image's architecture>, which the hub
+# NODE_PLATFORMS: the node builds in /opt/persona/nodes. It must include linux/<the image's architecture>, which the hub
 # itself runs. The PR smoke build passes linux/amd64 only (it never starts the others); everything else builds all four.
 ARG NODE_PLATFORMS="linux/amd64 linux/arm64 darwin/arm64 darwin/amd64"
 RUN for t in $NODE_PLATFORMS; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
-        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/personad || exit 1; \
+        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/personad-${t%/*}-${t#*/} ./cmd/personad || exit 1; \
     done
-# The built-in plugins' programs (the WeChat bot, docs/wechat.md), for this image's platform only: the hub runs them next to jarvisd, and starts one only when its `version -v` is
-# jarvisd's (the same -X).
+# The built-in plugins' programs (the WeChat bot, docs/wechat.md), for this image's platform only: the hub runs them next to personad, and starts one only when its `version -v` is
+# personad's (the same -X).
 ARG TARGETARCH
 RUN for p in wechat; do \
       CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
-        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/jarvisd-$p ./cmd/personad-$p || exit 1; \
+        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/personad-$p ./cmd/personad-$p || exit 1; \
     done
 
 FROM alpine:3.22
 ARG TARGETARCH
-# ssh: machines the hub reaches over ssh (optional with tailcat); su-exec: the entrypoint drops to the jarvis user.
+# ssh: machines the hub reaches over ssh (optional with tailcat); su-exec: the entrypoint drops to the persona user.
 RUN apk add --no-cache ca-certificates tzdata openssh-client su-exec \
- && adduser -D -h /home/jarvis -u 1000 jarvis \
- && mkdir -p /home/jarvis/.jarvis && chown jarvis:jarvis /home/jarvis/.jarvis && chmod 700 /home/jarvis/.jarvis
-COPY --from=build /out/nodes/ /opt/jarvis/nodes/
-RUN ln -s /opt/jarvis/nodes/jarvisd-linux-$TARGETARCH /opt/jarvis/jarvisd && /opt/jarvis/jarvisd version
-# Next to the binary jarvisd runs as (the link resolves into nodes/), where the hub looks for it.
-COPY --from=build /out/jarvisd-wechat /opt/jarvis/nodes/
-RUN for p in wechat; do [ "$(/opt/jarvis/nodes/jarvisd-$p version -v)" = "$(/opt/jarvis/jarvisd version -v)" ] || exit 1; done
-COPY deploy/docker/jarvisd.sh /usr/local/bin/jarvisd
-RUN ln -s jarvisd /usr/local/bin/personad
-COPY deploy/docker/entrypoint.sh /usr/local/bin/jarvis-entrypoint
-# ~/.jarvis is the data volume (hub.json, keys, the knowledge base): the node builds live outside it. No local node:
+ && adduser -D -h /home/persona -u 1000 persona \
+ && mkdir -p /home/persona/.persona && chown persona:persona /home/persona/.persona && chmod 700 /home/persona/.persona
+COPY --from=build /out/nodes/ /opt/persona/nodes/
+RUN ln -s /opt/persona/nodes/personad-linux-$TARGETARCH /opt/persona/personad && /opt/persona/personad version
+# Next to the binary personad runs as (the link resolves into nodes/), where the hub looks for it.
+COPY --from=build /out/personad-wechat /opt/persona/nodes/
+RUN for p in wechat; do [ "$(/opt/persona/nodes/personad-$p version -v)" = "$(/opt/persona/personad version -v)" ] || exit 1; done
+COPY deploy/docker/personad.sh /usr/local/bin/personad
+COPY deploy/docker/entrypoint.sh /usr/local/bin/persona-entrypoint
+# ~/.persona is the data volume (hub.json, keys, the knowledge base): the node builds live outside it. No local node:
 # this machine has no herdr or claude for the hub to drive.
-ENV HOME=/home/jarvis \
-    JARVIS_LOCAL_NODE=0 \
-    JARVIS_NODE_BINARIES=/opt/jarvis/nodes
+ENV HOME=/home/persona \
+    PERSONA_LOCAL_NODE=0 \
+    PERSONA_NODE_BINARIES=/opt/persona/nodes
 # 18660 the hub (HTTP), 18662 its TLS port (public.tls_listen: on for a first start, deploy/docker/entrypoint.sh).
 EXPOSE 18660 18662
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
   CMD wget -qO- http://127.0.0.1:18660/api/v1/health >/dev/null || exit 1
-ENTRYPOINT ["jarvis-entrypoint"]
+ENTRYPOINT ["persona-entrypoint"]
 CMD ["hub", "run"]

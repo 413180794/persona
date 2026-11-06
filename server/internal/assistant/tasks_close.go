@@ -88,7 +88,7 @@ func (s *Service) doneTaskAgents() []doneTaskAgent {
 // still since both the task was done and its last step at least taskCloseIdle ago, and with nothing going on.
 func retirable(s proto.Session, doneAt, now time.Time) bool {
 	switch {
-	case s.Assistant, s.SourceKind != "", s.Starting, !s.StartedByJarvis:
+	case s.Assistant, s.SourceKind != "", s.Starting, !s.StartedByPersona:
 		return false
 	case s.Status == proto.StatusOffline || s.PaneID == "":
 		return false // not running: nothing to close

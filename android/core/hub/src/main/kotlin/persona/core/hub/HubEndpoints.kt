@@ -17,7 +17,7 @@ const val MAX_MANUAL_ENDPOINTS = 10
  * The key every candidate comparison uses (dedupe, disabled, the user's order, the active route):
  * `scheme://host:port`, lowercase, explicit port, IPv6 in brackets, no trailing slash. Pairing addresses are stored as
  * `https://host:port/` while the hub sends `https://host:port`; both get the same key. A hub behind a reverse proxy at
- * a sub-path keeps it (`https://host:443/jarvis`): another prefix on the same host is another endpoint.
+ * a sub-path keeps it (`https://host:443/persona`): another prefix on the same host is another endpoint.
  */
 fun endpointKey(url: String): String = url.trim().toHttpUrlOrNull()?.key() ?: url.trim().lowercase()
 

@@ -64,7 +64,7 @@ class GeneratorTests(unittest.TestCase):
             "motion": {"state": token("duration", {"value": .25, "unit": "s"}), "layout": token("duration", {"value": 300, "unit": "ms"}), "reduced": token("duration", {"value": 0, "unit": "ms"})},
             "sample": {"alias": token("color", "{semantic.native.light.text}"), "number": token("number", 50), "name": token("string", 'system "$font"')},
         }
-        self.rules = {"$description": "测试规则", "$extensions": {"jarvis": {"styles": sorted(gen.STYLES), "modes": sorted(gen.MODES), "contrast": [{"id": "body", "foreground": "semantic.{style}.{mode}.text", "background": "semantic.{style}.{mode}.page", "minimum": 4.5, "description": "正文", "level": "error"}]}}}
+        self.rules = {"$description": "测试规则", "$extensions": {"persona": {"styles": sorted(gen.STYLES), "modes": sorted(gen.MODES), "contrast": [{"id": "body", "foreground": "semantic.{style}.{mode}.text", "background": "semantic.{style}.{mode}.page", "minimum": 4.5, "description": "正文", "level": "error"}]}}}
         self.save()
 
     def save(self):
@@ -153,7 +153,7 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(len(catalog.contrast_results()), 12)
 
     def test_warn_level_reports_without_failing(self):
-        self.rules["$extensions"]["jarvis"]["contrast"][0]["level"] = "warn"
+        self.rules["$extensions"]["persona"]["contrast"][0]["level"] = "warn"
         self.data["semantic"]["clay"]["dark"]["text"]["$value"] = color("FFFFFF")
         self.save()
         code, log = self.run_cli("--check")
@@ -176,7 +176,7 @@ class GeneratorTests(unittest.TestCase):
         self.assertIn("请从列表里删掉", log)
 
     def test_rule_level_is_required(self):
-        del self.rules["$extensions"]["jarvis"]["contrast"][0]["level"]
+        del self.rules["$extensions"]["persona"]["contrast"][0]["level"]
         self.save()
         code, log = self.run_cli("--check")
         self.assertEqual(code, 1)
@@ -188,7 +188,7 @@ class GeneratorTests(unittest.TestCase):
         code, log = self.run_cli("--check")
         self.assertEqual(code, 1)
         self.assertIn("canvas", log)
-        self.rules["$extensions"]["jarvis"]["contrast"][0]["canvas"] = "semantic.native.light.page"
+        self.rules["$extensions"]["persona"]["contrast"][0]["canvas"] = "semantic.native.light.page"
         self.save()
         self.assertEqual(self.run_cli("--check")[0], 0)
 
@@ -231,7 +231,7 @@ class GeneratorTests(unittest.TestCase):
         self.save()
         self.assertEqual(self.run_cli("--check")[0], 1)
         del self.data["bad-name"]
-        self.rules["$extensions"]["jarvis"]["contrast"] = []
+        self.rules["$extensions"]["persona"]["contrast"] = []
         self.save()
         self.assertEqual(self.run_cli("--check")[0], 1)
 

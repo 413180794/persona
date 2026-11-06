@@ -70,7 +70,7 @@ func newFakeNode(t *testing.T) *fakeNode {
 	return n
 }
 
-// connector runs jarvis-link (Run) on a link.json of its own in passive mode, listening on 127.0.0.1.
+// connector runs persona-link (Run) on a link.json of its own in passive mode, listening on 127.0.0.1.
 type connector struct {
 	path   string
 	addr   string // host:port it listens on
@@ -124,7 +124,7 @@ func (c *connector) waitFor(t *testing.T, ok func(Status) bool) Status {
 	}
 }
 
-// invite is `jarvis-link pair --listen --addr <where it listens>`.
+// invite is `persona-link pair --listen --addr <where it listens>`.
 func (c *connector) invite(t *testing.T) (fp, code string) {
 	t.Helper()
 	inv, err := PairListen(c.path, "", []string{c.addr}, time.Now())
@@ -550,7 +550,7 @@ func TestActivePairingKeepsPassiveMode(t *testing.T) {
 	}))
 	defer hub.Close()
 	u, _ := netip.ParseAddrPort(strings.TrimPrefix(hub.URL, "https://"))
-	link := fmt.Sprintf("jarvis://link?url=http%%3A%%2F%%2F127.0.0.1%%3A1&tls=%d&token=jp_x&hub=h1&fp=%s&machine=laptop", u.Port(), pinOf(hub))
+	link := fmt.Sprintf("persona://link?url=http%%3A%%2F%%2F127.0.0.1%%3A1&tls=%d&token=jp_x&hub=h1&fp=%s&machine=laptop", u.Port(), pinOf(hub))
 	if _, err := Pair(context.Background(), link, "", "", path); err != nil {
 		t.Fatal(err)
 	}
@@ -639,7 +639,7 @@ func TestListenCandidatesFollowActiveModesOrder(t *testing.T) {
 	// pair --listen without --addr puts them in the link, in that order.
 	path := filepath.Join(t.TempDir(), "link.json")
 	inv, err := PairListen(path, "", nil, time.Now())
-	if err != nil || !strings.HasPrefix(inv.Link, "jarvis://connector?addr=%5Bfd00%3A%3A10%5D%3A18663&addr=%5B2400%3Acb00%3A%3A10%5D%3A18663&addr=8.8.4.4%3A18663&fp=") {
+	if err != nil || !strings.HasPrefix(inv.Link, "persona://connector?addr=%5Bfd00%3A%3A10%5D%3A18663&addr=%5B2400%3Acb00%3A%3A10%5D%3A18663&addr=8.8.4.4%3A18663&fp=") {
 		t.Fatalf("%+v %v", inv, err)
 	}
 	localAddrs = func() ([]netaddr.Addr, error) { return addrs[4:6], nil }
@@ -665,8 +665,8 @@ func TestConnectorLinks(t *testing.T) {
 	if err != nil || strings.Join(addrs, ",") != "[fd00::10]:18663,hub.example.com:18663" || fp != "pin_-x" || code != "jc_abc" {
 		t.Fatalf("%v %v %v %v", addrs, fp, code, err)
 	}
-	for _, bad := range []string{"jarvis://link?addr=a:1&fp=x&code=y", "jarvis://connector?fp=x&code=y", "jarvis://connector?addr=a:1&code=y",
-		"jarvis://connector?addr=nohost&fp=x&code=y"} {
+	for _, bad := range []string{"persona://link?addr=a:1&fp=x&code=y", "persona://connector?fp=x&code=y", "persona://connector?addr=a:1&code=y",
+		"persona://connector?addr=nohost&fp=x&code=y"} {
 		if _, _, _, err := ParseConnectorLink(bad); err == nil {
 			t.Errorf("%q parsed", bad)
 		}

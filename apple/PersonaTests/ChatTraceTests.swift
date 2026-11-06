@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Copy Diagnostics (#3783): the chat's trace says where a reply went in structure only, and never carries a word of it.
 @MainActor

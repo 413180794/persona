@@ -46,16 +46,16 @@ final class QuietSpaceOrderTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let path = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let appearance = ProcessInfo.processInfo.environment["JARVIS_STYLE"] ?? "system"
+        if let path = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let appearance = ProcessInfo.processInfo.environment["PERSONA_STYLE"] ?? "system"
             try screenshot.pngRepresentation.write(to: URL(fileURLWithPath: path)
                 .appendingPathComponent("quiet-order-\(name)-\(UITestStyle.name)-\(appearance).png"))
         }
     }
 
     @MainActor func testExpandedQuietSpaceUsesLatestActivityInCardsAndCompactRows() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_QUIET_ORDER_HUB"] else {
-            throw XCTSkip("needs the MOCK_QUIET=order hub (JARVIS_QUIET_ORDER_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_QUIET_ORDER_HUB"] else {
+            throw XCTSkip("needs the MOCK_QUIET=order hub (PERSONA_QUIET_ORDER_HUB)")
         }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow"] where alert.buttons[label].exists {
@@ -65,7 +65,7 @@ final class QuietSpaceOrderTests: XCTestCase {
             return false
         }
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-tab", "dev", "-dev.openChat", "",
                                "-openAgentsFresh", "YES", "-dev.grouping", "space"]
         app.launchPinned()

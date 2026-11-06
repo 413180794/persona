@@ -32,7 +32,7 @@ export function agentFilter(value: string | null): AgentFilter {
 
 // "botmux" beside the filters (#2786): a show / hide switch for botmux sessions, kept in this browser. It only hides
 // them from this list; the hub's per-machine switch (machine page › "Engine") still decides whether they are listed at all.
-export const BOTMUX_HIDDEN_KEY = "jarvis.agentHideBotmux";
+export const BOTMUX_HIDDEN_KEY = "persona.agentHideBotmux";
 
 export const isBotmux = (s: Session) => sessionHost(s) === "botmux";
 

@@ -36,7 +36,7 @@ import java.io.File
 class UserBubbleShotsTest {
     @get:Rule val rule = createComposeRule()
 
-    private val relay = "<jarvis-context kind=\"context\" title=\"来自对话「写周报」\" url=\"\">\n这条消息不是用户本人发的。\n</jarvis-context>\n周报写好了，放在 docs/weekly.md"
+    private val relay = "<persona-context kind=\"context\" title=\"来自对话「写周报」\" url=\"\">\n这条消息不是用户本人发的。\n</persona-context>\n周报写好了，放在 docs/weekly.md"
 
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/user-bubble-shots").also { it.mkdirs() }
 

@@ -26,28 +26,28 @@ class ToolPresentationTest {
 
     // The whole screen follows the app's language, not iOS's hard-coded Chinese.
     @Test @Config(qualifiers = "ja") fun wholeScreenIsInTheAppsLanguage() {
-        assertEquals("macbook · 画面全体", toolPresentation(res, tool("mcp__jarvis__computer_state", "machine" to "macbook")).title)
+        assertEquals("macbook · 画面全体", toolPresentation(res, tool("mcp__persona__computer_state", "machine" to "macbook")).title)
     }
 
     @Test fun namedToolsShowTheirWordsNotTheirRawName() {
-        toolPresentation(res, tool("mcp__jarvis__computer_run", "machine" to "macbook")).let {
+        toolPresentation(res, tool("mcp__persona__computer_run", "machine" to "macbook")).let {
             assertEquals("操控电脑", it.verb)
             assertEquals("macbook", it.title)
         }
-        toolPresentation(res, tool("mcp__jarvis__conversation_rename", "kind" to "功能", "topic" to "登录页")).let {
+        toolPresentation(res, tool("mcp__persona__conversation_rename", "kind" to "功能", "topic" to "登录页")).let {
             assertEquals("重命名对话", it.verb)
             assertEquals("功能 | 登录页", it.title)
         }
         // Nothing to say about it: the words are the title too.
-        assertEquals("归档对话", toolPresentation(res, tool("mcp__jarvis__conversation_archive")).title)
-        assertEquals("用浏览器", toolPresentation(res, tool("mcp__jarvis__browser_run")).verb)
+        assertEquals("归档对话", toolPresentation(res, tool("mcp__persona__conversation_archive")).title)
+        assertEquals("用浏览器", toolPresentation(res, tool("mcp__persona__browser_run")).verb)
         assertEquals("看电脑", toolPresentation(res, tool("computer_state")).verb)
-        assertEquals("macbook · 整个屏幕", toolPresentation(res, tool("mcp__jarvis__computer_state", "machine" to "macbook")).title)
-        assertEquals("手机", toolPresentation(res, tool("mcp__jarvis__phone_device_info")).verb)
-        assertEquals("device info", toolPresentation(res, tool("mcp__jarvis__phone_device_info")).title)
-        assertEquals("邮件", toolPresentation(res, tool("mcp__jarvis__mail_send")).verb)
-        assertEquals("读 Agent 对话", toolPresentation(res, tool("mcp__jarvis__agent_read")).verb)
-        assertEquals("调用 Persona · github read", toolPresentation(res, tool("mcp__jarvis__github_read")).verb)
+        assertEquals("macbook · 整个屏幕", toolPresentation(res, tool("mcp__persona__computer_state", "machine" to "macbook")).title)
+        assertEquals("手机", toolPresentation(res, tool("mcp__persona__phone_device_info")).verb)
+        assertEquals("device info", toolPresentation(res, tool("mcp__persona__phone_device_info")).title)
+        assertEquals("邮件", toolPresentation(res, tool("mcp__persona__mail_send")).verb)
+        assertEquals("读 Agent 对话", toolPresentation(res, tool("mcp__persona__agent_read")).verb)
+        assertEquals("调用 Persona · github read", toolPresentation(res, tool("mcp__persona__github_read")).verb)
     }
 
     @Test fun claudeCodeAndUnknownToolsKeepTodaysWords() {
@@ -61,19 +61,19 @@ class ToolPresentationTest {
     @Test fun theRunningLineSaysTheNamedToolsWords() {
         fun running(item: Item) = workSummary(res, ChatLine.Work("w", listOf(WorkItem.Tool(ToolCall(item.asLineItem(), null, emptyList()))),
             live = true, start = null, end = null, open = false), null)
-        assertEquals("操控电脑 macbook，第 1 步", running(tool("mcp__jarvis__computer_run", "machine" to "macbook")))
-        assertEquals("归档对话，第 1 步", running(tool("mcp__jarvis__conversation_archive")))
+        assertEquals("操控电脑 macbook，第 1 步", running(tool("mcp__persona__computer_run", "machine" to "macbook")))
+        assertEquals("归档对话，第 1 步", running(tool("mcp__persona__conversation_archive")))
         assertEquals("正在读取 a.kt，第 1 步", running(tool("Read", "file_path" to "/w/a.kt")))
         assertEquals("正在执行 执行，第 1 步", running(tool("mcp__github__create_issue")))
     }
 
     @Test fun namedToolsHaveTheirIcons() {
-        assertEquals(PhIcons.Desktop, toolCategory("mcp__jarvis__computer_run"))
-        assertEquals(PhIcons.GlobeSimple, toolCategory("mcp__jarvis__browser_look"))
-        assertEquals(PhIcons.Archive, toolCategory("mcp__jarvis__conversation_unarchive"))
-        assertEquals(PhIcons.ChatCircle, toolCategory("mcp__jarvis__conversation_send"))
-        assertEquals(PhIcons.DeviceMobile, toolCategory("mcp__jarvis__phone_photos_recent"))
-        assertEquals(PhIcons.EnvelopeSimple, toolCategory("mcp__jarvis__mail_send"))
+        assertEquals(PhIcons.Desktop, toolCategory("mcp__persona__computer_run"))
+        assertEquals(PhIcons.GlobeSimple, toolCategory("mcp__persona__browser_look"))
+        assertEquals(PhIcons.Archive, toolCategory("mcp__persona__conversation_unarchive"))
+        assertEquals(PhIcons.ChatCircle, toolCategory("mcp__persona__conversation_send"))
+        assertEquals(PhIcons.DeviceMobile, toolCategory("mcp__persona__phone_photos_recent"))
+        assertEquals(PhIcons.EnvelopeSimple, toolCategory("mcp__persona__mail_send"))
         assertEquals(PhIcons.Eye, toolCategory("Read"))
         assertEquals(PhIcons.Wrench, toolCategory("mcp__github__create_issue"))
     }

@@ -153,7 +153,7 @@ func TestCheckTurnUsageRetriesARefusedMessageOnce(t *testing.T) {
 	proc := func() *assistantProc {
 		exited := make(chan struct{})
 		close(exited)
-		p := &assistantProc{id: id, agent: "claude", launcher: "opus", cwd: "/home/u/.jarvis/assistant", exited: exited,
+		p := &assistantProc{id: id, agent: "claude", launcher: "opus", cwd: "/home/u/.persona/assistant", exited: exited,
 			stdin: nopCloser{io.Discard}, cmd: &exec.Cmd{}}
 		n.mu.Lock()
 		n.procs[id] = p
@@ -163,7 +163,7 @@ func TestCheckTurnUsageRetriesARefusedMessageOnce(t *testing.T) {
 
 	p := proc()
 	n.checkTurnUsage(p, true)
-	if len(sent) != 1 || !strings.HasPrefix(sent[0], id+" /home/u/.jarvis/assistant opus ") {
+	if len(sent) != 1 || !strings.HasPrefix(sent[0], id+" /home/u/.persona/assistant opus ") {
 		t.Fatalf("sent %q", sent)
 	}
 	n.mu.Lock()
@@ -172,7 +172,7 @@ func TestCheckTurnUsageRetriesARefusedMessageOnce(t *testing.T) {
 	if running {
 		t.Error("the process holding the number was not let go")
 	}
-	goldenNode(t, "usage_retry", strings.TrimPrefix(sent[0], id+" /home/u/.jarvis/assistant opus "))
+	goldenNode(t, "usage_retry", strings.TrimPrefix(sent[0], id+" /home/u/.persona/assistant opus "))
 
 	// The gateway does it again at once: repaired again, not sent again.
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)

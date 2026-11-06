@@ -3,12 +3,12 @@ import XCTest
 /// Whole-project linking uses the native group menu and the shared picker, against the isolated mock hub.
 final class TodoGroupTests: XCTestCase {
     @MainActor func testCreateLinkAndRemoveAProject() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-ui.oldLayout", "NO", "-dev.grouping", "space",
                                "-dev.folded", "macbook/w1\nstudio/w2\nstudio/w3\nserver/w1"]
         app.launchPinned()

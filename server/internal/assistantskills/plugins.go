@@ -27,7 +27,7 @@ const pluginStamp = ".persona-plugin" // in each plugin skill: "<plugin> <digest
 
 // PluginDir is where this machine keeps the plugins' skills (PERSONA_PLUGIN_SKILLS_DIR elsewhere, for tests).
 func PluginDir() string {
-	if d := identity.Getenv("JARVIS_PLUGIN_SKILLS_DIR"); d != "" {
+	if d := identity.Getenv("PERSONA_PLUGIN_SKILLS_DIR"); d != "" {
 		return d
 	}
 	home, _ := os.UserHomeDir()
@@ -104,7 +104,7 @@ func pluginNames(dir string) []string {
 	return out
 }
 
-const pluginsCopied = ".persona-plugins" // in the assistant's skills: the plugin skills last copied in, with digests
+const pluginsCopied = ".persona-extension-skills" // in the assistant's skills: the plugin skills last copied in, with digests
 
 // installPlugins copies the plugin skills from plugins into dir, except those the user has their own of; one copied
 // before and no longer there is removed. The stamp (pluginsCopied) lists only skills that really are copies in dir:

@@ -99,7 +99,7 @@ describe("侧边面板的键盘操作", () => {
   let opener: HTMLButtonElement;
 
   beforeEach(() => {
-    localStorage.removeItem("jarvis.panelWidth");
+    localStorage.removeItem("persona.panelWidth");
     opener = document.createElement("button");
     opener.textContent = "文件";
     document.body.append(opener);
@@ -124,11 +124,11 @@ describe("侧边面板的键盘操作", () => {
   it("widens with ArrowLeft, narrows with ArrowRight, and remembers it", () => {
     expect(press(separator(), "ArrowLeft").defaultPrevented).toBe(true);
     expect(separator().getAttribute("aria-valuenow")).toBe("616");
-    expect(localStorage.getItem("jarvis.panelWidth")).toBe("616");
+    expect(localStorage.getItem("persona.panelWidth")).toBe("616");
     press(separator(), "ArrowRight");
     press(separator(), "ArrowRight");
     expect(separator().getAttribute("aria-valuenow")).toBe("584");
-    expect(localStorage.getItem("jarvis.panelWidth")).toBe("584");
+    expect(localStorage.getItem("persona.panelWidth")).toBe("584");
   });
 
   it("goes to the ends with Home / End and back to the default with Enter", () => {
@@ -138,7 +138,7 @@ describe("侧边面板的键盘操作", () => {
     expect(separator().getAttribute("aria-valuenow")).toBe("360");
     press(separator(), "Enter");
     expect(separator().getAttribute("aria-valuenow")).toBe("600");
-    expect(localStorage.getItem("jarvis.panelWidth")).toBeNull();
+    expect(localStorage.getItem("persona.panelWidth")).toBeNull();
   });
 
   it("closes on Esc from inside the panel and gives focus back to what opened it", () => {

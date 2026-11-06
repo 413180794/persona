@@ -1,7 +1,7 @@
 import PersonaKit
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 @Suite(.serialized)
 @MainActor

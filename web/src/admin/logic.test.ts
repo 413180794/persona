@@ -225,24 +225,24 @@ describe("computers", () => {
 });
 
 describe("connector links", () => {
-  it("reads what jarvis-link pair --listen prints", () => {
-    expect(parseConnectorLink(" jarvis://connector?addr=192.0.2.30:18663&addr=%5B2001:db8::30%5D:18663&fp=abc_-1&code=ABCD-EFGH ")).toEqual({
+  it("reads what persona-link pair --listen prints", () => {
+    expect(parseConnectorLink(" persona://connector?addr=192.0.2.30:18663&addr=%5B2001:db8::30%5D:18663&fp=abc_-1&code=ABCD-EFGH ")).toEqual({
       addrs: ["192.0.2.30:18663", "[2001:db8::30]:18663"],
       fp: "abc_-1",
       code: "ABCD-EFGH",
     });
-    for (const scheme of ["persona", "jarvis"]) {
+    for (const scheme of ["persona"]) {
       expect(parseConnectorLink(`${scheme}://connector?addr=192.0.2.30:18663&fp=abc_-1&code=ABCD-EFGH`)).toEqual({
         addrs: ["192.0.2.30:18663"], fp: "abc_-1", code: "ABCD-EFGH",
       });
       expect(parseConnectorLink(`${scheme}://connector?addr=192.0.2.30:18663&code=ABCD-EFGH`)).toBeNull();
       expect(parseConnectorLink(`${scheme}://link?addr=192.0.2.30:18663&fp=f&code=c`)).toBeNull();
     }
-    expect(parseConnectorLink("jarvis://connector/?fp=f&code=c")).toEqual({ addrs: [], fp: "f", code: "c" });
-    expect(parseConnectorLink("jarvis://connector?addr=bad&fp=f&code=c")?.addrs).toEqual([]);
+    expect(parseConnectorLink("persona://connector/?fp=f&code=c")).toEqual({ addrs: [], fp: "f", code: "c" });
+    expect(parseConnectorLink("persona://connector?addr=bad&fp=f&code=c")?.addrs).toEqual([]);
   });
   it("rejects anything else", () => {
-    for (const bad of ["", "jarvis://link?url=x&fp=f&code=c", "https://connector?fp=f&code=c", "jarvis://connector?addr=192.0.2.30:18663&fp=f", "jarvis://connector?code=c"])
+    for (const bad of ["", "persona://link?url=x&fp=f&code=c", "https://connector?fp=f&code=c", "persona://connector?addr=192.0.2.30:18663&fp=f", "persona://connector?code=c"])
       expect(parseConnectorLink(bad), bad).toBeNull();
   });
   it("checks host:port and socks5 proxies like the hub", () => {
@@ -253,7 +253,7 @@ describe("connector links", () => {
   });
   it("builds the Linux one-liner, quoted for the shell", () => {
     expect(shellQuote("it's")).toBe("'it'\\''s'");
-    expect(linuxInstallCommand("jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_x")).toBe("jarvis-link install --pair - <<< 'jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_x'");
+    expect(linuxInstallCommand("persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_x")).toBe("persona-link install --pair - <<< 'persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_x'");
   });
 });
 

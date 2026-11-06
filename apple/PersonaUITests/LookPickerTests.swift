@@ -2,14 +2,14 @@ import XCTest
 
 /// Settings › Appearance's three choices of how the app looks (docs/ios.md「设计语言」): Avatar, Theme Color and Interface Style, each on its own page
 /// and apart from the others. Against scripts/mock/mock_hub.py started with MOCK_PERSONAS=<dir with a package that brings
-/// colors> (or demo) and JARVIS_MOCK_HUB. Screenshots go to JARVIS_LOOK_SHOTS when set (the appearance is the simulator's).
+/// colors> (or demo) and PERSONA_MOCK_HUB. Screenshots go to PERSONA_LOOK_SHOTS when set (the appearance is the simulator's).
 final class LookPickerTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_PERSONAS")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB) with MOCK_PERSONAS")
         }
         self.hub = hub
     }
@@ -17,11 +17,11 @@ final class LookPickerTests: XCTestCase {
     /// Taps write the app's own settings: put back the defaults (Liquid Glass, Match Interface Style, the built-in) for the tests after.
     override func tearDown() {
         if let hub {
-            let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+            let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
             for (page, id) in [("color", "color-style"), ("style", "style-glass")] {
                 let app = XCUIApplication()
                 app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openAppearance", page, "-openPersona", "persona"]
-                app.launchJarvis()
+                app.launchPersona()
                 _ = app.collectionViews.firstMatch.waitForExistence(timeout: 10)
                 let bar = app.tabBars.firstMatch.frame.minY
                 let e = app.buttons[id]
@@ -38,9 +38,9 @@ final class LookPickerTests: XCTestCase {
     /// Opens on Settings › Appearance › `page` (color | style | persona).
     @MainActor private func launch(_ page: String, _ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openAppearance", page] + extra
-        app.launchJarvis()
+        app.launchPersona()
         return app
     }
 
@@ -60,7 +60,7 @@ final class LookPickerTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_LOOK_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_LOOK_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: name + ".png"))
     }
 

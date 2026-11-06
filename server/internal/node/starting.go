@@ -171,7 +171,7 @@ func (n *Node) startAsyncIn(kind, id, cwd, launcher, prompt, workspaceID, mode, 
 	now := time.Now().UTC()
 	r := &startRec{done: make(chan struct{}), session: proto.Session{
 		SessionID: id, Cwd: cwd, Launcher: launcher, Agent: "claude", Status: proto.StatusIdle, Starting: true,
-		StartedByJarvis: true, PermissionMode: mode, Effort: effort, UpdatedAt: now, WorkspaceID: workspaceID,
+		StartedByPersona: true, PermissionMode: mode, Effort: effort, UpdatedAt: now, WorkspaceID: workspaceID,
 	}}
 	n.starts.add(id, r)
 	// Known from now on: its chat loads empty (startingSession) and its watch waits for the transcript.

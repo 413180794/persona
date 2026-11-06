@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// Operating a Mac through Cua Driver (the hub's plugin cua, docs/computer-use.md): what the machine list says of it,
 /// and how the assistant's two tools read in the chat.
@@ -24,7 +24,7 @@ struct ComputerTests {
 
     private func call(_ name: String, _ input: [String: JSONValue]) -> ToolCall {
         let use = Item(id: "1#0", seq: 1, ts: Date(timeIntervalSince1970: 1), role: "assistant", kind: .toolUse, text: nil,
-                       toolUseID: "t1", toolName: "mcp__jarvis__" + name, toolInput: .object(input), isError: nil, image: nil)
+                       toolUseID: "t1", toolName: "mcp__persona__" + name, toolInput: .object(input), isError: nil, image: nil)
         return ToolCall(use: use, result: nil)
     }
 
@@ -34,15 +34,15 @@ struct ComputerTests {
         work.group = "work"
         let machines = [mac, work]
         let named: JSONValue = .object(["machine": .string("MacBook")])
-        #expect(ScreenEntry.machine("mcp__jarvis__computer_run", input: named, chat: MachineRef(id: "server"), machines: machines) == mac.ref,
+        #expect(ScreenEntry.machine("mcp__persona__computer_run", input: named, chat: MachineRef(id: "server"), machines: machines) == mac.ref,
                 "the assistant's: the Mac it names, by name too")
-        #expect(ScreenEntry.machine("mcp__jarvis__computer_state", input: .object(["machine": .string("macbook")]),
+        #expect(ScreenEntry.machine("mcp__persona__computer_state", input: .object(["machine": .string("macbook")]),
                                     chat: MachineRef(group: "work", id: "server"), machines: machines) == MachineRef(group: "work", id: "macbook"),
                 "in the chat's group of hubs")
         #expect(ScreenEntry.machine("mcp__cua-driver__click", input: .object([:]), chat: mac.ref, machines: machines) == mac.ref,
                 "an agent's own Cua Driver: its machine")
         #expect(ScreenEntry.machine("Bash", input: named, chat: mac.ref, machines: machines) == nil)
-        #expect(ScreenEntry.machine("mcp__jarvis__computer_run", input: .object([:]), chat: mac.ref, machines: machines) == nil)
+        #expect(ScreenEntry.machine("mcp__persona__computer_run", input: .object([:]), chat: mac.ref, machines: machines) == nil)
     }
 
     @Test func theMachineListSaysWhetherItsScreenCanBeShown() throws {
@@ -83,9 +83,9 @@ struct ComputerTests {
             .object(["launch_app": .object(["name": .string("Safari")])]), .object(["expect": .object([:])]),
             click("Equals"), click("Done"),
         ])])
-        #expect(ComputerSteps.describe("mcp__jarvis__computer_run", input: mixed) == "点 C → 输入「你好」 → 按 ⏎ → 按 ⌘S → 打开 Safari → 检查 → 点 = → Done")
-        #expect(ComputerSteps.describe("mcp__jarvis__computer_state", input: .object(["app": .string("Calculator")])) == "看 Calculator")
-        #expect(ComputerSteps.describe("mcp__jarvis__computer_state", input: .object([:])) == "看整个屏幕")
+        #expect(ComputerSteps.describe("mcp__persona__computer_run", input: mixed) == "点 C → 输入「你好」 → 按 ⏎ → 按 ⌘S → 打开 Safari → 检查 → 点 = → Done")
+        #expect(ComputerSteps.describe("mcp__persona__computer_state", input: .object(["app": .string("Calculator")])) == "看 Calculator")
+        #expect(ComputerSteps.describe("mcp__persona__computer_state", input: .object([:])) == "看整个屏幕")
         #expect(ComputerSteps.describe("mcp__cua-driver__click", input: .object(["element_token": .string("s1:5")])) == "点 一处")
         #expect(ComputerSteps.describe("mcp__cua-driver__type_text", input: .object(["text": .string(String(repeating: "长", count: 40))]))
             == "输入「" + String(repeating: "长", count: 23) + "…」")
@@ -100,7 +100,7 @@ struct ComputerTests {
             Item(id: id, seq: 1, ts: ts, role: kind == .toolUse ? "assistant" : "user", kind: kind, text: nil, toolUseID: use,
                  toolName: name, toolInput: input, isError: nil, image: nil)
         }
-        let use = item("1", .toolUse, t0, name: "mcp__jarvis__computer_run", input: .object(["machine": .string("MacBook"), "steps": .array([click("All Clear")])]), use: "t1")
+        let use = item("1", .toolUse, t0, name: "mcp__persona__computer_run", input: .object(["machine": .string("MacBook"), "steps": .array([click("All Clear")])]), use: "t1")
         let bash = item("2", .toolUse, t0, name: "Bash", input: .object([:]), use: "t2")
         let running = try #require(ComputerActivity.latest(in: [use, bash], chat: MachineRef(id: "server"), machines: [mac]))
         #expect(running.machine == mac.ref && running.machineName == "MacBook" && running.step == "点 AC" && running.running)
@@ -140,7 +140,7 @@ struct ComputerTests {
             ctx.fill(CGRect(origin: .zero, size: size))
         }.jpegData(compressionQuality: 0.8))
         let use = Item(id: "a1#0", seq: 1, ts: nil, role: "assistant", kind: .toolUse, text: nil, toolUseID: "t1",
-                       toolName: "mcp__jarvis__computer_state", toolInput: .object(["machine": .string("macbook"), "app": .string("Calculator")]),
+                       toolName: "mcp__persona__computer_state", toolInput: .object(["machine": .string("macbook"), "app": .string("Calculator")]),
                        isError: nil, image: nil)
         let result = Item(id: "u2#0", seq: 2, ts: nil, role: "user", kind: .toolResult, text: "{\"snapshot_id\":\"s1\"}\nwindow 1",
                           toolUseID: "t1", toolName: nil, toolInput: nil, isError: nil, image: nil)

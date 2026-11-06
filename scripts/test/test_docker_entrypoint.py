@@ -10,7 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 DOCKER = ROOT / "deploy/docker"
 ENTRYPOINT = DOCKER / "entrypoint.sh"
-WRAPPER = DOCKER / "jarvisd.sh"
+WRAPPER = DOCKER / "personad.sh"
 COMPOSE = DOCKER / "compose.yaml"
 # Real tools the scripts use besides the stubs (the image's busybox has them all).
 TOOLS = ("mkdir", "mv", "grep", "cat")
@@ -37,27 +37,27 @@ class DockerEntrypointTests(unittest.TestCase):
             home = root / "home"
             home.mkdir()
             commands = {
-                "id": '#!/bin/sh\ncase "$1" in -u) echo 1000 ;; -un) echo jarvis ;; *) exit 1 ;; esac\n',
+                "id": '#!/bin/sh\ncase "$1" in -u) echo 1000 ;; -un) echo persona ;; *) exit 1 ;; esac\n',
                 "getent": '#!/bin/sh\n[ "$1 $2" = "hosts host.docker.internal" ] || exit 2\nexit ' + ("0" if desktop else "1") + '\n',
-                "jarvisd": '#!/bin/sh\nprintf "%s\\n" "$@"\nexit ' + str(exit_code) + '\n',
+                "personad": '#!/bin/sh\nprintf "%s\\n" "$@"\nexit ' + str(exit_code) + '\n',
             }
             write_stubs(bin_dir, commands)
             link_tools(bin_dir)
             if hub_json is not None:
-                (home / ".jarvis").mkdir()
-                (home / ".jarvis/hub.json").write_text(hub_json)
+                (home / ".persona").mkdir()
+                (home / ".persona/hub.json").write_text(hub_json)
             result = subprocess.run(
                 ["/bin/sh", str(ENTRYPOINT), "hub", "run", "one argument"],
-                env={"PATH": str(bin_dir), "HOME": str(home), "JARVIS_ADMIN_ACCESS": access,
-                     "JARVIS_ADMIN_CIDRS": cidrs, "JARVIS_PUBLIC_URL": public_url},
+                env={"PATH": str(bin_dir), "HOME": str(home), "PERSONA_ADMIN_ACCESS": access,
+                     "PERSONA_ADMIN_CIDRS": cidrs, "PERSONA_PUBLIC_URL": public_url},
                 capture_output=True, text=True, timeout=5,
             )
             self.assertEqual(result.returncode, exit_code, result.stderr)
             self.assertEqual(result.stdout.splitlines(), ["hub", "run", "one argument"])
             self.assertEqual(sorted(p.name for p in bin_dir.iterdir()), sorted([*commands, *TOOLS]))
             files = {str(p.relative_to(home)): p for p in home.rglob("*") if p.is_file()}
-            self.assertEqual(list(files), [".jarvis/hub.json"])
-            written = files[".jarvis/hub.json"]
+            self.assertEqual(list(files), [".persona/hub.json"])
+            written = files[".persona/hub.json"]
             return result.stderr, written.read_text(), written.stat().st_mode & 0o777
 
     def test_manager_gets_no_hub_config_or_reminders(self):
@@ -69,20 +69,20 @@ class DockerEntrypointTests(unittest.TestCase):
             home = root / "home"
             home.mkdir()
             write_stubs(bin_dir, {
-                "id": '#!/bin/sh\ncase "$1" in -u) echo 1000 ;; -un) echo jarvis ;; *) exit 1 ;; esac\n',
+                "id": '#!/bin/sh\ncase "$1" in -u) echo 1000 ;; -un) echo persona ;; *) exit 1 ;; esac\n',
                 "getent": '#!/bin/sh\nexit 1\n',
-                "jarvisd": '#!/bin/sh\nprintf "%s\\n" "$@"\n',
+                "personad": '#!/bin/sh\nprintf "%s\\n" "$@"\n',
             })
             link_tools(bin_dir)
             result = subprocess.run(
-                ["/bin/sh", str(ENTRYPOINT), "manager", "run", "--dir", "/home/jarvis/.jarvis/managers/m-0a1b2c"],
+                ["/bin/sh", str(ENTRYPOINT), "manager", "run", "--dir", "/home/persona/.persona/managers/m-0a1b2c"],
                 env={"PATH": str(bin_dir), "HOME": str(home)}, capture_output=True, text=True, timeout=5,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.splitlines(), ["manager", "run", "--dir", "/home/jarvis/.jarvis/managers/m-0a1b2c"])
+            self.assertEqual(result.stdout.splitlines(), ["manager", "run", "--dir", "/home/persona/.persona/managers/m-0a1b2c"])
             self.assertEqual([p for p in home.rglob("*") if p.is_file()], [])
-            self.assertNotIn("JARVIS_PUBLIC_URL", result.stderr)
-            self.assertNotIn("JARVIS_ADMIN_ACCESS", result.stderr)
+            self.assertNotIn("PERSONA_PUBLIC_URL", result.stderr)
+            self.assertNotIn("PERSONA_ADMIN_ACCESS", result.stderr)
 
     def test_desktop_api_guidance_is_independent_of_admin_access(self):
         for access in ("", "lan", "loopback", "cidrs", "any"):
@@ -97,8 +97,8 @@ class DockerEntrypointTests(unittest.TestCase):
         self.assertNotIn("Docker Desktop", self.run_entrypoint(False)[0])
 
     def test_admin_reminders_are_preserved(self):
-        self.assertIn("JARVIS_ADMIN_ACCESS is not set", self.run_entrypoint(False)[0])
-        self.assertIn("without JARVIS_ADMIN_CIDRS", self.run_entrypoint(True, "cidrs")[0])
+        self.assertIn("PERSONA_ADMIN_ACCESS is not set", self.run_entrypoint(False)[0])
+        self.assertIn("without PERSONA_ADMIN_CIDRS", self.run_entrypoint(True, "cidrs")[0])
         self.assertIn("is not loopback, lan, cidrs or any", self.run_entrypoint(False, "invalid")[0])
 
     def test_hub_exit_status_is_preserved(self):
@@ -116,12 +116,12 @@ class DockerEntrypointTests(unittest.TestCase):
         self.assertNotIn("token", text)
         self.assertEqual(mode, 0o600)
         self.assertIn("first start: wrote hub.json", logs)
-        self.assertIn("JARVIS_PUBLIC_URL is not set", logs)
+        self.assertIn("PERSONA_PUBLIC_URL is not set", logs)
 
     def test_first_start_with_public_url_does_not_nag(self):
         logs, text, _ = self.run_entrypoint(False, "lan", public_url="http://nas.example.com:18660")
         self.assertEqual(json.loads(text)["public_url"], "")
-        self.assertNotIn("JARVIS_PUBLIC_URL is not set", logs)
+        self.assertNotIn("PERSONA_PUBLIC_URL is not set", logs)
 
     def test_existing_hub_json_is_never_touched(self):
         for existing in ('{"token": "t", "public_url": "http://nas.example.com:18660"}\n',
@@ -141,33 +141,33 @@ class DockerEntrypointTests(unittest.TestCase):
         self.assertIn('if [ "$PUID" -eq 0 ]; then', text)
 
 
-class JarvisdWrapperTests(unittest.TestCase):
-    """deploy/docker/jarvisd.sh: the database password from .env, or the generated one from the data folder."""
+class PersonadWrapperTests(unittest.TestCase):
+    """deploy/docker/personad.sh: the database password from .env, or the generated one from the data folder."""
 
     def run_wrapper(self, url, password_file=None, uid="1000", readable=True):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             bin_dir = root / "bin"
             bin_dir.mkdir()
-            binary = root / "jarvisd-real"
-            binary.write_text('#!/bin/sh\nprintf "%s\\n" "${JARVIS_DATABASE_URL:-<unset>}" "$@"\n')
+            binary = root / "personad-real"
+            binary.write_text('#!/bin/sh\nprintf "%s\\n" "${PERSONA_DATABASE_URL:-<unset>}" "$@"\n')
             binary.chmod(0o755)
             write_stubs(bin_dir, {
                 "id": '#!/bin/sh\necho ' + uid + '\n',
-                "su-exec": '#!/bin/sh\n[ "$1" = jarvis ] || exit 9\nshift\nexec "$@"\n',
+                "su-exec": '#!/bin/sh\n[ "$1" = persona ] || exit 9\nshift\nexec "$@"\n',
             })
             link_tools(bin_dir)
-            wrapper = root / "jarvisd.sh"
-            wrapper.write_text(WRAPPER.read_text().replace("/opt/jarvis/jarvisd", str(binary)))
+            wrapper = root / "personad.sh"
+            wrapper.write_text(WRAPPER.read_text().replace("/opt/persona/personad", str(binary)))
             home = root / "home"
-            (home / ".jarvis/docker").mkdir(parents=True)
+            (home / ".persona/docker").mkdir(parents=True)
             if password_file is not None:
-                (home / ".jarvis/docker/db-password").write_text(password_file)
+                (home / ".persona/docker/db-password").write_text(password_file)
                 if not readable:
-                    (home / ".jarvis/docker/db-password").chmod(0)
+                    (home / ".persona/docker/db-password").chmod(0)
             env = {"PATH": str(bin_dir), "HOME": str(home)}
             if url is not None:
-                env["JARVIS_DATABASE_URL"] = url
+                env["PERSONA_DATABASE_URL"] = url
             result = subprocess.run(["/bin/sh", str(wrapper), "hub", "pair"], env=env,
                                     capture_output=True, text=True, timeout=5)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -176,21 +176,21 @@ class JarvisdWrapperTests(unittest.TestCase):
             return lines[0], result.stderr
 
     def test_env_password_wins(self):
-        url = "postgres://jarvis:fromenv1@postgres:5432/jarvis?sslmode=disable"
+        url = "postgres://persona:fromenv1@postgres:5432/persona?sslmode=disable"
         for uid in ("0", "1000"):
             with self.subTest(uid=uid):
                 self.assertEqual(self.run_wrapper(url, "generated2", uid), (url, ""))
 
     def test_generated_password_fills_an_empty_one(self):
-        for url in ("postgres://jarvis:@postgres:5432/jarvis?sslmode=disable",
-                    "postgres://jarvis@postgres:5432/jarvis?sslmode=disable"):
+        for url in ("postgres://persona:@postgres:5432/persona?sslmode=disable",
+                    "postgres://persona@postgres:5432/persona?sslmode=disable"):
             with self.subTest(url=url):
                 got, logs = self.run_wrapper(url, "abc123\n", "0")
-                self.assertEqual(got, "postgres://jarvis:abc123@postgres:5432/jarvis?sslmode=disable")
+                self.assertEqual(got, "postgres://persona:abc123@postgres:5432/persona?sslmode=disable")
                 self.assertEqual(logs, "")
 
     def test_missing_or_bad_password_file_warns(self):
-        url = "postgres://jarvis:@postgres:5432/jarvis?sslmode=disable"
+        url = "postgres://persona:@postgres:5432/persona?sslmode=disable"
         got, logs = self.run_wrapper(url)
         self.assertEqual(got, url)
         self.assertIn("no database password", logs)
@@ -203,7 +203,7 @@ class JarvisdWrapperTests(unittest.TestCase):
             self.assertIn("cannot be read by uid 1000", logs)
 
     def test_other_urls_are_left_alone(self):
-        for url in (None, "", "postgres://postgres:5432/jarvis", "postgres://db/x@y"):
+        for url in (None, "", "postgres://postgres:5432/persona", "postgres://db/x@y"):
             with self.subTest(url=url):
                 got, logs = self.run_wrapper(url, "abc123")
                 self.assertEqual(got, url or "<unset>")
@@ -267,17 +267,17 @@ class ComposeTests(unittest.TestCase):
 
     def test_compose_needs_only_the_image(self):
         text = COMPOSE.read_text()
-        self.assertIn("${JARVIS_IMAGE:?", text)
-        for name in ("JARVIS_DB_PASSWORD", "JARVIS_PUBLIC_URL", "PUID", "PGID"):
+        self.assertIn("${PERSONA_IMAGE:?", text)
+        for name in ("PERSONA_DB_PASSWORD", "PERSONA_PUBLIC_URL", "PUID", "PGID"):
             self.assertNotIn("${" + name + ":?", text)
             self.assertNotIn("${" + name + ":-1000}", text)
         # The hub and postgres agree on where the generated password lives.
         self.assertIn("- ./data/docker:/run/persona", text)
-        self.assertIn("JARVIS_DATABASE_URL: postgres://jarvis:${JARVIS_DB_PASSWORD:-}@postgres:5432/", text)
-        self.assertIn('$HOME/.jarvis/docker/db-password', WRAPPER.read_text())
+        self.assertIn("PERSONA_DATABASE_URL: postgres://persona:${PERSONA_DB_PASSWORD:-}@postgres:5432/", text)
+        self.assertIn('$HOME/.persona/docker/db-password', WRAPPER.read_text())
 
     def test_tls_port_is_published_and_exposed(self):
-        self.assertIn('- "${JARVIS_TLS_PORT:-18662}:18662"', COMPOSE.read_text())
+        self.assertIn('- "${PERSONA_TLS_PORT:-18662}:18662"', COMPOSE.read_text())
         self.assertIn('"tls_listen": ":%s"', ENTRYPOINT.read_text())
         self.assertIn("TLS_PORT=18662", ENTRYPOINT.read_text())
         self.assertIn("EXPOSE 18660 18662", (ROOT / "Dockerfile").read_text())

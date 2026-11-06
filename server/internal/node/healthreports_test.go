@@ -37,7 +37,7 @@ func TestHealthReportsPairRecordsNewestFirst(t *testing.T) {
 	if err != nil || list == nil || len(list) != 0 {
 		t.Fatalf("no directory yet: %v, %v", list, err)
 	}
-	writeReports(t, dir, "体检-20261106-093000.pdf", "体检-20261106-093000.md", "血常规.png", "2025-年度体检.md", ".jarvis-upload-1")
+	writeReports(t, dir, "体检-20261106-093000.pdf", "体检-20261106-093000.md", "血常规.png", "2025-年度体检.md", ".persona-upload-1")
 	if err := os.Mkdir(filepath.Join(dir, "folder"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -154,6 +154,7 @@ func TestHealthReportsCall(t *testing.T) {
 // (health_dir, echoed), lists and deletes only its own; the built-in's stays where it was; any other name is refused.
 func TestHealthReportsOfAManagersSpace(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", filepath.Join(home, ".persona"))
 	n := &Node{dir: t.TempDir(), home: home, logger: log.New(io.Discard, "", 0)}
 	call := func(method string, p map[string]any) (any, error) {
 		raw, _ := json.Marshal(p)

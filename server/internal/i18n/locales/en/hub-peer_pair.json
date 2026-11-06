@@ -1,6 +1,6 @@
 {
   "no_tls": "TLS is off on this hub (public.tls_listen in hub.json). Turn it on to link hubs, or list the addresses that may link without TLS in mesh.plaintext.allow",
-  "not_a_code": "This isn’t a link code (jarvis://peer?…)",
+  "not_a_code": "This isn’t a link code (persona://peer?…)",
   "incomplete": "The link code is incomplete. Generate a new one on the other hub",
   "no_address": "The link code has no address for the other hub",
   "own_code": "This is this hub’s own link code. Use it on another hub",

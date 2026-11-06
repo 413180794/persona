@@ -314,9 +314,9 @@ func permissionKind(tool string) string {
 	return "other"
 }
 
-// contextBlock is a block the apps and Persona put in a message for the model (<jarvis-context>…): not what the
+// contextBlock is a block the apps and Persona put in a message for the model (<persona-context>…): not what the
 // user said.
-var contextBlock = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
+var contextBlock = regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`)
 
 // recentOf is the user's and the agent's words in items (the last turns), made speakable and cut; tool calls in a
 // row are one line of their names (docs/voice.md 4.5: "used Bash").

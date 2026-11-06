@@ -5,7 +5,7 @@
       "name": "hub_screen_choice",
       "description": "终端普通选项按 hub 能力构造回答。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
         "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
       ],
       "input": {
@@ -72,7 +72,7 @@
       "name": "hub_screen_custom",
       "description": "终端自填选项按 hub 能力构造回答。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
         "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
       ],
       "input": {
@@ -140,7 +140,7 @@
       "name": "hub_screen_chat",
       "description": "终端转回对话选项按 hub 能力构造回答。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
         "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
       ],
       "input": {
@@ -207,7 +207,7 @@
       "name": "legacy_screen_choice",
       "description": "终端普通选项按 hub 能力构造回答。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
         "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
       ],
       "input": {
@@ -239,7 +239,7 @@
       "name": "legacy_screen_custom",
       "description": "终端自填选项按 hub 能力构造回答。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
         "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
       ],
       "input": {
@@ -275,7 +275,7 @@
       "name": "legacy_screen_chat",
       "description": "终端转回对话选项按 hub 能力构造回答。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow",
         "server/internal/screen/dialog.go：ParseDialog、Dialog.Option"
       ],
       "input": {
@@ -307,7 +307,7 @@
       "name": "screen_custom_blank_blocked",
       "description": "自填选项只有空白时不可发送。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.typeRow"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.typeRow"
       ],
       "input": {
         "profile": "ios_current",
@@ -371,7 +371,7 @@
       "name": "raw_terminal_text",
       "description": "原始终端输入按原文发送，仅空字符串禁用。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
       ],
       "input": {
         "profile": "ios_current",
@@ -402,7 +402,7 @@
       "name": "raw_terminal_empty",
       "description": "原始终端输入按原文发送，仅空字符串禁用。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
       ],
       "input": {
         "profile": "ios_current",
@@ -428,7 +428,7 @@
       "name": "raw_terminal_whitespace",
       "description": "原始终端输入按原文发送，仅空字符串禁用。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
       ],
       "input": {
         "profile": "ios_current",
@@ -459,7 +459,7 @@
       "name": "raw_terminal_keys",
       "description": "原始终端按键按给定顺序发送。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal"
       ],
       "input": {
         "profile": "ios_current",
@@ -494,7 +494,7 @@
       "description": "终端多题标签栏解析为步骤并保留选项原文。",
       "source": [
         "ios/Shared/ChatStore.swift：ScreenParser.dialog、steps",
-        "ios/JarvisTests/ScreenDialogTests.swift：readsTheTabBarOfSeveralQuestions"
+        "ios/PersonaTests/ScreenDialogTests.swift：readsTheTabBarOfSeveralQuestions"
       ],
       "input": {
         "profile": "ios_current",
@@ -534,7 +534,7 @@
       "description": "没有编号选项时不解析成对话框。",
       "source": [
         "ios/Shared/ChatStore.swift：ScreenParser.dialog",
-        "ios/JarvisTests/ScreenDialogTests.swift：noDialogWithoutNumberedOptions"
+        "ios/PersonaTests/ScreenDialogTests.swift：noDialogWithoutNumberedOptions"
       ],
       "input": {
         "profile": "ios_current",

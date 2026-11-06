@@ -57,7 +57,7 @@ nonisolated struct RecordingTransfer: Codable, Sendable {
     var total: Int?
     var marks: [Double]
 
-    static let key = "jarvisRecording"
+    static let key = "personaRecording"
     var dictionary: [String: Any] { [Self.key: (try? JSONEncoder().encode(self)) ?? Data()] }
     init(entry: RecordingEntry, segment: RecordingSegment? = nil) {
         id = entry.id; createdAt = entry.createdAt; locale = entry.locale

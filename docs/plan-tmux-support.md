@@ -130,7 +130,7 @@ same as Orca and Herdr App, but because colors are available the draft detection
 
 - `Spaces`: the sessions of all servers. `CreateSpace`: `new-session -d -s <name> -c <dir> -P -F …` on the **default socket** (this starts a server if there is none; see below).
   `CreateSlot`: `new-window -d -t <server>/<session>: -c <dir> -n <name> -P -F …`. All with `-d`, so they do not switch away from the window being viewed on the computer (just as herdr does not steal focus).
-- `Run`: paste the command + `\r`. The pane runs the user's interactive `default-shell`, so launchers in `~/.zshrc` expand as usual and `docs/launchers.md` needs no change; `jarvisd launch <name>` works too.
+- `Run`: paste the command + `\r`. The pane runs the user's interactive `default-shell`, so launchers in `~/.zshrc` expand as usual and `docs/launchers.md` needs no change; `personad launch <name>` works too.
 - `NameAgent`: tmux has no "Agent name"; write it as a pane user option `set -p -t <pane> @persona-agent j-xxxxxx`, without changing the title (claude changes the title itself).
 - New sessions are started by Persona and have the hooks (`--plugin-dir`), so state and cards are as complete as in herdr.
 - **Environment of servers started by the node**: a tmux server's global environment comes from the process that started it. A server started by a node resident under launchd has only the system PATH and the node's environment,

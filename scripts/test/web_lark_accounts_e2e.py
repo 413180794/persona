@@ -51,11 +51,11 @@ def run(browser, base, token, shots):
         if not shots:
             return
         for theme in ("light", "dark"):
-            page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+            page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
             page.reload()
             page.wait_for_timeout(900)
             page.screenshot(path=os.path.join(shots, f"{name}-{theme}.png"))
-        page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
+        page.evaluate("localStorage.setItem('persona.theme', 'light')")
 
     page.goto(base + "/?token=" + token)
     page.evaluate("localStorage.setItem('lark.homeMessages', '1'); localStorage.removeItem('lark.account')")

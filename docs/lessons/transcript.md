@@ -26,7 +26,7 @@ Pitfalls, unusual behavior, and the trade-offs made at the time (originally in "
   do not resend it for rev changes—use a separate `revs` event. The Lark gateway has a real-time event WebSocket (`/agent/v1/events`, `message.upserted` /
   `conversation.upserted`); Lark pushes come from there.
 - Validate changes to transcript parsing or the sync protocol against a real corpus (`docs/archive/lanes/msg-render-verification.md`). `corpus_test.go` compares the old and new parsers file by file;
-  `continuity_corpus_test.go` simulates lost pushes, gap filling, and rewrites using the App's rules. Keep the corpus only in `~/jarvis-corpus`. Active session files grow while being read, so take a snapshot before comparing.
+  `continuity_corpus_test.go` simulates lost pushes, gap filling, and rewrites using the App's rules. Keep the corpus only in `~/persona-corpus`. Active session files grow while being read, so take a snapshot before comparing.
   To view real sessions in the simulator App, use a local test hub (fake HOME, no herdr connection, separate database), not the production hub.
 - Cold-opening a large transcript parses only a tail window (`transcript/window.go`). A line's parsed result depends on preceding lines through just three things: background task notifications already displayed
   (duplicates are dropped), the previous "! cmd" input, and Codex recording the same item twice. If a parser change introduces "cross-line state," the window's starting point must also be able to reconstruct it
@@ -42,8 +42,8 @@ Pitfalls, unusual behavior, and the trade-offs made at the time (originally in "
 - The App merges its on-disk chat cache by item id. If the hub changes the contents of a type of item (for example, adding fields to notices), new pages do not overwrite old cached items. When the item structure changes,
   bump the `ChatCache` directory version (`chats-v3`).
 - Backward pagination has a parsing budget, but must not return an empty page while earlier content remains. An empty page + `has_more: true` leaves the App with no seq to fetch next, making earlier history permanently inaccessible (large Codex rollouts can have tens of MB of lines that produce no entries between two turns).
-- Parsing `<jarvis-context>` must not assume all attributes are present or in a fixed order (2026-11-03, #876). iOS once recognized it only when all three of `kind`, `title`, and `url` were present. Lark /agent contexts had no `url`, so the tag went unrecognized, leaving the whole prompt and large blank areas in the bubble.
-  Truncating user messages for pagination must also avoid cutting through tags: a cut in the middle leaves an unclosed `<jarvis-context`, which every client displays as body text (`lightContexts` in `transcript/contexts.go` trims only the body of each block).
+- Parsing `<persona-context>` must not assume all attributes are present or in a fixed order (2026-11-03, #876). iOS once recognized it only when all three of `kind`, `title`, and `url` were present. Lark /agent contexts had no `url`, so the tag went unrecognized, leaving the whole prompt and large blank areas in the bubble.
+  Truncating user messages for pagination must also avoid cutting through tags: a cut in the middle leaves an unclosed `<persona-context`, which every client displays as body text (`lightContexts` in `transcript/contexts.go` trims only the body of each block).
 
 ## A tail window may contain no words at all (2026-11-04, #1163)
 

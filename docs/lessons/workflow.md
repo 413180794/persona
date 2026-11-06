@@ -28,7 +28,7 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
   (`FeishuSearchXxx`…, otherwise names collide on master and the build fails); on merge or rebase conflicts, files outside your own directory always take the origin/master version; before pushing check
   that `git diff origin/master --stat` contains only your files (14fe469 once overwrote half the repo with an old copy; 941d067 restored it); when the main working tree has someone else's uncommitted changes,
   do your fix in `git worktree add --detach /tmp/x origin/master`.
-- Database migration numbers are split into ranges per lane (00x1…); before picking a number, check `server/internal/db/migrations/` in every worktree and `schema_migrations` in the `jarvis_test` database:
+- Database migration numbers are split into ranges per lane (00x1…); before picking a number, check `server/internal/db/migrations/` in every worktree and `schema_migrations` in the `persona_test` database:
   another lane's unmerged migration may already hold the number (2026-10-30, 0051 collided; switched to 0061).
 - On 2026-11-01 `ios/` was renamed to `apple/` (the iOS, watch and macOS Apps and shared code are in the same XcodeGen project): when rebasing an old branch / worktree,
   files newly created under `ios/` must be moved to `apple/` by hand (git follows the rename for changes to existing files).
@@ -40,9 +40,9 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
   and the session waiting on it is never woken even long after the script finished (2026-11-01, stalled for almost 6 hours).
 - macOS sed does not understand `\b`; for whole-word replacement use `perl -pi -e 's/\bFoo\b/Bar/g'`.
 - When the temp disk is too small for Go builds, point `GOTMPDIR` at a **short physical directory outside the repo**, and give `GOCACHE` a cache of this lane's own (#2469). `go test` passes that temp directory to tests: putting it in the worktree makes fixtures that are "not in a repo" look like a real repo to Git, which may even try a real fetch/push; a path that is too long makes Unix sockets fail with `bind: invalid argument`. Do not hide a long directory behind a short symlink: Git's canonical root and the fixture's logical path diverge, and directory-rejection tests may change their result. Keep the failure record, rerun in a suitable directory, and do not delete the shared cache or raise test baselines.
-- Server tests used to all connect to the same `jarvis_test` database: several lanes and deploys running at once wiped each other, migrated each other's tables, and tests randomly failed on empty or someone else's data (#545, #556, #583).
+- Server tests used to all connect to the same `persona_test` database: several lanes and deploys running at once wiped each other, migrated each other's tables, and tests randomly failed on empty or someone else's data (#545, #556, #583).
   Now test packages that use the database call `dbtest.Main` (`server/internal/db/dbtest`) in `TestMain`: each test binary creates its own
-  `jarvis_test_<time>_<random>` next to `JARVIS_TEST_DATABASE_URL` and drops it afterwards (ones left behind by a killed run are cleaned by the next run after 6 hours); subprocesses started in tests (fake node) reuse the parent's database.
+  `persona_test_<time>_<random>` next to `PERSONA_TEST_DATABASE_URL` and drops it afterwards (ones left behind by a killed run are cleaned by the next run after 6 hours); subprocesses started in tests (fake node) reuse the parent's database.
   New test packages that use the database must add `TestMain` the same way, not connect to the shared database directly. When the role lacks permission to create databases, it falls back to locking and queuing on the shared database.
 - After adding a large dependency (#167's tailscale / gvisor, one zip is 21 MB), the first `go test` on the hub machine: that machine's outbound network is slow, `go` hung on the download for over twenty minutes,
   and finally reported `unexpected EOF` (2026-11-01). Fix: from `server/go.sum`, list the files missing from the hub's `~/go/pkg/mod/cache/download`, download them on the dev machine from
@@ -66,9 +66,9 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
 
 ## Temporary test hubs
 
-- Renaming the product does not rename the runtime contract (2026-11-03, #277): docs call the product Persona, but historical paths, signing profiles, databases / data volumes, protocol fields, bundle IDs, cache keys and source evidence must not be blindly replaced. When docs show `personad` / `~/.persona`, state that the old `jarvisd` / `~/.jarvis` remain compatible; describe env var precedence only for new entry points that are already implemented; a standalone wording PR is not proof that the runtime migration is done.
+- Historical note (2026-11-03, #277; superseded by the no-compatibility cutover on 2026-11-06): docs call the product Persona, but historical paths, signing profiles, databases / data volumes, protocol fields, bundle IDs, cache keys and source evidence must not be blindly replaced. When docs show `personad` / `~/.persona`, state that the old `personad` / `~/.persona` remain compatible; describe env var precedence only for new entry points that are already implemented; a standalone wording PR is not proof that the runtime migration is done.
 
-- To verify on a real machine without touching the production hub: on the hub machine, start a copy with a different HOME (`HOME=/tmp/x jarvisd hub`, with another listen port in hub.json
+- To verify on a real machine without touching the production hub: on the hub machine, start a copy with a different HOME (`HOME=/tmp/x personad hub`, with another listen port in hub.json
   and a separate database); the `kind: local` machine is a node started from the same binary, and the different HOME keeps it away from the production node's socket and config. Drop the database and delete the directory afterwards.
 - Before `ssh -L`, check whether the local port is taken: another lane may already have a tunnel to the production hub on the same port, and requests made before `ExitOnForwardFailure` errors out go to the production hub.
   After connecting, first check that `version` in `/api/v1/health` is your own copy.

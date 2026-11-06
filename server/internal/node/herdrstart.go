@@ -123,7 +123,7 @@ func (n *Node) startHerdr(ctx context.Context, h *herdrHost, why string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("herdr: %w", err)
 	}
-	unlock, err := lockHerdrDir(dir) // another node (a second jarvisd on this account) starting it too
+	unlock, err := lockHerdrDir(dir) // another node (a second personad on this account) starting it too
 	if err != nil {
 		return fmt.Errorf("herdr: lock %s: %w", dir, err)
 	}

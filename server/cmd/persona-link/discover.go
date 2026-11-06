@@ -14,11 +14,11 @@ import (
 	"github.com/nwverse/persona/server/internal/mdns"
 )
 
-// `jarvis-link discover`: the hubs on this LAN, as they advertise themselves over mDNS (_jarvis-hub._tcp, docs/mesh.md).
+// `persona-link discover`: the hubs on this LAN, as they advertise themselves over mDNS (_persona-hub._tcp, docs/mesh.md).
 // Finding the hub is one of the connector's three jobs; the installer asks it whether this computer needs a hub of its
 // own or the node service is enough (docs/plan-hub-center.md section 0). Nothing is paired by it: pairing takes a link.
 
-const hubService = "_jarvis-hub._tcp"
+const hubService = "_persona-hub._tcp"
 
 // foundHub is a hub heard on the LAN: what its TXT record says (never a credential) and where it is.
 type foundHub struct {
@@ -98,7 +98,7 @@ func clip(s string, n int) string {
 	return s
 }
 
-// discover is `jarvis-link discover [--wait <seconds>] [--json]`: exit code 0 when a hub was heard, 1 when none.
+// discover is `persona-link discover [--wait <seconds>] [--json]`: exit code 0 when a hub was heard, 1 when none.
 func discover(e *env, args []string) error {
 	wait, asJSON := 3*time.Second, false
 	for i := 0; i < len(args); i++ {

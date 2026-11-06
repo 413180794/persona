@@ -17,7 +17,7 @@ import Synchronization
 /// will not start it, the page opens saying why (VNCPiPLog, Picture in Picture Diagnostics).
 @MainActor final class VNCPiP: NSObject, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
     static let shared = VNCPiP()
-    nonisolated static let log = Logger(subsystem: "jarvis", category: "vnc")
+    nonisolated static let log = Logger(subsystem: "persona", category: "vnc")
     private(set) var ref: MachineRef?
     private var from: SessionKey?
     private var host: VNCScreenUIView?
@@ -350,7 +350,7 @@ import Synchronization
 /// (`supported` is false); the full page shows the screen.
 @MainActor final class VNCPiP: NSObject {
     static let shared = VNCPiP()
-    nonisolated static let log = Logger(subsystem: "jarvis", category: "vnc")
+    nonisolated static let log = Logger(subsystem: "persona", category: "vnc")
     private(set) var ref: MachineRef?
 
     static var supported: Bool { false }
@@ -366,7 +366,7 @@ import Synchronization
 /// full window; closing it ends the connection unless that window has it.
 @MainActor final class VNCPiP: NSObject, NSWindowDelegate {
     static let shared = VNCPiP()
-    nonisolated static let log = Logger(subsystem: "jarvis", category: "vnc")
+    nonisolated static let log = Logger(subsystem: "persona", category: "vnc")
     private(set) var ref: MachineRef?
     private var from: SessionKey?
     private var panel: NSPanel?

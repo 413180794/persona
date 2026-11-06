@@ -63,7 +63,7 @@ def agent_row(page, s, scope="aside"):
 
 
 def conv_row(page, c):
-    return page.locator(f'aside a[href="/j/{c["session_id"]}"]')
+    return page.locator(f'aside a[href="/persona/{c["session_id"]}"]')
 
 
 def type_and_leave(page, row_open, text, row_next):
@@ -85,7 +85,7 @@ def run(browser, base, token, asks, done, seen, conv, shots):
     page.set_default_timeout(10000)
     page.goto(base + "/overview?token=" + token)
     expect(page.locator("aside")).to_be_attached()
-    page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
+    page.evaluate("localStorage.setItem('persona.theme', 'light')")
     page.reload()
 
     # 1. An agent that needs you: typed, left — "Draft:" and the words in place of what it asks, its count stays.
@@ -126,7 +126,7 @@ def run(browser, base, token, asks, done, seen, conv, shots):
         box.fill("顺便看一下 CI 里的重试")
         page.wait_for_timeout(400)
         for theme in ("light", "dark"):
-            page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+            page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
             page.reload()
             expect(agent_row(page, asks).locator("[data-draft]")).to_be_visible()
             expect(page.locator("main textarea").last).to_have_value("顺便看一下 CI 里的重试")
@@ -136,7 +136,7 @@ def run(browser, base, token, asks, done, seen, conv, shots):
             page.locator("aside").screenshot(path=os.path.join(shots, f"wide-sidebar-{theme}.png"))
         page.locator("main textarea").last.fill("")
         page.wait_for_timeout(400)
-        page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
+        page.evaluate("localStorage.setItem('persona.theme', 'light')")
         page.set_viewport_size({"width": 1280, "height": 820})
         page.reload()
 
@@ -149,7 +149,7 @@ def run(browser, base, token, asks, done, seen, conv, shots):
         drafts = page.evaluate("Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith('draft:')).map((k) => [k, localStorage.getItem(k)]))")
         npage.goto(base + "/overview?token=" + token)
         expect(npage.locator("aside")).to_be_attached()
-        npage.evaluate("([drafts, theme]) => { for (const [k, v] of Object.entries(drafts)) localStorage.setItem(k, v); localStorage.setItem('jarvis.theme', theme); }", [drafts, theme])
+        npage.evaluate("([drafts, theme]) => { for (const [k, v] of Object.entries(drafts)) localStorage.setItem(k, v); localStorage.setItem('persona.theme', theme); }", [drafts, theme])
         npage.goto(base + "/agents")
         # the phone's Agents page draws the rows itself (the drawer over it leaves them out)
         mark = agent_row(npage, asks, "main").locator("[data-draft]")

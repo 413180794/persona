@@ -42,9 +42,9 @@ func TestRezoneMovesUTCDaysIntoTheUsers(t *testing.T) {
 		return x
 	}
 	if err := st.AppendMessages(c, []Line{
-		{At: at("2026-10-31", "09:00"), Sender: "张三", Text: "上午好"},           // 10-31 17:00 in Shanghai
+		{At: at("2026-10-31", "09:00"), Sender: "张三", Text: "上午好"},        // 10-31 17:00 in Shanghai
 		{At: at("2026-10-31", "17:30"), Sender: "李四", Text: "明早的会\n改到十点"}, // 11-01 01:30 in Shanghai
-		{At: at("2026-11-01", "01:00"), Sender: "我", Text: "收到"},             // 11-01 09:00 in Shanghai
+		{At: at("2026-11-01", "01:00"), Sender: "我", Text: "收到"},          // 11-01 09:00 in Shanghai
 	}); err != nil {
 		t.Fatal(err)
 	}

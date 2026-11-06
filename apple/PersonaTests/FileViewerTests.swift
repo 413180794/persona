@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The file viewer's models (docs/ios.md「文件查看器」): lines and pages of a text file, colors worked out in chunks,
 /// the JSON outline, Markdown cut into pieces, and which mentioned paths are linked.
@@ -42,14 +42,14 @@ struct FileViewerTests {
 
     // MARK: JSON
 
-    static let json = #"{"name": "jarvis", "tags": ["a", "b"], "deep": {"x": {"y": 1}}, "z": null, "empty": {}}"#
+    static let json = #"{"name": "persona", "tags": ["a", "b"], "deep": {"x": {"y": 1}}, "z": null, "empty": {}}"#
 
     @Test func outlineKeepsOrderAndFolds() throws {
         let o = try JSONOutline(text: Self.json)
         let top = o.childIndices(0)
         #expect(top.map { o.key(o.nodes[$0]) } == ["name", "tags", "deep", "z", "empty"])
         #expect(o.nodes[0].children == 5)
-        #expect(o.value(o.nodes[top[0]]) == "\"jarvis\"")
+        #expect(o.value(o.nodes[top[0]]) == "\"persona\"")
         #expect(o.path(o.childIndices(top[1])[1]) == ".tags[1]")
         #expect(o.isLast(top[4]) && !o.isLast(top[3]))
 
@@ -82,7 +82,7 @@ struct FileViewerTests {
         let source = JSONOutlineSource(try JSONOutline(text: Self.json))
         let shown = (0..<source.lineCount).map { source.line($0).string }
         #expect(shown.first == "{")
-        #expect(shown.contains(#"  "name": "jarvis","#))
+        #expect(shown.contains(#"  "name": "persona","#))
         #expect(shown.contains(#"  "empty": {}"#))
         #expect(shown.last == "}")
         // Tapping a container's line folds it.

@@ -49,7 +49,7 @@ class KnowledgeRepositoryTest {
                 "meta":{"dirs":["laptop:/code/weather"]}},"agents":[
                 {"machine_id":"laptop","session_id":"s1","title":"小组件","cwd":"/code/weather","status":"working"},
                 {"machine_id":"laptop","session_id":"s2","cwd":"/code/weather","status":"offline"},
-                {"machine_id":"server","session_id":"jarvis","assistant":true,"status":"idle"}]}"""))
+                {"machine_id":"server","session_id":"persona","assistant":true,"status":"idle"}]}"""))
             val entry = repository.entry(KnowledgeKind.Projects, "weather")
             assertEquals(listOf("s1"), (entry.agents.orEmpty().map { it.sessionId }).zhAny())
             assertEquals("/api/v1/kb/projects/weather", (server.takeRequest().path).zhAny())

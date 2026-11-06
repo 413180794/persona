@@ -240,14 +240,14 @@ enum PromptItems {
             }
     }
 
-    /// The quote for a picked session (`ContextRef`, sent as a `<jarvis-context>` tag before the message).
+    /// The quote for a picked session (`ContextRef`, sent as a `<persona-context>` tag before the message).
     static func quote(_ source: PromptSource, in all: [Session]) -> ContextRef? {
         guard source.id.hasPrefix("session:"), let s = all.first(where: { "session:" + $0.id == source.id }) else { return nil }
         var lines = ["另一个会话：\(s.displayTitle)（\(s.agentLabel)）", "目录：\(s.cwd)"] // i18n-ignore
         if let last = s.lastText?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty {
             lines.append("它最近说：\(String(last.prefix(600)))") // i18n-ignore
         }
-        return ContextRef(kind: "context", title: s.displayTitle, url: "jarvis://session/\(s.machineID)/\(s.sessionID)",
+        return ContextRef(kind: "context", title: s.displayTitle, url: "persona://session/\(s.machineID)/\(s.sessionID)",
                           text: lines.joined(separator: "\n"))
     }
 }

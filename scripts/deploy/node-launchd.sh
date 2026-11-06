@@ -1,18 +1,18 @@
 #!/bin/bash
-# Run on a machine (a Mac in its login session, or Linux) to keep a resident jarvisd node there (docs/server.md "Resident node"):
-#   ./scripts/deploy/node-launchd.sh install    # Mac: launchd agent com.jarvis.node; Linux: systemd user service jarvisd-node;
+# Run on a machine (a Mac in its login session, or Linux) to keep a resident personad node there (docs/server.md "Resident node"):
+#   ./scripts/deploy/node-launchd.sh install    # Mac: launchd agent com.persona.node; Linux: systemd user service personad-node;
 #                                        # started at login / boot, restarted whenever it exits
 #   ./scripts/deploy/node-launchd.sh restart    # after a new binary, now (ends the assistant's running conversations)
 #   ./scripts/deploy/node-launchd.sh restart-idle  # after a new binary (deploy.sh does this): once no conversation is
 #                                        # busy (SIGHUP to the node only; docs/hub-restart.md "Conversations are not interrupted")
 #   ./scripts/deploy/node-launchd.sh uninstall  # back to the hub starting the node over ssh
-# The hub keeps connecting over ssh as before; `jarvisd node --stdio` relays to this node when it's running, so what
+# The hub keeps connecting over ssh as before; `personad node --stdio` relays to this node when it's running, so what
 # the node starts runs in the login session and can read the login keychain. Set up for tailcat
-# (`jarvisd node tailcat init`), the resident node is also how the hub reaches the machine when ssh cannot.
+# (`personad node tailcat init`), the resident node is also how the hub reaches the machine when ssh cannot.
 set -euo pipefail
-ROOT="${PERSONA_HOME-${JARVIS_HOME-}}"
+ROOT="${PERSONA_HOME-}"
 if [ -z "$ROOT" ]; then
-  if [ -d "$HOME/.jarvis" ] || [ -L "$HOME/.jarvis" ]; then ROOT="$HOME/.jarvis"; else ROOT="$HOME/.persona"; fi
+  ROOT="$HOME/.persona"
 fi
 case "$ROOT" in '~') ROOT="$HOME" ;; '~/'*) ROOT="$HOME/${ROOT#\~/}" ;; esac
 case "$ROOT" in /*) ;; *) ROOT="$HOME/$ROOT" ;; esac
@@ -23,7 +23,7 @@ while [ -n "$rest" ]; do
   case "$part" in '' | .) ;; ..) ROOT="${ROOT%/*}" ;; *) ROOT="$ROOT/$part" ;; esac
 done
 ROOT="${ROOT:-/}"
-BIN="$ROOT/bin/jarvisd"
+BIN="$ROOT/bin/personad"
 xml_escape() {
   # Not ${value//&/...}: bash 3.2 (macOS /bin/bash) and 5.2 (patsub_replacement) read & and \ in the replacement differently.
   printf '%s' "$1" | LC_ALL=C sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
@@ -35,7 +35,7 @@ systemd_quote() {
 }
 
 if [ "$(uname -s)" = Linux ]; then
-  UNIT=jarvisd-node.service
+  UNIT=personad-node.service
   UNIT_FILE="$HOME/.config/systemd/user/$UNIT"
   case "${1:-install}" in
     install)
@@ -43,13 +43,13 @@ if [ "$(uname -s)" = Linux ]; then
       mkdir -p "$(dirname "$UNIT_FILE")" "$ROOT"
       cat > "$UNIT_FILE" <<UN
 [Unit]
-Description=Jarvis resident node (docs/server.md)
+Description=Persona resident node (docs/server.md)
 After=network-online.target
 
 [Service]
 ExecStart=$(systemd_quote "${BIN//\$/\$\$}") node --attach
 Environment=$(systemd_quote "PERSONA_HOME=$ROOT")
-Environment=$(systemd_quote "JARVIS_HOME=$ROOT")
+Environment=$(systemd_quote "PERSONA_HOME=$ROOT")
 # The same PATH as the hub's unit (hub-systemd.sh): the node finds herdr, claude and the rest where a hub-started one did.
 Environment=PATH=%h/.local/bin:%h/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 Restart=always
@@ -82,7 +82,7 @@ UN
   exit 0
 fi
 
-LABEL=com.jarvis.node
+LABEL=com.persona.node
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 DOMAIN="gui/$(id -u)"
 case "${1:-install}" in
@@ -97,7 +97,7 @@ case "${1:-install}" in
   <key>ProgramArguments</key><array><string>$(xml_escape "$BIN")</string><string>node</string><string>--attach</string></array>
   <key>EnvironmentVariables</key><dict>
     <key>PERSONA_HOME</key><string>$(xml_escape "$ROOT")</string>
-    <key>JARVIS_HOME</key><string>$(xml_escape "$ROOT")</string>
+    <key>PERSONA_HOME</key><string>$(xml_escape "$ROOT")</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

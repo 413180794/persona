@@ -2,21 +2,21 @@ import XCTest
 
 /// Settings › Translation (docs/ios.md「翻译」): with it on, a mail in another language opens translated with Show Original to go back;
 /// a Feishu chat picked there gets translations under others' foreign messages, and no other chat does. Against
-/// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB): mail 504 is in English, the 「设计评审」 chat (f2) has English messages.
+/// scripts/mock/mock_hub.py (PERSONA_MOCK_HUB): mail 504 is in English, the 「设计评审」 chat (f2) has English messages.
 final class TranslationTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func launch(kind: String, chats: String) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", kind, "-inbox.source", "", "-openInboxFirst", "YES",
                                "-translate.enabled", "YES", "-translate.target", "zh-Hans", "-translate.mail", "YES",
                                "-translate.larkChats", chats]

@@ -141,7 +141,7 @@ Use an invalidation revision as the task key and handle the flag after completio
   changing `Tab.badge` rebuilds its page even without parameters, resetting open overflow menus and reevaluating entire chats.
   Wrap every `Tab` page in `TabPage { … }.equatable()`. Changing `Menu.label` relays out and resets open menus; put counts / red dots in small self-observing views beside it
   (`WaitingBadge`), with menu hosts not reading per-push data. Mock must push `inbox` and `interaction`
-  (`/mock/churn?inbox=1&waiting=1`); run both layouts since the new shell is iPhone default (`TEST_RUNNER_JARVIS_LAYOUT=shell`).
+  (`/mock/churn?inbox=1&waiting=1`); run both layouts since the new shell is iPhone default (`TEST_RUNNER_PERSONA_LAYOUT=shell`).
 - Row parameters containing closures or structures with strings / arrays (`Item`) make SwiftUI treat them as changed every time: each push reevaluates the page and all visible plus lazy-buffer rows
   (~45 in a long Persona main chat, 2026-11-01). Chat bubbles, replies, work rows and composer all use `Equatable` + `.equatable()`, comparing only messages;
   permanently mounted but hidden content (closed sidebar) must not read changing `allSessions`; use its previous value while hidden.
@@ -410,7 +410,7 @@ Use an invalidation revision as the task key and handle the flag after completio
   - 取消展示任务不会中止 detached task 中的同步构造；保留最多两个最近输入的准备任务/结果，取消只阻止旧结果发布，快速返回同一输入不再重做。它是有界近期复用，不保证所有历史输入只算一次；响应发布仍检查取消、代次和最新输入，测试必须验证取消后的准备复用，不能只验证没显示旧内容。
 - Video detection is not complete transfer (2026-11-03): old binary API capped 2 MiB, while MP 4 index may be at end, so a prefix remains unplayable. Bounded full download first restored playback, later authenticated Range + `AVAssetResourceLoader` reads tail index / target keyframes and caches sparse chunks. Sparse logical file length is not downloaded bytes. Pin versions across requests with `If-Match`, not `If-Range` (which falls back to full 200 after changes). Test long video for first playback before full download, actual `seek` ranges, continued playback and close cleanup; `seek` completion / instant clock jump do not prove frames decoded—check ranges after playback resumes.
 - Message paths become tappable files only `if` actually present on that machine (`FilePresence` batches `GET …/stat`, uncertainty means no link). Previously other-machine paths (hub
-  `~/.jarvis/…`) were tappable and only produced "Cannot open this file".
+  `~/.persona/…`) were tappable and only produced "Cannot open this file".
 
 - Direction-selecting `UIPanGestureRecognizer`: when `gestureRecognizerShouldBegin` runs, `translation` is still 0 and `velocity` estimates only the last two samples
   (a 30° diagonal read as(1, 68), almost straight down), incorrectly yielding diagonals to the list. Record touch-down in a recognizer subclass and judge actual displacement
@@ -486,8 +486,8 @@ Use an invalidation revision as the task key and handle the flag after completio
   inserting a new one first silently reroutes existing `SpaceMenuItems(group:) { rename }` calls. Add optional closures last and label call sites.
 - In Chinese locale, SwiftUI `.dateTime.hour(.twoDigits(amPM: .omitted))` uses 12-hour time, showing 17:00 as 05:00; for 24-hour times use fixed `HH:mm` (`AssistantScheduleText.hm`).
 - Types in `apple/Shared` default to MainActor isolation; new pure-data enums used by `nonisolated` structs need `nonisolated`, otherwise isolated-conformance errors result.
-  JarvisTests has no default isolation: mark test structs using app static methods, properties or key paths `@MainActor` (like `ChatStoreTests`),
-  rather than removing app isolation for tests. Run all JarvisTests before submitting; one noncompiling file blocks the target (2026-10-31 `KnowledgeTests`).
+  PersonaTests has no default isolation: mark test structs using app static methods, properties or key paths `@MainActor` (like `ChatStoreTests`),
+  rather than removing app isolation for tests. Run all PersonaTests before submitting; one noncompiling file blocks the target (2026-10-31 `KnowledgeTests`).
 - The app defaults to MainActor isolation. System-owned callbacks on system queues (`PHPhotoLibrary.performChanges`, `SFSpeechRecognizer.requestAuthorization`,
   `fetchReminders`, `PHImageManager`, `WCSession.sendMessage` reply / error…) without SDK `Sendable` annotation compile without warnings but inherit main isolation,
   crashing when runtime isolation checks fail (`dispatch_assert_queue_fail`, every image save on 2026-10-31). Always write `{ @Sendable … in`; `BackgroundCallbackTests` checks source.
@@ -512,7 +512,7 @@ Use an invalidation revision as the task key and handle the flag after completio
 - Guard new-SDK symbols with `#if compiler(>=6.4)` (27.1 is 6.4.0;26.4–26.6 has Swift 6.3 but still iOS 26 SDK, so 6.3 guards fail there, #453), with old behavior under `#else`, not empty functionality. `#available` / `@available` checks only govern runtime and cannot resolve missing compile-time symbols.
 - `#if compiler(>=6.4)` identifies only the iOS 27 SDK. **It cannot guard symbols introduced in 26.x minor SDK releases such as 26.1–26.4**: doing so disables the feature in every Xcode 26 build (CarPlay voice UI `CPVoiceControlState.actionButtons` comes from the 26.4 SDK; this guard once left Xcode 26 builds without buttons in the car).
   Access Objective-C properties / methods at runtime instead: check `responds(to: NSSelectorFromString("setXxx:"))`, then use `setValue(_:forKey:)`; add a source-scanning regression test (`CarPlayVoiceButtonsTests`).
-- For new APIs, build with 26.0 before merge when available (`eval "$(python3 scripts/jarvis_config.py env)"` for `DEVELOPER_DIR`). **Without that environment, no mandatory build or merge / release blockage** (explicitly requested 2026-11-03): build / test with available tools, `state` actual version and "26.0 not verified" in PR without repeated exemptions; retain compatibility targets and compile guards.
+- For new APIs, build with 26.0 before merge when available (`eval "$(python3 scripts/persona_config.py env)"` for `DEVELOPER_DIR`). **Without that environment, no mandatory build or merge / release blockage** (explicitly requested 2026-11-03): build / test with available tools, `state` actual version and "26.0 not verified" in PR without repeated exemptions; retain compatibility targets and compile guards.
 - Raising minimum is a product decision: ask the user and update `CLAUDE.md`'s rule and this section.
 
 - Release machine Swift 6.3.3 differs from other machines and may report "unable to type-check this expression in reasonable time":
@@ -552,7 +552,7 @@ Use an invalidation revision as the task key and handle the flag after completio
 - DEBUG argument names must not match Swift identifiers: enum cases enter Release reflection `strings` and trigger `release.sh` false positives
   (`Tab.workbench` collided with `-workbench`, renamed `-openWorkbench`). Use `open…` / `show…` names unlike type members and register in `release.sh`.
   Stored properties also collide (2026-10-31, `AgentsListMenu.Actions`.openMonitor vs `-openMonitor` stopped TestFlight 50). For new properties,
-  first build locally `xcodebuild build -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO` and run `release.sh` `strings` checks on `Release-iphoneos/Jarvis.app/Jarvis`.
+  first build locally `xcodebuild build -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO` and run `release.sh` `strings` checks on `Release-iphoneos/Persona.app/Persona`.
 - Launch-argument defaults are `strings` (`-dev.compact YES` is "YES"). Read booleans / numbers with `bool(forKey:)` / `integer(forKey:)` / `double(forKey:)` like AppStorage,
   not `object(forKey:) as? Bool`, which silently falls back (#1473 `StoredValue` broke `-dev.compact YES`; `CompactListShots` showed cards instead of compact rows, #2147).
 - Live Activities (`docs/live-activity.md`): ActivityKit uses default JSONDecoder for `content-state`; `Date` values start 2001; pass Unix-second numbers.
@@ -585,7 +585,7 @@ Use an invalidation revision as the task key and handle the flag after completio
 - Slow / offline networking shows no banner; title becomes spinner + Waiting for network / Connecting… / Updating… (`docs/ios.md` ("Connection status")). `.toolbar(removing: .title)`
   also removes `.principal`. Untitled pages needing `state` use an ordinarily empty `.principal` instead; large-title pages also leave it empty normally to avoid duplicate titles.
   Slow-link detection counts only timely pongs (late pongs are slow), or title flashes each ping.
-- Avatars (`docs/persona.md`) may be third-party characters: art / generated files stay in hub `~/.jarvis/personas`, outside repo / app bundle.
+- Avatars (`docs/persona.md`) may be third-party characters: art / generated files stay in hub `~/.persona/personas`, outside repo / app bundle.
   Avatar, theme-color and style changes rebuild the entire tree by `AppModel.look`. `@State` navigation paths disappear; settings paths belong to `AppModel.settingsPath`,
   keeping Settings › Appearance › Avatar / Theme color / Interface style / Layout `open` after selection (2026-11-01, `PersonaPickerTests` / `LookPickerTests`).
   New-shell settings sheet uses `AppModel.shellSettings`; RootView.id(look) does not rebuild already-presented sheets, leaving input-free samples stale, so content also uses `.id(model.look)` (`LookPickerTests.testShellSheetStaysOnAppearance` compares bubble pixels). Apply elsewhere for look-changing sheets / pages. DEBUG once-`open` flags (`-openAppearance` etc.) also cannot be `@State`, whose reset reroutes users back to startup page; `SettingsView.debugOpened` is static, once per launch.
@@ -623,9 +623,9 @@ Queries always use `get(_:query:)`. Found only by mock logs (`MISSING GET …%3F
   breaking old data / hub JSON. Store optional `hubGroup: String?` with nonoptional computed `group`; `Encodable` omits nil,
   keeping default-`group` snapshots, drafts and pending-message JSON byte-identical.
 - `Shared` data extensions default to MainActor too; nonisolated `APIClient` / decoding gets main-actor errors. Use `nonisolated extension`.
-- All `apple/Shared` compiles into `JarvisWatch`; do not use app-only types there (`IntentFailure` in `Jarvis/Intents`).
-  Build watch with `Shared` changes (`Jarvis` scheme includes it). Mac includes most `Jarvis` files; UIKit-only `UIScrollView.isTracking` needs `Mac/Compat`.
-  #243 broke Mac until discovered #256; build `JarvisMac` after shared changes.
+- All `apple/Shared` compiles into `PersonaWatch`; do not use app-only types there (`IntentFailure` in `Persona/Intents`).
+  Build watch with `Shared` changes (`Persona` scheme includes it). Mac includes most `Persona` files; UIKit-only `UIScrollView.isTracking` needs `Mac/Compat`.
+  #243 broke Mac until discovered #256; build `PersonaMac` after shared changes.
 - Group names must not follow current socket route, which can choose another member each time and alternate "Company" / "Company 2". Prefer user name → first member `hub_name` → connected member.
 - "One `group` stays pixel-identical": conditionally create entire `ToolbarItem` inside `.toolbar` (`if model.isMultiHub { ToolbarItem … }`),
   not an empty-content item that may reserve space / glass. `Machine.groupLabel` is nil for one `group` (`title == name`), avoiding per-page checks.
@@ -668,7 +668,7 @@ including `activity` here (`TaskNow`, `docs/unified-entry.md` ("Task cards")). `
 
 ## Chat list blanks after collapsing work, fixed only by killing the app (2026-11-03, #686, #754)
 
-A new Jarvis chat fits one screen collapsed. While a turn runs, expand work, inspect tool output, then collapse by its header: content blanks, cannot drag, and switching away / back does not recover, only killing does.
+A new Persona chat fits one screen collapsed. While a turn runs, expand work, inspect tool output, then collapse by its header: content blanks, cannot drag, and switching away / back does not recover, only killing does.
 Many mock / real-hub attempts failed until replaying that turn's real items (local `/tmp` only, outside repo), then reliably reproducing with `MOCK_ASSISTANT_RUN=alone`:
 
 - **An inverted lazy list may draw nothing when content suddenly shrinks below one screen**: collapse removes 2000+ points; ScrollView internally retracts a high offset to latest,
@@ -715,7 +715,7 @@ clipping only chat bottom when oversized. Apply this to all sheet-embedded pages
 - Card `@State` holds partial answers: use one `ScrollView` in both fitting / overflowing cases, not separate branches that lose text when another card crosses the threshold.
 - Pixel-identical fitting scroll region: use `.scrollDisabled` / `.scrollClipDisabled` while fitting to preserve shadows, add `contentMargins` only on overflow for cut-edge shadows. Compare before / after screenshots pixelwise (`PendingCardsTests.testOneCardAsBefore`, only clock / timer differ), asserting elements lie within card-region bounds.
 
-## Images sent to Jarvis disappear in chat (2026-11-03, #987)
+## Images sent to Persona disappear in chat (2026-11-03, #987)
 
 Data is present throughout (claude -p image block, transcript, hub items); app grouping loses it because claude -p writes **image before text**
 (`[image, text]`), unlike Agents pastes. App divides turns by user text, assigning preceding images to previous work and hiding them;
@@ -833,7 +833,7 @@ Inspect magnified corner crops and compare outside-corner pixels with the same s
 ## Ask Persona shortcut unexpectedly quits: Release stripped reflection names (2026-11-04, #990)
 
 - TestFlight Ask Persona with a fixed question reported unexpected app exit; Debug / simulator worked.
-  Stack: AppIntents → `AskJarvisIntent.perform()` → `ask()` → `question.getter` → AppIntents `_assertionFailure`.
+  Stack: AppIntents → `AskPersonaIntent.perform()` → `ask()` → `question.getter` → AppIntents `_assertionFailure`.
 - Release anti-tampering set `SWIFT_REFLECTION_METADATA_LEVEL: without-names`. App Intents uses reflected property names (`_question`)
   to populate `@Parameter` from Siri / Shortcuts; absent names leave missing values, asserting on nonoptional reads. Every parameterized intent is affected
   (Ask Claude, Agent tasks, Dynamic Island allow / deny / approve). `Mirror(reflecting: self).children` labels are nil.
@@ -1179,7 +1179,7 @@ but UIKit still had a page with only Agents Back and empty content.
 
 ## Context-block bodies always use `ContextText.inBlock` (2026-11-06, #3831)
 
-- `ContextRef.xml` previously removed literal `</jarvis-context>` / `</persona-context>` tags once. Nested `</jarvis-</jarvis-context>context>` leaves a closing tag after deletion, ending the block early; third-party Inbox text handed to AI becomes apparent user speech. Case variants and whitespace `</jarvis-context >` are also accepted by hub / web readers and bypass single literal removal.
+- `ContextRef.xml` previously removed literal `</persona-context>` / `</persona-context>` tags once. Nested `</persona-</persona-context>context>` leaves a closing tag after deletion, ending the block early; third-party Inbox text handed to AI becomes apparent user speech. Case variants and whitespace `</persona-context >` are also accepted by hub / web readers and bypass single literal removal.
 - `ContextRef.xml` and `TodosLogic.formatTodoContext` now use `Shared/ContextText.swift`: remove once, then replace remaining < with `&lt;`, two linear passes matching hub `prompts.ContextBody`, web `contextBody` and Android `contextBody`. All new block writers follow this. Regress by counting `ContextText.closingTag` across the whole message: only the block's own closing tag remains.
 
 ## The Agents page's top on a phone is our own component, `AgentsHeader`, not the system search drawer (#2478, 2026-11-06)

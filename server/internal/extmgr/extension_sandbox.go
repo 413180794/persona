@@ -369,12 +369,12 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 	runtimeSock := ""
 	if g.AgentRuntimes {
 		runtimeSock = filepath.Join(run, "runtime.sock")
-		s.Env = append(slices.Clone(s.Env), "PERSONA_RUNTIME_SOCKET="+runtimeSock, "JARVIS_RUNTIME_SOCKET="+runtimeSock)
+		s.Env = append(slices.Clone(s.Env), "PERSONA_RUNTIME_SOCKET="+runtimeSock)
 	}
 	hubURL := "http://" + egress.HubHost
-	s.Env = setEnv(s.Env, "JARVIS_HUB_URL", hubURL)
+	s.Env = setEnv(s.Env, "PERSONA_HUB_URL", hubURL)
 	if start := s.StartEnv; start != nil {
-		s.StartEnv = func() []string { return setEnv(start(), "JARVIS_HUB_URL", hubURL) }
+		s.StartEnv = func() []string { return setEnv(start(), "PERSONA_HUB_URL", hubURL) }
 	}
 	if initf := s.Init; initf != nil {
 		s.Init = func(ctx context.Context) (extension.InitializeParams, error) {
@@ -422,18 +422,12 @@ var nodeRuntimeSocket = func() string {
 	return filepath.Join(identity.SocketDir(home), "runtime.sock")
 }
 
-// setEnv is env with name set to value where it is there (and its PERSONA_ / JARVIS_ twin).
+// setEnv replaces the value of an existing environment key.
 func setEnv(env []string, name, value string) []string {
-	twin := ""
-	if rest, ok := strings.CutPrefix(name, "JARVIS_"); ok {
-		twin = "PERSONA_" + rest
-	} else if rest, ok := strings.CutPrefix(name, "PERSONA_"); ok {
-		twin = "JARVIS_" + rest
-	}
 	out := slices.Clone(env)
 	for i, kv := range out {
 		k, _, _ := strings.Cut(kv, "=")
-		if k == name || k == twin {
+		if k == name {
 			out[i] = k + "=" + value
 		}
 	}

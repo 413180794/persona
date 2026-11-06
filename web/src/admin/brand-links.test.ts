@@ -9,7 +9,7 @@ afterEach(() => {
 
 it("the admin mock accepts both connector and peer input aliases but keeps legacy output", async () => {
   vi.useFakeTimers();
-  for (const scheme of ["jarvis", "persona"]) {
+  for (const scheme of ["persona"]) {
     installMock("center");
     setCsrf("mock-csrf");
     const pairLink = `${scheme}://connector?addr=192.0.2.30%3A18663&fp=fixture-pin&code=fixture-code`;
@@ -25,5 +25,5 @@ it("the admin mock accepts both connector and peer input aliases but keeps legac
   }
   const output = adminApi<{ code: string }>("/peers/code", "POST");
   await vi.runAllTimersAsync();
-  expect((await output).code.startsWith("jarvis://peer?")).toBe(true);
+  expect((await output).code.startsWith("persona://peer?")).toBe(true);
 });

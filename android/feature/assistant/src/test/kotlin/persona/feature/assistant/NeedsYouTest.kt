@@ -44,14 +44,14 @@ class NeedsYouTest {
 
     @Test fun personaOwnAndMutedConversationsAreLeftOut() {
         val sessions = listOf(
-            Session(machineId = "m", sessionId = "jarvis", assistant = true),
+            Session(machineId = "m", sessionId = "persona", assistant = true),
             Session(machineId = "m", sessionId = "quiet", spaceName = "空间"),
             Session(machineId = "m", sessionId = "allowed", spaceName = "空间"),
             Session(machineId = "m", sessionId = "muted"),
         )
         val mutes = AgentPreferences(spaces = listOf("m/空间"), sessions = listOf("m/muted"), allowed = setOf("m/allowed"))
         val needs = needsYou(
-            listOf(request("r1", "jarvis"), request("r2", "quiet"), request("r3", "allowed"), request("r4", "muted"),
+            listOf(request("r1", "persona"), request("r2", "quiet"), request("r3", "allowed"), request("r4", "muted"),
                 request("r5", "main"), request("r5", "main")),
             sessions, mutes, emptyList(), isAssistant = { it == SessionKey("m", "main") },
         )

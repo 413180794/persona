@@ -4,8 +4,8 @@ import XCTest
 /// Compact Context shows Compacting Context… above the composer and then Context compacted, New Main Chat… asks first (Include Old Chat Summary on)
 /// and lands on the empty main page. A failure stays until closed.
 ///   PORT=<port> MOCK_MAIN_ACTIONS=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/MainConversationActionsTests
-/// The failure test wants the mock started with MOCK_COMPACTION=failed too (TEST_RUNNER_JARVIS_MOCK_COMPACTION=failed).
+///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/MainConversationActionsTests
+/// The failure test wants the mock started with MOCK_COMPACTION=failed too (TEST_RUNNER_PERSONA_MOCK_COMPACTION=failed).
 final class MainConversationActionsTests: XCTestCase {
     private var hub = ""
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
@@ -13,15 +13,15 @@ final class MainConversationActionsTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_MAIN_ACTIONS=1 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_MAIN_ACTIONS=1 (PERSONA_MOCK_HUB)")
         }
         hub = h
     }
 
     @MainActor private func launch(_ open: String, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistant", open] + extra
         app.launchPinned()
         return app
@@ -37,7 +37,7 @@ final class MainConversationActionsTests: XCTestCase {
     }
 
     @MainActor private func openMenu(_ app: XCUIApplication) {
-        let a = app.buttons["jarvis-avatar"]
+        let a = app.buttons["persona-avatar"]
         XCTAssertTrue(a.waitForExistence(timeout: 15), "no avatar in the top bar:\n\(app.debugDescription)")
         a.tap()
     }
@@ -78,7 +78,7 @@ final class MainConversationActionsTests: XCTestCase {
 
     /// A failure from just now shows with its reason and goes when closed.
     @MainActor func testFailedCloses() throws {
-        guard ProcessInfo.processInfo.environment["JARVIS_MOCK_COMPACTION"] == "failed" else {
+        guard ProcessInfo.processInfo.environment["PERSONA_MOCK_COMPACTION"] == "failed" else {
             throw XCTSkip("needs the mock with MOCK_COMPACTION=failed")
         }
         let app = launch(main)

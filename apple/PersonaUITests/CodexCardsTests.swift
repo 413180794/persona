@@ -3,14 +3,14 @@ import XCTest
 /// Codex's approval and question cards (docs/codex.md「提问和审批」) in its chat: the approval says Codex asks, with its
 /// reason, the command, Deny / Approve, Always Approve naming what it allows, and Deny and Explain… opening a field; a refused answer (a
 /// draft in the computer's input box) keeps the card and says why; the question card answers both questions. Against
-/// scripts/mock/mock_hub.py with MOCK_CODEX=1 (TEST_RUNNER_JARVIS_CODEX_HUB=http://127.0.0.1:<port>);
-/// TEST_RUNNER_JARVIS_SHOT_DIR=<dir> also saves the screens there as PNG.
+/// scripts/mock/mock_hub.py with MOCK_CODEX=1 (TEST_RUNNER_PERSONA_CODEX_HUB=http://127.0.0.1:<port>);
+/// TEST_RUNNER_PERSONA_SHOT_DIR=<dir> also saves the screens there as PNG.
 final class CodexCardsTests: XCTestCase {
     private let orders = "server/a1f3c2d4-0000-4000-8000-000000000004"
 
     private func hub() throws -> String {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_CODEX_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_CODEX=1 (JARVIS_CODEX_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_CODEX_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_CODEX=1 (PERSONA_CODEX_HUB)")
         }
         return hub
     }
@@ -21,7 +21,7 @@ final class CodexCardsTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOT_DIR"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOT_DIR"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("codex-" + name + ".png"))
         }
     }
@@ -54,9 +54,9 @@ final class CodexCardsTests: XCTestCase {
             return false
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", orders]
-        app.launchJarvis()
+        app.launchPersona()
 
         let title = anything(app, "Codex 需要你授权")
         XCTAssertTrue(title.waitForExistence(timeout: 20), app.debugDescription)
@@ -118,9 +118,9 @@ final class CodexCardsTests: XCTestCase {
         let hub = try hub()
         _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!)
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", orders]
-        app.launchJarvis()
+        app.launchPersona()
         XCTAssertTrue(anything(app, "Codex 需要你授权").waitForExistence(timeout: 20), app.debugDescription)
         app.buttons["同意"].tap()
         XCTAssertTrue(anything(app, "Codex 在问你").waitForExistence(timeout: 10), app.debugDescription)
@@ -146,9 +146,9 @@ final class CodexCardsTests: XCTestCase {
             return false
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", orders, "-ui.style", "beautiful"]
-        app.launchJarvis()
+        app.launchPersona()
         XCTAssertTrue(anything(app, "同意 Bash 吗？").waitForExistence(timeout: 20), app.debugDescription)
         nudge(app)
         XCTAssertTrue(anything(app, "总是同意").exists && anything(app, "以后不再问以 curl -s 开头的命令").exists, "总是同意 says what it allows")
@@ -157,11 +157,11 @@ final class CodexCardsTests: XCTestCase {
         shot("beautiful")
     }
 
-    /// Session Info says how Persona reaches this Codex: its app-server, or the terminal and why (TEST_RUNNER_JARVIS_CODEX_ROUTE
+    /// Session Info says how Persona reaches this Codex: its app-server, or the terminal and why (TEST_RUNNER_PERSONA_CODEX_ROUTE
     /// says which the mock was started with: MOCK_CODEX_ROUTE).
     @MainActor func testSessionInfoShowsTheRoute() throws {
         let hub = try hub()
-        let terminal = ProcessInfo.processInfo.environment["JARVIS_CODEX_ROUTE"] == "terminal"
+        let terminal = ProcessInfo.processInfo.environment["PERSONA_CODEX_ROUTE"] == "terminal"
         addUIInterruptionMonitor(withDescription: "system alert") { alert in
             for label in ["Allow", "允许", "OK", "好"] where alert.buttons[label].exists {
                 alert.buttons[label].tap()
@@ -170,9 +170,9 @@ final class CodexCardsTests: XCTestCase {
             return false
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", orders, "-showInfo", "YES"]
-        app.launchJarvis()
+        app.launchPersona()
         let row = anything(app, "连接")
         XCTAssertTrue(row.waitForExistence(timeout: 20), app.debugDescription)
         nudge(app)

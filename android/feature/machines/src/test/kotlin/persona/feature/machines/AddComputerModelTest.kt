@@ -28,9 +28,9 @@ class AddComputerModelTest {
         override suspend fun add(name: String, os: ComputerOs): ComputerCode {
             calls += "add $name ${os.wire}"
             refuse?.let { throw it }
-            return ComputerCode("macbook", name, "jarvis://link?machine=macbook", 600_000)
+            return ComputerCode("macbook", name, "persona://link?machine=macbook", 600_000)
         }
-        override suspend fun again(machineId: String): ComputerCode { calls += "again $machineId"; return ComputerCode(machineId, "", "jarvis://link?2", 1_200_000) }
+        override suspend fun again(machineId: String): ComputerCode { calls += "again $machineId"; return ComputerCode(machineId, "", "persona://link?2", 1_200_000) }
         override suspend fun machines(machineId: String) = listed.also { calls += "machines $machineId" }
         override suspend fun confirm(machineId: String) { calls += "confirm $machineId" }
         override suspend fun reject(machineId: String) { calls += "reject $machineId" }
@@ -157,10 +157,10 @@ class AddComputerModelTest {
     }
 
     @Test fun commands() {
-        val code = ComputerCode("m", "n", "jarvis://link?a=1&b='x'", 0)
-        assertEquals("jarvis-link pair 'jarvis://link?a=1&b=%27x%27'", pairCommand(code))
-        assertEquals(".\\jarvis-link.exe install --jarvisd .\\personad.exe --pair 'jarvis://link?a=1&b=%27x%27'", windowsCommand(code.pairUrl))
-        assertEquals("jarvis-link pair 'given'", pairCommand(code.copy(command = "jarvis-link pair 'given'")))
+        val code = ComputerCode("m", "n", "persona://link?a=1&b='x'", 0)
+        assertEquals("persona-link pair 'persona://link?a=1&b=%27x%27'", pairCommand(code))
+        assertEquals(".\\persona-link.exe install --personad .\\personad.exe --pair 'persona://link?a=1&b=%27x%27'", windowsCommand(code.pairUrl))
+        assertEquals("persona-link pair 'given'", pairCommand(code.copy(command = "persona-link pair 'given'")))
     }
 
     @Test fun anUnreadableOrSkewedExpiryCountsTenMinutesFromNow() {

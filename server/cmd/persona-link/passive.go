@@ -12,7 +12,7 @@ import (
 // Passive mode on the command line (docs/link.md "Passive mode"): `pair --listen` makes the link the hub's admin page
 // takes, `mode` switches between the two modes.
 
-// pairListen is `jarvis-link pair --listen [addr] [--addr …]`: the link alone on stdout (for a pipe), the rest on stderr.
+// pairListen is `persona-link pair --listen [addr] [--addr …]`: the link alone on stdout (for a pipe), the rest on stderr.
 func pairListen(e *env, listen string, addrs []string) error {
 	before, _ := link.Read(e.configPath())
 	inv, err := link.PairListen(e.configPath(), listen, addrs, e.now())
@@ -30,13 +30,13 @@ func pairListen(e *env, listen string, addrs []string) error {
 	fmt.Fprintln(w, firewallHint(e.goos, inv.Listen))
 	switch {
 	case link.Running(e.configPath()):
-		fmt.Fprintln(w, "在运行的 jarvis-link 一两秒内就开始监听，不用重启。")
+		fmt.Fprintln(w, "在运行的 persona-link 一两秒内就开始监听，不用重启。")
 	case e.goos == "linux":
-		fmt.Fprintln(w, "接下来：jarvis-link install --listen（装成 systemd 用户服务，一直监听），或者前台跑 jarvis-link run。")
+		fmt.Fprintln(w, "接下来：persona-link install --listen（装成 systemd 用户服务，一直监听），或者前台跑 persona-link run。")
 	case e.goos == "windows":
-		fmt.Fprintln(w, "接下来：jarvis-link install --listen（装成登录时启动的计划任务，一直监听），或者前台跑 jarvis-link run。")
+		fmt.Fprintln(w, "接下来：persona-link install --listen（装成登录时启动的计划任务，一直监听），或者前台跑 persona-link run。")
 	default:
-		fmt.Fprintln(w, "接下来让 jarvis-link 跑起来（Mac 上是菜单栏 App「Persona Link」；也可以前台跑 jarvis-link run）。")
+		fmt.Fprintln(w, "接下来让 persona-link 跑起来（Mac 上是菜单栏 App「Persona Link」；也可以前台跑 persona-link run）。")
 	}
 	return nil
 }
@@ -76,7 +76,7 @@ func modeName(mode string) string {
 	return "我去连 hub（主动）"
 }
 
-// modeCmd is `jarvis-link mode [active|passive] [--listen addr]`.
+// modeCmd is `persona-link mode [active|passive] [--listen addr]`.
 func modeCmd(e *env, args []string) error {
 	var mode, listen string
 	for i := 0; i < len(args); i++ {
@@ -116,15 +116,15 @@ func modeCmd(e *env, args []string) error {
 	fmt.Fprintln(e.stdout, line+"。")
 	switch {
 	case mode == link.ModePassive && !c.Passive.Paired():
-		fmt.Fprintln(e.stdout, "还没有 hub 来配对：jarvis-link pair --listen 打印给 hub 管理界面粘贴的链接。")
+		fmt.Fprintln(e.stdout, "还没有 hub 来配对：persona-link pair --listen 打印给 hub 管理界面粘贴的链接。")
 	case mode == link.ModeActive && c.Token == "":
-		fmt.Fprintln(e.stdout, "主动模式还没配对：jarvis-link pair '<jarvisd hub pair --machine <这台的 id> 给的链接>'。")
+		fmt.Fprintln(e.stdout, "主动模式还没配对：persona-link pair '<personad hub pair --machine <这台的 id> 给的链接>'。")
 	}
 	if mode == link.ModePassive {
 		fmt.Fprintln(e.stdout, firewallHint(e.goos, c.Passive.ListenAddr()))
 	}
 	if link.Running(e.configPath()) {
-		fmt.Fprintln(e.stdout, "在运行的 jarvis-link 一两秒内就换过去。")
+		fmt.Fprintln(e.stdout, "在运行的 persona-link 一两秒内就换过去。")
 	}
 	return nil
 }

@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity android:name="persona.android.MainActivity">
-            <meta-data android:name="jarvis.launchAdapter" android:value="persona.android.debug.DebugLaunchAdapter" />
+            <meta-data android:name="persona.launchAdapter" android:value="persona.android.debug.DebugLaunchAdapter" />
         </activity>
         <activity android:name="persona.android.debug.DebugEntryActivity" android:exported="true" />
         <!-- "Proactive" against a fake hub, for captures (ProactiveDebugActivity.kt). -->

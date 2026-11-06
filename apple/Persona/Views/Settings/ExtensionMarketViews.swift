@@ -787,7 +787,7 @@ private struct MarketTokenSheet: View {
                     } header: {
                         SettingsHeading(String(localized: "Address"))
                     } footer: {
-                        Text(String(localized: "Three forms: https://example.com/extensions/ (an address not ending in .json reads persona-extensions.json under it, then persona-plugins.json); github:owner/repo (the one at the repo root; private repos need a token); git:<address>[#branch] (git@host:path.git, ssh://…, https://…; uses the hub machine's own SSH credentials, no token)."))
+                        Text(String(localized: "Three forms: https://example.com/extensions/ (an address not ending in .json reads persona-extensions.json under it); github:owner/repo (the one at the repo root; private repos need a token); git:<address>[#branch] (git@host:path.git, ssh://…, https://…; uses the hub machine's own SSH credentials, no token)."))
                     }
                 }
                 Section {

@@ -57,7 +57,7 @@ class HttpAgentCreationService(
         val body = JsonCodec.encodeToString(request).toRequestBody("application/json".toMediaType())
         // A lost response must be reconciled through operation(), never by posting again.
         val result = try {
-            outcome(read(request("api", "v1", "sessions").header("X-Jarvis-Op-Id", operationId).post(body).build(), startHttp))
+            outcome(read(request("api", "v1", "sessions").header("X-Persona-Op-Id", operationId).post(body).build(), startHttp))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

@@ -12,65 +12,28 @@ import shlex
 
 def env_value(name, environment=None):
     environment = os.environ if environment is None else environment
-    suffix = name.split("_", 1)[1] if name.startswith(("PERSONA_", "JARVIS_")) else name
-    return environment.get("PERSONA_" + suffix, environment.get("JARVIS_" + suffix, ""))
+    key = name if name.startswith("PERSONA_") else "PERSONA_" + name
+    return environment.get(key, "")
 
 
 def data_dir(home=None, environment=None):
     home = os.path.expanduser("~") if home is None else os.fspath(home)
     root = env_value("PERSONA_HOME", environment)
-    if root:
-        if root == "~": root = home
-        elif root.startswith("~/"): root = os.path.join(home, root[2:])
-        elif not os.path.isabs(root): root = os.path.join(home, root)
-        return os.path.normpath(root)
-    current, legacy = os.path.join(home, ".persona"), os.path.join(home, ".jarvis")
-    if os.path.lexists(legacy):
-        try:
-            if os.path.samefile(current, legacy): return current
-        except OSError:
-            pass
-        return legacy
-    return current
-
-
-def _alias(home, root, alias, environment):
-    try:
-        os.symlink(os.path.basename(root), alias)
-    except FileExistsError:
-        pass
-    except OSError:
-        if os.path.isdir(data_dir(home, environment)):
-            return
-        raise
-    if not os.path.samefile(root, alias):
-        raise OSError("state directories changed during initialization; retry without moving either directory")
+    if not root:
+        return os.path.join(home, ".persona")
+    if root == "~": root = home
+    elif root.startswith("~/"): root = os.path.join(home, root[2:])
+    elif not os.path.isabs(root): root = os.path.join(home, root)
+    return os.path.normpath(root)
 
 
 def prepare_dir(home=None, environment=None):
-    home = os.path.expanduser("~") if home is None else os.fspath(home)
     root = data_dir(home, environment)
-    current, legacy = os.path.join(home, ".persona"), os.path.join(home, ".jarvis")
-    if not os.path.lexists(current) and (not os.path.lexists(legacy) or not os.path.islink(legacy) or os.path.isdir(legacy)) and root in (current, legacy):
-        os.makedirs(legacy, mode=0o700, exist_ok=True)
-        _alias(home, legacy, current, environment)
-        return data_dir(home, environment)
+    # Follow an existing valid custom link, but never create an alias or repair a dangling link.
     if os.path.islink(root) and not os.path.isdir(root):
-        raw = os.readlink(root)
-        if not os.path.isabs(raw):
-            raw = os.path.dirname(root) + "/" + raw
-        while raw.endswith("/") or raw.endswith("/."):
-            raw = raw[:-2] if raw.endswith("/.") else raw[:-1]
-        target, parent = os.path.normpath(raw), os.path.dirname(raw)
-        if root not in (current, legacy) or target not in (current, legacy) or not os.path.isdir(parent) or os.path.realpath(parent) != os.path.realpath(home) or os.path.lexists(target):
-            raise OSError("state symlink target is unavailable; restore it before upgrading")
-        os.makedirs(target, mode=0o700, exist_ok=True)
+        raise OSError("state symlink target is unavailable; restore it before upgrading")
     os.makedirs(root, mode=0o700, exist_ok=True)
-    if root in (current, legacy):
-        alias = legacy if root == current else current
-        if not os.path.lexists(alias):
-            _alias(home, root, alias, environment)
-    return data_dir(home, environment)
+    return root
 
 
 def _file_environment(path):
@@ -104,7 +67,7 @@ def _file_environment(path):
                     if character in newline:
                         key, state = [], "before_key"
                     elif character == "=":
-                        wanted = "".join(key).rstrip(whitespace) in ("PERSONA_HOME", "JARVIS_HOME")
+                        wanted = "".join(key).rstrip(whitespace) in ("PERSONA_HOME",)
                         value, trailing, state = [], None, "before_value"
                     else:
                         key.append(character)
@@ -246,7 +209,7 @@ def _unit_environment(unit, home):
                 values.clear()
             for entry in entries:
                 key, sep, value = entry.partition("=")
-                if sep and key in ("PERSONA_HOME", "JARVIS_HOME"):
+                if sep and key in ("PERSONA_HOME",):
                     values[key] = value.replace("%%", "\0").replace("%h", home).replace("\0", "%")
     for entry in environment_files:
         optional = entry.startswith("-")
@@ -274,15 +237,15 @@ def _unit_environment(unit, home):
 def service_environment(home=None, environment=None, role="auto"):
     """Recover only the requested service's root; never borrow a different service's profile."""
     environment = dict(os.environ if environment is None else environment)
-    if "PERSONA_HOME" in environment or "JARVIS_HOME" in environment:
+    if "PERSONA_HOME" in environment:
         return environment
     home = os.path.expanduser("~") if home is None else os.fspath(home)
     config = pathlib.Path(environment.get("XDG_CONFIG_HOME") or os.path.join(home, ".config"))
     units = {
-        "hub": ("jarvisd.service",),
-        "node": ("jarvisd-node.service", "jarvis-link.service"),
-        "link": ("jarvis-link.service", "jarvisd-node.service"),
-        "auto": ("jarvisd.service", "jarvisd-node.service", "jarvis-link.service"),
+        "hub": ("personad.service",),
+        "node": ("personad-node.service", "persona-link.service"),
+        "link": ("persona-link.service", "personad-node.service"),
+        "auto": ("personad.service", "personad-node.service", "persona-link.service"),
     }[role]
     found = []
     for name in units:
@@ -294,14 +257,14 @@ def service_environment(home=None, environment=None, role="auto"):
                 return dict(environment, **values)
             found.append(values)
     if role != "hub":
-        names = ("com.jarvis.link.plist", "com.jarvis.node.plist") if role == "link" else ("com.jarvis.node.plist", "com.jarvis.link.plist")
+        names = ("com.persona.link.plist", "com.persona.node.plist") if role == "link" else ("com.persona.node.plist", "com.persona.link.plist")
         for name in names:
             try:
                 stored = plistlib.loads(pathlib.Path(home, "Library/LaunchAgents", name).read_bytes())
             except FileNotFoundError:
                 continue
             values = stored.get("EnvironmentVariables", {})
-            values = {key: values[key] for key in ("PERSONA_HOME", "JARVIS_HOME") if isinstance(values.get(key), str)}
+            values = {key: values[key] for key in ("PERSONA_HOME",) if isinstance(values.get(key), str)}
             if role != "auto":
                 return dict(environment, **values)
             found.append(values)
@@ -330,7 +293,7 @@ def main():
         code = base64.b64encode(pathlib.Path(__file__).read_bytes()).decode()
         print("_PERSONA_STATE_DIR=$(python3 -c \"import base64; exec(base64.b64decode('" + code + "'))\" --service "
               + (args.service or "auto") + (" --prepare" if args.prepare else "") + ") || exit $?")
-        print('export PERSONA_HOME="$_PERSONA_STATE_DIR" JARVIS_HOME="$_PERSONA_STATE_DIR"')
+        print('export PERSONA_HOME="$_PERSONA_STATE_DIR"')
         if args.prefix != "-": print(pathlib.Path(args.prefix).read_text(), end="")
         return
     environment = service_environment(role=args.service) if args.service else os.environ

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct LarkAttachmentTests {
     private func file(_ name: String = "notes.txt", text: String = "notes") throws -> URL {

@@ -14,7 +14,7 @@ import persona.core.contracts.Session
  * application id, which is personal configuration (docs/config.md).
  */
 internal object ShortcutPublisher {
-    private const val TAG = "JarvisShortcuts"
+    private const val TAG = "PersonaShortcuts"
     private const val ASK = "ask"
     private const val APPROVE = "approve"
     private const val NEW_TODO = "new-todo"

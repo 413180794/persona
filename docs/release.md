@@ -4,8 +4,8 @@ TestFlight internal testing (testers in the configured `app_store.testers`), plu
 
 ## Accounts and identifiers
 
-The product is Persona (formerly Jarvis), but the existing Bundle IDs, App Group, keychain groups, signing profile names and App Store Connect app record stay the same; don't recreate the App because of the rename.
-Since 2026-11-03 the store name in App Store Connect is **Persona Side** (formerly "Jarvis Herd"; the home screen still shows `CFBundleDisplayName`, Persona), and the privacy policy URL is `app_store.external.privacy_url` (the website's privacy policy page). The store name lives in the App Info localizations (`name` in `appInfoLocalizations`) and can be changed directly via the API while the version hasn't been submitted for review; see "Changing the store name" below. "Jarvis App Store" and "Jarvis Watch App Store" below are existing signing profile names and stay as they are; the generated project / targets and archive / `.app` products use the Persona name, and old project / scheme aliases and module identity are in [compatibility migration](rename.md). Historical build records keep the names of their time. New default config and `personad` / `jarvisd` compatibility are in [naming and compatibility](config.md#命名与兼容).
+The product is Persona (previously under another product name), but the existing Bundle IDs, App Group, keychain groups, signing profile names and App Store Connect app record stay the same; don't recreate the App because of the rename.
+Since 2026-11-03 the store name in App Store Connect is **Persona Side** (formerly "Persona Herd"; the home screen still shows `CFBundleDisplayName`, Persona), and the privacy policy URL is `app_store.external.privacy_url` (the website's privacy policy page). The store name lives in the App Info localizations (`name` in `appInfoLocalizations`) and can be changed directly via the API while the version hasn't been submitted for review; see "Changing the store name" below. "Persona App Store" and "Persona Watch App Store" below are existing signing profile names and stay as they are; the generated project / targets and archive / `.app` products use the Persona name, and old project / scheme aliases and module identity are in [compatibility migration](rename.md). Historical build records keep the names of their time. New default config and `personad` / `personad` compatibility are in [naming and compatibility](config.md#命名与兼容).
 
 All in the build config (`docs/config.md`): `app.bundle_id` / `app.team_id`, `app_store.key_id` / `issuer_id` / `key_path` (the API key file lives only
 outside the repo, e.g. `~/.appstoreconnect/`), `app_store.app_id` (the app record's numeric ID), `app_store.testers`, `app_store.feedback_email`.
@@ -14,7 +14,7 @@ outside the repo, e.g. `~/.appstoreconnect/`), `app_store.app_id` (the app recor
 | --- | --- |
 | Bundle ID | iOS `<bundle_id>`, watch `<bundle_id>.watchkitapp`, Live Activity `<bundle_id>.liveactivity`, notification service extension `<bundle_id>.notify` (push relay, `docs/push-relay.md`), share extension `<bundle_id>.share` (#4586); registered with `scripts/release/asc_signing.py` |
 | App ID capabilities | iOS: `PUSH_NOTIFICATIONS`, `USERNOTIFICATIONS_TIMESENSITIVE` (time-sensitive notifications, #1572), `HEALTHKIT`, `APP_GROUPS`; Live Activity: `APP_GROUPS`; watch: none. The App Group itself can only be created on the website and attached to App IDs ("App Group" below) |
-| Provisioning profiles | "Jarvis App Store", "Jarvis Watch App Store", "Persona Share App Store", etc. (`IOS_APP_STORE`; the share extension's was added 2026-11-06, so run `asc_signing.py` once before its first release to register its Bundle ID and profile); `asc_signing.py` deletes and recreates them and installs them into `~/Library/MobileDevice/Provisioning Profiles/` |
+| Provisioning profiles | "Persona App Store", "Persona Watch App Store", "Persona Share App Store", etc. (`IOS_APP_STORE`; the share extension's was added 2026-11-06, so run `asc_signing.py` once before its first release to register its Bundle ID and profile); `asc_signing.py` deletes and recreates them and installs them into `~/Library/MobileDevice/Provisioning Profiles/` |
 | Signing identity | `Apple Distribution: … (team_id)` in the login keychain |
 | App Store Connect App ID | After creating the app record on the website, put it in the config's `app_store.app_id` |
 
@@ -46,7 +46,7 @@ The build number can also be given by hand: `./scripts/release/release.sh 42`.
 
 What `release.sh` does:
 
-1. `xcodegen generate` (the source is `apple/project.yml`, generating `Persona.xcodeproj`; the old `Jarvis.xcodeproj` is a symlink to the project entry, and generated content isn't committed).
+1. `xcodegen generate` (the source is `apple/project.yml`, generating `Persona.xcodeproj`; the old `Persona.xcodeproj` is a symlink to the project entry, and generated content isn't committed).
 2. Release archive to `~/Library/Developer/Xcode/Archives/<date>/Persona <build number>.xcarchive` (dSYMs kept for Organizer symbolication),
    with the watch App embedded.
 3. `check_bundle_strings.py` checks `Persona.app` and `Persona.app/Watch/Persona.app`: `*UsageDescription` in Info.plist
@@ -99,24 +99,24 @@ so a profile saved to the keychain by `asc auth login` never gets mixed in. The 
 | Stage | Signing | Profile |
 | --- | --- | --- |
 | Archive `xcodebuild archive` | Automatic (`CODE_SIGN_STYLE=Automatic`) | The development `iOS Team Provisioning Profile` |
-| Export `xcodebuild -exportArchive` | Manual (`signingStyle=manual`, `signingCertificate=Apple Distribution`) | "Jarvis App Store" / "Jarvis Watch App Store" |
+| Export `xcodebuild -exportArchive` | Manual (`signingStyle=manual`, `signingCertificate=Apple Distribution`) | "Persona App Store" / "Persona Watch App Store" |
 
 An App Store Connect API key can only do what App Manager can, and cloud-managed signing needs Admin; manual signing gets around that.
 Changing Bundle ID capabilities (say, adding another capability) invalidates the old profiles; just rerun `scripts/release/asc_signing.py`.
 
 ## entitlements (2026-11-02)
 
-The App and its extensions hand things over through shared groups: the push relay's private key goes through a keychain group (`<team>.<bundle id>.push`, App → JarvisNotify), and the Dynamic Island avatar and avatar pack images go through the App Group (`group.<bundle id>`, App → JarvisWidgets, next section).
-Every bundle's signature must have its target's `keychain-access-groups` and `com.apple.security.application-groups`, and the group the Info.plist tells the code to use (`JarvisPushKeychainGroup`, `JarvisAppGroup`) must be one of them; if anything is missing, it silently falls back to defaults.
-The App Group ID itself has no team prefix, so the Info.plist writes `$(JARVIS_APP_GROUP)` directly, and it has a value even in an unsigned archive.
+The App and its extensions hand things over through shared groups: the push relay's private key goes through a keychain group (`<team>.<bundle id>.push`, App → PersonaNotify), and the Dynamic Island avatar and avatar pack images go through the App Group (`group.<bundle id>`, App → PersonaWidgets, next section).
+Every bundle's signature must have its target's `keychain-access-groups` and `com.apple.security.application-groups`, and the group the Info.plist tells the code to use (`PersonaPushKeychainGroup`, `PersonaAppGroup`) must be one of them; if anything is missing, it silently falls back to defaults.
+The App Group ID itself has no team prefix, so the Info.plist writes `$(PERSONA_APP_GROUP)` directly, and it has a value even in an unsigned archive.
 
 - **Info.plist group names use `$(DEVELOPMENT_TEAM).`, not `$(AppIdentifierPrefix)`**: the latter only has a value during Xcode signing and is empty in an unsigned archive. Entitlements files still use `$(AppIdentifierPrefix)`.
 - **Unsigned archive (`CODE_SIGNING_ALLOWED=NO`, when this Mac has no distribution certificate and export uses cloud signing)**: bundles in the archive have no entitlements, and export signs according to what's in the bundle.
   Before export, `python3 scripts/release/entitlements.py sign <archive>` ad hoc signs inside-out, giving each bundle its target's entitlements (found via `xcodebuild -showBuildSettings`,
   with build variables expanded and `$(AppIdentifierPrefix)` set to the team's; if something can't be expanded it errors instead of leaving it empty). If you only run `codesign --entitlements <original file>` on the App and leave out the extensions,
-  export expands the App's `$(JARVIS_BUNDLE_ID)` to empty and the extensions get no groups at all (that's what happened in build 92: the Dynamic Island avatar didn't follow the setting, `docs/live-activity.md`).
+  export expands the App's `$(PERSONA_BUNDLE_ID)` to empty and the extensions get no groups at all (that's what happened in build 92: the Dynamic Island avatar didn't follow the setting, `docs/live-activity.md`).
 - **Check after export**: `python3 scripts/release/entitlements.py check <ipa>` lists every problem and exits non-zero; it reports 9 issues on build 92's ipa.
-  App Groups are checked the same way: every bundle's signature has its target's group, and the Info.plist's `JarvisAppGroup` is one of them.
+  App Groups are checked the same way: every bundle's signature has its target's group, and the Info.plist's `PersonaAppGroup` is one of them.
   In the exported ipa / pkg, the push entitlement (`aps-environment`; on Mac `com.apple.developer.aps-environment`) must be `production`. A Mac .pkg can be checked too.
 - **Time-sensitive notifications** (`com.apple.developer.usernotifications.time-sensitive`, #1572): the hub's "Needs you" pushes and plugins' urgent alerts carry `interruption-level: time-sensitive`.
   If the App's signature lacks this entitlement, the system shows them all as `active`: they don't break through Focus, so with Focus on the phone doesn't ring and the watch doesn't get them either, and nothing reports an error. The App ID must first enable `USERNOTIFICATIONS_TIMESENSITIVE`
@@ -130,8 +130,8 @@ The App Group ID itself has no team prefix, so the Info.plist writes `$(JARVIS_A
 
 ## App Group (2026-11-02)
 
-The App and the Dynamic Island extension (JarvisWidgets) hand over the avatar and avatar pack images through files in the App Group container (`docs/live-activity.md` ("Avatar"); the Live Activity extension can't read the keychain on a phone).
-The group name defaults to `group.<bundle id>` and can be changed with the config's `app.app_group` (`docs/config.md`); it's written into both targets' entitlements (`com.apple.security.application-groups`) and the Info.plist's `JarvisAppGroup`.
+The App and the Dynamic Island extension (PersonaWidgets) hand over the avatar and avatar pack images through files in the App Group container (`docs/live-activity.md` ("Avatar"); the Live Activity extension can't read the keychain on a phone).
+The group name defaults to `group.<bundle id>` and can be changed with the config's `app.app_group` (`docs/config.md`); it's written into both targets' entitlements (`com.apple.security.application-groups`) and the Info.plist's `PersonaAppGroup`.
 It was registered on the developer website on 2026-11-02 and attached to the App IDs of the App and the Dynamic Island extension; since then, the TestFlight flow (unsigned archive → `entitlements.py sign` → export with API key cloud signing) produces an ipa where both bundles carry the group.
 
 **API keys can't register App Groups** (checked 2026-11-02):
@@ -147,7 +147,7 @@ Steps on the developer website (developer.apple.com › Account › Certificates
 3. Do step 2 for the Dynamic Island extension's App ID `<bundle id>.liveactivity` too. The watch and notification extension don't need it.
 4. Profiles: cloud-signed export (automatic signing) regenerates them itself; `release.sh`'s manual signing needs a rerun of `python3 scripts/release/asc_signing.py`,
    which checks every profile for the group, and if missing prints the steps above and exits non-zero.
-5. After a release export, `scripts/release/entitlements.py check` verifies that the signatures of both the App and JarvisWidgets in the ipa carry the group.
+5. After a release export, `scripts/release/entitlements.py check` verifies that the signatures of both the App and PersonaWidgets in the ipa carry the group.
 
 ## Changing the store name
 
@@ -224,7 +224,7 @@ python3 scripts/release/asc_testflight.py external   # create the group, enable/
 
 ## Mac version (2026-11-02)
 
-The Mac App (target `PersonaMac`, old `JarvisMac` scheme compatible) shares the iPhone's bundle id, so it is **the same app record** in App Store Connect (macOS platform added, version 1.0),
+The Mac App (target `PersonaMac`, old `PersonaMac` scheme compatible) shares the iPhone's bundle id, so it is **the same app record** in App Store Connect (macOS platform added, version 1.0),
 and uses the same TestFlight: the same Internal / Friends groups and public link. Testers install TestFlight on a Mac to see Mac builds.
 
 - **Build numbers**: a number can only be used once per platform; different platforms can reuse it. Rule: **the Mac build and iPhone build in one release use the same number**
@@ -241,7 +241,7 @@ and uses the same TestFlight: the same Internal / Friends groups and public link
   microphone / camera (entitlements in `project.yml`).
 - **Push** (since 2026-11-02, `docs/mac.md` ("Remote push (Mac)")): `com.apple.developer.aps-environment` (the macOS name; iOS uses `aps-environment`).
   The App ID is UNIVERSAL and already has Push Notifications enabled, so no developer-account change is needed; the archive has `development`, and cloud signing at App Store export changes it to `production`.
-  The package also includes notification service extension `PersonaNotify.appex` (target `PersonaMacNotify`, module / notification main class still `JarvisNotify`, in `Contents/PlugIns/`, sandbox + `.push` keychain group, #432).
+  The package also includes notification service extension `PersonaNotify.appex` (target `PersonaMacNotify`, module / notification main class still `PersonaNotify`, in `Contents/PlugIns/`, sandbox + `.push` keychain group, #432).
   Its bundle id is the same as the iPhone extension's (UNIVERSAL App ID); cloud signing creates its Mac profile at export. `entitlements.py sign / check` signs and checks it too.
 - **Pre-release checks** match the iPhone's: permission descriptions (`check_bundle_strings.py`), privacy scan (`check_bundle_privacy.py`, recognizes Mac's
   `Contents/` layout, skips `embedded.provisionprofile`, scans the entire universal binary), no DEBUG switches in Release; also checks the category and 512 / 512@2x icons.
@@ -265,13 +265,13 @@ curl -fsSL <publish.site_url>/install.sh | sh   # install to ~/.persona/bin/pers
 ```
 
 - After installing `personad`, if herdr can't be found on this computer (PATH and directories node searches, such as `~/.local/bin`), install it with herdr's official installer (`https://herdr.dev/install.sh`)
-  too, so sessions appear in Agents after the first install. Failure only prints one warning and doesn't affect `personad`; computers using Orca / Herdr App can skip it with `JARVIS_SKIP_HERDR=1`.
+  too, so sessions appear in Agents after the first install. Failure only prints one warning and doesn't affect `personad`; computers using Orca / Herdr App can skip it with `PERSONA_SKIP_HERDR=1`.
   `deploy.sh` does the same when installing `personad` on each computer (`scripts/deploy/ensure-herdr.sh`; keep the two sets of steps aligned).
 
 - `release.sh` runs this after uploading TestFlight. The version is `<commit>-<build number>`, matching that TestFlight release; `NO_PUBLISH=1` only releases TestFlight,
   and no publish happens without `publish.site_url` in config. Standalone: `./scripts/release/publish.sh`; `NO_DEPLOY=1` only builds and checks (outputs in `build-publish/`).
 - Website-only changes (`site/`): `SITE_ONLY=1 ./scripts/release/publish.sh` skips a new build, fetches the small files of the currently published version (`VERSION`, `SHA256SUMS`, `latest.json`, `SLOT`, `install.sh`) and deploys them with the committed `site/`, leaving archives in R2 unchanged. Afterwards it checks the live small files are unchanged and every archive still exists (`HEAD` size). It refuses if there's no live `dl/SLOT` yet (a release from before R2); do one full publish first. **Don't run `wrangler deploy` directly in `site/`**: it makes `/dl/` and `install.sh` return 404 (`docs/lessons/server.md`).
-- Web dependencies always install from the official npm registry (`npm ci --registry=https://registry.npmjs.org/`, overridable with `JARVIS_NPM_REGISTRY`), ignoring local npm config. `package-lock.json` already points to the official registry; a locally configured mirror may lack packages (on 2026-11-06 it lacked `elkjs`, stopping release before web bundling).
+- Web dependencies always install from the official npm registry (`npm ci --registry=https://registry.npmjs.org/`, overridable with `PERSONA_NPM_REGISTRY`), ignoring local npm config. `package-lock.json` already points to the official registry; a locally configured mirror may lack packages (on 2026-11-06 it lacked `elkjs`, stopping release before web bundling).
 - Build four platforms (linux / darwin × amd64 / arm64), with `-tags public -trimpath -s -w`, embedding `channel=release`, build number (UTC `YYYYMMDDHHMM`) and `updateURL`:
   - **Web bundled into the binary** (`server/internal/hub/webdist`, `go:embed`): the hub uses it when the hub machine has no `~/.persona/web`; otherwise it still uses the directory.
   - **No skills included**: the skill connecting to the Lark gateway was copied from a private upstream repository (GPL-3.0) and cannot be redistributed. Skills live in `~/.persona/skills/` on each machine,
@@ -280,15 +280,15 @@ curl -fsSL <publish.site_url>/install.sh | sh   # install to ~/.persona/bin/pers
   - **Version manifest** `dl/latest.json` (each platform's archive and unpacked sha256, build number, commit), unsigned (the user's decision; trade-offs in `docs/hub-update.md` ("Security"));
     before publishing, check that the build number is greater than the live one, the live version's commit is an ancestor of this one, and server/ and web/ have no uncommitted changes. The manifest includes all commits in this release (`ancestors`):
     hubs read it for auto-update, but only install automatically if it includes the commit they're running (`docs/hub-update.md` ("Preventing rollback")).
-  - **Programs published together**: `jarvisd-wechat` (WeChat bot, a separate program, `docs/wechat.md`), built for all four platforms with the same
+  - **Programs published together**: `personad-wechat` (WeChat bot, a separate program, `docs/wechat.md`), built for all four platforms with the same
     `-X` flags, privacy scan and size check as personad; its `version -v` must match personad's. The manifest's `programs` lists them, and hub auto-update replaces them together.
   - Before upload, run `check_bundle_privacy.py --whole-short`: binaries must contain none of the configured values (except Go module paths; values of four characters or fewer match whole words,
     since Unicode tables and compressed JS contain short letter combinations everywhere). A few protocol names, official contact links and standard network constants in public dependencies are classified by exact context, without allowing whole domains or private network ranges;
     it requires the binary's `public` marker, unreplaced dependencies and checksums matching `server/go.sum`, and `go mod verify` before building. Registered personal values always take precedence and are blocked; see `docs/lessons/testing.md`.
-- Build the connector `jarvis-link-<os>-<arch>` for the same four platforms too (2026-11-02, node service, `install.sh --node`, see `docs/link.md` ("Installing the node service")), with the same privacy scan and compression, included in `SHA256SUMS`.
-- Downloads are `jarvisd-<os>-<arch>.gz`: scan the raw binary first, then compress with `gzip -n -9`; `SHA256SUMS` verifies the archive. The installer verifies it before unpacking and installing; failed verification / decompression never overwrites the old version.
+- Build the connector `persona-link-<os>-<arch>` for the same four platforms too (2026-11-02, node service, `install.sh --node`, see `docs/link.md` ("Installing the node service")), with the same privacy scan and compression, included in `SHA256SUMS`.
+- Downloads are `personad-<os>-<arch>.gz`: scan the raw binary first, then compress with `gzip -n -9`; `SHA256SUMS` verifies the archive. The installer verifies it before unpacking and installing; failed verification / decompression never overwrites the old version.
   **Archives go in R2 bucket `persona-dl`, not the site** (#2541): Workers static assets have a 25 MiB per-file limit ([official limit](https://developers.cloudflare.com/workers/platform/limits/#static-assets));
-  after #1002 embedded tiered avatar images, compressed jarvisd exceeded it. The Worker binds the bucket as `DL` (`site/wrangler.jsonc`); `worker.mjs` serves `/dl/*.gz` from it (`GET` / `HEAD` / `Range` / `If-None-Match`),
+  after #1002 embedded tiered avatar images, compressed personad exceeded it. The Worker binds the bucket as `DL` (`site/wrangler.jsonc`); `worker.mjs` serves `/dl/*.gz` from it (`GET` / `HEAD` / `Range` / `If-None-Match`),
   while other `/dl/` files remain static. The bucket has slots `a` and `b`: publishing uploads archives to the inactive slot (`<slot>/<filename>`), then deploys the site, switching `dl/SLOT` and `latest.json` together.
   The other slot keeps the previous version until the next publish, so downloads in progress at deployment can finish. The site only has small files now; `check_asset_sizes.py` still checks the whole site directory. Local `build-publish/bin` keeps uncompressed binaries for debugging but doesn't upload them.
   Regression: `python3 -B -m unittest discover -s scripts/deploy -p 'test_compressed_publish.py'`.
@@ -302,7 +302,7 @@ curl -fsSL <publish.site_url>/install.sh | sh   # install to ~/.persona/bin/pers
   The push relay is in the same Worker (`/relay/*`) and is redeployed on each publish too.
 - Push relay deployed (2026-11-02): resident `personad relay` + Cloudflare Tunnel + website Worker forwarding; public health, origin protection, registration and authentication verified.
   Release config needs `app.push_relay`; only a new TestFlight with the notification extension registers. Notification decryption on real devices still needs separate acceptance; see `docs/push-relay.md`.
-- Not yet available (others can install, but it's still awkward; see `docs/config.md`): one-step `jarvisd setup` (hub currently needs manual Postgres and `hub.json` setup),
+- Not yet available (others can install, but it's still awkward; see `docs/config.md`): one-step `personad setup` (hub currently needs manual Postgres and `hub.json` setup),
   Developer ID notarization of the macOS binary (browser downloads get blocked by Gatekeeper; `curl` doesn't).
 
 ## Publishing the hub image (`.github/workflows/hub-image.yml`, 2026-11-01)

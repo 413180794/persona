@@ -66,7 +66,7 @@ func linkToken(t *testing.T, h *Hub, machine string) (token, id string) {
 	return token, id
 }
 
-// fakeResidentNode listens like `jarvisd node --attach` and answers every call of every connection with its number.
+// fakeResidentNode listens like `personad node --attach` and answers every call of every connection with its number.
 func fakeResidentNode(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "jl") // unix socket paths are short on macOS
@@ -101,7 +101,7 @@ func fakeResidentNode(t *testing.T) string {
 	return path
 }
 
-// runLink runs jarvis-link (internal/link) with cfg; stop ends it.
+// runLink runs persona-link (internal/link) with cfg; stop ends it.
 func runLink(t *testing.T, cfg link.Config, target string) (statuses chan link.Status, path string, stop func()) {
 	t.Helper()
 	path = filepath.Join(t.TempDir(), "link.json")
@@ -158,7 +158,7 @@ func waitStatus(t *testing.T, ch chan link.Status, what string, ok func(link.Sta
 				return s
 			}
 		case <-timeout:
-			t.Fatalf("jarvis-link never reported %s", what)
+			t.Fatalf("persona-link never reported %s", what)
 		}
 	}
 }
@@ -176,7 +176,7 @@ func pid(t *testing.T, m *Machine) int {
 	return out.PID
 }
 
-func TestLinkMachineComesOnlineThroughJarvisLink(t *testing.T) {
+func TestLinkMachineComesOnlineThroughPersonaLink(t *testing.T) {
 	h, m, srv := newLinkHub(t)
 	h.linkPing = [2]time.Duration{200 * time.Millisecond, 2 * time.Second} // the hub's heartbeat on the link
 	token, _ := linkToken(t, h, "laptop")
@@ -223,7 +223,7 @@ func TestLinkMachineComesOnlineThroughJarvisLink(t *testing.T) {
 func TestLinkWithoutResidentNode(t *testing.T) {
 	h, m, srv := newLinkHub(t)
 	token, _ := linkToken(t, h, "laptop")
-	statuses, _, _ := runLink(t, linkConfig(h, srv, token), "/tmp/jarvis-link-no-such.sock")
+	statuses, _, _ := runLink(t, linkConfig(h, srv, token), "/tmp/persona-link-no-such.sock")
 	st := waitStatus(t, statuses, "the node missing", func(s link.Status) bool { return s.State == "connected" && s.Node == "offline" })
 	if !strings.Contains(st.NodeError, "常驻 node") {
 		t.Fatalf("node error %q", st.NodeError)
@@ -268,7 +268,7 @@ func TestLinkReplacedAndRevoked(t *testing.T) {
 	statuses, _, _ := runLink(t, linkConfig(h, srv, token), fakeResidentNode(t))
 	eventually(t, 10*time.Second, "machine online", func() bool { return m.snapshot().Online })
 
-	// A second jarvis-link with the same credential takes over; the first is told so.
+	// A second persona-link with the same credential takes over; the first is told so.
 	c, _, err := dialLink(t, srv, token)
 	if err != nil {
 		t.Fatal(err)
@@ -354,7 +354,7 @@ func TestLinkPairing(t *testing.T) {
 	requireCode(t, w, http.StatusOK, "")
 	var p pairCode
 	_ = json.Unmarshal(w.Body.Bytes(), &p)
-	if p.Machine != "laptop" || !strings.HasPrefix(p.PairURL, "jarvis://link?") || !strings.Contains(p.PairURL, "machine=laptop") {
+	if p.Machine != "laptop" || !strings.HasPrefix(p.PairURL, "persona://link?") || !strings.Contains(p.PairURL, "machine=laptop") {
 		t.Fatalf("pair code %+v", p)
 	}
 	// What a code made for the laptop can do: become the laptop's link credential, nothing else.
@@ -386,7 +386,7 @@ func TestLinkPairing(t *testing.T) {
 	// The apps' pairing code can make one too, for a link machine named in the request.
 	w = code("")
 	_ = json.Unmarshal(w.Body.Bytes(), &p)
-	if strings.HasPrefix(p.PairURL, "jarvis://link?") {
+	if strings.HasPrefix(p.PairURL, "persona://link?") {
 		t.Fatal("a code for the apps")
 	}
 	if _, err := link.Pair(context.Background(), p.PairURL, "box", "", filepath.Join(t.TempDir(), "x.json")); err == nil {
@@ -396,7 +396,7 @@ func TestLinkPairing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// No TLS, no jarvis-link.
+	// No TLS, no persona-link.
 	h.public.mu.Lock()
 	h.public.port = 0
 	h.public.mu.Unlock()
@@ -479,9 +479,9 @@ func TestHubName(t *testing.T) {
 		{strings.Repeat("名", 80), "nas", "", strings.Repeat("名", 64) + "…"},
 	} {
 		h.cfg.Name, host = tc.name, tc.host
-		t.Setenv("JARVIS_LOCAL_NODE", tc.local)
+		t.Setenv("PERSONA_LOCAL_NODE", tc.local)
 		if got := h.hubName(); got != tc.want {
-			t.Errorf("name %q, host %q, JARVIS_LOCAL_NODE=%q: %q, want %q", tc.name, tc.host, tc.local, got, tc.want)
+			t.Errorf("name %q, host %q, PERSONA_LOCAL_NODE=%q: %q, want %q", tc.name, tc.host, tc.local, got, tc.want)
 		}
 	}
 	if h.meshHubCount() != 1 {

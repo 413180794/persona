@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A conversation's feed longer than one page of the hub's (500, tasks.go `feedPage`) is read whole (#4642).
 @MainActor

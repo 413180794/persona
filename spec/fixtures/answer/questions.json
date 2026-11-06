@@ -5,7 +5,7 @@
       "name": "single_tap_sends_original_label",
       "description": "单题单选点击后立即发送带推荐后缀的原文。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -57,7 +57,7 @@
       "name": "single_pick_clears_other",
       "description": "点选单选项会清空自填答案。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -111,7 +111,7 @@
       "name": "other_answer_trimmed",
       "description": "其他回答去掉首尾空白后发送。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -164,7 +164,7 @@
       "name": "empty_answer_cannot_submit",
       "description": "没有选择也没有自填答案时不能提交。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -211,7 +211,7 @@
       "name": "blank_other_cannot_submit",
       "description": "只有空白的其他回答不能提交。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -260,7 +260,7 @@
       "name": "multiple_picks_follow_option_order",
       "description": "多选按选项原顺序拼接而非点击顺序。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -316,7 +316,7 @@
       "name": "multiple_other_overrides_picks",
       "description": "多选的自填答案覆盖已选项而不与选项合并。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -373,7 +373,7 @@
       "name": "blank_other_uses_picks",
       "description": "空白自填内容不会覆盖已选项。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -430,7 +430,7 @@
       "name": "multiple_pick_waits_for_submit",
       "description": "多选点击选项只更新选择而不发送。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -483,7 +483,7 @@
       "name": "multiple_pick_toggles_off",
       "description": "再次点击多选项会取消选择。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -538,7 +538,7 @@
       "name": "multiple_questions_send_original_keys",
       "description": "多题提交以问题原文为键并包含全部答案。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -609,7 +609,7 @@
       "name": "last_page_missing_answer_returns_to_gap",
       "description": "末题已答但前题漏答时跳回漏答题且不发送。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -673,7 +673,7 @@
       "name": "next_page_does_not_send",
       "description": "多题当前题已答时下一题只翻页。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -737,7 +737,7 @@
       "name": "all_answered_can_submit_from_earlier_page",
       "description": "全部答完后可从前一题直接提交。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {
@@ -808,7 +808,7 @@
       "name": "sending_disables_option",
       "description": "正在发送时选项按钮不可再点。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm",
+        "ios/Persona/Views/Interactions/InteractionViews.swift：QuestionForm",
         "ios/Shared/Models.swift：Resolution"
       ],
       "input": {

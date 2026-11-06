@@ -47,7 +47,7 @@ const aurora: LookView = {
     source: { kind: "extension", extension: "example-looks", extension_name: "Example Looks" },
   },
 };
-const builtins: LookView[] = ["persona", "jarvis", "jarvis-circuit"].map((id) => ({ id, source: "builtin", name: id, app_icon: id }));
+const builtins: LookView[] = ["persona", "persona-visor", "persona-circuit"].map((id) => ({ id, source: "builtin", name: id, app_icon: id }));
 
 async function load() {
   vi.resetModules();
@@ -68,7 +68,7 @@ describe("the look the hub keeps", () => {
   afterEach(() => localStorage.clear());
 
   it("moves this browser's old choice up once when the hub has none", async () => {
-    localStorage.setItem("jarvis.persona", "aurora");
+    localStorage.setItem("persona.persona", "aurora");
     const p = await load();
     await p.refreshPersonas();
     expect(hub.puts).toEqual([{ id: "aurora", if_unset: true }]);
@@ -76,12 +76,12 @@ describe("the look the hub keeps", () => {
   });
 
   it("takes the hub's choice over this browser's", async () => {
-    localStorage.setItem("jarvis.persona", "jarvis");
+    localStorage.setItem("persona.persona", "persona");
     hub.current = { id: "aurora", effective: "aurora" } satisfies LookCurrent;
     const p = await load();
     await p.refreshPersonas();
     expect(hub.puts).toEqual([]);
-    expect(localStorage.getItem("jarvis.persona")).toBe("aurora");
+    expect(localStorage.getItem("persona.persona")).toBe("aurora");
   });
 
   it("does not move anything up from a browser that never chose", async () => {
@@ -93,13 +93,13 @@ describe("the look the hub keeps", () => {
   it("sends a choice to the hub, and follows another device's", async () => {
     const p = await load();
     await p.refreshPersonas();
-    p.choosePersona("jarvis-circuit");
-    expect(hub.puts).toEqual([{ id: "jarvis-circuit" }]);
-    expect(localStorage.getItem("jarvis.persona")).toBe("jarvis-circuit");
+    p.choosePersona("persona-circuit");
+    expect(hub.puts).toEqual([{ id: "persona-circuit" }]);
+    expect(localStorage.getItem("persona.persona")).toBe("persona-circuit");
     hub.listeners.get("look")!({ type: "look", id: "aurora", effective: "aurora" });
-    expect(localStorage.getItem("jarvis.persona")).toBe("aurora");
+    expect(localStorage.getItem("persona.persona")).toBe("aurora");
     hub.listeners.get("look")!({ type: "look", id: "persona", effective: "persona" });
-    expect(localStorage.getItem("jarvis.persona")).toBeNull();
+    expect(localStorage.getItem("persona.persona")).toBeNull();
   });
 
   // #4682
@@ -118,11 +118,11 @@ describe("the look the hub keeps", () => {
     await p.refreshPersonas();
     const release = holdReads();
     const reading = p.refreshPersonas(); // the picker opens
-    p.choosePersona("jarvis");
-    expect(hub.current.id).toBe("jarvis");
+    p.choosePersona("persona-visor");
+    expect(hub.current.id).toBe("persona-visor");
     release();
     await reading;
-    expect(localStorage.getItem("jarvis.persona")).toBe("jarvis");
+    expect(localStorage.getItem("persona.persona")).toBe("persona-visor");
   });
 
   it("keeps another device's choice pushed while the list is being read", async () => {
@@ -131,11 +131,11 @@ describe("the look the hub keeps", () => {
     await p.refreshPersonas();
     const release = holdReads();
     const reading = p.refreshPersonas();
-    hub.current = { id: "jarvis-circuit", effective: "jarvis-circuit" };
-    hub.listeners.get("look")!({ type: "look", id: "jarvis-circuit", effective: "jarvis-circuit" });
+    hub.current = { id: "persona-circuit", effective: "persona-circuit" };
+    hub.listeners.get("look")!({ type: "look", id: "persona-circuit", effective: "persona-circuit" });
     release();
     await reading;
-    expect(localStorage.getItem("jarvis.persona")).toBe("jarvis-circuit");
+    expect(localStorage.getItem("persona.persona")).toBe("persona-circuit");
   });
 
   it("sends a choice made before the first answer once it comes", async () => {
@@ -143,36 +143,36 @@ describe("the look the hub keeps", () => {
     const p = await load();
     const release = holdReads();
     const reading = p.refreshPersonas(); // the page's first read
-    p.choosePersona("jarvis");
+    p.choosePersona("persona-visor");
     expect(hub.puts).toEqual([]); // not known yet whether this hub keeps it
     release();
     await reading;
-    expect(hub.puts).toEqual([{ id: "jarvis" }]);
-    expect(hub.current.id).toBe("jarvis");
-    expect(localStorage.getItem("jarvis.persona")).toBe("jarvis");
+    expect(hub.puts).toEqual([{ id: "persona-visor" }]);
+    expect(hub.current.id).toBe("persona-visor");
+    expect(localStorage.getItem("persona.persona")).toBe("persona-visor");
   });
 
   it("keeps the look a push confirms while the list is being read, even one this page already shows", async () => {
-    hub.current = { id: "jarvis", effective: "jarvis" };
-    localStorage.setItem("jarvis.persona", "aurora");
+    hub.current = { id: "persona", effective: "persona" };
+    localStorage.setItem("persona.persona", "aurora");
     const p = await load();
     const release = holdReads();
-    const reading = p.refreshPersonas(); // its answer will say jarvis
+    const reading = p.refreshPersonas(); // its answer will say persona
     hub.current = { id: "aurora", effective: "aurora" };
     hub.listeners.get("look")!({ type: "look", id: "aurora", effective: "aurora" });
     release();
     await reading;
-    expect(localStorage.getItem("jarvis.persona")).toBe("aurora");
+    expect(localStorage.getItem("persona.persona")).toBe("aurora");
   });
 
   it("sends a choice made before the first answer once, when the hub has none yet", async () => {
     const p = await load();
     const release = holdReads();
     const reading = p.refreshPersonas();
-    p.choosePersona("jarvis");
+    p.choosePersona("persona-visor");
     release();
     await reading;
-    expect(hub.puts).toEqual([{ id: "jarvis" }]);
-    expect(hub.current.id).toBe("jarvis");
+    expect(hub.puts).toEqual([{ id: "persona-visor" }]);
+    expect(hub.current.id).toBe("persona-visor");
   });
 });

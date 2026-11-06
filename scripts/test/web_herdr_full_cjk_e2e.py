@@ -136,7 +136,7 @@ def main():
         browser = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch(channel="chrome")
         for scheme in ("light", "dark"):
             ctx = browser.new_context(viewport={"width": 1800, "height": 900}, color_scheme=scheme, device_scale_factor=2)
-            ctx.add_init_script(f"localStorage.setItem('jarvis.token', 'mock'); localStorage.setItem('jarvis.theme', {scheme!r})")
+            ctx.add_init_script(f"localStorage.setItem('persona.token', 'mock'); localStorage.setItem('persona.theme', {scheme!r})")
             page = ctx.new_page()
             page.set_default_timeout(15000)
             page.goto(f"{a.base}/terminal/server/{SHELL}")

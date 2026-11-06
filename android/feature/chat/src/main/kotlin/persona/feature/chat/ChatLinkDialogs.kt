@@ -60,7 +60,7 @@ internal fun LinkPickDialog(
 
 /**
  * "Hand to Persona" for text picked on a page with no conversation behind it (the knowledge base, the inbox's pages): the
- * selection as a `<jarvis-context>` and what Persona is to do with it ("Take a look at the above." when nothing is written) go to
+ * selection as a `<persona-context>` and what Persona is to do with it ("Take a look at the above." when nothing is written) go to
  * [send], the app's main conversation.
  */
 @Composable

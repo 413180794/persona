@@ -309,7 +309,7 @@ func herdrNode(t *testing.T) (*Node, *fakeHerdr, string) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	f := newFakeHerdr(t)
 	n, home := testNode(t)
-	n.hosts, n.dir, n.bin = herdrHosts(&herdr.Client{Socket: f.sock}), filepath.Join(home, ".jarvis"), "/tmp/jarvis-test/jarvisd"
+	n.hosts, n.dir, n.bin = herdrHosts(&herdr.Client{Socket: f.sock}), filepath.Join(home, ".persona"), "/tmp/persona-test/personad"
 	n.panes, n.panePIDs, n.modes, n.driving = map[string]string{}, map[string]panePID{}, map[string]sessionModes{}, map[string]bool{}
 	n.files, n.metas, n.bgScans = map[string]*transcript.File{}, map[string]quickMeta{}, map[string]*bgScan{}
 	n.shellTabs = &shellTabs{} // its own sweep memory, not the process's (shelltabs.go)

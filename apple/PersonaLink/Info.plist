@@ -9,7 +9,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>Persona Link</string>
 	<key>CFBundleExecutable</key>
-	<string>JarvisLink</string>
+	<string>PersonaLink</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,7 +29,6 @@
 			<string>Viewer</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>jarvis</string>
 				<string>persona</string>
 			</array>
 		</dict>

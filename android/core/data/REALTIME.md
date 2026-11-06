@@ -11,7 +11,7 @@ App 接线仍由协调者完成：用同一个 `data.chats` 调用 `trackActions
 `ChatRepositoriesTest.kt` 新增两个关键路径测试，覆盖流式接替的两种到达顺序、稳定 ID、缓存与已读门禁、屏幕及工具更新、会话错误隔离、历史重置，以及中断、离线、重连和同窗格替换。验证命令在 `android/` 执行：
 
 ```sh
-./gradlew -Pkotlin.compiler.execution.strategy=in-process --no-watch-fs :core:data:testDebugUnitTest --tests jarvis.core.data.ChatRepositoriesTest :app:assembleDebug
+./gradlew -Pkotlin.compiler.execution.strategy=in-process --no-watch-fs :core:data:testDebugUnitTest --tests persona.core.data.ChatRepositoriesTest :app:assembleDebug
 ```
 
 测试与 APK 构建通过，定向测试共五个。首轮发现并修正跨模块属性的 Kotlin 智能转换错误；编译改用进程内模式，避免沙箱外的 Kotlin daemon 标记文件写入。改动限于对话仓储、测试及本报告，收件箱文件未改。

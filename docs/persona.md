@@ -1,6 +1,6 @@
 # Avatar (persona)
 
-Here `persona` still means the avatar (name / picture / status dot); it is not renamed because the product is now called Persona. The built-in avatar IDs `persona` (the default Mochi) / `jarvis` (Visor) / `jarvis-circuit` (Circuit) / `jarvis-pixel` (Pixel) / `jarvis-facet` (Facet) / `jarvis-blob` (Jelly), `persona.json`, protocol fields, and cache identities stay compatible; the new default pack directory is `~/.persona/personas`, and the old `~/.jarvis/personas` keeps working, see [Naming and compatibility](config.md#命名与兼容).
+Here `persona` still means the avatar (name / picture / status dot); it is not renamed because the product is now called Persona. The built-in avatar IDs `persona` (the default Mochi) / `persona` (Visor) / `persona-circuit` (Circuit) / `persona-pixel` (Pixel) / `persona-facet` (Facet) / `persona-blob` (Jelly), `persona.json`, protocol fields, and cache identities stay compatible; the new default pack directory is `~/.persona/personas`, and the old `~/.persona/personas` keeps working, see [Naming and compatibility](config.md#命名与兼容).
 
 An avatar = Persona's **name**, **picture**, the **animated status dot** in Persona's top bar, and the **App icon** (the logo inside the App and the home screen icon), optionally with a **color scheme**.
 You pick it in **Settings › Appearance › Avatar**, and once picked all of these change together: the face and name in the top bar (only the face, top left, in the new shell), the sidebar card, the profile page, the input field's "Ask xxx…",
@@ -14,17 +14,17 @@ An avatar's color scheme is only used when the theme color is set to **Match Ava
   - **Default avatar "Mochi"** (id `persona`, made the default on request 2026-11-03): the waving white mochi from the App icon, drawn with the icon's shape and colors:
     a paper-colored round base (in dark mode, the dark brown base of the icon's dark variant), black outline, two eyes, orange blush, a raised little hand, and three motion lines. **It doesn't follow the theme color**: its colors are what make it look like the icon.
     Below 36 pt the motion lines and highlights are dropped and the eyes and blush enlarged, so it's still recognizable as a small avatar in lists. The card reads "Mochi · App icon colors".
-  - **Visor** (id `jarvis`, the default before 2026-11-03, now optional): drawn in the current theme color. The card reads "Visor".
-  - **Circuit** (id `jarvis-circuit`, set by the user on 2026-11-01 as an option, not the default): three traces flowing into a core with two eyes, drawn in the current theme color. No download needed; the card reads "Circuit".
-  - **Pixel / Facet / Jelly** (id `jarvis-pixel` / `jarvis-facet` / `jarvis-blob`, #350, chosen by the user from a set of style candidates): listed after Circuit, also drawn in the current theme color, no download needed, animated in all five states; the Dynamic Island / Lock Screen use each state's still frame.
+  - **Visor** (id `persona`, the default before 2026-11-03, now optional): drawn in the current theme color. The card reads "Visor".
+  - **Circuit** (id `persona-circuit`, set by the user on 2026-11-01 as an option, not the default): three traces flowing into a core with two eyes, drawn in the current theme color. No download needed; the card reads "Circuit".
+  - **Pixel / Facet / Jelly** (id `persona-pixel` / `persona-facet` / `persona-blob`, #350, chosen by the user from a set of style candidates): listed after Circuit, also drawn in the current theme color, no download needed, animated in all five states; the Dynamic Island / Lock Screen use each state's still frame.
     Pixel is a small 8 × 8 grid face on a dark base whose eyes move cell by cell, with four cells on the mouth lighting up in turn like a loading bar while working; Facet is nine folded facets fanning out from the center with slanted eyes, with light and shade rotating like a passing sweep of light while working; Jelly is a blob of jelly on a light base with big eyes and blush that squashes and springs back, edges wobbling gently, while working.
 - **Changing the default leaves people who already chose alone**: the choice is stored in UserDefaults `persona.id`, written only when a card is tapped. A phone that never chose has no such key, and `PersonaStore.chosenID` falls back to the new default `persona`;
-  someone who chose Visor has `jarvis` stored and still gets Visor; same for Circuit or an avatar pack. That's why the new default got a new id instead of redrawing `jarvis` as Mochi (`PersonaTests.mochiIsTheDefaultAndAnEarlierChoiceStays`).
+  someone who chose Visor has `persona` stored and still gets Visor; same for Circuit or an avatar pack. That's why the new default got a new id instead of redrawing `persona` as Mochi (`PersonaTests.mochiIsTheDefaultAndAnEarlierChoiceStays`).
 - **Android** (`PersonaFace.kt` in `core/designsystem`, `PersonaDesign.Mochi`): a Canvas drawing from the same icon coordinates with the same five states, also the default since 2026-11-04, with the same migration rule (`AppStyleStore.personaId`).
 - **Web** (`web/src/views/assistant/MochiFace.tsx`): an SVG drawn from the same icon coordinates, colors from `--mochi-*` in `styles.css` (light / dark sets), animated with Web Animations (`face-motion.ts`; CSS animations made the whole page recompute styles every cycle), stopped under Reduce Motion.
-  The web's old built-in avatar was the page's own logo (id `jarvis`; choosing it stored nothing in `localStorage`); the default is now Mochi.
+  The web's old built-in avatar was the page's own logo (id `persona`; choosing it stored nothing in `localStorage`); the default is now Mochi.
   Because people who chose the built-in stored nothing, "never chose" can't be told apart from "chose the logo", so on the web they all switch to Mochi; those who chose an avatar pack are unchanged.
-  Since 2026-11-06 (#3200) the web's `jarvis` is Visor like on the other platforms, and Circuit is available too (`web/src/views/assistant/BuiltinFaces.tsx`, drawn from the coordinates in Android's `PersonaFace.kt`, in the accent color);
+  Since 2026-11-06 (#3200) the web's `persona` is Visor like on the other platforms, and Circuit is available too (`web/src/views/assistant/BuiltinFaces.tsx`, drawn from the coordinates in Android's `PersonaFace.kt`, in the accent color);
   "logo" is no longer a separate option: the web's brand mark (`AppMark`: top of the sidebar, login page) and the tab icon follow the avatar (`web/src/lib/look-icon.ts`; for Mochi it is the App icon itself).
 - On **Android**, what follows the avatar: the top bar face, the sidebar / chat list, the floating capsule, and the cards in Settings (all through `PersonaFace` / `LocalPersonaPack`). What doesn't: the launcher icon (only Mochi is packaged, see extensions.md ("Avatars")),
   the small notification icon, and the icons of the Quick Settings tile and widgets (`ic_stat`: the system requires monochrome vector resources, so it can only be the packaged image).
@@ -33,7 +33,7 @@ An avatar's color scheme is only used when the theme color is set to **Match Ava
 - **Other avatars**: placed in `~/.persona/personas/<id>/` on the hub machine; the phone downloads and caches one when it's selected. When the id matches a built-in avatar, the directory wins (to try new artwork on one hub first).
 - **Extension avatars** (#3200): an extension declares them in its manifest's `looks`, and the hub serves them as avatar packs (also listed in `/api/v1/personas`); see [extensions.md](extensions.md) ("Avatars").
 - **The selected avatar is stored on the hub and synced across platforms** (#3200): `GET /api/v1/looks` is the unified list of built-in avatars, avatar packs, and extension avatars plus the current choice; `PUT /api/v1/looks/current` changes it and broadcasts `look`.
-  The per-platform local keys mentioned below (`persona.id`, `AppStyleStore.personaId`, `jarvis.persona`) become caches, migrated up the first time a new hub is connected; rules in extensions.md ("Avatars").
+  The per-platform local keys mentioned below (`persona.id`, `AppStyleStore.personaId`, `persona.persona`) become caches, migrated up the first time a new hub is connected; rules in extensions.md ("Avatars").
   The App icon is merged into the avatar: places that can only use a packaged icon pick by the avatar's `app_icon`.
 - Demo mode has only the default avatar (`AppModel.persona`).
 ## Why avatars live on the hub and not in the App bundle
@@ -86,14 +86,14 @@ Avatars are often third-party characters found online (sometimes with another pl
 | Field | Description |
 | --- | --- |
 | `format` | 1. Neither hub nor App accepts any other value (an incompatible format change later bumps it, and old Apps simply don't see new packs) |
-| `id` | `a-z0-9-`, at most 32 characters, must match the directory name; `persona`, `jarvis`, `jarvis-circuit`, `jarvis-pixel`, `jarvis-facet`, `jarvis-blob` are reserved for built-in avatars (rejected by hub, phone, and web; hubs before 2026-11-03 only block `jarvis`) |
+| `id` | `a-z0-9-`, at most 32 characters, must match the directory name; `persona`, `persona`, `persona-circuit`, `persona-pixel`, `persona-facet`, `persona-blob` are reserved for built-in avatars (rejected by hub, phone, and web; hubs before 2026-11-03 only block `persona`) |
 | `name` / `subtitle` | `name` is used in the top bar, sidebar, profile page, and input field; `subtitle` only in Settings |
 | `avatar.sizes` | Side length (pixels) → file, square PNGs. The App picks the smallest one that's big enough for "display points × screen scale" and crops it to a circle. `safe` is the ratio of the circle holding the important content to the inscribed circle (1 = the whole inscribed circle is safe; the script's images are already round) |
 | `dot.size` | Frame side length (pixels). The top bar shows it at 46 pt; 144 px is exactly 48 pt @3x |
 | `dot.states` | One APNG per state for five states (a plain PNG when there's only one frame); `idle` is required, and the App uses `idle` for any missing state. `fps` is only used when the file doesn't specify per-frame durations; `frames` is only for humans |
 | `colors` | One set of `#RRGGBB` per appearance, see "Color scheme" below. The whole block can be omitted (change only the face, not the colors) |
 | `about` | Optional, a few words (no more than 10; Milk Frog's is "NWVERSE level"): the second line of the card in **Settings › Appearance › Avatar**, replacing the color swatches (built-in avatars show "Follows the theme color" there); on Android, the option's description line |
-| `app_icon_fallback` | Optional, the id of a built-in avatar (`persona` / `jarvis` / `jarvis-circuit`): the home screen icon uses that one, see "App icon" below. Missing or an unknown id means the default (Mochi). The logo inside the App still uses the pack's own picture |
+| `app_icon_fallback` | Optional, the id of a built-in avatar (`persona` / `persona` / `persona-circuit`): the home screen icon uses that one, see "App icon" below. Missing or an unknown id means the default (Mochi). The logo inside the App still uses the pack's own picture |
 | `tiers` | Optional, only for tiered avatars: where the level comes from, the default tier, and each tier's manifest, see "Tiered avatars" below. The hub doesn't send it to phones |
 
 **Validation rules**
@@ -310,7 +310,7 @@ python3 scripts/assets/make_persona.py tiers build --spec scripts/assets/persona
 
 Generate and package in one step: `make_persona.py new --id doudou --name Doudou a.jpg b.jpg c.jpg`. You can skip AI too: put your own 8 transparent PNGs with the names above into `<work>/poses/` and run `build` directly. Only `avatar` is required; missing poses fall back to it.
 
-On first run the script installs Pillow and numpy into `~/.cache/jarvis/persona-venv`.
+On first run the script installs Pillow and numpy into `~/.cache/persona/persona-venv`.
 ## Generating images with Codex (measured 2026-10-31, codex-cli 0.153)
 
 - **Image tool**: the built-in `image_gen` tool in `codex exec` (feature `image_generation`, stable).

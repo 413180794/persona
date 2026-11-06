@@ -49,8 +49,8 @@ class Page:
         self.posts = []
         self.page.on("request", lambda r: r.method == "POST" and r.url.endswith("/retry") and self.posts.append(r.url))
         self.page.goto(base + "/overview?token=" + token)
-        self.page.wait_for_function("localStorage.getItem('jarvis.token')")
-        self.page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+        self.page.wait_for_function("localStorage.getItem('persona.token')")
+        self.page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
         self.page.goto(base + "/")
         self.card = self.page.locator("div[role=button]", has_text=TITLE).filter(has=self.page.get_by_text("没开起来：")).first
         self.any_card = self.page.locator("div[role=button]", has_text=TITLE)

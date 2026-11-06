@@ -26,7 +26,7 @@ import (
 // itself — on the shared app-server daemon for a plain 0.163, where #220 joins it (codex_daemon.go); in its own process
 // for 0.153 or a launcher with -c, on the terminal route. Neither the message nor the launcher's words (an alias can
 // carry a key) go through a shell or onto the screen: they are written to a file only the user can read, the tab runs
-// `jarvisd codex-start <file>`, and that execs the words with the message as one argument after "--". The start answers once the new thread is known — the rollout in that directory, begun after the
+// `personad codex-start <file>`, and that execs the words with the message as one argument after "--". The start answers once the new thread is known — the rollout in that directory, begun after the
 // launch, whose first message is exactly this one — with that thread's id, so the phone opens the session that is
 // there; it fails, with what the tab shows, when none comes in time.
 
@@ -282,10 +282,10 @@ func codexThreadStart(path string) (time.Time, string) {
 	return began, ""
 }
 
-// codexStartError starts what `jarvisd codex-start` prints when it cannot run the launcher.
-const codexStartError = "jarvisd codex-start:"
+// codexStartError starts what `personad codex-start` prints when it cannot run the launcher.
+const codexStartError = "personad codex-start:"
 
-// codexStartFile is what `jarvisd codex-start` runs: the launcher's words (variables set in front, `A=1 codex …`,
+// codexStartFile is what `personad codex-start` runs: the launcher's words (variables set in front, `A=1 codex …`,
 // then the command and its arguments) and the first message.
 type codexStartFile struct {
 	Argv   []string `json:"argv"`
@@ -295,12 +295,12 @@ type codexStartFile struct {
 	Agent string `json:"agent,omitempty"`
 }
 
-// CodexStart is `jarvisd codex-start <file>`: it reads a codexStartFile (and removes it), then runs its words with the
+// CodexStart is `personad codex-start <file>`: it reads a codexStartFile (and removes it), then runs its words with the
 // message as one more argument after "--", in place of itself. No shell sees either. The file's agent replaces a
 // HERDR_AGENT the shell had: appended, the inherited one would come first, and that is the one getenv and herdr read.
 func CodexStart(args []string) error {
 	if len(args) != 1 {
-		return errors.New(codexStartError + " usage: jarvisd codex-start <file>")
+		return errors.New(codexStartError + " usage: personad codex-start <file>")
 	}
 	b, err := os.ReadFile(args[0])
 	_ = os.Remove(args[0])
@@ -328,7 +328,7 @@ func CodexStart(args []string) error {
 		return fmt.Errorf("%s %s not found in PATH", codexStartError, words[0])
 	}
 	argv := append([]string(nil), words...)
-	if f.Prompt != "" { // a resume without a message (`jarvisd tab-start`, pi.go) runs the words alone
+	if f.Prompt != "" { // a resume without a message (`personad tab-start`, pi.go) runs the words alone
 		argv = append(argv, "--", f.Prompt)
 	}
 	path, argv, env, _ = codexStartExec(path, argv, env)

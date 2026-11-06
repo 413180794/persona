@@ -1,14 +1,14 @@
 import XCTest
 
 /// Settings › Connectors: this device's data, the mail accounts (moved here from the inbox's ⋯ menu), Lark and the hub's own
-/// connectors (GitHub) open from the settings list. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
+/// connectors (GitHub) open from the settings list. Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB).
 final class ConnectorsTests: XCTestCase {
     @MainActor func testEachConnectorOpens() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""]
         app.launchPinned()
         func row(_ label: String) -> XCUIElement {

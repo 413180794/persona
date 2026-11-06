@@ -233,7 +233,7 @@ describe("收件箱条目（inbox_item）", () => {
     for (const bad of [
       "persona://settings/extensions/", "persona://settings/extensions/a/b", "persona://settings/extensions/a?x=1", "persona://settings/extensions/-market",
       "persona://settings/extensions/a%2Fb", "persona://settings/extensions/%E0", "persona://settings", "persona://inbox/a/source", "https://example.com/settings/extensions/a",
-      "jarvis://settings/extensions/a",
+      "previous://settings/extensions/a",
     ]) {
       expect(extensionSettingsHref(bad)).toBeUndefined();
     }

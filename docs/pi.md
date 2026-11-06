@@ -16,7 +16,7 @@ both built on `integrations/runtime-sdk/`. pi follows the route of whichever hos
 ## Structure
 
 ```
- App ── hub ── node ── ~/.persona/runtime.sock ◄─┬─ jarvis extension (one connection per pi process)
+ App ── hub ── node ── ~/.persona/runtime.sock ◄─┬─ persona extension (one connection per pi process)
                                                  │    · pi terminal / pi --mode rpc: runtime `pi-<pid>`, only sessions running in this process
                                                  │    · pi-web server process: runtime `pi-web`, sessions running in pi-web
                                                  └─ pi-web companion process companion.mjs: runtime `pi-files`
@@ -39,11 +39,11 @@ both built on `integrations/runtime-sdk/`. pi follows the route of whichever hos
 
 ## Who manages sessions, and where offline sessions resume
 
-At session start, the extension records where it runs using `pi.appendEntry("jarvis-host", {host})` (`herdr`, `terminal`, `pi-web`; only when it changes, excluded from model context;
+At session start, the extension records where it runs using `pi.appendEntry("persona-host", {host})` (`herdr`, `terminal`, `pi-web`; only when it changes, excluded from model context;
 not recorded for sessions launched by other programs, such as `pi --mode rpc` or `pi -p`). After a session stops, the companion lists it from disk and uses the last record to decide:
 
 - Previously run in herdr or a terminal: the row carries `resume_argv: ["pi", "--session", <file>]`. When the phone sends a message, node opens a new tab in the herdr space for that directory,
-  runs it through `jarvisd tab-start <0600 file>` (commands and paths do not pass through a shell or appear on screen), waits for the new pi extension to list the session, then sends the message.
+  runs it through `personad tab-start <0600 file>` (commands and paths do not pass through a shell or appear on screen), waits for the new pi extension to list the session, then sends the message.
   If herdr is unavailable, it rejects the request (`engine_missing`); it does **not** open it in pi-web instead. If node is too old to recognize `resume_argv`, the companion also rejects the request rather than waking pi-web.
 - Previously run in pi-web, or no record (sessions from before the extension was installed): pi-web wakes it, as before.
 
@@ -54,41 +54,41 @@ It does not connect to old nodes; it connects automatically after node restarts 
 
 1. Install pi and pi-web: `npm i -g @earendil-works/pi-coding-agent @agegr/pi-web`; configure models (`~/.pi/agent/models.json`, see pi's documentation).
 2. Install with automatic-update support (“Automatic updates” below): `node <Persona repository>/integrations/pi/install.mjs`. This installs the package into
-   `~/.persona/runtime-packages/jarvis-pi-runtime/current/` and prints the exact paths for the next two steps.
-   Then run `pi install ~/.persona/runtime-packages/jarvis-pi-runtime/current/pi` (it uses the adjacent `runtime-sdk` through a relative path).
+   `~/.persona/runtime-packages/persona-pi-runtime/current/` and prints the exact paths for the next two steps.
+   Then run `pi install ~/.persona/runtime-packages/persona-pi-runtime/current/pi` (it uses the adjacent `runtime-sdk` through a relative path).
    pi terminals, `pi --mode rpc`, and pi-web all load it. Restart pi-web after installation.
    Alternatively, run `pi install <Persona repository>/integrations/pi` directly (a local directory is linked, not copied), but this does not auto-update: you must update the checkout and restart pi-web yourself.
-3. Keep the companion running: `node ~/.persona/runtime-packages/jarvis-pi-runtime/current/pi/companion.mjs [--port <pi-web port>]`, supervised by launchd (`KeepAlive`) /
+3. Keep the companion running: `node ~/.persona/runtime-packages/persona-pi-runtime/current/pi/companion.mjs [--port <pi-web port>]`, supervised by launchd (`KeepAlive`) /
    systemd (`Restart=always`). During an automatic update it exits after installing the new version, letting the supervisor restart it with the new code.
    It lists all on-disk sessions (stopped herdr sessions and sessions reclaimed by pi-web); install it even if you use pi only in herdr.
 4. To use pi in herdr: `herdr integration install pi` (herdr's own pi integration, which reports status and session files; optional, since the extension can report the pane).
 
 ### Configuration (optional)
 
-`~/.pi/agent/jarvis.json` (under `PI_CODING_AGENT_DIR`):
+`~/.pi/agent/persona.json` (under `PI_CODING_AGENT_DIR`):
 
 | Field | Default | Description |
 | --- | --- | --- |
-| `approve` | `[]` | Tools that require approval on the phone (or in pi's own dialog), such as `["bash", "write"]`. pi itself has no permission confirmation; nothing is blocked by default. The phone card has “Always approve” (“Don't ask about Bash again in this session”): after tapping it, that tool no longer asks in this session. This is recorded in the session file (custom entry `jarvis-allow`, excluded from model context) and remains effective when another pi process resumes the session. One-time approvals and denials are not recorded |
+| `approve` | `[]` | Tools that require approval on the phone (or in pi's own dialog), such as `["bash", "write"]`. pi itself has no permission confirmation; nothing is blocked by default. The phone card has “Always approve” (“Don't ask about Bash again in this session”): after tapping it, that tool no longer asks in this session. This is recorded in the session file (custom entry `persona-allow`, excluded from model context) and remains effective when another pi process resumes the session. One-time approvals and denials are not recorded |
 | `askUser` | `true` | Gives the model an `ask_user` tool: ask the user a question (optionally with choices), answered on the phone or in pi's dialog |
 | `answerFirst` | `auto` | Who gets approvals and questions first: `auto` = the phone if it has driven this session within the last 6 hours, otherwise local first (pi terminal / pi-web page); `phone` / `local` fixes one side. If no local dialog is available (`pi -p`, JSON mode), approval cards go to the phone (when connected to the hub); if the phone also does not answer, execution is blocked |
-| `socket` | `~/.persona/runtime.sock` | node runtime socket; the `JARVIS_RUNTIME_SOCKET` environment variable also works |
+| `socket` | `~/.persona/runtime.sock` | node runtime socket; the `PERSONA_RUNTIME_SOCKET` environment variable also works |
 | `autoUpdate` | `true` | Extensions installed from the package store accept versions supplied by node (“Automatic updates”); `false` prevents switching. The companion uses `--no-update` |
 
 ### Automatic updates
 
-personad embeds this package at build time (the extension, companion, and `runtime-sdk` in `integrations/pi`; `jarvis-pi-runtime` in `internal/runtimepkg`).
+personad embeds this package at build time (the extension, companion, and `runtime-sdk` in `integrations/pi`; `persona-pi-runtime` in `internal/runtimepkg`).
 The package carried by node is the version to run (see `docs/runtimes.md`, “Automatic updates,” for the general approach). Only installations from the package store (pi loads `<store>/current/pi`) update:
 
 - **Extension** (pi terminals, `pi --mode rpc`, pi-web server process): reports its package hash when connecting to node. If node carries a different package, it fetches, verifies, and installs it as the new `current` (replacing the symlink by rename),
-  then waits until **all sessions in this process are between turns and none has a card on the phone**, stops its connection, and has each session run `/jarvis-reload` on itself. The extension registers this command,
-  which calls pi's `ctx.reload()` (pi grants extensions this ability only inside commands), so `sendUserMessage("/jarvis-reload", {expandPromptTemplates: true})` executes it as a command
+  then waits until **all sessions in this process are between turns and none has a card on the phone**, stops its connection, and has each session run `/persona-reload` on itself. The extension registers this command,
+  which calls pi's `ctx.reload()` (pi grants extensions this ability only inside commands), so `sendUserMessage("/persona-reload", {expandPromptTemplates: true})` executes it as a command
   rather than sending it to the model. When pi reloads the extension it reads from disk (jiti, no module cache), reading the new `current`: the same process and session now use the new code. The new host connects to node with the same
   process identity (`instance`), replacing the old connection. pi-web does not permit reloading while replying, so it must wait until idle.
   With no session open in pi-web, there is nothing to reload. The next session still opens with cached old code, then switches immediately after opening.
 - **Companion process**: likewise fetches and installs the package, then exits; launchd / systemd restarts it with the new code (without supervision it would stay stopped, so supervision is required).
 - If switching fails (old pi cannot register commands, or the reload returns the old version): stay on the old version and do not retry that version in this process; retry after pi restarts.
-- To see the running version: node logs `runtime pi-web <version> #N connected`; extension logs require `JARVIS_PI_DEBUG=1`.
+- To see the running version: node logs `runtime pi-web <version> #N connected`; extension logs require `PERSONA_PI_DEBUG=1`.
 
 The first switch (from a version without this mechanism, or an installation from a checkout) must be manual: run `install.mjs`, `pi install` the new path, run the companion from the new path, and restart pi-web and the companion.
 These are all terminal commands on that computer (or ask an Agent to do it); there is no UI to click through.
@@ -135,8 +135,8 @@ The companion's `--port` / `--host` must match pi-web (default `127.0.0.1:30141`
     one herdr session row, extension serving requests, display from the pane, common acceptance tests, phone messages not typed into the pane, disk listing after `/quit`, then another message resuming and receiving an answer in a new tab in the same herdr space. 2026-11-01: 23/23.
   - `node integrations/pi/e2e/run.mjs`: real `pi --mode rpc` with the extension and real `personad node`: listing, common acceptance tests. 2026-11-01: 16/16.
   - `node integrations/pi/e2e/update.mjs`: automatic updates. pi-web and the companion are installed from the package store (the script supervises the companion like launchd); node's package comes from a directory
-    (`JARVIS_RUNTIME_PACKAGES`). No package is offered for the same version; after switching to a node carrying a new version, the extension in pi-web switches in place (same pi-web process, same session),
-    the companion installs, exits, and returns on the new version, `current` points to the new version, phone messages still receive replies after the switch, and `/jarvis-reload` never enters the chat. 2026-11-02: 9/9.
+    (`PERSONA_RUNTIME_PACKAGES`). No package is offered for the same version; after switching to a node carrying a new version, the extension in pi-web switches in place (same pi-web process, same session),
+    the companion installs, exits, and returns on the new version, `current` points to the new version, phone messages still receive replies after the switch, and `/persona-reload` never enters the chat. 2026-11-02: 9/9.
     Unit tests: the last five cases in `integrations/pi/test/pi.test.js` (wait until idle before switching; no switch or message without a command; companion exits after installation; restore and stop retrying when returning to the same version; do not install a mismatched hash).
   - `node integrations/pi/e2e/pi-web.mjs`: real pi-web (isolated configuration directory, this package installed through `packages`, idle reclamation set to 6 seconds) + companion:
     launcher visible before any session exists, creation from the phone, sending, disk listing and pagination after reclamation, waking on another message, extension taking ownership again, and listing sessions created in the web client. 2026-11-01: 11/11.

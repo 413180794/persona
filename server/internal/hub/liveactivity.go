@@ -612,7 +612,7 @@ func liveActivityPayloadIn(l i18n.Lang, event string, st FleetState, now time.Ti
 		aps["relevance-score"] = fleetRelevance(st)
 	}
 	if event == "start" {
-		aps["attributes-type"] = "JarvisActivityAttributes"
+		aps["attributes-type"] = "PersonaActivityAttributes"
 		aps["attributes"] = map[string]any{"kind": "fleet"}
 		aps["alert"] = map[string]any{"title": "Persona", "body": fleetSentence(l, st)}
 	}

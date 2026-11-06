@@ -151,7 +151,7 @@ func shellSafeHex(s string) bool {
 // managerImage is the image a manager's container runs: the one this Docker hub runs, else the one it was built as;
 // "" when neither is known.
 func (h *Hub) managerImage() string {
-	if image := identity.Getenv("JARVIS_IMAGE"); image != "" {
+	if image := identity.Getenv("PERSONA_IMAGE"); image != "" {
 		return image
 	}
 	return h.build.Image
@@ -188,8 +188,8 @@ if docker inspect "$N-pg" >/dev/null 2>&1; then
 	pw=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$N-pg" | sed -n 's/^POSTGRES_PASSWORD=//p')
 elif docker volume inspect "$N-data" >/dev/null 2>&1; then
 	# Its database is there from before: the password is the one in its manager.json, when that volume is there too.
-	pw=$(docker run --rm -v "$N-home:/home/jarvis/.jarvis" --entrypoint sh "$IMAGE" -c \
-		"sed -n 's|.*postgres://` + pgdocker.User + `:\([0-9a-f]*\)@.*|\1|p' /home/jarvis/.jarvis/managers/$ID/manager.json" 2>/dev/null || true)
+	pw=$(docker run --rm -v "$N-home:/home/persona/.persona" --entrypoint sh "$IMAGE" -c \
+		"sed -n 's|.*postgres://` + pgdocker.User + `:\([0-9a-f]*\)@.*|\1|p' /home/persona/.persona/managers/$ID/manager.json" 2>/dev/null || true)
 	[ -n "$pw" ] || fail "the volume $N-data holds a database whose password is gone: remove it (docker volume rm $N-data, its data with it) and run this again"
 fi
 [ -n "$pw" ] || pw=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
@@ -201,8 +201,8 @@ docker start "$N-pg" >/dev/null
 if docker inspect "$N" >/dev/null 2>&1; then
 	# One that never joined (no manager.json in its volume: the hub refused its code, and it waits for one) is made
 	# again with this script's code; one that joined is started as it is, and so is one docker could not look into.
-	joined=$(docker run --rm -v "$N-home:/home/jarvis/.jarvis" --entrypoint sh "$IMAGE" -c \
-		"if [ -f /home/jarvis/.jarvis/managers/$ID/manager.json ]; then echo yes; else echo no; fi" 2>/dev/null || true)
+	joined=$(docker run --rm -v "$N-home:/home/persona/.persona" --entrypoint sh "$IMAGE" -c \
+		"if [ -f /home/persona/.persona/managers/$ID/manager.json ]; then echo yes; else echo no; fi" 2>/dev/null || true)
 	if [ "$joined" != no ]; then
 		docker start "$N" >/dev/null
 		echo "persona manager: $N was there already: started it"
@@ -212,8 +212,8 @@ if docker inspect "$N" >/dev/null 2>&1; then
 	echo "persona manager: $N never joined the hub: making it again with this install code"
 fi
 ` + databaseEnvName + `="postgres://` + pgdocker.User + `:$pw@$N-pg:5432/` + pgdocker.Database + `?sslmode=disable" docker run -d --name "$N" --network "$N" \
-	--restart unless-stopped -v "$N-home:/home/jarvis/.jarvis" -e ` + databaseEnvName + ` "$IMAGE" \
-	manager run --dir "/home/jarvis/.jarvis/managers/$ID" --join "$HUB" "$CODE"` + fpArgs + ` >/dev/null
+	--restart unless-stopped -v "$N-home:/home/persona/.persona" -e ` + databaseEnvName + ` "$IMAGE" \
+	manager run --dir "/home/persona/.persona/managers/$ID" --join "$HUB" "$CODE"` + fpArgs + ` >/dev/null
 echo "persona manager: started $N and its Postgres $N-pg (volumes $N-home, $N-data); logs: docker logs -f $N"
 `
 }
@@ -373,11 +373,11 @@ SUMS='` + sums.String() + `'
 fail() { echo "persona manager: $*" >&2; exit 1; }
 
 find_personad() {
-	for c in "${PERSONA_HOME:-$HOME/.persona}/bin/jarvisd" "$HOME/.persona/bin/jarvisd" "$HOME/.jarvis/bin/jarvisd"; do
+	for c in "${PERSONA_HOME:-$HOME/.persona}/bin/personad" "$HOME/.persona/bin/personad"; do
 		[ -x "$c" ] && { printf '%s\n' "$c"; return 0; }
 	done
 	command -v personad 2>/dev/null && return 0
-	command -v jarvisd 2>/dev/null && return 0
+	command -v personad 2>/dev/null && return 0
 	return 1
 }
 
@@ -394,7 +394,7 @@ if [ -z "$BIN" ]; then
 	else fail "needs sha256sum or shasum to check the download"; fi
 	tmp="$(mktemp -d)"
 	trap 'rm -rf "$tmp"' EXIT
-	archive="jarvisd-$os-$arch.gz"
+	archive="personad-$os-$arch.gz"
 ` + versionNote + `	if [ -n "$SUMS" ]; then
 		printf '%s' "$SUMS" > "$tmp/SHA256SUMS"
 	else
@@ -406,9 +406,9 @@ if [ -z "$BIN" ]; then
 	[ -n "$want" ] && [ "$(sum "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive: not installed. A release may have come out since the hub last checked: get the install command from the app again"
 	dest="${PERSONA_HOME:-$HOME/.persona}/bin"
 	mkdir -p "$dest"
-	gzip -dc "$tmp/$archive" > "$tmp/jarvisd" && chmod 755 "$tmp/jarvisd" && mv "$tmp/jarvisd" "$dest/jarvisd" || fail "could not unpack $archive"
-	ln -sf jarvisd "$dest/personad"
-	BIN="$dest/jarvisd"
+	gzip -dc "$tmp/$archive" > "$tmp/personad" && chmod 755 "$tmp/personad" && mv "$tmp/personad" "$dest/personad" || fail "could not unpack $archive"
+	ln -sf personad "$dest/personad"
+	BIN="$dest/personad"
 	echo "personad installed at $BIN"
 fi
 "$BIN" manager join "$HUB" "$CODE" ` + fp + ` --install "$@"

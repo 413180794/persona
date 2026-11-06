@@ -18,7 +18,7 @@ import (
 
 // noWriteDirs are folders under the home that are never written to, whole: the hub's and the node's own state, and
 // the Mac's Library (preferences, keychains, app data) that nothing here should edit by hand.
-var noWriteDirs = []string{".persona", ".jarvis", "Library"}
+var noWriteDirs = []string{".persona", "Library"}
 
 func errManagerReadOnly(path string) error {
 	return &rpc.Error{Code: proto.CodeReadOnly, Message: fmt.Sprintf("%s is in a manager's folder, which is read-only from the phone", path)}

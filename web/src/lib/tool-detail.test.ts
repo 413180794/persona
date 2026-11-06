@@ -55,7 +55,7 @@ describe("questions of an AskUserQuestion / ask_user", () => {
   });
 
   it("names an MCP tool by its own name", () => {
-    expect(baseToolName("mcp__jarvis__ask_user")).toBe("ask_user");
+    expect(baseToolName("mcp__persona__ask_user")).toBe("ask_user");
     expect(baseToolName("ExitPlanMode")).toBe("ExitPlanMode");
   });
 });

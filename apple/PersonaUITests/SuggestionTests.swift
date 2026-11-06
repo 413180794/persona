@@ -1,15 +1,15 @@
 import XCTest
 
 /// Claude's suggested next message over the composer, against scripts/mock/mock_hub.py started with MOCK_SUGGESTION=1
-/// (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
+/// (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>).
 final class SuggestionTests: XCTestCase {
     @MainActor func testTapFillsTheComposer() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let suggestion = "把命名问题修完再跑一遍测试，然后推到 review/naming"
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
         app.launchPinned()
         let pill = app.buttons["Claude 建议：" + suggestion]

@@ -1,6 +1,6 @@
 import XCTest
 
-/// Saving to the photo library for real (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB): the image viewer's Save
+/// Saving to the photo library for real (scripts/mock/mock_hub.py, PERSONA_MOCK_HUB): the image viewer's Save
 /// and the share card's Save, each after allowing the system's permission alert. Photos runs the change block on its
 /// own queue; a block the compiler took for main-actor code crashed the app there (2026-10-31), so the test only
 /// passes if the app is still alive and says Saved to Photos.
@@ -13,8 +13,8 @@ final class PhotoSaveTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
         let state = try mockPhoto(true)
@@ -36,7 +36,7 @@ final class PhotoSaveTests: XCTestCase {
     @MainActor private func launch(_ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
         app.resetAuthorizationStatus(for: .photos) // the alert comes up again, like on a fresh install
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", session] + extra
         app.launchPinned()
         return app

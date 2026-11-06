@@ -1,7 +1,7 @@
 import Foundation
 import Security
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The live screen's address (ScreenViewer.url, #1498): this device's token reaches the page as it is. It went out
 /// encoded twice (a `jd_` token as `jd%255F`), the page read `jd%5F…`, and the hub said invalid token.
@@ -26,11 +26,11 @@ struct ScreenViewerTests {
             #expect(got["name"] == "Mac Studio" && got["embed"] == "1", "\(url.absoluteString)")
             #expect(url.path == "/screen/macstudio" && url.query == nil, "the token stays out of what is sent to the hub")
         }
-        let plain = try #require(ScreenViewer.url(page, token: "jd_cafe00a1", name: nil))
+        let plain = try #require(ScreenViewer.url(page, token: "removed-secret-value", name: nil))
         #expect(plain.absoluteString == "http://127.0.0.1:18660/screen/macstudio#token=jd_cafe00a1&embed=1")
-        let kept = try #require(ScreenViewer.url(page, token: "jd_cafe00a1", name: nil, keep: "phone"))
+        let kept = try #require(ScreenViewer.url(page, token: "removed-secret-value", name: nil, keep: "phone"))
         #expect(read(kept)["keep"] == "phone", "this device remembers the Mac's sign-in (#1322)")
-        let unlock = try #require(ScreenViewer.url(page, token: "jd_cafe00a1", name: nil, keep: "phone", unlock: true))
+        let unlock = try #require(ScreenViewer.url(page, token: "removed-secret-value", name: nil, keep: "phone", unlock: true))
         #expect(read(unlock)["unlock"] == "1" && read(kept)["unlock"] == nil, "一键解锁 asks the page to type it (#1507 a-2)")
     }
 

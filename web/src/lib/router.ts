@@ -4,8 +4,8 @@ import { takeOverlayEntry } from "./back-close";
 import { BASE, stripBase } from "./base";
 import { decodeURIComponentSafe } from "./uri";
 
-// Persona's main conversation is the front door (like the app, which opens on the assistant): `/` and `/j` open it, `/j/<id>` is
-// one conversation, `/j/new` starts a one-off one, and "Overview" lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
+// Persona's main conversation is the front door (like the app, which opens on the assistant): `/` and `/persona` open it, `/persona/<id>` is
+// one conversation, `/persona/new` starts a one-off one, and "Overview" lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
 // (docs/extensions.md "UI slots" nav_page).
 /** What the middle of an agent's page shows (docs/web.md "Terminal ⇄ chat"): its conversation, or its terminal in place. */
 export type SessionView = "chat" | "term";
@@ -18,7 +18,7 @@ export type Route =
   | { name: "session"; mid: string; sid: string; view?: SessionView }
   // one herdr tab (a slot) of a workspace; `sid` picks its pane (lib/herdr-tree.ts resolveTab)
   | { name: "tab"; mid: string; space: string; slot: string; sid?: string; view?: SessionView }
-  | { name: "jarvis"; sid?: string }
+  | { name: "persona"; sid?: string }
   // "All chats"; `origin` filters it (lib/conversation-origins.ts): the sidebar's "Automatic" rows open it so
   | { name: "history"; origin?: string }
   // the health space (docs/health.md): its home, or one of its conversations
@@ -54,8 +54,8 @@ export function parse(path: string, search = ""): Route {
   const view = parseView(search);
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2], ...(view && { view }) };
   if (p[0] === "t" && p[1] && p[2] && p[3]) return { name: "tab", mid: p[1], space: p[2], slot: p[3], sid: p[4] || undefined, ...(view && { view }) };
-  if (!p.length) return { name: "jarvis" };
-  if (p[0] === "j" || p[0] === "persona") return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "jarvis", sid: p[1] };
+  if (!p.length) return { name: "persona" };
+  if (p[0] === "persona") return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "persona", sid: p[1] };
   if (p[0] === "workspace-board") return { name: "workspace-board" };
   if (p[0] === "overview") return { name: "home" };
   if (p[0] === "history") return p[1] ? { name: "history", origin: p[1] } : { name: "history" };
@@ -92,10 +92,10 @@ export function routePath(r: Route): string {
       return `/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}${viewQuery(r.view)}`;
     case "tab":
       return ["/t", r.mid, r.space, r.slot, ...(r.sid ? [r.sid] : [])].map((x, i) => (i ? encodeURIComponent(x) : x)).join("/") + viewQuery(r.view);
-    case "jarvis":
-      return r.sid ? `/j/${encodeURIComponent(r.sid)}` : "/";
+    case "persona":
+      return r.sid ? `/persona/${encodeURIComponent(r.sid)}` : "/";
     case "persona-new":
-      return "/j/new";
+      return "/persona/new";
     case "history":
       return r.origin ? `/history/${encodeURIComponent(r.origin)}` : "/history";
     case "health":

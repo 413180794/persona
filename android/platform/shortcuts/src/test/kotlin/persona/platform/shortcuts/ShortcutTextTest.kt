@@ -85,7 +85,7 @@ class ShortcutTextTest {
             machineId = "mac", sessionId = id, title = "任务 $id", status = status, assistant = assistant,
             updatedAt = t.plusSeconds(minutes * 60).toString())
         val picked = RecentAgents.pick(listOf(session("old", 1), session("offline", 9, status = "offline"),
-            session("jarvis", 8, assistant = true), session("new", 5), session("mid", 3)))
+            session("persona", 8, assistant = true), session("new", 5), session("mid", 3)))
         assertEquals(listOf("new", "mid"), picked.map { it.sessionId })
         assertEquals("任务 new", ShortcutPublisher.shortLabel(picked.first()))
         assertEquals("打开 任务 new", ShortcutPublisher.longLabel(context, picked.first()))

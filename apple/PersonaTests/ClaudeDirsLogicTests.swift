@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Claude Code › Blocked Config Folders (`ClaudeDirsLogic`): the same cases as web `agent-settings.test.ts`.
 struct ClaudeDirsLogicTests {

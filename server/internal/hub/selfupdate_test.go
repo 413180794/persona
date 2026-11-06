@@ -44,7 +44,7 @@ func newPublisherWith(t *testing.T, version string, build int64, edit func(*upda
 	p := &fakePublisher{script: []byte(fmt.Sprintf("#!/bin/sh\necho %s\necho 'channel release, build %d'\n", version, build))}
 	gz := gz(p.script)
 	outer, inner := sha256.Sum256(gz), sha256.Sum256(p.script)
-	name := "jarvisd-" + runtime.GOOS + "-" + runtime.GOARCH + ".gz"
+	name := "personad-" + runtime.GOOS + "-" + runtime.GOARCH + ".gz"
 	m := update.Manifest{Version: version, Build: build, Protocol: proto.Protocol, Released: time.Now().UTC().Truncate(time.Second),
 		Files: map[string]update.File{runtime.GOOS + "-" + runtime.GOARCH: {Name: name, Size: int64(len(gz)),
 			SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}}}
@@ -93,7 +93,7 @@ func updatingHub(t *testing.T, p *fakePublisher, channel string) (*Hub, *Machine
 	u := h.upd
 	u.client = p.srv.Client()
 	u.idleEvery, u.confirmIn, u.manualIdle = 20*time.Millisecond, 300*time.Millisecond, 2*time.Second
-	target := filepath.Join(t.TempDir(), "jarvisd")
+	target := filepath.Join(t.TempDir(), "personad")
 	if err := os.WriteFile(target, []byte("#!/bin/sh\necho old\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -491,21 +491,21 @@ func TestUpdateSettings(t *testing.T) {
 // node is another build, reached through the hub, are redeployed: never the hub's own machine.
 func TestUpdateNodesBinariesInPlace(t *testing.T) {
 	nodes := t.TempDir()
-	t.Setenv("JARVIS_NODE_BINARIES", nodes)
+	t.Setenv("PERSONA_NODE_BINARIES", nodes)
 	staged := t.TempDir()
-	os.WriteFile(filepath.Join(staged, "jarvisd-darwin-arm64"), []byte("node for macs"), 0o755)
-	os.WriteFile(filepath.Join(staged, "jarvisd-darwin-arm64.gz"), []byte("the download"), 0o644)
-	os.WriteFile(filepath.Join(nodes, "jarvisd-darwin-arm64"), []byte("old node"), 0o755)
+	os.WriteFile(filepath.Join(staged, "personad-darwin-arm64"), []byte("node for macs"), 0o755)
+	os.WriteFile(filepath.Join(staged, "personad-darwin-arm64.gz"), []byte("the download"), 0o644)
+	os.WriteFile(filepath.Join(nodes, "personad-darwin-arm64"), []byte("old node"), 0o755)
 	h := newTestHub(t)
 	h.version = "v2"
 	local := newMachine(h, MachineConfig{ID: "hub", Name: "Hub", Kind: "local"})
 	local.online, local.info.Version = true, "v1" // the hub's own: runs the hub's binary, never deployed to
 	h.machines, h.byID["hub"] = []*Machine{local}, local
 	h.upd.updateNodes(context.Background(), staged)
-	if b, _ := os.ReadFile(filepath.Join(nodes, "jarvisd-darwin-arm64")); string(b) != "node for macs" {
+	if b, _ := os.ReadFile(filepath.Join(nodes, "personad-darwin-arm64")); string(b) != "node for macs" {
 		t.Fatalf("node binary %q", b)
 	}
-	if _, err := os.Stat(filepath.Join(nodes, "jarvisd-darwin-arm64.gz")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(nodes, "personad-darwin-arm64.gz")); !os.IsNotExist(err) {
 		t.Fatal("the download itself went in with the binaries")
 	}
 	_ = local // the manager decides what to redeploy (internal/devices TestUpdateNodesSkipsTheHubsOwn)
@@ -516,7 +516,7 @@ func TestUpdateNodesBinariesInPlace(t *testing.T) {
 // updated, is deployed to from these files (internal/devices nodeBinary), and nothing else fetches its platform.
 func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
 	nodes := t.TempDir()
-	t.Setenv("JARVIS_NODE_BINARIES", nodes)
+	t.Setenv("PERSONA_NODE_BINARIES", nodes)
 	script := []byte("#!/bin/sh\necho v2\n")
 	known, unknown := "plan9-386", "plan9-arm"
 	served := map[string][]byte{} // path -> the .gz
@@ -524,7 +524,7 @@ func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
 		for _, plat := range []string{known, unknown} {
 			body := gz(script)
 			sum, binSum := sha256.Sum256(body), sha256.Sum256(script)
-			name := "jarvisd-" + plat + ".gz"
+			name := "personad-" + plat + ".gz"
 			m.Files[plat] = update.File{Name: name, Size: int64(len(body)),
 				SHA256: hex.EncodeToString(sum[:]), BinarySHA256: hex.EncodeToString(binSum[:])}
 			served["/dl/"+name] = body
@@ -556,7 +556,7 @@ func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
 	want := []string{known, unknown, own}
 	staged := filepath.Join(h.upd.dir, fmt.Sprint(int64(202611021700)), "nodes")
 	for _, plat := range want {
-		if _, err := os.Stat(filepath.Join(staged, "jarvisd-"+plat)); err != nil {
+		if _, err := os.Stat(filepath.Join(staged, "personad-"+plat)); err != nil {
 			t.Fatalf("the release's node binary for %s was not downloaded: %v", plat, err)
 		}
 	}
@@ -569,13 +569,13 @@ func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
 	}
 	mu.Unlock()
 	for _, plat := range want {
-		if path := "/dl/jarvisd-" + plat + ".gz"; counts[path] != 1 {
+		if path := "/dl/personad-" + plat + ".gz"; counts[path] != 1 {
 			t.Fatalf("%s was fetched %d times, want 1 (all fetches: %v)", path, counts[path], counts)
 		}
 	}
 	// And what is in nodes/ is the binary, not the .gz it was downloaded as: a machine is sent the file as it is
 	// (internal/devices), so a copy of the .gz would be a broken node binary for the hub's own platform.
-	if b, err := os.ReadFile(filepath.Join(staged, "jarvisd-"+own)); err != nil {
+	if b, err := os.ReadFile(filepath.Join(staged, "personad-"+own)); err != nil {
 		t.Fatal(err)
 	} else if !bytes.Equal(b, p.script) {
 		t.Fatalf("the node binary for %s is not the hub's binary: %d bytes, gzip %v", own, len(b), len(b) > 1 && b[0] == 0x1f && b[1] == 0x8b)
@@ -583,7 +583,7 @@ func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
 	// What the new hub does with them: "Redeploy" takes them from NodeBinaryDir (internal/devices nodeBinary).
 	h.upd.updateNodes(context.Background(), staged)
 	for _, plat := range want {
-		if _, err := os.Stat(filepath.Join(nodes, "jarvisd-"+plat)); err != nil {
+		if _, err := os.Stat(filepath.Join(nodes, "personad-"+plat)); err != nil {
 			t.Fatalf("no node binary for %s in NodeBinaryDir: %v", plat, err)
 		}
 	}
@@ -598,11 +598,11 @@ func TestUpdateDockerSaysNewImage(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if r.URL.Path != "/v2/owner/jarvis/tags/list" {
+		if r.URL.Path != "/v2/owner/persona/tags/list" {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprint(w, `{"name":"owner/jarvis","tags":["0.3.0","0.4.0","0.5.0-rc1","edge","latest"]}`)
+		fmt.Fprint(w, `{"name":"owner/persona","tags":["0.3.0","0.4.0","0.5.0-rc1","edge","latest"]}`)
 	}))
 	defer reg.Close()
 	host := strings.TrimPrefix(reg.URL, "http://")
@@ -611,7 +611,7 @@ func TestUpdateDockerSaysNewImage(t *testing.T) {
 	h.upd.client = reg.Client()
 	ctx := context.Background()
 
-	t.Setenv("JARVIS_IMAGE", host+"/owner/jarvis:latest")
+	t.Setenv("PERSONA_IMAGE", host+"/owner/persona:latest")
 	if _, err := h.upd.check(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -619,10 +619,10 @@ func TestUpdateDockerSaysNewImage(t *testing.T) {
 	if v.State != "available" || v.Latest == nil || v.Latest.Version != "0.4.0" || !v.Latest.Newer || v.CanUpdate {
 		t.Fatalf("a newer image is not offered: %+v %+v", v, v.Latest)
 	}
-	if v.Image == nil || v.Image.Name != host+"/owner/jarvis" || v.Image.Tag != "latest" || v.Image.Pinned {
+	if v.Image == nil || v.Image.Name != host+"/owner/persona" || v.Image.Tag != "latest" || v.Image.Pinned {
 		t.Fatalf("image %+v", v.Image)
 	}
-	t.Setenv("JARVIS_IMAGE", host+"/owner/jarvis:0.3.0")
+	t.Setenv("PERSONA_IMAGE", host+"/owner/persona:0.3.0")
 	if v := h.upd.view(); v.Image == nil || !v.Image.Pinned {
 		t.Fatalf("a pinned tag: %+v", v.Image)
 	}
@@ -635,31 +635,31 @@ func TestUpdateDockerSaysNewImage(t *testing.T) {
 
 	private = true
 	h.upd.check(ctx)
-	if v := h.upd.view(); !strings.Contains(v.Error, "JARVIS_REGISTRY_TOKEN") {
+	if v := h.upd.view(); !strings.Contains(v.Error, "PERSONA_REGISTRY_TOKEN") {
 		t.Fatalf("a private image does not say what to set: %q", v.Error)
 	}
 
-	t.Setenv("JARVIS_IMAGE", "")
-	if _, err := h.upd.check(ctx); err == nil || !strings.Contains(h.upd.view().Error, "JARVIS_IMAGE") {
+	t.Setenv("PERSONA_IMAGE", "")
+	if _, err := h.upd.check(ctx); err == nil || !strings.Contains(h.upd.view().Error, "PERSONA_IMAGE") {
 		t.Fatalf("no image to look at: %v, %q", err, h.upd.view().Error)
 	}
-	h.build.Image = host + "/owner/jarvis"
+	h.build.Image = host + "/owner/persona"
 	private = false
 	if _, err := h.upd.check(ctx); err != nil || h.upd.view().Image.Tag != "latest" {
 		t.Fatalf("the image it was built as: %v %+v", err, h.upd.view().Image)
 	}
 }
 
-// A release with a program the hub runs beside it (jarvisd-wechat): the program is checked and put next to the
+// A release with a program the hub runs beside it (personad-wechat): the program is checked and put next to the
 // hub's binary with it, and going back takes it away again (it was new here).
 func TestUpdateSwapsPrograms(t *testing.T) {
 	plat := runtime.GOOS + "-" + runtime.GOARCH
 	prog := []byte("#!/bin/sh\necho v2-202611021700\necho 'channel release, build 202611021700'\n")
 	pgz := gz(prog)
 	outer, inner := sha256.Sum256(pgz), sha256.Sum256(prog)
-	pf := update.File{Name: "jarvisd-wechat-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
+	pf := update.File{Name: "personad-wechat-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
 	p := newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
-		m.Programs = map[string]map[string]update.File{"jarvisd-wechat": {plat: pf}}
+		m.Programs = map[string]map[string]update.File{"personad-wechat": {plat: pf}}
 	})
 	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
 	h, _, target, execs := updatingHub(t, p, "release")
@@ -671,7 +671,7 @@ func TestUpdateSwapsPrograms(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the restart", func() bool { return len(execs()) == 1 })
-	placed := filepath.Join(filepath.Dir(target), "jarvisd-wechat")
+	placed := filepath.Join(filepath.Dir(target), "personad-wechat")
 	if b, _ := os.ReadFile(placed); !bytes.Equal(b, prog) {
 		t.Fatal("the program is not next to the hub's binary")
 	}
@@ -694,9 +694,9 @@ func TestUpdateRefusesAWrongProgram(t *testing.T) {
 	prog := []byte("#!/bin/sh\necho v1-old\necho 'channel release, build 1'\n") // says another build
 	pgz := gz(prog)
 	outer, inner := sha256.Sum256(pgz), sha256.Sum256(prog)
-	pf := update.File{Name: "jarvisd-wechat-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
+	pf := update.File{Name: "personad-wechat-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
 	p := newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
-		m.Programs = map[string]map[string]update.File{"jarvisd-wechat": {plat: pf}}
+		m.Programs = map[string]map[string]update.File{"personad-wechat": {plat: pf}}
 	})
 	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
 	h, _, target, execs := updatingHub(t, p, "release")
@@ -712,7 +712,7 @@ func TestUpdateRefusesAWrongProgram(t *testing.T) {
 	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" {
 		t.Fatal("the hub's binary was swapped")
 	}
-	if !strings.Contains(h.upd.view().Error, "jarvisd-wechat") {
+	if !strings.Contains(h.upd.view().Error, "personad-wechat") {
 		t.Fatalf("error %q", h.upd.view().Error)
 	}
 }

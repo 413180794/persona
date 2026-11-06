@@ -48,7 +48,7 @@ func TestWorkspaceBoardPersistenceConflictAndRestart(t *testing.T) {
 	if _, err := d.SaveWorkspaceBoard(ctx, 1, invalid); !errors.Is(err, workspaceboard.ErrInvalid) {
 		t.Fatalf("invalid: %v", err)
 	}
-	reopened, err := Open(ctx, os.Getenv("JARVIS_TEST_DATABASE_URL"), AllSets)
+	reopened, err := Open(ctx, os.Getenv("PERSONA_TEST_DATABASE_URL"), AllSets)
 	if err != nil {
 		t.Fatal(err)
 	}

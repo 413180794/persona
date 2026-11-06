@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct MetricPreparationTests {
     @Test @MainActor func metricsEndpointPreservesTheRequestedRange() async throws {

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The cookie file reader (Shared/BrowserCookies.swift) on the cases the web's lib/cookies.test.ts holds lib/cookies.ts
 /// to (#1304): both clients read a file the same way.

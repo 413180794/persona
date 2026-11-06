@@ -263,7 +263,7 @@ func TestEngineDetection(t *testing.T) {
 	if tr := f.trace(); len(tr) != 0 {
 		t.Errorf("herdr asked while not the engine: %v", tr)
 	}
-	t.Setenv("HC_SOCKET", "/tmp/jarvis-no-such-dir/c.sock")
+	t.Setenv("HC_SOCKET", "/tmp/persona-no-such-dir/c.sock")
 	got = n.engines(context.Background(), "0.9.3")
 	if got[1].Available || got[0].Version != "0.9.3" || got[2].Available {
 		t.Errorf("without herdr-core: %+v", got)

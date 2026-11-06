@@ -1,28 +1,28 @@
 import XCTest
 
-/// A Jarvis conversation in the middle of a long turn, tool calls one after another, nobody touching the screen
+/// A Persona conversation in the middle of a long turn, tool calls one after another, nobody touching the screen
 /// (2026-11-03: the chat jumped between two places about once a second, then went blank for good). Whatever the pushes
 /// do, the content area is never empty and the top line on screen stays where it is (or, at the newest, the newest
 /// stays in view). Samples the pixels (what is drawn, not what the model holds) and `probe.chat-rows`.
 ///   PORT=18797 MOCK_ASSISTANT_RUN=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_RUN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/RunningChatTests
+///   TEST_RUNNER_PERSONA_RUN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/RunningChatTests
 final class RunningChatTests: XCTestCase {
     private var hub = ""
     private var token = "mock"
     private var chat = RunningChatTests.main
     private var app: XCUIApplication!
-    /// The mock's main Jarvis conversation (ASK1), running with MOCK_ASSISTANT_RUN=1.
+    /// The mock's main Persona conversation (ASK1), running with MOCK_ASSISTANT_RUN=1.
     private static let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_RUN_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_ASSISTANT_RUN=1 (JARVIS_RUN_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_RUN_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_ASSISTANT_RUN=1 (PERSONA_RUN_HUB)")
         }
         hub = h
         // A real hub, for a check by hand against a throwaway conversation (never a user's): its token and the chat.
         let env = ProcessInfo.processInfo.environment
-        if let t = env["JARVIS_RUN_TOKEN"], !t.isEmpty { token = t }
-        if let c = env["JARVIS_RUN_CHAT"], !c.isEmpty { chat = c }
+        if let t = env["PERSONA_RUN_TOKEN"], !t.isEmpty { token = t }
+        if let c = env["PERSONA_RUN_CHAT"], !c.isEmpty { chat = c }
         continueAfterFailure = true
     }
 
@@ -46,7 +46,7 @@ final class RunningChatTests: XCTestCase {
 
     private func launch(_ extra: [String] = []) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + token
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + token
         app.launchArguments = ["-pairURL", pair]
         app.launchPinned()
         sleep(3)
@@ -108,7 +108,7 @@ final class RunningChatTests: XCTestCase {
         }
         let step = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "运行")).firstMatch
         if step.waitForExistence(timeout: 10), step.isHittable { step.tap() }
-        if ProcessInfo.processInfo.environment["JARVIS_RUN_BACKGROUND"] == "1" {
+        if ProcessInfo.processInfo.environment["PERSONA_RUN_BACKGROUND"] == "1" {
             // Away for a while and back (the socket reconnects, the chat catches up and lands where it was read).
             sleep(2)
             XCUIDevice.shared.press(.home)
@@ -196,8 +196,8 @@ final class RunningChatTests: XCTestCase {
     /// stayed so until the app was killed (#686). Opened, the header stays on screen and the chat is never blank, not
     /// even for the frame right after the tap (#754).
     func testFoldingARunningWorkLineKeepsTheChat() throws {
-        guard ProcessInfo.processInfo.environment["JARVIS_RUN_ALONE"] == "1" else {
-            throw XCTSkip("needs MOCK_ASSISTANT_RUN=alone (JARVIS_RUN_ALONE=1)")
+        guard ProcessInfo.processInfo.environment["PERSONA_RUN_ALONE"] == "1" else {
+            throw XCTSkip("needs MOCK_ASSISTANT_RUN=alone (PERSONA_RUN_ALONE=1)")
         }
         launch()
         let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
@@ -212,7 +212,7 @@ final class RunningChatTests: XCTestCase {
         XCTAssertTrue(work.waitForExistence(timeout: 10) && work.isHittable, "the running work line's header on screen")
         let y0 = work.frame.minY
         work.tap() // open
-        if ProcessInfo.processInfo.environment["JARVIS_TRACE"] == "1" { trace(seconds: 4, label: "open") }
+        if ProcessInfo.processInfo.environment["PERSONA_TRACE"] == "1" { trace(seconds: 4, label: "open") }
         sample(seconds: 3, label: "opened")
         XCTAssertTrue(work.exists && work.isHittable, "the header stays on screen when its work line opens")
         if work.exists {
@@ -220,7 +220,7 @@ final class RunningChatTests: XCTestCase {
         }
         if work.exists && work.isHittable {
             work.tap() // and folded again
-            if ProcessInfo.processInfo.environment["JARVIS_TRACE"] == "1" { trace(seconds: 3, label: "fold") }
+            if ProcessInfo.processInfo.environment["PERSONA_TRACE"] == "1" { trace(seconds: 3, label: "fold") }
             sample(seconds: 4, label: "folded again")
         }
     }
@@ -233,10 +233,10 @@ final class RunningChatTests: XCTestCase {
 
     /// A recorded turn replayed (MOCK_ASSISTANT_REPLAY, the items outside the repo): read from its start, the work
     /// line and its first call's whole output open, the next calls pushed, then the work line folded from its header
-    /// `JARVIS_FOLD_AT` seconds after a text of the agent's starts streaming (it is written 1.5 s in).
+    /// `PERSONA_FOLD_AT` seconds after a text of the agent's starts streaming (it is written 1.5 s in).
     func testReplayFold() throws {
-        guard let at = ProcessInfo.processInfo.environment["JARVIS_FOLD_AT"].flatMap(Double.init) else {
-            throw XCTSkip("needs MOCK_ASSISTANT_REPLAY and JARVIS_FOLD_AT")
+        guard let at = ProcessInfo.processInfo.environment["PERSONA_FOLD_AT"].flatMap(Double.init) else {
+            throw XCTSkip("needs MOCK_ASSISTANT_REPLAY and PERSONA_FOLD_AT")
         }
         // As the user had it, tapping no rows (XCUITest places rows of the upside-down list wrong): the calls whose
         // output was cut (the first one's, 4 KB) open by themselves once the work line is opened from its header.

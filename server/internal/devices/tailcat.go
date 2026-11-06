@@ -59,7 +59,7 @@ func (m *Machine) noteDirectFailed() {
 	m.switchedBack = time.Time{}
 }
 
-// transports are the ways to try, in order. A link machine is only reached through its jarvis-link (link.go; tests
+// transports are the ways to try, in order. A link machine is only reached through its persona-link (link.go; tests
 // give it a node command instead, run like ssh's).
 func (m *Machine) transports() []string {
 	switch {
@@ -119,7 +119,7 @@ func (m *Machine) tailcatDial(ctx context.Context) (net.Conn, error) {
 	c, err := d.Dial(ctx, m.cfg.TailcatAddr, tunnel.NodePort)
 	if errors.Is(err, context.DeadlineExceeded) {
 		// What a node not running, not set up for this hub's key, or not listening yet looks like: no answer at all.
-		return nil, errors.New("tailcat 连不上：那台电脑的常驻 node 没在跑，或没有加这个 hub 的 key（jarvisd node tailcat init）")
+		return nil, errors.New("tailcat 连不上：那台电脑的常驻 node 没在跑，或没有加这个 hub 的 key（personad node tailcat init）")
 	}
 	return c, err
 }

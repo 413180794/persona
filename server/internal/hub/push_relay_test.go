@@ -88,7 +88,7 @@ func relayHubVia(t *testing.T, front func(http.Handler) http.Handler) (*Hub, *re
 	t.Cleanup(srv.Close)
 	// The phone registers with the relay itself.
 	resp, err := srv.Client().Post(srv.URL+"/relay/v1/register", "application/json",
-		strings.NewReader(`{"apns_token":"a1b2c3d4e5f60718a1b2c3d4e5f60718","env":"sandbox","topic":"app.example"}`))
+		strings.NewReader(`{"apns_token":"removed-secret-value","env":"sandbox","topic":"app.example"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestRelayDoneAndWake(t *testing.T) {
 	if bg.Priority != "5" || bytes.Contains(bg.Body, []byte("tool")) {
 		t.Fatalf("wake %+v %s", bg, bg.Body)
 	}
-	if p := opened(t, priv, bg); p["jarvis_wake"] != "tool" {
+	if p := opened(t, priv, bg); p["persona_wake"] != "tool" {
 		t.Fatalf("wake %v", p)
 	}
 }
@@ -335,7 +335,7 @@ func TestRelayLateGoneKeepsReregisteredDevice(t *testing.T) {
 	hp.waitArrived(t)
 
 	renewed := old
-	renewed.APNSToken = "b2c3d4e5f60718a9b2c3d4e5f60718a9"
+	renewed.APNSToken = "removed-secret-value"
 	renewed.Prefs = nil // registration carries the token, not the settings
 	h.push.register(renewed)
 	close(hp.release)
@@ -651,12 +651,12 @@ func TestRelayShortensWhatDoesNotFit(t *testing.T) {
 }
 
 // TestManualRelayPush pushes through a running relay the way a hub without apns.json does, for the simulator's
-// end-to-end check (scripts/test/relay_sim_e2e.sh). Opt-in: JARVIS_RELAY_URL, JARVIS_RELAY_GRANT, JARVIS_PUSH_KEY
-// (the phone's public key); JARVIS_RELAY_KIND is "interaction" (default) or "done".
+// end-to-end check (scripts/test/relay_sim_e2e.sh). Opt-in: PERSONA_RELAY_URL, PERSONA_RELAY_GRANT, PERSONA_PUSH_KEY
+// (the phone's public key); PERSONA_RELAY_KIND is "interaction" (default) or "done".
 func TestManualRelayPush(t *testing.T) {
-	url, grant, key := os.Getenv("JARVIS_RELAY_URL"), os.Getenv("JARVIS_RELAY_GRANT"), os.Getenv("JARVIS_PUSH_KEY")
+	url, grant, key := os.Getenv("PERSONA_RELAY_URL"), os.Getenv("PERSONA_RELAY_GRANT"), os.Getenv("PERSONA_PUSH_KEY")
 	if url == "" || grant == "" || key == "" {
-		t.Skip("set JARVIS_RELAY_URL, JARVIS_RELAY_GRANT and JARVIS_PUSH_KEY")
+		t.Skip("set PERSONA_RELAY_URL, PERSONA_RELAY_GRANT and PERSONA_PUSH_KEY")
 	}
 	accepted := make(chan string, 4)
 	p := newPusher(t.TempDir(), nil, func(f string, a ...any) {
@@ -667,7 +667,7 @@ func TestManualRelayPush(t *testing.T) {
 		}
 	})
 	p.register(Device{DeviceID: "sim", Name: "simulator", Kind: "iphone", PushKey: key, RelayURL: url, RelayGrant: grant})
-	switch os.Getenv("JARVIS_RELAY_KIND") {
+	switch os.Getenv("PERSONA_RELAY_KIND") {
 	case "done":
 		p.notifyDone("m1", "笔记本", "s1", "重构支付模块", "改好了，测试全过", nil)
 	default:

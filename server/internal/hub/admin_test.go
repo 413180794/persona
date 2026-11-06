@@ -172,7 +172,7 @@ func (c *adminClient) do(method, path, body string) (int, map[string]any, *httpt
 	if method != http.MethodGet {
 		req.Header.Set("Content-Type", "application/json")
 		if c.csrf != "" {
-			req.Header.Set("X-Jarvis-CSRF", c.csrf)
+			req.Header.Set("X-Persona-CSRF", c.csrf)
 		}
 	}
 	for k, v := range c.header {
@@ -184,7 +184,7 @@ func (c *adminClient) do(method, path, body string) (int, map[string]any, *httpt
 	w := httptest.NewRecorder()
 	c.h.ServeHTTP(w, req)
 	for _, ck := range w.Result().Cookies() {
-		if strings.HasPrefix(ck.Name, "jarvis_admin") {
+		if strings.HasPrefix(ck.Name, "persona_admin") {
 			if ck.MaxAge < 0 {
 				c.cookie = nil
 			} else {
@@ -454,7 +454,7 @@ func TestAdminSetupLoginSessionCSRF(t *testing.T) {
 		t.Fatalf("setup: %d %v", code, st)
 	}
 	ck := w.Result().Cookies()[0]
-	if !ck.HttpOnly || ck.SameSite != http.SameSiteStrictMode || ck.Path != adminCookiePath || ck.Secure || ck.Name != "jarvis_admin" {
+	if !ck.HttpOnly || ck.SameSite != http.SameSiteStrictMode || ck.Path != adminCookiePath || ck.Secure || ck.Name != "persona_admin" {
 		t.Fatalf("cookie %+v", ck)
 	}
 	if store.hash == "" || strings.Contains(store.hash, "a good password") {
@@ -494,7 +494,7 @@ func TestAdminSetupLoginSessionCSRF(t *testing.T) {
 	}
 	c.header = nil
 	req := httptest.NewRequest("PUT", "/api/v1/admin/hub", strings.NewReader(`{"name":"x"}`))
-	req.RemoteAddr, req.Header = c.remote, http.Header{"Content-Type": {"text/plain"}, "X-Jarvis-CSRF": {csrf}}
+	req.RemoteAddr, req.Header = c.remote, http.Header{"Content-Type": {"text/plain"}, "X-Persona-CSRF": {csrf}}
 	req.AddCookie(c.cookie)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -549,7 +549,7 @@ func TestAdminLogoutDeleteFails(t *testing.T) {
 	}
 	cleared := false
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "jarvis_admin" && ck.MaxAge < 0 {
+		if ck.Name == "persona_admin" && ck.MaxAge < 0 {
 			cleared = true
 		}
 	}
@@ -580,7 +580,7 @@ func TestAdminTLSCookieAndPublicPlaintext(t *testing.T) {
 		t.Fatalf("setup over TLS: %d %v", code, out)
 	}
 	ck := w.Result().Cookies()[0]
-	if ck.Name != "jarvis_admin_tls" || !ck.Secure {
+	if ck.Name != "persona_admin_tls" || !ck.Secure {
 		t.Fatalf("TLS cookie %+v", ck)
 	}
 }
@@ -683,7 +683,7 @@ func TestAdminAccessOnlyNarrows(t *testing.T) {
 		t.Fatalf("after locking out: %d", code)
 	}
 	// A scope from the environment is the deployment's: the page cannot change it.
-	t.Setenv("JARVIS_ADMIN_ACCESS", "lan")
+	t.Setenv("PERSONA_ADMIN_ACCESS", "lan")
 	if err := h.adminReload(); err != nil {
 		t.Fatal(err)
 	}
@@ -874,7 +874,7 @@ func TestAdminHubNameAndDevices(t *testing.T) {
 	}
 	code, out, _ := c.do("POST", "/api/v1/admin/devices/pair", `{}`)
 	qr, _ := out["qr"].(map[string]any)
-	if code != 200 || !strings.HasPrefix(out["pair_url"].(string), "jarvis://pair?") || qr == nil {
+	if code != 200 || !strings.HasPrefix(out["pair_url"].(string), "persona://pair?") || qr == nil {
 		t.Fatalf("pair %d %v", code, out)
 	}
 	rows := qr["rows"].([]any)
@@ -896,7 +896,7 @@ func TestAdminRestartOnlyWhenSupervised(t *testing.T) {
 	h.admin.restart = func() { restarted <- struct{}{} }
 	c := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
 	t.Setenv("INVOCATION_ID", "")
-	t.Setenv("JARVIS_SUPERVISED", "")
+	t.Setenv("PERSONA_SUPERVISED", "")
 	if code, out, _ := c.do("POST", "/api/v1/admin/restart", `{}`); code != 409 || out["code"] != "not_supervised" {
 		t.Fatalf("unsupervised: %d %v", code, out)
 	}
@@ -1081,7 +1081,7 @@ func TestAdminSetupCodeGuessesAreLimited(t *testing.T) {
 func TestAdminNetworkPublicKeepsEnvOut(t *testing.T) {
 	h, _, mux := adminTestHub(t)
 	_ = os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t","public":{"advertise_ipv6":false}}`), 0o600)
-	t.Setenv("JARVIS_PUBLIC_URL", "http://nas.example.com:18660")
+	t.Setenv("PERSONA_PUBLIC_URL", "http://nas.example.com:18660")
 	c := signedIn(t, mux, ip4(192, 168, 1, 20)+":1")
 	_, view, _ := c.do("GET", "/api/v1/admin/network", "")
 	if view["public_url"] != "http://nas.example.com:18660" || view["public_url_from_env"] != true {

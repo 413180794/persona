@@ -36,11 +36,9 @@ class InjectedMessagesTest {
         assertEquals("任务「跑测试」做完了", (injectedOf(Item("1", role = "user", kind = "text", text = notice))?.line).zhAny())
     }
 
-    @Test fun leadingSnapshotEitherNameIsSkipped() {
-        for (tag in listOf("jarvis-context", "persona-context")) {
-            val text = "<$tag>\n实时快照\n</$tag>\n<$tag kind=\"context\" title=\"t\">x</$tag>\n$notice"
-            assertEquals(tag, "任务「跑测试」做完了", parseInjected(text)?.line)
-        }
+    @Test fun leadingPersonaSnapshotsAreSkipped() {
+        val text = "<persona-context>\n实时快照\n</persona-context>\n<persona-context kind=\"context\" title=\"t\">x</persona-context>\n$notice"
+        assertEquals("任务「跑测试」做完了", parseInjected(text)?.line)
     }
 
     @Test fun sentFromAnAppStaysTheUsers() {

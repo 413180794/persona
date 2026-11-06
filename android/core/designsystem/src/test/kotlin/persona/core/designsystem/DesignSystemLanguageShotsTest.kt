@@ -44,6 +44,24 @@ class DesignSystemLanguageShotsTest {
 
     private class Words(val back: String, val offline: String, val needsYou: String, val allModels: String, val noMatches: String)
 
+    @Config(sdk = [35], qualifiers = "en-w400dp-h1200dp-xhdpi")
+    @Test fun hubCardUsesPersonaBrandInitial() {
+        var dark by mutableStateOf(false)
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = AppStyle.Brief) {
+                Box(Modifier.testTag("hub").width(400.dp).height(160.dp).background(PersonaTheme.palette.background).padding(16.dp)) {
+                    HubCard("Persona hub", connected = true, statusText = "Connected")
+                }
+            }
+        }
+        for (d in listOf(false, true)) {
+            dark = d
+            rule.waitForIdle()
+            rule.onNodeWithText("P").assertExists()
+            save(rule.onNodeWithTag("hub").captureToImage().asAndroidBitmap(), "hub-card-persona-brief-${if (d) "dark" else "light"}.png")
+        }
+    }
+
     @Config(sdk = [35], qualifiers = "zh-w400dp-h1200dp-xhdpi")
     @Test fun simplifiedChinese() = shots("zh", Words("返回", "离线", "等你处理 3 件", "全部模型", "没有找到"))
 

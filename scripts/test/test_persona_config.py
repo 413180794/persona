@@ -10,23 +10,24 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('config_under_test', ROOT / 'scripts/jarvis_config.py')
+spec = importlib.util.spec_from_file_location('config_under_test', ROOT / 'scripts/persona_config.py')
 config = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(config)
 
 
 class PersonaConfigTests(unittest.TestCase):
-    def test_old_and_new_config_paths_share_the_file(self):
-        for initial in ('jarvis', 'persona'):
-            with self.subTest(initial=initial), tempfile.TemporaryDirectory() as directory:
-                with patch.dict(os.environ, {'HOME': directory}, clear=True):
-                    path = Path(directory) / '.config' / initial / 'config.json'
-                    path.parent.mkdir(parents=True)
-                    path.write_text('{"app":{"bundle_id":"com.example.assistant"}}')
-                    self.assertEqual(config.load()['app']['bundle_id'], 'com.example.assistant')
-                    self.assertEqual((Path(directory) / '.config/persona/config.json').resolve(),
-                                     (Path(directory) / '.config/jarvis/config.json').resolve())
-                    self.assertEqual(config.path(), str(Path(directory) / '.config/persona/config.json'))
+    former_name = 'jar' + 'vis'
+    former_prefix = former_name.upper() + '_'
+
+    def test_default_config_is_canonical_without_creating_aliases(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'HOME': directory}, clear=True):
+            path = Path(directory) / '.config/persona/config.json'
+            path.parent.mkdir(parents=True)
+            path.write_text('{"app":{"bundle_id":"com.example.assistant"}}')
+            self.assertEqual(config.load()['app']['bundle_id'], 'com.example.assistant')
+            self.assertEqual(config.path(), str(path))
+            self.assertFalse(path.parent.is_symlink())
+            self.assertFalse(os.path.lexists(Path(directory) / '.config' / self.former_name))
 
     def test_current_config_priority_and_independent_profiles(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'HOME': directory}, clear=True):
@@ -34,35 +35,46 @@ class PersonaConfigTests(unittest.TestCase):
             old, new = Path(directory) / 'old.json', Path(directory) / 'new.json'
             old.write_text('{"which":"old"}')
             new.write_text('{"which":"new"}')
-            os.environ['JARVIS_CONFIG'] = str(old)
-            self.assertEqual(config.load()['which'], 'old')
+            os.environ[self.former_prefix + 'CONFIG'] = str(old)
+            with self.assertRaises(SystemExit):
+                config.load()
             os.environ['PERSONA_CONFIG'] = str(new)
             self.assertEqual(config.load()['which'], 'new')
+            self.assertEqual(json.loads(old.read_text())['which'], 'old')
             self.assertFalse((Path(directory) / '.config').exists())
 
-    def test_both_configs_remain_intact(self):
+    def test_former_config_is_not_read_or_modified(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'HOME': directory}, clear=True):
-            for name in ('persona', 'jarvis'):
-                file = Path(directory) / '.config' / name / 'config.json'
-                file.parent.mkdir(parents=True)
-                file.write_text(json.dumps({'name': name}))
+            former = Path(directory) / '.config' / self.former_name / 'config.json'
+            former.parent.mkdir(parents=True)
+            former.write_text('{"name":"former"}')
+            with self.assertRaises(SystemExit):
+                config.load()
+            current = Path(directory) / '.config/persona/config.json'
+            self.assertFalse(os.path.lexists(current.parent))
+            current.parent.mkdir()
+            current.write_text('{"name":"persona"}')
             self.assertEqual(config.load()['name'], 'persona')
-            self.assertEqual(json.loads((Path(directory) / '.config/jarvis/config.json').read_text())['name'], 'jarvis')
+            self.assertEqual(former.read_text(), '{"name":"former"}')
+            self.assertFalse(current.is_symlink())
+            self.assertFalse(current.parent.is_symlink())
 
-    def test_generated_environment_keeps_both_names_and_never_prints_other_secrets(self):
+    def test_generated_environment_exports_only_canonical_keys_and_keeps_secrets_private(self):
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory) / 'config.json'
             file.write_text('{"hub":{"url":"http://hub.example.com"}}')
-            env = {'HOME': directory, 'PATH': os.environ['PATH'], 'JARVIS_CONFIG': str(file),
-                   'PERSONA_HUB_URL': 'http://previous.example.com', 'PERSONA_PRIVATE_TOKEN': 'test-private-value'}
-            result = subprocess.run([sys.executable, str(ROOT / 'scripts/jarvis_config.py'), 'env'],
+            env = {'HOME': directory, 'PATH': os.environ['PATH'], 'PERSONA_CONFIG': str(file),
+                   'PERSONA_HUB_URL': 'http://previous.example.com', 'PERSONA_PRIVATE_TOKEN': 'test-private-value',
+                   self.former_prefix + 'HUB_URL': 'http://former.example.com'}
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/persona_config.py'), 'env'],
                                     env=env, capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertNotIn('test-private-value', result.stdout)
-            shell = subprocess.run(['bash', '-c', result.stdout + '\nprintf "%s|%s|%s" "$JARVIS_HUB_URL" "$PERSONA_HUB_URL" "$JARVIS_PRIVATE_TOKEN"'],
+            self.assertNotIn(self.former_prefix, result.stdout)
+            shell = subprocess.run(['bash', '-c', result.stdout + '\nprintf "%s|%s|%s" "$PERSONA_HUB_URL" "$' + self.former_prefix + 'HUB_URL" "$PERSONA_PRIVATE_TOKEN"'],
                                    env=env, capture_output=True, text=True, timeout=10)
             self.assertEqual(shell.returncode, 0, shell.stderr)
-            self.assertEqual(shell.stdout, 'http://hub.example.com|http://hub.example.com|test-private-value')
+            self.assertEqual(shell.stdout, 'http://hub.example.com|http://former.example.com|test-private-value')
 
     def _fake_root(self, directory: str) -> Path:
         # A copy of the app's entitlements under a temporary ROOT, so app_entitlements never writes into the checkout.
@@ -107,8 +119,8 @@ class MetaWearablesConfigTests(unittest.TestCase):
         for name, (cfg, expected) in cases.items():
             with self.subTest(case=name):
                 generated = config.env(cfg)
-                self.assertEqual(generated['JARVIS_META_WEARABLES'], expected)
                 self.assertEqual(generated['PERSONA_META_WEARABLES'], expected)
+                self.assertTrue(all(not key.startswith(PersonaConfigTests.former_prefix) for key in generated))
 
     def test_xcconfig_writes_meta_app_id_and_client_token(self):
         cases = {

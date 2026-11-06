@@ -4,7 +4,7 @@ nonisolated extension ComponentSpec {
     /// Island: floating white islands with deep soft shadows on a misty wash of the color, generous corners.
     static let island = ComponentSpec(
         title: "Island", subtitle: String(localized: "Floating cards"),
-        surface: .floating, buttons: .soft, fontDesign: .default, previewCorner: 26, components: .jarvis, canvas: .islands,
+        surface: .floating, buttons: .soft, fontDesign: .default, previewCorner: 26, components: .persona, canvas: .islands,
         colors: .teal)
 }
 

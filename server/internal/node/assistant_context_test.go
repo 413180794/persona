@@ -125,13 +125,13 @@ func TestToolsChangedIsLogged(t *testing.T) {
 	start := func(tools string) {
 		n.readAssistant(p, strings.NewReader(`{"type":"system","subtype":"init","tools":[`+tools+`]}`+"\n"))
 	}
-	start(`"Read","mcp__jarvis__agents_list","mcp__jarvis__phone_device_info"`)
-	start(`"mcp__jarvis__phone_device_info","Read","mcp__jarvis__agents_list"`)
+	start(`"Read","mcp__persona__agents_list","mcp__persona__phone_device_info"`)
+	start(`"mcp__persona__phone_device_info","Read","mcp__persona__agents_list"`)
 	if logs.Len() != 0 {
 		t.Fatalf("the same tools in another order: %s", logs.String())
 	}
-	start(`"Read","mcp__jarvis__agents_list"`)
-	if !strings.Contains(logs.String(), "tools changed since its last start (+[] -[mcp__jarvis__phone_device_info])") {
+	start(`"Read","mcp__persona__agents_list"`)
+	if !strings.Contains(logs.String(), "tools changed since its last start (+[] -[mcp__persona__phone_device_info])") {
 		t.Fatalf("logged %q", logs.String())
 	}
 }

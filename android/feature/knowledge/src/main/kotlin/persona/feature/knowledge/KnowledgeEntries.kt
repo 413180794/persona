@@ -14,8 +14,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 
-@Serializable @SerialName("jarvis.feature.knowledge.KnowledgeRoute") data object KnowledgeRoute : NavKey
-@Serializable @SerialName("jarvis.feature.knowledge.KnowledgeDetailRoute") data class KnowledgeDetailRoute(val kind: KnowledgeKind, val id: String) : NavKey
+@Serializable @SerialName("persona.feature.knowledge.KnowledgeRoute") data object KnowledgeRoute : NavKey
+@Serializable @SerialName("persona.feature.knowledge.KnowledgeDetailRoute") data class KnowledgeDetailRoute(val kind: KnowledgeKind, val id: String) : NavKey
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)

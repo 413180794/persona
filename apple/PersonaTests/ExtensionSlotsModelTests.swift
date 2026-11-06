@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The plugins' UI slots (docs/extensions.md「UI 插槽」): what the hub lists and the app keeps (entries, cards, badges),
 /// the new items (chart, stat_grid), refresh_after, and the plugin_ui event.

@@ -156,7 +156,7 @@ class ApproveFirstActivity : ComponentActivity() {
     }
 
     companion object {
-        const val ACTION_APPROVE = "jarvis.platform.shortcuts.APPROVE"
+        const val ACTION_APPROVE = "persona.platform.shortcuts.APPROVE"
     }
 }
 

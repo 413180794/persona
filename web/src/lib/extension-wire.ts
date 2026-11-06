@@ -347,8 +347,8 @@ export interface ThemeItem {
 /**
  * A look every app draws itself: Mochi (the default), Visor, Circuit.
  */
-export type BuiltinLook = "persona" | "jarvis" | "jarvis-circuit" | (string & {});
-export const BUILTIN_LOOKS = ["persona", "jarvis", "jarvis-circuit"] as const;
+export type BuiltinLook = "persona" | "persona-visor" | "persona-circuit" | (string & {});
+export const BUILTIN_LOOKS = ["persona", "persona-visor", "persona-circuit"] as const;
 
 /**
  * A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
@@ -596,12 +596,12 @@ export interface AssistantItem {
  * or an interpreter.
  */
 export interface MCPServerItem {
-  /** The server's name for the assistant; not jarvis or persona. */
+  /** The server's name for the assistant; not persona or persona. */
   id: string;
   /** Looked up on PATH, then in ~/bin. */
   command: string;
   /**
-   * A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+   * A PERSONA_ variable (PERSONA_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
    * leave the server out.
    */
   env?: string;
@@ -2088,7 +2088,7 @@ export interface Action {
    */
   reply?: string;
   /**
-   * Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+   * Assistant only: an https URL or a validated persona/persona session, task, kb or file target, opened inside the
    * app.
    */
   open?: string;

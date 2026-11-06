@@ -23,7 +23,7 @@ class ConnectDeviceModelTest {
         override suspend fun pairCode(): AppPairCode {
             fail?.let { throw it }
             codes++
-            return AppPairCode("jp_$codes", 600_000, "jarvis://pair?token=jp_$codes", QrImage(1, listOf("1")))
+            return AppPairCode("jp_$codes", 600_000, "persona://pair?token=jp_$codes", QrImage(1, listOf("1")))
         }
     }
 
@@ -32,7 +32,7 @@ class ConnectDeviceModelTest {
         var now = 0L
         val model = ConnectDeviceModel(hub) { now }
         model.make()
-        assertEquals("jarvis://pair?token=jp_1", model.state.value.code?.pairUrl)
+        assertEquals("persona://pair?token=jp_1", model.state.value.code?.pairUrl)
         assertEquals(600, model.state.value.secondsLeft)
         assertEquals("10:00", clock(model.state.value.secondsLeft))
         assertFalse(model.poll())
@@ -62,7 +62,7 @@ class ConnectDeviceModelTest {
     @Test fun anUnreadableExpiryStillShowsTheCode() {
         assertEquals(1_000 + PairCodeLifeMs, localExpiry(0, 1_000))
         assertEquals(1_000 + PairCodeLifeMs, localExpiry(500, 1_000))
-        val state = ConnectDeviceState(ConnectPhase.Showing(AppPairCode("jp", localExpiry(0, 1_000), "jarvis://pair")), now = 1_000)
+        val state = ConnectDeviceState(ConnectPhase.Showing(AppPairCode("jp", localExpiry(0, 1_000), "persona://pair")), now = 1_000)
         assertFalse(state.expired)
         assertEquals(600, state.secondsLeft)
     }

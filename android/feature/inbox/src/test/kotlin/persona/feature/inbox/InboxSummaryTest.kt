@@ -24,7 +24,7 @@ class InboxSummaryTest {
     )
     private fun working(row: InboxRow) = row.id.startsWith("busy")
 
-    @Test fun rowsAnAgentWorksOnAreJarvissNotTheUsers() {
+    @Test fun rowsAnAgentWorksOnArePersonasNotTheUsers() {
         assertEquals("1 条要回，Persona 在办 2 件", inboxSummary(res, buildInboxList(items), ::working))
     }
 

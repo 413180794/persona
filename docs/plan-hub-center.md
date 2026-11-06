@@ -30,14 +30,14 @@ The user added on 2026-11-02: **recommend that users install only one hub and us
                   │    ▲                           │    ▲
   hub connects    │    │ computer connects         │    │   computers attached to a member: the primary reaches them over the member's link
    (passive)      ▼    │ (active)                  ▼    │
-                 service preinstalled on the computer: resident node + connector jarvis-link
+                 service preinstalled on the computer: resident node + connector persona-link
 ```
 
 | Role | What it does |
 | --- | --- |
 | **Primary hub** | The only one in the group. Serves all clients and holds all state (session index, interactions, push, device credentials, assistant, Inbox, knowledge base, model config, scheduled tasks…), and connects to every computer (directly, or through member hubs) |
 | **Member hub** | Does only two things: forwards client requests to the primary unchanged, and relays the node streams of the computers attached to it to the primary. It no longer drives nodes or serves clients itself; its own assistant / Inbox / scheduled tasks are suspended (the data stays and comes back after it leaves the group) |
-| **Computer** | Preinstalled resident node (`personad node`, which holds all the functionality) and the connector jarvis-link (only discovery, reporting and the link; it passes everything through to `~/.persona/node-attach.sock` unchanged and carries no functionality, per the user's 2026-10-31 requirement) |
+| **Computer** | Preinstalled resident node (`personad node`, which holds all the functionality) and the connector persona-link (only discovery, reporting and the link; it passes everything through to `~/.persona/node-attach.sock` unchanged and carries no functionality, per the user's 2026-10-31 requirement) |
 
 With a single hub and no linking, it is the primary and everything works as it does today.
 
@@ -59,7 +59,7 @@ With a single hub and no linking, it is the primary and everything works as it d
 
 ## 4. Connecting computers: preinstalled service, no SSH
 
-- Every computer has two things preinstalled: the resident node (a launchd / systemd service; Windows see #299) and the connector jarvis-link (what the Mac menu bar app, Linux headless, and the Windows tray carry).
+- Every computer has two things preinstalled: the resident node (a launchd / systemd service; Windows see #299) and the connector persona-link (what the Mac menu bar app, Linux headless, and the Windows tray carry).
 - **One connector, two modes** (chosen at pairing, changeable later):
 
   | Mode | Who connects to whom | Suited to |
@@ -78,8 +78,8 @@ With a single hub and no linking, it is the primary and everything works as it d
     Authentication failures are rate-limited per source. Nothing beyond these endpoints is offered: no shell, files, or port forwarding; it can only reach node-attach.sock.
   - The hub pins the connector fingerprint recorded at pairing.
 - **Passive-mode pairing goes the other direction** (the computer can't necessarily reach the hub):
-  1. On the computer, `jarvis-link pair --listen [:18663]` (in the menu bar / tray, choose "Let the hub connect"): generates a one-time pairing code and prints the link
-     `jarvis://connector?addr=<candidate addresses>&fp=<connector fingerprint>&code=<one-time code>`, valid for 10 minutes.
+  1. On the computer, `persona-link pair --listen [:18663]` (in the menu bar / tray, choose "Let the hub connect"): generates a one-time pairing code and prints the link
+     `persona://connector?addr=<candidate addresses>&fp=<connector fingerprint>&code=<one-time code>`, valid for 10 minutes.
   2. In the hub admin UI, paste the link into **Computers › Add computer › Hub connects** (you can edit the address and set a proxy): the hub connects with the pinned fingerprint and trades the one-time code for a long-term credential
      (the hub generates a random credential and hands it to the connector, which stores the hash), then opens the stream to node as usual.
   3. The hub stores the credential encrypted in Postgres (the same AES-GCM approach as mail credentials), not in `hub.json`.
@@ -107,12 +107,12 @@ With a single hub and no linking, it is the primary and everything works as it d
 | `GET /api/v1/admin/mesh` | `{"role":"center|member","center":{"hub_id","name","online"},"term":3}` |
 | `GET /api/v1/admin/peers` | Adds `role` to each item |
 | `POST /api/v1/admin/peers/{hub_id}/center` | Set as primary (requires `{"confirm":true}` when the old primary is offline) |
-| `POST /api/v1/admin/machines` | Supports kind `service`: `{"pair_link":"jarvis://connector?…","id","name","address"?,"proxy"?}` |
+| `POST /api/v1/admin/machines` | Supports kind `service`: `{"pair_link":"persona://connector?…","id","name","address"?,"proxy"?}` |
 | `GET /api/v1/admin/machines` | Each machine includes `paths` |
 
 ## 7. Division of work
 
-| Lane | Scope | issue | worktree (`~/code/self/jarvis-mesh/`) |
+| Lane | Scope | issue | worktree (`~/code/self/persona-mesh/`) |
 | --- | --- | --- | --- |
 | H | Hub side: multi-path machine model and route selection; kind `service` (dial the connector, pinning, encrypted credential storage, socks5 proxy); SSH demoted to compatibility; single-primary rework (choosing the primary, terms, members forwarding clients, members handing computers to the primary, suspending members' own services, moving credentials to the primary, set as primary); admin API and the matching admin UI pages (`web/src/admin/`); docs (rewrite `mesh.md`, `server.md`, `config.md`, `protocol.md`) | #435 | `h-center` |
 | C | Connector: passive mode (listening, TLS identity, pairing code, auth and rate limiting, pass-through to node-attach.sock only), `pair --listen`, mode switching; Mac menu bar shows the mode and listen address; Linux headless install supports passive mode; docs `link.md`. Doesn't touch `server/internal/hub/` | #436 | `c-connector` |

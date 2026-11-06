@@ -1,20 +1,20 @@
 import XCTest
 
 /// Control Computer on a Mac's page (docs/computer-use.md), against scripts/mock/mock_hub.py with `MOCK_COMPUTER=<state>`
-/// (TEST_RUNNER_JARVIS_COMPUTER_HUB=http://127.0.0.1:<port>, TEST_RUNNER_JARVIS_COMPUTER_STATE=<state>): the section
-/// says the state, and its switch turns it off and on; not installed, it installs and asks for the permissions. JARVIS_SHOTS
+/// (TEST_RUNNER_PERSONA_COMPUTER_HUB=http://127.0.0.1:<port>, TEST_RUNNER_PERSONA_COMPUTER_STATE=<state>): the section
+/// says the state, and its switch turns it off and on; not installed, it installs and asks for the permissions. PERSONA_SHOTS
 /// saves the screenshots there too.
 final class ComputerSectionTests: XCTestCase {
-    private var state: String { ProcessInfo.processInfo.environment["JARVIS_COMPUTER_STATE"] ?? "ready" }
+    private var state: String { ProcessInfo.processInfo.environment["PERSONA_COMPUTER_STATE"] ?? "ready" }
 
     /// The page, scrolled to the section: its switch and its state line.
     @MainActor private func open() throws -> (XCUIApplication, toggle: XCUIElement, status: XCUIElement) {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_COMPUTER_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_COMPUTER (JARVIS_COMPUTER_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_COMPUTER_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_COMPUTER (PERSONA_COMPUTER_HUB)")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openScreenFresh", "YES"]
         app.launchPinned()
         let toggle = app.switches["computer-switch"].firstMatch
@@ -44,10 +44,10 @@ final class ComputerSectionTests: XCTestCase {
 
     /// VNC (#1184): the hub's live screen page in a web view, which reaches the Mac's Screen Sharing through the port
     /// relay and asks for its sign-in. Needs the mock to serve the built page (MOCK_WEB=web/dist) and to relay to a real
-    /// Screen Sharing on this Mac's 5900 (TEST_RUNNER_JARVIS_COMPUTER_SCREEN=1).
+    /// Screen Sharing on this Mac's 5900 (TEST_RUNNER_PERSONA_COMPUTER_SCREEN=1).
     @MainActor func testTheLiveScreenAsksForTheMacsSignIn() throws {
-        guard state == "ready", ProcessInfo.processInfo.environment["JARVIS_COMPUTER_SCREEN"] == "1" else {
-            throw XCTSkip("MOCK_COMPUTER=ready with MOCK_WEB and a Screen Sharing on 5900 (JARVIS_COMPUTER_SCREEN=1)")
+        guard state == "ready", ProcessInfo.processInfo.environment["PERSONA_COMPUTER_SCREEN"] == "1" else {
+            throw XCTSkip("MOCK_COMPUTER=ready with MOCK_WEB and a Screen Sharing on 5900 (PERSONA_COMPUTER_SCREEN=1)")
         }
         let (app, _, _) = try open()
         let look = app.buttons["computer-screen"].firstMatch
@@ -64,12 +64,12 @@ final class ComputerSectionTests: XCTestCase {
     /// In the chat, under the assistant's View Computer / Control Computer: VNC for the Mac it operated (MOCK_COMPUTER=ready has a
     /// conversation where it did 6 × 7 on MacBook).
     @MainActor func testTheChatOffersTheLiveScreen() throws {
-        guard state == "ready", let hub = ProcessInfo.processInfo.environment["JARVIS_COMPUTER_HUB"] else {
-            throw XCTSkip("MOCK_COMPUTER=ready (JARVIS_COMPUTER_HUB)")
+        guard state == "ready", let hub = ProcessInfo.processInfo.environment["PERSONA_COMPUTER_HUB"] else {
+            throw XCTSkip("MOCK_COMPUTER=ready (PERSONA_COMPUTER_HUB)")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant",
                                "-openAssistant", "server/b2e4d6f8-0000-4000-8000-0000000000c1", "-openAllWork", "YES",
                                "-showToolDetails", "YES", "-showRunsOpen", "YES"] // BeautifulUI folds the two into a run of chips
@@ -86,11 +86,11 @@ final class ComputerSectionTests: XCTestCase {
         shot(app, "computer-chat-tool")
     }
 
-    /// The apps always allowed for the assistant on this Mac (#1507; MOCK_COMPUTER_APPS=1, JARVIS_COMPUTER_APPS=1):
+    /// The apps always allowed for the assistant on this Mac (#1507; MOCK_COMPUTER_APPS=1, PERSONA_COMPUTER_APPS=1):
     /// listed under VNC, each taken back with Remove (asked about again next time).
     @MainActor func testAllowedAppsCanBeTakenBack() throws {
-        guard state == "ready", ProcessInfo.processInfo.environment["JARVIS_COMPUTER_APPS"] == "1" else {
-            throw XCTSkip("MOCK_COMPUTER=ready MOCK_COMPUTER_APPS=1 (JARVIS_COMPUTER_APPS=1)")
+        guard state == "ready", ProcessInfo.processInfo.environment["PERSONA_COMPUTER_APPS"] == "1" else {
+            throw XCTSkip("MOCK_COMPUTER=ready MOCK_COMPUTER_APPS=1 (PERSONA_COMPUTER_APPS=1)")
         }
         let (app, _, status) = try open()
         XCTAssertTrue(status.waitForExistence(timeout: 10))
@@ -217,14 +217,14 @@ final class ComputerSectionTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        let look = ProcessInfo.processInfo.environment["JARVIS_LOOK"].map { "-" + $0 } ?? ""
+        let look = ProcessInfo.processInfo.environment["PERSONA_LOOK"].map { "-" + $0 } ?? ""
         let full = "\(name)-\(UITestStyle.name)\(look)"
         let png = app.screenshot()
         let attachment = XCTAttachment(screenshot: png)
         attachment.name = full
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(full + ".png"))
         }
     }

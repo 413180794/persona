@@ -323,7 +323,7 @@ export function linkify(md: string, { math = false }: { math?: boolean } = {}): 
     .join("");
 }
 
-// jarvis://session links survive (they move to that conversation); everything else as react-markdown decides
+// persona://session links survive (they move to that conversation); everything else as react-markdown decides
 // (javascript: and other apps' schemes are dropped).
 export function markdownUrl(url: string): string {
   return linkRoute(url).kind === "session" ? url : defaultUrlTransform(url);

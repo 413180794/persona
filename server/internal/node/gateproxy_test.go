@@ -100,7 +100,7 @@ func (a *fakeAPI) requests() []apiSeen {
 // gateNode is a node the hub gave the proxied example gate on api, with the example skill in cwd.
 func gateNode(t *testing.T, api string, user ...proto.LarkRule) (*Node, string) {
 	t.Helper()
-	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0),
 		larkCfg: proto.AssistantLark{Gates: []proto.CommandGate{proxiedGate(api, user...)}}}
 	t.Cleanup(func() { n.gates().close() })
@@ -370,9 +370,9 @@ func TestGatedToolSendsThroughTheProxy(t *testing.T) {
 	api := newFakeAPI(t)
 	n, hub := runtimeNode(t)
 	assistantHub(hub)
-	skills := filepath.Join(n.home, ".jarvis", "skills")
-	t.Setenv("JARVIS_SKILLS_DIR", skills)
-	n.dir = filepath.Join(n.home, ".jarvis")
+	skills := filepath.Join(n.home, ".persona", "skills")
+	t.Setenv("PERSONA_SKILLS_DIR", skills)
+	n.dir = filepath.Join(n.home, ".persona")
 	script := filepath.Join(skills, "example", "scripts", "ex.sh")
 	_ = os.MkdirAll(filepath.Dir(script), 0o755)
 	_ = os.WriteFile(filepath.Join(skills, "example", "SKILL.md"), []byte("---\nname: example\n---\n"), 0o644)

@@ -22,7 +22,7 @@ internal fun managementPage(name: String): ResolvedRoute? {
         "markets" -> ResolvedRoute(AppTab.Settings, ExtensionMarketsRoute)
         "market-plugin" -> argument?.let { market -> parts.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { ResolvedRoute(AppTab.Settings, ExtensionCatalogRoute(market, it)) } }
         "launcher" -> argument?.let { machine -> parts.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { ResolvedRoute(AppTab.Agents, LauncherRoute(machine, it)) } }
-        "new-agent" -> ResolvedRoute(AppTab.Jarvis, NewAgentRoute(argument, parts.getOrNull(2)?.takeIf { it.isNotBlank() },
+        "new-agent" -> ResolvedRoute(AppTab.Persona, NewAgentRoute(argument, parts.getOrNull(2)?.takeIf { it.isNotBlank() },
             prompt = if (argument == null) null else "这是知识库里这个项目的档案（示例）。\n\n"))  // i18n-ignore: debug preview fixture data
         else -> null
     }

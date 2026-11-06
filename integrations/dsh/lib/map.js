@@ -5,12 +5,12 @@
 import { appToolName, clipInput, light, snippet } from '../../runtime-sdk/index.js'
 
 // The live snapshot the Persona assistant starts each message with (node/assistant_context.go; a bare <persona-context>
-// tag, <jarvis-context> from older nodes, unlike the phone's quoted context, which carries attributes): context for the
+// tag, <persona-context> from older nodes, unlike the phone's quoted context, which carries attributes): context for the
 // model, not shown in the chat.
-const SNAPSHOT_RE = /<(?:jarvis|persona)-context>[\s\S]*?<\/(?:jarvis|persona)-context>\s*/g
+const SNAPSHOT_RE = /<persona-context>[\s\S]*?<\/persona-context>\s*/g
 
 /** Persona seq of a DSH event: DSH counts from 0, Persona treats 0 as "nothing yet". */
-export const jarvisSeq = (dshSeq) => dshSeq + 1
+export const personaSeq = (dshSeq) => dshSeq + 1
 /** DSH seq of a Persona seq. */
 export const dshSeq = (seq) => seq - 1
 
@@ -89,14 +89,14 @@ const TURN_NOTES = {
 }
 
 /**
- * The items of one DSH session event, in block order; ids are "<jarvis seq>#<block>". Only what a person reads in a
+ * The items of one DSH session event, in block order; ids are "<persona seq>#<block>". Only what a person reads in a
  * chat: the human's prompts (source kind user), the assistant's thinking / text / tool calls, tool results, and
  * notices for interrupted or failed turns and compactions. Context DSH injects (time, skills, instructions) is left
  * out; queued inbox splices are left out too, their message is logged again as a user/message when it enters.
  */
 export function eventItems(event, { full = false } = {}) {
   if (!event || typeof event.seq !== 'number') return []
-  const seq = jarvisSeq(event.seq)
+  const seq = personaSeq(event.seq)
   const at = ts(event.time)
   const out = []
   const push = (idx, item) => out.push(full ? { id: `${seq}#${idx}`, seq, ts: at, ...item } : light({ id: `${seq}#${idx}`, seq, ts: at, ...item }))

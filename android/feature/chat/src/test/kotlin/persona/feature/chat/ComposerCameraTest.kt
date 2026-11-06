@@ -4,7 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ComposerCameraTest {
-    private val app = "com.example.jarvis"
+    private val app = "com.example.persona"
     private val shot = ComposerAttachment("shot", "camera-1.jpg", "content://$app.chat.files/chat-captures/camera-1.jpg", true)
     private val kept = ComposerAttachment("kept", "camera-2.jpg", "content://$app.chat.files/chat-captures/camera-2.jpg", true)
     private val picked = ComposerAttachment("picked", "photo.jpg", "content://media/external/images/media/12", true)

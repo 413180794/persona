@@ -1549,12 +1549,12 @@ func (s *Service) TodoLink(ctx context.Context, p TodoLinkParams) (TodoLinkResul
 
 // contextLeadRe and contextCloseRe are where a prompt's context block starts and ends (contextOpenRe: channels_plugin.go).
 var (
-	contextLeadRe  = regexp.MustCompile(`^<(?:jarvis|persona)-context\b`)
-	contextCloseRe = regexp.MustCompile(`</(?:jarvis|persona)-context>`)
+	contextLeadRe  = regexp.MustCompile(`^<persona-context\b`)
+	contextCloseRe = regexp.MustCompile(`</persona-context>`)
 )
 
 // cleanPromptTitle is a title for an agent from the prompt it was started with: its first line past a
-// context block (<persona-context>, or <jarvis-context> as older ones were, #3182).
+// context block (<persona-context>, as older ones were, #3182).
 func cleanPromptTitle(prompt string) string {
 	s := strings.TrimSpace(prompt)
 	if contextLeadRe.MatchString(s) {

@@ -17,7 +17,7 @@ import { ALLOW_ENTRY, alwaysAllowed, branchItems, branchKey, entryItems, firstTe
 export const RUNTIME_VERSION = '0.3.0'
 const DISK_EVERY = 30_000 // ms: list the sessions on disk at most this often (pi-web)
 const TERMINAL_HOSTS = new Set(['herdr', 'terminal']) // resumed in the machine's terminal engine, not in pi-web
-const RELOAD_COMMAND = 'jarvis-reload' // the command a session runs on itself to load a new version (docs/pi.md "Auto-update")
+const RELOAD_COMMAND = 'persona-reload' // the command a session runs on itself to load a new version (docs/pi.md "Auto-update")
 const IDLE_EVERY = 5000 // ms: how often to look whether the process is idle enough to switch versions
 
 /**
@@ -119,7 +119,7 @@ export function createPiHost(deps, options = {}) {
       const all = await deps.SessionManager.listAll()
       disk = { at: Date.now(), rows: all, paths: new Map(all.map((s) => [s.id, s.path])) }
     } catch (err) {
-      log(`jarvis: list pi sessions: ${err.message}`)
+      log(`persona: list pi sessions: ${err.message}`)
     }
   }
 
@@ -245,7 +245,7 @@ export function createPiHost(deps, options = {}) {
     if (!path) throw new RpcError('这个 pi 会话没有在这里运行，这次没有发送', 'not_running')
     if (TERMINAL_HOSTS.has(hostOfFile(path))) {
       // A session that ran in a terminal goes back to one (the node resumes it in herdr); this node cannot.
-      throw new RpcError('这个 pi 会话是在终端（herdr）里跑的，要在 herdr 里接着它：更新这台电脑上的 jarvisd 后再发。这次没有发送', 'not_running')
+      throw new RpcError('这个 pi 会话是在终端（herdr）里跑的，要在 herdr 里接着它：更新这台电脑上的 personad 后再发。这次没有发送', 'not_running')
     }
     // On disk: pi-web opens it and prompts (its extension load registers it here as it starts).
     await webCall(`/api/agent/${encodeURIComponent(id)}`, { type: 'prompt', message: text, ...(images.length ? { images } : {}) })
@@ -319,7 +319,7 @@ export function createPiHost(deps, options = {}) {
         })
         commandReady = true
       } catch (err) {
-        log(`jarvis: ${RELOAD_COMMAND}: ${err.message}`)
+        log(`persona: ${RELOAD_COMMAND}: ${err.message}`)
       }
     }
     const track = (ctx) => {
@@ -449,7 +449,7 @@ export function createPiHost(deps, options = {}) {
       const { hash, files } = verifyPackage(await rt.fetchPackage(update.name), update.name)
       if (hash === update.hash || bad.has(hash)) return
       installCurrent(update.store, hash, files)
-      log(`jarvis: ${update.name} ${hash.slice(0, 12)} from the node is installed (running ${update.hash.slice(0, 12)})`)
+      log(`persona: ${update.name} ${hash.slice(0, 12)} from the node is installed (running ${update.hash.slice(0, 12)})`)
       if (update.exit) {
         rt.stop()
         update.exit(hash)
@@ -462,7 +462,7 @@ export function createPiHost(deps, options = {}) {
       maybeReload()
     } catch (err) {
       bad.add(offer.hash)
-      log(`jarvis: ${update.name} update to ${offer.hash.slice(0, 12)} failed: ${err.message}`)
+      log(`persona: ${update.name} update to ${offer.hash.slice(0, 12)} failed: ${err.message}`)
     } finally {
       installing = false
     }
@@ -477,7 +477,7 @@ export function createPiHost(deps, options = {}) {
     if (!want || retired || live.size === 0 || !idle()) return
     const sessions = [...live.values()]
     if (!sessions.every((s) => s.reloadable)) {
-      log(`jarvis: ${update.name} ${want.slice(0, 12)} is installed; this pi cannot reload its extension by itself — it takes effect when pi restarts`)
+      log(`persona: ${update.name} ${want.slice(0, 12)} is installed; this pi cannot reload its extension by itself — it takes effect when pi restarts`)
       bad.add(want)
       want = ''
       clearInterval(idleTimer)
@@ -485,14 +485,14 @@ export function createPiHost(deps, options = {}) {
     }
     retired = true
     clearInterval(idleTimer)
-    log(`jarvis: switching ${sessions.length} session(s) to ${update.name} ${want.slice(0, 12)}`)
+    log(`persona: switching ${sessions.length} session(s) to ${update.name} ${want.slice(0, 12)}`)
     rt.stop()
     for (const s of sessions) {
       try {
         const r = s.pi.sendUserMessage(`/${RELOAD_COMMAND}`, { expandPromptTemplates: true })
-        r?.catch?.((err) => log(`jarvis: reload ${s.id}: ${err.message}`))
+        r?.catch?.((err) => log(`persona: reload ${s.id}: ${err.message}`))
       } catch (err) {
-        log(`jarvis: reload ${s.id}: ${err.message}`)
+        log(`persona: reload ${s.id}: ${err.message}`)
       }
     }
   }
@@ -557,7 +557,7 @@ export function createPiHost(deps, options = {}) {
      */
     revive() {
       if (!retired) return
-      log(`jarvis: ${update?.name} ${want.slice(0, 12)} did not load; staying on ${update?.hash.slice(0, 12)}`)
+      log(`persona: ${update?.name} ${want.slice(0, 12)} did not load; staying on ${update?.hash.slice(0, 12)}`)
       bad.add(want)
       want = ''
       retired = false
@@ -576,7 +576,7 @@ export function createPiHost(deps, options = {}) {
  * undefined when this process is not pi-web's server.
  */
 export function piWebOf(argv = process.argv, env = process.env) {
-  const hostKind = env.PERSONA_PI_HOST ?? env.JARVIS_PI_HOST
+  const hostKind = env.PERSONA_PI_HOST
   const isWeb = hostKind === 'web' || (hostKind !== 'cli' && argv.some((a) => a.includes('pi-web')) && argv.includes('start'))
   if (!isWeb) return undefined
   const i = argv.indexOf('-p')

@@ -123,7 +123,7 @@ func (n *Node) setOmpSetting(key string, value any) error {
 	if st, err := os.Stat(path); err == nil {
 		mode = st.Mode().Perm()
 	}
-	tmp := path + ".jarvis.tmp"
+	tmp := path + ".persona.tmp"
 	if err := os.WriteFile(tmp, []byte(text), mode); err != nil {
 		return err
 	}

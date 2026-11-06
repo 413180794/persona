@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The inbox_item slot (docs/extensions.md「收件箱条目」, #1682): which sources' items a plugin draws, the item's body as
 /// the plugin's View (`context.item`, its buttons), today's body whenever that cannot be (quietly, or with a line and
@@ -180,7 +180,7 @@ import Testing
         #expect(item("persona://inbox/mail%3Aacc1%2Ft1%3A501/source") == "mail:acc1/t1:501", "the id is path-escaped")
         #expect(item("PERSONA://Inbox/lark:F1:1051/source") == "lark:F1:1051")
         for not in ["persona://inbox/lark:F1:1051", "persona://inbox/lark:F1:1051/other", "persona://inbox//source",
-                    "persona://chat/lark:F1:1051/source", "https://inbox/lark:F1:1051/source", "jarvis://inbox/x/source"] {
+                    "persona://chat/lark:F1:1051/source", "https://inbox/lark:F1:1051/source", "persona://inbox/x/source"] {
             #expect(item(not) == nil, "\(not)")
         }
         // What a button may open: https anywhere; the item's own source only on that item's page.

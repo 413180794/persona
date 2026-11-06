@@ -68,9 +68,9 @@ class SettingsParityShotsTest {
 
     private object Providers : ProviderSetup {
         val list = listOf(
-            HubLauncher("team", source = "jarvis", baseUrl = "https://gateway.example.com/v1", model = "example-pro", hasKey = true, auth = "bearer",
+            HubLauncher("team", source = "persona", baseUrl = "https://gateway.example.com/v1", model = "example-pro", hasKey = true, auth = "bearer",
                 models = listOf(PresetModel("example-pro"), PresetModel("example-lite"))),
-            HubLauncher("api-direct", source = "jarvis", kind = "api", api = "responses", baseUrl = "https://api.example.com", model = "example-mini", hasKey = true),
+            HubLauncher("api-direct", source = "persona", kind = "api", api = "responses", baseUrl = "https://api.example.com", model = "example-mini", hasKey = true),
             HubLauncher("cc_work", source = "zshrc", baseUrl = "https://proxy.example.com", model = "example-max", machines = listOf("hub", "mac"),
                 definitions = mapOf("hub" to "cc_work() {\n  ANTHROPIC_BASE_URL=https://proxy.example.com \\\n  ANTHROPIC_AUTH_TOKEN=••• claude \"$@\"\n}")),
             HubLauncher("cc_old", source = "zshrc", model = "example-legacy", machines = listOf("mac"), hidden = true),

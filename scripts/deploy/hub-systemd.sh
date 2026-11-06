@@ -4,22 +4,22 @@
 # writes the same units: keep the two in step.
 set -euo pipefail
 ROOT="${_PERSONA_STATE_DIR:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/../persona_identity.py" --service hub --prepare)}"
-export PERSONA_HOME="$ROOT" JARVIS_HOME="$ROOT"
+export PERSONA_HOME="$ROOT"
 # Blue-green (docs/hub-restart.md "Blue-green switch"): the running hub's edge starts the new binary next to the one serving
 # and switches once it is up, nothing restarts. It returns 0 once switched; 1 (no edge here, or one older than the new
 # binary's protocol: `hub switch` exits 3; or a binary that cannot run it) to have the caller restart the service;
 # it exits the script when the new binary did not come up (exit 1: the hub serves on the old one, back in place).
 switch_or_restart() {
   local prev=() rc=0
-  [ -x "$ROOT/bin/jarvisd.prev" ] && prev=(--prev "$ROOT/bin/jarvisd.prev")
-  "$ROOT/bin/jarvisd" hub switch --timeout 8m ${prev[@]+"${prev[@]}"} || rc=$?
+  [ -x "$ROOT/bin/personad.prev" ] && prev=(--prev "$ROOT/bin/personad.prev")
+  "$ROOT/bin/personad" hub switch --timeout 8m ${prev[@]+"${prev[@]}"} || rc=$?
   case $rc in
     0) echo "hub: switched to the new binary (blue-green, nothing restarted)"; return 0 ;;
     1) ;;
     *) echo "hub: no edge to switch on (hub switch: exit $rc): restarting the service"; return 1 ;;
   esac
   if [ ${#prev[@]} -gt 0 ]; then
-    cp -p "$ROOT/bin/jarvisd.prev" "$ROOT/bin/jarvisd.new" && mv "$ROOT/bin/jarvisd.new" "$ROOT/bin/jarvisd"
+    cp -p "$ROOT/bin/personad.prev" "$ROOT/bin/personad.new" && mv "$ROOT/bin/personad.new" "$ROOT/bin/personad"
     echo "hub: the new binary did not take over; the old one serves on and is back in place" >&2
   else
     echo "hub: the new binary did not take over; the old one serves on" >&2
@@ -28,10 +28,10 @@ switch_or_restart() {
 }
 if [ "$(uname -s)" = Darwin ] && ! command -v systemctl >/dev/null 2>&1; then
   # A Mac hub runs under a launchd agent the user set up (no systemd): restart the one whose program is this root's
-  # jarvisd with "hub" (through ~/.jarvis or ~/.persona, whichever path it names). Nothing is installed here.
+  # personad with "hub" (through ~/.persona or ~/.persona, whichever path it names). Nothing is installed here.
   label=$(python3 - <<'PY'
 import glob, os, plistlib
-want = os.path.realpath(os.path.join(os.environ['PERSONA_HOME'], 'bin/jarvisd'))
+want = os.path.realpath(os.path.join(os.environ['PERSONA_HOME'], 'bin/personad'))
 for path in sorted(glob.glob(os.path.expanduser('~/Library/LaunchAgents/*.plist'))):
     try:
         with open(path, 'rb') as f:
@@ -45,7 +45,7 @@ for path in sorted(glob.glob(os.path.expanduser('~/Library/LaunchAgents/*.plist'
 PY
 )
   if [ -z "$label" ]; then
-    echo "hub: no launchd agent in ~/Library/LaunchAgents runs $ROOT/bin/jarvisd hub; restart the hub yourself" >&2
+    echo "hub: no launchd agent in ~/Library/LaunchAgents runs $ROOT/bin/personad hub; restart the hub yourself" >&2
     exit 1
   fi
   switch_or_restart && exit 0
@@ -53,12 +53,12 @@ PY
   echo "hub: restarted launchd agent $label"
   exit 0
 fi
-# The listening sockets belong to jarvisd.socket (socket activation, docs/hub-restart.md "No gap"): restarting the
+# The listening sockets belong to personad.socket (socket activation, docs/hub-restart.md "No gap"): restarting the
 # hub never closes the port, connections made meanwhile wait for the next process instead of being refused.
 # PERSONA_HUB_SOCKET=0 goes back to the hub listening itself (the rollback): the socket unit is removed.
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-SOCKET_FILE="$UNIT_DIR/jarvisd.socket"
-SERVICE_FILE="$UNIT_DIR/jarvisd.service"
+SOCKET_FILE="$UNIT_DIR/personad.socket"
+SERVICE_FILE="$UNIT_DIR/personad.service"
 socket_before=$(cat "$SOCKET_FILE" 2>/dev/null || true)
 service_before=$(cat "$SERVICE_FILE" 2>/dev/null || true)
 PERSONA_HUB_SOCKET="${PERSONA_HUB_SOCKET:-1}" python3 - <<'PY'
@@ -84,7 +84,7 @@ unit_dir = Path(os.environ.get('XDG_CONFIG_HOME') or str(Path.home() / '.config'
 edge = os.environ.get('PERSONA_HUB_EDGE')
 if edge is None:
     try:
-        m = re.search(r'PERSONA_HUB_EDGE=([^"\s]*)', (unit_dir / 'jarvisd.service').read_text())
+        m = re.search(r'PERSONA_HUB_EDGE=([^"\s]*)', (unit_dir / 'personad.service').read_text())
         edge = m.group(1) if m else ''
     except OSError:
         edge = ''
@@ -95,18 +95,18 @@ unit = [
     '[Unit]', 'Description=Persona hub (personad)', 'After=network-online.target',
 ]
 if use_socket:
-    unit += ['Wants=jarvisd.socket', 'After=jarvisd.socket']
+    unit += ['Wants=personad.socket', 'After=personad.socket']
 unit += [
     '', '[Service]',
-    'ExecStart=' + quote(root + '/bin/jarvisd').replace('$', '$$') + ' hub',
+    'ExecStart=' + quote(root + '/bin/personad').replace('$', '$$') + ' hub',
     'Restart=always', 'RestartSec=3', 'TimeoutStopSec=20',
-    'Environment=' + quote('PERSONA_HOME=' + root), 'Environment=' + quote('JARVIS_HOME=' + root),
+    'Environment=' + quote('PERSONA_HOME=' + root),
     'Environment=PATH=%h/.local/bin:%h/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin',
     *(['Environment=' + quote('PERSONA_HUB_EDGE=' + edge)] if edge else []), '',
     '[Install]', 'WantedBy=default.target', '',
 ]
-(unit_dir / 'jarvisd.service').write_text('\n'.join(unit))
-socket = unit_dir / 'jarvisd.socket'
+(unit_dir / 'personad.service').write_text('\n'.join(unit))
+socket = unit_dir / 'personad.socket'
 if use_socket:
     socket.write_text('\n'.join([
         '[Unit]', "Description=Persona hub's listening sockets (docs/hub-restart.md)", '', '[Socket]',
@@ -114,7 +114,7 @@ if use_socket:
         # An address-bound listener (personad hub setup binds TLS to the LAN address) comes up even while that
         # address is gone (DHCP) instead of failing the socket and the plaintext port with it. Same as hub/setup_service.go.
         'Backlog=4096', 'NoDelay=true', *(['FreeBind=true'] if any(not a.startswith(':') for a in listens) else []),
-        'Service=jarvisd.service', '',
+        'Service=personad.service', '',
         '[Install]', 'WantedBy=sockets.target', '',
     ]))
 elif socket.exists():
@@ -123,30 +123,30 @@ PY
 socket_after=$(cat "$SOCKET_FILE" 2>/dev/null || true)
 service_after=$(cat "$SERVICE_FILE" 2>/dev/null || true)
 systemctl --user daemon-reload
-systemctl --user enable jarvisd >/dev/null 2>&1
+systemctl --user enable personad >/dev/null 2>&1
 # The units as they were and the hub running: switch to the new binary instead of restarting.
-if [ "$socket_before" = "$socket_after" ] && [ "$service_before" = "$service_after" ] && systemctl --user is-active --quiet jarvisd; then
+if [ "$socket_before" = "$socket_after" ] && [ "$service_before" = "$service_after" ] && systemctl --user is-active --quiet personad; then
   if switch_or_restart; then
-    systemctl --user is-active jarvisd
+    systemctl --user is-active personad
     exit 0
   fi
 fi
 if [ -z "$socket_after" ]; then
   # Rolling back (or never used): the hub listens itself again once the socket lets go of the port.
-  if systemctl --user is-active --quiet jarvisd.socket 2>/dev/null || [ -n "$socket_before" ]; then
-    systemctl --user stop jarvisd
-    systemctl --user disable --now jarvisd.socket >/dev/null 2>&1 || true
-    systemctl --user start jarvisd
+  if systemctl --user is-active --quiet personad.socket 2>/dev/null || [ -n "$socket_before" ]; then
+    systemctl --user stop personad
+    systemctl --user disable --now personad.socket >/dev/null 2>&1 || true
+    systemctl --user start personad
   else
-    systemctl --user restart jarvisd
+    systemctl --user restart personad
   fi
-elif ! systemctl --user is-active --quiet jarvisd.socket || [ "$socket_before" != "$socket_after" ]; then
+elif ! systemctl --user is-active --quiet personad.socket || [ "$socket_before" != "$socket_after" ]; then
   # First time, or other addresses: the running hub holds the port itself; one stop to hand it to the socket.
-  systemctl --user stop jarvisd
-  systemctl --user enable jarvisd.socket >/dev/null 2>&1
-  systemctl --user restart jarvisd.socket
-  systemctl --user start jarvisd
+  systemctl --user stop personad
+  systemctl --user enable personad.socket >/dev/null 2>&1
+  systemctl --user restart personad.socket
+  systemctl --user start personad
 else
-  systemctl --user restart jarvisd # the socket keeps listening: nothing is refused meanwhile
+  systemctl --user restart personad # the socket keeps listening: nothing is refused meanwhile
 fi
-systemctl --user is-active jarvisd
+systemctl --user is-active personad

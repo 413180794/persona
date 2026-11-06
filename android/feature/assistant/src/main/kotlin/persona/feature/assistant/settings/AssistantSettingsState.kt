@@ -50,7 +50,7 @@ internal interface TimezoneChoice {
 }
 
 internal class StoredTimezoneChoice(context: Context) : TimezoneChoice {
-    private val preferences = context.applicationContext.getSharedPreferences("jarvis-assistant", Context.MODE_PRIVATE)
+    private val preferences = context.applicationContext.getSharedPreferences("persona-assistant", Context.MODE_PRIVATE)
     override val phoneZone: String get() = TimeZone.getDefault().id
     override var followPhone: Boolean
         get() = preferences.getBoolean("timezone.follow_phone", true)
@@ -354,7 +354,7 @@ internal fun parseMemory(file: MemoryFile, indexed: Pair<String, String?>? = nul
     )
 }
 
-/** `~/.jarvis/assistant` rather than the full path, when it is under the machine's home. */
+/** `~/.persona/assistant` rather than the full path, when it is under the machine's home. */
 internal fun homeRelative(path: String, home: String?): String {
     val root = home?.trimEnd('/')?.takeIf { it.isNotEmpty() } ?: return path
     return when {

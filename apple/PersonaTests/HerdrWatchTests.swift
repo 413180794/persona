@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Agents list's 「herdr 没在运行」 rows (#1916): which machines get one, what a failed read leaves, and On.
 @MainActor struct HerdrWatchTests {

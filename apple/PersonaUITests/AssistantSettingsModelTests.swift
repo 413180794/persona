@@ -7,7 +7,7 @@ final class AssistantSettingsModelTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let value = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+        guard let value = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py")
         }
         hub = value
@@ -15,7 +15,7 @@ final class AssistantSettingsModelTests: XCTestCase {
 
     @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""] + extra
         app.launchPinned()
         return app
@@ -27,8 +27,8 @@ final class AssistantSettingsModelTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let suffix = ProcessInfo.processInfo.environment["JARVIS_SHOT_SUFFIX"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let suffix = ProcessInfo.processInfo.environment["PERSONA_SHOT_SUFFIX"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + suffix + ".png"))
         }
     }

@@ -89,10 +89,10 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	m.mu.Unlock()
 
 	m.mu.Lock()
-	m.sessions = []proto.Session{{SessionID: "main-1", Launcher: "claude", Model: "stale", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
-		{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
-		{SessionID: "side-3", Launcher: "gone", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
-		{SessionID: "daily-4", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
+	m.sessions = []proto.Session{{SessionID: "main-1", Launcher: "claude", Model: "stale", Assistant: true, Cwd: "/home/u/.persona/assistant"},
+		{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.persona/assistant"},
+		{SessionID: "side-3", Launcher: "gone", Assistant: true, Cwd: "/home/u/.persona/assistant"},
+		{SessionID: "daily-4", Launcher: "sss", Assistant: true, Cwd: "/home/u/.persona/assistant"}}
 	m.mu.Unlock()
 	seedTasks(t, h, assistant.Task{ID: "r", Title: "早报", Repeat: "daily", Time: "09:00", Enabled: true, RunMachineID: "box", RunSessionID: "daily-4"})
 	connectAssistant(t, h) // the hub knows a task's own conversation from what the assistant reports
@@ -253,7 +253,7 @@ func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
 			m.mu.Lock()
 			m.peer, m.online = hubPeer, true
 			m.info.Home = "/home/u"
-			m.sessions = []proto.Session{{SessionID: "side", Launcher: "l", Model: c.model, Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
+			m.sessions = []proto.Session{{SessionID: "side", Launcher: "l", Model: c.model, Assistant: true, Cwd: "/home/u/.persona/assistant"}}
 			m.mu.Unlock()
 			connectAssistant(t, h) // what a message to its conversation runs on is its decision
 			if code, out := call(t, h.routes(), "POST", "/api/v1/sessions/"+m.cfg.ID+"/side/messages", h.cfg.Token, `{"text":"hi"}`); code != 200 {
@@ -283,7 +283,7 @@ func (s *newAgentStore) Setting(_ context.Context, key string, out any) (bool, e
 	return true, json.Unmarshal(raw, out)
 }
 
-// A message to a session that is not running and whose launcher nobody knows (started outside Jarvis) carries "New
+// A message to a session that is not running and whose launcher nobody knows (started outside Persona) carries "New
 // Agent's launcher and model, so the node resumes it on them instead of plain claude; a known launcher, a running
 // session and a launcher the app picked are left alone. Which launcher and model that is is the manager's to say
 // (agents.resume_params); while it is not connected the hub adds nothing.
@@ -315,7 +315,7 @@ func TestOfflineSessionWithoutLauncherResumesOnNewAgents(t *testing.T) {
 	m.peer, m.online = hubPeer, true
 	m.sessions = []proto.Session{
 		{SessionID: "gone-1", Status: proto.StatusOffline},
-		{SessionID: "known-2", Status: proto.StatusOffline, Launcher: "mine", StartedByJarvis: true},
+		{SessionID: "known-2", Status: proto.StatusOffline, Launcher: "mine", StartedByPersona: true},
 		{SessionID: "live-3", Status: proto.StatusIdle},
 		{SessionID: "codex-4", Status: proto.StatusOffline, Agent: "codex"},
 	}

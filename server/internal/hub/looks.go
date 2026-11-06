@@ -31,9 +31,9 @@ var builtinLookNames = map[string]struct {
 	name  string
 	names map[string]string
 }{
-	"persona":        {"团子", map[string]string{"en": "Mochi", "ja": "だんご"}},
-	"jarvis":         {"面罩", map[string]string{"en": "Visor", "ja": "バイザー"}},
-	"jarvis-circuit": {"汇流", map[string]string{"en": "Circuit", "ja": "サーキット"}},
+	"persona":         {"团子", map[string]string{"en": "Mochi", "ja": "だんご"}},
+	"persona-visor":   {"面罩", map[string]string{"en": "Visor", "ja": "バイザー"}},
+	"persona-circuit": {"汇流", map[string]string{"en": "Circuit", "ja": "サーキット"}},
 }
 
 // lookView is one look as the apps list it.

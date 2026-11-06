@@ -1290,7 +1290,7 @@ func (h *Hub) memberRecords() []*hubRecord {
 }
 
 // managerHTTP asks manager id (the machine's, for a machine's route) one of its routes (devicewire.Routes) as an app
-// would, for the hub's own features (jarvis_settings); a status that is not 2xx is an error with the body's message.
+// would, for the hub's own features (persona_settings); a status that is not 2xx is an error with the body's message.
 func (h *Hub) managerHTTP(ctx context.Context, id, method, path string, body any, out any) error {
 	req := assistantwire.HTTPRequest{Method: method, Path: path, Header: map[string][]string{"Content-Type": {"application/json"}}}
 	req.Header[assistantwire.RoleHeader] = []string{"full"}

@@ -1,20 +1,20 @@
 import XCTest
 
-/// Typing straight into the terminal against scripts/mock/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>):
+/// Typing straight into the terminal against scripts/mock/mock_hub.py (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>):
 /// a tap brings the keyboard up on the terminal, keys go out in order (batched), the key bar's modifiers apply to them.
 final class TerminalTypingTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
-    /// TEST_RUNNER_JARVIS_TERMINAL_ENGINE picks the terminal's renderer (the Ghostty branch; empty: our own).
+    /// TEST_RUNNER_PERSONA_TERMINAL_ENGINE picks the terminal's renderer (the Ghostty branch; empty: our own).
     private var engine: [String] {
-        ProcessInfo.processInfo.environment["JARVIS_TERMINAL_ENGINE"].map { ["-terminalEngine", $0] } ?? []
+        ProcessInfo.processInfo.environment["PERSONA_TERMINAL_ENGINE"].map { ["-terminalEngine", $0] } ?? []
     }
 
     @MainActor func testKeyboardTypesIntoTheTerminal() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
         app.launchPinned()
@@ -59,11 +59,11 @@ final class TerminalTypingTests: XCTestCase {
     /// subscribe, keys go out as the terminal's bytes over the WebSocket, and the keyboard coming up gives the
     /// terminal fewer rows.
     @MainActor func testDrivingTheTerminalSendsItsBytes() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
         app.launchPinned()
@@ -127,11 +127,11 @@ final class TerminalTypingTests: XCTestCase {
     /// Driving the terminal, a drag is its mouse wheel (as in Moshi): down the screen back in history, up forward —
     /// herdr gives it to Claude Code, which scrolls its conversation itself. The view does not scroll or bounce.
     @MainActor func testSwipingIsTheWheelWhileDriving() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
         app.launchArguments += engine
@@ -175,11 +175,11 @@ final class TerminalTypingTests: XCTestCase {
     /// the view measures the phone's grid before the first frame, so the takeover starts (build 21 spun forever:
     /// the spinner stood in for the view that tells the grid the subscribe waits for).
     @MainActor func testOpeningTheTerminalWhenConnectedDrivesIt() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget,
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
         app.launchPinned()

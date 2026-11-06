@@ -1,4 +1,4 @@
-// Package db is the hub's Postgres store (docker container jarvis-postgres on the hub machine, see docs/server.md).
+// Package db is the hub's Postgres store (docker container persona-postgres on the hub machine, see docs/server.md).
 package db
 
 import (
@@ -1277,7 +1277,7 @@ type DeviceToken struct {
 	CreatedAt time.Time  `json:"created_at"`
 	LastSeen  *time.Time `json:"last_seen,omitempty"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
-	// MachineID binds a jarvis-link credential (kind link) to its machine in hub.json; empty for every other kind.
+	// MachineID binds a persona-link credential (kind link) to its machine in hub.json; empty for every other kind.
 	MachineID string `json:"machine_id,omitempty"`
 }
 

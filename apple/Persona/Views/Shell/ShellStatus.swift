@@ -19,8 +19,8 @@ import SwiftUI
     /// How many times the link's state came and went (`probe.shell`: a toast must not bring it).
     private(set) var opened = 0
     private(set) var folded = 0
-    /// How many views in front say the link in their own title (an agent's chat, 收件箱, 机器: `titleSaysLink()`). While
-    /// any does the pill stays away: it said 连接中… a second time just under the chat's title.
+    /// How many views in front say the link in their own title (an agent's chat, Inbox, Machines: `titleSaysLink()`). While
+    /// any does the pill stays away: it repeated Connecting… just under the chat's title.
     private(set) var titles = 0
     /// The link's state as the pill shows it: nil while the hub is reached or a title in front already says it.
     var pill: ConnectionStatus.Phase? {
@@ -213,7 +213,7 @@ private struct ToastWindowRoot: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .environment(model)
             .dynamicTypeSize(size)
-            .buiTheme(.jarvis())
+            .buiTheme(.persona())
             .tint(Theme.accent)
     }
 }
@@ -235,6 +235,6 @@ private struct TitleSaysLink: ViewModifier {
 }
 
 extension View {
-    /// This title says 等待网络 / 连接中… / 更新中… itself: the shell's pill keeps out of its way (`ShellNotices.pill`).
+    /// This title says Waiting for Network / Connecting… / Updating… itself: the shell's pill keeps out of its way (`ShellNotices.pill`).
     func titleSaysLink() -> some View { modifier(TitleSaysLink()) }
 }

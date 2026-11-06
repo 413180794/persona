@@ -92,7 +92,7 @@ final class PerfAssistantTests: PerfTestCase {
         }
     }
 
-    /// The archived conversations sheet (sidebar › 已归档) presented and closed.
+    /// The archived conversations sheet (sidebar › Archived) presented and closed.
     @MainActor func testArchivedSheet() throws {
         openMain(["-openAssistantSidebar", "YES"])
         let archived = app.buttons["sidebar-archived"]
@@ -110,7 +110,7 @@ final class PerfAssistantTests: PerfTestCase {
 
     // MARK: Switches and sheets
 
-    /// The switch between 助手 and Agents (the shell's segment, the old layout's tab bar), and back.
+    /// The switch between Persona and Agents (the shell's segment, the old layout's tab bar), and back.
     @MainActor func testTabSwitchAssistantAgents() throws {
         openMain()
         let agents = shell ? app.buttons["shell-agents"].firstMatch : app.tabBars.buttons["Agents"]
@@ -148,14 +148,14 @@ final class PerfAssistantTests: PerfTestCase {
 
     // MARK: Pages from the conversation
 
-    /// The profile page (形象、定时任务、运行记录…) scrolled.
+    /// The profile page (avatar, scheduled tasks, run history) scrolled.
     @MainActor func testProfileScroll() throws {
         openPage("profile")
         see(app.buttons["定时任务"].firstMatch, "the profile", timeout: 20)
         measureScroll(mainScroller(), flicks: 2)
     }
 
-    /// Profile → 定时任务 → back.
+    /// Profile → Scheduled tasks → back.
     @MainActor func testProfileToRoutinesPushPop() throws {
         openPage("profile")
         let routines = see(app.buttons["定时任务"].firstMatch, "the profile's 定时任务", timeout: 20)
@@ -180,7 +180,7 @@ final class PerfAssistantTests: PerfTestCase {
         }
     }
 
-    /// A project's entry page (档案 Markdown, people, moments) scrolled.
+    /// A project's entry page (profile Markdown, people, moments) scrolled.
     @MainActor func testKnowledgeEntryScroll() throws {
         openPage("knowledge", ["-showKnowledgeEntry", "projects/weather-app"])
         sleep(3)
@@ -194,7 +194,7 @@ final class PerfAssistantTests: PerfTestCase {
         measureScroll(mainScroller(), flicks: 2)
     }
 
-    /// Typing into 搜索待办 (the list filtered and sorted per keystroke).
+    /// Typing into the to-do search field (the list filtered and sorted per keystroke).
     @MainActor func testTodosSearchTyping() throws {
         openPage("todos")
         let search = app.searchFields.firstMatch

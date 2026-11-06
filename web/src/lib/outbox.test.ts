@@ -39,7 +39,7 @@ describe("which bubbles stay", () => {
   it("goes once the transcript says the same, with as many images", () => {
     expect(arrived(entry(), [{ text: "你好", images: [] }])).toBe(true);
     expect(arrived(entry({ images: [{ mime: "image/png", data: "x" }] }), [{ text: "你好", images: [] }])).toBe(false);
-    expect(arrived(entry({ text: '<jarvis-context kind="context" title="t" url="">x</jarvis-context>\n\n说说' }), [{ text: "说说", images: [] }])).toBe(true);
+    expect(arrived(entry({ text: '<persona-context kind="context" title="t" url="">x</persona-context>\n\n说说' }), [{ text: "说说", images: [] }])).toBe(true);
   });
 
   it("keeps failed ones, and sent ones only for a while", () => {
@@ -76,7 +76,7 @@ describe("which bubbles stay", () => {
   });
 
   it("shows contexts as cards and images as images", () => {
-    const m = outboxMessage(entry({ text: '<jarvis-context kind="context" title="项目" url="">档案</jarvis-context>\n\n问题', images: [{ mime: "image/png", data: "AQID" }] }));
+    const m = outboxMessage(entry({ text: '<persona-context kind="context" title="项目" url="">档案</persona-context>\n\n问题', images: [{ mime: "image/png", data: "AQID" }] }));
     expect(m.text).toBe("问题");
     expect(m.contexts).toEqual([{ kind: "context", title: "项目", url: "", text: "档案" }]);
     expect(m.images[0]).toMatchObject({ kind: "image", role: "user", image: { mime: "image/png", data: "AQID" } });
@@ -112,7 +112,7 @@ describe("sending from another page", () => {
     expect(await retryOutbox("m", "s", failed.id, failed.clearable)).toBe(true);
     const again = JSON.parse(fetcher.mock.calls[1][1].body);
     expect(again.client_msg_id).not.toBe(failed.id);
-    expect(fetcher.mock.calls[1][1].headers.get("X-Jarvis-Op-Id")).toBe(again.client_msg_id);
+    expect(fetcher.mock.calls[1][1].headers.get("X-Persona-Op-Id")).toBe(again.client_msg_id);
     expect(again.clear_draft).toBe("old");
     discardOutbox("m", "s", again.client_msg_id);
     expect(outbox()["m/s"]).toBeUndefined();
@@ -140,7 +140,7 @@ describe("问 Persona", () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response({ ok: true }));
     vi.stubGlobal("fetch", fetcher);
     await askPersona("说说进展");
-    expect(navigate).toHaveBeenCalledWith({ name: "jarvis", sid: "main1" });
+    expect(navigate).toHaveBeenCalledWith({ name: "persona", sid: "main1" });
     expect(outbox()["hub/main1"][0].text).toBe("说说进展");
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ text: "说说进展", launcher: "codex" });
     pickLauncher("hub/main1", undefined);
@@ -153,6 +153,6 @@ describe("问 Persona", () => {
     expect(fetcher.mock.calls[0][0]).toBe("/api/v1/assistant/conversations");
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ prompt: "说说进展", main: true });
     expect(outbox()["hub/new1"][0]).toMatchObject({ state: "sent", text: "说说进展" });
-    expect(navigate).toHaveBeenCalledWith({ name: "jarvis", sid: "new1" });
+    expect(navigate).toHaveBeenCalledWith({ name: "persona", sid: "new1" });
   });
 });

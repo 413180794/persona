@@ -22,7 +22,7 @@ func olCfg(user ...proto.LarkRule) proto.AssistantLark {
 }
 
 func TestAssistantLarkAccountEnvironment(t *testing.T) {
-	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: proto.AssistantLark{
 		Gates: []proto.CommandGate{func() proto.CommandGate {
 			g := exampleGate("http://127.0.0.1:18000")
@@ -40,11 +40,11 @@ func TestAssistantLarkAccountEnvironment(t *testing.T) {
 	}
 }
 
-// ex is on the assistant's PATH only when the example skill is in the user's space (~/.jarvis/skills, linked into
-// the assistant's directory): skills are no longer inside jarvisd (docs/hub-update.md).
+// ex is on the assistant's PATH only when the example skill is in the user's space (~/.persona/skills, linked into
+// the assistant's directory): skills are no longer inside personad (docs/hub-update.md).
 func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	user, cwd := t.TempDir(), t.TempDir()
-	t.Setenv("JARVIS_SKILLS_DIR", user)
+	t.Setenv("PERSONA_SKILLS_DIR", user)
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: olCfg()}
 	ex := filepath.Join(n.assistantBin(cwd), "ex")
 	n.assistantLarkEnv(cwd, "")
@@ -89,7 +89,7 @@ func TestLarkGate(t *testing.T) {
 	cwd := t.TempDir()
 	_ = os.WriteFile(filepath.Join(cwd, "msg.json"), []byte(`{"text":"来自文件"}`), 0o600)
 	const host = "api.example.test:8443"
-	skill := "/home/me/.jarvis/assistant/.claude/skills/example/scripts/ex.sh"
+	skill := "/home/me/.persona/assistant/.claude/skills/example/scripts/ex.sh"
 	for _, tc := range []struct {
 		cmd  string
 		want string // allow | confirm | deny | other

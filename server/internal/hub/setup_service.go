@@ -30,7 +30,7 @@ func (e *setupEnv) service(ctx context.Context, cfg *setupConfig) error {
 	}
 	bin, err := e.hubBinary()
 	if err != nil {
-		return e.fail("service", "放不进 "+filepath.Join(e.root, "bin", "jarvisd")+"："+err.Error(), "检查这个目录的权限")
+		return e.fail("service", "放不进 "+filepath.Join(e.root, "bin", "personad")+"："+err.Error(), "检查这个目录的权限")
 	}
 	switch e.goos {
 	case "linux":
@@ -64,14 +64,14 @@ func (e *setupEnv) ownSocketActive(ctx context.Context) bool {
 	if e.goos != "linux" {
 		return false
 	}
-	_, err := e.run(ctx, nil, "systemctl", "--user", "is-active", "--quiet", "jarvisd.socket")
+	_, err := e.run(ctx, nil, "systemctl", "--user", "is-active", "--quiet", "personad.socket")
 	return err == nil
 }
 
-// hubBinary is <root>/bin/jarvisd, where the units run it from and self-update replaces it; copied from this
+// hubBinary is <root>/bin/personad, where the units run it from and self-update replaces it; copied from this
 // executable when it is not there yet (personad run from somewhere else), with personad next to it.
 func (e *setupEnv) hubBinary() (string, error) {
-	bin := filepath.Join(e.root, "bin", "jarvisd")
+	bin := filepath.Join(e.root, "bin", "personad")
 	if fi, err := os.Stat(bin); err == nil && !fi.IsDir() {
 		return bin, nil
 	}
@@ -87,14 +87,14 @@ func (e *setupEnv) hubBinary() (string, error) {
 	}
 	alias := filepath.Join(e.root, "bin", "personad")
 	if _, err := os.Lstat(alias); os.IsNotExist(err) {
-		_ = os.Symlink("jarvisd", alias)
+		_ = os.Symlink("personad", alias)
 	}
 	return bin, nil
 }
 
-// binaryStamp is where setup notes which <root>/bin/jarvisd the service was last (re)started with.
+// binaryStamp is where setup notes which <root>/bin/personad the service was last (re)started with.
 func binaryStamp(bin string) string {
-	return filepath.Join(filepath.Dir(bin), ".jarvisd.setup-sha256")
+	return filepath.Join(filepath.Dir(bin), ".personad.setup-sha256")
 }
 
 // binaryChanged says whether bin differs from the one the service last started with (install.sh replaced it, an
@@ -150,22 +150,22 @@ func systemdQuoteValue(v string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, `%`, `%%`).Replace(v) + `"`
 }
 
-// hubServiceUnit is jarvisd.service, as hub-systemd.sh writes it.
+// hubServiceUnit is personad.service, as hub-systemd.sh writes it.
 func hubServiceUnit(root string, socket bool) string {
 	lines := []string{"[Unit]", "Description=Persona hub (personad)", "After=network-online.target"}
 	if socket {
-		lines = append(lines, "Wants=jarvisd.socket", "After=jarvisd.socket")
+		lines = append(lines, "Wants=personad.socket", "After=personad.socket")
 	}
 	lines = append(lines, "", "[Service]",
-		"ExecStart="+strings.ReplaceAll(systemdQuoteValue(root+"/bin/jarvisd"), "$", "$$")+" hub",
+		"ExecStart="+strings.ReplaceAll(systemdQuoteValue(root+"/bin/personad"), "$", "$$")+" hub",
 		"Restart=always", "RestartSec=3", "TimeoutStopSec=20",
-		"Environment="+systemdQuoteValue("PERSONA_HOME="+root), "Environment="+systemdQuoteValue("JARVIS_HOME="+root),
+		"Environment="+systemdQuoteValue("PERSONA_HOME="+root),
 		"Environment=PATH=%h/.local/bin:%h/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin", "",
 		"[Install]", "WantedBy=default.target", "")
 	return strings.Join(lines, "\n")
 }
 
-// hubSocketUnit is jarvisd.socket, as hub-systemd.sh writes it: the plaintext and TLS addresses. FreeBind lets an
+// hubSocketUnit is personad.socket, as hub-systemd.sh writes it: the plaintext and TLS addresses. FreeBind lets an
 // address-bound listener (a new install's "<LAN address>:18662") come up while that address is not there yet or any
 // more (DHCP), instead of failing the socket and with it the plaintext port.
 func hubSocketUnit(listens []string) string {
@@ -183,7 +183,7 @@ func hubSocketUnit(listens []string) string {
 	if bound {
 		lines = append(lines, "FreeBind=true")
 	}
-	lines = append(lines, "Service=jarvisd.service", "", "[Install]", "WantedBy=sockets.target", "")
+	lines = append(lines, "Service=personad.service", "", "[Install]", "WantedBy=sockets.target", "")
 	return strings.Join(lines, "\n")
 }
 
@@ -219,7 +219,7 @@ func (e *setupEnv) systemdService(ctx context.Context, cfg *Config, bin string) 
 	if cfg.Public.TLSListen != "" {
 		listens = append(listens, cfg.Public.TLSListen)
 	}
-	servicePath, socketPath := filepath.Join(dir, "jarvisd.service"), filepath.Join(dir, "jarvisd.socket")
+	servicePath, socketPath := filepath.Join(dir, "personad.service"), filepath.Join(dir, "personad.socket")
 	serviceBefore, _ := os.ReadFile(servicePath)
 	socketBefore, _ := os.ReadFile(socketPath)
 	service := hubServiceUnit(e.root, useSocket)
@@ -240,36 +240,36 @@ func (e *setupEnv) systemdService(ctx context.Context, cfg *Config, bin string) 
 	changed := string(serviceBefore) != service
 	sum, binChanged := binaryChanged(bin)
 	socketChanged := string(socketBefore) != socket
-	steps := [][]string{{"daemon-reload"}, {"enable", "jarvisd"}}
-	serviceActive := e.systemctl(ctx, "is-active", "--quiet", "jarvisd") == nil
-	socketActive := e.systemctl(ctx, "is-active", "--quiet", "jarvisd.socket") == nil
-	what := "装好了常驻服务（systemd 用户服务 jarvisd，端口归 jarvisd.socket）并启动"
+	steps := [][]string{{"daemon-reload"}, {"enable", "personad"}}
+	serviceActive := e.systemctl(ctx, "is-active", "--quiet", "personad") == nil
+	socketActive := e.systemctl(ctx, "is-active", "--quiet", "personad.socket") == nil
+	what := "装好了常驻服务（systemd 用户服务 personad，端口归 personad.socket）并启动"
 	switch {
 	case useSocket && (!socketActive || socketChanged):
 		// First time, or other addresses: a running hub holds the port itself; one stop to hand it to the socket.
-		steps = append(steps, []string{"stop", "jarvisd"}, []string{"enable", "jarvisd.socket"},
-			[]string{"restart", "jarvisd.socket"}, []string{"start", "jarvisd"})
+		steps = append(steps, []string{"stop", "personad"}, []string{"enable", "personad.socket"},
+			[]string{"restart", "personad.socket"}, []string{"start", "personad"})
 	case !useSocket && (socketActive || len(socketBefore) > 0):
-		steps = append(steps, []string{"stop", "jarvisd"}, []string{"disable", "--now", "jarvisd.socket"}, []string{"start", "jarvisd"})
+		steps = append(steps, []string{"stop", "personad"}, []string{"disable", "--now", "personad.socket"}, []string{"start", "personad"})
 	case changed || !serviceActive:
-		steps = append(steps, []string{"restart", "jarvisd"})
+		steps = append(steps, []string{"restart", "personad"})
 	case e.restartHub:
-		steps = append(steps, []string{"restart", "jarvisd"})
+		steps = append(steps, []string{"restart", "personad"})
 		what = "常驻服务已经装好；hub.json 补了本机，重启了 hub"
 	case binChanged:
 		// The units are as they were, but the binary is new (an upgrade): the hub running is the old one. The port
-		// stays with jarvisd.socket, so the restart is not noticed (docs/hub-restart.md).
-		steps = append(steps, []string{"restart", "jarvisd"})
+		// stays with personad.socket, so the restart is not noticed (docs/hub-restart.md).
+		steps = append(steps, []string{"restart", "personad"})
 		what = "常驻服务已经装好；hub 换了新版本，重启了它"
 	default:
 		what = "常驻服务已经装好、在运行，没动它"
 	}
 	if !useSocket {
-		what = strings.Replace(what, "，端口归 jarvisd.socket", "", 1)
+		what = strings.Replace(what, "，端口归 personad.socket", "", 1)
 	}
 	for _, s := range steps {
 		if err := e.systemctl(ctx, s...); err != nil {
-			return e.fail("service", "systemctl --user "+strings.Join(s, " ")+" 失败："+err.Error(), "运行 journalctl --user -u jarvisd -n 50 看原因")
+			return e.fail("service", "systemctl --user "+strings.Join(s, " ")+" 失败："+err.Error(), "运行 journalctl --user -u personad -n 50 看原因")
 		}
 	}
 	noteBinary(bin, sum)
@@ -317,7 +317,7 @@ func (e *setupEnv) plistPath() string {
 	return filepath.Join(e.home, "Library", "LaunchAgents", hubLaunchdLabel+".plist")
 }
 
-// hubPlist is the hub's launchd agent: it runs <root>/bin/jarvisd hub, which hub-systemd.sh and self-update find.
+// hubPlist is the hub's launchd agent: it runs <root>/bin/personad hub, which hub-systemd.sh and self-update find.
 func hubPlist(home, root, bin string) string {
 	x := html.EscapeString
 	log := filepath.Join(root, "hub.log")
@@ -330,7 +330,6 @@ func hubPlist(home, root, bin string) string {
   <key>ProgramArguments</key><array><string>` + x(bin) + `</string><string>hub</string></array>
   <key>EnvironmentVariables</key><dict>
     <key>PERSONA_HOME</key><string>` + x(root) + `</string>
-    <key>JARVIS_HOME</key><string>` + x(root) + `</string>
     <key>PATH</key><string>` + x(path) + `</string>
   </dict>
   <key>RunAtLoad</key><true/>
@@ -344,8 +343,8 @@ func hubPlist(home, root, bin string) string {
 
 // otherHubAgent is the label of a launchd agent someone set up before that already runs this hub ("" when none):
 // left as it is, like hub-systemd.sh does. Matched the way that script matches: ProgramArguments (or Program) is
-// "<jarvisd> hub", the binary resolved through symlinks and ~, so an agent naming ~/.jarvis/bin/jarvisd is found
-// when ~/.jarvis and ~/.persona are the same directory.
+// "<personad> hub", the binary resolved through symlinks and ~, so an agent naming ~/.persona/bin/personad is found
+// when ~/.persona and ~/.persona are the same directory.
 func (e *setupEnv) otherHubAgent(bin string) string {
 	want := resolvedPath(bin)
 	files, _ := filepath.Glob(filepath.Join(e.home, "Library", "LaunchAgents", "*.plist"))

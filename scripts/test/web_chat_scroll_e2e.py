@@ -148,7 +148,7 @@ def shot(page, shots, name):
 
 
 def set_theme(page, theme):
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
 
 
 def hub_get(hub, path):
@@ -204,8 +204,8 @@ def wide(browser, base, a, other):
     set_theme(page, "light")
 
     # From the sidebar: another Persona conversation, then back to the main one.
-    page.locator(f'aside a[href="/j/{other["session_id"]}"]').click()
-    page.wait_for_function(f"location.pathname === '/j/{other['session_id']}'")
+    page.locator(f'aside a[href="/persona/{other["session_id"]}"]').click()
+    page.wait_for_function(f"location.pathname === '/persona/{other['session_id']}'")
     settled(page, "wide another Persona conversation")
     ok("wide: another Persona conversation opens")
     page.locator('aside a[title="Persona 的主对话"]').click()

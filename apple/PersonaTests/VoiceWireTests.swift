@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The voice extension's socket contract on the app's side (docs/voice.md 3, 6.10「帧」): frames in, frames out, the
 /// address, PCM16 and what is held before `ready`. Pure: no audio, no hub.
@@ -285,7 +285,7 @@ struct VoiceWireTests {
             item(1, "user", "第一轮"), item(2, "assistant", "好的"),
             item(3, "user", "第二轮"), item(4, "assistant", "想一想", kind: "thinking"), item(5, "assistant", "", kind: "tool_use"),
             item(6, "assistant", "改好了"),
-            item(7, "user", "<jarvis-context kind=\"context\" title=\"语音对话\">你：顺便修 lint</jarvis-context>\n第三轮"),
+            item(7, "user", "<persona-context kind=\"context\" title=\"语音对话\">你：顺便修 lint</persona-context>\n第三轮"),
             item(8, "user", "第四轮"), item(9, "assistant", String(repeating: "长", count: 400)),
         ]
         let recent = VoiceLine.recent(items)

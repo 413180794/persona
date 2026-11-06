@@ -4,7 +4,7 @@ package prompts
 // conversation a note that the answer goes back to Feishu; the message it quotes, a forwarded chat, and the paths of
 // the files it carried, saved on the machine the conversation runs on.
 type BotMessage struct {
-	Jarvis  bool   // a Persona conversation (not a coding agent): add the note about answering in Feishu
+	Persona bool   // a Persona conversation (not a coding agent): add the note about answering in Feishu
 	Topic   bool   // said in a topic of a group chat (the thread of a todo), not in the bot's private chat
 	Owner   string // "" is the Chinese word for "user"
 	Text    string

@@ -1,7 +1,7 @@
 {
   "$description": "所有规则在六种风格 × 深浅色下展开。level 为 error 的是 docs/ios.md 写明的可读性底线，--check 不达标就失败（已知的例外记在 known-failures.json，只许减少）；warn 是按 WCAG AA 补的建议，只报告不阻断，iOS 现在的取值有不少达不到，改色要两端一起改。",
   "$extensions": {
-    "jarvis": {
+    "persona": {
       "styles": [
         "glass",
         "claude",

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The hub's recording sync (docs/protocol.md「录音同步」) as far as the phone needs it: stores the latest revision,
 /// remembers deletes (a later PUT gets 410), can be down (503).

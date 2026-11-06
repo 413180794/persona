@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The mail accounts in jarvis_settings are the manager's (mail is); the card is the hub's (the fake hub here).
+// The mail accounts in persona_settings are the manager's (mail is); the card is the hub's (the fake hub here).
 
 type selfSettingsMail struct {
 	Mail
@@ -57,7 +57,7 @@ func TestSelfSettingsMailNeedsPhoneInput(t *testing.T) {
 			hubOf(h).answer = func(proto.Interaction) proto.Resolution { return tt.answer }
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, err := h.toolJarvisSettings(ctx, "server", "s1", json.RawMessage(`{"action":"add","key":"mail.accounts","value":{"email":"me@example.com"}}`))
+			_, err := h.toolPersonaSettings(ctx, "server", "s1", json.RawMessage(`{"action":"add","key":"mail.accounts","value":{"email":"me@example.com"}}`))
 			asked := hubOf(h).asked()
 			if len(asked) != 1 || len(asked[0].Fields) != 1 || !asked[0].Fields[0].Secret || asked[0].MachineID != "server" {
 				t.Fatalf("missing secure approval card: %+v", asked)

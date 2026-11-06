@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.Setenv("HOME", filepath.Join(fixtureDir, "home"))
 	_ = os.Setenv("PERSONA_HOME", filepath.Join(fixtureDir, "runtime"))
-	_ = os.Setenv("JARVIS_HOME", filepath.Join(fixtureDir, "runtime"))
+	_ = os.Setenv("PERSONA_HOME", filepath.Join(fixtureDir, "runtime"))
 	_ = os.MkdirAll(os.Getenv("HOME"), 0700)
 	_ = os.Setenv("INVOCATION_ID", "")
 	_ = os.Setenv("XPC_SERVICE_NAME", "")

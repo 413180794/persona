@@ -5,7 +5,7 @@
       "name": "resolve_no_client",
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "ios/Persona/App/AppModel.swift：resolve(_:_:)",
         "docs/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
@@ -37,7 +37,7 @@
       "name": "resolve_network_down",
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "ios/Persona/App/AppModel.swift：resolve(_:_:)",
         "docs/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
@@ -69,7 +69,7 @@
       "name": "resolve_success",
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "ios/Persona/App/AppModel.swift：resolve(_:_:)",
         "docs/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
@@ -103,7 +103,7 @@
       "name": "resolve_gone",
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "ios/Persona/App/AppModel.swift：resolve(_:_:)",
         "docs/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
@@ -137,7 +137,7 @@
       "name": "resolve_prompt_changed",
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "ios/Persona/App/AppModel.swift：resolve(_:_:)",
         "docs/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
@@ -171,7 +171,7 @@
       "name": "resolve_error_restores_card",
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
-        "ios/Jarvis/App/AppModel.swift：resolve(_:_:)",
+        "ios/Persona/App/AppModel.swift：resolve(_:_:)",
         "docs/redesign/ux.md §3.4、§5.3"
       ],
       "input": {

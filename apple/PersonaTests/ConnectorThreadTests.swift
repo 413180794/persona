@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A connector's inbox thread as a conversation page (#1054): pages of messages going back, a quote's message reached,
 /// a reply through the hub (which asks on the phone), what the page shows when the thread cannot be read. Made-up

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The sections' pages are kept in the window once shown (#390): a switch hides one and shows another, telling each
 /// whether it is in front; nothing is built again.

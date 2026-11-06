@@ -5,10 +5,10 @@ import UserNotifications
 
 /// Pushes sealed to this phone (docs/push-relay.md): a hub without the app's APNs key seals each payload to the phone's
 /// public key and the relay forwards it as `e`. HPKE base mode, DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM,
-/// the same suite as the hub's `pushcrypto` package. The notification service extension (JarvisNotify) opens alerts,
+/// the same suite as the hub's `pushcrypto` package. The notification service extension (PersonaNotify) opens alerts,
 /// the app opens silent pushes; anything that does not open stays 「有新消息」, never anything in the clear.
 nonisolated enum PushCrypto {
-    static let info = Data("jarvis push v1".utf8)
+    static let info = Data("persona push v1".utf8)
     static let suite = HPKE.Ciphersuite.P256_SHA256_AES_GCM_256
     /// A payload sealed longer ago than this shows only the fallback (a relay replaying old ones learns nothing new).
     static let maxAge: TimeInterval = 24 * 3600
@@ -19,9 +19,9 @@ nonisolated enum PushCrypto {
     /// The keychain group the app and its extension share (Info.plist, `<team>.<bundle id>.push`); nil without a team
     /// (an empty one leaves just the dot).
     static var accessGroup: String? {
-        (Bundle.main.object(forInfoDictionaryKey: "JarvisPushKeychainGroup") as? String).flatMap { $0.isEmpty || $0.hasPrefix(".") ? nil : $0 }
+        (Bundle.main.object(forInfoDictionaryKey: "PersonaPushKeychainGroup") as? String).flatMap { $0.isEmpty || $0.hasPrefix(".") ? nil : $0 }
     }
-    private static let service = "jarvis.push"
+    private static let service = "persona.push"
     private static let account = "push-key"
 
     /// Each group of hubs seals to a key of its own (docs/multi-hub.md「推送」): the default group's is the one the
@@ -34,7 +34,7 @@ nonisolated enum PushCrypto {
         if let group { q[kSecAttrAccessGroup as String] = group }
         #if os(macOS)
         // A Mac's default is the old file keychain, where access groups do nothing and an item belongs to the app that
-        // made it: JarvisMacNotify could not read the key. The data protection keychain shares it like on a phone.
+        // made it: PersonaMacNotify could not read the key. The data protection keychain shares it like on a phone.
         q[kSecUseDataProtectionKeychain as String] = true
         #endif
         return q
@@ -157,7 +157,7 @@ nonisolated enum PushCrypto {
         service(content, keys: { key().map { [("", $0)] } ?? [] }, now: now)
     }
 
-    /// Tries every group's key; the one that opens the push names its group (`jarvis_group`, docs/multi-hub.md).
+    /// Tries every group's key; the one that opens the push names its group (`persona_group`, docs/multi-hub.md).
     static func service(_ content: UNNotificationContent, keys: () -> [(group: String, key: P256.KeyAgreement.PrivateKey)],
                         now: Date = .now) -> (UNNotificationContent, Outcome) {
         guard isSealed(content.userInfo) else { return (content, .notSealed) }
@@ -178,7 +178,7 @@ nonisolated enum PushCrypto {
     }
 
     /// Where an opened push says which group's key opened it (another group than the default one).
-    static let groupKey = "jarvis_group"
+    static let groupKey = "persona_group"
 
     /// A push's payload opened with any group's key, and the group.
     static func opened(_ userInfo: [AnyHashable: Any], keys: [(group: String, key: P256.KeyAgreement.PrivateKey)]) -> (group: String, payload: [String: Any])? {

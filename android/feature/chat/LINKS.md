@@ -7,10 +7,10 @@
 ## 链接协议（2026-11-02 按主线旧 App 补齐，`ChatLinks.kind`）
 
 - `http(s)`：在卡片里打开。
-- `jarvis://session/<机器>/<会话>`、`jarvis://tab/jarvis|agents|inbox`（`assistant` 当 jarvis）、`jarvis://assistant`、`jarvis://inbox`：只做跳转（打开那个对话 / 切 tab，开着的卡片先收起），由外壳经 `LocalChatAppLinks` 接到导航。`jarvis://pair`、`jarvis://open` 在对话里点了不认（外部打开时才配对 / 直达）。
-- `mailto:`、`tel:`、其他 App 的协议、`intent:`：先确认（「写邮件？」「拨打电话？」「用其他 App 打开？」），再交给系统；`intent:` 去掉 component、selector、clip data 和所有 URI 授权标志，数据是 `jarvis:` / `intent:` / `content:` / `file:` 等或目标是本 App 的一律丢掉（`externalIntent`）。没有能打开的 App 时提示。
+- `persona://session/<机器>/<会话>`、`persona://tab/persona|agents|inbox`（`assistant` 当 persona）、`persona://assistant`、`persona://inbox`：只做跳转（打开那个对话 / 切 tab，开着的卡片先收起），由外壳经 `LocalChatAppLinks` 接到导航。`persona://pair`、`persona://open` 在对话里点了不认（外部打开时才配对 / 直达）。
+- `mailto:`、`tel:`、其他 App 的协议、`intent:`：先确认（「写邮件？」「拨打电话？」「用其他 App 打开？」），再交给系统；`intent:` 去掉 component、selector、clip data 和所有 URI 授权标志，数据是 `persona:` / `intent:` / `content:` / `file:` 等或目标是本 App 的一律丢掉（`externalIntent`）。没有能打开的 App 时提示。
 - `content:` `file:` `javascript:` `data:` `about:` `blob:` `vbscript:`：不打开，弹「无法打开链接」。
-- 网页里的非 http 跳转：只有用户真点了、页面在屏幕上时才走上面的确认（预加载的页面和脚本拉不起 App），`jarvis:` 链接不从网页进来。
+- 网页里的非 http 跳转：只有用户真点了、页面在屏幕上时才走上面的确认（预加载的页面和脚本拉不起 App），`persona:` 链接不从网页进来。
 
 ## 选中文字
 
@@ -18,7 +18,7 @@
 
 卡片里的原生飞书文档 / 公司圈帖子（hub 有飞书扩展时）选区菜单在「复制」后面加同样的项（`feature/inbox` 的 `LarkSelectable`），头部另有「作为上下文」按钮带上整篇（文档的正文是和 iOS、网页一样的标记「（整篇）」，Agent 自己去读；公司圈帖子带帖子正文）。
 
-「AI 修改」可以不写要求（默认「按上面选中的内容修改。」）；「作为上下文」放进输入区，出站消息落入 outbox 后才清理，只有上下文时正文是「参考上面的内容。」。引用标签和 iOS 的 `ContextRef` 逐字一样：属性转义 `& " < >`，正文不转义、只去掉 `</jarvis-context>`；多个上下文之间一个换行，正文前空一行。读回时按 iOS 的规则解码实体，以前转义过正文的消息也读得回来。
+「AI 修改」可以不写要求（默认「按上面选中的内容修改。」）；「作为上下文」放进输入区，出站消息落入 outbox 后才清理，只有上下文时正文是「参考上面的内容。」。引用标签和 iOS 的 `ContextRef` 逐字一样：属性转义 `& " < >`，正文不转义、只去掉 `</persona-context>`；多个上下文之间一个换行，正文前空一行。读回时按 iOS 的规则解码实体，以前转义过正文的消息也读得回来。
 
 ## WebView 池
 
@@ -26,10 +26,10 @@
 
 ## 当前 App 接线
 
-`ShellChat` 与助手内嵌入口均使用已带 ChatLinkHost 的 ChatScreen，飞书会话挂 LarkLinkHost，外壳（`app/…/ui/ShellLinks.kt` 的 `ShellLinkHost`）为知识库等页面提供应用内链接入口，同时提供 `jarvis://` 的跳转和收件箱网页的「交给 Persona」（`feature/inbox` 的 `LocalInboxWebSelection`）。会话内选区上下文和 AI 修改已走现有草稿／发送器，随会话隔离。
+`ShellChat` 与助手内嵌入口均使用已带 ChatLinkHost 的 ChatScreen，飞书会话挂 LarkLinkHost，外壳（`app/…/ui/ShellLinks.kt` 的 `ShellLinkHost`）为知识库等页面提供应用内链接入口，同时提供 `persona://` 的跳转和收件箱网页的「交给 Persona」（`feature/inbox` 的 `LocalInboxWebSelection`）。会话内选区上下文和 AI 修改已走现有草稿／发送器，随会话隔离。
 
 ## 验证与边界
 
-`ChatLinksTest` 覆盖中文链接边界、Markdown 保护、和 iOS 逐字对照的标签与默认文字、读回旧格式、预加载的新鲜度和主机、协议分类、`jarvis://` 解析（含拒绝 pair / open）、外跳确认文案和 intent 目标的拒绝规则。
+`ChatLinksTest` 覆盖中文链接边界、Markdown 保护、和 iOS 逐字对照的标签与默认文字、读回旧格式、预加载的新鲜度和主机、协议分类、`persona://` 解析（含拒绝 pair / open）、外跳确认文案和 intent 目标的拒绝规则。
 
 网页登录状态来自 WebView，不注入 hub 凭据。限制内嵌登录的 OAuth 站点需用户从菜单打开浏览器，尚未接 Custom Tabs。选中菜单的实际顺序、渲染进程崩溃后的恢复要在真机 / 模拟器上确认（Chromium 每个版本填菜单的方式可能不同）；跨 iframe 的选区、性能未实测。

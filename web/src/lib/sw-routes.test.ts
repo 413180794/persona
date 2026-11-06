@@ -12,7 +12,7 @@ const at = (path: string, mode = "no-cors", method = "GET", from = origin) => st
 
 describe("service worker routes", () => {
   it("serves page loads from the shell, whatever the client route", () => {
-    for (const p of ["/", "/j/new", "/s/laptop/abc", "/inbox/1?token=x", "/screen/laptop"]) expect(at(p, "navigate")).toBe("shell");
+    for (const p of ["/", "/persona/new", "/s/laptop/abc", "/inbox/1?token=x", "/screen/laptop"]) expect(at(p, "navigate")).toBe("shell");
   });
 
   it("never touches the API, the admin page or itself", () => {

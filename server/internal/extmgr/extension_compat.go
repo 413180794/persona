@@ -278,7 +278,7 @@ func extensionsRoot(home string, logf func(string, ...any)) string {
 }
 
 // withExtensionEnv gives every PERSONA_PLUGIN_<NAME> in env also as PERSONA_EXTENSION_<NAME> (the host adds the
-// JARVIS_ spellings of both): extensions written before #1844 read the old names, new ones the new.
+// PERSONA_ spellings of both): extensions written before #1844 read the old names, new ones the new.
 func withExtensionEnv(env []string) []string {
 	out := slices.Clone(env)
 	for _, e := range env {

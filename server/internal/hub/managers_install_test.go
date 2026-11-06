@@ -25,7 +25,6 @@ import (
 func TestManagerInstallScript(t *testing.T) {
 	h, srv, _ := managersHub(t)
 	h.cfg.PublicURL = "" // the commands follow the address the app used (TestManagerCommandsUseTheHubsOwnAddress)
-	t.Setenv("JARVIS_IMAGE", "")
 	t.Setenv("PERSONA_IMAGE", "")
 	var made struct {
 		Manager  managerInfo       `json:"manager"`
@@ -128,7 +127,7 @@ case "$1 $2" in
 "run --rm")
 	# The script's own sh -c, run here against the home volume (a directory under $S), as the image's sh would.
 	[ -d "$S/homevol" ] || exit 1
-	sh -c "$(printf '%s' "$last" | sed "s|/home/jarvis/.jarvis|$S/homevol|g")" ;;
+	sh -c "$(printf '%s' "$last" | sed "s|/home/persona/.persona|$S/homevol|g")" ;;
 "run -d")
 	name=; prev=; for a in "$@"; do [ "$prev" = --name ] && name=$a; prev=$a; done
 	printf %s "${POSTGRES_PASSWORD:-}" > "$S/c-$name"
@@ -172,8 +171,8 @@ func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 	out, err := run()
 	pw := read("c-" + n + "-pg")
 	if err != nil || len(pw) != 48 || read("c-"+n) != "" || !strings.Contains(out, "ARGV network create "+n) ||
-		!strings.Contains(out, "ARGV run -d --name "+n+" --network "+n+" --restart unless-stopped -v "+n+"-home:/home/jarvis/.jarvis -e PERSONA_MANAGER_DATABASE_URL registry.example/persona-hub:1 manager run --dir /home/jarvis/.jarvis/managers/"+id+" --join "+hub+" "+code) ||
-		!strings.Contains(out, "mdb=postgres://user:removed-password@"+n+"-pg:5432/jarvis?sslmode=disable") {
+		!strings.Contains(out, "ARGV run -d --name "+n+" --network "+n+" --restart unless-stopped -v "+n+"-home:/home/persona/.persona -e PERSONA_MANAGER_DATABASE_URL registry.example/persona-hub:1 manager run --dir /home/persona/.persona/managers/"+id+" --join "+hub+" "+code) ||
+		!strings.Contains(out, "mdb=postgres://persona:"+pw+"@"+n+"-pg:5432/persona?sslmode=disable") {
 		t.Fatalf("first run: %v\n%s", err, out)
 	}
 	for _, line := range strings.Split(out, "\n") {
@@ -201,7 +200,7 @@ func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 	if err != nil || !strings.Contains(out, "ARGV rm -f "+n+"\n") || !strings.Contains(out, "never joined") ||
 		!strings.Contains(out, "ARGV run -d --name "+n+" ") || !strings.Contains(out, "--join "+hub+" "+fresh) ||
 		strings.Contains(out, "ARGV run -d --name "+n+"-pg") || read("c-"+n+"-pg") != pw ||
-		!strings.Contains(out, "mdb=postgres://user:removed-password@"+n+"-pg:5432/jarvis?sslmode=disable") {
+		!strings.Contains(out, "mdb=postgres://persona:"+pw+"@"+n+"-pg:5432/persona?sslmode=disable") {
 		t.Fatalf("run again before it joined: %v\n%s", err, out)
 	}
 
@@ -220,7 +219,7 @@ func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 	_ = os.Remove(filepath.Join(state, "c-"+n+"-pg"))
 	_ = os.Remove(filepath.Join(state, "c-"+n))
 	out, err = run()
-	if err != nil || read("c-"+n+"-pg") != pw || !strings.Contains(out, "ARGV run --rm") || !strings.Contains(read("mdb"), "jarvis:"+pw+"@") {
+	if err != nil || read("c-"+n+"-pg") != pw || !strings.Contains(out, "ARGV run --rm") || !strings.Contains(read("mdb"), "persona:"+pw+"@") {
 		t.Fatalf("run after the containers went (volumes kept): %v %q\n%s", err, read("c-"+n+"-pg"), out)
 	}
 

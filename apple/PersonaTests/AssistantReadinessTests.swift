@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The main conversation's readiness (docs/onboarding.md 4.4, 5.1, 5.2; docs/protocol.md「主对话就绪度」) against FakeHub:
 /// decoding, the step a card shows, what holds the send button, warm's answer, dismiss, coded refusals as cards.
@@ -140,7 +140,7 @@ struct AssistantReadinessTests {
         #expect(TurnErrorFix(code: "model_route")?.action == "connect_model")
         #expect(TurnErrorFix(code: "rate_limited") == nil && TurnErrorFix(code: nil) == nil)
         let s = try JSON.decoder.decode(Session.self, from: Data(#"""
-        {"machine_id":"mbp","session_id":"s1","title":"","cwd":"","status":"idle","started_by_jarvis":true,"assistant":true,
+        {"machine_id":"mbp","session_id":"s1","title":"","cwd":"","status":"idle","started_by_persona":true,"assistant":true,
          "turn_error":"Not logged in · Please run /login","turn_error_kind":"model","turn_error_code":"not_logged_in"}
         """#.utf8))
         #expect(s.turnErrorCode == "not_logged_in" && s.turnErrorKind == "model" && s.turnError?.hasPrefix("Not logged in") == true)

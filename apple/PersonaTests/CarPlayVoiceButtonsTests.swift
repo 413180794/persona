@@ -2,7 +2,7 @@
 import CarPlay
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The CarPlay voice states' buttons (CarPlayVoiceButtons): set through the runtime, so every SDK that builds the app
 /// builds the buttons in. They used to sit behind `#if compiler(>=6.4)`, which every Xcode 26 toolchain failed.

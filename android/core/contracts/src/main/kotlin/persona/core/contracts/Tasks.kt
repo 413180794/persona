@@ -279,7 +279,7 @@ fun List<Todo>.forSpace(machineId: String, space: String): Todo? {
  */
 fun todoContextXml(title: String, notes: String): String {
     val t = title.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
-    return """<jarvis-context kind="context" title="待办 · $t" url="">${contextBody(notes)}</jarvis-context>""" // i18n-ignore: the tag docs/todos.md specifies for the agent
+    return """<persona-context kind="context" title="待办 · $t" url="">${contextBody(notes)}</persona-context>""" // i18n-ignore: the tag docs/todos.md specifies for the agent
 }
 
 /**

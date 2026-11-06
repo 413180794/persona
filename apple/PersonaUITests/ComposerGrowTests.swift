@@ -1,8 +1,8 @@
 import XCTest
 
 /// The composer is laid out apart from the page (`LayoutIsland`): typing must still grow it line by line, keep it over
-/// the keyboard, and the page must make room for it. Against scripts/mock/mock_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=…);
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> keeps screenshots of one line and several.
+/// the keyboard, and the page must make room for it. Against scripts/mock/mock_hub.py (TEST_RUNNER_PERSONA_MOCK_HUB=…);
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> keeps screenshots of one line and several.
 final class ComposerGrowTests: XCTestCase {
     @MainActor func testTypingGrowsTheComposerOverTheKeyboard() throws {
         try grows(layout: ["-ui.oldLayout", "NO"])
@@ -13,11 +13,11 @@ final class ComposerGrowTests: XCTestCase {
     }
 
     @MainActor private func grows(layout: [String]) throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant"] + layout
         app.launchPinned()
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
@@ -48,7 +48,7 @@ final class ComposerGrowTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] else { return }
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: name + ".png"))
     }
 }

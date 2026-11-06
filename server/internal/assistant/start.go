@@ -154,7 +154,7 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 		return proto.Session{}, err
 	}
 	sess := proto.Session{SessionID: res.SessionID, Cwd: cwd, Status: proto.StatusWorking, Launcher: used, PermissionMode: p.PermissionMode,
-		Effort: p.Effort, StartedByJarvis: true, UpdatedAt: time.Now().UTC()}
+		Effort: p.Effort, StartedByPersona: true, UpdatedAt: time.Now().UTC()}
 	sess.MachineID, sess.Assistant, sess.State, sess.Space = machine, true, proto.StateWorking, p.Space
 	return sess, nil
 }

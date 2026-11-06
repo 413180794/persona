@@ -66,7 +66,7 @@ func TestElicitationReachesOnlyCapableApps(t *testing.T) {
 		r := httptest.NewRequest("GET", "https://example.com/api/v1/interactions", nil)
 		r.RemoteAddr = net.JoinHostPort(netip.AddrFrom4([4]byte{127, 0, 0, 1}).String(), "1234")
 		r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
-		r.Header.Set("X-Jarvis-Client", tc.header)
+		r.Header.Set("X-Persona-Client", tc.header)
 		w := httptest.NewRecorder()
 		h.routes().ServeHTTP(w, r)
 		var body struct {

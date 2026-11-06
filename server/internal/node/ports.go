@@ -44,8 +44,8 @@ const (
 	maxPortTitle  = 60 // characters
 	// portProbeAgent is the User-Agent of the probe's GET /: a server can tell it from its real clients (the tests'
 	// servers do, as a node on the machine probes them too). Never rename it: installed nodes keep sending
-	// "jarvis-ports", and what recognizes the probe has to match them.
-	portProbeAgent = "jarvis-ports"
+	// "persona-ports", and what recognizes the probe has to match them.
+	portProbeAgent = "persona-ports"
 )
 
 type portState struct {

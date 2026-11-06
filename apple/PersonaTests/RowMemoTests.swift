@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The per-message memos are keyed by chat and id (#372): item ids repeat across sessions — a runtime's are
 /// "<seq>#<block>", and two branches of one DSH session share theirs up to where they part.

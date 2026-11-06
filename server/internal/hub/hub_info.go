@@ -31,7 +31,7 @@ func (h *Hub) defaultHubName() string {
 	}
 	host, _ := hostname()
 	short := strings.TrimSpace(strings.Split(host, ".")[0])
-	if short == "" || short == "localhost" || containerHost.MatchString(strings.ToLower(short)) || identity.Getenv("JARVIS_LOCAL_NODE") == "0" {
+	if short == "" || short == "localhost" || containerHost.MatchString(strings.ToLower(short)) || identity.Getenv("PERSONA_LOCAL_NODE") == "0" {
 		id := h.hubID()
 		return "hub-" + id[:min(6, len(id))]
 	}

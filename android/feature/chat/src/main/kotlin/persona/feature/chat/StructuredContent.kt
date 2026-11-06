@@ -110,7 +110,7 @@ internal fun userBubbleTime(ts: String, locale: java.util.Locale, zone: java.tim
 /**
  * Your message (several queued ones read as one): the photos it carries above its text (`<attached_images>`, read from
  * the session's machine, R3), its file paths as chips under the bubble, a long press for the message menu. Its
- * `<jarvis-context>` blocks fold into one row above the bubble; a message of nothing but blocks has no bubble (#876).
+ * `<persona-context>` blocks fold into one row above the bubble; a message of nothing but blocks has no bubble (#876).
  */
 @Composable
 internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUpdate> = emptyMap(),

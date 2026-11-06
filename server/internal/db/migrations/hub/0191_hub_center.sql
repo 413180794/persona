@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS mesh_group (
 );
 -- Computers of kind service (hub/service.go, docs/plan-hub-center.md 4): the hub dials the connector on the computer.
 -- What pairing left: the connector's TLS key pin and the credential the hub made up for it, sealed with the hub's
--- ~/.jarvis/secret.key (never in the clear; the connector keeps only its hash).
+-- ~/.persona/secret.key (never in the clear; the connector keeps only its hash).
 CREATE TABLE IF NOT EXISTS connector_credentials (
     machine_id text PRIMARY KEY,
     fp         text NOT NULL,

@@ -32,7 +32,7 @@ extension View {
             .fontDesign(model.style.fontDesign)
             .dynamicTypeSize(model.textSize.applied(to: systemTypeSize))
             .environment(\.shellBaseTypeSize, model.textSize.applied(to: systemTypeSize))
-            .buiTheme(.jarvis())
+            .buiTheme(.persona())
             .scrollIndicators(.hidden)
             .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages())
             .onAppear { model.colorScheme.apply() }

@@ -5,23 +5,23 @@ import XCTest
 final class LiveActivityShots: XCTestCase {
     @MainActor func testShots() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let phase = env["JARVIS_FLEET_SAMPLE"] else {
-            throw XCTSkip("set JARVIS_FLEET_SAMPLE=needsYou|working|done|thinking|offline|current")
+        guard let phase = env["PERSONA_FLEET_SAMPLE"] else {
+            throw XCTSkip("set PERSONA_FLEET_SAMPLE=needsYou|working|done|thinking|offline|current")
         }
-        if let id = env["JARVIS_ISLAND_PEER"] { endPeer(id) } // one left over from an earlier run
+        if let id = env["PERSONA_ISLAND_PEER"] { endPeer(id) } // one left over from an earlier run
         if phase != "current" { // "current": photograph whatever the activity shows now (after a real push)
             let app = XCUIApplication()
-            app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO",
-                                   "-fleetIsland", env["JARVIS_FLEET_ISLAND"] ?? "a", "-tab", "settings",
-                                   "-showFleetCount", env["JARVIS_FLEET_COUNT"] ?? "0"]
-            // The persona on the activity (`persona`, the default, `jarvis` (Visor), `jarvis-circuit`, or a hub package such as mock_hub's
-            // `demo`, which needs JARVIS_MOCK_HUB to be downloaded from).
-            if let persona = env["JARVIS_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
+            app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["PERSONA_FLEET_DETAILS"] ?? "NO",
+                                   "-fleetIsland", env["PERSONA_FLEET_ISLAND"] ?? "a", "-tab", "settings",
+                                   "-showFleetCount", env["PERSONA_FLEET_COUNT"] ?? "0"]
+            // The persona on the activity (`persona`, the default, `persona` (Visor), `persona-circuit`, or a hub package such as mock_hub's
+            // `demo`, which needs PERSONA_MOCK_HUB to be downloaded from).
+            if let persona = env["PERSONA_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
             if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
-            // JARVIS_UI_LANGUAGE=en|ja|zh-Hans: the activity in that interface language (docs/ios.md「界面语言」).
-            if let lang = env["JARVIS_UI_LANGUAGE"] { app.launchArguments += ["-AppleLanguages", "(\(lang))"] }
+            // PERSONA_UI_LANGUAGE=en|ja|zh-Hans: the activity in that interface language (docs/ios.md「界面语言」).
+            if let lang = env["PERSONA_UI_LANGUAGE"] { app.launchArguments += ["-AppleLanguages", "(\(lang))"] }
             app.launchPinned()
-            sleep(env["JARVIS_MOCK_HUB"] == nil ? 4 : 8) // a package is downloaded first
+            sleep(env["PERSONA_MOCK_HUB"] == nil ? 4 : 8) // a package is downloaded first
         }
         XCUIDevice.shared.press(.home)
         sleep(2)
@@ -31,7 +31,7 @@ final class LiveActivityShots: XCTestCase {
         sleep(3)
         shot("\(phase)-compact3") // settled
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        if let id = env["JARVIS_ISLAND_PEER"] { shared(with: id, phase) }
+        if let id = env["PERSONA_ISLAND_PEER"] { shared(with: id, phase) }
 
         // Long-press the island to expand it.
         springboard.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 201, dy: 37)).press(forDuration: 1.5)
@@ -74,20 +74,20 @@ final class LiveActivityShots: XCTestCase {
     }
 
     /// A persona chosen in Settings › Appearance › Avatar while the activity runs reaches the island within seconds, without a new
-    /// activity (docs/live-activity.md「形象」). `JARVIS_PERSONA_SWITCH=demo,jarvis-circuit,jarvis`: starts on the first,
+    /// activity (docs/live-activity.md「形象」). `PERSONA_PERSONA_SWITCH=demo,persona-circuit,persona`: starts on the first,
     /// then picks each next one in Settings and photographs the island 3 s after leaving the app. A hub package needs
-    /// JARVIS_MOCK_HUB (scripts/mock/mock_hub.py with MOCK_PERSONAS=demo).
+    /// PERSONA_MOCK_HUB (scripts/mock/mock_hub.py with MOCK_PERSONAS=demo).
     @MainActor func testSwitchingPersonaRedrawsTheIsland() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let ids = env["JARVIS_PERSONA_SWITCH"]?.split(separator: ",").map(String.init), let first = ids.first else {
-            throw XCTSkip("set JARVIS_PERSONA_SWITCH=<persona id>,<persona id>…")
+        guard let ids = env["PERSONA_PERSONA_SWITCH"]?.split(separator: ",").map(String.init), let first = ids.first else {
+            throw XCTSkip("set PERSONA_PERSONA_SWITCH=<persona id>,<persona id>…")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-showFleetSample", env["JARVIS_FLEET_SAMPLE"] ?? "working", "-fleetIsland", "a",
+        app.launchArguments = ["-showFleetSample", env["PERSONA_FLEET_SAMPLE"] ?? "working", "-fleetIsland", "a",
                                "-tab", "settings", "-openAppearance", "persona", "-openPersona", first]
         if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
         app.launchPinned()
-        sleep(env["JARVIS_MOCK_HUB"] == nil ? 4 : 8)
+        sleep(env["PERSONA_MOCK_HUB"] == nil ? 4 : 8)
         Self.allowNotifications()
         XCUIDevice.shared.press(.home)
         sleep(3)
@@ -117,7 +117,7 @@ final class LiveActivityShots: XCTestCase {
         app.terminate()
     }
 
-    /// mock_hub's pairing link when JARVIS_MOCK_HUB is set: the hub a package persona is downloaded from.
+    /// mock_hub's pairing link when PERSONA_MOCK_HUB is set: the hub a package persona is downloaded from.
     /// A simulator whose permissions were reset asks for notifications on launch: the prompt would take the Home press
     /// (and the app, not active behind it, starts no activity).
     @MainActor static func allowNotifications() {
@@ -131,13 +131,13 @@ final class LiveActivityShots: XCTestCase {
     }
 
     static var pair: String? {
-        ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"].map {
-            "jarvis://pair?url=" + $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"].map {
+            "persona://pair?url=" + $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         }
     }
 
     /// Another app's activity beside ours (docs/live-activity.md「和其他 App 共用灵动岛」): the peer app
-    /// (apple/IslandPeer, `JARVIS_ISLAND_PEER` is its bundle id) starts one when it opens. Then, with the peer in front
+    /// (apple/IslandPeer, `PERSONA_ISLAND_PEER` is its bundle id) starts one when it opens. Then, with the peer in front
     /// in landscape, ours alone in the landscape island (limited in width too). The peer ends its activity again.
     @MainActor private func shared(with id: String, _ phase: String) {
         let peer = XCUIApplication(bundleIdentifier: id)

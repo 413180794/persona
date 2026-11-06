@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Messages Persona types in for the model (`Injected`, docs/protocol.md「Persona 注入的消息」): read off the text the way
 /// the hub does (the shared cases in spec/fixtures/injected), taken from the hub's mark, never from a line the user sent,

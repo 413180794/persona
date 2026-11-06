@@ -161,6 +161,7 @@
     <string name="designsystem_work_failed">失敗</string>
     <string name="designsystem_work_waiting">対応待ち</string>
     <string name="designsystem_work_unknown">結果の記録なし</string>
+    <string name="designsystem_brand_persona">Persona</string>
     <string name="designsystem_send">送信</string>
     <string name="designsystem_composer_expand">入力欄を広げる</string>
     <string name="designsystem_composer_collapse">入力欄を縮める</string>

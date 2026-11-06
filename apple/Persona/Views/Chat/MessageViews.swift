@@ -12,10 +12,10 @@ extension MarkdownUI.Theme {
     /// apart by the space above them; code blocks are the code level. Paragraphs have the body's line height (1.45:
     /// 0.26 em over SF's own 1.19). On the Mac, where ScaledMetric does not follow Small / Standard / Large, the base size is
     /// times `Theme.Font.scale` (#833) and the theme is made again when it changes (once on the iPhone).
-    @MainActor static var jarvis: MarkdownUI.Theme { jarvisAtScale.value }
-    @MainActor private static let jarvisAtScale = PerTextScale { makeJarvis() }
+    @MainActor static var persona: MarkdownUI.Theme { personaAtScale.value }
+    @MainActor private static let personaAtScale = PerTextScale { makePersona() }
 
-    @MainActor private static func makeJarvis() -> MarkdownUI.Theme {
+    @MainActor private static func makePersona() -> MarkdownUI.Theme {
         MarkdownUI.Theme()
             .text { FontSize(Theme.Level.body.size * Theme.Font.scale) }
             .code {
@@ -250,7 +250,7 @@ struct PeerMessage: View {
                 .lineLimit(1)
             Markdown(d.markdown)
                 .markdownSoftBreakMode(.lineBreak)
-                .markdownTheme(.jarvis)
+                .markdownTheme(.persona)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 #if os(macOS)
                 .textSelection(.enabled) // drag to select and ⌘C, as on the web (#2542)
@@ -471,7 +471,7 @@ struct AssistantText: View, Equatable {
                 .task(id: item.id) { await Self.preloadLinks(item) }
                 // Inside the theme (applied first), or the theme's text style wins (docs/lessons/ios.md).
                 .modifier(QuietMarkdown(on: quiet))
-                .markdownTheme(.jarvis)
+                .markdownTheme(.persona)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 #if os(macOS)
                 // Drag to select and ⌘C, as on the web (#2542); iOS keeps the long-press menu's Select.
@@ -991,7 +991,7 @@ struct RecapDrawer: View {
                                     .font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
                             Markdown(Links.markdown(MathMarkdown.rewrite(item.text ?? "")))
-                                .markdownTheme(.jarvis)
+                                .markdownTheme(.persona)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -1027,7 +1027,7 @@ struct StreamingText: View {
                     .padding(.top, i == 0 ? 0 : StreamChunks.gap(after: parts.done[i - 1], before: chunk))
             }
             Markdown(MarkdownMemo.content(parts.tail + " ▍"))
-                .markdownTheme(.jarvis)
+                .markdownTheme(.persona)
                 .padding(.top, parts.done.last.map { StreamChunks.gap(after: $0, before: parts.tail) } ?? 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1043,7 +1043,7 @@ private struct StreamChunk: View, Equatable {
         // written is not: its last word may be half a path).
         let paths = MarkdownMemo.paths(text)
         LinkedMarkdown(plain: MarkdownMemo.content(text), paths: paths, key: text)
-            .markdownTheme(.jarvis)
+            .markdownTheme(.persona)
             .lookUpFiles(paths.paths)
     }
 }

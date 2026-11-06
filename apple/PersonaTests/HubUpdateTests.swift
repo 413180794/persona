@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › hub and the line over the Agents list (docs/hub-update.md「App 里」), against a FakeHub.
 @MainActor
@@ -142,7 +142,7 @@ struct HubUpdateTests {
     /// A Docker hub: a newer image gets a line (no Update, the page says what to run), closed per version.
     @Test func aDockerHub() throws {
         let docker = try JSON.decoder.decode(HubUpdateStatus.self, from: Data(Self.docker.utf8))
-        #expect(docker.image == .init(name: "ghcr.io/owner/jarvis", tag: "0.3.0", pinned: true))
+        #expect(docker.image == .init(name: "ghcr.io/owner/persona", tag: "0.3.0", pinned: true))
         #expect(HubNotice.of(docker, compat: .ok, dismissed: []) == .newImage(version: "0.4.0"))
         #expect(HubNotice.of(docker, compat: .ok, dismissed: ["image:0.4.0"]) == nil)
         #expect(HubNotice.of(docker, compat: .ok, dismissed: ["image:0.3.9"]) == .newImage(version: "0.4.0"))
@@ -151,7 +151,7 @@ struct HubUpdateTests {
         #expect(HubNotice.of(current, compat: .ok, dismissed: []) == nil)
     }
 
-    static let docker = #"{"version":"0.3.0","build":0,"channel":"docker","can_update":false,"why_not":"Docker 里的 hub 由新镜像更新","latest":{"version":"0.4.0","build":0,"newer":true,"bad":false},"state":"available","busy":[],"auto":false,"auto_notice":false,"confirmed":true,"image":{"name":"ghcr.io/owner/jarvis","tag":"0.3.0","pinned":true}}"#
+    static let docker = #"{"version":"0.3.0","build":0,"channel":"docker","can_update":false,"why_not":"Docker 里的 hub 由新镜像更新","latest":{"version":"0.4.0","build":0,"newer":true,"bad":false},"state":"available","busy":[],"auto":false,"auto_notice":false,"confirmed":true,"image":{"name":"ghcr.io/owner/persona","tag":"0.3.0","pinned":true}}"#
 
     @Test func eventsCarryItLive() {
         guard case .hello(let info)? = ServerEvent.decode(Data(#"{"type":"hello","features":["x"],"channel":"release","build":202611021500,"protocol":1,"min_app_build":0}"#.utf8)) else {

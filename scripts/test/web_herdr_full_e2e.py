@@ -32,7 +32,7 @@ from playwright.sync_api import expect, sync_playwright
 
 SHELL = "pane%3Aw1%3Ap2"  # a shell of the "persona" workspace on the fake hub's first machine
 HOST = "127.0.0.1"
-MODE_KEYS = ("jarvis.terminal.mode", "jarvis.terminal.defaultMode")
+MODE_KEYS = ("persona.terminal.mode", "persona.terminal.defaultMode")
 
 
 def ok(msg):
@@ -62,7 +62,7 @@ def fresh(browser, port, viewport, scheme="light", touch=False, reduced=False):
         is_mobile=touch,
         permissions=["clipboard-read", "clipboard-write"],
     )
-    ctx.add_init_script(f"localStorage.setItem('jarvis.token', 'mock'); localStorage.setItem('jarvis.theme', {scheme!r})")
+    ctx.add_init_script(f"localStorage.setItem('persona.token', 'mock'); localStorage.setItem('persona.theme', {scheme!r})")
     page = ctx.new_page()
     page.set_default_timeout(10000)
     return ctx, page
@@ -176,7 +176,7 @@ def main_checks(browser, base_port, shots):
     assert both == 2, both
     mode_is(page, "单窗格")
     page.wait_for_function("document.querySelectorAll('[data-surface]').length === 1")
-    assert page.evaluate("localStorage.getItem('jarvis.terminal.mode')") == "pane"
+    assert page.evaluate("localStorage.getItem('persona.terminal.mode')") == "pane"
     assert len(sent(base_port, "herdr_close", n)) == 1, log(base_port)[n:]
     expect(page.locator('[data-surface="shown"] .xterm')).to_be_visible()
     ok("the switch slides 单窗格 in over 完整界面, lets the client go (herdr_close) and remembers the choice")
@@ -186,7 +186,7 @@ def main_checks(browser, base_port, shots):
     radio(page, "完整界面").click()
     wait_text(page, "spaces", "the sidebar again")
     assert len(sent(base_port, "herdr_open", n)) == 1
-    assert page.evaluate("localStorage.getItem('jarvis.terminal.mode')") == "full"
+    assert page.evaluate("localStorage.getItem('persona.terminal.mode')") == "full"
     ok("and back: a new client is opened on a clean screen")
 
     # ── the shortcut ──
@@ -229,8 +229,8 @@ def main_checks(browser, base_port, shots):
     # ── Settings chooses the default ──
     expect(page.get_by_role("radio", name="完整界面", exact=True)).to_have_attribute("aria-checked", "true")
     page.get_by_role("radio", name="单窗格", exact=True).click()
-    assert page.evaluate("localStorage.getItem('jarvis.terminal.defaultMode')") == "pane"
-    page.evaluate("localStorage.removeItem('jarvis.terminal.mode')")
+    assert page.evaluate("localStorage.getItem('persona.terminal.defaultMode')") == "pane"
+    page.evaluate("localStorage.removeItem('persona.terminal.mode')")
     page.evaluate("window.sessionStorage.clear()")
     page.reload()  # a new page life: no terminal has chosen its own mode
     open_terminal(page, base)
@@ -248,7 +248,7 @@ def main_checks(browser, base_port, shots):
     ok("设置 › 记住上次: the last choice of the switch is where the next terminal starts")
     page.goto(f"{base}/settings")
     page.get_by_role("radio", name="完整界面", exact=True).click()
-    assert page.evaluate("localStorage.getItem('jarvis.terminal.defaultMode')") is None
+    assert page.evaluate("localStorage.getItem('persona.terminal.defaultMode')") is None
     ok("choosing 完整界面 in 设置 is the default again, and writes nothing")
     ctx.close()
 

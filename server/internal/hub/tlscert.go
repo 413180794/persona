@@ -164,5 +164,5 @@ func sameSANs(cert *x509.Certificate, dns []string, ips []net.IP) bool {
 // names, and anyone who reaches the public port can read the certificate: the host name and the LAN addresses must
 // not be in it (the addresses are only handed out after authentication, hub-changes.md 1.2).
 func (h *Hub) tlsNames() []string {
-	return []string{h.hubID() + ".jarvis.invalid"}
+	return []string{h.hubID() + ".persona.invalid"}
 }

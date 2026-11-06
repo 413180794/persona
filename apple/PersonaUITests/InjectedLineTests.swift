@@ -3,15 +3,15 @@ import XCTest
 /// Messages Persona typed in for the model in the main conversation (#2358, docs/protocol.md「Persona 注入的消息」): a
 /// task's notice and a scheduled run are each one centered line, never a bubble with the model's instructions; the
 /// notice opens its task, the run's line opens to what the task asks. Against scripts/mock/mock_hub.py with
-/// MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14 (the lines at the bottom) (JARVIS_MOCK_HUB). With
-/// JARVIS_SHOTS set it writes the lines and the opened run there (JARVIS_SHOTS_APPEARANCE names the appearance).
+/// MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14 (the lines at the bottom) (PERSONA_MOCK_HUB). With
+/// PERSONA_SHOTS set it writes the lines and the opened run there (PERSONA_SHOTS_APPEARANCE names the appearance).
 final class InjectedLineTests: XCTestCase {
     private var hub = ""
     private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14 (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -23,14 +23,14 @@ final class InjectedLineTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let appearance = env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let appearance = env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/injected-\(appearance)-\(name).png"))
     }
 
     @MainActor func testNoticesAreLinesThatOpenTheirTaskOrAsk() throws {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant", "-openAssistant", main]
         app.launchPinned()
 

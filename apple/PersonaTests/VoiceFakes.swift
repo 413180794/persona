@@ -1,5 +1,5 @@
 import Foundation
-@testable import Jarvis
+@testable import Persona
 
 // Stand-ins for a voice call's socket, audio, permission, screen lock and clock (docs/voice.md 6.10), so
 // VoiceConversation and VoiceCalls run their real logic with no network, microphone or waiting.

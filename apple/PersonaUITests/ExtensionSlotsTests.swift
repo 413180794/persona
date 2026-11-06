@@ -3,18 +3,18 @@ import XCTest
 /// The plugins' UI slots (docs/extensions.md「UI 插槽」) on the iPhone: Settings opens on the plugin's overview card (a stat
 /// grid and a small chart) above its main-navigation entry (with its badge); the entry opens the plugin's page (tabs,
 /// a stacked bar chart, a line chart), the card opens the same page; a machine's page ends with the plugin's section
-/// for that machine. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`;
-/// `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
+/// for that machine. Against scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1: `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=http://127.0.0.1:<port>`;
+/// `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named by `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` and the style.
 final class ExtensionSlotsTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     @MainActor private func launch(_ args: [String] = []) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)") }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings"] + args
         app.launchPinned()
@@ -24,8 +24,8 @@ final class ExtensionSlotsTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "slots-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 

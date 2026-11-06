@@ -17,7 +17,7 @@ type Health struct {
 	} `json:"update"`
 }
 
-// Watch is the watchdog `jarvisd update-watch` runs: the old binary's code, started just before the hub runs the new
+// Watch is the watchdog `personad update-watch` runs: the old binary's code, started just before the hub runs the new
 // one. It waits until the hub answers as the new build with the update confirmed; by deadline it has not (the new
 // version hangs, or dies before it can roll back by itself), it restores the old binary, writes why, and restarts
 // the hub on it. Someone else finishing the update (the pending marker gone) ends it too.

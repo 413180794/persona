@@ -742,7 +742,7 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 	return cfg
 }
 
-// assistantLarkEnv puts the skills in the assistant's directory (the user's from ~/.jarvis/skills, linked, the
+// assistantLarkEnv puts the skills in the assistant's directory (the user's from ~/.persona/skills, linked, the
 // built-in ones and the plugins', assistantskills) and gives its process what its gated commands need: each gate's
 // command on PATH (a wrapper running the skill's script, when the skill is there) and its env. A gate with Auth keeps
 // its credentials in the node: its BaseEnv is this process's own address at the gate proxy, and neither its Secret
@@ -762,7 +762,7 @@ func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func
 	}
 	bin := n.assistantBin(cwd)
 	_ = os.MkdirAll(bin, 0o755)
-	env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "JARVIS_ASSISTANT_BIN=" + bin}
+	env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "PERSONA_ASSISTANT_BIN=" + bin}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cfg := n.assistantLark(ctx)
@@ -802,7 +802,7 @@ func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func
 		}
 		slices.Sort(keys)
 		for _, k := range keys {
-			if held[k] || !envName.MatchString(k) || strings.HasPrefix(k, "PERSONA_") || strings.HasPrefix(k, "JARVIS_") || k == "PATH" {
+			if held[k] || !envName.MatchString(k) || strings.HasPrefix(k, "PERSONA_") || k == "PATH" {
 				continue
 			}
 			v := g.Env[k]

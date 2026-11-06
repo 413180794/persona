@@ -13,9 +13,9 @@ object FixtureReader {
     data class Case(val file: String, val value: JsonObject)
 
     fun read(domain: String): List<Case> {
-        val root = System.getProperty("jarvis.repo.root")?.let(::File) ?: generateSequence(File(".").canonicalFile) { it.parentFile }
+        val root = System.getProperty("persona.repo.root")?.let(::File) ?: generateSequence(File(".").canonicalFile) { it.parentFile }
             .firstOrNull { File(it, ".git").exists() && File(it, "android").isDirectory }
-            ?: error("Cannot locate the repository root; set jarvis.repo.root")
+            ?: error("Cannot locate the repository root; set persona.repo.root")
         val directory = File(root, "spec/fixtures/$domain")
         if (!directory.isDirectory) {
             println("Skipping spec/fixtures/$domain: directory is not present")

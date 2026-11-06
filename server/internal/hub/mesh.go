@@ -323,7 +323,7 @@ func (h *Hub) viewLoop(ctx context.Context) {
 // this hub's credentials to the center once it can be reached, and telling a hub that is back what was revoked.
 func (h *Hub) meshViewChanged(old, v *meshView) {
 	if reachableHubs(old) != reachableHubs(v) {
-		h.sendLinkEndpoints() // jarvis-link shows how many hubs the group has
+		h.sendLinkEndpoints() // persona-link shows how many hubs the group has
 	}
 	h.fleetRegroup() // the members' computers (machines.go)
 	h.handOverCredentials()

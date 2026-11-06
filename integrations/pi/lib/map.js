@@ -16,11 +16,11 @@ export const toolName = (name) => appToolName(name, OWN_TOOLS)
 // Where a session last ran, as the extension records it in the session (a custom entry, not in the model's context):
 // "herdr", "terminal" (pi's TUI outside herdr) or "pi-web". A session that ran in a terminal is resumed in the
 // machine's terminal engine (herdr), one from pi-web in pi-web (docs/pi.md "Who manages a session").
-export const HOST_ENTRY = 'jarvis-host'
+export const HOST_ENTRY = 'persona-host'
 
 // A tool the user allowed for the rest of a session on the phone ("Always allow" on an approval card): a custom entry too, so a
 // session resumed in another pi process does not ask about it again.
-export const ALLOW_ENTRY = 'jarvis-allow'
+export const ALLOW_ENTRY = 'persona-allow'
 
 /** Whether a session's entries hold "Always allow" for tool (pi's own name). */
 export function alwaysAllowed(entries, tool) {

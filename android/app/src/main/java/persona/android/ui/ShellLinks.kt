@@ -24,8 +24,8 @@ import java.util.UUID
 
 /**
  * Links for the whole shell: the link sheet over pages outside a conversation (the knowledge base, the Persona home's
- * own links), `jarvis://` links tapped in any conversation (they open a conversation or a tab, nothing else), links to
- * the hub's own web pages (the assistant's `/s/…`, `/j/…`, `/todos?id=…`: the same screens in the app), and
+ * own links), `persona://` links tapped in any conversation (they open a conversation or a tab, nothing else), links to
+ * the hub's own web pages (the assistant's `/s/…`, `/persona/…`, `/todos?id=…`: the same screens in the app), and
  * text picked on a page with no conversation behind it (those pages, and the inbox's): "Hand to Persona" puts it in Persona's
  * main conversation and shows the Persona tab, as the inbox's own "Hand to Persona" does.
  */
@@ -41,7 +41,7 @@ internal fun ShellLinkHost(session: ShellSession, navigator: Navigator, feedback
         main?.let { sender ->
             val send: suspend (String) -> Unit = { message ->
                 sender.sendToMain(message, UUID.randomUUID().toString())
-                navigator.selectTab(AppTab.Jarvis)
+                navigator.selectTab(AppTab.Persona)
             }
             send
         }
@@ -53,7 +53,7 @@ internal fun ShellLinkHost(session: ShellSession, navigator: Navigator, feedback
                 is ChatAppLink.Tab -> navigator.selectTab(when (link.tab) {
                     "agents" -> AppTab.Agents
                     "inbox" -> AppTab.Inbox
-                    else -> AppTab.Jarvis
+                    else -> AppTab.Persona
                 })
             }
         }
@@ -125,7 +125,7 @@ internal fun openHubPage(link: String, hubs: List<String>, namespace: String?, s
                 else -> assistant.conversations.map { it.key }.firstOrNull { it.sessionId == id }
                     ?: main?.let { SessionKey(it.machineId, id) } ?: return false
             }
-            if (key == null) navigator.selectTab(AppTab.Jarvis)
+            if (key == null) navigator.selectTab(AppTab.Persona)
             else {
                 page.itemId?.let { MessageJumps.request(key.machineId, key.sessionId, it) }
                 navigator.navigate(ChatRoute(key.machineId, key.sessionId, ConversationKind.Assistant))

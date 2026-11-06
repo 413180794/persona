@@ -14,7 +14,7 @@ import persona.core.navigation.*
 @Config(sdk = [35])
 class NotificationRequestLinkTest {
     private fun stacks() = mapOf<AppTab, MutableList<NavKey>>(
-        AppTab.Jarvis to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
+        AppTab.Persona to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
         AppTab.Inbox to mutableListOf(InboxRoute), AppTab.Settings to mutableListOf(SettingsRoute),
     )
 
@@ -45,6 +45,6 @@ class NotificationRequestLinkTest {
             Router { _, _ -> ConversationKind.Agent }.parse(RouteInput.DeepLink(untabbed))!!.key)
         // An empty request parameter still opens the chat.
         assertEquals(ChatRoute("machine", "session", ConversationKind.Agent),
-            Router { _, _ -> ConversationKind.Agent }.parse(RouteInput.DeepLink("jarvis://open?machine=machine&session=session&request="))!!.key)
+            Router { _, _ -> ConversationKind.Agent }.parse(RouteInput.DeepLink("persona://open?machine=machine&session=session&request="))!!.key)
     }
 }

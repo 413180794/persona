@@ -1,4 +1,4 @@
-// A fake jarvisd node for a runtime's unit tests: listens on a temp runtime socket, records what the runtime says and
+// A fake personad node for a runtime's unit tests: listens on a temp runtime socket, records what the runtime says and
 // lets the test call it like the node does. Real end-to-end checks use node-harness.mjs instead.
 
 import { createServer } from 'node:net'

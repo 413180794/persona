@@ -5,7 +5,7 @@ import { arrange, conversationTitle, filterConversations, groupByDay, mergeConve
 const now = new Date(2026, 10, 2, 10, 0);
 const at = (d: number, h = 9) => new Date(2026, 10, d, h).toISOString();
 const conv = (sid: string, p: Partial<Conversation> = {}): Conversation => ({
-  machine_id: "server", session_id: sid, title: sid, cwd: "/home/me/.jarvis/assistant", status: "idle", assistant: true, ...p,
+  machine_id: "server", session_id: sid, title: sid, cwd: "/home/me/.persona/assistant", status: "idle", assistant: true, ...p,
 });
 
 describe("titles", () => {

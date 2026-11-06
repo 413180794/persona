@@ -124,7 +124,7 @@ type fakeHub struct {
 
 func (f *fakeHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Only the client's dials count: other programs on this machine probe local ports too (a node's port scan in
-	// another package's tests, user agent jarvis-ports), and one could land on this server's.
+	// another package's tests, user agent persona-ports), and one could land on this server's.
 	if r.URL.Path != Path || r.Header.Get("Authorization") == "" {
 		http.NotFound(w, r)
 		return

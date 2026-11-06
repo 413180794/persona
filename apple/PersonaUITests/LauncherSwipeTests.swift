@@ -3,14 +3,14 @@ import XCTest
 /// Settings › Model: swiping a ~/.zshrc launcher left hides it (it moves under Hidden), swiping a hidden one brings it back.
 /// A Persona launcher swiped left is deleted after a confirmation.
 /// Against scripts/mock/mock_hub.py with MOCK_MANAGED_LAUNCHER=1 (jv_strong added in Persona; cc_glm shown, cc_old and cc_test hidden):
-///   TEST_RUNNER_JARVIS_LAUNCHER_HUB=http://127.0.0.1:<port>
+///   TEST_RUNNER_PERSONA_LAUNCHER_HUB=http://127.0.0.1:<port>
 final class LauncherSwipeTests: XCTestCase {
     @MainActor func testSwipeHidesAndRestores() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_LAUNCHER_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_LAUNCHER_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_LAUNCHER_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_LAUNCHER_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openModelLaunchers", "YES", "-dev.openChat", ""]
         app.launchPinned()
 
@@ -54,8 +54,8 @@ final class LauncherSwipeTests: XCTestCase {
 
     /// Hiding a launcher on its own page: back on the list it has moved under Hidden (#1433, the list kept the old one).
     @MainActor func testHidingOnItsPageUpdatesTheList() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_LAUNCHER_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_LAUNCHER_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_LAUNCHER_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_LAUNCHER_HUB)")
         }
         // Bring cc_glm back on the mock afterwards, so the swipe test still finds it shown.
         addTeardownBlock {
@@ -65,7 +65,7 @@ final class LauncherSwipeTests: XCTestCase {
             _ = try? await URLSession.shared.data(for: req)
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openModelLaunchers", "YES", "-dev.openChat", ""]
         app.launchPinned()
 

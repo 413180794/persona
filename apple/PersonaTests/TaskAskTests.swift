@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A task card waiting for the user says what its agent asks, not only "Waiting for your answer" (#3998).
 struct TaskAskTests {

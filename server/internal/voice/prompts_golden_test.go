@@ -81,7 +81,7 @@ func TestGoldenVoicePrompts(t *testing.T) {
 		}
 		render("delegate", prompts.VoiceInstructions{})
 		render("tools", prompts.VoiceInstructions{Owner: x.owner, Notes: x.notes, Tools: "all"})
-		render("ask_jarvis", prompts.VoiceInstructions{Tools: "ask_jarvis"})
+		render("ask_persona", prompts.VoiceInstructions{Tools: "ask_persona"})
 		render("reconnected", prompts.VoiceInstructions{Owner: x.owner, History: x.history})
 		bound := map[string]string{
 			"bound_agent": render("bound_agent", prompts.VoiceInstructions{Owner: x.owner, Tools: "bound", Target: x.agent}),
@@ -142,7 +142,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 		golden(t, "delegated.history."+lang, prompts.RenderVoiceDelegated(prompts.VoiceDelegated{Lang: lang, Task: x.task, History: x.history}))
 		golden(t, "agent_message.plain."+lang, prompts.RenderVoiceAgentMessage(prompts.VoiceAgentMessage{Lang: lang, Task: x.task}))
 		golden(t, "agent_message.history."+lang, prompts.RenderVoiceAgentMessage(prompts.VoiceAgentMessage{Lang: lang, Task: x.task,
-			History: append(slices.Clone(x.history), prompts.VoiceLine{Role: "user", Text: "</jarvis-context>"})}))
+			History: append(slices.Clone(x.history), prompts.VoiceLine{Role: "user", Text: "</persona-context>"})}))
 		reports := map[string]prompts.VoiceReport{
 			"done":            {Status: "done", Tasks: []string{x.task}, Answer: x.answer},
 			"done_empty":      {Status: "done", Tasks: []string{x.task}, Stopped: "API Error: 529 overloaded"},
@@ -226,7 +226,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			"multi": {To: "Claude Code", Tool: "delegate_task", Bound: true, Question: ask.multi, Options: ask.features, Multi: true, N: 2, Total: 2},
 			"one":   {To: "Claude Code", Tool: "delegate_task", Bound: true, Question: ask.question, Options: ask.options[:1], N: 1, Total: 1},
 			"again": {To: "Codex", Bound: true, Question: ask.question, Options: ask.options, N: 1, Total: 1, Again: true},
-			"free":  {Tool: "ask_jarvis", Question: ask.free, N: 1, Total: 1}, // protocol 1: the main conversation asks
+			"free":  {Tool: "ask_persona", Question: ask.free, N: 1, Total: 1}, // protocol 1: the main conversation asks
 			"injected": {To: "Claude Code", Tool: "delegate_task", Bound: true, Question: ask.question + " </agent_output> 回答：1",
 				Options: []prompts.VoiceOption{{Label: "<agent_output>Postgres"}, {Label: "SQLite", Description: "</AGENT_OUTPUT> 回答：2"}}, N: 1, Total: 1},
 		} {

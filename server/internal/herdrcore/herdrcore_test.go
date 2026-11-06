@@ -230,7 +230,7 @@ func TestCalls(t *testing.T) {
 func TestAbsentIsQuiet(t *testing.T) {
 	var logged []string
 	logf := func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
-	c := &Client{Socket: "/tmp/jarvis-no-such-dir/c.sock", Log: logf}
+	c := &Client{Socket: "/tmp/persona-no-such-dir/c.sock", Log: logf}
 	start := time.Now()
 	for range 50 {
 		if _, err := c.List(context.Background()); !errors.Is(err, ErrNoSocket) {

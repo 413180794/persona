@@ -148,7 +148,7 @@ func notesPackage(t *testing.T, version string) string {
 	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "bin", "notes"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=connector exec "+self+" \"$@\"\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "bin", "notes"), []byte("#!/bin/sh\nPERSONA_TEST_PLUGIN=connector exec "+self+" \"$@\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-notes", "name": "Example Notes", "version": %q,

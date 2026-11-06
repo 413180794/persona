@@ -1,8 +1,8 @@
-// End-to-end acceptance of a daemon (docs/daemons.md "Acceptance") against a real `jarvisd node`: the echo example as a
+// End-to-end acceptance of a daemon (docs/daemons.md "Acceptance") against a real `personad node`: the echo example as a
 // daemon (the SDK's listen mode), dialed by the node from daemons.json; the script plays the hub. A daemon's own e2e
 // copies this and starts its service instead of the echo daemon.
 //
-//   JARVISD=<jarvisd binary> node integrations/runtime-sdk/e2e/daemon.mjs
+//   PERSONAD=<personad binary> node integrations/runtime-sdk/e2e/daemon.mjs
 
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -12,9 +12,9 @@ import { Peer } from '../lib/wire.js'
 import { createConnection } from 'node:net'
 import { checks, startNode, startResident, until } from '../testing/node-harness.mjs'
 
-const jarvisd = process.env.JARVISD
-if (!jarvisd) {
-  console.error('set JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!personad) {
+  console.error('set PERSONAD (a personad binary)')
   process.exit(2)
 }
 const { check, summary } = checks()
@@ -28,13 +28,13 @@ async function startDaemon(port = 0) {
     listen: { port, token: () => { d.dials++; return TOKEN } } })
   d.runtime = runtime
   d.addr = await runtime.start()
-  d.url = `ws://127.0.0.1:${d.addr.port}/jarvis/runtime`
+  d.url = `ws://127.0.0.1:${d.addr.port}/persona/runtime`
   return d
 }
 
 function writeConfig(home, daemons) {
-  mkdirSync(join(home, '.jarvis'), { recursive: true })
-  writeFileSync(join(home, '.jarvis', 'daemons.json'), JSON.stringify({ daemons }, null, 2), { mode: 0o600 })
+  mkdirSync(join(home, '.persona'), { recursive: true })
+  writeFileSync(join(home, '.persona', 'daemons.json'), JSON.stringify({ daemons }, null, 2), { mode: 0o600 })
 }
 
 const sessions = async (node) => (await node.call('sessions.list')).sessions ?? []
@@ -66,7 +66,7 @@ try {
     { id: 'acme', name: 'Acme Echo', url: daemon.url, token_file: join(root, 'token') },
     { id: 'wrong', url: daemon.url, token: 'not-the-token-QX' },
   ])
-  node = await startNode({ jarvisd, home })
+  node = await startNode({ personad, home })
   cleanups.push(() => node.stop())
 
   const ls = await until('the daemon\'s launcher', async () => {
@@ -145,13 +145,13 @@ try {
   const rhome = join(root, 'resident')
   writeConfig(rhome, [{ id: 'acme', name: 'Acme Echo', url: daemon.url, token_file: join(root, 'token') }])
   const dialsBefore = daemon.dials
-  const resident = await startResident({ jarvisd, home: rhome })
+  const resident = await startResident({ personad, home: rhome })
   cleanups.push(() => resident.stop())
-  const a = await startNode({ jarvisd, home: rhome })
+  const a = await startNode({ personad, home: rhome })
   await until('listed through the resident node', async () => (await launchers(a)).some((l) => l.name === 'acme'), 20_000)
   const { session: rs } = await a.call('session.start', { launcher: 'acme', cwd: '/tmp' })
   a.stop()
-  const b = await startNode({ jarvisd, home: rhome })
+  const b = await startNode({ personad, home: rhome })
   cleanups.push(() => b.stop())
   const again = await until('listed on the next hub connection', async () => (await sessions(b)).find((s) => s.session_id === rs.session_id), 20_000)
   check('a resident node keeps the daemon while the hub reconnects', again && daemon.dials - dialsBefore === 1, `dials ${daemon.dials - dialsBefore}`)

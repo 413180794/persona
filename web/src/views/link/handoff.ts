@@ -9,10 +9,10 @@ import { toast } from "../../ui/atoms";
 import { t } from "../../i18n";
 
 /** Persona's main conversation (its composer's draft key and route), else a new conversation. */
-function jarvisTarget(): { key: string; go: () => void } {
+function personaTarget(): { key: string; go: () => void } {
   const a = getState().assistant;
-  if (a?.main) return { key: `${a.machine_id}/${a.main}`, go: () => navigate({ name: "jarvis", sid: a.main }) };
-  return { key: "jarvis-new", go: () => navigate({ name: "jarvis" }) };
+  if (a?.main) return { key: `${a.machine_id}/${a.main}`, go: () => navigate({ name: "persona", sid: a.main }) };
+  return { key: "persona-new", go: () => navigate({ name: "persona" }) };
 }
 
 /** Who gets it: "the current chat" when a composer is on the page, else Persona. */
@@ -27,7 +27,7 @@ export function giveContext(ref: ContextRef) {
     toast(t("link-handoff.added"), "ok");
     return;
   }
-  const target = jarvisTarget();
+  const target = personaTarget();
   addContext(target.key, ref);
   target.go();
   toast(t("link-handoff.added_persona"), "ok");
@@ -46,7 +46,7 @@ export function giveEdit(ref: ContextRef, ask: string) {
     });
   const c = usableComposer();
   if (c) return send(c);
-  const target = jarvisTarget();
+  const target = personaTarget();
   target.go();
   whenComposer(target.key, send, () => keep(target.key));
 }

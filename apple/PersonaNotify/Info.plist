@@ -13,15 +13,15 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>JarvisNotify</string>
+	<string>PersonaNotify</string>
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>JarvisPushKeychainGroup</key>
-	<string>$(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push</string>
+	<key>PersonaPushKeychainGroup</key>
+	<string>$(DEVELOPMENT_TEAM).$(PERSONA_BUNDLE_ID).push</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

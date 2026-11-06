@@ -13,12 +13,12 @@ class HubLinksTest {
         assertEquals(HubPage.Agent("m1", "6f1c3a2e-0000-4000-8000-000000000001"),
             page("$hub/s/m1/6f1c3a2e-0000-4000-8000-000000000001"))
         assertEquals(HubPage.Screen(TodoDetailRoute("todo_1")), page("$hub/todos?id=todo_1"))
-        assertEquals(HubPage.Conversation("abc-1"), page("$hub/j/abc-1"))
+        assertEquals(HubPage.Conversation("abc-1"), page("$hub/persona/abc-1"))
     }
 
     @Test fun ignoresTheQueryAndFragment() {
         assertEquals(HubPage.Agent("m1", "abc-1"), page("$hub/s/m1/abc-1?view=chat#item-42"))
-        assertEquals(HubPage.Conversation("abc-1"), page("$hub/j/abc-1#at"))
+        assertEquals(HubPage.Conversation("abc-1"), page("$hub/persona/abc-1#at"))
         assertEquals(HubPage.Screen(TodoDetailRoute("todo 1")), page("$hub/todos?view=x&id=todo%201"))
     }
 
@@ -27,11 +27,11 @@ class HubLinksTest {
         assertEquals(HubPage.Agent("m1", "abc-1", "a1b2#3"), page("$hub/s/m1/abc-1?at=a1b2%233"))
         assertEquals(HubPage.Agent("m1", "abc-1", "item-42"), page("$hub/s/m1/abc-1?view=chat&at=item-42#x"))
         assertEquals(HubPage.Agent("m1", "abc-1", "item-42"), page("$hub/t/m1/space/slot/abc-1?at=item-42"))
-        assertEquals(HubPage.Conversation("abc-1", "item 7"), page("$hub/j/abc-1?at=item+7"))
+        assertEquals(HubPage.Conversation("abc-1", "item 7"), page("$hub/persona/abc-1?at=item+7"))
         assertEquals(HubPage.Conversation("abc-1", "item-7"), page("$hub/persona/abc-1?at=item-7"))
         // an empty anchor is no anchor; Persona's own page has no message to land on
         assertEquals(HubPage.Agent("m1", "abc-1"), page("$hub/s/m1/abc-1?at="))
-        assertEquals(HubPage.Conversation(null), page("$hub/j?at=item-7"))
+        assertEquals(HubPage.Conversation(null), page("$hub/persona?at=item-7"))
         assertEquals(HubPage.Screen(TodoDetailRoute("todo_1")), page("$hub/todos?id=todo_1&at=item-7"))
     }
 
@@ -45,8 +45,8 @@ class HubLinksTest {
         assertEquals(HubPage.Screen(AgentsRoute), page("$hub/t/m1/space/slot"))
         assertEquals(HubPage.Conversation(null), page(hub))
         assertEquals(HubPage.Conversation(null), page("$hub/"))
-        assertEquals(HubPage.Conversation(null), page("$hub/j"))
-        assertEquals(HubPage.Conversation(null), page("$hub/j/new"))
+        assertEquals(HubPage.Conversation(null), page("$hub/persona"))
+        assertEquals(HubPage.Conversation(null), page("$hub/persona/new"))
         assertEquals(HubPage.Screen(TodoDetailRoute("todo_1")), page("$hub/todos/todo_1"))
         assertEquals(HubPage.Screen(TodosRoute), page("$hub/todos"))
         assertEquals(HubPage.Screen(InboxRoute), page("$hub/inbox"))
@@ -59,7 +59,7 @@ class HubLinksTest {
 
     @Test fun leavesPagesWithoutAScreenToTheWeb() {
         listOf("/s/m1", "/s/m1/abc-1/more", "/kb/people/x", "/terminal", "/admin", "/api/v1/sessions", "/assets/app.js",
-            "/j/abc/more", "/todos/a/b", "/extension/x/y").forEach { assertNull(it, page("$hub$it")) }
+            "/persona/abc/more", "/todos/a/b", "/extension/x/y").forEach { assertNull(it, page("$hub$it")) }
     }
 
     @Test fun onlyOnTheHubsOwnAddresses() {
@@ -68,7 +68,7 @@ class HubLinksTest {
         assertNull(page("http://hub.example.com:18661/s/m1/abc-1"))
         assertNull(page("$hub/s/m1/abc-1", emptyList()))
         assertNull(page("http://user@hub.example.com:18660/s/m1/abc-1"))
-        assertNull(page("jarvis://session/m1/abc-1"))
+        assertNull(page("persona://session/m1/abc-1"))
         assertNull(page("not a url"))
         // the host's case, IPv6 literals, an address given without a scheme, and the default ports
         assertEquals(HubPage.Agent("m1", "a"), page("http://HUB.example.com:18660/s/m1/a"))

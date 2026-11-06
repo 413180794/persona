@@ -1,6 +1,6 @@
-// Package voice is the built-in voice plugin (`jarvisd voice`, docs/extensions.md "Built-in voice extension"): full-duplex voice
+// Package voice is the built-in voice plugin (`personad voice`, docs/extensions.md "Built-in voice extension"): full-duplex voice
 // conversations in the app over a realtime service that speaks the GPT-Live wire. The hub starts it like any plugin
-// and relays /api/v1/plugins/<id>/… to the HTTP server it serves on JARVIS_PLUGIN_SOCKET.
+// and relays /api/v1/plugins/<id>/… to the HTTP server it serves on PERSONA_PLUGIN_SOCKET.
 //
 // One plugin can have several upstreams (providers): each is a /v1/live endpoint, its dialect, its credential. The
 // models of all of them make one list, and the model the app picks decides which upstream a conversation goes to.
@@ -198,7 +198,7 @@ var (
 
 // LoadConfig reads the settings the hub hands the plugin (docs/voice.md "How the extension gets its settings"): the settings form in
 // PERSONA_EXTENSION_CONFIG, its key in PERSONA_EXTENSION_SECRETS, the config of the hub.json entry the hub took over
-// in PERSONA_VOICE_HUB_CONFIG. The old names (PERSONA_PLUGIN_*, JARVIS_PLUGIN_*) are read too.
+// in PERSONA_VOICE_HUB_CONFIG. The former PERSONA_PLUGIN_* names are read too.
 func LoadConfig() (Config, error) {
 	var secrets map[string]string
 	if raw := strings.TrimSpace(extensionEnv("SECRETS")); raw != "" {
@@ -210,7 +210,7 @@ func LoadConfig() (Config, error) {
 		HubJSON: json.RawMessage(identity.Getenv("PERSONA_VOICE_HUB_CONFIG"))})
 }
 
-// extensionEnv is PERSONA_EXTENSION_<name>, else its old names PERSONA_PLUGIN_<name> and JARVIS_PLUGIN_<name>.
+// extensionEnv is PERSONA_EXTENSION_<name>, else its former PERSONA_PLUGIN_<name> name.
 func extensionEnv(name string) string {
 	if v, ok := identity.LookupEnv("PERSONA_EXTENSION_" + name); ok {
 		return v

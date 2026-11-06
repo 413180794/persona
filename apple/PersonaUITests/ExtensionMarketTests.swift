@@ -3,19 +3,19 @@ import XCTest
 /// Settings › Extensions › Extension Market and a plugin's own page (docs/extensions.md「扩展市场」「声明式 UI」): a plugin installed from a market
 /// (preview, its permissions agreed to, installed, then removed so the next run finds it as before), a plugin page's
 /// form filled in and saved (the plugin's toast, its new view), and a launcher's page with the plugin's section — the
-/// one that says unsupported (#1339) not there at all. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
-/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the screenshots, named
-/// by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark) and the style.
+/// one that says unsupported (#1339) not there at all. Against scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1:
+/// `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the screenshots, named
+/// by `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` (light / dark) and the style.
 final class ExtensionMarketTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     @MainActor private func launch(_ args: [String] = []) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)") }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings"] + args
         app.launchPinned()
@@ -25,8 +25,8 @@ final class ExtensionMarketTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "market-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 
@@ -104,7 +104,7 @@ final class ExtensionMarketTests: XCTestCase {
     /// user with what it asks for more, opening the market's upgrade; the Markets page's switch for all of them. The mock's
     /// MOCK_PLUGIN_UPGRADE picks the state (needs_permission by default; the screenshots of the others are named by it).
     @MainActor func testAutoUpgrade() throws {
-        let state = env["JARVIS_PLUGIN_UPGRADE"] ?? "needs_permission"
+        let state = env["PERSONA_PLUGIN_UPGRADE"] ?? "needs_permission"
         let app = try launch(["-openExtension", "example-gateway"])
         let toggle = app.switches["plugin-auto-upgrade"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 15), "no 自动升级 switch:\n\(app.debugDescription)")

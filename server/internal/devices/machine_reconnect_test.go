@@ -15,7 +15,7 @@ import (
 
 // A real subprocess keeps stdout open until the hub terminates its transport.
 func TestMachinePeerHelper(t *testing.T) {
-	if os.Getenv("JARVIS_TEST_MACHINE_PEER") != "1" {
+	if os.Getenv("PERSONA_TEST_MACHINE_PEER") != "1" {
 		return
 	}
 	peer := rpc.New("n", os.Stdout)
@@ -41,12 +41,12 @@ func TestMachineReconnectReplacesClosedPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte("#!/bin/sh\nexec \"$JARVIS_TEST_PEER_BINARY\" -test.run '^TestMachinePeerHelper$'\n"), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte("#!/bin/sh\nexec \"$PERSONA_TEST_PEER_BINARY\" -test.run '^TestMachinePeerHelper$'\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("JARVIS_TEST_PEER_BINARY", bin)
-	t.Setenv("JARVIS_TEST_MACHINE_PEER", "1")
+	t.Setenv("PERSONA_TEST_PEER_BINARY", bin)
+	t.Setenv("PERSONA_TEST_MACHINE_PEER", "1")
 	m := newMachine(newTestDevices(t), MachineConfig{ID: "test-machine", Kind: "ssh", SSHHost: "test-node"})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

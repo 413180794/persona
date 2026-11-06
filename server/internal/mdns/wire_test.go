@@ -13,7 +13,7 @@ import (
 func testService() Service {
 	return Service{
 		Instance: "Hub. One 2",
-		Type:     "_jarvis-hub._tcp",
+		Type:     "_persona-hub._tcp",
 		Port:     8443,
 		TXT: map[string]string{
 			"hub_id": "1a2b3c4d",
@@ -49,7 +49,7 @@ func TestBuildParseRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, browse := range []string{"_jarvis-hub._tcp", "_JARVIS-HUB._TCP.local.", "_jarvis-hub._tcp.LOCAL"} {
+	for _, browse := range []string{"_persona-hub._tcp", "_PERSONA-HUB._TCP.local.", "_persona-hub._tcp.LOCAL"} {
 		es := parseEntries(b, browse)
 		if len(es) != 1 {
 			t.Fatalf("browse %q: got %d entries, want 1", browse, len(es))
@@ -58,7 +58,7 @@ func TestBuildParseRoundTrip(t *testing.T) {
 		if e.Instance != svc.Instance {
 			t.Errorf("Instance = %q, want %q", e.Instance, svc.Instance)
 		}
-		if e.Host != "jarvis-hub-one-2.local." {
+		if e.Host != "persona-hub-one-2.local." {
 			t.Errorf("Host = %q", e.Host)
 		}
 		if e.Port != 8443 {
@@ -95,7 +95,7 @@ func TestBuildParseRoundTrip(t *testing.T) {
 	if len(target) != 4 || target[0] != "Hub. One 2" {
 		t.Fatalf("PTR target labels = %q", target)
 	}
-	if got := target.String(); got != `Hub\.\032One\0322._jarvis-hub._tcp.local.` {
+	if got := target.String(); got != `Hub\.\032One\0322._persona-hub._tcp.local.` {
 		t.Errorf("PTR target = %s", got)
 	}
 	if m.answers[0].class != classIN {
@@ -113,8 +113,8 @@ func TestBuildCompresses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// "_jarvis-hub" is written once; later names point at it.
-	if n := strings.Count(string(b), "_jarvis-hub"); n != 1 {
+	// "_persona-hub" is written once; later names point at it.
+	if n := strings.Count(string(b), "_persona-hub"); n != 1 {
 		t.Errorf("type label written %d times", n)
 	}
 }
@@ -130,29 +130,29 @@ func TestInstanceCut(t *testing.T) {
 	if len(es) != 1 || es[0].Instance != strings.Repeat("家", 21) {
 		t.Fatalf("got %+v", es)
 	}
-	if !strings.HasPrefix(es[0].Host, "jarvis.") {
+	if !strings.HasPrefix(es[0].Host, "persona.") {
 		t.Errorf("Host = %q", es[0].Host) // nothing usable in the instance: the bare prefix
 	}
 }
 
 func TestExplicitHost(t *testing.T) {
 	svc := testService()
-	svc.Host = "jarvis-1a2b3c4d.local."
+	svc.Host = "persona-1a2b3c4d.local."
 	es := parseEntries(must(buildResponse(svc, nil, recordTTL)), svc.Type)
-	if len(es) != 1 || es[0].Host != "jarvis-1a2b3c4d.local." {
+	if len(es) != 1 || es[0].Host != "persona-1a2b3c4d.local." {
 		t.Fatalf("got %+v", es)
 	}
 }
 
 func TestHostFromInstance(t *testing.T) {
 	for in, want := range map[string]string{
-		"1A2B3C4D":                   "jarvis-1a2b3c4d",
-		"Hub. One 2":                 "jarvis-hub-one-2",
-		"--x--":                      "jarvis-x",
-		"jarvis-1a2b":                "jarvis-1a2b",
-		"家":                          "jarvis",
-		strings.Repeat("ab-", 40):    "jarvis-" + strings.TrimSuffix(strings.Repeat("ab-", 19), "-"),
-		"0123456789abcdef0123456789": "jarvis-0123456789abcdef0123456789",
+		"1A2B3C4D":                   "persona-1a2b3c4d",
+		"Hub. One 2":                 "persona-hub-one-2",
+		"--x--":                      "persona-x",
+		"persona-1a2b":               "persona-1a2b",
+		"家":                          "persona",
+		strings.Repeat("ab-", 40):    "persona-" + strings.TrimSuffix(strings.Repeat("ab-", 19)[:maxLabel-len("persona-")], "-"),
+		"0123456789abcdef0123456789": "persona-0123456789abcdef0123456789",
 	} {
 		got := hostFromInstance(in)
 		if got != want {
@@ -167,8 +167,8 @@ func TestHostFromInstance(t *testing.T) {
 func TestBuildErrors(t *testing.T) {
 	for name, mut := range map[string]func(*Service){
 		"empty instance": func(s *Service) { s.Instance = "" },
-		"bad type":       func(s *Service) { s.Type = "jarvis" },
-		"no proto":       func(s *Service) { s.Type = "_jarvis._sctp" },
+		"bad type":       func(s *Service) { s.Type = "persona" },
+		"no proto":       func(s *Service) { s.Type = "_persona._sctp" },
 		"three labels":   func(s *Service) { s.Type = "_a._b._tcp" },
 		"port 0":         func(s *Service) { s.Port = 0 },
 		"port too big":   func(s *Service) { s.Port = 70000 },
@@ -210,14 +210,14 @@ func TestEmptyTXT(t *testing.T) {
 }
 
 func TestPTROnly(t *testing.T) {
-	typ := mustType(t, "_jarvis-hub._tcp")
+	typ := mustType(t, "_persona-hub._tcp")
 	b, err := packMessage(&message{flags: flagResponse | flagAA, answers: []record{
 		{name: typ, typ: typePTR, class: classIN, ttl: 4500, target: append(name{"Solo"}, typ...)},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	es := parseEntries(b, "_jarvis-hub._tcp")
+	es := parseEntries(b, "_persona-hub._tcp")
 	if len(es) != 1 {
 		t.Fatalf("got %d entries", len(es))
 	}
@@ -228,19 +228,19 @@ func TestPTROnly(t *testing.T) {
 }
 
 func TestGoodbye(t *testing.T) {
-	es := parseEntries(must(buildResponse(testService(), testAddrs(), 0)), "_jarvis-hub._tcp")
+	es := parseEntries(must(buildResponse(testService(), testAddrs(), 0)), "_persona-hub._tcp")
 	if len(es) != 1 || es[0].TTL != 0 || es[0].Instance != "Hub. One 2" {
 		t.Fatalf("got %+v", es)
 	}
 }
 
 func TestParseIgnoresQueries(t *testing.T) {
-	typ := mustType(t, "_jarvis-hub._tcp")
+	typ := mustType(t, "_persona-hub._tcp")
 	b, err := packMessage(&message{questions: []question{{name: typ, typ: typePTR, class: classIN}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if es := parseEntries(b, "_jarvis-hub._tcp"); es != nil {
+	if es := parseEntries(b, "_persona-hub._tcp"); es != nil {
 		t.Errorf("query parsed as %+v", es)
 	}
 	if es := parseEntries(b, "not a type"); es != nil {
@@ -257,12 +257,12 @@ func TestDecodeTXT(t *testing.T) {
 }
 
 func TestParseType(t *testing.T) {
-	for _, ok := range []string{"_jarvis-hub._tcp", "_jarvis-hub._tcp.", "_jarvis-hub._tcp.local", "_x._UDP.Local."} {
+	for _, ok := range []string{"_persona-hub._tcp", "_persona-hub._tcp.", "_persona-hub._tcp.local", "_x._UDP.Local."} {
 		if _, err := parseType(ok); err != nil {
 			t.Errorf("%q: %v", ok, err)
 		}
 	}
-	for _, bad := range []string{"", ".", "_tcp", "jarvis._tcp", "_jarvis.tcp", "_jarvis._tcp.example", "_._tcp", "_a._b._tcp"} {
+	for _, bad := range []string{"", ".", "_tcp", "persona._tcp", "_persona.tcp", "_persona._tcp.example", "_._tcp", "_a._b._tcp"} {
 		if _, err := parseType(bad); err == nil {
 			t.Errorf("%q: no error", bad)
 		}
@@ -305,12 +305,12 @@ func TestAnswer(t *testing.T) {
 		ans, add []uint16
 	}{
 		{"PTR", []question{{s.typ, typePTR, classIN}}, []uint16{typePTR}, []uint16{typeSRV, typeTXT, typeA, typeAAAA}},
-		{"PTR with QU bit, other case", []question{{name{"_JARVIS-HUB", "_TCP", "LOCAL"}, typePTR, classIN | topBit}}, []uint16{typePTR}, []uint16{typeSRV, typeTXT, typeA, typeAAAA}},
+		{"PTR with QU bit, other case", []question{{name{"_PERSONA-HUB", "_TCP", "LOCAL"}, typePTR, classIN | topBit}}, []uint16{typePTR}, []uint16{typeSRV, typeTXT, typeA, typeAAAA}},
 		{"meta", []question{{metaName, typePTR, classIN}}, []uint16{typePTR}, nil},
 		{"SRV", []question{{s.inst, typeSRV, classIN}}, []uint16{typeSRV}, []uint16{typeA, typeAAAA}},
 		{"TXT", []question{{s.inst, typeTXT, classIN}}, []uint16{typeTXT}, nil},
 		{"ANY instance", []question{{s.inst, typeANY, classIN}}, []uint16{typeSRV, typeTXT}, []uint16{typeA, typeAAAA}},
-		{"A", []question{{name{"JARVIS-HUB-ONE-2", "local"}, typeA, classIN}}, []uint16{typeA}, []uint16{typeAAAA}},
+		{"A", []question{{name{"PERSONA-HUB-ONE-2", "local"}, typeA, classIN}}, []uint16{typeA}, []uint16{typeAAAA}},
 		{"AAAA", []question{{s.host, typeAAAA, classIN}}, []uint16{typeAAAA}, []uint16{typeA}},
 		{"ANY host", []question{{s.host, typeANY, classIN}}, []uint16{typeA, typeAAAA}, nil},
 		{"SRV and A", []question{{s.inst, typeSRV, classIN}, {s.host, typeA, classIN}}, []uint16{typeSRV, typeA}, []uint16{typeAAAA}},
@@ -382,7 +382,7 @@ func TestSkipsUnknownRecords(t *testing.T) {
 		0, 0, 47, 0, 1, 0, 0, 0, 120, 0, 3, 1, 2, 3,
 		0, 0, 1, 0, 3, 0, 0, 0, 120, 0, 4, 192, 0, 2, 99)
 	msg[11] += 2 // two more additionals
-	es := parseEntries(msg, "_jarvis-hub._tcp")
+	es := parseEntries(msg, "_persona-hub._tcp")
 	if len(es) != 1 || es[0].Port != 8443 || len(es[0].Addrs) != 3 {
 		t.Fatalf("got %+v", es)
 	}
@@ -392,7 +392,7 @@ func TestSkipsUnknownRecords(t *testing.T) {
 func TestRandomBytes(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 2))
 	valid := must(buildResponse(testService(), testAddrs(), recordTTL))
-	typ := mustType(t, "_jarvis-hub._tcp")
+	typ := mustType(t, "_persona-hub._tcp")
 	br := newBrowser(typ, "")
 	now := time.Now()
 	for i := range 20000 {
@@ -411,7 +411,7 @@ func TestRandomBytes(t *testing.T) {
 		default:
 			b = slices.Clone(valid[:rng.IntN(len(valid)+1)])
 		}
-		parseEntries(b, "_jarvis-hub._tcp")
+		parseEntries(b, "_persona-hub._tcp")
 		if m, err := unpackMessage(b); err == nil {
 			br.apply(m, "eth0", now)
 			br.sweep(now.Add(time.Duration(rng.IntN(300)) * time.Second))
@@ -425,9 +425,9 @@ func FuzzParseEntries(f *testing.F) {
 	f.Add(must(buildResponse(testService(), nil, 0)))
 	f.Add([]byte{0, 0, 0x84, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0xC0, 12})
 	f.Fuzz(func(t *testing.T, b []byte) {
-		parseEntries(b, "_jarvis-hub._tcp")
+		parseEntries(b, "_persona-hub._tcp")
 		if m, err := unpackMessage(b); err == nil {
-			newBrowser(name{"_jarvis-hub", "_tcp", "local"}, "").apply(m, "eth0", time.Now())
+			newBrowser(name{"_persona-hub", "_tcp", "local"}, "").apply(m, "eth0", time.Now())
 		}
 	})
 }

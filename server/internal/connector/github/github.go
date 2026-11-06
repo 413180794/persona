@@ -53,7 +53,7 @@ func (c *Config) host() string {
 var (
 	ErrNoMachine   = errors.New("github.auth.from_machine is not one of the manager's machines")
 	ErrOffline     = errors.New("the machine is offline")
-	ErrNodeTooOld  = errors.New("the machine's jarvisd is too old")
+	ErrNodeTooOld  = errors.New("the machine's personad is too old")
 	ErrNoGh        = errors.New("gh is not installed")
 	ErrNotSignedIn = errors.New("gh is not signed in")
 	// errBadProxy: hub.json's github.proxy cannot be used; every request fails with it rather than going direct.
@@ -259,7 +259,7 @@ func (c *Connector) explain(err error) (string, string) {
 	case errors.Is(err, ErrOffline):
 		return connector.StateNotSignedIn, "GitHub 未授权（" + m + " 离线）：它连上后会自动再读"
 	case errors.Is(err, ErrNodeTooOld):
-		return connector.StateError, m + " 的 jarvisd 太旧，读不了 gh 登录：更新它（scripts/deploy/deploy.sh）"
+		return connector.StateError, m + " 的 personad 太旧，读不了 gh 登录：更新它（scripts/deploy/deploy.sh）"
 	case errors.Is(err, ErrNoGh):
 		return connector.StateNotSignedIn, m + " 上没有 gh：在那台机器上装好 gh 并运行 gh auth login"
 	case errors.Is(err, ErrNotSignedIn):

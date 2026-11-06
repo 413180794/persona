@@ -197,7 +197,7 @@ type MachineExtras struct {
 	ScreenPort bool `json:"screen_port,omitempty"`
 }
 
-// Setting is one of the manager's jarvis_settings entries (HubSettingsList).
+// Setting is one of the manager's persona_settings entries (HubSettingsList).
 type Setting struct {
 	Key     string   `json:"key"`
 	Title   string   `json:"title"`
@@ -208,9 +208,9 @@ type Setting struct {
 
 // More of what the hub asks of the manager (HubCall.Method).
 const (
-	// HubSettingsList: {} → {settings: [Setting]}: the manager's jarvis_settings entries (mail, sources' rules).
+	// HubSettingsList: {} → {settings: [Setting]}: the manager's persona_settings entries (mail, sources' rules).
 	HubSettingsList = "settings.list"
-	// HubSettingsTool: {machine_id, session_id, arguments} → {text}: jarvis_settings on one of them (the card is the
+	// HubSettingsTool: {machine_id, session_id, arguments} → {text}: persona_settings on one of them (the card is the
 	// hub's: the manager asks HubWaitInteraction).
 	HubSettingsTool = "settings.tool"
 	// HubKBArchives, … see the routes.

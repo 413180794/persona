@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A space's tabs (`AppModel.siblings(of:)`): one per pane, the open one winning its pane, slot order; worked out once
 /// per update of the lists, and a view reading them is drawn again only for its own space.
@@ -10,7 +10,7 @@ struct SiblingsTests {
     private func session(_ id: String, space: String? = "w1", pane: String? = nil, slot: Int? = nil, state: String = "idle",
                          updated: String? = nil, title: String? = nil, machine: String = "box") throws -> Session {
         var o: [String: Any] = ["machine_id": machine, "session_id": id, "title": title ?? "agent \(id)", "cwd": "/code/\(id)",
-                                "status": "idle", "state": state, "started_by_jarvis": false, "assistant": false,
+                                "status": "idle", "state": state, "started_by_persona": false, "assistant": false,
                                 "pending_interactions": 0]
         if let space { o["space_id"] = space }
         if let pane { o["pane_id"] = pane }

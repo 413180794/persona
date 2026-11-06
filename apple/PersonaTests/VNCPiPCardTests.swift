@@ -1,6 +1,6 @@
 import CoreVideo
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The small window's card (#1839, VNCPiPCard): what it says for each phase of the connection, and that it draws into a
 /// frame of its size (3×) with something on it.

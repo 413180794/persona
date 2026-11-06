@@ -71,7 +71,7 @@ func (h *Hub) adminDeviceRoutes(mux *http.ServeMux) {
 	})
 }
 
-// qrRows is text's QR code (level L, like `jarvisd hub pair`), one string of 0 / 1 per row, without the quiet zone:
+// qrRows is text's QR code (level L, like `personad hub pair`), one string of 0 / 1 per row, without the quiet zone:
 // the page draws it with its own colors.
 func qrRows(text string) ([]string, int, error) {
 	code, err := qr.Encode(text, qr.L)

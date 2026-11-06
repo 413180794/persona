@@ -20,7 +20,7 @@ import (
 
 // The admin page's peers API (docs/plan-hub-mesh.md 2.7): the admin routes (#296) call registerPeerAdmin on their mux,
 // behind the admin login. Until they are there, peerAdminRoutes serves it on the API for the master token from this
-// machine only (the CLI: jarvisd hub pair --peer, jarvisd hub peer …).
+// machine only (the CLI: personad hub pair --peer, personad hub peer …).
 
 // peerItem is one paired hub as the admin page lists it.
 type peerItem struct {
@@ -197,7 +197,7 @@ func (h *Hub) inGroup(hub string) bool {
 	return h.meshView().reachable(hub)
 }
 
-// peerCLIRoutes serve the peers API to `jarvisd hub pair --peer` and `jarvisd hub peer …` on the hub's machine, under
+// peerCLIRoutes serve the peers API to `personad hub pair --peer` and `personad hub peer …` on the hub's machine, under
 // /api/v1/admin/cli/: the master token, over loopback (like the admin UI's reload), no admin session.
 func (h *Hub) peerCLIRoutes(open *http.ServeMux) {
 	peers := http.NewServeMux()

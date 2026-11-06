@@ -3,7 +3,7 @@ import XCTest
 /// A new Persona conversation opens on the welcome (`AssistantWelcome`: a greeting, what Persona can reach, things to ask),
 /// in the shell and the old layout, from launch and from the sidebar's New Chat. The shell once showed nothing but the
 /// composer there (2026-11-02, the user: 「之前设计的挺好的助手空状态，现在咋全空白了？」). Runs in the BeautifulUI
-/// style too (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`).
+/// style too (`TEST_RUNNER_PERSONA_UI_STYLE=beautiful`).
 final class AssistantWelcomeTests: XCTestCase {
     private var app: XCUIApplication!
 

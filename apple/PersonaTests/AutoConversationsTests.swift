@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The sidebar's Auto Chats (#3264, docs/protocol.md「助手对话的来源」): the conversations Persona opened by itself out of
 /// Recent, by source; a hub that never says who opened them lists them as before.

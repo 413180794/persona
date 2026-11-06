@@ -1,9 +1,9 @@
 #!/bin/sh
 # Install herdr (the default engine, docs/engines.md) on this computer if it has none. deploy.sh pipes it to each
-# machine it installs jarvisd on (`ssh <host> sh -s < scripts/deploy/ensure-herdr.sh`); install.sh has the same steps inline
+# machine it installs personad on (`ssh <host> sh -s < scripts/deploy/ensure-herdr.sh`); install.sh has the same steps inline
 # (it is served alone): keep the two in step. herdr's own installer puts it in ~/.local/bin, where the node looks.
-# JARVIS_SKIP_HERDR=1 skips it. Prints one line; a failed install only warns (exit 0) so the deploy goes on.
-HERDR_INSTALL="${PERSONA_HERDR_INSTALL-${JARVIS_HERDR_INSTALL:-https://herdr.dev/install.sh}}"
+# PERSONA_SKIP_HERDR=1 skips it. Prints one line; a failed install only warns (exit 0) so the deploy goes on.
+HERDR_INSTALL="${PERSONA_HERDR_INSTALL:-https://herdr.dev/install.sh}"
 
 # The places the node looks besides PATH (server/internal/node/node.go: ssh sessions get a minimal PATH).
 has_herdr() {
@@ -14,7 +14,7 @@ has_herdr() {
 	return 1
 }
 
-[ "${PERSONA_SKIP_HERDR-${JARVIS_SKIP_HERDR:-}}" = 1 ] && exit 0
+[ "${PERSONA_SKIP_HERDR:-}" = 1 ] && exit 0
 has_herdr && exit 0
 if ! command -v curl >/dev/null 2>&1; then
 	echo "herdr: not installed and no curl to install it; install it yourself (https://herdr.dev)" >&2

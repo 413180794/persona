@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// New Agent's model: the launcher's list as the hub sends it and what a start sends (docs/model-config.md「新建 Agent 选模型」).
 @MainActor struct LauncherModelChoiceTests {

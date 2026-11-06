@@ -50,7 +50,7 @@ describe("session capability contract", () => {
   it("keeps plain paths as they are and a leading ~ outside the quotes", () => {
     expect(shellPath("/home/me/work-2/a_b.c")).toBe("/home/me/work-2/a_b.c");
     expect(shellPath("~")).toBe("~");
-    expect(shellPath("~/.jarvis/assistant")).toBe("~/.jarvis/assistant");
+    expect(shellPath("~/.persona/assistant")).toBe("~/.persona/assistant");
     expect(shellPath("~/项目")).toBe("~/'项目'");
     expect(shellPath("~user/x y")).toBe("'~user/x y'");
     expect(shellPath("a|b>c")).toBe("'a|b>c'");

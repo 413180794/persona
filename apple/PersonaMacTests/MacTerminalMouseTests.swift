@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The pointer on a terminal the Mac drives (docs/terminal.md「第二十五节」): the same routing, buttons and bits as the
 /// web's `lib/terminal-mouse.ts`.

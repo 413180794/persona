@@ -10,9 +10,7 @@ class PairingLinksTest {
     @Test fun embeddedLinksUseTheSameParsedRequestBeforePermissionAndTlsChecks() {
         val suffix = "pair?url=https%3A%2F%2Fhub.example.com%3A8443&token=fixture&hub=example-hub&fp=${"A".repeat(43)}&tls=443" +
             "&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D%3A8443&alt=https%3A%2F%2Fbackup.example.com"
-        val legacy = PairingRequest("  jarvis://$suffix  ", "outer-token").parsedPairingLink()!!
         val current = PairingRequest("  persona://$suffix  ", "outer-token").parsedPairingLink()!!
-        assertEquals(legacy, current)
         assertEquals("https://hub.example.com:8443", current.url)
         assertEquals("fixture", current.token)
         assertEquals("example-hub", current.hub)
@@ -31,8 +29,8 @@ class PairingLinksTest {
         assertEquals(request.alt, wired.alt)
     }
 
-    @Test fun bothSchemesRetainCredentialAndTlsValidation() {
-        for (scheme in listOf("persona", "jarvis")) {
+    @Test fun personaSchemeRetainsCredentialAndTlsValidation() {
+        for (scheme in listOf("persona")) {
             for (suffix in listOf("other?url=https://hub.example.com&token=fixture",
                 "pair?url=https://hub.example.com&token=", "pair?url=https://hub.example.com&token=fixture&tls=no",
                 "pair?url=https://hub.example.com&token=fixture&token=duplicate")) {

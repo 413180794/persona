@@ -195,7 +195,7 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	firstPane := 0
 	sessions := []proto.Session{{MachineID: "m1", SessionID: "s1", Title: "示例任务", Cwd: "/home/user/project", Status: proto.StatusBlocked,
 		PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1", Agent: "claude", Launcher: "example", Model: "example-model",
-		PermissionMode: "plan", Effort: "high", StartedByJarvis: true, SpaceKind: "herdr", SpaceID: "w1", SpaceName: "示例空间", SpaceIndex: 1,
+		PermissionMode: "plan", Effort: "high", StartedByPersona: true, SpaceKind: "herdr", SpaceID: "w1", SpaceName: "示例空间", SpaceIndex: 1,
 		SlotID: "t1", SlotName: "示例任务", SlotIndex: 1, PaneIndex: &firstPane, UpdatedAt: now, Rev: 120, PendingInteractions: 1,
 		Queued: []string{"请补充示例。"}, Suggestion: "继续检查示例", Background: []proto.BackgroundTask{{ID: "task_example", Kind: "shell", Description: "检查示例", Command: "pwd", StartedAt: now}},
 		Subagents: []proto.Subagent{{ID: "agent_example", SessionID: "s1@agent_example", Type: "Explore", Running: true, StartedAt: now}},
@@ -349,7 +349,7 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 		h.clients[c] = struct{}{}
 		h.broadcast(map[string]any{"type": "interaction", "interaction": ix})
 		add("interactions", "interaction_elicitation_"+mode, "仅向声明 elicitation 能力的连接下发，旧 iOS 不接收此样本。", "event", wireReceive(t, c), fields,
-			"server/internal/hub/http.go: Hub.broadcast", "server/internal/proto/proto.go: Elicitation", "android/core/contracts/src/main/kotlin/jarvis/core/contracts/Elicitation.kt")
+			"server/internal/hub/http.go: Hub.broadcast", "server/internal/proto/proto.go: Elicitation", "android/core/contracts/src/main/kotlin/persona/core/contracts/Elicitation.kt")
 	}
 	secret.ID = "ix_secret"
 	secret.Screen = "Password:"

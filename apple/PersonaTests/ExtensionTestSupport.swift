@@ -1,5 +1,5 @@
 import Foundation
-@testable import Jarvis
+@testable import Persona
 
 /// A component's own fields, to look at in the tests.
 extension ExtensionComponent {

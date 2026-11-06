@@ -59,7 +59,7 @@ func nodeHas(info proto.NodeInfo, cap string) bool {
 	return true
 }
 
-// buildDiffers: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>
+// buildDiffers: the node's personad is another build than the hub's. Builds are named <commit>[-dirty]-<time>
 // (deploy.sh); dev builds ("dev", empty) are never flagged. The local node is the hub binary itself. This is an
 // upgrade hint (the update offer, the hub's automatic redeploy), not compatibility: compatOf is.
 func buildDiffers(hub, node string) bool {

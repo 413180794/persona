@@ -1,7 +1,7 @@
 import XCTest
 
 /// Signing in to a connector by scanning a QR code with another app (#1351), against scripts/mock/mock_hub.py started
-/// with MOCK_WECHAT=signed_out (JARVIS_MOCK_HUB_QR): Settings › WeChat › Sign In shows the code the hub drew and Save QR Code,
+/// with MOCK_WECHAT=signed_out (PERSONA_MOCK_HUB_QR): Settings › WeChat › Sign In shows the code the hub drew and Save QR Code,
 /// then signs in on its own once the mock says it was confirmed (its sixth ask) (the page asks again every interval).
 final class QRSignInTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
@@ -14,9 +14,9 @@ final class QRSignInTests: XCTestCase {
     }
 
     @MainActor func testScanToSignIn() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_QR"] else { throw XCTSkip("needs a mock with MOCK_WECHAT=signed_out") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_QR"] else { throw XCTSkip("needs a mock with MOCK_WECHAT=signed_out") }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""]
         app.launchPinned()
         let any = app.descendants(matching: .any)
@@ -55,14 +55,14 @@ final class QRSignInTests: XCTestCase {
     }
 
     /// A QR step the hub sent without the code or a link (MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none,
-    /// JARVIS_MOCK_HUB_QR_NONE): the page says it cannot draw it and offers Start Over, never an empty card with a grey
+    /// PERSONA_MOCK_HUB_QR_NONE): the page says it cannot draw it and offers Start Over, never an empty card with a grey
     /// Next (#1693).
     @MainActor func testAStepItCannotDrawSaysSo() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_QR_NONE"] else {
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB_QR_NONE"] else {
             throw XCTSkip("needs a mock with MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""]
         app.launchPinned()
         let any = app.descendants(matching: .any)

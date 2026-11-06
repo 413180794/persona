@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The voice orb (`VoiceOrb`, docs/voice.md「设计系统」): its motion is a pure function of phase, time and level
 /// (`VoiceOrbPose`), held here to the tokens: Android's pace, a still frame with Reduce Motion, and inside its box.

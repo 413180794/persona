@@ -374,7 +374,7 @@ export function connect(prog: Program, write: Write) {
 /** What the hub gives a program in its environment, under the names of any hub. */
 export function env() {
   const get = (name: string) =>
-    process.env[`PERSONA_EXTENSION_${name}`] || process.env[`PERSONA_PLUGIN_${name}`] || process.env[`JARVIS_PLUGIN_${name}`] || "";
+    process.env[`PERSONA_EXTENSION_${name}`] || process.env[`PERSONA_PLUGIN_${name}`] || "";
   const json = (s: string) => {
     try {
       return s ? JSON.parse(s) : undefined;
@@ -390,8 +390,8 @@ export function env() {
     /** For a program that does not speak the protocol (rpc: none); otherwise initialize has it. */
     config: json(get("CONFIG")),
     secrets: json(get("SECRETS")) as Record<string, string> | undefined,
-    hubURL: process.env.PERSONA_HUB_URL || process.env.JARVIS_HUB_URL || "",
-    hubToken: process.env.PERSONA_HUB_TOKEN || process.env.JARVIS_HUB_TOKEN || "",
+    hubURL: process.env.PERSONA_HUB_URL || "",
+    hubToken: process.env.PERSONA_HUB_TOKEN || "",
   };
 }
 

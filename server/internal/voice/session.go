@@ -478,7 +478,7 @@ func (c *conversation) connect(woken bool) error {
 	case len(tools) == len(toolNames):
 		mode = "all"
 	case len(tools) > 0:
-		mode = "ask_jarvis"
+		mode = "ask_persona"
 	}
 	c.mu.Lock()
 	snap, waiting := c.snap, c.waiting()
@@ -631,7 +631,7 @@ func (c *conversation) dial(ctx context.Context, p *Provider, w wire, model stri
 }
 
 // toolSet is which of the plugin's function tools the session declares (docs/voice.md "Permissions"): all of them for a full
-// device; for another extension calling (role extension) only ask_jarvis, to the main conversation, which is what it may
+// device; for another extension calling (role extension) only ask_persona, to the main conversation, which is what it may
 // reach: the others reach past that (the knowledge base, any agent), and without a tool the measured service hands
 // nothing over at all (docs/lessons/voice.md "Other behavior"); none for an upstream that takes no tools.
 func (c *conversation) toolSet() []string {
@@ -639,13 +639,13 @@ func (c *conversation) toolSet() []string {
 	case !c.p.tools():
 		return nil
 	case c.version >= 2:
-		// Bound to a conversation: what hands work over goes to it (delegate_task); send_to_agent and ask_jarvis would
+		// Bound to a conversation: what hands work over goes to it (delegate_task); send_to_agent and ask_persona would
 		// go past it. The measured service hands nothing over without a tool (docs/lessons/voice.md "Other behavior").
 		return boundTools
 	case c.role == "" || c.role == roleFull:
 		return toolNames
 	}
-	return []string{"ask_jarvis"}
+	return []string{"ask_persona"}
 }
 
 // tools: the session declares function tools (a delegation comes with its call).
@@ -988,10 +988,10 @@ func (c *conversation) sendUp(gen int, frames ...any) bool {
 	return true
 }
 
-// runTool runs a function call in the background and answers it (mu held). ask_jarvis is a task for the main
+// runTool runs a function call in the background and answers it (mu held). ask_persona is a task for the main
 // conversation: its call stays open and its one result is the task's answer (docs/lessons/voice.md: a call can wait
 // minutes; answering at once had the model speak twice and left the answer to be said out of turn). What writes
-// (ask_jarvis, send_to_agent) waits for the user-speech gate, as it was at the call.
+// (ask_persona, send_to_agent) waits for the user-speech gate, as it was at the call.
 func (c *conversation) runTool(gen int, e event) {
 	if !slices.Contains(c.toolSet(), e.name) {
 		c.pl.logf("a call of %s, a tool this session did not declare: ignored", e.name)
@@ -1003,7 +1003,7 @@ func (c *conversation) runTool(gen int, e event) {
 		label = e.name
 	}
 	switch e.name {
-	case "ask_jarvis", "delegate_task":
+	case "ask_persona", "delegate_task":
 		// A handover: protocol 2 reports it with run frames, protocol 1 with a tool line.
 		var in struct {
 			Task string `json:"task"`

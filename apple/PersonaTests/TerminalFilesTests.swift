@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UniformTypeIdentifiers
-@testable import Jarvis
+@testable import Persona
 
 /// Files pasted or dropped into a terminal the app drives (docs/terminal.md「第十八节」): the same escaping, names and
 /// guards as the web's `lib/terminal-clipboard.ts`.

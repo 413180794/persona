@@ -12,11 +12,11 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// report is `jarvis-link status --json`: what is known here about the link, without asking the running jarvis-link
+// report is `persona-link status --json`: what is known here about the link, without asking the running persona-link
 // (it keeps its last status on disk, link.status.json) and without touching the resident node (a connection to its
 // socket would take the node from the hub).
 type report struct {
-	// Running: a jarvis-link holds the run lock (whoever started it: the service, the menu bar app, a person).
+	// Running: a persona-link holds the run lock (whoever started it: the service, the menu bar app, a person).
 	Running bool `json:"running"`
 	// Mode: active (this computer dials the hub) | passive (the hub dials it).
 	Mode string `json:"mode"`
@@ -30,7 +30,7 @@ type report struct {
 	// Trust: how the hub is checked, "pin" (its key, from the pairing) | "system" (behind an HTTPS reverse proxy:
 	// the system's CAs and the host name).
 	Trust string `json:"trust,omitempty"`
-	// Link is the last status the running jarvis-link reported; with running false, the last one before it stopped.
+	// Link is the last status the running persona-link reported; with running false, the last one before it stopped.
 	Link *link.SavedStatus `json:"link,omitempty"`
 	// Passive is passive mode's pairing, whichever mode is on.
 	Passive *passiveReport `json:"passive,omitempty"`
@@ -157,7 +157,7 @@ func (r report) text(now time.Time, user string) string {
 		if live {
 			line("进程：pid %d · 版本 %s", st.PID, st.Version)
 		}
-		line("日志：%s（jarvis-link logs -f）", r.Log)
+		line("日志：%s（persona-link logs -f）", r.Log)
 		return b.String()
 	}
 	line("模式：%s", modeName(r.Mode))
@@ -165,7 +165,7 @@ func (r report) text(now time.Time, user string) string {
 	case r.Error != "":
 		line("凭据：读不了（%s）", r.Error)
 	case !r.Paired:
-		line("链路：还没配对。在 hub 机器上运行 jarvisd hub pair --machine <这台的 id> --add，再在这里 jarvis-link pair '<链接>'")
+		line("链路：还没配对。在 hub 机器上运行 personad hub pair --machine <这台的 id> --add，再在这里 persona-link pair '<链接>'")
 	case !r.Running && st != nil && st.State != "stopped":
 		// How long ago, not a clock time: this computer's zone may well be UTC (a server) and not the user's.
 		line("链路：没在运行（%s前最后一次报告：%s）", duration(now.Sub(st.Updated)), stateText(&st.Status, now))
@@ -223,7 +223,7 @@ func (r report) text(now time.Time, user string) string {
 	if live {
 		line("进程：pid %d · 版本 %s", st.PID, st.Version)
 	}
-	line("日志：%s（jarvis-link logs -f）", r.Log)
+	line("日志：%s（persona-link logs -f）", r.Log)
 	return b.String()
 }
 
@@ -257,7 +257,7 @@ func (r report) passiveText(line func(string, ...any), now time.Time, live bool)
 		}
 	}
 	if !paired {
-		line("配对：还没有 hub 来配对。jarvis-link pair --listen 打印链接，粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」")
+		line("配对：还没有 hub 来配对。persona-link pair --listen 打印链接，粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」")
 	}
 	if p != nil && p.CodeExpires != nil {
 		line("配对链接：还剩 %s（只能用一次）", duration(p.CodeExpires.Sub(now)))
@@ -293,7 +293,7 @@ func (r report) passiveText(line func(string, ...any), now time.Time, live bool)
 		}
 	}
 	if r.Paired {
-		line("主动模式也配对过（hub 上的「%s」）：jarvis-link mode active 切回去", r.Machine)
+		line("主动模式也配对过（hub 上的「%s」）：persona-link mode active 切回去", r.Machine)
 	}
 }
 
@@ -309,7 +309,7 @@ func (r report) serviceText(line func(string, ...any), user string) {
 		case s.Missing != "":
 			line("后台服务：没有 systemd 用户服务（%s）", s.Missing)
 		case !s.Installed:
-			line("后台服务：没装（jarvis-link install）")
+			line("后台服务：没装（persona-link install）")
 		default:
 			linger := "linger 已开"
 			if !s.Linger {
@@ -414,7 +414,7 @@ func stateText(s *link.Status, now time.Time) string {
 	return t
 }
 
-// errorParts: jarvis-link joins why each candidate failed with a full-width semicolon.
+// errorParts: persona-link joins why each candidate failed with a full-width semicolon.
 func errorParts(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, "；") {

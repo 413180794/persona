@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @Suite(.serialized)
 @MainActor
@@ -102,7 +102,7 @@ struct TodosLogicTests {
     @Test func manualHerdrAgentsGetTheirOwnSection() throws {
         func agent(_ id: String, kind: String?, byPersona: Bool, state: AgentState = .working) throws -> Session {
             let kindField = kind.map { ",\"space_kind\":\"\($0)\"" } ?? ""
-            let json = #"{"machine_id":"m","session_id":"\#(id)","title":"\#(id)","cwd":"/tmp","status":"idle","state":"\#(state.rawValue)","started_by_jarvis":\#(byPersona)\#(kindField)}"#
+            let json = #"{"machine_id":"m","session_id":"\#(id)","title":"\#(id)","cwd":"/tmp","status":"idle","state":"\#(state.rawValue)","started_by_persona":\#(byPersona)\#(kindField)}"#
             return try JSON.decoder.decode(Session.self, from: Data(json.utf8))
         }
         let onTodo = try agent("on_todo", kind: "herdr", byPersona: false)
@@ -144,7 +144,7 @@ struct TodosLogicTests {
 
     @Test func formatTodoContextOutput() {
         let xml = TodosLogic.formatTodoContext(title: "测试 <&> \"待办\"", notes: "说明内容")
-        #expect(xml == "<jarvis-context kind=\"context\" title=\"待办 · 测试 &lt;&amp;&gt; &quot;待办&quot;\" url=\"\">说明内容</jarvis-context>")
+        #expect(xml == "<persona-context kind=\"context\" title=\"待办 · 测试 &lt;&amp;&gt; &quot;待办&quot;\" url=\"\">说明内容</persona-context>")
     }
 
     /// An older hub answers GET /api/v1/todos with 404: the store's refresh hides the entrance and shows no error.

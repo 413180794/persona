@@ -56,8 +56,8 @@ Reference client [Fact]
 - Documented measurement / acceptance (`BH-docs/LARK_CHAT_UI_REVIEW.md:17-31`): reproduced jumps into old messages after content above grew and jumps to the first prepended history row; after fixes, the same text position remained after 80 rows grew and three delayed images completed together. Fast dragging still had intermediate blank frames; real-device / frame-rate checks were not done. `BH-docs/FEISHU_PARITY.md:62`: "Preserve message-level anchors; do not promise restoration of pixel offsets within long messages."
 
 Current Persona [Fact]
-- Lark page `J/ios/Jarvis/Views/Inbox/Lark/LarkChatView.swift`: **non-inverted** `ScrollView + LazyVStack + ScrollPosition` (:54-89); `defaultScrollAnchor` chooses top / bottom based on whether a specific message is targeted (:89).
-- No saved reading position: every open uses `focus` (first message for this Inbox item, `J/ios/Jarvis/App/InboxStore.swift:114-123`) or `readPosition+1` (:254-276).
+- Lark page `J/ios/Persona/Views/Inbox/Lark/LarkChatView.swift`: **non-inverted** `ScrollView + LazyVStack + ScrollPosition` (:54-89); `defaultScrollAnchor` chooses top / bottom based on whether a specific message is targeted (:89).
+- No saved reading position: every open uses `focus` (first message for this Inbox item, `J/ios/Persona/App/InboxStore.swift:114-123`) or `readPosition+1` (:254-276).
 - Message jumps use **fixed waits**: `sleep 80ms → scrollTo → sleep 250ms → scrollTo` (:293-298). The reference client explicitly replaced this with measured completion (`BH-docs/LARK_CHAT_UI_REVIEW.md:19`, "Replace fixed waits").
 - Agent chats (`J/docs/ios.md:66-67, 89-104`) already use inverted lists + id jumps followed by measured correction + `chat.read.<session>` storing the topmost row, more mature than the Lark page.
 
@@ -153,10 +153,10 @@ Relevant upstream Lark gateway capabilities [Fact]
 - Message views carry optional `clientId` and `localState: synced | pending | failed` (`OL/src/shared/contracts/index.ts:776, 807`).
 
 Current Persona [Fact]
-- Lark sends `await api.larkSend`, clears input only on success, shows error on failure (`LarkChatView.swift:402-416`); request has only `text` (`J/ios/Jarvis/Views/Inbox/Lark/LarkModels.swift:258-259`); no outgoing bubbles or persistence.
+- Lark sends `await api.larkSend`, clears input only on success, shows error on failure (`LarkChatView.swift:402-416`); request has only `text` (`J/ios/Persona/Views/Inbox/Lark/LarkModels.swift:258-259`); no outgoing bubbles or persistence.
 - Hub **generates a new random clientId on every call** (`J/server/internal/lark/lark.go:497-504`), so retry after phone timeout = new clientId = possible duplicate send.
 - Hub message projection omits `clientId` / `localState` (`lark.go:122-143`).
-- Agent chats already have outbox queues (`J/ios/Jarvis/App/Outbox.swift`: persist waiting messages, send in order, reuse `client_msg_id` on retry; `J/docs/ios.md:288-291`).
+- Agent chats already have outbox queues (`J/ios/Persona/App/Outbox.swift`: persist waiting messages, send in order, reuse `client_msg_id` on retry; `J/docs/ios.md:288-291`).
 
 [Assessment]
 - Reuse Agent Outbox for Lark: phone generates and persists clientId (UUID) → hub forwards unchanged to gateway (change `lark.Send` signature) → upstream deduplicates by clientId. Automatic resend after network recovery becomes safe (already sent returns original id).
@@ -175,8 +175,8 @@ Reference client [Fact]
 - Large galleries: images use `fullScreenCover`, other attachments sheets, under one presentation owner (`MF/ImagePresentation.swift:3-36`).
 
 Current Persona [Fact]
-- Already reserves dimensions: `metadata.width/height` → fit within 240×300, fallback 200×150 (`J/ios/Jarvis/Views/Inbox/Lark/LarkMessageContent.swift:366-399`); video uses posterWidth/Height (:479-492); stickers reserve 80×80 then use actual ratio after loading (:401-415, causing one relayout).
-- `LarkMedia` (`J/ios/Jarvis/Views/Inbox/Lark/LarkMedia.swift`): Caches/lark-media disk cache (sha256(url#size)), ImageIO downsampling (:100-106), NSCache 120 MB (:29), hub thumbnails in 24px steps ≤624 (:183-187); **no decode validation before disk writes** (:59-63). `LarkRemoteImage` shows a broken-image icon after one failure, retrying only on reappearance (:156-181). Video / audio stream directly with Bearer-header AVURLAsset (:277-306, hub forwards Range, `J/CLAUDE.md`); files use Quick Look (:309-332).
+- Already reserves dimensions: `metadata.width/height` → fit within 240×300, fallback 200×150 (`J/ios/Persona/Views/Inbox/Lark/LarkMessageContent.swift:366-399`); video uses posterWidth/Height (:479-492); stickers reserve 80×80 then use actual ratio after loading (:401-415, causing one relayout).
+- `LarkMedia` (`J/ios/Persona/Views/Inbox/Lark/LarkMedia.swift`): Caches/lark-media disk cache (sha256(url#size)), ImageIO downsampling (:100-106), NSCache 120 MB (:29), hub thumbnails in 24px steps ≤624 (:183-187); **no decode validation before disk writes** (:59-63). `LarkRemoteImage` shows a broken-image icon after one failure, retrying only on reappearance (:156-181). Video / audio stream directly with Bearer-header AVURLAsset (:277-306, hub forwards Range, `J/CLAUDE.md`); files use Quick Look (:309-332).
 
 [Assessment]
 - Persona is better at decoding (downsampling) and video streaming; keep both.
@@ -233,7 +233,7 @@ Reference client [Fact]
 - Measurement (`BH-docs/FEISHU_PARITY.md:1009`): in isolation, message requests after leaving/reentering stayed 1→1 (online reuse avoided rereads); silent edits/deletions during disconnect updated/disappeared correctly after reconnect.
 
 Current Persona [Fact]
-- Hub follows Lark gateway `/agent/v1/events`, pushing `lark{feed_ids}` at most every 400 ms (`J/docs/protocol.md:160`). App `LarkSync` (`J/ios/Jarvis/App/LarkSync.swift`) gives each listener `bufferingNewest(1)` (:34-40); events trigger chat `refreshLatest` and background prefetch of latest pages for Inbox chats (concurrency 2, at most once per 3 s per chat, :11-15, :83-103).
+- Hub follows Lark gateway `/agent/v1/events`, pushing `lark{feed_ids}` at most every 400 ms (`J/docs/protocol.md:160`). App `LarkSync` (`J/ios/Persona/App/LarkSync.swift`) gives each listener `bufferingNewest(1)` (:34-40); events trigger chat `refreshLatest` and background prefetch of latest pages for Inbox chats (concurrency 2, at most once per 3 s per chat, :11-15, :83-103).
 - **Reconnection notifies only feed == nil listeners (Inbox), not open chats** (:60-61), and background catch-up skips open chats (:73-81) → open chats wait for 60 s polling (`LarkChatView.swift:132-135`).
 - **`refreshLatest` reads latest page (limit 40) and appends anything newer than the current last item** (`LarkChatView.swift:300-312`): more than one page arriving between refreshes creates a **silent middle gap**, without detection.
 - Hub projection discards upstream `syncState` and filters deleted messages (`J/server/internal/lark/lark.go:282-305`) → app cannot determine window completeness.
@@ -294,7 +294,7 @@ Reference client [Fact] (`BH-docs/LARK_INBOX_UI_REVIEW.md`, `BH-docs/FEISHU_PARI
 [Assessment] Unify all three paths on caller-supplied clientId (phone-generated, or hub-generated and persisted per item / tool call); same for Watch Send (direct `/reply`, `J/docs/inbox.md:101`).
 
 ### Supplement 2.12: re-pairing does not clear caches
-[Fact] `AppModel.pair()` / `unpair()` (`J/ios/Jarvis/App/AppModel.swift:123-152`) clears memory and credentials, not `StateCache` (Inbox `inbox-items`, `lark-chat-<id>`) or `Caches/lark-media`; media key is only `sha256(url#size)` (`LarkMedia.swift:108-111`), without hub identity.
+[Fact] `AppModel.pair()` / `unpair()` (`J/ios/Persona/App/AppModel.swift:123-152`) clears memory and credentials, not `StateCache` (Inbox `inbox-items`, `lark-chat-<id>`) or `Caches/lark-media`; media key is only `sha256(url#size)` (`LarkMedia.swift:108-111`), without hub identity.
 [Assessment] Low risk for personal use, but seeing old-hub Inbox data immediately after switching violates reference-client cache isolation by connection / account and clearing on account change (`BH-docs/ARCHITECTURE.md:317`); add hub-scoped cache directories and clear the whole scope on pairing changes during redesign.
 
 ## 4. Migrate / do not migrate (under "Do not build a second Lark")

@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import UserNotifications
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct ExtensionNotificationActionsTests {
     @Test func aCategoryKeepsTextInputAndDestructiveForegroundOptions() throws {

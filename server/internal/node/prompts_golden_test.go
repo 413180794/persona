@@ -48,7 +48,7 @@ func TestGoldenRuntimeInstructions(t *testing.T) {
 	g := exampleGate("")
 	g.Tool = &proto.GateTool{Name: "example_api", Description: "Run ex."}
 	n.larkCfg, n.larkCfgAt = proto.AssistantLark{Gates: []proto.CommandGate{g}}, time.Now().Add(time.Hour)
-	cwd := filepath.Join(home, ".jarvis", "assistant")
+	cwd := filepath.Join(home, ".persona", "assistant")
 	mem := t.TempDir()
 	_ = os.WriteFile(filepath.Join(mem, "MEMORY.md"), []byte("- [习惯](habits.md) — 回复先给结论\n"), 0o600)
 	clean := func(s string) string { return strings.ReplaceAll(s, mem, "<dir>") }
@@ -62,7 +62,7 @@ func TestGoldenRuntimeInstructions(t *testing.T) {
 func TestGoldenLostTasksNotice(t *testing.T) {
 	n := assistantNode(t)
 	const id = "11111111-2222-3333-4444-000000000001"
-	n.state.put(id, sessionState{Cwd: "/home/u/.jarvis/assistant", Tasks: []string{"tail the deploy log", "Sleep 23 minutes"}})
+	n.state.put(id, sessionState{Cwd: "/home/u/.persona/assistant", Tasks: []string{"tail the deploy log", "Sleep 23 minutes"}})
 	var got string
 	n.recoverAssistantTasks(func(_, text string) error { got = text; return nil })
 	path := filepath.Join("testdata", "prompts", "lost_tasks.golden")

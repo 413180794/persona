@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor
 struct AssistantViewAPITests {
@@ -81,7 +81,7 @@ struct AssistantViewAPITests {
     @Test func newConversationWithoutALauncherOmitsTheField() async throws {
         let hub = FakeHub()
         hub.on("POST", "/api/v1/assistant/conversations",
-               json: #"{"session":{"session_id":"s1","status":"working","state":"working","started_by_jarvis":true,"assistant":true,"pending_interactions":0}}"#)
+               json: #"{"session":{"session_id":"s1","status":"working","state":"working","started_by_persona":true,"assistant":true,"pending_interactions":0}}"#)
         let session = try await hub.client.startConversation(prompt: "你好")
         #expect(session.sessionID == "s1")
         let request = try #require(hub.requests.last)
@@ -93,7 +93,7 @@ struct AssistantViewAPITests {
     @Test func newConversationWithALauncherSendsIt() async throws {
         let hub = FakeHub()
         hub.on("POST", "/api/v1/assistant/conversations",
-               json: #"{"session":{"session_id":"s2","status":"working","state":"working","started_by_jarvis":true,"assistant":true,"pending_interactions":0}}"#)
+               json: #"{"session":{"session_id":"s2","status":"working","state":"working","started_by_persona":true,"assistant":true,"pending_interactions":0}}"#)
         _ = try await hub.client.startConversation(prompt: "你好", launcher: "codex")
         let request = try #require(hub.requests.last)
         let data = try #require(request.body)

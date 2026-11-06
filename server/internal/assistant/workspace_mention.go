@@ -1,7 +1,7 @@
 package assistant
 
 // A workspace the user @-mentioned in the assistant's composer (#5594, docs/assistant.md "Workspace mentions"): the
-// client sends <jarvis-context kind="workspace" title="…" machine="<id>" cwd="<folder>"> in front of the message, and
+// client sends <persona-context kind="workspace" title="…" machine="<id>" cwd="<folder>"> in front of the message, and
 // here the block becomes what the assistant needs to work there — the computer and folder to dispatch to, the
 // knowledge base's projects there and the agents that worked there lately.
 
@@ -20,7 +20,7 @@ import (
 
 // leadingContextRe is one attributed context block at the start of what is left of a message: the clients put the
 // picked contexts in front, so a block further on (one quoted inside another's text) is never taken for a mention.
-var leadingContextRe = regexp.MustCompile(`(?s)^\s*<(?:jarvis|persona)-context\b([^>]*)>(.*?)</(?:jarvis|persona)-context>`)
+var leadingContextRe = regexp.MustCompile(`(?s)^\s*<persona-context\b([^>]*)>(.*?)</persona-context>`)
 
 // contextAttrRe is one name="value" on a context tag.
 var contextAttrRe = regexp.MustCompile(`([a-z_]+)="([^"]*)"`)

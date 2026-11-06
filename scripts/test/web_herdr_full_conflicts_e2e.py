@@ -65,7 +65,7 @@ def fresh(browser, viewport, scheme="light", mac=False, touch=False):
         is_mobile=touch,
         permissions=["clipboard-read", "clipboard-write"],
     )
-    init = f"localStorage.setItem('jarvis.token', 'mock'); localStorage.setItem('jarvis.theme', {scheme!r});"
+    init = f"localStorage.setItem('persona.token', 'mock'); localStorage.setItem('persona.theme', {scheme!r});"
     if mac:  # xterm decides its Mac defaults (right click selects a word) from this when it loads
         init += "Object.defineProperty(navigator, 'platform', {get: () => 'MacIntel'}); Object.defineProperty(navigator, 'userAgentData', {get: () => undefined});"
     ctx.add_init_script(init)

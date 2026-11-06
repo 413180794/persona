@@ -353,7 +353,7 @@ export function systemFacts(system: SystemInfo | undefined, m: DetailMachine | u
   }
   if (m?.claude_version) out.push(["Claude Code", m.claude_version, true]);
   if (m?.herdr_version) out.push(["herdr", m.herdr_version, true]);
-  if (m?.node_version) out.push(["jarvisd", m.node_version, true]);
+  if (m?.node_version) out.push(["personad", m.node_version, true]);
   const conn = m ? connectionText(m) : "";
   if (conn) out.push([t("lib-machine-detail.fact_connection"), conn]);
   return out;

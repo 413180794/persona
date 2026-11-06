@@ -23,12 +23,12 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import jarvis_config  # noqa: E402
+import persona_config  # noqa: E402
 
 API = "https://api.appstoreconnect.apple.com"
-CONFIG = jarvis_config.load()
+CONFIG = persona_config.load()
 STORE = CONFIG.get("app_store", {})
-BUNDLE_ID = jarvis_config.get(CONFIG, "app.bundle_id", "")
+BUNDLE_ID = persona_config.get(CONFIG, "app.bundle_id", "")
 KEY_ID = os.environ.get("ASC_KEY_ID") or STORE.get("key_id", "")
 ISSUER = os.environ.get("ASC_ISSUER_ID") or STORE.get("issuer_id", "")
 KEY_PATH = os.path.expanduser(os.environ.get("ASC_KEY_PATH") or STORE.get("key_path") or f"~/.appstoreconnect/AuthKey_{KEY_ID}.p8")
@@ -39,7 +39,7 @@ def app_id() -> str:
     value = str(STORE.get("app_id", "")).strip()
     if not value.isdigit():
         sys.exit(
-            f"app_store.app_id in {jarvis_config.path()} must be the numeric Apple ID of the App record, got {value!r}.\n"
+            f"app_store.app_id in {persona_config.path()} must be the numeric Apple ID of the App record, got {value!r}.\n"
             f"Create the record on the web first (App Store Connect › Apps › + › New App, bundle id {BUNDLE_ID}). "
             "See docs/release.md."
         )

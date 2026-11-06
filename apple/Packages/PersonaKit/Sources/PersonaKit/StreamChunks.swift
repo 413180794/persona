@@ -26,7 +26,7 @@ public nonisolated enum StreamChunks {
     }
 
     /// The space MarkdownUI's theme puts between the last block of one piece and the first of the next (the larger
-    /// of the two margins, `MarkdownUI.Theme.jarvis`).
+    /// of the two margins, `MarkdownUI.Theme.persona`).
     public static func gap(after prev: String, before next: String) -> CGFloat {
         let last = prev.split(separator: "\n").last.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
         let first = next.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""

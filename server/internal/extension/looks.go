@@ -77,7 +77,7 @@ const (
 
 // BuiltinLooks are the looks every app draws itself (the default Mochi, Visor, Circuit): no package takes their ids, and they
 // are what app_icon_fallback names.
-var BuiltinLooks = []string{"persona", "jarvis", "jarvis-circuit"}
+var BuiltinLooks = []string{"persona", "persona-visor", "persona-circuit"}
 
 // DefaultLook is the look of one who never chose (and of one whose look went away).
 const DefaultLook = "persona"

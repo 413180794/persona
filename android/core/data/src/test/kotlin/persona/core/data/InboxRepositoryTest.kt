@@ -55,7 +55,7 @@ class InboxRepositoryTest {
     }
 
     @Test fun inboxAiUsesSharedOfflineOutboxAndRetainsRequestOnWriteFailure() = runTest {
-        val directory = Files.createTempDirectory("inbox-jarvis-test").toFile()
+        val directory = Files.createTempDirectory("inbox-persona-test").toFile()
         var failWrite = false
         val store = object : OutboxStore {
             override val entries = MutableStateFlow<List<OutboxEntry>>(emptyList())

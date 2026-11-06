@@ -32,20 +32,20 @@ class ToolVerbTest {
         )
         names.forEach { (name, words) ->
             assertEquals(name, words, verb(name))
-            assertEquals(name, words, verb("mcp__jarvis__$name"))
+            assertEquals(name, words, verb("mcp__persona__$name"))
             assertEquals(name, words, verb("mcp__other__$name"))
         }
     }
 
     @Test fun computerBrowserPhoneAndMailToolsHaveNames() {
-        assertEquals("看电脑", verb("mcp__jarvis__computer_state"))
+        assertEquals("看电脑", verb("mcp__persona__computer_state"))
         assertEquals("操控电脑", verb("computer_run"))
-        assertEquals("操控电脑", verb("mcp__jarvis__computer_run"))
-        assertEquals("用浏览器", verb("mcp__jarvis__browser_run"))
+        assertEquals("操控电脑", verb("mcp__persona__computer_run"))
+        assertEquals("用浏览器", verb("mcp__persona__browser_run"))
         assertEquals("看浏览器", verb("browser_look"))
-        assertEquals("手机", verb("mcp__jarvis__phone_calendar_events"))
+        assertEquals("手机", verb("mcp__persona__phone_calendar_events"))
         assertEquals("手机", verb("phone_reminders_create"))
-        assertEquals("邮件", verb("mcp__jarvis__mail_send"))
+        assertEquals("邮件", verb("mcp__persona__mail_send"))
         assertEquals("邮件", verb("mail_search"))
     }
 
@@ -56,7 +56,7 @@ class ToolVerbTest {
             "agents_list" to "看 Agent 列表", "list_agents" to "看 Agent 列表",
             "agent_start" to "派任务", "task_plan" to "派任务",
             "interaction_answer" to "替你回答",
-            "ask_jarvis" to "交给 Persona",
+            "ask_persona" to "交给 Persona",
             "kb_get" to "查知识库", "kb_list" to "查知识库", "kb_search" to "查知识库", "search_knowledge" to "查知识库",
             "kb_update" to "更新知识库",
             "ask_user" to "问你",
@@ -67,22 +67,22 @@ class ToolVerbTest {
             "schedule_routine" to "设定期任务",
             "delete_routine" to "删定期任务",
             "inbox_draft" to "起草回复",
-            "jarvis_settings" to "Persona 设置",
+            "persona_settings" to "Persona 设置",
             "view_show" to "画卡片",
             "view_get" to "看卡片",
             "view_update" to "更新卡片",
         )
         names.forEach { (name, words) ->
-            assertEquals(name, words, verb("mcp__jarvis__$name"))
             assertEquals(name, words, verb("mcp__persona__$name"))
-            assertEquals(name, words, verb("mcp__plugin_jarvis__$name"))
+            assertEquals(name, words, verb("mcp__persona__$name"))
+            assertEquals(name, words, verb("mcp__plugin_persona__$name"))
         }
         // ask_user outside Persona's server is the question tool's "Ask", as iOS's generic table has it.
         assertEquals("提问", verb("ask_user"))
     }
 
     @Test fun otherPersonaToolsReadAsACallToPersona() {
-        assertEquals("调用 Persona · github read", verb("mcp__jarvis__github_read"))
+        assertEquals("调用 Persona · github read", verb("mcp__persona__github_read"))
         assertEquals("调用 Persona · some new tool", verb("mcp__persona__some_new_tool"))
     }
 
@@ -95,13 +95,13 @@ class ToolVerbTest {
     }
 
     @Test fun serverAndBaseName() {
-        assertEquals("jarvis", toolServer("mcp__jarvis__agent_read"))
-        assertNull(toolServer("mcp__jarvis"))
+        assertEquals("persona", toolServer("mcp__persona__agent_read"))
+        assertNull(toolServer("mcp__persona"))
         assertNull(toolServer("Bash"))
-        assertEquals("agent_read", toolBaseName("mcp__jarvis__agent_read"))
+        assertEquals("agent_read", toolBaseName("mcp__persona__agent_read"))
         assertEquals("Bash", toolBaseName("Bash"))
-        assertTrue(isPersonaTool("mcp__plugin_jarvis__kb_search"))
-        assertFalse(isPersonaTool("mcp__jarvis_extra__kb_search"))
+        assertTrue(isPersonaTool("mcp__plugin_persona__kb_search"))
+        assertFalse(isPersonaTool("mcp__persona_extra__kb_search"))
         assertFalse(isPersonaTool("kb_search"))
     }
 
@@ -109,20 +109,20 @@ class ToolVerbTest {
         """{"id":"x","kind":"tool_use","tool_name":"$name","tool_input":$input}""")).zh()
 
     @Test fun namedToolsSayWhatTheyAreAbout() {
-        assertEquals("功能 | 登录页", subject("mcp__jarvis__conversation_rename", """{"kind":"功能","topic":"登录页"}"""))
-        assertEquals("第一行", subject("mcp__jarvis__conversation_send", """{"text":"第一行\n第二行"}"""))
-        assertEquals("abcdef12", subject("mcp__jarvis__conversation_archive", """{"id":"abcdef1234567"}"""))
-        assertEquals("macbook · Calculator", subject("mcp__jarvis__computer_state", """{"machine":"macbook","app":"Calculator"}"""))
-        assertEquals("macbook · 整个屏幕", subject("mcp__jarvis__computer_state", """{"machine":"macbook"}"""))
+        assertEquals("功能 | 登录页", subject("mcp__persona__conversation_rename", """{"kind":"功能","topic":"登录页"}"""))
+        assertEquals("第一行", subject("mcp__persona__conversation_send", """{"text":"第一行\n第二行"}"""))
+        assertEquals("abcdef12", subject("mcp__persona__conversation_archive", """{"id":"abcdef1234567"}"""))
+        assertEquals("macbook · Calculator", subject("mcp__persona__computer_state", """{"machine":"macbook","app":"Calculator"}"""))
+        assertEquals("macbook · 整个屏幕", subject("mcp__persona__computer_state", """{"machine":"macbook"}"""))
         assertEquals("整个屏幕", subject("computer_state", "{}"))
-        assertEquals("先处理哪项？", subject("mcp__jarvis__ask_user", """{"questions":[{"question":"先处理哪项？","options":[]}]}"""))
-        assertEquals("", subject("mcp__jarvis__ask_user", "{}"))
+        assertEquals("先处理哪项？", subject("mcp__persona__ask_user", """{"questions":[{"question":"先处理哪项？","options":[]}]}"""))
+        assertEquals("", subject("mcp__persona__ask_user", "{}"))
         assertEquals("等构建", subject("Monitor", """{"description":"等构建","command":"tail -f log"}"""))
         assertEquals("tail -f log", subject("Monitor", """{"command":"tail -f log\nnext"}"""))
-        assertEquals("macbook", subject("mcp__jarvis__computer_run", """{"machine":"macbook","steps":[]}"""))
-        assertEquals("macbook · open()", subject("mcp__jarvis__browser_run", """{"machine":"macbook","script":"  open()\nnext()"}"""))
-        assertEquals("calendar events", subject("mcp__jarvis__phone_calendar_events", "{}"))
-        assertEquals("send", subject("mcp__jarvis__mail_send", "{}"))
+        assertEquals("macbook", subject("mcp__persona__computer_run", """{"machine":"macbook","steps":[]}"""))
+        assertEquals("macbook · open()", subject("mcp__persona__browser_run", """{"machine":"macbook","script":"  open()\nnext()"}"""))
+        assertEquals("calendar events", subject("mcp__persona__phone_calendar_events", "{}"))
+        assertEquals("send", subject("mcp__persona__mail_send", "{}"))
         assertEquals("", subject("mcp__github__create_issue", """{"title":"x"}"""))
     }
 }

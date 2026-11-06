@@ -6,7 +6,7 @@ final class FilePreviewLinkTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_FILE_LINK_HUB"] else {
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_FILE_LINK_HUB"] else {
             throw XCTSkip("需要 MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 的 mock hub")
         }
         self.hub = hub
@@ -22,9 +22,9 @@ final class FilePreviewLinkTests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let directory = env["JARVIS_SHOTS"] else { return }
-        let style = env["JARVIS_UI_STYLE"] ?? "glass"
-        let appearance = env["JARVIS_FILE_LINK_APPEARANCE"] ?? "unknown"
+        guard let directory = env["PERSONA_SHOTS"] else { return }
+        let style = env["PERSONA_UI_STYLE"] ?? "glass"
+        let appearance = env["PERSONA_FILE_LINK_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: directory + "/file-links-\(style)-\(appearance)-\(name).png"))
     }
 

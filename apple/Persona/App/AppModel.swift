@@ -224,7 +224,7 @@ final class AppModel {
         }
     }
     var debugShowNewChat = false
-    /// Bumped whenever another page hands the user to a Persona conversation (`askJarvis`): the Persona tab goes back
+    /// Bumped whenever another page hands the user to a Persona conversation (`askPersona`): the Persona tab goes back
     /// to its conversation even when it is the one already shown (a pushed Knowledge page would otherwise stay on top).
     var assistantReveal = 0
     /// Compact context asked here, and when: the chat says Compacting until the hub's word on it arrives (#1762).
@@ -263,7 +263,7 @@ final class AppModel {
         DemoHub.install()
         #if DEBUG
         // `-openWelcome YES`: start unpaired and out of Demo Mode, on the pairing page (DemoModeTests); with `-demo.on YES`
-        // too, Demo Mode from a clean start (UI tests, `launchJarvis`).
+        // too, Demo Mode from a clean start (UI tests, `launchPersona`).
         if UserDefaults.standard.bool(forKey: "openWelcome") {
             HubStore.save(HubRegistry()) // known empty: deletes the registry and the old single pairing
             StateCache.remove(Self.snapshotName("")) // and the lists it left: Demo Mode would show them (a paired app)
@@ -835,7 +835,7 @@ final class AppModel {
 
     /// Sends text to Persona' main conversation (starting it when there is none) and opens the Persona tab: how other
     /// pages hand something to Persona with its context.
-    func askJarvis(_ text: String) async {
+    func askPersona(_ text: String) async {
         guard let api else { return }
         selectedTab = .assistant
         assistantReveal += 1
@@ -2482,7 +2482,7 @@ final class AppModel {
     /// it (`MacDrop.take`: pictures attached, other files uploaded).
     var composerDrops: [SessionKey: [URL]] = [:]
     #endif
-    /// Page excerpts picked as context for a chat's next message (`<jarvis-context>`).
+    /// Page excerpts picked as context for a chat's next message (`<persona-context>`).
     /// Kept across launches with the text (#4578): a quote is the larger part of a reply.
     var composerContexts: [SessionKey: [ContextRef]] = AppModel.savedContexts() { didSet { saveContexts(); markDrafts() } }
     @ObservationIgnored let contextWriter = Debouncer()

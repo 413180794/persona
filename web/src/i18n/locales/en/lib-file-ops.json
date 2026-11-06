@@ -2,7 +2,7 @@
   "name_empty": "The name can't be empty",
   "name_dots": "The name can't be . or ..",
   "name_slash": "The name can't contain / or \\",
-  "read_only": "This place can't be changed: only your home folder is writable, except ~/.persona, ~/.jarvis, ~/Library and where keys are kept",
+  "read_only": "This place can't be changed: only your home folder is writable, except ~/.persona, ~/.persona, ~/Library and where keys are kept",
   "exists": "“{name}” already exists",
   "node_outdated": "personad on this computer is too old to change files. Redeploy it and try again",
   "too_large": "The file is too large: 2 GB at most",

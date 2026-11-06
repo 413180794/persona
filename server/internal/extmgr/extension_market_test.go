@@ -284,7 +284,7 @@ func TestExtensionMarketSite(t *testing.T) {
 	index := marketIndex(t, "Site plugins", marketEntry(t, dir, "pkg/example-ui.tar.gz", pkg), other, map[string]any{"manifest": map[string]any{"id": "Bad"}})
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/plugins/persona-plugins.json":
+		case "/plugins/" + extension.IndexFile:
 			_, _ = w.Write(index)
 		case "/plugins/pkg/example-ui.tar.gz":
 			_, _ = w.Write(pkg)

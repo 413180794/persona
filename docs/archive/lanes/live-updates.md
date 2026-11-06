@@ -73,7 +73,7 @@ User: "The machine-switch refresh issue and refreshes while scrolling in chats t
   - Inbox changes (new Lark messages).
   - Pending interactions (one Agent asks a question, another gets answered).
 - "Badges" read these: the Agents and Inbox counts on the old tab bar, and the red dot on ☰ / count on "Agents" in the new shell. The mock never pushed either, so tests stayed green.
-- The new shell (fd9c99e) is the default iPhone layout, but all UI tests ran with `-ui.oldLayout YES` (`launchJarvis`). These tests had never run under the new shell.
+- The new shell (fd9c99e) is the default iPhone layout, but all UI tests ran with `-ui.oldLayout YES` (`launchPersona`). These tests had never run under the new shell.
 
 ### Cause
 
@@ -101,7 +101,7 @@ Tests: the mock's `/mock/churn` gained two parameters.
 - `&inbox=1`: change an Inbox item each round, vary the "Needs you" count every other round, and repush pending interactions. Every `LiveUpdateTests` case includes it.
 - `&waiting=1`: add an Agent waiting for you each round, then answer it the next round. The count changes every round, and the top card appears / disappears. Menu cases include it.
 
-These tests now run with both layouts. With `TEST_RUNNER_JARVIS_LAYOUT=shell`, `launchJarvis` defaults to the new shell.
+These tests now run with both layouts. With `TEST_RUNNER_PERSONA_LAYOUT=shell`, `launchPersona` defaults to the new shell.
 
 "Before" below is origin/master, using the same tests.
 

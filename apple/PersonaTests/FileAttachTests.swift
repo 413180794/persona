@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct FileAttachTests {
     @Test func insertsAtTheEnd() {
@@ -50,7 +50,7 @@ struct FileAttachTests {
     @Test func messages() {
         let big = APIError(status: 413, message: "文件超过 200 MB", fields: ["code": "too_large"])
         #expect(FileUploads.message(big, name: "a.zip") == "「a.zip」超过 200 MB，发不了")
-        let old = APIError(status: 409, message: "MacBook 上的 jarvisd 太旧，不能接收文件，需要重新部署", fields: ["code": "node_outdated"])
+        let old = APIError(status: 409, message: "MacBook 上的 personad 太旧，不能接收文件，需要重新部署", fields: ["code": "node_outdated"])
         #expect(FileUploads.message(old, name: "a.zip") == old.message)
         #expect(FileUploads.message(APIError(status: 404, message: "404 page not found"), name: "a.zip")?.contains("hub 版本太旧") == true)
         #expect(FileUploads.message(URLError(.cancelled), name: "a.zip") == nil)

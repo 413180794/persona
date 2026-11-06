@@ -1,7 +1,7 @@
 import XCTest
 
 /// Commenting in the Feishu document reader (#1290), end to end against scripts/mock/mock_hub.py started with
-/// MOCK_DOC_COMMENTS=1 (JARVIS_MOCK_HUB): typing @ finds people and the comment goes out mentioning the one picked;
+/// MOCK_DOC_COMMENTS=1 (PERSONA_MOCK_HUB): typing @ finds people and the comment goes out mentioning the one picked;
 /// Reply answers that thread; Resolve moves a thread to Resolved and Reopen brings it back. What the plugin's routes got is
 /// read from the mock (GET /mock/doc-comments), so the test checks what was sent, not only what shows.
 final class FeishuDocCommentsTests: XCTestCase {
@@ -9,8 +9,8 @@ final class FeishuDocCommentsTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_DOC_COMMENTS=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_DOC_COMMENTS=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
@@ -21,8 +21,8 @@ final class FeishuDocCommentsTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let appearance = env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let appearance = env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/doc-comments-\(UITestStyle.name)-\(appearance)-\(name).png"))
     }
 
@@ -41,7 +41,7 @@ final class FeishuDocCommentsTests: XCTestCase {
     @MainActor func testMentionReplyResolveAndReopen() throws {
         let before = try writes().count
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "studio/a1f3c2d4-0000-4000-8000-000000000003",
                                "-openLinkURL", "https://example.feishu.cn/docx/AbC123", "-showFeishuDocSheet", "comments"]
         app.launchPinned()
@@ -99,7 +99,7 @@ final class FeishuDocCommentsTests: XCTestCase {
     @MainActor func testCommentOnAPassage() throws {
         let before = try writes().count
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "studio/a1f3c2d4-0000-4000-8000-000000000003",
                                "-openLinkURL", "https://example.feishu.cn/docx/AbC123"]
         app.launchPinned()

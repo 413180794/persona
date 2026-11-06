@@ -6,7 +6,7 @@ nonisolated struct RecordingReceipt: Codable, Sendable {
     var id: UUID
     var index: Int?
     var total: Int?
-    static let key = "jarvisRecordingReceipt"
+    static let key = "personaRecordingReceipt"
     var dictionary: [String: Any] { [Self.key: (try? JSONEncoder().encode(self)) ?? Data()] }
     init(id: UUID, index: Int? = nil, total: Int? = nil) { self.id = id; self.index = index; self.total = total }
     init?(dictionary: [String: Any]) {

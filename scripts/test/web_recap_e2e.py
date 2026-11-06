@@ -84,7 +84,7 @@ def run(browser, base, token, size, theme, shots):
     page = ctx.new_page()
     page.set_default_timeout(15000)
     page.goto(base + "/overview?token=" + token)
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}'); localStorage.removeItem('jarvis.closedRecaps')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}'); localStorage.removeItem('persona.closedRecaps')")
     page.goto(base + REVIEW)
 
     def shot(name):

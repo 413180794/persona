@@ -3,7 +3,7 @@ import XCTest
 /// Exercises the real list and socket against an isolated mock, never a Feishu account.
 final class LarkPinnedShelfFlowTests: XCTestCase {
     private func fixture(_ change: [String: Any]? = nil) async throws -> [String: Any] {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"],
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"],
               let url = URL(string: hub + "/test/lark-pins/state") else { throw XCTSkip("needs pin shelf mock") }
         var request = URLRequest(url: url)
         if let change {
@@ -18,9 +18,9 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
     @MainActor private func open(count: Int = 18, large: Bool = false) async throws -> XCUIApplication {
         _ = try await fixture(["count": count, "account": "pin-account-one", "offline": false, "reverse": false, "unread": 3, "newest": false])
         continueAfterFailure = false
-        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"])
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "feishu", "-demo.on", "NO",
             "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES"]
         if large { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
@@ -40,7 +40,7 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }

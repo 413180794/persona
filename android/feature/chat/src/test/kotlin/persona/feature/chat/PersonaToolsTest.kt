@@ -27,14 +27,14 @@ class PersonaToolsTest {
         Item("u", kind = "tool_use", role = "assistant", toolName = name, toolInput = input)
 
     @Test fun askUserIsOnlyPersonasOwn() {
-        assertTrue(PersonaTools.isAskUser("mcp__jarvis__ask_user"))
+        assertTrue(PersonaTools.isAskUser("mcp__persona__ask_user"))
         assertTrue(!PersonaTools.isAskUser("mcp__github__ask_user"))
-        assertEquals(persona.core.designsystem.icons.PhIcons.Question, toolCategory("mcp__jarvis__ask_user"))
-        assertEquals(persona.core.designsystem.icons.PhIcons.BookOpen, toolCategory("mcp__jarvis__kb_search"))
+        assertEquals(persona.core.designsystem.icons.PhIcons.Question, toolCategory("mcp__persona__ask_user"))
+        assertEquals(persona.core.designsystem.icons.PhIcons.BookOpen, toolCategory("mcp__persona__kb_search"))
     }
 
     @Test fun computerStepsReadAsOneSentence() {
-        val run = item("mcp__jarvis__computer_run", buildJsonObject {
+        val run = item("mcp__persona__computer_run", buildJsonObject {
             put("machine", "MacBook")
             put("steps", buildJsonArray {
                 listOf("All Clear", "6", "Multiply").forEach { add(buildJsonObject { put("click", buildJsonObject { put("name", it) }) }) }
@@ -44,9 +44,9 @@ class PersonaToolsTest {
         })
         assertEquals("操控电脑", toolPresentation(res, run).verb)
         assertEquals("MacBook · 点 AC → 6 → × → 输入「你好」 → 按 ⌘S", toolPresentation(res, run).title)
-        assertEquals("运行脚本：tell app", toolPresentation(res, item("mcp__jarvis__computer_run", buildJsonObject { put("script", "\ntell app\nend") })).title)
+        assertEquals("运行脚本：tell app", toolPresentation(res, item("mcp__persona__computer_run", buildJsonObject { put("script", "\ntell app\nend") })).title)
         // Nothing it does in words: the machine alone, as before.
-        assertEquals("MacBook", toolPresentation(res, item("mcp__jarvis__computer_run", buildJsonObject { put("machine", "MacBook") })).title)
+        assertEquals("MacBook", toolPresentation(res, item("mcp__persona__computer_run", buildJsonObject { put("machine", "MacBook") })).title)
     }
 
     @Test fun askUserTicksWhatWasPicked() {

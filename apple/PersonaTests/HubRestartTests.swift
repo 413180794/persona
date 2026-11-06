@@ -1,7 +1,7 @@
 import Foundation
 import Network
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The app riding out a hub restart (docs/hub-restart.md, #1634): where the broadcasts left off and the resume URL,
 /// how long a drop stays invisible and how fast it retries, what a resumed reconnect leaves alone, and writes that go

@@ -22,9 +22,9 @@ class ServerTestEnvironmentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "hub.json"
             for source, expected in (
-                ("postgres://user:synthetic@localhost:5432/jarvis?sslmode=disable", "postgres://user:synthetic@localhost:5432/jarvis_test?sslmode=disable"),
-                ("postgresql://user:synthetic@localhost/jarvis", "postgresql://user:synthetic@localhost/jarvis_test"),
-                ("postgres://user:p%40ss@[::1]:5432/jarvis?sslmode=require", "postgres://user:p%40ss@[::1]:5432/jarvis_test?sslmode=require"),
+                ("postgres://user:synthetic@localhost:5432/persona?sslmode=disable", "postgres://user:synthetic@localhost:5432/persona_test?sslmode=disable"),
+                ("postgresql://user:synthetic@localhost/persona", "postgresql://user:synthetic@localhost/persona_test"),
+                ("postgres://user:p%40ss@[::1]:5432/persona?sslmode=require", "postgres://user:p%40ss@[::1]:5432/persona_test?sslmode=require"),
             ):
                 with self.subTest(source=source):
                     config.write_text(json.dumps({"database_url": source}))
@@ -36,9 +36,9 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                                      urlunsplit(expected_parts._replace(query=urlencode(query))))
                     self.assertNotEqual(source, expected)
             for source in (
-                "postgres://user:synthetic@localhost/custom", "postgres://user:synthetic@localhost/jarvis_test",
-                "postgres://user:synthetic@localhost/%6aarvis", "postgres://user:synthetic@localhost/jarvis/",
-                "postgres://user:synthetic@localhost/jarvis#fragment", "https://example.com/jarvis", "postgres:///jarvis", 42, None,
+                "postgres://user:synthetic@localhost/custom", "postgres://user:synthetic@localhost/persona_test",
+                "postgres://user:synthetic@localhost/%6aarvis", "postgres://user:synthetic@localhost/persona/",
+                "postgres://user:synthetic@localhost/persona#fragment", "https://example.com/persona", "postgres:///persona", 42, None,
             ):
                 with self.subTest(source=source):
                     config.write_text(json.dumps({"database_url": source}))
@@ -49,22 +49,22 @@ class ServerTestEnvironmentTests(unittest.TestCase):
 
     def test_query_overrides_and_ambiguous_queries_stop_before_any_child_process(self):
         queries = (
-            "dbname=jarvis", "database=jarvis", "db%6Eame=jarvis", "%64atabase=jarvis",
-            "DBNAME=jarvis", "Database=jarvis", "dbname=", "dbname=jarvis_test",
-            "dbname=jarvis&dbname=jarvis_test", "dbname=jarvis_test&db%6Eame=jarvis",
-            "database=jarvis_test&dbname=jarvis", "%2564bname=jarvis",
+            "dbname=persona", "database=persona", "db%6Eame=persona", "%64atabase=persona",
+            "DBNAME=persona", "Database=persona", "dbname=", "dbname=persona_test",
+            "dbname=persona&dbname=persona_test", "dbname=persona_test&db%6Eame=persona",
+            "database=persona_test&dbname=persona", "%2564bname=persona",
             "service=fixture", "serv%69ce=fixture", "servicefile=/synthetic/config",
             "service=fixture&service=other", "passfile=/synthetic/passwords",
             "host=example.invalid", "port=5432", "user=other", "password=synthetic", "options=fixture",
             "sslmode=disable&sslmode=require", "sslmode=disable&ssl%6dode=require", "SSLMode=disable",
-            "sslmode=%xx", "sslmode=%", "sslmode=%FF", "sslmode=disable;dbname=jarvis",
+            "sslmode=%xx", "sslmode=%", "sslmode=%FF", "sslmode=disable;dbname=persona",
             "sslmode", "=fixture", "sslmode=disable&&connect_timeout=3",
         )
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "hub.json"
             for query in queries:
                 with self.subTest(query=query):
-                    config.write_text(json.dumps({"database_url": "postgres://fixture:synthetic@127.0.0.1/jarvis?" + query}))
+                    config.write_text(json.dumps({"database_url": "postgres://fixture:synthetic@127.0.0.1/persona?" + query}))
                     with mock.patch.object(ISOLATION.subprocess, "run") as run:
                         with self.assertRaises(ValueError):
                             ISOLATION.run_tests(config, ["go", "test"], {})
@@ -75,15 +75,15 @@ class ServerTestEnvironmentTests(unittest.TestCase):
             root = Path(directory)
             profile = root / "live-profile"
             config = root / "hub.json"
-            config.write_text(json.dumps({"database_url": "postgres://user:synthetic@localhost/jarvis"}))
+            config.write_text(json.dumps({"database_url": "postgres://user:synthetic@localhost/persona"}))
             environment = {
                 "HOME": str(root / "real-home"), "PATH": str(profile / "bin") + os.pathsep + "/usr/bin",
-                "PERSONA_HOME": str(profile), "JARVIS_HOME": str(profile),
-                "PERSONA_CONFIG": str(profile / "config.json"), "JARVIS_CONFIG": str(profile / "old.json"),
-                "PERSONA_TOKEN": "synthetic-live-token", "JARVIS_DATABASE_URL": "postgres://example.invalid/production",
-                "PERSONA_TEST_DATABASE_URL": "postgres://example.invalid/not_test", "JARVIS_TEST_DATABASE_URL": "invalid",
-                "PERSONA_OTHER_SETTING": "synthetic", "JARVIS_OTHER_SETTING": "synthetic",
-                "PGDATABASE": "jarvis", "PGUSER": "live-user", "PGPASSWORD": "synthetic-live-password",
+                "PERSONA_HOME": str(profile),
+                "PERSONA_CONFIG": str(profile / "config.json"),
+                "PERSONA_TOKEN": "synthetic-live-token", "PERSONA_DATABASE_URL": "postgres://example.invalid/production",
+                "PERSONA_TEST_DATABASE_URL": "postgres://example.invalid/not_test",
+                "PERSONA_OTHER_SETTING": "synthetic",
+                "PGDATABASE": "persona", "PGUSER": "live-user", "PGPASSWORD": "synthetic-live-password",
                 "PGHOST": "example.invalid", "PGPORT": "5432", "PGOPTIONS": "synthetic",
                 "PGSERVICE": "live", "PGSERVICEFILE": str(profile / "service"),
                 "PGPASSFILE": str(profile / "passwords"), "PGSSLCERT": str(profile / "certificate"),
@@ -98,17 +98,17 @@ class ServerTestEnvironmentTests(unittest.TestCase):
             def run(command, **kwargs):
                 child = kwargs["env"]
                 if command[:2] == ["go", "env"]:
-                    self.assertFalse(any(key.startswith(("PERSONA_", "JARVIS_", "PG")) for key in child))
+                    self.assertFalse(any(key.startswith(("PERSONA_", "PG")) for key in child))
                     return subprocess.CompletedProcess(command, 0, json.dumps(caches))
                 homes.append(Path(child["HOME"]))
                 self.assertTrue(homes[-1].is_dir())
                 self.assertNotEqual(child["HOME"], environment["HOME"])
                 self.assertTrue(Path(child["TMPDIR"]).is_dir())
                 self.assertEqual(Path(child["HOME"]), Path(child["HOME"]).resolve())
-                self.assertEqual({key for key in child if key.startswith(("PERSONA_", "JARVIS_"))},
-                                 {"PERSONA_TEST_DATABASE_URL", "JARVIS_TEST_DATABASE_URL"})
-                self.assertEqual(child["PERSONA_TEST_DATABASE_URL"], child["JARVIS_TEST_DATABASE_URL"])
-                self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).path, "/jarvis_test")
+                self.assertEqual({key for key in child if key.startswith(("PERSONA_"))},
+                                 {"PERSONA_TEST_DATABASE_URL"})
+                self.assertFalse(any(key.startswith(('jar' + 'vis').upper() + '_') for key in child))
+                self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).path, "/persona_test")
                 self.assertFalse(any(key.startswith("PG") for key in child))
                 self.assertFalse(any(str(profile) in value for value in child.values()))
                 self.assertEqual(child["GOTOOLCHAIN"], "local")
@@ -124,7 +124,7 @@ class ServerTestEnvironmentTests(unittest.TestCase):
     def test_cache_failure_never_starts_the_test_command(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "hub.json"
-            config.write_text(json.dumps({"database_url": "postgres://user:synthetic@localhost/jarvis"}))
+            config.write_text(json.dumps({"database_url": "postgres://user:synthetic@localhost/persona"}))
             for result in (subprocess.CompletedProcess(["go", "env"], 1, "synthetic-private-output"),
                            subprocess.CompletedProcess(["go", "env"], 0, "not-json"),
                            subprocess.CompletedProcess(["go", "env"], 0, "{}")):
@@ -153,21 +153,21 @@ class ServerTestEnvironmentTests(unittest.TestCase):
             (sdk / "go.mod").write_text("module example.invalid/fixture-sdk\n")
             (sdk / "wire/schema/view.schema.json").write_text('{"fixture":true}\n')
             sdk_capture = root / "sdk-sync.json"
-            remote_sdk = remote / ".cache/jarvis-test-checkout/sdk/go"
+            remote_sdk = remote / ".cache/persona-test-checkout/sdk/go"
             schema = checkout / "schema/extension"
             (schema / "examples/View.fixture.json").write_text('{"valid":true}\n')
             (schema / "examples/invalid/View.fixture.json").write_text('{"valid":false}\n')
             schema_capture = root / "schema-sync.json"
-            remote_schema = remote / ".cache/jarvis-test-checkout/schema/extension"
+            remote_schema = remote / ".cache/persona-test-checkout/schema/extension"
             shutil.copy2(ROOT / "scripts/test/test-server.sh", checkout / "scripts/test/test-server.sh")
             shutil.copy2(ROOT / "scripts/test/server_test_env.py", checkout / "scripts/test/server_test_env.py")
-            (checkout / "scripts/jarvis_config.py").write_text("print('export JARVIS_HUB_SSH=fake-hub')\n")
+            (checkout / "scripts/persona_config.py").write_text("print('export PERSONA_HUB_SSH=fake-hub')\n")
             (checkout / "scripts/persona_identity.py").write_text(
                 "import shlex,sys\n"
                 f"root={str(profile)!r}\n"
-                "print('export PERSONA_HOME='+shlex.quote(root)+' JARVIS_HOME='+shlex.quote(root))\n"
+                "print('export PERSONA_HOME='+shlex.quote(root))\n"
                 "if '--prepare' in sys.argv: print('test -f \"$PERSONA_HOME/hub.json\"')\n")
-            (profile / "hub.json").write_text(json.dumps({"database_url": "postgres://user:synthetic@localhost/jarvis"}))
+            (profile / "hub.json").write_text(json.dumps({"database_url": "postgres://user:synthetic@localhost/persona"}))
             capture = root / "go-environment.json"
             cache_capture = root / "go-cache-environment.json"
             caches = {key: str(root / key.lower()) for key in ("GOCACHE", "GOMODCACHE", "GOPATH")}
@@ -214,12 +214,12 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                  "sys.exit(int(os.environ.get('FAKE_GO_EXIT','0')))\n")
             environment = {
                 "PATH": str(tools) + os.pathsep + os.environ["PATH"], "HOME": str(remote),
-                "PERSONA_HOME": str(profile), "JARVIS_HOME": str(profile),
-                "PERSONA_CONFIG": str(profile / "production-config.json"), "JARVIS_TOKEN": "synthetic-live-token",
-                "PERSONA_DATABASE_URL": "postgres://example.invalid/production", "JARVIS_SOMETHING_NEW": "synthetic",
-                "PERSONA_TEST_DATABASE_URL": "postgres://example.invalid/not_test", "JARVIS_TEST_DATABASE_URL": "invalid",
+                "PERSONA_HOME": str(profile),
+                "PERSONA_CONFIG": str(profile / "production-config.json"), "PERSONA_TOKEN": "synthetic-live-token",
+                "PERSONA_DATABASE_URL": "postgres://example.invalid/production", "PERSONA_SOMETHING_NEW": "synthetic",
+                "PERSONA_TEST_DATABASE_URL": "postgres://example.invalid/not_test",
                 "CLAUDE_CONFIG_DIR": str(profile / "claude"), "CODEX_HOME": str(profile / "codex"),
-                "PGDATABASE": "jarvis", "PGHOST": "example.invalid", "PGPASSWORD": "synthetic-live-password",
+                "PGDATABASE": "persona", "PGHOST": "example.invalid", "PGPASSWORD": "synthetic-live-password",
                 "PGSERVICE": "live", "PGSERVICEFILE": str(profile / "service"),
                 "PGPASSFILE": str(profile / "passwords"), "PGOPTIONS": "synthetic", "PG_FUTURE_SETTING": "synthetic",
             }
@@ -242,24 +242,24 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                     child = recorded["env"]
                     self.assertEqual(recorded["sdk_source"], source)
                     self.assertEqual(json.loads(sdk_capture.read_text()),
-                                     ["-a", "--delete", "sdk/go/", "fake-hub:.cache/jarvis-test-checkout/sdk/go/"])
+                                     ["-a", "--delete", "sdk/go/", "fake-hub:.cache/persona-test-checkout/sdk/go/"])
                     self.assertFalse((remote_sdk / "stale.go").exists())
                     self.assertEqual(json.loads(schema_capture.read_text()),
                                      ["-a", "--delete", "schema/extension/",
-                                      "fake-hub:.cache/jarvis-test-checkout/schema/extension/"])
+                                      "fake-hub:.cache/persona-test-checkout/schema/extension/"])
                     self.assertFalse((remote_schema / "stale.json").exists())
                     self.assertEqual(recorded["args"], expected)
-                    self.assertEqual({key for key in child if key.startswith(("PERSONA_", "JARVIS_"))},
-                                     {"PERSONA_TEST_DATABASE_URL", "JARVIS_TEST_DATABASE_URL"})
-                    self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).path, "/jarvis_test")
+                    self.assertEqual({key for key in child if key.startswith(("PERSONA_"))},
+                                     {"PERSONA_TEST_DATABASE_URL"})
+                    self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).path, "/persona_test")
                     self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).netloc, "user:synthetic@localhost")
                     self.assertFalse(any(key.startswith("PG") for key in child))
-                    self.assertEqual(child["JARVIS_TEST_DATABASE_URL"], child["PERSONA_TEST_DATABASE_URL"])
+                    self.assertFalse(any(key.startswith(('jar' + 'vis').upper() + '_') for key in child))
                     self.assertNotEqual(child["HOME"], str(remote))
                     self.assertFalse(Path(child["HOME"]).exists())
                     self.assertFalse(any(str(profile) in value for value in child.values()))
                     cache_env = json.loads(cache_capture.read_text())
-                    self.assertFalse(any(key.startswith(("PERSONA_", "JARVIS_", "PG")) for key in cache_env))
+                    self.assertFalse(any(key.startswith(("PERSONA_", "PG")) for key in cache_env))
                     self.assertNotIn("synthetic-live-token", result.stdout + result.stderr)
                     self.assertNotIn("synthetic-live-password", result.stdout + result.stderr)
                     self.assertNotIn("postgres://", result.stdout + result.stderr)
@@ -267,13 +267,13 @@ class ServerTestEnvironmentTests(unittest.TestCase):
             cache_capture.unlink(missing_ok=True)
             for source in (
                 "postgres://user:synthetic@localhost/custom",
-                "postgres://user:synthetic@localhost/jarvis?dbname=jarvis",
-                "postgres://user:synthetic@localhost/jarvis?database=jarvis",
-                "postgres://user:synthetic@localhost/jarvis?db%6Eame=jarvis",
-                "postgres://user:synthetic@localhost/jarvis?dbname=jarvis_test&db%6Eame=jarvis",
-                "postgres://user:synthetic@localhost/jarvis?service=live",
-                "postgres://user:synthetic@localhost/jarvis?servicefile=/synthetic/config",
-                "postgres://user:synthetic@localhost/jarvis?sslmode=%xx",
+                "postgres://user:synthetic@localhost/persona?dbname=persona",
+                "postgres://user:synthetic@localhost/persona?database=persona",
+                "postgres://user:synthetic@localhost/persona?db%6Eame=persona",
+                "postgres://user:synthetic@localhost/persona?dbname=persona_test&db%6Eame=persona",
+                "postgres://user:synthetic@localhost/persona?service=live",
+                "postgres://user:synthetic@localhost/persona?servicefile=/synthetic/config",
+                "postgres://user:synthetic@localhost/persona?sslmode=%xx",
             ):
                 with self.subTest(source=source):
                     (profile / "hub.json").write_text(json.dumps({"database_url": source}))

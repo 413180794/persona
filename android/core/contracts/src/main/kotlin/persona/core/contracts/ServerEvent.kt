@@ -202,7 +202,7 @@ data object ManagersEvent : ServerEvent
 data object UnknownEvent : ServerEvent
 
 object ServerEventSerializer : KSerializer<ServerEvent> {
-    override val descriptor = buildClassSerialDescriptor("jarvis.core.contracts.ServerEvent")
+    override val descriptor = buildClassSerialDescriptor("persona.core.contracts.ServerEvent")
     override fun deserialize(decoder: Decoder): ServerEvent {
         val input = decoder as? JsonDecoder ?: throw SerializationException("Events require JSON")
         val obj = input.decodeJsonElement() as? JsonObject ?: throw SerializationException("Expected event object")

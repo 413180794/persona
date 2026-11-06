@@ -80,7 +80,7 @@ func TestResolveBodyLimitForAnswerRole(t *testing.T) {
 	}
 }
 
-// A pairing code for one machine's jarvis-link can only trade itself for a token: an oversized body is refused before
+// A pairing code for one machine's persona-link can only trade itself for a token: an oversized body is refused before
 // its role is checked, without reading it all.
 func TestAuthTokensBodyLimitForLinkPair(t *testing.T) {
 	h := newTestHub(t)
@@ -180,7 +180,7 @@ func TestAppHandlersBodyLimitTooLarge(t *testing.T) {
 	const opID = "0b6f3c2e-6d1a-4c55-9a43-2f8e6f6b9c10"
 	for _, c := range []struct {
 		method, path string
-		opID         string // X-Jarvis-Op-Id: withClientOp reads the body itself
+		opID         string // X-Persona-Op-Id: withClientOp reads the body itself
 		limit        int64
 	}{
 		{"POST", "/api/v1/sessions/m1/s1/messages", "", 32 << 20},
@@ -208,7 +208,7 @@ func TestAppHandlersBodyLimitTooLarge(t *testing.T) {
 			req.RemoteAddr = "127.0.0.1:12345"
 			req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 			if c.opID != "" {
-				req.Header.Set("X-Jarvis-Op-Id", c.opID)
+				req.Header.Set("X-Persona-Op-Id", c.opID)
 			}
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)

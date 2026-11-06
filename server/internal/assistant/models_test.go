@@ -574,7 +574,7 @@ func TestLaunchersListHideRestoreDelete(t *testing.T) {
 		names = append(names, v.Name+":"+v.Source+":"+strings.Join(v.Machines, "+"))
 	}
 	// A wrapper script on the laptop's PATH (#5954) is one of its own launchers too, its source kept.
-	if strings.Join(names, " ") != "mine:jarvis: alpha:zshrc:laptop claude-demo:path:laptop work:zshrc:server+laptop" {
+	if strings.Join(names, " ") != "mine:persona: alpha:zshrc:laptop claude-demo:path:laptop work:zshrc:server+laptop" {
 		t.Fatalf("%v %s", names, rec.Body.String())
 	}
 	if rec := request(s, "DELETE", "/api/v1/launchers/alpha", ""); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"hidden":true`) {
@@ -582,7 +582,7 @@ func TestLaunchersListHideRestoreDelete(t *testing.T) {
 	}
 	picker, _ := s.machineLaunchers(ctx, "laptop")
 	if fmt.Sprint(picker) != fmt.Sprint([]proto.Launcher{{Name: "work", Source: "zshrc"}, {Name: "claude-demo", BaseURL: "https://gw2.example.com", Source: "path"},
-		{Name: "mine", BaseURL: "https://gw.example.com", Model: "m", Source: "jarvis"}}) {
+		{Name: "mine", BaseURL: "https://gw.example.com", Model: "m", Source: "persona"}}) {
 		t.Fatalf("picker: %+v", picker)
 	}
 	if rec := request(s, "POST", "/api/v1/launchers/alpha/restore", ""); rec.Code != 200 || slicesContain(s.hiddenLaunchers(ctx), "alpha") {
@@ -775,11 +775,11 @@ func TestPresetModelsCountForTheSendCheck(t *testing.T) {
 }
 
 // TestAutoTabNameLive names a few tasks with a real model:
-// JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}' go test -run AutoTabNameLive -v ./internal/assistant
+// PERSONA_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}' go test -run AutoTabNameLive -v ./internal/assistant
 func TestAutoTabNameLive(t *testing.T) {
-	raw := os.Getenv("JARVIS_LIVE_AI")
+	raw := os.Getenv("PERSONA_LIVE_AI")
 	if raw == "" {
-		t.Skip("JARVIS_LIVE_AI not set")
+		t.Skip("PERSONA_LIVE_AI not set")
 	}
 	var cfg ai.Config
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {

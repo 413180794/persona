@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Demo Mode's made-up hub (DemoHub, Resources/Demo.json): every page's request decodes into the app's models, so a
 /// model that changes shape breaks here instead of in front of App Review. DemoModeTests walks the screens.

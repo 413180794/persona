@@ -264,13 +264,13 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 		return json.Marshal(map[string]any{"ok": true, "checks": checks})
 	case DeviceAssistantPrepare:
 		f.prepared = append(f.prepared, a)
-		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/assistant"})
+		return json.Marshal(map[string]any{"cwd": "/home/me/.persona/assistant"})
 	case DeviceAssistantGuestPrepare:
 		if f.noGuest {
 			return nil, fmt.Errorf("unknown method %s", p.Method)
 		}
 		f.guestPrepared = append(f.guestPrepared, a)
-		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/guest"})
+		return json.Marshal(map[string]any{"cwd": "/home/me/.persona/guest"})
 	case DeviceWorktreePrepare, DeviceWorktreeCreate: // the machine's engine: checkouts under /wt/<repo>
 		a["method"] = p.Method
 		f.worktrees = append(f.worktrees, a)

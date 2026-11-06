@@ -36,7 +36,7 @@ func TestAgentPlugin(t *testing.T) {
 		if err := n.writeClaudeConfig(); err != nil {
 			t.Fatal(err)
 		}
-		plugin := filepath.Join(jarvisDir(home), "agent-plugin")
+		plugin := filepath.Join(personaDir(home), "agent-plugin")
 		if st, err := os.Stat(filepath.Join(plugin, "skills", "persona-office", "scripts", "office.sh")); err != nil || st.Mode()&0o111 == 0 {
 			t.Fatalf("the plugin's script: %v", err)
 		}
@@ -52,12 +52,12 @@ func TestAgentPlugin(t *testing.T) {
 			t.Fatal(err)
 		}
 		waitCalls(t, f, "pane.send_input", 1)
-		want := startCmd("claude", "--session-id "+startID, jarvisDir(home))
+		want := startCmd("claude", "--session-id "+startID, personaDir(home))
 		if tc.flag { // the hooks go in a plugin too, and Persona passes no --settings (hooksplugin.go)
-			want = "HERDR_AGENT=claude claude --session-id " + startID + " --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json")) +
+			want = "HERDR_AGENT=claude claude --session-id " + startID + " --mcp-config " + shellQuote(filepath.Join(personaDir(home), "mcp.json")) +
 				" --plugin-dir " + shellQuote(plugin) +
 				" --allowedTools " + shellQuote("Bash(sh "+filepath.Join(plugin, "skills", "persona-office", "scripts", "office.sh")+" *)") +
-				" --plugin-dir " + shellQuote(filepath.Join(jarvisDir(home), "claude-hooks"))
+				" --plugin-dir " + shellQuote(filepath.Join(personaDir(home), "claude-hooks"))
 		}
 		if typed := f.trace("pane.send_input"); !slices.Contains(typed, call("pane.send_input", map[string]any{"pane_id": "w1:p2", "keys": []string{"Enter"}, "text": want})) {
 			t.Errorf("claude %q: typed %v, want %s", tc.version, typed, want)
@@ -69,7 +69,7 @@ func TestAgentPlugin(t *testing.T) {
 // The assistant is allowed Persona's tools and its own copy of the office skill's script, at its exact path.
 func TestAssistantAllowsTheOfficeScript(t *testing.T) {
 	n, home := testNode(t)
-	want := "mcp__jarvis,Bash(sh " + filepath.Join(identity.AssistantDir(home), ".claude", "skills", "persona-office", "scripts", "office.sh") + " *)"
+	want := "mcp__persona,Bash(sh " + filepath.Join(identity.AssistantDir(home), ".claude", "skills", "persona-office", "scripts", "office.sh") + " *)"
 	if got := n.assistantTools(); got != want {
 		t.Fatalf("%s\nwant %s", got, want)
 	}

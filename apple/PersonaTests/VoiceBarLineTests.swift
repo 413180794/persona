@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The voice bar's words and buttons (docs/voice.md 6.2, 1.3; 6.10「VoiceBarLine 的各种相位」): what the bound
 /// conversation does, what needs the user, why an instruction did not go and what can be done, and the first line's

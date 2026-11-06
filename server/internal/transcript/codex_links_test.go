@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestCodexCreatedThreadBecomesJarvisLink(t *testing.T) {
+func TestCodexCreatedThreadBecomesPersonaLink(t *testing.T) {
 	LocalMachine.Store("")
 	in := "建好了\n::created-thread{threadId=\"01a19b67-dce8-7a73-a357-8edeeda396bc\"}"
 	if got := codexThreadLinks(in); got != in {
@@ -14,7 +14,7 @@ func TestCodexCreatedThreadBecomesJarvisLink(t *testing.T) {
 	}
 	LocalMachine.Store("m1")
 	t.Cleanup(func() { LocalMachine.Store("") })
-	want := "建好了\n[打开新建的对话](jarvis://session/m1/01a19b67-dce8-7a73-a357-8edeeda396bc)"
+	want := "建好了\n[打开新建的对话](persona://session/m1/01a19b67-dce8-7a73-a357-8edeeda396bc)"
 	if got := codexThreadLinks(in); got != want {
 		t.Fatalf("got %q", got)
 	}

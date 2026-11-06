@@ -4,7 +4,7 @@ import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
 
 /**
- * One `<jarvis-context kind="…" title="…" url="…">body</jarvis-context>` block of a message: a piece of a page picked on
+ * One `<persona-context kind="…" title="…" url="…">body</persona-context>` block of a message: a piece of a page picked on
  * the phone, or part of what a Feishu `/agent` request hands its agent (instructions, where it was asked, the chat
  * before it, a document). [kind] is `context`, `edit`, `instructions`, `doc`…; [url] is null when missing or blank;
  * [body] may be empty, and the hub may have cut it (it then ends with the Chinese "…(truncated, N bytes total)" mark).
@@ -14,12 +14,12 @@ data class MessageContext(val kind: String, val title: String, val url: String?,
     val label: CoreText get() = (title.takeIf(String::isNotBlank) ?: url)?.let(CoreText::plain) ?: CoreText.of(Key.ContextQuote)
 }
 
-// <persona-context>, or <jarvis-context> as older hubs, nodes and apps write it (#3182).
-private val contextBlock = Regex("<(?:jarvis|persona)-context\\b([^>]*)>([\\s\\S]*?)</(?:jarvis|persona)-context>\\s*")
+// The canonical context tag used by the hub, nodes and apps.
+private val contextBlock = Regex("<persona-context\\b([^>]*)>([\\s\\S]*?)</persona-context>\\s*")
 private val contextAttribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
 
-/** Whether [text] has a context block's opening tag, either name. */
-fun hasContextTag(text: String): Boolean = text.contains("<jarvis-context") || text.contains("<persona-context")
+/** Whether [text] has a context block's opening tag. */
+fun hasContextTag(text: String): Boolean = text.contains("<persona-context")
 
 /**
  * The context blocks of [text] in order, and the text outside all of them (trimmed): what the user actually wrote,

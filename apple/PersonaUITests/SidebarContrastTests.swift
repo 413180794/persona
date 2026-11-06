@@ -4,7 +4,7 @@ import XCTest
 /// titles and rows white on its near-white backdrop, while the glass buttons and badges in it were fine. The sidebar
 /// lives in a hosting controller of its own; its text has to follow the same look as the window it is drawn in.
 /// Measured on the screenshot: in the Inbox row the text has to stand apart from the row's own background.
-/// Run once per look (`simctl ui <udid> appearance light|dark`) and per style (`TEST_RUNNER_JARVIS_UI_STYLE`).
+/// Run once per look (`simctl ui <udid> appearance light|dark`) and per style (`TEST_RUNNER_PERSONA_UI_STYLE`).
 final class SidebarContrastTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -16,7 +16,7 @@ final class SidebarContrastTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-newAssistant", "YES"] + extra
         // Settings › Appearance › Light & Dark set against the system's (`-ui.scheme light` on a dark simulator).
-        if let scheme = ProcessInfo.processInfo.environment["JARVIS_SCHEME"] { app.launchArguments += ["-ui.scheme", scheme] }
+        if let scheme = ProcessInfo.processInfo.environment["PERSONA_SCHEME"] { app.launchArguments += ["-ui.scheme", scheme] }
         app.launchPinned()
     }
 
@@ -80,8 +80,8 @@ final class SidebarContrastTests: XCTestCase {
         launch()
         openDrawer("cold start")
         assertReadable("on the first open")
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let look = ProcessInfo.processInfo.environment["JARVIS_SHOTS_APPEARANCE"] ?? "look"
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let look = ProcessInfo.processInfo.environment["PERSONA_SHOTS_APPEARANCE"] ?? "look"
             try? app.screenshot().pngRepresentation
                 .write(to: URL(fileURLWithPath: dir).appendingPathComponent("sidebar-\(UITestStyle.name)-\(look).png"))
         }
@@ -110,11 +110,11 @@ final class SidebarContrastTests: XCTestCase {
     }
 
     /// The look changing while the app runs (the system's automatic light / dark at sunrise and sunset), with the
-    /// drawer closed or out, the app in front or at home. `JARVIS_FLIP_LOOK=<udid>` names the simulator to flip:
+    /// drawer closed or out, the app in front or at home. `PERSONA_FLIP_LOOK=<udid>` names the simulator to flip:
     /// the test asks the host (`simctl ui … appearance`) through a file the runner script watches.
     @MainActor func testRowsFollowALookChange() throws {
-        guard let flip = ProcessInfo.processInfo.environment["JARVIS_FLIP_LOOK"] else {
-            throw XCTSkip("needs JARVIS_FLIP_LOOK=<a file the runner turns into simctl ui appearance>")
+        guard let flip = ProcessInfo.processInfo.environment["PERSONA_FLIP_LOOK"] else {
+            throw XCTSkip("needs PERSONA_FLIP_LOOK=<a file the runner turns into simctl ui appearance>")
         }
         func look(_ l: String) {
             try? l.write(toFile: flip, atomically: true, encoding: .utf8)
@@ -123,7 +123,7 @@ final class SidebarContrastTests: XCTestCase {
             sleep(2)
         }
         launch()
-        let start = ProcessInfo.processInfo.environment["JARVIS_START_LOOK"] ?? "dark"
+        let start = ProcessInfo.processInfo.environment["PERSONA_START_LOOK"] ?? "dark"
         let other = start == "dark" ? "light" : "dark"
         _ = app.buttons["assistant-sidebar-button"].firstMatch.waitForExistence(timeout: 15)
         sleep(2)

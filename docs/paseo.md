@@ -84,8 +84,8 @@ otherwise use Paseo's default provider (its built-in Claude Code provider if ena
 
 ## How the bridge runs
 
-- **Bridge code**: bundled in personad as runtime package `jarvis-paseo-runtime` (`internal/runtimepkg`, generated from `integrations/` at build time).
-  When the engine switches to Paseo, node writes it beside `runtime.sock` at `runtime-packages/jarvis-paseo-runtime/<hash>/`, then runs:
+- **Bridge code**: bundled in personad as runtime package `persona-paseo-runtime` (`internal/runtimepkg`, generated from `integrations/` at build time).
+  When the engine switches to Paseo, node writes it beside `runtime.sock` at `runtime-packages/persona-paseo-runtime/<hash>/`, then runs:
   `node bridge.mjs --socket <runtime.sock> --paseo-home <Paseo home>`.
 - **Which Node.js**: the first version 22 or newer, in this order:
   1. `PERSONA_NODEJS`
@@ -173,10 +173,10 @@ otherwise use Paseo's default provider (its built-in Claude Code provider if ena
 - Unit tests: `cd integrations/paseo && npm test`. Use a fake Paseo daemon (`test/fake-paseo.js`) and the SDK's fake node to test lists, content,
   streaming, sending, cards, creation, takeover, mode changes, Paseo restart, and disconnection.
 - End to end: first `cd server && go generate ./internal/runtimepkg && go build -o /tmp/personad ./cmd/personad`, then run
-  `JARVISD=/tmp/personad CLAUDE_BIN=<a Claude Code executable> node integrations/paseo/e2e/run.mjs`. There are 29 checks; `paseo` must be installed locally.
+  `PERSONAD=/tmp/personad CLAUDE_BIN=<a Claude Code executable> node integrations/paseo/e2e/run.mjs`. There are 29 checks; `paseo` must be installed locally.
   - Start a real Paseo daemon with its own home and an unused port. The provider uses `extends: "claude"`; the model is a scripted
     Anthropic API in `e2e/model.mjs`.
-  - Start a real `jarvisd node --stdio`, with the SDK test tools acting as hub. After setting the engine to Paseo, node runs the bridge itself.
+  - Start a real `personad node --stdio`, with the SDK test tools acting as hub. After setting the engine to Paseo, node runs the bridge itself.
   - Test from creation through takeover after closing.
   - Use only temporary directories, without touching the active local Paseo or `~/.claude`.
   - Add `KEEP=1` to retain temporary directories, or `DEBUG=1` to print the bridge lines from node's log.

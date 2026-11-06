@@ -215,7 +215,7 @@ func (c *codexRemote) run() {
 	var init struct {
 		CodexHome string `json:"codexHome"`
 	}
-	err = wire.call(ctx, "initialize", map[string]any{"clientInfo": map[string]any{"name": "jarvis", "title": "Persona", "version": c.n.Version}, "capabilities": map[string]any{"experimentalApi": true}}, &init)
+	err = wire.call(ctx, "initialize", map[string]any{"clientInfo": map[string]any{"name": "persona", "title": "Persona", "version": c.n.Version}, "capabilities": map[string]any{"experimentalApi": true}}, &init)
 	cancel()
 	if err != nil {
 		return

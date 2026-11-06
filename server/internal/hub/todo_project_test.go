@@ -68,8 +68,8 @@ func TestNewAgentCarriesProjectContext(t *testing.T) {
 	}
 	withBackground := func(what, got, text string) {
 		t.Helper()
-		if !strings.HasPrefix(got, `<jarvis-context kind="context" title="项目 · 天气 App · 背景" url="">`) ||
-			!strings.Contains(got, "「修登录页」结论：修好了 https://github.com/o/r/pull/1") || !strings.HasSuffix(got, "</jarvis-context>\n\n"+text) {
+		if !strings.HasPrefix(got, `<persona-context kind="context" title="项目 · 天气 App · 背景" url="">`) ||
+			!strings.Contains(got, "「修登录页」结论：修好了 https://github.com/o/r/pull/1") || !strings.HasSuffix(got, "</persona-context>\n\n"+text) {
 			t.Fatalf("%s = %q", what, got)
 		}
 	}

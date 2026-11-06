@@ -267,10 +267,10 @@ export interface ConnectorLink {
   code: string;
 }
 
-// parseConnectorLink reads what `jarvis-link pair --listen` prints: jarvis://connector?addr=<host:port>&…&fp=…&code=…
+// parseConnectorLink reads what `persona-link pair --listen` prints: persona://connector?addr=<host:port>&…&fp=…&code=…
 // (the hub checks it again). null when it is not one or misses the key fingerprint or the code.
 export function parseConnectorLink(raw: string): ConnectorLink | null {
-  const m = /^(?:jarvis|persona):\/\/connector\/?\?(.*)$/is.exec(raw.trim());
+  const m = /^persona:\/\/connector\/?\?(.*)$/is.exec(raw.trim());
   if (!m) return null;
   const q = new URLSearchParams(m[1]);
   const fp = q.get("fp")?.trim() ?? "";
@@ -298,9 +298,9 @@ export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-// linuxInstallCommand pairs, installs and starts jarvis-link on a Linux computer in one go (docs/link.md "Linux").
+// linuxInstallCommand pairs, installs and starts persona-link on a Linux computer in one go (docs/link.md "Linux").
 export function linuxInstallCommand(pairUrl: string): string {
-  return `jarvis-link install --pair - <<< ${shellQuote(pairUrl)}`;
+  return `persona-link install --pair - <<< ${shellQuote(pairUrl)}`;
 }
 
 // ── the group of hubs (docs/plan-hub-center.md 2) ──────

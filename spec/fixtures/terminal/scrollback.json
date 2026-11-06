@@ -6,8 +6,8 @@
       "name": "scrollback_colored_rows",
       "description": "解析 ANSI 历史行并保留内部空行和样式。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
-        "ios/JarvisTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
+        "ios/PersonaTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
       ],
       "input": {
         "text": "\u001b[0m\u001b[31mred\u001b[0m plain\r\n\r\nnext 中\r\n"
@@ -54,8 +54,8 @@
       "name": "scrollback_plain",
       "description": "解析 ANSI 历史行并保留内部空行和样式。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
-        "ios/JarvisTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
+        "ios/PersonaTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
       ],
       "input": {
         "text": "plain only"
@@ -76,8 +76,8 @@
       "name": "scrollback_empty",
       "description": "解析 ANSI 历史行并保留内部空行和样式。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
-        "ios/JarvisTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain",
+        "ios/PersonaTests/TerminalGridTests.swift — scrollbackPagesAreRowsOfColoredText"
       ],
       "input": {
         "text": ""
@@ -94,7 +94,7 @@
       "name": "scrollback_final_empty_line",
       "description": "解析 ANSI 历史行并保留内部空行和样式。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain"
       ],
       "input": {
         "text": "a\n\n"
@@ -117,7 +117,7 @@
       "name": "scrollback_lf_resets_column",
       "description": "解析 ANSI 历史行并保留内部空行和样式。",
       "source": [
-        "ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain"
+        "ios/Persona/Views/Session/Terminal/TerminalGrid.swift — rows(fromANSI:) / plain"
       ],
       "input": {
         "text": "ab\n中"

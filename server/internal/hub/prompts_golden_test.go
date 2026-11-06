@@ -227,11 +227,11 @@ func contextOf(t *testing.T, res any) string {
 }
 
 func TestGoldenBotMessage(t *testing.T) {
-	golden(t, "bot_message.jarvis", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Owner: "示例用户", Text: "今天有什么会？",
+	golden(t, "bot_message.persona", prompts.RenderBotMessage(prompts.BotMessage{Persona: true, Owner: "示例用户", Text: "今天有什么会？",
 		Quote: &prompts.BotQuote{Who: "Persona", Text: "上午 10 点有周会。"}}))
 	golden(t, "bot_message.agent_files", prompts.RenderBotMessage(prompts.BotMessage{Text: "看下这个日志",
-		Forward: "11-02 10:00 张三：构建挂了\n11-02 10:01 李四：我看下", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
-	golden(t, "bot_message.only_files", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Files: []string{"/tmp/a.pdf", "/tmp/b.png"}}))
+		Forward: "11-02 10:00 张三：构建挂了\n11-02 10:01 李四：我看下", Files: []string{"/tmp/persona-uploads/build.log"}}))
+	golden(t, "bot_message.only_files", prompts.RenderBotMessage(prompts.BotMessage{Persona: true, Files: []string{"/tmp/a.pdf", "/tmp/b.png"}}))
 }
 
 // A message to a plugin's chat app bot (docs/channels.md): plain text and text answers (WeChat), Markdown without
@@ -242,7 +242,7 @@ func TestGoldenChannelMessage(t *testing.T) {
 	golden(t, "channel_message.quote_unsupported", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "微信", Plain: true,
 		Asks: true, Text: "看下这个", Quote: "张三\n合同明天要签", Unsupported: []string{"文件「合同.pdf」", "一段视频"}}))
 	golden(t, "channel_message.markdown_files", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "Example Chat",
-		Text: "看下这个日志", Forward: "11-02 10:00 张三：构建挂了", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
+		Text: "看下这个日志", Forward: "11-02 10:00 张三：构建挂了", Files: []string{"/tmp/persona-uploads/build.log"}}))
 	golden(t, "channel_answer_again.feishu", prompts.RenderChannelAnswerAgain(prompts.ChannelAnswerAgain{Name: "飞书"}))
 	golden(t, "channel_message.only_unsupported", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "微信", Plain: true,
 		Asks: true, Unsupported: []string{"一段没有转写的语音"}}))

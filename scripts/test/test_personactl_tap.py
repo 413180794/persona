@@ -1,11 +1,11 @@
-"""jarvisctl.py tap acts only on a match a touch reaches: the app's `activate` answers "not visible" for the shell's
-page behind, and the real-touch fallback asks `find` for a reachable match. Run: python3 scripts/test/test_jarvisctl_tap.py"""
+"""personactl.py tap acts only on a match a touch reaches: the app's `activate` answers "not visible" for the shell's
+page behind, and the real-touch fallback asks `find` for a reachable match. Run: python3 scripts/test/test_personactl_tap.py"""
 import importlib.util
 from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("jarvisctl_under_test", ROOT / "scripts/app/jarvisctl.py")
+spec = importlib.util.spec_from_file_location("personactl_under_test", ROOT / "scripts/app/personactl.py")
 ctl = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ctl)
 

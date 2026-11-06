@@ -19,7 +19,7 @@ export const COMPUTER_OSES: readonly ComputerOS[] = ["mac", "linux", "windows"];
 /** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md decision 1). */
 export const PERSONA_LINK_INSTALL_DOC = "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md";
 
-/** How to install jarvis-link on a headless Linux when the hub has no install script (docs/link.md "Linux (headless)"). */
+/** How to install persona-link on a headless Linux when the hub has no install script (docs/link.md "Linux (headless)"). */
 export const LINK_LINUX_DOC = "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless";
 
 // The hub does not keep the system a computer was added as (only its node reports one, once it connects), so the
@@ -62,7 +62,7 @@ export interface ComputerCodeReply {
   trust?: "pending" | "confirmed";
   /** This request added it (omitted when an existing pending one was reused). */
   added?: boolean;
-  /** `jarvis-link pair '<pair_url>'`. */
+  /** `persona-link pair '<pair_url>'`. */
   command?: string;
   /** One line that installs and pairs; only when the hub knows the site it was published from. */
   install?: { linux?: string };
@@ -82,9 +82,9 @@ export function addBody(name: string, os: ComputerOS) {
   return { add: { name: name.trim(), os } };
 }
 
-/** The line that pairs an installed jarvis-link; the reply's own when the hub gave one. */
+/** The line that pairs an installed persona-link; the reply's own when the hub gave one. */
 export function pairCommand(reply: Pick<ComputerCodeReply, "pair_url" | "command">): string {
-  return reply.command || `jarvis-link pair ${quoted(reply.pair_url)}`;
+  return reply.command || `persona-link pair ${quoted(reply.pair_url)}`;
 }
 
 /** What a Linux computer runs: the one line that installs and pairs, or only the pairing when the hub has no site. */
@@ -93,9 +93,9 @@ export function linuxCommand(reply: Pick<ComputerCodeReply, "pair_url" | "comman
   return line ? { line, installs: true } : { line: pairCommand(reply), installs: false };
 }
 
-/** What Windows runs in PowerShell, in the folder with jarvis-link.exe and personad.exe (docs/windows.md). */
+/** What Windows runs in PowerShell, in the folder with persona-link.exe and personad.exe (docs/windows.md). */
 export function windowsCommand(pairURL: string): string {
-  return `.\\jarvis-link.exe install --jarvisd .\\personad.exe --pair ${quoted(pairURL)}`;
+  return `.\\persona-link.exe install --personad .\\personad.exe --pair ${quoted(pairURL)}`;
 }
 
 // A pairing link in single quotes for sh and PowerShell; it has none of its own (it is URL-encoded).

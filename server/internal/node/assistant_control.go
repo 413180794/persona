@@ -29,7 +29,7 @@ func (p *assistantProc) control(ctx context.Context, request map[string]any) err
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	id := fmt.Sprintf("jarvis-%d", p.reqSeq.Add(1))
+	id := fmt.Sprintf("persona-%d", p.reqSeq.Add(1))
 	result := make(chan assistantControlResponse, 1)
 	p.mu.Lock()
 	if p.controls == nil {

@@ -1,12 +1,12 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct FeishuBotModelTests {
     private static let status = """
     {"enabled":true,"app_id":"cli_a","domain":"https://open.feishu.cn","has_secret":true,"from_config":false,
      "features":{"main":true,"cards":true,"all_cards":false,"pushes":false,"sync":false,"agents":false},
-     "connected":true,"bot_name":"Jarvis","owner":{"name":"我","paired_at":1}}
+     "connected":true,"bot_name":"Persona","owner":{"name":"我","paired_at":1}}
     """
 
     private func model(_ hub: FakeHub, toasts: BotRecorder<[String]> = BotRecorder([])) -> FeishuBotModel {
@@ -14,9 +14,9 @@ import Testing
     }
 
     @Test func brandMigrationDoesNotRewriteTheConfiguredBotName() async throws {
-        for name in ["Jarvis", "Persona", "我的助手"] {
+        for name in ["Persona", "Persona", "我的助手"] {
             let hub = FakeHub()
-            hub.on("GET", "/api/v1/bots/feishu", json: Self.status.replacingOccurrences(of: "\"bot_name\":\"Jarvis\"", with: "\"bot_name\":\"\(name)\""))
+            hub.on("GET", "/api/v1/bots/feishu", json: Self.status.replacingOccurrences(of: "\"bot_name\":\"Persona\"", with: "\"bot_name\":\"\(name)\""))
             let m = model(hub)
             await m.load()
             #expect(m.status?.botName == name)
@@ -28,7 +28,7 @@ import Testing
         hub.on("GET", "/api/v1/bots/feishu", json: Self.status)
         let m = model(hub)
         await m.load()
-        #expect(m.status?.botName == "Jarvis")
+        #expect(m.status?.botName == "Persona")
         #expect(m.appID == "cli_a" && m.domain == "feishu" && m.appSecret.isEmpty)
         #expect(!m.credentialsChanged)
         #expect(m.stateText == "已连接")

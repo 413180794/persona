@@ -17,7 +17,7 @@ type VoiceInstructions struct {
 	Lang  string
 	Owner string // "" is the word for "user" in Lang
 	Notes string
-	// Tools is which of the plugin's function tools (mcp/voice) the session declares: "all"; "ask_jarvis" (only that
+	// Tools is which of the plugin's function tools (mcp/voice) the session declares: "all"; "ask_persona" (only that
 	// one: another extension calling, docs/voice.md "Permissions"); "bound" (a call bound to a conversation, protocol 2:
 	// search_knowledge, list_agents and delegate_task, which hands work to it); "" none, the model delegates.
 	Tools string
@@ -184,7 +184,7 @@ func RenderVoiceStatus(d VoiceStatus) string { return render("voice/status", d) 
 type VoiceAsk struct {
 	Lang string
 	To   string // an agent's name; "" the Persona main conversation
-	// Tool is what the model hands the answer over with: delegate_task, ask_jarvis, or "" (a delegation of its own).
+	// Tool is what the model hands the answer over with: delegate_task, ask_persona, or "" (a delegation of its own).
 	Tool string
 	// Bound: the call is bound to the conversation (protocol 2): the "status:" and "stop:" prefixes (in Chinese) are not answers.
 	Bound            bool

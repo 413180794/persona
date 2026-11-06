@@ -1,10 +1,10 @@
-# Agent SDK 桥（jarvis-agent-sdk-runtime）
+# Agent SDK 桥（persona-agent-sdk-runtime）
 
 主对话的 `agentsdk` 运行方式：node 不再起 `claude -p --input-format stream-json`，而是用 Node 22+ 跑这里的 `dist/bridge.mjs`，
 桥在进程里调 [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) 的 `query()`。
 stdin / stdout 的格式和 `claude -p` 的 stream-json 一样，node 读输出的代码（`readAssistant`）不用改。
 
-node 带着这个包（`server/internal/runtimepkg` 的 `jarvis-agent-sdk-runtime`：`package.json` + `dist/bridge.mjs`），写到磁盘上再运行。
+node 带着这个包（`server/internal/runtimepkg` 的 `persona-agent-sdk-runtime`：`package.json` + `dist/bridge.mjs`），写到磁盘上再运行。
 
 ## 协议
 

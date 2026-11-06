@@ -193,7 +193,7 @@ export interface Session {
   assistant?: boolean;
   /** The assistant's space it runs in: "health" for the health space's (docs/health.md). */
   space?: string;
-  started_by_jarvis?: boolean;
+  started_by_persona?: boolean;
   space_id?: string;
   space_name?: string;
   space_index?: number;

@@ -76,7 +76,7 @@ func waitCalls(t *testing.T, f *fakeHerdr, method string, n int) {
 	}
 }
 
-func jarvisDir(home string) string { return filepath.Join(home, ".jarvis") }
+func personaDir(home string) string { return filepath.Join(home, ".persona") }
 
 func mkdir(t *testing.T, p string) string {
 	t.Helper()
@@ -120,14 +120,14 @@ func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
 		call("tab.create", map[string]any{"workspace_id": "w1", "cwd": cwd, "label": "agent-2", "focus": false}),
 		markTab("w1:p2", startID),
 		call("pane.send_input", map[string]any{"pane_id": "w1:p2", "keys": []string{"Enter"},
-			"text": startCmd("claude", "--session-id "+startID+" --permission-mode plan --effort high", jarvisDir(home))}),
+			"text": startCmd("claude", "--session-id "+startID+" --permission-mode plan --effort high", personaDir(home))}),
 		readVisible("w1:p2"), // the trust dialog, cursor on "No, exit"
 		sendKeys("w1:p2", "down", "enter"),
 		readVisible("w1:p2"), agentGet("w1:p2"), // ready once…
 		readVisible("w1:p2"), agentGet("w1:p2"), // …and twice
 		call("agent.rename", map[string]any{"target": "w1:p2", "name": "j-0e0000"}),
-		resumeHeld("w1:p2", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[0],
-		resumeHeld("w1:p2", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[1],
+		resumeHeld("w1:p2", startID, startCmd("claude", "--resume "+startID, personaDir(home)))[0],
+		resumeHeld("w1:p2", startID, startCmd("claude", "--resume "+startID, personaDir(home)))[1],
 		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "fix the build"}),
 		call("session.snapshot", nil), // sessionFor
 	})
@@ -137,7 +137,7 @@ func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
 	f.reply("pane.process_info", processInfo(1<<30))
 	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent("", proto.StatusIdle, "w1:p2", "w1:t2", "w1", cwd, "")}, nil))
 	list := listSessions(t, n)
-	if len(list) != 1 || list[0].SessionID != startID || list[0].PaneID != "w1:p2" || !list[0].StartedByJarvis ||
+	if len(list) != 1 || list[0].SessionID != startID || list[0].PaneID != "w1:p2" || !list[0].StartedByPersona ||
 		list[0].Launcher != "claude" || list[0].Starting {
 		t.Fatalf("listed %+v", list)
 	}
@@ -162,7 +162,7 @@ func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s := decodeSessions(t, []any{res["session"]})[0]; s.SessionID != startID || s.PaneID != "w7:p1" || s.Status != proto.StatusDone ||
-		s.SpaceKind != "herdr" || !s.StartedByJarvis || s.Launcher != "work_claude" {
+		s.SpaceKind != "herdr" || !s.StartedByPersona || s.Launcher != "work_claude" {
 		t.Errorf("session %+v", s)
 	}
 	assertTrace(t, f.trace(), []string{
@@ -171,12 +171,12 @@ func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 		call("tab.rename", map[string]any{"tab_id": "w7:t1", "label": "fix the build"}),
 		markTab("w7:p1", startID),
 		call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
-			"text": startCmd("work_claude", "--resume "+startID, jarvisDir(home))}),
+			"text": startCmd("work_claude", "--resume "+startID, personaDir(home))}),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		call("agent.rename", map[string]any{"target": "w7:p1", "name": "j-0e0000"}),
-		resumeHeld("w7:p1", startID, startCmd("work_claude", "--resume "+startID, jarvisDir(home)))[0],
-		resumeHeld("w7:p1", startID, startCmd("work_claude", "--resume "+startID, jarvisDir(home)))[1],
+		resumeHeld("w7:p1", startID, startCmd("work_claude", "--resume "+startID, personaDir(home)))[0],
+		resumeHeld("w7:p1", startID, startCmd("work_claude", "--resume "+startID, personaDir(home)))[1],
 		call("session.snapshot", nil),
 	})
 }
@@ -195,7 +195,7 @@ func TestHerdrResumeWithoutTranscriptStartsUnderItsID(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
-		"text": startCmd("claude", "--session-id "+startID, jarvisDir(home))})
+		"text": startCmd("claude", "--session-id "+startID, personaDir(home))})
 	for _, c := range f.trace() {
 		if c == want {
 			return
@@ -206,7 +206,7 @@ func TestHerdrResumeWithoutTranscriptStartsUnderItsID(t *testing.T) {
 
 // A workspace given (a tab next to another agent): no workspace lookup. A claude that comes up blocked (a dialog of
 // its own) counts as ready at once; the first message is not typed into the dialog, and the session is listed as
-// needing the user, saying so (firstprompt.go). A managed launcher (kept by the hub) runs as `jarvisd launch <name>`.
+// needing the user, saying so (firstprompt.go). A managed launcher (kept by the hub) runs as `personad launch <name>`.
 func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 	n, f, home := herdrNode(t)
 	if _, err := request(t, n, "launchers.managed", map[string]any{"launchers": []any{
@@ -227,18 +227,18 @@ func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 		markTab("w2:p5", startID),
 		// A managed launcher's start gets Persona's settings with its gateway merged in (#1336).
 		call("pane.send_input", map[string]any{"pane_id": "w2:p5", "keys": []string{"Enter"},
-			"text": "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID + " --settings " +
-				shellQuote(filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")) +
-				" --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json"))}),
+			"text": "HERDR_AGENT=claude /tmp/persona-test/personad launch work_gw --session-id " + startID + " --settings " +
+				shellQuote(filepath.Join(personaDir(home), "launcher-settings", "work_gw-claude-settings.json")) +
+				" --mcp-config " + shellQuote(filepath.Join(personaDir(home), "mcp.json"))}),
 		readVisible("w2:p5"), agentGet("w2:p5"),
 		call("agent.rename", map[string]any{"target": "w2:p5", "name": "j-0e0000"}),
 		// herdr's restore resumes it through the launcher too, not with a bare `claude --resume` (#1879).
-		resumeHeld("w2:p5", startID, "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
-			filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")+
-			" --mcp-config "+filepath.Join(jarvisDir(home), "mcp.json"))[0],
-		resumeHeld("w2:p5", startID, "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
-			filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")+
-			" --mcp-config "+filepath.Join(jarvisDir(home), "mcp.json"))[1],
+		resumeHeld("w2:p5", startID, "HERDR_AGENT=claude /tmp/persona-test/personad launch work_gw --resume "+startID+" --settings "+
+			filepath.Join(personaDir(home), "launcher-settings", "work_gw-claude-settings.json")+
+			" --mcp-config "+filepath.Join(personaDir(home), "mcp.json"))[0],
+		resumeHeld("w2:p5", startID, "HERDR_AGENT=claude /tmp/persona-test/personad launch work_gw --resume "+startID+" --settings "+
+			filepath.Join(personaDir(home), "launcher-settings", "work_gw-claude-settings.json")+
+			" --mcp-config "+filepath.Join(personaDir(home), "mcp.json"))[1],
 		call("session.snapshot", nil),
 	})
 	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent(startID, proto.StatusIdle, "w2:p5", "w2:t5", "w2", home, "")}, nil))
@@ -277,12 +277,12 @@ func TestHerdrStartNamesTheTabOnceItExists(t *testing.T) {
 		markTab("w2:p6", startID),
 		call("tab.rename", map[string]any{"tab_id": "w2:t6", "label": "named early"}),
 		call("pane.send_input", map[string]any{"pane_id": "w2:p6", "keys": []string{"Enter"},
-			"text": startCmd("claude", "--session-id "+startID, jarvisDir(home))}),
+			"text": startCmd("claude", "--session-id "+startID, personaDir(home))}),
 		readVisible("w2:p6"), agentGet("w2:p6"),
 		readVisible("w2:p6"), agentGet("w2:p6"),
 		call("agent.rename", map[string]any{"target": "w2:p6", "name": "j-0e0000"}),
-		resumeHeld("w2:p6", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[0],
-		resumeHeld("w2:p6", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[1],
+		resumeHeld("w2:p6", startID, startCmd("claude", "--resume "+startID, personaDir(home)))[0],
+		resumeHeld("w2:p6", startID, startCmd("claude", "--resume "+startID, personaDir(home)))[1],
 		call("session.snapshot", nil),
 	})
 }
@@ -514,12 +514,12 @@ func TestHerdrSendResumesAnOfflineSession(t *testing.T) {
 		call("tab.rename", map[string]any{"tab_id": "w7:t1", "label": "agent-1"}),
 		markTab("w7:p1", sidA),
 		call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
-			"text": startCmd("claude", "--resume "+sidA, jarvisDir(home))}),
+			"text": startCmd("claude", "--resume "+sidA, personaDir(home))}),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		call("agent.rename", map[string]any{"target": "w7:p1", "name": "j-0d0000"}),
-		resumeHeld("w7:p1", sidA, startCmd("claude", "--resume "+sidA, jarvisDir(home)))[0],
-		resumeHeld("w7:p1", sidA, startCmd("claude", "--resume "+sidA, jarvisDir(home)))[1],
+		resumeHeld("w7:p1", sidA, startCmd("claude", "--resume "+sidA, personaDir(home)))[0],
+		resumeHeld("w7:p1", sidA, startCmd("claude", "--resume "+sidA, personaDir(home)))[1],
 		call("session.snapshot", nil),
 		readANSI("w7:p1"), // the pane checked again
 		call("agent.prompt", map[string]any{"target": "w7:p1", "text": "go on"}),
@@ -527,8 +527,8 @@ func TestHerdrSendResumesAnOfflineSession(t *testing.T) {
 	})
 }
 
-// A session that is not running and that nothing says which launcher it ran with (started outside Jarvis) is
-// resumed with the launcher the hub sends ("New Agent"'s), not plain claude; the launcher Jarvis started it with
+// A session that is not running and that nothing says which launcher it ran with (started outside Persona) is
+// resumed with the launcher the hub sends ("New Agent"'s), not plain claude; the launcher Persona started it with
 // still wins over the hub's.
 func TestHerdrSendResumesWithTheHubsLauncher(t *testing.T) {
 	for _, tc := range []struct {
@@ -554,7 +554,7 @@ func TestHerdrSendResumesWithTheHubsLauncher(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
-				"text": startCmd(tc.want, "--resume "+sidA, jarvisDir(home))})
+				"text": startCmd(tc.want, "--resume "+sidA, personaDir(home))})
 			if !slices.Contains(f.trace(), want) {
 				t.Fatalf("resumed with another launcher than %q:\n%s", tc.want, strings.Join(f.trace(), "\n"))
 			}

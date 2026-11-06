@@ -29,7 +29,7 @@ export interface UserMessage {
   parts?: string[];
   /** The message sent from here it came from, as the hub tied it (Item.client_msg_id). */
   client_msg_id?: string;
-  /** Files it carries as <jarvis-file> tags (videos sent from the phone…), drawn as cards. */
+  /** Files it carries as <persona-file> tags (videos sent from the phone…), drawn as cards. */
   files?: AttachedFile[];
   /** Paths of photos sent with it (`<attached_images>`), on the session's machine: thumbnails above the bubble. */
   photos?: string[];
@@ -37,7 +37,7 @@ export interface UserMessage {
   injected?: Injected;
 }
 
-/** A <jarvis-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol.md "Sending video"). */
+/** A <persona-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol.md "Sending video"). */
 export interface AttachedFile {
   kind: string; // video | audio | file
   path: string; // on the session's machine
@@ -88,15 +88,15 @@ export function mergeItems(have: Item[], batch: Item[]): Item[] {
   return sortItems(kept);
 }
 
-// <persona-context>, or <jarvis-context> as older hubs and apps wrote it (#3182)
-const CONTEXT_RE = /<(?:persona|jarvis)-context\b([^>]*)>([\s\S]*?)<\/(?:persona|jarvis)-context>/g;
+// Only the canonical persona-context tag is recognized.
+const CONTEXT_RE = /<persona-context\b([^>]*)>([\s\S]*?)<\/persona-context>/g;
 const ATTR_RE = /(\w+)="([^"]*)"/g;
 
 function unescapeAttr(s: string) {
   return s.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
-const FILE_RE = /<jarvis-file\b([^>]*?)\/?>(?:\s*<\/jarvis-file>)?/g;
+const FILE_RE = /<persona-file\b([^>]*?)\/?>(?:\s*<\/persona-file>)?/g;
 
 const VIDEO = ["mp4", "m4v", "mov", "webm", "mkv"];
 const AUDIO = ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"];
@@ -348,10 +348,10 @@ export function toolLabel(name?: string): string {
   return name;
 }
 
-/** The MCP server's name as shown: Persona's own server keeps its old id `jarvis` (allow lists and hooks match it). */
+/** The MCP server's name as shown: Persona's own server keeps its old id `persona` (allow lists and hooks match it). */
 export function mcpServerLabel(server: string): string {
   const s = server.replace(/^plugin_/, "");
-  return s === "jarvis" ? "Persona" : s;
+  return s === "persona" ? "Persona" : s;
 }
 
 /** The server part of mcp__<server>__<tool> ("mcp__<server>" alone for a server-wide request), else null. */
@@ -370,10 +370,10 @@ export function toolDisplayName(name?: string): string {
   return tool ? `${mcpServerLabel(server)} · ${tool}` : mcpServerLabel(server);
 }
 
-/** The MCP server ids that are Persona itself (`jarvis` today, `persona` if it is ever renamed; plugin_ dropped). */
-const PERSONA_SERVERS = new Set(["jarvis", "persona"]);
+/** The MCP server ids that are Persona itself (`persona` today, `persona` if it is ever renamed; plugin_ dropped). */
+const PERSONA_SERVERS = new Set(["persona"]);
 
-/** Whether a tool is one of Persona's own MCP tools (mcp__jarvis__agent_read…). */
+/** Whether a tool is one of Persona's own MCP tools (mcp__persona__agent_read…). */
 export function isPersonaTool(name?: string): boolean {
   const server = mcpServer(name);
   return server !== null && PERSONA_SERVERS.has(server.replace(/^plugin_/, "")) && name!.length > 5 + server.length + 2;
@@ -390,7 +390,7 @@ const PERSONA_VERB_KEY: Record<string, string> = {
   agent_start: "persona_agent_start",
   task_plan: "persona_agent_start",
   interaction_answer: "persona_interaction_answer",
-  ask_jarvis: "persona_ask_persona",
+  ask_persona: "persona_ask_persona",
   // the knowledge base (docs/knowledge.md)
   kb_get: "persona_kb_search",
   kb_list: "persona_kb_search",
@@ -406,7 +406,7 @@ const PERSONA_VERB_KEY: Record<string, string> = {
   schedule_routine: "persona_schedule_routine",
   delete_routine: "persona_delete_routine",
   inbox_draft: "persona_inbox_draft",
-  jarvis_settings: "persona_settings",
+  persona_settings: "persona_settings",
   // live cards (docs/assistant-views.md)
   view_show: "persona_view_show",
   view_get: "persona_view_get",
@@ -428,7 +428,7 @@ const PERSONA_VERB_KEY: Record<string, string> = {
 
 /** How one of Persona's own tools reads in a step: a verb ("Read agent chat"), or for the phone and mail families the
  *  family and what it did ("iPhone" + "contacts search"); null for every other tool and the Persona tools without one
- *  (they keep "Persona · agent read"). Display only: the server stays `jarvis` on the wire. */
+ *  (they keep "Persona · agent read"). Display only: the server stays `persona` on the wire. */
 export function personaToolVerb(name?: string): { verb: string; what?: string } | null {
   if (!isPersonaTool(name)) return null;
   const base = name!.slice(name!.lastIndexOf("__") + 2);

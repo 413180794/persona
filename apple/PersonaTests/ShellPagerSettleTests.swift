@@ -1,7 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The shell's strip stays `moving` until its slide has really ended (`ShellPager.settle`): at rest each page's own top
 /// bar comes back in place of the one drawn over both pages, so the page must be where it rests by then. Ended

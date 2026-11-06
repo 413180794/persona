@@ -166,7 +166,7 @@ func TestAFailureInAMutedConversationIsStillPushed(t *testing.T) {
 	}
 
 	n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
-		Cwd: "/home/me/.jarvis/assistant"})
+		Cwd: "/home/me/.persona/assistant"})
 	if _, err := runNow(t, h, "p"); err != nil {
 		t.Fatal(err)
 	}

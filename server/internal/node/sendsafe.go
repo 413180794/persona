@@ -119,8 +119,8 @@ type sendOpts struct {
 }
 
 // resumeLauncher is the launcher an offline session is resumed with to take a message, and the model to run it
-// with: the one Jarvis started it with; else the one whose base URL and model its transcript shows (a session
-// started outside Jarvis); else the hub's pick, with its model; plain claude only when there is none of them. The
+// with: the one Persona started it with; else the one whose base URL and model its transcript shows (a session
+// started outside Persona); else the hub's pick, with its model; plain claude only when there is none of them. The
 // first two keep the model it ran with.
 func (n *Node) resumeLauncher(st sessionState, id string, opts sendOpts) (string, modelExecution) {
 	ran := modelExecution{Model: st.Model, Fingerprint: st.ModelFingerprint}

@@ -12,11 +12,11 @@ import (
 )
 
 // workspaceTag is the block the web's @ menu writes for a workspace (web/src/lib/mentions.ts workspaceContext).
-const workspaceTag = `<jarvis-context kind="workspace" title="weather" url="" machine="box" cwd="/code/weather" branch="main">
+const workspaceTag = `<persona-context kind="workspace" title="weather" url="" machine="box" cwd="/code/weather" branch="main">
 Workspace: weather
 Computer: box
 Folder: /code/weather
-</jarvis-context>`
+</persona-context>`
 
 func mentionEnv(t *testing.T) (*Service, *fakeHub) {
 	t.Helper()
@@ -46,7 +46,7 @@ func TestWithWorkspacesFillsTheBlock(t *testing.T) {
 	s, _ := mentionEnv(t)
 	got := s.withWorkspaces(context.Background(), workspaceTag+"\n\nAdd a dark mode")
 	for _, want := range []string{
-		`<jarvis-context kind="workspace" title="weather" url="" machine="box" cwd="/code/weather">`,
+		`<persona-context kind="workspace" title="weather" url="" machine="box" cwd="/code/weather">`,
 		"machine 填 box、cwd 填 /code/weather",
 		"分支：main",
 		"Weather App（weather-app）：The weather app for iOS and Android",
@@ -66,7 +66,7 @@ func TestWithWorkspacesFillsTheBlock(t *testing.T) {
 			t.Errorf("%q should not be there:\n%s", not, got)
 		}
 	}
-	if !strings.HasSuffix(got, "</jarvis-context>\n\nAdd a dark mode") {
+	if !strings.HasSuffix(got, "</persona-context>\n\nAdd a dark mode") {
 		t.Errorf("the user's words after the block:\n%s", got)
 	}
 }
@@ -79,7 +79,7 @@ func TestWithWorkspacesLeavesTheRest(t *testing.T) {
 	if got := s.withWorkspaces(ctx, unknown+"\n\nhi"); got != unknown+"\n\nhi" {
 		t.Errorf("unknown computer changed:\n%s", got)
 	}
-	quote := `<jarvis-context kind="context" title="Another session" url="jarvis://session/box/s1">` + "\nFolder: /x\n</jarvis-context>"
+	quote := `<persona-context kind="context" title="Another session" url="persona://session/box/s1">` + "\nFolder: /x\n</persona-context>"
 	got := s.withWorkspaces(ctx, quote+"\n"+workspaceTag+"\n\nhi")
 	if !strings.HasPrefix(got, quote+"\n") || !strings.Contains(got, "cwd 填 /code/weather") {
 		t.Errorf("a quote then a workspace:\n%s", got)

@@ -1,5 +1,5 @@
 // What can be done with one item besides reading it (docs/inbox.md "What you can do with one item"): "AI draft reply" (a reply in the
-// user's voice, edited and sent from here) and "Hand to AI" (the item as <jarvis-context> to Persona or a running agent).
+// user's voice, edited and sent from here) and "Hand to AI" (the item as <persona-context> to Persona or a running agent).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText } from "../../lib/api";
 import { noteSent, sendToSession } from "../../lib/outbox";
@@ -99,7 +99,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
               onClick={() => {
                 onClose();
                 // The AI twin runs as the assistant (docs/inbox.md): its conversation is one of Persona's.
-                navigate(agent.machine_id === assistant?.machine_id ? { name: "jarvis", sid: agent.session_id! } : conversationRoute(agent.machine_id!, agent.session_id!, sessions, assistant));
+                navigate(agent.machine_id === assistant?.machine_id ? { name: "persona", sid: agent.session_id! } : conversationRoute(agent.machine_id!, agent.session_id!, sessions, assistant));
               }}
               className="mt-1.5 flex items-center gap-1 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
             >
@@ -171,7 +171,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
   );
 }
 
-/** Hands the item to Persona (a new conversation) or to a running agent, as a <jarvis-context> plus the ask. */
+/** Hands the item to Persona (a new conversation) or to a running agent, as a <persona-context> plus the ask. */
 export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () => void }) {
   const sessions = useStore((s) => s.sessions);
   const machines = useStore((s) => s.machines);
@@ -211,7 +211,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
       if (markDone) void setDone(item, true);
       toast(t("inbox-inboxdialogs.handed_to_persona"), "ok");
       onClose();
-      navigate({ name: "jarvis", sid: r.session.session_id });
+      navigate({ name: "persona", sid: r.session.session_id });
     } catch (e) {
       setError(errorText(e));
     } finally {

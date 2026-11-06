@@ -42,7 +42,7 @@ def sign_in(page, base, token, theme="light", grouping="machine"):
     page.goto(base + "/overview?token=" + token)
     # signed in (the link's token traded for this browser's) before going anywhere else
     expect(page.locator("aside")).to_be_attached(timeout=30000)
-    page.evaluate(f"Object.keys(localStorage).filter(k => k.startsWith('fold:')).forEach(k => localStorage.removeItem(k)); localStorage.setItem('jarvis.theme', '{theme}'); localStorage.setItem('jarvis.agentGrouping', '{grouping}')")
+    page.evaluate(f"Object.keys(localStorage).filter(k => k.startsWith('fold:')).forEach(k => localStorage.removeItem(k)); localStorage.setItem('persona.theme', '{theme}'); localStorage.setItem('persona.agentGrouping', '{grouping}')")
 
 
 class Touch:

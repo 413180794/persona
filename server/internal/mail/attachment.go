@@ -41,7 +41,7 @@ func (s *Service) attachment(ctx context.Context, accountID string, uid uint32, 
 	if mailbox == "" {
 		mailbox = "INBOX"
 	}
-	file, err := os.CreateTemp("", "jarvis-mail-attachment-*")
+	file, err := os.CreateTemp("", "persona-mail-attachment-*")
 	if err != nil {
 		return nil, Attachment{}, err
 	}

@@ -59,7 +59,7 @@ var askedEveryTimeNames = []string{
 	"terminal", "终端", "iterm", "iterm2", "warp", "ghostty", "alacritty", "kitty", "wezterm",
 	"system settings", "系统设置", "system preferences", "系统偏好设置", "keychain access", "钥匙串访问",
 	"passwords", "密码", "1password", "bitwarden", "lastpass", "dashlane", "keepassxc", "enpass",
-	"persona", "persona link", "jarvis",
+	"persona", "persona link",
 }
 
 // approval: the plugin's "Ask the first time an app is operated", on unless turned off.

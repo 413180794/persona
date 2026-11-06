@@ -12,19 +12,19 @@ import (
 	"github.com/nwverse/persona/server/internal/mdns"
 )
 
-// Finding other hubs on the LAN (docs/plan-hub-mesh.md 2.1): every hub with TLS advertises _jarvis-hub._tcp over
+// Finding other hubs on the LAN (docs/plan-hub-mesh.md 2.1): every hub with TLS advertises _persona-hub._tcp over
 // mDNS, its TXT holding only hub_id, name, TLS port, key pin and version (never a credential), and lists the hubs it
 // hears for the admin page. Nothing is paired by itself: that takes the other hub's code. Docker's bridge network does
 // not pass multicast (network_mode: host does); there the other hub is added by its address.
 
-const meshService = "_jarvis-hub._tcp"
+const meshService = "_persona-hub._tcp"
 
 func (h *Hub) runDiscovery(ctx context.Context) {
 	// The TLS port and pin are known once startPublic ran; a hub without TLS cannot be paired, so it only listens.
 	port, fp := h.tlsPin()
 	var adv *mdns.Service
 	if port > 0 && fp != "" && !loopbackOnly(h.cfg.Public.TLSListen) {
-		adv = &mdns.Service{Instance: h.hubID(), Type: meshService, Host: "jarvis-" + shortID(h.hubID()), Port: port,
+		adv = &mdns.Service{Instance: h.hubID(), Type: meshService, Host: "persona-" + shortID(h.hubID()), Port: port,
 			TXT: map[string]string{"hub_id": h.hubID(), "name": clip(h.hubName(), 60), "tls": strconv.Itoa(port), "fp": fp, "v": clip(h.version, 60)}}
 	}
 	err := mdns.Run(ctx, mdns.Options{Advertise: adv, Browse: meshService, Found: h.discovered,

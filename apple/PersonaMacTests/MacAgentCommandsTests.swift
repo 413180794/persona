@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Agent menu (docs/mac.md「菜单和快捷键」): acts on the chat on screen.
 @MainActor
@@ -10,7 +10,7 @@ struct MacAgentCommandsTests {
     private func session(_ id: String, _ state: AgentState, ago: TimeInterval = 0, assistant: Bool = false) -> Session {
         var s = try! JSON.decoder.decode(Session.self, from: Data("""
         {"machine_id":"m","session_id":"\(id)","title":"t","cwd":"/w","status":"idle","state":"\(state.rawValue)",
-         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0}
+         "started_by_persona":false,"assistant":\(assistant),"pending_interactions":0}
         """.utf8))
         s.stateSince = Date(timeIntervalSince1970: 1_000_000 - ago)
         return s

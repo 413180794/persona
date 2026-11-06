@@ -84,9 +84,9 @@ const LINK_MS = 1000;
 const YIELD_MS = 1200;
 /** One herdr_input carries at most this many UTF-16 units: a big paste goes in several (the hub caps one at 1 MiB). */
 const INPUT_CHUNK = 32 << 10;
-const FONT_KEY = "jarvis.terminal.fontSize";
-const CURSOR_KEY = "jarvis.terminal.cursorStyle";
-const BLINK_KEY = "jarvis.terminal.cursorBlink";
+const FONT_KEY = "persona.terminal.fontSize";
+const CURSOR_KEY = "persona.terminal.cursorStyle";
+const BLINK_KEY = "persona.terminal.cursorBlink";
 const FONT_RANGE = { min: 9, max: 20, default: 13 };
 
 function savedFontSize(): number {

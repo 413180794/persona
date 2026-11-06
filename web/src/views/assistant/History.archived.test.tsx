@@ -54,7 +54,7 @@ vi.hoisted(() => {
 });
 
 const conv = (sid: string, p: Partial<Session> = {}): Session => ({
-  machine_id: "server", session_id: sid, title: `对话 ${sid}`, cwd: "/home/me/.jarvis/assistant", status: "idle", assistant: true,
+  machine_id: "server", session_id: sid, title: `对话 ${sid}`, cwd: "/home/me/.persona/assistant", status: "idle", assistant: true,
   updated_at: "2026-11-01T09:00:00Z", ...p,
 } as Session);
 const push = async (sessions: Session[]) => {

@@ -476,7 +476,7 @@ private struct FeishuDocsMarkdownComments: ViewModifier {
     func body(content: Content) -> some View {
         if let comment {
             content.markdownBlockStyle(\.paragraph) { config in
-                // MarkdownUI.Theme.jarvis's paragraph (the reader's theme keeps it), with the long press.
+                // MarkdownUI.Theme.persona's paragraph (the reader's theme keeps it), with the long press.
                 config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.26)).markdownMargin(top: 0, bottom: 10)
                     .modifier(FeishuDocsCommentable(text: config.content.renderPlainText(), blockID: nil, copyable: copyable, comment: comment))
             }
@@ -512,7 +512,7 @@ struct FeishuDocsImageProvider: ImageProvider {
 extension MarkdownUI.Theme {
     /// Long-form reading: the app's Markdown theme with document headings and Feishu-blue links.
     @MainActor static var feishuDocs: MarkdownUI.Theme {
-        MarkdownUI.Theme.jarvis
+        MarkdownUI.Theme.persona
             .link { ForegroundColor(LarkColor.blue) }
             .heading1 { config in
                 config.label.markdownMargin(top: 20, bottom: 8).markdownTextStyle { FontWeight(.bold); FontSize(.em(1.45)) }
@@ -529,7 +529,7 @@ extension MarkdownUI.Theme {
     }
 
     @MainActor static var feishuDocsSmall: MarkdownUI.Theme {
-        MarkdownUI.Theme.jarvis
+        MarkdownUI.Theme.persona
             .text { FontSize(Theme.Level.secondary.size * Theme.Font.scale) }
             .paragraph { config in config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.15)).markdownMargin(top: 0, bottom: 6) }
     }

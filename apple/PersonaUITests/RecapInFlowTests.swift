@@ -2,16 +2,16 @@ import XCTest
 
 /// The away recap shown open is the chat's last line, in the flow with the agent's words (#1360): at the newest end it
 /// sits whole between the reply and the composer, covering neither; scrolled up, it goes with the messages; a tap folds
-/// it back to its one-line chip in place. Against scripts/mock/mock_hub.py with MOCK_RECAP_LONG=1 (JARVIS_MOCK_HUB).
-/// With JARVIS_SHOTS set it writes the open and the folded recap, at the newest end and scrolled up, there
-/// (JARVIS_SHOTS_APPEARANCE names the simulator's appearance in the file).
+/// it back to its one-line chip in place. Against scripts/mock/mock_hub.py with MOCK_RECAP_LONG=1 (PERSONA_MOCK_HUB).
+/// With PERSONA_SHOTS set it writes the open and the folded recap, at the newest end and scrolled up, there
+/// (PERSONA_SHOTS_APPEARANCE names the simulator's appearance in the file).
 final class RecapInFlowTests: XCTestCase {
     private var hub = ""
     private let review = "macbook/a1f3c2d4-0000-4000-8000-000000000006"
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_RECAP_LONG=1 (JARVIS_MOCK_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_RECAP_LONG=1 (PERSONA_MOCK_HUB)")
         }
         hub = h
         continueAfterFailure = false
@@ -23,8 +23,8 @@ final class RecapInFlowTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let appearance = env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let appearance = env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/recap-\(appearance)-\(name).png"))
     }
 
@@ -40,7 +40,7 @@ final class RecapInFlowTests: XCTestCase {
 
     @MainActor func testTheOpenRecapScrollsWithTheChatAndFoldsInPlace() throws {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", review, "-openChatsFresh", "YES", "-openRecapsFresh", "YES"]
         app.launchPinned()
 

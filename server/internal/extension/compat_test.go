@@ -7,12 +7,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
-// The names before #1844 still work (docs/extensions.md "Naming and compatibility"): the manifest's old file name and
-// engines.plugin_protocol, initialize's "plugin", the index's old file name and "plugins".
+// Protocol compatibility still covers the manifest file name, engines.plugin_protocol,
+// initialize's "plugin", and an index's "plugins" collection key.
 
 func TestEnginesBothNames(t *testing.T) {
 	for _, engines := range []string{`{"extension_protocol": 1}`, `{"plugin_protocol": 1}`, `{"extension_protocol": 1, "plugin_protocol": 1}`} {
@@ -66,44 +68,111 @@ func TestInitializeBothKeys(t *testing.T) {
 	}
 }
 
-func TestIndexBothNames(t *testing.T) {
-	var m map[string]any
-	_ = json.Unmarshal([]byte(exampleManifest), &m)
-	entries := []any{map[string]any{"manifest": m, "packages": []any{map[string]any{"url": "x.tar.gz", "sha256": strings.Repeat("a", 64)}}}}
-	index := func(key string) []byte {
-		b, _ := json.Marshal(map[string]any{"market_version": 1, "name": "Example", key: entries})
-		return b
+func compatibleIndex(t *testing.T, key string) []byte {
+	t.Helper()
+	var manifest map[string]any
+	if err := json.Unmarshal([]byte(exampleManifest), &manifest); err != nil {
+		t.Fatal(err)
 	}
+	entries := []any{map[string]any{"manifest": manifest, "packages": []any{map[string]any{"url": "x.tar.gz", "sha256": strings.Repeat("a", 64)}}}}
+	index, err := json.Marshal(map[string]any{"market_version": 1, "name": "Example", key: entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return index
+}
+
+func TestIndexBothKeys(t *testing.T) {
 	for _, key := range []string{"extensions", "plugins"} {
-		ix, _, err := ParseIndex(index(key))
+		ix, _, err := ParseIndex(compatibleIndex(t, key))
 		if err != nil || len(ix.Extensions) != 1 {
 			t.Fatalf("%s: %v", key, err)
 		}
 	}
+}
 
-	// A site or a repository that has only the old file is read from it.
-	for _, files := range []map[string]bool{{IndexFile: true}, {LegacyIndexFile: true}} {
-		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			name := filepath.Base(r.URL.Path)
-			if strings.HasPrefix(r.URL.Path, "/repos/") {
-				name = strings.TrimPrefix(r.URL.Path, "/repos/example/market/contents/")
-			}
-			if !files[name] {
-				http.NotFound(w, r)
-				return
-			}
-			_, _ = w.Write(index("extensions"))
-		}))
-		for _, spec := range []string{srv.URL + "/market/", "github:example/market"} {
-			s, err := ParseMarket(spec)
-			if err != nil {
-				t.Fatal(err)
-			}
-			mk := &Market{Spec: s, Client: srv.Client(), GitHubAPI: srv.URL}
-			if ix, _, err := mk.Fetch(context.Background()); err != nil || len(ix.Extensions) != 1 {
-				t.Fatalf("%v %s: %v", files, spec, err)
-			}
+func TestCanonicalIndexRequests(t *testing.T) {
+	for _, scenario := range []struct {
+		name, filename string
+		canonical      bool
+	}{
+		{"canonical", IndexFile, true},
+		{"canonical missing", "alternate-index.json", false},
+	} {
+		for _, kind := range []string{"https", "github"} {
+			t.Run(scenario.name+"/"+kind, func(t *testing.T) {
+				index := compatibleIndex(t, "extensions")
+				var mu sync.Mutex
+				var requested []string
+				srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					name := filepath.Base(r.URL.Path)
+					mu.Lock()
+					requested = append(requested, name)
+					mu.Unlock()
+					if name != scenario.filename {
+						http.NotFound(w, r)
+						return
+					}
+					_, _ = w.Write(index)
+				}))
+				defer srv.Close()
+				address := srv.URL + "/market/"
+				if kind == "github" {
+					address = "github:example/market"
+				}
+				spec, err := ParseMarket(address)
+				if err != nil {
+					t.Fatal(err)
+				}
+				market := &Market{Spec: spec, Client: srv.Client(), GitHubAPI: srv.URL}
+				ix, _, err := market.Fetch(context.Background())
+				want := []string{IndexFile}
+				if scenario.canonical {
+					if err != nil || len(ix.Extensions) != 1 {
+						t.Fatalf("canonical index: %v", err)
+					}
+					want = append(want, IndexFile+SigSuffix)
+				} else if err == nil {
+					t.Fatal("a missing canonical index was accepted")
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if !slices.Equal(requested, want) {
+					t.Fatalf("index/signature requests: %q, want %q; no alternate filenames may be probed", requested, want)
+				}
+			})
 		}
-		srv.Close()
+	}
+}
+
+func TestExplicitJSONIndexRequests(t *testing.T) {
+	const filename = "custom-catalog.json"
+	index := compatibleIndex(t, "extensions")
+	var mu sync.Mutex
+	var requested []string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requested = append(requested, filepath.Base(r.URL.Path))
+		mu.Unlock()
+		if filepath.Base(r.URL.Path) != filename {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(index)
+	}))
+	defer srv.Close()
+	address := srv.URL + "/market/" + filename
+	spec, err := ParseMarket(address)
+	if err != nil || spec.URL != address {
+		t.Fatalf("explicit JSON index changed: %+v %v", spec, err)
+	}
+	market := &Market{Spec: spec, Client: srv.Client()}
+	if ix, _, err := market.Fetch(context.Background()); err != nil || len(ix.Extensions) != 1 {
+		t.Fatalf("explicit JSON index: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{filename, filename + SigSuffix}; !slices.Equal(requested, want) {
+		t.Fatalf("explicit index/signature requests: %q, want %q", requested, want)
 	}
 }

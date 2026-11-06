@@ -399,7 +399,7 @@ class OutboxMessageSenderTest {
         transport.readyToSend.value = true
         runCurrent()
         assertEquals(listOf("uncertain-2", "next"), transport.requests.map { it.clientMessageId })
-        assertEquals("uncertain-2", transport.requests.first().headers["X-Jarvis-Op-Id"])
+        assertEquals("uncertain-2", transport.requests.first().headers["X-Persona-Op-Id"])
         sender.close()
     }
 
@@ -505,7 +505,7 @@ class OutboxMessageSenderTest {
         assertEquals(OutboxState.Sent, store.state("message-a"))
         assertEquals(2, modern.requests.size)
         modern.requests.forEach {
-            assertEquals("message-a", it.headers["X-Jarvis-Op-Id"])
+            assertEquals("message-a", it.headers["X-Persona-Op-Id"])
             assertEquals(scope, it.scope)
         }
         assertTrue(store.transitions.contains(OutboxState.Unknown to OutboxState.Sending))
@@ -641,7 +641,7 @@ class OutboxMessageSenderTest {
         runCurrent()
         hub.readyToSend.value = true
         runCurrent()
-        val ops = hub.requests.map { it.headers.getValue("X-Jarvis-Op-Id") }
+        val ops = hub.requests.map { it.headers.getValue("X-Persona-Op-Id") }
         assertEquals(2, ops.size)
         assertEquals("offline", ops[0])
         assertTrue(ops[1] != ops[0])
@@ -663,7 +663,7 @@ class OutboxMessageSenderTest {
         hub.answers += MessageTransportResult.Accepted
         assertTrue(sender.retry("draft"))
         runCurrent()
-        val ops = hub.requests.map { it.headers.getValue("X-Jarvis-Op-Id") }
+        val ops = hub.requests.map { it.headers.getValue("X-Persona-Op-Id") }
         assertEquals(2, ops.size)
         assertTrue(ops[1] != ops[0])
         assertEquals(OutboxState.Sent, store.state("draft"))
@@ -681,7 +681,7 @@ class OutboxMessageSenderTest {
         private val first = mutableMapOf<String, MessageTransportResult>()
         override suspend fun send(request: MessageRequest): MessageTransportResult {
             requests += request
-            val op = request.headers.getValue("X-Jarvis-Op-Id")
+            val op = request.headers.getValue("X-Persona-Op-Id")
             val stored = first[op] ?: return answers.removeFirst().also { first[op] = it }
             return if (stored is MessageTransportResult.HubError && stored.retryable) MessageTransportResult.NoReceipt else stored
         }

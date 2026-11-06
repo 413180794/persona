@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// What the app does with the fleet while it draws the Live Activity itself (in front: the hub pushes nothing then).
 /// Only the assistant answering is something to show on an island that shows it (#4628, the app's side of #4590).

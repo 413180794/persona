@@ -186,7 +186,7 @@ func (c *Client) rpcOnce(ctx context.Context, method string, params any, out any
 	if params == nil {
 		params = struct{}{}
 	}
-	id := fmt.Sprintf("jarvis:%d", c.seq.Add(1))
+	id := fmt.Sprintf("persona:%d", c.seq.Add(1))
 	req, err := json.Marshal(map[string]any{"id": id, "method": method, "params": params})
 	if err != nil {
 		return err
@@ -631,7 +631,7 @@ func (c *Client) Subscribe(ctx context.Context, subs []Subscription, fn func(Eve
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
-	req, err := json.Marshal(map[string]any{"id": "jarvis:events", "method": "events.subscribe",
+	req, err := json.Marshal(map[string]any{"id": "persona:events", "method": "events.subscribe",
 		"params": map[string]any{"subscriptions": subs}})
 	if err != nil {
 		return err

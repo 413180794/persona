@@ -31,7 +31,7 @@ func TestAssistantClassificationRespectsHostPane(t *testing.T) {
 			id := "11111111-2222-4333-8444-555555555555"
 			n.agents[id] = host.Agent{PaneID: tc.pane}
 			if tc.transcript {
-				p := filepath.Join(home, ".claude", "projects", "-synthetic-jarvis-assistant", id+".jsonl")
+				p := filepath.Join(home, ".claude", "projects", "-synthetic-persona-assistant", id+".jsonl")
 				if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 					t.Fatal(err)
 				}
@@ -40,7 +40,7 @@ func TestAssistantClassificationRespectsHostPane(t *testing.T) {
 				}
 				n.paths[id] = p
 			} else {
-				n.state.put(id, sessionState{Cwd: filepath.Join(home, ".jarvis", "assistant")})
+				n.state.put(id, sessionState{Cwd: filepath.Join(home, ".persona", "assistant")})
 			}
 			if tc.process {
 				n.procs[id] = &assistantProc{}
@@ -54,7 +54,7 @@ func TestAssistantClassificationRespectsHostPane(t *testing.T) {
 
 func TestTerminalWatchStillRejectsHeadlessAssistant(t *testing.T) {
 	n, home := testNode(t)
-	n.state.put("headless", sessionState{Cwd: filepath.Join(home, ".jarvis", "assistant")})
+	n.state.put("headless", sessionState{Cwd: filepath.Join(home, ".persona", "assistant")})
 	if _, err := n.terminalWatch(context.Background(), "headless", nil); err == nil || !strings.Contains(err.Error(), "has no terminal") {
 		t.Fatalf("watch headless assistant: %v", err)
 	}

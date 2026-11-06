@@ -1,7 +1,7 @@
 import XCTest
 
 /// Going into a chat from the Agents list and back, by Back and by the edge swipe, with the search field folded and
-/// pulled out, in the shell and in the old layout (both styles with `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`): on every
+/// pulled out, in the shell and in the old layout (both styles with `TEST_RUNNER_PERSONA_UI_STYLE=beautiful`): on every
 /// frame of the way back the list is where it was left. The first row and the navigation bar do not move, the search
 /// field stays as it was, and the navigation container keeps its frame and safe area. The shell's room for its top bar
 /// was padding around the navigation container, taken away for the chat and given back on the way back: the list came

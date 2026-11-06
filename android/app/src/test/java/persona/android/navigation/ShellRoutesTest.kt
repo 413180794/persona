@@ -16,7 +16,7 @@ import org.junit.Test
 
 class ShellRoutesTest {
     private fun stacks() = mapOf<AppTab, MutableList<NavKey>>(
-        AppTab.Jarvis to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
+        AppTab.Persona to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
         AppTab.Inbox to mutableListOf(InboxRoute), AppTab.Settings to mutableListOf(SettingsRoute),
     )
 
@@ -24,14 +24,14 @@ class ShellRoutesTest {
         // Cold start: the session list has not loaded, so the router alone cannot tell the kind.
         val unknown = Router()
         val chat = ChatRoute("machine", "session")
-        val assistant = unknown.open(NotificationRoute(AppTab.Jarvis, chat))!!
+        val assistant = unknown.open(NotificationRoute(AppTab.Persona, chat))!!
         val stacks = stacks()
-        assertEquals(AppTab.Jarvis, assistant.restore(stacks))
-        assertEquals(listOf(AssistantRoute, chat.copy(kind = ConversationKind.Assistant)), stacks.getValue(AppTab.Jarvis))
+        assertEquals(AppTab.Persona, assistant.restore(stacks))
+        assertEquals(listOf(AssistantRoute, chat.copy(kind = ConversationKind.Assistant)), stacks.getValue(AppTab.Persona))
 
         // Metadata that disagrees does not move a conversation the notification placed explicitly.
         val agentMetadata = Router { _, _ -> ConversationKind.Agent }
-        assertEquals(AppTab.Jarvis, agentMetadata.open(NotificationRoute(AppTab.Jarvis, chat))!!.tab)
+        assertEquals(AppTab.Persona, agentMetadata.open(NotificationRoute(AppTab.Persona, chat))!!.tab)
         assertEquals(AppTab.Agents, unknown.open(NotificationRoute(AppTab.Agents, chat))!!.tab)
     }
 
@@ -39,7 +39,7 @@ class ShellRoutesTest {
         val chat = ChatRoute("machine", "session")
         assertNull(Router().open(NotificationRoute(null, chat)))
         val known = Router { _, _ -> ConversationKind.Assistant }
-        assertEquals(AppTab.Jarvis, known.open(NotificationRoute(null, chat))!!.tab)
+        assertEquals(AppTab.Persona, known.open(NotificationRoute(null, chat))!!.tab)
 
         val stacks = stacks()
         stacks.getValue(AppTab.Agents).add(ChatRoute("machine", "other", ConversationKind.Agent))
@@ -83,12 +83,11 @@ class ShellRoutesTest {
         assertEquals(InboxDestination.Open(LarkRoute("chat", "lark-item", 42)), inboxDestination(InboxItemRoute("lark-item"), listOf(lark), false))
     }
 
-    @Test fun personaTerminalLinksRetainTheLegacyStack() {
+    @Test fun personaTerminalLinksKeepTheirConversationStack() {
         val link = "persona://open?target=terminal&machine=mac%20mini&session=a%2Bb"
         val route = terminalLink(link)!!
-        val old = terminalLink(link.replaceFirst("persona://", "jarvis://"))!!
-        assertEquals(old.key, route.key)
-        assertEquals(old.tab, route.tab)
+        assertEquals(TerminalRoute("mac mini", "a+b"), route.key)
+        assertEquals(AppTab.Agents, route.tab)
         val stacks = stacks()
         assertEquals(AppTab.Agents, route.open(stacks))
         assertEquals(listOf(AgentsRoute, ChatRoute("mac mini", "a+b", ConversationKind.Agent), TerminalRoute("mac mini", "a+b")),
@@ -97,7 +96,7 @@ class ShellRoutesTest {
     }
 
     @Test fun terminalNotificationLinksOpenTheTerminalAboveItsConversation() {
-        val route = terminalLink("jarvis://open?target=terminal&machine=mac%20mini&session=a%2Bb")!!
+        val route = terminalLink("persona://open?target=terminal&machine=mac%20mini&session=a%2Bb")!!
         assertEquals(TerminalRoute("mac mini", "a+b"), route.key)
         val stacks = stacks()
         assertEquals(AppTab.Agents, route.open(stacks))
@@ -107,9 +106,9 @@ class ShellRoutesTest {
         assertEquals(AppTab.Agents, route.open(stacks))
         assertEquals(3, stacks.getValue(AppTab.Agents).size)
 
-        assertNull(terminalLink("jarvis://open?target=terminal&machine=m"))
-        assertNull(terminalLink("jarvis://open?target=terminal&machine=m&session=s&session=t"))
-        assertNull(terminalLink("jarvis://open?machine=m&session=s"))
+        assertNull(terminalLink("persona://open?target=terminal&machine=m"))
+        assertNull(terminalLink("persona://open?target=terminal&machine=m&session=s&session=t"))
+        assertNull(terminalLink("persona://open?machine=m&session=s"))
         assertNull(terminalLink("https://example.com/open?target=terminal&machine=m&session=s"))
     }
 }

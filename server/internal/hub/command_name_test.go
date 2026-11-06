@@ -6,14 +6,15 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-// What the hub says to people (errors, the admin UI's messages, logs, usage, doctor) names the command they installed,
-// personad (#4481). jarvisd stays a working alias and so do identities like the jarvisd systemd unit (docs/rename.md),
-// so only the command form "jarvisd hub …" is caught, in string literals, not comments.
+// Commands in user-readable hub text must name the canonical server executable.
 func TestUserTextNamesPersonad(t *testing.T) {
+	commands := regexp.MustCompile(`\b([a-z]+d) hub (?:admin|setup|pair|run|slot|switch|update)\b`)
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -32,8 +33,16 @@ func TestUserTextNamesPersonad(t *testing.T) {
 			t.Fatal(err)
 		}
 		ast.Inspect(f, func(n ast.Node) bool {
-			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Contains(lit.Value, "jarvisd hub") {
-				t.Errorf("%s: %s tells people to run jarvisd; say personad", fset.Position(lit.Pos()), lit.Value)
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				text, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, command := range commands.FindAllStringSubmatch(text, -1) {
+					if command[1] != "personad" {
+						t.Errorf("%s: noncanonical hub command %q", fset.Position(lit.Pos()), command[0])
+					}
+				}
 			}
 			return true
 		})

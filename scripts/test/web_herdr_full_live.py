@@ -56,7 +56,7 @@ def main():
         exe = os.environ.get("PERSONA_E2E_CHROMIUM")
         browser = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch(channel="chrome")
         ctx = browser.new_context(viewport={"width": 1500, "height": 900}, device_scale_factor=2, permissions=["clipboard-read", "clipboard-write"])
-        ctx.add_init_script("localStorage.setItem('jarvis.token', 'mock')")
+        ctx.add_init_script("localStorage.setItem('persona.token', 'mock')")
         page = ctx.new_page()
         page.set_default_timeout(15000)
         page.goto(f"{a.base}/terminal/server/pane%3Aw1%3Ap2")

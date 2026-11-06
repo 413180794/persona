@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The phone's writes ask one at a time and each answer counts once, for the one it names (#4456).
 @MainActor

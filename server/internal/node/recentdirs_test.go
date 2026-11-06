@@ -18,7 +18,7 @@ func TestDirsRecentExcludesAssistantDirectories(t *testing.T) {
 	newest := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 	for i, path := range []string{
 		filepath.Join(home, ".persona", "assistant"),
-		filepath.Join(home, ".jarvis", "assistant"),
+		filepath.Join(home, ".persona", "assistant"),
 		filepath.Join(root, "assistant"),
 	} {
 		if err := os.MkdirAll(path, 0o700); err != nil {

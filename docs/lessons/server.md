@@ -88,11 +88,11 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - Guessing architecture from `os` during deployment installs the wrong binary, and installation didn't check executability (2026-11-05, #3103): config contained only `os`, which `deploy.sh` translated as darwin→arm64, everything else→amd64,
   so Linux machines missing `os` and Intel Macs got `darwin-arm64`. The remote side only ran `cat >`; successful ssh printed `installed`, while that node couldn't start or stayed old.
   Build all four platforms (linux / darwin × amd64 / arm64, matching releases and Docker images); ask the machine directly for missing `os` / `arch` (`uname -s` / `uname -m`),
-  then run `version` on the target after installation. The hub's `bin/nodes/` also needs all four, or "Redeploy" on other platforms only says "hub has no jarvisd for …".
+  then run `version` on the target after installation. The hub's `bin/nodes/` also needs all four, or "Redeploy" on other platforms only says "hub has no personad for …".
   Test this function from `deploy.sh` separately (`scripts/test/test_deploy_platform.py`), without fake machines.
 
 - In macOS sandbox-exec, symlinks along the path must themselves be readable (2026-11-06): the extension sandbox denies the home directory and allows only real package / data / runtime paths,
-  but the hub refers to them through `~/.persona/…` (symlink to `.jarvis`, or vice versa). Resolving a path requires reading `~/.persona` inside the denied home directory, so `execvp` reports
+  but the hub refers to them through `~/.persona/…` (symlink to `.persona`, or vice versa). Resolving a path requires reading `~/.persona` inside the denied home directory, so `execvp` reports
   `Operation not permitted`, and data access through the symlink fails too. Merely replacing directory paths isn't enough: arguments, `HOME`, and socket environment variables still contain original paths. Allow each symlink along the path separately as
   "real containing directory + its own name" with `(allow file-read* (literal …))`: this only permits reading its destination; later components still use real-path checks (reading other home files via symlinks still denied in testing).
   `file-read-metadata` alone isn't enough. Test temporary directories themselves are under `/var -> private/var`; `TestDarwinSandboxForReal` runs with a symlinked state directory and reproduces the original error when the allow rule is removed.
@@ -120,7 +120,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - After disconnect, accepted operations must use their own bounded context for to-do linking too (2026-11-04, #1551): session creation with receipts and both message-send paths continue executing, but if post-success `LinkTodoAgent` uses the HTTP request context, backgrounding or disconnect causes "operation succeeded, to-do not linked", and receipt replay doesn't repair it. Postprocessing uses the same operation context; fake node cancels the request before success, and fake persistence rejects canceled writes like Postgres, testing creation, ordinary send, and dedup send individually. RPC returns immediately if already canceled/expired and rechecks context inside the actual writer lock before writing; entry-only checks miss cancellation during JSON serialization or waiting for other writes and still send side-effecting launch requests. Regressions cancel during parameter serialization and while the writer is unavailable, asserting no request bytes on the wire; this doesn't change cancellation semantics of already-sent operations or remote execution.
 - Waiting for RPC writes must honor caller context and connection closure (2026-11-05, #2994): `Peer` used `sync.Mutex` for serialized writes; one stuck write (SSH stdin to a frozen node, stalled relay WebSocket, full `io.Pipe`) left every later `Call`/`Notify` waiting forever, past their deadline and `Close`. The write entry now uses a single-slot semaphore, selecting `ctx.Done()` and `p.closed` while waiting and rechecking after acquisition; canceled requests never reach the wire. An ongoing `Write` itself can't be interrupted. A permanently blocked writer verifies short-deadline calls return on time with no bytes after release, and `Close` wakes queued calls and notifications.
 
-- Docker Desktop gvisor forwarding sources aren't necessarily the gateway (#1030): local and LAN clients may both appear as the same public-looking address. Inspect actual peers with `netstat -tn` inside the container; don't allowlist the `docker network inspect` gateway or masked authentication-log subnet directly. Restrict host-port reachability first, then configure a single-address `security.trusted_cidrs`; admin `JARVIS_ADMIN_CIDRS` is separate. Ingress diagnostics must be independent of admin access mode.
+- Docker Desktop gvisor forwarding sources aren't necessarily the gateway (#1030): local and LAN clients may both appear as the same public-looking address. Inspect actual peers with `netstat -tn` inside the container; don't allowlist the `docker network inspect` gateway or masked authentication-log subnet directly. Restrict host-port reachability first, then configure a single-address `security.trusted_cidrs`; admin `PERSONA_ADMIN_CIDRS` is separate. Ingress diagnostics must be independent of admin access mode.
 
 - GitHub device-code sign-in isn't on the API domain (2026-11-04, #1106): code acquisition and polling use `github.com/login/device/code` and `github.com/login/oauth/access_token`,
   while the API uses `api.github.com`. Some networks let the hub reach `api.github.com` but time out on `github.com`; the GitHub connector works with the computer's gh login,
@@ -129,7 +129,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 
 - Don't treat every `EnvironmentFile` as unrecoverable root configuration (2026-11-03, #277): an old service may keep only unrelated runtime fields there, so rejecting it breaks upgrades using the default root. Extract only HOME assignments, honoring file fields overriding unit assignments, later files winning, optional files, and `UnsetEnvironment` last. Don't return/log other fields or execute shell expansion. HOME text inside multiline unrelated fields isn't a new assignment. Missing required files must still stop, not silently switch to an empty new root.
 
-- Changing the runtime root requires more than fixing resident-service environments (2026-11-03, #277): SSH logins don't inherit systemd / launchd `PERSONA_HOME`; deploy, pairing, or test scripts reading fixed `~/.jarvis` may write binaries to the wrong place, miss old config, or rewrite service launch paths. A shared resolver first honors explicit new/old environment values (even empty new variables win); otherwise it reads root fields only from the existing user service for that role, honoring cleared `Environment=` and ordered drop-ins. Independent hub, node, and link roots on one machine can't borrow from each other. User-unit writes and lookups honor `XDG_CONFIG_HOME`. Remote resolution happens in its own HOME, never copying developer-machine paths. Keep default symlinks, concurrent initialization, and lexical paths aligned with Go / SDK so scripts don't recreate two stores. Run actual deploy entry points with temporary HOME and fake SSH / systemctl, checking binaries, web, and APK land in the original service root without running real services or creating credentials.
+- Changing the runtime root requires more than fixing resident-service environments (2026-11-03, #277): SSH logins don't inherit systemd / launchd `PERSONA_HOME`; deploy, pairing, or test scripts reading fixed `~/.persona` may write binaries to the wrong place, miss old config, or rewrite service launch paths. A shared resolver first honors explicit new/old environment values (even empty new variables win); otherwise it reads root fields only from the existing user service for that role, honoring cleared `Environment=` and ordered drop-ins. Independent hub, node, and link roots on one machine can't borrow from each other. User-unit writes and lookups honor `XDG_CONFIG_HOME`. Remote resolution happens in its own HOME, never copying developer-machine paths. Keep default symlinks, concurrent initialization, and lexical paths aligned with Go / SDK so scripts don't recreate two stores. Run actual deploy entry points with temporary HOME and fake SSH / systemctl, checking binaries, web, and APK land in the original service root without running real services or creating credentials.
 
 - Connector mode watching mustn't record only startup mtime and wait for a later change before checking mode (2026-11-03, #748): the run loop picks active/passive then starts its watcher asynchronously; if the user switches before the watcher goroutine begins, new config becomes the initial snapshot and the first switch is missed forever. Sample initial time, then immediately compare actual mode and cancel the old mode if different. Bidirectional regressions directly simulate "config changed before watcher starts", not longer waits; observing initial state doesn't mean the watcher is ready.
 
@@ -142,7 +142,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - Occasional launcher `command not found: claude`, or node-started chats reporting `send to claude: write |1: file already closed` (2026-11-05, #2581), usually means npm is globally reinstalling Claude Code (auto-update moves the old install first, writes the new one about 2.5 seconds later). Long-lived old claude processes (months-old sessions in botmux / herdr) each periodically detect "new version", reinstall, then never restart themselves, causing reinstalls every minute or two (7 times in 8 minutes measured). Check repeated `install --global @anthropic-ai/claude-code` in `~/.npm/_logs/` and versions via `/proc/<pid>/exe --version`; the root fix is ending old processes. node retries early "command missing" exits every 2 seconds, at most 3 times, and reports stderr instead of a pipe error.
 - SSH sessions can't read macOS's login keychain: claude started by an SSH-started node gets 401 if its API key comes from the keychain (Agents in herdr work because herdr is in the login session).
   Install resident node on that Mac (`scripts/deploy/node-launchd.sh install`, `docs/server.md` ("Resident node")).
-- Go `UnixListener.Close()` deletes the socket file by default: during redeploy, old node exit deleted the new node's `~/.jarvis/node.sock`,
+- Go `UnixListener.Close()` deletes the socket file by default: during redeploy, old node exit deleted the new node's `~/.persona/node.sock`,
   silently disabling every hook / MCP (unreachable hooks allow the TUI). Fixed with `SetUnlinkOnClose(false)` and a rebuild self-check every 15 seconds.
   Suspect inactive hooks / MCP? Run `personad node doctor` first (actual socket response, generated files matching the binary, command paths still present; `docs/claude-integration.md` ("Self-check")).
 - macOS `lsof -p a,b,c` exits 1 if any pid has exited or is a zombie, but still prints other processes' results to stdout (2026-11-03, #541):
@@ -159,27 +159,27 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   APNs is a persistent HTTP/2 connection; Go doesn't detect that it's dead after a network outage. Close idle connections when a push request errors so the next request redials (`push.go`).
 - `URLSessionWebSocketTask.sendPing` callbacks require both: the pong echoes the ping payload unchanged (empty pong doesn't count),
   and a pending `receive` exists. `scripts/mock/mock_hub.py` once returned empty pong, causing App heartbeat to declare the connection dead and reconnect every minute (hub coder/websocket was fine).
-- Machine monitoring (`docs/machines.md`): darwin jarvisd is cross-compiled with `CGO_ENABLED=0`, so Mach calls like `host_statistics` are unavailable,
+- Machine monitoring (`docs/machines.md`): darwin personad is cross-compiled with `CGO_ENABLED=0`, so Mach calls like `host_statistics` are unavailable,
   and `vm.page_*` sysctls lack anonymous-page and compressor counts. macOS CPU / memory come from persistent `iostat -n 0 -w 10` / `vm_stat 10` (one line per 10 seconds, not a new process per sample),
   the rest from sysctl, route socket (`NET_RT_IFLIST2`), and statfs. Before manually decoding C structs (`if_msghdr2`, `struct loadavg`), print `offsetof` with a small C program to confirm offsets (`#pragma pack(4)` exists).
   Linux virtual interfaces are identified by whether `/sys/class/net/<name>` points into `/sys/devices/virtual/`, more reliable than names (TUN proxies use varied names).
   When the node runs in a container, `/proc/meminfo` and `/proc/self/mounts` show the host: a pod limited to 32 GiB on a 512 GiB host showed 31% memory while it was close to an OOM kill,
   and the host's 1.7 TB data disk came in as directory binds (`/tmp`, `/etc/hosts`) at 28% while the container's own `/` was 83% full. Memory uses the cgroup limit; disks use mountinfo's mount root to skip directory mounts (#3520).
-- macOS Desktop, Documents, and Downloads are privacy-protected (TCC): jarvisd running over SSH gets `operation not permitted` without authorization,
+- macOS Desktop, Documents, and Downloads are privacy-protected (TCC): personad running over SSH gets `operation not permitted` without authorization,
   so the phone can't open files there. node explains the error (`explainDenied`): enable sshd-keygen-wrapper in Full Disk Access or use another folder.
   Put user-visible files (screenshots etc.) in an ordinary directory under `~/`, not Desktop.
-  TCC attributes permission to the responsible process: SSH-started node and children all count as `sshd-keygen-wrapper`; granting the jarvisd binary itself doesn't help (and redeployment replaces the binary and loses authorization).
+  TCC attributes permission to the responsible process: SSH-started node and children all count as `sshd-keygen-wrapper`; granting the personad binary itself doesn't help (and redeployment replaces the binary and loses authorization).
   Granting it gives every SSH login Full Disk Access (including `~/Library/Messages/chat.db`). To authorize only one program, launch it via launchd (LaunchAgent), see `docs/plan-connectors.md`.
 - If node differs from the hub version (`node_mismatch`), App "Redeploy" asks the hub to install it: hub deployment leaves platform node binaries in
-  `~/.jarvis/bin/nodes/`; the hub installs via SSH, kills resident node for launchd to restart, then reconnects (`devices/deploy.go`). Deploying only one machine, not the hub, leaves old binaries there and the button reinstalls the old version.
+  `~/.persona/bin/nodes/`; the hub installs via SSH, kills resident node for launchd to restart, then reconnects (`devices/deploy.go`). Deploying only one machine, not the hub, leaves old binaries there and the button reinstalls the old version.
 - SSH remote commands are parsed by the target's **login shell**, not necessarily POSIX (2026-11-04, #1770): fish rejected the deployment script's first `b=…` with
   `Unsupported use of '='`, executing nothing else. Wrap sh scripts in `sh -c <script>` (`posixCommand` in `devices/deploy.go`), with outer quoting from `anyShellQuote`:
   fish still interprets `\\` and `\'` inside single quotes; csh still expands `!` history (`'a!b'` → `Event not found`). Keep quotes, backslashes, and `!` outside quotes, backslash-escaped, so sh / bash / zsh / fish / csh agree; no newlines (csh doesn't accept them).
-  A command plus arguments (`jarvisd node --stdio`, `true`) works in every shell without wrapping. `deploy_test.go` runs deployment, quoting, and node-start commands in each locally available shell (fish only tested if installed).
+  A command plus arguments (`personad node --stdio`, `true`) works in every shell without wrapping. `deploy_test.go` runs deployment, quoting, and node-start commands in each locally available shell (fish only tested if installed).
 - macOS tar includes extended attributes when sending files to the hub (2026-11-03, #665 / #884): build artifacts carry `com.apple.provenance`,
   downloaded files also carry source URLs. Two mechanisms: `._<name>` AppleDouble files (GNU tar extracts as normal files) need `COPYFILE_DISABLE=1`;
   `LIBARCHIVE.xattr.*` in pax headers (GNU tar drops them and logs `Ignoring unknown extended header keyword`) need `--no-xattrs`. Use both.
-- Building jarvisd on a hub in China: `proxy.golang.org` may be entirely unreachable (TCP timeout; working OS repositories / Docker Hub don't prove it works).
+- Building personad on a hub in China: `proxy.golang.org` may be entirely unreachable (TCP timeout; working OS repositories / Docker Hub don't prove it works).
   Before building, `go env -w GOPROXY=https://goproxy.cn,direct`. If Postgres image pulls fail, use `public.ecr.aws/docker/library/postgres:18-alpine` (`docs/server.md`).
 - Cloud public IPs / EIPs usually have an outer firewall or NAT (measured on UCloud: all ports including 22 and 8080 unreachable publicly, though local ss showed listeners,
   and local curl to its public IP failed too—hairpin self-connect can't establish port openness). Prefer the user's VPN / private address for phone access, or open ports in the cloud console;
@@ -203,21 +203,21 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   Changing the map reselects the region on `init`, changing the address but not the key.
 - Don't expect `http.Server.Shutdown` to finish WebSockets: it doesn't wait for hijacked connections, while `pgxpool.Close` waits unboundedly for all borrowed connections. During a NAS upgrade on 2026-10-31, old hub hung after SIGTERM until SIGKILL, causing about 46 seconds downtime (normally ~1 second). Now close listeners, send WS 1001, and drain with bounds; every step has a timeout and total shutdown has a budget (`shutdown_timeout_seconds`, default 8 seconds), see `docs/server.md` ("Shutdown"). External `docker stop -t` must exceed it.
 - coder/websocket reads, writes, and pings close the entire connection as soon as their context ends (`context.AfterFunc`), without a close frame.
-  Connections needing close codes (jarvis-link replacement 4001, revocation 4002) mustn't read/write with a context canceled first: the hub canceled link ctx then called Close,
+  Connections needing close codes (persona-link replacement 4001, revocation 4002) mustn't read/write with a context canceled first: the hub canceled link ctx then called Close,
   so an in-flight write cut the connection and the client got -1 instead of 4002 (`send`, `close` in `devices/link.go`; regression `TestLinkReplacedAndRevoked` in `hub/link_test.go`).
 - coder/websocket `Conn.Close` is a handshake: waits for the write lock to send a close frame (up to 5 seconds), then for the peer's close frame (up to 5 seconds). A client no longer reading never replies, typically waiting the full 5 seconds, up to about 10. Don't synchronously Close under shared locks like `h.mu`: `sendJSON` did this under `notifyWS`'s lock for slow clients and stalled the whole hub. Use `go conn.Close(...)` (`client.queue`) or `CloseNow`; regression `TestWSNotifyDropsASlowClientWithoutHoldingTheHub`.
 
-## jarvis-link on Linux (docs/link.md ("Linux (headless)"), 2026-11-02)
+## persona-link on Linux (docs/link.md ("Linux (headless)"), 2026-11-02)
 
-- `errors.Join()` with no errors returns nil: jarvis-link route `race` returned "no winner, no error" when all candidates were canceled (service stopped during dialing),
+- `errors.Join()` with no errors returns nil: persona-link route `race` returned "no winner, no error" when all candidates were canceled (service stopped during dialing),
   and the caller crashed on a nil link. Explicitly return `ctx.Err()` when all are canceled (`TestRaceCalledOffIsAnError`).
 - Sessions entered through `su`, `sudo -u`, or `docker exec -u` lack `XDG_RUNTIME_DIR`, so `systemctl --user` reports `Failed to connect to bus`:
   the user instance may actually be running (linger enabled); setting `/run/user/<uid>` connects. If no instance exists (no linger and nobody logged in), setting it won't help;
   disabling linger stops a user instance with no sessions immediately.
 - User instances have no `network-online.target`; `After=/Wants=network-online.target` in a user unit waits for nothing. The program must retry itself.
-- With nonpersistent journals (`/run/log/journal`), ordinary users' `journalctl --user` can't see their services' logs: jarvis-link writes and rotates its own files,
-  and `jarvis-link logs` reads them; journal is only a fallback.
-- To check whether resident node exists, **don't** connect to `~/.jarvis/node-attach.sock`: each connection is a new attach and displaces the hub's active one. Use only hub reports.
+- With nonpersistent journals (`/run/log/journal`), ordinary users' `journalctl --user` can't see their services' logs: persona-link writes and rotates its own files,
+  and `persona-link logs` reads them; journal is only a fallback.
+- To check whether resident node exists, **don't** connect to `~/.persona/node-attach.sock`: each connection is a new attach and displaces the hub's active one. Use only hub reports.
 - For a systemd container in Docker Desktop (Mac): `--privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock`,
   with `/lib/systemd/systemd` as PID 1. The image needs `libpam-systemd`, or `user@<uid>.service` won't start (log:
   `Trying to run as user instance, but $XDG_RUNTIME_DIR is not set`). A host service listening only on 127.0.0.1 is reachable through `host.docker.internal`,
@@ -225,7 +225,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - `docker pull --platform linux/amd64 <image>` replaces the local same-name tag with amd64; later `docker run` without `--platform` uses emulation.
   After testing, restore with `docker pull --platform linux/arm64 <image>`.
 
-## jarvis-link passive mode and node service (docs/link.md ("Passive mode", "Installing the node service"), 2026-11-02)
+## persona-link passive mode and node service (docs/link.md ("Passive mode", "Installing the node service"), 2026-11-02)
 
 - Link only relays node streams; remote updates belong in node RPC (#1158, `docs/node-update.md`). Each attach creates a new `Node`, so update exclusion and installation transactions must belong to the resident process; closing the current RPC doesn't restart resident node. Shut down the resident service only after the success response is actually written; a separate recovery process rolls back if the new version can't start. Old nodes don't know the update protocol and need one local upgrade first; version mismatch alone mustn't enable a deployment button.
 
@@ -233,7 +233,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - On macOS, reopening an already-executed signed Mach-O staging file with `O_RDWR` may cause later self-check retries to receive `SIGKILL` (#1158). Use a read-only handle for post-validation `fsync`; don't request write access just to sync. Canceled commits return before self-check. Verify busy / cancellation retries five consecutive times, not just first execution.
 - macOS UNIX socket path limits are short; test names plus default long `TMPDIR` may exceed them (#1158). Socket fixtures use a short separate `/tmp` root, or `TMPDIR=/tmp` in isolation; don't blame the updater or change production sockets.
   New tests easily repeat this: `t.TempDir()` includes the test name (and subtest name), so a socket a few levels below exceeds the limit (#2257, #2278). Linux's limit is 108 bytes and its `TMPDIR` is short; Linux-only testing misses this.
-- **launchd labels don't follow HOME**: temporary HOME doesn't make `jarvis-link node install` safe; `launchctl bootout gui/<uid>/com.jarvis.node` still stops the real resident node on that Mac.
+- **launchd labels don't follow HOME**: temporary HOME doesn't make `persona-link node install` safe; `launchctl bootout gui/<uid>/com.persona.node` still stops the real resident node on that Mac.
   Test Mac service installation only with fake commands (`env.command`), never actually on the developer machine; use a different label for real runs.
 - Container `eth0` is `/sys/devices/virtual/net/eth0` in sysfs, so netaddr treats it as virtual. Excluding virtual interfaces leaves no pairing-link address in containers,
   making `install --listen` fail (same for NAS interfaces on virtual switches). Fall back to virtual interfaces if no other addresses exist, still excluding tunnels and bridges (`docker0`, `veth`, `utun`, `tailscale`…);
@@ -303,8 +303,8 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   (`docs/testing.md` ("npm registry checks")); `Dockerfile` checks before installation too. Web builds inside the image use `--ignore-scripts` to skip `prebuild`'s
   privacy check (build context lacks `scripts/` and git); workflow runs that check against the full checkout before building.
 - Container ssh can't identify uids absent from passwd (`No user exists for uid`); duplicate uid entries use the first home (alpine guest is 405,
-  home `/dev/null`, making mounted `~/.ssh` useless). The entry script changes the `jarvis` user itself to PUID / PGID and removes colliding entries rather than using
-  `docker run --user <uid>`. `docker compose exec` defaults to root; image `jarvisd` wraps privilege dropping to `jarvis`, or newly generated tailcat keys belong to root and the hub can't read them.
+  home `/dev/null`, making mounted `~/.ssh` useless). The entry script changes the `persona` user itself to PUID / PGID and removes colliding entries rather than using
+  `docker run --user <uid>`. `docker compose exec` defaults to root; image `personad` wraps privilege dropping to `persona`, or newly generated tailcat keys belong to root and the hub can't read them.
 
 ## Knowledge base (docs/knowledge.md)
 
@@ -381,8 +381,8 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - Link RPC events run in the read loop: role changes upon higher terms (disconnect Apps, stop its own computer connections) only close connections or enqueue work, never wait for node there.
 - Opening a node stream through a member mustn't use the opening step's timeout context for ssh: the process lives with that context and dies when the step ends.
   Use a stream-lifetime context. After an HTTP handler hijacks a connection, request context isn't the stream lifetime either.
-- Testing two local hub admin UIs (127.0.0.1, different ports): cookies aren't port-scoped, so `jarvis_admin` cookies overwrite each other. Headless browsers must log in and screenshot one at a time.
-- Passive jarvis-link counts failures per source, banning for 15 minutes after 10/minute: ordinary hub retries with bad credentials plus 30-second probes ban the hub's own address.
+- Testing two local hub admin UIs (127.0.0.1, different ports): cookies aren't port-scoped, so `persona_admin` cookies overwrite each other. Headless browsers must log in and screenshot one at a time.
+- Passive persona-link counts failures per source, banning for 15 minutes after 10/minute: ordinary hub retries with bad credentials plus 30-second probes ban the hub's own address.
   After 401, pause the whole route (dialing and probing) for 5 minutes.
 - Simultaneous dialing may show the rejected side either 4011 or hello `rpc: connection closed` (peer completed hello before closing). Both mean only "link already exists";
   return to the loop's start and wait for it to break, not repeated error logs.
@@ -407,7 +407,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - **herdr 0.9 event names contain dots**: `pane.agent_status_changed`, as in subscriptions. The underscores in old code/docs (`pane_agent_status_changed`) belong to older herdr.
   Accept both when branching by event name and feed both in tests. If unsure, subscribe directly to the socket and inspect raw output (one-line `events.subscribe`, then one event per line).
 - **Ask what a fixed "wait first" is waiting for**: the hub waited 1.5 s on every screen card for a hook card to arrive; sessions without hooks (user profiles) never produce one, wasting time on every card.
-  Decide per session (hook events seen since hub startup, or launched by Jarvis).
+  Decide per session (hook events seen since hub startup, or launched by Persona).
 - Measure the chain: start a real node in the hub package (same process, own HOME, `~/.claude` linked to the real config), connect with pipes like SSH, and timestamp every hop for real Claude
   in isolated herdr (`hub/cardlatency_live_test.go`). Reports all sharing the same fractional second (.57 s, .58 s) indicate per-second ticks, not events.
 
@@ -454,7 +454,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - Symptom: 13 minutes after #1283 (move task dock "All N" first) merged and deployed, the user still saw the old dock.
 - Cause: hub logs showed another deploy after #1283 with `commit before #1283 + -dirty`: someone ran `deploy.sh` from an unre-based branch / workspace,
   and hub deployment also replaced the web with that directory's `web/`. Not cache: index.html is `no-cache`, assets hashed, no Service Worker.
-- Diagnose through each startup version (`git describe`) in `journalctl --user -u jarvisd`, and production `web/index.html` mtime (tar preserves build time);
+- Diagnose through each startup version (`git describe`) in `journalctl --user -u personad`, and production `web/index.html` mtime (tar preserves build time);
   a PR-specific string in the live bundle identifies the web version.
 - `deploy.sh` now requires HEAD to contain `origin/master`, otherwise refuses; deliberately deploying an old commit requires `PERSONA_DEPLOY_ANY_COMMIT=1`.
 - Fake backends can't catch dependencies in connectors written in other languages (2026-11-04, #1487): an external Lark connector pinned `SQLAlchemy==2.0.30`, which crashes on import under Python 3.13; green `CheckProgram` tests miss it. Build a real package and run actual pip/install/import checks. Accountless parts (dependencies, imports, QR initialization, decoding one synthetic push frame) can all be tested this way.
@@ -469,15 +469,15 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 ## Pitfalls in seamless hub restarts (2026-11-04, #1574)
 
 - **Resident node systemd units need the same PATH as hub**: local node formerly inherited hub unit `PATH=%h/.local/bin:…` as a child;
-  separate `jarvisd-node` used systemd's default PATH and missed herdr / claude in `~/.local/bin`. `node-launchd.sh` now writes the same PATH.
-- **Signal only the resident node's main process**: `systemctl --user kill -s HUP jarvisd-node` defaults to the whole cgroup, sending SIGHUP to assistant claude and background commands too.
+  separate `personad-node` used systemd's default PATH and missed herdr / claude in `~/.local/bin`. `node-launchd.sh` now writes the same PATH.
+- **Signal only the resident node's main process**: `systemctl --user kill -s HUP personad-node` defaults to the whole cgroup, sending SIGHUP to assistant claude and background commands too.
   Use `--kill-whom=main` (`node-launchd.sh restart-idle`).
 - **During resident-node `exec`, `node --stdio` could take over the connection**: the socket file remains (`SetUnlinkOnClose(false)`) but refuses connections; old `Relay` interpreted this as no resident node,
   serving the connection itself and putting assistant chats back in hub's cgroup, killed on next restart. Now wait up to 8 s on refusal (`dialResident`).
 - **Shutdown "offline" broadcasts are false**: hub canceled ctx on SIGTERM, then disconnected machines broadcast offline `machines` and ended questions, so clients saw an offline cascade before disconnect.
   Suppress these during `stopping`; new hub uses handed-over machine snapshots (warm start).
-- **Old binaries can't start after socket activation**: hubs unaware of `LISTEN_FDS` call `net.Listen` while `jarvisd.socket` owns the port, repeatedly restarting with `address already in use`.
-  Before rollback, run `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`. A connection after `systemctl --user stop jarvisd` starts it again; stop the socket too for full shutdown.
+- **Old binaries can't start after socket activation**: hubs unaware of `LISTEN_FDS` call `net.Listen` while `personad.socket` owns the port, repeatedly restarting with `address already in use`.
+  Before rollback, run `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`. A connection after `systemctl --user stop personad` starts it again; stop the socket too for full shutdown.
 
 ## Workspace directories and independent discovery (2026-11-04, #1646)
 
@@ -505,7 +505,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 ## New runtime packages must enter the hub image (2026-11-04, #1777)
 
 `go generate` in `server/internal/runtimepkg` reads `integrations/<name>/`, but image build context includes only `.dockerignore`-allowed directories,
-and build stages only those COPYed by `Dockerfile`. #1668 added `jarvis-paseo-runtime` to neither, so `v0.1.4` image failed at `go generate`;
+and build stages only those COPYed by `Dockerfile`. #1668 added `persona-paseo-runtime` to neither, so `v0.1.4` image failed at `go generate`;
 PR smoke paths didn't include `integrations/**`, so no premerge run. Add runtime packages to both `.dockerignore` and `Dockerfile`; image workflow PR paths now include `integrations/**`.
 
 Same for web tests (2026-11-05, #2666): web-stage `npm run build` runs `tsc -b` on `src/**/*.test.ts` too; #2399 `injected.test.ts` imports fixtures from repo-root
@@ -570,14 +570,14 @@ Fake unsigned markets return 404 for `.sig`; test both first read and an already
 - How Persona currently meets this (code review and real-machine checks, 2026-11-04):
   - herdr server and all panes / Agents: `launchHerdrServer` (`server/internal/node/herdrstart_unix.go`) detects `systemd/private` under `XDG_RUNTIME_DIR` and available `systemd-run`,
     then launches `systemd-run --user --quiet --collect --unit=persona-herdr-server` into that unit's cgroup, unaffected by hub/node stop or update;
-    environments without user systemd (containers etc.) fall back to `setsid`. Real `jarvisd.service` cgroup contained only hub, local `node --stdio`, and `assistant`, no herdr, claude, codex.
-  - node self-update rollback: `nodeupdate/watch.go` uses `systemd-run --user --unit=persona-node-update-<id>` ("jarvis-link passive mode and node service" above).
+    environments without user systemd (containers etc.) fall back to `setsid`. Real `personad.service` cgroup contained only hub, local `node --stdio`, and `assistant`, no herdr, claude, codex.
+  - node self-update rollback: `nodeupdate/watch.go` uses `systemd-run --user --unit=persona-node-update-<id>` ("persona-link passive mode and node service" above).
   - children remaining in node/hub units (assistant claude / codex, Paseo bridge, plugins, connectors) are tied to the initiating process through stdin pipes and should exit when their owner disappears,
     not outlive the daemon; each uses `Setpgid` and owner stops the whole group. node updates wait for idle and use `node-launchd.sh restart-idle` (HUP main process only), avoiding running-chat interruption.
 - Future long-lived daemon-independent processes follow `launchHerdrServer`: transient units plus no-user-bus fallback, with generated command lines tested separately.
 - Known, not fixed:
   - Hub self-update rollback watchdog (`startWatchdog` in `hub/selfupdate.go`) only uses `setsid`, remaining in the hub cgroup under systemd.
-  - Without resident node (`jarvisd-node`), hub's local `node --stdio` and assistant claude live in `jarvisd.service` and stop on hub restart (`docs/hub-restart.md` ("Uninterrupted chats")).
+  - Without resident node (`personad-node`), hub's local `node --stdio` and assistant claude live in `personad.service` and stop on hub restart (`docs/hub-restart.md` ("Uninterrupted chats")).
   - `herdrstart_test.go` doesn't cover the `systemd-run` command branch.
   - Whether macOS `setsid` protects herdr from launchd job-stop cleanup hasn't been checked on Mac; Windows node doesn't launch herdr, so no equivalent issue.
 - When a field can mean either "package to send" or "built-in, no package", add a package-only accessor (2026-11-05, #1830 wrap-up, `Manifest.NodeProgram()`):
@@ -595,7 +595,7 @@ Fake unsigned markets return 404 for `.sig`; test both first read and an already
 
 ## personad downloads exceeded Workers' 25 MiB static-file limit (2026-11-05, #2541)
 
-#1002 embedded 3.1 MB of tiered-avatar PNGs in hub (already compressed, little gzip benefit), growing compressed jarvisd from 22.4 MiB to 25.8 MiB.
+#1002 embedded 3.1 MB of tiered-avatar PNGs in hub (already compressed, little gzip benefit), growing compressed personad from 22.4 MiB to 25.8 MiB.
 `check_asset_sizes.py` blocked publish before upload; TestFlight uploaded normally, only personad wasn't released. All four platforms were already within one or two MiB of the limit;
 image compression only buys time, so archives moved to R2 (Worker forwarding, two rotating slots), leaving small files in the site. Check release-package sizes before embedding large `server/` assets.
 ## Hub-created cards must identify their initiating session (2026-11-05, #2558)
@@ -623,7 +623,7 @@ Work continuing after reply (watches, streams) uses `rpc.ConnContext(ctx)`. Test
 ## In-place exec loses systemd sockets (2026-11-05, blue-green switching)
 
 Hub startup takes sockets from `LISTEN_FDS`, then clears the environment. `net.FileListener` duplicates fds with close-on-exec, and original fds are closed.
-So self-update `syscall.Exec` leaves the new process without either fd or environment; it tries to `bind`, but `jarvisd.socket` owns the port, causing `address already in use`.
+So self-update `syscall.Exec` leaves the new process without either fd or environment; it tries to `bind`, but `personad.socket` owns the port, causing `address already in use`.
 Reproduced on Linux with a minimal program (same `listen.go`, simulating systemd → hub → exec).
 
 Hub now runs behind an entry process that keeps the port; version changes no longer exec (`docs/hub-restart.md` ("Blue-green switching")). Without an entry process, retain systemd fds marked close-on-exec,
@@ -676,7 +676,7 @@ Whenever an existing method gains a "write somewhere else" / "do it differently"
 - Compose reads `.env` on the host before containers start, including `${X:?}` failures. "Fill missing values on first startup" requires mounted storage (DB password in `data/docker/db-password`) read by image scripts, not rewriting `.env`.
 - Postgres starts first (hub `depends_on`), so generate random passwords in its entrypoint: wrap compose `entrypoint` with `sh -c` (`$` becomes `$$`). Overriding `entrypoint` removes image `CMD` too; add `command: ["postgres"]`.
 - Don't verify passwords with `psql -h 127.0.0.1` inside Postgres: official `pg_hba.conf` uses `trust` for local loopback, accepting wrong passwords. Connect to `postgres` from another container on the same network.
-- Build database URLs with `postgres://jarvis:${JARVIS_DB_PASSWORD:-}@…`, not `${X:+…}`: old docker-compose v1 doesn't support `:+`.
+- Build database URLs with `postgres://persona:${PERSONA_DB_PASSWORD:-}@…`, not `${X:+…}`: old docker-compose v1 doesn't support `:+`.
 - Generate random passwords only before a database exists: Postgres reads `POSTGRES_PASSWORD` only during data-directory initialization; if DB exists (restored only `postgres/`, deleted `data/`), generating a new one mismatches its stored password.
 
 ## Don't let `http.Server` read `websocket.NetConn` directly (2026-11-06, #3498)
@@ -696,7 +696,7 @@ regression `TestRelayedAnswersArriveWhole` (concurrent small responses, slow-rea
 
 Hub self-update downloaded node binaries only for machines whose platforms were known at that moment. Later-added machines, or never-connected machines with empty os / arch during update, had platforms absent from downloads.
 The release manifest is read only during self-update, with no later fallback: `nodeBinary` in `internal/devices` searches only local `~/.persona/bin/nodes/`, returning
-"hub has no jarvisd for `<os>/<arch>`" if absent; repeated Redeploy fails. If an old platform binary remains from the previous release, it sends that old version and mismatch persists.
+"hub has no personad for `<os>/<arch>`" if absent; repeated Redeploy fails. If an old platform binary remains from the previous release, it sends that old version and mismatch persists.
 Now download every platform in the release manifest (four, matching `deploy.sh` and images); the hub platform's node binary is the same as hub itself, so reuse that download.
 For any download/build list derived from current runtime state, consider objects appearing only after update.
 

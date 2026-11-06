@@ -330,7 +330,7 @@ func TestHerdrCoreAbsentOrGone(t *testing.T) {
 
 	var logged []string
 	var mu sync.Mutex
-	c := &herdrcore.Client{Socket: "/tmp/jarvis-no-such-dir/c.sock", Log: func(format string, args ...any) {
+	c := &herdrcore.Client{Socket: "/tmp/persona-no-such-dir/c.sock", Log: func(format string, args ...any) {
 		mu.Lock()
 		logged = append(logged, fmt.Sprintf(format, args...))
 		mu.Unlock()

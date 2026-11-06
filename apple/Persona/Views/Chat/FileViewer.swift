@@ -375,7 +375,7 @@ struct FileViewer: View {
 }
 
 /// A Markdown file rendered, a piece at a time in a lazy stack (`MarkdownChunks`), with the chat's look
-/// (`.jarvis`: fitted tables, links that end where `Links` says) and colored code fences. No text selection: it made
+/// (`.persona`: fitted tables, links that end where `Links` says) and colored code fences. No text selection: it made
 /// opening 40 % slower and scrolling hitch more (docs/ios.md「文件查看器」); the source view copies lines.
 private struct MarkdownFile: View {
     var page: FileViewerModel
@@ -394,7 +394,7 @@ private struct MarkdownFile: View {
                         .padding(.bottom, Theme.Space.m)
                     ForEach(chunks) { c in
                         Markdown(c.content, imageBaseURL: page.baseURL)
-                            .markdownTheme(.jarvis)
+                            .markdownTheme(.persona)
                             .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter())
                             .markdownImageProvider(MachineImageProvider(load: loadImage))
                             .onAppear { if c.id == 0 { page.shown() } }

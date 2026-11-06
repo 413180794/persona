@@ -87,7 +87,7 @@ type ExtensionTools interface {
 // SetExtensions gives the service the extensions' tools (before Run).
 func (s *Service) SetExtensions(e ExtensionTools) { s.ext = e }
 
-// AskCard is askHub for the extensions in this process: a card of theirs (a mail send, Cua's apps, jarvis_settings),
+// AskCard is askHub for the extensions in this process: a card of theirs (a mail send, Cua's apps, persona_settings),
 // waited for like a hook's; ctx ending withdraws it.
 func (s *Service) AskCard(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
 	return s.askHub(ctx, ix)

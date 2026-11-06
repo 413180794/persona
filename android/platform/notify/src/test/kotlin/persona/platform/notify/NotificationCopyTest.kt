@@ -56,7 +56,7 @@ class NotificationCopyTest {
     }
 
     private val mcpPermission = Interaction("p", kind = "permission", toolName = "mcp__github__create_issue", summary = "Fix login")
-    private val personaPermission = Interaction("q", kind = "permission", toolName = "mcp__jarvis__mail_send")
+    private val personaPermission = Interaction("q", kind = "permission", toolName = "mcp__persona__mail_send")
     private val form = Interaction("f", kind = "elicitation", summary = "Pick a repository",
         elicitation = Elicitation(message = "Pick a repository"))
 

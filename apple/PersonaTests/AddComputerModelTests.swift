@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Machines › Add Computer (#4196, docs/protocol.md「电脑的配对码」「电脑的信任」): the add request, a new code for one that waits,
 /// every refusal's words, the computer joining and being confirmed or rejected, machines decoding trust / error_code,
@@ -11,9 +11,9 @@ struct AddComputerModelTests {
 
     private static func code(machine: String = "macbook", name: String = "小林的 MacBook", expires: Date, install: Bool = true) -> String {
         let at = ISO8601DateFormatter().string(from: expires)
-        let pair = "jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_example&machine=\(machine)"
+        let pair = "persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_example&machine=\(machine)"
         var json = #"{"token":"jp_example","expires_at":"\#(at)","url":"https://hub.example.com","machine":"\#(machine)","#
-            + #""name":"\#(name)","trust":"pending","added":true,"pair_url":"\#(pair)","command":"jarvis-link pair '\#(pair)'""#
+            + #""name":"\#(name)","trust":"pending","added":true,"pair_url":"\#(pair)","command":"persona-link pair '\#(pair)'""#
         if install { json += #","install":{"linux":"curl -fsSL https://example.com/install.sh | sh -s -- --node --pair '\#(pair)'"}"# }
         return json + "}"
     }
@@ -47,7 +47,7 @@ struct AddComputerModelTests {
         #expect(page.stage == .waiting && page.machineID == "macbook" && page.secondsLeft == 600)
         let c = try #require(page.code)
         #expect(AddComputerText.linuxCommand(c).installs && AddComputerText.linuxCommand(c).line.hasPrefix("curl -fsSL "))
-        #expect(c.pairLink.hasPrefix("jarvis://link?") && c.trust == "pending" && c.added == true)
+        #expect(c.pairLink.hasPrefix("persona://link?") && c.trust == "pending" && c.added == true)
     }
 
     @Test func macAndWindowsAskForTheirIcons() async throws {
@@ -81,8 +81,8 @@ struct AddComputerModelTests {
         let data = Data(Self.code(expires: Self.start, install: false).utf8)
         let c = try JSON.decoder.decode(APIClient.ComputerCode.self, from: data)
         let line = AddComputerText.linuxCommand(c)
-        #expect(!line.installs && line.line == "jarvis-link pair '\(c.pairLink)'")
-        #expect(AddComputerText.windowsCommand(c) == #".\jarvis-link.exe install --jarvisd .\personad.exe --pair '"# + c.pairLink + "'")
+        #expect(!line.installs && line.line == "persona-link pair '\(c.pairLink)'")
+        #expect(AddComputerText.windowsCommand(c) == #".\persona-link.exe install --personad .\personad.exe --pair '"# + c.pairLink + "'")
     }
 
     @Test func anExpiredCodeIsMadeAgainForTheSameComputer() async throws {

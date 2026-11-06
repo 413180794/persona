@@ -37,10 +37,10 @@ func stopCardAction(t botTarget) *feishubot.CardAction {
 // A run's progress card carries the Stop button with the run's own conversation, in the card's language; a card with
 // no live run carries no button (the answer and idle cards never do).
 func TestProgressCardStopButton(t *testing.T) {
-	target := botTarget{Kind: targetJarvis, MachineID: "server", SessionID: "conv0001"}
+	target := botTarget{Kind: targetPersona, MachineID: "server", SessionID: "conv0001"}
 	b, _ := json.Marshal(progressCard("", "Persona", time.Second, nil, "", "", liveView{}, target))
 	card := string(b)
-	for _, want := range []string{`"a":"stop"`, `"k":"jarvis"`, `"m":"server"`, `"s":"conv0001"`, `"type":"danger"`, "停止"} {
+	for _, want := range []string{`"a":"stop"`, `"k":"persona"`, `"m":"server"`, `"s":"conv0001"`, `"type":"danger"`, "停止"} {
 		if !strings.Contains(card, want) {
 			t.Fatalf("running card missing %q: %s", want, card)
 		}
@@ -60,7 +60,7 @@ func TestProgressCardStopButton(t *testing.T) {
 func TestStopCardPressMakesTheSameInterruptCallAsStopCommand(t *testing.T) {
 	s, f := stopCardHub(t, FeishuFeatures{Main: true})
 	ctx := context.Background()
-	target := botTarget{Kind: targetJarvis, MachineID: "server", SessionID: "conv0001"}
+	target := botTarget{Kind: targetPersona, MachineID: "server", SessionID: "conv0001"}
 
 	r := s.botCardAction(ctx, stopCardAction(target), "")
 	want := i18n.T("", "assistant-feishu_cards.stopped", i18n.Args{"label": s.targetLabel(ctx, target)})
@@ -96,7 +96,7 @@ func TestStopCardPressInterruptFailureSaysWhy(t *testing.T) {
 	s, f := stopCardHub(t, FeishuFeatures{Main: true})
 	f.failInterrupt = errors.New("node is down")
 	ctx := context.Background()
-	target := botTarget{Kind: targetJarvis, MachineID: "server", SessionID: "conv0001"}
+	target := botTarget{Kind: targetPersona, MachineID: "server", SessionID: "conv0001"}
 
 	r := s.botCardAction(ctx, stopCardAction(target), "")
 	want := i18n.T("", "assistant-feishu_cards.not_stopped", i18n.Args{"error": "node is down"})
@@ -128,7 +128,7 @@ func TestStopCardPressWithNothingToStopSaysSo(t *testing.T) {
 	}{
 		{"agent is gone", botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agone01"}, true,
 			i18n.T("", "assistant-feishu_cards.nothing_running"), "info"},
-		{"no conversation yet", botTarget{Kind: targetJarvis}, true,
+		{"no conversation yet", botTarget{Kind: targetPersona}, true,
 			i18n.T("", "assistant-feishu_cards.nothing_running"), "info"},
 		{"agents feature off", botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agone01"}, false,
 			i18n.T("", "assistant-feishu.agents_off"), "error"},

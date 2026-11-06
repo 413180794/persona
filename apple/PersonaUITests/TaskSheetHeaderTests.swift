@@ -3,32 +3,32 @@ import XCTest
 /// A task opened from the main conversation (#3255): its sheet has one header, the agent's chat's — ✕, the task's
 /// title over the agent's state and place, ⋯ — with no row of the space's other agents under it; ⋯ has
 /// 「在 Agents 里打开」, and there the Agents page's chat keeps its tabs. Against scripts/mock/mock_hub.py with
-/// MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 (JARVIS_MOCK_HUB); with MOCK_TASKS_DOCK=multi (JARVIS_TASK_MULTI=1) the task has
+/// MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 (PERSONA_MOCK_HUB); with MOCK_TASKS_DOCK=multi (PERSONA_TASK_MULTI=1) the task has
 /// two agents and its title's ⌄ switches between them. Phone only (an iPad pushes the page, `IPadTaskDetailTests`).
-/// With JARVIS_SHOTS set it writes the pages there, JARVIS_SHOTS_APPEARANCE naming the simulator's appearance.
+/// With PERSONA_SHOTS set it writes the pages there, PERSONA_SHOTS_APPEARANCE naming the simulator's appearance.
 final class TaskSheetHeaderTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let appearance = env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let appearance = env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/task-sheet-\(appearance)-\(name).png"))
     }
 
     @MainActor func testOneHeaderAndNoTabs() throws {
         guard UIDevice.current.userInterfaceIdiom == .phone else { throw XCTSkip("a phone's sheet") }
-        let multi = ProcessInfo.processInfo.environment["JARVIS_TASK_MULTI"] == "1"
+        let multi = ProcessInfo.processInfo.environment["PERSONA_TASK_MULTI"] == "1"
         let app = XCUIApplication()
-        let url = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let url = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", url, "-holdChromeOpen", "YES", "-tab", "assistant"] // a run before may have ended on the Agents page
         app.launchPinned()
 

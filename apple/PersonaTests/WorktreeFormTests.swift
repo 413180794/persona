@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// New Worktree…'s form (`WorktreeForm`, docs/terminal.md「新建 worktree…」), the same cases as the web's worktree.test.ts.
 struct WorktreeFormTests {

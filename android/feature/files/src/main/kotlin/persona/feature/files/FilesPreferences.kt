@@ -9,7 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 
 /** The browser's "Show hidden files", kept on this phone (not with the pairing): it is how you like to browse, on any hub. */
 internal class FilesPreferences(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences("jarvis-files", Context.MODE_PRIVATE)
+    private val preferences = context.applicationContext.getSharedPreferences("persona-files", Context.MODE_PRIVATE)
 
     var showHidden: Boolean
         get() = preferences.getBoolean(SHOW_HIDDEN, false)

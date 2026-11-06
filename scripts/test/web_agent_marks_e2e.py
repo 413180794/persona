@@ -81,7 +81,7 @@ def run(browser, base, token, shots, channel_note):
             page.set_default_timeout(10000)
             page.goto(base + "/overview?token=" + token)
             expect(page.locator("aside")).to_be_attached()
-            page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+            page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
             page.reload()
             if width <= 600:
                 page.locator("main").get_by_role("button", name="侧边栏").first.click()

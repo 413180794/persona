@@ -6,11 +6,11 @@
       "name": "filter_all",
       "description": "快速筛选保留对应状态，计数取筛选前的会话。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
-        "ios/JarvisTests/AgentFilterTests.swift: eachFilterKeepsItsState"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/PersonaTests/AgentFilterTests.swift: eachFilterKeepsItsState"
       ],
       "input": {
         "sessions": [
@@ -159,11 +159,11 @@
       "name": "filter_needsyou",
       "description": "快速筛选保留对应状态，计数取筛选前的会话。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
-        "ios/JarvisTests/AgentFilterTests.swift: eachFilterKeepsItsState"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/PersonaTests/AgentFilterTests.swift: eachFilterKeepsItsState"
       ],
       "input": {
         "sessions": [
@@ -276,11 +276,11 @@
       "name": "filter_unread",
       "description": "快速筛选保留对应状态，计数取筛选前的会话。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
-        "ios/JarvisTests/AgentFilterTests.swift: eachFilterKeepsItsState"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/PersonaTests/AgentFilterTests.swift: eachFilterKeepsItsState"
       ],
       "input": {
         "sessions": [
@@ -398,11 +398,11 @@
       "name": "filter_working",
       "description": "快速筛选保留对应状态，计数取筛选前的会话。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)",
-        "ios/JarvisTests/AgentFilterTests.swift: eachFilterKeepsItsState"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)",
+        "ios/PersonaTests/AgentFilterTests.swift: eachFilterKeepsItsState"
       ],
       "input": {
         "sessions": [
@@ -515,10 +515,10 @@
       "name": "empty_list",
       "description": "空列表的状态计数为零。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [],
@@ -568,10 +568,10 @@
       "name": "unread_keeps_seen_rows",
       "description": "未读筛选保留已经看过的会话，计数和批量已读集合只计算当前未读。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -697,10 +697,10 @@
       "name": "unread_reselected_drops_seen_rows",
       "description": "重新选择筛选时仅保留当前匹配的会话。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -824,10 +824,10 @@
       "name": "machine_search_before_counts",
       "description": "机器和不区分大小写的搜索先过滤，助手不计数，离线会话不进入普通分组。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [
@@ -957,10 +957,10 @@
       "name": "kept_cannot_escape_base",
       "description": "保留集合不能绕过机器或搜索范围。",
       "source": [
-        "ios/Jarvis/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
+        "ios/Persona/Views/Chats/ChatsView.swift: base, body, counts(_:), rank(_:), ordered(_:), stateSections(_:), machineSections(_:), spaceSection(_:)",
         "ios/Shared/Models.swift: Session.sortDate",
         "ios/Shared/APIClient.swift: Pins.mutes(session:space:)",
-        "ios/Jarvis/App/AppModel.swift: isPinned(_:), isMuted(_:)"
+        "ios/Persona/App/AppModel.swift: isPinned(_:), isMuted(_:)"
       ],
       "input": {
         "sessions": [

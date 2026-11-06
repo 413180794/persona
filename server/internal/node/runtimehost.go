@@ -20,7 +20,7 @@ import (
 )
 
 // RuntimeHost is the runtime socket (runtime.sock, runtimes.go) and the runtimes connected to it. A resident node
-// (`jarvisd node --attach`, attach.go) makes one when it starts and shares it with the Node it makes for each hub
+// (`personad node --attach`, attach.go) makes one when it starts and shares it with the Node it makes for each hub
 // connection, so runtimes connect before the hub does and stay connected while it reconnects: their sessions are in
 // the first list the next connection sends, and nothing on the runtime's side notices the gap. A node serving its one
 // connection itself (`--stdio` with no resident node) has one of its own, for that connection (listenRuntimeSocket).
@@ -424,7 +424,7 @@ func (rh *RuntimeHost) servePackage(h *runtimeConn, params json.RawMessage) (any
 		return nil, err
 	}
 	if pkg == nil {
-		return nil, &rpc.Error{Message: "this jarvisd carries no package " + p.Name, Code: "not_found"}
+		return nil, &rpc.Error{Message: "this personad carries no package " + p.Name, Code: "not_found"}
 	}
 	files := make([]map[string]string, len(pkg.Files))
 	for i, f := range pkg.Files {

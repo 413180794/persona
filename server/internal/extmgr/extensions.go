@@ -37,7 +37,7 @@ import (
 
 // PluginConfig is hub.json's plugins[]: a process the hub runs next to itself (docs/extensions.md "Extensions in
 // hub.json"). The hub starts it, restarts it when it exits and relays /api/v1/plugins/{id}/… to the HTTP server it
-// serves on the unix socket in JARVIS_PLUGIN_SOCKET (WebSockets included). Without a command the plugin runs elsewhere
+// serves on the unix socket in PERSONA_PLUGIN_SOCKET (WebSockets included). Without a command the plugin runs elsewhere
 // and only its socket is here (e.g. forwarded with ssh -R from a machine that reaches what the plugin needs). The
 // registry gives it a manifest made from the entry; it is changed in hub.json only.
 type ExtensionConfig struct {
@@ -45,12 +45,12 @@ type ExtensionConfig struct {
 	Name     string            `json:"name,omitempty"`
 	Kind     string            `json:"kind"`
 	Command  string            `json:"command,omitempty"`
-	Socket   string            `json:"socket,omitempty"` // default ~/.jarvis/plugins/<id>.sock
+	Socket   string            `json:"socket,omitempty"` // default ~/.persona/plugins/<id>.sock
 	Args     []string          `json:"args,omitempty"`
 	Env      map[string]string `json:"env,omitempty"`
 	Dir      string            `json:"dir,omitempty"` // working directory; "~/" is the hub machine's home
 	Disabled bool              `json:"disabled,omitempty"`
-	// Config is the plugin's own settings, handed over as JSON in JARVIS_PLUGIN_CONFIG (the built-in voice plugin's
+	// Config is the plugin's own settings, handed over as JSON in PERSONA_PLUGIN_CONFIG (the built-in voice plugin's
 	// providers, docs/extensions.md "Built-in voice extension").
 	Config json.RawMessage `json:"config,omitempty"`
 }
@@ -801,7 +801,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		} else if len(p.Record.Granted.Hub) > 0 && ps.h != nil {
 			url := hubLocalURL(ps.h.cfg.Listen)
 			s.StartEnv = func() []string {
-				return []string{"JARVIS_HUB_URL=" + url, "JARVIS_HUB_TOKEN=" + hubToken.renew(ps, p)}
+				return []string{"PERSONA_HUB_URL=" + url, "PERSONA_HUB_TOKEN=" + hubToken.renew(ps, p)}
 			}
 		}
 		if !s.RPC { // no initialize to carry them
@@ -1051,7 +1051,7 @@ func (ps *extensions) hubEnv() []string {
 	}
 	// A plugin granted it is configured or accepted by whoever runs the hub, so it gets the hub's own credential to
 	// call its API with (the knowledge base, the agents, …): like a node, it is part of the hub.
-	return []string{"JARVIS_HUB_URL=" + hubLocalURL(ps.h.cfg.Listen), "JARVIS_HUB_TOKEN=" + ps.h.cfg.Token}
+	return []string{"PERSONA_HUB_URL=" + hubLocalURL(ps.h.cfg.Listen), "PERSONA_HUB_TOKEN=" + ps.h.cfg.Token}
 }
 
 // remoteManifest asks a plugin elsewhere for its manifest: initialize over its protocol socket says who it is and

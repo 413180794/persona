@@ -1,9 +1,9 @@
 明日の予定を確認
 
-<jarvis-context kind="context" title="音声会話" url="">
+<persona-context kind="context" title="音声会話" url="">
 音声会話で頼んだことを音声アシスタントが伝えています。聞き間違いがあるかもしれないので、はっきりしないときは確認してください。終わったら返事は短めに。読み上げて聞きます。
 
 音声会話で直前に話したこと：
 私：明日の会議は？
 音声アシスタント：メイン会話に調べてもらいます。
-</jarvis-context>
+</persona-context>

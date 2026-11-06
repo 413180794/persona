@@ -2,16 +2,16 @@ import XCTest
 
 /// The Agents list with a lot of agents (scripts/mock/mock_hub.py with MOCK_AGENTS=1: ~120 agents, a space with 3 needing
 /// you, 35 finished-unread and 12 working): the quick filters, the compact rows, folding spaces, marking read.
-///   TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:<port>
-/// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「Agents 列表」).
+///   TEST_RUNNER_PERSONA_AGENTS_HUB=http://127.0.0.1:<port>
+/// TEST_RUNNER_PERSONA_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「Agents 列表」).
 final class AgentsListTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_AGENTS_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 (JARVIS_AGENTS_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_AGENTS_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 (PERSONA_AGENTS_HUB)")
         }
         hub = h
         _ = mock("reset") // every agent back to its state, nothing marked seen
@@ -32,7 +32,7 @@ final class AgentsListTests: XCTestCase {
     /// (another test's) decides whether the chat opens.
     private func launch(fresh: Bool = true, chat: String = "") {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev", "-dev.grouping", "space"]
             + (fresh ? ["-openAgentsFresh", "YES"] : [])
         app.launchPinned()
@@ -48,8 +48,8 @@ final class AgentsListTests: XCTestCase {
     private func shot(_ name: String) {
         let s = app.screenshot()
         add(attachment(XCTAttachment(screenshot: s), name))
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + style + ".png"))
         }
     }
@@ -185,7 +185,7 @@ final class AgentsListTests: XCTestCase {
     /// and one tap shows every machine again (#1659: one machine chosen once hid the other computers' agents).
     @MainActor func testMachineFilterShowsInShell() throws {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES",
                                "-ui.oldLayout", "NO"]
         app.launchPinned()
@@ -561,7 +561,7 @@ final class AgentsListTests: XCTestCase {
     /// tap as well (2026-10-31: it took two taps where the other states take one); a second tap folds it again.
     @MainActor func testStateGroupingOpensSeenInOneTap() throws {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-dev.grouping", "state"]
         app.launchPinned()
         see(filter("all"), "the quick filters", timeout: 15)

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The chat's lines (`ChatLines`) from items, without the chat: one exchange per message, open work lines unfolded,
 /// several messages of a finished turn merged, BeautifulUI's runs of tool calls.
@@ -212,7 +212,7 @@ struct ChatLinesTests {
         #expect(ChatLines.openRecap(after, pending: earlier) == nil)
     }
 
-    /// A picture sent with a message to Jarvis: claude -p writes the message's line with the picture first and the
+    /// A picture sent with a message to Persona: claude -p writes the message's line with the picture first and the
     /// text after it (an image block, then the text), where a pasted one in an Agents chat comes after the text. The
     /// picture belongs to that message, above its bubble, as it showed while it was being sent: it went to the
     /// exchange before (folded into its work, out of sight).
@@ -241,7 +241,7 @@ struct ChatLinesTests {
         #expect(kinds(ChatLines(openWork: []).build(blocks(items), live: nil)) == ["user", "answer", "other", "user", "answer"])
     }
 
-    /// A picture sent to Jarvis with no text: its line holds the picture alone. It is a message of its own, shown as
+    /// A picture sent to Persona with no text: its line holds the picture alone. It is a message of its own, shown as
     /// a sent picture, not the end of the exchange before it.
     @Test func aPictureSentAloneIsAMessageOfItsOwn() {
         var photo = item(3, .image, role: "user", id: nil)
@@ -308,7 +308,7 @@ struct ChatLinesTests {
     }
 
     /// The same after a turn that did work: the divider comes after the answer, not hidden in its folded work line
-    /// (the Jarvis chat showed nothing of the compaction).
+    /// (the Persona chat showed nothing of the compaction).
     @Test func anIdleCompactionAfterWorkIsAfterTheAnswer() {
         let items = [item(1, .text, role: "user", text: "看一下"), item(2, .toolUse, tool: "Bash", id: "a"), item(3, .toolResult, role: "user", text: "ok", id: "a"),
                      item(4, .text, text: "看完了"), notice(5, ChatStore.compactedText), notice(6, ChatStore.continuedText)]

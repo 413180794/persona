@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Persona › Scheduled Tasks: the rules in words, the times, and what runs next (docs/assistant.md).
 @MainActor

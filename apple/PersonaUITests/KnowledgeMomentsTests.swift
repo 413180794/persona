@@ -1,14 +1,14 @@
 import XCTest
 
 /// A project's related company moments (「相关公司圈」): the posts the hub linked, and one opened with its comments. Against scripts/mock/mock_hub.py
-/// (JARVIS_MOCK_HUB).
+/// (PERSONA_MOCK_HUB).
 final class KnowledgeMomentsTests: XCTestCase {
     @MainActor func testAProjectListsItsPostsAndOpensOne() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistantPage", "knowledge",
                                "-showKnowledgeEntry", "projects/weather-app"]
         app.launchPinned()

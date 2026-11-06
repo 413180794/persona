@@ -171,7 +171,7 @@ struct FeishuBotView: View {
 
     private var featuresSection: some View {
         Section {
-            feature(\.main, Theme.Icon.jarvis, "Chat with Persona", "Messages go to the main chat (/new, /list to switch threads); replies come back to Lark")
+            feature(\.main, Theme.Icon.persona, "Chat with Persona", "Messages go to the main chat (/new, /list to switch threads); replies come back to Lark")
             feature(\.cards, Theme.Icon.needsYou, "Questions and Approvals", "When Persona or an agent you drive from Lark needs an answer or approval, you get a card in Lark. One tap does it")
             feature(\.allCards, Theme.Icon.notifications, "Questions from All Agents", "Questions and approvals from every agent on all your computers go to Lark")
                 .disabled(!features.cards)

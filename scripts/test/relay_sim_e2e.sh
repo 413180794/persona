@@ -1,6 +1,6 @@
 #!/bin/bash
 # End-to-end check of the push relay on a simulator (docs/push-relay.md "Verification"), without Apple:
-#   app's public key → hub code seals a push → local `jarvisd relay` → fake APNs (writes what it got) → `simctl push`
+#   app's public key → hub code seals a push → local `personad relay` → fake APNs (writes what it got) → `simctl push`
 #   → the phone's code opens it. A tampered payload must stay "New message" (the placeholder). What each hop got goes to $OUT
 #   (default /tmp/relay-e2e).
 #
@@ -13,7 +13,7 @@ cd "$(dirname "$0")/../.."
 : "${SIM:?set SIM=<simulator udid>}"
 SIM=$(scripts/app/sim-boot.sh "$SIM")   # boots it slim if it is shut down (default profile keeps apsd)
 OUT=${OUT:-/tmp/relay-e2e}
-BUNDLE=$(python3 scripts/jarvis_config.py get app.bundle_id)
+BUNDLE=$(python3 scripts/persona_config.py get app.bundle_id)
 TMP=$(mktemp -d)
 rm -rf "$OUT" && mkdir -p "$OUT"
 pids=()
@@ -55,8 +55,8 @@ cat > "$TMP/relay.json" <<JSON
 JSON
 # -mod=readonly: a GOFLAGS=-mod=mod in the environment must not rewrite go.mod here.
 export GOFLAGS=-mod=readonly
-(cd server && go build -o "$TMP/jarvisd" ./cmd/personad)
-"$TMP/jarvisd" relay "$TMP/relay.json" > "$OUT/relay.log" 2>&1 & pids+=($!)
+(cd server && go build -o "$TMP/personad" ./cmd/personad)
+"$TMP/personad" relay "$TMP/relay.json" > "$OUT/relay.log" 2>&1 & pids+=($!)
 for _ in $(seq 50); do curl -fs "http://127.0.0.1:$RELAY_PORT/relay/v1/health" >/dev/null && break; sleep 0.1; done
 curl -fs "http://127.0.0.1:$RELAY_PORT/relay/v1/health" >/dev/null || { say "FAIL: relay did not start"; cat "$OUT/relay.log"; exit 1; }
 
@@ -66,8 +66,8 @@ GRANT=$(curl -fs "http://127.0.0.1:$RELAY_PORT/relay/v1/register" -H 'Content-Ty
 
 # 5. The hub's code seals and pushes (an interaction, then a finished turn).
 for kind in interaction done; do
-  (cd server && JARVIS_RELAY_URL="http://127.0.0.1:$RELAY_PORT/relay" JARVIS_RELAY_GRANT="$GRANT" JARVIS_PUSH_KEY="$PUSH_KEY" \
-    JARVIS_RELAY_KIND=$kind go test ./internal/hub/ -run TestManualRelayPush -count=1 >"$OUT/hub-$kind.log" 2>&1) \
+  (cd server && PERSONA_RELAY_URL="http://127.0.0.1:$RELAY_PORT/relay" PERSONA_RELAY_GRANT="$GRANT" PERSONA_PUSH_KEY="$PUSH_KEY" \
+    PERSONA_RELAY_KIND=$kind go test ./internal/hub/ -run TestManualRelayPush -count=1 >"$OUT/hub-$kind.log" 2>&1) \
     || { say "FAIL: hub push ($kind)"; cat "$OUT/hub-$kind.log"; exit 1; }
 done
 [ -s "$OUT/apns-2.json" ] || { say "FAIL: fake APNs got nothing"; exit 1; }
@@ -84,7 +84,7 @@ import json, sys, base64
 p = json.load(open(sys.argv[1])); raw = bytearray(base64.b64decode(p["e"])); raw[-1] ^= 1
 p["e"] = base64.b64encode(bytes(raw)).decode(); json.dump(p, open(sys.argv[2], "w"))
 PY
-eval "$(python3 scripts/jarvis_config.py env)"
+eval "$(python3 scripts/persona_config.py env)"
 (cd apple && TEST_RUNNER_RELAY_PAYLOADS="$OUT/apns-1.json=Bash: swift test|$OUT/apns-2.json=改好了，测试全过|$OUT/garbage.json=有新消息" \
   xcodebuild test-without-building -project Persona.xcodeproj -scheme Persona -destination "id=$SIM" \
   -derivedDataPath "${DERIVED:-../build/DerivedData}" -only-testing:PersonaTests/NotificationServiceTests >"$OUT/open.log" 2>&1) \

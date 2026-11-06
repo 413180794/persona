@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Links to a port of the conversation's machine (docs/ports.md「链接」): localhost and its spellings, the machine's
 /// own name, with paths; anything else on the web is not one.

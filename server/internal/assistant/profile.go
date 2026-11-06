@@ -29,8 +29,8 @@ import (
 const settingsKey = "assistant"
 
 // assistantRel is this manager's assistant directory on a machine, relative to its home (node assistant.prepare):
-// .jarvis/assistant for the built-in manager, .jarvis/assistant-<id> for another (identity.AssistantDirName).
-func (s *Service) assistantRel() string { return path.Join(".jarvis", identity.AssistantDirName(s.id)) }
+// .persona/assistant for the built-in manager, .persona/assistant-<id> for another (identity.AssistantDirName).
+func (s *Service) assistantRel() string { return path.Join(".persona", identity.AssistantDirName(s.id)) }
 
 // settingsFresh is how long the settings read from the database are used before they are read again (the assistant
 // writes them itself; another hub sharing the database might too).
@@ -291,7 +291,7 @@ func (s *Service) assistantCwd(d Device) string {
 }
 
 // stateDirOn is the directory name in a machine's state directory: its data directory when it reported one (a custom
-// PERSONA_HOME), else ~/.jarvis; "" while it has not reported its home.
+// PERSONA_HOME), else ~/.persona; "" while it has not reported its home.
 func stateDirOn(home, dataDir, name string) string {
 	if home == "" {
 		return ""
@@ -299,7 +299,7 @@ func stateDirOn(home, dataDir, name string) string {
 	if dataDir != "" {
 		return path.Join(dataDir, name)
 	}
-	return path.Join(home, ".jarvis", name)
+	return path.Join(home, ".persona", name)
 }
 
 type assistantView struct {

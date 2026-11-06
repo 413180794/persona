@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Mark All as Read over a socket that is gone (#1588): a mark waits until a list from the hub shows it recorded, the
 /// session stays seen meanwhile, and the mark goes again over HTTP or the next socket.

@@ -9,9 +9,9 @@ import (
 )
 
 func TestCloseContextWithBorrowedConnection(t *testing.T) {
-	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	url := os.Getenv("PERSONA_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set")
+		t.Skip("PERSONA_TEST_DATABASE_URL not set")
 	}
 	d, err := Open(context.Background(), url, AllSets)
 	if err != nil {

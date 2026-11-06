@@ -33,8 +33,8 @@ func fileFor(name string, bin []byte) (File, []byte) {
 
 // A download cut off halfway is tried again; what finally lands matches the signed manifest.
 func TestDownloadRetriesACutDownload(t *testing.T) {
-	bin := bytes.Repeat([]byte("jarvisd "), 4096)
-	f, gz := fileFor("jarvisd-linux-amd64.gz", bin)
+	bin := bytes.Repeat([]byte("personad "), 4096)
+	f, gz := fileFor("personad-linux-amd64.gz", bin)
 	var tries atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if tries.Add(1) == 1 {
@@ -64,8 +64,8 @@ func TestDownloadRetriesACutDownload(t *testing.T) {
 
 // A file that is not the one signed is deleted at once and not tried again.
 func TestDownloadRefusesAnotherFile(t *testing.T) {
-	f, _ := fileFor("jarvisd-linux-amd64.gz", []byte("the real one"))
-	_, other := fileFor("jarvisd-linux-amd64.gz", []byte("something else entirely, same name"))
+	f, _ := fileFor("personad-linux-amd64.gz", []byte("the real one"))
+	_, other := fileFor("personad-linux-amd64.gz", []byte("something else entirely, same name"))
 	f.Size = int64(len(other))
 	var tries atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { tries.Add(1); w.Write(other) }))
@@ -83,7 +83,7 @@ func TestDownloadRefusesAnotherFile(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
-	f, _ := fileFor("jarvisd-linux-amd64.gz", []byte("x"))
+	f, _ := fileFor("personad-linux-amd64.gz", []byte("x"))
 	m := Manifest{Version: "v2", Build: 202611021700, Protocol: 1, Files: map[string]File{"linux-amd64": f}}
 	data, _ := json.Marshal(m)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +105,7 @@ func TestCheck(t *testing.T) {
 
 func TestSwapAndRestore(t *testing.T) {
 	dir := t.TempDir()
-	target, next := filepath.Join(dir, "jarvisd"), filepath.Join(dir, "new")
+	target, next := filepath.Join(dir, "personad"), filepath.Join(dir, "new")
 	os.WriteFile(target, []byte("old"), 0o755)
 	os.WriteFile(next, []byte("new"), 0o755)
 	prev, err := Swap(target, next)

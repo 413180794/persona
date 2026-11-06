@@ -49,7 +49,7 @@ const codexStartTimeout = 90 * time.Second
 type codexConn struct {
 	n            *Node
 	p            *assistantProc
-	key          string // what the jarvis MCP server reports as its session until the thread exists (resolveAssistantKey)
+	key          string // what the persona MCP server reports as its session until the thread exists (resolveAssistantKey)
 	memDir       string // the assistant's memory, shared with Claude (codexMemoryPrompt)
 	nextID       int64
 	writeMessage func([]byte) error
@@ -152,17 +152,17 @@ func (c *codexConn) turn() string {
 	return c.turnID
 }
 
-// codexArgs are app-server's own flags: the jarvis MCP server (its session is the conversation's key until the
+// codexArgs are app-server's own flags: the persona MCP server (its session is the conversation's key until the
 // thread exists) with a timeout long enough for ask_user, nothing else; sandbox and approvals go with each thread
 // and turn.
 func codexArgs(bin, key string) []string {
 	q := func(s string) string { b, _ := json.Marshal(s); return string(b) } // a JSON string is a TOML basic string
 	return []string{
-		"-c", "mcp_servers.jarvis.command=" + q(bin),
-		"-c", `mcp_servers.jarvis.args=["mcp"]`,
-		"-c", fmt.Sprintf("mcp_servers.jarvis.env={PERSONA_ASSISTANT=%s,JARVIS_ASSISTANT=%s,PERSONA_SESSION_ID=%s,JARVIS_SESSION_ID=%s}", q("1"), q("1"), q(key), q(key)),
-		"-c", fmt.Sprintf("mcp_servers.jarvis.tool_timeout_sec=%d", codexToolTimeout),
-		"-c", "mcp_servers.jarvis.startup_timeout_sec=30",
+		"-c", "mcp_servers.persona.command=" + q(bin),
+		"-c", `mcp_servers.persona.args=["mcp"]`,
+		"-c", fmt.Sprintf("mcp_servers.persona.env={PERSONA_ASSISTANT=%s,PERSONA_SESSION_ID=%s}", q("1"), q(key)),
+		"-c", fmt.Sprintf("mcp_servers.persona.tool_timeout_sec=%d", codexToolTimeout),
+		"-c", "mcp_servers.persona.startup_timeout_sec=30",
 		// Commands get the process's environment like Claude's Bash does: the default excludes (*KEY*, *TOKEN*…)
 		// would strip the credentials of a gate that still puts them there (auth env, gateproxy.go), and its command
 		// would fail.
@@ -180,8 +180,8 @@ func codexArgs(bin, key string) []string {
 // function sets what it sets (env, -c model_provider, -m …) exactly as when it starts the TUI.
 // Use alias-safe definitions and calls: zsh expands aliases while parsing the script.
 func codexShell(launcher string) string {
-	return `__jarvis_args=("$@")
-function codex { builtin command codex "$@" app-server "${__jarvis_args[@]}"; }
+	return `__persona_args=("$@")
+function codex { builtin command codex "$@" app-server "${__persona_args[@]}"; }
 function command { if [[ "$1" == codex ]]; then shift; \codex "$@"; else builtin command "$@"; fi; }
 ` + launcher
 }
@@ -200,7 +200,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "jarvis"}, codexArgs(n.bin, key)...)...)
+	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "persona"}, codexArgs(n.bin, key)...)...)
 	cmd.Dir = root
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
 	gateEnv, releaseGates := n.assistantLarkEnv(cwd, id) // its addresses at the gate proxy go with the process
@@ -289,7 +289,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 }
 
 // codexDirs is the workspace and the memory directory (made if missing) as Codex gets them, symlinks resolved: both
-// are writable roots, and its macOS sandbox refuses one with a symlink in it (~/.jarvis → .persona, a ~/.claude kept in
+// are writable roots, and its macOS sandbox refuses one with a symlink in it (~/.persona → .persona, a ~/.claude kept in
 // dotfiles), turning every command down before it runs. Only Codex sees the real paths; the session keeps its cwd.
 func (n *Node) codexDirs(cwd string) (root, memDir string) {
 	memDir = n.memoryDir(cwd)
@@ -316,7 +316,7 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 		CodexHome string `json:"codexHome"`
 	}
 	if err := c.call(ctx, "initialize", map[string]any{
-		"clientInfo":   map[string]any{"name": "jarvis", "title": "Persona", "version": "1"},
+		"clientInfo":   map[string]any{"name": "persona", "title": "Persona", "version": "1"},
 		"capabilities": map[string]any{"experimentalApi": true, "requestAttestation": false},
 	}, &init); err != nil {
 		return err
@@ -857,7 +857,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 		}
 		accept := map[string]any{"action": "accept", "content": map[string]any{}, "_meta": nil}
 		// Persona's own tools run unasked; the hub asks before the ones that act for the user (mail_send, phone writes).
-		if r.ServerName == "jarvis" || mode == proto.ModeBypass {
+		if r.ServerName == "persona" || mode == proto.ModeBypass {
 			return accept, nil
 		}
 		ix.ToolName = "mcp__" + r.ServerName
@@ -918,7 +918,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 		}
 		return map[string]any{"answers": answers}, nil
 	}
-	return nil, fmt.Errorf("jarvis does not handle %s", method)
+	return nil, fmt.Errorf("persona does not handle %s", method)
 }
 
 // askPhone asks about a command / file change and maps the answer to Codex's decision names.

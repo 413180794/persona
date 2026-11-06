@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Pages of long sessions come with the agent's work folded (`Item.fold`, docs/protocol.md「折叠的工作」): the work
 /// line counts what a fold stands for, a fold replaces the steps it covers, and opening it puts the steps back.

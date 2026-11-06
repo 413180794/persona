@@ -174,7 +174,7 @@ func remoteTestNode(t *testing.T) *Node {
 	n.logger = log.New(io.Discard, "", 0)
 	n.metas = map[string]quickMeta{}
 	n.bgScans = map[string]*bgScan{}
-	n.dir = filepath.Join(home, ".jarvis")
+	n.dir = filepath.Join(home, ".persona")
 	n.configureCodex(proto.CodexConfig{})
 	return n
 }

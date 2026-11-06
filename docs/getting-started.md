@@ -163,7 +163,7 @@ These cards on iPhone and Android are still in progress; there you'll only see t
 
 For people comfortable with the command line. The commands and files behind each step above:
 
-- The hub install command ends by running `personad hub setup`: it writes `~/.persona/hub.json`, creates the Postgres container `jarvis-postgres` in Docker, installs a systemd user service (on a Mac, the LaunchAgent `com.jarvis.hub`), runs a self-check, and finally prints the pairing QR code and `/admin#setup=<setup code>`.
+- The hub install command ends by running `personad hub setup`: it writes `~/.persona/hub.json`, creates the Postgres container `persona-postgres` in Docker, installs a systemd user service (on a Mac, the LaunchAgent `com.persona.hub`), runs a self-check, and finally prints the pairing QR code and `/admin#setup=<setup code>`.
   What it does and doesn't change is in [onboarding.md](onboarding.md) ("Installer"); for manual deployment see [server.md](server.md), for a NAS see [docker.md](docker.md).
 - Get another phone pairing code: run `personad hub pair` on the hub machine. Under "Advanced" on the web sign-in page you can sign in with the hub's master key; it's the `token` in hub.json, and whoever has it can do anything.
 - Add a computer without the web: **Admin › Computers › Add computer**, or run `personad hub pair --machine <id> --add --name <name>` on the hub machine. Computers added either way count as confirmed right away. Details in [link.md](link.md).

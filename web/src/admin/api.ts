@@ -46,7 +46,7 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(json ?? {});
-    if (csrf) headers["X-Jarvis-CSRF"] = csrf;
+    if (csrf) headers["X-Persona-CSRF"] = csrf;
   }
   return answer<T>(await transport(`/api/v1/admin${path}`, { method, headers, body, credentials: "same-origin", cache: "no-store" }));
 }
@@ -55,7 +55,7 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
 // package, docs/admin.md "Extensions"). query carries what the body cannot.
 export async function adminUpload<T>(path: string, file: Blob, query: Record<string, string>): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream", "Accept-Language": currentLanguage() };
-  if (csrf) headers["X-Jarvis-CSRF"] = csrf;
+  if (csrf) headers["X-Persona-CSRF"] = csrf;
   const q = new URLSearchParams(Object.entries(query).filter(([, v]) => v)).toString();
   return answer<T>(await transport(`/api/v1/admin${path}?${q}`, { method: "POST", headers, body: file, credentials: "same-origin", cache: "no-store" }));
 }
@@ -140,7 +140,7 @@ export const getMesh = () => adminApi<MeshView>("/mesh");
 // cannot be reached (409 confirm_required without it; that hub becomes a member when it comes back).
 export const setCenter = (hubId: string, confirm = false) => adminApi<MeshView>(`/peers/${enc(hubId)}/center`, "POST", { confirm });
 
-// addLinkMachine: the computer dials the hub (its jarvis-link, paired with linkPair next). Live at once.
+// addLinkMachine: the computer dials the hub (its persona-link, paired with linkPair next). Live at once.
 export const addLinkMachine = (m: { id: string; name: string; icon: string }) => adminApi<AddedMachine>("/machines", "POST", { kind: "link", ...m });
 
 // addServiceMachine: the hub dials the computer's connector. The hub pairs with the pasted link first and only then

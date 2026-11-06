@@ -182,7 +182,7 @@ func (s *memStore) TakeSetting(ctx context.Context, key string, out any) (bool, 
 func newTestDevices(t *testing.T) *Devices {
 	t.Helper()
 	logf := func(string, ...any) {}
-	if os.Getenv("JARVIS_DEVICES_LOG") == "1" {
+	if os.Getenv("PERSONA_DEVICES_LOG") == "1" {
 		logf = log.New(os.Stderr, "", log.Lmicroseconds).Printf
 	} else {
 		_ = io.Discard

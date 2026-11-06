@@ -1,12 +1,12 @@
 // The smallest complete Persona runtime (docs/runtimes.md "Smallest example"): sessions in memory, every message answered with
 // an echo after a short "thinking" stream, and a permission card before each echo when the text says so. Start it
-// next to a jarvisd node to see a runtime in the apps without any agent, or copy it as the skeleton of a new runtime:
+// next to a personad node to see a runtime in the apps without any agent, or copy it as the skeleton of a new runtime:
 //
 //   node integrations/runtime-sdk/examples/echo-runtime.mjs [--socket <path>]
 //
-// or as a daemon the node dials (docs/daemons.md), the token in JARVIS_DAEMON_TOKEN:
+// or as a daemon the node dials (docs/daemons.md), the token in PERSONA_DAEMON_TOKEN:
 //
-//   JARVIS_DAEMON_TOKEN=<token> node integrations/runtime-sdk/examples/echo-runtime.mjs --listen <port>
+//   PERSONA_DAEMON_TOKEN=<token> node integrations/runtime-sdk/examples/echo-runtime.mjs --listen <port>
 //
 // What a real runtime replaces: `sessions` with its own session store, `reply` with its agent, and the item mapping
 // with its own (see integrations/dsh/lib/map.js).
@@ -117,14 +117,14 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const opts = { answerFirst: 'phone', log: (m) => console.error(m) }
   if (i > 0) opts.socketPath = process.argv[i + 1]
   if (l > 0) {
-    const token = process.env.PERSONA_DAEMON_TOKEN ?? process.env.JARVIS_DAEMON_TOKEN
+    const token = process.env.PERSONA_DAEMON_TOKEN
     if (!token) {
-      console.error('set PERSONA_DAEMON_TOKEN (JARVIS_DAEMON_TOKEN is also supported; the token daemons.json gives for this daemon)')
+      console.error('set PERSONA_DAEMON_TOKEN (the token daemons.json gives for this daemon)')
       process.exit(2)
     }
     opts.listen = { port: Number(process.argv[l + 1]), token }
   }
   const { runtime } = createEchoRuntime(opts)
   const addr = await runtime.start()
-  console.error(addr ? `echo daemon: ws://${addr.address}:${addr.port}/jarvis/runtime; Ctrl-C to stop` : 'echo runtime: waiting for the jarvisd node; Ctrl-C to stop')
+  console.error(addr ? `echo daemon: ws://${addr.address}:${addr.port}/persona/runtime; Ctrl-C to stop` : 'echo runtime: waiting for the personad node; Ctrl-C to stop')
 }

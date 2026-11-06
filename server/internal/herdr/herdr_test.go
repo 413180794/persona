@@ -189,10 +189,10 @@ func TestSubscribeStreamsUntilHerdrCloses(t *testing.T) {
 		defer conn.Close()
 		line, _ := bufio.NewReader(conn).ReadBytes('\n')
 		gotReq <- string(line)
-		_, _ = conn.Write([]byte(`{"id":"jarvis:events","result":{"type":"subscription_started"}}` + "\n" +
+		_, _ = conn.Write([]byte(`{"id":"persona:events","result":{"type":"subscription_started"}}` + "\n" +
 			`{"event":"pane_agent_status_changed","data":{"pane_id":"w1:p2","workspace_id":"w1","agent_status":"blocked"}}` + "\n" +
 			`{"event":"pane_created","data":{"pane":{"pane_id":"w1:p3"}}}` + "\n" +
-			`{"id":"jarvis:events","error":{"code":"events_lost","message":"subscriber fell behind"}}` + "\n"))
+			`{"id":"persona:events","error":{"code":"events_lost","message":"subscriber fell behind"}}` + "\n"))
 	}()
 	c := &Client{Socket: sock}
 	var got []string
@@ -228,7 +228,7 @@ func TestSubscribeEndsWithContext(t *testing.T) {
 			return
 		}
 		_, _ = bufio.NewReader(conn).ReadBytes('\n')
-		_, _ = conn.Write([]byte(`{"id":"jarvis:events","result":{"type":"subscription_started"}}` + "\n"))
+		_, _ = conn.Write([]byte(`{"id":"persona:events","result":{"type":"subscription_started"}}` + "\n"))
 		// then silence, connection left open
 	}()
 	ctx, cancel := context.WithCancel(context.Background())

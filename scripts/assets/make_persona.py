@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Makes a persona package (docs/persona.md): Jarvis's name, face, the animated dot in the Jarvis tab's top bar and
+"""Makes a persona package (docs/persona.md): Persona's name, face, the animated dot in the Persona tab's top bar and
 the colors, from a few pictures of a character.
 
   python3 scripts/assets/make_persona.py new --id doudou --name Doudou a.jpg b.jpg c.jpg   # generate, then build
@@ -7,7 +7,7 @@ the colors, from a few pictures of a character.
   python3 scripts/assets/make_persona.py build --work W --id doudou --name Doudou [--out DIR]
   python3 scripts/assets/make_persona.py demo --out DIR      # an original placeholder (the mock hub, UI tests)
   python3 scripts/assets/make_persona.py check DIR           # the hub's and the app's rules, no hub needed
-  python3 scripts/assets/make_persona.py install DIR [--hub HOST]   # to the hub's ~/.jarvis/personas/<id>/
+  python3 scripts/assets/make_persona.py install DIR [--hub HOST]   # to the hub's ~/.persona/personas/<id>/
   python3 scripts/assets/make_persona.py tiers generate --spec S --work W   # a tiered look: every tier's poses at once
   python3 scripts/assets/make_persona.py tiers build --spec S --work W --out DIR   # the package, and W/review.html
 
@@ -16,7 +16,7 @@ as references: transparent PNGs in <work>/poses/. Codex must reach chatgpt.com; 
 build needs no network: it lays the poses into round frames, animates them (breathing and a blink, a thought bubble,
 a spinner arc, a pulsing ring, floating z's), writes the dot's APNGs, the avatar sizes, persona.json with colors taken
 from the character (held to the app's contrast floors) and preview.png to look at. Pillow and numpy are set up in
-~/.cache/jarvis/persona-venv on first use.
+~/.cache/persona/persona-venv on first use.
 """
 import argparse
 import colorsys
@@ -32,11 +32,11 @@ import sys
 import tarfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VENV = os.path.expanduser("~/.cache/jarvis/persona-venv")
+VENV = os.path.expanduser("~/.cache/persona/persona-venv")
 
 FORMAT = 1
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
-BUILTIN = "jarvis"
+BUILTIN = "persona"
 STATES = ["idle", "thinking", "working", "needs_you", "offline"]
 AVATAR_SIZES = [64, 128, 256, 512]
 # The dot's frames: 48 pt at 3x (the top bar shows it at 46 pt).
@@ -79,14 +79,14 @@ def ensure_deps():
         return
     except ImportError:
         pass
-    if os.environ.get("JARVIS_PERSONA_VENV"):
+    if os.environ.get("PERSONA_PERSONA_VENV"):
         sys.exit("Pillow / numpy still missing in %s" % VENV)
     py = os.path.join(VENV, "bin", "python")
     if not os.path.exists(py):
         print("setting up %s (Pillow, numpy)…" % VENV, file=sys.stderr)
         subprocess.check_call([sys.executable, "-m", "venv", VENV])
         subprocess.check_call([py, "-m", "pip", "install", "-q", "pillow", "numpy"])
-    os.environ["JARVIS_PERSONA_VENV"] = "1"
+    os.environ["PERSONA_PERSONA_VENV"] = "1"
     os.execv(py, [py, os.path.abspath(__file__)] + sys.argv[1:])
 
 
@@ -1386,22 +1386,22 @@ def install(args):
     pid = os.path.basename(os.path.normpath(d))
     host = args.hub
     if not host:
-        cfg = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "jarvis_config.py"), "env"],
+        cfg = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "persona_config.py"), "env"],
                              capture_output=True, text=True, check=True).stdout
-        m = re.search(r"JARVIS_HUB_SSH=(\S+)", cfg)
+        m = re.search(r"PERSONA_HUB_SSH=(\S+)", cfg)
         host = shlex.split(m.group(1))[0] if m else ""
     if not host:
-        sys.exit("no hub: --hub HOST, or hub.machine in ~/.config/jarvis/config.json (docs/config.md)")
+        sys.exit("no hub: --hub HOST, or hub.machine in ~/.config/persona/config.json (docs/config.md)")
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as t:
         for name in sorted(os.listdir(d)):
             t.add(os.path.join(d, name), arcname=name)
     # Next to the old one under a dot name (the hub skips those), then swapped in: the phone never lists half a package.
-    script = ("set -e; d=~/.jarvis/personas; mkdir -p $d; rm -rf $d/.{id}.new $d/.{id}.old; mkdir $d/.{id}.new; "
+    script = ("set -e; d=~/.persona/personas; mkdir -p $d; rm -rf $d/.{id}.new $d/.{id}.old; mkdir $d/.{id}.new; "
               "tar -xzf - -C $d/.{id}.new; [ -d $d/{id} ] && mv $d/{id} $d/.{id}.old; mv $d/.{id}.new $d/{id}; "
               "rm -rf $d/.{id}.old").format(id=pid)
     subprocess.run(["ssh", host, script], input=buf.getvalue(), check=True)
-    print("installed %s on %s:~/.jarvis/personas/%s (phones pick it up in 设置 › 形象)" % (pid, host, pid))
+    print("installed %s on %s:~/.persona/personas/%s (phones pick it up in 设置 › 形象)" % (pid, host, pid))
 
 
 def new(args):

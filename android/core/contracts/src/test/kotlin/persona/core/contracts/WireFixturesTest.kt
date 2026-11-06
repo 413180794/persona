@@ -12,7 +12,7 @@ class WireFixturesTest(private val name: String, private val fixture: JsonObject
     companion object {
         @JvmStatic @Parameterized.Parameters(name = "{0}")
         fun cases(): List<Array<Any>> {
-            val dir = File(System.getProperty("jarvis.repo.root"), "spec/fixtures/wire")
+            val dir = File(System.getProperty("persona.repo.root"), "spec/fixtures/wire")
             val files = requireNotNull(dir.listFiles { f -> f.extension == "json" })
             require(files.isNotEmpty()) { "Missing wire fixtures" }
             return files.sortedBy { it.name }.flatMap { file ->

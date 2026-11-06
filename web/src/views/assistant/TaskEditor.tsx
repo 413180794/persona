@@ -111,7 +111,7 @@ export function TaskEditor({
       const r = await api<{ session_id: string; machine_id: string }>(`/assistant/tasks/${enc(task.id)}/run`, { method: "POST", json: {} });
       toast(t("assistant-taskeditor.run_started", { title: taskTitle(task) }), "ok");
       onClose();
-      navigate({ name: "jarvis", sid: r.session_id });
+      navigate({ name: "persona", sid: r.session_id });
     } catch (e) {
       toast(e instanceof ApiError && e.status === 409 ? e.message || t("assistant-taskeditor.still_running") : errorText(e), "error");
     } finally {
@@ -150,7 +150,7 @@ export function TaskEditor({
 
   const open = (sid: string) => {
     onClose();
-    navigate({ name: "jarvis", sid });
+    navigate({ name: "persona", sid });
   };
 
   const close = () => {

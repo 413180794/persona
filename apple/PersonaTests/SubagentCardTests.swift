@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A subagent's card in the chat (#5602): how it is doing by its call's result (a background one by its notice), and
 /// the line under its title — what it does while it runs, how it went with its steps and time once over.

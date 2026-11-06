@@ -234,7 +234,7 @@ fun AssistantScreen(
         activeMachine = key.machineId
         activeSession = key.sessionId
         if (!hasChat) {
-            navigator.selectTab(AppTab.Jarvis)
+            navigator.selectTab(AppTab.Persona)
             navigator.navigate(ChatRoute(key.machineId, key.sessionId))
         }
     }

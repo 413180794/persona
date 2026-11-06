@@ -62,11 +62,11 @@ func shortHome(t *testing.T) string {
 	return home
 }
 
-// launchEnv is the environment for a child personad with home as its home and no Persona / Jarvis overrides.
+// launchEnv is the environment for a child personad with home as its home and no Persona / Persona overrides.
 func launchEnv(home string) []string {
 	env := []string{}
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "PERSONA_") && !strings.HasPrefix(kv, "JARVIS_") && !strings.HasPrefix(kv, "HOME=") {
+		if !strings.HasPrefix(kv, "PERSONA_") && !strings.HasPrefix(kv, "HOME=") {
 			env = append(env, kv)
 		}
 	}
@@ -79,7 +79,6 @@ func TestLaunchGivesUpOnANodeThatDoesNotAnswer(t *testing.T) {
 	home := shortHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv("PERSONA_HOME", "")
-	t.Setenv("JARVIS_HOME", "")
 	sock, requests := silentNode(t, home)
 	defer func(w time.Duration) { LaunchNodeWait = w }(LaunchNodeWait)
 	LaunchNodeWait = 200 * time.Millisecond
@@ -116,7 +115,6 @@ func TestLaunchWithoutANodeIsNotATimeout(t *testing.T) {
 	home := shortHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv("PERSONA_HOME", "")
-	t.Setenv("JARVIS_HOME", "")
 	err := runLaunch(func() {}, "foo", nil)
 	if err == nil || strings.Contains(err.Error(), "did not answer") {
 		t.Fatalf("err = %v", err)

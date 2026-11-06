@@ -149,7 +149,7 @@ func generatedFiles(bin string) ([]generatedFile, error) {
 			out = append(out, generatedFile{Group: kind + "-hooks", Rel: filepath.Join(kind+"-hooks", rel), Content: files[rel]})
 		}
 	}
-	mcp, err := marshalJSON(map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": bin, "args": []string{"mcp"}}}})
+	mcp, err := marshalJSON(map[string]any{"mcpServers": map[string]any{"persona": map[string]any{"command": bin, "args": []string{"mcp"}}}})
 	if err != nil {
 		return nil, err
 	}

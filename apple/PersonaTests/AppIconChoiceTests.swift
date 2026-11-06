@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 import UIKit
-@testable import Jarvis
+@testable import Persona
 
 /// The home screen icon, the Avatar's (#3203): which icon each Avatar puts on, the model over a stand-in for UIApplication
 /// (following the Avatar and Light & Dark, the migration from the old App Icon setting), and that every icon's assets are in the
@@ -61,11 +61,12 @@ import UIKit
             let m = try JSONDecoder().decode(PersonaManifest.self, from: Data((json + "}").utf8))
             return Persona(info: PersonaInfo(id: m.id, rev: "1", bytes: 1, manifest: m))
         }
-        #expect(try package("jarvis-circuit").appIcon == .circuit)
-        #expect(try package("jarvis").appIcon == .visor)
+        #expect(try package("persona-circuit").appIcon == .circuit)
+        #expect(try package("persona-visor").appIcon == .visor)
+        #expect(try package("persona").appIcon == .standard)
         #expect(try package(nil).appIcon == .standard)
         #expect(try package("gone").appIcon == .standard)
-        #expect(try package("jarvis").manifest?.problem == nil)
+        #expect(try package("persona").manifest?.problem == nil)
     }
 
     /// Choosing an Avatar puts its icon on; the same again does nothing (the system would alert again); back to Mochi.

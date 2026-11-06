@@ -38,16 +38,16 @@ export function FilesPanel({ mid, sid, cwd, path, file, onClose }: { mid: string
   useEffect(() => setStack(start.stack), [start]);
   const dir = stack.reduce(joinPath, start.root);
 
-  const [showHidden, setShowHidden] = useStoredFlag("jarvis.files.showHidden", false);
+  const [showHidden, setShowHidden] = useStoredFlag("persona.files.showHidden", false);
   // The tree is the wide screens' view, the drill-in the narrow ones'; the menu's choice wins over both.
   const narrow = useMedia(NARROW);
   const [viewPref, setViewPref] = useState<"tree" | "drill" | null>(() => {
-    const v = localStorage.getItem("jarvis.files.view");
+    const v = localStorage.getItem("persona.files.view");
     return v === "tree" || v === "drill" ? v : null;
   });
   const tree = (viewPref ?? (narrow ? "drill" : "tree")) === "tree";
   const chooseView = (v: "tree" | "drill") => {
-    localStorage.setItem("jarvis.files.view", v);
+    localStorage.setItem("persona.files.view", v);
     setViewPref(v);
   };
   const reveal = useMemo(() => ancestors(start.root, start.stack), [start]);

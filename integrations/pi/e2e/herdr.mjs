@@ -1,13 +1,13 @@
 // End-to-end check of pi in herdr (docs/pi.md "pi in herdr"): a real herdr (a named session of its own, its config in
 // a temp dir, with herdr's pi integration installed there), a real pi TUI in a herdr pane with this package, a real
-// `jarvisd node --stdio` on that herdr (the runtime SDK's harness plays the hub), the companion for sessions on disk,
+// `personad node --stdio` on that herdr (the runtime SDK's harness plays the hub), the companion for sessions on disk,
 // and the SDK's scripted model.
 //
 // The pi in the pane is one herdr session: its pane, space and screen are herdr's, its conversation and control the
 // extension's (the SDK's conformance checks). After pi quits, a send from the phone resumes it in a new herdr tab
 // (`pi --session`), not in pi-web.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/pi/e2e/herdr.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/pi/e2e/herdr.mjs
 //
 // Needs herdr and pi on PATH. Nothing outside a fresh temp directory is touched; the herdr session is stopped by name.
 
@@ -22,9 +22,9 @@ import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness
 
 const here = dirname(fileURLToPath(import.meta.url))
 const pkg = resolve(here, '..')
-const jarvisd = process.env.JARVISD
-if (!process.env.DSH_CHECKOUT || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!process.env.DSH_CHECKOUT || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout, for its mock model server) and PERSONAD (a personad binary)')
   process.exit(2)
 }
 const root = mkdtempSync(join('/tmp', 'jpih-'))
@@ -45,14 +45,14 @@ writeFileSync(join(agentDir, 'models.json'), JSON.stringify({ providers: { mock:
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }],
 } } }))
 writeFileSync(join(agentDir, 'settings.json'), JSON.stringify({ defaultProvider: 'mock', defaultModel: 'mock-model', quietStartup: true, packages: [pkg] }))
-writeFileSync(join(agentDir, 'jarvis.json'), JSON.stringify({ approve: ['bash'], askUser: true, answerFirst: 'phone' }))
+writeFileSync(join(agentDir, 'persona.json'), JSON.stringify({ approve: ['bash'], askUser: true, answerFirst: 'phone' }))
 
 const env = { PATH, HOME: home, XDG_CONFIG_HOME: config, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: '1', TERM: 'xterm-256color' }
 // herdr's own pi integration, installed the way a user installs it (into this run's HOME).
 execFileSync('herdr', ['integration', 'install', 'pi'], { env, stdio: 'ignore' })
 
-const node = await startNode({ jarvisd, env: { HERDR_SOCKET_PATH: sock } })
-const paneEnv = { ...env, JARVIS_RUNTIME_SOCKET: node.runtimeSocket }
+const node = await startNode({ personad, env: { HERDR_SOCKET_PATH: sock } })
+const paneEnv = { ...env, PERSONA_RUNTIME_SOCKET: node.runtimeSocket }
 const logs = { herdr: [], companion: [] }
 const server = spawn('herdr', ['--session', session, 'server'], { env: paneEnv, stdio: ['ignore', 'pipe', 'pipe'] })
 server.stdout.on('data', (d) => logs.herdr.push(String(d)))

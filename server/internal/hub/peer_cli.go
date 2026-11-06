@@ -21,7 +21,7 @@ import (
 // The mesh from the command line on the hub's machine (docs/mesh.md "Command line"): the same peers API as the admin page,
 // under /api/v1/admin/cli/, over loopback with the master token (peerCLIRoutes).
 
-// PairPeer prints a code another hub pairs with this one by (`jarvisd hub pair --peer`): the code alone on stdout, what
+// PairPeer prints a code another hub pairs with this one by (`personad hub pair --peer`): the code alone on stdout, what
 // to do with it on stderr.
 func PairPeer() error {
 	cfg, err := LoadConfig()
@@ -39,8 +39,8 @@ func PairPeer() error {
 	return nil
 }
 
-// PeerCommand is `jarvisd hub peer add <code>|-`, `jarvisd hub peer list`, `jarvisd hub peer remove <hub_id>`,
-// `jarvisd hub peer center [<hub_id>] [--confirm]` (set as center; this hub when no id is given).
+// PeerCommand is `personad hub peer add <code>|-`, `personad hub peer list`, `personad hub peer remove <hub_id>`,
+// `personad hub peer center [<hub_id>] [--confirm]` (set as center; this hub when no id is given).
 func PeerCommand(args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("用法：personad hub peer add <互联码>|- ｜ list ｜ remove <hub_id> ｜ center [<hub_id>] [--confirm]")

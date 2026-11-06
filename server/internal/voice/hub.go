@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// hubClient calls the Persona hub's API with the credential the hub hands its plugins (JARVIS_HUB_URL / JARVIS_HUB_TOKEN).
+// hubClient calls the Persona hub's API with the credential the hub hands its plugins (PERSONA_HUB_URL / PERSONA_HUB_TOKEN).
 // A call takes as long as its context allows (callTimeout when it sets none): a send to a conversation that has to be
 // resumed first waits minutes (sendTimeout), not a fixed client timeout.
 type hubClient struct {

@@ -179,7 +179,7 @@
     <string name="settings_hub_update_warning_bad">このバージョンは前回インストール後に起動できず、ロールバックしました。自動更新では再インストールしません。</string>
     <string name="settings_hub_update_warning_held">自動更新ではこのバージョンをインストールしません：%1$s。問題がなければ手動で更新できます。</string>
     <string name="settings_hub_update_docker_plain">Dockerで動かしているハブは新しいイメージで更新します。新しいイメージがあれば、composeファイルのあるディレクトリで次を実行します</string>
-    <string name="settings_hub_update_docker_env">ハブのマシンで、composeファイルの隣にある.envのJARVIS_IMAGEを次に変更します：</string>
+    <string name="settings_hub_update_docker_env">ハブのマシンで、composeファイルの隣にある.envのPERSONA_IMAGEを次に変更します：</string>
     <string name="settings_hub_update_docker_then">続けてそのディレクトリで実行します：</string>
     <string name="settings_hub_update_docker_run">ハブのマシンで、composeファイルのあるディレクトリで実行します：</string>
     <string name="settings_hub_update_docker_new_image">新しいイメージ%1$s</string>

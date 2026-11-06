@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 struct LarkChatStatesTests {
     private func hub(_ status: Int, _ message: String, code: String? = nil) -> APIError {

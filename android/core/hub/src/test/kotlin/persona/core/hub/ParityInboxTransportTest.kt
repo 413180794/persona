@@ -73,7 +73,7 @@ class ParityInboxTransportTest {
             server.enqueue(MockResponse().setBody("""{"chat":{"id":"c 1","name":"Alex"},"messages":[{"id":"m","at":"2026-01-01T00:00:00Z","from_me":true,"text":"hi"}]}"""))
             server.enqueue(MockResponse().setBody("""{"account_id":"acct","anti_recall":true,"show_edit_history":false}"""))
             server.enqueue(MockResponse().setBody("""{"account_id":"acct","anti_recall":true,"show_edit_history":true}"""))
-            server.enqueue(MockResponse().setBody("""{"configured":true,"client_id":"id","redirect_uri":"jarvis-mail-oauth://outlook"}"""))
+            server.enqueue(MockResponse().setBody("""{"configured":true,"client_id":"id","redirect_uri":"persona-mail-oauth://outlook"}"""))
             server.enqueue(MockResponse().setBody("""{"account":{"id":"o1","email":"me@example.com","provider":"outlook","auth":"oauth2"}}"""))
 
             val status = api.messagesStatus()
@@ -87,7 +87,7 @@ class ParityInboxTransportTest {
             assertTrue(api.messagesThread("c 1").messages.single().isMine)
             val display = api.larkMessageDisplay()
             assertEquals(true, api.setLarkMessageDisplay(display, "show_edit_history", true).showEditHistory)
-            assertEquals("jarvis-mail-oauth://outlook", api.setMicrosoftClientId("id").redirectUri)
+            assertEquals("persona-mail-oauth://outlook", api.setMicrosoftClientId("id").redirectUri)
             assertEquals("outlook", api.microsoftSignInFinish(MicrosoftFinish("s", error = "e", errorDescription = "d")).provider)
 
             fun next() = server.takeRequest()

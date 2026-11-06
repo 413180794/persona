@@ -2,14 +2,14 @@ import XCTest
 
 /// Add Mail Account › Outlook (docs/mail.md「Outlook 接入方式」): with no client ID on the hub the field for it and the steps
 /// with the redirect URI come first; a value that is no client ID is refused, a good one is saved on the hub and
-/// Sign In with Microsoft takes its place. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
+/// Sign In with Microsoft takes its place. Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB).
 final class MailOutlookTests: XCTestCase {
     @MainActor func testTheClientIDComesFirstThenTheSignIn() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", "", "-addMail", "YES"]
         app.launchPinned()
         func shot(_ name: String) {
@@ -27,7 +27,7 @@ final class MailOutlookTests: XCTestCase {
         outlook.tap()
         let field = app.textFields["应用程序(客户端) ID"]
         XCTAssertTrue(field.waitForExistence(timeout: 10), "no client ID field:\n\(app.debugDescription)")
-        XCTAssertTrue(text("jarvis-mail-oauth://outlook").exists, "no redirect URI to register")
+        XCTAssertTrue(text("persona-mail-oauth://outlook").exists, "no redirect URI to register")
         XCTAssertTrue(text("允许公共客户端流").exists, "no registration steps")
         shot("outlook client id")
 

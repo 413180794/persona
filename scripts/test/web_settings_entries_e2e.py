@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check independent channel settings (#2196) against MOCK_CHANNELS=1 MOCK_PLUGINS=1.
+"""Check independent channel settings (#2196) against MOCK_CHANNELS=1 MOCK_EXTENSIONS=1.
 
 Run with a dedicated fake hub and the web dev server pointing to it:
     python3 scripts/test/web_settings_entries_e2e.py <web address> [--shots <directory>]
@@ -15,7 +15,7 @@ from playwright.sync_api import expect, sync_playwright
 
 def check(browser, base, width, theme, shots):
     context = browser.new_context(viewport={"width": width, "height": 900}, color_scheme=theme)
-    context.add_init_script("localStorage.setItem('jarvis.theme', " + repr(theme) + ")")
+    context.add_init_script("localStorage.setItem('persona.theme', " + repr(theme) + ")")
     page = context.new_page()
     page.set_default_timeout(15000)
     errors = []

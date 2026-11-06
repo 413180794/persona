@@ -7,7 +7,7 @@
 
 `svg` reads the version floors from apple/project.yml, android/gradle/libs.versions.toml and server/go.mod, so the
 badges follow the code, and puts the app icon's own picture (AppIcon.appiconset) in the banner; it needs Pillow. `shoot` drives a DEBUG build in demo mode (made-up data, no hub) that is already installed on
-the simulator given by JARVISCTL_UDID, over the Runtime CLI (docs/runtime-cli.md): it relaunches the app with
+the simulator given by PERSONACTL_UDID, over the Runtime CLI (docs/runtime-cli.md): it relaunches the app with
 `-demo.on YES`, takes every scene in light and dark, and records the demo once per appearance. `hero` needs ffmpeg
 and Pillow; it puts the demo in the middle phone and four still screens beside it.
 """
@@ -429,11 +429,11 @@ STILLS = {
 
 def ctl():
     sys.path.insert(0, os.path.join(ROOT, "scripts/app"))
-    from jarvisctl import Ctl
-    udid = os.environ.get("JARVISCTL_UDID")
+    from personactl import Ctl
+    udid = os.environ.get("PERSONACTL_UDID")
     if not udid:
-        raise SystemExit("set JARVISCTL_UDID to the simulator with the DEBUG build")
-    return Ctl(udid=udid, bundle=os.environ.get("PERSONA_BUNDLE_ID"), port=int(os.environ.get("JARVISCTL_PORT", 18950)))
+        raise SystemExit("set PERSONACTL_UDID to the simulator with the DEBUG build")
+    return Ctl(udid=udid, bundle=os.environ.get("PERSONA_BUNDLE_ID"), port=int(os.environ.get("PERSONACTL_PORT", 18950)))
 
 
 def fresh(c, appearance):

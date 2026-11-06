@@ -13,10 +13,10 @@ import (
 )
 
 // A provider's environment for claude (#2455, docs/launchers.md): one pure function both ways of running the main
-// conversation and every Agent use, the CLI (its --settings env, `jarvisd launch`'s env) and the Agent SDK bridge (the
+// conversation and every Agent use, the CLI (its --settings env, `personad launch`'s env) and the Agent SDK bridge (the
 // child's env and settings.env). Cindy's env-builder, the Anthropic part.
 
-// legacyEnvClear: what `jarvisd launch` has always dropped from the shell (another launcher or account) before a
+// legacyEnvClear: what `personad launch` has always dropped from the shell (another launcher or account) before a
 // managed launcher from before #2455 runs. A trailing "*" is a prefix.
 var legacyEnvClear = []string{"ANTHROPIC_*", "CLAUDE_CODE_USE_BEDROCK*", "CLAUDE_CODE_USE_VERTEX*",
 	"CLAUDE_CODE_USE_FOUNDRY*", "CLAUDE_CODE_OAUTH_TOKEN*", "CLAUDE_CODE_SUBAGENT_MODEL*"}
@@ -271,7 +271,7 @@ func providerEnv(l proto.ManagedLauncher, model, effort string, mainConversation
 	return env
 }
 
-// managedEnvOrder: the order `jarvisd launch` has always set a managed launcher's variables in; any other comes
+// managedEnvOrder: the order `personad launch` has always set a managed launcher's variables in; any other comes
 // after them, sorted.
 var managedEnvOrder = []string{
 	"ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL",
@@ -315,7 +315,7 @@ func pinnedEnv(env map[string]string) map[string]string {
 	return out
 }
 
-// launchEnvFor is what `jarvisd launch` drops from the shell and sets for a launcher (the node's clear and env lists):
+// launchEnvFor is what `personad launch` drops from the shell and sets for a launcher (the node's clear and env lists):
 // in the assistant's process (PERSONA_ASSISTANT=1), neither touches perStartEnv, so its own compact window and
 // thinking level stay.
 func launchEnvFor(clear, env []string, assistant bool) ([]string, []string) {

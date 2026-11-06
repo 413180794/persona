@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @ a workspace in the Persona assistant's composer (#5594): the menu lists the hub's workspaces (GET /workspaces),
 // filters them as you type, Enter picks one into a chip, and the message goes out with a
-// <jarvis-context kind="workspace" machine cwd> in front. Agents' composers don't offer workspaces.
+// <persona-context kind="workspace" machine cwd> in front. Agents' composers don't offer workspaces.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,7 +46,7 @@ afterEach(() => {
   host.remove();
 });
 
-const render = (mention: MentionSource, onSend: (m: Outgoing) => Promise<boolean> = async () => true, draftKey = "jarvis-new") =>
+const render = (mention: MentionSource, onSend: (m: Outgoing) => Promise<boolean> = async () => true, draftKey = "persona-new") =>
   act(() => root.render(<Composer draftKey={draftKey} placeholder="" mention={mention} onSend={onSend} />));
 
 const box = () => host.querySelector("textarea")!;
@@ -67,7 +67,7 @@ const options = () => [...host.querySelectorAll('[role="option"]')].map((o) => o
 
 describe("@ workspaces", () => {
   it("lists each workspace with a folder once, with its computer and folder", async () => {
-    render({ self: "jarvis-new", files: () => [], workspaces: true });
+    render({ self: "persona-new", files: () => [], workspaces: true });
     await type("@");
     expect(api).toHaveBeenCalledWith("/workspaces", expect.anything());
     const rows = options();
@@ -79,7 +79,7 @@ describe("@ workspaces", () => {
   });
 
   it("filters by what is typed after @", async () => {
-    render({ self: "jarvis-new", files: () => [], workspaces: true });
+    render({ self: "persona-new", files: () => [], workspaces: true });
     await type("@note");
     expect(options()).toHaveLength(1);
     expect(options()[0]).toContain("notes");
@@ -87,7 +87,7 @@ describe("@ workspaces", () => {
 
   it("picks with the keyboard into a chip and sends the workspace in front of the message", async () => {
     const onSend = vi.fn(async (_m: Outgoing) => true);
-    render({ self: "jarvis-new", files: () => [], workspaces: true }, onSend);
+    render({ self: "persona-new", files: () => [], workspaces: true }, onSend);
     await type("@wea");
     key("Enter");
     expect(options()).toHaveLength(0); // the menu closed
@@ -97,9 +97,9 @@ describe("@ workspaces", () => {
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="发送"]')!.click());
     expect(onSend).toHaveBeenCalledOnce();
     const text = onSend.mock.calls[0][0].text;
-    expect(text).toMatch(/^<jarvis-context kind="workspace" title="weather" url="" machine="laptop" cwd="\/home\/me\/code\/weather" branch="main">\n/);
+    expect(text).toMatch(/^<persona-context kind="workspace" title="weather" url="" machine="laptop" cwd="\/home\/me\/code\/weather" branch="main">\n/);
     expect(text).toContain("工作区：weather");
-    expect(text.endsWith("</jarvis-context>\n\nAdd a dark mode")).toBe(true);
+    expect(text.endsWith("</persona-context>\n\nAdd a dark mode")).toBe(true);
   });
 
   it("is not offered where the source doesn't ask for it (an agent's composer)", async () => {
@@ -113,7 +113,7 @@ describe("@ workspaces", () => {
     api.mockImplementationOnce(async () => {
       throw new Error("404");
     });
-    render({ self: "jarvis-new", files: () => [], workspaces: true });
+    render({ self: "persona-new", files: () => [], workspaces: true });
     await type("@");
     expect(options()).toHaveLength(0);
   });

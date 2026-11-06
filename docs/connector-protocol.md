@@ -165,7 +165,7 @@ Other errors have only human-readable message, **no secrets or body text**.
 
 ## Versioning
 
-Current 2. Changed field meaning / removal increments; optional additions do not. Hub accepts identical protocol only; first-party programs built alongside jarvisd necessarily match.
+Current 2. Changed field meaning / removal increments; optional additions do not. Hub accepts identical protocol only; first-party programs built alongside personad necessarily match.
 
 ## Conformance tests
 

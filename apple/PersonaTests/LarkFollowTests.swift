@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Where a Feishu chat's list goes as it changes (LarkFollow, #672). The numbers are the chat measured on an
 /// iPhone 17 Pro opened from the inbox: a 202 pt top bar, the box 89 pt over the bottom, the keyboard adding 311.

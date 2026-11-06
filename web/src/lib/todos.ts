@@ -300,7 +300,7 @@ function sessionRank(s: Session, mutes: AgentMutes): number {
 
 /** An agent opened by hand in herdr: not started by Persona (nor spawned through it). */
 function isManualHerdr(s: Session) {
-  return s.space_kind === "herdr" && !s.started_by_jarvis;
+  return s.space_kind === "herdr" && !s.started_by_persona;
 }
 
 /**
@@ -404,13 +404,13 @@ export function buildTodoAgentGroups(
 
 /**
  * The format when handing it to an agent (the same as the inbox's)
- * `<jarvis-context kind="context" title="To-do · <title>" url="">notes</jarvis-context>`
+ * `<persona-context kind="context" title="To-do · <title>" url="">notes</persona-context>`
  */
 export function formatTodoContext(title: string, notes?: string): string {
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // a closing tag in the notes would end the block early (either name, #3182)
   const body = contextBody(notes ?? "").trim();
-  return `<jarvis-context kind="context" title="${escape(t("lib-todos.context_title", { title }))}" url="">${body}</jarvis-context>`;
+  return `<persona-context kind="context" title="${escape(t("lib-todos.context_title", { title }))}" url="">${body}</persona-context>`;
 }
 
 // ── Decision log (#1618, docs/todos.md "Decision log") ───────────────

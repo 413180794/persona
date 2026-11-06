@@ -25,14 +25,14 @@ describe("stripBase", () => {
     expect(stripBase("/persona/", "/persona")).toBe("/");
   });
   it("does not take a mere prefix of a segment", () => {
-    expect(stripBase("/personax/j", "/persona")).toBe("/personax/j");
+    expect(stripBase("/personax/persona", "/persona")).toBe("/personax/persona");
   });
 });
 
 describe("routes under a sub-path", () => {
   const routes: Route[] = [
-    { name: "jarvis" },
-    { name: "jarvis", sid: "c 1" },
+    { name: "persona" },
+    { name: "persona", sid: "c 1" },
     { name: "session", mid: "laptop", sid: "abc", view: "term" },
     { name: "tab", mid: "laptop", space: "w1", slot: "2", sid: "abc" },
     { name: "inbox", id: "lark:feed:1" },
@@ -53,7 +53,7 @@ describe("routes under a sub-path", () => {
   });
   it("is the root's at the root", () => {
     for (const r of routes) expect(href(r, "")).toBe(routePath(r));
-    expect(href({ name: "jarvis" }, "/persona")).toBe("/persona/");
+    expect(href({ name: "persona" }, "/persona")).toBe("/persona/");
   });
 });
 
@@ -67,7 +67,7 @@ describe("links to this hub's pages under a sub-path", () => {
     expect(linkRoute(`${origin}/s/laptop/abc`, false, origin, "/persona").kind).toBe("web");
     expect(linkRoute(`${origin}/other/s/laptop/abc`, false, origin, "/persona").kind).toBe("web");
   });
-  it("keeps jarvis:// session links in-app at the root", () => {
-    expect(linkHref("jarvis://session/laptop/abc")).toBe("/s/laptop/abc");
+  it("keeps persona:// session links in-app at the root", () => {
+    expect(linkHref("persona://session/laptop/abc")).toBe("/s/laptop/abc");
   });
 });

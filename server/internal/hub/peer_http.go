@@ -19,17 +19,17 @@ import (
 // HTTP between hubs over their links (docs/mesh.md "Member forwarding"). Each stream a hub opens on a link is one HTTP/1.1
 // connection to the other hub's peer server (no socket: it only takes streams from authenticated links). Two kinds
 // of request travel this way, both passed on hop by hop toward where they go (TTL 8):
-//   - an app's request a member got: everything under /api/ but what the member answers itself (its health, jarvis-link,
+//   - an app's request a member got: everything under /api/ but what the member answers itself (its health, persona-link,
 //     the links between hubs, its admin page) goes to the center as it came, Authorization included. The member has
 //     judged where it came from (LAN or internet, TLS, a source blocked for failed credentials) and says so in
-//     X-Jarvis-Peer-Source; the center takes its word (the member is paired) and serves it like its own app's.
+//     X-Persona-Peer-Source; the center takes its word (the member is paired) and serves it like its own app's.
 //   - a node stream the center asks a member for (peer_node.go).
 
 const (
-	hdrPeerTTL    = "X-Jarvis-Peer-Ttl"
-	hdrPeerSource = "X-Jarvis-Peer-Source" // a forwarded app request: "<lan|public> <client address> <tls|plain>"
-	hdrPeerNode   = "X-Jarvis-Peer-Node"   // a node stream: "<hub_id>/<machine id>", asked by hdrPeerFrom
-	hdrPeerFrom   = "X-Jarvis-Peer-From"
+	hdrPeerTTL    = "X-Persona-Peer-Ttl"
+	hdrPeerSource = "X-Persona-Peer-Source" // a forwarded app request: "<lan|public> <client address> <tls|plain>"
+	hdrPeerNode   = "X-Persona-Peer-Node"   // a node stream: "<hub_id>/<machine id>", asked by hdrPeerFrom
+	hdrPeerFrom   = "X-Persona-Peer-From"
 )
 
 type meshTTLKey struct{}
@@ -268,14 +268,14 @@ func (h *Hub) meshForwardTo(w http.ResponseWriter, r *http.Request, to string) b
 }
 
 // servedByMember: what a member answers itself rather than passing on to the center: its health, its computers'
-// jarvis-links (and pairing them: the codes of `jarvisd hub pair --machine`), the links between hubs, its admin page,
+// persona-links (and pairing them: the codes of `personad hub pair --machine`), the links between hubs, its admin page,
 // and pairing codes made on its machine (an app's comes from the center: pairing.go).
 func (h *Hub) servedByMember(r *http.Request) bool {
 	switch r.URL.Path {
 	case "/api/v1/health", link.Path, link.StreamPath, peerPath, peerPairPath, "/api/v1/auth/pair-codes":
 		return true
 	case "/api/v1/auth/tokens":
-		// A jarvis-link trading this hub's code for its credential (a code made for one of its link machines).
+		// A persona-link trading this hub's code for its credential (a code made for one of its link machines).
 		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if strings.HasPrefix(tok, "jp_") && h.store != nil {
 			if pt, err := h.store.PairTokenByHash(r.Context(), hashToken(tok)); err == nil && pt != nil && pt.MachineID != "" {

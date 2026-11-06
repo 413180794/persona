@@ -27,9 +27,9 @@ export function createAgyRuntime(options = {}) {
     [
       options.personadBin,
       join(home, '.persona', 'bin', 'personad'),
-      join(home, '.persona', 'bin', 'jarvisd'),
-      join(home, '.jarvis', 'bin', 'personad'),
-      join(home, '.jarvis', 'bin', 'jarvisd'),
+      join(home, '.persona', 'bin', 'personad'),
+      join(home, '.persona', 'bin', 'personad'),
+      join(home, '.persona', 'bin', 'personad'),
     ].find((p) => p && existsSync(p)) || join(home, '.persona', 'bin', 'personad')
   const agyBin = options.agyBin || join(home, '.local', 'bin', 'agy')
   const log = options.log || ((m) => console.error(m))
@@ -349,15 +349,15 @@ export function createAgyRuntime(options = {}) {
     if (!existsSync(personadBin)) return []
     const env = [
       { name: 'PERSONA_SESSION_ID', value: pid },
-      { name: 'JARVIS_SESSION_ID', value: pid },
+      { name: 'PERSONA_SESSION_ID', value: pid },
     ]
     if (isAsst) {
       env.push({ name: 'PERSONA_ASSISTANT', value: '1' })
-      env.push({ name: 'JARVIS_ASSISTANT', value: '1' })
+      env.push({ name: 'PERSONA_ASSISTANT', value: '1' })
     }
     return [
       {
-        name: 'jarvis',
+        name: 'persona',
         command: personadBin,
         args: ['mcp'],
         env,
@@ -447,9 +447,9 @@ export function createAgyRuntime(options = {}) {
     if (typeof params.context === 'string' && params.context.trim()) {
       const ctx = params.context.trim()
       const wrapped =
-        ctx.startsWith('<jarvis-context>') || ctx.startsWith('<persona-context>')
+        ctx.startsWith('<persona-context>')
           ? ctx
-          : `<jarvis-context>\n${ctx}\n</jarvis-context>`
+          : `<persona-context>\n${ctx}\n</persona-context>`
       fullText = `${wrapped}\n\n${fullText}`
     }
     if (fullText) {

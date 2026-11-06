@@ -8,7 +8,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
 /** The WebSocket subprotocol of the runtime protocol (node: DaemonSubprotocol). */
-export const SUBPROTOCOL = 'jarvis-runtime.v1'
+export const SUBPROTOCOL = 'persona-runtime.v1'
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 const MAX_MESSAGE = 64 * 1024 * 1024 // as the node's limit on a line

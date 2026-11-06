@@ -4,7 +4,7 @@ import SwiftUI
 
 // Quotes, as Telegram's replies (#986): what goes with the next message sits in the composer's box over the field — a
 // rule, who or what is quoted, a line or two of it, × — and the sent bubble opens with the same block, which leads
-// back to what it quotes. Every quote is a `ContextRef` (`<jarvis-context>` before the message); the hub's own
+// back to what it quotes. Every quote is a `ContextRef` (`<persona-context>` before the message); the hub's own
 // context of a Feishu /agent request (instructions, documents) is not a quote and stays folded (`ContextGroup`).
 
 nonisolated extension ContextRef {
@@ -21,14 +21,14 @@ nonisolated extension ContextRef {
         refs.isEmpty || !refs.allSatisfy(\.isQuote) ? nil : refs
     }
 
-    var isSession: Bool { url.hasPrefix("jarvis://session/") }
+    var isSession: Bool { url.hasPrefix("persona://session/") }
 
     #if DEBUG
     /// `-showSampleQuotes YES`: what Add as Context on a page and @ on a session put over the box.
     static let samples = [
         ContextRef(kind: "context", title: "WidgetKit 时间线", url: "https://example.com/docs/widgetkit/timeline", // i18n-ignore
                    text: "时间线里的每一项都有一个日期，系统按这个日期换上新的内容；刷新策略决定时间线用完以后什么时候再要一条。"), // i18n-ignore
-        ContextRef(kind: "context", title: "照片同步支持 HEIC", url: "jarvis://session/studio/a1f3c2d4-0000-4000-8000-000000000005", // i18n-ignore
+        ContextRef(kind: "context", title: "照片同步支持 HEIC", url: "persona://session/studio/a1f3c2d4-0000-4000-8000-000000000005", // i18n-ignore
                    text: "另一个会话：照片同步支持 HEIC（Claude）\n目录：~/code/photo-sync\n它最近说：计划写好了，等你批准后开始改。"), // i18n-ignore
     ]
     #endif

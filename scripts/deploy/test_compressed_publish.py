@@ -18,7 +18,7 @@ class InstallTestCase(unittest.TestCase):
     """install.sh against a fake download site: curl copies <url's file name> from downloads/ (to -o, or stdout)."""
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="jarvis-install-test-")
+        self.temp = tempfile.TemporaryDirectory(prefix="persona-install-test-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.home = self.root / "home"
@@ -33,10 +33,10 @@ class InstallTestCase(unittest.TestCase):
         self.script("uname", '#!/bin/sh\ncase "$1" in -s) printf "%s\\n" "$TEST_OS";; -m) printf "%s\\n" "$TEST_ARCH";; *) exit 1;; esac\n')
         self.env = {"PATH": str(self.tools) + os.pathsep + os.defpath, "HOME": str(self.home),
                     "TEST_DOWNLOADS": str(self.downloads), "TEST_OS": "Linux", "TEST_ARCH": "x86_64",
-                    "JARVIS_DL": "https://example.invalid/dl", "JARVIS_SKIP_HERDR": "1",
-                    "JARVIS_HERDR_INSTALL": "https://example.invalid/herdr-install.sh"}
+                    "PERSONA_DL": "https://example.invalid/dl", "PERSONA_SKIP_HERDR": "1",
+                    "PERSONA_HERDR_INSTALL": "https://example.invalid/herdr-install.sh"}
         self.binary = b"#!/bin/sh\nprintf '%s\\n' test-version\n"
-        self.installed = self.home / ".jarvis/bin/jarvisd"
+        self.installed = self.home / ".persona/bin/personad"
         self.installed.parent.mkdir(parents=True)
         self.installed.write_bytes(b"previous-install")
 
@@ -45,7 +45,7 @@ class InstallTestCase(unittest.TestCase):
         path.write_text(text)
         path.chmod(0o755)
 
-    def artifact(self, name="jarvisd-linux-amd64.gz", data=None):
+    def artifact(self, name="personad-linux-amd64.gz", data=None):
         data = gzip.compress(self.binary, mtime=0) if data is None else data
         path = self.downloads / name
         path.write_bytes(data)
@@ -63,23 +63,23 @@ class InstallTestCase(unittest.TestCase):
 
 
 class InstallProgramTests(InstallTestCase):
-    """JARVIS_WITH=wechat: the hub's computer also gets jarvisd-wechat (docs/wechat.md); others do not."""
+    """PERSONA_WITH=wechat: the hub's computer also gets personad-wechat (docs/wechat.md); others do not."""
 
     program = b"#!/bin/sh\nprintf '%s\\n' wechat\n"
 
     def both(self):
-        files = {"jarvisd-linux-amd64.gz": gzip.compress(self.binary, mtime=0),
-                 "jarvisd-wechat-linux-amd64.gz": gzip.compress(self.program, mtime=0)}
+        files = {"personad-linux-amd64.gz": gzip.compress(self.binary, mtime=0),
+                 "personad-wechat-linux-amd64.gz": gzip.compress(self.program, mtime=0)}
         for name, data in files.items():
             (self.downloads / name).write_bytes(data)
         (self.downloads / "SHA256SUMS").write_text("".join(hashlib.sha256(d).hexdigest() + "  " + n + "\n" for n, d in files.items()))
 
     def test_the_hub_asks_for_it(self):
         self.both()
-        self.env["JARVIS_WITH"] = "wechat"
+        self.env["PERSONA_WITH"] = "wechat"
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        program = self.home / ".jarvis/bin/jarvisd-wechat"
+        program = self.home / ".persona/bin/personad-wechat"
         self.assertEqual(program.read_bytes(), self.program)
         self.assertTrue(os.access(program, os.X_OK))
 
@@ -87,16 +87,16 @@ class InstallProgramTests(InstallTestCase):
         self.both()
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse((self.home / ".jarvis/bin/jarvisd-wechat").exists())
+        self.assertFalse((self.home / ".persona/bin/personad-wechat").exists())
 
     def test_a_program_that_does_not_check_out_is_not_installed(self):
         self.both()
-        (self.downloads / "jarvisd-wechat-linux-amd64.gz").write_bytes(gzip.compress(b"something else", mtime=0))
-        self.env["JARVIS_WITH"] = "wechat"
+        (self.downloads / "personad-wechat-linux-amd64.gz").write_bytes(gzip.compress(b"something else", mtime=0))
+        self.env["PERSONA_WITH"] = "wechat"
         result = self.run_install()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("checksum mismatch for jarvisd-wechat-linux-amd64.gz", result.stderr)
-        self.assertFalse((self.home / ".jarvis/bin/jarvisd-wechat").exists())
+        self.assertIn("checksum mismatch for personad-wechat-linux-amd64.gz", result.stderr)
+        self.assertFalse((self.home / ".persona/bin/personad-wechat").exists())
 
 
 class InstallCompressedTests(InstallTestCase):
@@ -106,7 +106,7 @@ class InstallCompressedTests(InstallTestCase):
         for os_name, arch, suffix in platforms:
             with self.subTest(platform=suffix):
                 self.env.update({"TEST_OS": os_name, "TEST_ARCH": arch})
-                self.artifact("jarvisd-" + suffix + ".gz")
+                self.artifact("personad-" + suffix + ".gz")
                 result = self.run_install()
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(self.installed.read_bytes(), self.binary)
@@ -137,10 +137,10 @@ class InstallCompressedTests(InstallTestCase):
 
 
 class InstallNodeServiceTests(unittest.TestCase):
-    """install.sh --node: jarvisd and jarvis-link downloaded and checked, then jarvis-link sets the node service up."""
+    """install.sh --node: personad and persona-link downloaded and checked, then persona-link sets the node service up."""
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="jarvis-install-node-")
+        self.temp = tempfile.TemporaryDirectory(prefix="persona-install-node-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.home = self.root / "home"
@@ -156,15 +156,15 @@ class InstallNodeServiceTests(unittest.TestCase):
         tool.chmod(0o755)
         self.env = {"PATH": str(self.tools) + os.pathsep + os.defpath, "HOME": str(self.home),
                     "TEST_DOWNLOADS": str(self.downloads), "TEST_OS": "Linux", "TEST_ARCH": "x86_64",
-                    "JARVIS_DL": "https://example.invalid/dl", "JARVIS_SKIP_HERDR": "1"}
+                    "PERSONA_DL": "https://example.invalid/dl", "PERSONA_SKIP_HERDR": "1"}
         self.calls = self.home / "link-calls"
         self.identities = self.home / "link-identities"
 
     def publish(self, suffix="linux-amd64", link=True):
         sums = []
-        binaries = {"jarvisd": b"#!/bin/sh\nprintf '%s\\n' test-version\n"}
-        if link:  # a fake jarvis-link: says its version, writes down everything else it is asked
-            binaries["jarvis-link"] = (b'#!/bin/sh\n[ "$1" = version ] && { echo test-link; exit 0; }\n'
+        binaries = {"personad": b"#!/bin/sh\nprintf '%s\\n' test-version\n"}
+        if link:  # a fake persona-link: says its version, writes down everything else it is asked
+            binaries["persona-link"] = (b'#!/bin/sh\n[ "$1" = version ] && { echo test-link; exit 0; }\n'
                                        b'printf "%s|%s\\n" "$(basename "$0")" "${PERSONA_LINK_NAME:-}" >> "$HOME/link-identities"\n'
                                        b'echo "$*" >> "$HOME/link-calls"\n')
         for name, data in binaries.items():
@@ -182,10 +182,14 @@ class InstallNodeServiceTests(unittest.TestCase):
     def calls_made(self):
         return self.calls.read_text().splitlines() if self.calls.exists() else []
 
-    def assert_compatible_connector_commands(self):
-        bin_dir = self.home / ".jarvis/bin"
-        self.assertFalse((bin_dir / "jarvis-link").is_symlink())
-        for name in ("jarvis-link", "persona-link"):
+    def assert_canonical_connector_command(self):
+        bin_dir = self.home / ".persona/bin"
+        former = 'jar' + 'vis'
+        self.assertFalse(os.path.lexists(bin_dir / (former + '-link')))
+        self.assertFalse(os.path.lexists(bin_dir / (former + 'd')))
+        self.assertFalse(os.path.lexists(self.home / ('.' + former)))
+        self.assertFalse((bin_dir / "persona-link").is_symlink())
+        for name in ("persona-link",):
             with self.subTest(command=name):
                 command = bin_dir / name
                 self.assertTrue(os.access(command, os.X_OK))
@@ -198,18 +202,18 @@ class InstallNodeServiceTests(unittest.TestCase):
         self.publish()
         result = self.run_install("--node", "--listen")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(os.access(self.home / ".jarvis/bin/jarvisd", os.X_OK))
-        self.assertTrue(os.access(self.home / ".jarvis/bin/jarvis-link", os.X_OK))
+        self.assertTrue(os.access(self.home / ".persona/bin/personad", os.X_OK))
+        self.assertTrue(os.access(self.home / ".persona/bin/persona-link", os.X_OK))
         self.assertIn("persona-link test-link installed", result.stdout)
-        self.assert_compatible_connector_commands()
+        self.assert_canonical_connector_command()
         self.assertEqual(self.calls_made(), ["install --listen"])
-        self.assertEqual(self.identities.read_text().splitlines(), ["jarvis-link|persona-link"])
+        self.assertEqual(self.identities.read_text().splitlines(), ["persona-link|"])
 
     def test_pair_and_listen_imply_the_node_service(self):
         self.publish()
-        result = self.run_install("--pair", "jarvis://link?token=x&machine=pi", "--machine", "pi")
+        result = self.run_install("--pair", "persona://link?token=x&machine=pi", "--machine", "pi")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(self.calls_made(), ["install --pair jarvis://link?token=x&machine=pi --machine pi"])
+        self.assertEqual(self.calls_made(), ["install --pair persona://link?token=x&machine=pi --machine pi"])
         self.calls.unlink()
         result = self.run_install("--listen", ":18700")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -238,21 +242,21 @@ class InstallNodeServiceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.calls_made(), ["node install", "pair --listen :18700 --addr mac.example.com"])
         self.assertIn("Persona Link", result.stdout)
-        self.assert_compatible_connector_commands()
-        self.assertEqual(self.identities.read_text().splitlines(), ["jarvis-link|persona-link"] * 4)
+        self.assert_canonical_connector_command()
+        self.assertEqual(self.identities.read_text().splitlines(), ["persona-link|"] * 4)
 
-    def test_without_jarvis_link_published_the_node_service_fails_loudly(self):
+    def test_without_persona_link_published_the_node_service_fails_loudly(self):
         self.publish(link=False)
         result = self.run_install("--node", "--listen")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("jarvis-link-linux-amd64.gz", result.stderr)
-        self.assertTrue(os.access(self.home / ".jarvis/bin/jarvisd", os.X_OK))
+        self.assertIn("persona-link-linux-amd64.gz", result.stderr)
+        self.assertTrue(os.access(self.home / ".persona/bin/personad", os.X_OK))
 
-    def test_without_a_role_or_terminal_only_jarvisd(self):
+    def test_without_a_role_or_terminal_only_personad(self):
         self.publish()
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertFalse((self.home / ".jarvis/bin/jarvis-link").exists())
+        self.assertFalse((self.home / ".persona/bin/persona-link").exists())
         self.assertEqual(self.calls_made(), [])
         self.assertIn("--node --pair", result.stdout)
 
@@ -263,7 +267,7 @@ class InstallHerdrTests(InstallTestCase):
         body = ('#!/bin/sh\nmkdir -p "$HOME/.local/bin"\nprintf "#!/bin/sh\\n" > "$HOME/.local/bin/herdr"\n'
                 'chmod 755 "$HOME/.local/bin/herdr"\necho fake herdr installed\n') if ok else "#!/bin/sh\necho boom >&2\nexit 1\n"
         (self.downloads / "herdr-install.sh").write_text(body)
-        self.env.pop("JARVIS_SKIP_HERDR")
+        self.env.pop("PERSONA_SKIP_HERDR")
         self.artifact()
 
     def herdr(self):
@@ -284,7 +288,7 @@ class InstallHerdrTests(InstallTestCase):
         self.assertIn("herdr: already installed", result.stdout)
         self.assertFalse(self.herdr().exists())
 
-    def test_failed_herdr_install_still_installs_jarvisd(self):
+    def test_failed_herdr_install_still_installs_personad(self):
         self.herdr_installer(ok=False)
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -293,7 +297,7 @@ class InstallHerdrTests(InstallTestCase):
 
     def test_skip_leaves_herdr_out(self):
         self.herdr_installer()
-        self.env["JARVIS_SKIP_HERDR"] = "1"
+        self.env["PERSONA_SKIP_HERDR"] = "1"
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(self.herdr().exists())
@@ -325,7 +329,7 @@ class InstallHerdrTests(InstallTestCase):
 
 class AssetSizeTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="jarvis-assets-test-")
+        self.temp = tempfile.TemporaryDirectory(prefix="persona-assets-test-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 

@@ -38,7 +38,7 @@ func loginShells(t *testing.T) []string {
 // whatever the machine's login shell is (#1770: on a machine whose login shell is fish it failed at `b=`).
 func TestDeployScriptInstallsTheBinary(t *testing.T) {
 	for _, shell := range loginShells(t) {
-		for _, bin := range []string{"~/.jarvis/bin/jarvisd", "~/odd 'dir'/jarvisd", `~/back\\slash \'q/jarvisd`, "~/bang!x/jarvisd"} {
+		for _, bin := range []string{"~/.persona/bin/personad", "~/odd 'dir'/personad", `~/back\\slash \'q/personad`, "~/bang!x/personad"} {
 			t.Run(filepath.Base(shell)+"/"+bin, func(t *testing.T) { testDeployScript(t, shell, bin) })
 		}
 	}
@@ -86,8 +86,8 @@ func TestNodeBinaryMissing(t *testing.T) {
 	}
 	dir := nodeBinaryDir()
 	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "jarvisd-darwin-arm64"), []byte("x"), 0o755)
-	if p, err := nodeBinary("darwin", "arm64"); err != nil || filepath.Base(p) != "jarvisd-darwin-arm64" {
+	_ = os.WriteFile(filepath.Join(dir, "personad-darwin-arm64"), []byte("x"), 0o755)
+	if p, err := nodeBinary("darwin", "arm64"); err != nil || filepath.Base(p) != "personad-darwin-arm64" {
 		t.Fatalf("%s %v", p, err)
 	}
 }
@@ -122,7 +122,7 @@ func TestAnyShellQuoteReadsTheSameInEveryShell(t *testing.T) {
 }
 
 // The remote command that starts a node over ssh is a plain command with arguments, which every login shell runs
-// alike (#1770): it starts the node at ~/.jarvis/bin/jarvisd with `node --stdio`.
+// alike (#1770): it starts the node at ~/.persona/bin/personad with `node --stdio`.
 func TestNodeCommandRunsInEveryShell(t *testing.T) {
 	m := newMachine(newTestDevices(t), MachineConfig{ID: "box", Name: "Box", Kind: "ssh"})
 	args := m.command(context.Background()).Args
@@ -130,7 +130,7 @@ func TestNodeCommandRunsInEveryShell(t *testing.T) {
 	for _, shell := range loginShells(t) {
 		home := t.TempDir()
 		calls := filepath.Join(home, "calls")
-		bin := filepath.Join(home, ".jarvis", "bin", "jarvisd")
+		bin := filepath.Join(home, ".persona", "bin", "personad")
 		_ = os.MkdirAll(filepath.Dir(bin), 0o755)
 		_ = os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s|' \"$@\" > "+shellQuote(calls)+"\n"), 0o755)
 		cmd := exec.Command(shell, "-c", remote)
@@ -157,7 +157,7 @@ func TestDeployOverFailedSSHDoesNotLeakTheWriter(t *testing.T) {
 	if _, err := rand.Read(data); err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(dir, "jarvisd")
+	bin := filepath.Join(dir, "personad")
 	if err := os.WriteFile(bin, data, 0o755); err != nil {
 		t.Fatal(err)
 	}

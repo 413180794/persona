@@ -1,5 +1,5 @@
 import Foundation
-@testable import Jarvis
+@testable import Persona
 
 /// A hub in memory for unit tests: canned JSON by "METHOD path", every request recorded. Hand its `transport` to an
 /// `APIClient` (`FakeHub.client`); a view model built with that client runs its real requests and decoding.

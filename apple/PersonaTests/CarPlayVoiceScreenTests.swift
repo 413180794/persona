@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The CarPlay voice screen's states and buttons, as data (CarPlayVoiceScreen): no CarPlay needed.
 struct CarPlayVoiceScreenTests {

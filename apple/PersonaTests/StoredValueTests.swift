@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// `@StoredValue` redraws only for its own key (#1337): `@AppStorage` redrew every view holding one on any write to
 /// UserDefaults (a Mac window resize writes the split view's frames every frame).

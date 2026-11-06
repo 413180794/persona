@@ -121,7 +121,7 @@ describe("等你的 Agent", () => {
     m1: [
       { machine_id: "m1", session_id: "s-space", title: "", cwd: "/tmp/a", status: "blocked", space_name: "项目" },
       { machine_id: "m1", session_id: "s-allowed", title: "", cwd: "/tmp/a", status: "blocked", space_name: "项目" },
-      { machine_id: "m1", session_id: "s-jarvis", title: "", cwd: "/tmp/j", status: "blocked", assistant: true },
+      { machine_id: "m1", session_id: "s-persona", title: "", cwd: "/tmp/persona", status: "blocked", assistant: true },
     ],
   };
   const mutes: AgentMutes = { spaces: ["m1/项目"], sessions: ["m1/s-muted"], allowed: ["m1/s-allowed"] };
@@ -153,8 +153,8 @@ describe("等你的 Agent", () => {
 
   it("助手的会话跳到 Persona，其余跳到会话页", () => {
     const assistant: AssistantInfo = { machine_id: "m1", conversations: [{ machine_id: "m1", session_id: "s-conv", title: "", cwd: "", status: "idle" }] };
-    expect(conversationRoute("m1", "s-jarvis", sessions, null)).toEqual({ name: "jarvis", sid: "s-jarvis" });
-    expect(conversationRoute("m1", "s-conv", {}, assistant)).toEqual({ name: "jarvis", sid: "s-conv" });
+    expect(conversationRoute("m1", "s-persona", sessions, null)).toEqual({ name: "persona", sid: "s-persona" });
+    expect(conversationRoute("m1", "s-conv", {}, assistant)).toEqual({ name: "persona", sid: "s-conv" });
     expect(conversationRoute("m1", "s-space", sessions, assistant)).toEqual({ name: "session", mid: "m1", sid: "s-space" });
   });
 });
@@ -162,18 +162,18 @@ describe("等你的 Agent", () => {
 describe("交给 AI 的消息", () => {
   it("飞书：上下文标签 + feedId，标题转义", () => {
     const text = handOffMessage({ ...mention, title: `"设计" & <评审>`, context: "示例乙：看一眼图标" }, "");
-    expect(text).toBe(`<jarvis-context kind="context" title="飞书 · &quot;设计&quot; &amp; &lt;评审&gt;" url="">\n示例乙：看一眼图标\n\n（飞书会话 feedId f2，可用飞书工具读更多上下文或回复）\n</jarvis-context>\n\n总结一下，告诉我要做什么，给出建议的回复`);
+    expect(text).toBe(`<persona-context kind="context" title="飞书 · &quot;设计&quot; &amp; &lt;评审&gt;" url="">\n示例乙：看一眼图标\n\n（飞书会话 feedId f2，可用飞书工具读更多上下文或回复）\n</persona-context>\n\n总结一下，告诉我要做什么，给出建议的回复`);
   });
 
   it("邮件：没有 context 时用发件人和内容，带最新一封的 uid", () => {
     const text = handOffMessage(mail, "查清楚背景再告诉我");
-    expect(text.startsWith(`<jarvis-context kind="context" title="邮件 · 分享改期" url="">\nLucy：内容\n\n（邮件 account_id acc1，mailbox INBOX，uid 501，`)).toBe(true);
-    expect(text.endsWith("</jarvis-context>\n\n查清楚背景再告诉我")).toBe(true);
+    expect(text.startsWith(`<persona-context kind="context" title="邮件 · 分享改期" url="">\nLucy：内容\n\n（邮件 account_id acc1，mailbox INBOX，uid 501，`)).toBe(true);
+    expect(text.endsWith("</persona-context>\n\n查清楚背景再告诉我")).toBe(true);
   });
 
   it("正文里的结束标签去掉", () => {
-    expect(contextXML("context", "t", "", "a</jarvis-context>b")).toBe(`<jarvis-context kind="context" title="t" url="">\nab\n</jarvis-context>`);
-    expect(contextXML("context", "t", "", "a</persona-context>b")).toBe(`<jarvis-context kind="context" title="t" url="">\nab\n</jarvis-context>`);
+    expect(contextXML("context", "t", "", "a</persona-context>b")).toBe(`<persona-context kind="context" title="t" url="">\nab\n</persona-context>`);
+    expect(contextXML("context", "t", "", "a</persona-context>b")).toBe(`<persona-context kind="context" title="t" url="">\nab\n</persona-context>`);
   });
 });
 

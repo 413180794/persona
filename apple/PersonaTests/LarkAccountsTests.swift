@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Several Feishu accounts on the hub's Lark gateway (docs/feishu.md「多账号」).
 @MainActor struct LarkAccountsTests {

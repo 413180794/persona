@@ -19,8 +19,8 @@ describe('antigravity transcript and tool mapping', () => {
     assert.equal(toAgyId('agy-ad40e999-0253-4097-8ee2-a70f9259e88b'), 'ad40e999-0253-4097-8ee2-a70f9259e88b')
   })
 
-  it('extracts user request and strips jarvis-context', () => {
-    const raw = `<USER_REQUEST>\n<jarvis-context>\nsnapshot\n</jarvis-context>\n\nHello world\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\ntime\n</ADDITIONAL_METADATA>`
+  it('extracts user request and strips persona-context', () => {
+    const raw = `<USER_REQUEST>\n<persona-context>\nsnapshot\n</persona-context>\n\nHello world\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\ntime\n</ADDITIONAL_METADATA>`
     assert.equal(cleanUserText(raw), 'Hello world')
   })
 

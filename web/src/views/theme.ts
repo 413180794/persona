@@ -6,7 +6,7 @@ const listeners = new Set<() => void>();
 const media = matchMedia("(prefers-color-scheme: dark)");
 
 function current(): Theme {
-  return (localStorage.getItem("jarvis.theme") as Theme) || "system";
+  return (localStorage.getItem("persona.theme") as Theme) || "system";
 }
 
 function apply() {
@@ -21,7 +21,7 @@ function apply() {
 media.addEventListener("change", apply);
 
 export function setTheme(t: Theme) {
-  localStorage.setItem("jarvis.theme", t);
+  localStorage.setItem("persona.theme", t);
   apply();
   listeners.forEach((l) => l());
 }

@@ -29,9 +29,9 @@ type clientOpResult struct {
 
 func (h *Hub) withClientOp(kind string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Only clients that send X-Jarvis-Op-Id use receipts. Messages without it (today's iOS) are deduplicated by
+		// Only clients that send X-Persona-Op-Id use receipts. Messages without it (today's iOS) are deduplicated by
 		// client_msg_id in sendMessage (sent_messages), so a non-UUID client_msg_id must still go through.
-		id := r.Header.Get("X-Jarvis-Op-Id")
+		id := r.Header.Get("X-Persona-Op-Id")
 		if id == "" {
 			next(w, r)
 			return

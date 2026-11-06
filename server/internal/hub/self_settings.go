@@ -13,9 +13,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The hub's own settings jarvis_settings offers (docs/assistant.md "Operating Persona itself", 2026-11-01): the tool is the
+// The hub's own settings persona_settings offers (docs/assistant.md "Operating Persona itself", 2026-11-01): the tool is the
 // assistant's (its own settings are its own: "About me", its launcher, …), which lists these (app.call settings.list) and
-// hands the actions on them to the hub (app.tool jarvis_settings). One registry: each setting says what it is, how to
+// hands the actions on them to the hub (app.tool persona_settings). One registry: each setting says what it is, how to
 // read it and how a change is made. Reads are free; every change is a card on the phone that says what changes (before
 // → after) and is applied only when approved. What the card needs filled in (a password) is typed on the phone and
 // never passes through the model. Some things are never here: the hub's and devices' tokens, pairing, which machines
@@ -63,7 +63,7 @@ func (h *Hub) selfSettings() []selfSetting {
 	return out
 }
 
-func (h *Hub) toolJarvisSettings(ctx context.Context, from string, m *Machine, sessionID string, args json.RawMessage) (string, error) {
+func (h *Hub) toolPersonaSettings(ctx context.Context, from string, m *Machine, sessionID string, args json.RawMessage) (string, error) {
 	var a struct {
 		Action string          `json:"action"`
 		Key    string          `json:"key"`
@@ -117,7 +117,7 @@ func (h *Hub) toolJarvisSettings(ctx context.Context, from string, m *Machine, s
 	}
 	shown, _ := json.Marshal(map[string]string{"setting": s.title, "action": a.Action})
 	ix := proto.Interaction{ID: "ix_" + randomHex(6), MachineID: m.cfg.ID, SessionID: sessionID, Kind: proto.IxPermission,
-		ToolName: "jarvis_settings", Summary: change.summary, ToolInput: shown, Fields: change.fields, SessionTitle: "Persona",
+		ToolName: "persona_settings", Summary: change.summary, ToolInput: shown, Fields: change.fields, SessionTitle: "Persona",
 		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC()}
 	r, err := h.waitInteraction(ctx, ix)
 	if err != nil {
@@ -159,7 +159,7 @@ func changeSummary(l i18n.Lang, title, before, after string) string {
 	return ss(l, "change", i18n.Args{"title": title, "before": clipped(l, before), "after": clipped(l, after)})
 }
 
-// managerSettings are the manager's jarvis_settings entries (none while it is away).
+// managerSettings are the manager's persona_settings entries (none while it is away).
 func (h *Hub) managerSettings(ctx context.Context, id string) []extwire.Setting {
 	if h.busConnOf(id) == nil {
 		return nil

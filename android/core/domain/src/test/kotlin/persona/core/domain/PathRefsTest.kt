@@ -9,7 +9,7 @@ class PathRefsTest {
     private fun paths(t: String) = PathRefs.find(t).map { r -> r.line?.let { "${r.path}:$it" + (r.col?.let { c -> ":$c" } ?: "") } ?: r.path }
 
     @Test fun findsAbsoluteHomeAndRelativePathsWithAFolder() {
-        assertEquals(listOf("/tmp/jarvis-tasks/1664-lark-test.md"), (paths("读 /tmp/jarvis-tasks/1664-lark-test.md 并完整执行这个任务")).zhAny())
+        assertEquals(listOf("/tmp/persona-tasks/1664-lark-test.md"), (paths("读 /tmp/persona-tasks/1664-lark-test.md 并完整执行这个任务")).zhAny())
         assertEquals(listOf("~/code/app/README.md", "web/src/lib/api.ts"), (paths("看 ~/code/app/README.md 和 web/src/lib/api.ts")).zhAny())
         assertEquals(listOf("/var/log/"), (paths("目录 /var/log/ 里")).zhAny())
     }

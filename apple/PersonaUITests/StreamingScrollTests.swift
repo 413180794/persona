@@ -2,34 +2,34 @@ import XCTest
 
 /// The chat while a reply streams (the user, 2026-11-04: 「流式输出的时候，滚动就不稳定了」). A long Markdown reply
 /// (`/mock/say?preset=markdown`: a code block, a table, a list) streams at the hub's pace, a delta every 80 ms, into the
-/// Jarvis conversation (scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1, JARVIS_MOCK_HUB).
+/// Persona conversation (scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1, PERSONA_MOCK_HUB).
 ///
 /// The screen is measured from outside: `scripts`' recording of the simulator, decoded frame by frame, and the app's
 /// per-frame scroll trace (`-scrollTrace YES`, Documents/scroll-trace.txt). Each case prints `STREAM <case> start|end
 /// <epoch>` around the stream, for cutting both to it. What a case asserts is what XCUITest can see at the end.
 final class StreamingScrollTests: XCTestCase {
     private var hub = ""
-    private let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004" // 「整理这个季度的读书笔记」, a long one
+    private let persona = "server/b2e4d6f8-0000-4000-8000-000000000004" // 「整理这个季度的读书笔记」, a long one
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
         _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!)
     }
 
-    /// The Jarvis conversation whose turn runs (MOCK_ASSISTANT_RUN=1): steps, and now and then words streamed.
+    /// The Persona conversation whose turn runs (MOCK_ASSISTANT_RUN=1): steps, and now and then words streamed.
     private let running = "server/b2e4d6f8-0000-4000-8000-000000000001"
     /// An agent at work (MOCK_STREAM=1): a thought, a call or a reply every 2 s.
     private let working = "macbook/a1f3c2d4-0000-4000-8000-000000000001"
 
     @MainActor private func launch(_ open: [String]? = nil) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-openChatsFresh", "YES", "-scrollTrace", "YES",
-                               ] + (open ?? ["-tab", "assistant", "-openAssistant", jarvis])
+                               ] + (open ?? ["-tab", "assistant", "-openAssistant", persona])
         app.launchPinned()
         // The notification prompt of a fresh install would sit over the chat in the recording.
         let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]

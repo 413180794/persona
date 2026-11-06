@@ -333,7 +333,7 @@ func (h *Hub) fleetLive() (FleetState, FleetStats) {
 }
 
 // waitInteraction asks the user on the phone for one of the hub's own features (a mail send, Cua's apps, ego's
-// scripts, jarvis_settings): the manager shows the card and waits for its answer (fleet.ask). Without the manager
+// scripts, persona_settings): the manager shows the card and waits for its answer (fleet.ask). Without the manager
 // nothing can be asked: a dismiss.
 func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
 	// No expiry given: the manager's own wait for a card (its manager.json hook_timeout_minutes) applies.

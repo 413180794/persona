@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Phone Data on the Mac: the sources the Mac has tools for. A Mac has no health data (no health tools are
 /// registered there), so no health switch either.

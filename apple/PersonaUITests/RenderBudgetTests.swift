@@ -6,12 +6,12 @@ import XCTest
 /// `last`: one agent's last line. Reports them (PERF lines, attachments) and fails over the budget (docs/ios-state.md
 /// 「第 5 步」): after steps 1–3 such a push draws only the leaf views that show the field that changed.
 ///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
-///   TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/RenderBudgetTests
+///   TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/RenderBudgetTests
 final class RenderBudgetTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!
     private static let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001"
-    private static let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"
+    private static let persona = "server/b2e4d6f8-0000-4000-8000-000000000004"
     private static let pushes = 5
     /// Bodies per push each page may run, by push: what steps 1–3 left (the Agents list: the row's time, and for a
     /// last line the row; the chats: nothing).
@@ -24,8 +24,8 @@ final class RenderBudgetTests: XCTestCase {
     private static let slack = 0.25
 
     override func setUpWithError() throws {
-        guard let h = ProcessInfo.processInfo.environment["JARVIS_CHURN_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (JARVIS_CHURN_HUB)")
+        guard let h = ProcessInfo.processInfo.environment["PERSONA_CHURN_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 (PERSONA_CHURN_HUB)")
         }
         hub = h
         _ = mock("reset")
@@ -33,7 +33,7 @@ final class RenderBudgetTests: XCTestCase {
 
     private func launch(_ args: [String]) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair]
         app.launchPinned()
         sleep(3)
@@ -118,8 +118,8 @@ final class RenderBudgetTests: XCTestCase {
         measure("Agent chat", "last")
     }
 
-    func testJarvisChat() {
-        launch(["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", Self.jarvis])
+    func testPersonaChat() {
+        launch(["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", Self.persona])
         measure("Persona chat", "rev")
         measure("Persona chat", "last")
     }

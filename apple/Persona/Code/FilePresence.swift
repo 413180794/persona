@@ -9,7 +9,7 @@ struct FileScope: Hashable, Sendable {
 }
 
 /// Which paths mentioned in conversations are there on their machine (docs/ios.md「文件查看器」), so only those are
-/// linked: a message may name another machine's file (the hub's ~/.jarvis/…), or one since deleted, and tapping it
+/// linked: a message may name another machine's file (the hub's ~/.persona/…), or one since deleted, and tapping it
 /// only said it could not be opened. Asked in batches (GET /api/v1/machines/{mid}/stat) a moment after rows appear,
 /// remembered per machine + directory + path. Until the answer comes, and when none can come (a node from before
 /// the endpoint, no network), a path is plain text: better unlinked than a link that fails.
@@ -51,7 +51,7 @@ final class FilePresence {
         known[Key(scope: scope, path: path)]?.kind
     }
 
-    /// Whether a path is one to link: there as a file or a directory, or in a folder macOS keeps from jarvisd (opening
+    /// Whether a path is one to link: there as a file or a directory, or in a folder macOS keeps from personad (opening
     /// it says what to do).
     func linkable(_ path: String, in scope: FileScope) -> Bool {
         switch kind(path, in: scope) {

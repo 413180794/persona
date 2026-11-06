@@ -30,7 +30,7 @@ enum class ComputerOs(val wire: String) {
 
 /**
  * A computer's pairing code: the link its Persona Link takes ([pairUrl]), [machine] in the ids the app's lists use.
- * [command] pairs an installed jarvis-link; [linuxInstall] installs and pairs in one line, only when the hub knows the
+ * [command] pairs an installed persona-link; [linuxInstall] installs and pairs in one line, only when the hub knows the
  * site it was published from.
  */
 data class ComputerCode(

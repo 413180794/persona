@@ -6,7 +6,7 @@ import (
 )
 
 // Blocked Claude Code config directories (docs/claude-integration.md "Blocked config directories"): per machine, patterns the user
-// keeps out of Jarvis — the node neither looks in nor reports a matching directory, the hub does not remember it, and
+// keeps out of Persona — the node neither looks in nor reports a matching directory, the hub does not remember it, and
 // its sessions are not listed. Both the hub and the node match with ClaudeDirBlocked.
 
 // CleanClaudeDirPatterns trims spaces and trailing slashes, drops empty ones, ones that would block everything and

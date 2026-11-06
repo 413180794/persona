@@ -3,24 +3,24 @@ import XCTest
 /// Settings › Channels (docs/channels.md): the Channels row before Connectors, the list in its three sections, WeChat's page
 /// (bound: its account, Send Messages To, its features), binding a channel with a token a step at a time, the Feishu bot's
 /// pairing code, and 「来自 微信」 under the main conversation's first message. Against scripts/mock/mock_hub.py with
-/// MOCK_CHANNELS=1 MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_JARVIS_SHOTS=<dir>` keeps the
-/// screenshots, named by `TEST_RUNNER_JARVIS_CHANNELS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
+/// MOCK_CHANNELS=1 MOCK_EXTENSIONS=1: `TEST_RUNNER_PERSONA_CHANNELS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the
+/// screenshots, named by `TEST_RUNNER_PERSONA_CHANNELS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
 final class ChannelSettingsTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = env["JARVIS_SHOTS"] else { return }
-        let look = env["JARVIS_CHANNELS_APPEARANCE"] ?? "light"
+        guard let dir = env["PERSONA_SHOTS"] else { return }
+        let look = env["PERSONA_CHANNELS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "channels-\(name)-\(look).png"))
     }
 
     @MainActor private func launch(_ args: [String]) throws -> XCUIApplication {
-        guard let hub = env["JARVIS_CHANNELS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_CHANNELS=1 (JARVIS_CHANNELS_HUB)") }
+        guard let hub = env["PERSONA_CHANNELS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_CHANNELS=1 (PERSONA_CHANNELS_HUB)") }
         addUIInterruptionMonitor(withDescription: "notifications") { alert in
             for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
             return false
         }
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()

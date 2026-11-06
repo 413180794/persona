@@ -3,11 +3,11 @@ import XCTest
 /// The hub's line over the Agents list and Settings › hub (docs/hub-update.md「App 里」). Each button on the line takes only
 /// its own taps (it sits in a list row that opens the hub page), and an update waiting for busy agents shows them and
 /// asks before Update Now. Against scripts/mock/mock_hub.py (any MOCK_HUB_UPDATE; each test sets its own mode):
-///   TEST_RUNNER_JARVIS_HUB_UPDATE_HUB=http://127.0.0.1:<port>
+///   TEST_RUNNER_PERSONA_HUB_UPDATE_HUB=http://127.0.0.1:<port>
 final class HubNoticeUITests: XCTestCase {
     private func hub(mode: String) throws -> String {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_HUB_UPDATE_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_HUB_UPDATE_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_HUB_UPDATE_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_HUB_UPDATE_HUB)")
         }
         _ = try Data(contentsOf: URL(string: hub + "/mock/hub_update?mode=" + mode)!)
         return hub
@@ -20,7 +20,7 @@ final class HubNoticeUITests: XCTestCase {
 
     private func launch(_ hub: String, _ args: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", ""] + args
         app.launchPinned()
         return app

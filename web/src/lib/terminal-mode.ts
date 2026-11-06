@@ -18,10 +18,10 @@ export const MODE_TITLE: Record<TerminalMode, string> = {
 };
 
 /** The last choice made with the switch, and the default in Settings; neither is written until it is chosen. */
-export const LAST_MODE_KEY = "jarvis.terminal.mode";
-export const PREFERENCE_KEY = "jarvis.terminal.defaultMode";
+export const LAST_MODE_KEY = "persona.terminal.mode";
+export const PREFERENCE_KEY = "persona.terminal.defaultMode";
 /** Set once the note about the shared layout has been shown. */
-export const HINT_KEY = "jarvis.terminal.fullHint";
+export const HINT_KEY = "persona.terminal.fullHint";
 
 export function parseMode(raw: string | null | undefined): TerminalMode | null {
   return raw === "pane" || raw === "full" ? raw : null;

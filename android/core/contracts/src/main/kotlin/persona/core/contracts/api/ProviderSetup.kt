@@ -69,7 +69,7 @@ interface ProviderSetup {
 @Serializable
 data class HubLauncher(
     @SerialName("name") val name: String,
-    /** jarvis (kept by Persona) | zshrc (a machine's ~/.zshrc function) | path (a wrapper script on its PATH) */
+    /** persona (kept by Persona) | zshrc (a machine's ~/.zshrc function) | path (a wrapper script on its PATH) */
     @SerialName("source") val source: String = "zshrc",
     /** launcher | api */
     @SerialName("kind") val kind: String? = null,
@@ -95,7 +95,7 @@ data class HubLauncher(
     /** The detail's: each machine's function body, keys masked. */
     @SerialName("definitions") val definitions: Map<String, String> = emptyMap(),
 ) {
-    val managed: Boolean get() = source == "jarvis"
+    val managed: Boolean get() = source == "persona"
     val pathScript: Boolean get() = source == "path"
     val isApi: Boolean get() = kind == "api"
 }

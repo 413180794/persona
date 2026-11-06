@@ -524,7 +524,7 @@ struct GitHubMarkdown: View {
 
     var body: some View {
         Markdown(text)
-            .markdownTheme(.jarvis)
+            .markdownTheme(.persona)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

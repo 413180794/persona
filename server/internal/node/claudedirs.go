@@ -27,7 +27,7 @@ import (
 // Directories are compared by their real path: ~/.claude/projects symlinked into a profile is the same directory.
 // Directories the user blocked for this machine (node.configure claude_dirs_blocked, proto.ClaudeDirBlocked) are left
 // out of all of it: not looked in, not reported, their sessions not listed. The node's default directory is never
-// blocked (what Jarvis starts runs there).
+// blocked (what Persona starts runs there).
 
 // claudeScanEvery is how often running claude processes are scanned for their config directory.
 const claudeScanEvery = 30 * time.Second

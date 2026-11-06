@@ -2,8 +2,8 @@
 // relays, upgraded to a direct path when NAT traversal works, with no public IP, open port or ssh needed on either side.
 // It is the fallback when the hub cannot ssh to a machine (docs/server.md "tailcat hole punching").
 //
-// A node keeps a fixed identity in ~/.jarvis/tailcat.json and serves only the hub keys listed there; the manager that
-// dials it keeps its own (the built-in manager's in ~/.jarvis/managers/assistant/tailcat-hub.json, docs/managers.md "The
+// A node keeps a fixed identity in ~/.persona/tailcat.json and serves only the hub keys listed there; the manager that
+// dials it keeps its own (the built-in manager's in ~/.persona/managers/assistant/tailcat-hub.json, docs/managers.md "The
 // built-in manager's own files") and dials a node's address (hub.json machines[].tailcat_addr). The address holds
 // the node's public keys, the WireGuard pre-shared key and the DERP region: it is a secret, like the hub token.
 package tunnel
@@ -27,8 +27,8 @@ import (
 
 // Ports on a node's tailcat address (its own netstack: nothing listens on the machine's network).
 const (
-	NodePort   uint16 = 18662 // the node protocol, as on `jarvisd node --stdio`
-	UploadPort uint16 = 18663 // a new jarvisd binary (upload.go)
+	NodePort   uint16 = 18662 // the node protocol, as on `personad node --stdio`
+	UploadPort uint16 = 18663 // a new personad binary (upload.go)
 )
 
 func dataDir() string {
@@ -68,10 +68,10 @@ func LoadNodeKey(path string) (*NodeKey, error) {
 		return nil, err
 	}
 	if k.Key.IsZero() || k.PresharedKey.IsZero() || k.RegionID == 0 {
-		return nil, fmt.Errorf("%s: incomplete (run `jarvisd node tailcat init`)", path)
+		return nil, fmt.Errorf("%s: incomplete (run `personad node tailcat init`)", path)
 	}
 	if len(k.Hubs) == 0 {
-		return nil, fmt.Errorf("%s: no hub key allowed (run `jarvisd node tailcat init --hub <key>`)", path)
+		return nil, fmt.Errorf("%s: no hub key allowed (run `personad node tailcat init --hub <key>`)", path)
 	}
 	return &k, nil
 }
@@ -81,7 +81,7 @@ func LoadNodeKey(path string) (*NodeKey, error) {
 func InitNodeKey(ctx context.Context, path, hub, derpMapURL string) (*NodeKey, error) {
 	var hk key.NodePublic
 	if err := hk.UnmarshalText([]byte(hub)); err != nil {
-		return nil, fmt.Errorf("hub key %q: %w (it is what `jarvisd hub tailcat-key` prints on the hub's machine)", hub, err)
+		return nil, fmt.Errorf("hub key %q: %w (it is what `personad hub tailcat-key` prints on the hub's machine)", hub, err)
 	}
 	var k NodeKey
 	switch err := readJSON(path, &k); {
@@ -150,7 +150,7 @@ func (k *NodeKey) Server(logf logger.Logf) *tailcat.Server {
 	}
 }
 
-// LoadOrCreateHubKey reads the hub's identity, creating it the first time. The hub and `jarvisd hub tailcat-key`
+// LoadOrCreateHubKey reads the hub's identity, creating it the first time. The hub and `personad hub tailcat-key`
 // running at once must end up with the same key, not each with its own.
 func LoadOrCreateHubKey(path string) (*HubKey, error) {
 	var k HubKey
@@ -201,16 +201,16 @@ func LoadOrCreateHubKey(path string) (*HubKey, error) {
 	return &k, nil
 }
 
-// Public is what a node's `jarvisd node tailcat init --hub` takes.
+// Public is what a node's `personad node tailcat init --hub` takes.
 func (k *HubKey) Public() string {
 	b, _ := k.Key.Public().MarshalText()
 	return string(b)
 }
 
-// Logf is tailscale's logging for this package: silent unless JARVIS_TAILCAT_DEBUG=1, magicsock and wireguard
+// Logf is tailscale's logging for this package: silent unless PERSONA_TAILCAT_DEBUG=1, magicsock and wireguard
 // log a few lines a second while a path is being worked out.
 func Logf(to logger.Logf) logger.Logf {
-	if identity.Getenv("JARVIS_TAILCAT_DEBUG") == "1" && to != nil {
+	if identity.Getenv("PERSONA_TAILCAT_DEBUG") == "1" && to != nil {
 		return to
 	}
 	return logger.Discard

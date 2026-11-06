@@ -1,10 +1,10 @@
-<jarvis-context kind="context" title="Example Chat机器人" url="">
+<persona-context kind="context" title="Example Chat机器人" url="">
 用户在Example Chat里私聊 Persona 机器人发来这条消息。这一轮的最终回答会以机器人的身份发回Example Chat（Markdown）：结论先行、短一些，也不用再 notify_user。需要确认的照常 ask_user，用户要到 App 里答。
-</jarvis-context>
-<jarvis-context kind="context" title="转发的聊天记录" url="">
+</persona-context>
+<persona-context kind="context" title="转发的聊天记录" url="">
 11-02 10:00 张三：构建挂了
-</jarvis-context>
+</persona-context>
 看下这个日志
 
 附件（已存到这台电脑上）：
-/tmp/jarvis-uploads/build.log
+/tmp/persona-uploads/build.log

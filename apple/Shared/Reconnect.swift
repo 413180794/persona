@@ -103,10 +103,10 @@ nonisolated struct FrameMeta: Equatable, Sendable {
 // MARK: Writes through a gap
 
 /// Writes that survive a hub restart (docs/hub-restart.md「写操作排队、幂等重放」): one op id per logical operation, sent
-/// as `X-Jarvis-Op-Id`, so the hub does it once however often it arrives; a request that died on the way goes again with
+/// as `X-Persona-Op-Id`, so the hub does it once however often it arrives; a request that died on the way goes again with
 /// the same id, for up to `limit`, before the caller shows its failure.
 nonisolated enum OpRetry {
-    static let header = "X-Jarvis-Op-Id"
+    static let header = "X-Persona-Op-Id"
     /// How long a write keeps trying through a gap before it fails.
     static let limit: TimeInterval = 60
 

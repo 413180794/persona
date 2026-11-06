@@ -26,14 +26,14 @@ import (
 // Codex panes on a shared app-server, answered over its protocol (docs/codex.md "Sessions on a daemon"): a real
 // `codex app-server` on a socket of its own (never the daemon in use), a TUI attached to it in the isolated herdr, and
 // a node that knows only that app-server (discovery off) and answers the cards the way the phone does. Env as
-// TestLiveCodexCards; JARVIS_CODEX_DAEMON=1 runs it (scripts/test/test-codex.sh, for a Codex with app-server daemons), and
-// JARVIS_CODEX_FALLBACK=<a codex without one> also checks that such a Codex beside it stays on the terminal route.
+// TestLiveCodexCards; PERSONA_CODEX_DAEMON=1 runs it (scripts/test/test-codex.sh, for a Codex with app-server daemons), and
+// PERSONA_CODEX_FALLBACK=<a codex without one> also checks that such a Codex beside it stays on the terminal route.
 func TestLiveCodexDaemon(t *testing.T) {
-	bin, work := os.Getenv("JARVIS_CODEX_BIN"), os.Getenv("JARVIS_CODEX_WORK")
-	if bin == "" || work == "" || os.Getenv("JARVIS_CODEX_DAEMON") == "" {
-		t.Skip("JARVIS_CODEX_BIN / JARVIS_CODEX_WORK / JARVIS_CODEX_DAEMON not set")
+	bin, work := os.Getenv("PERSONA_CODEX_BIN"), os.Getenv("PERSONA_CODEX_WORK")
+	if bin == "" || work == "" || os.Getenv("PERSONA_CODEX_DAEMON") == "" {
+		t.Skip("PERSONA_CODEX_BIN / PERSONA_CODEX_WORK / PERSONA_CODEX_DAEMON not set")
 	}
-	d := startLiveDaemon(t, bin, filepath.Join(work, "daemon"+os.Getenv("JARVIS_CODEX_COLS")))
+	d := startLiveDaemon(t, bin, filepath.Join(work, "daemon"+os.Getenv("PERSONA_CODEX_COLS")))
 	c := herdr.New()
 	n, hub := daemonNode(t, c, d)
 	lc := startLiveCodex(t, bin, work, liveOptions{name: "daemon", node: n,
@@ -44,10 +44,10 @@ func TestLiveCodexDaemon(t *testing.T) {
 		route, note := n.codexRoute(lc.id)
 		t.Fatalf("%v: route %s (%s)\n%s", err, route, note, lc.plain())
 	}
-	rounds, _ := strconv.Atoi(os.Getenv("JARVIS_CODEX_ROUNDS"))
+	rounds, _ := strconv.Atoi(os.Getenv("PERSONA_CODEX_ROUNDS"))
 	rounds = max(rounds, 1)
 	only := map[string]bool{}
-	for _, c := range strings.Split(os.Getenv("JARVIS_CODEX_CASES"), ",") {
+	for _, c := range strings.Split(os.Getenv("PERSONA_CODEX_CASES"), ",") {
 		if c = strings.TrimSpace(c); c != "" {
 			only[c] = true
 		}
@@ -125,7 +125,7 @@ func startLiveDaemon(t *testing.T, bin, dir string) *liveDaemon {
 
 func (d *liveDaemon) start() error {
 	args := []string{"app-server", "--listen", "unix://" + d.sock, "-c", "notify=[]", "-c", "features.request_permissions_tool=true"}
-	a := strings.Fields(os.Getenv("JARVIS_CODEX_ARGS"))
+	a := strings.Fields(os.Getenv("PERSONA_CODEX_ARGS"))
 	for i := 0; i < len(a); i++ {
 		switch {
 		case a[i] == "-m" && i+1 < len(a):
@@ -665,7 +665,7 @@ func (dc *daemonCases) caseRestart(n int) error {
 // A Codex beside it that runs its own thread (0.153, or any in-process one) stays on the terminal route, and its
 // approval is a terminal card.
 func (dc *daemonCases) caseFallback(n int) error {
-	other := os.Getenv("JARVIS_CODEX_FALLBACK")
+	other := os.Getenv("PERSONA_CODEX_FALLBACK")
 	if other == "" {
 		return errSkip
 	}

@@ -61,7 +61,7 @@ def wait_for(fn, what, seconds=5):
 
 def fresh(browser, token, viewport, scheme="light"):
     ctx = browser.new_context(viewport=viewport, color_scheme=scheme, device_scale_factor=2, locale="zh-CN")
-    ctx.add_init_script(f"localStorage.setItem('jarvis.token', {token!r}); localStorage.setItem('jarvis.theme', {scheme!r})")
+    ctx.add_init_script(f"localStorage.setItem('persona.token', {token!r}); localStorage.setItem('persona.theme', {scheme!r})")
     page = ctx.new_page()
     page.set_default_timeout(10000)
     return ctx, page

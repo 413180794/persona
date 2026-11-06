@@ -3,7 +3,7 @@
 // shortcuts call the rest. Kept out of Sidebar.tsx so that file only gains the few lines that listen.
 import { AGENT_GROUPINGS, agentGrouping, type AgentGrouping } from "./agent-groups";
 
-export const GROUPING_KEY = "jarvis.agentGrouping";
+export const GROUPING_KEY = "persona.agentGrouping";
 
 // ── fold all / open all ──────────────────────────────────
 

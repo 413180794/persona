@@ -25,7 +25,7 @@ import (
 const guestsKey = "assistant.guests"
 
 // guestDir is where guest conversations run, next to the assistant's directory.
-const guestDir = ".jarvis/guest"
+const guestDir = ".persona/guest"
 
 // maxGuestTools bounds guest.tools.
 const maxGuestTools = 8

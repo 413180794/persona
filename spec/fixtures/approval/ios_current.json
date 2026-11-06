@@ -5,7 +5,7 @@
       "name": "ios_current_conversation_plan_unlocked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -55,7 +55,7 @@
       "name": "ios_current_conversation_plan_locked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -105,7 +105,7 @@
       "name": "ios_current_conversation_permission_unlocked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -151,7 +151,7 @@
       "name": "ios_current_conversation_permission_locked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -197,7 +197,7 @@
       "name": "ios_current_conversation_question_unlocked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -227,7 +227,7 @@
       "name": "ios_current_conversation_question_locked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -257,7 +257,7 @@
       "name": "ios_current_conversation_screen_unlocked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -287,7 +287,7 @@
       "name": "ios_current_conversation_screen_locked",
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
+        "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm"
       ],
       "input": {
         "profile": "ios_current",
@@ -317,7 +317,7 @@
       "name": "ios_current_notification_plan_unlocked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -355,7 +355,7 @@
       "name": "ios_current_notification_plan_locked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -393,7 +393,7 @@
       "name": "ios_current_notification_permission_unlocked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -430,7 +430,7 @@
       "name": "ios_current_notification_permission_locked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -467,7 +467,7 @@
       "name": "ios_current_notification_question_unlocked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -491,7 +491,7 @@
       "name": "ios_current_notification_question_locked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -515,7 +515,7 @@
       "name": "ios_current_notification_screen_unlocked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -539,7 +539,7 @@
       "name": "ios_current_notification_screen_locked",
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/App/NotificationActions.swift：categories、resolution"
+        "ios/Persona/App/NotificationActions.swift：categories、resolution"
       ],
       "input": {
         "profile": "ios_current",
@@ -564,8 +564,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -597,8 +597,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -630,8 +630,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -669,8 +669,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -708,8 +708,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -734,8 +734,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -760,8 +760,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -786,8 +786,8 @@
       "description": "核对锁屏实时活动的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
-        "ios/Jarvis/App/FleetActions.swift：resolution",
-        "ios/JarvisWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
+        "ios/Persona/App/FleetActions.swift：resolution",
+        "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
         "profile": "ios_current",
@@ -811,7 +811,7 @@
       "name": "ios_current_watch_plan_unlocked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -848,7 +848,7 @@
       "name": "ios_current_watch_plan_locked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -885,7 +885,7 @@
       "name": "ios_current_watch_permission_unlocked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -921,7 +921,7 @@
       "name": "ios_current_watch_permission_locked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -957,7 +957,7 @@
       "name": "ios_current_watch_question_unlocked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -987,7 +987,7 @@
       "name": "ios_current_watch_question_locked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -1017,7 +1017,7 @@
       "name": "ios_current_watch_screen_unlocked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -1047,7 +1047,7 @@
       "name": "ios_current_watch_screen_locked",
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/JarvisWatch/JarvisWatchApp.swift：WatchInteractionView.body"
+        "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body"
       ],
       "input": {
         "profile": "ios_current",
@@ -1077,7 +1077,7 @@
       "name": "ios_current_siri_shortcut_plan_unlocked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",
@@ -1102,7 +1102,7 @@
       "name": "ios_current_siri_shortcut_plan_locked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",
@@ -1127,7 +1127,7 @@
       "name": "ios_current_siri_shortcut_permission_unlocked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",
@@ -1151,7 +1151,7 @@
       "name": "ios_current_siri_shortcut_permission_locked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",
@@ -1175,7 +1175,7 @@
       "name": "ios_current_siri_shortcut_question_unlocked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",
@@ -1199,7 +1199,7 @@
       "name": "ios_current_siri_shortcut_question_locked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",
@@ -1223,7 +1223,7 @@
       "name": "ios_current_siri_shortcut_screen_unlocked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",
@@ -1247,7 +1247,7 @@
       "name": "ios_current_siri_shortcut_screen_locked",
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
-        "ios/Jarvis/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
+        "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform"
       ],
       "input": {
         "profile": "ios_current",

@@ -23,8 +23,8 @@ import (
 const SpaceHealth = identity.SpaceHealth
 
 // healthRel is this manager's health space directory on a machine, relative to its home (node assistant.prepare):
-// .jarvis/health for the built-in manager, .jarvis/health-<id> for another (identity.HealthDirName).
-func (s *Service) healthRel() string { return path.Join(".jarvis", identity.HealthDirName(s.id)) }
+// .persona/health for the built-in manager, .persona/health-<id> for another (identity.HealthDirName).
+func (s *Service) healthRel() string { return path.Join(".persona", identity.HealthDirName(s.id)) }
 
 // healthCwd is this manager's health space directory on d, or "" while d has not reported its home.
 func (s *Service) healthCwd(d Device) string {

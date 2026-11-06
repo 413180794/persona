@@ -2,8 +2,7 @@ import AppIntents
 
 /// Siri / Spotlight shortcuts. Every phrase has to include `\(.applicationName)`; only AppEntity/AppEnum
 /// parameters may be interpolated, which is why the message text is asked for after the phrase matches.
-// Compatibility: the system addresses this type by its original module/type identity.
-struct JarvisShortcuts: AppShortcutsProvider {
+struct PersonaShortcuts: AppShortcutsProvider {
     nonisolated static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: TalkToPersonaIntent(),
@@ -17,7 +16,7 @@ struct JarvisShortcuts: AppShortcutsProvider {
             systemImageName: "waveform.badge.mic"
         )
         AppShortcut(
-            intent: AskJarvisIntent(),
+            intent: AskPersonaIntent(),
             phrases: [
                 "Ask \(.applicationName) something",
                 "Quick question for \(.applicationName)",
@@ -61,7 +60,7 @@ struct JarvisShortcuts: AppShortcutsProvider {
             systemImageName: "bubble.left.and.text.bubble.right"
         )
         AppShortcut(
-            intent: JarvisStatusIntent(),
+            intent: PersonaStatusIntent(),
             phrases: [
                 "Status of \(.applicationName)",
                 "\(.applicationName) status",

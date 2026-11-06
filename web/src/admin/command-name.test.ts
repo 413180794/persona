@@ -3,8 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-// The CLI is personad; jarvisd is only a compatibility alias. Admin UI text must not tell people to
-// run `jarvisd hub …` (the systemd unit name `jarvisd` in journalctl / systemctl hints is fine).
+// The admin UI uses the one canonical server command.
 const src = fileURLToPath(new URL("..", import.meta.url));
 
 function files(dir: string, keep: (path: string) => boolean): string[] {
@@ -15,10 +14,11 @@ function files(dir: string, keep: (path: string) => boolean): string[] {
   });
 }
 
-it("admin UI text names personad, not jarvisd, for hub commands", () => {
+it("admin UI text names the canonical server command", () => {
   const admin = files(join(src, "admin"), (p) => /\.(ts|tsx)$/.test(p) && !/\.test\.tsx?$/.test(p));
   const locales = files(join(src, "i18n", "locales"), (p) => /[\\/]admin-[^\\/]*\.json$/.test(p));
   expect(locales.length).toBeGreaterThan(0);
-  const offenders = [...admin, ...locales].filter((p) => /jarvisd\s+hub\b/.test(readFileSync(p, "utf8")));
-  expect(offenders.map((p) => p.slice(src.length))).toEqual([]);
+  const commands = [...admin, ...locales].flatMap((p) => [...readFileSync(p, "utf8").matchAll(/\b(personad?)\s+hub\b/g)].map((m) => m[1]));
+  expect(commands.length).toBeGreaterThan(0);
+  expect([...new Set(commands)]).toEqual(["personad"]);
 });

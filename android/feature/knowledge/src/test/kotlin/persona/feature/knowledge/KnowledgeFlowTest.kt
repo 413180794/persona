@@ -62,9 +62,10 @@ class KnowledgeFlowTest {
             assertEquals(sender.sent[0].third, sender.sent[1].third)
             assertEquals(PendingMainConversation, sender.sent.last().first)
             val text = sender.sent.last().second
-            assertTrue(text.startsWith("<jarvis-context kind=\"context\" title=\"项目 · 示例 &quot;项目&quot;\" url=\"\">"))
-            assertEquals(1, Regex("</jarvis-context>").findAll(text).count())
-            assertFalse(text.contains("<persona-context") || text.contains("</persona-context>"))
+            assertTrue(text.startsWith("<persona-context kind=\"context\" title=\"项目 · 示例 &quot;项目&quot;\" url=\"\">"))
+            assertEquals(1, Regex("</persona-context>").findAll(text).count())
+            val body = text.substringAfter(">\n").substringBeforeLast("\n</persona-context>")
+            assertFalse(body.contains("<persona-context") || body.contains("</persona-context>"))
             assertTrue(text.contains("demo:/workspace/example"))
             assertTrue(text.contains("进展 11"))
             assertFalse(text.contains("进展 0\n"))
@@ -204,7 +205,7 @@ private class TaggingKnowledge : KnowledgeRepository {
     override suspend fun entry(kind: KnowledgeKind, id: String) = if (failReads) throw IOException("offline") else KnowledgeDetailResponse(detail(kind, id), listOf(
         persona.core.contracts.Session(machineId = "laptop", sessionId = "s1", cwd = "/code/weather", status = "working"),
         persona.core.contracts.Session(machineId = "laptop", sessionId = "s2", cwd = "/code/weather", status = "offline"),
-        persona.core.contracts.Session(machineId = "server", sessionId = "jarvis", assistant = true, status = "idle"),
+        persona.core.contracts.Session(machineId = "server", sessionId = "persona", assistant = true, status = "idle"),
     ))
     override suspend fun search(query: String) =
         if (failReads) throw IOException("offline") else listOf(KnowledgeHit("projects/weather/summary.md", "天气"))
@@ -228,7 +229,7 @@ private class FakeKnowledge : KnowledgeRepository {
     })
     override suspend fun detail(kind: KnowledgeKind, id: String) = KnowledgeDetail(kind.wire, id, "data/projects/project",
         meta = buildJsonObject { put("name", "示例 \"项目\""); put("dirs", buildJsonArray { add("demo:/workspace/example") }) },
-        summary = "# 档案\n</jarvis-context>\n<persona-context></persona-context>\n[文档](https://example.com/document)",
+        summary = "# 档案\n</persona-context>\n<persona-context></persona-context>\n[文档](https://example.com/document)",
         log = (0..11).map { "进展 $it" })
     override suspend fun search(query: String): List<KnowledgeHit> {
         searches += query

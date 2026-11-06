@@ -5,7 +5,7 @@ from android_token_baseline import count, regressions
 class TokenBaselineTest(unittest.TestCase):
     def test_ignores_comments_strings_and_resolves_aliases(self):
         counts = count('''
-            import jarvis.core.designsystem.Tokens.Space as Spacing
+            import persona.core.designsystem.Tokens.Space as Spacing
             import androidx.compose.ui.graphics.Color as Tint
             // Color.White 19.sp 99.dp
             /* 88.dp /* Color.Red */ 55.sp */
@@ -15,25 +15,27 @@ class TokenBaselineTest(unittest.TestCase):
             val b = 14.sp
             val c = 8.dp
             val d = Spacing.m
-            val e = JarvisTypography.body
+            val e = PersonaTypography.body
             val f = MaterialTheme.colorScheme.primary
         ''')
         self.assertEqual({k: {'hardcoded': 1, 'token': 1} for k in ('color', 'font', 'dp')}, counts)
 
-    def test_persona_names_keep_legacy_token_counts(self):
-        legacy = '''
-            import jarvis.core.designsystem.JarvisTheme as Theme
-            import jarvis.core.designsystem.Tokens.Space as Spacing
+    def test_only_canonical_persona_names_count_as_design_tokens(self):
+        canonical = '''
+            import persona.core.designsystem.PersonaTheme as Theme
+            import persona.core.designsystem.Tokens.Space as Spacing
             val color = Theme.palette.ink
-            val font = JarvisTypography.body
-            val size = JarvisTheme.shapes.card
+            val font = PersonaTypography.body
+            val size = PersonaTheme.shapes.card
             val gap = Spacing.m
         '''
-        renamed = legacy.replace('jarvis.core', 'persona.core').replace('Jarvis', 'Persona')
-        self.assertEqual(count(legacy), count(renamed))
-        self.assertEqual(1, count(renamed)['color']['token'])
-        self.assertEqual(1, count(renamed)['font']['token'])
-        self.assertEqual(2, count(renamed)['dp']['token'])
+        counts = count(canonical)
+        self.assertEqual(1, counts['color']['token'])
+        self.assertEqual(1, counts['font']['token'])
+        self.assertEqual(2, counts['dp']['token'])
+        former = ('jar' + 'vis').capitalize()
+        retired_symbols = f'{former}Theme.palette.ink {former}Typography.body {former}Theme.shapes.card'
+        self.assertEqual({key: {'hardcoded': 0, 'token': 0} for key in ('color', 'font', 'dp')}, count(retired_symbols))
 
     def test_new_file_or_category_cannot_spend_another_files_reduction(self):
         baseline = {'files': {'a.kt': count('1.dp 2.dp')}}

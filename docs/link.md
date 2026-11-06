@@ -1,24 +1,24 @@
 # Persona Link: the computer connects to the hub, or the hub connects to the computer
 
-> Naming (#1159): the connection helper is **Persona Link**, and the command is `persona-link`. The installer creates `persona-link` beside `jarvis-link` as an alias; both names run the same program,
-> and its prompts use whichever name you ran. The executable `~/.persona/bin/jarvis-link`, download name `jarvis-link-<os>-<arch>.gz`,
-> systemd unit `jarvis-link.service`, launchd identity and helper inside the Mac App keep their old names, so this page still says `jarvis-link` when referring to the program below.
-> Copyable commands from the hub and admin page also still use `jarvis-link`, because the hub doesn't know that computer's version, and older versions have no `persona-link`.
+> Naming (#1159): the connection helper is **Persona Link**, and the command is `persona-link`. The installer creates `persona-link` beside `persona-link` as an alias; both names run the same program,
+> and its prompts use whichever name you ran. The executable `~/.persona/bin/persona-link`, download name `persona-link-<os>-<arch>.gz`,
+> systemd unit `persona-link.service`, launchd identity and helper inside the Mac App keep their old names, so this page still says `persona-link` when referring to the program below.
+> Copyable commands from the hub and admin page also still use `persona-link`, because the hub doesn't know that computer's version, and older versions have no `persona-link`.
 
 The hub can't reliably SSH into computers such as laptops whose IP and network keep changing. Requested 2026-10-31: no Tailscale or reverse tunnels;
 instead, the client on the computer connects to the hub and reconnects on its own after a disconnect, and the hub reuses that link to talk to its node. No SSH or VPN is needed anywhere along the path.
 
 The user decided again on 2026-11-02 ([plan-hub-center.md](plan-hub-center.md), sections 0 and 4): hubs and computers always connect through a preinstalled service on the computer, not SSH (too much permission);
-the computer can connect to the hub or accept a connection from it. The recommendation is one hub for the whole household, with a **node service** on every other computer: resident node plus jarvis-link, installed by one command or one App.
+the computer can connect to the hub or accept a connection from it. The recommendation is one hub for the whole household, with a **node service** on every other computer: resident node plus persona-link, installed by one command or one App.
 
 ## Two modes
 
-The same jarvis-link supports both, selected during pairing and changeable anytime (`jarvis-link mode active|passive`, or the menu bar App's pairing window). Each mode stores its pairing separately, so switching back doesn't require pairing again.
+The same persona-link supports both, selected during pairing and changeable anytime (`persona-link mode active|passive`, or the menu bar App's pairing window). Each mode stores its pairing separately, so switching back doesn't require pairing again.
 
 | Mode | Who connects to whom | Best for | Requirements |
 | --- | --- | --- | --- |
-| **Active** (connect to the hub) | jarvis-link dials the hub's WSS `/api/v1/link` ("Link" below) | Laptops, computers behind NAT or frequently changing networks | The hub has a TLS port (`public.tls_listen`) or sits behind an HTTPS reverse proxy ("[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)" below); this computer can reach the hub |
-| **Passive** (let the hub connect) | The hub dials the TLS port jarvis-link listens on locally ("Passive mode" below) | Computers with stable addresses reachable by the hub: servers, development workstations, home desktops | The hub can reach this computer's port (directly or through a SOCKS proxy); the computer's firewall opens this port only to the hub |
+| **Active** (connect to the hub) | persona-link dials the hub's WSS `/api/v1/link` ("Link" below) | Laptops, computers behind NAT or frequently changing networks | The hub has a TLS port (`public.tls_listen`) or sits behind an HTTPS reverse proxy ("[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)" below); this computer can reach the hub |
+| **Passive** (let the hub connect) | The hub dials the TLS port persona-link listens on locally ("Passive mode" below) | Computers with stable addresses reachable by the hub: servers, development workstations, home desktops | The hub can reach this computer's port (directly or through a SOCKS proxy); the computer's firewall opens this port only to the hub |
 
 Choosing: the computer can reach the hub but the hub can't reach it (a laptop, a computer on a company intranet connecting to a home hub) → active; the hub can reach it but it can't reach the hub (the hub is somewhere unreachable from the public internet,
 but can enter the computer's network through a proxy), or you don't want the computer initiating outbound connections → passive. If both directions work, either is fine; active needs no open port and is simpler.
@@ -35,35 +35,35 @@ curl -fsSL <site>/install.sh | sh -s -- --node --pair '<pairing link>'   # Activ
 curl -fsSL <site>/install.sh | sh -s -- --node --listen [:18663] [--addr <address the hub uses to reach this computer>]         # Passive
 ```
 
-- Downloads personad and jarvis-link (both verified against `SHA256SUMS`) to `~/.persona/bin/`, then hands off to `jarvis-link install`: installs the resident node's systemd user service
-  `jarvisd-node` (leaves an existing one unchanged) and jarvis-link's own service, pairs, and waits for connection (passive mode: waits for the listener to start, then prints a link for the hub admin interface).
-- `--pair` / `--listen` imply `--node`; so do `JARVIS_ROLE=node`, `JARVIS_PAIR`, `JARVIS_LISTEN`. With no options and a terminal, it asks;
-  if a hub is already detected on the LAN (mDNS `_jarvis-hub._tcp`, `jarvis-link discover`), it first says "One hub is enough for the whole household; install the node service on this computer."
+- Downloads personad and persona-link (both verified against `SHA256SUMS`) to `~/.persona/bin/`, then hands off to `persona-link install`: installs the resident node's systemd user service
+  `personad-node` (leaves an existing one unchanged) and persona-link's own service, pairs, and waits for connection (passive mode: waits for the listener to start, then prints a link for the hub admin interface).
+- `--pair` / `--listen` imply `--node`; so do `PERSONA_ROLE=node`, `PERSONA_PAIR`, `PERSONA_LISTEN`. With no options and a terminal, it asks;
+  if a hub is already detected on the LAN (mDNS `_persona-hub._tcp`, `persona-link discover`), it first says "One hub is enough for the whole household; install the node service on this computer."
 - Without systemd, it still installs the binaries and prints alternative instructions (see "Linux (headless)").
 - On Mac, `--node` only installs the resident node's launchd agent and pairs; the menu bar App handles the connection.
-- Publishing: `scripts/publish.sh` builds four extra `jarvis-link-<os>-<arch>.gz` files alongside personad and adds them to the same `SHA256SUMS`.
+- Publishing: `scripts/publish.sh` builds four extra `persona-link-<os>-<arch>.gz` files alongside personad and adds them to the same `SHA256SUMS`.
 
-**Mac**: install the **Persona Link** menu bar App (`./scripts/app/mac-link.sh install`; a step-by-step guide for others is in [persona-link-install.md](persona-link-install.md)). The App includes personad (`Contents/Helpers/jarvisd`), and **on first launch** runs
-`jarvis-link node install --jarvisd <inside the App>` to install the resident node LaunchAgent `com.jarvis.node`: if `~/.persona/bin/jarvisd` doesn't exist, it copies it there first (the node service executable is named `jarvisd`; `personad` is an alias the install script creates beside it, not created by the Mac App),
+**Mac**: install the **Persona Link** menu bar App (`./scripts/app/mac-link.sh install`; a step-by-step guide for others is in [persona-link-install.md](persona-link-install.md)). The App includes personad (`Contents/Helpers/personad`), and **on first launch** runs
+`persona-link node install --personad <inside the App>` to install the resident node LaunchAgent `com.persona.node`: if `~/.persona/bin/personad` doesn't exist, it copies it there first (the node service executable is named `personad`; `personad` is an alias the install script creates beside it, not created by the Mac App),
 leaving an existing installation unchanged (for example from `scripts/deploy/node-launchd.sh install`). Afterwards it only offers **Install local node service** in the menu; a service the user deletes isn't reinstalled automatically.
 App updates don't replace the installed resident node. Nodes supporting the update protocol can be remotely updated by the hub over the existing connection, with backup, rollback and online confirmation; first-time local upgrades for old nodes, progress and installation boundaries are in [node-update.md](node-update.md) (#1158).
 
-**Windows** (Orca engine, [windows.md](windows.md) ("Installation and startup")): `jarvis-link install --jarvisd <personad.exe> [--pair '<link>']`, without admin privileges.
-Registers the current user's scheduled task **Persona Link**, starting at sign-in and checked every 5 minutes; it runs a windowless supervisor (`jarvis-link supervise`), which starts
-jarvis-link and the resident node and restarts them on exit. Both are in one task (no separate `node install`). There is no one-command installer script or installation package (#1179).
+**Windows** (Orca engine, [windows.md](windows.md) ("Installation and startup")): `persona-link install --personad <personad.exe> [--pair '<link>']`, without admin privileges.
+Registers the current user's scheduled task **Persona Link**, starting at sign-in and checked every 5 minutes; it runs a windowless supervisor (`persona-link supervise`), which starts
+persona-link and the resident node and restarts them on exit. Both are in one task (no separate `node install`). There is no one-command installer script or installation package (#1179).
 
 **On the hub side**: active-mode computers are kind `link` in hub.json; passive-mode ones are kind `service` (the hub side implemented in #435; paste the link in admin **Computers › Add Computer › Hub connects**).
 
 ## Responsibilities
 
-- **jarvis-link** (`server/cmd/persona-link`, also reachable as `server/cmd/jarvis-link`; `server/internal/link`): a separate small program doing only three things:
+- **persona-link** (`server/cmd/persona-link`, also reachable as `server/cmd/persona-link`; `server/internal/link`): a separate small program doing only three things:
   - Discovery: find the hub among candidate addresses and connect;
   - Reporting: identify the computer, version and address used;
   - Link: maintain the connection and forward streams opened by the hub unchanged to the local resident node.
 
   It implements no specific feature.
-- **node is unchanged**: all features live in `personad node`. This computer needs a resident node (installed together under "Install the node service" above; separately, use `jarvis-link node install`
-  or `scripts/deploy/node-launchd.sh install`); jarvis-link forwards streams only to its socket `~/.persona/node-attach.sock`. This is the same path that SSH-started `node --stdio` forwarded to
+- **node is unchanged**: all features live in `personad node`. This computer needs a resident node (installed together under "Install the node service" above; separately, use `persona-link node install`
+  or `scripts/deploy/node-launchd.sh install`); persona-link forwards streams only to its socket `~/.persona/node-attach.sock`. This is the same path that SSH-started `node --stdio` forwarded to
   (`internal/node/attach.go`). Writing a systemd / launchd service for the resident node is packaging, not functionality: the service contents match those written by `scripts/deploy/node-launchd.sh`.
 - **hub and manager** (since 2026-11-04 computers belong to the manager, [machines.md](machines.md), "Who connects to computers"):
   - This computer is kind `link` in hub.json; nobody SSHs into it;
@@ -71,19 +71,19 @@ jarvis-link and the resident node and restarts them on exit. Both are in one tas
     the manager speaks the protocol below;
   - As soon as the link says hello, the manager opens a stream to connect to the node (streams Persona Link opens are also relayed through the hub); the node protocol on the stream is exactly the SSH protocol;
   - When the link disconnects, this computer goes offline immediately; while the manager is away the hub returns 503 on `/api/v1/link`, and Persona Link backs off normally and connects when the manager returns.
-- **Mac** uses the **Persona Link** menu bar App (`apple/PersonaLink/`), with jarvis-link packaged as a helper and started and supervised by the App.
-  On **Linux** (servers, NAS, Raspberry Pi, no GUI), `jarvis-link install` installs itself as a systemd user service; see "Linux (headless)";
+- **Mac** uses the **Persona Link** menu bar App (`apple/PersonaLink/`), with persona-link packaged as a helper and started and supervised by the App.
+  On **Linux** (servers, NAS, Raspberry Pi, no GUI), `persona-link install` installs itself as a systemd user service; see "Linux (headless)";
   on **Windows**, it installs as a sign-in scheduled task supervising both it and the resident node; see [windows.md](windows.md), "Installation and startup".
 
 ## Link (active mode)
 
 ```text
-jarvis-link ── WSS /api/v1/link ──▶ hub TLS port (public.tls_listen)
+persona-link ── WSS /api/v1/link ──▶ hub TLS port (public.tls_listen)
   → hello {machine, version, address}          First message; hub closes with 4003 if machine id doesn't match credentials
   ← endpoints {endpoints, hub_name, mesh_hubs, ping_ms?, ping_timeout_ms?, pending?}
                                                Sent on connect and again when hub addresses, linked group, heartbeat or pending status changes
   ← open {id}                                  hub wants to connect to node
-      jarvis-link connects ~/.persona/node-attach.sock first, then opens WSS /api/v1/link/stream?id=<id>, forwarding bytes unchanged both ways
+      persona-link connects ~/.persona/node-attach.sock first, then opens WSS /api/v1/link/stream?id=<id>, forwarding bytes unchanged both ways
   → open_failed {id, error}                    Can't open (resident node not running, etc.); hub records the reason as this computer's error
   ← node {online, error}                       Whether hub connected to node, displayed in the menu bar
 ```
@@ -97,14 +97,14 @@ jarvis-link ── WSS /api/v1/link ──▶ hub TLS port (public.tls_listen)
 - The hub includes `hub_name` in `endpoints`: `name` from hub.json, otherwise the short hostname of the hub machine; in Docker (where the hostname is a container id), `hub-<first 6 characters of hub_id>`
   ([config.md](config.md)); and `mesh_hubs`: the number of hubs in its linked group, including itself. Before linked hubs (#294) landed, this was fixed at 1, returned by `meshHubCount()`
   and wired up by the mesh lane; when the group changes the hub sends `endpoints` again (`sendLinkEndpoints`).
-- jarvis-link saves the name as `hub_name` in link.json, so it knows which hub even when disconnected; status includes `hub_name`, and `mesh_hubs` while connected.
+- persona-link saves the name as `hub_name` in link.json, so it knows which hub even when disconnected; status includes `hub_name`, and `mesh_hubs` while connected.
 - The name is restricted to one printable line (control characters become spaces), up to 80 characters.
-- Old hubs send neither: neither field appears in status, the Mac menu stays as before, and `jarvis-link status` displays the hub id. An `endpoints` message containing a name but no addresses does not clear candidate addresses.
+- Old hubs send neither: neither field appears in status, the Mac menu stays as before, and `persona-link status` displays the hub id. An `endpoints` message containing a name but no addresses does not clear candidate addresses.
 
 **Pending confirmation** (#4655)
 - A computer added through **Add Computer** on the phone / web is pending until the user taps **This is my computer** (`hub/machine_trust.go`). The hub hands pending machine ids to the manager (`pending` in `devices.config`),
   and the manager's `endpoints` to that computer's link carries `pending: true`; once confirmed (or rejected or expired), the hub hands over the config again and the manager sends `endpoints` without `pending`.
-- `endpoints` is per machine: every message describes that computer's current state; absent `pending` means confirmed. jarvis-link updates `pending` in its status line accordingly.
+- `endpoints` is per machine: every message describes that computer's current state; absent `pending` means confirmed. persona-link updates `pending` in its status line accordingly.
 - Old hubs don't send it: status omits `pending` and shows confirmed (Persona Link's status page already handles this in #4198). Passive mode (hub connects to computer) doesn't have it yet.
 
 **TLS**
@@ -114,7 +114,7 @@ jarvis-link ── WSS /api/v1/link ──▶ hub TLS port (public.tls_listen)
   Pairings with a fingerprint accept only the pinned public key and never fall back to system CAs.
 
 **Reporting**
-- The first message after connecting is hello, reporting this computer's machine id, jarvis-link version and chosen address.
+- The first message after connecting is hello, reporting this computer's machine id, persona-link version and chosen address.
 - The manager checks that the machine id matches the computer bound to the credentials (the hub includes that binding when forwarding), then immediately opens a stream to the node without waiting for the SSH retry interval.
 - This computer gets an extra `link` field in the machine list: `{version, address, since}`.
 
@@ -142,14 +142,14 @@ jarvis-link ── WSS /api/v1/link ──▶ hub TLS port (public.tls_listen)
   | Hub restarts (1001) | Normal backoff |
   | Manual **Reconnect now** | No wait |
 
-- Only one jarvis-link can run per computer (`~/.persona/link.json.run` file lock), or they replace each other repeatedly.
+- Only one persona-link can run per computer (`~/.persona/link.json.run` file lock), or they replace each other repeatedly.
 
 **Network changes**
 - Mac: the App uses `NWPathMonitor` and sends helper `SIGUSR1` on a network change:
   - If the link's original local address is gone, reconnect immediately;
   - If still present, ping immediately (3 seconds, or the hub-configured heartbeat timeout if longer), reconnecting on failure;
   - If already disconnected, retry immediately.
-- Linux: jarvis-link watches address changes itself with netlink (`internal/netaddr`).
+- Linux: persona-link watches address changes itself with netlink (`internal/netaddr`).
 - **Reconnect now** is `SIGUSR2`. Waiting for pong blocks neither this nor the network-change check: on a slow link, ping may wait the hub's entire configured timeout.
 
 **Forwarding**
@@ -163,11 +163,11 @@ When the hub doesn't serve TLS itself and is mounted under a reverse proxy's sub
 the phone App and web already work ([network.md](network.md), "Reverse-proxy subpaths (Android)"), and active-mode Persona Link works too (#2573):
 
 ```text
-jarvis-link ── WSS https://<domain>/<prefix>/api/v1/link ──▶ reverse proxy (TLS, public CA) ── strip /<prefix>, plaintext ──▶ hub listen port
+persona-link ── WSS https://<domain>/<prefix>/api/v1/link ──▶ reverse proxy (TLS, public CA) ── strip /<prefix>, plaintext ──▶ hub listen port
 ```
 
 - **Pairing**: without hub TLS, `personad hub pair --machine <id>` (and **Pairing link** in admin) still returns a link if `public_url` is `https://…`: its `url` is `public_url`,
-  with no `fp` or `tls`. jarvis-link accepts this link, preserving the path prefix and spelling out the port (`https://<domain>:443/<prefix>`, matching candidates sent by the hub);
+  with no `fp` or `tls`. persona-link accepts this link, preserving the path prefix and spelling out the port (`https://<domain>:443/<prefix>`, matching candidates sent by the hub);
   link.json stores `"trust": "system"` and no fingerprint. A link with no `fp` and no `https://` `url` is rejected (no usable address).
 - **Validation**: every candidate in this pairing is checked against system-trusted CAs and the hostname (TLS 1.2 or later, `http/1.1`), like opening the web app in a browser. Pairings with `fp` still accept only the pinned public key:
   if the proxy certificate doesn't match, the error is "TLS public-key fingerprint differs from pairing", with no fallback to system CAs.
@@ -178,7 +178,7 @@ jarvis-link ── WSS https://<domain>/<prefix>/api/v1/link ──▶ reverse p
 
   Plaintext from public sources is always rejected (`403 tls_required`), whatever the headers; other entry points (App APIs, bus, mesh) are unaffected. If the hub runs in Docker and port mapping makes the source appear as a container gateway, it is treated as public;
   add the gateway to `security.trusted_cidrs` ([network.md](network.md), "Source classification and reverse proxies"). Forwarding headers can be spoofed: on the LAN, spoofing only lets one's own link credentials travel in plaintext; Persona Link itself never sends plaintext.
-- **Status**: `jarvis-link status` adds "Validation: via reverse proxy · system certificates"; `trust` in `--json` is `system` (`pin` for pinning); the running status line carries `"trust": "system"`;
+- **Status**: `persona-link status` adds "Validation: via reverse proxy · system certificates"; `trust` in `--json` is `system` (`pin` for pinning); the running status line carries `"trust": "system"`;
   the menu bar App shows "Via reverse proxy · system certificates" below the connection method, and the pairing window explains it above the address list. Untrusted certificates and hostname mismatches report "Certificate not trusted by the system" and "Certificate hostname doesn't match" respectively.
 
 nginx example (replace placeholders; put `map` in `http { }`, and `location` in the port-443 `server { }`):
@@ -215,9 +215,9 @@ The protocol is fixed in [plan-hub-center.md](plan-hub-center.md), section 4; de
 
 ### Listener and identity
 
-- Listens on `passive.listen` in link.json, default `:18663` (all addresses); change with `jarvis-link mode passive --listen <address>` or `pair --listen <address>`. Only this one port is opened.
+- Listens on `passive.listen` in link.json, default `:18663` (all addresses); change with `persona-link mode passive --listen <address>` or `pair --listen <address>`. Only this one port is opened.
 - TLS 1.2 or later, ALPN only `http/1.1`. Identity is the helper's own ECDSA P-256 key and self-signed certificate in `~/.persona/link-tls/` (directory 0700, `link.key` and `link.crt` 0600),
-  generated on the first `pair --listen` or first listener start. The certificate contains only `connector.jarvis.invalid`, no hostname or addresses (anyone connecting to this port can see the certificate).
+  generated on the first `pair --listen` or first listener start. The certificate contains only `connector.persona.invalid`, no hostname or addresses (anyone connecting to this port can see the certificate).
 - Fingerprint format matches the hub's: SHA-256 of the certificate's SubjectPublicKeyInfo DER, unpadded base64url (43 characters). The hub pins the fingerprint from the pairing link and doesn't validate the certificate name.
 - Certificate lifetime is one year; with fewer than 30 days left it is renewed with the same key (also while listening, checked during handshakes), keeping the fingerprint. Changing the key (deleting `link-tls/`) requires re-pairing. These are configured values.
 
@@ -225,11 +225,11 @@ The protocol is fixed in [plan-hub-center.md](plan-hub-center.md), section 4; de
 
 The direction is reversed from active mode (the computer may not be able to reach the hub):
 
-1. On the computer: `jarvis-link pair --listen [<listen address>] [--addr <address>]…` (menu bar App: select **Let the hub connect** in the pairing window, then **Generate pairing link**).
+1. On the computer: `persona-link pair --listen [<listen address>] [--addr <address>]…` (menu bar App: select **Let the hub connect** in the pairing window, then **Generate pairing link**).
    It switches link.json to passive mode and generates a one-time pairing code (128 random bits, `jc_` prefix, only SHA-256 stored); **stdout contains only the link**, explanations go to stderr:
 
    ```text
-   jarvis://connector?addr=<host:port>[&addr=<host:port>…]&fp=<helper fingerprint>&code=<one-time code>
+   persona://connector?addr=<host:port>[&addr=<host:port>…]&fp=<helper fingerprint>&code=<one-time code>
    ```
 
    - `addr` may repeat, best first, always `host:port` (no scheme, IPv6 in brackets, URL-encoded as a whole). Without `--addr`, local addresses plus port are ordered like active-mode hub candidates:
@@ -274,7 +274,7 @@ Errors are JSON: `{"error":"<code>","message":"<human-readable Chinese>"}`.
 - Back off on 401; don't keep retrying bad credentials (you'll block your own source). On 429, wait for `Retry-After`.
 - Stream closed with 4002: another hub paired this computer; mark **Pairing required** and don't retry. On 1001 or connection failure, back off and reconnect normally.
 - 503 `node_unavailable`: the link works but the resident node isn't running; show `message` as this computer's error and retry later.
-- To check helper liveness and RTT: `GET /api/v1/connector/info`. The helper records the hub's last visit time and source, displayed in the menu bar and `jarvis-link status`.
+- To check helper liveness and RTT: `GET /api/v1/connector/info`. The helper records the hub's last visit time and source, displayed in the menu bar and `persona-link status`.
 
 ### Passive mode in link.json
 
@@ -284,9 +284,9 @@ Errors are JSON: `{"error":"<code>","message":"<human-readable Chinese>"}`.
 ```
 
 - Separate from active-mode fields (`hub`, `machine`, `fp`, `token`, `endpoints`), neither overwrites the other; absent `mode` or `active` means active mode (old files still work).
-- `jarvis-link pair <link>` (active) sets `mode` to `active`, `pair --listen` sets `passive`, and `mode` changes only the mode. A running jarvis-link checks link.json every second,
+- `persona-link pair <link>` (active) sets `mode` to `active`, `pair --listen` sets `passive`, and `mode` changes only the mode. A running persona-link checks link.json every second,
   switching when mode changes (closing the link or listener and opening the other); a changed listen address changes the port.
-- `jarvis-link uninstall --purge` also deletes `link-tls/`.
+- `persona-link uninstall --purge` also deletes `link-tls/`.
 
 ### Security boundary
 
@@ -304,12 +304,12 @@ Errors are JSON: `{"error":"<code>","message":"<human-readable Chinese>"}`.
   - Can open only `/api/v1/link` and `/api/v1/link/stream`; every other endpoint returns 403.
   - Visible and revocable in App **Settings › Devices**; revocation immediately disconnects the link (4002).
 - Both kinds of pairing code can be exchanged for it:
-  - `personad hub pair --machine <id>`: a code specifically for this computer (`pair_tokens.machine_id`). The link is `jarvis://link?…&machine=<id>`,
+  - `personad hub pair --machine <id>`: a code specifically for this computer (`pair_tokens.machine_id`). The link is `persona://link?…&machine=<id>`,
     exchangeable only for this computer's link credentials and nothing else. Stdout contains only the link, explanations go to stderr for easy piping.
     If the computer isn't in hub.json yet, add `--add [--name <name>]`: first adds `kind: link` (effective while running, no restart), already confirmed; without `--add`, it asks you to include it.
   - **Add Computer** in a signed-in App / web (`POST /api/v1/auth/pair-codes` with `add`, [protocol.md](protocol.md), "Temporary pairing"): the hub adds `kind: link` just like admin's **Add Computer**,
     with a code for that machine. Computers added this way are **pending confirmation** and don't receive Persona-managed keys until the user taps **This is my computer** in the App ([protocol.md](protocol.md), "Computer trust").
-  - A normal App pairing code (`personad hub pair`) plus a machine id: CLI `jarvis-link pair --machine <id>`, or fill in **Machine id** in the App.
+  - A normal App pairing code (`personad hub pair`) plus a machine id: CLI `persona-link pair --machine <id>`, or fill in **Machine id** in the App.
 - The hub needs TLS (`public.tls_listen`) or an `https://` reverse-proxy `public_url`; without either, `--machine` returns 409.
 - Failed authentication follows the hub's existing rate limits (public sources counted). Public connections require TLS; LAN plaintext isn't accepted either, except loopback
   or a LAN reverse proxy reporting HTTPS (`X-Forwarded-Proto: https`; see "[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)").
@@ -321,7 +321,7 @@ Prefer adding it in the App: no admin interface or sign-in to the hub machine ne
 for Windows see [windows.md](windows.md). Instructions for people who don't use terminals are in [getting-started.md](getting-started.md), "Connect a computer".
 
 1. Install Persona Link on the Mac: `./scripts/app/mac-link.sh install` ([persona-link-install.md](persona-link-install.md)). It builds (including personad), copies to `/Applications`, and opens;
-   first launch installs the resident node (`com.jarvis.node`), leaving existing installations untouched.
+   first launch installs the resident node (`com.persona.node`), leaving existing installations untouched.
 2. In the signed-in web app, open **Machines › Add Computer**, select Mac and enter a name (Chinese is allowed; the hub generates the id from the name). The hub adds `kind: link`, **pending confirmation**, and provides its pairing link
    (`POST /api/v1/auth/pair-codes` with `add`, [protocol.md](protocol.md), "Computer pairing codes"). iOS and Android entry points are in progress.
 3. Send the link to this Mac (**Copy pairing link** or **Share…**) and paste it into **Menu bar › Pair / Change connection…**.
@@ -338,26 +338,26 @@ Without hub TLS, the web reports "The hub hasn't enabled a secure connection yet
 
 - **Add without the App** (already confirmed): admin **Computers › Add Computer › Computer connects**; or generate a pairing link on the hub machine:
   - Native deployment: `personad hub pair --machine macbook --add --name MacBook` (`--add` does nothing if the computer exists, but still returns a link);
-  - Docker on NAS: `sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub pair --machine macbook --add`.
+  - Docker on NAS: `sudo /usr/local/bin/docker exec personad /opt/persona/bin/personad hub pair --machine macbook --add`.
 - **Hand-edit hub.json**: add a `machines` entry (or change the previous SSH entry) to `{"id":"macbook","name":"MacBook","kind":"link","icon":"laptop"}`, restart the hub, then generate the link with the command above.
 - If claude is a shell wrapper function, configure its launcher in `machines[].launchers` in hub.json.
 - **CLI pairing**:
   ```sh
-  … | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
+  … | "/Applications/Persona Link.app/Contents/Helpers/persona-link" pair -
   ```
 - **Passive mode**: replace steps 2 and 3 with **Let the hub connect** in the pairing window, then paste the link into hub admin **Computers › Add Computer › Hub connects** ("Passive mode" above).
 
-For Linux see "Linux (headless)" below: build `jarvis-link`, then `jarvis-link install --pair -` pairs, installs and waits for connection in one command.
+For Linux see "Linux (headless)" below: build `persona-link`, then `persona-link install --pair -` pairs, installs and waits for connection in one command.
 
 ## Menu bar App (`apple/PersonaLink/`)
 
 **Build**
 - `./scripts/app/mac-link.sh build|install|snapshot <directory>`.
 - A standalone SwiftPM package (not in `apple/project.yml`, no shared code with the Persona App), built with `xcodebuild`: on this development machine, `swift build`'s default build system reports "Developer directory not found".
-- jarvis-link and personad are built into `Contents/Helpers/` (personad is for the resident node; see "Install the node service"; adds about 37 MB to the App).
+- persona-link and personad are built into `Contents/Helpers/` (personad is for the resident node; see "Install the node service"; adds about 37 MB to the App).
 - Local ad-hoc signing (Sign to Run Locally), no hard-coded team.
-- Default bundle id is the placeholder `com.example.jarvis.link`, overrideable by `mac.link_bundle_id` in `~/.config/persona/config.json` or environment variable
-  `PERSONA_LINK_BUNDLE_ID` (old name `JARVIS_LINK_BUNDLE_ID`).
+- Default bundle id is the placeholder `com.example.persona.link`, overrideable by `mac.link_bundle_id` in `~/.config/persona/config.json` or environment variable
+  `PERSONA_LINK_BUNDLE_ID` (old name `PERSONA_LINK_BUNDLE_ID`).
 - After building, `vtool` changes the executable's recorded SDK version to the actual SDK used: xcodebuild records Swift packages as deployment target 15.0, making the system draw menu bar panels in the old SDK style
   ([lessons/macos.md](lessons/macos.md), "Persona Link's panel looks old").
 - `UNIVERSAL=1` also builds Intel.
@@ -365,17 +365,17 @@ For Linux see "Linux (headless)" below: build `jarvis-link`, then `jarvis-link i
 **System settings**
 - No Dock icon (`LSUIElement`).
 - No sandbox: needs sockets and config in `~/.persona`.
-- Info.plist registers both `jarvis` and `persona` URL schemes (#4198): opening `jarvis://link?…` in Notes, AirDrop, mail or Safari opens and prefills the pairing window; see "Pairing window" below.
+- Info.plist registers both `persona` and `persona` URL schemes (#4198): opening `persona://link?…` in Notes, AirDrop, mail or Safari opens and prefills the pairing window; see "Pairing window" below.
   The App is not signed and notarized: on first launch, right-click it in Finder and choose Open to pass Gatekeeper. The schemes are registered only after the App has been opened once; earlier link taps cannot open it.
-  If the Mac App (`PersonaMac`, which also registers both schemes) is installed on the same Mac, the system may send the link there instead: it recognizes `link` and forwards to Persona Link (found by executable `JarvisLink`, with configurable bundle id). If Persona Link is absent, it asks you to install it rather than pairing with that link; Persona on iPhone says "Open this link on the computer you want to add."
+  If the Mac App (`PersonaMac`, which also registers both schemes) is installed on the same Mac, the system may send the link there instead: it recognizes `link` and forwards to Persona Link (found by executable `PersonaLink`, with configurable bundle id). If Persona Link is absent, it asks you to install it rather than pairing with that link; Persona on iPhone says "Open this link on the computer you want to add."
 - Info.plist includes `NSLocalNetworkUsageDescription`: from macOS 15, LAN connections require local-network permission, and the first prompts the user.
   If denied, LAN candidates report unreachable; enable it in **System Settings › Privacy & Security › Local Network**.
 
 **Helper**
-- The App starts it with `jarvis-link run --parent`.
+- The App starts it with `persona-link run --parent`.
 - Stdout emits one JSON status per line; the App reads the latest.
 - Stderr appends to `~/.persona/link.log`; if over 1 MB, it is cleared on the next helper start.
-- Uses the resident node's data directory: if the App environment lacks `PERSONA_HOME` / `JARVIS_HOME`, it reads the directory from `~/Library/LaunchAgents/com.jarvis.node.plist` and passes it to the helper; otherwise defaults to `~/.persona` (`~/.jarvis` on machines that used the old version) (`LinkStatePaths.swift`).
+- Uses the resident node's data directory: if the App environment lacks `PERSONA_HOME` / `PERSONA_HOME`, it reads the directory from `~/Library/LaunchAgents/com.persona.node.plist` and passes it to the helper; otherwise defaults to `~/.persona` (`~/.persona` on machines that used the old version) (`LinkStatePaths.swift`).
 - `--parent` exits the helper when stdin closes, so any App exit, including a crash, also exits the helper.
 - If the helper exits, the App restarts it: exponential delay from 1 second to 30 seconds; after running for a full minute, restart delay resets to 1 second.
 
@@ -399,19 +399,19 @@ For Linux see "Linux (headless)" below: build `jarvis-link`, then `jarvis-link i
 - Connected hub and group size: "hub ‘Home’ · 3 hubs in linked group", or "hub ‘Home’ · Not linked to other hubs" when alone; disconnected shows only the name.
   Old hubs sending no name omit the line, preserving the previous menu.
 - The first line describes the state plainly: unpaired is "Not connected to hub yet" (menu action "Paste pairing link…"); "Connected to hub"; awaiting confirmation is "Waiting for confirmation on your phone" plus "Tap ‘This is my computer’ in the phone App";
-  if the resident node is not running, "Persona's background service on this computer is not running", with **Reinstall** in the menu (`jarvis-link node uninstall` then `node install`, preserving `~/.persona/bin/jarvisd`); "Connecting" or "Offline".
+  if the resident node is not running, "Persona's background service on this computer is not running", with **Reinstall** in the menu (`persona-link node uninstall` then `node install`, preserving `~/.persona/bin/personad`); "Connecting" or "Offline".
   "Waiting for confirmation" uses status-line `pending`: the hub does not yet send this field (#4655), so this period currently shows "Connected".
 - **Reconnect now** (not in passive mode, where the hub initiates), **Pair / Change connection…**, **Install local node service** (only when absent), **Launch at login**, **Quit**.
 
 **Pairing window**
 - Select **Connect to hub (active)** or **Let hub connect (passive)** at the top, defaulting to the current mode; viewing doesn't switch. Switching happens when pairing (active: paste and pair; passive: generate link),
-  or by tapping **Use this** (that mode was paired before, no re-pairing, `jarvis-link mode`).
+  or by tapping **Use this** (that mode was paired before, no re-pairing, `persona-link mode`).
 - Active: paste the pairing link from **Add Computer** on the phone or web, or open it directly (the URL scheme opens and prefills the window). **Never pairs automatically**: first shows the destination hub (`url` host),
   "Security fingerprint included" when `fp` is present, and this computer's name on the hub. Pairing runs only after the user taps **Pair**: a forwarded or forged link cannot hand this computer to someone else's hub on its own.
-  Only accepts host `link`; other links such as `jarvis://pair?…` show "This link is for the phone / Mac App", without prefilling or taking further action.
-  Machine id is under **Advanced** (only when the link lacks `machine`, such as `personad hub pair` without `--machine`). The App calls `jarvis-link pair`, displaying success or errors in the window. Lists candidate addresses and marks the selected one **In use**;
-  manual addresses can be added (`jarvis-link address add`) and removed.
-- Passive: enter listen address (default `:18663`); **Generate pairing link** calls `jarvis-link pair --listen`, showing the selectable link with **Copy**, its addresses and firewall guidance;
+  Only accepts host `link`; other links such as `persona://pair?…` show "This link is for the phone / Mac App", without prefilling or taking further action.
+  Machine id is under **Advanced** (only when the link lacks `machine`, such as `personad hub pair` without `--machine`). The App calls `persona-link pair`, displaying success or errors in the window. Lists candidate addresses and marks the selected one **In use**;
+  manual addresses can be added (`persona-link address add`) and removed.
+- Passive: enter listen address (default `:18663`); **Generate pairing link** calls `persona-link pair --listen`, showing the selectable link with **Copy**, its addresses and firewall guidance;
   if already paired, shows which hub and this computer's name.
 
 **Screenshots**
@@ -441,18 +441,18 @@ For Linux see "Linux (headless)" below: build `jarvis-link`, then `jarvis-link i
 - `trust`: `system` when active mode validates the hub through system CAs (reverse proxy, no fingerprint); absent when pinned.
 - No credentials included.
 - Each line is also written to `~/.persona/link.status.json` (with `pid`, `version`, `updated`; normal exit writes `"state":"stopped"`) for
-  `jarvis-link status` to read, since it can't query the running instance.
+  `persona-link status` to read, since it can't query the running instance.
 
 ## Linux (headless)
 
-On servers, NAS boxes and Raspberry Pis without a GUI, `jarvis-link` alone is enough.
+On servers, NAS boxes and Raspberry Pis without a GUI, `persona-link` alone is enough.
 
 **Build**
-- Pure Go, no cgo: `cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o jarvis-link ./cmd/jarvis-link`.
+- Pure Go, no cgo: `cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o persona-link ./cmd/persona-link`.
   Builds for `amd64`, `arm64` and 32-bit Raspberry Pi (`GOARCH=arm GOARM=7`); Windows also builds (file locks and signals in platform-specific files), but has no tray app yet (#299).
 - `personad` also builds for Windows (`GOOS=windows go build ./...`; process groups, signals, file locks and CPU time are platform-specific in `internal/osproc` and each package's `_windows.go`),
-  and the Windows resident node works with Orca; `jarvis-link install` installs a sign-in scheduled task on Windows (the Windows paragraph under "Install the node service"), see [windows.md](windows.md).
-- The resident node uses `jarvisd` built from the same commit (`~/.persona/bin/jarvisd`, with the install script creating a `personad` alias); `scripts/deploy/node-launchd.sh install` installs it on Linux as systemd user service `jarvisd-node`.
+  and the Windows resident node works with Orca; `persona-link install` installs a sign-in scheduled task on Windows (the Windows paragraph under "Install the node service"), see [windows.md](windows.md).
+- The resident node uses `personad` built from the same commit (`~/.persona/bin/personad`, with the install script creating a `personad` alias); `scripts/deploy/node-launchd.sh install` installs it on Linux as systemd user service `personad-node`.
 
 **One-command installation**
 
@@ -460,25 +460,25 @@ Get the link from signed-in web **Machines › Add Computer** (requires confirma
 
 ```sh
 personad hub pair --machine nas --add             # On hub machine; adds it if absent; stdout contains only the link
-./jarvis-link install --pair - <<< '<link>'       # On this computer; reads link from stdin
+./persona-link install --pair - <<< '<link>'       # On this computer; reads link from stdin
 ```
 
-Passive mode: `./jarvis-link install --listen [:18663] [--addr <address the hub uses to reach this computer>]`; after installation, prints a link for hub admin.
+Passive mode: `./persona-link install --listen [:18663] [--addr <address the hub uses to reach this computer>]`; after installation, prints a link for hub admin.
 
 `install` runs these steps:
-1. With `--pair`, pair first (same as `jarvis-link pair`; no link after `--pair`, or `-`, reads stdin). With `--listen`, switch to passive mode and generate a link if never paired
+1. With `--pair`, pair first (same as `persona-link pair`; no link after `--pair`, or `-`, reads stdin). With `--listen`, switch to passive mode and generate a link if never paired
    (same as `pair --listen`); an existing pairing stays unchanged. These options can't be combined.
-2. Copy itself to `~/.persona/bin/jarvis-link`, unless already there. Running `install` again with a new version upgrades it.
-3. If absent, install and start the resident node service (systemd user service `jarvisd-node`, same contents as `scripts/deploy/node-launchd.sh`): requires `~/.persona/bin/jarvisd` (the install script puts it there first),
-   or `--jarvisd <path>` to copy a supplied binary. Existing installations stay unchanged; `--no-node` leaves it alone.
-4. Write `~/.config/systemd/user/jarvis-link.service` (under `XDG_CONFIG_HOME` if set), then `daemon-reload`, `enable`, `restart`.
+2. Copy itself to `~/.persona/bin/persona-link`, unless already there. Running `install` again with a new version upgrades it.
+3. If absent, install and start the resident node service (systemd user service `personad-node`, same contents as `scripts/deploy/node-launchd.sh`): requires `~/.persona/bin/personad` (the install script puts it there first),
+   or `--personad <path>` to copy a supplied binary. Existing installations stay unchanged; `--no-node` leaves it alone.
+4. Write `~/.config/systemd/user/persona-link.service` (under `XDG_CONFIG_HOME` if set), then `daemon-reload`, `enable`, `restart`.
 5. If linger is off, suggest `sudo loginctl enable-linger <user>`: otherwise the user instance is absent when nobody is signed in, services stop at logout and don't start at boot.
 6. Wait up to 20 seconds for hub connection and the hub's local-node check, then print a one-line conclusion. Connected: exit 0; not connected: print every candidate's failure reason, exit 1, leaving the service installed and retrying.
    Passive mode waits for listening (or explains why it can't), then prints the pairing link and firewall guidance.
 
-The unit contains neither mode nor listen address: both live in link.json. Changing mode or port requires no service reinstall; the running jarvis-link switches within a second or two.
+The unit contains neither mode nor listen address: both live in link.json. Changing mode or port requires no service reinstall; the running persona-link switches within a second or two.
 
-Running `install` before pairing starts the service as unpaired; later `jarvis-link pair` makes it adopt new credentials within seconds, without restart (checks link.json changes every 2 seconds).
+Running `install` before pairing starts the service as unpaired; later `persona-link pair` makes it adopt new credentials within seconds, without restart (checks link.json changes every 2 seconds).
 
 Generated unit:
 
@@ -487,9 +487,9 @@ Generated unit:
 Description=Persona link: keeps this computer reachable from the Persona hub
 
 [Service]
-ExecStart="/home/<user>/.persona/bin/jarvis-link" run --log "/home/<user>/.persona/link.log"
+ExecStart="/home/<user>/.persona/bin/persona-link" run --log "/home/<user>/.persona/link.log"
 Environment="PERSONA_HOME=/home/<user>/.persona"
-Environment="JARVIS_HOME=/home/<user>/.persona"
+Environment="PERSONA_HOME=/home/<user>/.persona"
 Restart=always
 RestartSec=5
 StandardOutput=null
@@ -498,52 +498,52 @@ StandardOutput=null
 WantedBy=default.target
 ```
 
-- Paths use this computer's data directory (`~/.persona` for new installs, `~/.jarvis` on machines using an old version, or `PERSONA_HOME` if set; see [rename.md](rename.md)); both `Environment` lines pass the same directory to the service so it doesn't resolve another.
-- Doesn't wait for `network-online.target`: user instances don't have this target, and jarvis-link retries itself.
+- Paths use this computer's data directory (`~/.persona` for new installs, `~/.persona` on machines using an old version, or `PERSONA_HOME` if set; see [rename.md](rename.md)); both `Environment` lines pass the same directory to the service so it doesn't resolve another.
+- Doesn't wait for `network-online.target`: user instances don't have this target, and persona-link retries itself.
 - Status lines are for the menu bar App, not journal; logs go to `~/.persona/link.log` (`run --log`; at 1 MB, rotates to `link.log.1`, a configured value).
   On machines without persistent journals, ordinary users can't see user-service logs with `journalctl --user`, so logging doesn't depend on it.
 - Sessions entered through `su`, `sudo -u`, `docker exec` lack `XDG_RUNTIME_DIR`, so `systemctl --user` can't find the user instance; install / status / uninstall
   fill in `/run/user/<uid>` if unset and present. This doesn't help if the user instance itself is absent (no linger and nobody signed in); prompts to enable linger or SSH in as that user before installing.
-- Installing as root warns that the service runs as root with root's data directory, and the resident node must also run as root (the prompt hard-codes `/root/.jarvis`, but the actual directory is resolved by the rules above).
+- Installing as root warns that the service runs as root with root's data directory, and the resident node must also run as root (the prompt hard-codes `/root/.persona`, but the actual directory is resolved by the rules above).
 
 **Without systemd** (containers, some NAS systems)
 
 `install` still pairs and copies binaries, then prints copyable alternatives and exits 1:
-- Run in the background now: `nohup ~/.persona/bin/jarvis-link run --log ~/.persona/link.log >/dev/null 2>&1 &`
+- Run in the background now: `nohup ~/.persona/bin/persona-link run --log ~/.persona/link.log >/dev/null 2>&1 &`
 - At boot: cron `@reboot` with the same command;
 - Synology: a user script triggered at startup in Task Scheduler, containing the nohup line above;
-- Container: `jarvis-link run --log …` as the main process, restart policy `unless-stopped`, `~/.persona` mounted as a volume, resident node in the same container;
-- supervisord, runit, s6, OpenRC: run `jarvis-link run --log …` in foreground and restart on exit.
+- Container: `persona-link run --log …` as the main process, restart policy `unless-stopped`, `~/.persona` mounted as a volume, resident node in the same container;
+- supervisord, runit, s6, OpenRC: run `persona-link run --log …` in foreground and restart on exit.
 
-Resident node likewise: `nohup ~/.persona/bin/jarvisd node --attach >> ~/.persona/node-attach.log 2>&1 &`.
+Resident node likewise: `nohup ~/.persona/bin/personad node --attach >> ~/.persona/node-attach.log 2>&1 &`.
 
 **Status, logs, uninstall**
 
 | Command | Action |
 | --- | --- |
-| `jarvis-link status` | Mode, link (address, duration; candidate failure reasons when disconnected), hub name and group size, local node, machine id, candidate addresses, systemd service (active / enabled / linger), pid and version, log location. Passive mode instead shows: listen address, listening or hub connected, paired hub and pairing time, hub's last visit time and address, helper fingerprint, local addresses usable by hub. Exit 0 when connected (also listening in passive mode), otherwise 1 |
-| `jarvis-link status --json` | Same for scripts: `running`, `mode`, `paired`, `machine`, `hub_id`, `hub_name`, `endpoints`, `trust` (`pin` / `system`), `link` (last reported status), `passive` (`listen`, `paired`, `hub_id`, `hub_name`, `machine`, `paired_at`, `code_expires`, `fp`), `service`, `config`, `log`; `error` if link.json can't be read; no credential or hash |
-| `jarvis-link logs [-f] [-n lines]` | Last 100 lines of `~/.persona/link.log` (change with `-n` / `--lines`); `-f` / `--follow` keeps following, including rotation; without a log file but with an installed service, reads journal. `log` is the same command |
-| `jarvis-link uninstall` | Stop, disable and delete systemd user service (Windows: scheduled task), preserving credentials. Linux / Mac resident-node service remains (`node uninstall` removes it); on Windows the node shares the task and stops too, but `jarvisd.exe` remains |
-| `jarvis-link uninstall --purge` | Also remove credentials (link.json and `.lock` / `.run`), status, logs (including `link.log.1`), passive TLS identity `link-tls/`, `~/.persona/bin/jarvis-link`, and install-script `persona-link` alias (only if truly an alias); refuses while another jarvis-link is running (menu bar App, manually started). Revoke hub-side credentials in App **Settings › Devices** |
-| `jarvis-link pair [--machine <id>] [<link>\|-]` | Active pairing, credentials saved to `~/.persona/link.json`. No link or `-` reads stdin; prompts to paste in a terminal and reads one line on Enter. If the link lacks a machine id (normal App code), specify `--machine` |
-| `jarvis-link pair --listen [<listen address>] [--addr <address>]…` | Passive pairing link (only link on stdout, for piping); default listen `:18663`; can't combine with pairing link or `--machine` |
-| `jarvis-link mode [active\|passive] [--listen <address>]` | No arguments: display current mode (with passive listen address); supplied mode: switch, retaining both pairings; `--listen` alone changes passive listen address without switching mode |
-| `jarvis-link node install [--jarvisd <path>]` / `node status [--json]` / `node uninstall` | Resident node service (Linux systemd `jarvisd-node`, Mac launchd `com.jarvis.node`); leaves existing services unchanged; `uninstall` doesn't delete `~/.persona/bin/jarvisd`. On Windows the node shares jarvis-link's task; only `node status` exists |
-| `jarvis-link discover [--wait <seconds>] [--json]` | Hubs heard on the LAN (mDNS), viewing only, no pairing; listens 3 seconds by default, `--wait` allows decimals up to 60; exit 0 if found, otherwise 1 |
-| `jarvis-link run [--parent] [--log <file>]` | Maintain the link in foreground, one JSON status per stdout line (see "Status line"); `--parent` exits on stdin close (used by menu bar App); `--log` writes there (rotates to `<file>.1` at 1 MB), not stderr. Used by systemd and the alternatives under "Without systemd" |
-| `jarvis-link address add <address>` / `address remove <address>` | Manually add / remove a hub candidate (`https://domain:port`, or just domain), stored in link.json; pairing required before adding. `remove` deletes that entry, manual or hub-provided (the hub may send it again on next connect) |
-| `jarvis-link version` | Print version (`--version`, `-v` equivalent) |
-| `jarvis-link help` | Print usage (`--help`, `-h` equivalent); unknown commands / options also print usage and exit 2 |
+| `persona-link status` | Mode, link (address, duration; candidate failure reasons when disconnected), hub name and group size, local node, machine id, candidate addresses, systemd service (active / enabled / linger), pid and version, log location. Passive mode instead shows: listen address, listening or hub connected, paired hub and pairing time, hub's last visit time and address, helper fingerprint, local addresses usable by hub. Exit 0 when connected (also listening in passive mode), otherwise 1 |
+| `persona-link status --json` | Same for scripts: `running`, `mode`, `paired`, `machine`, `hub_id`, `hub_name`, `endpoints`, `trust` (`pin` / `system`), `link` (last reported status), `passive` (`listen`, `paired`, `hub_id`, `hub_name`, `machine`, `paired_at`, `code_expires`, `fp`), `service`, `config`, `log`; `error` if link.json can't be read; no credential or hash |
+| `persona-link logs [-f] [-n lines]` | Last 100 lines of `~/.persona/link.log` (change with `-n` / `--lines`); `-f` / `--follow` keeps following, including rotation; without a log file but with an installed service, reads journal. `log` is the same command |
+| `persona-link uninstall` | Stop, disable and delete systemd user service (Windows: scheduled task), preserving credentials. Linux / Mac resident-node service remains (`node uninstall` removes it); on Windows the node shares the task and stops too, but `personad.exe` remains |
+| `persona-link uninstall --purge` | Also remove credentials (link.json and `.lock` / `.run`), status, logs (including `link.log.1`), passive TLS identity `link-tls/`, `~/.persona/bin/persona-link`, and install-script `persona-link` alias (only if truly an alias); refuses while another persona-link is running (menu bar App, manually started). Revoke hub-side credentials in App **Settings › Devices** |
+| `persona-link pair [--machine <id>] [<link>\|-]` | Active pairing, credentials saved to `~/.persona/link.json`. No link or `-` reads stdin; prompts to paste in a terminal and reads one line on Enter. If the link lacks a machine id (normal App code), specify `--machine` |
+| `persona-link pair --listen [<listen address>] [--addr <address>]…` | Passive pairing link (only link on stdout, for piping); default listen `:18663`; can't combine with pairing link or `--machine` |
+| `persona-link mode [active\|passive] [--listen <address>]` | No arguments: display current mode (with passive listen address); supplied mode: switch, retaining both pairings; `--listen` alone changes passive listen address without switching mode |
+| `persona-link node install [--personad <path>]` / `node status [--json]` / `node uninstall` | Resident node service (Linux systemd `personad-node`, Mac launchd `com.persona.node`); leaves existing services unchanged; `uninstall` doesn't delete `~/.persona/bin/personad`. On Windows the node shares persona-link's task; only `node status` exists |
+| `persona-link discover [--wait <seconds>] [--json]` | Hubs heard on the LAN (mDNS), viewing only, no pairing; listens 3 seconds by default, `--wait` allows decimals up to 60; exit 0 if found, otherwise 1 |
+| `persona-link run [--parent] [--log <file>]` | Maintain the link in foreground, one JSON status per stdout line (see "Status line"); `--parent` exits on stdin close (used by menu bar App); `--log` writes there (rotates to `<file>.1` at 1 MB), not stderr. Used by systemd and the alternatives under "Without systemd" |
+| `persona-link address add <address>` / `address remove <address>` | Manually add / remove a hub candidate (`https://domain:port`, or just domain), stored in link.json; pairing required before adding. `remove` deletes that entry, manual or hub-provided (the hub may send it again on next connect) |
+| `persona-link version` | Print version (`--version`, `-v` equivalent) |
+| `persona-link help` | Print usage (`--help`, `-h` equivalent); unknown commands / options also print usage and exit 2 |
 
 `status` uses:
 - Running: whether the file lock `~/.persona/link.json.run` is held (regardless of who started it: systemd, menu bar App, manual). It briefly acquires the lock to check;
-  a jarvis-link starting at that exact moment exits as "already running", then systemd starts it again after 5 seconds.
+  a persona-link starting at that exact moment exits as "already running", then systemd starts it again after 5 seconds.
 - Link state: `~/.persona/link.status.json` (see "Status line"); when not running, shows the last report and time.
 - **Does not connect to the resident node socket** to check liveness: every connection is a new attach and would replace the hub's current connection. Local-node status comes only from the hub.
 - Also works on Mac (the menu bar helper writes the same status file); `install` on Mac only suggests installing the menu bar App.
 
-`scripts/deploy/link-systemd.sh` remains a thin wrapper: `install` / `uninstall` / `status` delegate to `~/.persona/bin/jarvis-link`; `restart` runs `systemctl --user restart`.
+`scripts/deploy/link-systemd.sh` remains a thin wrapper: `install` / `uninstall` / `status` delegate to `~/.persona/bin/persona-link`; `restart` runs `systemctl --user restart`.
 
 **Verification** (2026-11-02): a clean Debian 12 container (arm64) in local Docker, with a test hub on the host listening only on 127.0.0.1; the container connects through
 `host.docker.internal` to its TLS port. Everything was stopped afterwards.
@@ -560,7 +560,7 @@ Resident node likewise: `nohup ~/.persona/bin/jarvisd node --attach >> ~/.person
 The link uses only the hub's TLS port. Away-from-home use also needs:
 - DSM firewall allows 18662/tcp (not 18660).
 - Router allows IPv6 inbound to NAS.
-- Domain in hub.json `public.advertise` (DDNS points to NAS IPv6). After one connection the hub sends it to jarvis-link; it can also be manually added in the App.
+- Domain in hub.json `public.advertise` (DDNS points to NAS IPv6). After one connection the hub sends it to persona-link; it can also be manually added in the App.
 
 IPv4-only networks can't reach a home IPv6 address, just as with the phone.
 
@@ -568,23 +568,23 @@ IPv4-only networks can't reach a home IPv6 address, just as with the phone.
 
 | Symptom | Action |
 | --- | --- |
-| Passive: "Can't listen on :18663: port in use" | Another program owns it: change port with `jarvis-link mode passive --listen :18664` (then edit this computer's address in hub admin), or stop that program |
+| Passive: "Can't listen on :18663: port in use" | Another program owns it: change port with `persona-link mode passive --listen :18664` (then edit this computer's address in hub admin), or stop that program |
 | Passive: hub can't connect, and "Last hub connection" in `status` never changes | Firewall / router doesn't allow the port; hub can't reach the link addresses (edit address or proxy in admin); fingerprint mismatch (deleted `link-tls/`: re-pair) |
-| Passive: hub reports 429 | Too many failed authentications from that source (usually retrying old credentials); wait 15 minutes or restart jarvis-link to clear counters |
+| Passive: hub reports 429 | Too many failed authentications from that source (usually retrying old credentials); wait 15 minutes or restart persona-link to clear counters |
 | `pair --listen` finds no address | Only loopback, tunnel or temporary addresses: use `--addr <domain or address the hub can reach>` |
-| Menu says "Link connected, but hub can't reach local node" | Resident node isn't running: `launchctl print gui/$(id -u)/com.jarvis.node`; log at `~/.persona/node-attach.log` |
+| Menu says "Link connected, but hub can't reach local node" | Resident node isn't running: `launchctl print gui/$(id -u)/com.persona.node`; log at `~/.persona/node-attach.log` |
 | "Hub rejects this computer's credentials" | Credentials revoked or hub database changed: re-pair |
 | Reverse proxy: "Certificate not trusted by the system" / "Certificate hostname doesn't match" | Proxy certificate isn't public-CA signed, expired, or doesn't match `public_url`: fix certificate or `public_url`, then re-pair |
 | Reverse proxy: hub returns HTTP 403 | Hub logs show `tls_required`: proxy on another machine lacks `X-Forwarded-Proto: https`, or hub treats its address as public (container gateway, public address); see "[Hub behind a reverse proxy](#hub-behind-a-reverse-proxy)" |
 | Reverse proxy: HTTP 404 / 400, or immediate disconnect | Prefix not stripped, WebSocket not forwarded (`Upgrade` / `Connection` headers), or `proxy_read_timeout` too short |
-| "This computer opened another link elsewhere" | Same link.json copied to another computer, or two jarvis-link instances running |
+| "This computer opened another link elsewhere" | Same link.json copied to another computer, or two persona-link instances running |
 | LAN candidates "unreachable" though network works | Check local-network permission |
 | Linux: `install` says "Can't reach your systemd user instance" | Entered through `su` / `sudo -u` / `docker exec` without linger: SSH directly as this user, or first `sudo loginctl enable-linger <user>` |
-| Linux: link disconnects at logout and doesn't connect after reboot | Enable linger: `sudo loginctl enable-linger <user>` (`jarvis-link status`'s background-service line explains) |
-| Linux: link connected, local node offline | Resident node isn't running: `systemctl --user status jarvisd-node`; log at `~/.persona/node-attach.log` |
+| Linux: link disconnects at logout and doesn't connect after reboot | Enable linger: `sudo loginctl enable-linger <user>` (`persona-link status`'s background-service line explains) |
+| Linux: link connected, local node offline | Resident node isn't running: `systemctl --user status personad-node`; log at `~/.persona/node-attach.log` |
 
 Logs:
-- Helper / Linux service: `~/.persona/link.log` (`jarvis-link logs -f`); passive mode uses `passive: …` (listener start, pairing, stream start / end, rejected requests);
+- Helper / Linux service: `~/.persona/link.log` (`persona-link logs -f`); passive mode uses `passive: …` (listener start, pairing, stream start / end, rejected requests);
 - Hub: `[<machine>] link up …` / `link down …`.
 
 ## How passive mode and the node service were verified (2026-11-02)
@@ -593,12 +593,12 @@ Logs:
   pairs with the code and opens authenticated streams to a fake node in a temporary directory (echo); verifies 300 KiB random bytes unchanged both ways, wrong credential 401, correct credentials also 429 after rate limiting, single-use and expired codes,
   other paths 404, old credentials 401 and old streams closing with 4002 after re-pairing, missing node 503, helper disconnecting when hub doesn't pong, occupied port error and retry, switching between active / passive.
   Existing active-mode tests all still pass.
-- Real binaries (temporary HOME, listening only on 127.0.0.1): `jarvis-link pair --listen` + `jarvis-link run` + real `personad node --attach`; after pairing, the fake hub sends node-protocol
+- Real binaries (temporary HOME, listening only on 127.0.0.1): `persona-link pair --listen` + `persona-link run` + real `personad node --attach`; after pairing, the fake hub sends node-protocol
   `ping` and `node.info` on the stream, and the resident node answers both.
 - Clean Debian 12 (arm64) container with systemd: `curl … install.sh | sh -s -- --node --listen` (`docker exec -u`, no `XDG_RUNTIME_DIR`), both user services active,
   link printed; a fake hub on the host pairs through a port mapped to 127.0.0.1 and talks to the real node in the container; both services restart themselves after container restart, and original credentials still work.
   On the first run the container's only interface was virtual, leaving no candidate addresses and blocking installation; this led to the "fall back when all interfaces are virtual" behavior.
-- `jarvis-link discover` heard a temporary fake hub broadcast on the LAN (mDNS, stopped afterwards).
+- `persona-link discover` heard a temporary fake hub broadcast on the LAN (mDNS, stopped afterwards).
 - Passive-mode screenshots of the Mac menu bar and pairing window (light and dark, `mac-link.sh snapshot`). The App's first-launch resident-node installation **was not run on a real machine**: this development machine has a real, actively used
-  `com.jarvis.node` that must not be touched; Mac `node install` command sequences (`launchctl bootout` / `bootstrap`) were tested only with fake commands; the plist passed `plutil -lint`.
+  `com.persona.node` that must not be touched; Mac `node install` command sequences (`launchctl bootout` / `bootstrap`) were tested only with fake commands; the plist passed `plutil -lint`.
 - Not tested: real hub dialing side (#435 in progress), SOCKS proxy, passive mode on Windows (compiled only; Windows active mode and scheduled task in [windows.md](windows.md)), public IPv6 inbound.

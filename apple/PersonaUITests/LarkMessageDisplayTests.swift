@@ -3,7 +3,7 @@ import XCTest
 final class LarkMessageDisplayFlowTests: XCTestCase {
     @MainActor private func launch(_ hub: String, settings: Bool) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", settings ? "settings" : "mail", "-demo.on", "NO", "-ui.oldLayout", "NO",
                                "-openConnectorFeishu", settings ? "YES" : "NO", "-inbox.source", "", "-inbox.kind", "mention", "-openInboxFirst", "NO"]
         app.launchPinned()
@@ -11,12 +11,12 @@ final class LarkMessageDisplayFlowTests: XCTestCase {
     }
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let path = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let path = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: path).appendingPathComponent(name + ".png"))
         }
     }
     @MainActor private func configure(_ hub: String, enabled: Bool) throws {
-        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { return try configureSource(hub, enabled: enabled) }
+        if ProcessInfo.processInfo.environment["PERSONA_MESSAGING"] == "1" { return try configureSource(hub, enabled: enabled) }
         let app = launch(hub, settings: true)
         let entry = app.buttons["风灵月影"].firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 20)); entry.tapCenter()
@@ -78,7 +78,7 @@ final class LarkMessageDisplayFlowTests: XCTestCase {
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
     }
     @MainActor func testRetainedRecallHistoryAndClosedSettings() async throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs Trainer mock Hub") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs Trainer mock Hub") }
         continueAfterFailure = false
         try configure(hub, enabled: true)
         var app = launch(hub, settings: false)

@@ -1,8 +1,8 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
-/// Quotes as Telegram's replies (#986): a quoted message carries its id through the `<jarvis-context>` tag, so the
+/// Quotes as Telegram's replies (#986): a quoted message carries its id through the `<persona-context>` tag, so the
 /// sent bubble leads back to it; what the user picked shows as quotes, what the hub put in a Feishu /agent request folds.
 struct QuoteTests {
     @Test func aQuotedMessageKeepsItsIDThroughTheTag() {
@@ -29,7 +29,7 @@ struct QuoteTests {
         let whole = ContextRef(kind: "context", title: "时间线", url: "https://example.com/t", text: "（整篇）")
         #expect(whole.quoteHeading == "引用 时间线")
         #expect(whole.quoteSummary == "example.com")
-        let session = ContextRef(kind: "context", title: "照片同步", url: "jarvis://session/m/s",
+        let session = ContextRef(kind: "context", title: "照片同步", url: "persona://session/m/s",
                                  text: "另一个会话：照片同步（Claude）\n目录：~/code/photos")
         #expect(session.quoteHeading == "引用会话 照片同步")
         #expect(session.quoteSummary == "目录：~/code/photos")

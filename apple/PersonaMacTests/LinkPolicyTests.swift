@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Which links a click hands to macOS. On the Mac `NSWorkspace.open` runs whatever a URL names (a `file://` app, an
 /// `smb://` share, another app's scheme) without asking, and the text comes from agents and chats: only the web and

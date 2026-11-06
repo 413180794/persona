@@ -13,7 +13,7 @@ import (
 const oldHubJSON = `{
   "listen": ":18660",
   "token": "hub-token",
-  "database_url": "postgres://u:p@[fd00::20]:5432/jarvis",
+  "database_url": "postgres://u:p@[fd00::20]:5432/persona",
   "machines": [{"id": "server", "kind": "local"}],
   "assistant": {"owner": "Example", "notes": "- Code is in ~/code", "machine": "server", "launcher": "claude",
     "external": false, "persona_view": true},

@@ -57,7 +57,7 @@
 
 ```sh
 cd server
-JARVIS_VERIFY_IOS_FIXTURES=1 go test -count=1 -p 1 -run 'TestResolutionFixture' -v ./internal/proto
+PERSONA_VERIFY_IOS_FIXTURES=1 go test -count=1 -p 1 -run 'TestResolutionFixture' -v ./internal/proto
 ```
 
 `server/internal/proto/resolution_fixtures_test.go` 负责三层检查：

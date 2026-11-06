@@ -2,18 +2,18 @@ import XCTest
 
 /// A plugin's list of machines (schema format machine, docs/extensions.md): a switch per Mac, by name and how it is, no
 /// machine ids typed in; a switch takes effect at once and is the machine page's Let the Assistant Control This Computer too. Against
-/// scripts/mock/mock_hub.py with MOCK_PLUGINS=1 MOCK_COMPUTER=ready (`TEST_RUNNER_JARVIS_PLUGINS_HUB`), which has the
-/// plugin cua on for MacBook; `TEST_RUNNER_JARVIS_SHOTS` keeps the screenshots, named by
-/// `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`.
+/// scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1 MOCK_COMPUTER=ready (`TEST_RUNNER_PERSONA_EXTENSIONS_HUB`), which has the
+/// plugin cua on for MacBook; `TEST_RUNNER_PERSONA_SHOTS` keeps the screenshots, named by
+/// `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE`.
 final class ExtensionMachineSwitchesTests: XCTestCase {
     @MainActor func testMacsAreSwitches() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"], env["JARVIS_PLUGINS_COMPUTER"] == "1" else {
-            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 MOCK_COMPUTER=ready (JARVIS_PLUGINS_HUB, JARVIS_PLUGINS_COMPUTER=1)")
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"], env["PERSONA_EXTENSIONS_COMPUTER"] == "1" else {
+            throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 MOCK_COMPUTER=ready (PERSONA_EXTENSIONS_HUB, PERSONA_EXTENSIONS_COMPUTER=1)")
         }
         continueAfterFailure = false
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "cua"]
         app.launchPinned()
@@ -29,7 +29,7 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
         XCTAssertEqual(studio.value as? String, "0")
         XCTAssertTrue(macbook.label.contains("MacBook") && macbook.label.contains("在线 · Cua 可以用"), macbook.label)
         XCTAssertTrue(studio.label.contains("在线 · Cua 没装"), "said for a Mac it is not on for too: \(studio.label)")
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-machines-\(look).png"))
         }
 
@@ -46,12 +46,12 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
     /// it off, Open turns it on (the hub has it); turning it off does not ask.
     @MainActor func testAListWithAConfirmAsksFirst() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"], env["JARVIS_PLUGINS_COMPUTER"] == "1" else {
-            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 MOCK_COMPUTER=ready (JARVIS_PLUGINS_HUB, JARVIS_PLUGINS_COMPUTER=1)")
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"], env["PERSONA_EXTENSIONS_COMPUTER"] == "1" else {
+            throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 MOCK_COMPUTER=ready (PERSONA_EXTENSIONS_HUB, PERSONA_EXTENSIONS_COMPUTER=1)")
         }
         continueAfterFailure = false
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "cua"]
         app.launchPinned()
@@ -67,7 +67,7 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
         XCTAssertTrue(turnOn.waitForExistence(timeout: 5), "asked first:\n\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "坐在它前面的人能直接用它")).firstMatch.exists,
                       "the plugin's x-confirm:\n\(app.debugDescription)")
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-no-lock-ask-\(look).png"))
         }
         cancelDialog(app)
@@ -134,16 +134,16 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
     }
 
     /// A plugin whose program runs on computers (#1830): the field picking them says, for each machine switched on, how
-    /// the program is there; switching one on asks first (a program will run there). `MOCK_PLUGINS=1` has it on for
+    /// the program is there; switching one on asks first (a program will run there). `MOCK_EXTENSIONS=1` has it on for
     /// MacBook (running) and Mac Studio (failed to start).
     @MainActor func testWhereAPluginsProgramRuns() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let hub = env["JARVIS_PLUGINS_HUB"] else {
-            throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)")
+        guard let hub = env["PERSONA_EXTENSIONS_HUB"] else {
+            throw XCTSkip("needs mock_hub.py with MOCK_EXTENSIONS=1 (PERSONA_EXTENSIONS_HUB)")
         }
         continueAfterFailure = false
-        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let look = env["PERSONA_EXTENSIONS_APPEARANCE"] ?? "light"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openPlugin", "example-helper"]
         app.launchPinned()
@@ -157,7 +157,7 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
                        "a footer repeating that the switches take effect at once")
         XCTAssertTrue(server.exists, "a Linux machine is offered: the program has a Linux build")
         XCTAssertFalse(server.label.contains("程序"), "said for a machine it is not on for: \(server.label)")
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-node-\(look).png"))
         }
         server.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
@@ -170,7 +170,7 @@ final class ExtensionMachineSwitchesTests: XCTestCase {
         server.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         XCTAssertTrue(open.waitForExistence(timeout: 5), "switching a machine on did not ask the second time")
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '将在这台电脑上运行'")).firstMatch.exists)
-        if let dir = env["JARVIS_SHOTS"] {
+        if let dir = env["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-node-ask-\(look).png"))
         }
         open.tap()

@@ -161,21 +161,18 @@ func assertNoSecret(t *testing.T, d proto.LauncherDetail, secret string) {
 }
 
 func TestRedactSecretsInHelperCalls(t *testing.T) {
-	api := "sk-test-" + strings.Repeat("a1", 16)
-	bearer := "test-bearer-" + strings.Repeat("b2", 16)
-	vendor := "plat_" + strings.Repeat("c3", 24)
-	got := redactSecrets("_claude_proxy https://gw.example.com " + api + ` "model-alpha" 786432 "on"
-_claude_proxy https://gw.example.com "Bearer ` + bearer + `" model-beta "on"
-_claude_proxy https://gw.example.com ` + vendor + ` model-gamma 700000 "on"
+	got := redactSecrets(`_claude_proxy https://gw.example.com removed-secret-value "deepseek-v4-pro[1m]" 786432 "$@"
+_claude_proxy https://gw.example.com "removed-secret-value" openai_qwen3.7-max "$@"
+_claude_proxy https://gw.example.com removed-secret-value opensource/glm5.2 700000 "$@"
 unset CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR ANTHROPIC_AUTH_TOKEN`)
-	for _, secret := range []string{api, bearer, vendor, api[:12], bearer[len(bearer)-12:], vendor[:12]} {
+	for _, secret := range []string{"removed-secret-value", "haCTqQzmGJKng40t2VhngFF10wk8oOh6_GPT_AK", "ealXySu-x5uFSjX2Z-T7TYlmridk8N"} {
 		if strings.Contains(got, secret) {
-			t.Errorf("a synthetic secret or excerpt remains in the redacted helper output")
+			t.Errorf("%s shows:\n%s", secret, got)
 		}
 	}
-	for _, kept := range []string{"https://gw.example.com", "model-alpha", "model-beta", "model-gamma", "786432", "700000", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", "ANTHROPIC_AUTH_TOKEN"} {
+	for _, kept := range []string{"https://gw.example.com", "deepseek-v4-pro[1m]", "786432", "opensource/glm5.2", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"} {
 		if !strings.Contains(got, kept) {
-			t.Errorf("a non-secret helper option or environment-variable name was removed: %s", kept)
+			t.Errorf("%s was masked:\n%s", kept, got)
 		}
 	}
 }
@@ -331,7 +328,7 @@ cat "$last" > `+shellQuote(seen)+`
 printf '\033]1337;ShellIntegrationVersion=14;shell=zsh\007{"type":"result","subtype":"success","is_error":false,"duration_ms":900,"result":"ok","modelUsage":{"m":{}}}\n'
 `)
 	home := os.Getenv("HOME")
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona"), logger: log.New(io.Discard, "", 0)}
 	r := n.launcherCheck(context.Background(), "claude")
 	if !r.OK || r.Answer != "ok" || r.Model != "m" {
 		t.Fatalf("check: %+v", r)
@@ -349,7 +346,7 @@ func checkWithFakeClaude(t *testing.T, script string, timeout time.Duration) pro
 	launcherCheckTimeout = timeout
 	t.Cleanup(func() { launcherCheckTimeout = was })
 	home := os.Getenv("HOME")
-	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	n := &Node{home: home, dir: filepath.Join(home, ".persona"), logger: log.New(io.Discard, "", 0)}
 	return n.launcherCheck(context.Background(), "claude")
 }
 

@@ -1,17 +1,17 @@
 import XCTest
 
 /// Links to this hub's own pages open them in the app (#2696), against scripts/mock/mock_hub.py with MOCK_HUB_LINKS=1
-/// (`TEST_RUNNER_JARVIS_HUB_LINKS_HUB=<its address>`): an agent's reply links another agent's chat at one of its early
+/// (`TEST_RUNNER_PERSONA_HUB_LINKS_HUB=<its address>`): an agent's reply links another agent's chat at one of its early
 /// messages, a task and an outside page. The first opens that chat with the message on screen, the second the task's
-/// detail, the third the web page sheet as before. `TEST_RUNNER_JARVIS_SHOTS=<dir>` writes a picture of each.
+/// detail, the third the web page sheet as before. `TEST_RUNNER_PERSONA_SHOTS=<dir>` writes a picture of each.
 final class HubPageLinkUITests: XCTestCase {
     private var hub: String!
     private let source = "macbook/a1f3c2d4-0000-4000-8000-00000000001a"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_HUB_LINKS_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_HUB_LINKS=1 (JARVIS_HUB_LINKS_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_HUB_LINKS_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_HUB_LINKS=1 (PERSONA_HUB_LINKS_HUB)")
         }
         self.hub = hub
     }
@@ -26,8 +26,8 @@ final class HubPageLinkUITests: XCTestCase {
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let directory = env["JARVIS_SHOTS"] else { return }
-        let appearance = env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown"
+        guard let directory = env["PERSONA_SHOTS"] else { return }
+        let appearance = env["PERSONA_SHOTS_APPEARANCE"] ?? "unknown"
         try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: directory + "/hub-links-\(appearance)-\(name).png"))
     }
 

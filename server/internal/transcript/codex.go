@@ -375,7 +375,7 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 var LocalMachine atomic.Value
 
 // The Codex app's directive for a thread it just created (its sidebar shows a card for it); in Persona a link that
-// opens that thread's chat (jarvis://session/<machine>/<session>, the in-chat link the apps navigate by).
+// opens that thread's chat (persona://session/<machine>/<session>, the in-chat link the apps navigate by).
 var codexCreatedThreadRe = regexp.MustCompile(`::created-thread\{threadId="([0-9a-fA-F-]+)"\}`)
 
 func codexThreadLinks(s string) string {
@@ -385,7 +385,7 @@ func codexThreadLinks(s string) string {
 	}
 	return codexCreatedThreadRe.ReplaceAllStringFunc(s, func(m string) string {
 		id := codexCreatedThreadRe.FindStringSubmatch(m)[1]
-		return "[打开新建的对话](jarvis://session/" + url.PathEscape(machine) + "/" + url.PathEscape(id) + ")"
+		return "[打开新建的对话](persona://session/" + url.PathEscape(machine) + "/" + url.PathEscape(id) + ")"
 	})
 }
 

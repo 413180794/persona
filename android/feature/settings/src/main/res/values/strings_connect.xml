@@ -183,7 +183,7 @@
     <string name="settings_hub_update_warning_bad">Last time this version failed to start and was rolled back. Auto-update won\'t install it again.</string>
     <string name="settings_hub_update_warning_held">Auto-update won\'t install this version: %1$s. If you\'re sure it\'s fine, update by hand.</string>
     <string name="settings_hub_update_docker_plain">A Docker hub updates with a new image. When there is one, run this in the folder with the compose file</string>
-    <string name="settings_hub_update_docker_env">On the hub machine, set JARVIS_IMAGE in the .env next to the compose file to:</string>
+    <string name="settings_hub_update_docker_env">On the hub machine, set PERSONA_IMAGE in the .env next to the compose file to:</string>
     <string name="settings_hub_update_docker_then">Then run this in that folder:</string>
     <string name="settings_hub_update_docker_run">On the hub machine, run this in the folder with the compose file:</string>
     <string name="settings_hub_update_docker_new_image">New image %1$s</string>

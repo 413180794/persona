@@ -23,7 +23,7 @@ func TestPairURLMetadataContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	if u.Scheme != "jarvis" || u.Host != "pair" || q.Get("url") != p.URL || q.Get("token") != p.Token || q.Get("hub") != p.HubID || q.Get("fp") != p.FP || q.Get("tls") != "18662" || strings.Join(q["alt"], " ") != strings.Join(p.Alt, " ") {
+	if u.Scheme != "persona" || u.Host != "pair" || q.Get("url") != p.URL || q.Get("token") != p.Token || q.Get("hub") != p.HubID || q.Get("fp") != p.FP || q.Get("tls") != "18662" || strings.Join(q["alt"], " ") != strings.Join(p.Alt, " ") {
 		t.Fatal("pairing parameter contract changed")
 	}
 }
@@ -70,7 +70,7 @@ func TestPairCLIOfflineAndLegacy(t *testing.T) {
 	if err := cfg.printPair(context.Background(), true, &out); err != nil {
 		t.Fatal(err)
 	}
-	const oldURL = "jarvis://pair?token=a%26b%3D%2B+%3F&url=http%3A%2F%2Fexample.com%3A18660%2Fpath%3Fa%3D1"
+	const oldURL = "persona://pair?token=a%26b%3D%2B+%3F&url=http%3A%2F%2Fexample.com%3A18660%2Fpath%3Fa%3D1"
 	if cfg.PairURL() != oldURL {
 		t.Fatalf("legacy URL changed: %s", cfg.PairURL())
 	}
@@ -108,7 +108,7 @@ func TestPairCLISaysWhenTheHubHasNoAddress(t *testing.T) {
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	cfg := &Config{Listen: ":" + port, Token: "master"}
 	_, err := cfg.requestPairCode(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "JARVIS_PUBLIC_URL") || !strings.Contains(err.Error(), "public_url") {
+	if err == nil || !strings.Contains(err.Error(), "PERSONA_PUBLIC_URL") || !strings.Contains(err.Error(), "public_url") {
 		t.Fatalf("empty address: %v", err)
 	}
 }

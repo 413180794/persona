@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Files into a folder of the file browser (docs/protocol.md "Changing files", #4858): what is sent, and the "already exists" question.
 @MainActor

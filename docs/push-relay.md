@@ -3,7 +3,7 @@
 A self-hosted hub doesn't have the APNs key of the Apple Team that owns the App, so it can't send pushes. The push relay is a `personad relay` run by the App's publisher:
 it holds the APNs key and hands pushes to APNs on behalf of every hub. The hub encrypts the notification content with the phone's public key, the relay only forwards ciphertext,
 and the phone decrypts it in the Notification Service Extension before showing it. A hub that has its own APNs key (`~/.persona/apns.json`) keeps talking to APNs directly and never goes through the relay.
-The Mac version works the same way: its Notification Service Extension target is `PersonaMacNotify` (product `PersonaNotify.appex`; the module and principal notification class still use `JarvisNotify`, `docs/mac.md` ("Remote push (Mac)"), #432), and the private key lives in the data protection keychain, shared with the extension.
+The Mac version works the same way: its Notification Service Extension target is `PersonaMacNotify` (product `PersonaNotify.appex`; the module and principal notification class still use `PersonaNotify`, `docs/mac.md` ("Remote push (Mac)"), #432), and the private key lives in the data protection keychain, shared with the extension.
 
 ```
 hub ──(HPKE ciphertext + grant)──▶ relay ──(APNs key)──▶ APNs ──▶ phone: Notification Service Extension decrypts → shows
@@ -28,10 +28,10 @@ hub ──(HPKE ciphertext + grant)──▶ relay ──(APNs key)──▶ APN
 
 ## Encryption
 
-- HPKE (RFC 9180) base mode: DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM, `info = "jarvis push v1"`.
+- HPKE (RFC 9180) base mode: DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM, `info = "persona push v1"`.
   Go uses the standard library `crypto/hpke`; iOS uses CryptoKit `HPKE` (`P256_SHA256_AES_GCM_256`). Ciphertext = `enc` (65 bytes) ‖ AEAD output, base64 in the push's `e` field.
 - The plaintext is exactly the JSON the hub would send when direct (`aps.alert` title / subtitle / body, `category`, `thread-id`, `interruption-level`,
-  `interaction_id` / `machine_id` / `session_id`, the pairing receipt `pair`, `jarvis_wake`), plus an `iat` (Unix seconds).
+  `interaction_id` / `machine_id` / `session_id`, the pairing receipt `pair`, `persona_wake`), plus an `iat` (Unix seconds).
 - The phone's private key: a `P256.KeyAgreement.PrivateKey` stored in the keychain access group shared by the App and the Notification Service Extension, `AfterFirstUnlockThisDeviceOnly`
   (readable by the extension on the lock screen once the device has been unlocked after boot; not in iCloud backups, regenerated on a new phone). Generated the first time it's needed, then never changes.
 
@@ -41,7 +41,7 @@ The relay builds the APNs `aps` itself. The hub can only provide ciphertext and 
 
 | `type` from hub | What the relay sends to APNs |
 | --- | --- |
-| `alert` | `{"aps":{"alert":{"title":"Jarvis","body":"有新消息"},"mutable-content":1,"sound":"default"},"e":"<ciphertext>"}` (`有新消息` = "New message"), push type `alert` |
+| `alert` | `{"aps":{"alert":{"title":"Persona","body":"有新消息"},"mutable-content":1,"sound":"default"},"e":"<ciphertext>"}` (`有新消息` = "New message"), push type `alert` |
 | `background` | `{"aps":{"content-available":1},"e":"<ciphertext>"}`, push type `background`, priority 5 |
 | `liveactivity` | The `aps` given by the hub (only keys used by Live Activities are allowed), push type `liveactivity`, topic with `.push-type.liveactivity` appended |
 
@@ -101,12 +101,12 @@ lost alerts and Live Activity updates. Live Activity pushes carry `aps.timestamp
 
 ## App
 
-- The build config `app.push_relay` (`config.json`, e.g. `https://<relay domain>/relay`) goes into Info.plist's `JarvisPushRelay`; when empty, the App doesn't register with a relay.
+- The build config `app.push_relay` (`config.json`, e.g. `https://<relay domain>/relay`) goes into Info.plist's `PersonaPushRelay`; when empty, the App doesn't register with a relay.
 - After getting the APNs device token: make sure a push key exists → register with the relay for a grant (cached in the keychain per device token; re-registered when the token changes) →
   report `apns_token`, `push_key`, `relay_url`, `relay_grant` together to the hub.
-- Notification Service Extension `JarvisNotify`: if `e` is present, decrypt it and swap in the title / subtitle / body / category (the notification's buttons) / thread / interruption level / userInfo;
+- Notification Service Extension `PersonaNotify`: if `e` is present, decrypt it and swap in the title / subtitle / body / category (the notification's buttons) / thread / interruption level / userInfo;
   without `e` (direct pushes never carry `mutable-content`, so the extension isn't invoked) the notification is shown as-is.
-- Silent pushes (`background`) are decrypted in the App process; `jarvis_wake` wakes the connection as before, and `resolved_interaction_ids` removes the notifications of cards that are over (#4349, only to apps that registered with `features: ["withdraw"]`).
+- Silent pushes (`background`) are decrypted in the App process; `persona_wake` wakes the connection as before, and `resolved_interaction_ids` removes the notifications of cards that are over (#4349, only to apps that registered with `features: ["withdraw"]`).
 
 ## Which way a device is pushed (#5998)
 
@@ -154,7 +154,7 @@ Now every side says which way pushes take and, when none, why:
    `npx wrangler secret put RELAY_ORIGIN` (value like `https://<tunnel hostname>`) and `npx wrangler secret put RELAY_PROXY_SECRET`
    (same as `proxy_secret`), then deploy `site/` as usual (only with `scripts/release/publish.sh`: it adds `dl/` and `install.sh` in a copy before deploying; running `wrangler deploy` directly in `site/` makes the downloads and install script 404. wrangler 4 needs Node 22+).
    When neither is set, `/relay/*` returns 503 and the rest of the site is unaffected. After deployment, `curl https://<website domain>/relay/v1/health` should return `{"ok":true,"apns":true}`.
-4. Ship the App: `python3 scripts/release/asc_signing.py --only <bundle id>.notify` registers the Notification Service Extension's bundle id and creates the "Jarvis Notify App Store"
+4. Ship the App: `python3 scripts/release/asc_signing.py --only <bundle id>.notify` registers the Notification Service Extension's bundle id and creates the "Persona Notify App Store"
    profile (needed when `release.sh` exports); fill `app.push_relay` in `config.json` (e.g. `https://<website domain>/relay`); release to TestFlight as usual.
    Older App versions have no extension and don't register with the relay, so self-hosted hubs still can't push to them; install a version from after this change.
 
@@ -164,16 +164,16 @@ For a remotely managed Tunnel, configure two ingress rules in Cloudflare: first 
 `http_status:404`. The origin DNS is a proxied CNAME pointing to `<Tunnel ID>.cfargotunnel.com`. Don't reuse an existing service's Tunnel or overwrite its ingress.
 
 Put a `cloudflared` verified against the official release SHA-256 into `~/.persona/bin/`, the Tunnel token into `~/.persona/relay-tunnel.token` (0600),
-and create `~/.config/systemd/user/jarvis-relay-tunnel.service`:
+and create `~/.config/systemd/user/persona-relay-tunnel.service`:
 
 ```ini
 [Unit]
-Description=Jarvis push relay Cloudflare Tunnel
-After=network-online.target jarvis-relay.service
+Description=Persona push relay Cloudflare Tunnel
+After=network-online.target persona-relay.service
 Wants=network-online.target
 
 [Service]
-ExecStart=%h/.jarvis/bin/cloudflared --no-autoupdate tunnel --protocol http2 run --token-file %h/.jarvis/relay-tunnel.token
+ExecStart=%h/.persona/bin/cloudflared --no-autoupdate tunnel --protocol http2 run --token-file %h/.persona/relay-tunnel.token
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
@@ -183,8 +183,8 @@ UMask=0077
 WantedBy=default.target
 ```
 
-`jarvis-relay.service` is the name of the unit that runs `personad relay` on this machine; if yours differs, use the actual name. Run
-`systemctl --user daemon-reload` and `systemctl --user enable --now jarvis-relay-tunnel.service`, and make sure linger is enabled for the user,
+`persona-relay.service` is the name of the unit that runs `personad relay` on this machine; if yours differs, use the actual name. Run
+`systemctl --user daemon-reload` and `systemctl --user enable --now persona-relay-tunnel.service`, and make sure linger is enabled for the user,
 or the service stops when you log out of SSH. `--token-file` keeps the token out of process arguments and logs. When UDP/7844 is blocked on the deploy machine, use HTTP/2 explicitly;
 TCP/7844 outbound must still be allowed. The unit being `active` isn't enough: also check that the Tunnel has registered connections and the remote ingress is loaded.
 
@@ -199,7 +199,7 @@ never on the command line, and never print the values. Delete the temporary file
 - Registering an invalid device token: 400; a topic not on the allowed list: 403.
 - Registering with the correct topic and a test token: 200, grant not printed; a push without a grant: 401.
 - A valid grant with invalid ciphertext: 400, nothing sent to APNs. Don't use a real device token in tests, to avoid sending notifications by mistake.
-- `app.push_relay` is filled in `config.json`, the notification extension's provisioning profile is valid, the archived `JarvisPushRelay` points to the website's `/relay`,
+- `app.push_relay` is filled in `config.json`, the notification extension's provisioning profile is valid, the archived `PersonaPushRelay` points to the website's `/relay`,
   and the App's and extension's shared push keychain group both pass `entitlements.py check`.
 - After installing the new TestFlight build, verify ordinary notification decryption and Live Activities on a hub without its own APNs key; a simulator health check doesn't replace acceptance on a real device.
 
@@ -212,11 +212,11 @@ your own APNs key. In that case it's simpler to put the key straight into your h
 
 - `server/internal/relay`: grant sealing / tampering / topic, rate limits, the assembled APNs request (fake APNs), 410 passthrough.
 - `server/internal/hub`: without `apns.json`, ordinary notifications / interactions / completions / silent wakes / Live Activities all hit a fake relay, with no plaintext in the requests; with `apns.json`, it stays direct as before.
-- Ciphertext generated by `server/internal/pushcrypto` is decrypted by JarvisTests with CryptoKit (cross-language test vectors).
+- Ciphertext generated by `server/internal/pushcrypto` is decrypted by PersonaTests with CryptoKit (cross-language test vectors).
 - `site/worker.test.mjs` (`node --test`): static paths unchanged, 503 when unconfigured, the secret and client address added when forwarding, forged secrets and cookies dropped.
 - Simulator end-to-end: `scripts/test/relay_sim_e2e.sh` takes the public key exported by the App, encrypts with the hub's Go code → local `personad relay` → a fake APNs
   receives the request (checked for no plaintext) → the extension's logic runs in the App process (`PushCrypto.service`, `NotificationServiceTests`) and decrypts each one;
   one with a corrupted byte still shows "New message".
   **`simctl push` doesn't run the Notification Service Extension** (the simulator adds it straight to Notification Center as a local notification; measured 2026-11-01 on Xcode 27.1 / iOS 27.0:
-  the extension process didn't start, and a push with `mutable-content` was shown as-is as "New message"), so the extension itself (`JarvisNotify`) can only be verified on a real device.
+  the extension process didn't start, and a push with `mutable-content` was shown as-is as "New message"), so the extension itself (`PersonaNotify`) can only be verified on a real device.
 - Real APNs and the extension on a real device: need the publisher's key and a signed build with the extension; verified after the publisher deploys (`docs/release.md`).

@@ -86,9 +86,9 @@ class SessionSourceTest {
         assertFalse(claude.copy(agent = "dsh").canChangeModes)
         assertFalse(claude.copy(status = "offline").canChangeModes)
         // Persona's conversations change modes but have no pane to type /model or /clear into.
-        val jarvis = claude.copy(assistant = true)
-        assertTrue(jarvis.canChangeModes)
-        assertFalse(jarvis.canTypeClaudeCommands)
+        val persona = claude.copy(assistant = true)
+        assertTrue(persona.canChangeModes)
+        assertFalse(persona.canTypeClaudeCommands)
         assertFalse(claude.copy(paneId = null).canTypeClaudeCommands)
     }
 

@@ -2,16 +2,16 @@ import XCTest
 
 /// The home screen icon is the Avatar's (docs/persona.md「App 图标」, #3203): choosing Visor in Settings › Appearance › Avatar really
 /// changes the home screen icon, through the system's alert; a launch on another Avatar (the old App Icon setting left
-/// the icon apart from it) brings the icon back to that Avatar's. Against scripts/mock/mock_hub.py (JARVIS_MOCK_HUB).
-/// The icon on now is the value of the page's note (`persona-icon-note`). Screenshots go to JARVIS_ICON_SHOTS when set:
+/// the icon apart from it) brings the icon back to that Avatar's. Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB).
+/// The icon on now is the value of the page's note (`persona-icon-note`). Screenshots go to PERSONA_ICON_SHOTS when set:
 /// the page and the home screen after each switch.
 final class AppIconTests: XCTestCase {
     private var hub: String!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
@@ -19,14 +19,14 @@ final class AppIconTests: XCTestCase {
     /// On Settings › Appearance › Avatar with `persona` chosen as the app starts.
     @MainActor private func launch(_ persona: String) -> XCUIApplication {
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openAppearance", "persona", "-openPersona", persona]
         app.launchPinned()
         return app
     }
 
     @MainActor private func shot(_ name: String, _ image: XCUIScreenshot) throws {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_ICON_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_ICON_SHOTS"] else { return }
         try image.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name).png"))
     }
 
@@ -57,7 +57,7 @@ final class AppIconTests: XCTestCase {
         dismissPermissionPrompt()
         // The line under Avatar says which icon is on, or "unavailable" where the system cannot switch icons
         // (`supportsAlternateIcons`): iOS 26.0.1 and 26.3.1 simulators cannot (docs/lessons/ios.md), a device can.
-        XCTAssertTrue(app.buttons["persona-jarvis"].waitForExistence(timeout: 20), "no 形象 page:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["persona-persona"].waitForExistence(timeout: 20), "no 形象 page:\n\(app.debugDescription)")
         let note = app.descendants(matching: .any)["persona-icon-note"]
         XCTAssertTrue(note.waitForExistence(timeout: 10), "no line on the icon under 形象:\n\(app.debugDescription)")
         if note.value as? String == "unavailable" {
@@ -66,7 +66,7 @@ final class AppIconTests: XCTestCase {
         acceptIconAlert() // a simulator left on another icon goes back to Mochi's first
         waitIcon(app, "standard", "团子 should be on the default icon")
 
-        let visor = app.buttons["persona-jarvis"]
+        let visor = app.buttons["persona-persona"]
         XCTAssertTrue(visor.waitForExistence(timeout: 10), "面罩 is not offered:\n\(app.debugDescription)")
         visor.tap()
         acceptIconAlert()

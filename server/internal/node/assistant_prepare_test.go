@@ -37,11 +37,11 @@ func TestAssistantPreparePerDirectory(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			n, _ := testNode(t)
-			n.dir, n.bin, n.logger = filepath.Join(n.home, ".jarvis"), "/opt/example/personad", log.New(io.Discard, "", 0)
+			n.dir, n.bin, n.logger = filepath.Join(n.home, ".persona"), "/opt/example/personad", log.New(io.Discard, "", 0)
 			if custom {
 				n.dir = t.TempDir()
 			}
-			const firstDir, secondDir = ".jarvis/assistant", ".jarvis/managers/second/assistant"
+			const firstDir, secondDir = ".persona/assistant", ".persona/managers/second/assistant"
 			first := prepareAssistantForTest(t, n, firstDir, []string{"example"}, map[string]string{"shared": "example"})
 			second := prepareAssistantForTest(t, n, secondDir, []string{"other"}, map[string]string{"shared": "other"})
 			if n.assistantBin(first) != filepath.Join(n.dir, "assistant-bin") {
@@ -68,7 +68,7 @@ func TestAssistantPreparePerDirectory(t *testing.T) {
 			for _, cwd := range []string{first, second} {
 				env, release := n.assistantLarkEnv(cwd, "")
 				release()
-				if !slices.Contains(env, "JARVIS_ASSISTANT_BIN="+n.assistantBin(cwd)) ||
+				if !slices.Contains(env, "PERSONA_ASSISTANT_BIN="+n.assistantBin(cwd)) ||
 					!slices.Contains(env, "PATH="+n.assistantBin(cwd)+string(os.PathListSeparator)+os.Getenv("PATH")) {
 					t.Fatalf("the process does not use its own command directory: %v", env)
 				}
@@ -95,14 +95,14 @@ func TestAssistantPrepareSymlinkDirectory(t *testing.T) {
 	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
 	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", t.TempDir())
 	n, _ := testNode(t)
-	n.dir, n.bin, n.logger = filepath.Join(n.home, ".persona"), "/opt/example/personad", log.New(io.Discard, "", 0)
+	n.dir, n.bin, n.logger = filepath.Join(n.home, "state"), "/opt/example/personad", log.New(io.Discard, "", 0)
 	if err := os.MkdirAll(n.dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(n.dir, filepath.Join(n.home, ".jarvis")); err != nil {
+	if err := os.Symlink(n.dir, filepath.Join(n.home, ".persona")); err != nil {
 		t.Fatal(err)
 	}
-	cwd := prepareAssistantForTest(t, n, ".jarvis/assistant", []string{"example"}, map[string]string{"ex": "example"})
+	cwd := prepareAssistantForTest(t, n, ".persona/assistant", []string{"example"}, map[string]string{"ex": "example"})
 	real := filepath.Join(n.dir, "assistant")
 	if !n.mayCall(real, "example_list") || n.connectorCLIs(real)["ex"] != "example" || n.assistantBin(real) != n.assistantBin(cwd) {
 		t.Fatal("the resolved session directory lost its prepare state or command path")
@@ -121,8 +121,8 @@ func TestAssistantPrepareScopesSkillConsumers(t *testing.T) {
 	t.Cleanup(func() { assistantskills.Requires = old })
 	n, _ := testNode(t)
 	n.dir, n.bin, n.logger = t.TempDir(), "/opt/example/personad", log.New(io.Discard, "", 0)
-	first := prepareAssistantForTest(t, n, ".jarvis/assistant", []string{"example"}, nil)
-	second := prepareAssistantForTest(t, n, ".jarvis/managers/second/assistant", nil, nil)
+	first := prepareAssistantForTest(t, n, ".persona/assistant", []string{"example"}, nil)
+	second := prepareAssistantForTest(t, n, ".persona/managers/second/assistant", nil, nil)
 	for _, cwd := range []string{first, second} {
 		checkSkill := func(root string) {
 			t.Helper()
@@ -160,9 +160,9 @@ func TestSkillsListPreparedDirectoryFallback(t *testing.T) {
 	old := assistantskills.Requires
 	assistantskills.Requires = map[string]string{"persona-office": "example"}
 	t.Cleanup(func() { assistantskills.Requires = old })
-	const defaultDir = ".jarvis/assistant"
-	const otherDir = ".jarvis/managers/other/assistant"
-	const thirdDir = ".jarvis/managers/third/assistant"
+	const defaultDir = ".persona/assistant"
+	const otherDir = ".persona/managers/other/assistant"
+	const thirdDir = ".persona/managers/third/assistant"
 	for _, tc := range []struct {
 		name     string
 		prepared map[string]bool // directory → example connector signed in

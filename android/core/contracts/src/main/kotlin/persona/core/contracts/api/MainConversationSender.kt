@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 /** Local outbox destination until a main conversation is durably bound. Never send it to the hub. */
 val PendingMainConversation = SessionKey("", "main")
 
-/** Shared entry point for sharing, asking Persona and handing context to Jarvis. */
+/** Shared entry point for sharing, asking Persona and handing context to Persona. */
 interface MainConversationSender {
     val outbox: StateFlow<List<OutboxMessage>>
     /** Commits locally before returning; a failed call must leave the editor intact. */

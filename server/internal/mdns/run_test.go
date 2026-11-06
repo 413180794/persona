@@ -21,8 +21,8 @@ func TestRunRejectsBadOptions(t *testing.T) {
 	for desc, o := range map[string]Options{
 		"nothing to do":  {},
 		"bad service":    {Advertise: &bad},
-		"bad browse":     {Browse: "jarvis"},
-		"bad both":       {Advertise: &bad, Browse: "_jarvis-hub._tcp"},
+		"bad browse":     {Browse: "persona"},
+		"bad both":       {Advertise: &bad, Browse: "_persona-hub._tcp"},
 		"browse invalid": {Browse: "_a._b._tcp"},
 	} {
 		if err := Run(ctx, o); err == nil {
@@ -130,14 +130,14 @@ func (lr *liveRun) halt(t *testing.T, what string) time.Duration {
 }
 
 // TestLive runs a real advertiser and real browsers on this machine's interfaces. It sends a few mDNS packets on the
-// LAN, so it only runs with JARVIS_MDNS_LIVE=1. It checks: announcements reach a browser that was already running,
+// LAN, so it only runs with PERSONA_MDNS_LIVE=1. It checks: announcements reach a browser that was already running,
 // a browser started later finds the instance through its query and the answer, a legacy unicast query gets a
 // unicast reply, and stopping the advertiser sends a goodbye.
 func TestLive(t *testing.T) {
-	if os.Getenv("JARVIS_MDNS_LIVE") != "1" {
-		t.Skip("set JARVIS_MDNS_LIVE=1 to send real mDNS packets on this machine's interfaces")
+	if os.Getenv("PERSONA_MDNS_LIVE") != "1" {
+		t.Skip("set PERSONA_MDNS_LIVE=1 to send real mDNS packets on this machine's interfaces")
 	}
-	const typ = "_jarvis-test._tcp"
+	const typ = "_persona-test._tcp"
 	rnd := make([]byte, 4)
 	rand.Read(rnd)
 	inst := "live test " + hex.EncodeToString(rnd)

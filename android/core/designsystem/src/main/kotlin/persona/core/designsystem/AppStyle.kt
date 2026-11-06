@@ -46,7 +46,7 @@ enum class GlassLevel { Liquid, Frosted, Solid }
 /** Device-wide appearance choices; not tied to a hub, so they survive re-pairing. */
 class AppStyleStore(context: Context) {
     private val app = context.applicationContext
-    private val preferences = app.getSharedPreferences("jarvis-appearance", Context.MODE_PRIVATE)
+    private val preferences = app.getSharedPreferences("persona-appearance", Context.MODE_PRIVATE)
     private val currentStyle = MutableStateFlow(AppStyle.fromKey(preferences.getString(KEY_STYLE, null)))
     private val currentGlass = MutableStateFlow(GlassPreference.fromKey(preferences.getString(KEY_GLASS, null)))
     val style: StateFlow<AppStyle> = currentStyle.asStateFlow()

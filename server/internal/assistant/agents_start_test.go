@@ -28,12 +28,12 @@ func TestTabSlug(t *testing.T) {
 }
 
 func TestDefaultTabName(t *testing.T) {
-	for _, n := range []string{"", "jarvis", "jarvis-3", "1", "12", "agent-4"} {
+	for _, n := range []string{"", "persona", "persona-3", "1", "12", "agent-4"} {
 		if !defaultTabName.MatchString(n) {
 			t.Errorf("%q should count as nobody's choice", n)
 		}
 	}
-	for _, n := range []string{"leader", "leader-kiro", "ai-person-kiro", "jarvis-app", "agent"} {
+	for _, n := range []string{"leader", "leader-kiro", "ai-person-kiro", "persona-app", "agent"} {
 		if defaultTabName.MatchString(n) {
 			t.Errorf("%q was chosen by someone", n)
 		}

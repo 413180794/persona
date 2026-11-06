@@ -58,8 +58,8 @@ func planTestPackage(t *testing.T, id, version string, pack bool) string {
 
 func TestExtensionPlanPostgresFailureRestoresPackagesAndRecords(t *testing.T) {
 	// Without CREATE DATABASE, dbtest falls back to a shared database; fault triggers are never allowed in that mode.
-	u, err := url.Parse(os.Getenv("JARVIS_TEST_DATABASE_URL"))
-	if err != nil || !regexp.MustCompile(`^/jarvis_test_[0-9]{10}_[0-9a-f]{8}$`).MatchString(u.Path) {
+	u, err := url.Parse(os.Getenv("PERSONA_TEST_DATABASE_URL"))
+	if err != nil || !regexp.MustCompile(`^/persona_test_[0-9]{10}_[0-9a-f]{8}$`).MatchString(u.Path) {
 		t.Skip("fault injection requires dbtest's per-run isolated database; shared fallback is not allowed")
 	}
 	for _, failure := range []string{"prevalidation", "second", "main", "commit"} {

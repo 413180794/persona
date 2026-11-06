@@ -76,8 +76,8 @@ func TestQuietTasksFromTheMainConversation(t *testing.T) {
 		t.Fatalf("GET = %v", got["main_tasks_quiet"])
 	}
 	m := h.localMachine("box")
-	if got := h.callAssistantTool(ctx, m, "conv1", "jarvis_settings", json.RawMessage(`{"action":"get","key":"assistant.main_tasks_quiet"}`)); got.Content[0].Text != "true" {
-		t.Fatalf("jarvis_settings get = %+v", got)
+	if got := h.callAssistantTool(ctx, m, "conv1", "persona_settings", json.RawMessage(`{"action":"get","key":"assistant.main_tasks_quiet"}`)); got.Content[0].Text != "true" {
+		t.Fatalf("persona_settings get = %+v", got)
 	}
 	if got := call(http.MethodPut, `{"main_tasks_quiet":false}`); got["main_tasks_quiet"] != false || got["main"] != "conv1" {
 		t.Fatalf("PUT = %v", got)

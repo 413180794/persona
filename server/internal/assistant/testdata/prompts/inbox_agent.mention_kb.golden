@@ -1,11 +1,11 @@
 这是收件箱里的一件事（事件 lark:f1:1），你是用户的管理者处理它的那段对话：这件事以后的新消息、用户的确认和指示都会发到这段对话里，你接着做，不用从头再来。
 
-<jarvis-context kind="context" title="飞书 · 发布群">
+<persona-context kind="context" title="飞书 · 发布群">
 类型：飞书群里 @ 了用户
 张三：@我 周五灰度能提前吗
 飞书会话 id：f1
 
-</jarvis-context>
+</persona-context>
 
 要做的：查清楚构建为什么挂了，回复对方结论
 
@@ -23,21 +23,21 @@
   note 是一两句你查到了什么、依据在哪、还缺什么，给用户核对用。和别的会话、别的来源里的事有关的，把那件事的 id 写进 related。
 - 交了就结束这一轮，不用再总结。之后这件事有新消息、用户确认或驳回时会发到这里：只需要更新总结时调 inbox_suggest 只给 recap。
 
-## 知识库里的背景（~/.jarvis/data）
+## 知识库里的背景（~/.persona/data）
 
-<jarvis-context kind="context" title="会话档案 · 发布群">
+<persona-context kind="context" title="会话档案 · 发布群">
 # 发布群
 
 ## 这是什么
 发布协调
 
-</jarvis-context>
-<jarvis-context kind="context" title="项目 · 示例发布">
+</persona-context>
+<persona-context kind="context" title="项目 · 示例发布">
 # 示例发布
 
 ## 目标
 周五灰度
 
-</jarvis-context>
+</persona-context>
 
 会话 id：lark-f1。更多用 kb_get / kb_search 查。处理完如果得出了新结论（项目进展、谁负责什么、截止时间），用 kb_update 写回对应项目的 log（这是允许的写操作）。

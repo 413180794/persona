@@ -1,4 +1,4 @@
-// Package spec is what the WeChat plugin declares, without its dependencies: the hub registers jarvisd-wechat with it
+// Package spec is what the WeChat plugin declares, without its dependencies: the hub registers personad-wechat with it
 // before the program has ever run (a switched-off connector can still be bound), and the program declares the same
 // (internal/wechat).
 package spec
@@ -8,11 +8,11 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// ID and Name of the plugin, its connector and its channel; Program is its program next to jarvisd.
+// ID and Name of the plugin, its connector and its channel; Program is its program next to personad.
 const (
 	ID      = "wechat"
 	Name    = "微信"
-	Program = "jarvisd-wechat"
+	Program = "personad-wechat"
 )
 
 // Network is where it goes: iLink and WeChat's media CDN.

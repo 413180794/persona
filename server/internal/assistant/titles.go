@@ -378,7 +378,7 @@ func parseTitleMax(out string, max int) (kind, topic string, ok bool) {
 	return kind, topic, kind != "" && n > 0 && n <= max
 }
 
-var contextBlock = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
+var contextBlock = regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`)
 
 var (
 	// A whole tag block a source channel wraps text in (an at mention or font tag from a card, an older node's

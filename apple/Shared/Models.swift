@@ -18,9 +18,9 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var herdrVersion: String?
     var claudeVersion: String?
     var lastSeen: Date?
-    /// The machine's jarvisd is not from the hub's build (newer hubs): some answers may be refused until it is deployed.
+    /// The machine's personad is not from the hub's build (newer hubs): some answers may be refused until it is deployed.
     var nodeMismatch: Bool?
-    /// The machine's jarvisd build.
+    /// The machine's personad build.
     var nodeVersion: String?
     /// The hub is installing its own build there (Redeploy); deployError: why the last try did not work.
     var deploying: Bool?
@@ -563,7 +563,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// `context_window`, #2430); nil while the node cannot tell (no reply yet, a window it does not know, an older node).
     var contextTokens: Int? = nil
     var contextWindow: Int? = nil
-    var startedByJarvis: Bool
+    var startedByPersona: Bool
     var assistant: Bool
     /// An assistant conversation moved out of the sidebar (listed under Archived; nothing is deleted).
     var archived: Bool? = nil
@@ -776,7 +776,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case contextTokens = "context_tokens", contextWindow = "context_window"
         case repoRoot = "repo_root"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
-             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
+             workspaceID = "workspace_id", agentName = "agent_name", startedByPersona = "started_by_persona", assistant, archived, state,
              assistantSpace = "space",
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index", parentSpaceID = "parent_space_id",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, workflows, ports,
@@ -819,7 +819,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         efforts = try c.decodeIfPresent([String].self, forKey: .efforts)
         contextTokens = try? c.decodeIfPresent(Int.self, forKey: .contextTokens) // an odd one never drops the session
         contextWindow = try? c.decodeIfPresent(Int.self, forKey: .contextWindow)
-        startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
+        startedByPersona = try c.decodeIfPresent(Bool.self, forKey: .startedByPersona) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived)
         assistantSpace = try c.decodeIfPresent(String.self, forKey: .assistantSpace).flatMap { $0.isEmpty ? nil : $0 }

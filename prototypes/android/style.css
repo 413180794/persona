@@ -1,4 +1,4 @@
-/* Jarvis Android redesign preview. Static, no dependencies, no network fonts.
+/* Persona Android redesign preview. Static, no dependencies, no network fonts.
    Phone tokens follow Material 3 (a neutral tonal palette in place of dynamic color); the agent-state colors are the
    iOS app's (ios/Shared/StatusPalette.swift) so both apps say "needs you / working / done" in the same colors. */
 
@@ -572,7 +572,7 @@ body.phone-only .stage { padding: 20px; justify-content: flex-start; align-items
 .locknotes { position: absolute; left: 0; right: 0; top: 250px; }
 .lockfoot { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; color: #e6e6ea; font-size: 13px; opacity: 0.85; }
 
-/* ---------- Jarvis tab ---------- */
+/* ---------- Persona tab ---------- */
 .jtop { height: 64px; flex: none; display: flex; align-items: center; padding: 0 4px; }
 .jtop .who { flex: 1; display: flex; justify-content: center; min-width: 0; }
 .jtop .who .pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 0 5px; border-radius: 20px; background: var(--sc-high); cursor: pointer; }

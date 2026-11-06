@@ -45,9 +45,9 @@ func isolate(t *testing.T) string {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("PERSONA_HOME", filepath.Join(home, ".persona"))
-	t.Setenv("JARVIS_HOME", filepath.Join(home, ".persona"))
+	t.Setenv("PERSONA_HOME", filepath.Join(home, ".persona"))
 	t.Setenv("PERSONA_DATABASE_URL", "")
-	t.Setenv("JARVIS_DATABASE_URL", "")
+	t.Setenv("PERSONA_DATABASE_URL", "")
 	return home
 }
 
@@ -164,15 +164,15 @@ func TestJoinCommandAndArgs(t *testing.T) {
 // The service units run `manager run --dir` from the right binary, quoted; a configuration mistake (exit 2) is not
 // restarted.
 func TestServiceFiles(t *testing.T) {
-	unit := serviceUnit("m-0a1b2c", "/opt/my bin/jarvisd", "/home/u/.persona/managers/m-0a1b2c")
-	for _, want := range []string{`ExecStart="/opt/my bin/jarvisd" manager run --dir "/home/u/.persona/managers/m-0a1b2c"`,
+	unit := serviceUnit("m-0a1b2c", "/opt/my bin/personad", "/home/u/.persona/managers/m-0a1b2c")
+	for _, want := range []string{`ExecStart="/opt/my bin/personad" manager run --dir "/home/u/.persona/managers/m-0a1b2c"`,
 		"Restart=always", "RestartPreventExitStatus=2", `Environment="PERSONA_ASSISTANT_DEPLOY=service"`, "WantedBy=default.target"} {
 		if !strings.Contains(unit, want) {
 			t.Errorf("unit lacks %q:\n%s", want, unit)
 		}
 	}
-	plist := servicePlist("m-0a1b2c", "/opt/jarvisd", "/Users/u/a&b", "/Users/u")
-	for _, want := range []string{"<string>com.jarvis.manager.m-0a1b2c</string>", "<string>manager</string><string>run</string><string>--dir</string><string>/Users/u/a&amp;b</string>",
+	plist := servicePlist("m-0a1b2c", "/opt/personad", "/Users/u/a&b", "/Users/u")
+	for _, want := range []string{"<string>com.persona.manager.m-0a1b2c</string>", "<string>manager</string><string>run</string><string>--dir</string><string>/Users/u/a&amp;b</string>",
 		"<key>KeepAlive</key><true/>", "/Users/u/a&amp;b/manager.log"} {
 		if !strings.Contains(plist, want) {
 			t.Errorf("plist lacks %q:\n%s", want, plist)
@@ -202,22 +202,22 @@ func TestInstallSystemd(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, _ := assistant.ReadManagerConfig(dir)
-	if c.DatabaseContainer != "persona-mgr-m-0a1b2c-pg" || !strings.HasPrefix(c.DatabaseURL, "postgres://jarvis:") ||
-		!strings.Contains(c.DatabaseURL, "@127.0.0.1:25432/jarvis") || !d.called("docker run -d --name persona-mgr-m-0a1b2c-pg") ||
+	if c.DatabaseContainer != "persona-mgr-m-0a1b2c-pg" || !strings.HasPrefix(c.DatabaseURL, "postgres://persona:") ||
+		!strings.Contains(c.DatabaseURL, "@127.0.0.1:25432/persona") || !d.called("docker run -d --name persona-mgr-m-0a1b2c-pg") ||
 		!d.called("docker volume create persona-mgr-m-0a1b2c-data") || !strings.Contains(out.String(), "建好了它自己的 Postgres") {
 		t.Fatalf("its database: %+v\n%s\n%s", c, strings.Join(d.calls, "\n"), out.String())
 	}
-	unit := filepath.Join(home, ".config", "systemd", "user", "jarvis-manager-m-0a1b2c.service")
+	unit := filepath.Join(home, ".config", "systemd", "user", "persona-manager-m-0a1b2c.service")
 	b, err := os.ReadFile(unit)
 	if err != nil || !strings.Contains(string(b), `"/opt/personad" manager run --dir "`+dir+`"`) {
 		t.Fatalf("unit %s %v", b, err)
 	}
-	if got := strings.Join(calls, "; "); !strings.Contains(got, "systemctl --user enable jarvis-manager-m-0a1b2c.service") ||
-		!strings.Contains(got, "systemctl --user restart jarvis-manager-m-0a1b2c.service") {
+	if got := strings.Join(calls, "; "); !strings.Contains(got, "systemctl --user enable persona-manager-m-0a1b2c.service") ||
+		!strings.Contains(got, "systemctl --user restart persona-manager-m-0a1b2c.service") {
 		t.Fatalf("calls: %s", got)
 	}
 	out.Reset()
-	if err := cmdStatus(context.Background(), e, nil); err != nil || !strings.Contains(out.String(), "jarvis-manager-m-0a1b2c.service active") ||
+	if err := cmdStatus(context.Background(), e, nil); err != nil || !strings.Contains(out.String(), "persona-manager-m-0a1b2c.service active") ||
 		!strings.Contains(out.String(), "persona-mgr-m-0a1b2c-pg") {
 		t.Fatalf("status %v: %s", err, out.String())
 	}
@@ -274,7 +274,7 @@ func TestJoinPlaintextAndBadCode(t *testing.T) {
 	j := &joinHub{}
 	srv := httptest.NewServer(j)
 	defer srv.Close()
-	own := "postgres://jarvis:pw@[fd00::20]:5432/jarvis"
+	own := "postgres://persona:pw@[fd00::20]:5432/persona"
 	public := func(context.Context, string) bool { return true }
 	var ce ConfigError
 	_, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", DatabaseURL: own, PublicHost: public})
@@ -331,7 +331,7 @@ func TestJoinForbidden(t *testing.T) {
 		_, _ = w.Write([]byte(body.Load().(string)))
 	}))
 	defer srv.Close()
-	own := "postgres://jarvis:pw@[fd00::20]:5432/jarvis"
+	own := "postgres://persona:pw@[fd00::20]:5432/persona"
 	var ce ConfigError
 	body.Store(`{"error":"TLS is required for public requests","code":"tls_required"}`)
 	_, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", DatabaseURL: own})
@@ -691,7 +691,7 @@ func TestJoinAgainAndDatabaseFromTheEnvironment(t *testing.T) {
 	defer srv.Close()
 	dir := filepath.Join(home, ".persona", "managers", "m-0a1b2c")
 	own := assistant.ManagerConfig{ID: "m-0a1b2c", Hub: srv.URL, Token: "jb_old",
-		DatabaseURL: "postgres://jarvis:pw@127.0.0.1:25432/jarvis?sslmode=disable", DatabaseContainer: "persona-mgr-m-0a1b2c-pg"}
+		DatabaseURL: "postgres://persona:pw@127.0.0.1:25432/persona?sslmode=disable", DatabaseContainer: "persona-mgr-m-0a1b2c-pg"}
 	if err := assistant.WriteManagerConfig(dir, own); err != nil {
 		t.Fatal(err)
 	}
@@ -710,14 +710,14 @@ func TestJoinAgainAndDatabaseFromTheEnvironment(t *testing.T) {
 	e := newEnv(io.Discard)
 	e.getenv = func(k string) string {
 		if k == databaseEnv {
-			return "postgres://jarvis:secret@persona-mgr-m-0a1b2c-pg:5432/jarvis?sslmode=disable"
+			return "postgres://persona:secret@persona-mgr-m-0a1b2c-pg:5432/persona?sslmode=disable"
 		}
 		return ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = cmdRun(ctx, e, update.Build{}, []string{"--dir", dir2, "--join", srv2.URL, "mi_good"})
-	if c, err := assistant.ReadManagerConfig(dir2); err != nil || c.DatabaseURL != "postgres://jarvis:secret@persona-mgr-m-0a1b2c-pg:5432/jarvis?sslmode=disable" || c.DatabaseContainer != "" {
+	if c, err := assistant.ReadManagerConfig(dir2); err != nil || c.DatabaseURL != "postgres://persona:secret@persona-mgr-m-0a1b2c-pg:5432/persona?sslmode=disable" || c.DatabaseContainer != "" {
 		t.Fatalf("from the environment: %+v %v", c, err)
 	}
 
@@ -740,7 +740,7 @@ func TestLostDatabaseAndDockerDown(t *testing.T) {
 	home := isolate(t)
 	dir := filepath.Join(home, "m")
 	c := assistant.ManagerConfig{ID: "m-0a1b2c", Hub: "http://[fd00::20]:18660", Token: "t",
-		DatabaseURL: "postgres://jarvis:pw@127.0.0.1:25432/jarvis?sslmode=disable", DatabaseContainer: "persona-mgr-m-0a1b2c-pg"}
+		DatabaseURL: "postgres://persona:pw@127.0.0.1:25432/persona?sslmode=disable", DatabaseContainer: "persona-mgr-m-0a1b2c-pg"}
 	_ = assistant.WriteManagerConfig(dir, c)
 	var out bytes.Buffer
 	d := &fakeDocker{}

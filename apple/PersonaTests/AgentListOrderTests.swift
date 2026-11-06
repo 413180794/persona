@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The Agents list's order and sections (`AgentListOrder`), without the list.
 @MainActor struct AgentListOrderTests {

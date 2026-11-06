@@ -18,21 +18,21 @@ internal data class ChatLinkMatch(val url: String, val start: Int, val end: Int)
 enum class ChatLinkKind { Web, App, External, Refused }
 
 /**
- * A `jarvis://` link in a conversation (iOS writes `jarvis://session/…` as the url of a picked session). They only
+ * A `persona://` link in a conversation (iOS writes `persona://session/…` as the url of a picked session). They only
  * navigate: anything can open the app's links, so nothing reached this way may send, answer or change anything, and
- * `jarvis://pair` (replacing the hub) is not navigation: tapped in a conversation it is ignored.
+ * `persona://pair` (replacing the hub) is not navigation: tapped in a conversation it is ignored.
  */
 sealed interface ChatAppLink {
     data class Session(val machineId: String, val sessionId: String) : ChatAppLink
-    /** `jarvis` (also `assistant`), `agents` or `inbox`. */
+    /** `persona` (also `assistant`), `agents` or `inbox`. */
     data class Tab(val tab: String) : ChatAppLink
 }
 
-/** Supplied by the app shell: opens a conversation or a tab for a tapped `jarvis://` link. */
+/** Supplied by the app shell: opens a conversation or a tab for a tapped `persona://` link. */
 val LocalChatAppLinks = staticCompositionLocalOf<((ChatAppLink) -> Unit)?> { null }
 
 /**
- * Supplied by the app shell: opens a link to a page of the hub's web app (the assistant's `/s/…`, `/j/…`,
+ * Supplied by the app shell: opens a link to a page of the hub's web app (the assistant's `/s/…`, `/persona/…`,
  * `/todos?id=…` links) in the app instead, and says whether it did; a page it has no screen for, or another
  * site, is left to the sheet.
  */
@@ -88,12 +88,12 @@ internal object ChatLinks {
             .distinct().take(3).toList()
     }
 
-    /** http(s) opens in the sheet, `jarvis:` navigates in the app, mailto: / tel: / intent: and other apps go out. */
+    /** http(s) opens in the sheet, `persona:` navigates in the app, mailto: / tel: / intent: and other apps go out. */
     fun kind(url: String): ChatLinkKind {
         val scheme = url.trim().substringBefore(':', "").lowercase()
         return when {
             scheme == "http" || scheme == "https" -> ChatLinkKind.Web
-            scheme == "jarvis" -> ChatLinkKind.App
+            scheme == "persona" -> ChatLinkKind.App
             scheme.isEmpty() || scheme in refused || !scheme.all { it.isLetterOrDigit() || it == '+' || it == '-' || it == '.' } ->
                 ChatLinkKind.Refused
             else -> ChatLinkKind.External
@@ -102,25 +102,25 @@ internal object ChatLinks {
 
     fun appLink(url: String): ChatAppLink? {
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
-        if (!uri.scheme.equals("jarvis", ignoreCase = true)) return null
+        if (!uri.scheme.equals("persona", ignoreCase = true)) return null
         val path = uri.rawPath.orEmpty().split('/').filter { it.isNotEmpty() }.map { URLDecoder.decode(it, "UTF-8") }
         return when (uri.host?.lowercase()) {
             "session" -> if (path.size >= 2 && path[0].isNotBlank() && path[1].isNotBlank()) ChatAppLink.Session(path[0], path[1]) else null
-            "assistant" -> ChatAppLink.Tab("jarvis")
+            "assistant" -> ChatAppLink.Tab("persona")
             "inbox" -> ChatAppLink.Tab("inbox")
-            "tab" -> path.firstOrNull()?.lowercase()?.let { if (it == "assistant") "jarvis" else it }
-                ?.takeIf { it in setOf("jarvis", "agents", "inbox") }?.let { ChatAppLink.Tab(it) }
+            "tab" -> path.firstOrNull()?.lowercase()?.let { if (it == "assistant") "persona" else it }
+                ?.takeIf { it in setOf("persona", "agents", "inbox") }?.let { ChatAppLink.Tab(it) }
             else -> null // pair, open and anything else: not from a tapped link
         }
     }
 
     /**
-     * Whether an intent built from an external link may start: never with data the app's own (`jarvis:`), another
+     * Whether an intent built from an external link may start: never with data the app's own (`persona:`), another
      * intent, local files or providers, and never into this app's own package.
      */
     fun allowedIntent(dataScheme: String?, targetPackage: String?, ownPackage: String): Boolean {
         val scheme = dataScheme?.lowercase()
-        if (scheme != null && (scheme == "jarvis" || scheme == "intent" || scheme in refused)) return false
+        if (scheme != null && (scheme == "persona" || scheme == "intent" || scheme in refused)) return false
         return targetPackage != ownPackage
     }
 
@@ -144,7 +144,7 @@ internal object ChatLinks {
 
 /**
  * A piece of a page picked in the link sheet, carried in a message as
- * `<jarvis-context kind="context|edit|quote" title="…" url="…" msg="…">text</jarvis-context>`, written exactly as iOS's `ContextRef`
+ * `<persona-context kind="context|edit|quote" title="…" url="…" msg="…">text</persona-context>`, written exactly as iOS's `ContextRef`
  * does: the attributes escaped, the text through [contextBody] (it cannot close the tag).
  */
 data class ChatLinkContext(
@@ -153,8 +153,8 @@ data class ChatLinkContext(
     /** A quoted message's id in its chat ([kind] `quote`, iOS `ContextRef.msg`): one quote per message. */
     val msg: String = "",
 ) {
-    fun xml(): String = "<jarvis-context kind=\"${if (kind == "edit" || kind == QUOTE) kind else "context"}\" title=\"${escape(title)}\" url=\"${escape(url)}\"" +
-        (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + contextBody(text) + "\n</jarvis-context>"
+    fun xml(): String = "<persona-context kind=\"${if (kind == "edit" || kind == QUOTE) kind else "context"}\" title=\"${escape(title)}\" url=\"${escape(url)}\"" +
+        (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + contextBody(text) + "\n</persona-context>"
 
     companion object {
         /**
@@ -178,7 +178,7 @@ data class ChatLinkContext(
         const val QUOTE_ME = "我" // i18n-ignore: on the wire in every language, iOS writes and reads it
         fun quote(text: String, from: String, msg: String) = ChatLinkContext(QUOTE, from, "", text.trim(), msg = msg)
 
-        private val tags = Regex("<(?:jarvis|persona)-context\\b([^>]*)>([\\s\\S]*?)</(?:jarvis|persona)-context>\\s*")
+        private val tags = Regex("<persona-context\\b([^>]*)>([\\s\\S]*?)</persona-context>\\s*")
         private val attributes = Regex("([a-z]+)=\"([^\"]*)\"")
         private fun escape(s: String) = s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
         private fun unescape(s: String) = s.replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")

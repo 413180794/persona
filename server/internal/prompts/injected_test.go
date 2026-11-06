@@ -75,8 +75,8 @@ func injectedCases() []injectedCase {
 		c("snapshot_before", "前面带着实时快照块的也认。", notice,
 			RenderTurnContext(TurnContext{Sections: []string{"- 现在：……"}})+"\n"+RenderTaskNotice(TaskNotice{Title: "跑测试", State: "done"}),
 			&proto.Injected{Kind: "task_notice", State: "done", Title: "跑测试", Line: "任务「跑测试」做完了"}),
-		c("snapshot_before_jarvis", "旧名字 <jarvis-context> 的快照块也认（历史消息、旧 node，#3182）。", notice,
-			"<jarvis-context>\n实时快照：……\n</jarvis-context>\n"+RenderTaskNotice(TaskNotice{Title: "跑测试", State: "done"}),
+		c("snapshot_before_persona", "旧名字 <persona-context> 的快照块也认（历史消息、旧 node，#3182）。", notice,
+			"<persona-context>\n实时快照：……\n</persona-context>\n"+RenderTaskNotice(TaskNotice{Title: "跑测试", State: "done"}),
 			&proto.Injected{Kind: "task_notice", State: "done", Title: "跑测试", Line: "任务「跑测试」做完了"}),
 		c("contexts_before_persona", "前面带着有属性的 <persona-context> 块的也认。", notice,
 			`<persona-context kind="context" title="引用的消息" url="">`+"\n引用\n</persona-context>\n"+RenderTaskNotice(TaskNotice{Title: "跑测试", State: "done"}),
@@ -137,7 +137,7 @@ func TestInjectedTemplatesKeepTheirHead(t *testing.T) {
 // A follow-up (supervision) message (#3124) is a system line, read off its head and marker; a user's line that looks like its head is not.
 func TestParseInjectedSupervise(t *testing.T) {
 	text := RenderSupervise(Supervise{Entries: []SuperviseEntry{{ID: "todo_1", Title: "部署", Kind: "review"}, {ID: "todo_2", Title: "修崩溃", Kind: "idle"}}})
-	got := ParseInjected("<jarvis-context>快照</jarvis-context>\n" + text)
+	got := ParseInjected("<persona-context>快照</persona-context>\n" + text)
 	if got == nil || got.Kind != proto.InjectedSystem || got.State != "supervise" || got.Line != "督办：2 个派出去的任务要处理" {
 		t.Fatalf("ParseInjected = %+v", got)
 	}

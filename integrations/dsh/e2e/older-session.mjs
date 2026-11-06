@@ -1,9 +1,9 @@
 // End-to-end: a DSH session that dropped out of the runtime's list (DSH lists its latest sessions only, here 1)
 // can still be sent to from the phone, and its reply comes back (docs/dsh.md "Verification"). It used to go to herdr as a
 // Claude session to resume. Same setup as run.mjs: a real `dsh web` (isolated DSH_HOME, DSH's llm-mock-server as the
-// model) and a real `jarvisd node --stdio` played as the hub by the runtime SDK's harness.
+// model) and a real `personad node --stdio` played as the hub by the runtime SDK's harness.
 //
-//   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/dsh/e2e/older-session.mjs
+//   DSH_CHECKOUT=<dsh source checkout, built> PERSONAD=<personad binary> node integrations/dsh/e2e/older-session.mjs
 
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -14,9 +14,9 @@ import { checks, startNode, until } from '../../runtime-sdk/testing/node-harness
 
 const here = dirname(fileURLToPath(import.meta.url))
 const dshCheckout = process.env.DSH_CHECKOUT
-const jarvisd = process.env.JARVISD
-if (!dshCheckout || !jarvisd) {
-  console.error('set DSH_CHECKOUT (a built dsh source checkout) and JARVISD (a jarvisd binary)')
+const personad = process.env.PERSONAD
+if (!dshCheckout || !personad) {
+  console.error('set DSH_CHECKOUT (a built dsh source checkout) and PERSONAD (a personad binary)')
   process.exit(2)
 }
 const root = mkdtempSync(join('/tmp', 'jdsh-older-'))
@@ -28,10 +28,10 @@ const { check, summary } = checks()
 
 const { startMockLlmServer } = await import(pathToFileURL(join(dshCheckout, 'packages/test-support/llm-mock-server/lib/index.js')).href)
 const llm = await startMockLlmServer({ sequence: ['success'], repeatLast: true, successText: 'Reply from DSH' })
-const node = await startNode({ jarvisd })
+const node = await startNode({ personad })
 const patch = join(root, 'patch.yml')
 writeFileSync(patch, `- insert:
-    - id: jarvis-dsh-runtime
+    - id: persona-dsh-runtime
       name: ${join(here, '..', 'index.js')}
       config:
         socket: ${node.runtimeSocket}

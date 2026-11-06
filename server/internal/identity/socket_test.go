@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestSocketDirectoryKeepsTheLegacyUnixPathLimit(t *testing.T) {
+func TestSocketDirectorySupportsTheUnixPathLimit(t *testing.T) {
 	cleanRootEnv(t)
 	limit := 103
 	if runtime.GOOS == "linux" {
@@ -22,7 +22,7 @@ func TestSocketDirectoryKeepsTheLegacyUnixPathLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(base) })
-	count := limit - len(filepath.Join(base, ".jarvis", "node-attach.sock")) - 1
+	count := limit - len(filepath.Join(base, ".persona", "node-attach.sock")) - 1
 	if count < 1 {
 		t.Skip("temporary directory is already longer than the Unix socket limit")
 	}
@@ -32,11 +32,11 @@ func TestSocketDirectoryKeepsTheLegacyUnixPathLimit(t *testing.T) {
 	}
 	path := filepath.Join(SocketDir(home), "node-attach.sock")
 	if len(path) != limit {
-		t.Fatalf("legacy Unix path length changed: %d, want %d", len(path), limit)
+		t.Fatalf("Unix path length changed: %d, want %d", len(path), limit)
 	}
 	listener, err := net.Listen("unix", path)
 	if err != nil {
-		t.Fatal("upgrade broke a formerly valid Unix socket path:", err)
+		t.Fatal("valid Unix socket path was rejected:", err)
 	}
 	listener.Close()
 }

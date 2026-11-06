@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The shared copy that explains the hub being out of reach; on the Mac it speaks of this Mac.
 @MainActor

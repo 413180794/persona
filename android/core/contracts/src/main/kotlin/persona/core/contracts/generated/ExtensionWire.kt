@@ -539,9 +539,9 @@ data class ExtensionThemeItem(
  */
 object ExtensionBuiltinLook {
     const val PERSONA = "persona"
-    const val JARVIS = "jarvis"
-    const val JARVIS_CIRCUIT = "jarvis-circuit"
-    val ALL = listOf("persona", "jarvis", "jarvis-circuit")
+    const val PERSONA_VISOR = "persona-visor"
+    const val PERSONA_CIRCUIT = "persona-circuit"
+    val ALL = listOf("persona", "persona-visor", "persona-circuit")
 }
 
 /**
@@ -869,7 +869,7 @@ data class ExtensionAssistantItem(
 @Serializable
 data class ExtensionMCPServerItem(
     /**
-     * The server's name for the assistant; not jarvis or persona.
+     * The server's name for the assistant; not persona or persona.
      */
     val id: String = "",
     /**
@@ -877,7 +877,7 @@ data class ExtensionMCPServerItem(
      */
     val command: String = "",
     /**
-     * A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+     * A PERSONA_ variable (PERSONA_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
      * leave the server out.
      */
     val env: String? = null,
@@ -2985,7 +2985,7 @@ data class ExtensionAction(
      */
     val reply: String? = null,
     /**
-     * Assistant only: an https URL or a validated persona/jarvis session, task, kb or file target, opened inside the
+     * Assistant only: an https URL or a validated persona/persona session, task, kb or file target, opened inside the
      * app.
      */
     val open: String? = null,

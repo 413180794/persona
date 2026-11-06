@@ -79,7 +79,7 @@ func (s *Service) ixMapLocked() map[string]*pending {
 func (s *Service) hasHooks(machine string, sess proto.Session) bool {
 	s.fleet.mu.Lock()
 	defer s.fleet.mu.Unlock()
-	return s.fleet.hooked[[2]string{machine, sess.SessionID}] || sess.StartedByJarvis
+	return s.fleet.hooked[[2]string{machine, sess.SessionID}] || sess.StartedByPersona
 }
 
 // hasElicitationClient: an app that takes MCP elicitations is connected (the hub says, fleet.clients).
@@ -1074,7 +1074,7 @@ func (s *Service) expireLoop(ctx context.Context) {
 	}
 }
 
-// askHub is fleet.ask: a card one of the hub's own features asks (a mail send, Cua's apps, jarvis_settings),
+// askHub is fleet.ask: a card one of the hub's own features asks (a mail send, Cua's apps, persona_settings),
 // waited for like a hook's.
 func (s *Service) askHub(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
 	if ix.ID == "" {

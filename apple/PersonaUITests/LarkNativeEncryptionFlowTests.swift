@@ -3,13 +3,13 @@ import XCTest
 /// All passwords, ciphertext and sends go to the isolated mock Hub.
 final class LarkNativeEncryptionFlowTests: XCTestCase {
     @MainActor private func open(inbox: Bool = false) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs native encryption mock") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs native encryption mock") }
         // The old /api/v1/lark's cover picker and unlock sheet; a messaging source asks through compose
         // (MessagingSealedFlowTests, #2138).
-        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
+        if ProcessInfo.processInfo.environment["PERSONA_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", inbox ? "mail" : "feishu", "-demo.on", "NO",
             "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES",
             "-inbox.source", "", "-inbox.kind", "mention", "-openInboxFirst", "NO"]
@@ -28,13 +28,13 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }
 
     private func resetMock(locked: Bool = true, failOnce: Bool = false, unavailable: String = "") async throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"], let url = URL(string: hub + "/test/lark-encryption/reset") else { throw XCTSkip("needs native encryption mock") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"], let url = URL(string: hub + "/test/lark-encryption/reset") else { throw XCTSkip("needs native encryption mock") }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"; request.httpBody = try JSONSerialization.data(withJSONObject: ["locked": locked, "fail_once": failOnce, "unavailable": unavailable])
         let (_, response) = try await URLSession.shared.data(for: request)

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Session Triage (`TriageSettingsModel`, `TriageSwitches`) without the page.
 @MainActor struct TriageSettingsTests {

@@ -1,8 +1,8 @@
 // Package assistantskills puts the assistant's skills in its directory (<assistant dir>/.claude/skills,
-// docs/hub-update.md "Skills out of the binary"): the user's own, kept in ~/.jarvis/skills/<name> on the machine that runs
+// docs/hub-update.md "Skills out of the binary"): the user's own, kept in ~/.persona/skills/<name> on the machine that runs
 // the assistant and linked in, and the built-in ones this binary carries, copied in. Built-in skills are only those
 // Persona may redistribute (persona-office, personad office's): a copied one, like an extension's skill a user put
-// there by hand, lives in the user's space. jarvisd never writes that space, so an update cannot touch the user's skills.
+// there by hand, lives in the user's space. personad never writes that space, so an update cannot touch the user's skills.
 package assistantskills
 
 import (
@@ -50,13 +50,13 @@ func wanted(name string, connectors []string) bool {
 }
 
 const (
-	builtinStamp = ".jarvis-builtin" // the built-in skills last copied in
-	legacyStamp  = ".jarvis-skills"  // what older jarvisd binaries left next to their copies
+	builtinStamp = ".persona-builtin" // the built-in skills last copied in
+	legacyStamp  = ".persona-skills"  // what older personad binaries left next to their copies
 )
 
-// UserDir is the user's skill space: ~/.jarvis/skills (JARVIS_SKILLS_DIR elsewhere, for tests).
+// UserDir is the user's skill space: ~/.persona/skills (PERSONA_SKILLS_DIR elsewhere, for tests).
 func UserDir() string {
-	if d := identity.Getenv("JARVIS_SKILLS_DIR"); d != "" {
+	if d := identity.Getenv("PERSONA_SKILLS_DIR"); d != "" {
 		return d
 	}
 	home, _ := os.UserHomeDir()
@@ -145,7 +145,7 @@ func Sync(dir, user string, connectors []string, logf func(string, ...any)) erro
 	return nil
 }
 
-// migrate moves the skills an older jarvisd copied into dir (the stamp says it did: every real directory there but
+// migrate moves the skills an older personad copied into dir (the stamp says it did: every real directory there but
 // the built-in ones) into the user's space, once: the user keeps them, and Sync links them back.
 func migrate(dir, user string, logf func(string, ...any)) {
 	if _, err := os.Stat(filepath.Join(dir, legacyStamp)); err != nil {
@@ -173,7 +173,7 @@ func migrate(dir, user string, logf func(string, ...any)) {
 			logf("assistant skills: move %s to %s: %v", name, user, err)
 			return
 		}
-		logf("assistant skills: moved %s to %s (skills are no longer in jarvisd)", name, to)
+		logf("assistant skills: moved %s to %s (skills are no longer in personad)", name, to)
 	}
 	_ = os.Remove(filepath.Join(dir, legacyStamp))
 }

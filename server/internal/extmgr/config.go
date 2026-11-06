@@ -93,10 +93,10 @@ func loadConfig(dir, file string) (*Config, error) {
 			cfg.warnings = append(cfg.warnings, fmt.Sprintf("parse %s: %v: its sections are not read until it is fixed", file, err))
 		}
 	}
-	if v := identity.Getenv("JARVIS_PUBLIC_URL"); v != "" {
+	if v := identity.Getenv("PERSONA_PUBLIC_URL"); v != "" {
 		cfg.PublicURL = v
 	}
-	if v := identity.Getenv("JARVIS_LISTEN"); v != "" {
+	if v := identity.Getenv("PERSONA_LISTEN"); v != "" {
 		cfg.Listen = v
 	}
 	if err := connector.ValidateRules(cfg.ConnectorGate); err != nil {

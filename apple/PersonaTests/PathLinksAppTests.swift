@@ -1,7 +1,7 @@
 import Foundation
 import PersonaKit
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 // What of the paths in messages is the app's: the bubble's links and the chips' list. PathRefs itself and its tests
 // are in PersonaKit (apple/Packages/PersonaKit, #2095).

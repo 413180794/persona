@@ -25,7 +25,7 @@ Read this before changing the Windows node (#1090), or developing or testing `pe
 
 ## Scheduled tasks (automatic startup)
 
-`jarvis-link install` registers scheduled tasks on Windows ([windows.md](../windows.md), “Installation and automatic startup”). These findings were all tested on a physical Windows 11 machine on 2026-11-04:
+`persona-link install` registers scheduled tasks on Windows ([windows.md](../windows.md), “Installation and automatic startup”). These findings were all tested on a physical Windows 11 machine on 2026-11-04:
 
 - **Standard users cannot register “Run whether user is logged on or not” tasks**: With S4U `LogonType` (no stored password), `Register-ScheduledTask` returns access denied (even for an unelevated administrator account).
   Only `InteractiveToken` works, running with the login session.
@@ -39,7 +39,7 @@ Read this before changing the Windows node (#1090), or developing or testing `pe
   Write XML files as UTF-16LE with a BOM so Chinese characters in usernames and paths are not corrupted.
 - **Ending a task kills only the daemon itself**: Its children survive. The daemon puts itself in a Job with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (subsequent children automatically join it),
   so when it disappears (`/End`, a crash, or a kill), its children disappear too.
-- A running `.exe` cannot be overwritten or deleted. Before reinstalling, `/End` the task and wait for jarvis-link to release the run lock; during uninstall, the daemon file may take a moment to become deletable.
+- A running `.exe` cannot be overwritten or deleted. Before reinstalling, `/End` the task and wait for persona-link to release the run lock; during uninstall, the daemon file may take a moment to become deletable.
 
 ## Machine monitoring (sysmon)
 

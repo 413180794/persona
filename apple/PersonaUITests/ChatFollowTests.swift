@@ -1,6 +1,6 @@
 import XCTest
 
-/// The chat stays at the newest message (scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1, JARVIS_MOCK_HUB): a long chat
+/// The chat stays at the newest message (scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1, PERSONA_MOCK_HUB): a long chat
 /// opens at the bottom; at the bottom a new reply is followed; scrolled up, ↓ (Jump to Latest) shows and brings you back; a
 /// reply that arrives while you read history does not pull you down. On an Agent's chat (working, Unread, and opened
 /// where you left off) and on the Persona page. Replies come from `/mock/say`. Where the list is comes from the app's `-showScrollState` probe:
@@ -8,13 +8,13 @@ import XCTest
 final class ChatFollowTests: XCTestCase {
     private var hub: String!
     private let working = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // 「给天气 App 加主屏幕小组件」, 15 exchanges in front
-    private let jarvis = "server/b2e4d6f8-0000-4000-8000-000000000004"   // 「整理这个季度的读书笔记」, a long one
+    private let persona = "server/b2e4d6f8-0000-4000-8000-000000000004"   // 「整理这个季度的读书笔记」, a long one
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         if name.contains("RealHub") { return } // its own hub
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_LONG_HISTORY=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
         _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!)
@@ -27,7 +27,7 @@ final class ChatFollowTests: XCTestCase {
     @MainActor private func launch(_ open: [String], keepCache: Bool = false) -> XCUIApplication {
         if let i = open.firstIndex(where: { $0 == "-openSession" || $0 == "-openAssistant" }), i + 1 < open.count { opened = open[i + 1] }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // No chat kept on disk from an earlier run (unless `keepCache`, a cold start of this test's own): the mock starts
         // its conversations over at each reset, and a cached one from another test (its churned steps) took the seqs
         // this test's replies get; they did not show.
@@ -42,8 +42,8 @@ final class ChatFollowTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"] ?? "light"
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"] ?? "light"
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/follow-\(name)-\(style).png"))
         }
     }
@@ -208,21 +208,21 @@ final class ChatFollowTests: XCTestCase {
         }?["id"] as? String)
     }
 
-    @MainActor func testJarvisChatFollows() throws {
-        followAndReturn(launch(["-tab", "assistant", "-openAssistant", jarvis]), "jarvis", stream: true)
+    @MainActor func testPersonaChatFollows() throws {
+        followAndReturn(launch(["-tab", "assistant", "-openAssistant", persona]), "persona", stream: true)
     }
 
-    // MARK: Against a real hub (screenshots before / after; skipped without JARVIS_REAL_PAIR)
+    // MARK: Against a real hub (screenshots before / after; skipped without PERSONA_REAL_PAIR)
 
-    /// A real hub's long chats: `JARVIS_REAL_PAIR` (a pairing URL), `JARVIS_REAL_AGENT` (machine/session of an agent whose
-    /// transcript grows while the test runs), `JARVIS_REAL_SAVED` (a line near its end, the user's case: where it was left;
-    /// a work line `w-<message id>` stays put while the agent goes on), `JARVIS_REAL_JARVIS` (a Persona conversation),
-    /// `JARVIS_REAL_CASES` (which of agent,saved,jarvis). Opens each at the bottom, waits for new lines to show, reads
+    /// A real hub's long chats: `PERSONA_REAL_PAIR` (a pairing URL), `PERSONA_REAL_AGENT` (machine/session of an agent whose
+    /// transcript grows while the test runs), `PERSONA_REAL_SAVED` (a line near its end, the user's case: where it was left;
+    /// a work line `w-<message id>` stays put while the agent goes on), `PERSONA_REAL_PERSONA` (a Persona conversation),
+    /// `PERSONA_REAL_CASES` (which of agent,saved,persona). Opens each at the bottom, waits for new lines to show, reads
     /// up, ↓. At the bottom with nothing held back is what counts: a reply taller than the screen is never "visible".
     @MainActor func testRealHubChats() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let pair = env["JARVIS_REAL_PAIR"], let agent = env["JARVIS_REAL_AGENT"] else {
-            throw XCTSkip("needs JARVIS_REAL_PAIR and JARVIS_REAL_AGENT")
+        guard let pair = env["PERSONA_REAL_PAIR"], let agent = env["PERSONA_REAL_AGENT"] else {
+            throw XCTSkip("needs PERSONA_REAL_PAIR and PERSONA_REAL_AGENT")
         }
         func open(_ args: [String]) -> XCUIApplication {
             let app = XCUIApplication()
@@ -249,15 +249,15 @@ final class ChatFollowTests: XCTestCase {
             expect(app, "\(name): ↓ did not go back to the newest") { $0["bottom"] == 1 && $0["withheld"] == 0 }
             shot(app, "real-\(name)-back")
         }
-        let cases = Set((env["JARVIS_REAL_CASES"] ?? "agent,saved,jarvis").split(separator: ",").map(String.init))
+        let cases = Set((env["PERSONA_REAL_CASES"] ?? "agent,saved,persona").split(separator: ",").map(String.init))
         if cases.contains("agent") {
             real(open(["-tab", "dev", "-openSession", agent]), "agent", grows: true)
         }
-        if cases.contains("saved"), let saved = env["JARVIS_REAL_SAVED"] {
+        if cases.contains("saved"), let saved = env["PERSONA_REAL_SAVED"] {
             real(open(["-tab", "dev", "-openSession", agent, "-chat.read.\(agent)", saved]), "agent-saved", grows: true)
         }
-        if cases.contains("jarvis"), let jarvis = env["JARVIS_REAL_JARVIS"] {
-            real(open(["-tab", "assistant", "-openAssistant", jarvis]), "jarvis", grows: false)
+        if cases.contains("persona"), let persona = env["PERSONA_REAL_PERSONA"] {
+            real(open(["-tab", "assistant", "-openAssistant", persona]), "persona", grows: false)
         }
     }
 }

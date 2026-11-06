@@ -13,17 +13,17 @@ import org.junit.Test
 /** The list beside a detail pane marks the row of the page the detail shows, whichever way the page was opened. */
 class ShellPanesTest {
     private val stacks = mapOf<AppTab, MutableList<NavKey>>(
-        AppTab.Jarvis to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
+        AppTab.Persona to mutableListOf(AssistantRoute), AppTab.Agents to mutableListOf(AgentsRoute),
         AppTab.Inbox to mutableListOf(InboxRoute), AppTab.Settings to mutableListOf(SettingsRoute),
     )
-    private var selected = AppTab.Jarvis
+    private var selected = AppTab.Persona
     private val navigator = AppNavigator(stacks, { selected }, { selected = it })
     private fun marked(tab: AppTab) = detailOf(stacks.getValue(tab))
 
     @Test fun deepLinkedSettingsPagesAreMarkedInTheList() {
         for (page in SettingsPage.entries) {
             stacks.getValue(AppTab.Settings).retainAll { it == SettingsRoute }
-            val link = "jarvis://open?target=settings&page=" + page.name.lowercase()
+            val link = "persona://open?target=settings&page=" + page.name.lowercase()
             selected = Router().parse(RouteInput.DeepLink(link))!!.open(stacks)
             assertEquals(AppTab.Settings, selected)
             // The settings list compares its rows with exactly this key.

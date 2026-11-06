@@ -225,7 +225,7 @@ function RecapStrip({ item, onClose }: { item: Item; onClose: () => void }) {
   );
 }
 
-const CLOSED_RECAPS = "jarvis.closedRecaps";
+const CLOSED_RECAPS = "persona.closedRecaps";
 
 /** The recap closed per conversation (its id), kept in this browser. */
 export function closedRecap(key: string): string | undefined {

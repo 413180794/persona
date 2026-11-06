@@ -31,7 +31,7 @@ Sources:
 ## How directories and memory are isolated
 
 - **Directory**: health chats run in `<data dir>/health` on the assistant's machine (default `~/.persona/health`), alongside the assistant's own `<data dir>/assistant`.
-  When the hub asks node to prepare the directory (`assistant.prepare`), the relative path it passes is `.jarvis/health`.
+  When the hub asks node to prepare the directory (`assistant.prepare`), the relative path it passes is `.persona/health`.
   `identity.HealthDir`, `identity.SpaceHealth`, `identity.SpaceOf` are in `server/internal/identity/paths.go`; `IsAssistantDir` also holds for the health directory,
   so health chats, like assistant chats, are "assistant chats" (`assistant: true`) and use the same tools, authorization and questions.
 - **CLAUDE.md**: the Health space has its own `server/internal/prompts/assistant/health_claude_md.md` (golden: `server/internal/assistant/testdata/prompts/health_claude_md.golden`):

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Connectors › Telegram: the sign-in a step at a time against the hub (docs/plan-telegram.md), the switch, deleting
 /// what it brought in. Made-up values only.

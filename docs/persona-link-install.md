@@ -1,7 +1,7 @@
 # Build and install Persona Link on Mac
 
 Persona Link is a small Mac menu-bar app. It connects this Mac to your Persona hub, letting the hub use this computer to view and drive Claude Code, Codex, and other Agents running here.
-It bundles the jarvis-link connector and personad, and installs a persistent local node service on first launch. See [link.md](link.md) for the architecture, two connection modes, and protocol; this document covers installation only.
+It bundles the persona-link connector and personad, and installs a persistent local node service on first launch. See [link.md](link.md) for the architecture, two connection modes, and protocol; this document covers installation only.
 
 There is no published installer yet. Build from source for now; it takes a few minutes.
 
@@ -11,7 +11,7 @@ There is no published installer yet. Build from source for now; it takes a few m
 | --- | --- |
 | macOS 15 or later | The app's minimum OS version |
 | Xcode (the full app, not just command-line tools) | Builds the Swift package with `xcodebuild`; after installation, run `sudo xcode-select -s /Applications/Xcode.app` and open Xcode once to accept its license |
-| Go | Builds jarvis-link and personad. Use the version in `server/go.mod`; a slightly older local Go is fine if `GOTOOLCHAIN=local` is not set, since Go downloads the required version automatically |
+| Go | Builds persona-link and personad. Use the version in `server/go.mod`; a slightly older local Go is fine if `GOTOOLCHAIN=local` is not set, since Go downloads the required version automatically |
 | A running hub | And a browser already connected to it (the web client), to add this Mac. A hub set up with the install command already has the secure connection required for computer access; for an older hub, see "Advanced" under "Pairing" below |
 
 No Apple developer account is needed: the app uses local ad-hoc signing and runs only on the Mac that built it.
@@ -23,17 +23,17 @@ git clone <repository-url> persona && cd persona
 ./scripts/app/mac-link.sh install
 ```
 
-This command builds the app for the local architecture (Apple silicon / Intel), builds and bundles jarvis-link and personad, signs the app, installs it at `/Applications/Jarvis Link.app` (the filename remains Jarvis Link for compatibility with older versions; the app displays Persona Link), and opens it.
+This command builds the app for the local architecture (Apple silicon / Intel), builds and bundles persona-link and personad, signs the app, installs it at `/Applications/Persona Link.app` (the filename remains Persona Link for compatibility with older versions; the app displays Persona Link), and opens it.
 If an older version is running, it quits and replaces it first.
 
-- Build without installing: `./scripts/app/mac-link.sh build`; output is `apple/PersonaLink/build/Jarvis Link.app`.
+- Build without installing: `./scripts/app/mac-link.sh build`; output is `apple/PersonaLink/build/Persona Link.app`.
 - Build for both Apple silicon and Intel: `UNIVERSAL=1 ./scripts/app/mac-link.sh build`.
-- The default bundle ID is the placeholder `com.example.jarvis.link`; no need to change it for personal use. To change it, set `mac.link_bundle_id` in `~/.config/persona/config.json`
+- The default bundle ID is the placeholder `com.example.persona.link`; no need to change it for personal use. To change it, set `mac.link_bundle_id` in `~/.config/persona/config.json`
   (or the `PERSONA_LINK_BUNDLE_ID` environment variable). Changing the bundle ID makes it a different app, so enable "Launch at login" again.
 
 After launch, an icon appears at the top right in the menu bar, with no Dock icon. On first launch:
 
-- It copies the bundled personad to `~/.persona/bin/` (leaving any existing copy alone), and installs the `com.jarvis.node` LaunchAgent to keep the local node running.
+- It copies the bundled personad to `~/.persona/bin/` (leaving any existing copy alone), and installs the `com.persona.node` LaunchAgent to keep the local node running.
 - On the first connection to a LAN address, the system asks whether to allow Persona Link to find devices on the local network. Choose Allow. If you denied it, enable it in **System Settings › Privacy & Security › Local Network**.
 
 ## Pairing
@@ -64,7 +64,7 @@ If the web client says "Secure connection isn't enabled on the hub yet", the old
 - **Pair in the terminal**:
 
   ```bash
-  echo '<pairing-link>' | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
+  echo '<pairing-link>' | "/Applications/Persona Link.app/Contents/Helpers/persona-link" pair -
   ```
 
 ## Menu entries
@@ -93,17 +93,17 @@ Upgrading the app does not replace the personad used by the persistent node. A n
 Older nodes need one initial local upgrade. First inspect the actual service's binary path and status:
 
 ```bash
-"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node status --json
+"/Applications/Persona Link.app/Contents/Helpers/persona-link" node status --json
 ```
 
-Replace the service binary pointed to by `bin` through its original installation / deployment channel and restart `com.jarvis.node`, preserving the existing runtime root, launch arguments, and pairing. Do not uninstall before querying the path, and do not assume upgrading the app upgrades the persistent node. See [node-update.md](node-update.md) for the full initial migration and failure recovery procedure.
+Replace the service binary pointed to by `bin` through its original installation / deployment channel and restart `com.persona.node`, preserving the existing runtime root, launch arguments, and pairing. Do not uninstall before querying the path, and do not assume upgrading the app upgrades the persistent node. See [node-update.md](node-update.md) for the full initial migration and failure recovery procedure.
 
 ## Uninstall
 
-1. If you no longer want the persistent node, stop it and remove its service first (before deleting the app): `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node uninstall`.
+1. If you no longer want the persistent node, stop it and remove its service first (before deleting the app): `"/Applications/Persona Link.app/Contents/Helpers/persona-link" node uninstall`.
 2. Menu › **Quit Persona Link**; remove it from **System Settings › General › Login Items** if listed.
-3. Delete the app: `rm -rf "/Applications/Jarvis Link.app"`.
-4. Pairing credentials are in `~/.persona/link.json`, state in `~/.persona/link.status.json`, passive-mode TLS identity in `~/.persona/link-tls/`, logs in `~/.persona/link.log`, and the persistent node binary in `~/.persona/bin/jarvisd` (if this computer has also run the install script, `~/.persona/bin/` contains `jarvis-link` and the aliases `personad`, `persona-link`). Delete these if no longer needed. Remove this computer in the hub's **Admin › Computers**.
+3. Delete the app: `rm -rf "/Applications/Persona Link.app"`.
+4. Pairing credentials are in `~/.persona/link.json`, state in `~/.persona/link.status.json`, passive-mode TLS identity in `~/.persona/link-tls/`, logs in `~/.persona/link.log`, and the persistent node binary in `~/.persona/bin/personad` (if this computer has also run the install script, `~/.persona/bin/` contains `persona-link` and the aliases `personad`, `persona-link`). Delete these if no longer needed. Remove this computer in the hub's **Admin › Computers**.
 
 ## Troubleshooting
 
@@ -113,13 +113,13 @@ Run `sudo xcode-select -s /Applications/Xcode.app`, or temporarily `export DEVEL
 **Build says Go is too old, or toolchain download fails**: install Go at least as new as the version in `server/go.mod`, or allow `go` network access to download it automatically.
 
 **The system says it cannot verify the developer when opening the app**: this happens to apps copied from elsewhere (ad-hoc signatures are trusted only on the machine that built them). Build on the Mac where you will use it.
-If you must copy it, right-click › Open, or run `xattr -dr com.apple.quarantine "/Applications/Jarvis Link.app"`.
+If you must copy it, right-click › Open, or run `xattr -dr com.apple.quarantine "/Applications/Persona Link.app"`.
 
 **Always "Disconnected", with the LAN route shown as unreachable**: local network permission was probably denied; see "On first launch" above. When away from home, LAN being unreachable is normal; it uses public IPv6 or a domain instead.
 
-**"Link connected, but the hub cannot reach the local node"**: run `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node status` to check whether the persistent node service is installed
+**"Link connected, but the hub cannot reach the local node"**: run `"/Applications/Persona Link.app/Contents/Helpers/persona-link" node status` to check whether the persistent node service is installed
 and loaded by launchd. Logs are in `~/.persona/node-attach.log`. If not installed, click **Install local node service** in the menu.
 
 **The menu-bar panel has the old square corners and thin border**: the app was built with an older script. Pull the latest code and run `install` again (see [lessons/macos.md](lessons/macos.md), "Persona Link panel has the old appearance", for why).
 
-**Read logs**: `tail -f ~/.persona/link.log`, or `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" logs -f`. On a computer that used the older Jarvis version, these files may still live under `~/.jarvis/` ([config.md](config.md), "Naming and compatibility").
+**Read logs**: `tail -f ~/.persona/link.log`, or `"/Applications/Persona Link.app/Contents/Helpers/persona-link" logs -f`. On a computer that used the older Persona version, these files may still live under `~/.persona/` ([config.md](config.md), "Naming and compatibility").

@@ -1,8 +1,8 @@
-// Command persona-link (jarvis-link before #1159; cmd/jarvis-link is a link to this directory) keeps this computer
+// Command persona-link (persona-link before #1159; cmd/persona-link is a link to this directory) keeps this computer
 // reachable from the Persona hub when the hub cannot reach it — a laptop on
 // whatever network it is on, a server or NAS behind NAT (docs/link.md). It finds the hub, says which machine it is and
 // hands each stream the hub opens on the link to this computer's resident node. Nothing else: everything a node does
-// stays in jarvisd. On a Mac the menu bar app runs it; on Linux `jarvis-link install` makes it a systemd user service.
+// stays in personad. On a Mac the menu bar app runs it; on Linux `persona-link install` makes it a systemd user service.
 package main
 
 import (
@@ -27,39 +27,39 @@ import (
 var version = "dev"
 
 const usage = `用法：
-  jarvis-link pair [--machine <id>] [<配对链接>|-]  主动模式（我去连 hub）：用 jarvisd hub pair 给的链接配对，凭据写进
-                                                 ~/.jarvis/link.json；不给链接或给 - 时从标准输入读（终端里会提示粘贴）；
+  persona-link pair [--machine <id>] [<配对链接>|-]  主动模式（我去连 hub）：用 personad hub pair 给的链接配对，凭据写进
+                                                 ~/.persona/link.json；不给链接或给 - 时从标准输入读（终端里会提示粘贴）；
                                                  链接里没带机器 id 时用 --machine 指定
-  jarvis-link pair --listen [<监听地址>] [--addr <地址>]…
+  persona-link pair --listen [<监听地址>] [--addr <地址>]…
                                                  被动模式（让 hub 来连）：在本机监听（默认 :18663），打印给 hub 管理界面
                                                  粘贴的链接（10 分钟内有效，只能用一次）；--addr 指定链接里给 hub 的地址
-  jarvis-link mode [active|passive] [--listen <监听地址>]
+  persona-link mode [active|passive] [--listen <监听地址>]
                                                  看 / 切换模式：active 我去连 hub，passive 让 hub 来连；
                                                  两种模式的配对各自留着，切回去不用重新配对
-  jarvis-link install [--pair <链接>|-] [--machine <id>] [--listen [<监听地址>]] [--addr <地址>]…
-                    [--jarvisd <路径>] [--no-node]
+  persona-link install [--pair <链接>|-] [--machine <id>] [--listen [<监听地址>]] [--addr <地址>]…
+                    [--personad <路径>] [--no-node]
                                                  Linux：装成 systemd 用户服务并启动，等它连上 hub（被动模式：等它开始监听）；
                                                  --pair 先配对（主动），--listen 改成被动模式、还没配对时打印配对链接；
                                                  常驻 node 的服务没装时一起装上（--no-node 不装）。
                                                  没有 systemd 时告诉你别的办法。
                                                  Windows：装成登录时启动的计划任务「Persona Link」，常驻 node 和
-                                                 jarvis-link 都在里面，退出了重启；--jarvisd 给的 personad.exe 每次都换上
-  jarvis-link node install [--jarvisd <路径>] | status [--json] | uninstall
-                                                 常驻 node（jarvisd node --attach）的服务：Linux systemd 用户服务
-                                                 jarvisd-node，Mac launchd 的 com.jarvis.node；已经装了的保持原样；
-                                                 没有 ~/.jarvis/bin/jarvisd 时从 --jarvisd 复制
-  jarvis-link discover [--wait <秒>] [--json]    局域网里有哪些 hub（mDNS）；听到了退出码 0，否则 1
-  jarvis-link status [--json]                    模式、链路、hub、本机 node、后台服务的状态；连着（被动模式：在监听）时
+                                                 persona-link 都在里面，退出了重启；--personad 给的 personad.exe 每次都换上
+  persona-link node install [--personad <路径>] | status [--json] | uninstall
+                                                 常驻 node（personad node --attach）的服务：Linux systemd 用户服务
+                                                 personad-node，Mac launchd 的 com.persona.node；已经装了的保持原样；
+                                                 没有 ~/.persona/bin/personad 时从 --personad 复制
+  persona-link discover [--wait <秒>] [--json]    局域网里有哪些 hub（mDNS）；听到了退出码 0，否则 1
+  persona-link status [--json]                    模式、链路、hub、本机 node、后台服务的状态；连着（被动模式：在监听）时
                                                  退出码 0，否则 1
-  jarvis-link logs [-f] [-n <行数>]              看日志（~/.jarvis/link.log）；-f 一直跟着
-  jarvis-link uninstall [--purge]                停掉并删掉 systemd 用户服务（Windows：计划任务）；--purge 连凭据、状态、日志、
-                                                 连接器的 TLS 身份和 ~/.jarvis/bin/jarvis-link 一起删
-  jarvis-link run [--parent] [--log <文件>]      保持链路（前台），状态一行一个 JSON 打到标准输出；
+  persona-link logs [-f] [-n <行数>]              看日志（~/.persona/link.log）；-f 一直跟着
+  persona-link uninstall [--purge]                停掉并删掉 systemd 用户服务（Windows：计划任务）；--purge 连凭据、状态、日志、
+                                                 连接器的 TLS 身份和 ~/.persona/bin/persona-link 一起删
+  persona-link run [--parent] [--log <文件>]      保持链路（前台），状态一行一个 JSON 打到标准输出；
                                                  --parent：标准输入关掉就退出（菜单栏 App 这样启动它）；
                                                  --log：日志写进这个文件（满 1 MB 换一个），不写标准错误
-  jarvis-link address add <地址>                 手动加一个 hub 的候选地址（https://域名:端口，或 域名）
-  jarvis-link address remove <地址>              去掉手动加的地址
-  jarvis-link version
+  persona-link address add <地址>                 手动加一个 hub 的候选地址（https://域名:端口，或 域名）
+  persona-link address remove <地址>              去掉手动加的地址
+  persona-link version
 
 信号（Linux、Mac）：SIGUSR1 网络变了，马上看一眼链路；SIGUSR2 断开重连。`
 
@@ -69,12 +69,8 @@ type exitCode int
 func (e exitCode) Error() string { return fmt.Sprintf("exit %d", int(e)) }
 
 func main() {
-	// Under the new name (or the installer's PERSONA_LINK_NAME) what it prints says persona-link (name.go).
 	self := commandName(os.Args[0], os.Getenv)
 	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
-	if self != legacyName {
-		stdout, stderr = renamer{os.Stdout}, renamer{os.Stderr}
-	}
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix(self + ": ")
 	if len(os.Args) < 2 {
@@ -82,7 +78,7 @@ func main() {
 		os.Exit(2)
 	}
 	if sub := os.Args[1]; helpTopics[sub] && wantsHelp(os.Args[2:]) {
-		// `jarvis-link <sub> -h`: that subcommand's lines of the usage, and nothing failed
+		// `persona-link <sub> -h`: that subcommand's lines of the usage, and nothing failed
 		fmt.Fprintln(stdout, subcommandHelp(sub))
 		return
 	}
@@ -157,7 +153,7 @@ func subcommandHelp(sub string) string {
 	var out []string
 	in := false
 	for _, line := range strings.Split(usage, "\n") {
-		switch rest, isEntry := strings.CutPrefix(line, "  jarvis-link "); {
+		switch rest, isEntry := strings.CutPrefix(line, "  persona-link "); {
 		case isEntry:
 			name, _, _ := strings.Cut(rest, " ")
 			in = name == sub
@@ -245,9 +241,9 @@ func pairCmd(e *env, args []string) error {
 	fmt.Fprintf(e.stdout, "配对好了：这台是 hub 上的「%s」，凭据存在 %s。\n", c.Machine, e.configPath())
 	switch {
 	case link.Running(e.configPath()):
-		fmt.Fprintln(e.stdout, "在运行的 jarvis-link 几秒内就会用上新凭据，不用重启。")
+		fmt.Fprintln(e.stdout, "在运行的 persona-link 几秒内就会用上新凭据，不用重启。")
 	case e.goos == "linux":
-		fmt.Fprintln(e.stdout, "接下来：jarvis-link install（装成 systemd 用户服务，一直连着）。")
+		fmt.Fprintln(e.stdout, "接下来：persona-link install（装成 systemd 用户服务，一直连着）。")
 	}
 	return nil
 }
@@ -258,7 +254,7 @@ func pair(e *env, raw, machine string) (*link.Config, error) {
 		in := bufio.NewReader(io.LimitReader(e.stdin, 16<<10))
 		if e.stdinIsTerminal() {
 			// One pasted line, then Enter: not waiting for the end of input.
-			fmt.Fprint(e.stderr, "粘贴 jarvisd hub pair 给的配对链接，回车：")
+			fmt.Fprint(e.stderr, "粘贴 personad hub pair 给的配对链接，回车：")
 			line, err := in.ReadString('\n')
 			if err != nil && line == "" {
 				return nil, err
@@ -274,7 +270,7 @@ func pair(e *env, raw, machine string) (*link.Config, error) {
 		raw = strings.TrimSpace(raw)
 	}
 	if strings.TrimSpace(raw) == "" {
-		return nil, errors.New("没有配对链接：在 hub 机器上运行 jarvisd hub pair --machine <这台的 id> --add，把拿到的链接给我")
+		return nil, errors.New("没有配对链接：在 hub 机器上运行 personad hub pair --machine <这台的 id> --add，把拿到的链接给我")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -323,8 +319,8 @@ func run(args []string) error {
 	return keepLink(ctx, link.DefaultPath(), logPath, os.Stdout)
 }
 
-// keepLink is `jarvis-link run`: the link for the link.json at path until ctx ends. Every status goes to stdout as a
-// JSON line and to link.status.json for `jarvis-link status`; the log to logPath when there is one.
+// keepLink is `persona-link run`: the link for the link.json at path until ctx ends. Every status goes to stdout as a
+// JSON line and to link.status.json for `persona-link status`; the log to logPath when there is one.
 func keepLink(ctx context.Context, path, logPath string, stdout io.Writer) error {
 	release, err := link.LockRun(path)
 	if err != nil {
@@ -367,7 +363,7 @@ func keepLink(ctx context.Context, path, logPath string, stdout io.Writer) error
 			log.Printf("status: %v", err)
 		}
 	}
-	log.Printf("jarvis-link %s started", version)
+	log.Printf("persona-link %s started", version)
 	err = link.Run(ctx, link.Options{Path: path, Target: link.AttachSocket(), Version: version,
 		Status: func(s link.Status) {
 			mu.Lock()
@@ -385,6 +381,6 @@ func keepLink(ctx context.Context, path, logPath string, stdout io.Writer) error
 	ended = true
 	save(link.Status{State: "stopped", Mode: last.Mode, Machine: last.Machine, HubName: last.HubName, Endpoints: last.Endpoints,
 		Listen: last.Listen, LastSeen: last.LastSeen, From: last.From})
-	log.Printf("jarvis-link stopped")
+	log.Printf("persona-link stopped")
 	return err
 }

@@ -30,10 +30,10 @@ class HubSwitchOnDeploy(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def jarvisd(self, rc: int, content: str = 'new'):
+    def personad(self, rc: int, content: str = 'new'):
         """The new binary: `hub switch` is logged and exits rc."""
-        p = self.root / 'bin/jarvisd'
-        p.write_text(f'#!/bin/sh\n# {content}\necho "jarvisd $*" >> "$HOME/calls"\nexit {rc}\n')
+        p = self.root / 'bin/personad'
+        p.write_text(f'#!/bin/sh\n# {content}\necho "personad $*" >> "$HOME/calls"\nexit {rc}\n')
         p.chmod(0o755)
 
     def run_script(self, **extra) -> subprocess.CompletedProcess:
@@ -45,10 +45,10 @@ class HubSwitchOnDeploy(unittest.TestCase):
         return subprocess.run(['bash', str(SCRIPT)], capture_output=True, text=True, env=env)
 
     def unit(self) -> str:
-        return (self.home / '.config/systemd/user/jarvisd.service').read_text()
+        return (self.home / '.config/systemd/user/personad.service').read_text()
 
     def test_edge_off_stays_across_deploys(self):
-        self.jarvisd(3)
+        self.personad(3)
         self.assertEqual(self.run_script(PERSONA_HUB_EDGE='0').returncode, 0)
         self.assertIn('Environment="PERSONA_HUB_EDGE=0"', self.unit())
         self.assertEqual(self.run_script().returncode, 0)
@@ -64,7 +64,7 @@ class HubSwitchOnDeploy(unittest.TestCase):
 
     def first_deploy(self):
         """Writes the units (they change: a restart, no switch)."""
-        self.jarvisd(3)
+        self.personad(3)
         r = self.run_script()
         self.assertEqual(r.returncode, 0, r.stderr)
         calls = self.calls()
@@ -72,34 +72,34 @@ class HubSwitchOnDeploy(unittest.TestCase):
 
     def test_switches_when_the_units_are_unchanged(self):
         self.first_deploy()
-        self.jarvisd(0)
-        (self.root / 'bin/jarvisd.prev').write_text('#!/bin/sh\n# old\n')
-        (self.root / 'bin/jarvisd.prev').chmod(0o755)
+        self.personad(0)
+        (self.root / 'bin/personad.prev').write_text('#!/bin/sh\n# old\n')
+        (self.root / 'bin/personad.prev').chmod(0o755)
         r = self.run_script()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('switched to the new binary', r.stdout)
         calls = self.calls()
-        self.assertIn(f'jarvisd hub switch --timeout 8m --prev {self.root}/bin/jarvisd.prev', calls)
+        self.assertIn(f'personad hub switch --timeout 8m --prev {self.root}/bin/personad.prev', calls)
         self.assertFalse(any(c.startswith('systemctl --user restart') or c.startswith('systemctl --user stop') for c in calls), calls)
 
     def test_restarts_without_an_edge(self):
         self.first_deploy()
-        self.jarvisd(3)
+        self.personad(3)
         r = self.run_script()
         self.assertEqual(r.returncode, 0, r.stderr)
         calls = self.calls()
         self.assertTrue(any('hub switch' in c for c in calls), calls)
-        self.assertIn('systemctl --user restart jarvisd', calls)
+        self.assertIn('systemctl --user restart personad', calls)
 
     def test_a_new_binary_that_fails_goes_back(self):
         self.first_deploy()
-        self.jarvisd(1)
-        (self.root / 'bin/jarvisd.prev').write_text('#!/bin/sh\n# old\n')
-        (self.root / 'bin/jarvisd.prev').chmod(0o755)
+        self.personad(1)
+        (self.root / 'bin/personad.prev').write_text('#!/bin/sh\n# old\n')
+        (self.root / 'bin/personad.prev').chmod(0o755)
         r = self.run_script()
         self.assertEqual(r.returncode, 1)
         self.assertIn('did not take over', r.stderr)
-        self.assertIn('# old', (self.root / 'bin/jarvisd').read_text())
+        self.assertIn('# old', (self.root / 'bin/personad').read_text())
         self.assertFalse(any(c.startswith('systemctl --user restart') for c in self.calls()))
 
 

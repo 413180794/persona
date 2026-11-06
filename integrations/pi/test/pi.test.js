@@ -348,7 +348,7 @@ test('总是同意 on a pi card is kept in the session: later calls of that tool
   assert.deepEqual(await a.fire('tool_call', { toolName: 'write', toolCallId: 'c5', input: { path: 'x', content: '' } }), { block: true, reason: '用户在手机上拒绝了' })
   assert.equal(n.asked.length, 4, 'another tool still asks')
   // A new process on the same session file (pi resumed elsewhere) reads the grant from the session.
-  const kept = a.sm.entries.filter((e) => e.customType === 'jarvis-allow')
+  const kept = a.sm.entries.filter((e) => e.customType === 'persona-allow')
   assert.deepEqual(kept.map((e) => e.data), [{ tool: 'bash' }])
   const b = piSession('s-al2', '/w/app', a.sm.entries)
   host.register(b.pi)
@@ -392,12 +392,12 @@ test('inside pi-web\'s server the extension lists only what runs there, as runti
 test('tells pi-web\'s server from a terminal pi by its process', () => {
   assert.deepEqual(piWebOf(['node', '/x/@agegr/pi-web/node_modules/next/dist/bin/next', 'start', '-p', '30199', '-H', '127.0.0.1'], {}), { port: 30199, host: '127.0.0.1', password: undefined })
   assert.equal(piWebOf(['node', '/opt/homebrew/bin/pi'], {}), undefined)
-  assert.equal(piWebOf(['node', 'pi'], { JARVIS_PI_HOST: 'web', PORT: '4000', PI_WEB_HOSTNAME: '0.0.0.0' }).host, '127.0.0.1')
-  assert.equal(piWebOf(['node', 'pi'], { PERSONA_PI_HOST: 'web', JARVIS_PI_HOST: 'cli' }).host, '127.0.0.1')
-  assert.equal(piWebOf(['node', 'pi'], { PERSONA_PI_HOST: '', JARVIS_PI_HOST: 'web' }), undefined)
+  assert.equal(piWebOf(['node', 'pi'], { PERSONA_PI_HOST: 'web', PORT: '4000', PI_WEB_HOSTNAME: '0.0.0.0' }).host, '127.0.0.1')
+  assert.equal(piWebOf(['node', 'pi'], { PERSONA_PI_HOST: 'web', PREVIOUS_PI_HOST: 'cli' }).host, '127.0.0.1')
+  assert.equal(piWebOf(['node', 'pi'], { PERSONA_PI_HOST: '', PREVIOUS_PI_HOST: 'web' }), undefined)
   const webArgv = ['node', '/x/@agegr/pi-web/node_modules/next/dist/bin/next', 'start']
-  assert.equal(piWebOf(webArgv, { PERSONA_PI_HOST: 'cli', JARVIS_PI_HOST: 'web' }), undefined)
-  assert.equal(piWebOf(webArgv, { PERSONA_PI_HOST: '', JARVIS_PI_HOST: 'cli' }).host, '127.0.0.1')
+  assert.equal(piWebOf(webArgv, { PERSONA_PI_HOST: 'cli', PREVIOUS_PI_HOST: 'web' }), undefined)
+  assert.equal(piWebOf(webArgv, { PERSONA_PI_HOST: '', PREVIOUS_PI_HOST: 'cli' }).host, '127.0.0.1')
 })
 
 test('the companion stays off a node that does not let the running runtime answer for a session', async (t) => {
@@ -422,7 +422,7 @@ test('a pi in a herdr pane lists the pane and records that it runs in herdr (onc
   await n.ready
   await until('listed', () => n.last('runtime.sessions')?.sessions.length === 1)
   assert.equal(n.last('runtime.sessions').sessions[0].pane_id, 'w1:p3')
-  const stamps = () => a.sm.entries.filter((e) => e.type === 'custom' && e.customType === 'jarvis-host')
+  const stamps = () => a.sm.entries.filter((e) => e.type === 'custom' && e.customType === 'persona-host')
   assert.deepEqual(stamps().map((e) => e.data.host), ['herdr'])
   await a.fire('session_start') // resumed in the same place: nothing new
   assert.equal(stamps().length, 1)
@@ -441,10 +441,10 @@ test('the companion gives sessions that ran in herdr a resume command, and never
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const line = (o) => JSON.stringify(o) + '\n'
   const herdrFile = join(dir, 'a_s-herdr.jsonl')
-  writeFileSync(herdrFile, line({ type: 'session', id: 's-herdr' }) + line({ type: 'custom', id: 'c1', parentId: null, customType: 'jarvis-host', data: { host: 'herdr' } }))
+  writeFileSync(herdrFile, line({ type: 'session', id: 's-herdr' }) + line({ type: 'custom', id: 'c1', parentId: null, customType: 'persona-host', data: { host: 'herdr' } }))
   const webFile = join(dir, 'b_s-web.jsonl')
-  writeFileSync(webFile, line({ type: 'session', id: 's-web' }) + line({ type: 'custom', id: 'c1', parentId: null, customType: 'jarvis-host', data: { host: 'herdr' } }) +
-    line({ type: 'custom', id: 'c2', parentId: 'c1', customType: 'jarvis-host', data: { host: 'pi-web' } })) // last ran in pi-web
+  writeFileSync(webFile, line({ type: 'session', id: 's-web' }) + line({ type: 'custom', id: 'c1', parentId: null, customType: 'persona-host', data: { host: 'herdr' } }) +
+    line({ type: 'custom', id: 'c2', parentId: 'c1', customType: 'persona-host', data: { host: 'pi-web' } })) // last ran in pi-web
   const disk = [
     { id: 's-herdr', path: herdrFile, cwd: '/w', modified: new Date(), messageCount: 2 },
     { id: 's-web', path: webFile, cwd: '/w', modified: new Date(), messageCount: 2 },
@@ -465,7 +465,7 @@ test('the companion gives sessions that ran in herdr a resume command, and never
 
 // ---- updates from the node (docs/pi.md "Auto-update") ----
 
-const PKG = 'jarvis-pi-runtime'
+const PKG = 'persona-pi-runtime'
 /** The package a node carries: what runtime.package answers. */
 function offerOf(text) {
   const files = [{ path: 'pi/index.js', data: Buffer.from(text) }, { path: 'runtime-sdk/index.js', data: Buffer.from('export {}') }]
@@ -482,7 +482,7 @@ function store(t) {
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   return dir
 }
-const reloads = (s) => s.pi.sent.filter((m) => m.content === '/jarvis-reload')
+const reloads = (s) => s.pi.sent.filter((m) => m.content === '/persona-reload')
 
 test('takes the node\'s version: installs it as current, waits until the process is idle, then every session reloads itself', async (t) => {
   const dir = store(t)
@@ -508,7 +508,7 @@ test('takes the node\'s version: installs it as current, waits until the process
   assert.equal(host.retired, true)
   await until('this version off the node', () => !host.runtime.connected)
   let reloaded = 0
-  await a.pi.commands.get('jarvis-reload').handler('', { reload: async () => { reloaded++ } })
+  await a.pi.commands.get('persona-reload').handler('', { reload: async () => { reloaded++ } })
   assert.equal(reloaded, 1, 'the command reloads pi (its new code loads)')
   assert.equal(n.packageCalls.length, 1)
 })

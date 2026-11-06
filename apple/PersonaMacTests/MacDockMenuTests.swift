@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Right-click on the Dock icon: what needs you, then what just finished, each opening its chat; New Agent Chat last.
 @MainActor
@@ -9,7 +9,7 @@ struct MacDockMenuTests {
     private func session(_ id: String, _ state: AgentState) -> Session {
         try! JSON.decoder.decode(Session.self, from: Data("""
         {"machine_id":"m","session_id":"\(id)","title":"t-\(id)","cwd":"/w/proj","status":"idle","state":"\(state.rawValue)",
-         "started_by_jarvis":false,"assistant":false,"pending_interactions":0}
+         "started_by_persona":false,"assistant":false,"pending_interactions":0}
         """.utf8))
     }
 

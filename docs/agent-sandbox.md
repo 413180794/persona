@@ -4,7 +4,7 @@ On macOS, the agents Persona starts can run under `sandbox-exec` with everything
 secrets. It is off until you turn it on, and Linux is not supported yet (#5357).
 
 An agent in the sandbox keeps the network, the home directory, git, ssh, compilers and the Keychain. It cannot open
-`secret.key`, `hub.json` or the other credential files in the data directory (`~/.persona`, `~/.jarvis`, or where
+`secret.key`, `hub.json` or the other credential files in the data directory (`~/.persona` or where
 `PERSONA_HOME` points), by any name and from any child process.
 
 ## It closes the data directory's secrets to the agents Persona starts
@@ -146,22 +146,21 @@ they started. Before you turn it on: it does not stop Docker (see "Some ways to 
 and `sudo` stop working in agents. `personad node doctor` repeats both while it is on.
 
 ```sh
-touch ~/.persona/agent-sandbox.on   # on (use ~/.jarvis or PERSONA_HOME's directory if that is the data directory)
+touch ~/.persona/agent-sandbox.on   # on (use PERSONA_HOME's directory for a custom root)
 rm ~/.persona/agent-sandbox.on      # off
 ```
 
-`PERSONA_AGENT_SANDBOX` (`on` or `off`, also `1`, `0`, `true`, `false`; `JARVIS_AGENT_SANDBOX` works too) overrides the
+`PERSONA_AGENT_SANDBOX` (`on` or `off`, also `1`, `0`, `true`, `false`) overrides the
 file for the process that reads it. Each start reads it in a different place:
 
 | Start | Reads the variable from |
 | --- | --- |
-| The assistant, CLI and Agent SDK | The node's environment: for the resident node, `EnvironmentVariables` in its LaunchAgent (`~/Library/LaunchAgents/com.jarvis.node.plist`), read when the node restarts |
+| The assistant, CLI and Agent SDK | The node's environment: for the resident node, `EnvironmentVariables` in its LaunchAgent (`~/Library/LaunchAgents/com.persona.node.plist`), read when the node restarts |
 | `personad launch`, `personad codex-start` | The shell of the herdr or Orca pane (the node's, when the node checks a launcher) |
 | `personad node doctor` | The terminal it runs in |
 
-A `PERSONA_HOME` set only for the node does not reach a pane's shell, which then looks for the file in `~/.persona` or
-`~/.jarvis`. The resident node's LaunchAgent sets `PERSONA_HOME` to the data directory itself, so both find the same
-file.
+A `PERSONA_HOME` set only for the node does not reach a pane's shell, which then looks for the file in
+`~/.persona`. Configure the same `PERSONA_HOME` in both the resident node's LaunchAgent and the pane's shell when using a custom root.
 
 ## When something breaks, turn it off and start again
 

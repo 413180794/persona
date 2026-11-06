@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Devices › Connect New Device (#3077): the code the hub makes decodes, the browser link asks for the hub's own page,
 /// the countdown, expiry and a new code, and the device that took the code is the credential that was not there
@@ -18,7 +18,7 @@ struct ConnectDeviceModelTests {
     private static func code(expires: Date) -> String {
         let at = ISO8601DateFormatter().string(from: expires)
         return #"{"token":"jp_example","expires_at":"\#(at)","url":"https://hub.example.com","#
-            + #""pair_url":"jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=jp_example","#
+            + #""pair_url":"persona://pair?url=https%3A%2F%2Fhub.example.com&token=jp_example","#
             + #""qr":{"size":2,"rows":["10","01"]},"web_url":"https://fake.invalid/#token=jp_example","web_qr":{"size":2,"rows":["11","00"]}}"#
     }
 
@@ -36,7 +36,7 @@ struct ConnectDeviceModelTests {
         let page = model(hub, clock)
         await page.make()
         let c = try #require(page.code)
-        #expect(c.token == "jp_example" && c.pairLink.hasPrefix("jarvis://pair?") && c.qr?.rows == ["10", "01"])
+        #expect(c.token == "jp_example" && c.pairLink.hasPrefix("persona://pair?") && c.qr?.rows == ["10", "01"])
         #expect(c.webURL == "https://fake.invalid/#token=jp_example" && c.webQR?.rows == ["11", "00"])
         #expect(page.secondsLeft == 600 && page.live && !page.expired)
         let body = try #require(hub.sent("POST", "/api/v1/auth/pair-codes").first?.body)
@@ -91,7 +91,7 @@ struct ConnectDeviceModelTests {
         let hub = FakeHub(), clock = Clock()
         hub.on("GET", "/api/v1/auth/tokens", json: Self.tokens)
         let at = ISO8601DateFormatter().string(from: Self.start.addingTimeInterval(600))
-        hub.on("POST", "/api/v1/auth/pair-codes", json: #"{"token":"jp_example","expires_at":"\#(at)","pair_url":"jarvis://pair?token=jp_example"}"#)
+        hub.on("POST", "/api/v1/auth/pair-codes", json: #"{"token":"jp_example","expires_at":"\#(at)","pair_url":"persona://pair?token=jp_example"}"#)
         let page = model(hub, clock)
         await page.make()
         let c = try #require(page.code)

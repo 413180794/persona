@@ -73,7 +73,7 @@ class ChatParityShotsTest {
         Item(id, kind = "tool_use", role = "assistant", toolName = name, toolInput = input, toolUseId = id).asLineItem()
     private fun result(id: String, text: String) = Item("$id-r", kind = "tool_result", role = "user", text = text, toolUseId = id).asLineItem()
 
-    private val askUser = WorkItem.Tool(ToolCall(use("ask", "mcp__jarvis__ask_user", buildJsonObject {
+    private val askUser = WorkItem.Tool(ToolCall(use("ask", "mcp__persona__ask_user", buildJsonObject {
         put("questions", buildJsonArray {
             add(buildJsonObject {
                 put("question", "周末的会挪到哪天？")
@@ -88,15 +88,15 @@ class ChatParityShotsTest {
     }), result("ask", "The user answered:\n- 周末的会挪到哪天？ → 下周一上午\n- 要通知谁？ → 产品, 测试"), emptyList()))
 
     private val steps = listOf(
-        WorkItem.Tool(ToolCall(use("ar", "mcp__jarvis__agent_read", buildJsonObject { put("session", "box/s1") }), result("ar", "ok"), emptyList())),
-        WorkItem.Tool(ToolCall(use("cr", "mcp__jarvis__computer_run", buildJsonObject {
+        WorkItem.Tool(ToolCall(use("ar", "mcp__persona__agent_read", buildJsonObject { put("session", "box/s1") }), result("ar", "ok"), emptyList())),
+        WorkItem.Tool(ToolCall(use("cr", "mcp__persona__computer_run", buildJsonObject {
             put("machine", "MacBook")
             put("steps", buildJsonArray {
                 listOf("All Clear", "6", "Multiply", "7", "Equals").forEach { add(buildJsonObject { put("click", buildJsonObject { put("name", it) }) }) }
             })
         }), result("cr", "ok"), emptyList())),
-        WorkItem.Tool(ToolCall(use("cv", "mcp__jarvis__conversation_read", buildJsonObject { put("id", "c0ffee12345") }), result("cv", "ok"), emptyList())),
-        WorkItem.Tool(ToolCall(use("fx", "mcp__jarvis__lark_doc_fetch", buildJsonObject { put("url", "https://example.com/doc") }), result("fx", "ok"), emptyList())),
+        WorkItem.Tool(ToolCall(use("cv", "mcp__persona__conversation_read", buildJsonObject { put("id", "c0ffee12345") }), result("cv", "ok"), emptyList())),
+        WorkItem.Tool(ToolCall(use("fx", "mcp__persona__lark_doc_fetch", buildJsonObject { put("url", "https://example.com/doc") }), result("fx", "ok"), emptyList())),
         WorkItem.Tool(ToolCall(use("task", "Task", buildJsonObject { put("description", "查一下崩溃日志"); put("prompt", "读最近的崩溃日志，找出原因"); put("subagent_type", "general-purpose") }),
             result("task", "done"), emptyList())),
         askUser,

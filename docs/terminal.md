@@ -216,7 +216,7 @@ and keys go directly into the terminal. Settings › Terminal Size can switch ba
 - A resize gives a full frame after about 6 ms; **same-size resize also gives a full frame**, with no SIGWINCH to the program (dimensions unchanged). The node uses this to obtain a fresh full frame when deltas exceed 256 KB,
   without reopening as observe does (which would restore computer size then switch back, redrawing Claude twice).
 - `terminal attach` also emits herdr's redrawn grid (`ESC[?1049h` alternate screen + per-cell CUP), **not raw program bytes**. So "switch to SwiftTerm for raw bytes" is invalid:
-  SwiftTerm would also receive in-place redraws and generate no scrollback. The existing VT subset already matches `herdr pane read` row by row, so no new Swift package (or `/tmp/jarvis-spm` mirror) is introduced.
+  SwiftTerm would also receive in-place redraws and generate no scrollback. The existing VT subset already matches `herdr pane read` row by row, so no new Swift package (or `/tmp/persona-spm` mirror) is introduced.
 - **herdr has no scrollback during control**: `pane read --source recent` returns only the current screen (31 rows), `max_offset_from_bottom` stays 0 even after Claude writes 60 lines;
   releasing to computer size restores the original 172-column history.
 
@@ -359,7 +359,7 @@ Claude works because it accepts wheels anywhere (row 0 and input included) and a
 - Hub forwards unchanged to node (`terminal.scroll {session_id, lines, up, column, row}`), omitting position if App didn't supply it.
 - Node (`herdr.Control.Scroll`) splits `lines` into N `lines: 1` commands at that cell; without position (old App/hub), use screen center, never 1;1.
   Thus **old Apps such as TestFlight 28 can scroll Codex after hub/node deployment alone**; new App adds finger position. Maximum 120 events per call.
-- Verification: `TestLiveControlWheel` (`-tags herdrlive`, `JARVIS_LIVE_WHEEL_PANE=<pane>`) controls a real pane via node code, scrolls up 5 rows (screen must change), then down 5 (must restore);
+- Verification: `TestLiveControlWheel` (`-tags herdrlive`, `PERSONA_LIVE_WHEEL_PANE=<pane>`) controls a real pane via node code, scrolls up 5 rows (screen must change), then down 5 (must restore);
   passed on the development machine's pinned-question Codex (0.9.3), hub Codex (0.9.5), and local lab Claude.
 
 Remaining difference (same as Moshi/real terminals): starting a swipe on Codex input/status or pinned question doesn't scroll, since it only accepts wheels in the chat area; Claude accepts anywhere.
@@ -373,7 +373,7 @@ User: a development machine connected through a SOCKS5 proxy on the hub machine 
 | Machine | Round trip (ms, n=11) | Throughput (KB/s, n=5, fewer than 10 samples, not a baseline) |
 | --- | --- | --- |
 | Proxied development machine | min 158 / p50 159 / p90 198 / max 210 / mean 167 | min 75 / p50 520 / max 626 / mean 443 |
-| Same-LAN Mac (jarvis-link) | min 6 / p50 7 / p90 9 / max 10 / mean 8 | min 1477 / p50 1999 / max 2432 / mean 1916 |
+| Same-LAN Mac (persona-link) | min 6 / p50 7 / p90 9 / max 10 / mean 8 | min 1477 / p50 1999 / max 2432 / mean 1916 |
 
 Under control, each key or wheel movement needs that round trip before echo; unavoidable link cost. Three other delays were ours:
 
@@ -626,7 +626,7 @@ Correct implementation needs node to include herdr scroll offset in frames or a 
 - Output URLs: `@xterm/addon-web-links`, http(s) only, click through `openLink`; no simultaneous `terminal_click` (`linkHit`).
 - Context menu: Copy / Paste / Select All / Find… / Clear Selection, existing `Menu` in `ui/atoms.tsx` unchanged. Since `Menu` anchors only to elements, a zero-size fixed element is placed at the mouse position. Blur xterm while menu is open (focused xterm swallows keys; Esc goes to program instead of closing menu).
 - Mac line-editing keys: ⌘⌫ → `\x15`, ⌘← → `\x01`, ⌘→ → `\x05`, only while controlling and with ⌘ alone (`lineEditBytes`).
-- Options: cursor style, blink, WebGL rendering (`@xterm/addon-webgl`, dynamically loaded on first enable; disable/context loss/no WebGL disposes and falls back to DOM); `jarvis.terminal.cursorStyle / cursorBlink / webgl`, defaults don't write keys.
+- Options: cursor style, blink, WebGL rendering (`@xterm/addon-webgl`, dynamically loaded on first enable; disable/context loss/no WebGL disposes and falls back to DOM); `persona.terminal.cursorStyle / cursorBlink / webgl`, defaults don't write keys.
 - Focus: under control, clicking panel or refocusing window returns keyboard to terminal unless text is selected, a dialog/menu/popover is open, focus is in another input (including Find) or outside-panel control, or terminal is hidden beneath another retained terminal (`inert`).
 
 ### Verification
@@ -773,7 +773,7 @@ hub → browser: `herdr_state {id, state: "open", cols, rows}`, `herdr_data {id,
 
 ### Web (`web/src/views/session/TerminalPanel.tsx`, `terminal/FullTerminal.tsx`, `terminal/full.ts`, `terminal/Surface.tsx`, `lib/terminal-mode.ts`)
 
-- **Switch**: panel header (same component for side panel and /terminal) segmented Single pane / Full view, icons-only when narrow; only last choice remembered (`jarvis.terminal.mode`). Mod+Alt+F also switches (`terminal-mode` shortcut registry, only foreground panel).
+- **Switch**: panel header (same component for side panel and /terminal) segmented Single pane / Full view, icons-only when narrow; only last choice remembered (`persona.terminal.mode`). Mod+Alt+F also switches (`terminal-mode` shortcut registry, only foreground panel).
   Props unchanged (`mid, sid, onClose, label, cwd, onFiles`); each UI renders header buttons into the same slot, switch stays in place.
   In the session page, terminal is an in-place view (section 22, page already titled with Terminal | Chat). Extra `embedded` prop reduces panel header to 40px toolbar (switch left; state, Files, key bar, Reconnect right), no second title bar.
 - **Settings › Terminal view**: Full view (default, no stored key) / Single pane / Remember last (new terminals use previous choice). Hidden without hub `herdr_client`.
@@ -789,7 +789,7 @@ hub → browser: `herdr_state {id, state: "open", cols, rows}`, `herdr_data {id,
 - **Inactive**: retained but hidden terminals (`inert`) and fading-out views release computer clients (don't occupy four slots or compete for layout), reconnect when shown.
 - **Automatic Single pane fallback**: view ends **before ever connecting** (`unsupported`, `forbidden`, `too_many`, immediate client exit… except offline). Show "Full view couldn't open: reason. Switched to Single pane" and switch;
   remember machine unsupported for this page's lifetime, other terminals on it use Single pane immediately (manually selecting Full view retries).
-- **First-use hint**: once on first connection: "Full view is herdr's own client. Operations here lay out the computer's panes at this panel's size; operating on the computer changes them back." (`jarvis.terminal.fullHint`).
+- **First-use hint**: once on first connection: "Full view is herdr's own client. Operations here lay out the computer's panes at this panel's size; operating on the computer changes them back." (`persona.terminal.fullHint`).
 
 ### Measurements (herdr 0.9.5, our temporary `persona-fullui-test` session, default untouched; `session stop` + `session delete` afterward)
 
@@ -869,7 +869,7 @@ Binary contains internal `mouse_tracking_enabled`, not exposed; web can't automa
 
 Like Moshi (full herdr client sends mouse to herdr first, which decides whether program accepts):
 
-| Setting (Terminal Settings › Mouse, `jarvis.terminal.mouse`) | Without Shift | With Shift |
+| Setting (Terminal Settings › Mouse, `persona.terminal.mouse`) | Without Shift | With Shift |
 | --- | --- | --- |
 | Send to program (default, no key stored) | Send press/drag/release, left/middle/right, Ctrl/Alt modifiers; no page selection/context menu | xterm local drag selection, right-click Persona menu |
 | Select locally | Previous behavior: drag selects, right-click menu, non-drag click still `terminal_input.click` | Send to program (Shift routes, no longer sent as modifier) |
@@ -906,7 +906,7 @@ Same routes/messages as web: `apple/Mac/Terminal/MacTerminalMouse.swift` (pure b
 
 `go test ./internal/herdr ./internal/hub ./internal/node` (encoding, driver-only, order), `npm test` (`terminal-mouse.test.ts`),
 `scripts/test/web_terminal_mouse_e2e.py` (fake hub records `terminal_input.mouse`, Playwright click/drag/right/Shift/settings),
-`go test -tags herdrlive -run TestLiveControlMouse` (`JARVIS_LIVE_MOUSE_PANE`, vim in temporary real herdr tab: click moves cursor to cell, drag creates visual selection).
+`go test -tags herdrlive -run TestLiveControlMouse` (`PERSONA_LIVE_MOUSE_PANE`, vim in temporary real herdr tab: click moves cursor to cell, drag creates visual selection).
 
 ## 26. Full view conflicts: herdr right-click, prefix, mouse and paste (2026-11-05, web, #2700)
 

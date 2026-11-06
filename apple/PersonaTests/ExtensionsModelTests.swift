@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Extensions' logic (ExtensionsModel, ExtensionModel): what the hub sends decodes, the form's draft is edited by path and
 /// saved as a whole without the emptied fields, a field the hub refuses comes back beside that field.

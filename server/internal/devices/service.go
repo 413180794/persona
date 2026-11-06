@@ -32,7 +32,7 @@ import (
 // GET /api/v1/connector/stream, which the connector joins to the resident node's attach socket: from there it is
 // the node protocol, as over ssh. GET /api/v1/connector/info, every half minute, says whether the connector is there
 // and how far (the choice between a computer's paths uses it). Pairing goes the other way round from link: the
-// computer makes a one-time code and a link (jarvis://connector?addr=…&fp=…&code=…), pasted into the admin page; the
+// computer makes a one-time code and a link (persona://connector?addr=…&fp=…&code=…), pasted into the admin page; the
 // manager trades the code for a credential it generates (POST /api/v1/connector/pair); the hub keeps it sealed in
 // Postgres with its own key and hands it over when asked (devices.connector_cred, devices.connector_paired).
 
@@ -90,7 +90,7 @@ func (m *Machine) connectorCred(ctx context.Context) (*connectorCred, int, error
 		return nil, 0, err
 	}
 	if c.Token == "" {
-		return nil, 0, errors.New("这台电脑的连接器还没配对：在管理界面这台电脑上点「重新配对」，粘贴它的 jarvis://connector 链接")
+		return nil, 0, errors.New("这台电脑的连接器还没配对：在管理界面这台电脑上点「重新配对」，粘贴它的 persona://connector 链接")
 	}
 	cred := &connectorCred{fp: c.FP, token: c.Token, version: c.Version}
 	m.mu.Lock()

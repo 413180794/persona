@@ -146,7 +146,7 @@ func TestRevokedTokensFollowToOtherHubs(t *testing.T) {
 		t.Fatalf("the phone's credential still works: %+v", tok)
 	}
 	if tok, _ := d.DeviceTokenByHash(ctx, "rv-hash-link"); tok == nil {
-		t.Fatal("a jarvis-link credential was revoked")
+		t.Fatal("a persona-link credential was revoked")
 	}
 	var devices int
 	if err := d.pool.QueryRow(ctx, `SELECT count(*) FROM devices WHERE credential_id = 'dev_rv_phone'`).Scan(&devices); err != nil || devices != 0 {

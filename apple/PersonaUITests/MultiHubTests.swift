@@ -3,20 +3,20 @@ import XCTest
 /// Several groups of hubs on one phone (docs/multi-hub.md), against three scripts/mock_hub.py: A alone (「家里」), B and C one
 /// group (「公司」, each lists the other in its hello's mesh; C owns the MacBook). Both groups have a MacBook with the same
 /// machine and session ids and the same interaction ids, so a request sent to the wrong group's hub shows. Start them
-/// as docs/testing.md「多 hub」 says and pass TEST_RUNNER_JARVIS_HUB_A / _B / _C (http://127.0.0.1:<port>).
+/// as docs/testing.md「多 hub」 says and pass TEST_RUNNER_PERSONA_HUB_A / _B / _C (http://127.0.0.1:<port>).
 final class MultiHubTests: XCTestCase {
     private struct Hubs { var a: String; var b: String; var c: String }
 
     private func hubs() throws -> Hubs {
         let env = ProcessInfo.processInfo.environment
-        guard let a = env["JARVIS_HUB_A"], let b = env["JARVIS_HUB_B"], let c = env["JARVIS_HUB_C"] else {
-            throw XCTSkip("needs three scripts/mock_hub.py (JARVIS_HUB_A, JARVIS_HUB_B, JARVIS_HUB_C)")
+        guard let a = env["PERSONA_HUB_A"], let b = env["PERSONA_HUB_B"], let c = env["PERSONA_HUB_C"] else {
+            throw XCTSkip("needs three scripts/mock_hub.py (PERSONA_HUB_A, PERSONA_HUB_B, PERSONA_HUB_C)")
         }
         return Hubs(a: a, b: b, c: c)
     }
 
     private func pair(_ hub: String) -> String {
-        "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
     }
 
     private func launch(_ h: Hubs, _ args: [String]) -> XCUIApplication {

@@ -55,8 +55,8 @@ def case(browser, base, token, size, theme, shots, channel_exe):
     page = ctx.new_page()
     page.set_default_timeout(15000)
     page.goto(base + "/?token=" + token)
-    page.wait_for_function("localStorage.getItem('jarvis.token')")
-    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+    page.wait_for_function("localStorage.getItem('persona.token')")
+    page.evaluate(f"localStorage.setItem('persona.theme', '{theme}')")
     page.goto(base + "/")
     page.wait_for_timeout(1500)
     if size == "narrow":  # on a phone the list is the Agents tab of the top switch
@@ -69,7 +69,7 @@ def case(browser, base, token, size, theme, shots, channel_exe):
     ok(f"{tag}: the opencode sessions and the terminal-only agent are in the sidebar")
     shot(page, shots, f"opencode-sidebar-{size}-{theme}")
 
-    page.goto(base + "/j/" + WORK)
+    page.goto(base + "/persona/" + WORK)
     expect(page.get_by_text("解析器遇到语法错误时只返回一个字符串").first).to_be_visible()
     open_folds(page)
     expect(page.get_by_text("run the parser tests").first).to_be_visible()
@@ -78,13 +78,13 @@ def case(browser, base, token, size, theme, shots, channel_exe):
     page.wait_for_timeout(500)
     shot(page, shots, f"opencode-chat-{size}-{theme}")
 
-    page.goto(base + "/j/" + ASK)
+    page.goto(base + "/persona/" + ASK)
     expect(page.get_by_text("rm -rf build").first).to_be_visible()
     ok(f"{tag}: the permission card shows the command")
     page.wait_for_timeout(500)
     shot(page, shots, f"opencode-ask-{size}-{theme}")
 
-    page.goto(base + "/j/" + BARE)
+    page.goto(base + "/persona/" + BARE)
     page.wait_for_timeout(1500)
     open_folds(page)
     if "没有装 Persona 的插件" not in page.locator("main").inner_text():
@@ -92,7 +92,7 @@ def case(browser, base, token, size, theme, shots, channel_exe):
     ok(f"{tag}: the session without the plugin says what is missing")
     shot(page, shots, f"opencode-bare-{size}-{theme}")
 
-    page.goto(base + "/j/" + GEMINI)
+    page.goto(base + "/persona/" + GEMINI)
     page.wait_for_timeout(1500)
     open_folds(page)
     if "还不能读 gemini" not in page.locator("main").inner_text():

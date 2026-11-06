@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Settings › Managers (docs/managers.md): the roster decodes, the status line and where it runs, why Delete is off,
 /// a new manager's install code (with and without the commands) and its countdown, the changes and the hub's refusals in

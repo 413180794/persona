@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Background tasks reporting back (`Item.task`): which call each came from, and the words of their one-line rows.
 @MainActor

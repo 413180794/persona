@@ -5,7 +5,7 @@ import persona.core.navigation.Navigator
 
 internal suspend fun sendInboxToPersona(repository: InboxRepository, request: InboxPersonaRequest, navigator: Navigator?) {
     repository.askPersona(request)
-    navigator?.selectTab(AppTab.Jarvis)
+    navigator?.selectTab(AppTab.Persona)
 }
 
 /** Source data is escaped separately from the user's instruction. */

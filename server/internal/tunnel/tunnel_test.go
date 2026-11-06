@@ -96,10 +96,10 @@ func TestInitNodeKeyAddsHubsAndKeepsTheAddress(t *testing.T) {
 	}
 }
 
-// fakeBinary is a "jarvisd" that runs here and says its version.
+// fakeBinary is a "personad" that runs here and says its version.
 func fakeBinary(t *testing.T, dir, version string) string {
 	t.Helper()
-	p := filepath.Join(dir, "jarvisd-"+version)
+	p := filepath.Join(dir, "personad-"+version)
 	if err := os.WriteFile(p, []byte("#!/bin/sh\necho "+version+"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -183,11 +183,11 @@ func TestUploadChecksTheHeader(t *testing.T) {
 	}
 }
 
-// The real thing, over Tailscale's public DERP relays (needs the network: JARVIS_TEST_TAILCAT=1): the allowed hub
+// The real thing, over Tailscale's public DERP relays (needs the network: PERSONA_TEST_TAILCAT=1): the allowed hub
 // reaches the node port and can upload; another key gets no answer at all.
 func TestTailcatEndToEnd(t *testing.T) {
-	if os.Getenv("JARVIS_TEST_TAILCAT") != "1" {
-		t.Skip("needs the network: JARVIS_TEST_TAILCAT=1")
+	if os.Getenv("PERSONA_TEST_TAILCAT") != "1" {
+		t.Skip("needs the network: PERSONA_TEST_TAILCAT=1")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -287,7 +287,7 @@ func TestTailcatEndToEnd(t *testing.T) {
 	}
 }
 
-// The hub and `jarvisd hub tailcat-key` creating the key at once agree on one.
+// The hub and `personad hub tailcat-key` creating the key at once agree on one.
 func TestHubKeyCreatedOnce(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "tailcat-hub.json")
 	const n = 8

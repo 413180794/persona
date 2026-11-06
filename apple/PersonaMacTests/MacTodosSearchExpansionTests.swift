@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The collapsed done group expands while a search matches completed todos, and clearing the search never collapses
 /// a group the user opened (#3474).

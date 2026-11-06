@@ -14,7 +14,7 @@ import (
 // idleAgent is s1 as a finished agent in a pane Persona started, last active at.
 func idleAgent(at time.Time) proto.Session {
 	return proto.Session{SessionID: "s1", MachineID: "box", Cwd: "/code/app", Agent: "claude", Status: proto.StatusIdle, PaneID: "w1:p1",
-		StartedByJarvis: true, UpdatedAt: at, LastText: "做完了"}
+		StartedByPersona: true, UpdatedAt: at, LastText: "做完了"}
 }
 
 func (f *fakeHub) retires() []string {
@@ -57,7 +57,7 @@ func TestRetirable(t *testing.T) {
 		{"starting", func(s *proto.Session) { s.Starting = true }, done, false},
 		{"assistant", func(s *proto.Session) { s.Assistant = true }, done, false},
 		{"another tool's", func(s *proto.Session) { s.SourceKind = "codex_app_server" }, done, false},
-		{"not started by the hub", func(s *proto.Session) { s.StartedByJarvis = false }, done, false},
+		{"not started by the hub", func(s *proto.Session) { s.StartedByPersona = false }, done, false},
 		{"a runtime's agent", func(s *proto.Session) { s.Agent = "dsh" }, done, false},
 	}
 	for _, c := range cases {

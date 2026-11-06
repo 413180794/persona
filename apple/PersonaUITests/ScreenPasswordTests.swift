@@ -2,20 +2,20 @@ import XCTest
 
 /// VNC remembers the Mac's Screen Sharing sign-in on this phone (#1322), against scripts/mock/mock_hub.py with
 /// MOCK_COMPUTER=ready MOCK_WEB=web/dist MOCK_SCREEN=fake (a Screen Sharing of the mock's own that takes me / mock-pass;
-/// TEST_RUNNER_JARVIS_SCREEN_HUB, TEST_RUNNER_JARVIS_FAKE_SCREEN=1): signed in once with 「在这台手机上记住」, the
+/// TEST_RUNNER_PERSONA_SCREEN_HUB, TEST_RUNNER_PERSONA_FAKE_SCREEN=1): signed in once with 「在这台手机上记住」, the
 /// screen comes up by itself next time; after the Mac's password changed the form says so and the new one replaces
-/// it; Forget Screen Sharing Password asks again. JARVIS_SHOTS keeps the screenshots.
+/// it; Forget Screen Sharing Password asks again. PERSONA_SHOTS keeps the screenshots.
 final class ScreenPasswordTests: XCTestCase {
-    private var hub: String? { ProcessInfo.processInfo.environment["JARVIS_SCREEN_HUB"] }
+    private var hub: String? { ProcessInfo.processInfo.environment["PERSONA_SCREEN_HUB"] }
 
     @MainActor func testTheSignInIsRemembered() throws {
-        guard let hub, ProcessInfo.processInfo.environment["JARVIS_FAKE_SCREEN"] == "1" else {
-            throw XCTSkip("needs the mock's own Screen Sharing: MOCK_SCREEN=fake (JARVIS_FAKE_SCREEN=1)")
+        guard let hub, ProcessInfo.processInfo.environment["PERSONA_FAKE_SCREEN"] == "1" else {
+            throw XCTSkip("needs the mock's own Screen Sharing: MOCK_SCREEN=fake (PERSONA_FAKE_SCREEN=1)")
         }
         continueAfterFailure = false
         try mock(hub, "/mock/screen-password?p=mock-pass")
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openScreenFresh", "YES"]
         app.launchPinned()
         let look = app.buttons["computer-screen"].firstMatch
@@ -73,13 +73,13 @@ final class ScreenPasswordTests: XCTestCase {
     /// One-Tap Unlock types the kept password on its lock screen: the mock's Screen Sharing gets it and Return, and unlocks.
     /// Face ID is skipped on the simulator (-showUnlockWithoutAuth).
     @MainActor func testOneTapUnlock() throws {
-        guard let hub, ProcessInfo.processInfo.environment["JARVIS_FAKE_SCREEN"] == "1" else {
-            throw XCTSkip("needs the mock's own Screen Sharing: MOCK_SCREEN=fake (JARVIS_FAKE_SCREEN=1)")
+        guard let hub, ProcessInfo.processInfo.environment["PERSONA_FAKE_SCREEN"] == "1" else {
+            throw XCTSkip("needs the mock's own Screen Sharing: MOCK_SCREEN=fake (PERSONA_FAKE_SCREEN=1)")
         }
         continueAfterFailure = false
         try mock(hub, "/mock/screen-password?p=mock-pass&clear=1")
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook",
                                "-openScreenFresh", "YES", "-showUnlockWithoutAuth", "YES"]
         app.launchPinned()
@@ -196,14 +196,14 @@ final class ScreenPasswordTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        let look = ProcessInfo.processInfo.environment["JARVIS_LOOK"].map { "-" + $0 } ?? ""
+        let look = ProcessInfo.processInfo.environment["PERSONA_LOOK"].map { "-" + $0 } ?? ""
         let full = "\(name)-\(UITestStyle.name)\(look)"
         let png = app.screenshot()
         let attachment = XCTAttachment(screenshot: png)
         attachment.name = full
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? png.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(full + ".png"))
         }
     }

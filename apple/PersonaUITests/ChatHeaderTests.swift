@@ -4,7 +4,7 @@ import XCTest
 /// status bar, and the one Back VoiceOver and XCUITest find is the one on screen, which goes back. In the BeautifulUI
 /// style the folded bar once sat in the status bar's band (its place pill on the clock), and the hidden bar's Back stayed
 /// in the accessibility tree, hittable but going nowhere (2026-11-02). Both layouts here; both styles with
-/// `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`.
+/// `TEST_RUNNER_PERSONA_UI_STYLE=beautiful`.
 final class ChatHeaderTests: XCTestCase {
     private var app: XCUIApplication!
 

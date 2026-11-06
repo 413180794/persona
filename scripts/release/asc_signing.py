@@ -4,8 +4,8 @@
 - registers the iPhone, Apple Watch, Live Activity and notification service extension bundle ids,
 - enables PUSH_NOTIFICATIONS, USERNOTIFICATIONS_TIMESENSITIVE and HEALTHKIT on the iPhone App ID, APP_GROUPS on it and
   the Live Activity's,
-- creates (or rebuilds) the "Jarvis App Store" / "Jarvis Watch App Store" / "Jarvis Live Activity App Store" /
-  "Jarvis Notify App Store" profiles
+- creates (or rebuilds) the "Persona App Store" / "Persona Watch App Store" / "Persona Live Activity App Store" /
+  "Persona Notify App Store" profiles
   with the team's distribution certificate and installs them where Xcode looks.
 
 The API key's role (App Manager) can't use cloud-managed signing, so release builds sign manually with
@@ -31,7 +31,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(__file__))
 from asc import BUNDLE_ID, CONFIG, APIError, create, get_all, request  # noqa: E402
-import jarvis_config  # noqa: E402
+import persona_config  # noqa: E402
 
 APP = BUNDLE_ID
 WATCH = APP + ".watchkitapp"
@@ -40,14 +40,14 @@ NOTIFY = APP + ".notify"  # the notification service extension opening relayed p
 SHARE = APP + ".share"  # the share extension sending to Persona's main conversation (#4586)
 # bundle identifier -> (App ID name, profile name, capabilities)
 TARGETS = {
-    APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "USERNOTIFICATIONS_TIMESENSITIVE", "HEALTHKIT", "APP_GROUPS"]),
-    WATCH: ("Jarvis Watch", "Jarvis Watch App Store", []),
-    LIVE: ("Jarvis Live Activity", "Jarvis Live Activity App Store", ["APP_GROUPS"]),
-    NOTIFY: ("Jarvis Notify", "Jarvis Notify App Store", []),
+    APP: ("Persona", "Persona App Store", ["PUSH_NOTIFICATIONS", "USERNOTIFICATIONS_TIMESENSITIVE", "HEALTHKIT", "APP_GROUPS"]),
+    WATCH: ("Persona Watch", "Persona Watch App Store", []),
+    LIVE: ("Persona Live Activity", "Persona Live Activity App Store", ["APP_GROUPS"]),
+    NOTIFY: ("Persona Notify", "Persona Notify App Store", []),
     SHARE: ("Persona Share", "Persona Share App Store", []),
 }
 # The App Group the app shares the Live Activity's persona with the widget extension through (docs/live-activity.md).
-GROUP = jarvis_config.app_group(CONFIG)
+GROUP = persona_config.app_group(CONFIG)
 PROFILE_DIR = os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles")
 
 
@@ -175,7 +175,7 @@ Run python3 scripts/release/asc_signing.py (with --dev too if you sign developme
         sys.exit(f"""
 {len(MISSING_GROUP)} profile(s) without the App Group {GROUP}: {", ".join(MISSING_GROUP)}.
 The API can't make an App Group or put one on an App ID. On developer.apple.com › Certificates, Identifiers & Profiles:
-  1. Identifiers › + › App Groups: description Jarvis, identifier {GROUP}.
+  1. Identifiers › + › App Groups: description Persona, identifier {GROUP}.
   2. Identifiers › {APP} › App Groups › Configure (Edit): tick {GROUP}, Continue, Save, Confirm.
   3. The same for {LIVE}.
 Then run this again (docs/release.md「App Group」).""")

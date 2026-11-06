@@ -7,17 +7,17 @@ import (
 	"testing"
 )
 
-func TestPairLinkBrandAliasesKeepTheSameSecurityInputs(t *testing.T) {
+func TestPersonaPairLinksKeepSecurityInputs(t *testing.T) {
 	values := url.Values{"url": {"http://hub.example.com:18660"}, "tls": {"18662"}, "fp": {"fixture-pin"},
 		"token": {"jp_fixture"}, "hub": {"fixture-hub"}, "machine": {"fixture-machine"}}
 	for _, host := range []string{"pair", "link"} {
-		legacyToken, legacy, err := parsePairLink("jarvis://" + host + "?" + values.Encode())
+		token, parsed, err := parsePairLink("persona://" + host + "?" + values.Encode())
 		if err != nil {
 			t.Fatal(err)
 		}
-		token, current, err := parsePairLink(" persona://" + host + "?" + values.Encode() + "\n")
-		if err != nil || token != legacyToken || !reflect.DeepEqual(current, legacy) {
-			t.Fatalf("brand alias changed the parsed credential or endpoint: %+v %v", current, err)
+		trimmedToken, trimmed, err := parsePairLink(" persona://" + host + "?" + values.Encode() + "\n")
+		if err != nil || token != trimmedToken || !reflect.DeepEqual(parsed, trimmed) {
+			t.Fatalf("whitespace changed credentials: %+v %v", trimmed, err)
 		}
 		for _, key := range []string{"token", "fp", "tls", "url"} {
 			incomplete := url.Values{}
@@ -25,10 +25,8 @@ func TestPairLinkBrandAliasesKeepTheSameSecurityInputs(t *testing.T) {
 				incomplete[name] = append([]string(nil), entries...)
 			}
 			incomplete.Del(key)
-			for _, scheme := range []string{"jarvis", "persona"} {
-				if _, _, err := parsePairLink(scheme + "://" + host + "?" + incomplete.Encode()); err == nil {
-					t.Errorf("%s missing %s was accepted", scheme, key)
-				}
+			if _, _, err := parsePairLink("persona://" + host + "?" + incomplete.Encode()); err == nil {
+				t.Errorf("missing %s was accepted", key)
 			}
 		}
 	}
@@ -39,16 +37,16 @@ func TestPairLinkBrandAliasesKeepTheSameSecurityInputs(t *testing.T) {
 	}
 }
 
-func TestConnectorBrandAliasDoesNotChangeLegacyOutput(t *testing.T) {
+func TestPersonaConnectorLinksRoundTrip(t *testing.T) {
 	addresses := []string{"[2001:db8::1]:18663", "hub.example.com:18663"}
-	old := ConnectorLink(addresses, "fixture-pin", "fixture-code")
-	if !strings.HasPrefix(old, "jarvis://connector?") {
-		t.Fatalf("legacy output changed: %s", old)
+	invite := ConnectorLink(addresses, "fixture-pin", "fixture-code")
+	if !strings.HasPrefix(invite, "persona://connector?") {
+		t.Fatalf("wrong output scheme: %s", invite)
 	}
-	for _, raw := range []string{old, strings.Replace(old, "jarvis://", "persona://", 1)} {
+	for _, raw := range []string{invite, " \n" + invite + "\n"} {
 		got, fp, code, err := ParseConnectorLink(raw)
 		if err != nil || !reflect.DeepEqual(got, addresses) || fp != "fixture-pin" || code != "fixture-code" {
-			t.Fatalf("alias changed the parsed invite: %v %v", got, err)
+			t.Fatalf("invite round trip: %v %v", got, err)
 		}
 	}
 	for _, raw := range []string{"other://connector?addr=hub.example.com:1&fp=x&code=y", "persona://pair?addr=hub.example.com:1&fp=x&code=y",

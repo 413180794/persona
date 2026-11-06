@@ -251,7 +251,7 @@ struct AgentRowMenu: View, Equatable {
         }
         Button {
             guard let s = now() else { return }
-            Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
+            Task { await model.askPersona(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
         } label: {
             Label("Hand to Persona", systemImage: Theme.Icon.ai)
         }

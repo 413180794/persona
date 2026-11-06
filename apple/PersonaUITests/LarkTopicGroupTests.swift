@@ -5,7 +5,7 @@ import XCTest
 /// Expand (what it hides takes no taps), a tap on a topic opens its thread as Topic Details from the group, and a tap on a link
 /// in a topic opens the link only. Under a topic are its newest two replies (View N earlier replies above them), then Add Reaction
 /// and Reply. A recalled or edited topic, and a recalled reply, follow Message Tweaks (Keep Recalled Messages, Edit History) as a chat's row does.
-/// Against scripts/mock/mock_hub.py with MOCK_LARK_TOPIC=1 (JARVIS_MOCK_HUB); TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a
+/// Against scripts/mock/mock_hub.py with MOCK_LARK_TOPIC=1 (PERSONA_MOCK_HUB); TEST_RUNNER_PERSONA_SHOTS=<dir> keeps a
 /// screenshot of each step, light and dark.
 final class LarkTopicGroupTests: XCTestCase {
     private var hub: String!
@@ -13,8 +13,8 @@ final class LarkTopicGroupTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_LARK_TOPIC=1 (JARVIS_MOCK_HUB)")
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_LARK_TOPIC=1 (PERSONA_MOCK_HUB)")
         }
         self.hub = hub
     }
@@ -263,7 +263,7 @@ final class LarkTopicGroupTests: XCTestCase {
 
     @MainActor private func open(scheme: String) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f4:405", "-ui.scheme", scheme]
         app.launchPinned()
         XCTAssertTrue(topics.firstMatch.waitForExistence(timeout: 20), "the topic group did not open:\n\(app.debugDescription)")
@@ -309,8 +309,8 @@ final class LarkTopicGroupTests: XCTestCase {
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
-            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"].map { "-" + $0 } ?? ""
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["PERSONA_STYLE"].map { "-" + $0 } ?? ""
             try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + style + ".png"))
         }
     }

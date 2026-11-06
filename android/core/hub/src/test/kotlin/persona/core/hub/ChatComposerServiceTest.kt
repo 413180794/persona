@@ -37,11 +37,11 @@ class ChatComposerServiceTest {
                 200 to """{"path":"/tmp/test.txt"}"""
             } else {
                 val fields = JsonCodec.parseToJsonElement(buffer.readUtf8()).jsonObject
-                assertEquals(headers["X-Jarvis-Op-Id"], fields["client_msg_id"]!!.jsonPrimitive.content)
+                assertEquals(headers["X-Persona-Op-Id"], fields["client_msg_id"]!!.jsonPrimitive.content)
                 assertEquals("消息", (fields["text"]!!.jsonPrimitive.content).zhAny())
                 attempts++
                 // The retry goes under a new operation id: the hub would answer "operation" from its first try.
-                assertEquals(attempts == 1, headers["X-Jarvis-Op-Id"] == "operation")
+                assertEquals(attempts == 1, headers["X-Persona-Op-Id"] == "operation")
                 if (attempts == 1) {
                     assertNull(fields["clear_draft"])
                     409 to """{"error":"电脑上有草稿","code":"input_draft","delivered":"none","draft":"电脑草稿","clearable":"电脑草稿"}"""
@@ -83,7 +83,7 @@ class ChatComposerServiceTest {
             val buffer = Buffer()
             body.writeTo(buffer)
             val raw = buffer.readUtf8()
-            val op = headers.getValue("X-Jarvis-Op-Id")
+            val op = headers.getValue("X-Persona-Op-Id")
             ops += op
             assertEquals(op, JsonCodec.parseToJsonElement(raw).jsonObject["client_msg_id"]!!.jsonPrimitive.content)
             val params = JsonCodec.parseToJsonElement(raw).jsonObject.filterKeys { it != "client_msg_id" }.toString()

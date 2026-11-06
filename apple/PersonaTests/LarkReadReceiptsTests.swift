@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// Read receipts of my Lark messages: what a receipt shows (`LarkReadMark`), which ones are asked for and when
 /// (`LarkReadReceipts`), and the request (`larkReadStates`).

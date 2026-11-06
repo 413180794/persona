@@ -133,7 +133,7 @@ nonisolated struct HubUpdateRecord: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// One of the assistant's skills (GET /api/v1/skills): the user's own in ~/.jarvis/skills, or built in.
+/// One of the assistant's skills (GET /api/v1/skills): the user's own in ~/.persona/skills, or built in.
 nonisolated struct AgentSkill: Codable, Equatable, Sendable, Identifiable {
     var name: String
     var description: String?

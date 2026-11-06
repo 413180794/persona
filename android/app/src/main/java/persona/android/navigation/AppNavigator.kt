@@ -50,7 +50,7 @@ internal class AppNavigator(
             onSelectTab(route.restore(stacks)); return
         }
         val rootTab = when (key) {
-            AssistantRoute -> AppTab.Jarvis
+            AssistantRoute -> AppTab.Persona
             AgentsRoute -> AppTab.Agents
             InboxRoute -> AppTab.Inbox
             SettingsRoute -> AppTab.Settings
@@ -66,7 +66,7 @@ internal class AppNavigator(
         }
         val target = if (key is ChatRoute) chatTab(key)
             ?: stacks.entries.firstOrNull { key in it.value }?.key
-            ?: selectedTab().takeIf { it == AppTab.Jarvis }
+            ?: selectedTab().takeIf { it == AppTab.Persona }
             ?: AppTab.Agents else selectedTab()
         onSelectTab(target)
         if (key is ChatRoute) stacks.filterKeys { it != target }.values.forEach { stack -> stack.removeAll { it == key } }
@@ -80,7 +80,7 @@ internal class AppNavigator(
         stacks.forEach { (tab, stack) ->
             stack.filterIsInstance<ChatRoute>().forEach chatEntry@ { chat ->
                 val owner = chatTab(chat) ?: return@chatEntry
-                if (owner == AppTab.Jarvis && openAssistant(chat, visible == chat)) {
+                if (owner == AppTab.Persona && openAssistant(chat, visible == chat)) {
                     stack.removeAll { it == chat }
                     return@chatEntry
                 }

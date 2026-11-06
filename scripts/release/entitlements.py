@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Each bundle's entitlements in a release build: sign an unsigned archive with them, check a built one has them.
 
-The app shares keychain items with JarvisNotify (the push key) and files with JarvisWidgets (the Live Activity's
+The app shares keychain items with PersonaNotify (the push key) and files with PersonaWidgets (the Live Activity's
 persona, in an App Group; docs/release.md "entitlements"), which only works when every bundle is signed with its
 target's keychain groups and App Groups. An archive built unsigned (CODE_SIGNING_ALLOWED=NO, for a cloud-signed export on a Mac without an
 Apple Distribution certificate) carries none, and the export signs each bundle with what it finds in it: build 92
@@ -11,7 +11,7 @@ groups whose bundle id was empty (2026-11-02).
   scripts/release/entitlements.py sign <unsigned .xcarchive>      # ad hoc, inside out, each bundle with its target's file
   scripts/release/entitlements.py check <.ipa | .pkg | .xcarchive | .app>  # every target's groups are in its signature
 
-The Mac app (JarvisMac, the same bundle id, a .pkg for the store) the same way. In an exported .ipa / .pkg the push
+The Mac app (PersonaMac, the same bundle id, a .pkg for the store) the same way. In an exported .ipa / .pkg the push
 entitlement (`aps-environment`, on a Mac `com.apple.developer.aps-environment`) must also say production: the archive
 says development, and only the App Store export changes it.
 
@@ -97,16 +97,16 @@ def identity(bundle):
 def team_prefix(settings):
     team = settings.get("DEVELOPMENT_TEAM", "")
     if not team:
-        sys.exit("entitlements: no DEVELOPMENT_TEAM (python3 scripts/jarvis_config.py xcconfig, then xcodegen)")
+        sys.exit("entitlements: no DEVELOPMENT_TEAM (python3 scripts/persona_config.py xcconfig, then xcodegen)")
     return team + "."
 
 
 def app_bundle(directory):
     """Find the renamed product or a legacy archive without guessing when both are present."""
-    found = [os.path.join(directory, name) for name in ("Persona.app", "Jarvis.app")
+    found = [os.path.join(directory, name) for name in ("Persona.app",)
              if os.path.isdir(os.path.join(directory, name))]
     if len(found) != 1:
-        sys.exit("entitlements: expected one Persona.app or Jarvis.app in %s" % directory)
+        sys.exit("entitlements: expected one Persona.app or Persona.app in %s" % directory)
     return found[0]
 
 
@@ -145,9 +145,9 @@ def check(path):
         elif path.endswith(".pkg"):
             subprocess.run(["pkgutil", "--expand-full", path, os.path.join(tmp, "x")], check=True, capture_output=True)
             found = [os.path.join(r, d) for r, ds, _ in os.walk(os.path.join(tmp, "x"))
-                     for d in ds if d in ("Persona.app", "Jarvis.app")]
+                     for d in ds if d in ("Persona.app",)]
             if len(found) != 1:
-                sys.exit("entitlements: expected one Persona.app or Jarvis.app in %s" % path)
+                sys.exit("entitlements: expected one Persona.app or Persona.app in %s" % path)
             app = found[0]
         elif path.endswith(".xcarchive"):
             app = app_bundle(os.path.join(path, "Products", "Applications"))
@@ -182,7 +182,7 @@ def check(path):
                     problems.append("%s: %s missing (no push)" % (name, k))
                 elif exported and have[k] != "production":
                     problems.append("%s: %s is %s, not production" % (name, k, have[k]))
-            # The groups the code is told to use (Info.plist: JarvisPushKeychainGroup, JarvisAppGroup) must be ones it has.
+            # The groups the code is told to use (Info.plist: PersonaPushKeychainGroup, PersonaAppGroup) must be ones it has.
             for k, v in sorted(info.items()):
                 if k.endswith("KeychainGroup") and v not in groups:
                     problems.append("%s: Info.plist %s = %s is not one of its keychain groups" % (name, k, v))

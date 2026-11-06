@@ -258,7 +258,7 @@ func portEcho(t *testing.T, mh *testHub, tok string, port int, text string) stri
 	return string(out)
 }
 
-// jarvis_settings (the hub's own tool) blocks a Claude config directory on a machine through the manager, whose setting
+// persona_settings (the hub's own tool) blocks a Claude config directory on a machine through the manager, whose setting
 // it is now, only after the phone approves, and removes it the same way.
 func TestSelfSettingsBlocksClaudeDirsThroughTheManager(t *testing.T) {
 	box := newMeshNode("uid-box", "box", "s1")
@@ -273,7 +273,7 @@ func TestSelfSettingsBlocksClaudeDirsThroughTheManager(t *testing.T) {
 		t.Helper()
 		done := make(chan string, 1)
 		go func() {
-			out, err := h.toolJarvisSettings(ctx, assistantwire.AssistantID, m, "s1", json.RawMessage(args))
+			out, err := h.toolPersonaSettings(ctx, assistantwire.AssistantID, m, "s1", json.RawMessage(args))
 			if err != nil {
 				out = "error: " + err.Error()
 			}

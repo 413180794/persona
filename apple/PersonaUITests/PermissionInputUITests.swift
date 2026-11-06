@@ -2,18 +2,18 @@ import XCTest
 
 final class PermissionInputUITests: XCTestCase {
     @MainActor func testSecureInputIsRequiredBeforeApproval() throws {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else {
             throw XCTSkip("needs MOCK_SETTINGS_INPUT=1 scripts/mock/mock_hub.py")
         }
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-app.tab", "chats", "-ui.oldLayout", "YES", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006", "-ui.style", "glass"]
         app.launch()
         let field = app.secureTextFields["interaction.field.password"]
         XCTAssertTrue(field.waitForExistence(timeout: 20), app.debugDescription)
         let allow = app.buttons["填写并允许"]
         XCTAssertFalse(allow.isEnabled)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "permission-input.png"))
         }
         field.tap()

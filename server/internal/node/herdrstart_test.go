@@ -289,7 +289,7 @@ func TestHerdrServerEnvIsClean(t *testing.T) {
 		"XDG_CONFIG_HOME=/Users/me/.config", "HERDR_SOCKET_PATH=/Users/me/.config/herdr/herdr.sock",
 		"ANTHROPIC_API_KEY=sk-test", "ANTHROPIC_BASE_URL=https://gateway.example.com", "ANTHROPIC_MODEL=m",
 		"CLAUDE_CONFIG_DIR=/Users/me/.claude-work", "HTTPS_PROXY=http://proxy.example.com:8080", "http_proxy=http://p",
-		"ALL_PROXY=socks5://p", "NO_PROXY=localhost", "PATH=/Users/me/.jarvis/bin:/usr/bin", "HERDR_PANE_ID=w1:p1",
+		"ALL_PROXY=socks5://p", "NO_PROXY=localhost", "PATH=/Users/me/.persona/bin:/usr/bin", "HERDR_PANE_ID=w1:p1",
 		"HERDR_ENV=1", "TERM_PROGRAM=herdr", "SHELL=/bin/bash", "NODE_OPTIONS=--x"}
 	got := herdrServerEnv(environ, "/bin/zsh")
 	want := []string{"HOME=/Users/me", "USER=me", "LOGNAME=me", "TMPDIR=/tmp/me/", "LANG=zh_CN.UTF-8",
@@ -340,12 +340,12 @@ func TestHerdrAtNodeStartWaitsForTheHub(t *testing.T) {
 // the launcher and Persona's flags, quoted without apostrophes (herdr refuses them), never a bare `claude --resume`.
 func TestClaudeResumeArgv(t *testing.T) {
 	n, home := testNode(t)
-	n.dir, n.bin = filepath.Join(home, ".jarvis"), "/Users/me/.jarvis/bin/jarvisd"
+	n.dir, n.bin = filepath.Join(home, ".persona"), "/Users/me/.persona/bin/personad"
 	n.setManaged([]proto.ManagedLauncher{{Name: "work_gw", BaseURL: "https://gateway.example.com", Model: "m"}})
-	argv, ok := n.claudeResumeArgv(claudeLaunch{Launcher: "work_gw", Settings: "/Users/me/.jarvis/launcher-settings/work_gw.json",
+	argv, ok := n.claudeResumeArgv(claudeLaunch{Launcher: "work_gw", Settings: "/Users/me/.persona/launcher-settings/work_gw.json",
 		Model: "opus[1m]", Hooks: "/Users/me/my hooks"}, startID)
-	want := "HERDR_AGENT=claude /Users/me/.jarvis/bin/jarvisd launch work_gw --resume " + startID +
-		" --settings /Users/me/.jarvis/launcher-settings/work_gw.json --mcp-config " + filepath.Join(n.dir, "mcp.json") +
+	want := "HERDR_AGENT=claude /Users/me/.persona/bin/personad launch work_gw --resume " + startID +
+		" --settings /Users/me/.persona/launcher-settings/work_gw.json --mcp-config " + filepath.Join(n.dir, "mcp.json") +
 		` --model "opus[1m]" --plugin-dir "/Users/me/my hooks"`
 	if !ok || len(argv) != 2 || argv[0] != "eval" || argv[1] != want {
 		t.Fatalf("argv %q\nwant eval %q", argv, want)
@@ -389,9 +389,9 @@ func TestClaudeResumeArgv(t *testing.T) {
 func TestPersonaClaudeIsNotResumedBare(t *testing.T) {
 	n, f, home := herdrNode(t)
 	launch := n.hosts.Get(host.Herdr).(*herdrHost)
-	spec := claudeLaunch{Launcher: "work_claude", Settings: filepath.Join(jarvisDir(home), "claude-settings.json")}
+	spec := claudeLaunch{Launcher: "work_claude", Settings: filepath.Join(personaDir(home), "claude-settings.json")}
 	n.holdResume(context.Background(), launch, "w1:p2", startID, spec)
-	cmd := func(id string) string { return startCmd("work_claude", "--resume "+id, jarvisDir(home)) }
+	cmd := func(id string) string { return startCmd("work_claude", "--resume "+id, personaDir(home)) }
 	held := resumeHeld("w1:p2", startID, cmd(startID))
 	assertTrace(t, f.trace(), held[:])
 	for _, c := range f.calls() {

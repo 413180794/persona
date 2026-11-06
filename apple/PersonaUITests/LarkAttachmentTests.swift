@@ -8,10 +8,10 @@ final class LarkAttachmentFlowTests: XCTestCase {
     private static let fresh = ["-showLarkSendFresh", "YES"]
 
     @MainActor private func open(_ draft: String, quote: String? = nil) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-demo.on", "NO", "-ui.oldLayout", "NO",
                                "-inbox.source", "", "-inbox.kind", "mention", "-openInboxFirst", "NO",
                                "-showLarkAttachmentDraft", draft] + (quote.map { ["-showLarkQuoteDraft", $0] } ?? []) + Self.fresh
@@ -27,7 +27,7 @@ final class LarkAttachmentFlowTests: XCTestCase {
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
-        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+        if let dir = ProcessInfo.processInfo.environment["PERSONA_SHOTS"] {
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + ".png"))
         }
     }
@@ -251,7 +251,7 @@ final class LarkAttachmentFlowTests: XCTestCase {
     /// #1035: a photo quoting a message keeps the quote when the hub can carry it, and stays in the box with a reason
     /// when it cannot (an older Feishu extension would send it on its own). Run against both kinds of mock.
     @MainActor func testQuotedPhotoFollowsWhatTheHubCanCarry() async throws {
-        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"])
         var health = URLRequest(url: try XCTUnwrap(URL(string: hub + "/api/v1/health")))
         health.setValue("Bearer mock", forHTTPHeaderField: "Authorization")
         let (data, _) = try await URLSession.shared.data(for: health)
@@ -285,7 +285,7 @@ final class LarkAttachmentFlowTests: XCTestCase {
     // MARK: Pictures and files in a thread (#1035)
 
     private func hubCarriesAttachmentReplies() async throws -> Bool {
-        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"])
         var health = URLRequest(url: try XCTUnwrap(URL(string: hub + "/api/v1/health")))
         health.setValue("Bearer mock", forHTTPHeaderField: "Authorization")
         let (data, _) = try await URLSession.shared.data(for: health)
@@ -293,17 +293,17 @@ final class LarkAttachmentFlowTests: XCTestCase {
     }
 
     private func uploads() async throws -> [String: [String: Any]] {
-        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"])
         let (data, _) = try await URLSession.shared.data(from: try XCTUnwrap(URL(string: hub + "/mock/lark/uploads")))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
     }
 
     /// 「周末徒步群」 at its thread (60 replies), the thread's box with `draft` picked.
     @MainActor private func openThread(_ draft: String) throws -> XCUIApplication {
-        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
+        guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-demo.on", "NO", "-ui.oldLayout", "NO",
                                "-openInboxItem", "lark:f3:300", "-showLarkThreadAttachmentDraft", draft] + Self.fresh
         app.launchPinned()

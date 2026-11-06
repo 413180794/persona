@@ -52,7 +52,7 @@ func TestSelfSettingsSourceTriageRules(t *testing.T) {
 	if err != nil || !strings.Contains(list, `"key":"inbox.rules.example-chat","title":"示例聊天的分拣规则"`) || strings.Contains(list, "example-other") {
 		t.Fatalf("list: %v\n%s", err, list)
 	}
-	if got, err := h.toolJarvisSettings(ctx, "server", "s1", json.RawMessage(`{"action":"get","key":"inbox.rules.example-chat"}`)); err != nil || got != "（无）" {
+	if got, err := h.toolPersonaSettings(ctx, "server", "s1", json.RawMessage(`{"action":"get","key":"inbox.rules.example-chat"}`)); err != nil || got != "（无）" {
 		t.Fatalf("get: %q %v", got, err)
 	}
 	// The same through the hub's hand-over (extwire.HubSettingsTool).
@@ -72,11 +72,11 @@ func TestSelfSettingsSourceTriageRules(t *testing.T) {
 			return proto.Resolution{Allow: &allow}
 		}
 		th.mu.Unlock()
-		out, err := h.toolJarvisSettings(ctx, "server", "s1", json.RawMessage(`{"action":"set","key":"inbox.rules.example-chat","value":`+value+`}`))
+		out, err := h.toolPersonaSettings(ctx, "server", "s1", json.RawMessage(`{"action":"set","key":"inbox.rules.example-chat","value":`+value+`}`))
 		if err != nil {
 			out = "error: " + err.Error()
 		}
-		if ix.ID == "" || ix.MachineID != "server" || ix.SessionID != "s1" || ix.ToolName != "jarvis_settings" || ix.Kind != proto.IxPermission {
+		if ix.ID == "" || ix.MachineID != "server" || ix.SessionID != "s1" || ix.ToolName != "persona_settings" || ix.Kind != proto.IxPermission {
 			t.Fatalf("the card: %+v", ix)
 		}
 		return out, ix
@@ -95,10 +95,10 @@ func TestSelfSettingsSourceTriageRules(t *testing.T) {
 	if c := config(); c["triage_rules"] != "机器人发的都算噪音" || c["account"] != float64(2) || !strings.Contains(out2, "updated") {
 		t.Fatalf("approved: %q %v", out2, c)
 	}
-	if got, _ := h.toolJarvisSettings(ctx, "server", "s1", json.RawMessage(`{"action":"get","key":"inbox.rules.example-chat"}`)); got != "机器人发的都算噪音" {
+	if got, _ := h.toolPersonaSettings(ctx, "server", "s1", json.RawMessage(`{"action":"get","key":"inbox.rules.example-chat"}`)); got != "机器人发的都算噪音" {
 		t.Fatalf("get after: %q", got)
 	}
-	if out, _ := h.toolJarvisSettings(ctx, "server", "s1", json.RawMessage(`{"action":"set","key":"inbox.rules.example-chat","value":"机器人发的都算噪音"}`)); !strings.Contains(out, "没有变化") {
+	if out, _ := h.toolPersonaSettings(ctx, "server", "s1", json.RawMessage(`{"action":"set","key":"inbox.rules.example-chat","value":"机器人发的都算噪音"}`)); !strings.Contains(out, "没有变化") {
 		t.Fatalf("unchanged: %q", out)
 	}
 	if _, ix = set(true, `""`); !strings.HasSuffix(ix.Summary, "→ （无）") {

@@ -89,22 +89,22 @@ func (n *Node) guestOf(id string) []string {
 // guestMCPAndTools are a guest conversation's process flags: Persona's MCP server alone, told it is a guest's, no
 // built-in tools, and only its tools allowed.
 func (n *Node) guestMCPAndTools(id string, tools []string) (mcpJSON string, toolFlags []string) {
-	env := map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id,
-		"PERSONA_GUEST": "1", "JARVIS_GUEST": "1"}
-	mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": n.bin, "args": []string{"mcp"}, "env": env}}})
+	env := map[string]string{"PERSONA_ASSISTANT": "1", "PERSONA_SESSION_ID": id,
+		"PERSONA_GUEST": "1"}
+	mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"persona": map[string]any{"command": n.bin, "args": []string{"mcp"}, "env": env}}})
 	allowed := make([]string, len(tools))
 	for i, t := range tools {
-		allowed[i] = "mcp__jarvis__" + t
+		allowed[i] = "mcp__persona__" + t
 	}
 	return string(mcp), []string{"--mcp-config", string(mcp), "--strict-mcp-config", "--tools", "", "--allowedTools", strings.Join(allowed, ",")}
 }
 
-// assistantDirOf is where a directory the hub names relative to HOME for the assistant (".jarvis/assistant",
-// ".jarvis/health", ".jarvis/guest") is on this node. Under a custom PERSONA_HOME it is in that root, the data_dir the
-// hub reports the assistant's directory in (#5505); on the default layouts (~/.jarvis, ~/.persona) it stays at the
+// assistantDirOf is where a directory the hub names relative to HOME for the assistant (".persona/assistant",
+// ".persona/health", ".persona/guest") is on this node. Under a custom PERSONA_HOME it is in that root, the data_dir the
+// hub reports the assistant's directory in (#5505); on the default layouts (~/.persona, ~/.persona) it stays at the
 // path it always had, which Claude Code knows the assistant's sessions and memory by (docs/rename.md).
 func (n *Node) assistantDirOf(rel string) string {
-	if sub, ok := strings.CutPrefix(filepath.ToSlash(rel), ".jarvis/"); ok && n.customDataDir() {
+	if sub, ok := strings.CutPrefix(filepath.ToSlash(rel), ".persona/"); ok && n.customDataDir() {
 		return filepath.Join(n.dir, filepath.FromSlash(sub))
 	}
 	return filepath.Join(n.home, rel)
@@ -116,5 +116,5 @@ func (n *Node) customDataDir() bool {
 		return false
 	}
 	d := filepath.Clean(n.dir)
-	return d != filepath.Join(n.home, ".jarvis") && d != filepath.Join(n.home, ".persona")
+	return d != filepath.Join(n.home, ".persona") && d != filepath.Join(n.home, ".persona")
 }

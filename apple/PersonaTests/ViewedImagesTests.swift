@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The images a turn's work looked at (`ViewedImages`, docs/protocol.md「这一轮看过的图片」), by the hub's rules, from
 /// the work itself and from a fold that hides it; and where their strip goes (`ChatLines`): between the work line and
@@ -55,7 +55,7 @@ struct ViewedImagesTests {
             item(3, .toolUse, tool: "Read", id: "a", input: ["file_path": .string("/w/shot.png")]),
             item(4, .toolResult, role: "user", text: "", id: "a"),
             item(5, .image, role: "user", id: "a", image: png(4, 3, size: 100, item: "5#0")),
-            item(6, .toolUse, tool: "mcp__jarvis__computer_state", id: "b", input: ["machine": .string("m1"), "app": .string("Notes")]),
+            item(6, .toolUse, tool: "mcp__persona__computer_state", id: "b", input: ["machine": .string("m1"), "app": .string("Notes")]),
             item(7, .toolResult, role: "user", text: "ok", id: "b"),
             item(8, .image, role: "user", id: "b", image: png(16, 10, size: 900, item: "8#0")),
             item(9, .toolUse, tool: "Read", id: "c", input: ["file_path": .string("/w/shot.png")]),
@@ -67,10 +67,10 @@ struct ViewedImagesTests {
             item(15, .toolResult, role: "user", text: "", id: "e"),
             item(16, .toolUse, tool: "Read", id: "f", input: ["file_path": .string("/w/gone.png")]),
             item(17, .toolResult, role: "user", text: "no such file", id: "f", error: true),
-            item(18, .toolUse, tool: "mcp__jarvis__browser_look", id: "g", input: ["machine": .string("m2")]),
+            item(18, .toolUse, tool: "mcp__persona__browser_look", id: "g", input: ["machine": .string("m2")]),
             item(19, .toolResult, role: "user", text: "ok", id: "g"),
             item(20, .image, role: "user", id: "g", image: png(8, 5, size: 300, item: "20#0")),
-            item(21, .toolUse, tool: "mcp__jarvis__computer_state", id: "h", input: ["machine": .string("m1")]),
+            item(21, .toolUse, tool: "mcp__persona__computer_state", id: "h", input: ["machine": .string("m1")]),
             item(22, .toolResult, role: "user", text: "ok", id: "h"),
             item(23, .image, role: "user", id: "h", image: png(16, 10, size: 900, item: "23#0")),
             item(24, .text, text: "看完了"),
@@ -92,10 +92,10 @@ struct ViewedImagesTests {
     @Test func aFoldGivesTheSameStripAsItsWork() {
         let images: [FoldImage] = [
             FoldImage(itemID: "5#0", toolUseID: "a", tool: "Read", source: "read", path: "/w/shot.png", mime: "image/png", size: 100, width: 4, height: 3),
-            FoldImage(itemID: "8#0", toolUseID: "b", tool: "mcp__jarvis__computer_state", source: "screenshot", machine: "m1",
+            FoldImage(itemID: "8#0", toolUseID: "b", tool: "mcp__persona__computer_state", source: "screenshot", machine: "m1",
                       mime: "image/png", size: 900, width: 16, height: 10),
             FoldImage(toolUseID: "d", tool: "Read", source: "read", path: "/w/big.JPG"),
-            FoldImage(itemID: "20#0", toolUseID: "g", tool: "mcp__jarvis__browser_look", source: "browser", machine: "m2",
+            FoldImage(itemID: "20#0", toolUseID: "g", tool: "mcp__persona__browser_look", source: "browser", machine: "m2",
                       mime: "image/png", size: 300, width: 8, height: 5),
         ]
         var fold = item(3, .fold)

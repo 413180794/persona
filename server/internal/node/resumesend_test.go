@@ -76,7 +76,7 @@ func TestResumedSessionWithADialogIsNotTypedInto(t *testing.T) {
 		return map[string]any{}
 	})
 	n, home := testNode(t)
-	n.hosts, n.dir, n.panes = herdrHosts(h), filepath.Join(home, ".jarvis"), map[string]string{}
+	n.hosts, n.dir, n.panes = herdrHosts(h), filepath.Join(home, ".persona"), map[string]string{}
 	n.files, n.modes, n.metas, n.bgScans = map[string]*transcript.File{}, map[string]sessionModes{}, map[string]quickMeta{}, map[string]*bgScan{}
 	n.state.put(id, sessionState{Cwd: home, Launcher: "claude"})
 	err := n.send(context.Background(), id, "部署到线上", nil, sendOpts{})

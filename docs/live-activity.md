@@ -1,7 +1,7 @@
 # Lock Screen / Dynamic Island Live Activity (Fleet)
 
 The whole phone has a single Live Activity, "Fleet": it rolls up every Agent that needs you, is working, or finished unseen onto the Lock Screen and the Dynamic Island. The manager that talks to computers computes the content (`server/internal/assistant/fleet_live.go`, delivered to the hub over the bus as `fleet.live`); the hub fills in each device's fields and pushes over APNs at a set pace.
-The App starts the activity and reports tokens; the Widget extension (source `apple/PersonaWidgets`, module still `JarvisWidgets`) draws it. The design rationale is in the lane notes (an analysis of the ChatGPT Codex / Sand activities);
+The App starts the activity and reports tokens; the Widget extension (source `apple/PersonaWidgets`, module still `PersonaWidgets`) draws it. The design rationale is in the lane notes (an analysis of the ChatGPT Codex / Sand activities);
 this page covers only implementation and conventions.
 
 ## What it shows
@@ -20,7 +20,7 @@ The compact view used to be "a star on the left, a timer on the right", which sa
 Preset A (default)  ( ⚙3    ▬▬▬▬   ●1 )     left: the most urgent category, right: the next one; when something needs you ( 💬2  ▬▬▬▬  ⚙3 )
 Preset B            ( ⚙3    ▬▬▬▬   ⚡12k )   right: tokens output per minute across all Agents (TPM)
 Preset C            ( ⚙3    ▬▬▬▬   📊42M )   right: tokens used today
-Custom              pick each side: Status Counts / Tokens per Minute / Tokens Today / Requests Today / Jarvis assistant / Machine Load / Longest Turn Timer / None
+Custom              pick each side: Status Counts / Tokens per Minute / Tokens Today / Requests Today / Persona assistant / Machine Load / Longest Turn Timer / None
 ```
 
 - "Needs You" always takes the left side (overriding the custom choice), in red; when the right side is set to Status Counts it shows the next category after the left one. The rules are in `IslandCell.sides` (`apple/Shared/FleetState.swift`), pinned by unit tests.
@@ -81,8 +81,8 @@ Limited 28  ⚙3            (12) status ring    99+ (status color)      inside a
 
 **Verification**: `IslandFitTests` draws the minimal, width-limited and compact-side views with 1 / 2 / 3 / 4-digit counts at their respective sizes and checks that every drawn pixel stays within bounds
 (text isn't shrunk or truncated, so anything that doesn't fit overflows and gets caught). In the simulator, reproduce with another app's activity: `scripts/app/island_peer.sh <simulator>` installs a sample app that has only a Live Activity
-(`apple/IslandPeer`, "8分"); with `JARVIS_ISLAND_PEER=dev.example.islandpeer`, `LiveActivityShots` takes two extra shots, "shared" and "landscape",
-and `JARVIS_FLEET_COUNT=12` makes the fabricated count two digits.
+(`apple/IslandPeer`, "8分"); with `PERSONA_ISLAND_PEER=dev.example.islandpeer`, `LiveActivityShots` takes two extra shots, "shared" and "landscape",
+and `PERSONA_FLEET_COUNT=12` makes the fabricated count two digits.
 
 - Not counted: seen (idle), offline and muted Agents, and ones waiting for the next `/loop` wake-up; the assistant (chat tab) only counts when it's asking you. The rules match the Agents list (`hub/liveactivity.go buildFleet`).
 - Item order: needs you (earliest request first) → working (longest-running first) → finished unseen (newest first); the push carries at most 3 items, the UI draws 2, and the rest show as "+N".
@@ -195,7 +195,7 @@ The diagnostics page (next section) showed the same avatar in Settings, the hub 
 
 #### Diagnostics
 
-- **Logs**: on both sides, every App Group file write and every failed read is logged to the system log (subsystem `jarvis`, category `island`), including filename, byte count and error. When what the extension draws changes (or 10 minutes have passed since the last log), it logs
+- **Logs**: on both sides, every App Group file write and every failed read is logged to the system log (subsystem `persona`, category `island`), including filename, byte count and error. When what the extension draws changes (or 10 minutes have passed since the last log), it logs
   "extension drew … container … saved … face …": which avatar from the content it drew, whether it has a container, which image it read. In the Mac's Console, select the phone and search `category:island`, or capture a sysdiagnose.
 - **Diagnostics page**: **Settings › Notifications › Dynamic Island**, long-press the first preview. It lists the avatar's delivery path in order:
   - conclusion: the first step that went wrong;
@@ -223,7 +223,7 @@ Go `hub.FleetState` and Swift `FleetState` (`apple/Shared/FleetState.swift`) mat
 - **Times are always Unix seconds (numbers)**: ActivityKit decodes a push's `content-state` with the default JSONDecoder, which interprets a `Date` as seconds since 2001.
 - For background-work items (`background: true`), `since` uses the earliest `started_at` among running workflows with a known start time (#3433), so time spent waiting after the main turn ended isn't counted as workflow duration. If no such workflow exists, fall back to the turn start time, then the session update time. Foreground turns still use their own start time; the one-line `detail` text is unchanged.
 - Every field on the Swift side is decoded leniently (unknown phase / kind values don't error), so adding hub fields won't break the activity.
-- `attributes-type` is `JarvisActivityAttributes`, and `attributes` is `{"kind":"fleet"}` (used by push-to-start); neither name may change.
+- `attributes-type` is `PersonaActivityAttributes`, and `attributes` is `{"kind":"fleet"}` (used by push-to-start); neither name may change.
 - Dynamic Island fields: `left` / `right` (this device's sides, `status|tpm|tokens|requests|assistant|load|timer|none`), `assistant` (assistant replying),
   `stats` (`{tpm, tokens, requests, loads:[{id, name, percent}]}`). The hub only fills the fields each device displays (`FleetState.forDevice`),
   so changes to things it doesn't display consume no pushes. The `fleet` event received by the App carries all numbers, trimmed to its own settings (`FleetState.tailored`).
@@ -288,7 +288,7 @@ On the user's real hub, Dynamic Island content changed about 180 times per hour.
   reporting all of these to `POST /api/v1/devices/{id}/live-activity`.
 - On a `fleet` event in the foreground, or `GET /api/v1/fleet` on returning to the foreground: with content, start (only the foreground can `Activity.request`) or update; when empty, wait 1 minute before ending (otherwise it flickers between rounds). If only the assistant is replying and one island side displays the assistant, it is not empty: keep an existing activity (Thinking), but do not start a new one just for it. After the assistant finishes, end after 1 minute, matching the hub (#4628 / #4590, `LiveActivityController.step`).
   If identical to what's displayed (something this device doesn't display changed), don't update unless less than 5 minutes remain before staleness (each update renews for 15 minutes, `worthUpdating`): every update redraws the island and Lock Screen.
-- Tapping the activity itself (compact, Lock Screen): with one Agent, open it (`jarvis://open?machine=…&session=…`); with several, simply return to the App (`jarvis://open`), at the page and position where you left (a list stays a list, a chat stays the same chat and line; if the system ended the App, cold launch restores the last chat and the reading position recorded on backgrounding). Each expanded-view row opens its own session. Before 2026-10-29 it always opened the first item; the user reported "tapping the Dynamic Island goes into some Agent".
+- Tapping the activity itself (compact, Lock Screen): with one Agent, open it (`persona://open?machine=…&session=…`); with several, simply return to the App (`persona://open`), at the page and position where you left (a list stays a list, a chat stays the same chat and line; if the system ended the App, cold launch restores the last chat and the reading position recorded on backgrounding). Each expanded-view row opens its own session. Before 2026-10-29 it always opened the first item; the user reported "tapping the Dynamic Island goes into some Agent".
 - When the Lock Screen draws a single request (the one with buttons, or the one nameless line such as "A permission request is waiting" when details are hidden), tapping the Lock Screen opens that request's session (`FleetLink.lockScreen`, #4318): it opens what is drawn, not a guess. With several rows or only counts, as above. The Apple Watch Smart Stack (`.small`) still taps as the whole activity.
 - Simulator automation (`-pairURL`) doesn't report tokens, so the hub won't mistake the real device's activity for the simulator's.
 
@@ -314,16 +314,16 @@ On the user's real hub, Dynamic Island content changed about 180 times per hour.
 
 ## Verification
 
-- Layout: `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`thinking`: only the assistant replying, plus one finished-unseen item; `assistant`: only the assistant, nothing countable, so the minimal view draws the avatar; `offline`: a working activity marked stale immediately; `-fleetDetails YES` shows Lock Screen details, `-fleetIsland b|c|custom:assistant,load` selects the island sides, `-openPersona jarvis-circuit` changes the avatar) starts an activity with fabricated data, no hub needed.
-  UI test `LiveActivityShots` reads `JARVIS_FLEET_ISLAND` and `JARVIS_PERSONA` (avatar packs need `JARVIS_MOCK_HUB`: mock_hub with `MOCK_PERSONAS=demo`, downloaded by the App first).
-  `testSwitchingPersonaRedrawsTheIsland` reads `JARVIS_PERSONA_SWITCH=demo,jarvis-circuit,jarvis`: while the activity runs, switch through them in **Settings › Appearance › Avatar**, returning home for 3 seconds and capturing the island each time. Two compact shots 0.4 seconds apart (`compact` / `compact2`) check for animation, then another 3 seconds later (`compact3`; just after going home, the island may still be animating and empty).
-  `JARVIS_ISLAND_PEER` (another app's activity, landscape) and `JARVIS_FLEET_COUNT` (`-showFleetCount`, changes the number of count digits) are described under "Sharing the Dynamic Island with other apps" above.
+- Layout: `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`thinking`: only the assistant replying, plus one finished-unseen item; `assistant`: only the assistant, nothing countable, so the minimal view draws the avatar; `offline`: a working activity marked stale immediately; `-fleetDetails YES` shows Lock Screen details, `-fleetIsland b|c|custom:assistant,load` selects the island sides, `-openPersona persona-circuit` changes the avatar) starts an activity with fabricated data, no hub needed.
+  UI test `LiveActivityShots` reads `PERSONA_FLEET_ISLAND` and `PERSONA_PERSONA` (avatar packs need `PERSONA_MOCK_HUB`: mock_hub with `MOCK_PERSONAS=demo`, downloaded by the App first).
+  `testSwitchingPersonaRedrawsTheIsland` reads `PERSONA_PERSONA_SWITCH=demo,persona-circuit,persona`: while the activity runs, switch through them in **Settings › Appearance › Avatar**, returning home for 3 seconds and capturing the island each time. Two compact shots 0.4 seconds apart (`compact` / `compact2`) check for animation, then another 3 seconds later (`compact3`; just after going home, the island may still be animating and empty).
+  `PERSONA_ISLAND_PEER` (another app's activity, landscape) and `PERSONA_FLEET_COUNT` (`-showFleetCount`, changes the number of count digits) are described under "Sharing the Dynamic Island with other apps" above.
   In the simulator a stale activity only appears on the Lock Screen (gray avatar + "Waiting for hub update…"), not the Dynamic Island.
   Settings page: `-tab settings -openNotificationSettings YES -openIslandSettings YES`.
   `simctl io screenshot` can't capture the Dynamic Island or Lock Screen; use UI test `LiveActivityShots` for compact / expanded / Lock Screen shots (`docs/testing.md`).
 - Push: `xcrun simctl push` doesn't support Live Activities, but the simulator can receive real APNs sandbox pushes. The DEBUG build prints the activity push token in the system log
-  (`subsystem == "jarvis"`); on the hub machine, run `JARVIS_LA_TOKEN=<token> JARVIS_LA_TOPIC=<bundle id> go test ./internal/hub -run TestManualLiveActivityPush`
-  to send an update with the hub's APNs key, then capture it with `JARVIS_FLEET_SAMPLE=current` (verified 2026-10-29: Go-generated JSON → APNs → simulator activity displays correctly).
+  (`subsystem == "persona"`); on the hub machine, run `PERSONA_LA_TOKEN=<token> PERSONA_LA_TOPIC=<bundle id> go test ./internal/hub -run TestManualLiveActivityPush`
+  to send an update with the hub's APNs key, then capture it with `PERSONA_FLEET_SAMPLE=current` (verified 2026-10-29: Go-generated JSON → APNs → simulator activity displays correctly).
 - Buttons: UI test `LiveActivityActionTests` connects to `mock_hub.py`, taps Deny on the Lock Screen, then reads `GET /mock/resolved` to confirm the hub received `allow:false` (passed 2026-10-29).
 - Real device only: push-to-start (hub starts an activity after the App is killed), update budget, Watch Smart Stack.
 

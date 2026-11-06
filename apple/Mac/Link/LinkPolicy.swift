@@ -4,7 +4,7 @@ import SwiftUI
 /// Which links a click hands to macOS. `NSWorkspace.open` runs whatever a URL names without asking (a `file://`
 /// application, an `smb://` share, another app's URL scheme), and links come from agents' replies and other people's
 /// messages. The web and mail go out; anything else is copied, with a toast saying so (the web version does the same).
-/// Not `jarvis://` either: a `jarvis://pair` link in a message would move the app to whoever's hub it names.
+/// Not `persona://` either: a `persona://pair` link in a message would move the app to whoever's hub it names.
 nonisolated enum LinkPolicy {
     static let openable: Set<String> = ["http", "https", "mailto"]
 

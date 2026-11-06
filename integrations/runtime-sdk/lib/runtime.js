@@ -18,7 +18,7 @@ import { Peer, RpcError } from './wire.js'
 export const PROTOCOL = 1
 
 const PHONE_DRIVEN_FOR = 6 * 60 * 60 * 1000 // a session the phone sent to or started recently: it answers first
-const RESUME_WAIT = 2 * 60 * 1000 // how long a pending ask waits for the next node (jarvisd node.ResumeWait)
+const RESUME_WAIT = 2 * 60 * 1000 // how long a pending ask waits for the next node (personad node.ResumeWait)
 const APPEND_WINDOW = 80 // ms: committed content within this window goes out as one batch
 const STREAM_EVERY = 120 // ms: live text at most this often (the whole text so far each time)
 const RETRY_PRESENT = 1000 // ms: retry this often while the socket file is there (a node is, or is restarting)
@@ -29,7 +29,7 @@ const NEW_NODE_MAX = 10 * 60_000 // ms: …and connect again after this long any
 const CONFLICT_RETRY = 30_000 // ms: another process holds this runtime id on the node: try again this often
 
 /** Where a listening runtime takes the node's connection when it serves the endpoint itself (options.listen.path). */
-export const DEFAULT_LISTEN_PATH = '/jarvis/runtime'
+export const DEFAULT_LISTEN_PATH = '/persona/runtime'
 
 /** The node's runtime socket for the user this process runs as. */
 export function defaultSocketPath() {
@@ -85,7 +85,7 @@ export function defaultSocketPath() {
  *   after every hello and whenever the node's hub comes or goes (a runtime fetching the hub's tools does it then).
  *   listen: be a daemon (docs/daemons.md) — the node dials this runtime's WebSocket endpoint instead of the runtime
  *   dialing runtime.sock. With a port ({port, host, path, token}; port 0 picks one) start() serves the endpoint
- *   itself (host 127.0.0.1 and path /jarvis/runtime by default); without one ({token}, or `true` with
+ *   itself (host 127.0.0.1 and path /persona/runtime by default); without one ({token}, or `true` with
  *   options.token) the runtime's own HTTP server hands upgrades to rt.accept(). The token is what the node's
  *   daemons.json gives for this daemon (a function: read at every connection).
  *   package / onUpdate: the code this runtime runs, for a node that keeps it up to date (docs/runtimes.md "Auto-update";
@@ -274,7 +274,7 @@ export function createRuntime(driver, options) {
       const missing = requires.filter((f) => !nodeFeatures.includes(f))
       if (missing.length > 0) {
         // An older node: stay off it, and look again now and then (an updated node restarts and is found).
-        if (!warnedRequires) log(`jarvis: this jarvisd node lacks ${missing.join(', ')}; update jarvisd (connecting again once it restarts)`)
+        if (!warnedRequires) log(`persona: this personad node lacks ${missing.join(', ')}; update personad (connecting again once it restarts)`)
         warnedRequires = true
         if (peer === p) peer = undefined
         state.heldOff = true
@@ -292,7 +292,7 @@ export function createRuntime(driver, options) {
           try {
             options.onUpdate({ name: offer.name, hash: offer.hash, version: typeof offer.version === 'string' ? offer.version : '' })
           } catch (err) {
-            log(`jarvis: onUpdate: ${err.message}`)
+            log(`persona: onUpdate: ${err.message}`)
           }
         })
       }
@@ -300,25 +300,25 @@ export function createRuntime(driver, options) {
       if (peer === p) peer = undefined
       if (err instanceof RpcError && err.code === 'runtime_conflict') {
         // Another process is this runtime id on the node (two copies configured alike): do not fight it.
-        if (!warnedConflict) log(`jarvis: ${err.message}; give this one another runtime id (trying again every ${CONFLICT_RETRY / 1000}s)`)
+        if (!warnedConflict) log(`persona: ${err.message}; give this one another runtime id (trying again every ${CONFLICT_RETRY / 1000}s)`)
         warnedConflict = true
         state.heldOff = true
         p.close(err)
         if (dialing && state.run === run) scheduleConnect(CONFLICT_RETRY)
         return
       }
-      log(`jarvis: hello failed: ${err.message}`)
+      log(`persona: hello failed: ${err.message}`)
       p.close(err)
       if (dialing && state.run === run) scheduleConnect(backoff())
       return
     }
     retryMs = baseRetry
-    log('jarvis: connected to the node')
+    log('persona: connected to the node')
     schedulePush(0)
     hubChanged()
     const why = await p.done
     if (peer === p) peer = undefined
-    log(`jarvis: node connection closed${why?.message ? `: ${why.message}` : ''}`)
+    log(`persona: node connection closed${why?.message ? `: ${why.message}` : ''}`)
     if (dialing && state.run === run) scheduleConnect(baseRetry)
   }
 
@@ -334,7 +334,7 @@ export function createRuntime(driver, options) {
     }
     const conn = upgrade(req, socket, head, { token: typeof token === 'function' ? token() : token })
     if (!conn) {
-      log('jarvis: refused a connection (wrong token, or not the runtime protocol)')
+      log('persona: refused a connection (wrong token, or not the runtime protocol)')
       return false
     }
     void adopt(conn)
@@ -362,7 +362,7 @@ export function createRuntime(driver, options) {
       server.once('error', reject)
       server.listen(listen.port ?? 0, listen.host ?? '127.0.0.1', () => {
         server.off('error', reject)
-        server.on('error', (err) => log(`jarvis: endpoint: ${err.message}`))
+        server.on('error', (err) => log(`persona: endpoint: ${err.message}`))
         resolve(server.address())
       })
     })
@@ -417,7 +417,7 @@ export function createRuntime(driver, options) {
       for (const s of list) listed.add(s.session_id)
       peer?.notify('runtime.sessions', { sessions: list })
     } catch (err) {
-      log(`jarvis: list sessions: ${err.message}`)
+      log(`persona: list sessions: ${err.message}`)
     }
   }
 
@@ -465,7 +465,7 @@ export function createRuntime(driver, options) {
         w.history = at.history
       }
     } catch (err) {
-      log(`jarvis: catch up ${id}: ${err.message}`)
+      log(`persona: catch up ${id}: ${err.message}`)
     } finally {
       w.catchingUp = false
       // In order, each against what went out before it: queue drops what the catch-up already pushed, and a move to
@@ -499,7 +499,7 @@ export function createRuntime(driver, options) {
     try {
       driver.watchChanged(id, watching, o)
     } catch (err) {
-      log(`jarvis: watchChanged ${id}: ${err.message}`)
+      log(`persona: watchChanged ${id}: ${err.message}`)
     }
   }
 
@@ -603,7 +603,7 @@ export function createRuntime(driver, options) {
   function setHub(connected) {
     if (connected === hubConnected) return false
     hubConnected = connected
-    log(`jarvis: the node's hub ${connected ? 'is back' : 'is gone'}`)
+    log(`persona: the node's hub ${connected ? 'is back' : 'is gone'}`)
     return true
   }
 
@@ -612,7 +612,7 @@ export function createRuntime(driver, options) {
     try {
       options.onHub(peer !== undefined && hubConnected)
     } catch (err) {
-      log(`jarvis: onHub: ${err.message}`)
+      log(`persona: onHub: ${err.message}`)
     }
   }
 
@@ -657,7 +657,7 @@ export function createRuntime(driver, options) {
             await sleep(1000, signal) // the node restarts: ask the next one with the same id
             continue
           }
-          log(`jarvis: ask the phone: ${err.message}`)
+          log(`persona: ask the phone: ${err.message}`)
           return { dismiss: true }
         }
       }

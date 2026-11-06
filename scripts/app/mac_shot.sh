@@ -5,9 +5,9 @@
 #   scripts/app/mac_shot.sh <name> [launch args…]
 #   scripts/app/mac_shot.sh agents -tab dev
 #   scripts/app/mac_shot.sh chat -openSession demo-mac/demo-1
-#   BUILD=1 scripts/app/mac_shot.sh settings -tab settings     # build JarvisMac (Debug) first
+#   BUILD=1 scripts/app/mac_shot.sh settings -tab settings     # build PersonaMac (Debug) first
 #
-# Writes $OUT/<name>-light.png and $OUT/<name>-dark.png (OUT defaults to /tmp/jarvis-mac-shots) and prints the paths.
+# Writes $OUT/<name>-light.png and $OUT/<name>-dark.png (OUT defaults to /tmp/persona-mac-shots) and prints the paths.
 # Always demo mode (`-demo.on YES`, made-up data, nothing leaves the Mac) unless DEMO=0 (then pass -pairURL for
 # scripts/mock/mock_hub.py yourself). SIZE=1280x820, DELAY=4 (seconds before the shot), APP=<path to Persona.app>,
 # APPEARANCES="light dark".
@@ -16,7 +16,7 @@ set -euo pipefail
 name=${1:?usage: mac_shot.sh <name> [launch args…]}
 shift || true
 root=$(cd "$(dirname "$0")/../.." && pwd)
-out=${OUT:-/tmp/jarvis-mac-shots}
+out=${OUT:-/tmp/persona-mac-shots}
 size=${SIZE:-1280x820}
 delay=${DELAY:-4}
 derived=${DERIVED:-$root/../build/DerivedDataMac}
@@ -25,8 +25,8 @@ app=${APP:-$derived/Build/Products/Debug/Persona.app}
 if [[ "${BUILD:-0}" == 1 ]]; then
     (
         cd "$root/apple"
-        eval "$(python3 ../scripts/jarvis_config.py env)"
-        python3 ../scripts/jarvis_config.py xcconfig >/dev/null
+        eval "$(python3 ../scripts/persona_config.py env)"
+        python3 ../scripts/persona_config.py xcconfig >/dev/null
         xcodegen generate -q
         xcodebuild build -project Persona.xcodeproj -scheme PersonaMac -configuration Debug -destination "platform=macOS" \
             -derivedDataPath "$derived" CODE_SIGNING_ALLOWED=NO -quiet

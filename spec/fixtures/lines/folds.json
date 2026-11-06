@@ -7,8 +7,8 @@
       "description": "折叠条目按其代表的工具数和思考数计数，保留结束时间。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/FoldedWorkTests.swift: aFoldCountsWhatItStandsFor"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/FoldedWorkTests.swift: aFoldCountsWhatItStandsFor"
       ],
       "input": {
         "items": [
@@ -158,8 +158,8 @@
       "description": "重发折叠保持幂等，扩大范围替换旧步骤，展开恢复原顺序。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/FoldedWorkTests.swift: aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/FoldedWorkTests.swift: aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack"
       ],
       "input": {
         "items": [
@@ -1029,8 +1029,8 @@
       "description": "折叠范围外的调用在结果补到后仍配成完整工具卡。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
-        "ios/JarvisTests/FoldedWorkTests.swift: stepsOutsideAFoldStay"
+        "ios/Persona/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
+        "ios/PersonaTests/FoldedWorkTests.swift: stepsOutsideAFoldStay"
       ],
       "input": {
         "items": [

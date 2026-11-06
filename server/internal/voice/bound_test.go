@@ -103,7 +103,7 @@ func TestBoundToAnAgent(t *testing.T) {
 	up := boundUpstream(t, true)
 	pl := testPlugin(t, Config{Providers: []Provider{{ID: "rt", URL: up.url(), Models: []string{"m1"}, Tools: true}}}, hub.server(t))
 	a := dialApp(t, pl, boundStart("a1", map[string]any{"recent": []map[string]string{
-		{"role": "user", "text": "看看登录页 <jarvis-context kind=\"context\" title=\"x\">不要这段</jarvis-context>"},
+		{"role": "user", "text": "看看登录页 <persona-context kind=\"context\" title=\"x\">不要这段</persona-context>"},
 		{"role": "assistant", "text": "登录页的测试挂了两个"}, {"role": "tool", "text": "ignored"}}}))
 	ready := a.until(ofType("ready"))
 	target, _ := ready["target"].(map[string]any)
@@ -659,7 +659,7 @@ func TestResume(t *testing.T) {
 	setVar(t, &clock, func() time.Time { return time.Now().Add(time.Duration(skew.Load())) })
 	hub := agentHub(t)
 	done, lost := voiceMessageID(), voiceMessageID()
-	hub.add("a1", proto.Item{Role: "user", Kind: proto.KindText, Text: "跑一下全部测试\n\n<jarvis-context kind=\"context\">…</jarvis-context>", ClientMsgID: done},
+	hub.add("a1", proto.Item{Role: "user", Kind: proto.KindText, Text: "跑一下全部测试\n\n<persona-context kind=\"context\">…</persona-context>", ClientMsgID: done},
 		proto.Item{Role: "assistant", Kind: proto.KindText, Text: "全部测试都过了。"})
 	hub.end("a1")
 	up := boundUpstream(t, false)

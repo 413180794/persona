@@ -30,7 +30,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 - node shares one synchronous writer for frames and replies to hub (`rpc.Peer.write` holds a lock while writing stdout). A slow link can block writes; the blocked code must not hold other locks or block reads from herdr.
   On slow links, merge "frames arriving while a write is in progress", not just "frames arriving within 30 ms" (section 17 of `docs/terminal.md`).
 - If a session has a real host pane but reports `has no terminal`, check `isAssistantSession` first, not just WebSocket or Herdr versions.
-  The working directory `~/.jarvis/assistant` and transcript directory are only fallback clues for a headless assistant; users can also restore terminal sessions in those directories.
+  The working directory `~/.persona/assistant` and transcript directory are only fallback clues for a headless assistant; users can also restore terminal sessions in those directories.
   A nonempty `PaneID` in the current host snapshot should take precedence over directory inference, but a headless assistant process explicitly owned by node still takes priority (so a stale pane does not override ownership).
   Validate by subscribing through hub and receiving a complete terminal frame, not just a successful WebSocket handshake or `pane_id` in the session list.
   Hub's `decorated` also reclassifies `assistant`, and the phone's Agents list filters by that field. Fixing only node lets the terminal open but still leaves the session missing from the list.

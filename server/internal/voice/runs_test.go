@@ -339,7 +339,7 @@ func TestUnpromptedDelegationIsRefused(t *testing.T) {
 
 // On the measured service the model's function call comes before the caption of what the user said: the handover
 // waits for it rather than refusing. The call stays open, nothing goes back on it until its answer.
-func TestAskJarvisWaitsForTheCaptionAndAnswersOnItsCall(t *testing.T) {
+func TestAskPersonaWaitsForTheCaptionAndAnswersOnItsCall(t *testing.T) {
 	hub := newFakeHub(t)
 	up := newFakeUpstream(t, func(u *fakeUpstream, c *websocket.Conn, f map[string]any) {
 		if f["type"] != "session.start" {
@@ -348,7 +348,7 @@ func TestAskJarvisWaitsForTheCaptionAndAnswersOnItsCall(t *testing.T) {
 		u.send(c, map[string]any{"type": "session.started", "session": map[string]any{}})
 		u.send(c, map[string]any{"type": "session.delegation.created", "delegation": map[string]any{"id": "dlg7", "target": "client"}})
 		u.send(c, map[string]any{"type": "response.event", "delegation_id": "dlg7", "event": map[string]any{
-			"type": "function_call", "call_id": "c1", "name": "ask_jarvis", "arguments": `{"task":"查明天的日程"}`,
+			"type": "function_call", "call_id": "c1", "name": "ask_persona", "arguments": `{"task":"查明天的日程"}`,
 		}})
 		go func() {
 			time.Sleep(500 * time.Millisecond)
@@ -378,10 +378,10 @@ func TestAskJarvisWaitsForTheCaptionAndAnswersOnItsCall(t *testing.T) {
 	}
 }
 
-// Another extension calling (X-Persona-Role: extension) gets ask_jarvis only, from an upstream that takes tools: it may
+// Another extension calling (X-Persona-Role: extension) gets ask_persona only, from an upstream that takes tools: it may
 // hand work to the main conversation (docs/voice.md "Permissions"), and the measured service hands nothing over without a
 // tool; the knowledge base and the agents are not its to reach.
-func TestExtensionCallerGetsOnlyAskJarvis(t *testing.T) {
+func TestExtensionCallerGetsOnlyAskPersona(t *testing.T) {
 	hub := newFakeHub(t)
 	up := newFakeUpstream(t, func(u *fakeUpstream, c *websocket.Conn, f map[string]any) {
 		if f["type"] == "session.start" {
@@ -389,7 +389,7 @@ func TestExtensionCallerGetsOnlyAskJarvis(t *testing.T) {
 		}
 	})
 	pl := testPlugin(t, Config{Providers: []Provider{{ID: "rt", URL: up.url(), Models: []string{"m1"}, Tools: true}}}, hub.server(t))
-	for role, want := range map[string][]string{"extension": {"ask_jarvis"}, "full": toolNames, "": toolNames} {
+	for role, want := range map[string][]string{"extension": {"ask_persona"}, "full": toolNames, "": toolNames} {
 		a := dialApp(t, pl, map[string]any{"type": "start"}, http.Header{"X-Persona-Role": {role}})
 		a.until(ofType("ready"))
 		start := up.next("session.start")["session"].(map[string]any)
@@ -400,7 +400,7 @@ func TestExtensionCallerGetsOnlyAskJarvis(t *testing.T) {
 		}
 		instructions := start["instructions"].(string)
 		if strings.Join(got, ",") != strings.Join(want, ",") || strings.Contains(instructions, "send_to_agent") != (len(want) > 1) ||
-			!strings.Contains(instructions, "ask_jarvis") {
+			!strings.Contains(instructions, "ask_persona") {
 			t.Errorf("role %q: tools %v", role, got)
 		}
 		_ = a.c.CloseNow()

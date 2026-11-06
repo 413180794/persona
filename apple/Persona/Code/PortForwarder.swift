@@ -18,7 +18,7 @@ final class PortForwarder {
     }
 
     private var forwards: [Key: PortForward] = [:]
-    private let queue = DispatchQueue(label: "jarvis.ports")
+    private let queue = DispatchQueue(label: "persona.ports")
 
     /// The phone's port for a machine's port, listening from now on.
     func localPort(_ key: Key, config: ServerConfig) async throws -> Int {

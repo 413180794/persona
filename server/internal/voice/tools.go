@@ -13,7 +13,7 @@ import (
 // The function tools the voice model may call (live dialect with tools): what Persona knows and the agents on the
 // user's machines, through the hub's API. Their descriptions are prompts (prompts/mcp/voice), and so is what they
 // answer (prompts/voice/tool_result.md, prompts/voice/refused.md).
-var toolNames = []string{"search_knowledge", "list_agents", "send_to_agent", "ask_jarvis"}
+var toolNames = []string{"search_knowledge", "list_agents", "send_to_agent", "ask_persona"}
 
 // boundTools are a call bound to a conversation's (protocol 2): the two that only read, and delegate_task, which hands
 // work to that conversation (docs/voice.md "Sending, the gate and 409").
@@ -24,7 +24,7 @@ var toolLabels = map[string]string{
 	"search_knowledge": "查知识库",
 	"list_agents":      "看 Agents",
 	"send_to_agent":    "发给 Agent",
-	"ask_jarvis":       "交给 Persona",
+	"ask_persona":      "交给 Persona",
 	"delegate_task":    "交给对话",
 }
 
@@ -41,7 +41,7 @@ func toolDecls(names []string) []toolDecl {
 	return out
 }
 
-// runTool runs one of the hub tools (ask_jarvis is the conversation's: it answers later) and returns what the model
+// runTool runs one of the hub tools (ask_persona is the conversation's: it answers later) and returns what the model
 // is told, in language l.
 func runTool(ctx context.Context, hub *hubClient, l i18n.Lang, name, args string) string {
 	res := prompts.VoiceToolResult{Lang: string(l), Tool: name}

@@ -36,7 +36,7 @@ type Machine struct {
 	HerdrVersion  string    `json:"herdr_version,omitempty"`
 	ClaudeVersion string    `json:"claude_version,omitempty"`
 	LastSeen      time.Time `json:"last_seen,omitempty"`
-	// NodeVersion is the machine's jarvisd build. NodeMismatch: the hub offers to redeploy the node, because it runs
+	// NodeVersion is the machine's personad build. NodeMismatch: the hub offers to redeploy the node, because it runs
 	// another build than the hub's (deploy.sh missed it, or it was installed on its own) or because its manager cannot
 	// drive it (NodeIncompatible). Another build alone is an upgrade offer, not a fault: whether the node can be used
 	// is decided by its protocol and capabilities (docs/protocol.md "Node handshake").
@@ -56,7 +56,7 @@ type Machine struct {
 	DeployPhase  string `json:"deploy_phase,omitempty"`
 	// System: OS and hardware, from the node's last connection (kept across hub restarts).
 	System *System `json:"system,omitempty"`
-	// Link: kind link, while the computer's jarvis-link is connected (docs/link.md).
+	// Link: kind link, while the computer's persona-link is connected (docs/link.md).
 	Link *MachineLink `json:"link,omitempty"`
 	// Transport is how the hub reaches it now: local | ssh | tailcat | link (empty while offline); Tailcat: it can be
 	// reached over tailcat (an address is set); TailcatPath, over tailcat: direct (NAT traversal worked) | relay.
@@ -81,7 +81,7 @@ type Machine struct {
 	// Browser: its ego lite, while the plugin ego is on and it is a Mac (Browser).
 	Browser *Browser `json:"browser,omitempty"`
 	// Hub mesh (docs/mesh.md): the hub that connects to this machine (its owner), its name, the machine's own id
-	// (~/.jarvis/machine-uid, empty for an old node or one never reached) and how the hub the client talks to gets
+	// (~/.persona/machine-uid, empty for an old node or one never reached) and how the hub the client talks to gets
 	// there. A hub without peers fills them in for its own machines too.
 	HubID      string        `json:"hub_id,omitempty"`
 	HubName    string        `json:"hub_name,omitempty"`
@@ -111,7 +111,7 @@ type MachinePath struct {
 	Active bool   `json:"active,omitempty"`
 }
 
-// MachineLink is a live jarvis-link: its build, the hub URL it went to and since when.
+// MachineLink is a live persona-link: its build, the hub URL it went to and since when.
 type MachineLink struct {
 	Version string    `json:"version,omitempty"`
 	Address string    `json:"address,omitempty"`
@@ -425,7 +425,7 @@ type NodeInfo struct {
 	// EngineHosts is the set of hosts the node drives now (enginehosts.go): reported by nodes that take a set in
 	// engine.use (its hosts and default fields), left out by older ones — the hub then sends them only the engine.
 	EngineHosts *EngineChoice `json:"engine_hosts,omitempty"`
-	// MachineUID is the computer's own id (~/.jarvis/machine-uid, a UUIDv4 made on the node's first run): hubs that
+	// MachineUID is the computer's own id (~/.persona/machine-uid, a UUIDv4 made on the node's first run): hubs that
 	// both reach it tell it is the same computer (docs/mesh.md). Older nodes leave it out.
 	MachineUID string `json:"machine_uid,omitempty"`
 	// HerdrRunning and HerdrRunningKnown: whether classic herdr's server answers on this machine now, so the Agents
@@ -503,7 +503,7 @@ type Launcher struct {
 	Name    string `json:"name"`
 	BaseURL string `json:"base_url"`
 	Model   string `json:"model"`
-	// Source: "zshrc" (a function in the machine's ~/.zshrc), "path" (a wrapper script on its PATH, node/pathlaunchers.go) or "jarvis" (managed in Settings › Models, the manager's assistant/models_launchers.go). Empty
+	// Source: "zshrc" (a function in the machine's ~/.zshrc), "path" (a wrapper script on its PATH, node/pathlaunchers.go) or "persona" (managed in Settings › Models, the manager's assistant/models_launchers.go). Empty
 	// from an older node: zshrc.
 	Source string `json:"source,omitempty"`
 	// Agent is what it starts when not Claude Code: "codex" (plain codex, or an alias running it; docs/codex.md
@@ -604,7 +604,7 @@ type LauncherEnv struct {
 	Value string `json:"value"`
 }
 
-// ManagedLauncher is a launcher kept by the hub (Settings › Models): what `jarvisd launch <name>` sets before it runs claude.
+// ManagedLauncher is a launcher kept by the hub (Settings › Models): what `personad launch <name>` sets before it runs claude.
 // The key only goes to nodes (in memory), never to the app.
 type ManagedLauncher struct {
 	Kind       string `json:"kind,omitempty"`  // launcher (default) or api
@@ -818,9 +818,9 @@ type Session struct {
 	// Codex thread the phone drives through its app-server (node/codex_effort.go), its model's levels weakest first.
 	// Only Effort can change there. Empty for every other session: Claude's and the assistant's keep the apps' own
 	// list, the rest cannot change it from the phone.
-	Efforts         []string `json:"efforts,omitempty"`
-	StartedByJarvis bool     `json:"started_by_jarvis"`
-	Assistant       bool     `json:"assistant"` // runs in the assistant directory (the app's "Chat" tab)
+	Efforts          []string `json:"efforts,omitempty"`
+	StartedByPersona bool     `json:"started_by_persona"`
+	Assistant        bool     `json:"assistant"` // runs in the assistant directory (the app's "Chat" tab)
 	// Space is the assistant's space it runs in: "health" for the health space's (docs/health.md), "" for the
 	// assistant's own. Set by the hub on the assistant's conversations.
 	Space string `json:"space,omitempty"`
@@ -1117,7 +1117,7 @@ type Fold struct {
 type FoldImage struct {
 	ItemID    string `json:"item_id,omitempty"`
 	ToolUseID string `json:"tool_use_id"`
-	Tool      string `json:"tool"`              // the call's tool as written (Read, mcp__jarvis__computer_state)
+	Tool      string `json:"tool"`              // the call's tool as written (Read, mcp__persona__computer_state)
 	Source    string `json:"source"`            // read, screenshot (computer_*), browser (browser_*), mcp (another MCP tool), tool
 	Path      string `json:"path,omitempty"`    // the picture file Read opened (a Codex view_image too)
 	Machine   string `json:"machine,omitempty"` // screenshot / browser: the machine the call named (an id or a name)

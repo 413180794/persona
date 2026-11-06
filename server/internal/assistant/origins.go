@@ -193,8 +193,8 @@ func (s *Service) gatherOriginEvidence(ctx context.Context) originEvidence {
 // the Feishu plugin's /agent), as the node lists an untitled conversation: its first message.
 var (
 	inboxFirst   = "这是收件箱里的一件事"
-	relayFirst   = regexp.MustCompile(`^<jarvis-context kind="context" title="来自对话「[^"]*」"[^>]*>\s*这条消息不是用户本人发的，是 Persona 的另一段对话（([A-Za-z0-9._-]+)）`)
-	larkAgentRe  = regexp.MustCompile(`^<jarvis-context kind="instructions" title="给 Agent 的说明">[\s\S]*?/agent`)
+	relayFirst   = regexp.MustCompile(`^<persona-context kind="context" title="来自对话「[^"]*」"[^>]*>\s*这条消息不是用户本人发的，是 Persona 的另一段对话（([A-Za-z0-9._-]+)）`)
+	larkAgentRe  = regexp.MustCompile(`^<persona-context kind="instructions" title="给 Agent 的说明">[\s\S]*?/agent`)
 	taskFirstPfx = "⏰"
 )
 

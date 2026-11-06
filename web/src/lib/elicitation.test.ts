@@ -99,7 +99,7 @@ describe("elicitation 的文案", () => {
     expect(elicitationSource({ ...form(), agent_type: "worker", mcp_config_source: "project" })).toEqual(["来自子 Agent · worker", "来自 MCP 服务器 example-mcp（配置来源：project）"]);
     expect(elicitationSource(form())).toEqual(["来自 MCP 服务器 example-mcp"]);
     // Persona's own server and a plugin's read as on Android (mcpServerLabel)
-    expect(elicitationSource({ ...form(), mcp_server_name: "plugin_jarvis" })).toEqual(["来自 MCP 服务器 Persona"]);
+    expect(elicitationSource({ ...form(), mcp_server_name: "plugin_persona" })).toEqual(["来自 MCP 服务器 Persona"]);
     expect(elicitationSource({ ...form(), mcp_server_name: "plugin_docs" })).toEqual(["来自 MCP 服务器 docs"]);
     expect(interactionTitle(form())).toBe("MCP 表单等你填写");
     expect(interactionTitle({ ...form(), elicitation: { mode: "url", url: "https://example.com" } })).toBe("MCP 链接等你确认");
@@ -123,12 +123,12 @@ describe("elicitation 的文案", () => {
 describe("声明能力", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("每个请求带 X-Jarvis-Client，和 client_hello 的 platform / version 一致", async () => {
+  it("每个请求带 X-Persona-Client，和 client_hello 的 platform / version 一致", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response("{\"interactions\":[]}", { status: 200 }));
     vi.stubGlobal("fetch", fetcher);
     await api("/interactions", { token: "t" });
     const headers = fetcher.mock.calls[0][1].headers as Headers;
-    expect(headers.get("X-Jarvis-Client")).toBe("web/1");
+    expect(headers.get("X-Persona-Client")).toBe("web/1");
     expect(CLIENT_FEATURES).toContain("elicitation");
   });
 });

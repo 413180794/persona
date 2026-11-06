@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// In the background nothing opens the socket but a silent push (`LiveConnection.suspended`, `wake()`): iOS suspends
 /// the app with it open, and the hub would take the phone for an open app (no wake push for its phone_* calls, no

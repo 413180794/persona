@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// The same vector as integrations/runtime-sdk/test/loader.test.js: the loader and jarvisd must hash alike.
+// The same vector as integrations/runtime-sdk/test/loader.test.js: the loader and personad must hash alike.
 func TestHashVector(t *testing.T) {
 	got := Hash([]File{{Path: "b/c.js", Data: []byte("y")}, {Path: "a.js", Data: []byte("x")}})
 	if want := "d6f3031b914b7e5243281ea484c24fc9ef36488a09bf7fe78df53a1101f06b8f"; got != want {
@@ -29,10 +29,10 @@ func TestValidPath(t *testing.T) {
 func TestLoadOverride(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(OverrideEnv, dir)
-	if p, err := Load("jarvis-dsh-runtime"); p != nil || err != nil {
+	if p, err := Load("persona-dsh-runtime"); p != nil || err != nil {
 		t.Fatalf("no package there: %v %v", p, err)
 	}
-	root := filepath.Join(dir, "jarvis-dsh-runtime")
+	root := filepath.Join(dir, "persona-dsh-runtime")
 	for path, data := range map[string]string{"dsh/lib/a.js": "x", "runtime-sdk/index.js": "y"} {
 		if err := os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o755); err != nil {
 			t.Fatal(err)
@@ -41,7 +41,7 @@ func TestLoadOverride(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	p, err := Load("jarvis-dsh-runtime")
+	p, err := Load("persona-dsh-runtime")
 	if err != nil || p == nil {
 		t.Fatalf("load: %v %v", p, err)
 	}
@@ -72,18 +72,18 @@ func TestGenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := []string{}
-	for _, f := range files["jarvis-dsh-runtime"] {
+	for _, f := range files["persona-dsh-runtime"] {
 		got = append(got, f.Path)
 	}
 	want := []string{"dsh/package.json", "dsh/lib/a.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/r.js"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("copied %v, want %v", got, want)
 	}
-	if _, err := os.Stat(filepath.Join(out, "jarvis-dsh-runtime", "dsh", "test")); err == nil {
+	if _, err := os.Stat(filepath.Join(out, "persona-dsh-runtime", "dsh", "test")); err == nil {
 		t.Fatal("tests were copied")
 	}
 	got = got[:0]
-	for _, f := range files["jarvis-pi-runtime"] {
+	for _, f := range files["persona-pi-runtime"] {
 		got = append(got, f.Path)
 	}
 	want = []string{"pi/package.json", "pi/index.js", "pi/companion.mjs", "pi/lib/pi.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/r.js"}
@@ -91,7 +91,7 @@ func TestGenerate(t *testing.T) {
 		t.Fatalf("pi copied %v, want %v", got, want)
 	}
 	got = got[:0]
-	for _, f := range files["jarvis-paseo-runtime"] {
+	for _, f := range files["persona-paseo-runtime"] {
 		got = append(got, f.Path)
 	}
 	want = []string{"paseo/package.json", "paseo/bridge.mjs", "paseo/lib/bridge.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/r.js"}
@@ -99,7 +99,7 @@ func TestGenerate(t *testing.T) {
 		t.Fatalf("paseo copied %v, want %v", got, want)
 	}
 	got = got[:0]
-	for _, f := range files["jarvis-agent-sdk-runtime"] {
+	for _, f := range files["persona-agent-sdk-runtime"] {
 		got = append(got, f.Path)
 	}
 	if want = []string{"agent-sdk/package.json", "agent-sdk/dist/bridge.mjs"}; !reflect.DeepEqual(got, want) {
@@ -147,7 +147,7 @@ func TestAgentSDKPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv(OverrideEnv, out)
-	p, err := Load("jarvis-agent-sdk-runtime")
+	p, err := Load("persona-agent-sdk-runtime")
 	if err != nil || p == nil {
 		t.Fatalf("load: %v %v", p, err)
 	}

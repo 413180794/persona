@@ -3,7 +3,7 @@ import XCTest
 /// Settings › Appearance › Light & Dark (docs/ios.md「深浅色」): picking Dark or Light draws the app that way (checked on `probe.scheme`,
 /// the look the page is actually in) and puts the default Avatar (Mochi)'s matching icon on the home screen, through the
 /// system's alert where the simulator supports alternate icons; Match System hands both back. Runs in the demo mode (no
-/// hub). Screenshots go to JARVIS_ICON_SHOTS when set: the page and the home screen after each pick.
+/// hub). Screenshots go to PERSONA_ICON_SHOTS when set: the page and the home screen after each pick.
 final class ColorSchemeIconTests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
@@ -61,7 +61,7 @@ final class ColorSchemeIconTests: XCTestCase {
     }
 
     @MainActor private func shot(_ name: String, _ image: XCUIScreenshot) throws {
-        guard let dir = ProcessInfo.processInfo.environment["JARVIS_ICON_SHOTS"] else { return }
+        guard let dir = ProcessInfo.processInfo.environment["PERSONA_ICON_SHOTS"] else { return }
         try image.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name).png"))
     }
 

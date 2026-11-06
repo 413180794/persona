@@ -7,9 +7,9 @@
       "description": "未屏蔽的交互按创建时间升序放在需要你段最前，并包含助手。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -159,9 +159,9 @@
       "description": "Agent 入口遵循来源、类型和搜索限制。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -303,9 +303,9 @@
       "description": "Agent 入口遵循来源、类型和搜索限制。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -431,9 +431,9 @@
       "description": "Agent 入口遵循来源、类型和搜索限制。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -559,9 +559,9 @@
       "description": "Agent 入口遵循来源、类型和搜索限制。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [
@@ -703,9 +703,9 @@
       "description": "空间屏蔽排除待处理交互，单会话允许可保留交互。",
       "source": [
         "ios/Shared/InboxModels.swift: InboxItem.triage, isTriaged, isDone",
-        "ios/Jarvis/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
-        "ios/Jarvis/App/InboxStore.swift: actionCount",
-        "ios/Jarvis/App/AppModel.swift: pendingInteractions"
+        "ios/Persona/Views/Inbox/InboxView.swift: matches(_:), waitingAgents, list",
+        "ios/Persona/App/InboxStore.swift: actionCount",
+        "ios/Persona/App/AppModel.swift: pendingInteractions"
       ],
       "input": {
         "items": [

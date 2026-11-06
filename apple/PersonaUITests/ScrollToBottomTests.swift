@@ -4,8 +4,8 @@ import XCTest
 /// the chat's state over time (`probe.chat-rows`: the arrow, the follow mode, held back, near the newest, the gap to
 /// it, a finger on the list) and asserts what the user should see. Each case saves a few screenshots along its
 /// timeline (`/tmp/persona-follow-<case>-<n><suffix>.png`) for the review.
-///   Agents chat:  PORT=… MOCK_STREAM=1 MOCK_LONG_HISTORY=1 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py  (JARVIS_MOCK_HUB)
-///   Jarvis chat:  PORT=… MOCK_ASSISTANT_RUN=1 (JARVIS_RUN_HUB); MOCK_ASSISTANT_RUN=alone for the one-screen chat
+///   Agents chat:  PORT=… MOCK_STREAM=1 MOCK_LONG_HISTORY=1 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py  (PERSONA_MOCK_HUB)
+///   Persona chat:  PORT=… MOCK_ASSISTANT_RUN=1 (PERSONA_RUN_HUB); MOCK_ASSISTANT_RUN=alone for the one-screen chat
 final class ScrollToBottomTests: XCTestCase {
     private var app: XCUIApplication!
     private static let widget = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // streams with MOCK_STREAM, long history
@@ -40,7 +40,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     private func launch(_ hub: String, chat: String, assistant: Bool, _ extra: [String] = []) {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-probes", "YES", "-openChatsFresh", "YES"]
             + (assistant ? ["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", chat]
                          : ["-app.tab", "chats", "-tab", "dev", "-dev.openChat", chat])
@@ -163,7 +163,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 1. Streaming, at the newest: a finger drags the list up a little (40 pt) and lets go. It keeps following.
     func testA_DragUpALittleWhileStreaming() throws {
-        launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
+        launch(try hub("PERSONA_RUN_HUB"), chat: Self.main, assistant: true)
         record("1 before", seconds: 2, shots: 1)
         drag(from: 0.55, to: 0.60, rest: 0.4) // about 45 pt, no glide after it
         let s = record("1 after a small drag", seconds: 10, shots: 4)
@@ -181,7 +181,7 @@ final class ScrollToBottomTests: XCTestCase {
     /// 2. A flick toward the newest from a little way up: it glides to the end and follows; from far up it stops in
     /// the history, reading, with ↓.
     func testB_FlickTowardTheNewest() throws {
-        launch(try hub("JARVIS_MOCK_HUB"), chat: Self.widget, assistant: false)
+        launch(try hub("PERSONA_MOCK_HUB"), chat: Self.widget, assistant: false)
         drag(from: 0.35, to: 0.75)
         sleep(1)
         let up = record("2 a screen up", seconds: 2, shots: 1)
@@ -207,7 +207,7 @@ final class ScrollToBottomTests: XCTestCase {
     /// 3. The running turn's work line opened at the newest end: its header goes up under the top bar (#1173) and stays
     /// there while the turn keeps growing under it — never held back, not following away from it; folded, it follows.
     func testC_OpenAndFoldAWorkLine() throws {
-        launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
+        launch(try hub("PERSONA_RUN_HUB"), chat: Self.main, assistant: true)
         let work = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "正在工作")).firstMatch
         XCTAssertTrue(work.waitForExistence(timeout: 10))
         shot("3 before")
@@ -237,7 +237,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 4. The keyboard comes up (the composer tapped) and goes down, at the newest end.
     func testD_Keyboard() throws {
-        launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
+        launch(try hub("PERSONA_RUN_HUB"), chat: Self.main, assistant: true)
         guard let field = composer() else { throw XCTSkip("the composer is not in the accessibility tree (#1006)") }
         field.tap()
         let up = record("4 keyboard up", seconds: 3, shots: 1)
@@ -253,7 +253,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 5. A message sent while reading history: back to the newest, following.
     func testE_SendWhileReadingHistory() throws {
-        launch(try hub("JARVIS_MOCK_HUB"), chat: Self.widget, assistant: false)
+        launch(try hub("PERSONA_MOCK_HUB"), chat: Self.widget, assistant: false)
         for _ in 0..<3 { drag(from: 0.3, to: 0.8, velocity: .fast); sleep(1) }
         XCTAssertEqual(rows()?.mode, "reading")
         shot("5 reading")
@@ -269,7 +269,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 6. Pushes insert new content while the user reads history: held back with ↓; then ↓.
     func testF_PushesWhileReadingThenTheArrow() throws {
-        launch(try hub("JARVIS_MOCK_HUB"), chat: Self.widget, assistant: false)
+        launch(try hub("PERSONA_MOCK_HUB"), chat: Self.widget, assistant: false)
         for _ in 0..<2 { drag(from: 0.3, to: 0.8, velocity: .fast); sleep(1) }
         let reading = record("6 reading", seconds: 8, shots: 3) // MOCK_STREAM: a push every 2 s
         XCTAssertTrue(reading.allSatisfy { ($0.r.arrow ?? false) && $0.r.mode == "reading" && ($0.r.frozen ?? false) },
@@ -285,7 +285,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 7. Out of the chat and back in (the Agents list and the same chat again).
     func testG_LeaveAndComeBack() throws {
-        launch(try hub("JARVIS_MOCK_HUB"), chat: Self.widget, assistant: false)
+        launch(try hub("PERSONA_MOCK_HUB"), chat: Self.widget, assistant: false)
         let back = app.buttons.matching(NSPredicate(format: "label == %@", "返回")).firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 10), "返回")
         back.tap()
@@ -304,7 +304,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 8. To the background and back, at the newest end of a running turn.
     func testH_BackgroundAndBack() throws {
-        launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
+        launch(try hub("PERSONA_RUN_HUB"), chat: Self.main, assistant: true)
         shot("8 before")
         XCUIDevice.shared.press(.home)
         sleep(6)
@@ -318,7 +318,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 9. A chat shorter than the screen: there is nothing to scroll, the arrow never shows, it keeps following.
     func testI_ShortChat() throws {
-        launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
+        launch(try hub("PERSONA_RUN_HUB"), chat: Self.main, assistant: true)
         drag(from: 0.4, to: 0.6)
         let s = record("9 short chat", seconds: 6, shots: 1)
         XCTAssertFalse(s.contains { $0.r.arrow ?? false }, "↓ in a chat that fits on one screen:\n\(describe(s))")
@@ -328,7 +328,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// 10. Several pending cards over the chat (#939): no ↓ at rest; scrolled up, ↓ above the cards brings it back.
     func testJ_PendingCards() throws {
-        launch(try hub("JARVIS_MOCK_HUB"), chat: Self.photos, assistant: false)
+        launch(try hub("PERSONA_MOCK_HUB"), chat: Self.photos, assistant: false)
         let s = record("10 cards", seconds: 4, shots: 1)
         let r = try XCTUnwrap(s.last?.r)
         XCTAssertFalse(r.arrow ?? true, "↓ at rest with the cards up:\n\(describe(s))")

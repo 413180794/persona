@@ -37,7 +37,7 @@ func (h *Hub) hello() map[string]any {
 		// the user's language (feature locale, locale.go)
 		"locale": string(h.userLang()),
 	}
-	// The address the hub's own links use (hub.json public_url; the assistant's /s/…, /j/…, /todos links, #2194): the
+	// The address the hub's own links use (hub.json public_url; the assistant's /s/…, /persona/…, /todos links, #2194): the
 	// apps tell those links from other sites by it even when they reach the hub at another address (#2696). Only when set.
 	if h.cfg == nil {
 		return m

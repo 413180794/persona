@@ -28,7 +28,7 @@ type ProviderModel struct {
 }
 
 // APIReceipt is one route of a plugin's API with a send receipt: Method and Path (under the prefix, "*" one segment)
-// and the receipt's Kind. The receipt's id comes from the body's client_id, or the caller's X-Jarvis-Op-Id.
+// and the receipt's Kind. The receipt's id comes from the body's client_id, or the caller's X-Persona-Op-Id.
 type APIReceipt struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`

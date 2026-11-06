@@ -9,7 +9,7 @@
   "err_csrf": "ページが古くなっています。再読み込みしてからやり直してください",
   "err_tls_required": "TLSポート経由でアクセスしてください",
   "err_widen_cli_only": "アクセス範囲を広げるには、ハブのマシンでコマンドラインかデプロイスクリプトを使ってください",
-  "err_from_env": "ここでは変更できません。デプロイ時の環境変数（JARVIS_ADMIN_ACCESS / JARVIS_PUBLIC_URL）で決まる項目です",
+  "err_from_env": "ここでは変更できません。デプロイ時の環境変数（PERSONA_ADMIN_ACCESS / PERSONA_PUBLIC_URL）で決まる項目です",
   "err_would_lock_you_out": "この変更を行うとアクセスできなくなります",
   "err_invalid_cidr": "アドレス範囲の形式が正しくありません（例：192.0.2.0/24）",
   "err_invalid_id": "IDに使えるのは英小文字、数字、- _ . です。先頭は英字か数字にしてください",

@@ -62,8 +62,6 @@ export async function handToPersona(s: Session, machineName?: string) {
   }
 }
 
-// Source compatibility for integrations written before the product rename.
-export const handToJarvis = handToPersona;
 
 /** "Live link": link a session from another source (a Codex app-server thread…) live. The chat's ⋯ and the row menu both
  *  call this; it reads the session again first, since the menu may have opened on an older copy. */

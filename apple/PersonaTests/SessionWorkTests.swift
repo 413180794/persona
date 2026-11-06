@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// A stopped session's work state as the lists show it (`Session.work`, docs/agent-work.md; the web's lib/work.ts).
 @MainActor

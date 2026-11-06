@@ -1,5 +1,5 @@
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 /// The chat page's Terminal | Chat on the Mac (#3183): the terminal mounts the first time it shows and stays mounted while
 /// the chat shows, so coming back to it does not connect again.
