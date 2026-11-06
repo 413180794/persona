@@ -805,8 +805,7 @@ func messageFrom(a *MailAccount, mailbox string, m *imapclient.FetchMessageBuffe
 		raw = m.BodySection[0].Bytes
 	}
 	parseMessage(raw, msg)
-	sum.HasAttach = len(msg.Attachments) > 0
-	msg.MailSummary = sum
+	msg.HasAttach = len(msg.Attachments) > 0
 	msg.Snippet = truncateRunes(strings.Join(strings.Fields(msg.Text), " "), snippetRunes)
 	if msg.Snippet == "" {
 		msg.Snippet = truncateRunes(strings.Join(strings.Fields(stripHTML(msg.HTML)), " "), snippetRunes)
