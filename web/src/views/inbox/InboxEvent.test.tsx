@@ -48,9 +48,11 @@ const waiting = byId("lark:oc_demo3:300");
 const agentSuggestion = byId("mail:a1:contract:88");
 const failed = byId("lark:oc_demo6:600");
 const conclusion = byId("lark:oc_demo7:700");
+const managerDone = byId("mail:a1:notice:110");
 const legacy = (it: InboxItem): InboxItem => {
   const { status: _s, urgent: _u, recap: _r, handling: _h, suggestion: _g, chain: _c, related: _rel, ...rest } = it;
-  return rest;
+  // an older hub never files as the manager
+  return rest.done_by === "manager" ? { ...rest, done_by: "user" } : rest;
 };
 /** An item with no source page of its own (no chat, no mail): its body is the preview, so 看原文 needs no reads. */
 const plain = (it: InboxItem): InboxItem => ({ ...it, lark: undefined, mail: undefined });
@@ -173,12 +175,28 @@ describe("收件箱事件：详情", () => {
   });
 });
 
+describe("收件箱事件：已处理", () => {
+  it("says the manager filed it, and draws the chain's 已处理 entry with its check, no link", async () => {
+    act(() => root.render(<EventBody item={managerDone} onSource={() => {}} />));
+    expect(host.querySelector("[data-event-manager-done]")?.textContent).toBe("管理者处理了");
+    expect(host.querySelector("[data-suggestion]")).toBeNull();
+    const done = host.querySelector('[data-chain-entry="done"]')!;
+    expect(done.textContent).toContain("管理者看完，不用管");
+    expect(done.querySelector("button")!.disabled).toBe(true); // no link, nothing to expand
+    expect(done.querySelector("svg path")?.getAttribute("d")).toBeTruthy();
+  });
+  it("a conclusion in 知悉即可 stays listed with its card until 知道了", () => {
+    act(() => root.render(<EventBody item={conclusion} onSource={() => {}} />));
+    expect(host.querySelector('[data-suggestion="conclusion"]')).not.toBeNull();
+  });
+});
+
 describe("收件箱事件：列表", () => {
   it("has 进行中 between 需要你 and 知悉即可, marks the rows, and draws a suggestion instead of the draft", async () => {
     calls.items = fixture.items;
     act(() => root.render(<InboxList />));
     await flush();
-    const titles = [...host.querySelectorAll("section > div > button > span:first-child")].map((s) => s.textContent);
+    const titles = [...host.querySelectorAll("[data-section-title]")].map((s) => s.textContent);
     expect(titles).toEqual(["需要你", "进行中", "知悉即可", "已折叠", "已处理"]);
     const row = (id: string) => host.querySelector(`[data-item="${id}"]`)!;
     expect(row(reply.id).querySelector('[data-event-mark="suggestion"]')?.textContent).toContain("建议回复");
@@ -186,12 +204,19 @@ describe("收件箱事件：列表", () => {
     expect(row(urgent.id).querySelector('[data-event-mark="preparing"]')?.textContent).toContain("AI 正在准备建议");
     expect(row(waiting.id).querySelector('[data-event-mark="working"]')?.textContent).toBe("等对方回复");
     expect(row(failed.id).querySelector('[data-event-mark="failed"]')).not.toBeNull();
+    expect(row(managerDone.id).querySelector('[data-event-mark="manager-done"]')?.textContent).toBe("管理者处理了");
+    expect(row(conclusion.id).closest("[data-section]")?.getAttribute("data-section")).toBe("fyi");
+    // 进行中 never folds: no toggle on its title, its rows always shown
+    const working = host.querySelector('[data-section="working"]')!;
+    expect(working.querySelector("[aria-expanded]")).toBeNull();
+    expect(working.querySelector(`[data-item="${waiting.id}"]`)).not.toBeNull();
+    expect(host.querySelector('[data-section="action"] [aria-expanded]')).not.toBeNull();
   });
   it("an older hub's list: the four sections and the draft card as before", async () => {
     calls.items = fixture.items.map(legacy);
     act(() => root.render(<InboxList />));
     await flush();
-    const titles = [...host.querySelectorAll("section > div > button > span:first-child")].map((s) => s.textContent);
+    const titles = [...host.querySelectorAll("[data-section-title]")].map((s) => s.textContent);
     expect(titles).toEqual(["需要你", "知悉即可", "已折叠", "已处理"]);
     expect(host.querySelector("[data-event-mark]")).toBeNull();
     expect(host.querySelector(`[data-item="${reply.id}"]`)?.textContent).toContain("AI 分身草拟的回复");

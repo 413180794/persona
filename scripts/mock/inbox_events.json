@@ -636,6 +636,82 @@
      }
     }
    ]
+  },
+  {
+   "id": "mail:a1:notice:110",
+   "source": "mail",
+   "kind": "direct",
+   "account": "a1",
+   "account_name": "me@example.com",
+   "title": "会议室变更通知",
+   "sender": "行政",
+   "preview": "周三例会改到 3 号会议室",
+   "count": 1,
+   "started_at": "2026-11-05T01:00:00Z",
+   "updated_at": "2026-11-05T01:00:00Z",
+   "done_at": "2026-11-05T01:06:00Z",
+   "done_by": "manager",
+   "tier": "action",
+   "summary": "例会换了会议室",
+   "recap": "管理者看过了：只是换会议室，日历已经是新地点，不用管。",
+   "mail": {
+    "account_id": "a1",
+    "mailbox": "INBOX",
+    "uids": [
+     110
+    ],
+    "message_id": "<n@example.com>",
+    "from": {
+     "name": "行政",
+     "email": "admin@example.com"
+    },
+    "thread": "会议室变更通知"
+   },
+   "handling": {
+    "owner": "manager",
+    "state": "done",
+    "machine_id": "m1",
+    "session_id": "s-demo10",
+    "since": "2026-11-05T01:02:00Z"
+   },
+   "chain": [
+    {
+     "id": "c1",
+     "at": "2026-11-05T01:00:00Z",
+     "kind": "received",
+     "text": "收到 1 封邮件 · 行政",
+     "count": 1,
+     "sender": "行政",
+     "link": {
+      "type": "source",
+      "uid": 110
+     }
+    },
+    {
+     "id": "c2",
+     "at": "2026-11-05T01:00:03Z",
+     "kind": "triaged",
+     "text": "分拣：需要你",
+     "detail": "需要你 · 直接发给你"
+    },
+    {
+     "id": "c3",
+     "at": "2026-11-05T01:01:00Z",
+     "kind": "handling",
+     "text": "管理者处理",
+     "link": {
+      "type": "session",
+      "machine_id": "m1",
+      "session_id": "s-demo10"
+     }
+    },
+    {
+     "id": "c4",
+     "at": "2026-11-05T01:06:00Z",
+     "kind": "done",
+     "text": "管理者看完，不用管"
+    }
+   ]
   }
  ]
 }

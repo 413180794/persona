@@ -52,7 +52,7 @@ export function InboxList({ selected }: { selected?: string }) {
   // machines push that leaves them as they were keeps the same array (useStore compares it item by item) and the list,
   // with every row in it, does not render again.
   const agents = useStore((st) => waitingAgents(st.interactions, st.sessions, st.mutes, { source, kind, query }));
-  const [open, setOpen] = useState<Set<string>>(() => new Set(["action", "working", "fyi"]));
+  const [open, setOpen] = useState<Set<string>>(() => new Set(["action", "fyi"]));
   const [editing, setEditing] = useState<InboxItem | null>(null);
   const accounts = useMailAccounts();
   const more = useMenu();
@@ -200,7 +200,7 @@ export function InboxList({ selected }: { selected?: string }) {
           if (!list.length && !waiting.length) return null;
           const clear = tier.key === "fyi" ? t("inbox-inboxlist.clear_fyi") : tier.key === "noise" ? t("inbox-inboxlist.clear_noise") : undefined;
           return (
-            <Section key={tier.key} k={tier.key} title={tier.title} count={sectionCount(list.length, waiting.length)} open={open.has(tier.key)} onToggle={() => toggle(tier.key)}
+            <Section key={tier.key} k={tier.key} title={tier.title} count={sectionCount(list.length, waiting.length)} open={tier.key === "working" || open.has(tier.key)} onToggle={tier.key === "working" ? undefined : () => toggle(tier.key)}
               action={clear && list.length ? { label: clear, run: () => setAllDone(list, true) } : undefined}>
               {waiting.map((ix) => <AgentRow key={ix.id} ix={ix} />)}
               {list.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={setEditing} />)}
@@ -232,15 +232,25 @@ export function sectionCount(items: number, agents: number): { text: string; lab
   };
 }
 
-function Section({ k, title, count, open, onToggle, action, children }: { k: SectionKey | "done"; title: string; count: { text: string; label: string }; open: boolean; onToggle: () => void; action?: { label: string; run: () => void }; children: React.ReactNode }) {
+/** A section of the list; without `onToggle` it is always open (进行中: what the AI is on never hides). */
+function Section({ k, title, count, open, onToggle, action, children }: { k: SectionKey | "done"; title: string; count: { text: string; label: string }; open: boolean; onToggle?: () => void; action?: { label: string; run: () => void }; children: React.ReactNode }) {
+  const head = (
+    <>
+      <span className={cx("text-[12px] font-medium whitespace-nowrap", k === "action" ? "text-ink" : "text-ink-3")} data-section-title>{title}</span>
+      <span title={count.label} className="text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums"><span aria-hidden>{count.text}</span><span className="sr-only">{count.label}</span></span>
+    </>
+  );
   return (
-    <section className="mt-4">
+    <section className="mt-4" data-section={k}>
       <div className="flex items-center gap-2 px-1 pb-1.5">
-        <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-          <span className={cx("text-[12px] font-medium whitespace-nowrap", k === "action" ? "text-ink" : "text-ink-3")}>{title}</span>
-          <span title={count.label} className="text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums"><span aria-hidden>{count.text}</span><span className="sr-only">{count.label}</span></span>
-          <Icon name="chevronRight" size={11} stroke={2.4} className="text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : undefined }} />
-        </button>
+        {onToggle ? (
+          <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+            {head}
+            <Icon name="chevronRight" size={11} stroke={2.4} className="text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : undefined }} />
+          </button>
+        ) : (
+          <h3 className="flex min-w-0 flex-1 items-center gap-1.5">{head}</h3>
+        )}
         {action && (
           <button type="button" onClick={action.run} className="h-6 rounded-[6px] px-1.5 text-[11.5px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover hover:text-ink">
             {action.label}
@@ -272,7 +282,7 @@ const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { i
   // a suggestion takes the AI 分身's draft's place, and the event's handling the AI 分身's 正在处理
   const draft = !done && !it.suggestion && agentDraft(it);
   const working = !done && !it.handling && agentWorking(it);
-  const mark = !done && (it.suggestion || it.handling) ? <EventMark it={it} /> : null;
+  const mark = done ? (it.done_by === "manager" ? <EventMark it={it} /> : null) : it.suggestion || it.handling ? <EventMark it={it} /> : null;
   const rows = !done ? it.doc?.rows ?? [] : [];
   const first = rows[0];
   const translated = hubTranslation(it, useTranslatePrefs());

@@ -31,7 +31,16 @@ function useConversation(): (mid: string, sid: string) => Route {
 
 /** Under a row: what the AI is doing (进行中), 「AI 正在准备建议」 (急事), 处理失败, or the suggestion's kind + first line. */
 export function EventMark({ it }: { it: InboxItem }) {
-  if (isDone(it)) return null;
+  if (isDone(it)) {
+    // filed by the manager after it looked (done_by manager): say who
+    if (it.done_by !== "manager") return null;
+    return (
+      <p className="flex min-w-0 items-center gap-1.5 text-[11.5px] whitespace-nowrap text-ink-3" data-event-mark="manager-done">
+        <Icon name="check" size={12} stroke={2.4} className="shrink-0" />
+        <span className="truncate">{t("inbox-inboxevent.manager_done")}</span>
+      </p>
+    );
+  }
   const s = it.suggestion;
   if (s) {
     return (
@@ -93,6 +102,12 @@ export function EventBody({ item, onSource }: { item: InboxItem; onSource: (at: 
           </section>
         )}
         {!done && <HandlingLine item={item} />}
+        {done && item.done_by === "manager" && (
+          <p className="flex items-center gap-2 text-[12.5px] text-ink-2" data-event-manager-done>
+            <Icon name="check" size={13} stroke={2.4} className="shrink-0 text-green" />
+            {t("inbox-inboxevent.manager_done")}
+          </p>
+        )}
         {!done && item.suggestion && <SuggestionCard key={`${item.id}@${item.suggestion.version}`} item={item} suggestion={item.suggestion} />}
         <Chain item={item} onSource={onSource} />
         <Related item={item} />
@@ -239,6 +254,7 @@ const CHAIN_ICON: Record<string, { icon?: IconName; glyph?: "reply" | "question"
   instructed: { icon: "chat" },
   self_replied: { glyph: "reply" },
   failed: { icon: "warning" },
+  done: { icon: "check" },
   concluded: { icon: "read" },
 };
 

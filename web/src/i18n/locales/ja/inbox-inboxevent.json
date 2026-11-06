@@ -17,5 +17,6 @@
   "entry_expand": "開く",
   "entry_collapse": "閉じる",
   "message_sender": "{sender}：",
-  "related": "関連"
+  "related": "関連",
+  "manager_done": "マネージャーが処理済み"
 }

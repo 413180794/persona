@@ -29,14 +29,16 @@
 从仓库根目录运行。脚本回归测试使用合成数据；服务端测试需要已配置的 hub 和真实 Postgres 测试库。运行实际部署、发布或真实 Agent 联调前，另按相关文档准备环境。
 
 ```sh
-python3 -B -m unittest discover -s scripts/test -p 'test_*.py'
-python3 -B -m unittest discover -s scripts/release -p 'test_*.py'
-python3 -B -m unittest discover -s scripts/deploy -p 'test_*.py'
-python3 -B -m unittest discover -s scripts/mock -p 'test_*.py'
-python3 -B -m unittest discover -s scripts/diag -p 'test_*.py'
+# scripts/ 下全部 test_*.py，和 CI「Scripts tests」一样逐个在所在目录跑；任一失败则退出码非 0
+n=0 failed=""
+for f in $(find scripts -name 'test_*.py' -not -path '*/node_modules/*' | sort); do
+  n=$((n + 1))
+  (cd "$(dirname "$f")" && python3 -B -m unittest -q "$(basename "$f" .py)") || failed="$failed $f"
+done
+echo "$n suites, failed:${failed:- none}"; [ -z "$failed" ]
 node scripts/test/pr_needs_issue_test.mjs
 python3 scripts/privacy_check.py
 ./scripts/test/test-server.sh
 ```
 
-目录回归测试检查兼容入口转发、配置 import、根目录推算、shell / Python 语法，以及 mock hub 的真实启动；`test/test_doc_paths.py` 检查现行文档（顶层文档，以及 `android/`、`integrations/`、`schema/`、`sdk/`、`spec/` 下 git 跟踪的 md）里反引号引用的仓库路径都还在（`docs/archive/` 不查），以及 `docs/` 顶层每篇文档都在 CLAUDE.md 的文档索引里。`test/test_doc_go_paths.py` 在同一批文档里查按包写的 Go 文件（`devices/deploy.go`，包是 `server/internal` 下的目录）都还在那个包里。Python 脚本要能在 macOS 自带的 Python 3.9 上跑：语法按 3.9 检查，注解里写 `X | None` 的文件要加 `from __future__ import annotations`（3.9 运行到 def 时就求值注解，`str | None` 会 TypeError，#579）；`datetime.fromisoformat` 在 3.9 上只认 3 或 6 位小数秒，解析 Go 写的时间先补齐到 6 位。新增脚本放到对应功能目录，回归测试也放在同目录；不要再往顶层增加功能脚本。
+测试要在所在目录跑：它们按同目录 import 邻居模块，部分 fixture 路径是相对路径，从仓库根目录 `discover` 会漏掉或跑错。目录回归测试检查兼容入口转发、配置 import、根目录推算、shell / Python 语法，以及 mock hub 的真实启动；`test/test_doc_paths.py` 检查现行文档（顶层文档，以及 `android/`、`integrations/`、`schema/`、`sdk/`、`spec/` 下 git 跟踪的 md）里反引号引用的仓库路径都还在（`docs/archive/` 不查），以及 `docs/` 顶层每篇文档都在 CLAUDE.md 的文档索引里。`test/test_doc_go_paths.py` 在同一批文档里查按包写的 Go 文件（`devices/deploy.go`，包是 `server/internal` 下的目录）都还在那个包里。Python 脚本要能在 macOS 自带的 Python 3.9 上跑：语法按 3.9 检查，注解里写 `X | None` 的文件要加 `from __future__ import annotations`（3.9 运行到 def 时就求值注解，`str | None` 会 TypeError，#579）；`datetime.fromisoformat` 在 3.9 上只认 3 或 6 位小数秒，解析 Go 写的时间先补齐到 6 位。新增脚本放到对应功能目录，回归测试也放在同目录；不要再往顶层增加功能脚本。

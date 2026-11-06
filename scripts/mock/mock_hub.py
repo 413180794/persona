@@ -4488,7 +4488,7 @@ for _i in range(int(os.environ.get("MOCK_INBOX_EXTRA", "0"))):
 
 # MOCK_INBOX_EVENTS=1: inbox events (docs/inbox.md「事件、处理链条、建议」): the list is scripts/mock/inbox_events.json, one
 # item per state (a reply suggestion, 急事 preparing, waiting, an Agent working, an agent suggestion, failed, a
-# conclusion in 知悉即可, noise, done), its times shifted so `as_of` is now. POST /api/v1/inbox/{id}/suggestion acts as
+# conclusion in 知悉即可, noise, done by a self-reply and by the manager), its times shifted so `as_of` is now. POST /api/v1/inbox/{id}/suggestion acts as
 # the hub does (409 suggestion_stale on another version); GET /mock/inbox_events/bump?id=<item> puts a new suggestion
 # version in place, for 「建议已更新」. MOCK_INBOX_EVENTS=legacy: the same items without any of the new fields (an old hub).
 MOCK_INBOX_EVENTS = os.environ.get("MOCK_INBOX_EVENTS", "")
@@ -4553,7 +4553,8 @@ def inbox_suggestion(iid, body):
         elif s["kind"] == "agent":
             _chain_add(x, "agent", "开了子会话：" + text[:40], link={"type": "session", "machine_id": "m1", "session_id": "s-mock-agent"})
             h.update(state="agent", since=ago()); x["status"] = "working"
-        else:
+        else:  # a conclusion: 知道了 files it (the chain says so)
+            _chain_add(x, "done", "你标了已处理")
             x["done_at"], x["done_by"] = ago(), "user"
     x["updated_at"] = ago()
     return x, 200

@@ -17,5 +17,6 @@
   "entry_expand": "Expand",
   "entry_collapse": "Collapse",
   "message_sender": "{sender}: ",
-  "related": "Related"
+  "related": "Related",
+  "manager_done": "Handled by the manager"
 }

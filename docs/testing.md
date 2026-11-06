@@ -10,7 +10,7 @@ cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -schem
 ./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 cd apple/Packages/PersonaKit && swift test                             # PersonaKit 的单测：在 Mac 上直接跑，不编 App、不开模拟器
 python3 -B scripts/test/test_sim_boot.py                               # sim-boot.sh（假的 xcrun / simslim，不开模拟器）
-for f in scripts/*/test_*.py; do (cd "$(dirname "$f")" && python3 -B -m unittest -q "$(basename "$f" .py)") || echo "FAIL $f"; done   # scripts/ 的全部 Python 测试
+n=0 failed=""; for f in $(find scripts -name 'test_*.py' -not -path '*/node_modules/*' | sort); do n=$((n + 1)); (cd "$(dirname "$f")" && python3 -B -m unittest -q "$(basename "$f" .py)") || failed="$failed $f"; done; echo "$n suites, failed:${failed:- none}"; [ -z "$failed" ]   # scripts/ 的全部 Python 测试（同 CI，任一失败则退出码非 0）
 ```
 
 `scripts/` 下的 `test_*.py` 每个 PR 都由 CI 的「Scripts tests」（`.github/workflows/scripts-tests.yml`，job `scripts/ unittest suites`）在 Linux 上逐个从所在目录跑一遍，任一失败即红（#3011）；Linux 上整轮约 90 秒，只在 Mac 上有意义的自己 skip。新加的测试放在 `scripts/<子目录>/test_*.py` 就会被带上。
@@ -29,6 +29,8 @@ for f in scripts/*/test_*.py; do (cd "$(dirname "$f")" && python3 -B -m unittest
 ./scripts/check-fast.sh --all            # 跑除 iOS/macOS 和服务端 Postgres 全量外的所有本地快速检查
 ```
 
+`--all` 也会像 CI 的 Scripts tests job 一样跑全部 `scripts/**/test_*.py`（同一条 `find`；只跳过已有专门检查的几个：`test_external_service_refs.py`、`test_sdk_bundle.py`、`test_extension_schema.py` 和 `scripts/app/test_android_*`，见 `script_test_add`，改名或去掉这些专门检查时要同步改这份跳过清单）：放在一个检查里按顺序逐个跑，每个套件在自己的目录、各自 `CHECK_FAST_TIMEOUT_OTHER` 超时，一个失败不影响其余，结尾列出失败和超时的文件。
+
 路径映射：
 
 | 改动路径 | 跑什么 |
@@ -39,12 +41,16 @@ for f in scripts/*/test_*.py; do (cd "$(dirname "$f")" && python3 -B -m unittest
 | `sdk/ts/**` | `bun test`（没有 bun 时跳过并写明原因） |
 | `sdk/go/**` | 在 sdk/go 模块里 `go test ./...` |
 | `server/internal/foo/**`、`server/cmd/bar/**` | `go test ./internal/foo/...` 等受影响包；无法映射的服务端改动兜底 `go build ./...` |
+| `spec/fixtures/**`、`schema/extension/**`、`integrations/**`、`docs/<文件>`、`scripts/test/server_test_env.py` | 除本表其他行的检查外，再对读取它的服务端包跑 `go test ./internal/<包>/...`（即 `server-test.yml` 路径过滤里那些服务端测试会读的仓库文件）：运行时用 `git grep` 找 `server/**/*_test.go` 里写到该路径（字符串或 `filepath.Join` 的各段，`//` 注释行不算）的包，新加的读取方不用改脚本；`spec/` 下其他文件仍按未映射列出 |
 | `android/**`、`scripts/app/*android*`（含两个 `test_android_*` 自测） | `scripts/app/android_i18n_check.py` 及 android 检查器自己的 unittest（i18n、token baseline，不跑 gradle 构建） |
 | `.github/**` | `scripts/test/pr_needs_issue_test.mjs` |
 | `schema/**` | `scripts/test/test_extension_schema.py`、`scripts/test/test_sdk_bundle.py`，并在 sdk/go 模块 `go test ./...`（对齐 CI 的 Extension schema job 三件套） |
 | `scripts/test/test_external_service_refs.py`、`scripts/{gen,test}/sdk_bundle*` | 对应脚本本身的测试 |
 | `scripts/**` | 按改动路径选 privacy / PR / schema / refs / bundle / i18n 秒级检查；拿不准就 PR 和 schema 都跑；另外跑改到的 `scripts/<子目录>/test_*.py`，以及改到的脚本 `<名字>.py` / `<名字>.sh` 对应的 `test_<名字>.py`（`-` 换成 `_`；`.sh` 也找 `test_<名字>_sh.py`），和 CI 一样在测试所在目录跑（#3968） |
-| 只改 `docs/**`、markdown | 无代码检查，明确提示「无相关检查」；其他未映射路径会逐文件列出 |
+| `docs/**`、任意 `*.md` | `scripts/test/test_doc_paths.py`、`scripts/test/test_doc_go_paths.py`（文档里引用的路径、CLAUDE.md 文档索引） |
+| `apple/**` | `scripts/test/test_apple_l10n.py`（String Catalog 完整、Swift 中文字面量都进了 catalog）；iOS / macOS 的编译和测试需要 Mac，提示跳过 |
+| `deploy/docker/**`、`docs/docker.md`、根目录 `Dockerfile` | `scripts/test/test_docker_entrypoint.py`（它也检查根目录 `Dockerfile` 的 `EXPOSE`） |
+| 其他路径 | 无代码检查，逐文件列出未映射的路径 |
 
 只要有改动就始终先跑 `scripts/privacy_check.py`：纯本地扫描、不联网、约几秒。每个检查都有超时（npm ci 600 s、vitest 300 s、单组 go test 300 s、其他 120 s，可用 `CHECK_FAST_TIMEOUT_NPM_CI` / `CHECK_FAST_TIMEOUT_WEB_TEST` / `CHECK_FAST_TIMEOUT_GO_TEST` / `CHECK_FAST_TIMEOUT_OTHER` 环境变量覆盖），成功、失败、超时都各打印一行结论和耗时，结尾汇总通过 / 跳过（含原因）/ 失败 / 超时清单和日志目录。退出码：全过（或无需检查）为 0；有检查失败为 1；没有失败但有超时为 124（超时不当成功，需进一步跑全套确认）。工具链缺失时，默认模式只跳过相关检查并说明，`--all` 模式下缺少核心工具（node ≥ 22、go、python3）则判失败；bun 始终可选。需要 GNU `timeout`（macOS 装 coreutils）。
 

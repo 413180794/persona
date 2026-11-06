@@ -3,7 +3,8 @@
 #
 #   scripts/check-fast.sh                 # diff merge-base(HEAD, origin/master)..working tree, pick checks by path
 #   scripts/check-fast.sh --base master   # diff against another ref
-#   scripts/check-fast.sh --all           # every local fast check except iOS/macOS builds and the Postgres suite
+#   scripts/check-fast.sh --all           # every local fast check except iOS/macOS builds and the Postgres suite,
+#                                         # including every scripts/**/test_*.py suite CI's Scripts tests job runs
 #   scripts/check-fast.sh -h|--help
 #
 # Path mapping (diff mode):
@@ -14,6 +15,9 @@
 #   sdk/ts/**                  bun test (skipped with a reason when bun is absent)
 #   sdk/go/**                  go test ./... inside the sdk/go module
 #   server/internal/foo/**     go test ./internal/foo/...   (cmd/ likewise; uncategorized server changes: go build ./...)
+#   spec/fixtures/**, schema/extension/**, integrations/**, docs/<file>, scripts/test/server_test_env.py
+#                              also go test on each server package whose _test.go names that input (server-test.yml's
+#                              path filter), found at run time with git grep (comment lines are ignored)
 #   android/**                 scripts/app/android_i18n_check.py plus the android checkers' own unittests (no gradle)
 #   .github/**                 scripts/test/pr_needs_issue_test.mjs
 #   schema/**                  the extension-schema py, the sdk bundle py, and sdk/go go test (mirrors CI's job)
@@ -22,7 +26,13 @@
 #                              each changed scripts/<dir>/test_*.py and the test_<name>.py of each changed script
 #                              <name>.py / <name>.sh (- read as _; db.sh's is test_db_sh.py), run from its
 #                              directory as CI does (#3968)
-#   docs/** or markdown only   no code checks; the privacy gate still runs
+#   docs/**, any *.md          scripts/test/test_doc_paths.py and test_doc_go_paths.py (paths quoted in the docs, the
+#                              CLAUDE.md doc index)
+#   apple/**                   scripts/test/test_apple_l10n.py (String Catalogs, Chinese Swift literals); the iOS/macOS
+#                              builds and tests are skipped with a note (they need a Mac)
+#   deploy/docker/**, docs/docker.md, Dockerfile
+#                              scripts/test/test_docker_entrypoint.py (it also reads the root Dockerfile)
+#                              These Linux suites run in CI's Scripts tests job; they run from scripts/test as there.
 # scripts/privacy_check.py runs on every invocation that has changes (it is a seconds-long local scan, no network).
 #
 # Independent checks run in parallel; each command gets a GNU timeout (override with the CHECK_FAST_TIMEOUT_*
@@ -272,6 +282,33 @@ job_scripts_test() {  # $1 = scripts/<dir>/test_<name>.py, run from its director
   in_dir "$_dir" step "$TIMEOUT_OTHER" "$1" python3 -B -m unittest -q "$_module"
 }
 
+# job_scripts_all runs every SCRIPT_TESTS suite (--all) one after another in a single job, the way CI's Scripts tests
+# job loops over them, instead of starting ~60 python processes at once. Each suite runs from its own directory under
+# its own TIMEOUT_OTHER; one failing or slow suite does not stop the rest. The failed and timed-out files are listed
+# last so the summary's log tail names them. Any failure makes the job a FAIL; only timeouts make it a TIMEOUT.
+job_scripts_all() {
+  [ "$HAVE_PY" -eq 1 ] || skip "python3 not found"
+  local _t _rc _failed=() _timed_out=()
+  for _t in "${SCRIPT_TESTS[@]}"; do
+    echo "+ $_t (timeout ${TIMEOUT_OTHER}s)"
+    ( cd "$(dirname "$_t")" && "$TIMEOUT_BIN" -k 5s "$TIMEOUT_OTHER" python3 -B -m unittest -q "$(basename "$_t" .py)" ) 2>&1
+    _rc=$?
+    case "$_rc" in
+      0) ;;
+      124|137) _timed_out+=("$_t") ;;
+      *) _failed+=("$_t") ;;
+    esac
+  done
+  echo "${#SCRIPT_TESTS[@]} suite(s): ${#_failed[@]} failed, ${#_timed_out[@]} timed out"
+  for _t in "${_timed_out[@]:-}"; do [ -n "$_t" ] && echo "timed out: $_t"; done
+  for _t in "${_failed[@]:-}"; do [ -n "$_t" ] && echo "failed: $_t"; done
+  [ "${#_failed[@]}" -eq 0 ] || return 1
+  if [ "${#_timed_out[@]}" -gt 0 ]; then
+    printf 'TIMEOUT\t124\t%s\t%s suite(s) timed out: %s\n' "$SECONDS" "${#_timed_out[@]}" "${_timed_out[*]}" > "$JOB_STATUS"
+  fi
+  return 0
+}
+
 job_pr_needs_issue() {
   if ! node_ok; then skip "node >= 22 not found (found: $(node -v 2>/dev/null || echo none))"; fi
   step "$TIMEOUT_OTHER" "node scripts/test/pr_needs_issue_test.mjs" node scripts/test/pr_needs_issue_test.mjs || return $?
@@ -288,7 +325,7 @@ job_extension_schema() {
 
 CORE_FAIL=0
 CHANGED=""
-WEB=0; SDKTS=0; ANDROID=0; PRNEEDS=0; EXTSCHEMA=0; SERVER_BUILD=0; APPLE=0; DOCS=0; UNMAPPED=0
+WEB=0; SDKTS=0; ANDROID=0; PRNEEDS=0; EXTSCHEMA=0; SERVER_BUILD=0; APPLE=0; UNMAPPED=0
 SITE=0; SDKGO=0; EXTREFS=0; SDKBUNDLE=0
 INTEG=(); GO_GROUPS=(); UNMAPPED_FILES=(); SCRIPT_TESTS=()
 CORE_MISSING=()
@@ -337,6 +374,7 @@ else
         _p=$(printf '%s' "$f" | cut -d/ -f2)
         arr_has "$_p" "${INTEG[@]:-}" || INTEG+=("$_p") ;;
       sdk/ts/*) SDKTS=1 ;;
+      spec/fixtures/*) ;;  # read by server tests: the reader packages are collected in a pass below
       server/*)
         _rest=${f#server/}
         case "$_rest" in
@@ -369,7 +407,9 @@ else
         # also covers nested paths such as scripts/hooks/foo.sh, not only files directly under scripts/.
         PRNEEDS=1; EXTSCHEMA=1 ;;
       apple/*) APPLE=1 ;;
-      docs/*) DOCS=1 ;;
+      # The suites guarding docs, markdown and deploy/docker (and the root Dockerfile) are added with the scripts/
+      # unittests below.
+      docs/*|deploy/docker/*|Dockerfile|*.md) ;;
       *) UNMAPPED=1; UNMAPPED_FILES+=("$f") ;;
     esac
   done <<< "$CHANGED"
@@ -387,6 +427,37 @@ if [ "$ALL" -eq 0 ]; then
   done <<< "$CHANGED"
 fi
 
+# server_readers prints the package directory (relative to server/) of each server _test.go that matches the extended regex $1
+# outside a // comment line. Finding them at run time keeps a new reader mapped without an edit here.
+server_readers() {
+  git grep -nE "$1" -- 'server/*_test.go' 2>/dev/null \
+    | grep -vE '^[^:]*:[0-9]+:[[:space:]]*//' | cut -d: -f1 | sort -u \
+    | while IFS= read -r _file; do _dir=$(dirname "$_file"); printf '%s\n' "${_dir#server/}"; done | sort -u
+}
+
+# Repository inputs that server tests read (the extra paths in server-test.yml's filter): a change to one also runs go
+# test on the packages that read it. Each regex matches the input as a path string or as filepath.Join elements.
+if [ "$ALL" -eq 0 ]; then
+  READER_RES=()
+  while IFS= read -r f; do
+    _re=""
+    case "$f" in
+      spec/fixtures/*) _re='spec/fixtures|"spec", *"fixtures"' ;;
+      schema/extension/*) _re='schema/extension|"schema", *"extension"' ;;
+      integrations/*/*) _re='integrations/|"integrations"' ;;
+      scripts/test/server_test_env.py) _re='server_test_env\.py' ;;
+      docs/*) _re=$(printf '%s' "$f" | sed 's/[][\.^$*+?(){}|]/\\&/g') ;;  # docs/wechat-connector.md -> docs/wechat-connector\.md
+    esac
+    [ -n "$_re" ] && { arr_has "$_re" "${READER_RES[@]:-}" || READER_RES+=("$_re"); }
+  done <<< "$CHANGED"
+  for _re in "${READER_RES[@]:-}"; do
+    [ -n "$_re" ] || continue
+    while IFS= read -r _g; do
+      [ -n "$_g" ] && { arr_has "$_g" "${GO_GROUPS[@]:-}" || GO_GROUPS+=("$_g"); }
+    done < <(server_readers "$_re")
+  done
+fi
+
 # script_test_add adds a scripts/<dir>/test_*.py that exists (a deleted one is not run) and that no dedicated job above
 # already runs (refs, bundle, extension schema, the android checkers).
 script_test_add() {
@@ -400,8 +471,15 @@ script_test_add() {
 
 # The scripts/ unittests a change needs (#3968): each changed scripts/<dir>/test_*.py, and for each changed script
 # <name>.py / <name>.sh anywhere under scripts/, every scripts/<dir>/test_<name>.py, and test_<name>_sh.py for a .sh
-# (CI's Scripts tests job runs scripts/*/test_*.py; sim-boot.sh is tested by test_sim_boot.py, db.sh by test_db_sh.py).
-if [ "$ALL" -eq 0 ]; then
+# (CI's Scripts tests job runs scripts/**/test_*.py; sim-boot.sh is tested by test_sim_boot.py, db.sh by test_db_sh.py).
+# Changes to docs, markdown, apple/, deploy/docker/ and the root Dockerfile add the scripts/test suites that guard them.
+# --all runs every scripts/**/test_*.py suite, the same find as CI's Scripts tests job, minus the few script_test_add
+# skips because a dedicated check above runs them; renaming or dropping one of those checks must update that skip list.
+if [ "$ALL" -eq 1 ]; then
+  while IFS= read -r f; do
+    script_test_add "$f"
+  done < <(find scripts -name 'test_*.py' -not -path '*/node_modules/*' | sort)
+else
   while IFS= read -r f; do
     case "$f" in
       scripts/*/test_*.py) script_test_add "$f" ;;
@@ -411,6 +489,12 @@ if [ "$ALL" -eq 0 ]; then
         for _t in scripts/*/"test_$_name.py"; do script_test_add "$_t"; done
         case "$f" in *.sh) for _t in scripts/*/"test_${_name}_sh.py"; do script_test_add "$_t"; done ;; esac ;;
     esac
+    # The Linux suites in CI's Scripts tests job that guard files outside scripts/; a file can need several.
+    case "$f" in
+      docs/*|*.md) script_test_add scripts/test/test_doc_paths.py; script_test_add scripts/test/test_doc_go_paths.py ;;
+    esac
+    case "$f" in apple/*) script_test_add scripts/test/test_apple_l10n.py ;; esac
+    case "$f" in deploy/docker/*|docs/docker.md|Dockerfile) script_test_add scripts/test/test_docker_entrypoint.py ;; esac
   done <<< "$CHANGED"
 fi
 
@@ -459,7 +543,13 @@ fi
 [ "$EXTREFS" -eq 1 ] && schedule "external service refs" job_external_refs ""
 if [ "${#SCRIPT_TESTS[@]}" -gt 0 ]; then
   if [ "$HAVE_PY" -eq 1 ]; then
-    for _t in "${SCRIPT_TESTS[@]}"; do schedule "$_t" job_scripts_test "$_t"; done
+    if [ "$ALL" -eq 1 ]; then
+      schedule "scripts unittest suites (${#SCRIPT_TESTS[@]})" job_scripts_all ""
+    else
+      for _t in "${SCRIPT_TESTS[@]}"; do schedule "$_t" job_scripts_test "$_t"; done
+    fi
+  elif [ "$ALL" -eq 1 ]; then
+    core_missing "python3 not found; scripts unittest suites skipped"
   else
     INFO+=("SKIP  scripts unittests (${SCRIPT_TESTS[*]}): python3 not found")
   fi
@@ -502,10 +592,7 @@ if [ "$EXTSCHEMA" -eq 1 ]; then
 fi
 
 if [ "$APPLE" -eq 1 ]; then
-  INFO+=("SKIP  apple/** changes: iOS/macOS checks need a Mac — scripts/app/sim.sh, PersonaKit swift test (docs/testing.md)")
-fi
-if [ "$DOCS" -eq 1 ] && [ ${#JOB_NAME[@]} -le 1 ]; then
-  INFO+=("INFO  only docs/markdown changed: no code fast checks map to this diff")
+  INFO+=("SKIP  apple/** builds and tests: iOS/macOS checks need a Mac — scripts/app/sim.sh, PersonaKit swift test (docs/testing.md)")
 fi
 if [ "$UNMAPPED" -eq 1 ]; then
   INFO+=("INFO  no fast check maps to: ${UNMAPPED_FILES[*]} (privacy scan still ran; full suites in docs/testing.md)")
