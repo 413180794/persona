@@ -1,70 +1,72 @@
-# 协议（前后端契约）
+# Protocol (frontend/backend contract)
 
-本轮核对：2026-10-31，基于提交 `f3a13fdb7672927197cb8ac38bccb9c65671677b` 的 `server/internal/hub/` 路由、事件发送和数据库记录。以下超时、保留期和数量限制均为协议或配置，实际性能未实测。
+Last reviewed: 2026-10-31, against the routes, event emission and database records in `server/internal/hub/` at commit `f3a13fdb7672927197cb8ac38bccb9c65671677b`. The timeouts, retention periods and count limits below are protocol or configuration values; actual performance was not measured.
 
-所有 JSON 字段 snake_case。时间为 RFC3339（UTC）。HTTP `listen` 默认 `:18660`；TLS 通过 `public.tls_listen` 显式开启，提供 HTTPS / WSS。公网优先 IPv6，配置和放行方法见 [network.md](network.md)。
+All JSON fields are snake_case. Times are RFC3339 (UTC). HTTP `listen` defaults to `:18660`; TLS is turned on explicitly with `public.tls_listen` and serves HTTPS / WSS. Over the public internet IPv6 is preferred; see [network.md](network.md) for configuration and firewall rules.
 
-## 鉴权
+## Authentication
 
-- 优先使用 `Authorization: Bearer <token>`。当前实现未收紧 URL token：没有 Authorization 值时，所有鉴权 API（含 WebSocket）仍可回退到 `?token=`，不只限回环或 WS。客户端应使用请求头，避免凭据进入 URL。
-- 工作区看板（#1646）将 GET `/api/v1/workspace-board` 与 `/api/v1/workspaces` 加入 `answer` 读取允许列表；修改看板仍仅限 `full`，详见「工作区看板」。
-- hub.json 的 `token` 是主 token，只接受回环 / 内网等受信任来源；公网即使用 TLS 也返回 `403 master_token_local_only`。公网应使用临时配对 token 或设备 token。默认拒绝公网明文 API，返回 `403 tls_required`，仅 `GET /api/v1/health` 例外。
-- 每台设备自己的凭据：`POST /api/v1/auth/tokens {"name":"<设备名称>","kind":"phone"}` → `{id,token,role,name}`。设备 token 以 `jd_` 开头，hub 只存哈希；`kind: watch` 得到 `answer`，其他 kind 得到 `full`；kind 存 `phone`、`watch`、`web`、`link`，其余存成 `other`。
-网页带可选的 `"replaces":"<这个浏览器上次的设备 id>"`：新凭据建好后 hub 撤销那台（只在它是还没撤销的 `kind: web` 时，别的 kind、不认识的 id 一律不动，新凭据照样发），响应多一个 `"replaced":"<id>"`；同一浏览器重新登录不再累积设备（#3356）；升级前存成 `other` 的网页设备不替换，要手动撤销。`full` 可以创建设备 token。`answer` 只能做手表用到的事（允许列表，`devicetokens.go`），其余一律 403，GET 也一样：读机器、会话、对话内容、交互和收件箱列表，回答交互，发消息，标已读 / 中断，收件箱标记完成、草拟、回复。文件、启动器、设备注册和 WebSocket 都不行。回答屏幕卡片只能选选项或按 `1`–`9`、`esc`、`enter`，不能打字，也不能选自由输入那一项（「Type something」，它要带文字；在卡片被认领之前就拒，卡片留着给手机）；发消息只能发给列表里的会话，只带文字（去掉控制字符），选不了启动器和模型，也不能带图；回复收件箱不能带文档状态变更，开了 `lark_agent` 时也不能发 `/agent`。发消息和批准计划是它本来的能力，所以手表丢了还是要撤销。新 App 配对后立刻换一个自己的 token，之后只用它；配对的手表再换一个 `kind: watch` 的，手表只拿这个；还没换到时（请求失败、旧 hub）手表不拿任何凭据，提示「还没有手表的凭据」，点「从 iPhone 同步」时手机再换一次（#1185：以前暂用手机那份 `full`，#1128 的限制就落空了）。
-- `GET /api/v1/auth/tokens` 返回 `{tokens,current}`，`DELETE /api/v1/auth/tokens/{id}` 撤销凭据、清缓存（认证结果缓存 30 秒，撤销时清掉）并断开该设备的 WebSocket；App 在「设置 › 设备」里管理。旧 hub 无此接口时，旧客户端仍按原配对流程使用凭据。
-- 电脑链路的凭据（[link.md](link.md)）：`POST /api/v1/auth/tokens {"kind":"link","machine":"<hub.json 里 kind 为 link 的机器>"}` → `role: link`，
-  只能开 `/api/v1/link` 和 `/api/v1/link/stream`，其他接口 403；列表里带 `machine_id`。用给这台生成的配对码（下文 `{"machine"}`）兑换时，
-  kind 和 machine 由配对码决定，请求里写别的机器返回 403。
-- 扩展的 token（`pext_` 开头，#1855）：hub 按扩展接受了的范围（`permissions.hub`）签发，只开那些范围登记的路由，其余 403 `permission_denied`（缺范围时带 `scope`），
-  只认本机来的请求；见 [extensions.md](extensions.md)「权限」「hub 的接口：范围」。
-- hub 互联（[mesh.md](mesh.md)）：另一台 hub 的凭据 kind / role 都是 `peer`（`machine_id` 是对方的 hub_id），只能开 `GET /api/v1/peer`；
-  互联码 `jx_…` 只能 `POST /api/v1/peer/pair`；别的接口一律 403。组里只有**中心 hub** 认 App 的凭据：成员把 App 的请求原样（带 `Authorization`）
-  转给中心，成员加入时把它签过的凭据（hash）交给中心，所以配对在成员上的设备照常能用。中心连不上时成员回
-  `503 {"code":"center_unreachable","center":{"hub_id","name"}}`。
-- 公网鉴权失败按 IPv4 单地址、IPv6 /64 计数，封禁检查在查库前；`429 rate_limited` 带秒数形式的 `Retry-After`。内网 / VPN 不计数，参数见 [网络配置](network.md#hubjson-网络配置)。
-- 服务（助手等独立进程）连 hub 的总线用另一种 token（`jb_…`），只能开 `GET /api/v1/bus`，见下文「总线」。
-- 请求可带 `Accept-Language: zh-Hans|en|ja`（浏览器自带的完整列表也认，取第一项按 [i18n.md](i18n.md) 回退）：这次响应里给人看的文字（`error`、状态说明）用这种语言；`code` 不变，客户端仍以 `code` 分支。没带时用用户语言（见「客户端能力与心跳」的 `client_hello.locale`）。
-- 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
+- Prefer `Authorization: Bearer <token>`. The current implementation has not locked down URL tokens: when there is no Authorization value, every authenticated API (WebSocket included) still falls back to `?token=`, not only on loopback or for WS. Clients should use the header so credentials stay out of URLs.
+- The workspace board (#1646) adds GET `/api/v1/workspace-board` and `/api/v1/workspaces` to the `answer` read allowlist; changing the board still requires `full`. See "Workspace board".
+- The `token` in hub.json is the master token. It is accepted only from trusted sources such as loopback / LAN; from the public internet it returns `403 master_token_local_only` even over TLS. Public clients should use a temporary pairing token or a device token. Plaintext API over the public internet is rejected by default with `403 tls_required`; the only exception is `GET /api/v1/health`.
+- Per-device credentials: `POST /api/v1/auth/tokens {"name":"<device name>","kind":"phone"}` → `{id,token,role,name}`. Device tokens start with `jd_`; the hub stores only a hash. `kind: watch` gets `answer`, every other kind gets `full`. The stored kind is `phone`, `watch`, `web` or `link`; anything else is stored as `other`.
+The web client may send `"replaces":"<this browser's previous device id>"`: once the new credential is created, the hub revokes that one (only if it is a `kind: web` credential not yet revoked; other kinds and unknown ids are left alone, and the new credential is issued either way), and the response gains `"replaced":"<id>"`. Logging in again from the same browser no longer piles up devices (#3356). Web devices stored as `other` before the upgrade are not replaced and must be revoked by hand. `full` can create device tokens. `answer` can only do what the watch needs (an allowlist, `devicetokens.go`); everything else is 403, GET included. Allowed: reading machines, sessions, chat content, interactions and the Inbox list; answering interactions; sending messages; marking read / interrupting; marking Inbox items done, drafting, replying. Files, launchers, device registration and WebSocket are not allowed. When answering a screen card it can only pick an option or press `1`–`9`, `esc`, `enter`; it cannot type, and cannot pick the free-input option ("Type something", which needs text; this is rejected before the card is claimed, so the card stays for the phone). It can only send messages to sessions in the list, text only (control characters stripped), with no launcher or model choice and no images. Inbox replies cannot carry document state changes, and cannot send `/agent` when `lark_agent` is on. Sending messages and approving plans are capabilities it has by design, so a lost watch still needs to be revoked. A newly paired App immediately exchanges for its own token and uses only that from then on. A paired watch exchanges for a separate `kind: watch` one and the watch only ever gets that. Until the exchange succeeds (request failed, old hub) the watch gets no credential at all and shows "No watch credential yet"; tapping "Sync from iPhone" makes the phone exchange again (#1185: it used to borrow the phone's `full` token for the time being, which defeated the restriction from #1128).
+- `GET /api/v1/auth/tokens` returns `{tokens,current}`. `DELETE /api/v1/auth/tokens/{id}` revokes a credential, clears the cache (authentication results are cached for 30 seconds and cleared on revoke) and disconnects that device's WebSocket. The App manages these in **Settings › Devices**. When an old hub lacks this API, old clients keep using credentials through the original pairing flow.
+- Credentials for a computer's link ([link.md](link.md)): `POST /api/v1/auth/tokens {"kind":"link","machine":"<a machine in hub.json with kind link>"}` → `role: link`,
+  which can only open `/api/v1/link` and `/api/v1/link/stream`; every other API is 403. The list includes `machine_id`. When redeeming a pairing code generated for that computer (`{"machine"}` below),
+  kind and machine are set by the pairing code; naming a different machine in the request returns 403.
+- Extension tokens (starting with `pext_`, #1855): the hub issues them for the scopes the extension was granted (`permissions.hub`). They open only the routes registered for those scopes; everything else is 403 `permission_denied` (with `scope` when a scope is missing),
+  and only requests from the local machine are accepted. See [extensions.md](extensions.md) ("Permissions", "Hub API: scopes").
+- Linked hubs ([mesh.md](mesh.md)): another hub's credential has kind / role `peer` (`machine_id` is the other side's hub_id) and can only open `GET /api/v1/peer`;
+  a link code `jx_…` can only `POST /api/v1/peer/pair`; every other API is 403. In a group only the **primary hub** accepts App credentials: a member forwards App requests unchanged (with `Authorization`)
+  to the primary, and when it joins it hands the credentials it has issued (hashes) to the primary, so devices paired with the member keep working. When the primary is unreachable, the member returns
+  `503 {"code":"center_unreachable","center":{"hub_id","name"}}`.
+- Public authentication failures are counted per IPv4 address and per IPv6 /64, and the ban check runs before the database lookup; `429 rate_limited` carries `Retry-After` in seconds. LAN / VPN is not counted. Parameters are in [network configuration](network.md#hubjson-网络配置).
+- Services (separate processes such as the assistant) connect to the hub's bus with a different token (`jb_…`), which can only open `GET /api/v1/bus`. See "Bus" below.
+- Requests may send `Accept-Language: zh-Hans|en|ja` (the full list a browser sends is also accepted; the first entry is taken and falls back per [i18n.md](i18n.md)): human-readable text in that response (`error`, status descriptions) uses that language. `code` does not change; clients still branch on `code`. Without it, the user's language is used (see `client_hello.locale` in "Client capabilities and heartbeat").
+- Every response carries `X-Request-Id`. A request may send `X-Client-Request-Id` (4–32 hex characters / `-`), and the hub then uses it (`docs/server.md`, "Operations").
 
-### 健康检查与能力位
+### Health check and feature flags
 
-`GET /api/v1/health` 不需要鉴权。公网来源只返回：
+`GET /api/v1/health` needs no authentication. Public sources get only:
 
 ```json
-{"ok":true,"hub_id":"<hub UUID>","hub_name":"家里","tls_port":18662,"fp":"<SPKI SHA-256 base64url>"}
+{"ok":true,"hub_id":"<hub UUID>","hub_name":"Home","tls_port":18662,"fp":"<SPKI SHA-256 base64url>"}
 ```
 
-内网 / 回环等受信任来源另外返回 `version` 和 `features`。来源按连接地址判断，与是否带 token 无关；公网 HTTPS health 也会裁剪。所有来源都不返回候选地址。未启用 TLS 时 `tls_port` 为 `0`，`fp` 为空字符串。
+Trusted sources such as LAN / loopback also get `version` and `features`. The source is judged by the connection address, regardless of whether a token is sent; a public HTTPS health response is trimmed too. No source gets candidate addresses. When TLS is off, `tls_port` is `0` and `fp` is an empty string.
 
-受信任来源的健康检查还返回 `channel`（`release` / `docker` / `dev`）、`build`（UTC `YYYYMMDDHHMM`，没有是 0）、`protocol`（App ↔ hub 的大版本号）、`min_app_build`（它能配的最老的 App，`docs/hub-update.md`「兼容」），以及 `update.confirmed`（进程是否已确认完一次更新：没有更新要确认时为真，看门狗等它）。`channel` 和 `build` 说明这个 hub 怎么构建、能不能自己更新；WS `hello` 带同样的字段。WS `hello`（认证后）另带 `public_url`（hub.json 的 `public_url`，去掉末尾的 `/`；没有时不带）：助手回答里的 hub 链接都用它拼，App 靠它认出「本 hub 的链接」，手机经别的地址连 hub 时也认得出（#2696）。
+For trusted sources the health check also returns `channel` (`release` / `docker` / `dev`), `build` (UTC `YYYYMMDDHHMM`, 0 if absent), `protocol` (the App ↔ hub major version), `min_app_build` (the oldest App it can pair with, `docs/hub-update.md` "Compatibility"), and `update.confirmed` (whether the process has finished confirming an update: true when there is no update to confirm; the watchdog waits on it). `channel` and `build` tell how this hub was built and whether it can update itself; WS `hello` carries the same fields. WS `hello` (after authentication) also carries `public_url` (hub.json's `public_url` with the trailing `/` removed; omitted if unset): hub links in assistant answers are built from it, and the App uses it to recognize "links to this hub", even when the phone reaches the hub through another address (#2696).
 
-`hub_name` 是这台 hub 给人看的名字（hub.json 的 `name`，[config.md](config.md)）。`hub_id` 是持久化在数据库 `settings` 的 UUID。客户端用它区分 hub，并核对切换候选后仍连接到同一实例；`fp` 必须来自可信扫码或已鉴权的可信通道，不能信任任意公网 health 回包来建立钉扎。
+`hub_name` is this hub's human-readable name (hub.json's `name`, [config.md](config.md)). `hub_id` is a UUID persisted in the database's `settings`. Clients use it to tell hubs apart and to check they still reach the same instance after switching candidates. `fp` must come from a trusted QR scan or an authenticated trusted channel; never trust an arbitrary public health response to establish pinning.
 
-鉴权后的 WS `hello.features` 总是提供服务端能力。当前 `proto.Features` 包括：
+The authenticated WS `hello.features` always lists server capabilities. The current `proto.Features` contains:
 
-- P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
-- 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`herdr_focus`（完整界面的焦点联动：`herdr_focus` 等，见下「焦点联动」）、`file_upload`。
-- 按 hub.json 出现：`assistant_views`（`assistant.persona_view` 打开：声明式动作带 `expected_version`、活卡片、正文卡片注册的接口可用）、`assistant_html_bridge`（另外 `assistant.html_views` 未关：`…/html-actions` 可用；客户端是否运行 HTML 仍看自己的安全验收，不据此跑 JS），见下面「助手」的卡片接口和 [assistant-views.md](assistant-views.md)。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`assistant_readiness`（主对话就绪度，见下「主对话就绪度」）；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`extension_auth`（扩展的登录 `/api/v1/extensions/{id}/-/auth…`、`extension_auth` 事件、安装步骤 `tools`，[extensions.md](extensions.md)「登录（auth）」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）、`machines_add`（已登录设备经 `POST /api/v1/auth/pair-codes` 的 `add` 添加电脑、拿电脑的配对码，见下面「临时配对」里的「电脑的配对码」）。
+- New in P0: `tls`, `endpoints`, `client_hello`, `heartbeat`, `app_ping`, `error_codes`, `client_ops`, `ws_notify`, `lock_test`, `android_update`.
+- Existing: `client_msg_id`, `send_refusals`, `screen_dialog`, `resumable_interactions`, `secret_prompts`, `request_id`, `terminal_stream`, `terminal_control`, `terminal_scroll`, `terminal_click`, `terminal_mouse`, `herdr_client` (the web client's full herdr interface: `herdr_open` etc., see "Full herdr interface" below), `herdr_focus` (focus sync for the full interface: `herdr_focus` etc., see "Focus sync" below), `file_upload`.
+- Present depending on hub.json: `assistant_views` (`assistant.persona_view` on: declarative actions carry `expected_version`, live cards, and the APIs registered by in-body cards are available), `assistant_html_bridge` (additionally `assistant.html_views` not turned off: `…/html-actions` is available; whether a client runs HTML still depends on its own security sign-off, and it does not run JS based on this flag). See the card APIs under "Assistant" below and [assistant-views.md](assistant-views.md).
+- Also: `assistant_compact` (manually compacting an assistant chat, the session's `compaction`), `assistant_main_new` (new main chat), see the two APIs under "Assistant" below; `assistant_readiness` (main chat readiness, see "Main chat readiness" below); `elicitation` (MCP forms and links), `model_configuration` (models configured by purpose), `plugins` ([plugins](extensions.md)), `plugin_ui_slots` (plugin UI slots, UI version 2, `plugin_ui` events, [extensions.md](extensions.md) "UI slots"), `plugin_auto_upgrade` (the toggle and list for auto-upgrading market plugins, `plugin_upgrade` events, [extensions.md](extensions.md) "Auto-upgrade"), `extension_operations` (install, upgrade, uninstall in steps with progress, see "Extension install, upgrade and uninstall progress" below), `extension_auth` (extension sign-in `/api/v1/extensions/{id}/-/auth…`, `extension_auth` events, the install step `tools`, [extensions.md](extensions.md) "Sign-in (auth)"), `desktops` (desktop client registration, see `register_desktop` below), `locale` (honors `Accept-Language`, `client_hello.locale` and the device's `locale`; human-readable text follows the language, [i18n.md](i18n.md)), `terminal_panes` (`GET/POST /machines/{mid}/panes` and terminal stream ids of the form `pane:<pane id>`, [terminal.md](terminal.md) section 19), `machine_trust` (a machine's `trust` / `error_code` and `POST /machines/{id}/confirm`, `…/reject`, see "Computer trust" below), `machines_add` (a signed-in device adds a computer and gets the computer's pairing code via `add` on `POST /api/v1/auth/pair-codes`, see "Computer pairing codes" under "Temporary pairing" below).
 
-能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
+A feature flag means the implementation supports it; `tls` does not mean the listener is on, so also check `tls_port` / `fp`. A new client talking to an old hub falls back to the old behavior based on the flags. `node_version` / `node_mismatch` in the machine list flag whether the node and hub deployment versions match (the personad on that computer was not deployed by this hub deployment, i.e. `deploy.sh` deployed only part of it; the hub also logs a line when it connects). New fields are all optional, and the App currently checks whether a field is present. When a future request would be "misunderstood by an old hub", check here first.
 
-`POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.persona/bin/nodes/jarvisd-<os>-<arch>`）经 ssh 装到那台电脑（正走 tailcat 时经 tailcat 发给常驻 node，它换掉自己后退出、由 launchd / systemd 重启），杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。App 在「设置 › 机器」里提示并给一个「重新部署」按钮。
+`POST /api/v1/machines/{id}/deploy`: the hub installs the node from its own deployment (left by `deploy.sh` on the hub machine at `~/.persona/bin/nodes/jarvisd-<os>-<arch>`) on that computer over ssh (when it is going through tailcat, it is sent to the resident node through tailcat; the node replaces itself, exits and is restarted by launchd / systemd), kills the resident node (launchd restarts it with the new binary; `launchctl kickstart` over ssh does not always work) and reconnects. It runs in the background and returns `{ok}` immediately (409 with a reason when it cannot start). Progress is in the machine list: `deploying` (in progress), `deploy_error` (why the last attempt failed); on success `node_mismatch` goes away. The App shows a notice in **Settings › Machines** with a **Redeploy** button.
 
-Persona Link 的主动 `link` / 被动 `service` 机器，以及经成员 hub 转发的 node，支持更新协议时经现有 node RPC 更新，不要求 SSH。`node.info` 的 `node_update` / `node_update_reason` 表示本机更新能力；机器列表的 `can_deploy` / `deploy_reason` 表示该入口当前能否使用，`deploy_phase` 为 `waiting_idle` / `transferring` / `restarting` / `confirming`。旧 node 先在本机升级一次。部署任务存 Postgres，支持等待空闲、校验安装、常驻进程重启、本地回滚与重新上线确认；详细 RPC 和恢复约定见 [node-update.md](node-update.md)。
+Persona Link's active `link` / passive `service` machines, and nodes forwarded through a member hub, are updated over the existing node RPC when they support the update protocol; no SSH is needed. `node.info`'s `node_update` / `node_update_reason` report the local update capability; the machine list's `can_deploy` / `deploy_reason` say whether that entry point can be used right now, and `deploy_phase` is `waiting_idle` / `transferring` / `restarting` / `confirming`. An old node is first upgraded once locally. Deploy jobs are stored in Postgres and support waiting for idle, verifying the install, restarting the resident process, local rollback and confirming it is back online. The detailed RPC and recovery conventions are in [node-update.md](node-update.md).
 
-### 临时配对
+<a id="临时配对"></a>
 
-`POST /api/v1/auth/pair-codes` 接受两种调用方：**回环来源 + 主 token**（`personad hub pair`），或**已登录的 `full` 设备 token**（任何来源，#2731：网页「设置 › 设备 › 连接新设备」）。
-无须请求体；请求体带 `machine` 或 `add` 时生成给一台电脑的 Persona Link 用的配对码（下面「电脑的配对码」）。
-手表（`answer`）、链路、互联、扩展的凭据，临时配对 token 本身（不能用一个码生成下一个码），以及非回环来源的主 token 均返回 403。
-`full` 设备本来就能 `POST /api/v1/auth/tokens` 建长期凭据，这里给的是 10 分钟、只能兑换一次的码，不扩大权限；设备申请时 hub 记一行日志（设备名和 id）。
-App 用的码（不带 `machine`）多返回 `qr: {size, rows}`（配对链接的二维码，每行一串 `0` / `1`，不含静区，和 `/admin` 的一样）。
-请求体再带 `"web": "<网页地址>"`（绝对的 http(s) 地址，不带 `#` 片段和账号密码，否则 400）时多返回 `web_url`（`<网页地址>#token=<临时 token>`，网页打开即登录，`#` 后的部分不发到服务器）和它的二维码 `web_qr`。成功为 HTTP 200，返回：
+### Temporary pairing
+
+`POST /api/v1/auth/pair-codes` accepts two kinds of callers: **loopback source + master token** (`personad hub pair`), or **a signed-in `full` device token** (any source, #2731: the web client's **Settings › Devices › Connect New Device**).
+No request body is needed; when the body carries `machine` or `add`, it generates a pairing code for a computer's Persona Link (see "Computer pairing codes" below).
+Watch (`answer`), link, peer and extension credentials, the temporary pairing token itself (one code cannot generate the next), and a master token from a non-loopback source all get 403.
+A `full` device can already create long-lived credentials with `POST /api/v1/auth/tokens`; what this gives is a 10-minute, single-use code, so it does not widen permissions. The hub logs a line (device name and id) when a device requests one.
+Codes for the App (without `machine`) also return `qr: {size, rows}` (the QR code of the pairing link, one string of `0` / `1` per row, no quiet zone, same as `/admin`).
+When the body also carries `"web": "<web URL>"` (an absolute http(s) URL with no `#` fragment and no user/password, otherwise 400), the response also includes `web_url` (`<web URL>#token=<temporary token>`: opening it signs in to the web client, and the part after `#` is not sent to the server) and its QR code `web_qr`. On success it returns HTTP 200 with:
 
 ```json
 {
-  "token":"<临时 token>",
+  "token":"<temporary token>",
   "expires_at":"<RFC3339 UTC>",
   "url":"http://hub.example.com:18660",
   "hub_id":"<hub UUID>",
@@ -75,437 +77,439 @@ App 用的码（不带 `machine`）多返回 `qr: {size, rows}`（配对链接�
 }
 ```
 
-响应带 `Cache-Control: no-store`。临时 token 为 `jp_` 加 32 字节随机值的十六进制编码，数据库只存哈希。有效期 10 分钟，可作为完整的 `full` Bearer 访问 API / WS，以兼容旧 iOS 先读机器、连 WS、注册推送再换凭据的流程。
+The response carries `Cache-Control: no-store`. The temporary token is `jp_` plus the hex encoding of 32 random bytes; the database stores only its hash. It is valid for 10 minutes and works as a full `full` Bearer for the API / WS, for compatibility with the old iOS flow that reads machines, connects WS and registers push before exchanging credentials.
 
-它只能通过 `POST /api/v1/auth/tokens` **兑换一次**设备 token，重复兑换返回 `401 invalid_token`。兑换后其他 API 仍可使用至 `min(原到期时间, 兑换时间 + 2 分钟)`；到期后失效，已建立的临时 token WS 也会被取消。有效期与宽限均为协议策略，不是性能实测。新设备配对成功后，hub 尝试发配对通知；推送不可用时记日志。
+It can **exchange for a device token only once** through `POST /api/v1/auth/tokens`; a second exchange returns `401 invalid_token`. After the exchange, other APIs keep working until `min(original expiry, exchange time + 2 minutes)`; then it expires, and WS connections already opened with the temporary token are canceled too. The validity and grace periods are protocol policy, not measured performance. After a new device pairs successfully, the hub tries to send a pairing notification; if push is unavailable it logs instead.
 
-`personad hub pair` 调用上述本机接口，打印临时链接和二维码；运行中的 hub 必须可经 IPv4 回环 HTTP 访问。`--legacy` 才离线打印主 token 的旧格式。现有 iOS 忽略新参数，可继续在内网扫默认临时码，不必改用 `--legacy`。
+`personad hub pair` calls the local API above and prints the temporary link and QR code; the running hub must be reachable over IPv4 loopback HTTP. Only `--legacy` prints the old format with the master token offline. Existing iOS ignores the new parameters and can keep scanning the default temporary code on the LAN; it does not need `--legacy`.
 
-二维码保持 `url` / `token`，附加字段遵循 redesign/hub-changes.md 1.3：
+The QR code keeps `url` / `token`; the extra fields follow redesign/hub-changes.md 1.3:
 
 ```text
-jarvis://pair?url=<兼容地址>&token=<临时 token>&hub=<hub_id>&fp=<指纹>&tls=<TLS 端口>&alt=<HTTPS 候选>&alt=<HTTPS 候选>
+jarvis://pair?url=<compatible URL>&token=<temporary token>&hub=<hub_id>&fp=<fingerprint>&tls=<TLS port>&alt=<HTTPS candidate>&alt=<HTTPS candidate>
 ```
 
-这是结构示意，实际参数值逐项 URL 编码，顺序不重要。
+This shows the structure; actual parameter values are each URL-encoded, and order does not matter.
 
-| 参数 | 格式 |
+| Parameter | Format |
 | --- | --- |
-| `url` | `public_url`；旧 App 继续使用它，因此应保留可达的内网 / VPN 地址 |
-| `token` | 临时 Bearer token；`--legacy` 时为主 token |
+| `url` | `public_url`; old Apps still use it, so keep a reachable LAN / VPN address here |
+| `token` | Temporary Bearer token; the master token with `--legacy` |
 | `hub` | hub UUID |
-| `fp` | SHA-256(SubjectPublicKeyInfo DER)，base64url 无填充，43 字符；非整张证书的哈希 |
-| `tls` | TLS 监听端口，十进制 |
-| `alt` | 完整 HTTPS URL，可重复；当前最多两个，按候选顺序选取并排除 `lan` |
+| `fp` | SHA-256(SubjectPublicKeyInfo DER), base64url without padding, 43 characters; not a hash of the whole certificate |
+| `tls` | TLS listen port, decimal |
+| `alt` | Full HTTPS URL, repeatable; currently at most two, picked in candidate order, excluding `lan` |
 
-未启用 TLS 时二维码省略 `fp` / `tls`；无合适候选时省略 `alt`。API 响应仍有对应字段（空字符串、0 或空数组）。换证书保留同一把密钥不改变 `fp`；换密钥需要重启 hub 并让设备重新可信配对，当前没有 `fp_next`。
+When TLS is off the QR code omits `fp` / `tls`; with no suitable candidate it omits `alt`. The API response still has the matching fields (empty string, 0 or empty array). Renewing a certificate with the same key does not change `fp`; changing the key requires restarting the hub and re-pairing devices through a trusted path. There is no `fp_next` yet.
 
-#### 电脑的配对码（feature `machines_add`，#3735）
+#### Computer pairing codes (feature `machines_add`, #3735)
 
-新用户上手方案（#287）4.2、5.3。请求体：
+From the new-user onboarding plan (#287) 4.2, 5.3. Request bodies:
 
 ```
-{"add": {"name": "小林的 MacBook", "os": "mac", "icon": "laptop"}}   新加一台「电脑来连」（kind link）的电脑，给它的码
-{"add": {"id": "macbook", "name": "…"}}                              同上，指定 id（`personad hub pair --machine <id> --add`）
-{"machine": "macbook"}                                               已有的 link 电脑再出一个码
+{"add": {"name": "Lin's MacBook", "os": "mac", "icon": "laptop"}}   add a new "Computer connects" (kind link) computer and get its code
+{"add": {"id": "macbook", "name": "…"}}                              same, with an explicit id (`personad hub pair --machine <id> --add`)
+{"machine": "macbook"}                                               another code for an existing link computer
 ```
 
-- `add.name` 可以是中文（最多 40 个字）；不给 `add.id` 时 id 由名字生成：取名字里的 ASCII 字母和数字（小写，其余的变成 `-`），一个都没有时用 `add.os`（`mac` / `linux` / `windows`），再没有是 `computer`；
-  和已有的重了加 `-2`、`-3`。`add.os` 只决定客户端显示哪种安装说明，hub 不存；`add.icon` 是 `laptop`（默认）/ `desktop` / `server`。
-- hub 照管理界面「添加电脑 › 电脑来连」的同一个函数写 hub.json 并交给管理者（运行中生效，不用重启）。
-  **设备**加的电脑是待确认的（下面「电脑的信任」），**回环 + 主 token** 加的是已确认的。
-- 设备用同一个名字再加一次、那台还在待确认又从没连上过时，复用它、重出码（`added: false`）。主 token 带 `add.id` 遇到已有的 link 电脑也是重出码。
-- 设备只能给**待确认**的电脑出码（`machine` 或复用），已确认的回 409 `not_pending`：设备出的码都走「待确认 → 确认」，重新配对一台已确认的电脑在管理界面或 hub 机器上做。
-  这不是安全边界（full 设备本来就能用 `POST /api/v1/auth/tokens` 的 `kind: link` 给任何 link 电脑签凭据）。
-- 设备给一台待确认的电脑重新出码（`machine` 或复用）时，先吊销它已有的 Persona Link 凭据：上一个码不管被哪台电脑换走，都不能跟着新码的那台一起被确认。
-- 成功为 200，`Cache-Control: no-store`，在上面的字段（`token`、`expires_at`、`url`、`hub_id`、`fp`、`tls_port`、`alt`、`machine`、`pair_url`，没有 `qr`）之外多给：
+- `add.name` may be Chinese (at most 40 characters). Without `add.id`, the id is derived from the name: the ASCII letters and digits in the name (lowercased, everything else becomes `-`); if there are none, `add.os` (`mac` / `linux` / `windows`); failing that, `computer`.
+  On collision with an existing id, `-2`, `-3` are appended. `add.os` only decides which install instructions the client shows; the hub does not store it. `add.icon` is `laptop` (default) / `desktop` / `server`.
+- The hub uses the same function as the admin page's **Add Computer › Computer connects** to write hub.json and hand it to the manager (effective while running, no restart).
+  Computers added by a **device** are pending confirmation ("Computer trust" below); those added by **loopback + master token** are confirmed.
+- When a device adds the same name again and that computer is still pending and has never connected, it is reused and a new code issued (`added: false`). A master token with `add.id` that hits an existing link computer also just reissues a code.
+- A device can only issue codes for **pending** computers (`machine` or reuse); a confirmed one returns 409 `not_pending`. Every code a device issues goes through "pending → confirmed"; re-pairing a confirmed computer is done on the admin page or on the hub machine.
+  This is not a security boundary (a full device can already sign credentials for any link computer with `kind: link` on `POST /api/v1/auth/tokens`).
+- When a device reissues a code for a pending computer (`machine` or reuse), the computer's existing Persona Link credentials are revoked first: whichever computer redeemed the previous code, it cannot get confirmed along with the one holding the new code.
+- Success is 200 with `Cache-Control: no-store`. Besides the fields above (`token`, `expires_at`, `url`, `hub_id`, `fp`, `tls_port`, `alt`, `machine`, `pair_url`; no `qr`), it adds:
 
 ```json
-{"machine": "macbook", "name": "小林的 MacBook", "trust": "pending", "added": true,
+{"machine": "macbook", "name": "Lin's MacBook", "trust": "pending", "added": true,
  "pair_url": "jarvis://link?url=…&token=…&machine=macbook&hub=…&fp=…&tls=…",
  "command": "jarvis-link pair '<pair_url>'",
- "install": {"linux": "curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<pair_url>'"}}
+ "install": {"linux": "curl -fsSL <site>/install.sh | sh -s -- --node --pair '<pair_url>'"}}
 ```
 
-  `trust` 是 `pending` 或 `confirmed`（这里总是给出）；`added` 说这次是不是新加的（不是时省略）；`install` 只在 hub 知道自己是从哪个站点发布的时候有
-  （构建时的 `publish.site_url`，[config.md](config.md)；本地构建、Docker 镜像没有），目前只有 `linux`。
-- 错误（`error` 按 `Accept-Language` 本地化）：
+  `trust` is `pending` or `confirmed` (always present here). `added` says whether this call added it (omitted when not). `install` is present only when the hub knows which site it was published from
+  (the build-time `publish.site_url`, [config.md](config.md); local builds and Docker images don't have it), and currently only has `linux`.
+- Errors (`error` is localized per `Accept-Language`):
 
-| HTTP | code | 什么时候 |
+| HTTP | code | When |
 | --- | --- | --- |
-| 403 | `forbidden` | 不是 full 设备：手表、链路、配对码换来的临时身份、扩展；非回环的主 token |
-| 409 | `tls_required` | hub 没开 TLS、也不在 HTTPS 反向代理后面，Persona Link 连不进来；带 `"action": "enable_tls"` |
-| 409 | `mesh_member` | 设备连的是互联组里的成员 hub：在中心 hub 上添加 |
-| 429 | `too_many_pending` | 设备新加电脑时已经有 3 台在等确认（复用、重出码不算） |
-| 409 | `exists` / `not_pending` | 指定的 id 已经有了（不是能复用的 link 电脑）/ 设备给已确认的电脑出码 |
-| 404 | `not_found` | 设备带的 `machine` 不是 hub.json 里的 link 电脑 |
-| 400 | `unknown_machine` | 主 token 带的 `machine` 不是 hub.json 里的 link 电脑（`hub pair --machine` 据此提示加 `--add`） |
-| 400 | `invalid_name` / `invalid_id` / `invalid_os` / `bad_request` | 没名字或名字太长 / id 不合规则 / os 不认识 / `machine` 和 `add` 一起给、或带了 `web` |
+| 403 | `forbidden` | Not a full device: a watch, a link, a temporary identity from a pairing code, an extension; a master token from non-loopback |
+| 409 | `tls_required` | The hub has no TLS and is not behind an HTTPS reverse proxy, so Persona Link cannot connect; carries `"action": "enable_tls"` |
+| 409 | `mesh_member` | The device is connected to a member hub of a linked-hub group: add it on the primary hub |
+| 429 | `too_many_pending` | The device is adding a new computer while 3 are already pending (reuse and reissue don't count) |
+| 409 | `exists` / `not_pending` | The given id already exists (and is not a reusable link computer) / a device issuing a code for a confirmed computer |
+| 404 | `not_found` | The `machine` a device sent is not a link computer in hub.json |
+| 400 | `unknown_machine` | The `machine` sent with a master token is not a link computer in hub.json (`hub pair --machine` then suggests adding `--add`) |
+| 400 | `invalid_name` / `invalid_id` / `invalid_os` / `bad_request` | Missing or too-long name / id breaks the rules / unknown os / `machine` and `add` sent together, or `web` included |
 
-- 回执：设备出了电脑的码，给**其他**已配对设备推一条「<设备> 给电脑「<名字>」出了一个配对码」；待确认的电脑的 Persona Link 兑换了码，给所有设备推「新电脑「<名字>」想加入：打开 App 确认是不是你的」
-  （代替平常的「有新设备配对」）。出码的回执是安全回执，故意不看设备的通知偏好、静音和「电脑上开着就不推」。推送不可用时记日志。出码（`code`）、兑换（`redeem`）都写 `machine_audit`。
-- 回执推送的 payload（#4199）：三条都带 `aps.category` 和顶层的 `pair`，通知按钮要用的 id 只放在 `pair` 里，通知文案里不放 id 和地址
-  （出码的设备没有名字时文案写「一台设备」，不写凭据 id）：
+- Receipts: when a device issues a computer code, the **other** paired devices get a push "<device> made a pairing code for the computer “<name>”"; when a pending computer's Persona Link redeems the code, all devices get "A new computer, “<name>”, wants to join. Open the app to confirm it’s yours"
+  (instead of the usual "New device paired"). The code-issued receipt is a security receipt and deliberately ignores the device's notification preferences, mute and "don't push while the computer is in use". If push is unavailable it logs. Both issuing (`code`) and redeeming (`redeem`) are written to `machine_audit`.
+- Receipt push payload (#4199): all three carry `aps.category` and a top-level `pair`. The ids the notification buttons need go only in `pair`; the notification text contains no ids or addresses
+  (when the issuing device has no name, the text says "A device", not the credential id):
 
-  | 什么时候 | `aps.category` | `pair` |
+  | When | `aps.category` | `pair` |
   | --- | --- | --- |
-  | 设备给电脑出码（推给其他设备） | `pair_receipt` | `{"kind":"computer_code","device_id":"<出码设备的凭据 id>","machine":"<电脑 id>"}` |
-  | 待确认的电脑兑换了码（推给所有设备） | `computer_joining` | `{"kind":"computer_joining","machine":"<电脑 id>"}` |
-  | 新凭据（新设备、已确认电脑的 Persona Link）配对（推给所有设备） | `pair_receipt` | `{"kind":"device","device_id":"<新凭据的 id>"}` |
+  | A device issues a code for a computer (pushed to other devices) | `pair_receipt` | `{"kind":"computer_code","device_id":"<credential id of the issuing device>","machine":"<computer id>"}` |
+  | A pending computer redeemed the code (pushed to all devices) | `computer_joining` | `{"kind":"computer_joining","machine":"<computer id>"}` |
+  | A new credential (new device, Persona Link of a confirmed computer) paired (pushed to all devices) | `pair_receipt` | `{"kind":"device","device_id":"<new credential id>"}` |
 
-  客户端按钮：`pair_receipt` 的「不是你？撤销」在 `kind: device` 时 `DELETE /api/v1/auth/tokens/{device_id}`，`kind: computer_code` 时 `POST /api/v1/machines/{machine}/reject`
-  （电脑已经确认过时 409 `not_pending`，打开机器详情）；`computer_joining` 的「是我的电脑」/「不是」调 `…/confirm` / `…/reject`。经推送中继时 `category` 和 `pair` 和其余明文一起加密
-  （[push-relay.md](push-relay.md)「加密」），中继看不到；通知服务扩展解密后换上 category、把 `pair` 留在 `userInfo` 里。老 hub 没有这两个字段，客户端当普通通知显示。
-  iOS / Mac 已经注册这两个分类（`apple/Persona/App/PairReceiptActions.swift`）：按钮都要先解锁、不打开 App，结果用一条本地通知告诉你（「已撤销配对」「已确认这台电脑」，失败时说原因）；
-  按推送的 `hub_id`（或解开它的那组密钥）找到发推送的 hub 去做。点通知本身：`computer_joining` 打开「确认电脑」，`pair_receipt` 打开「设置 › 设备」。
-  手表不注册这两个分类；Android、网页还没做。
+  Client buttons: `pair_receipt`'s **Not you? Revoke** calls `DELETE /api/v1/auth/tokens/{device_id}` for `kind: device`, and `POST /api/v1/machines/{machine}/reject` for `kind: computer_code`
+  (409 `not_pending` if the computer is already confirmed, which opens the machine details). `computer_joining`'s **It's Mine** / **Not Mine** call `…/confirm` / `…/reject`. Through the push relay, `category` and `pair` are encrypted along with the rest of the plaintext
+  ([push-relay.md](push-relay.md) "Encryption"), so the relay cannot see them; the notification service extension decrypts, restores the category, and keeps `pair` in `userInfo`. Old hubs don't send these two fields, and clients show a normal notification.
+  iOS / Mac already register both categories (`apple/Persona/App/PairReceiptActions.swift`): the buttons require unlocking and don't open the App, and the result comes as a local notification ("Pairing revoked", "Computer confirmed", or the reason on failure).
+  The action goes to the hub that sent the push, found by the push's `hub_id` (or by the key set that decrypted it). Tapping the notification itself: `computer_joining` opens **Confirm Computer**, `pair_receipt` opens **Settings › Devices**.
+  The watch does not register these categories; Android and web are not done yet.
 
-### 候选地址
+<a id="候选地址"></a>
 
-`GET /api/v1/endpoints` 需要鉴权，返回 `{hub_id,tls_port,fp,endpoints}`。每个 endpoint：
+### Candidate addresses
+
+`GET /api/v1/endpoints` requires authentication and returns `{hub_id,tls_port,fp,endpoints}`. Each endpoint:
 
 ```json
 {"url":"https://[2001:db8::1234]:18662","kind":"ipv6","port":18662,"scheme":"https","seen_at":"<RFC3339 UTC>"}
 ```
 
-地址为文档示例。`kind` 为 `ipv6` / `name` / `lan` / `ipv4`，按此顺序排列；同类 HTTPS 优先。`scheme` 为 `https` / `http`，`seen_at` 是采集时间，不是可达性证明。候选合并 `public_url`、`public.advertise` 和符合条件的本机地址；公网 IPv4 只从显式配置发布。TLS 关闭时自动候选使用 HTTP，客户端不得因此向公网明文发送 token。
+The address is a documentation example. `kind` is `ipv6` / `name` / `lan` / `ipv4`, sorted in that order; within a kind HTTPS comes first. `scheme` is `https` / `http`. `seen_at` is when it was collected, not proof of reachability. Candidates merge `public_url`, `public.advertise` and qualifying local addresses; public IPv4 is published only from explicit configuration. When TLS is off, automatic candidates use HTTP, and clients must not send tokens in plaintext over the public internet because of that.
 
-WS `hello` 同样携带候选。地址列表变化时发送 `{"type":"endpoints","endpoints":[...]}`，只发给本连接在 `client_hello.features` 声明了 `endpoints` 的客户端；仅 `seen_at` 改变不会触发事件。事件是完整候选列表，可为空，客户端应替换旧列表。
+WS `hello` carries the candidates too. When the address list changes, the hub sends `{"type":"endpoints","endpoints":[...]}`, only to clients that declared `endpoints` in `client_hello.features` on that connection; a change in `seen_at` alone does not trigger the event. The event is the complete candidate list and may be empty; clients should replace the old list.
 
-### 错误体
+### Error body
 
-主 API 的公共错误处理保留 `error` 文本，新增稳定的 `code`；`retryable` 和 `delivered` **可选**，只有能判断时才给出。主路由的 404 / 405 也返回 JSON；邮件等独立子处理器和流式响应仍按各自协议处理，不能假设它们全部带新字段。
+The main API's shared error handling keeps the `error` text and adds a stable `code`. `retryable` and `delivered` are **optional** and only given when they can be determined. 404 / 405 on the main router also return JSON. Separate sub-handlers such as mail, and streaming responses, follow their own protocols; don't assume they all carry the new fields.
 
 ```json
 {"error":"invalid token","code":"invalid_token","retryable":false,"delivered":"none"}
 ```
 
-`delivered` 为 `none` / `unknown` / `yes`，缺省不等于未执行；尤其普通超时不会凭空补 `none`。`retryable` 缺省也不表示可以自动重试。node 返回的 409 细节继续平铺（如 `draft`、`clearable`），不包进新的 `data`。
+`delivered` is `none` / `unknown` / `yes`; absent does not mean not executed. In particular, a plain timeout never gets a made-up `none`. Absent `retryable` does not mean automatic retry is OK either. Node 409 details stay flat (e.g. `draft`, `clearable`) and are not wrapped in a new `data`.
 
-| code | 常见 HTTP 状态 | 含义 |
+| code | Typical HTTP status | Meaning |
 | --- | --- | --- |
-| `tls_required` | 403 | 公网明文 API 被拒；`delivered: none` |
-| `master_token_local_only` | 403 | 公网不能用主 token；`delivered: none` |
-| `invalid_token` | 401 | 凭据无效、过期、撤销或临时 token 重复兑换；`retryable: false`、`delivered: none` |
-| `forbidden` | 403 | 权限或配对码来源不满足要求；`retryable: false`、`delivered: none` |
-| `rate_limited` | 429 | 鉴权失败来源被封禁，按 `Retry-After` 等待 |
-| `bad_request` | 400 | 参数 / JSON 错误；`retryable: false` |
-| `not_found` / `method_not_allowed` | 404 / 405 | 资源不存在 / 方法不支持；`retryable: false` |
-| `gone` | 410 | 交互已不再待处理等；`retryable: false` |
-| `conflict` | 409 | 未指定更具体错误码的冲突 |
-| `input_draft` / `dialog_open` / `prompt_changed` | 409 | 发送或回答被明确拒绝；`retryable: false`、`delivered: none`，见下文 |
-| `op_id_reused` | 409 | 操作 ID 已用于不同设备、目标或参数；不得换 ID 盲目重试 |
-| `node_outdated` | 409 | node 不支持请求的功能，如文件上传 |
-| `too_large` | 413，或 node RPC 映射的 409 | 请求 / 文件超过限制 |
-| `timeout` | 408 / 504，node 调用常为 502 | 超时；执行结果不能仅靠这个码判断 |
-| `node_unreachable` | 502 / 503 | node 离线或连接中断；明确离线时 `retryable: true`、`delivered: none`，连接中断未必如此 |
-| `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` | 409 | 主对话（和其他助手对话）起不来：没有电脑 / 电脑还没确认 / 那台电脑上没装 Claude Code / 找不到启动器。`error` 是 hub 按请求语言写的一句人话（说是哪台电脑），`detail` 是原文（shell 的报错，只放「详情」），`action` 是建议的动作（`add_computer` / `confirm_computer` / `install_claude` / `connect_model`），另带 `machine_name`、`launcher`（有时）和 `delivered: none`。`machine_pending` 已定义，待确认电脑落地后才会出现。设计见新用户上手的方案（#287、#3339）第 4.6、5.2 节 |
-| `center_unreachable` | 503 | 连的是互联组里的成员 hub，组的中心 hub 现在连不上（带 `center: {hub_id, name}`）；成员不会自己接管，换一台或等中心回来（[mesh.md](mesh.md)「中心」） |
-| `internal` | 5xx | 其他内部错误 |
+| `tls_required` | 403 | Plaintext public API rejected; `delivered: none` |
+| `master_token_local_only` | 403 | The master token can't be used over the public internet; `delivered: none` |
+| `invalid_token` | 401 | Credential invalid, expired, revoked, or a temporary token exchanged twice; `retryable: false`, `delivered: none` |
+| `forbidden` | 403 | Permission or pairing-code source requirements not met; `retryable: false`, `delivered: none` |
+| `rate_limited` | 429 | The source is banned after authentication failures; wait per `Retry-After` |
+| `bad_request` | 400 | Bad parameter / JSON; `retryable: false` |
+| `not_found` / `method_not_allowed` | 404 / 405 | Resource doesn't exist / method not supported; `retryable: false` |
+| `gone` | 410 | The interaction is no longer pending, etc.; `retryable: false` |
+| `conflict` | 409 | A conflict with no more specific code |
+| `input_draft` / `dialog_open` / `prompt_changed` | 409 | The send or answer was explicitly refused; `retryable: false`, `delivered: none`, see below |
+| `op_id_reused` | 409 | The operation ID was already used for a different device, target or parameters; don't blindly retry with a new ID |
+| `node_outdated` | 409 | The node doesn't support the requested feature, e.g. file upload |
+| `too_large` | 413, or 409 mapped from node RPC | Request / file over the limit |
+| `timeout` | 408 / 504, often 502 for node calls | Timed out; the outcome can't be judged from this code alone |
+| `node_unreachable` | 502 / 503 | The node is offline or the connection dropped; when clearly offline, `retryable: true`, `delivered: none`; not necessarily so for a dropped connection |
+| `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` | 409 | The main chat (and other assistant chats) can't start: no computer / the computer isn't confirmed yet / Claude Code isn't installed on that computer / launcher not found. `error` is a plain-language sentence the hub writes in the request's language (naming the computer), `detail` is the raw text (the shell's error, shown only under "Details"), `action` is the suggested action (`add_computer` / `confirm_computer` / `install_claude` / `connect_model`), plus `machine_name`, `launcher` (sometimes) and `delivered: none`. `machine_pending` is defined and appears only once pending computers ship. Design: new-user onboarding plan (#287, #3339) sections 4.6, 5.2 |
+| `center_unreachable` | 503 | Connected to a member hub of a linked-hub group, and the group's primary hub is unreachable right now (carries `center: {hub_id, name}`); the member does not take over on its own; switch to another or wait for the primary to return ([mesh.md](mesh.md) "Primary") |
+| `internal` | 5xx | Other internal errors |
 
-表格列出公共处理器和主要业务码；node 的其他明确 RPC 错误码也会透传，通常映射为 409。客户端应以 `code` 分支，未知码保留 `error` 展示，旧 hub 只有 `error` 时按旧行为处理。
+The table lists the shared handler and the main business codes; other explicit node RPC error codes are passed through too, usually mapped to 409. Clients should branch on `code`, show `error` for unknown codes, and keep the old behavior when an old hub sends only `error`.
 
-收 JSON 请求体的 App 接口都有大小上限（`decodeJSONBody`，按接口在 4 KiB–4 MiB 之间：小的设置、回答、配对 4–16 KiB，置顶 / 静音 / 启动器 / 回答卡片 / 连接器回复 1 MiB），超过回 413 `too_large`，hub 读到上限就停、不读完；格式错误仍是 400。
+App APIs that take a JSON body all have a size limit (`decodeJSONBody`, 4 KiB–4 MiB depending on the API: small settings, answers, pairing 4–16 KiB; pin / mute / launchers / answer cards / connector replies 1 MiB). Over the limit returns 413 `too_large`; the hub stops reading at the limit instead of reading it all. Malformed input is still 400.
 
-## 操作回执（client_ops）
+## Operation receipts (client_ops)
 
-服务端声明 `client_ops` 后，客户端可在以下写请求带 `X-Jarvis-Op-Id: <UUID>`：
+Once the server declares `client_ops`, clients may send `X-Jarvis-Op-Id: <UUID>` on the following write requests:
 
-| 操作种类 | 路径 |
+| Operation kind | Path |
 | --- | --- |
 | `message` | `POST /api/v1/sessions/{mid}/{sid}/messages` |
 | `start` | `POST /api/v1/sessions` |
 | `resolve` | `POST /api/v1/interactions/{id}/resolve` |
-| `interrupt` / `close` / `rename` / `modes` | `POST /api/v1/sessions/{mid}/{sid}/interrupt`、`/close`、`/rename`、`/modes` |
+| `interrupt` / `close` / `rename` / `modes` | `POST /api/v1/sessions/{mid}/{sid}/interrupt`, `/close`, `/rename`, `/modes` |
 
-UUID 忽略大小写。hub 将操作种类、路径、规范化查询参数和 JSON 参数生成摘要，再原子认领 ID；重复请求只有同一设备、目标和参数才复用回执，冲突返回 `409 {"code":"op_id_reused"}`。消息请求会把 `client_msg_id` 设为操作 UUID，覆盖原 body 的同名值。没有该请求头时保留旧行为，包括旧 iOS 的非 UUID `client_msg_id` 和 `sent_messages` 去重。
+The UUID is case-insensitive. The hub builds a digest from the operation kind, path, normalized query parameters and JSON parameters, then claims the ID atomically. A repeated request reuses the receipt only for the same device, target and parameters; a conflict returns `409 {"code":"op_id_reused"}`. Message requests set `client_msg_id` to the operation UUID, overriding any value of that name in the body. Without the header the old behavior stays, including old iOS's non-UUID `client_msg_id` and `sent_messages` dedup.
 
-`GET /api/v1/ops/{id}` 返回记录 `{id,device_id,kind,target,digest,state,result,created_at,updated_at}`。`target` 含 `path` / `query`；`result` 已记录时为 `{status,body,content_type?}`，其中 `body` 是原 HTTP 响应字节的 base64。不存在或当前设备凭据不属于该记录时返回 404；主 token 没有设备 ID，查询不受设备归属过滤。
+`GET /api/v1/ops/{id}` returns the record `{id,device_id,kind,target,digest,state,result,created_at,updated_at}`. `target` contains `path` / `query`. Once recorded, `result` is `{status,body,content_type?}`, where `body` is the base64 of the original HTTP response bytes. It returns 404 when the record doesn't exist or doesn't belong to the current device credential. The master token has no device ID, so its queries are not filtered by device ownership.
 
-| `state` | 含义与重试行为 |
+| `state` | Meaning and retry behavior |
 | --- | --- |
-| `pending` | 认领后执行尚未完成；重复写请求等待回执，等待配置到期后返回 `202 {"state":"pending"}` |
-| `done` | 成功回执已落库；重复写请求重放原 HTTP 状态和正文，不再执行 |
-| `failed` | 已确定失败并保存回执；重复写请求仍重放原结果 |
-| `unknown` | 执行结果不明；普通操作重复请求返回 `202 {"state":"unknown"}`，需查询或人工核对，不能认作成功或自动重发 |
+| `pending` | Claimed, execution not finished; a repeated write waits for the receipt and returns `202 {"state":"pending"}` when the configured wait runs out |
+| `done` | Success receipt stored; a repeated write replays the original HTTP status and body without executing again |
+| `failed` | Definitely failed, receipt stored; a repeated write still replays the original result |
+| `unknown` | Outcome unknown; for ordinary operations a repeated request returns `202 {"state":"unknown"}`. Query or check by hand; never treat it as success or resend automatically |
 
-普通操作的 HTTP 400 / 409 通常记录为 `failed`，其他错误若不能证明未执行则记录为 `unknown`。hub 启动会将遗留 `pending` 标为 `unknown`，不重新执行。完成后即使 HTTP 调用方已断开仍尝试落库；落库失败返回 503 和 `state: unknown`。回执按创建时间保留 30 天，这是保留策略，不能保证超出窗口仍可去重。
+For ordinary operations, HTTP 400 / 409 are usually recorded as `failed`; other errors are recorded as `unknown` unless it can be shown they didn't execute. On startup the hub marks leftover `pending` as `unknown` and does not re-execute them. After completion it still tries to store the receipt even if the HTTP caller has disconnected; if storing fails it returns 503 with `state: unknown`. Receipts are kept for 30 days from creation. That is a retention policy; dedup beyond the window is not guaranteed.
 
-飞书发送和收件箱回复另以 body 的 `client_id` 派生回执，见下文「飞书 API」；同样复用 `client_ops`，但已有上游错误响应会原样重放。不要将这种响应处理规则套到所有普通操作。
+Lark sends and Inbox replies also derive receipts from the body's `client_id`; see "Lark API" below. They reuse `client_ops` too, but an existing upstream error response is replayed as-is. Don't apply that response rule to all ordinary operations.
 
-新建会话带操作 ID 时，hub 会在调用方断开后继续完成已受理的启动并保存回执。同 ID 重放不会再次启动；已有 HTTP 结果即使标为 `unknown` 也原样返回，没有结果的遗留操作仍返回 `202 {"state":"unknown"}`。Android 在发请求前持久保存 ID 和参数，响应丢失时查询该 ID；404 或结果不明均不能证明未启动，继续保留待确认记录，不再 POST。只有明确失败的回执才允许修改表单后新建操作。未带请求头的客户端沿用原行为。
+When a new session is started with an operation ID, the hub keeps finishing an accepted start after the caller disconnects and stores the receipt. Replaying the same ID won't start it again; an existing HTTP result is returned as-is even if marked `unknown`, and leftover operations with no result still return `202 {"state":"unknown"}`. Android persists the ID and parameters before sending, and queries the ID if the response is lost. Neither a 404 nor an unknown result proves it didn't start, so it keeps the pending-confirmation record and doesn't POST again. Only a clearly failed receipt allows editing the form and starting a new operation. Clients without the header keep the old behavior.
 
-## 设备连接与锁屏测试
+## Device connections and lock screen test
 
-### 连接记录
+### Connection records
 
-`GET /api/v1/devices/{id}/sessions?since=<RFC3339 UTC>` 返回 `{sessions,summary}`，默认查最近 24 小时，最早裁到最近 14 天；未来或非法时间返回 400。`{id}` 使用设备凭据 ID，与推送注册 ID、客户端自报的 `client_hello.device_id` 区分。该查询走现有通用鉴权，当前未额外限制只能查本机；锁屏测试接口则严格校验当前设备。
+`GET /api/v1/devices/{id}/sessions?since=<RFC3339 UTC>` returns `{sessions,summary}`. It defaults to the last 24 hours and is clipped to at most the last 14 days; a future or invalid time returns 400. `{id}` is the device credential ID, distinct from the push registration ID and the client-reported `client_hello.device_id`. This query uses the existing general authentication and currently has no extra restriction to the calling device; the lock screen test APIs do strictly check the current device.
 
-每条 session 为 `{id,device_id,connected_at,disconnected_at,reason,source,heartbeat_interval}`。`id` 是数据库数字 ID，仅用于 HTTP；连接尚未断开时 `disconnected_at` 为 null、`reason` 为空。`source` 只保存 IPv4 /24 或 IPv6 /64 前缀，心跳间隔为当前协议配置，不能当作实测发包频率。
+Each session is `{id,device_id,connected_at,disconnected_at,reason,source,heartbeat_interval}`. `id` is the numeric database ID, used only over HTTP. While the connection is still open, `disconnected_at` is null and `reason` is empty. `source` stores only the IPv4 /24 or IPv6 /64 prefix. The heartbeat interval is the current protocol configuration, not a measured send rate.
 
-- 只有设备 token 的 WS 建立连接记录；主 token 和临时配对 token 不记录。
-- `reason` 为 `closed`、`pong_timeout`、`error`、`replaced` 或 `hub_stopped`。hub 启停修复未结束记录时标 `hub_stopped`，不假定能恢复准确崩溃时间。
-- `summary.disconnects` 统计窗口内非 `hub_stopped` 的断开记录数；并行连接可分别计数。`summary.longest_gap_seconds` 对重叠连接区间合并后计算最长离线，含截至查询时仍未恢复的间隔，排除 hub 停止造成的间隔；首次已知连接之前的未知时段不推算。
-- 记录保留 14 天。连接汇总反映 hub 的观测，不能单独证明手机锁屏或系统杀进程。
+- Only WS connections with a device token create connection records; master tokens and temporary pairing tokens are not recorded.
+- `reason` is `closed`, `pong_timeout`, `error`, `replaced` or `hub_stopped`. When the hub starts or stops and fixes up unfinished records, it marks them `hub_stopped` and does not assume it can recover the exact crash time.
+- `summary.disconnects` counts non-`hub_stopped` disconnects in the window; parallel connections may each count. `summary.longest_gap_seconds` merges overlapping connection intervals and computes the longest offline gap, including a gap still open at query time and excluding gaps caused by hub stops. The unknown period before the first known connection is not inferred.
+- Records are kept for 14 days. The connection summary reflects what the hub observed; on its own it can't prove the phone was locked or the system killed the process.
 
-### 锁屏测试
+### Lock screen test
 
-服务端能力为 `lock_test`。下列接口的 `{id}` 必须等于当前设备凭据 ID；主 token、临时配对 token 和其他设备凭据均不能代操作。
+The server capability is `lock_test`. In these APIs `{id}` must equal the current device credential ID; master tokens, temporary pairing tokens and other devices' credentials cannot act on its behalf.
 
-| 方法 | 路径 | 请求与响应 |
+| Method | Path | Request and response |
 | --- | --- | --- |
-| POST | `/api/v1/devices/{id}/lock-tests` | `{delay_seconds?}`，默认 30，允许 1–3600 秒；可不带 body。返回测试记录 |
-| GET | `/api/v1/devices/{id}/lock-tests/{test_id}` | 返回当前测试记录，不存在时 404 |
-| POST | `/api/v1/devices/{id}/lock-tests/{test_id}/receipt` | `{notification_shown?}`，可不带 body；首次回报后返回记录，重复回报保留首次结果，未发送或无对应测试时 409 |
+| POST | `/api/v1/devices/{id}/lock-tests` | `{delay_seconds?}`, default 30, 1–3600 seconds allowed; body optional. Returns the test record |
+| GET | `/api/v1/devices/{id}/lock-tests/{test_id}` | Returns the current test record, 404 if missing |
+| POST | `/api/v1/devices/{id}/lock-tests/{test_id}/receipt` | `{notification_shown?}`, body optional; returns the record after the first report, repeated reports keep the first result, 409 if not sent yet or no matching test |
 
-记录为 `{test_id,device_id,created_at,due_at,status,device_session_id?,sent_at?,received_at?,notification_shown?}`。`device_session_id` 为实际选择的连接记录数字 ID。到期后只选择本设备已声明 `client_hello.features: ["lock_test"]`、有连接记录且最近建立的一条连接，发独立事件：
+The record is `{test_id,device_id,created_at,due_at,status,device_session_id?,sent_at?,received_at?,notification_shown?}`. `device_session_id` is the numeric ID of the connection record actually chosen. When due, the hub picks only the most recently established connection of this device that declared `client_hello.features: ["lock_test"]` and has a connection record, and sends a standalone event:
 
 ```json
-{"type":"lock_test","lock_test_id":"<测试 ID>","lock_test_due_at":"<RFC3339 UTC>","lock_test_sent_at":"<RFC3339 UTC>","lock_test_title":"锁屏测试","lock_test_body":"已收到测试通知，请回到应用查看结果。"}
+{"type":"lock_test","lock_test_id":"<test ID>","lock_test_due_at":"<RFC3339 UTC>","lock_test_sent_at":"<RFC3339 UTC>","lock_test_title":"Lock screen test","lock_test_body":"Test notification received. Go back to the app to see the result."}
 ```
 
-新增 payload 字段均带 `lock_test_` 前缀，避免与旧 iOS Envelope 类型冲突。客户端展示本地通知后主动回报；`notification_shown` 缺省表示未知，true 也不能证明用户看到了通知或设备当时锁屏。测试由用户主动预约，不受普通通知偏好控制，不要求 `ws_notify` 能力。
+All new payload fields have the `lock_test_` prefix to avoid clashing with old iOS Envelope types. The client shows a local notification and then reports back. Absent `notification_shown` means unknown, and true doesn't prove the user saw the notification or that the device was locked at the time. The test is scheduled by the user, is not subject to ordinary notification preferences, and does not require the `ws_notify` capability.
 
-| `status` | 含义 |
+| `status` | Meaning |
 | --- | --- |
-| `scheduled` | 已落库，等待预约到期 |
-| `sent` | 记录了发送尝试，尚无设备回报，不能视为送达 |
-| `received` | hub 已收到设备回报 |
-| `unavailable` | 到期没有符合条件的连接，不再补发 |
-| `interrupted` | hub 重启时预约已过期，不补发 |
+| `scheduled` | Stored, waiting until due |
+| `sent` | A send attempt was recorded, no device report yet; not to be treated as delivered |
+| `received` | The hub received the device's report |
+| `unavailable` | No qualifying connection when due; not resent |
+| `interrupted` | The schedule had expired when the hub restarted; not resent |
 
-hub 重启保留未来预约；发送记录与 WS 写入无法原子完成，所以 `sent` 且无回报也可能是中断或写入失败，不会自动重发。记录保留 14 天，连接记录清理后关联可为空。预约延迟是配置，调度精度、后台存活、通知实际展示均未实测。
+A hub restart keeps future schedules. Recording the send and writing to WS can't be done atomically, so `sent` with no report may also mean an interruption or a failed write; it is not resent automatically. Records are kept for 14 days, and the link may be empty after connection records are cleaned up. The schedule delay is configuration; scheduling precision, background survival and whether the notification actually shows were not measured.
 
-## Android 安装包
+## Android packages
 
-两条接口都需要鉴权，能力位为 `android_update`：
+Both APIs require authentication; the feature flag is `android_update`:
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/api/v1/app/android/latest` | 原样返回已发布 `latest.json`；发布脚本写入 `{version_code,version_name,min_sdk,notes,sha256,size}` |
-| GET | `/api/v1/app/android/apk` | 按清单 `sha256` 读取 APK；MIME 为 `application/vnd.android.package-archive`，附件名 `jarvis.apk`，ETag 为带引号的摘要，支持 ServeContent 的范围与条件请求 |
+| GET | `/api/v1/app/android/latest` | Returns the published `latest.json` as-is; the release script writes `{version_code,version_name,min_sdk,notes,sha256,size}` |
+| GET | `/api/v1/app/android/apk` | Reads the APK by the manifest's `sha256`; MIME `application/vnd.android.package-archive`, attachment name `jarvis.apk`, ETag is the quoted digest, supports ServeContent range and conditional requests |
 
-发布文件位于 hub 配置目录的 `apps/android/`，APK 按 `<sha256>.apk` 命名。未发布返回 404，清单摘要无效返回 500。客户端应校验大小与摘要、保持同源下载，安装交给系统确认；同包名同签名升级仍需发布产物后真机验收。
+Published files live in `apps/android/` under the hub's config directory, with APKs named `<sha256>.apk`. Unpublished returns 404; an invalid manifest digest returns 500. Clients should verify size and digest, keep downloads same-origin, and leave installation to the system's confirmation. Upgrades with the same package name and signature still need on-device sign-off after artifacts are published.
 
-## Codex 来源与能力
+## Codex sources and capabilities
 
-外部 Codex 会话继续使用 `(machine_id, session_id)`。固定 legacy home 保持既有 raw thread ID，其他 canonical home 的 thread 使用 `c0de-` 加确定性摘要的 opaque ID；PID、endpoint 或连接代际变化不换会话 ID。`source_thread_id` 是原 thread ID，不可将 opaque ID 放进 `claude --resume`。
+External Codex sessions keep using `(machine_id, session_id)`. The fixed legacy home keeps its existing raw thread IDs; threads in other canonical homes use an opaque ID of `c0de-` plus a deterministic digest. Changes in PID, endpoint or connection generation don't change the session ID. `source_thread_id` is the original thread ID; never put the opaque ID into `claude --resume`.
 
-Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server` / `identity_conflict`；Agent 运行时的会话是 `runtime`，见「Runtime ↔ node」；Claude Code 的后台会话是 `claude_bg`，只读，见 `docs/claude-integration.md`「后台会话」）、`source_thread_id`、`source_instance_id`、`parent_thread_id`、`read_only_reason`、`attached`、`capabilities`（read/send/interrupt/approve/terminal/attach 六个布尔值）。旧来源缺这些字段维持兼容，新来源缺能力默认拒写。没有终端能力就不显示终端/按键/关闭窗格。
-Session 还有可选字段 `pane_index`（#2320）：这个 pane 在它的 tab 里按位置的序号（从 0 起，左上为 0）。herdr 的 node 按快照 `layouts` 的分屏树（`splits`，旧版 herdr 没有时按 rect）算，宿主不给布局、旧 node 或窗格不在布局里时不带；`0` 照样发，不带才是不知道；只有它变了也推 `sessions.changed`。客户端把同一个 tab（`slot_id`）的几个 Agent 按它排成一组，0 号是发起者；旧客户端忽略它（`docs/agent-states.md`「一个 tab 里的几个 pane」）。
-Session 还有可选字段 `space`（#2691）：助手对话属于哪个助手空间，健康空间的对话是 `"health"`，助手自己的不带。hub 按会话的 `cwd` 填（健康目录 `~/.persona/health`），和 herdr 的 `space_id` / `space_name` 无关；旧客户端忽略它（`docs/health.md`）。
-Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间在宿主里挂在哪个空间下面，同机器、同 `space_kind`，顶层空间不带。Orca 宿主按 `worktree.ps` 的 `parentWorktreeId` 填（指向自己的当没有），hub 原样转发；旧客户端忽略它照旧平铺，网页的「按机器」、iOS / Mac 的「按仓库」把子空间折叠在父空间下（`docs/web.md`、`docs/ios.md`）。
+New optional Session fields: `source_kind` (`codex_history` / `codex_app_server` / `identity_conflict`; Agent runtime sessions are `runtime`, see "Runtime ↔ node"; Claude Code background sessions are `claude_bg`, read-only, see `docs/claude-integration.md` "Background sessions"), `source_thread_id`, `source_instance_id`, `parent_thread_id`, `read_only_reason`, `attached`, `capabilities` (six booleans: read/send/interrupt/approve/terminal/attach). Old sources lacking these fields stay compatible; new sources lacking capabilities default to refusing writes. Without the terminal capability, terminal / keys / close pane are not shown.
+Session also has the optional field `pane_index` (#2320): this pane's positional index within its tab (from 0, top-left is 0). The herdr node computes it from the split tree in the snapshot's `layouts` (`splits`; by rect on older herdr without it). It is omitted when the host gives no layout, on old nodes, or when the pane isn't in the layout; `0` is still sent, and only absence means unknown. A change in it alone also pushes `sessions.changed`. Clients group the Agents of one tab (`slot_id`) in this order, with 0 as the initiator; old clients ignore it (`docs/agent-states.md` "Several panes in one tab").
+Session also has the optional field `space` (#2691): which assistant space an assistant chat belongs to. Chats in the health space are `"health"`; the assistant's own chats omit it. The hub fills it from the session's `cwd` (the health directory `~/.persona/health`); it has nothing to do with herdr's `space_id` / `space_name`. Old clients ignore it (`docs/health.md`).
+A Session's space also has the optional field `parent_space_id` (#2073): which space this space hangs under in the host, same machine, same `space_kind`; top-level spaces omit it. The Orca host fills it from `worktree.ps`'s `parentWorktreeId` (pointing at itself counts as none), and the hub forwards it as-is. Old clients ignore it and stay flat; the web client's **By Machine** and iOS / Mac's **By Repository** fold child spaces under their parent (`docs/web.md`, `docs/ios.md`).
 
-思考强度（`docs/codex.md`「思考强度」）：手机经 app-server 驱动的 Codex 会话（`codex_app_server` 里能发送的，和接上共享守护进程的 herdr 窗格，后者没有 `source_kind`）带 `efforts`：`POST …/modes` 的 `effort` 能取的档位，从弱到强（这个 thread 的模型在 `model/list` 报的，拿不到时是 Codex 的 minimal … ultra）；`effort` 是它现在的值，`permission_mode` 不带。这类会话的 `/modes` 只收 `effort`，带 `permission_mode` 报错，档位不在 `efforts` 里也报错；没改成（app-server 断开、没有及时回应、Codex 拒绝）也报错，不会先回成功。其他会话都不带 `efforts`：Claude Code 和助手照旧用客户端自己的那套档位，别的不能改。客户端按 `efforts` 非空且能发送决定只显示思考强度，不按 Agent 种类猜；旧客户端忽略这个字段。
+Reasoning effort (`docs/codex.md` "Reasoning effort"): Codex sessions the phone drives through app-server (sendable ones in `codex_app_server`, and herdr panes attached to the shared daemon, which have no `source_kind`) carry `efforts`: the levels `effort` on `POST …/modes` can take, weakest to strongest (as reported by `model/list` for this thread's model; Codex's minimal … ultra when unavailable). `effort` is its current value, and `permission_mode` is omitted. For these sessions `/modes` accepts only `effort`; sending `permission_mode` is an error, a level not in `efforts` is an error, and failing to apply it (app-server disconnected, no timely response, Codex refused) is an error too, never a premature success. All other sessions omit `efforts`: Claude Code and the assistant keep the client's own set of levels, and the rest can't be changed. Clients show only reasoning effort when `efforts` is non-empty and sending is possible, without guessing from the Agent type; old clients ignore the field.
 
-上下文用量（#2430）：会话带 `context_tokens`（agent 最近一次回复时模型看到的 token：Claude 是 `input + cache_read + cache_creation`，Codex 是 rollout 最近一条 `token_count` 的 `last_token_usage.input_tokens`）和 `context_window`（模型的窗口）；node 从 `readQuickMetaSince` 已经在读的 transcript 尾部算，不多读文件，尾部没有回复时沿用上一次读到的（`node/contextwindow.go`）。窗口：Codex 用 rollout 自己记的 `model_context_window`；Claude 按模型 id——`[1m]` 后缀是 100 万，已经看过超过 20 万 token 的也算 100 万（transcript 里的 id 没有后缀），其余 `claude-*` 是 20 万；不是 Claude 的模型（网关自己的）不知道窗口，只带 `context_tokens`。不知道的字段不带（`omitempty`）：还没有回复、老 node。客户端用 `context_tokens / context_window` 算百分比，缺任何一个都不画。
+Context usage (#2430): sessions carry `context_tokens` (the tokens the model saw on the agent's latest reply: for Claude `input + cache_read + cache_creation`, for Codex the latest rollout `token_count`'s `last_token_usage.input_tokens`) and `context_window` (the model's window). The node computes these from the transcript tail that `readQuickMetaSince` already reads, without reading extra files; when the tail has no reply it keeps the last value read (`node/contextwindow.go`). Window: Codex uses the `model_context_window` recorded in its own rollout; Claude goes by model id: a `[1m]` suffix is 1 million, and a session that has already seen more than 200k tokens also counts as 1 million (ids in the transcript have no suffix); other `claude-*` are 200k. For non-Claude models (the gateway's own) the window is unknown and only `context_tokens` is sent. Unknown fields are omitted (`omitempty`): no reply yet, old node. Clients compute the percentage as `context_tokens / context_window` and draw nothing if either is missing.
 
-`POST /api/v1/sessions/{mid}/{sid}/attach`：用户要求实时接入，node 只对原实例仍 loaded、owner 唯一的 thread 请求 resume，且不带运行配置覆盖。发现/普通读历史不调用 resume。加入许可按 thread/稳定实例记在 settings；断线重验 owner，不自动冷恢复或换实例。loaded/list 与 resume 不原子，不能承诺中间没有 unload 竞态。
+`POST /api/v1/sessions/{mid}/{sid}/attach`: the user asks to attach live. The node requests resume only for a thread still loaded on its original instance with a unique owner, and without overriding run configuration. Discovery and ordinary history reads don't call resume. Attach permission is stored in settings per thread / stable instance; after a disconnect the owner is re-checked, with no automatic cold resume or instance switch. loaded/list and resume aren't atomic, so there's no promise against an unload race in between.
 
-外部发送同样用 `/messages`，必须带 `client_msg_id` 并成功登记 Postgres 去重记录；不能在存储不可用时无保护地发出。未知发送结果（包括可能发生在 admission 后的通用 server error）返回 `delivered: unknown`，不能自动重发或将 steer 失败改成 start。发送记录不按一天过期，避免恢复很久以前的 outbox 后重复执行；只有明确未发送的记录可忘记。
+External sends also use `/messages`, must carry `client_msg_id`, and must successfully register a dedup record in Postgres; nothing is sent unprotected when storage is unavailable. An unknown send outcome (including a generic server error that may come after admission) returns `delivered: unknown`; it must not be resent automatically, and a failed steer must not be turned into a start. Send records don't expire after a day, so restoring a very old outbox can't execute twice; only records known not to have been sent may be forgotten.
 
-审批 ID 含 machine/instance/connection generation/thread/原始带类型 request ID。手机明确回答才给原连接回复；未知请求、取消和断线不自动发 error/decline。`serverRequest/resolved` 只将卡片记 dismissed 并撤下，不生成批准。外部 interrupt 不清理所有后台终端；父管子 thread 的直接驱动尚未开放。
+Approval IDs contain machine / instance / connection generation / thread / the original typed request ID. Only an explicit answer from the phone replies on the original connection; unknown requests, cancels and disconnects don't automatically send error/decline. `serverRequest/resolved` only marks the card dismissed and takes it down; it never produces an approval. External interrupt doesn't clean up all background terminals; directly driving child threads from a parent isn't open yet.
 
-## 模型供应商与用途配置
+## Model providers and per-purpose configuration
 
-原 `/api/v1/launchers` 保持兼容，供应商新增 `kind`（`launcher` / `api`）和 `api`（`messages` / `responses`）；Messages 协议的 API 接入也能当启动器给主对话和 Agents 用（node 用它的地址和 Key 起 claude，#2455），Responses 的不行。
+The original `/api/v1/launchers` stays compatible. Providers gain `kind` (`launcher` / `api`) and `api` (`messages` / `responses`). An API connection using the Messages protocol can also serve as a launcher for the main chat and Agents (the node starts claude with its URL and Key, #2455); Responses ones can't.
 
-- `GET /api/v1/model-config` → `{purposes, providers}`。
-- `GET /api/v1/model-config/purposes/{id}` → `{purpose, providers}`。
-- `PATCH /api/v1/model-config/purposes/{id}` 接收 `{revision, provider?, model?, effort?, runtime?}`；缺失不改，`null` 清除覆盖，revision 冲突返回 409。成功返回同单项 GET。
-  `runtime`（`cli` / `agentsdk`）只有 `assistant` 能写，别的用途带了回 400；`assistant` 这一项的 `fields` 多一个 `runtime`，另带 `runtimes: ["cli","agentsdk"]`。换供应商不清掉 runtime。
-  给 node 的 `assistant.send` / `assistant.start` / `assistant.warm`（管理者按模型配置填好的 params）带 `runtime: "agentsdk"`；CLI（空或 `cli`）不带。`model_fingerprint` 包含 runtime：变了 node 重启进程并 `--resume` 接回。
-- `GET /api/v1/launchers/import?machine=<id>` → `{machine, providers:[{name, base_url, auth, has_key, has_headers, model, models, opus_model, sonnet_model, haiku_model, fable_model, small_model, subagent_model, subagent_force, effort, compact_window, max_context, proxy, no_proxy, timeout_ms, args, source, aliases, existing?}]}`：
-  管理者调那台机器的 `launchers.zshrc`，把调 claude 的 alias 按 `base_url + key` 合成供应商（名字取第一个 alias，不合法的字符换成 `-`；模型名的 `[1m]` 去掉、上下文窗口记 1000000；同组的各个 `ANTHROPIC_MODEL` 合进 `models`）。
-  `existing` 是已存的同 `base_url + key` 的供应商名。不返回 key 和请求头。机器离线 503 `code: "offline"`，node 太旧 409 `code: "node_outdated"`，没有这台机器 404。
-- `POST /api/v1/launchers/import` `{machine, providers:[name…]}` → `{created:[…], updated:[…]}`：再读一次 alias，key 和请求头只在管理者里转手、加密保存，`source` 写 `zshrc:<alias>@<machine>`。
-  已存在的供应商只补 `models`（新的 id 加上，已有的只补未知的上下文窗口），别的字段不动；新建的和已有名字撞了加 `-2`、`-3`。不认识的名字 400。
-  `inbox.triage` 改成调不了的、又有要它的插件开着时返回 422 `{code: "triage_model_in_use", plugins: [名字], error}`（`docs/extensions.md`「收件箱的通用规则」）。
-- `GET /api/v1/launchers/presets` → `{presets}`：内置预设（`plugin: "builtin"`，id `builtin/<厂商>`，多 `auth`、`signup_url`、`display_name`）加插件的，按请求语言排序，同 id 插件的盖掉内置的（`docs/launchers.md`「内置预设」）。
-- `POST /api/v1/launchers` 带 `preset` 时 `name` 可以空（厂商 slug，重名加 `-2`），`display_name` 空时用预设的；带 `assign: ["assistant","agent.new"]` 时回
-  `{launcher, assigned: [用途], kept: [{purpose, reason: "customized"|"incompatible"|"failed"}]}`，只改还是默认值的用途；别的用途 400。`POST /api/v1/launchers/test`、`/discover` 带 `preset` 时没填的地址（和模型）用预设的。以上在 `features` 里登记为 `builtin_presets`，客户端看到才走。
-- 用途的 `fields`、`provider_ids` 限定可编辑参数和兼容供应商；`override` 与 `effective` 分开，`inherited_from` 标记来源，`status` 为中文状态说明。真实任务/插件使用 `task.<id>` / `plugin.<id>`。
+- `GET /api/v1/model-config` → `{purposes, providers}`.
+- `GET /api/v1/model-config/purposes/{id}` → `{purpose, providers}`.
+- `PATCH /api/v1/model-config/purposes/{id}` takes `{revision, provider?, model?, effort?, runtime?}`; missing fields are unchanged, `null` clears the override, and a revision conflict returns 409. On success it returns the same as the single-item GET.
+  `runtime` (`cli` / `agentsdk`) can only be written for `assistant`; other purposes sending it get 400. The `assistant` entry's `fields` has an extra `runtime`, plus `runtimes: ["cli","agentsdk"]`. Changing the provider does not clear runtime.
+  The node's `assistant.send` / `assistant.start` / `assistant.warm` (params the manager fills in from the model configuration) carry `runtime: "agentsdk"`; CLI (empty or `cli`) omits it. `model_fingerprint` includes the runtime: when it changes, the node restarts the process and reattaches with `--resume`.
+- `GET /api/v1/launchers/import?machine=<id>` → `{machine, providers:[{name, base_url, auth, has_key, has_headers, model, models, opus_model, sonnet_model, haiku_model, fable_model, small_model, subagent_model, subagent_force, effort, compact_window, max_context, proxy, no_proxy, timeout_ms, args, source, aliases, existing?}]}`:
+  the manager calls that machine's `launchers.zshrc` and merges aliases that call claude into providers by `base_url + key` (the name is the first alias, with invalid characters replaced by `-`; `[1m]` is stripped from model names and the context window recorded as 1000000; the `ANTHROPIC_MODEL`s in one group are merged into `models`).
+  `existing` is the name of an already saved provider with the same `base_url + key`. Keys and request headers are not returned. Machine offline is 503 `code: "offline"`, node too old is 409 `code: "node_outdated"`, no such machine is 404.
+- `POST /api/v1/launchers/import` `{machine, providers:[name…]}` → `{created:[…], updated:[…]}`: reads the aliases again; keys and request headers pass only through the manager and are saved encrypted, and `source` is written as `zshrc:<alias>@<machine>`.
+  An existing provider only gets `models` filled in (new ids added, existing ones only get unknown context windows filled), other fields untouched; a new one whose name collides gets `-2`, `-3`. Unknown names are 400.
+  If it would make `inbox.triage` unusable while a plugin that needs it is on, it returns 422 `{code: "triage_model_in_use", plugins: [names], error}` (`docs/extensions.md` "Shared Inbox rules").
+- `GET /api/v1/launchers/presets` → `{presets}`: built-in presets (`plugin: "builtin"`, id `builtin/<vendor>`, with extra `auth`, `signup_url`, `display_name`) plus plugin ones, sorted by request language; a plugin preset with the same id overrides the built-in one (`docs/launchers.md` "Built-in presets").
+- `POST /api/v1/launchers` with `preset` may leave `name` empty (vendor slug, `-2` on collision); an empty `display_name` uses the preset's. With `assign: ["assistant","agent.new"]` it returns
+  `{launcher, assigned: [purposes], kept: [{purpose, reason: "customized"|"incompatible"|"failed"}]}`, changing only purposes still at their defaults; other purposes are 400. `POST /api/v1/launchers/test` and `/discover` with `preset` use the preset's URL (and model) where not filled in. All of the above is registered in `features` as `builtin_presets`; clients use it only when they see it.
+- A purpose's `fields` and `provider_ids` limit the editable parameters and compatible providers. `override` and `effective` are separate, `inherited_from` marks the source, and `status` is a status description in Chinese. Real tasks / plugins use `task.<id>` / `plugin.<id>`.
 
-供应商响应只带描述与 `has_key`，不返回秘密；具体默认、执行边界和兼容规则见 `docs/model-config.md`。
+Provider responses carry only the description and `has_key`, never secrets. Defaults, execution boundaries and compatibility rules are in `docs/model-config.md`.
 
-## 数据类型
+## Data types
 
 ```jsonc
-// Machine。kind：local | ssh | link；link 的机器在 jarvis-link 连着时多一个 "link":{"version","address","since"}（docs/link.md）
-{"id":"laptop","name":"笔记本","kind":"ssh","ssh_host":"<SSH 配置别名>","online":true,"error":"",
- "hostname":"<机器主机名>","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
+// Machine. kind: local | ssh | link; a link machine gains "link":{"version","address","since"} while jarvis-link is connected (docs/link.md)
+{"id":"laptop","name":"Laptop","kind":"ssh","ssh_host":"<SSH config alias>","online":true,"error":"",
+ "hostname":"<machine hostname>","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
  "last_seen":"...",
- // 怎么连的（docs/server.md「tailcat 打洞」）：transport 是 local | ssh | tailcat（离线时没有）；tailcat：配了 tailcat 地址；
- // tailcat_path 只在走 tailcat 时有：direct（打洞成功，点对点）| relay（经 DERP 中继）。旧 hub 没有这几个字段
+ // How it's connected (docs/server.md "tailcat hole punching"): transport is local | ssh | tailcat (absent when offline); tailcat: a tailcat address is configured;
+ // tailcat_path only when going through tailcat: direct (hole punched, peer-to-peer) | relay (via DERP relay). Old hubs don't have these fields
  "transport":"ssh","tailcat":true,
- // 引擎（下面「引擎」）：用户给这台机器选的终端宿主（存下的选择，不是 node 回报的），hub 总是给出（没选过是 herdr）；engines 是 node 在这台机器上
- // 找到的（离线时为空数组）。旧 hub 没有这两个字段
+ // Engine ("Engines" below): the terminal host the user chose for this machine (the saved choice, not what the node reports); the hub always sends it (herdr if never chosen); engines is what the node
+ // found on this machine (empty array when offline). Old hubs don't have these two fields
  "engine":"herdr",
  "engines":[{"id":"herdr","name":"herdr","available":true,"version":"0.9.3"},
             {"id":"herdr-core","name":"Herdr App","available":false},
             {"id":"herdr-both","name":"herdr + Herdr App","available":false}],
- // 系统信息（docs/machines.md）：node 最近一次连上时报的，存在 hub 的数据库里，离线也有；旧 node 没有这个字段
+ // System info (docs/machines.md): reported by the node the last time it connected, stored in the hub's database, present even when offline; old nodes don't have this field
  "system":{"os":"darwin","distro":"macos","like":"","name":"macOS 26.1","version":"26.1","build":"25B78",
            "kernel":"Darwin 25.1.0","arch":"arm64","model":"MacBook Pro","cpu":"Apple M4 Pro","cores":14,
            "memory":51539607552,"boot_time":1790000000},
- // 中心怎么连这台（docs/mesh.md「一台电脑多条路」，plan-hub-center.md 5）：hub_id / hub_name 是现在经过的 hub（直接连的是中心自己，
- // 经成员的是那台成员）；machine_uid 是电脑自己的 uid（旧 node 没有）；route.via 是 local | service | link | ssh | tailcat（hops 0）或
- // hub（经成员，hops 1），rtt_ms 没测到时省略。没有互联时也有（都是本 hub）。id：中心 hub.json 里有它就用中心的 id，只在成员上配的用成员的
- // id，撞名的加 @<成员名>。kind 是 hub 的：只在成员上配的电脑。旧 hub 没有这几个字段
- "hub_id":"<hub UUID>","hub_name":"家里","machine_uid":"<UUID>","route":{"via":"service","hops":0,"rtt_ms":12},
- // 可选：不止一条路（或只能经成员）时，每条路一项：方式、经哪台 hub（中心自己的路是中心的 hub_id）、现在能不能用、最近的 RTT、是不是在用的那条
- "paths":[{"via":"service","hub_id":"<hub UUID>","ok":true,"rtt_ms":12,"active":true},{"via":"hub","hub_id":"<成员 hub UUID>","ok":true,"rtt_ms":40}],
- // 可选（feature machine_trust，上手方案 #287 的 5.3）：trust 是 pending 时这台电脑在等用户确认（下面「电脑的信任」），省略 = 已确认；
- // error_code 说 error 是哪一类：node_service_down（链路通、常驻 node 没在跑）| link_offline（连过、现在断着）| never_connected（电脑来连 /
- // hub 来连的还从没连上过）| node_outdated（在线，node 是另一个版本、又旧到不能从这里远程更新）；error 原文照旧给，不认识的码显示 error
+ // How the primary reaches this one (docs/mesh.md "One computer, several paths", plan-hub-center.md 5): hub_id / hub_name is the hub it currently goes through (direct means the primary itself,
+ // through a member means that member); machine_uid is the computer's own uid (old nodes don't have it); route.via is local | service | link | ssh | tailcat (hops 0) or
+ // hub (through a member, hops 1); rtt_ms is omitted when not measured. Present without linked hubs too (all this hub). id: the primary's id if the primary's hub.json has it; for ones configured only on a member, the member's
+ // id, with @<member name> appended on collision. kind is the hub's: a computer configured only on a member. Old hubs don't have these fields
+ "hub_id":"<hub UUID>","hub_name":"Home","machine_uid":"<UUID>","route":{"via":"service","hops":0,"rtt_ms":12},
+ // Optional: when there is more than one path (or only through a member), one entry per path: method, which hub (the primary's own paths use the primary's hub_id), usable now, latest RTT, whether it's the active one
+ "paths":[{"via":"service","hub_id":"<hub UUID>","ok":true,"rtt_ms":12,"active":true},{"via":"hub","hub_id":"<member hub UUID>","ok":true,"rtt_ms":40}],
+ // Optional (feature machine_trust, onboarding plan #287 5.3): trust pending means this computer is waiting for the user to confirm ("Computer trust" below); omitted = confirmed;
+ // error_code says which kind error is: node_service_down (link is up, resident node not running) | link_offline (connected before, disconnected now) | never_connected (a computer-connects /
+ // hub-connects computer that has never connected) | node_outdated (online, the node is another version and too old to update remotely from here); the raw error is still sent, unknown codes show error
  "trust":"pending","error_code":"never_connected"}
 
-// MetricSample：一次读数（每 10 秒）。没测到的字段缺省（第一次读数没有 cpu / net_*），不是 0；cores 只有 Linux 有
+// MetricSample: one reading (every 10 seconds). Unmeasured fields are absent (the first reading has no cpu / net_*), not 0; cores is Linux only
 {"t":1790003600,"cpu":42.5,"cores":[40,45],"load":3.1,"mem_used":34359738368,"mem_total":68719476736,
  "swap_used":0,"swap_total":0,"net_rx":1024.5,"net_tx":512,"disk_used":10737418240,"disk_total":107374182400}
 
-// MetricPoint：历史里的一步（该步内的平均）；gap 表示这里断开了，画图不要连线。mem / swap / disk 是已用字节
+// MetricPoint: one step in history (average within the step); gap means a break here, don't draw a line across it. mem / swap / disk are bytes used
 {"t":1790000000,"cpu":10.2,"load":1.25,"mem":34359738368,"swap":0,"rx":2048,"tx":512,"disk":10737418240}
 {"t":1790000240,"gap":true}
 
-// Launcher（来自 zsh：_claude_launchers 列出的函数，以及调用 claude 的 alias；docs/launchers.md）。GET …/launchers 每项另带 agent_type
-// （claude / codex / traex / runtime 的 agent，旧 hub 没有时按 Claude 处理）：没写的按 agent、再按名字（codex、traex）推断，hub.json 的
-// machines[].launchers 可以添加包装函数或覆盖类型，例如 [{"name":"example_wrapper","agent_type":"codex"}]，同名配置保留未覆盖的模型和网关字段
-// （管理者的 assistant/models_launchers.go 的 sessionLaunchers）。Android 按类型筛选启动器。
-{"name":"example_launcher","base_url":"https://example.com","model":"<模型名>","agent_type":"claude"}
-// Codex 的启动器（PATH 上的 codex、跑 codex 的 alias）带 agent，新建时必须带 prompt、不能 async（docs/codex.md「从手机新建」）
-{"name":"codex","model":"默认","agent":"codex","agent_type":"codex"}
-// 新建请求可带 agent_type，包装函数按声明的类型启动：Claude 沿用原参数，Codex／TRAEX 不带 Claude 专用参数，并通过已有 herdr／进程识别
-// 取得真实会话 ID；首句按单个参数传给启动器。权限模式和思考强度暂只适用于 Claude，Android 的新建表单选择其他类型时隐藏这两项。
+// Launcher (from zsh: functions listed in _claude_launchers, plus aliases that call claude; docs/launchers.md). Each item from GET …/launchers also carries agent_type
+// (claude / codex / traex / a runtime's agent; treated as Claude when an old hub lacks it): when unset it is inferred from agent, then from the name (codex, traex). hub.json's
+// machines[].launchers can add wrapper functions or override the type, e.g. [{"name":"example_wrapper","agent_type":"codex"}]; same-name config keeps the model and gateway fields it doesn't override
+// (sessionLaunchers in the manager's assistant/models_launchers.go). Android filters launchers by type.
+{"name":"example_launcher","base_url":"https://example.com","model":"<model name>","agent_type":"claude"}
+// Codex launchers (codex on PATH, aliases that run codex) carry agent; starting one requires prompt and can't be async (docs/codex.md "Starting from the phone")
+{"name":"codex","model":"Default","agent":"codex","agent_type":"codex"}
+// A start request may carry agent_type, and wrapper functions launch per the declared type: Claude keeps the original arguments, Codex / compatible forks don't get Claude-only arguments, and get the real session ID
+// through the existing herdr / process detection; the first message is passed to the launcher as a single argument. Permission mode and reasoning effort apply only to Claude for now; Android's new-session form hides both when another type is chosen.
 
-// Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。
-{"machine_id":"server","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"<项目目录>",
- "workspace_cwd":"<node 验证的物理目录>",   // 可选；用于工作区关联，缺失时兼容回退 cwd，不替换原始 cwd
- "repo_root":"<cwd 所属仓库的主检出目录>",   // 可选（#2840）：宿主知道仓库时才带（Paseo 的桥：它的 worktree 在 Paseo 自己的目录下，看路径认不出仓库）；
-                   // 「按仓库」按它分：cwd 在它里面是主检出，否则是它的一个 worktree。不带时客户端照旧按 cwd 的路径推断
- "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
+// Session: (machine_id, session_id) is unique. session_id is Claude Code's session uuid.
+{"machine_id":"server","session_id":"uuid","title":"AI-generated title or directory name","cwd":"<project directory>",
+ "workspace_cwd":"<physical directory verified by the node>",   // optional; used for workspace association, falls back to cwd when missing, doesn't replace the original cwd
+ "repo_root":"<main checkout of the repo cwd belongs to>",   // optional (#2840): only when the host knows the repo (the Paseo bridge: its worktrees live under Paseo's own directory, so the repo can't be recognized from the path);
+                   // "By Repository" groups by it: cwd inside it is the main checkout, otherwise one of its worktrees. When absent, clients infer from the cwd path as before
+ "status":"idle|working|blocked|done|unknown|offline",   // offline = not running in herdr, only a transcript, can be resumed
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
- "pane_index":0,   // 可选（#2320）：这个窗格在它的 tab 里按位置的序号，从 0 起，左上为 0（别的窗格都是从它切出来的，有 Agent 时就是这组的发起者）；
-                   // herdr 的 node 从快照的 layouts 算，宿主不给布局、旧 node、窗格不在布局里时不带（0 照样发，不带才是不知道）。见 docs/agent-states.md「一个 tab 里的几个 pane」
- "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
+ "pane_index":0,   // optional (#2320): this pane's positional index within its tab, from 0, top-left is 0 (the other panes were all split from it; with Agents, it's the group's initiator);
+                   // the herdr node computes it from the snapshot's layouts; omitted when the host gives no layout, on old nodes, or when the pane isn't in the layout (0 is still sent; only absence means unknown). See docs/agent-states.md "Several panes in one tab"
+ "agent":"claude","agent_label":"",   // agent_label only on Agents the App doesn't know: the runtime's name for it ("DSH", see "Runtime ↔ node")
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
- "origin":"inbox","origin_ref":"<收件箱条目 id>",   // 只在助手对话（assistant: true）上：这段对话是谁开的，见下「助手对话的来源」；没有 = user
- "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字",
-     "turn_error":"API Error: Connection lost mid-response…（停着且这一轮被模型 API 错误打断时才有，否则不带；它的任务算「中断了」，#1516。Claude Code：hub 从最后一句的开头认；Codex：node 从 task_complete.error / 失败的 turn/completed 报，#2185）",
-     "turn_error_kind":"transient（可选：agent 自己说了错误种类时才有，Codex 的 codex_error_info：transient 值得「继续」，user 要用户处理；没有就按 turn_error 的文字判，docs/agent-work.md「分诊」；Claude Code 的「Not logged in」、Key 不对、模型不对 hub 补成 user）",
-     "turn_error_code":"not_logged_in（可选：hub 从 turn_error 认出是什么问题时才有：not_logged_in / auth_failed / model_route / rate_limited，客户端据此画「去修」的卡片，见新用户上手的方案 5.2 节）","pending_interactions":1,
- "work":{"phase":"blocked","on":"external","line":"等部署跑完再跑线上测试","wait":"部署跑完","then":"跑线上测试","every_minutes":5,
+ "origin":"inbox","origin_ref":"<Inbox item id>",   // only on assistant chats (assistant: true): who opened this chat, see "Origin of assistant chats" below; absent = user
+ "updated_at":"...","last_text":"first 200 characters of the last assistant text",
+     "turn_error":"API Error: Connection lost mid-response… (only when stopped and this turn was interrupted by a model API error, otherwise absent; its task counts as \"interrupted\", #1516. Claude Code: the hub recognizes it from the start of the last line; Codex: the node reports it from task_complete.error / a failed turn/completed, #2185)",
+     "turn_error_kind":"transient (optional: only when the agent itself states the error kind, Codex's codex_error_info: transient is worth a \"continue\", user needs the user to act; otherwise judged from the turn_error text, docs/agent-work.md \"Triage\"; for Claude Code's \"Not logged in\", a wrong Key or a wrong model the hub fills in user)",
+     "turn_error_code":"not_logged_in (optional: only when the hub recognizes the problem from turn_error: not_logged_in / auth_failed / model_route / rate_limited; clients use it to draw a \"fix it\" card, see the new-user onboarding plan section 5.2)","pending_interactions":1,
+ "work":{"phase":"blocked","on":"external","line":"Wait for the deploy to finish, then run the production tests","wait":"deploy finished","then":"run the production tests","every_minutes":5,
          "wake_at":"...","attempts":1,"max":6,"turn_at":"...","at":"...","by":"model"},
-     // 工作态（docs/agent-work.md）：phase working | blocked | done；blocked 的 on 是 user（等你决定，questions / link /
-     // interaction_id 是 Persona 替它开的卡片）| agent（等另一个 Agent，agent:{machine_id,session_id,label}）| external（等部署、CI、时间点，
-     // 到 wake_at Persona 叫醒它）| transient（模型服务暂时出错，到 wake_at Persona 发「继续」）；done 带 artifacts:[{kind:pr|commit|doc|build|url,ref}]。
-     // 工作中只有 {"phase":"working"}；一轮停下后还没分诊（或看不出来）时不带。做完的、在等 Persona 叫醒的，state 是 idle 不是 unread。
-     // 分诊是管理者（助手进程）做的，hub 照它在快照里报的填（只对还停在那一轮上的会话），见下「总线」的「Agents」
- "activity":"在跑测试","activity_at":"...",   // 最近一步是工具调用、之后还没有新文字时才有：这一步在做什么（node 从 transcript 概括，40 字以内）和开始的时间；写出新文字或开始新一轮就没了
- "queued":["工作中输入、还没被取走的消息"],
+     // Work state (docs/agent-work.md): phase working | blocked | done; blocked's on is user (waiting for your decision; questions / link /
+     // interaction_id are the card Persona opened for it) | agent (waiting for another Agent, agent:{machine_id,session_id,label}) | external (waiting for a deploy, CI, a point in time;
+     // Persona wakes it at wake_at) | transient (the model service is temporarily failing; Persona sends "continue" at wake_at); done carries artifacts:[{kind:pr|commit|doc|build|url,ref}].
+     // Working is just {"phase":"working"}; absent after a turn stops and before triage (or when it can't tell). For finished ones and ones waiting for Persona to wake them, state is idle, not unread.
+     // Triage is done by the manager (the assistant process); the hub fills it in from what it reports in the snapshot (only for sessions still stopped on that turn), see "Agents" under "Bus" below
+ "activity":"running tests","activity_at":"...",   // only when the latest step is a tool call with no new text since: what this step is doing (summarized by the node from the transcript, within 40 characters) and when it started; gone once new text is written or a new turn starts
+ "queued":["messages typed while working, not yet picked up"],
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
-                "parent_id":"c27d03b1…","fork":true,   // 谁起的它：起它的子 Agent 的 id（主会话起的没有）；fork = 分叉出来的。父的不在列表里时当顶层
-                "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // 子 Agent 当会话读
+                "parent_id":"c27d03b1…","fork":true,   // who started it: the id of the subagent that started it (absent when the main session did); fork = forked off. Treated as top-level when the parent isn't in the list
+                "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // subagents are read as sessions
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
- "goal":{"objective":"…","status":"active|paused|blocked|usage_limited|budget_limited|complete","reason":"…",   // 它在做的 goal（docs/agent-goal.md）
-        "tokens_used":12345,"token_budget":500000,"seconds":600,"updated_at":"..."},                              // 没有 goal 时不带
- // Agent 的进程在监听、回 HTTP 的 TCP 端口（docs/ports.md）：一个端口一条；title 是它首页的 <title>（没有就缺省）。旧 node 没有这个字段
+ "goal":{"objective":"…","status":"active|paused|blocked|usage_limited|budget_limited|complete","reason":"…",   // the goal it's working on (docs/agent-goal.md)
+        "tokens_used":12345,"token_budget":500000,"seconds":600,"updated_at":"..."},                              // absent when there is no goal
+ // TCP ports the Agent's processes listen on that answer HTTP (docs/ports.md): one entry per port; title is its home page's <title> (absent if none). Old nodes don't have this field
  "ports":[{"port":5173,"addr":"127.0.0.1","pid":4242,"process":"node","title":"Vite + React"}],
- // 关联的未完成待办（docs/todos.md）：只在当前有关联（未 released）且待办未完成时出现，由 hub 补齐
- "todo":{"id":"todo_…","title":"天气 App 发 1.3 版"},
- "quiet":true,   // 给安静的任务干活（干过）的 Agent（#1731，docs/unified-entry.md「安静的任务」）：不进任务通知和全局角标，任务做完后也一直带着
- "background":[{"id":"b85polnoj","kind":"shell|agent|monitor|workflow","description":"…","command":"…",   // 还没回报的后台命令 / 子代理 / Monitor / workflow
+ // Linked unfinished to-do (docs/todos.md): only present while currently linked (not released) and the to-do is unfinished; filled in by the hub
+ "todo":{"id":"todo_…","title":"Ship version 1.3 of the weather App"},
+ "quiet":true,   // an Agent working (or that worked) on a quiet task (#1731, docs/unified-entry.md "Quiet tasks"): kept out of task notifications and the global badge, and stays set after the task is done
+ "background":[{"id":"b85polnoj","kind":"shell|agent|monitor|workflow","description":"…","command":"…",   // background commands / subagents / Monitors / workflows that haven't reported back yet
                 "output_file":"/private/tmp/…/b85polnoj.output","started_at":"...",
-                "expires_at":"...",          // Monitor：到这个时间自己停（结果里的 expires in 30m），没说就不带
-                "run_id":"wf_c1d9daf8-cd2"}], // workflow：对应 workflows 里的哪一次运行；只有在跑的 workflow 在这里（旧客户端照样当后台任务）
- // Claude Code 的 workflow（Workflow 工具在后台跑的多 agent 脚本，#2935，docs/agent-states.md「后台 workflow」）：最近一天的，新的在前。
- // 在跑的（running=true）算后台工作：hub 把 state 算成 working，不推「做完了」，待办不判完成、不自动关这个 Agent。旧 node 没有这个字段
+                "expires_at":"...",          // Monitor: stops by itself at this time (the "expires in 30m" in the result); absent if not stated
+                "run_id":"wf_c1d9daf8-cd2"}], // workflow: which run in workflows it is; only running workflows are here (old clients still treat it as a background task)
+ // Claude Code workflows (multi-agent scripts the Workflow tool runs in the background, #2935, docs/agent-states.md "Background workflows"): the last day's, newest first.
+ // Running ones (running=true) count as background work: the hub computes state as working, doesn't push "done", doesn't judge the to-do complete or auto-close this Agent. Old nodes don't have this field
  "workflows":[{"task_id":"wdp5zxh37","run_id":"wf_c1d9daf8-cd2","name":"parity-audit","summary":"…",
-               "status":"running|completed|failed|killed|stalled","running":true,   // stalled：没收到结束通知，但 30 分钟没有动静（它的 claude 没了），不算在跑
-               "phases":["Audit","Verify"],"phase":"Verify","phase_index":2,"phase_count":2,   // 脚本 meta 里的阶段；phase 是最近开始的、还在跑的 agent 所在的阶段，phase_index 从 1 数，0 = 不知道
-               "tool_use_id":"toolu_…",                                            // 启动它的那次 Workflow 调用
-               "agents_started":185,"agents_done":169,"agents_running":16,        // 总数要跑完才知道（脚本边跑边派）：显示「完成数 / 已开始数」
-               "started_at":"...","ended_at":"...","updated_at":"...",           // ended_at 跑完才有；耗时 = (ended_at 或现在) - started_at
-               "error":"Error: Workflow aborted",                                 // failed / killed 的第一行
-               "agents":[{"id":"a55ab0b9…","session_id":"<id>@a55ab0b9…","label":"audit:chat-rich","phase":"Audit",   // 按开始的顺序，最多 60 个（留最新的）
-                          "running":false,"status":"running|done|stopped",   // stopped：run 结束时它还没回来
-                          "started_at":"...","updated_at":"...","last_text":"…"}]}],                   // 每个 agent 当子 Agent 读：GET 会话 session_id 的内容
- "background_working":true,   // state 是 working 只是因为后台工作（这一轮已结束，workflow / 后台命令 / Monitor / 子 Agent 在跑，#2935）：客户端写「工作中（后台）」。hub 算的；旧 hub 没有时，看 state=working 且有在跑的 workflow
- // 用户最近一次手动压缩（只有助手对话，POST …/compact 之后才有）：running → done | failed（error 是给人看的原因）；node 记着，直到下一次
+               "status":"running|completed|failed|killed|stalled","running":true,   // stalled: no end notification, but no activity for 30 minutes (its claude is gone); not counted as running
+               "phases":["Audit","Verify"],"phase":"Verify","phase_index":2,"phase_count":2,   // phases from the script's meta; phase is the phase of the most recently started agent still running, phase_index counts from 1, 0 = unknown
+               "tool_use_id":"toolu_…",                                            // the Workflow call that started it
+               "agents_started":185,"agents_done":169,"agents_running":16,        // the total is known only once finished (the script dispatches as it runs): show "done / started"
+               "started_at":"...","ended_at":"...","updated_at":"...",           // ended_at only once finished; duration = (ended_at or now) - started_at
+               "error":"Error: Workflow aborted",                                 // first line for failed / killed
+               "agents":[{"id":"a55ab0b9…","session_id":"<id>@a55ab0b9…","label":"audit:chat-rich","phase":"Audit",   // in start order, at most 60 (newest kept)
+                          "running":false,"status":"running|done|stopped",   // stopped: it hadn't come back when the run ended
+                          "started_at":"...","updated_at":"...","last_text":"…"}]}],                   // each agent is read as a subagent: GET the content of session session_id
+ "background_working":true,   // state is working only because of background work (this turn is over, workflows / background commands / Monitors / subagents are running, #2935): clients write "Working (Background)". Computed by the hub; when an old hub lacks it, look for state=working with a running workflow
+ // The user's latest manual compaction (assistant chats only, present only after POST …/compact): running → done | failed (error is a human-readable reason); the node keeps it until the next one
  "compaction":{"state":"running|done|failed","error":"…","started_at":"...","finished_at":"..."}}
 
-// Todo：待办事项（docs/todos.md）
-{"id":"todo_…","title":"天气 App 发 1.3 版","notes":"说明","done_at":null,
+// Todo: a to-do item (docs/todos.md)
+{"id":"todo_…","title":"Ship version 1.3 of the weather App","notes":"Notes","done_at":null,
  "created_at":"...","updated_at":"...",
- "origin":"<助手对话 id>","plan_id":"plan_…",   // 只有从助手对话开的任务才有（docs/unified-entry.md）
- "start_error":"rpc: connection closed",         // 任务的 Agent 没开起来：hub 同时写 done_at，任务到此结束；重新打开时清空（#1077）
- "quiet":true,   // 主对话派的、当时开着「主对话派的任务只在主对话里通知」：建的时候定下、不再变（#1731）
- "done_by":"auto|review",   // 空 = 用户点的；auto = hub 判断做完自动关的；review = 督办人验收后关的（#3124），理由在 done_reason
- // 督办台账（#3124，docs/unified-entry.md「督办」）：只有主对话派出去的任务才有；不认识的客户端照常显示待办
- "supervision":{"supervisor":"<主对话 id>",
-                "done_when":["PR 合并到 master","浅色 / 深色截图贴进 PR"],   // 验收标准，可能是空数组
-                "expect_minutes":30,                                    // 预计分钟数，0 / 没有 = 没写
-                "state":"",       // "" 进行中 | pending_review 待验收 | rework 返工中 | needs_user 等用户决定 | accepted 已验收 | cancelled 已取消
-                                  //（accepted / cancelled 时待办已完成；用户重新打开后按进行中算）
-                "round":1,        // 返工了几轮，最多 2
-                "reviews":[{"at":"...","verdict":"accepted|rework|needs_user|cancelled","round":1,   // round 只在 rework 上
-                            "checks":[{"criterion":"浅色 / 深色截图贴进 PR","met":false,"evidence":"只有浅色"}],"note":"补深色截图"}],
+ "origin":"<assistant chat id>","plan_id":"plan_…",   // only on tasks opened from an assistant chat (docs/unified-entry.md)
+ "start_error":"rpc: connection closed",         // the task's Agent failed to start: the hub also sets done_at, and the task ends there; cleared on reopen (#1077)
+ "quiet":true,   // dispatched by the main chat while "notify about main-chat tasks only in the main chat" was on: fixed at creation, never changes (#1731)
+ "done_by":"auto|review",   // empty = the user marked it; auto = the hub judged it done and closed it; review = closed after the supervisor's review (#3124), reason in done_reason
+ // Supervision record (#3124, docs/unified-entry.md "Supervision"): only on tasks dispatched by the main chat; clients that don't know it show the to-do as usual
+ "supervision":{"supervisor":"<main chat id>",
+                "done_when":["PR merged into master","Light / dark screenshots posted in the PR"],   // acceptance criteria, may be an empty array
+                "expect_minutes":30,                                    // estimated minutes, 0 / absent = not given
+                "state":"",       // "" in progress | pending_review awaiting review | rework being reworked | needs_user waiting for the user to decide | accepted accepted | cancelled cancelled
+                                  // (for accepted / cancelled the to-do is done; after the user reopens it, it counts as in progress)
+                "round":1,        // how many rework rounds, at most 2
+                "reviews":[{"at":"...","verdict":"accepted|rework|needs_user|cancelled","round":1,   // round only on rework
+                            "checks":[{"criterion":"Light / dark screenshots posted in the PR","met":false,"evidence":"Only the light one"}],"note":"Add the dark screenshot"}],
                 "updated_at":"..."},
  "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
  "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
            "title":"…","cwd":"…","agent":"claude","start_error":"","source":"manual|space|spawned","via":""}]}
 
-// Item：transcript 规范化后的一条（一个内容块一条）
-{"id":"<entry uuid>#<block idx>","seq":123,            // seq = transcript 行号，单调递增，用于增量和分页
+// Item: one normalized transcript entry (one per content block)
+{"id":"<entry uuid>#<block idx>","seq":123,            // seq = transcript line number, monotonically increasing, used for increments and paging
  "ts":"...","role":"user|assistant|system",
  "kind":"text|thinking|tool_use|tool_result|notice|image|fold|turn_duration",
- "text":"…",                                           // text / thinking / notice / tool_result 的文本
- "tool_use_id":"toolu_…",                             // tool_use 与 tool_result 共用，App 据此合并成一张卡片
- "tool_name":"Bash", "tool_input":{...},              // 仅 tool_use
- "is_error":false,                                    // 仅 tool_result
- "full_size":4874,                                    // text 被截断了（页和推送里工具输出最多 4 KB、其他文字 24 KB），全文的字节数；
-                                                      // 截断的 text 末尾是一行说明：工具输出是「…（已截断，点开看全文，共 N 字节）」（App 有「看全文」按钮），
-                                                      // 其他文字是「…（已截断，共 N 字节）」；旧 App 照样能看懂
- "queued":true,                                       // 仅 user text：工作中输入、被中途吸收的消息
- "client_msg_id":"…",                                 // 这条来自 App 带这个 client_msg_id 发的消息（文字、图片，或 /compact 变成的 notice），
-                                                      // 由 node 认出，见「待发消息的对应」；旧 hub / node 不带
- "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
- "injected":{"kind":"task_notice","state":"done",…},   // 仅 user text：这条是 Persona 发给模型的消息（任务通知、定时任务、叫醒……），不是用户写的；hub 下发时补上，见「Persona 注入的消息」
- "compact":{"trigger":"manual|auto","pre_tokens":151467}, // 仅 notice：这里压缩了上下文（Claude Code 的 compact_boundary）；App 画成一条分隔线，紧跟的「已从压缩的上下文继续」和空闲压缩的说明并进它
- "task":{"kind":"shell|monitor|agent|task",              // 仅 notice：后台任务的通知（命令、Monitor 事件 / 结束、子 Agent），text 是一行摘要
-         "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description 或命令第一行",
+ "text":"…",                                           // text of text / thinking / notice / tool_result
+ "tool_use_id":"toolu_…",                             // shared by tool_use and tool_result; the App merges them into one card by it
+ "tool_name":"Bash", "tool_input":{...},              // tool_use only
+ "is_error":false,                                    // tool_result only
+ "full_size":4874,                                    // text was truncated (in pages and pushes, tool output is at most 4 KB, other text 24 KB): the byte size of the full text;
+                                                      // truncated text ends in a note line: for tool output "…（已截断，点开看全文，共 N 字节）" ("truncated, tap to see the full text, N bytes"; the App has a "view full text" button),
+                                                      // for other text "…（已截断，共 N 字节）" ("truncated, N bytes"); old Apps still understand it
+ "queued":true,                                       // user text only: a message typed while working, absorbed mid-turn
+ "client_msg_id":"…",                                 // this item comes from a message the App sent with this client_msg_id (text, image, or the notice /compact turns into),
+                                                      // recognized by the node, see "Matching pending messages"; old hubs / nodes omit it
+ "wake":true,                                         // notice only: Claude was idle when a background task finished, and this notification started a new turn
+ "injected":{"kind":"task_notice","state":"done",…},   // user text only: this is a message Persona sent to the model (task notification, scheduled task, wake-up…), not written by the user; added by the hub when sending, see "Messages Persona injects"
+ "compact":{"trigger":"manual|auto","pre_tokens":151467}, // notice only: the context was compacted here (Claude Code's compact_boundary); the App draws a divider and folds the following "已从压缩的上下文继续" ("continued from compacted context") and the idle-compaction note into it
+ "task":{"kind":"shell|monitor|agent|task",              // notice only: a background task notification (command, Monitor event / end, subagent); text is a one-line summary
+         "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description or the command's first line",
          "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…",
-         "detail":"Monitor 的事件 / 子 Agent 的结果 / 整条命令（已解码实体）"},
- "fold":{"items":1294,"tools":647,"thoughts":110,     // 仅 kind=fold（请求带 fold_work 才有）：一段被折叠的工作，见「折叠的工作」；可带 tasks、images
+         "detail":"the Monitor event / the subagent's result / the whole command (entities decoded)"},
+ "fold":{"items":1294,"tools":647,"thoughts":110,     // kind=fold only (only when the request carries fold_work): a folded stretch of work, see "Folded work"; may carry tasks, images
          "until":"...","through_seq":6890,"through_id":"…#0"},
- "image":{"mime":"image/png","data":"base64"}}        // 仅 image（tool_result 里的图片也拆成 image item，带 tool_use_id）
+ "image":{"mime":"image/png","data":"base64"}}        // image only (images in tool_result are also split into image items, with tool_use_id)
 
-// Interaction：需要人处理的事
+// Interaction: something that needs a person
 {"id":"ix_…","machine_id":"server","session_id":"uuid","session_title":"…","cwd":"…",
- "task_title":"…",   // 提问的 Agent 在为从助手对话开的任务干活时，hub 发给客户端时填上任务名（docs/unified-entry.md）
+ "task_title":"…",   // when the asking Agent works on a task opened from an assistant chat, the hub fills in the task name when sending to clients (docs/unified-entry.md)
  "kind":"question|plan|permission|screen|elicitation",
  "created_at":"…","expires_at":"…","tool_name":"AskUserQuestion","tool_use_id":"…",
  "questions":[{"question":"…","header":"…","multi_select":false,
                "options":[{"label":"…","description":"…"}]}],   // question
  "plan":"markdown",                                              // plan
  "tool_input":{...}, "summary":"rm -rf build",                   // permission
- "screen":"终端可见区域文本",                                     // screen（hook 覆盖不到的 TUI 对话框）
- "always_keys":["tool:Bash"],  // node → hub：助手对话的授权卡上「总是允许」放行什么，hub 记下后自己回答同样的卡（docs/assistant.md「本会话总是允许」）；客户端不用
- "agent":"codex", "reason":"…", "always_label":"本会话不再问这个命令"} // node 从 Codex / TRAEX 的 TUI 读出来的卡（「Codex 的提问和审批」）
+ "screen":"visible terminal text",                                // screen (TUI dialogs hooks can't cover)
+ "always_keys":["tool:Bash"],  // node → hub: what "Always Allow" on an assistant chat's permission card lets through; the hub records it and answers the same card itself (docs/assistant.md "Always allow for this session"); not used by clients
+ "agent":"codex", "reason":"…", "always_label":"本会话不再问这个命令"} // a card the node read from the Codex / compatible forks TUI ("Codex questions and approvals"); always_label is emitted in Chinese: "don't ask about this command again this session"
 
-// Resolution（按 kind）
-{"answers":{"<question 原文>":"所选 label；多选用 \", \" 连接；或自定义文本"}}   // question
-{"approve":true,"mode":"bypassPermissions|acceptEdits|default"}               // plan 批准
-{"approve":false,"feedback":"改成……"}                                        // plan 打回
+// Resolution (by kind)
+{"answers":{"<original question text>":"the chosen label; multiple joined with \", \"; or custom text"}}   // question
+{"approve":true,"mode":"bypassPermissions|acceptEdits|default"}               // plan approved
+{"approve":false,"feedback":"Change it to…"}                                  // plan sent back
 {"allow":true,"always":false} / {"allow":false,"message":"…"}                // permission
-{"keys":["down","enter"],"text":""}                                         // screen：按键 / 文本发到 pane
-{"dismiss":true}                                                            // 任意：放弃，交回电脑 TUI 处理
-{"answers":{"…":"…"},"answered_by":"assistant"}                               // 助手代答（#1602）：只有 question 可以，App 回复不带 answered_by
+{"keys":["down","enter"],"text":""}                                         // screen: keys / text sent to the pane
+{"dismiss":true}                                                            // any: give up, hand back to the computer's TUI
+{"answers":{"…":"…"},"answered_by":"assistant"}                               // answered by the assistant (#1602): question only; App replies don't carry answered_by
 ```
 
 ### MCP elicitation
 
-`hello.features` 新增 `elicitation`。客户端需在 `client_hello.features` 明确声明，Android 和网页默认声明（网页的 `X-Jarvis-Client` 写平台 web、版本 1，和它 `client_hello` 的 `platform` / `version` 一致）。现有 `interaction` 事件的 `interaction` 对象新增以下可选字段，信封顶层不增加键：
+`hello.features` adds `elicitation`. Clients must declare it explicitly in `client_hello.features`; Android and the web client declare it by default (the web client's `X-Jarvis-Client` gives platform web, version 1, matching the `platform` / `version` in its `client_hello`). The `interaction` object in the existing `interaction` event gains the following optional fields; no keys are added at the envelope's top level:
 
 ```json
 {
@@ -515,7 +519,7 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
   "agent_type": "worker",
   "elicitation": {
     "mode": "form",
-    "message": "请选择",
+    "message": "Please choose",
     "requested_schema": {
       "type": "object",
       "properties": {"choice": {"type": "string", "enum": ["yes", "no"]}}
@@ -524,22 +528,24 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 }
 ```
 
-URL 模式的 `elicitation` 为 `{"mode":"url","message":"请打开链接完成确认","url":"https://example.com/confirm","elicitation_id":"request_example"}`。`mcp_config_source`、`tool_name`、`tool_use_id` 均可选，只有来源提供时才有；Claude Code 2.1.306 的 Elicitation 输入不提供工具关联和配置来源，缺失时不推断。
+In URL mode `elicitation` is `{"mode":"url","message":"Open the link to confirm","url":"https://example.com/confirm","elicitation_id":"request_example"}`. `mcp_config_source`, `tool_name` and `tool_use_id` are all optional and present only when the source provides them; Claude Code 2.1.306's Elicitation input provides no tool association or config source, and nothing is inferred when they're missing.
 
-Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"choice":"yes"}}` 提交 form；URL 接受只带 `{"action":"accept"}`；拒绝和取消分别为 `{"action":"decline"}`、`{"action":"cancel"}`。`{"dismiss":true}` 仍表示放弃手机接管、交给终端。缺少合法 action 的答复返回 400，请求保持待处理。
+Resolution gains optional `action` and `content`. `{"action":"accept","content":{"choice":"yes"}}` submits a form; accepting a URL sends only `{"action":"accept"}`; decline and cancel are `{"action":"decline"}` and `{"action":"cancel"}`. `{"dismiss":true}` still means giving up the phone takeover and handing it to the terminal. A reply without a valid action returns 400 and the request stays pending.
 
-下发和降级规则：
+Delivery and fallback rules:
 
-- 广播和连接初始化都过滤未声明能力的连接。首次声明能力后补发仍待处理的 elicitation，重复 hello 不重复补发。
-- REST 待处理列表及历史列表也过滤。只有相同认证凭据、相同 `X-Jarvis-Client` 平台／版本存在已声明能力的活动连接，才返回该类型；HTTP 请求头本身不能声明能力。
-- 创建时没有兼容连接，立即交回终端，不留下等待手机作答的请求。已有交互的超时、撤销及重启恢复规则保持适用。
-- elicitation 通知只走同时声明 `ws_notify` 和 `elicitation` 的连接，不发旧 iOS 的 APNs 交互类别；共享 Fleet 继续使用现有终端提示，不传入新 kind。
+- Both broadcasts and connection initialization filter out connections that didn't declare the capability. After a connection first declares it, still-pending elicitations are resent; repeated hellos don't resend.
+- The REST pending and history lists are filtered too. That kind is returned only if an active connection with the same credential and the same `X-Jarvis-Client` platform / version has declared the capability; an HTTP header can't declare a capability by itself.
+- If there is no compatible connection at creation, it is handed back to the terminal immediately, leaving no request waiting for a phone answer. The existing timeout, revocation and restart-recovery rules for interactions still apply.
+- Elicitation notifications go only to connections that declared both `ws_notify` and `elicitation`; the old iOS APNs interaction category is not sent. The shared Fleet keeps using the existing terminal prompt and is not given the new kind.
 
-新字段随现有交互 JSON payload 存储，无需数据库迁移。包内协议核对和未验收项见 [Claude 集成文档](claude-integration.md#mcp-elicitation-hooks)。
+The new fields are stored in the existing interaction JSON payload; no database migration is needed. In-package protocol checks and items not yet signed off are in the [Claude integration doc](claude-integration.md#mcp-elicitation-hooks).
 
-## 工作区看板
+<a id="工作区看板"></a>
 
-工作流说明、升级和持久化见 [工作区看板](workspace-board.md)。下列接口是管理者的（hub 经总线 `http.request` 原样转发，见「转发 App 的请求」；管理者不在时 `503 assistant_offline`），两个事件由管理者经 `ws.broadcast` 发、hub 原样推。接口以 hub 机器的 Postgres 为唯一持久状态，没有内存或 JSON 文件写入降级。`answer` 允许 GET 看板和清单，POST 要求 `full`；`can_write` 表示当前请求的角色能否编辑，不额外授予文件、Git 或 Agent 操作权限。
+## Workspace board
+
+Workflow, upgrades and persistence are covered in [Workspace board](workspace-board.md). The APIs below belong to the manager (the hub forwards them unchanged over the bus `http.request`, see "Forwarding App requests"; `503 assistant_offline` when the manager isn't there), and the two events are sent by the manager via `ws.broadcast` and pushed unchanged by the hub. The APIs use the hub machine's Postgres as the only persistent state, with no fallback to in-memory or JSON file writes. `answer` may GET the board and the list; POST requires `full`. `can_write` says whether the current request's role can edit; it grants no extra file, Git or Agent permissions.
 
 ```text
 BoardState { revision: int64, columns: Column[], cards: Card[], can_write: bool }
@@ -550,1089 +556,1090 @@ Workspace { id, machine_id, source, source_id, title, cwd, branch?,
             online: bool, available: bool, last_seen?: RFC3339 }
 ```
 
-默认 revision 为 0，列 ID 为 `todo`、`doing`、`review`、`done`。数组顺序是人工顺序，客户端按列、归档状态和置顶分组后保持数组相对顺序。卡片自身 ID 稳定；工作区 ID 由 hub 按机器、来源和来源 ID 限定，不能拿宿主本地 ID 直接匹配另一台机器。
+The default revision is 0 and the column IDs are `todo`, `doing`, `review`, `done`. Array order is the manual order; clients group by column, archived state and pinned, keeping the arrays' relative order. Card IDs are stable. Workspace IDs are scoped by the hub to machine, source and source ID; a host's local ID can't be matched directly against another machine.
 
-POST 必须显式给出 `revision`，成功后数据库原子递增并返回完整状态。可用 action 与参数如下：
+POST must give `revision` explicitly; on success the database increments it atomically and returns the full state. Available actions and parameters:
 
-| action | 参数 |
+| action | Parameters |
 | --- | --- |
-| `add_card` | `column_id,machine_id`，另提供 `workspace_id` 或 `cwd`，可选 `title,pinned,archived`；ID 由 hub 生成 |
-| `update_card` | `id`；仅更新给出的 `title,pinned,archived` |
-| `move_card` | `id,column_id,before_id?`；省略 before 放到目标列末尾 |
-| `add_column` | `title`；ID 由 hub 生成 |
+| `add_card` | `column_id,machine_id`, plus `workspace_id` or `cwd`, optional `title,pinned,archived`; the ID is generated by the hub |
+| `update_card` | `id`; updates only the given `title,pinned,archived` |
+| `move_card` | `id,column_id,before_id?`; omitting before puts it at the end of the target column |
+| `add_column` | `title`; the ID is generated by the hub |
 | `update_column` | `id,title` |
-| `move_column` | `id,before_id?`；省略 before 放到末尾 |
-| `delete_column` | `id,move_to?`；含卡片（含归档）时必须提供另一列，不能删除最后一列 |
+| `move_column` | `id,before_id?`; omitting before puts it at the end |
+| `delete_column` | `id,move_to?`; another column is required when it has cards (archived included); the last column can't be deleted |
 
-`add_card` 的工作区必须属于指定机器。hub 重新枚举或核对会话目录，再让 node 以 `workspace.resolve` 验证并解析物理目录；客户端不能写入 `source/source_id/branch`。同一有效机器、同一规范目录只允许一个新绑定，归档也参与判重。路径按远端语法处理（POSIX、Windows 盘符、UNC），不能使用 hub 自己的文件系统解析远端路径。机器 alias 后来被吸收时，仅在响应中投影到当前路由身份，不合并或改写原卡的列与顺序；原始状态继续参与修改和 CAS。
+The workspace in `add_card` must belong to the given machine. The hub re-enumerates or checks the session directories, then has the node verify and resolve the physical directory with `workspace.resolve`; clients can't write `source/source_id/branch`. Only one new binding is allowed per effective machine and canonical directory, with archived cards counted in the duplicate check. Paths are handled in the remote syntax (POSIX, Windows drive letters, UNC); remote paths are never resolved with the hub's own filesystem. When a machine alias is later absorbed, it is only projected onto the current routing identity in responses; the original card's column and order are not merged or rewritten, and the original state still takes part in edits and CAS.
 
-错误：无效 action、路径、引用、重复绑定等返回 400；非 full 写入 403；revision 过期或提交时竞争返回 409 `conflict`；存储不可用返回 503（未实现存储能力时 code 为 `not_supported`）。客户端遇到 409 应先重读，不能自动覆盖最新状态；其他失败恢复上一次确认状态。旧 hub 可返回 404。
+Errors: invalid action, path, reference, duplicate binding etc. return 400; writes by non-full roles 403; a stale revision or a race at commit returns 409 `conflict`; storage unavailable returns 503 (code `not_supported` when the storage capability isn't implemented). On 409 clients should re-read first and never overwrite the latest state automatically; on other failures restore the last confirmed state. Old hubs may return 404.
 
-GET 清单合并宿主空间、当前会话目录和已绑定目录。宿主未知目录可以为空，客户端不能据此绑定；机器离线或枚举失败时使用最后快照，并标记可用性，发现错误放入 `errors`。部分宿主失败不能清空其他宿主的结果。alias 快照按当前有效机器归组，以最新完整快照为准。卡片在工作区消失、机器离线及 hub 重启后保留。
+The GET list merges host spaces, current session directories and bound directories. A host's unknown directory may be empty, and clients can't bind based on it. When a machine is offline or enumeration fails, the last snapshot is used with availability marked, and discovery errors go into `errors`. One host failing must not clear other hosts' results. Alias snapshots are grouped by the current effective machine, with the latest complete snapshot winning. Cards survive a workspace disappearing, a machine going offline and a hub restart.
 
-Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的物理目录，只用于工作区关联，原始 `cwd` 保持不变。不存在、不可解析或不允许读取的目录可以不返回该字段；旧客户端忽略它，新客户端优先使用它，缺失时回退 `cwd`。该值经过短期缓存，不构成后续文件操作的权限或存在性保证。
+Session gains optional `workspace_cwd`: the physical directory verified by the node with symlinks resolved, used only for workspace association; the original `cwd` stays unchanged. The field may be omitted for directories that don't exist, can't be resolved or can't be read. Old clients ignore it; new clients prefer it and fall back to `cwd` when it's missing. The value is cached briefly and is no guarantee of permission or existence for later file operations.
 
-看板默认关闭（#2475）：`GET /api/v1/workspace-board/settings` 返回 `{enabled,can_write}`，值存在 Postgres 的 `settings` 表（key `workspace_board.settings`，`{"enabled":bool}`），整个 hub 一份，所有浏览器和设备一致。从没设过时，`workspace_board` 的 `revision > 0`（看板被改过）就算打开，否则关闭；推断值不回写，第一次 PUT 才存下。PUT `{enabled}` 仅 `full`，成功后 WS 推送 `{"type":"workspace_board_settings","enabled":bool}`。开关只决定客户端显示不显示：关闭时看板和清单接口照常可用，数据不删。旧 hub 没有这个接口返回 404，客户端按打开处理（旧版本对所有人显示）且不显示开关。
+The board is off by default (#2475): `GET /api/v1/workspace-board/settings` returns `{enabled,can_write}`. The value lives in Postgres's `settings` table (key `workspace_board.settings`, `{"enabled":bool}`), one per hub, the same for all browsers and devices. If it was never set, it counts as on when `workspace_board`'s `revision > 0` (the board has been edited), otherwise off; the inferred value isn't written back, and only the first PUT stores it. PUT `{enabled}` requires `full`; on success WS pushes `{"type":"workspace_board_settings","enabled":bool}`. The toggle only decides whether clients show it: when off, the board and list APIs still work and no data is deleted. Old hubs without this API return 404; clients then treat it as on (the old version showed it to everyone) and hide the toggle.
 
-移动、归档等看板修改不调用 Agent 或 Git 操作。成功后 WS 推送 `{"type":"workspace_board","revision":<新版本>}`，客户端据此重读。网页还在看板可见期间每 10 秒刷新发现，回到前台时立即刷新，以补足目录和连接状态变化。
+Board edits such as move and archive don't trigger Agent or Git operations. On success WS pushes `{"type":"workspace_board","revision":<new version>}`, and clients re-read. While the board is visible the web client also refreshes discovery every 10 seconds, and immediately when it comes back to the foreground, to catch changes in directories and connection state.
 
-## 主对话就绪度（`assistant_readiness`，#3710）
+## Main chat readiness (`assistant_readiness`, #3710)
 
-主对话现在能不能用、缺哪一步，由 hub 算好给四端（设计见新用户上手的方案第 4.4、5.1 节）。助手服务回答（经「转发 App 的请求」），只给 `full` 设备；助手没连着时和其他助手接口一样 503 `assistant_offline`；老 hub 404，客户端退回现在的行为。
+Whether the main chat works right now and which step is missing is computed by the hub for all four clients (design: new-user onboarding plan sections 4.4, 5.1). The assistant service answers (via "Forwarding App requests"), for `full` devices only. When the assistant isn't connected it returns 503 `assistant_offline` like the other assistant APIs; old hubs return 404 and clients fall back to the current behavior.
 
 ```
 GET  /api/v1/assistant/readiness            → Readiness
-GET  /api/v1/assistant/readiness?probe=1    → Readiness，另外真跑一次一词检查（花钱；同一台电脑、同一启动器 30 秒内再调直接回上次结果，同一时间只跑一个）
-POST /api/v1/assistant/readiness/dismiss    {"dismissed": true}  →  {"ok": true}（空 body 等于 true；false 撤销）
-POST /api/v1/assistant/warm                 → {"ok": true, "readiness"?: Readiness}（同一结构，不 probe；2.5 秒内算不完时回上一次记下的，从没记过就不带）
+GET  /api/v1/assistant/readiness?probe=1    → Readiness, plus an actual one-word check (costs money; calls for the same computer and launcher within 30 seconds return the last result, and only one runs at a time)
+POST /api/v1/assistant/readiness/dismiss    {"dismissed": true}  →  {"ok": true} (an empty body equals true; false undoes it)
+POST /api/v1/assistant/warm                 → {"ok": true, "readiness"?: Readiness} (same structure, no probe; if it can't finish within 2.5 seconds it returns the last recorded one, omitted if none was ever recorded)
 ```
 
 ```jsonc
 {
   "version": 1,
-  "mode": "setup",                 // full / setup；chat_only 留给 P1，现在不出
+  "mode": "setup",                 // full / setup; chat_only is reserved for P1 and not produced yet
   "ready": false,                  // mode == "full"
-  "next": "model",                 // 第一个不是 ok / skipped 的步骤；都好了为 null
-  "machine": {"id": "mbp", "name": "小林的 MacBook"},   // 主对话的电脑；没有时 null
-  "launcher": "claude",            // 生效的启动器（模型配置 › 主对话 优先）
+  "next": "model",                 // the first step that isn't ok / skipped; null when all are fine
+  "machine": {"id": "mbp", "name": "Lin's MacBook"},   // the main chat's computer; null if none
+  "launcher": "claude",            // the effective launcher (Model configuration › Main chat takes precedence)
   "steps": [
     {"id": "computer", "state": "ok", "machine": "mbp"},
     {"id": "claude", "state": "ok", "version": "2.1.308"},
     {"id": "model", "state": "problem", "code": "not_logged_in", "machine": "mbp", "launcher": "claude",
-     "title": "Claude Code 还没登录", "detail": "在 小林的 MacBook 上登录一次，或者改用 API Key。",
+     "title": "Claude Code isn't signed in", "detail": "Sign in once on Lin's MacBook, or use an API key instead.",
      "action": {"id": "connect_model"}, "alt_actions": [{"id": "login_claude"}]},
-    {"id": "first_message", "state": "todo", "code": "never_tried", "title": "试一句", "detail": "…", "action": {"id": "test_assistant"}}
+    {"id": "first_message", "state": "todo", "code": "never_tried", "title": "Say hello", "detail": "…", "action": {"id": "test_assistant"}}
   ],
-  "suggestions": [{"id": "what_can_you_do", "title": "你能帮我做什么？", "local": true}],
-  "probe": {"ok": false, "agent": "claude", "millis": 2140, "error": "…"},   // 只有 ?probe=1 且电脑 ok 时有
+  "suggestions": [{"id": "what_can_you_do", "title": "What can you do for me?", "local": true}],
+  "probe": {"ok": false, "agent": "claude", "millis": 2140, "error": "…"},   // only with ?probe=1 and the computer ok
   "dismissed": false,
   "checked_at": "2026-11-06T09:00:00Z"
 }
 ```
 
-- `steps` 固定四个、固定顺序：`computer`、`claude`、`model`、`first_message`。`state`：`ok` / `todo` / `problem` / `checking` / `unknown` / `skipped`。`todo` / `problem` 一定带 `code`、`title`、`detail`（按 `Accept-Language`），通常带 `action`；`unknown` 的 `model` 也带（`model_unverified`）。
-- `computer`：没有电脑 `todo` + `no_machine`（`add_computer`）；电脑不在线 `problem` + `node_unreachable`（`wake_computer`）；node 太旧（不认模型配置）`problem` + `node_outdated`（没有按钮）。`machine_pending` 等待确认电脑（5.3）落地后才出。电脑不是 `ok` 时后面三步都是 `unknown`。
-- `claude`：node 自检（`node.doctor` 的 `claude-version`，每台电脑缓存：读到版本 10 分钟，读不到 1 分钟）读到版本为 `ok` + `version`；默认启动器 `claude` 读不到为 `problem` + `claude_missing`（`install_claude`，备选 `connect_model`）；上一次开对话被拒为 `claude_missing` / `launcher_missing`（被拒之后的自检读到版本、或启动器又在这台电脑上了，就不再算），或启动器健康检查的记录说找不到命令时同样；自己的启动器在这台电脑上没有了为 `launcher_missing`（`connect_model`；在 Persona 里加的启动器和讲 Messages 的直连 API 供应商在每台电脑上都算有）；启动器跑的是 Codex 或 runtime 为 `skipped`；老 node 没有自检、自己的启动器读不到版本为 `unknown`；自检这次没来得及答完为 `checking`（GET 最多等 12 秒，warm 等 2 秒，结果照样缓存）。模型答过话时它一定是 `ok`。
-- `model`：取最新的一条证据：最近一次 probe（同一台电脑、同一启动器）、主对话最近一轮（会话的 `turn_error` / `turn_error_code`，或正常答完）、启动器健康检查的记录（6 小时内）。最新的是答上了为 `ok`；是失败且认得出为 `problem` + `not_logged_in`（`connect_model`，备选 `login_claude`）/ `auth_failed`（`edit_provider`）/ `model_route` / `rate_limited`（`connect_model`）；没有证据、或失败认不出原因为 `unknown` + `model_unverified`（`test_assistant`），不算问题。不主动花 token。证据里还有 node 的 `claude.auth_status`（免费，#4048；每台电脑每个启动器缓存：登录了 10 分钟，没登录或没答上（问失败、`timeout`、`unreadable`）1 分钟，老 node 的 `unknown method` 10 分钟）：`not_logged_in` 算失败（`not_logged_in`）；`claude.ai` 登录只在没有别的证据、或最新的一条是 `not_logged_in` 时算答上了，盖不掉认出的 `auth_failed` / `model_route` / `rate_limited`；用 Key、网关令牌、云厂商（`api_key`、`api_key_helper`、`oauth_token`、`third_party`）的不算证据，没有别的证据时 `unknown` 的 `detail` 说「用的是配好的账号或 Key，还没试过」；`unknown` 不算证据。
-- `first_message`：主对话答过一次（记下，之后一直 `ok`；换过主对话也算）为 `ok`；没答过而最近一轮失败为 `problem` + 那一轮的码；否则 `todo` + `never_tried`（`test_assistant`）。它不影响 `mode`。
-- `mode`：`computer`、`claude`、`model` 里有 `todo` 或 `problem` 就是 `setup`，例外是 `rate_limited`（会自己好，`mode` 照样 `full`）；`unknown` / `checking` 不挡。
-- `suggestions`：`setup` 时只有 `local: true` 的两条（`what_can_you_do`、`how_to_connect_model`，客户端打开本地帮助，不发给模型）；`full` 时另有 `largest_folders`、`today`（`needs: ["phone_calendar"]`）、`connect_mail`，带 `prompt`（点了发出去的原话）。
-- `probe` 即 `POST /api/v1/launchers/{name}/check` 在主对话电脑上的 `{ok, agent, model, answer, millis, error}`；电脑没答（离线、超时）时只有 `error`，这种结果不记、不当作模型的证据。
-- 定时任务（#4253）：到点的运行先按同一套规则算一次就绪度（不 probe），这次运行要用的那一步挡着时不发，运行记录 `status: "skipped"`、`error` 是「还没接好电脑或模型，这次跳过」，不推送；「立即运行」和一次性的任务不看（一次性的到点就关，跳过就丢）。
-- 存储：最近一次结果、`dismissed`、最近一次 probe、开对话被拒、主对话答过一次、定时任务在等就绪（`routines_waiting`，#4253），存 Postgres `settings` 的 `assistant.readiness`；结果和上次一样（不算时间）时不写。第一版不推送事件，客户端在进 Persona tab、配对成功、添加 / 确认电脑、保存供应商、收到 `machines` 变化时重拉。
+- `steps` always has four entries in a fixed order: `computer`, `claude`, `model`, `first_message`. `state`: `ok` / `todo` / `problem` / `checking` / `unknown` / `skipped`. `todo` / `problem` always carry `code`, `title`, `detail` (per `Accept-Language`) and usually `action`; `model` in `unknown` carries them too (`model_unverified`).
+- `computer`: no computer is `todo` + `no_machine` (`add_computer`); computer not online is `problem` + `node_unreachable` (`wake_computer`); node too old (doesn't know model configuration) is `problem` + `node_outdated` (no button). `machine_pending` appears only once pending-computer confirmation (5.3) ships. When the computer isn't `ok`, the next three steps are all `unknown`.
+- `claude`: the node self-check (`node.doctor`'s `claude-version`, cached per computer: 10 minutes when a version was read, 1 minute when not) reading a version is `ok` + `version`. The default launcher `claude` not readable is `problem` + `claude_missing` (`install_claude`, alternative `connect_model`). The last chat start being refused gives `claude_missing` / `launcher_missing` (no longer counted once a later self-check reads a version, or the launcher is back on this computer), and the same when the launcher health check's record says the command wasn't found. Your own launcher no longer existing on this computer is `launcher_missing` (`connect_model`; launchers added in Persona and direct API providers speaking Messages count as present on every computer). A launcher running Codex or a runtime is `skipped`. An old node without the self-check, or your own launcher whose version can't be read, is `unknown`. A self-check that didn't finish answering this time is `checking` (GET waits at most 12 seconds, warm 2 seconds; the result is cached either way). Once the model has answered, it is always `ok`.
+- `model`: takes the newest piece of evidence: the latest probe (same computer, same launcher), the main chat's latest turn (the session's `turn_error` / `turn_error_code`, or a normal answer), the launcher health check record (within 6 hours). If the newest is an answer, `ok`; if it's a failure with a recognized cause, `problem` + `not_logged_in` (`connect_model`, alternative `login_claude`) / `auth_failed` (`edit_provider`) / `model_route` / `rate_limited` (`connect_model`); with no evidence, or a failure of unrecognized cause, `unknown` + `model_unverified` (`test_assistant`), which doesn't count as a problem. It never spends tokens on its own. The evidence also includes the node's `claude.auth_status` (free, #4048; cached per computer per launcher: 10 minutes when signed in, 1 minute when not signed in or no answer (the call failed, `timeout`, `unreadable`), 10 minutes for an old node's `unknown method`): `not_logged_in` counts as a failure (`not_logged_in`). A `claude.ai` sign-in counts as an answer only when there's no other evidence or the newest is `not_logged_in`; it can't override a recognized `auth_failed` / `model_route` / `rate_limited`. Keys, gateway tokens and cloud providers (`api_key`, `api_key_helper`, `oauth_token`, `third_party`) don't count as evidence; with no other evidence, the `unknown` `detail` says "uses an account or key it was set up with, not tried yet". `unknown` doesn't count as evidence.
+- `first_message`: `ok` once the main chat has answered (recorded, then always `ok`; a changed main chat counts too); if it never answered and the latest turn failed, `problem` + that turn's code; otherwise `todo` + `never_tried` (`test_assistant`). It doesn't affect `mode`.
+- `mode`: `setup` when any of `computer`, `claude`, `model` is `todo` or `problem`, except `rate_limited` (it recovers by itself, so `mode` stays `full`); `unknown` / `checking` don't block.
+- `suggestions`: in `setup` only the two `local: true` ones (`what_can_you_do`, `how_to_connect_model`; the client opens local help, nothing goes to the model); in `full` also `largest_folders`, `today` (`needs: ["phone_calendar"]`), `connect_mail`, with `prompt` (the exact text sent when tapped).
+- `probe` is `POST /api/v1/launchers/{name}/check`'s `{ok, agent, model, answer, millis, error}` on the main chat's computer. When the computer didn't answer (offline, timeout) only `error` is present; such results are not recorded and not used as model evidence.
+- Scheduled tasks (#4253): a run that comes due first computes readiness with the same rules (no probe). If a step this run needs is blocking, it isn't sent; the run record has `status: "skipped"` and `error` "Your computer or model isn’t set up yet, so this one was skipped", with no push. **Run Now** and one-off tasks don't check (a one-off closes when due, so a skip would lose it).
+- Storage: the latest result, `dismissed`, the latest probe, chat start refusals, the main chat having answered once, and scheduled tasks waiting for readiness (`routines_waiting`, #4253) are stored in Postgres `settings` under `assistant.readiness`; nothing is written when the result is unchanged (ignoring time). The first version pushes no events; clients re-fetch when entering the Persona tab, after pairing succeeds, after adding / confirming a computer, after saving a provider, and on `machines` changes.
 
-## 助手对话的来源（`origin`，#3264）
+## Origin of assistant chats (`origin`, #3264)
 
-助手对话（`assistant: true` 的会话）带 `origin`：这段对话是谁开的。hub 在开对话时记下（助手的 settings `assistant.origins`：会话 id → 来源、`origin_ref`、开始时间），
-经快照（`SessionView.origin` / `origin_ref`）填到发给 App 的会话列表里（`sessions` / `sessions_delta` 推送、`GET /api/v1/sessions`、`GET /api/v1/assistant` 的 `conversations`）。
-来源一旦记下就不变；Agent 会话（`assistant: false`）不带。认这个字段的 hub 在 features 里带 `conversation_origin`。
+Assistant chats (sessions with `assistant: true`) carry `origin`: who opened the chat. The hub records it when the chat is opened (the assistant's settings `assistant.origins`: session id → origin, `origin_ref`, start time),
+and fills it into the session lists sent to the App through the snapshot (`SessionView.origin` / `origin_ref`) (`sessions` / `sessions_delta` pushes, `GET /api/v1/sessions`, `conversations` in `GET /api/v1/assistant`).
+Once recorded, the origin never changes; Agent sessions (`assistant: false`) don't carry it. Hubs that know this field include `conversation_origin` in features.
 
-| `origin` | 谁开的 | `origin_ref` | 侧边栏 |
+| `origin` | Opened by | `origin_ref` | Sidebar |
 | --- | --- | --- | --- |
-| `user`（或不带） | 用户在 App / 网页里新建（含主对话，含在收件箱、飞书会话里点「交给 AI」开的） | — | 最近 |
-| `channel` | 用户在飞书机器人、微信等渠道里 `/new` 开的 | 渠道 id（`feishu`、`wechat`…） | 最近 |
-| `inbox` | 收件箱一件事的处理对话（AI 分身，`docs/inbox.md`） | 收件箱条目 id | 自动 · 收件箱 |
-| `task` | 定时任务和跟进（`schedule_followup`，含 `new_conversation` 的和只推送 `notify_user` 的 `push: "asked"` 任务自己的对话） | 任务 id | 自动 · 定时任务 |
-| `spawned` | 另一段对话用 `conversation_new` 开的 | 开它的那段对话的会话 id | 自动 · 对话派生 |
-| `lark_agent` | 飞书里发 `/agent …`（扩展经 `POST /api/v1/assistant/conversations`，`purpose: "lark.agent"`，`docs/lark-agent.md`） | 扩展 id | 自动 · 飞书 /agent |
-| `extension` | 别的扩展经 `POST /api/v1/assistant/conversations` 开的 | 扩展 id | 自动 · 扩展 |
+| `user` (or absent) | The user creating one in the App / web (including the main chat, and ones opened with **Hand to AI** in the Inbox or a Lark chat) | — | Recent |
+| `channel` | The user sending `/new` in a channel such as the Lark bot or WeChat | Channel id (`feishu`, `wechat`…) | Recent |
+| `inbox` | The handling chat for an Inbox item (AI twin, `docs/inbox.md`) | Inbox item id | Auto · Inbox |
+| `task` | Scheduled tasks and follow-ups (`schedule_followup`, including `new_conversation` ones and the own chats of `notify_user`-only `push: "asked"` tasks) | Task id | Auto · Scheduled Tasks |
+| `spawned` | Opened by another chat with `conversation_new` | Session id of the chat that opened it | Auto · Spawned from Chats |
+| `lark_agent` | Sending `/agent …` in Lark (the extension via `POST /api/v1/assistant/conversations`, `purpose: "lark.agent"`, `docs/lark-agent.md`) | Extension id | Auto · Lark /agent |
+| `extension` | Opened by another extension via `POST /api/v1/assistant/conversations` | Extension id | Auto · Extensions |
 
-- 往已有对话里发东西不开新对话，不是来源：任务续在自己的对话里、安静任务的通知（`task_notice`）进主对话、渠道发给主对话的消息、`conversation_send`。
-- **客户端怎么用**：不带、空、`user`、`channel` 算用户自己的；其余都算自动对话，包括以后加的、客户端不认识的值（显示成「其他」）。旧客户端不认识这个字段，照旧全列。
-- **标题**：自动对话的标题一开始就定（不等第一轮、不调模型），沿用「MMDD | 类型 | 主题」：收件箱 `MMDD | 收件箱 | 那件事的标题`，定时任务 `MMDD | 定时 | 任务名`。
-  `收件箱` 不在模型可选的类型里（只有 hub 用）。其余来源照旧在第一轮后起标题（`docs/assistant.md`「对话标题」）。
-- **老对话的回填**：hub 看到助手那台机器的会话列表时，给还没有来源的助手对话补一笔（`by: "backfill"`）：收件箱条目记着的 AI 分身会话 → `inbox`（顺带补标题）；
-  任务记着的对话（`run_session_id`、运行记录里的会话）、标题是「定时」起的 → `task`；第一条消息是收件箱 AI 分身 / 对话转发 / 定时任务的提示词开头 → 对应的来源；
-  其余 → `user`。可以重复跑：已经记下的不动，`POST /api/v1/assistant/origins/backfill`（只给完整权限的设备；`{"redo":true}` 时连 `by: "backfill"` 的也重新判断）
-  → `{"checked","filled":{"inbox":3,…}}`。
+- Sending into an existing chat doesn't open a new one and isn't an origin: a task continuing in its own chat, quiet-task notifications (`task_notice`) going into the main chat, channel messages to the main chat, `conversation_send`.
+- **How clients use it**: absent, empty, `user` and `channel` count as the user's own; everything else counts as an auto chat, including values added later that the client doesn't know (shown as **Other**). Old clients don't know the field and list everything as before.
+- **Titles**: an auto chat's title is set from the start (no waiting for the first turn, no model call), following "MMDD | kind | topic": Inbox `MMDD | 收件箱 | <the item's title>`, scheduled tasks `MMDD | 定时 | <task name>` (the kind words are emitted in Chinese: 收件箱 = Inbox, 定时 = scheduled).
+  `收件箱` is not among the kinds the model may pick (only the hub uses it). Other origins still get a title after the first turn (`docs/assistant.md` "Chat titles").
+- **Backfilling old chats**: when the hub sees the session list of the assistant's machine, it fills in assistant chats that have no origin yet (`by: "backfill"`): AI twin sessions recorded on Inbox items → `inbox` (filling the title too);
+  chats recorded on tasks (`run_session_id`, sessions in run records) and titles started with `定时` (scheduled) → `task`; a first message starting with the Inbox AI twin / chat-forward / scheduled-task prompt → the matching origin;
+  the rest → `user`. It can run repeatedly: already recorded ones are untouched. `POST /api/v1/assistant/origins/backfill` (full-permission devices only; with `{"redo":true}` it also re-judges `by: "backfill"` ones)
+  → `{"checked","filled":{"inbox":3,…}}`.
 
-### 侧边栏（各端一致）
+### Sidebar (same on every client)
 
-- 「Persona 对话」里的「最近」只列用户自己的对话（上表「最近」那几种）；置顶的照旧列在置顶里，不管来源。
-- 自动对话收成「最近」下面的一行「自动对话 N」（N 是没归档的自动对话数），**默认收起**，展开状态按设备记住。
-  收起时这行右边照样显示状态：有在跑的显示工作中的圆点，有等你的（`state: needs_you`）显示「需要你」的圆点和个数，不会因为折叠就漏掉。
-- 展开后每个来源一行小标签（收件箱 · 定时任务 · 飞书 /agent · 对话派生 · 扩展 · 其他），带个数和同样的状态点，只列有对话的来源；点一行打开「全部对话」，按这个来源筛好。
-- 「全部对话」顶部加来源筛选（全部 · 我的 · 收件箱 · 定时任务 · …），默认「全部」；搜索照旧搜全部对话，不管来源和折叠。
+- **Recent** under **Persona Chats** lists only the user's own chats (the "Recent" kinds in the table above); pinned ones still appear under pinned regardless of origin.
+- Auto chats are collapsed into one row below **Recent**, "Auto Chats N" (N is the number of unarchived auto chats), **collapsed by default**, with the expanded state remembered per device.
+  While collapsed the row still shows status on the right: a working dot when something is running, and a **Needs You** dot with a count when something is waiting for you (`state: needs_you`), so nothing is missed because it's folded.
+- When expanded, each origin gets a row with a small label (Inbox · Scheduled Tasks · Lark /agent · Spawned from Chats · Extensions · Other), with a count and the same status dots; only origins that have chats are listed. Tapping a row opens **All Chats** filtered to that origin.
+- **All Chats** gets an origin filter at the top (All · Mine · Inbox · Scheduled Tasks · …), defaulting to **All**; search still covers all chats regardless of origin and folding.
 
-## 扩展的安装、升级、卸载进度（`extension_operations`，#3277）
+## Extension install, upgrade and uninstall progress (`extension_operations`, #3277)
 
-hub 把每一次安装、升级、卸载记成一个**操作**（operation）：分成几个有名字的步骤，每步有状态，下载那一步带字节数，失败时停在哪一步、为什么都写在里面。操作一变就经 WebSocket 推 `extension_operation`；关掉页面再回来用 `GET /api/v1/extensions/-/operations` 拿到进行中和刚结束的。`hello.features` 带 `extension_operations` 才有这些；没有时客户端照旧用同步的预览 / 安装（下面的老接口不变）。
+The hub records each install, upgrade and uninstall as an **operation**: split into named steps, each with a state; the download step carries byte counts, and on failure it records which step it stopped at and why. Whenever an operation changes, WebSocket pushes `extension_operation`; after closing the page and coming back, `GET /api/v1/extensions/-/operations` returns the ones in progress and just finished. These exist only when `hello.features` carries `extension_operations`; otherwise clients keep using the synchronous preview / install (the old APIs below are unchanged).
 
-### 操作（`ExtensionOperation`）
+### Operation (`ExtensionOperation`)
 
 ```json
 {
-  "id": "3f9c…",                 // 操作 id
+  "id": "3f9c…",                 // operation id
   "kind": "install",             // install | upgrade | uninstall
-  "extension": "larkext",        // 扩展 id（预览前只知道市场里的 id）
-  "name": "飞书",                // 给人看的名字，知道了才有
-  "market": "c0bbc68b20",        // 从哪个市场来，可选
-  "source": "market:c0bbc68b20/larkext", // 安装来源（同扩展的 origin），可选
-  "version": "0.11.1",           // 要装的版本，知道了才有
-  "from": "0.10.0",              // 升级前的版本，只有 upgrade
-  "actor": "网页",               // 谁发起的：设备名、personad extension、hub（自动升级）
+  "extension": "larkext",        // extension id (before preview only the market id is known)
+  "name": "Lark",                // human-readable name, only once known
+  "market": "c0bbc68b20",        // which market it comes from, optional
+  "source": "market:c0bbc68b20/larkext", // install source (same as the extension's origin), optional
+  "version": "0.11.1",           // version to install, only once known
+  "from": "0.10.0",              // version before the upgrade, upgrade only
+  "actor": "Web",                // who started it: device name, personad extension, hub (auto-upgrade)
   "state": "running",            // running | needs_consent | succeeded | failed | canceled
-  "step": "download",            // 正在做（或停在）的步骤 id
+  "step": "download",            // the step id in progress (or stopped at)
   "steps": [
     {"id": "download", "state": "running", "bytes": 5242880, "total": 17302381, "started_at": "…"},
     {"id": "verify", "state": "pending"},
     {"id": "unpack", "state": "pending"}
   ],
-  "error": "下载卡住了：30 秒没有收到数据",  // 失败时，按发起请求的语言
-  "error_code": "download_stalled", // 失败时，可选，见下
-  "preview_id": "…",             // needs_consent 时：要用户同意的那份预览
-  "retryable": true,             // 失败后能不能 POST …/retry
+  "error": "Download stalled: no data received for 30 seconds",  // on failure, in the language of the request that started it
+  "error_code": "download_stalled", // on failure, optional, see below
+  "preview_id": "…",             // when needs_consent: the preview the user must agree to
+  "retryable": true,             // whether POST …/retry is possible after failure
   "started_at": "…", "updated_at": "…", "ended_at": "…"
 }
 ```
 
-- 步骤的 `state`：`pending`（还没到）、`running`、`done`、`failed`、`skipped`（这次用不着，如本地目录装的没有 `download`）。`state` 是 `done` 的 `download` 带 `cached: true` 表示包是本机缓存里的、没再下载。
-- `bytes` / `total` 只有 `download` 有：`total` 是索引写的大小或响应的 Content-Length，不知道时没有（画不确定的进度条）。别的步骤没有百分比。
-- 步骤 id（按顺序；没用到的是 `skipped`，客户端不认识的 id 原样显示，不出错）：
+- Step `state`: `pending` (not reached yet), `running`, `done`, `failed`, `skipped` (not needed this time, e.g. no `download` when installing from a local directory). A `download` in `done` with `cached: true` means the package came from the local cache and wasn't downloaded again.
+- `bytes` / `total` exist only on `download`: `total` is the size written in the index or the response's Content-Length, absent when unknown (draw an indeterminate progress bar). Other steps have no percentage.
+- Step ids (in order; unused ones are `skipped`; clients show ids they don't know as-is, without erroring):
 
-| kind | 步骤 |
+| kind | Steps |
 | --- | --- |
-| install / upgrade | `download`（下载包）→ `verify`（核对 sha256 和市场索引）→ `unpack`（解包）→ `check`（清单、权限、依赖、冲突；合集和缺的依赖一起预览）→ `consent`（等用户同意）→ `tools`（安装清单 `tools` 里的命令行程序，#4507）→ `install`（放进 installed/、写库）→ `start`（启动并等到它起来）→ `nodes`（把它在电脑上的程序发到各台电脑，只有带 `node` 段的） |
-| uninstall | `stop`（停下它）→ `remove`（删文件和记录）→ `nodes`（各台电脑上停掉、删掉它的程序，只有带 `node` 段的） |
+| install / upgrade | `download` (download the package) → `verify` (check sha256 and the market index) → `unpack` (unpack) → `check` (manifest, permissions, dependencies, conflicts; bundles and missing dependencies are previewed together) → `consent` (wait for the user to agree) → `tools` (install the command-line programs in the manifest's `tools`, #4507) → `install` (put into installed/, write to the database) → `start` (start it and wait until it's up) → `nodes` (send its computer-side program to each computer, only for ones with a `node` section) |
+| uninstall | `stop` (stop it) → `remove` (delete files and records) → `nodes` (stop and delete its program on each computer, only for ones with a `node` section) |
 
-- `consent` 是 `running` 时操作的 `state` 是 `needs_consent`：带 `preview_id`，客户端 `GET …/operations/{id}` 拿到完整预览（同 `catalog/preview` 的回答）给用户看，同意了照旧 `POST /-/install`（或 `/{id}/-/upgrade`）带这个 `preview_id`，hub 接着这个操作往下走；不同意 `DELETE …/operations/{id}`。预览过期（`expires_at`）操作就变成 `canceled`。不用用户同意的升级（自动升级、权限没变多的）这一步是 `skipped`。
-- `start`：没有程序的扩展（只有声明）、按需启动的（第一次被调才起）立刻 `done`；等到 `running` 才 `done`，起不来是 `failed`（升级会回滚到原来的版本，`error` 写明）。最多等 `host.ReadyWithin` 加 5 秒。
-- `tools`：没有 `tools` 的扩展 `skipped`；全部复用、或同一规格装过的立刻 `done`。步骤带 `tools: [{"name", "state", "reused"?}]`（`state`：`pending` / `running` / `done` / `failed`，按安装顺序），`bytes` / `total` 是正在下的那一个（`total` 常常不知道）。失败时什么都没装上，`error_code` 是 `tools_failed`，`error` 写哪个程序、为什么，见 [extensions.md](extensions.md)「命令行程序（tools）」。
-- `next`：操作 `succeeded` 时，扩展有 `auth` 又没登录（`signed_out` / `expired`），操作带 `"next": "auth"`：客户端打开扩展详情的登录（[extensions.md](extensions.md)「登录（auth）」）。
-- `nodes`：等每台在线的电脑同步完（离线的不等，上线时 hub 照旧补发），步骤带 `machines: {"done": 1, "total": 2}`；某台失败不算整个操作失败，那台的原因在 `machines.errors`（`{"<机器 id>": "…"}`）。
-- `error_code`：`download_stalled`（下载 30 秒没有收到数据）、`download_failed`、`checksum_mismatch`、`invalid_package`、`tools_failed`、`needs_consent`（同意的不是这份）、`start_failed`、`rolled_back`、`uninstall_failed`；不认识的按 `error` 显示。
-- 操作只在 hub 的内存里：进行中和结束后 10 分钟内的列得出来，hub 重启后就没了（重启前没装完的照常没装上，再装一次即可）。
+- While `consent` is `running`, the operation's `state` is `needs_consent`: it carries `preview_id`, and the client `GET …/operations/{id}` gets the full preview (same as the `catalog/preview` answer) to show the user. On agreement, `POST /-/install` (or `/{id}/-/upgrade`) with this `preview_id` as before, and the hub continues this operation; on refusal, `DELETE …/operations/{id}`. If the preview expires (`expires_at`) the operation becomes `canceled`. Upgrades that need no user consent (auto-upgrades, ones whose permissions didn't grow) have this step `skipped`.
+- `start`: extensions with no program (declarations only) and on-demand ones (started on first call) are `done` immediately; otherwise it's `done` once `running`, and `failed` if it can't start (an upgrade rolls back to the original version, stated in `error`). It waits at most `host.ReadyWithin` plus 5 seconds.
+- `tools`: `skipped` for extensions without `tools`; `done` immediately when everything is reused or the same spec was installed before. The step carries `tools: [{"name", "state", "reused"?}]` (`state`: `pending` / `running` / `done` / `failed`, in install order), and `bytes` / `total` are for the one being downloaded (`total` is often unknown). On failure nothing is installed, `error_code` is `tools_failed`, and `error` says which program and why; see [extensions.md](extensions.md) ("Command-line programs (tools)").
+- `next`: when the operation `succeeded` and the extension has `auth` but isn't signed in (`signed_out` / `expired`), the operation carries `"next": "auth"`: the client opens sign-in in the extension details ([extensions.md](extensions.md) "Sign-in (auth)").
+- `nodes`: waits for every online computer to finish syncing (offline ones aren't waited for; the hub sends to them when they come online, as before). The step carries `machines: {"done": 1, "total": 2}`; one computer failing doesn't fail the whole operation, and its reason is in `machines.errors` (`{"<machine id>": "…"}`).
+- `error_code`: `download_stalled` (no data received for 30 seconds during download), `download_failed`, `checksum_mismatch`, `invalid_package`, `tools_failed`, `needs_consent` (what was agreed to isn't this preview), `start_failed`, `rolled_back`, `uninstall_failed`; unknown ones are shown via `error`.
+- Operations live only in the hub's memory: ones in progress and those finished within the last 10 minutes are listed, and they're gone after a hub restart (an install unfinished before the restart is simply not installed; install again).
 
-### 接口
+### Endpoints
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 | --- | --- | --- |
-| POST | `/api/v1/extensions/-/catalog/preview`、`/api/v1/extensions/-/preview` | 原样；body 加 `"async": true` 时马上回 202 `{"operation": …}`，下载、检查在后台做，做完操作停在 `needs_consent`（或 `failed`）。不带 `async` 的同步回答照旧，多一个 `operation_id` |
-| POST | `/api/v1/extensions/-/install`、`/api/v1/extensions/{id}/-/upgrade` | 原样；body 加 `"async": true` 时回 202 `{"operation": …}`，`install` / `start` / `nodes` 在后台做。同步的照旧在装好后回扩展详情（多一个 `operation_id`），不等 `start` 和 `nodes` |
-| DELETE | `/api/v1/extensions/{id}/-/` | 原样；查询串加 `async=1` 时回 202 `{"operation": …}` |
-| GET | `/api/v1/extensions/-/operations` | `{"operations": [ExtensionOperation…]}`：进行中、等同意的和 10 分钟内结束的，新的在前 |
-| GET | `/api/v1/extensions/-/operations/{id}` | 一个操作；`needs_consent` 时多一个 `preview`（完整预览）。没有或过期 404 |
-| POST | `/api/v1/extensions/-/operations/{id}/retry` | 失败的操作从头再来一次，回 202 `{"operation": 新操作}`。下载过的包在缓存里，`download` 立刻 `done`（`cached`）；失败在 `consent` 之后、新预览的权限摘要和用户同意的一样时不再问，直接接着装 |
-| DELETE | `/api/v1/extensions/-/operations/{id}` | 取消：下载、检查中的（异步发起的）停下来，等同意的丢掉预览，操作变成 `canceled`；结束了的从列表里去掉；`install` 开始后不能取消（409 `cannot_cancel`） |
+| POST | `/api/v1/extensions/-/catalog/preview`, `/api/v1/extensions/-/preview` | Unchanged; with `"async": true` in the body it returns 202 `{"operation": …}` right away, downloads and checks in the background, and the operation stops at `needs_consent` (or `failed`) when done. Without `async` the synchronous response is as before, plus an `operation_id` |
+| POST | `/api/v1/extensions/-/install`, `/api/v1/extensions/{id}/-/upgrade` | Unchanged; with `"async": true` in the body it returns 202 `{"operation": …}` and runs `install` / `start` / `nodes` in the background. The synchronous form still returns the extension details once installed (plus an `operation_id`), without waiting for `start` and `nodes` |
+| DELETE | `/api/v1/extensions/{id}/-/` | Unchanged; with `async=1` in the query string it returns 202 `{"operation": …}` |
+| GET | `/api/v1/extensions/-/operations` | `{"operations": [ExtensionOperation…]}`: in progress, waiting for consent, and finished within the last 10 minutes, newest first |
+| GET | `/api/v1/extensions/-/operations/{id}` | One operation; in `needs_consent` it also has `preview` (the full preview). 404 if missing or expired |
+| POST | `/api/v1/extensions/-/operations/{id}/retry` | Runs a failed operation again from the start and returns 202 `{"operation": new operation}`. A package already downloaded is in the cache, so `download` is `done` immediately (`cached`); if it failed after `consent` and the new preview's permission digest matches what the user agreed to, it does not ask again and goes straight on to install |
+| DELETE | `/api/v1/extensions/-/operations/{id}` | Cancel: a download or check in progress (started async) stops, one waiting for consent drops its preview, and the operation becomes `canceled`; a finished one is removed from the list; once `install` has started it cannot be canceled (409 `cannot_cancel`) |
 
-权限同发起它的接口：能预览 / 安装的设备才能列、看、重试、取消操作（完整权限的设备装市场里的扩展，其余来源只认主 token 经回环）。
+Permissions follow the endpoint that started the operation: only a device that can preview / install can list, view, retry and cancel operations (a full-access device installs extensions from a market; every other source only accepts the main token over loopback).
 
-### 事件
+### Events
 
-`{"type": "extension_operation", "operation": ExtensionOperation}`：步骤变了就推；下载中最多每秒一条，不带 `preview`。只推给在 WebSocket 的 `?features=` 或 `client_hello.features` 里声明了 `extension_operations` 的连接，也不进事件日志（`event_seq` 续传补不回来）：重连后 `GET …/operations` 重新拿一次。旧客户端收不到，只认 `extension_upgrade` 的照旧能收到自动升级的结果。
+`{"type": "extension_operation", "operation": ExtensionOperation}`: pushed whenever the step changes; at most one per second while downloading, without `preview`. Only pushed to connections that declared `extension_operations` in the WebSocket `?features=` or `client_hello.features`, and not written to the event log (`event_seq` resume cannot fill it in): after reconnecting, `GET …/operations` once more. Old clients don't receive it; those that only know `extension_upgrade` still get the result of automatic upgrades.
 
-### 客户端怎么用
+### How clients use it
 
-0. 连 WebSocket 时在 `?features=`（或 `client_hello.features`）里带上 `extension_operations`。
-1. 点「安装」：`POST …/catalog/preview {"market", "extension", "async": true}`，拿到操作，画步骤列表；之后只听 `extension_operation`（按 `id` 替换）。
-2. `needs_consent`：`GET …/operations/{id}` 拿 `preview`，弹出原来的权限确认；同意就 `POST /-/install {"preview_id", "permissions_digest", "bundle", "async": true}`。
-3. `succeeded`：刷新扩展列表；`failed`：在失败的那一步旁边显示 `error`，`retryable` 时给「重试」（`POST …/retry`）。
-4. 打开扩展页（或重连）时 `GET …/operations`，把进行中的接着画出来。
+0. When connecting the WebSocket, include `extension_operations` in `?features=` (or `client_hello.features`).
+1. Tap **Install**: `POST …/catalog/preview {"market", "extension", "async": true}`, get the operation and draw the step list; from then on just listen to `extension_operation` (replace by `id`).
+2. `needs_consent`: `GET …/operations/{id}` to get `preview`, show the existing permission confirmation; if the user agrees, `POST /-/install {"preview_id", "permissions_digest", "bundle", "async": true}`.
+3. `succeeded`: refresh the extension list; `failed`: show `error` next to the step that failed, and when `retryable` offer **Retry** (`POST …/retry`).
+4. When opening the extensions page (or reconnecting), `GET …/operations` and keep drawing the ones in progress.
 
-## REST（App → hub）
+## REST (App → hub)
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/api/v1/machines` | `{"machines":[Machine]}` |
-| GET | `/api/v1/workspace-board` | `{revision,columns,cards,can_write}`，完整工作流看板；`answer` 可读，见「工作区看板」 |
-| POST | `/api/v1/workspace-board` | `{revision,action,...}` → 更新后的完整看板；仅 `full`，过期版本 409 `conflict` |
-| GET | `/api/v1/workspace-board/settings` | `{enabled,can_write}`：看板的开关（#2475），整个 hub 一份；没设过时按看板是否改过推断，见「工作区看板」 |
-| PUT | `/api/v1/workspace-board/settings` | `{enabled}` → `{enabled,can_write}`；仅 `full`，缺 `enabled` 返回 400 |
-| GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`；独立于 Agent 的工作区发现，失败保留历史信息，`answer` 可读 |
-| POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
-| POST | `/api/v1/machines/{id}/confirm` · `…/reject` | 确认 / 拒绝一台待确认的电脑（feature `machine_trust`，下面「电脑的信任」），只认已登录的 full 设备和主 token（配对码换来的临时身份 403）→ `{"ok":true}`。confirm：已经确认的再确认也是 200，没有这台 404；reject 只对待确认的（已确认的 409 `not_pending`，没有这台 404） |
-| GET | `/api/v1/machines/{mid}/panes` | 终端浏览器的树（feature `terminal_panes`，仅 `full`）：`{hosts:[{kind, stream, control, new_tab, workspaces:[{id,label,number?,cwd?,branch?}], tabs:[{id,workspace_id,label,number?}], panes:[{pane, terminal, tab_id, workspace_id, agent?, status?, title?, cwd?, session_id?}]}]}`；包括没有 Agent 的 shell 窗格。`terminal` 是终端流用的地址 `pane:<pane>`，`session_id` 是跑在那个窗格里的 Agent 会话（有就用它开终端） |
-| POST | `/api/v1/machines/{mid}/panes` | `{workspace_id, kind?}`：在这个空间新开一个 shell 标签页（不抢电脑上的焦点，目录是空间自己的，请求不能指定）→ `{pane, terminal, tab_id}`；仅 `full`，只有用户点了才调用 |
-| POST | `/api/v1/machines/{mid}/panes/close` · `…/panes/split` · `…/panes/agent` · `…/panes/git` · `…/tabs/close` · `…/tabs/rename` | 终端节点菜单的动作（`docs/terminal.md` 第二十一节），仅 `full`：`{pane}` 关窗格；`{pane, direction: right\|down}` 拆分 → `{pane, terminal}`；`{pane, launcher}` 在 shell 窗格里启动 Agent → `{session_id}`；`{op: pull\|push\|fetch, pane \| workspace_id+kind?}` → `{op, message, output?}`；`{tab_id, kind?}` 关标签页；`{tab_id, label, kind?}` 改标签页名。只认这些字段，不能指定目录或命令 |
-| GET · POST | `/api/v1/machines/{mid}/doctor` · `…/doctor/fix` | 机器页「这台电脑能做什么」（#2429，`docs/machines.md`「自检」），仅 `full`：GET 只读，回 `personad node doctor --json` 的报告 `{ok, dir, checks:[{name, status: ok\|warn\|fail, state, detail, hint, items}], fixed}`；POST 重写 Persona 自己生成的文件（和 `--fix` 同一条路径）再检查，回新的报告。旧 node 回 502 `unknown method node.doctor` |
-| POST | `/api/v1/machines/{mid}/worktree/prepare` · `…/worktree/create` | #2431 新建 worktree…（`docs/terminal.md` 第二十三节），仅 `full`：`{workspace_id, kind?}` → `{root, repoName, branch, path}`（仓库顶层、仓库名、工作区当前分支、herdr 放这个仓库检出的目录）；`{workspace_id, branch, path, kind?}` → `{workspace_id, tab_id?, pane?, terminal?, path, branch}`：分支已有就检出，否则从工作区的 HEAD 新建，作为 herdr 工作区打开；路径必须是绝对路径、不存在或是空目录；不强制、不删除。`panes` 的每个宿主多一个 `worktree` 布尔值 |
-| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"\|"paseo"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
-| GET / PUT | `/api/v1/machines/{mid}/botmux` | PUT `{"on":bool}` → 200 `{"on"}`；GET 同样回 `{"on"}`。「同时显示 botmux 会话」：按机器存，没设过用 hub.json 的 `machines[].botmux`，再没有就是开；离线也能改，PUT 后马上发 `node.configure {"botmux"}`。缺 `on` 400（#2575） |
-| GET / PUT | `/api/v1/machines/{mid}/herdr` | 「设置 › 机器 › 引擎」的「需要时自动启动 herdr」：GET → `{autostart, running, known, installing?, install_error?}`（`known` 是 node 能不能判断 herdr 在不在跑），机器在线且上次问过已超 3 秒时先问 node 的 `herdr.server.status`；PUT `{"autostart": bool}` 改开关，回同 GET：缺 `autostart` 400，引擎不是 `herdr` / `herdr-both` 404，存不下 500（[engines.md](engines.md)「herdr 没在运行时」） |
-| POST | `/api/v1/machines/{mid}/herdr/start` | Agents 列表「herdr 没在运行」旁的「启动」：node 的 `herdr.server.start`（最多等 40 秒）→ `{autostart, running, known: true}`；node 太旧或调用出错 502（下面「引擎」） |
-| GET | `/api/v1/machines/{mid}/computer` | 这台 Mac 现在有没有 Cua Driver、能不能被助手操控（hub 当场问 node 的 `computer.status`）→ 200 `Computer`（`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`，[computer-use.md](computer-use.md)）；插件 `cua` 没开、或不是 Mac → 404 |
-| PUT | `/api/v1/machines/{mid}/computer` | `{"enabled": bool}`：机器页「允许助手操控这台电脑」开关，写进插件 `cua` 配置里的 `machines` → 200 `Computer`；插件没开、不是 Mac → 404。改完照常推 `machines` |
-| POST | `/api/v1/machines/{mid}/computer/{install\|grant\|cancel}` | 机器页的「安装 Cua Driver」「去授权」「取消」：node 在后台跑（`computer.install` / `computer.grant` / `computer.cancel`），→ 200 `Computer`，进度在它的 `job`（`{kind, state: running\|done\|failed\|cancelled, step?, error?, started}`），页面接着 GET。插件没对这台打开 404；离线、已有任务、node 太旧 409 |
-| GET / DELETE | `/api/v1/machines/{mid}/computer/apps`、`…/computer/apps/{bundle}` | 机器页「已允许助手操作的 App」：GET → `{"apps":[{bundle_id, name, at}]}`；DELETE 按 bundle id 移除（下次再问），回剩下的列表；存不下 500（[computer-use.md](computer-use.md)「按 App 批准」） |
-| GET / POST | `/api/v1/machines/{mid}/computer/clipboard` | 这台 Mac 的剪贴板（App 看屏幕时用，#1343）：GET → `{"text"}`（超过 1 MiB 的截掉）；POST `{"text"}` 放进去，成功回 `{"text":""}`（不回原文）。经 node 的 `computer.clipboard`（`pbcopy` / `pbpaste`）；插件 `cua` 或 `ego` 没对这台打开 404，离线 409，node 出错（太旧、文字超过 1 MiB、读写失败）也是 409（[computer-use.md](computer-use.md)「App」） |
-| GET / PUT | `/api/v1/machines/{mid}/browser` | 这台 Mac 的 ego lite（插件 `ego`，[plan-ego-browser.md](plan-ego-browser.md)）：GET 当场问 node 的 `browser.status` → `Browser`（`{enabled, installed, version?, set_up, imported, analytics?, ready, note?, screen_sharing, job?}`）；PUT `{"enabled": bool}` 是机器页的开关（插件的 `machines`）。插件没开、不是 Mac → 404 |
-| POST | `/api/v1/machines/{mid}/browser/{install\|open\|cancel}` | 机器页的「安装 ego lite」「打开 ego lite」「取消」：node 在后台跑，进度在 `job`。插件没对这台打开 404；离线、已有任务、node 太旧 409 |
-| GET | `/api/v1/machines/{mid}/launchers?purpose=` | `{"launchers":[Launcher], "default":{provider, model, effort, runtime?}}`：`default` 是「模型配置」里这个用途的生效值（`purpose` 默认 `agent.new`，主对话的选择器传 `assistant`），`provider` 是启动器名，`runtime` 只有 `assistant` 有；客户端显示「默认：…」。不是启动器类的用途 `default` 为 null |
-| GET | `/api/v1/machines/{mid}/launchers/{name}/models?refresh=1` | 这个启动器的 CLI 在 `/model` 里列的模型（新建 Agent 选模型，`docs/model-config.md`「新建 Agent 选模型」）：`{"agent","models":[{"id","name","description"?,"resolved"?,"default"?,"efforts"?,"default_effort"?}],"locked"?}`。`id` 是开始会话时 `model` 填的值；`default` 是不给模型时跑的那个（选它等于不选）；`resolved` 是别名（opus…）按这个启动器的设置对应的模型；`efforts` 是它能用的思考强度，从弱到强；`locked` 是启动器写死了自己的 `--model`、选了也不会生效的原因。没有列表可问的 Agent（TRAEX、runtime 的）回 `models: []`。node 起一次 CLI 去问（几秒），存 10 分钟，`refresh=1` 重新问；列不出来回 502 `{"error"}`；这台电脑的 node 还没有这个功能时回 404 `{"error","code":"node_outdated"}`（和旧 hub 一样，App 不显示模型行） |
-| GET | `/api/v1/model-config/providers/{id}/models?refresh=1&machine=` | 模型配置里启动器类供应商（`launcher.<名字>`）的 `/model` 列表（`docs/model-config.md`「模型配置选模型」）：同上一行的回答，多一个 `machine`（问的是哪台）。在有这个启动器的在线电脑里挑一台：`machine` 指定的、助手所在的、hub 本机、其余的。没有这个供应商、插件 / API 类供应商 404；有它的电脑都不在线 503；node 太旧 404 `node_outdated` |
-| GET | `/api/v1/launchers/presets` | 插件提供的供应商预设 `{"presets":[{id, plugin, name, description?, kind, api?, base_url, model?, small_model?, models?…}]}`（`id` 是 `<扩展>/<供应商>`），新增供应商时「从插件添加」里选；插件问不到时是空列表（[launchers.md](launchers.md)「从插件添加」） |
-| POST | `/api/v1/launchers/test` | 测试连接，不经 node：`{name?, base_url?, auth?, api_key?, headers?, model}` → 总是 200 `{ok, ms, model, error?, code?}`（`code` 目前只有 `region_blocked`：Anthropic 按地区拦下，403 `{"error":{"type":"forbidden","message":"Request not allowed"}}`，换 Key 没用；带 `name` 时没填的取这个已存的供应商的；`base_url` 和存着的不同时不带存着的 Key 和请求头） |
-| POST | `/api/v1/launchers/discover` | 获取模型：同上的请求（不要 `model`）→ 总是 200 `{models:[{id, name?, context_window?…}], error?, code?}`（`code` 同上） |
-| POST | `/api/v1/launchers/{name}/check?machine=` | 测试可用性：真的发一个请求 → `{machine, check:{ok, agent?, model?, answer?, millis, error?}}`；`machine` 不认识时用助手所在的那台，也没有时 400；Persona 管理的 API 类供应商由管理者直接请求，回 `{check}` 不带 `machine`（[launchers.md](launchers.md)「测试可用性」） |
-| POST | `/api/v1/launchers/{name}/restore` | 取消隐藏 `~/.zshrc` 的启动器 → `{"ok":true}` |
-| GET | `/api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度：`{machine, checked_at, quota}`，查不了时 `{machine, checked_at, error, unsupported}`（仍是 200）；那台电脑离线 503，没有这个启动器 502；缓存一分钟，`refresh=1` 重读（[launchers.md](launchers.md)「额度」） |
-| GET | `/api/v1/launchers/health?state=&machine=` | 启动器健康检查的记录 `{"records":[{machine, launcher, agent?, state, kind?, error?, model?, millis?, checked_at, source, fails?, repairs?, repair?, blocked_reason?}]}`，可按状态、电脑筛（[launcher-health.md](launcher-health.md)「给看板的接口」） |
-| POST | `/api/v1/launchers/health/check?machine=&launcher=` | 马上查：不带参数查全部在线电脑，回这次的 `{"records":[…]}`，最多等 10 分钟 |
-| GET | `/api/v1/todos` | 全部待办（新建的在前）：`{"todos":[Todo]}`，每个待办带 `spaces` 和 `agents`（过滤 dismissed，当前的在前按 `linked_at` 降序，然后是参与过的按 `released_at` 降序） |
-| POST | `/api/v1/todos` | 新建待办 `{"title","notes"?}` → 200 `{"todo":Todo}`；`title` 不能为空（400）；只读设备 403 |
-| PATCH | `/api/v1/todos/{id}` | 修改待办 `{"title"?,"notes"?,"done"?}` → 200 `{"todo":Todo}`；`done: true` 标记完成，`false` 重新打开；不存在 404；只读设备 403 |
-| DELETE | `/api/v1/todos/{id}` | 删除待办及关联（Agent 本身不动） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
-| PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → 200 `{"ok":true,"linked":N}`；`space` 为 URL 编码的项目名（通配接住）；已完成 409，不存在 404，只读设备 403 |
-| DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → 200 `{"ok":true}`；不存在 404，只读设备 403 |
-| PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 关联已有 Agent → 200 `{"ok":true}`；同一 Agent 原挂在别处标 released，清掉 dismissed，已完成 409，不存在 404，只读设备 403 |
-| POST | `/api/v1/todos/{id}/retry` | 重试没开起来的任务（#1396）：照计划里的这个任务（机器、目录、提示词、启动器 / 模型、权限、标题）在同一个待办上再开 Agent；待办马上重新打开（`done_at`、`start_error` 清空，`reopened_at` 记下），计划里这个任务的 `error` 清空并推 `task_plan`，Agent 在后台开 → 200 `{"todo":Todo}`。已经在重开或已经开起来了也是 200（原样返回，不再开一次）；再失败照常写回 `done_at` + `start_error`、更新计划的 `error`，不追加第二条回执。目标机器离线 409 `「某电脑」现在离线，等它连上再重试`（待办不变），不是助手派出的任务或不是启动失败（比如手动完成的）409，不存在 404，只读设备 403。**未完成的任务**不重开：有 Agent 停在模型 API 错误上（`turn_error`，#1516）时给它发「继续」，200 原样返回待办，同一次打断连点只发一次；那台电脑离线 409；没有被打断的 Agent（在做、等你……）200 原样返回、什么都不发 |
-| POST | `/api/v1/todos/retitle?dry_run=1` | 把以前按提示词第一行起标题的任务待办改成短标题 → `{"dry_run","todos":[{"id","old_title","new_title"}]}`；`dry_run=1` 只列不改；待办还没加载好 503，只读设备 403（[todos.md](todos.md)「待办标题」） |
-| POST | `/api/v1/todos/{id}/done-check` | 照现在的样子跑一次「自动完成」的判断，不写库 → `{"verdict","reason","would_close","skip","replies","signals"}`；判断失败 502，不存在 404，待办还没加载好 503，只读设备 403（[todos.md](todos.md)「自动完成」） |
-| GET | `/api/v1/todos/{id}/decisions?all=1` | 决策列表 `{"decisions":[Decision]}`，按时间先后；默认只给生效的，`all=1` 连被改判的一起给；不存在 404，hub 没有数据库 503（[todos.md](todos.md)「决策记录」） |
-| POST | `/api/v1/todos/{id}/decisions` | 手动记一条 `{"question","choice","reason"?,"supersedes_id"?}` → `{"decision":Decision}`；问题或选择为空 400，`supersedes_id` 不对 400；待办不存在 404，hub 没有数据库 503；只读设备 403 |
-| PATCH | `/api/v1/todos/{id}/decisions/{did}` | 补标改判 `{"supersedes_id"}`（空字符串撤销；不带 400）→ `{"decision":Decision}`；待办或这条不存在 404，hub 没有数据库 503；只读设备 403 |
-| GET | `/api/v1/task-plans/{id}` | 一个计划（`TaskPlan`，见下面「任务和对话动态」） → 200 `{"plan":TaskPlan}`；不存在 404 |
-| POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
-| POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
-| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | 对话动态：`since`（RFC3339）之后的条目，旧的在前，一次最多 500 → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan},"views":{"view_…":AssistantView},"view_actions":{"<key>":ViewAction},"view_blocks":["<item id>/0"]}`（plans 和 views 是引用对象的当前状态；views、view_actions、view_blocks 总是返回该对话完整快照，不受 since 限制，更新不移动原 feed 位置；view_blocks 只含服务端已注册的正文卡片 key，不重复发送正文） |
-| POST | `/api/v1/assistant/conversations/{id}/views/{key}/actions` | 活卡片或已注册正文卡片的一次 reply（feature `assistant_views`）：请求体 `ViewActionInput` `{action,page?,values?,client_msg_id,confirmed?,expected_version?}` → `{action:ViewAction}`。服务端从保存的 View 取 reply 原文和表单定义，拒绝客户端覆盖和未声明字段（400 `bad_request`）。`expected_version` 是展示／原生确认时整张卡的 `AssistantView.version`（正文卡固定 1），JS 安全正整数；动作带 `confirm` 时必填，缺了 400。不带时只用于没有 confirm 的动作，hub 绑定校验时读到的版本。版本和保存的不同回 409 `view_changed`：`{error,code,version,view?}`（`ViewChangedError`，`version` 是当前版本，`view` 是 `AssistantView` 信封），客户端保留草稿、刷新后让用户重新确认，**不能自动换版本重发**。提交在事务内锁住卡片再比版本，和 `view_update` 并发时只会绑定提交时仍保存着的版本。另一提交 409 `already_answered`，附已有 action；同一 client_msg_id／动作／值／版本重试返回原记录（之前没有记录版本的老记录照旧幂等）。提交与待发送文字一起落库，pending／sent／failed 通过事件和 feed 同步。key 整段 URL 编码（包括 `/` 和 `#`），只读设备 403 `permission_denied`，扩展 token 403 `permission_denied`，`persona_view` 关闭 403 |
-| POST | `/api/v1/assistant/conversations/{id}/views/{key}/html-actions` | HTML 组件的 bridge（feature `assistant_html_bridge`，`persona_view` 和 `html_views` 都开时才有；**不表示任何客户端已能安全执行 HTML**）：请求体 `AssistantHTMLActionInput` `{kind:"reply"\|"open",component_key,page?,expected_version,text?\|url?,client_msg_id,confirmed:true}`。`component_key` 必须是该页（`page` 缺省为根页）保存的 `html` 组件的 `key`，没有 key 的 HTML 没有 bridge；`confirmed` 必须为 `true`（原生确认框里完整展示了 text 或 url）。`reply`：text 1–2000 字，不含控制字符和 `persona-action`，和声明式 reply 共用这张卡唯一的一次选择与 outbox → `{action:ViewAction}`（`kind:"html"`、`action` 为组件 key、`text` 为确认的原文、`version`）；已有任一选择时 409 `already_answered`，同一请求重试返回原记录。发给助手的正文是原文加 `<persona-action view="…" action="<组件 key>">{"html":true,"values":{}}</persona-action>`。`open`：url 按 `CheckAssistantOpen` 校验（https 或支持的 `persona://`）→ `AssistantHTMLOpenResult` `{open,version}`，不锁卡片、不落库；客户端打开前再核对 version，在 App 内打开。版本不同 409 `view_changed`（同上）；缺字段／非法值 400 `bad_request`；只读设备、扩展 token 403 `permission_denied`；任一开关关闭 403 |
-| POST | `/api/v1/assistant/conversations/{id}/today` | 这段对话今天的「今天」卡片：已有就回那张，没有就建一张（`today` 条目，`at` 是用户那天的零点）→ `{"item":FeedItem,"new":bool}`；只读设备 403 |
-| GET | `/api/v1/task-trust` | 「这类以后直接开」记住的几类 → `{"kinds":[{"key","machine","cwd","readonly"}]}` |
-| DELETE | `/api/v1/task-trust?key=` | 忘掉一类（以后又要先给计划）→ `{"ok":true}`；没记过 404；只读设备 403 |
-| POST | `/api/v1/assistant/conversations/{id}/route` | 直接对任务说话 `{"todo_id","text"}`：hub 发给这个任务最要紧的 Agent（等你 > 工作中 > 完成未看 > 最近的），追加 `routed` 条目 → 200 `{"item":FeedItem}`；不是这段对话的任务、没有在跑的 Agent 409；只读设备 403 |
-| DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 移出 Agent（软移出：置 `released_at` 和 `dismissed_at`，接口不再返回该行且不再自动挂回） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
-| GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
-| GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
-| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","agent_type"?,"model"?,"prompt"?,"resume_session_id"?,"workspace_id"?,"permission_mode"?,"effort"?,"tab_name"?,"async"?,"name_hint"?,"todo_id"?}` → `{"session":Session}`。可选 `X-Jarvis-Op-Id` 接入 `start` 持久回执。`model` 可选：新建 Agent 里选的模型（上面 `…/launchers/{name}/models` 的 `id`），只管这一次，盖在「模型配置 › Agents」上（管理者的 `agents.start_params`，见「总线」的「Agents」；它没连着时 hub 等它一会儿，等不到自己套「模型配置 › Agents」，不起标签名）。`todo_id` 可选：新建成功后在同一请求内挂上（不存在 404、已完成 409、只读设备 403）；带 `prompt` 时前面拼上目录所属项目的背景和待办的决策，不带 `prompt`（`async`）时这些拼在这个会话的第一条消息前面（`docs/todos.md`「做完记结论」）。`tab_name` 是 herdr 标签页的名字；不给时管理者用小任务模型按 `prompt` 起一个短英文名（`assistant/agents_start.go`，约 2 秒，失败或管理者没连着就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名。`"async": true`（App 都带）：立刻回会话（新会话 id、目录、启动器，`starting: true`），开标签页、等 Claude 就绪在后台做，见下面「新建会话」；这时 hub 不等起名，标签页先叫 `agent-<n>`，名字出来后再 `session.rename`。`name_hint`：App 把第一条消息当普通消息发（马上上屏）时，用它起名、不进 `prompt` |
-| POST | `/api/v1/tabs/autoname` | `{"dry_run"?,"all"?}` → `{"tabs":[{machine_id,session_id,space,title,from,to,error?}]}`：把在跑的 Agent 里「没人起过名」的标签页（`jarvis`、`jarvis-N`、herdr 的数字、`agent-N`）按会话标题改成短英文名，规则同新建；`dry_run` 只列出会改成什么，`all` 连用户起过名的也改。模型偶尔回空，会再问一次，仍没有就留原名（`error`）。2026-10-31 在两台机器上跑过一次：61 个标签页里改了 39 个，用户自己起的 21 个没动。管理者答（hub 转），它没连着时 503 `assistant_offline` |
-| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条；一轮特别长、往前要解析几十 MB 时这一页会短一些，`has_more: true`，再往前翻接着取；但只要前面还有内容，一页至少带一条，空页加 `has_more: true` 会让 App 没有 seq 可以接着往前取）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页）。带 `fold_work=1` 时从末尾往前的页把工作折叠起来；带 `from_seq=&through_seq=` 时返回这几行的 items（展开折叠用，约 1000 条一页，`more: true` 表示还没到 `through_seq`）。见「折叠的工作」 |
-| GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
-| GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/full` | 一条 item 的全文（`Item`，不带图片、没有 `full_size`；最多 1 MB）：App 点「看全文」时取。node 重新读那一行解析 |
-| POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?,"todo_id"?}`；`todo_id` 可选：发送成功后挂上（不存在 404、已完成 409、只读设备 403），`text` 前面拼上待办的决策；带 `todo_id` 新建、没给 `prompt` 的会话，它的第一条消息（15 分钟内，带不带 `todo_id` 都算）再拼上项目背景（`docs/todos.md`「做完记结论」）；会话 offline 时先用原启动器 `--resume` 拉起；被拒见下面「发消息」 |
-| GET | `/api/v1/sessions/{mid}/{sid}/info` | 会话信息：`{session_id,transcript_path,cwd,model,launcher,git_branch,version,permission_mode,effort,context_tokens,output_tokens,compactions,turns,started_at,last_activity}` |
-| POST | `/api/v1/sessions/{mid}/{sid}/queue` | `{keep:[索引]}`：取回原排队输入并仅保留指定项，返回 `{queue}`，用于编辑或删除；不走 client_ops |
-| POST | `/api/v1/sessions/{mid}/{sid}/seen` | 标记会话已看，返回 `{ok:true}`；WS 也可发 `seen` |
-| POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
+| GET | `/api/v1/workspace-board` | `{revision,columns,cards,can_write}`, the full workflow board; readable by `answer`, see "Workspace board" |
+| POST | `/api/v1/workspace-board` | `{revision,action,...}` → the full updated board; `full` only, a stale revision gets 409 `conflict` |
+| GET | `/api/v1/workspace-board/settings` | `{enabled,can_write}`: the board switch (#2475), one per hub; when never set, inferred from whether the board has been changed, see "Workspace board" |
+| PUT | `/api/v1/workspace-board/settings` | `{enabled}` → `{enabled,can_write}`; `full` only, missing `enabled` returns 400 |
+| GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`; workspace discovery independent of Agents, keeps the last known info on failure, readable by `answer` |
+| POST | `/api/v1/machines/{mid}/reconnect` | Reconnect that machine's node |
+| POST | `/api/v1/machines/{id}/confirm` · `…/reject` | Confirm / reject a computer waiting for confirmation (feature `machine_trust`, "Computer trust" below); only accepts a signed-in full device or the main token (a temporary identity from a pairing code gets 403) → `{"ok":true}`. confirm: confirming an already-confirmed one is also 200, unknown machine 404; reject only works on pending ones (already confirmed 409 `not_pending`, unknown 404) |
+| GET | `/api/v1/machines/{mid}/panes` | The terminal browser tree (feature `terminal_panes`, `full` only): `{hosts:[{kind, stream, control, new_tab, workspaces:[{id,label,number?,cwd?,branch?}], tabs:[{id,workspace_id,label,number?}], panes:[{pane, terminal, tab_id, workspace_id, agent?, status?, title?, cwd?, session_id?}]}]}`; includes shell panes with no Agent. `terminal` is the terminal-stream address `pane:<pane>`, `session_id` is the Agent session running in that pane (use it to open the terminal when present) |
+| POST | `/api/v1/machines/{mid}/panes` | `{workspace_id, kind?}`: open a new shell tab in this space (doesn't steal focus on the computer; the directory is the space's own, the request cannot set it) → `{pane, terminal, tab_id}`; `full` only, called only when the user taps |
+| POST | `/api/v1/machines/{mid}/panes/close` · `…/panes/split` · `…/panes/agent` · `…/panes/git` · `…/tabs/close` · `…/tabs/rename` | Terminal node menu actions (`docs/terminal.md` section 21), `full` only: `{pane}` closes a pane; `{pane, direction: right\|down}` splits → `{pane, terminal}`; `{pane, launcher}` starts an Agent in a shell pane → `{session_id}`; `{op: pull\|push\|fetch, pane \| workspace_id+kind?}` → `{op, message, output?}`; `{tab_id, kind?}` closes a tab; `{tab_id, label, kind?}` renames a tab. Only these fields are accepted; a directory or command cannot be specified |
+| GET · POST | `/api/v1/machines/{mid}/doctor` · `…/doctor/fix` | The machine page's **What This Computer Can Do** (#2429, `docs/machines.md` ("Self-check")), `full` only: GET is read-only and returns the `personad node doctor --json` report `{ok, dir, checks:[{name, status: ok\|warn\|fail, state, detail, hint, items}], fixed}`; POST rewrites the files Persona generated itself (same path as `--fix`), checks again, and returns the new report. An old node returns 502 `unknown method node.doctor` |
+| POST | `/api/v1/machines/{mid}/worktree/prepare` · `…/worktree/create` | #2431 **New Worktree…** (`docs/terminal.md` section 23), `full` only: `{workspace_id, kind?}` → `{root, repoName, branch, path}` (repo top level, repo name, the workspace's current branch, the directory herdr puts checkouts of this repo in); `{workspace_id, branch, path, kind?}` → `{workspace_id, tab_id?, pane?, terminal?, path, branch}`: checks out the branch if it exists, otherwise creates it from the workspace's HEAD, and opens it as a herdr workspace; the path must be absolute and either not exist or be an empty directory; never forces, never deletes. Each host in `panes` gains a `worktree` boolean |
+| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"\|"paseo"}` → 200 with the updated Machine; unknown engine 400 `{"error"}`, unknown machine 404. Works while offline too (stored, takes effect on connect); `machines` is pushed as usual afterwards ("Engine" below) |
+| GET / PUT | `/api/v1/machines/{mid}/botmux` | PUT `{"on":bool}` → 200 `{"on"}`; GET also returns `{"on"}`. **Also Show botmux Sessions**: stored per machine; if never set, uses `machines[].botmux` from hub.json, otherwise on; works while offline, and a PUT sends `node.configure {"botmux"}` right away. Missing `on` 400 (#2575) |
+| GET / PUT | `/api/v1/machines/{mid}/herdr` | "Start herdr automatically when needed" under **Settings › Machines › Engine**: GET → `{autostart, running, known, installing?, install_error?}` (`known` says whether the node can tell if herdr is running); if the machine is online and the last check is more than 3 seconds old, it first asks the node's `herdr.server.status`; PUT `{"autostart": bool}` changes the switch and returns the same as GET: missing `autostart` 400, engine not `herdr` / `herdr-both` 404, can't save 500 ([engines.md](engines.md) "When herdr isn't running") |
+| POST | `/api/v1/machines/{mid}/herdr/start` | The "Start" button next to "herdr isn't running" in the Agents list: the node's `herdr.server.start` (waits up to 40 seconds) → `{autostart, running, known: true}`; node too old or the call fails 502 ("Engine" below) |
+| GET | `/api/v1/machines/{mid}/computer` | Whether this Mac has Cua Driver right now and can be controlled by the assistant (the hub asks the node's `computer.status` on the spot) → 200 `Computer` (`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`, [computer-use.md](computer-use.md)); plugin `cua` not enabled, or not a Mac → 404 |
+| PUT | `/api/v1/machines/{mid}/computer` | `{"enabled": bool}`: the machine page's **Let the Assistant Control This Computer** switch, written to `machines` in the `cua` plugin config → 200 `Computer`; plugin not enabled or not a Mac → 404. `machines` is pushed as usual afterwards |
+| POST | `/api/v1/machines/{mid}/computer/{install\|grant\|cancel}` | The machine page's **Install Cua Driver**, **Grant Access**, **Cancel**: the node runs it in the background (`computer.install` / `computer.grant` / `computer.cancel`), → 200 `Computer`, progress is in its `job` (`{kind, state: running\|done\|failed\|cancelled, step?, error?, started}`), and the page keeps polling with GET. Plugin not enabled for this machine 404; offline, a job already running, or node too old 409 |
+| GET / DELETE | `/api/v1/machines/{mid}/computer/apps`, `…/computer/apps/{bundle}` | The machine page's **Apps Allowed for the Assistant**: GET → `{"apps":[{bundle_id, name, at}]}`; DELETE removes by bundle id (it will ask again next time) and returns the remaining list; can't save 500 ([computer-use.md](computer-use.md) "Approving per app") |
+| GET / POST | `/api/v1/machines/{mid}/computer/clipboard` | This Mac's clipboard (used while the App is viewing the screen, #1343): GET → `{"text"}` (truncated beyond 1 MiB); POST `{"text"}` puts it there and returns `{"text":""}` on success (doesn't echo the text). Goes through the node's `computer.clipboard` (`pbcopy` / `pbpaste`); plugin `cua` or `ego` not enabled for this machine 404, offline 409, and a node error (too old, text over 1 MiB, read/write failure) is also 409 ([computer-use.md](computer-use.md) "App") |
+| GET / PUT | `/api/v1/machines/{mid}/browser` | This Mac's ego lite (plugin `ego`, [plan-ego-browser.md](plan-ego-browser.md)): GET asks the node's `browser.status` on the spot → `Browser` (`{enabled, installed, version?, set_up, imported, analytics?, ready, note?, screen_sharing, job?}`); PUT `{"enabled": bool}` is the machine page's switch (the plugin's `machines`). Plugin not enabled or not a Mac → 404 |
+| POST | `/api/v1/machines/{mid}/browser/{install\|open\|cancel}` | The machine page's **Install ego lite**, **Open ego lite**, **Cancel**: the node runs it in the background, progress is in `job`. Plugin not enabled for this machine 404; offline, a job already running, or node too old 409 |
+| GET | `/api/v1/machines/{mid}/launchers?purpose=` | `{"launchers":[Launcher], "default":{provider, model, effort, runtime?}}`: `default` is the effective value for this purpose in **Model Settings** (`purpose` defaults to `agent.new`; the main chat's picker passes `assistant`), `provider` is the launcher name, and only `assistant` has `runtime`; the client shows "Default: …". For purposes that are not launcher-based, `default` is null |
+| GET | `/api/v1/machines/{mid}/launchers/{name}/models?refresh=1` | The models this launcher's CLI lists in `/model` (choosing a model for a new Agent, `docs/model-config.md` ("Choosing a model for a new Agent")): `{"agent","models":[{"id","name","description"?,"resolved"?,"default"?,"efforts"?,"default_effort"?}],"locked"?}`. `id` is the value to put in `model` when starting a session; `default` is the one that runs when no model is given (picking it is the same as not picking); `resolved` is what an alias (opus…) maps to under this launcher's settings; `efforts` are the reasoning efforts it supports, weakest to strongest; `locked` is the reason the launcher hard-codes its own `--model`, so picking has no effect. Agents with no list to ask (compatible Codex forks, runtime ones) return `models: []`. The node starts the CLI once to ask (a few seconds) and caches for 10 minutes; `refresh=1` asks again; if it can't list them, 502 `{"error"}`; if this computer's node doesn't have the feature yet, 404 `{"error","code":"node_outdated"}` (same as an old hub; the App hides the model row) |
+| GET | `/api/v1/model-config/providers/{id}/models?refresh=1&machine=` | The `/model` list of a launcher-type provider (`launcher.<name>`) in model settings (`docs/model-config.md` ("Choosing a model in model settings")): the same response as the row above, plus `machine` (which one was asked). It picks one of the online computers that have this launcher: the one named by `machine`, the assistant's, the hub's own, then the rest. Unknown provider, or a plugin / API-type provider 404; all computers that have it offline 503; node too old 404 `node_outdated` |
+| GET | `/api/v1/launchers/presets` | Provider presets supplied by plugins `{"presets":[{id, plugin, name, description?, kind, api?, base_url, model?, small_model?, models?…}]}` (`id` is `<extension>/<provider>`), picked under "Add from plugin" when adding a provider; an empty list when plugins can't be reached ([launchers.md](launchers.md) "Add from plugin") |
+| POST | `/api/v1/launchers/test` | Test connection, without going through a node: `{name?, base_url?, auth?, api_key?, headers?, model}` → always 200 `{ok, ms, model, error?, code?}` (`code` is currently only `region_blocked`: Anthropic blocks by region, 403 `{"error":{"type":"forbidden","message":"Request not allowed"}}`, and switching keys won't help; with `name`, unset fields come from that stored provider; if `base_url` differs from the stored one, the stored key and headers are not sent) |
+| POST | `/api/v1/launchers/discover` | Fetch models: same request as above (without `model`) → always 200 `{models:[{id, name?, context_window?…}], error?, code?}` (`code` as above) |
+| POST | `/api/v1/launchers/{name}/check?machine=` | Test availability: actually sends a request → `{machine, check:{ok, agent?, model?, answer?, millis, error?}}`; an unknown `machine` uses the assistant's machine, and 400 if there is none; API-type providers managed by Persona are requested by the manager directly and return `{check}` without `machine` ([launchers.md](launchers.md) "Test availability") |
+| POST | `/api/v1/launchers/{name}/restore` | Unhide a launcher from `~/.zshrc` → `{"ok":true}` |
+| GET | `/api/v1/launchers/{name}/quota?machine=&refresh=1` | Quota: `{machine, checked_at, quota}`, or `{machine, checked_at, error, unsupported}` when it can't be checked (still 200); that computer offline 503, no such launcher 502; cached for one minute, `refresh=1` re-reads ([launchers.md](launchers.md) "Quota") |
+| GET | `/api/v1/launchers/health?state=&machine=` | Launcher health-check records `{"records":[{machine, launcher, agent?, state, kind?, error?, model?, millis?, checked_at, source, fails?, repairs?, repair?, blocked_reason?}]}`, filterable by state and computer ([launcher-health.md](launcher-health.md) "Endpoints for the board") |
+| POST | `/api/v1/launchers/health/check?machine=&launcher=` | Check now: with no parameters checks all online computers, returns this run's `{"records":[…]}`, waits up to 10 minutes |
+| GET | `/api/v1/todos` | All to-dos (newest first): `{"todos":[Todo]}`, each with `spaces` and `agents` (dismissed filtered out; current ones first by `linked_at` descending, then past participants by `released_at` descending) |
+| POST | `/api/v1/todos` | Create a to-do `{"title","notes"?}` → 200 `{"todo":Todo}`; `title` can't be empty (400); read-only device 403 |
+| PATCH | `/api/v1/todos/{id}` | Edit a to-do `{"title"?,"notes"?,"done"?}` → 200 `{"todo":Todo}`; `done: true` marks it done, `false` reopens it; missing 404; read-only device 403 |
+| DELETE | `/api/v1/todos/{id}` | Delete the to-do and its links (the Agents themselves are untouched) → 200 `{"ok":true}`; missing 404; read-only device 403 |
+| PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | Attach a whole workspace project to the to-do → 200 `{"ok":true,"linked":N}`; `space` is the URL-encoded project name (caught by the wildcard); done 409, missing 404, read-only device 403 |
+| DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | Detach the whole group (physically deletes the space-linked Agents for that project under the to-do) → 200 `{"ok":true}`; missing 404, read-only device 403 |
+| PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Link an existing Agent → 200 `{"ok":true}`; if the same Agent was attached elsewhere, that link is marked released; clears dismissed; done 409, missing 404, read-only device 403 |
+| POST | `/api/v1/todos/{id}/retry` | Retry a task that failed to start (#1396): starts an Agent again on the same to-do according to this task in the plan (machine, directory, prompt, launcher / model, permissions, title); the to-do is reopened immediately (`done_at`, `start_error` cleared, `reopened_at` recorded), this task's `error` in the plan is cleared and `task_plan` is pushed, and the Agent starts in the background → 200 `{"todo":Todo}`. Already reopening or already started is also 200 (returned as is, not started again); if it fails again, `done_at` + `start_error` are written back as usual and the plan's `error` is updated, without appending a second receipt. Target machine offline 409 `“{name}” is offline. Try again once it’s connected.` (to-do unchanged); not a task dispatched by the assistant, or not a start failure (e.g. completed manually) 409, missing 404, read-only device 403. **Unfinished tasks** are not restarted: if an Agent is stuck on a model API error (`turn_error`, #1516), it is sent "Continue" and the to-do is returned as is with 200; repeated taps on the same interruption send it only once; that computer offline 409; no interrupted Agent (working, waiting for you…) returns 200 as is and sends nothing |
+| POST | `/api/v1/todos/retitle?dry_run=1` | Rename task to-dos that used to be titled with the prompt's first line to short titles → `{"dry_run","todos":[{"id","old_title","new_title"}]}`; `dry_run=1` lists without changing; to-dos not loaded yet 503, read-only device 403 ([todos.md](todos.md) "To-do titles") |
+| POST | `/api/v1/todos/{id}/done-check` | Run the "auto-complete" judgment once against the current state, without writing to the database → `{"verdict","reason","would_close","skip","replies","signals"}`; judgment failed 502, missing 404, to-dos not loaded yet 503, read-only device 403 ([todos.md](todos.md) "Auto-complete") |
+| GET | `/api/v1/todos/{id}/decisions?all=1` | Decision list `{"decisions":[Decision]}`, in chronological order; by default only those in effect, `all=1` also includes superseded ones; missing 404, hub without a database 503 ([todos.md](todos.md) "Decision log") |
+| POST | `/api/v1/todos/{id}/decisions` | Record one manually `{"question","choice","reason"?,"supersedes_id"?}` → `{"decision":Decision}`; empty question or choice 400, bad `supersedes_id` 400; to-do missing 404, hub without a database 503; read-only device 403 |
+| PATCH | `/api/v1/todos/{id}/decisions/{did}` | Mark it as superseding after the fact `{"supersedes_id"}` (empty string undoes; omitted 400) → `{"decision":Decision}`; to-do or decision missing 404, hub without a database 503; read-only device 403 |
+| GET | `/api/v1/task-plans/{id}` | One plan (`TaskPlan`, see "Tasks and chat feed" below) → 200 `{"plan":TaskPlan}`; missing 404 |
+| POST | `/api/v1/task-plans/{id}/start` | Start a plan `{"tasks"?:[PlanTask],"remember"?:bool}`: `tasks` overrides, by index, the fields the user changed on the card (empty ones unchanged), and `remember` remembers "Start These Directly" for this kind; creates a to-do per task (`origin`, `plan_id`) and starts the Agents in the background → 200 `{"plan":TaskPlan}`; already started or dismissed 409, missing 404, read-only device 403 |
+| POST | `/api/v1/task-plans/{id}/dismiss` | Don't start → 200 `{"plan":TaskPlan}`; already started 409 |
+| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | Chat feed: entries after `since` (RFC3339), oldest first, at most 500 at a time → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan},"views":{"view_…":AssistantView},"view_actions":{"<key>":ViewAction},"view_blocks":["<item id>/0"]}` (plans and views are the current state of referenced objects; views, view_actions and view_blocks are always the full snapshot for the chat, not limited by since, and updates don't move the original feed position; view_blocks only holds the keys of body cards registered on the server, without resending the body) |
+| POST | `/api/v1/assistant/conversations/{id}/views/{key}/actions` | One reply on a live card or a registered body card (feature `assistant_views`): request body `ViewActionInput` `{action,page?,values?,client_msg_id,confirmed?,expected_version?}` → `{action:ViewAction}`. The server takes the reply text and form definition from the saved View and rejects client overrides and undeclared fields (400 `bad_request`). `expected_version` is the whole card's `AssistantView.version` at display / native confirmation time (always 1 for body cards), a JS-safe positive integer; required when the action has `confirm`, 400 if missing. Without it (only for actions without confirm), the version the hub read when validating the binding is used. A version different from the saved one returns 409 `view_changed`: `{error,code,version,view?}` (`ViewChangedError`, `version` is the current version, `view` is the `AssistantView` envelope); the client keeps the draft, refreshes and has the user confirm again, and **must not resend automatically with the new version**. The submission locks the card inside a transaction before comparing versions, so concurrent with `view_update` it can only bind to the version still saved at submit time. Another submission 409 `already_answered`, with the existing action; retrying with the same client_msg_id / action / values / version returns the original record (older records without a version stay idempotent as before). The submission is stored together with the text to send; pending / sent / failed are synced via events and the feed. The key is URL-encoded as a whole (including `/` and `#`); read-only device 403 `permission_denied`, extension token 403 `permission_denied`, `persona_view` off 403 |
+| POST | `/api/v1/assistant/conversations/{id}/views/{key}/html-actions` | Bridge for HTML components (feature `assistant_html_bridge`, present only when both `persona_view` and `html_views` are on; **it does not mean any client can run HTML safely yet**): request body `AssistantHTMLActionInput` `{kind:"reply"\|"open",component_key,page?,expected_version,text?\|url?,client_msg_id,confirmed:true}`. `component_key` must be the `key` of an `html` component saved on that page (`page` defaults to the root page); HTML without a key has no bridge; `confirmed` must be `true` (the native confirmation dialog showed the full text or url). `reply`: text of 1–2000 characters, no control characters and no `persona-action`; it shares the card's single choice and outbox with declarative replies → `{action:ViewAction}` (`kind:"html"`, `action` is the component key, `text` is the confirmed text, `version`); if any choice exists, 409 `already_answered`, and retrying the same request returns the original record. The body sent to the assistant is the text plus `<persona-action view="…" action="<component key>">{"html":true,"values":{}}</persona-action>`. `open`: url validated by `CheckAssistantOpen` (https or a supported `persona://`) → `AssistantHTMLOpenResult` `{open,version}`, doesn't lock the card or store anything; the client re-checks version before opening and opens it in the App. Different version 409 `view_changed` (as above); missing fields / invalid values 400 `bad_request`; read-only device, extension token 403 `permission_denied`; either switch off 403 |
+| POST | `/api/v1/assistant/conversations/{id}/today` | Today's "Today" card for this chat: returns the existing one, or creates one (a `today` entry, `at` is midnight of the user's day) → `{"item":FeedItem,"new":bool}`; read-only device 403 |
+| GET | `/api/v1/task-trust` | Kinds remembered by "Start These Directly" → `{"kinds":[{"key","machine","cwd","readonly"}]}` |
+| DELETE | `/api/v1/task-trust?key=` | Forget a kind (a plan is required first again) → `{"ok":true}`; not remembered 404; read-only device 403 |
+| POST | `/api/v1/assistant/conversations/{id}/route` | Talk to a task directly `{"todo_id","text"}`: the hub sends it to the task's most pressing Agent (waiting for you > working > unread > most recent) and appends a `routed` entry → 200 `{"item":FeedItem}`; not this chat's task, or no running Agent 409; read-only device 403 |
+| DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Remove an Agent (soft removal: sets `released_at` and `dismissed_at`; the row is no longer returned and isn't re-attached automatically) → 200 `{"ok":true}`; missing 404; read-only device 403 |
+| GET | `/api/v1/machines/{mid}/dirs?path=` | Directory browsing: `{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`; with an empty path, entries is home |
+| GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`, including running ones (herdr) and offline sessions from the last 7 days |
+| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","agent_type"?,"model"?,"prompt"?,"resume_session_id"?,"workspace_id"?,"permission_mode"?,"effort"?,"tab_name"?,"async"?,"name_hint"?,"todo_id"?}` → `{"session":Session}`. Optional `X-Jarvis-Op-Id` hooks into the persistent `start` receipt. `model` is optional: the model picked in the new-Agent sheet (the `id` from `…/launchers/{name}/models` above), for this one time only, overriding **Model Settings › Agents** (the manager's `agents.start_params`, see "Agents" under "Bus"; when the manager isn't connected the hub waits for it a while, and if it doesn't come, applies **Model Settings › Agents** itself and doesn't generate a tab name). `todo_id` is optional: attached within the same request after a successful start (missing 404, done 409, read-only device 403); with `prompt`, the background of the project the directory belongs to and the to-do's decisions are prepended to it; without `prompt` (`async`), they're prepended to the session's first message (`docs/todos.md` ("Record the conclusion when done")). `tab_name` is the herdr tab name; if not given, the manager uses the small-task model to make a short English name from `prompt` (`assistant/agents_start.go`, about 2 seconds; if it fails or the manager isn't connected, no name), and the node falls back to `agent-<n>`, adding `-2`, `-3` for duplicates in the same space (`node.tabLabel`). When a new space is created, its first tab also gets this name. The assistant's `agent_start` names tabs automatically the same way. `"async": true` (all Apps send it): returns the session right away (new session id, directory, launcher, `starting: true`) and opens the tab and waits for Claude to be ready in the background, see "New session" below; in this case the hub doesn't wait for naming, the tab is called `agent-<n>` first and `session.rename` follows once the name is ready. `name_hint`: when the App sends the first message as a normal message (so it shows up immediately), it's used for naming and not put into `prompt` |
+| POST | `/api/v1/tabs/autoname` | `{"dry_run"?,"all"?}` → `{"tabs":[{machine_id,session_id,space,title,from,to,error?}]}`: renames tabs of running Agents that "nobody has named" (`jarvis`, `jarvis-N`, herdr's numbers, `agent-N`) to short English names based on the session title, same rules as new sessions; `dry_run` only lists what they'd become, `all` also renames tabs the user named. The model occasionally returns nothing, so it asks once more, and if still nothing keeps the old name (`error`). Run once on 2026-10-31 on two machines: of 61 tabs, 39 were renamed and the user's own 21 were untouched. Answered by the manager (forwarded by the hub); 503 `assistant_offline` when it isn't connected |
+| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | History paging `{"items":[Item],"has_more":bool}` (ascending by seq). `turns`: go back far enough to get N complete "user input + answer" turns; the page always starts with a user input (at most 2000 items; when one turn is very long and going back would mean parsing tens of MB, the page is shorter with `has_more: true`, and paging back continues from there; but as long as there is earlier content, a page contains at least one item, since an empty page with `has_more: true` would leave the App with no seq to page back from); old clients' `limit` still counts items. With `lazy_images=1`, images carry no data (`image: {mime, lazy:true, size, width, height}`) and are fetched when displayed. With `after_seq=N`, returns new content with seq > N (for background sync, about 500 items per page, never splitting the items of one line; `more_after: true` means there's more, fetch again from the last item's seq, or fetch the latest page instead). With `fold_work=1`, pages going back from the end fold the work; with `from_seq=&through_seq=`, returns the items of those lines (for expanding a fold, about 1000 items per page, `more: true` means `through_seq` isn't reached yet). See "Folded work" |
+| GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | The raw bytes of an item's image (Content-Type is the image type, cacheable forever); the item id contains `#` and must be percent-encoded |
+| GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/full` | An item's full text (`Item`, without images and without `full_size`; at most 1 MB): fetched when the App taps "show full text". The node re-reads and parses that line |
+| POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?,"todo_id"?}`; `todo_id` is optional: attached after a successful send (missing 404, done 409, read-only device 403), and the to-do's decisions are prepended to `text`; for a session created with `todo_id` and no `prompt`, its first message (within 15 minutes, with or without `todo_id`) also gets the project background prepended (`docs/todos.md` ("Record the conclusion when done")); if the session is offline, it is first started with the original launcher via `--resume`; for rejections see "Sending messages" below |
+| GET | `/api/v1/sessions/{mid}/{sid}/info` | Session info: `{session_id,transcript_path,cwd,model,launcher,git_branch,version,permission_mode,effort,context_tokens,output_tokens,compactions,turns,started_at,last_activity}` |
+| POST | `/api/v1/sessions/{mid}/{sid}/queue` | `{keep:[indexes]}`: takes back the queued input and keeps only the given items, returns `{queue}`; used for editing or deleting; doesn't go through client_ops |
+| POST | `/api/v1/sessions/{mid}/{sid}/seen` | Mark the session as seen, returns `{ok:true}`; `seen` can also be sent over WS |
+| POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | Send Esc |
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
-| GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}`；`source=recent` 连同窗格滚动缓冲一起读（lines 最多 20000，返回行数少于 lines 说明到头了）；`format=ansi` 带颜色（SGR，行尾 `\r\n`；旧 node 不认，照旧回纯文本） |
-| POST | `/api/v1/sessions/{mid}/{sid}/screen/before` | `{"anchor":["屏幕上最上面几行"],"lines":200,"format"?:"ansi"}` → `{"text","has_more","at_limit"}`：锚点之前的一段滚动历史（按内容定位，锚点按纯文本比；herdr 只保留约 1000 行，`at_limit` 表示到头） |
-| POST | `/api/v1/machines/{mid}/spaces/{wid}/rename` | `{"name"}`：`herdr workspace rename`，并把置顶 / 屏蔽里的「机器/旧名」改成新名 |
-| POST | `/api/v1/sessions/{mid}/{sid}/modes` | `{"permission_mode"?, "effort"?, "model"?}`：改在跑的会话的权限模式 / 思考强度（`effort` 是 `auto` / `low` / `medium` / `high` / `xhigh` / `max`，`auto` 是模型自己的默认档，见 `docs/ios.md`「思考强度和权限模式」）；`model`（#2434）只给 Claude Code 的终端会话：node 往它的输入框打 `/model <id>`（走发消息的那套检查：`dialog_open` / `input_draft` 拒绝，Agent 工作中拒绝，打完读屏确认），id 取自 `GET /machines/{mid}/launchers/{name}/models`，一次请求里先换模型再改其余；会话列表的 `model` 在 transcript 出现新模型前显示这次的选择；会话列表里的 `permission_mode`、`effort` 是当前值。带 `efforts` 的会话（经 app-server 的 Codex）只收 `effort`，取值在 `efforts` 里（「Codex 来源与能力」）。`POST /api/v1/sessions` 和 `POST /api/v1/assistant/conversations` 也收这两个字段，作为启动时的值 |
-| POST | `/api/v1/sessions/{mid}/{sid}/rename` | `{"tab_name"?, "title"?}`：tab 用 `herdr tab rename`；会话名给在跑的 claude 发 `/rename <名字>`（它写 `custom-title`），没在跑就直接往 transcript 追加同样的 `custom-title` 行。助手的对话：`title` 同时记成用户起的标题（hub 的 `assistant.titles`，不再被自动标题覆盖，`docs/assistant.md`「对话标题」）；Codex 的助手对话只记在 hub |
-| GET / PUT | `/api/v1/mutes` | 屏蔽，结构同 pins，另有 `allowed`（空间被屏蔽时单独开启通知的 Agent）。规则：Agent 自己在 sessions 里→屏蔽；在 allowed 里→不屏蔽；否则看它的空间。被屏蔽的 Agent / 空间不推送任何通知（完成、需要你），手机上弱化显示；hub 内存缓存，PUT 时更新 |
-| GET | `/api/v1/hub/update` | hub 的版本和更新状态（`docs/hub-update.md`）：`{version, build, channel, can_update, why_not?, latest?{version, build, released, notes, newer, bad, held?}, state, progress?, busy:[{machine_id, machine, session_id?, title}], error?, auto, auto_notice, last_check?, confirmed}`；`state`：`idle` / `checking` / `available` / `downloading` / `waiting_idle` / `restarting` / `confirming` / `updated` / `rolled_back` / `failed`；`busy` 是重启会打断的（在工作或在等回答的对话、正在重新部署的机器）；`auto_notice`：还没告诉过用户「自动更新已开启」；`latest.held`：更新的这一版自动更新不会装的原因（它的代码不一定包含这个 hub 正在运行的提交，`docs/hub-update.md`「防退回」），手动更新照样可以；Docker 的 hub 另带 `image{name, tag, pinned}`（它跑的镜像，`pinned`：标签是个版本号，要先改 `.env`），`latest` 是 registry 上最新的正式版本（`build` 为 0、没有 `released`），`POST …/check` 去问 registry |
-| POST | `/api/v1/hub/update/check` | 立即检查，回同上 |
-| POST | `/api/v1/hub/update` | `{"now"?: true}` 开始更新：下载、校验、等助手和 Agent 都空闲、替换、重启；`now` 是二级确认后的「现在就更新」，不等空闲。不是发布版（`dev` / `docker`）、没有更新的版本时 409（`error` 说明，Docker 给出 `docker compose pull` 的命令） |
-| PUT | `/api/v1/hub/update/settings` | `{"auto"?: bool, "auto_notice_seen"?: bool}`：自动更新开关（默认开），改了开关也算告诉过了 |
-| GET | `/api/v1/hub/update/history` | `{"history":[{from_version, to_version, to_build, started, ended, result: updated\|rolled_back\|failed\|held, reason?, auto}]}`，新的在前，留 50 条；`held`：更新的版本没有自动装（`reason` 写原因），每个版本记一次 |
-| GET | `/api/v1/skills` | 跑助手那台机器上的 skill（只读）：`{"machine_id","machine","skills":[{"name","description","source":"user\|builtin"}]}`；用户的在那台机器的 `~/.persona/skills/`（`docs/hub-update.md`）。node 太旧（没有 `skills.list`）或不在线时 502 |
-| GET / PUT | `/api/v1/pins` | 开发列表置顶：`{"spaces":["server/app"],"sessions":["server/<session id>"]}`，空间用「机器/空间名」（herdr 重启后 workspace id 会变），存 Postgres settings |
-| GET | `/api/v1/machines/{mid}/file?path=&cwd=&offset=` | 读一个文件（文件查看器，`docs/ios.md`「文件查看器」）：`{"path","name","size","mime","text"\|"data","truncated","offset","next","is_dir","entries"?}`。文本文件每次最多 2 MB，从 `offset` 读起，没读完时停在最后一个完整行的末尾，`next` 是下一页的起点（读完为 0）；二进制文件整个给（上限 2 MB），不能从中间读；目录给前 500 项。`~` 是 home，相对路径在 `cwd` 里；拒绝 iCloud。带 `stream=1`（hub 特性 `file_stream`）时二进制文件只回描述 `{"stream":true,"revision",...}`、不带 `data`，内容走 `/file/download`；`mime` 按固定扩展名表、再按开头字节嗅探（见下面「文件预览」） |
-| GET | `/api/v1/machines/{mid}/file/download?path=&cwd=&inline=` | 完整文件的原始字节，App 用同一 Bearer 鉴权；网页的 `<video>` / `<audio>` / `<img>` 发不了头，用 `?token=`（hub 从不记录查询串）；hub 用 node 的 `file.chunk` 每次最多 1 MiB 读取，单次请求不把整个文件放进内存。支持 HTTP Range / Content-Range（包括文件末尾范围），附带 Content-Length、ETag 和附件文件名；空路径 400、旧 node 409 `node_outdated`，非普通文件、iCloud 和读取错误拒绝。后续块必须匹配首次读取的文件大小和版本，文件中途变更或请求取消就停止下载。旧 `/file` 的 2 MiB 二进制预览行为不变。`inline=1` 只对图片、音视频、PDF 生效（`Content-Disposition: inline`），其余照旧附件；除 PDF 外一律带 `Content-Security-Policy: sandbox` |
-| GET | `/api/v1/machines/{mid}/file/thumb?path=&cwd=&size=` | 文件的缩略图（hub 特性 `file_thumb`，node `file.thumb`）：长边最多 `size` 像素（默认 256，32–1024），不透明的给 JPEG、带透明的给 PNG；`ETag` 是「文件版本-尺寸」，带 `If-None-Match` 回 304，`Cache-Control: private, max-age=86400`。画不了回 404 `no_thumbnail`（客户端显示图标），旧 node 409 `node_outdated` |
-| GET | `/api/v1/machines/{mid}/file/convert?path=&cwd=&to=pdf` | 用那台电脑的 LibreOffice 把文档转成 PDF（hub 特性 `file_convert`，node `file.convert`，网页的 Office 回退，#1345）：回 `{"path","size","mime"}`，`path` 是 node 缓存里的 PDF，再用 `/file/download?path=<它>&inline=1` 读。按文件版本缓存，7 天后清；一次只转一个，90 秒超时；输入先拷成固定文件名、用临时配置目录，不和用户自己开着的 LibreOffice 抢。没装 404 `no_converter`，旧 node 409 `node_outdated` |
-| GET | `/api/v1/machines/{mid}/git/blob?cwd=&path=&rev=` | 文件在某个版本的内容（hub 特性 `git_blob`，node `git.blob`，网页的对比用，#1437）：`rev` 是 `HEAD`、`INDEX`（暂存区）、提交哈希或「哈希^」（它的父提交），`path` 相对仓库根。回 `{"path","size"}`，`path` 是 node 缓存里按 blob id 命名的文件（带原扩展名），再用 `/file/download` 读；那个版本没有这个文件回 `{"missing":true}`。最大 200 MB，7 天清理 |
-| GET / POST / DELETE | `/api/v1/machines/{mid}/browser/cookies` | ego lite 里的登录（插件 ego，#1304，`docs/plan-ego-browser.md`「导入 cookies 做了什么」）：GET 列网站 `{"sites":[{"domain","count","expires"?}]}`（不含名字和值）；POST `{"cookies":[{name,value,domain,path?,expires?,secure?,http_only?,same_site?,host_only?}]}` 导入，回 `imported`、`skipped`；DELETE `?site=a&site=b` 或 `?all=1` 清除，回 `removed`。只认用户自己的设备 token（配对 token 等 403），hub 不保存，目标 Mac 离线 409 |
-| GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 personad 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径、敏感文件（见下）一律 `missing`；一次最多等 3 秒，没答上的（挂住的网络盘）也是 `missing`。手机只给 file / dir / denied 的路径做可点的文件块，网页内联成链接 |
-| GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime","ignored"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud；`ignored`（#2439）：Git 忽略它（node 对这一页名字跑一次 `git check-ignore`，不在仓库里或没有 git 时都不标，不出现这个字段） |
-| GET | `/api/v1/machines/{mid}/fs/find?cwd=&limit=` | 目录下的全部文件（#2438，node `fs.find`，网页 ⌘K 的文件搜索用）：`{"cwd","files":[相对路径,"/" 分隔],"truncated","source":"git"\|"walk"}`。是 git 仓库（含子目录）时用 `git ls-files --cached --others --exclude-standard`（忽略的不列，磁盘上已删的不列），不是就从 `cwd` 广度优先走（不进 `.git`、`node_modules` 和各种缓存目录，不跟软链进目录，5 秒封顶），所以超过上限时留下的是最浅的文件。最多 `limit` 个（默认和上限 5 万），不列敏感路径（同 `fs`，ssh 密钥、hub 的 token 等），iCloud 和敏感目录整个拒绝。node 对同一目录 10 秒内复用结果。权限同 `fs`：只有 full 角色，answer-only 设备（手表）不行 |
-| GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
-| POST | `/api/v1/machines/{mid}/git/pull` | `{"cwd"}` → `{"status": GitStatus, "updated": bool}`；只允许有上游的普通分支与干净工作区，执行 `git pull --ff-only --no-rebase --no-autostash --no-recurse-submodules`。分叉、未提交改动、无上游、认证失败或超时均报错，不自动 stash / 合并 / 变基；pull 命令最多 60 秒，node 总计 75 秒、hub 90 秒。仅 full 角色可调用 |
-| GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
+| GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}`; `source=recent` also reads the pane's scrollback (lines up to 20000; fewer lines returned than requested means it reached the top); `format=ansi` includes colors (SGR, lines end in `\r\n`; old nodes don't understand it and return plain text as before) |
+| POST | `/api/v1/sessions/{mid}/{sid}/screen/before` | `{"anchor":["the top few lines on screen"],"lines":200,"format"?:"ansi"}` → `{"text","has_more","at_limit"}`: a stretch of scrollback before the anchor (located by content, the anchor compared as plain text; herdr keeps only about 1000 lines, `at_limit` means it reached the top) |
+| POST | `/api/v1/machines/{mid}/spaces/{wid}/rename` | `{"name"}`: `herdr workspace rename`, and updates "machine/old name" in pins / mutes to the new name |
+| POST | `/api/v1/sessions/{mid}/{sid}/modes` | `{"permission_mode"?, "effort"?, "model"?}`: change a running session's permission mode / reasoning effort (`effort` is `auto` / `low` / `medium` / `high` / `xhigh` / `max`, `auto` being the model's own default, see `docs/ios.md` ("Reasoning effort and permission mode")); `model` (#2434) is only for Claude Code terminal sessions: the node types `/model <id>` into its input box (with the same checks as sending a message: `dialog_open` / `input_draft` reject, Agent working rejects, and the screen is read afterwards to confirm), the id comes from `GET /machines/{mid}/launchers/{name}/models`, and within one request the model is switched first, then the rest; the session list's `model` shows this choice until a new model appears in the transcript; `permission_mode` and `effort` in the session list are the current values. Sessions with `efforts` (Codex via app-server) only accept `effort`, with values from `efforts` ("Codex sources and capabilities"). `POST /api/v1/sessions` and `POST /api/v1/assistant/conversations` also accept these two fields, as the starting values |
+| POST | `/api/v1/sessions/{mid}/{sid}/rename` | `{"tab_name"?, "title"?}`: the tab uses `herdr tab rename`; the session name sends `/rename <name>` to the running claude (it writes `custom-title`), and if it isn't running, appends the same `custom-title` line to the transcript directly. For assistant chats, `title` is also recorded as the user-given title (the hub's `assistant.titles`, no longer overwritten by automatic titles, `docs/assistant.md` ("Chat titles")); Codex assistant chats are only recorded on the hub |
+| GET / PUT | `/api/v1/mutes` | Mutes, same structure as pins, plus `allowed` (Agents with notifications turned on individually while their space is muted). Rule: the Agent itself in sessions → muted; in allowed → not muted; otherwise go by its space. Muted Agents / spaces get no notifications at all (done, needs you) and are shown dimmed on the phone; cached in hub memory, updated on PUT |
+| GET | `/api/v1/hub/update` | The hub's version and update state (`docs/hub-update.md`): `{version, build, channel, can_update, why_not?, latest?{version, build, released, notes, newer, bad, held?}, state, progress?, busy:[{machine_id, machine, session_id?, title}], error?, auto, auto_notice, last_check?, confirmed}`; `state`: `idle` / `checking` / `available` / `downloading` / `waiting_idle` / `restarting` / `confirming` / `updated` / `rolled_back` / `failed`; `busy` lists what a restart would interrupt (chats working or waiting for an answer, machines being redeployed); `auto_notice`: the user hasn't been told "automatic updates are on" yet; `latest.held`: why automatic update won't install this newer version (its code may not include the commit this hub is running, `docs/hub-update.md` ("No going backwards")), though a manual update still can; a Docker hub also has `image{name, tag, pinned}` (the image it runs; `pinned`: the tag is a version number, so `.env` must be changed first), `latest` is the newest release on the registry (`build` is 0, no `released`), and `POST …/check` asks the registry |
+| POST | `/api/v1/hub/update/check` | Check now, returns the same as above |
+| POST | `/api/v1/hub/update` | `{"now"?: true}` start updating: download, verify, wait until the assistant and Agents are idle, replace, restart; `now` is "update now" after a second confirmation and doesn't wait for idle. Not a release build (`dev` / `docker`), or no newer version 409 (`error` explains; for Docker it gives the `docker compose pull` command) |
+| PUT | `/api/v1/hub/update/settings` | `{"auto"?: bool, "auto_notice_seen"?: bool}`: the automatic update switch (on by default); changing the switch also counts as having told the user |
+| GET | `/api/v1/hub/update/history` | `{"history":[{from_version, to_version, to_build, started, ended, result: updated\|rolled_back\|failed\|held, reason?, auto}]}`, newest first, keeps 50; `held`: the newer version wasn't installed automatically (`reason` says why), recorded once per version |
+| GET | `/api/v1/skills` | Skills on the machine running the assistant (read-only): `{"machine_id","machine","skills":[{"name","description","source":"user\|builtin"}]}`; the user's are in that machine's `~/.persona/skills/` (`docs/hub-update.md`). Node too old (no `skills.list`) or offline 502 |
+| GET / PUT | `/api/v1/pins` | Pins in the dev list: `{"spaces":["server/app"],"sessions":["server/<session id>"]}`; spaces use "machine/space name" (herdr workspace ids change after a herdr restart); stored in Postgres settings |
+| GET | `/api/v1/machines/{mid}/file?path=&cwd=&offset=` | Read a file (file viewer, `docs/ios.md` ("File viewer")): `{"path","name","size","mime","text"\|"data","truncated","offset","next","is_dir","entries"?}`. Text files at most 2 MB per call, read from `offset`; if not finished, it stops at the end of the last complete line, and `next` is where the next page starts (0 when done); binary files are given whole (up to 2 MB) and can't be read from the middle; directories give the first 500 entries. `~` is home, relative paths are inside `cwd`; iCloud is refused. With `stream=1` (hub feature `file_stream`), binary files return only a descriptor `{"stream":true,"revision",...}` without `data`, and the content goes through `/file/download`; `mime` comes from a fixed extension table, then sniffing the leading bytes (see "File preview" below) |
+| GET | `/api/v1/machines/{mid}/file/download?path=&cwd=&inline=` | The raw bytes of the complete file, authenticated by the App with the same Bearer; the web's `<video>` / `<audio>` / `<img>` can't send headers, so they use `?token=` (the hub never logs query strings); the hub reads via the node's `file.chunk` at most 1 MiB at a time, and a single request never holds the whole file in memory. Supports HTTP Range / Content-Range (including suffix ranges), with Content-Length, ETag and an attachment file name; empty path 400, old node 409 `node_outdated`, non-regular files, iCloud and read errors are refused. Later chunks must match the size and version from the first read; if the file changes midway or the request is canceled, the download stops. The old `/file` 2 MiB binary preview is unchanged. `inline=1` only applies to images, audio/video and PDF (`Content-Disposition: inline`); everything else is still an attachment; everything except PDF carries `Content-Security-Policy: sandbox` |
+| GET | `/api/v1/machines/{mid}/file/thumb?path=&cwd=&size=` | A file's thumbnail (hub feature `file_thumb`, node `file.thumb`): long side at most `size` pixels (default 256, 32–1024), JPEG when opaque, PNG when transparent; `ETag` is "file version-size", `If-None-Match` gets 304, `Cache-Control: private, max-age=86400`. Can't render 404 `no_thumbnail` (the client shows an icon), old node 409 `node_outdated` |
+| GET | `/api/v1/machines/{mid}/file/convert?path=&cwd=&to=pdf` | Convert a document to PDF with that computer's LibreOffice (hub feature `file_convert`, node `file.convert`, the web's Office fallback, #1345): returns `{"path","size","mime"}`, where `path` is the PDF in the node's cache, then read with `/file/download?path=<it>&inline=1`. Cached per file version, cleared after 7 days; one conversion at a time, 90-second timeout; the input is first copied to a fixed file name and a temporary profile directory is used, so it doesn't fight with a LibreOffice the user has open. Not installed 404 `no_converter`, old node 409 `node_outdated` |
+| GET | `/api/v1/machines/{mid}/git/blob?cwd=&path=&rev=` | A file's content at some revision (hub feature `git_blob`, node `git.blob`, for the web's diff, #1437): `rev` is `HEAD`, `INDEX` (the staging area), a commit hash or "hash^" (its parent), `path` is relative to the repo root. Returns `{"path","size"}`, where `path` is a file in the node's cache named by blob id (with the original extension), then read with `/file/download`; if the file doesn't exist at that revision, `{"missing":true}`. Up to 200 MB, cleaned after 7 days |
+| GET / POST / DELETE | `/api/v1/machines/{mid}/browser/cookies` | Sign-ins in ego lite (plugin ego, #1304, `docs/plan-ego-browser.md` ("What importing cookies does")): GET lists sites `{"sites":[{"domain","count","expires"?}]}` (no names or values); POST `{"cookies":[{name,value,domain,path?,expires?,secure?,http_only?,same_site?,host_only?}]}` imports and returns `imported`, `skipped`; DELETE `?site=a&site=b` or `?all=1` clears and returns `removed`. Only accepts the user's own device tokens (pairing tokens etc. 403); the hub stores nothing; target Mac offline 409 |
+| GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | Whether paths mentioned in a session exist on this machine: `paths` one per line (also accepts `path=a&path=b`), at most 200 → `{"stats":[{"path"(as given),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`. `denied` is a folder macOS won't let personad read (opening it explains how to grant access); relative paths without `cwd`, paths in iCloud, and sensitive files (see below) are always `missing`; waits at most 3 seconds per call, and anything not answered by then (a hung network drive) is also `missing`. The phone only turns file / dir / denied paths into tappable file blocks; the web inlines them as links |
+| GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | File tree: `{"path","entries":[{"name","dir","symlink","size","mtime","ignored"}],"truncated"}`, directories first, at most 2000 entries; iCloud is refused; `ignored` (#2439): Git ignores it (the node runs `git check-ignore` once over the names on this page; outside a repo or without git nothing is marked and the field doesn't appear) |
+| GET | `/api/v1/machines/{mid}/fs/find?cwd=&limit=` | All files under a directory (#2438, node `fs.find`, for the web's ⌘K file search): `{"cwd","files":[relative paths, "/"-separated],"truncated","source":"git"\|"walk"}`. Inside a git repo (including subdirectories) it uses `git ls-files --cached --others --exclude-standard` (ignored files and files deleted on disk aren't listed); otherwise it walks breadth-first from `cwd` (skips `.git`, `node_modules` and various cache directories, doesn't follow symlinks into directories, capped at 5 seconds), so when over the limit the shallowest files are kept. At most `limit` files (default and maximum 50,000); sensitive paths are not listed (same as `fs`: ssh keys, the hub's token, etc.), and iCloud and sensitive directories are refused entirely. The node reuses the result for the same directory within 10 seconds. Same permissions as `fs`: full role only, answer-only devices (the watch) can't |
+| GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[latest 30]}` (read-only, `GIT_OPTIONAL_LOCKS=0`) |
+| POST | `/api/v1/machines/{mid}/git/pull` | `{"cwd"}` → `{"status": GitStatus, "updated": bool}`; only allowed on a normal branch with an upstream and a clean worktree, runs `git pull --ff-only --no-rebase --no-autostash --no-recurse-submodules`. Divergence, uncommitted changes, no upstream, auth failure or timeout all report an error; it never stashes / merges / rebases automatically; the pull command gets at most 60 seconds, the node 75 seconds total, the hub 90 seconds. Full role only |
+| GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`; untracked files are diffed against /dev/null, at most 512 KB |
 | GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
-| GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
-| POST | `/api/v1/sessions/{mid}/{sid}/fork` | 分支到新聊天（#2137）：body `{at_item_id}`（某条回复的 item id，空则整段）→ `{session_id}`。node 把 Claude 的 transcript 复制到这条回复所在那一轮结束，换成新会话 id，原会话不动；新会话是离线会话，下一条消息照常 `--resume` 它。会话上 `can_fork: true` 才支持（Claude Code、有 transcript、不是外部来源 / runtime / Codex），否则回 `code: fork_unsupported`；从正在写的那一轮分支回 `fork_turn_running`。边界：只复制对话本身，`/rewind` 用的文件快照（`~/.claude/file-history/<id>/`）和子 Agent 的记录不复制，分支里 `/rewind` 不能回到分支前的改动 |
-| POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
-| DELETE | `/api/v1/sessions/{mid}/{sid}` | 删除对话：只是从各端的会话列表里移除（hub 在 settings `sessions.deleted` 记下时间，`sessions` 推送和 `GET /api/v1/sessions` 都不再带它），电脑上的 transcript 不动；之后这个会话再被用到（`updated_at` 晚于删除时间，或又运行起来）会重新出现。启动失败的（`start_error`）也能删，立即消失。→ `{"ok":true}`；正在运行或还在启动 409，助手的对话 400（用归档），没有这个会话 404，只读设备 403 |
-| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","recording_days","conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main_tasks_quiet` 是「主对话派的任务只在主对话里通知」的生效值（没改过时是 `true`，#1731），`recording_days` 是录音在知识库里留几天的生效值（默认 14，#3235），`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`）。`?space=health` 列健康空间的对话、`cwd` 是健康目录；不带 `space` 只列助手自己的，健康对话不在里面；别的 `space` 回 400（`docs/health.md`） |
-| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?,"main_tasks_quiet"?,"recording_days"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`recording_days` 是 1–365，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
-| POST | `/api/v1/assistant/conversations` | `{"prompt","images"?,"purpose"?,"machine_id"?,"main"?,"space"?,"report_tasks"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话。`space: "health"` 在健康空间的目录开（健康的 CLAUDE.md，`docs/health.md`），和 `main: true` 一起回 400，别的 `space` 回 400。`purpose`：用哪个模型用途（hub 认识的，如 `lark.agent`，不认识回 400；空着是 `assistant`）；`machine_id`：在 hub 的哪台机器上跑（空着是助手那台；没有这台回 400）。插件的 /agent 用这两个（#1484）。`report_tasks: true`：这段对话派出的任务（`task_plan`、`agent_start`）和主对话的「安静的任务」一样不另外推送，状态变化作为任务通知发进这段对话（#3192，`docs/lark-agent.md`「派出去的任务」），插件的 /agent 带上它 |
-| POST | `/api/v1/assistant/conversations/{id}/stop` | 停掉一段 `report_tasks` 开的对话（飞书 /agent 的 `/stop`，#3308）→ `{"conversation","tasks":[{"id","title","agents"}],"already"}`：中断它正在跑的一轮（`conversation`）、它派出去的未完成任务里在跑的 Agent（`tasks`，`agents` 是中断了几个），去掉排着的任务通知；之后它的任务通知丢掉，直到用户再给它发消息。都没在跑时 `already: true`。不是这种对话回 404 |
-| GET | `/api/v1/assistant/reporters` | `report_tasks` 开的对话（14 天内）→ `{"reporters":[{"session_id","machine_id","at","stopped_at"?,"stopped_by"?}]}`，`stopped_by` 是 `lark`（`…/stop`）或 `app`（App 的停止按钮：`POST /api/v1/sessions/{mid}/{sid}/interrupt` 停的助手对话，hub 发 `session.user_stopped` 给助手）；插件靠它知道请求在 App 里被停了 |
-| POST | `/api/v1/assistant/conversations/{id}/archive` | 归档助手的一段对话（只是不在列表里，数据保留）→ `{"ok","archived":true}`；主对话 400。会话列表（`sessions` 推送）里它带 `archived: true`，App 收在「已归档」；用户再给它发消息（`POST …/messages`）自动取消归档（`docs/assistant.md`「管理自己的对话」） |
-| POST | `/api/v1/assistant/conversations/{id}/unarchive` | 取消归档 → `{"ok","archived":false}` |
-| POST | `/api/v1/assistant/conversations/{id}/compact` | `{"machine_id"?}`（空着是助手那台）：手动压缩这段对话（Claude 发 `/compact`，进程不在就先 `--resume`；Codex `thread/compact/start`）→ 开始了就回 `{"ok":true}`，进度看会话的 `compaction`。409 + `code`：`busy`（正在回答）、`compacting`（已经在压）、`gone`（记录不在了）、`unsupported`（runtime 跑的对话）；`error` 是给人看的中文 |
-| POST | `/api/v1/assistant/main/new` | `{"carry":"summary"\|"none","expect"?}`：新建主对话。`carry`（默认 `summary`）带上旧主对话最近一次压缩的摘要和之后的几条消息；`expect` 是 App 看到的主对话 id，对不上回 409 `main_changed`；旧主对话正在回答 / 压缩时 409 `busy`。成功后主对话清空（`GET /api/v1/assistant` 的 `main` 没了），旧的改名「旧主对话 · 至 M月D日」并归档 → `{"ok","archived":"<旧 id，没有主对话时为空>","carried":bool}`。之后第一条带 `main:true` 的 `POST /api/v1/assistant/conversations`（以及飞书机器人、渠道发给主对话的消息）开新的主对话，带过去的背景作为 `<jarvis-context kind="context" title="接上旧主对话">` 放在第一条消息前，只用一次（`docs/assistant.md`「新建主对话」） |
-| POST | `/api/v1/assistant/warm` | `{"launcher"?}`：先起一个备用 claude 进程，新对话直接用 → `{"ok":true,"readiness"?}`（`readiness` 见上「主对话就绪度」，不 probe；算不完时回上一次记下的或不带） |
-| GET | `/api/v1/assistant/readiness` | 主对话就绪度（`?probe=1` 真跑一次一词检查，30 秒内复用），见上「主对话就绪度」 |
-| POST | `/api/v1/assistant/readiness/dismiss` | `{"dismissed":bool}`：记住「以后再说」→ `{"ok":true}` |
-| GET | `/api/v1/assistant/tasks` | 定时任务（一张表，`docs/assistant.md`「定时任务」）：`{"tasks":[Task]}`，已经跑过的一次性跟进不列。`Task` = `{id,title,prompt,repeat:"once"\|"daily"\|"interval",at,time:"HH:MM",weekdays:[1..7],every_minutes,enabled,machine_id,session_id,launcher,permission_mode,effort,created_by,created_at,last_run,last_session_id,last_status,last_error,next_run,run_machine_id,run_session_id,run_launcher,push}`：`once` 用 `at`，`daily` 用 `time` + `weekdays`（空 = 每天），`interval` 每 `every_minutes`（5 分钟到 7 天）跑一次、`at` 是下一次；`session_id` 有值时发进那段对话，空 = 任务自己的对话（`run_session_id`，hub 记的：第一次运行开，之后接着用；空 = 下一次开）；`launcher` / `permission_mode`（`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`）/ `effort`（`low`…`max`）空 = 助手的默认，只能在 App 里改；`created_by: "assistant"` 是助手在对话里建的；`push`：`""` 每次运行的回答都推送（默认），`"asked"` 只推运行自己用 `notify_user` 发的，这种任务固定在自己的对话里跑、`session_id` 为空（`docs/assistant.md`「跑完推送」）；认这个字段的 hub 在 features 里带 `task_push`，客户端据此显示开关 |
-| POST | `/api/v1/assistant/tasks` | 新建 `Task`（`session_id` 忽略，用任务自己的对话）→ `{"task"}`；不合法 400，消息是给用户看的中文 |
-| PUT | `/api/v1/assistant/tasks/{id}` | 保存用户能改的字段（`title,prompt,repeat,at,time,weekdays,every_minutes,enabled,launcher,permission_mode,effort,push`，`""` = 默认；请求体里没有 `push` 时保留原值，`null` 或不认识的值回 400）→ `{"task"}`；`session_id` 只能清空（改成用任务自己的对话）；`run_*` 只由 hub 写；`interval` 的下一次在间隔或规则变了、或重新开启时从现在算起 |
-| DELETE | `/api/v1/assistant/tasks/{id}` | 删除 |
-| POST | `/api/v1/assistant/tasks/{id}/run` | 立即运行 → `{"session_id","machine_id"}`；一次性的跑完就结束，重复的不改时间；上一轮还在跑时 409（记一条跳过） |
-| POST | `/api/v1/assistant/tasks/{id}/fresh` | 下次开新对话：清掉 `run_*`，下一次运行开一段新对话并记下 → `{"task"}` |
-| GET / PUT | `/api/v1/assistant/routines` | 旧版 App 用（2026-10-31 前）：`daily` 的任务，形状同 `Task`；PUT 整表替换 `daily` 的那些，别的任务和各任务的启动器 / 权限模式不动 |
-| GET / DELETE | `/api/v1/assistant/followups[/{id}]` | 旧版 App 用：开着的 `once` 和 `interval` 任务（`at` = 下一次）；DELETE 删任务 |
-| POST | `/api/v1/assistant/routines/{id}/run`、`/api/v1/assistant/followups/{id}/run` | 旧版 App 用，同 `tasks/{id}/run` |
-| GET | `/api/v1/assistant/runs[?ref=<id>]` | 运行记录，新的在前：`{"runs":[{id,kind:"routine"\|"followup"（一次性的是 followup）,ref_id（任务 id）,title,due,at,status,error,manual,machine_id,session_id}]}` |
-| GET | `/api/v1/assistant/memory` | `{"files":[{name,content,updated_at}],"dir"}`；`?space=health` 是健康空间的记忆（下一行同样） |
-| PUT / DELETE | `/api/v1/assistant/memory/{name}` | `{"content"}`；删除时顺带删 MEMORY.md 里的索引行 |
-| GET / PUT | `/api/v1/machines/{mid}/claude-settings` | 白名单的 Claude Code 设置；PUT `{"key","value"}`（value 为 null 恢复默认） |
-| GET / PUT | `/api/v1/machines/{mid}/codex-settings` | 白名单的 Codex 设置（这台机器的 `~/.codex/config.toml` 顶层的几项）：GET → `{"settings":[{key, title, detail, type, options?, default, value}]}`；PUT `{"key","value"}`，同 `claude-settings` |
-| GET | `/api/v1/machines/{mid}/claude-dirs` | 这台机器的 Claude Code 配置目录和屏蔽规则：`{"dirs":[{"path","default"?,"blocked"?,"blocked_by"?,"source","running","sessions"?}],"blocked":[…],"home","live"}`（`docs/claude-integration.md`「屏蔽配置目录」） |
-| PUT | `/api/v1/machines/{mid}/claude-dirs/blocked` | 整份替换屏蔽规则 `{"blocked":["~/.automation/*", …]}`（路径或通配，以 `/` 或 `~/` 开头，否则 400）；回同 GET 的状态 |
+| GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` paged |
+| POST | `/api/v1/sessions/{mid}/{sid}/fork` | Branch into a new chat (#2137): body `{at_item_id}` (the item id of a reply; empty means the whole thing) → `{session_id}`. The node copies Claude's transcript up to the end of the turn that reply is in, under a new session id, leaving the original session untouched; the new session is an offline session, and the next message `--resume`s it as usual. Only supported when the session has `can_fork: true` (Claude Code, with a transcript, not an external source / runtime / Codex), otherwise returns `code: fork_unsupported`; branching from the turn still being written returns `fork_turn_running`. Limits: only the conversation itself is copied; the file snapshots `/rewind` uses (`~/.claude/file-history/<id>/`) and subagent records are not, so `/rewind` in the branch can't go back to changes made before the branch |
+| POST | `/api/v1/sessions/{mid}/{sid}/close` | Quit claude and close the tab (any Agent in herdr, including manually started ones; for a split tab only its own pane is closed) |
+| DELETE | `/api/v1/sessions/{mid}/{sid}` | Delete a chat: only removes it from the session lists everywhere (the hub records the time in settings `sessions.deleted`, and neither the `sessions` push nor `GET /api/v1/sessions` includes it anymore); the transcript on the computer is untouched; if the session is used again later (`updated_at` later than the deletion, or it runs again), it reappears. Sessions that failed to start (`start_error`) can also be deleted and disappear immediately. → `{"ok":true}`; running or still starting 409, assistant chats 400 (use archive), no such session 404, read-only device 403 |
+| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","recording_days","conversations":[Session]}`: `notes` is present only if saved in the App; `main_tasks_quiet` is the effective value of "notify tasks dispatched by the main chat only in the main chat" (`true` if never changed, #1731); `recording_days` is the effective number of days recordings stay in the knowledge base (default 14, #3235); `main` is the main chat's session id (on the `machine_id` machine); archived chats are not listed by default, `?archived=1` includes them (`archived: true`). `?space=health` lists chats in the health space, with `cwd` being the health directory; without `space` only the assistant's own are listed, not the health chats; any other `space` returns 400 (`docs/health.md`) |
+| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?,"main_tasks_quiet"?,"recording_days"?}`, stored in Postgres settings (`docs/assistant.md`); only the fields present are changed; `recording_days` is 1–365; an empty string for `notes` also counts as a change; `main` of `"-"` clears the main chat (the App sends it together when switching machines) |
+| POST | `/api/v1/assistant/conversations` | `{"prompt","images"?,"purpose"?,"machine_id"?,"main"?,"space"?,"report_tasks"?}` → `{"session"}`: writes CLAUDE.md, then starts a new session in the assistant directory. `space: "health"` starts it in the health space's directory (the health CLAUDE.md, `docs/health.md`); together with `main: true` it's 400, and any other `space` is 400. `purpose`: which model purpose to use (one the hub knows, e.g. `lark.agent`; unknown 400; empty means `assistant`); `machine_id`: which of the hub's machines to run on (empty means the assistant's; unknown machine 400). The plugin's /agent uses these two (#1484). `report_tasks: true`: tasks dispatched by this chat (`task_plan`, `agent_start`) are, like the main chat's "quiet tasks", not pushed separately; their status changes are sent into this chat as task notifications (#3192, `docs/lark-agent.md` ("Dispatched tasks")); the plugin's /agent sets it |
+| POST | `/api/v1/assistant/conversations/{id}/stop` | Stop a chat opened with `report_tasks` (Lark /agent's `/stop`, #3308) → `{"conversation","tasks":[{"id","title","agents"}],"already"}`: interrupts its running turn (`conversation`) and the running Agents of the unfinished tasks it dispatched (`tasks`, `agents` is how many were interrupted), and drops queued task notifications; after that its task notifications are discarded until the user messages it again. If nothing was running, `already: true`. Not such a chat 404 |
+| GET | `/api/v1/assistant/reporters` | Chats opened with `report_tasks` (within 14 days) → `{"reporters":[{"session_id","machine_id","at","stopped_at"?,"stopped_by"?}]}`; `stopped_by` is `lark` (`…/stop`) or `app` (the App's stop button: an assistant chat stopped with `POST /api/v1/sessions/{mid}/{sid}/interrupt`, for which the hub sends `session.user_stopped` to the assistant); the plugin uses it to know a request was stopped in the App |
+| POST | `/api/v1/assistant/conversations/{id}/archive` | Archive one of the assistant's chats (just hidden from the list, data kept) → `{"ok","archived":true}`; the main chat 400. In the session list (`sessions` push) it carries `archived: true` and the App files it under **Archived**; when the user messages it again (`POST …/messages`) it's unarchived automatically (`docs/assistant.md` ("Managing its own chats")) |
+| POST | `/api/v1/assistant/conversations/{id}/unarchive` | Unarchive → `{"ok","archived":false}` |
+| POST | `/api/v1/assistant/conversations/{id}/compact` | `{"machine_id"?}` (empty means the assistant's machine): compact this chat manually (Claude gets `/compact`, `--resume`d first if the process isn't there; Codex `thread/compact/start`) → returns `{"ok":true}` once started; progress is in the session's `compaction`. 409 + `code`: `busy` (answering), `compacting` (already compacting), `gone` (the record no longer exists), `unsupported` (a chat run by a runtime); `error` is a human-readable message (in Chinese) |
+| POST | `/api/v1/assistant/main/new` | `{"carry":"summary"\|"none","expect"?}`: start a new main chat. `carry` (default `summary`) brings along the old main chat's latest compaction summary and the few messages after it; `expect` is the main chat id the App sees, and a mismatch returns 409 `main_changed`; the old main chat answering / compacting 409 `busy`. On success the main chat is cleared (`main` disappears from `GET /api/v1/assistant`), and the old one is renamed "旧主对话 · 至 M月D日" ("Old main chat · until <month/day>") and archived → `{"ok","archived":"<old id, empty if there was no main chat>","carried":bool}`. The next `POST /api/v1/assistant/conversations` with `main:true` (and messages to the main chat from the Lark bot or channels) starts the new main chat, with the carried background placed before the first message as `<jarvis-context kind="context" title="接上旧主对话">` ("Continuing the old main chat"), used once (`docs/assistant.md` ("New main chat")) |
+| POST | `/api/v1/assistant/warm` | `{"launcher"?}`: start a spare claude process in advance for new chats to use → `{"ok":true,"readiness"?}` (`readiness` see "Main chat readiness" above, without probe; if it can't be computed in time, returns the last recorded value or omits it) |
+| GET | `/api/v1/assistant/readiness` | Main chat readiness (`?probe=1` actually runs a one-word check, reused within 30 seconds), see "Main chat readiness" above |
+| POST | `/api/v1/assistant/readiness/dismiss` | `{"dismissed":bool}`: remember "Later" → `{"ok":true}` |
+| GET | `/api/v1/assistant/tasks` | Scheduled tasks (one table, `docs/assistant.md` ("Scheduled tasks")): `{"tasks":[Task]}`; one-off follow-ups that have already run aren't listed. `Task` = `{id,title,prompt,repeat:"once"\|"daily"\|"interval",at,time:"HH:MM",weekdays:[1..7],every_minutes,enabled,machine_id,session_id,launcher,permission_mode,effort,created_by,created_at,last_run,last_session_id,last_status,last_error,next_run,run_machine_id,run_session_id,run_launcher,push}`: `once` uses `at`, `daily` uses `time` + `weekdays` (empty = every day), `interval` runs every `every_minutes` (5 minutes to 7 days) with `at` being the next run; when `session_id` is set it posts into that chat, empty = the task's own chat (`run_session_id`, recorded by the hub: created on the first run and reused after; empty = created on the next run); `launcher` / `permission_mode` (`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`) / `effort` (`low`…`max`) empty = the assistant's default, changeable only in the App; `created_by: "assistant"` means the assistant created it in a chat; `push`: `""` pushes every run's answer (default), `"asked"` only pushes what the run itself sends with `notify_user`, and such tasks always run in their own chat with an empty `session_id` (`docs/assistant.md` ("Push when done")); a hub that understands this field includes `task_push` in features, and clients show the switch based on that |
+| POST | `/api/v1/assistant/tasks` | Create a `Task` (`session_id` ignored; the task's own chat is used) → `{"task"}`; invalid 400, with a user-facing message (in Chinese) |
+| PUT | `/api/v1/assistant/tasks/{id}` | Save the user-editable fields (`title,prompt,repeat,at,time,weekdays,every_minutes,enabled,launcher,permission_mode,effort,push`, `""` = default; when the body has no `push` the existing value is kept, `null` or an unknown value returns 400) → `{"task"}`; `session_id` can only be cleared (switching to the task's own chat); `run_*` is written only by the hub; for `interval`, the next run is counted from now when the interval or rule changes, or when it's re-enabled |
+| DELETE | `/api/v1/assistant/tasks/{id}` | Delete |
+| POST | `/api/v1/assistant/tasks/{id}/run` | Run now → `{"session_id","machine_id"}`; a one-off task ends after running, a repeating one keeps its schedule; previous run still going 409 (a skip is recorded) |
+| POST | `/api/v1/assistant/tasks/{id}/fresh` | New chat next time: clears `run_*`, so the next run opens a new chat and records it → `{"task"}` |
+| GET / PUT | `/api/v1/assistant/routines` | For old Apps (before 2026-10-31): `daily` tasks, same shape as `Task`; PUT replaces all `daily` ones wholesale, leaving other tasks and each task's launcher / permission mode untouched |
+| GET / DELETE | `/api/v1/assistant/followups[/{id}]` | For old Apps: enabled `once` and `interval` tasks (`at` = next run); DELETE deletes the task |
+| POST | `/api/v1/assistant/routines/{id}/run`, `/api/v1/assistant/followups/{id}/run` | For old Apps, same as `tasks/{id}/run` |
+| GET | `/api/v1/assistant/runs[?ref=<id>]` | Run records, newest first: `{"runs":[{id,kind:"routine"\|"followup" (one-offs are followup),ref_id (task id),title,due,at,status,error,manual,machine_id,session_id}]}` |
+| GET | `/api/v1/assistant/memory` | `{"files":[{name,content,updated_at}],"dir"}`; `?space=health` is the health space's memory (same for the next row) |
+| PUT / DELETE | `/api/v1/assistant/memory/{name}` | `{"content"}`; deleting also removes its index line in MEMORY.md |
+| GET / PUT | `/api/v1/machines/{mid}/claude-settings` | Allow-listed Claude Code settings; PUT `{"key","value"}` (value null restores the default) |
+| GET / PUT | `/api/v1/machines/{mid}/codex-settings` | Allow-listed Codex settings (a few top-level entries of this machine's `~/.codex/config.toml`): GET → `{"settings":[{key, title, detail, type, options?, default, value}]}`; PUT `{"key","value"}`, same as `claude-settings` |
+| GET | `/api/v1/machines/{mid}/claude-dirs` | This machine's Claude Code config directories and block rules: `{"dirs":[{"path","default"?,"blocked"?,"blocked_by"?,"source","running","sessions"?}],"blocked":[…],"home","live"}` (`docs/claude-integration.md` ("Blocking config directories")) |
+| PUT | `/api/v1/machines/{mid}/claude-dirs/blocked` | Replace the block rules wholesale `{"blocked":["~/.automation/*", …]}` (paths or globs starting with `/` or `~/`, otherwise 400); returns the same state as GET |
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
-| GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
-| POST | `/api/v1/interactions/{id}/reanswer` | `{answers: {问题原文: 答案}}`（#3029）：助手代答过的提问改成用户的答案。Agent 已经按助手的答案往下走了，新答案作为一条消息发给它（`prompts/agents/reanswer.md`，带上助手原来答的），同样的答案只发一次；回 `{"ok":true}`。hub 转给管理者（不在时 503 `assistant_offline`），只能答卡片的设备 403；不是助手代答的回 409，没有答案 400，发不出去 502 |
-| POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution；回 `{"ok":true}`。已经结束的（#1673）：已回答的（或交回电脑后再交回）幂等回 200 `{"ok":true,"already":true,"status","resolution"}`，`resolution` 是当时生效的答案（按历史记录脱敏），可能和这次发的不同，App 据此把卡片显示成已回答；过期、撤回、交回电脑的回 410 `{"error","code":"gone","status"}`，查不到结局的 410 不带 `status` |
-| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?,"locale"?}`；`locale` 是这台设备的界面语言（`zh-Hans` / `en` / `ja`），推给它的通知用这种语言，没带用用户语言；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。互联组里只有中心推送：连成员时这条也被转给中心；推送的 payload（直推的和经中继密封的）顶层带 `hub_id`：中心的（[mesh.md](mesh.md)「凭据和推送」）。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
-| POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
-| GET | `/api/v1/fleet` | `{"fleet": FleetState}`：当前的实时活动内容（App 回到前台时拉），`stats` 带全部数字和每台机器的负载 |
-| GET | `/api/v1/usage/windows` | `{"accounts": [{id, provider, name, plan?, windows: [{label, window_minutes, used_percent, resets_at?, model?}], sampled_at, stale?, local?, sources?, problem?}], "checked_at"}`：各台电脑的 node 从本机文件读到的 Codex / Claude 订阅额度窗口，加上管理者从账号池网关读到的（`local`：电脑上读到过，`sources`：网关名，`problem`：`unreachable` / `error`，`model`：单模型的窗口），管理者合并同一个账号、按最满的窗口排序，hub 转发，管理者不在时 503 `assistant_offline`；没有数据是 `[]`（`docs/usage-windows.md`，#2432、#2595） |
-| GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| 无, points: [MetricPoint]}], "step": 60}`：App「机器」页每张卡片上的现在值和走势，按配置顺序的每台机器，`points` 是最近 1 小时、每分钟一个点；`latest` 只在 30 秒内收到过样本时有（`docs/machines.md`） |
-| GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {同上一台}, "range", "step"}`：机器详情的曲线，步长 10 / 60 / 240 秒（约 360 个点）；没有这台机器 404，range 不对 400 |
-| GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`：所有机器的 token 用量（今天按手机时区算，`load` 是 1 分钟负载 / 核数），见 `docs/live-activity.md`「用量」 |
-| GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `translate`（设置 › 翻译：`{enabled,target,mail}`，收件箱（助手）据此提前翻译新邮件）、`live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）、`mute_while_desktop`（手机静音，默认 false：有桌面端连着时不给这台设备推「需要你处理」「Agent 做完」；助手按你的要求发的提醒照推）；`look`（这台手机的实时活动画哪个形象：`{"design","light","dark","package"?}`，App 换形象时单独 PUT，hub 原样放进这台设备推送的 content-state，见 `docs/live-activity.md`「形象」；design 超过 32 字节或 package 超过 160 字节的不存）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
-| PUT | `/api/v1/devices/{id}/widgets` | 这台设备屏幕上有哪些扩展的小组件 `{"widgets":[{extension,id,family}]}`（整份替换，最多 64 个）：扩展发 `ui.invalidate` 时 hub 给有这个小组件的设备发后台推送 `extension_widget`（每台每个 15 分钟最多一条），见 `docs/extensions.md`「系统级位置」 |
-| POST | `/api/v1/notify` | 给各台设备发一条提醒（给扩展用，见 `docs/extensions.md`「发通知」）：`{"title","body","machine_id"?,"session_id"?,"level"?:"active\|time-sensitive","id"?,"silent"?,"actions"?,"ui"?,"state"?}`，标题和正文至少一个（标题最多 120 字、正文 1000 字），`machine_id` 和 `session_id` 要么都给要么都不给，`level` 默认 `active`，同一个 `id` 在手机上替换上一条（apns-collapse-id，最长 64 字节），`silent: true` 不带声音。扩展凭据可带最多 3 个 `actions`、`ui` 与 `state`（通知按钮规格见 `docs/extensions.md`「通知按钮」）。带会话时点开进那个会话；会话被屏蔽回 `{"sent":false,"reason":"muted"}`，不发。按设备的 `input` 开关（关掉「需要你」就不收），也照「手机静音」和桌面端在线的规则；常驻连接里是 `notify` 事件，`kind` 为 `alert`（没有会话时 `machine_id`、`session_id` 是空字符串）；推送的 collapse id 是 `notify:<id>`，不会和 hub 自己的推送撞。payload 编码后超过 3500 字节、`machine_id` / `session_id` 超过 128 字节回 400。完整权限的凭据与具有 `notify` 范围的扩展凭据可调用，非扩展凭据带 `actions`/`ui`/`state` 回 400。回 `{"sent":true}` 只表示交给了推送，不保证送到 |
-| GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，personad 内置的包在前（`~/.persona/personas/` 里同 id 的目录优先），再是 `~/.persona/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。分级形象（奶蛙）只给当前档：`manifest` 是这一档自己的 persona.json（文件在 `tiers/<档>/` 下），`rev` 是这一档文件的哈希，换档就是 rev 变了。没有包时是空列表 |
-| GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / SVG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的）；扩展的形象只给清单点名的文件，SVG 是清洗过的（带 CSP）；`?rev=` 是当前 rev 时带 `Cache-Control: immutable` |
-| GET | `/api/v1/looks` | 全部形象（#3200，`docs/extensions.md`「形象」）：`{"looks":[{"id","source":"builtin\|hub\|extension","name","names?","subtitle?","subtitles?","app_icon","extension?","extension_name?","rev?","bytes?","manifest?"}],"current":{"id":选的或 null,"effective":该显示的,"updated_at?"}}`；内置形象在前，再是形象包和扩展的形象（`/api/v1/personas` 也列它们） |
-| PUT | `/api/v1/looks/current` | `{"id", "if_unset?"}` 选形象（存 hub，各端同步），回新的 `current`；不在列表里 404；`if_unset` 时 hub 上已经有选择就原样回、不改（各端把老的本机选择迁上来用）。改了广播 `look` |
-| GET | `/api/v1/plugins` | hub 的插件：`{"plugins":[{"id","name","kind","status","error"?, "version", "source", "enabled", "contributes", "needs_setup"?, …}], "can_install"}`，`status` 是 `disabled / needs_setup / incompatible / stopped / starting / running / error`（`docs/extensions.md`「hub 的接口」）；`features` 带 `plugins` 时才有 |
-| GET / PUT / DELETE | `/api/v1/plugins/{id}/-/…`、`/api/v1/plugins/-/…` | 插件的详情、开关、配置、密钥（完整权限的设备），预览 / 安装 / 升级 / 回滚 / 卸载（只认主 token 经回环）；`features` 带 `plugin_manager` 时才有，见 `docs/extensions.md`「hub 的接口」 |
-| GET | `/api/v1/machines/{mid}/ports/{port}` | 端口探测（`docs/ports.md`）：`{"port","listening","http","title"?}`，只看不放行 |
-| POST | `/api/v1/machines/{mid}/ports/{port}/open` | 用户在 App 里点开一个不在任何 Agent 名下的端口：有东西在听就放行 24 小时、回同上；没有 404；只读设备 403 |
-| GET | `/api/v1/machines/{mid}/ports/{port}/connect` | 端口转发：升级成 WebSocket，二进制消息就是一条 TCP 连接的字节（手机本地监听，浏览器每开一条连接就连一次）。端口必须是这台机器某个会话 `ports` 里的或点开过的，否则 403；没在听 404；只读设备 403；机器离线 503；一台机器同时超过 64 条 429 |
-| GET | `/api/v1/agents/sessions/{id}/messages?cursor=&limit=` | 个人 Agent 一段会话的消息（`id` 是 `<来源>:<sessionKey>`，路径里要百分号编码）→ `{session?, messages, hasMore, nextCursor?}`；往前翻带上次的 `nextCursor`（见下文「个人 Agent 来源状态」） |
-| POST | `/api/v1/agents/sessions/{id}/messages` | 发消息 `{"clientId"?,"text","origin"?}` → `{outbox, duplicate, upstream?}`；`clientId` 不给时 hub 生成，同一个再发不会发两次（`duplicate: true`）；`origin` 默认 `app`；文字为空、`clientId` 不是 UUID 400，超过 20000（按 UTF-16 计）413；`clientId` 用在了别的会话上、会话现在不能发（`canSend=false`）409 |
-| DELETE | `/api/v1/agents/sessions/{id}/messages/{clientId}` | 删掉发件箱里的一条（按 `clientId`）→ `{"ok":true}` |
-| POST | `/api/v1/agents/sessions/{id}/read` | 标这段会话已读 → `{"ok":true}` |
-| GET | `/api/v1/agents/sessions/{id}/avatar` | 会话的头像图片原样返回，带 `ETag`，`If-None-Match` 对上回 304，缓存一天 |
-| GET | `/api/v1/agents/outbox?session_id=&limit=` | 个人 Agent 的发件箱 `{"outbox":[{clientId, sessionId, preview, length, origin?, status, error?, attempts, createdAt, updatedAt}]}`；`status` 是 `sending` / `sent` / `failed` / `deleted`（`failed` 用同一个 `clientId` 重发是安全的） |
-| POST | `/api/v1/channels/{id}/test` | 给渠道绑定的主人发一条测试消息 → `{"ok":true}`；发不出去 502；没有这个渠道 404 `not_found`，只读的、市场里还没装的 409 `read_only`，只读设备 403（[channels.md](channels.md)「六、接口」） |
-| DELETE | `/api/v1/channels/{id}/binding` | 解绑：插件渠道是连接器退出登录，飞书机器人是解除配对；回解绑后的渠道详情；解绑失败 502，其余错误同上一行 |
-| POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`：让手机上的 DEBUG 包执行一条 Runtime CLI 命令（`docs/runtime-cli.md`「经 hub 连真机」），回 App 的原样回答 `{"ok": …}`。只给 `full` 设备凭据（只读设备 403）；没有登记了 `phone_runtime_cli` 的 App 在线 503 `phone_offline`（不唤醒）；`timeout` 秒内（最多 120）没回答 504；App 说这次调用失败 502。每次调用 hub 记一行日志（命令、调用方设备 id、状态、耗时），不记参数和回答 |
-| 任意 | `/api/v1/plugins/{id}/-/machines/{mid}/{path…}` | 插件在电脑 `mid` 上的程序的 HTTP（`node.http`，`docs/extensions.md`「在电脑上运行的程序」），WebSocket 也是：hub 经 `plugin.node.dial` 开流转发，去掉 `Authorization` 和 `token`；只给完整权限的设备；插件没在这台开 404，机器离线 409，程序不应答 502 |
-| 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（`/-/` 开头的不转发）（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/extensions.md`「语音」 |
+| GET | `/api/v1/interactions` | `{"interactions":[Interaction]}` (pending) |
+| POST | `/api/v1/interactions/{id}/reanswer` | `{answers: {question text: answer}}` (#3029): replace the assistant's answer to a question with the user's. The Agent has already moved on with the assistant's answer, so the new answer is sent to it as a message (`prompts/agents/reanswer.md`, including what the assistant answered), and the same answer is sent only once; returns `{"ok":true}`. The hub forwards to the manager (503 `assistant_offline` when absent); devices that can only answer cards 403; not answered by the assistant 409, no answers 400, couldn't send 502 |
+| POST | `/api/v1/interactions/{id}/resolve` | Body is a Resolution; returns `{"ok":true}`. Already finished (#1673): answered (or handed back to the computer and back again) is idempotent with 200 `{"ok":true,"already":true,"status","resolution"}`, where `resolution` is the answer that took effect (redacted per the history record), possibly different from the one sent now, and the App uses it to show the card as answered; expired, withdrawn, or handed back to the computer returns 410 `{"error","code":"gone","status"}`, and when the outcome can't be found, 410 without `status` |
+| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?,"locale"?}`; `locale` is the device's UI language (`zh-Hans` / `en` / `ja`), and notifications to it use that language, falling back to the user's language if absent; the three before it are for the push relay (the phone's public key, the relay URL, the credential the relay issued, `docs/push-relay.md`), used to push when the hub has no APNs key. In a linked-hub group only the primary hub pushes: when connected to a member, this is also forwarded to the primary; push payloads (direct and relay-sealed) carry the primary's `hub_id` at the top level ([mesh.md](mesh.md) "Credentials and push"). `mac` is the Mac App (same bundle id, same topic): it gets no silent wakeups, and while connected to the hub it doesn't get "Needs You" or "Agent finished" (the App posts local notifications itself). The hub records which device credential registered it, and revoking that credential deletes the device too, so it no longer gets pushes |
+| POST | `/api/v1/devices/{id}/live-activity` | Live Activity tokens: `{"push_to_start_token"}`, `{"activity_id","push_token"}` (rotates; sent repeatedly), `{"activity_id","ended":true}` (`docs/live-activity.md`) |
+| GET | `/api/v1/fleet` | `{"fleet": FleetState}`: the current Live Activity content (pulled when the App returns to the foreground); `stats` has all the numbers and each machine's load |
+| GET | `/api/v1/usage/windows` | `{"accounts": [{id, provider, name, plan?, windows: [{label, window_minutes, used_percent, resets_at?, model?}], sampled_at, stale?, local?, sources?, problem?}], "checked_at"}`: Codex / Claude subscription quota windows read by each computer's node from local files, plus those the manager reads from account-pool gateways (`local`: seen on a computer, `sources`: gateway names, `problem`: `unreachable` / `error`, `model`: a single-model window); the manager merges the same account and sorts by the fullest window, the hub forwards, and 503 `assistant_offline` when the manager is absent; no data is `[]` (`docs/usage-windows.md`, #2432, #2595) |
+| GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| none, points: [MetricPoint]}], "step": 60}`: current values and trends on each card of the App's **Machines** page, for every machine in configured order; `points` is the last hour, one per minute; `latest` is only present if a sample arrived within 30 seconds (`docs/machines.md`) |
+| GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {as above, one machine}, "range", "step"}`: the machine detail charts, step 10 / 60 / 240 seconds (about 360 points); unknown machine 404, bad range 400 |
+| GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`: token usage across all machines ("today" in the phone's time zone; `load` is 1-minute load / cores), see `docs/live-activity.md` ("Usage") |
+| GET / PUT | `/api/v1/devices/{id}/prefs` | Which pushes this device wants: `{"input":true,"done":"off|long|always"}`, plus `translate` (Settings › Translation: `{enabled,target,mail}`; the Inbox (assistant) uses it to translate new mail in advance), `live_activity` (default true), `lock_details` (Show Details on Lock Screen, default false), `island` (the two sides of the Dynamic Island: `{"preset":"a|b|c|custom","left","right","machine"}`, default `a`), `mute_while_desktop` (Phone Muted, default false: while a desktop client is connected, this device doesn't get "Needs You" or "Agent finished"; reminders the assistant sends at your request are still pushed); `look` (which avatar this phone's Live Activity draws: `{"design","light","dark","package"?}`, PUT separately when the App switches avatars; the hub puts it as is into the content-state pushed to this device, see `docs/live-activity.md` ("Avatar"); a design over 32 bytes or package over 160 bytes is not stored); PUT may carry only the fields to change; the response also has the hub's `long_turn_seconds` and `done_delay_seconds` (read-only). Can be set before the device has registered for push |
+| PUT | `/api/v1/devices/{id}/widgets` | Which extension widgets are on this device's screen `{"widgets":[{extension,id,family}]}` (replaced wholesale, at most 64): when an extension sends `ui.invalidate`, the hub sends the background push `extension_widget` to devices with that widget (at most one per device per widget every 15 minutes), see `docs/extensions.md` ("System-level placements") |
+| POST | `/api/v1/notify` | Send a reminder to the devices (for extensions, see `docs/extensions.md` ("Sending notifications")): `{"title","body","machine_id"?,"session_id"?,"level"?:"active\|time-sensitive","id"?,"silent"?,"actions"?,"ui"?,"state"?}`, at least one of title and body (title at most 120 characters, body 1000), `machine_id` and `session_id` both given or neither, `level` defaults to `active`, the same `id` replaces the previous one on the phone (apns-collapse-id, at most 64 bytes), `silent: true` has no sound. Extension credentials may carry up to 3 `actions`, `ui` and `state` (notification button spec in `docs/extensions.md` ("Notification buttons")). With a session, tapping opens that session; a muted session returns `{"sent":false,"reason":"muted"}` and nothing is sent. Respects the device's `input` switch (turn off "Needs You" and it's not received), and the "Phone Muted" and desktop-online rules; on the persistent connection it's a `notify` event with `kind` `alert` (without a session, `machine_id` and `session_id` are empty strings); the push collapse id is `notify:<id>`, so it never collides with the hub's own pushes. An encoded payload over 3500 bytes, or `machine_id` / `session_id` over 128 bytes, returns 400. Callable with full-access credentials and extension credentials with the `notify` scope; a non-extension credential sending `actions`/`ui`/`state` gets 400. `{"sent":true}` only means it was handed to push, not that it was delivered |
+| GET | `/api/v1/personas` | Avatars (`docs/persona.md`): `{"personas":[{"id","rev","bytes","manifest":{persona.json as is}}]}`; the packages built into personad first (a directory with the same id in `~/.persona/personas/` takes precedence), then the packages under `~/.persona/personas/` that pass the checks (all files present, id matches the directory name, within the size limit); `rev` is a hash of the whole package content and changes if any byte changes, and the phone caches by rev. Tiered avatars (such as `nwverse`) only expose the current tier: `manifest` is that tier's own persona.json (files under `tiers/<tier>/`), `rev` is a hash of that tier's files, and changing tier means rev changes. An empty list when there are no packages |
+| GET | `/api/v1/personas/{id}/{file…}` | One file from the package (PNG / SVG / persona.json); only regular files inside the package directory (no following symlinks, no dotfiles); extension avatars only serve files named in the manifest, and SVGs are sanitized (with CSP); when `?rev=` is the current rev, `Cache-Control: immutable` is set |
+| GET | `/api/v1/looks` | All avatars (#3200, `docs/extensions.md` ("Avatars")): `{"looks":[{"id","source":"builtin\|hub\|extension","name","names?","subtitle?","subtitles?","app_icon","extension?","extension_name?","rev?","bytes?","manifest?"}],"current":{"id":the chosen one or null,"effective":the one to show,"updated_at?"}}`; built-in avatars first, then avatar packages and extension avatars (`/api/v1/personas` lists them too) |
+| PUT | `/api/v1/looks/current` | `{"id", "if_unset?"}` choose an avatar (stored on the hub, synced across clients), returns the new `current`; not in the list 404; with `if_unset`, if the hub already has a choice it's returned unchanged (clients use this to migrate their old local choice up). A change broadcasts `look` |
+| GET | `/api/v1/plugins` | The hub's plugins: `{"plugins":[{"id","name","kind","status","error"?, "version", "source", "enabled", "contributes", "needs_setup"?, …}], "can_install"}`; `status` is `disabled / needs_setup / incompatible / stopped / starting / running / error` (`docs/extensions.md` ("Hub endpoints")); only present when `features` has `plugins` |
+| GET / PUT / DELETE | `/api/v1/plugins/{id}/-/…`, `/api/v1/plugins/-/…` | Plugin details, switch, config and secrets (full-access devices), preview / install / upgrade / rollback / uninstall (main token over loopback only); only present when `features` has `plugin_manager`, see `docs/extensions.md` ("Hub endpoints") |
+| GET | `/api/v1/machines/{mid}/ports/{port}` | Port probe (`docs/ports.md`): `{"port","listening","http","title"?}`, only looks, doesn't allow |
+| POST | `/api/v1/machines/{mid}/ports/{port}/open` | The user taps a port in the App that doesn't belong to any Agent: if something is listening it's allowed for 24 hours and returns the same as above; nothing there 404; read-only device 403 |
+| GET | `/api/v1/machines/{mid}/ports/{port}/connect` | Port forwarding: upgrades to a WebSocket whose binary messages are the bytes of one TCP connection (the phone listens locally and connects once for each connection the browser opens). The port must be in `ports` of some session on this machine or have been opened, otherwise 403; not listening 404; read-only device 403; machine offline 503; more than 64 concurrent per machine 429 |
+| GET | `/api/v1/agents/sessions/{id}/messages?cursor=&limit=` | Messages of one personal-Agent session (`id` is `<source>:<sessionKey>`, percent-encoded in the path) → `{session?, messages, hasMore, nextCursor?}`; to page back, pass the previous `nextCursor` (see "Personal Agent source state" below) |
+| POST | `/api/v1/agents/sessions/{id}/messages` | Send a message `{"clientId"?,"text","origin"?}` → `{outbox, duplicate, upstream?}`; if `clientId` isn't given the hub generates one, and resending the same one won't send twice (`duplicate: true`); `origin` defaults to `app`; empty text or a `clientId` that isn't a UUID 400, over 20000 (counted in UTF-16) 413; `clientId` already used on another session, or the session can't send right now (`canSend=false`) 409 |
+| DELETE | `/api/v1/agents/sessions/{id}/messages/{clientId}` | Delete one outbox entry (by `clientId`) → `{"ok":true}` |
+| POST | `/api/v1/agents/sessions/{id}/read` | Mark this session as read → `{"ok":true}` |
+| GET | `/api/v1/agents/sessions/{id}/avatar` | The session's avatar image as is, with `ETag`; a matching `If-None-Match` returns 304; cached for a day |
+| GET | `/api/v1/agents/outbox?session_id=&limit=` | The personal Agents' outbox `{"outbox":[{clientId, sessionId, preview, length, origin?, status, error?, attempts, createdAt, updatedAt}]}`; `status` is `sending` / `sent` / `failed` / `deleted` (resending a `failed` one with the same `clientId` is safe) |
+| POST | `/api/v1/channels/{id}/test` | Send a test message to the owner bound to the channel → `{"ok":true}`; couldn't send 502; no such channel 404 `not_found`, read-only ones or ones from a market not installed yet 409 `read_only`, read-only device 403 ([channels.md](channels.md) "6. Endpoints") |
+| DELETE | `/api/v1/channels/{id}/binding` | Unbind: for a plugin channel the connector signs out, for the Lark bot it unpairs; returns the channel details after unbinding; unbind failed 502, other errors as in the row above |
+| POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`: have the DEBUG build on the phone run one Runtime CLI command (`docs/runtime-cli.md` ("Connecting to a real device via the hub")), returns the App's response as is `{"ok": …}`. Full device credentials only (read-only device 403); no App online that registered `phone_runtime_cli` 503 `phone_offline` (doesn't wake it); no answer within `timeout` seconds (at most 120) 504; the App says the call failed 502. The hub logs one line per call (command, caller device id, status, duration), without arguments or responses |
+| Any | `/api/v1/plugins/{id}/-/machines/{mid}/{path…}` | HTTP to the plugin's program on computer `mid` (`node.http`, `docs/extensions.md` ("Programs that run on computers")), WebSocket too: the hub opens a stream via `plugin.node.dial` and forwards, stripping `Authorization` and `token`; full-access devices only; plugin not enabled on this machine 404, machine offline 409, program not responding 502 |
+| Any | `/api/v1/plugins/{id}/{path…}` | Forwarded as is to the plugin's `/{path…}` (except paths starting with `/-/`) (WebSocket too), stripping `Authorization` and `token`; read-only device 403. The voice plugin's contract is in `docs/extensions.md` ("Voice") |
 
-**按路径读文件的边界**（`file`、`file/download`、`file/thumb`、`file/convert`、`stat`、`fs`，node 的 `pathguard.go`）：只给已认证的客户端（设备 token）。路径逐段解析符号链接，**每一段在看之前**先检查，所以经链接指过去的也拦得住、且根本不碰目标：
-- **iCloud**（任何一段含 `Library/Mobile Documents`，不分大小写）：没解锁的 Mac 上一碰就卡住，`stat` 当不存在，读取拒绝。
-- **敏感文件**：home 下的 `.ssh`、`.gnupg`、`.aws`、`.azure`、`.kube`、`.docker`、`.password-store`、`Library/Keychains`、`.local/share/keyrings`、`.config/gcloud`、`.config/gh` 整个目录，
-  `.netrc`、`.git-credentials`、`.npmrc`、`.pypirc`、`.pgpass`、`.claude/.credentials.json`、`.codex/auth.json`，任何地方叫 `id_rsa` / `id_ed25519` 等的私钥，`.persona` / `.jarvis` 里的 `hub.json`（连备份 `hub.json.*`）、`apns*` 和 `.key` / `.p8` / `.pem` / `.crt`（知识库 `data/` 照常能读）。`stat` 当不存在，读取、列目录、下载都拒绝。
-- 链接最多跟 40 层（环就停）。这是基本防护，不是沙箱：设备 token 本来就能让 Agent 读这些文件。
+**Limits on reading files by path** (`file`, `file/download`, `file/thumb`, `file/convert`, `stat`, `fs`; the node's `pathguard.go`): only for authenticated clients (device tokens). Symlinks are resolved one segment at a time and **each segment is checked before it is looked at**, so anything reached through a link is blocked too, and the target is never touched:
+- **iCloud** (any segment containing `Library/Mobile Documents`, case-insensitive): touching it on a locked Mac hangs, so `stat` treats it as nonexistent and reads are refused.
+- **Sensitive files**: the whole directories `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.password-store`, `Library/Keychains`, `.local/share/keyrings`, `.config/gcloud`, `.config/gh` under home,
+  `.netrc`, `.git-credentials`, `.npmrc`, `.pypirc`, `.pgpass`, `.claude/.credentials.json`, `.codex/auth.json`, private keys named `id_rsa` / `id_ed25519` etc. anywhere, and in `.persona` / `.jarvis` the `hub.json` (including backups `hub.json.*`), `apns*` and `.key` / `.p8` / `.pem` / `.crt` (the knowledge base `data/` stays readable). `stat` treats them as nonexistent; reading, listing and downloading are all refused.
+- Links are followed at most 40 levels deep (a loop stops it). This is basic protection, not a sandbox: a device token can already have an Agent read these files.
 
-邮件见下文「邮件 API」。HTTP 错误格式和可选字段见上文「错误体」。
+For mail, see "Mail API" below. For the HTTP error format and optional fields, see "Error body" above.
 
-### 电脑的信任（feature `machine_trust`，#3347）
+### Computer trust (feature `machine_trust`, #3347)
 
-新用户上手方案（#287）4.2、5.3：已登录的设备能自己添加电脑（feature `machines_add`），添加的电脑先是**待确认**（`trust: "pending"`），用户点「是我的电脑」才确认。
-信任存 Postgres 的 `machine_trust` 表，**没有记录 = 已确认**：升级前的机器、`/admin` 加的、`hub pair --machine` 加的都直接是已确认，行为不变。待确认的电脑：
+From the onboarding plan (#287) 4.2 and 5.3: a signed-in device can add a computer itself (feature `machines_add`); an added computer starts out **pending** (`trust: "pending"`) and is confirmed only when the user taps **It's mine**.
+Trust is stored in the Postgres table `machine_trust`, and **no record = confirmed**: machines from before the upgrade, ones added via `/admin`, and ones added via `hub pair --machine` are all confirmed directly, with unchanged behavior. A pending computer:
 
-- 不收 Persona 管理的 Key（助手的 `pushManaged` 和新连接的 `launchers.managed` 都跳过）；它向管理者发的请求（`assistant.context`、MCP 工具）一律拒绝；
-- 不是助手的机器（`defaultAssistantMachine`、hello 的 `assistant.machines` 不含它），不在助手的 `devices.list` 里（派发、开 Agent、待办都看不到），hub 也不转给它助手的 `device.call`；
-- `POST /api/v1/sessions` 在它上面开 Agent 回 409 `machine_pending`（老 App 的新建 Agent 列表还会列它）；
-- 机器列表照常列出（App 要显示确认），`error` 写「等你在新版 App 或网页里确认这是你的电脑」，原来的 `error` 跟在括号里；
-- 24 小时没确认自动删除（hub.json 条目、记录，吊销它的 Persona Link 凭据和没用掉的配对码），和 `reject` 一样。
+- Doesn't receive Persona-managed keys (the assistant's `pushManaged` and `launchers.managed` on new connections both skip it); all its requests to the manager (`assistant.context`, MCP tools) are refused;
+- Isn't an assistant machine (`defaultAssistantMachine` and hello's `assistant.machines` exclude it), isn't in the assistant's `devices.list` (dispatch, starting Agents and to-dos don't see it), and the hub doesn't forward the assistant's `device.call` to it;
+- `POST /api/v1/sessions` starting an Agent on it returns 409 `machine_pending` (old Apps still list it in the new-Agent list);
+- Is still listed in the machine list (the App needs to show the confirmation), with `error` set to "Waiting for you to confirm this computer is yours in the latest app or on the web", followed by the original `error` in parentheses;
+- Is deleted automatically if not confirmed within 24 hours (the hub.json entry and the record; its Persona Link credential and unused pairing codes are revoked), the same as `reject`.
 
-拒绝或超时删除后，记录已经删了（看起来像已确认），但管理者断开它之前（配置变化要等一小会儿），hub 仍把它当待确认挡在外面，机器列表也不再列它，所以 hello 不会把它当成刚确认的电脑、给它推 Key。
-hub 读不到待确认的电脑（数据库不通）时，每台电脑都按待确认挡在外面（机器列表不标 `trust`），每 5 秒重读一次，读到为止；这期间不做超时删除。管理者那边读不到时，电脑发来的请求会拒绝，错误是「hub 的数据库没回应」，不说电脑在等确认。
-`confirm` / `reject` 的 `error` 按 `Accept-Language` 本地化（403 `forbidden`、404 `not_found`、409 `not_pending`）。
+After rejection or timeout deletion the record is gone (so it looks confirmed), but until the manager disconnects it (config changes take a moment), the hub still keeps it out as pending, and the machine list no longer lists it, so hello won't treat it as a just-confirmed computer and push keys to it.
+When the hub can't read pending computers (database unreachable), every computer is kept out as pending (the machine list doesn't mark `trust`), re-read every 5 seconds until it succeeds; no timeout deletion happens during that time. When the manager can't read them, requests from computers are refused with the error "the hub's database isn't responding", without saying the computer is waiting for confirmation.
+`error` for `confirm` / `reject` is localized by `Accept-Language` (403 `forbidden`, 404 `not_found`, 409 `not_pending`).
 
-确认后 hello 的机器列表多了它，助手随即给它推送 Key。出码、兑换、确认、拒绝、超时删除都写 `machine_audit` 表（谁、什么时候、做了什么，不含凭据）。
-设备怎么加出待确认的电脑见上面「临时配对」里的「电脑的配对码」。
+Once confirmed, hello's machine list includes it, and the assistant then pushes keys to it. Issuing a code, redeeming, confirming, rejecting and timeout deletion are all written to the `machine_audit` table (who, when, what was done, no credentials).
+How a device adds a pending computer: see "Computer pairing codes" under "Temporary pairing" above.
 
 ## WebSocket `/api/v1/ws`
 
-信封 `{"type":"…", ...}`。
+Envelope `{"type":"…", ...}`.
 
-服务端 → 客户端：
+Server → client:
 
-| type | 字段 |
+| type | Fields |
 | --- | --- |
-| `hub_restarting` | `back_in_ms`：hub 要重启了（部署、`systemctl restart`、更新），接着就是 1001「hub restarting」。客户端立刻重连、界面保持原样（[hub-restart.md](hub-restart.md)）。不带 `event_seq`，不补发 |
-| `hub_update` | `update`（同 `GET /api/v1/hub/update`）：检查、下载、等空闲、重启、确认、回滚，状态一变就推；`restarting` 之后连接会断一会儿，是预期的 |
-| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build`（后四个同 `/api/v1/health`），`event_stream`, `event_seq`, `resumed`（见下「事件续传」），`locale`（用户语言，feature `locale`）；每条 WS 首条消息，尚不含协商后的心跳。`mesh`：`{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`，互联组里所有 hub（含自己，`self: true`；配过对但现在到不了的 `online: false`；`center: true` 是组里的中心，客户端在同组的几台里优先连它），没有互联时只有自己。连成员时 hello 来自中心（`hub_id` 是中心的）（[mesh.md](mesh.md)） |
-| `endpoints` | `endpoints`（完整候选列表，仅发给声明同名能力的连接） |
-| `client_hello_ack` | `heartbeat: {interval, pong_timeout}`（本次协商后实际采用的秒数） |
+| `hub_restarting` | `back_in_ms`: the hub is about to restart (deploy, `systemctl restart`, update), followed by 1001 "hub restarting". The client reconnects immediately and keeps the UI as is ([hub-restart.md](hub-restart.md)). No `event_seq`, not replayed |
+| `hub_update` | `update` (same as `GET /api/v1/hub/update`): checking, downloading, waiting for idle, restarting, confirming, rolling back; pushed whenever the state changes; after `restarting` the connection drops for a while, which is expected |
+| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build` (the last four same as `/api/v1/health`), `event_stream`, `event_seq`, `resumed` (see "Event resume" below), `locale` (the user's language, feature `locale`); the first message on every WS, not yet including the negotiated heartbeat. `mesh`: `{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`, every hub in the linked-hub group (including itself, `self: true`; paired but currently unreachable ones `online: false`; `center: true` is the group's primary hub, which clients prefer among those in the same group); without linking, only itself. When connected to a member, hello comes from the primary (`hub_id` is the primary's) ([mesh.md](mesh.md)) |
+| `endpoints` | `endpoints` (the full candidate list, only sent to connections that declared the capability of the same name) |
+| `client_hello_ack` | `heartbeat: {interval, pong_timeout}` (the seconds actually used after this negotiation) |
 | `machines` | `machines` |
-| `workspace_board` | `revision`：看板修改已保存，客户端重新读取完整状态；不代表 Agent 状态变化 |
-| `workspace_board_settings` | `enabled`：看板的开关改了（`PUT /api/v1/workspace-board/settings`），客户端据此显示或隐藏入口 |
-| `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
-| `extension_operation` | `operation`（`ExtensionOperation`）：扩展的安装、升级、卸载走到了下一步，或下载有进展（最多每秒一条）；只发给声明了 `extension_operations` 的连接，不进事件日志，见上「扩展的安装、升级、卸载进度」 |
-| `extension_auth` | `extension`、`auth`（`ExtensionAuth`）：扩展的登录状态变了（登录完成、登出、过期、扩展发了 `auth.changed`），见 [extensions.md](extensions.md)「登录（auth）」 |
-| `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[extensions.md](extensions.md)「UI 插槽」 |
-| `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条；kind `view` 是活卡片的原始位置，body.view 是 AssistantView |
-| `assistant_view` | `conversation`, `view`（schema 的 AssistantView：id、conversation、version、view、created_at、updated_at）：已存入数据库的活卡片更新；同一卡片每秒最多一次，按 version 忽略旧更新；不另发通知 |
-| `assistant_view_block` | `conversation`, `key`：正文卡片已从可信助手 text item 校验并存入数据库，可以启用其一次 reply；重放同一来源不重复广播，进现有事件续传，漏掉后由 feed.view_blocks 快照补齐 |
-| `assistant_view_action` | `conversation`, `action`（ViewAction：key、action、page?、values、client_msg_id、status、revision、error?、at、updated_at、kind?、version?、text?）：卡片提交及发送状态；`kind` 缺省或 `action` 是声明式动作，`html` 是 HTML bridge 的 reply（`action` 为组件 key，`text` 为确认的原文）；`version` 是提交时用户看到的卡片版本（之前的记录没有）；按 revision 忽略旧状态，进现有事件续传 |
-| `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
-| `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`；可选 `attention_reason`：会话在「需要你」时，宿主说的原因（botmux 的 attention reason）；可选 `external_url`：在 Persona 之外打开它的地方（botmux 会话的飞书话题），见 `docs/engines.md`「botmux」） |
-| `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
-| `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话）；`settings_changed`（可选布尔值，默认 false，本批包含消息展示设置变化，与会话 ID 独立；客户端同时重读设置）；`account`（这些会话所在的飞书网关账号编号）；`ol_account`（只在不是默认账号时有，等于 `account`：读这些会话要带的参数，`docs/feishu.md`「多账号」）。hub 跟随飞书网关每个已登录账号的实时事件 `/agent/v1/events`，每个账号每 400ms 最多发一次，推给所有客户端。 |
-| `messaging` | `source`（消息来源 id）、`conversations`（有变化的会话 id）、`account`（可选，哪个账号的）、`settings_changed`（可选）：扩展 `messaging.changed` 合并一秒后推给所有客户端（`docs/extension-messaging.md`「九」） |
-| `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
-| `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
-| `live` | `machine_id`, `session_id`, `live`（`SessionLive` 或 `null`）：工作中的 Claude 的状态行，只发给订阅了该会话并声明 `session_live` 的连接，见下「实时状态」 |
-| `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
-| `fs_changed` | #2439：`machine_id`, `cwd`, `dirs`（这个页面 `fs_watch` 里变了的文件夹）, `git`（`cwd` 的 Git 状态变了）。只发给 `fs_watch` 过的页面，不进事件日志、重连不补发（页面重连后自己刷新一遍） |
-| `terminal_control` | `machine_id`, `session_id`, `state`：`active`（接管了，带 `cols`, `rows`）、`busy`（电脑上别的程序占着，问用户要不要 `takeover`；先镜像着）、`taken`（被别的设备或程序抢走）、`lost`（node 自己放手了）、`unsupported`（旧 node / herdr，只能镜像），`error` 是给人看的原因 |
-| `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
-| `herdr_state` / `herdr_data` / `herdr_end` | `id` 加 `state: "open"`, `cols`, `rows` / `data`（base64，≤ 32 KB 一条）/ `error?`, `code?`（`forbidden` `too_many` `bad_request` `offline`）, `unsupported?`：完整 herdr 界面的视图（`herdr_open` 的回应）。没 ack 的字节超过 1 MiB hub 就结束视图 |
-| `herdr_focus` | `id`（视图）, `machine_id`, `workspace_id`, `tab_id`, `pane_id`, `session_id?`（那个窗格里的 Agent 会话）, `source`（`client` 这台电脑上某个完整客户端刚被敲过 / `persona` 一次 `herdr_focus` 要求的 / `other` 其他）, `mine`（这个视图自己干的）：herdr 的焦点变了，推给这台电脑上的每个视图。网页只跟 `mine` 且 `client` 的，`persona` + `mine` 是回声，其余只出提示。feature `herdr_focus`。`docs/terminal.md` 第二十八节 |
-| `interaction` | `interaction`（新的待处理，推给所有客户端）。提问先由助手代答（#3029）时同一张卡会来两次：先带 `delegating: true`（助手在看，还没推送），助手交给用户时再来一次，`delegating` 没了、可能带 `delegate`（`what` / `why_now` / `recommend` / `cost` / `reason` / `deadline`，助手补齐的上下文）；按 `id` 覆盖 |
-| `interaction_resolved` | `id`；助手代答时另带 `answered_by: "assistant"`（#1602），以及 `reason`（为什么这么答）和 `answers`（答了什么，改答从这里开始，#3029） |
-| `interaction_reanswered` | `id`, `resolution`（`{answers}`）：用户把助手代答的改了，新答案已经发给那个 Agent（#3029） |
-| `fleet` | `fleet`（实时活动汇总，与 HTTP `/api/v1/fleet` 的内容对应） |
-| `hook_event` | node hook 事件的原字段，hub 补 `machine_id` 并置 `type: hook_event`；用于刷新会话运行状态；`Stop` 带 `stop_sig`（回复签名，hub 用来给「完成」推送去重，见 `agent-states.md`「hook 的轮次信号」）；全局只报告的 hooks（`claude-integration.md`「全局只报告的 hooks」）带 `report_only: true`，hub 不据此认为会话有 Persona 的 hooks，其余照旧 |
-| `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 且提供该工具的手机） |
-| `desktops` | `desktops`：连着的桌面端（Mac App），`[{"device","name","since"}]`，`device` 是它的设备凭据 id（用配对凭据连的为空，不能单独退出）。连上时发一次，之后有桌面端连上 / 断开就推给所有客户端（feature `desktops`）。iPhone 据此显示「Mac 上的 Persona 已登录」 |
-| `notify` | `kind: interaction / done / assistant`、`machine_id`、`session_id`、`title`、`subtitle`、`body`，交互另带 `interaction_id`；只发给声明 `ws_notify` 的连接，见下文 |
-| `lock_test` | `lock_test_id`、`lock_test_due_at`、`lock_test_sent_at`、`lock_test_title`、`lock_test_body`；只发给本设备声明 `lock_test` 的选定连接，见「锁屏测试」 |
-| `inbox` | 无内容载荷；列表变化提示，客户端重新拉取收件箱 |
-| `look` | `{"id","effective"}`：选中的形象变了（另一台设备选的、卸载扩展回默认），各端换上 `effective`（#3200） |
-| `personas` | 无内容载荷；形象列表变了（分级形象换了档、装 / 卸 / 停用带形象的扩展），客户端重拉 `GET /api/v1/personas`，新的包下载完整后再换（`docs/persona.md`「分级形象」） |
-| `error` | `machine_id`、`session_id`、`error`；例如订阅补发失败，客户端据此核对会话 |
-| `pong` | `id`（字符串，原样回应客户端应用层 ping） |
+| `workspace_board` | `revision`: a board change was saved; the client re-reads the full state; doesn't indicate an Agent state change |
+| `workspace_board_settings` | `enabled`: the board switch changed (`PUT /api/v1/workspace-board/settings`); clients show or hide the entry accordingly |
+| `todos` | —: pushed whenever to-dos or links change; clients re-fetch `GET /api/v1/todos` |
+| `extension_operation` | `operation` (`ExtensionOperation`): an extension install, upgrade or uninstall moved to the next step, or the download progressed (at most one per second); only sent to connections that declared `extension_operations`, not in the event log; see "Extension install, upgrade and uninstall progress" above |
+| `extension_auth` | `extension`, `auth` (`ExtensionAuth`): an extension's sign-in state changed (sign-in finished, signed out, expired, the extension sent `auth.changed`), see [extensions.md](extensions.md) "Sign-in (auth)" |
+| `plugin_ui` | `plugin`, `id`, `badge` (`{text, tone}`, `null` clears it): a plugin changed the badge on its main navigation entry (`nav_page`), [extensions.md](extensions.md) "UI slots" |
+| `assistant_feed` | `conversation`, `item` (`FeedItem`): a new entry in the chat feed; kind `view` is a live card's original position, and body.view is the AssistantView |
+| `assistant_view` | `conversation`, `view` (the schema's AssistantView: id, conversation, version, view, created_at, updated_at): an update to a live card already stored in the database; at most once per second per card, old updates ignored by version; no separate notification |
+| `assistant_view_block` | `conversation`, `key`: a body card has been validated from a trusted assistant text item and stored in the database, so its single reply can be enabled; replaying the same source doesn't broadcast again; goes into the existing event resume, and if missed is filled in by the feed.view_blocks snapshot |
+| `assistant_view_action` | `conversation`, `action` (ViewAction: key, action, page?, values, client_msg_id, status, revision, error?, at, updated_at, kind?, version?, text?): card submission and send status; `kind` absent or `action` means a declarative action, `html` is an HTML bridge reply (`action` is the component key, `text` is the confirmed text); `version` is the card version the user saw when submitting (older records don't have it); old states ignored by revision; goes into the existing event resume |
+| `task_plan` | `plan` (`TaskPlan`): a plan handed to the user, started, dismissed, or one of its tasks failed to start (`tasks[i].error`) |
+| `sessions` | `machine_id`, `sessions` (the full set for that machine, pushed on change, not pushed if identical to the last one; each session carries `rev` = transcript byte count, and a change means new content; optional `suggestion`: the gray "next message" suggestion Claude puts in the input box after a turn, see `docs/claude-integration.md`; optional `attention_reason`: when the session is in "Needs you", the reason the host gave (botmux's attention reason); optional `external_url`: where to open it outside Persona (the Lark thread of a botmux session), see `docs/engines.md` ("botmux")) |
+| `revs` | `machine_id`, `revs` (`{session_id: rev}`, changed ones only; sent when the fields visible in the list haven't changed but the transcript grew, pushed to all clients, and the App fetches the increment in the background) |
+| `lark` | `feed_ids` (chats with new Lark messages / changes); `settings_changed` (optional boolean, default false; this batch includes a change to message display settings, independent of the chat IDs; the client also re-reads settings); `account` (the Lark gateway account number these chats belong to); `ol_account` (only present when not the default account, equal to `account`: the parameter needed to read these chats, `docs/feishu.md` ("Multiple accounts")). The hub follows the live events `/agent/v1/events` of every signed-in account on the Lark gateway, sends at most once every 400 ms per account, and pushes to all clients. |
+| `messaging` | `source` (message source id), `conversations` (ids of changed chats), `account` (optional, which account), `settings_changed` (optional): an extension's `messaging.changed`, coalesced for one second, then pushed to all clients (`docs/extension-messaging.md` ("9")) |
+| `items` | `machine_id`, `session_id`, `items`, plus this batch's position in the transcript (see "Continuity of items" below): `history`, `to_seq`, `from_seq` (only on continuation batches). Only pushed to clients subscribed to that session; lines with no item (ai-title and the like) also get an empty `items`, so the App knows those lines have been seen |
+| `delta` | `machine_id`, `session_id`, `text` (the whole text the headless assistant is generating; an empty string means the turn is over). About one every 80 ms; the App draws each chat at most 5 times a second, the first one after a pause immediately and then the latest; an empty string is drawn immediately; anything not yet drawn is dropped when the message lands in the transcript or on reconnect (`DeltaPacer`) |
+| `live` | `machine_id`, `session_id`, `live` (`SessionLive` or `null`): the status line of a working Claude, only sent to connections subscribed to that session that declared `session_live`; see "Live status" below |
+| `screen` | `machine_id`, `session_id`, `text`, `status`, `ts` (the node no longer samples the screen per subscription: the terminal page reads `/screen` itself on demand, and old Apps not receiving this doesn't matter) |
+| `fs_changed` | #2439: `machine_id`, `cwd`, `dirs` (folders in this page's `fs_watch` that changed), `git` (the Git status of `cwd` changed). Only sent to pages that did `fs_watch`; not in the event log and not replayed on reconnect (the page refreshes itself once after reconnecting) |
+| `terminal_control` | `machine_id`, `session_id`, `state`: `active` (took control, with `cols`, `rows`), `busy` (another program on the computer holds it; ask the user whether to `takeover`; mirror in the meantime), `taken` (grabbed by another device or program), `lost` (the node let go itself), `unsupported` (old node / herdr, mirror only); `error` is a human-readable reason |
+| `terminal` | `machine_id`, `session_id`, plus a frame `epoch`, `seq`, `full`, `cols`, `rows`, `data` (base64 VT bytes), or `error` (the stream stopped: computer offline, session not running…) + `unsupported` (old node / herdr can't stream; poll `/screen` instead). See "Terminal stream" below |
+| `herdr_state` / `herdr_data` / `herdr_end` | `id` plus `state: "open"`, `cols`, `rows` / `data` (base64, ≤ 32 KB each) / `error?`, `code?` (`forbidden` `too_many` `bad_request` `offline`), `unsupported?`: a view of the full herdr interface (the response to `herdr_open`). The hub ends the view when un-acked bytes exceed 1 MiB |
+| `herdr_focus` | `id` (the view), `machine_id`, `workspace_id`, `tab_id`, `pane_id`, `session_id?` (the Agent session in that pane), `source` (`client`: some full client on this computer was just typed into / `persona`: requested by a `herdr_focus` / `other`: anything else), `mine` (done by this view itself): herdr's focus changed, pushed to every view on this computer. The web only follows ones that are `mine` and `client`; `persona` + `mine` is an echo; the rest only show a hint. Feature `herdr_focus`. `docs/terminal.md` section 28 |
+| `interaction` | `interaction` (a new pending one, pushed to all clients). When a question is first answered by the assistant on the user's behalf (#3029), the same card comes twice: first with `delegating: true` (the assistant is looking; not pushed yet), then again when the assistant hands it to the user, without `delegating` and possibly with `delegate` (`what` / `why_now` / `recommend` / `cost` / `reason` / `deadline`, the context the assistant filled in); overwrite by `id` |
+| `interaction_resolved` | `id`; when the assistant answered on the user's behalf, also `answered_by: "assistant"` (#1602), plus `reason` (why it answered that way) and `answers` (what it answered; re-answering starts from here, #3029) |
+| `interaction_reanswered` | `id`, `resolution` (`{answers}`): the user changed the assistant's answer, and the new answer has been sent to that Agent (#3029) |
+| `fleet` | `fleet` (the Live Activity summary, matching the content of HTTP `/api/v1/fleet`) |
+| `hook_event` | The node hook event's original fields; the hub adds `machine_id` and sets `type: hook_event`; used to refresh session run state; `Stop` carries `stop_sig` (a reply signature the hub uses to dedupe "done" pushes, see `agent-states.md` ("Turn signals from hooks")); global report-only hooks (`claude-integration.md` ("Global report-only hooks")) carry `report_only: true`, so the hub doesn't take them to mean the session has Persona's hooks; otherwise as before |
+| `tool_call` | `call_id`, `name`, `args` (only sent to phones that did `register_phone` and provide that tool) |
+| `desktops` | `desktops`: connected desktop clients (the Mac App), `[{"device","name","since"}]`; `device` is its device credential id (empty for those connected with a pairing credential, which can't be signed out individually). Sent once on connect, then pushed to all clients whenever a desktop client connects / disconnects (feature `desktops`). The iPhone uses it to show "Persona is signed in on a Mac" |
+| `notify` | `kind: interaction / done / assistant`, `machine_id`, `session_id`, `title`, `subtitle`, `body`; interactions also carry `interaction_id`; only sent to connections that declared `ws_notify`, see below |
+| `lock_test` | `lock_test_id`, `lock_test_due_at`, `lock_test_sent_at`, `lock_test_title`, `lock_test_body`; only sent to the selected connection on this device that declared `lock_test`, see "Lock screen test" |
+| `inbox` | No payload; a list-change hint, the client re-fetches the Inbox |
+| `look` | `{"id","effective"}`: the selected avatar changed (chosen on another device, or back to the default after an extension was uninstalled); every client switches to `effective` (#3200) |
+| `personas` | No payload; the avatar list changed (a tiered avatar changed tier, an extension with avatars was installed / uninstalled / disabled); clients re-fetch `GET /api/v1/personas` and switch once the new package has fully downloaded (`docs/persona.md` ("Tiered avatars")) |
+| `error` | `machine_id`, `session_id`, `error`; e.g. a subscription replay failed, and the client checks the session against it |
+| `pong` | `id` (a string, echoing the client's application-level ping) |
 
-客户端 → 服务端：
+Client → server:
 
-| type | 字段 |
+| type | Fields |
 | --- | --- |
-| `subscribe` | `machine_id`, `session_id`, `since_seq`（可选，App 传本地的 `covered`；有则补发其后的全部 items——每页一条 `items`（`backlog: true`），最多 8 页 / 4000 条，超出时最后一条带 `more_after: true`；否则补发最后两轮），`lazy_images`（可选；true 后这个连接收到的 items 都不带图片数据），`fold_work`（可选；true 后这个连接从末尾补发的最后两轮折叠工作，`since_seq` 的补发不折叠） |
-| `seen` | `machine_id`, `session_id`；与 HTTP `/seen` 同义 |
+| `subscribe` | `machine_id`, `session_id`, `since_seq` (optional; the App passes its local `covered`; if present, all items after it are replayed, one `items` per page (`backlog: true`), at most 8 pages / 4000 items, and beyond that the last one carries `more_after: true`; otherwise the last two turns are replayed), `lazy_images` (optional; when true, items received on this connection carry no image data), `fold_work` (optional; when true, the last two turns replayed from the end on this connection fold their work; `since_seq` replays are not folded) |
+| `seen` | `machine_id`, `session_id`; same as HTTP `/seen` |
 | `unsubscribe` | `machine_id`, `session_id` |
-| `terminal_subscribe` | `machine_id`, `session_id`, `epoch`（可选）, `after_seq`（可选）：开始收这个会话终端的实时帧（hub `features` 里有 `terminal_stream` 才发）；`control: {cols, rows}`（可选，`terminal_control`）：手机按这个尺寸接管终端，`takeover: true` 连别的程序占着的也抢 |
-| `terminal_input` | `machine_id`, `session_id`, `text`（终端字节，原样写进去）, `control: {cols, rows}`（可选，新尺寸）, `scroll`（可选，滚轮的行数，> 0 往回、< 0 往新，feature `terminal_scroll`）, `at`（可选，`[column, row]` 从 0 起，滚轮落在屏幕的哪一格：手指按下的地方；不带时 node 用屏幕正中间）, `click`（可选，`[column, row]` 从 0 起，屏幕上那一格左键单击，feature `terminal_click`），`mouse`（可选，`{action: down|up|drag|move, button: left|middle|right, at: [column, row], mods}`，`mods` 位：shift 1、ctrl 2、alt 4；一个鼠标事件，feature `terminal_mouse`，docs/terminal.md 第二十三节）：只有正在接管的那个连接发的才转给 node |
+| `terminal_subscribe` | `machine_id`, `session_id`, `epoch` (optional), `after_seq` (optional): start receiving live frames of this session's terminal (only sent when the hub's `features` has `terminal_stream`); `control: {cols, rows}` (optional, `terminal_control`): the phone takes control of the terminal at this size, and `takeover: true` grabs it even when another program holds it |
+| `terminal_input` | `machine_id`, `session_id`, `text` (terminal bytes, written as is), `control: {cols, rows}` (optional, new size), `scroll` (optional, wheel lines, > 0 goes back, < 0 goes newer, feature `terminal_scroll`), `at` (optional, `[column, row]` from 0, which cell of the screen the wheel lands on: where the finger went down; without it the node uses the center of the screen), `click` (optional, `[column, row]` from 0, a left click on that cell, feature `terminal_click`), `mouse` (optional, `{action: down|up|drag|move, button: left|middle|right, at: [column, row], mods}`, `mods` bits: shift 1, ctrl 2, alt 4; one mouse event, feature `terminal_mouse`, docs/terminal.md section 23): only forwarded to the node when sent by the connection currently in control |
 | `terminal_unsubscribe` | `machine_id`, `session_id` |
-| `fs_watch` | #2439（文件和 Git 的自动刷新，下面「文件自动刷新」）：`machine_id`, `cwd`（会话目录）, `paths`（这个页面打开着的文件夹，绝对路径，最多 32 个）, `git`（是否显示 `cwd` 的 Git 状态）。整份替换这个页面对这台机器、这个 `cwd` 的集合；`paths` 空且 `git` 为 false 就是释放（连接断开也释放）。只有完全权限的设备能发，答题设备（手表）忽略 |
-| `herdr_open` | `id`（浏览器自己取，≤ 64 字符）, `machine_id`, `session_id`（可选，会话 id 或 `pane:` 地址，先聚焦它的标签页）, `cols`, `rows`, `focus`：让 node 在 PTY 里跑 herdr 自己的客户端，字节流回来（feature `herdr_client`，仅 `full` 设备）。`docs/terminal.md` 第二十四节 |
-| `herdr_input` / `herdr_resize` / `herdr_ack` / `herdr_close` | `id` 加 `data` 或 `b64`（≤ 1 MiB）/ `cols`, `rows` / `bytes`（累计已解析的字节数）/ —：只有开这个视图的连接能用它 |
-| `herdr_focus` | `id`（视图的 id）, `session_id`（会话 id 或 `pane:` 地址，≤ 256 字符）：页面现在显示这个窗格，把 herdr 的焦点移过去（feature `herdr_focus`，仅 `full` 设备，仅开这个视图的连接；电脑上的状态变更，焦点是整个 herdr 会话共享的）。不回应；焦点真的变了会以 `herdr_focus`（`source: "persona"`）回来。`docs/terminal.md` 第二十八节 |
-| `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用）；可选 `device_id`、`platform`。按设备替换注册，空工具列表只清除该设备的供给；缺少 `device_id` 时用鉴权设备 ID，再回退到 `legacy`。调用先筛选提供该工具的在线手机，再优先真机、最近活跃连接。iPhone 的 `device_id` 是推送用的设备 id（同 `POST /api/v1/devices`）：连着的这段时间 hub 不给这台设备的实时活动推 APNs，App 自己画，`docs/live-activity.md`「推送节奏」；老 App 不带。`tools` 里的 `phone_runtime_cli`（DEBUG 包打开了经 hub 的 Runtime CLI）不算手机的工具：hub 把它拿出来，不进 Agent 的工具列表、Agent 调不到，只给 `POST /api/v1/phone/runtime-cli`；只登记了它一个（脚本驱动的模拟器）时这条连接不算手机。 |
-| `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）；`device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台 Mac 推「需要你处理」「Agent 做完」，它自己发本地通知；老 App 不带）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接、删掉它登记的推送） |
-| `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
-| `client_hello` | `device_id`, `platform`, `version`, `build`, `os: {name, version, sdk}`, `features`, `heartbeat: {interval?, pong_timeout?}`, `locale`（`zh-Hans` / `en` / `ja`，界面语言），均可省略，见下文 |
-| `ping` | 必须带字符串 `id`，允许空字符串；缺失、null 或非字符串时不回复 |
+| `fs_watch` | #2439 (automatic refresh of files and Git, "Automatic file refresh" below): `machine_id`, `cwd` (the session directory), `paths` (folders open on this page, absolute paths, at most 32), `git` (whether the Git status of `cwd` is shown). Replaces this page's whole set for this machine and this `cwd`; empty `paths` with `git` false releases it (so does disconnecting). Only full-access devices can send it; answer devices (the watch) are ignored |
+| `herdr_open` | `id` (chosen by the browser, ≤ 64 characters), `machine_id`, `session_id` (optional, a session id or a `pane:` address, whose tab is focused first), `cols`, `rows`, `focus`: have the node run herdr's own client in a PTY and stream the bytes back (feature `herdr_client`, `full` devices only). `docs/terminal.md` section 24 |
+| `herdr_input` / `herdr_resize` / `herdr_ack` / `herdr_close` | `id` plus `data` or `b64` (≤ 1 MiB) / `cols`, `rows` / `bytes` (cumulative bytes parsed) / —: only the connection that opened the view can use it |
+| `herdr_focus` | `id` (the view's id), `session_id` (a session id or a `pane:` address, ≤ 256 characters): the page now shows this pane, so move herdr's focus there (feature `herdr_focus`, `full` devices only, only the connection that opened the view; it changes state on the computer, since focus is shared by the whole herdr session). No reply; if focus actually changes, it comes back as `herdr_focus` (`source: "persona"`). `docs/terminal.md` section 28 |
+| `register_phone` | `device_name`, `tools` (`[{"name","description","input_schema"}]`, i.e. MCP tool definitions), `simulator` (a simulator only takes tool calls when no real device is connected); optional `device_id`, `platform`. Registration is replaced per device; an empty tool list only clears that device's tools; without `device_id`, the authenticated device ID is used, falling back to `legacy`. A call first filters online phones that provide the tool, then prefers real devices and the most recently active connection. The iPhone's `device_id` is the device id used for push (same as `POST /api/v1/devices`): while it's connected, the hub doesn't send APNs pushes for this device's Live Activity and the App draws it itself, `docs/live-activity.md` ("Push cadence"); old Apps don't send it. `phone_runtime_cli` in `tools` (a DEBUG build with Runtime CLI via the hub turned on) doesn't count as a phone tool: the hub takes it out, so it's not in the Agents' tool list and Agents can't call it; it's only for `POST /api/v1/phone/runtime-cli`; a connection that registers only that one (a script-driven simulator) doesn't count as a phone. |
+| `register_desktop` | `device_name`: the Mac App registers as a desktop client, not a phone: it doesn't take `phone_*` and doesn't stop the hub from sending pushes that wake the iPhone (`hub/desktops.go`); `device_id` (the device id used for push, same as `POST /api/v1/devices`: while it's connected, the hub doesn't push "Needs You" or "Agent finished" to this Mac, and it posts local notifications itself; old Apps don't send it). Signing it out means revoking its device credential (`DELETE /api/v1/auth/tokens/{id}`; the hub then drops its connection and deletes the push registration it made) |
+| `tool_result` | `call_id`, `content` (`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`), `is_error` |
+| `client_hello` | `device_id`, `platform`, `version`, `build`, `os: {name, version, sdk}`, `features`, `heartbeat: {interval?, pong_timeout?}`, `locale` (`zh-Hans` / `en` / `ja`, the UI language), all optional, see below |
+| `ping` | Must carry a string `id`; an empty string is allowed; no reply if it's missing, null or not a string |
 
-### 事件续传（`event_seq`，2026-11-04）
+### Event resume (`event_seq`, 2026-11-04)
 
-hub 发给所有客户端的广播（这张表里除 `hello`、连接快照、`sessions_delta`、`items`、`delta`、`terminal*`、`tool_call`、`notify`、`lock_test`、`pong`、`error`、
-`client_hello_ack`、`hub_restarting` 以外的）带 `event_seq`：同一条流（`hello.event_stream`）里每条加一，hub 重启后接着编号。
+Broadcasts the hub sends to all clients (everything in this table except `hello`, connection snapshots, `sessions_delta`, `items`, `delta`, `terminal*`, `tool_call`, `notify`, `lock_test`, `pong`, `error`,
+`client_hello_ack`, `hub_restarting`) carry `event_seq`: it increments by one per event within a stream (`hello.event_stream`), and numbering continues after a hub restart.
 
-- 客户端记住 `event_stream` 和收到的最大 `event_seq`，重连时带上：`/api/v1/ws?event_stream=<流>&event_seq=<n>`（两个都带才算）。
-- `hello.resumed: true`：紧跟 hello 补发 `event_seq > n` 的广播（按顺序、不重复），之后是实时的；客户端不用全量重拉。连接快照照常发（完整状态，静默应用）。
-- `resumed: false`（流变了：hub 崩溃过；漏掉的已经不在 hub 留的最近 2000 条 / 15 分钟里；超过 400 条）或旧 hub 没有这些字段：照以前全量刷新。
-  `hello.event_seq` 是此刻的最后一条，全量刷新后从它接着记。
-- 需要填写的授权卡片（elicitation 的 `interaction`）不补发，靠连接后的待处理交互快照。
-- 订阅（`subscribe`）的补发之后，正在生成的无头助手会话紧跟一条当前的 `delta`。
+- The client remembers `event_stream` and the highest `event_seq` it received, and passes them when reconnecting: `/api/v1/ws?event_stream=<stream>&event_seq=<n>` (both are required).
+- `hello.resumed: true`: right after hello, broadcasts with `event_seq > n` are replayed (in order, no duplicates), then live ones follow; the client doesn't need a full re-fetch. Connection snapshots are sent as usual (full state, applied silently).
+- `resumed: false` (the stream changed: the hub crashed; what was missed is no longer in the last 2000 events / 15 minutes the hub keeps; more than 400 events) or an old hub without these fields: do a full refresh as before.
+  `hello.event_seq` is the last event at this moment; after the full refresh, keep counting from it.
+- Permission cards that need filling in (elicitation `interaction`s) are not replayed; they come from the pending-interaction snapshot after connecting.
+- After a subscription (`subscribe`) replay, a headless assistant session that is still generating is followed immediately by one current `delta`.
 
-### 常驻连接通知（ws_notify）
+### Notifications over the persistent connection (ws_notify)
 
-`notify` 是事件名，`ws_notify` 是双方声明的能力名。hub 复用 APNs 的提问和完成决策、屏蔽规则与设备偏好，在 `c.has("ws_notify")` 时才发给该连接。即使没有 APNs token 或密钥也能收到；旧 iOS 不声明就不会收到新事件。
+`notify` is the event name; `ws_notify` is the capability name both sides declare. The hub reuses the APNs decisions for questions and completions, mute rules and device preferences, and sends it to a connection only when `c.has("ws_notify")`. It's received even without an APNs token or key; old iOS versions don't declare it and so don't get the new event.
 
-`interaction` 表示需要处理的交互，`done` 表示 Agent 完成，`assistant` 表示助手完成，`alert` 表示扩展经 `POST /api/v1/notify`（或脚本的 `personad notify`，`script-cli.md`）发的提醒（不认识的 kind 客户端忽略）。偏好按鉴权设备 ID 读取 `/api/v1/devices/{id}/prefs`：交互看 `input`，完成看原有完成策略；机器与空间屏蔽沿用已有判断。完成事件由 hub 决策，Android 不应根据 sessions 状态变化再次生成一条。原始 `interaction` 与 `interaction_resolved` 事件照旧发送，用于请求卡和撤回通知，不能把它们都当成新的提醒。
+`interaction` means an interaction that needs handling, `done` means an Agent finished, `assistant` means the assistant finished, and `alert` is a reminder an extension sent via `POST /api/v1/notify` (or a script's `personad notify`, `script-cli.md`) (clients ignore unknown kinds). Preferences are read from `/api/v1/devices/{id}/prefs` by the authenticated device ID: interactions follow `input`, completions follow the existing completion policy; machine and space mutes use the existing checks. Completion events are decided by the hub, and Android should not generate another one from session state changes. The raw `interaction` and `interaction_resolved` events are still sent, for request cards and withdrawing notifications; don't treat both as new reminders.
 
-事件不持久回放，也不证明通知实际展示；断线后客户端仍须拉交互和会话核对。通知可靠性、锁屏展示和耗电未实测。
+Events are not persisted for replay and don't prove a notification was actually shown; after a disconnect the client must still fetch interactions and sessions to reconcile. Notification reliability, lock screen display and battery use have not been measured.
 
-### 客户端能力与心跳
+### Client capabilities and heartbeat
 
-客户端看到服务端支持 `client_hello` 后可发送：
+Once the client sees that the server supports `client_hello`, it may send:
 
 ```json
-{"type":"client_hello","device_id":"<设备 id>","platform":"android","version":"<版本>","build":1,"os":{"name":"Android","version":"<系统版本>","sdk":36},"features":["endpoints"],"locale":"en","heartbeat":{"interval":240,"pong_timeout":15}}
+{"type":"client_hello","device_id":"<device id>","platform":"android","version":"<version>","build":1,"os":{"name":"Android","version":"<OS version>","sdk":36},"features":["endpoints"],"locale":"en","heartbeat":{"interval":240,"pong_timeout":15}}
 ```
 
-`locale` 是解析后的界面语言（`zh-Hans` / `en` / `ja`，[i18n.md](i18n.md)），不是「跟随系统」。hub 用它出这条连接上的 `notify`、`error` 等文案；`full` 角色的连接报的值同时记成**用户语言**（Postgres `settings.user_locale`），助手回答、injected 消息、任务通知、机器人回复、没有自己 `locale` 的设备的推送都用它。从没有客户端报过时是 `zh-Hans`。省略 `locale` 不改这两样；用户改了语言（或跟随系统时系统语言变了）立刻再发一次 `client_hello`（带上原来的其余字段，省略 `features` 会清空能力集合）。
+`locale` is the resolved UI language (`zh-Hans` / `en` / `ja`, [i18n.md](i18n.md)), not "Match System". The hub uses it for the text of `notify`, `error` and the like on this connection; the value reported by a `full`-role connection is also recorded as the **user language** (Postgres `settings.user_locale`), used for assistant answers, injected messages, task notifications, bot replies, and pushes to devices without their own `locale`. If no client has ever reported one, it's `zh-Hans`. Omitting `locale` changes neither. When the user changes the language (or the system language changes under Match System), send `client_hello` again right away (with the other fields as before; omitting `features` clears the capability set).
 
-这份元数据只记录在当前连接，不改变已鉴权的设备身份或权限。`build` 当前接收任意 JSON。每次 `client_hello` 替换客户端的能力集合，省略 `features` 等于清空集合；不要用服务端能力列表代替客户端自己支持的能力。
+This metadata is only recorded on the current connection and doesn't change the authenticated device identity or permissions. `build` currently accepts any JSON. Each `client_hello` replaces the client's capability set, and omitting `features` clears it; don't substitute the server's capability list for the capabilities the client itself supports.
 
-下面的秒数均为代码中的协商边界和定时器配置，**未实测网络延迟、实际发包频率、耗电或运营商空闲超时**。
+The seconds below are all negotiation bounds and timer settings in the code; **network latency, actual packet frequency, battery use and carrier idle timeouts have not been measured**.
 
-- 未协商时维持旧行为：hub 发 WebSocket 协议 ping 的间隔配置为 20 秒，等待协议 pong 的超时配置为 15 秒；不改变旧连接的 TCP keepalive 设置。
-- `heartbeat.interval` 为整数秒，先夹到 10–900，再仅向下抖动：减去 `0..min(interval-10, floor(interval/10))` 的随机整数。每次协商只抽取一次，`client_hello_ack` 返回实际采用的值。
-- `heartbeat.pong_timeout` 为整数秒，夹到 5–60；省略某项时保留上一值或默认值。提供空 `heartbeat` 对象也会标记已协商；整个字段缺省则保留原协商状态。
-- 写协程应用新配置后返回 `{"type":"client_hello_ack","heartbeat":{"interval":<实际值>,"pong_timeout":<实际值>}}`。客户端重复发送可再次协商；即使只发送元数据、不带 heartbeat，也会收到当前值的 ack。
-- 协商后同步尝试调整 TCP keepalive：Idle 用 interval、Interval 用 pong_timeout、Count 为 3；取决于底层连接是否支持。协议 pong 超时会关闭连接。同一时刻只等一个协议 ping，不阻塞应用层回复。
+- Without negotiation, the old behavior holds: the hub sends WebSocket protocol pings every 20 seconds and waits 15 seconds for the protocol pong; TCP keepalive settings on old connections are unchanged.
+- `heartbeat.interval` is in whole seconds, first clamped to 10–900, then jittered downward only: a random integer in `0..min(interval-10, floor(interval/10))` is subtracted. It's drawn once per negotiation, and `client_hello_ack` returns the value actually used.
+- `heartbeat.pong_timeout` is in whole seconds, clamped to 5–60; an omitted item keeps the previous or default value. An empty `heartbeat` object also marks it as negotiated; omitting the whole field keeps the previous negotiation state.
+- After the writer goroutine applies the new settings, it returns `{"type":"client_hello_ack","heartbeat":{"interval":<actual>,"pong_timeout":<actual>}}`. The client can send it again to renegotiate; even sending only metadata without heartbeat gets an ack with the current values.
+- After negotiation it also tries to adjust TCP keepalive: Idle uses interval, Interval uses pong_timeout, Count is 3; this depends on whether the underlying connection supports it. A protocol pong timeout closes the connection. Only one protocol ping is outstanding at a time, and it doesn't block application-level replies.
 
-应用层探测另用客户端发起的 JSON 消息：
+Application-level probes use separate client-initiated JSON messages:
 
 ```json
 {"type":"ping","id":"probe-1"}
 {"type":"pong","id":"probe-1"}
 ```
 
-第一条是客户端发，第二条是 hub 回，`id` 原样回显。先检查服务端的 `app_ping` 能力；它与 WebSocket 协议控制帧的 ping / pong 独立，不能互相替代。hub 不会主动发送 JSON `ping`，也不处理客户端 JSON `pong`。旧客户端不发 `client_hello` 时不会收到新增的 `endpoints` 事件或协商回执。
+The first is sent by the client, the second is the hub's reply, with `id` echoed as is. Check the server's `app_ping` capability first; it's independent of WebSocket protocol control-frame ping / pong, and neither replaces the other. The hub never sends JSON `ping` on its own and doesn't handle client JSON `pong`. Old clients that don't send `client_hello` don't receive the new `endpoints` event or the negotiation ack.
 
-新字段必须可选，且不能与现有 iOS `Envelope` 的同名键使用冲突类型；例如 `id` 保持字符串，不能为了新协议改成对象。
+New fields must be optional and must not use a type that conflicts with a same-named key in the existing iOS `Envelope`; for example, `id` stays a string and can't become an object for the new protocol.
 
-### Codex 的提问和审批
+### Codex questions and approvals
 
-Codex / TRAEX 在终端里没有 hook，node 自己从 rollout 读提问（`request_user_input_async` / `request_user_input`）、从屏幕读审批，做成普通的
-`question` / `permission` 交互，带 `agent: "codex" | "traex"`；授权卡还带 `reason`（Codex 说的理由）和 `always_label`（「总是同意」会放行什么，
-没有这个字段就没有「总是同意」）。回答格式和 Claude 的一样：`{"answers":…}`，`{"allow":true,"always":…}`，`{"allow":false,"message":"…"}`
-（有 `message` 时停下这一轮、把它作为下一条消息发进去）。回答是同步的：hub 把它交给 node（`codex.answer`），node 确认电脑上还是这道题 / 这个审批、
-TUI 回到了能作答的状态，输入后再确认 Codex 收下了才回成功；否则回 409 `input_draft` / `dialog_open` / `prompt_changed`（什么都没输入），
-卡片留着（`prompt_changed` 除外）。细节见 `docs/codex.md`「提问和审批」。
+Codex / compatible forks have no hooks in the terminal, so the node reads questions from the rollout itself (`request_user_input_async` / `request_user_input`) and approvals from the screen, turning them into ordinary
+`question` / `permission` interactions with `agent: "codex" | "traex"`; permission cards also carry `reason` (the reason Codex gave) and `always_label` (what **Always Approve** would allow;
+without this field there's no **Always Approve**). The answer format is the same as Claude's: `{"answers":…}`, `{"allow":true,"always":…}`, `{"allow":false,"message":"…"}`
+(with `message`, the turn stops and the message is sent in as the next message). Answers are synchronous: the hub hands it to the node (`codex.answer`), and the node checks that the computer still shows this question / this approval
+and that the TUI is back in a state where it can be answered, types the input, then confirms Codex accepted it before returning success; otherwise it returns 409 `input_draft` / `dialog_open` / `prompt_changed` (nothing typed),
+and the card stays (except for `prompt_changed`). Details in `docs/codex.md` ("Questions and approvals").
 
-### 需要填写的授权卡片
+### Permission cards that need filling in
 
-`permission` 交互可带 `fields: [{key,label,placeholder?,secret?,optional?}]`，App 用安全输入框填写密码，批准时发送
-`{"allow":true,"values":{"password":"…"}}`。必填字段缺失时 hub 拒绝本次批准并保留卡片；交互历史的 secret 字段只记录 `<redacted>`，
-原始值只交给等待中的工具处理。此类卡片的通知分类是 `INTERACTION_INPUT`（无快捷允许按钮），列表、手表和 Siri 不直接批准。
+A `permission` interaction can carry `fields: [{key,label,placeholder?,secret?,optional?}]`; the App fills in passwords with a secure input field and on approval sends
+`{"allow":true,"values":{"password":"…"}}`. If a required field is missing, the hub rejects this approval and keeps the card; secret fields in the interaction history are recorded only as `<redacted>`,
+and the raw values only go to the waiting tool. The notification category for these cards is `INTERACTION_INPUT` (no quick allow button), and the list, the watch and Siri don't approve them directly.
 
-### 终端对话框（screen 交互）
+### Terminal dialogs (screen interactions)
 
-Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`，40 行）建一张 `screen` 卡：
+When an Agent is blocked without a hook interaction, the hub reads the screen once (`session.screen`, 40 lines) and builds a `screen` card:
 
-- 什么时候建：没有 Jarvis hook 的 Claude Code（用户自己的 profile 启动的）一 blocked 就读屏幕建卡；有 hook 的会话（这次 hub 启动后发过 hook 事件，
-  或者是 Jarvis 起的）先等 1.5 s，让 hook 自己的卡先到（Codex / TRAEX 等 3 s）。hook 的卡晚到时照旧替掉屏幕卡。
-- 答完一张屏幕卡后 hub 每 250 ms 再看一次屏幕，最多 2 s：Agent 接着又问（AskUserQuestion 的下一道题、下一个授权）时 herdr 可能一直是 blocked、
-  没有状态变化，靠这一下给新的对话框建卡；看到的还是刚答的那个（按键还没落地）或没有对话框就接着看，Agent 不再 blocked 或已有别的卡就停。
-- 整条链路的实测和不限流的约定见 `docs/server.md`「卡片的快车道」（#751）。
+- When it's built: for Claude Code without Jarvis hooks (started from the user's own profile), it reads the screen and builds the card as soon as it's blocked; for sessions with hooks (that sent a hook event since this hub started,
+  or that Jarvis started), it first waits 1.5 s so the hook's own card arrives first (3 s for Codex / compatible forks). If the hook's card arrives late, it still replaces the screen card.
+- After a screen card is answered, the hub looks at the screen again every 250 ms for up to 2 s: when the Agent asks again right away (the next AskUserQuestion question, the next permission), herdr may stay blocked
+  with no state change, and this check is what builds a card for the new dialog; if it still sees the one just answered (the keys haven't landed yet) or no dialog, it keeps looking, and stops once the Agent is no longer blocked or another card exists.
+- Measurements of the whole path and the no-rate-limit convention are in `docs/server.md` ("Fast lane for cards") (#751).
 
-- hub 用 `server/internal/screen` 解析对话框，放进 `interaction.dialog`：`header`、`question`、`detail`、
-  `options[{key,label,detail,kind,keys}]`（`kind`：`type_something` / `chat` / 空）、`rev`（问题和选项的哈希，不含光标和转圈）。
-  有编号的选项按数字；Claude 2.1.312 信任目录那种不带编号的列表按光标算 `up/down` + `enter`。卡片 id 带上 `rev`：对话框换了就是新卡，
-  上一张卡里选的不会带过来。
-- App 回答带 `option`（`type_something` 再带 `text`），不再自己猜按键；hub 把 `rev` 和 `option` 交给 node 的 `session.keys`，
-  node **按键之前重读屏幕、重新解析、比对 `rev`**，不一致就什么都不按，回 409 `{"code":"prompt_changed"}`，hub 随即按当前屏幕再建一张卡。
-  按键也在 node 上按当时的屏幕算（光标在电脑上被挪过也不会选错）。
-- 兼容：旧 App 不认 `dialog`，照旧自己解析 `screen`、发 `keys`——hub 也会带上 `rev`，同样先核对；旧 node 不认 `rev` / `option`，
-  hub 同时传算好的 `keys`，行为同以前。没解析出对话框的卡（只有终端和按键栏）不核对。
-- 屏幕卡的回答是同步的：hub 等 node 按完才回 App（以前是先回成功再在后台按）。
-- `rev` 由 hub 和 node 各自用同一份解析代码算：改了 `internal/screen` 的解析就要 hub 和所有 node 一起部署，否则新卡永远对不上（每次都 `prompt_changed`）。
-- 手表有 `dialog` 时也按 `option` 回答（Siri「批准第一个待处理」不处理屏幕卡）。
-- **多选**（Claude Code 2.1.316 的 AskUserQuestion `multiSelect`，`docs/claude-integration.md`「多选提问的屏幕卡」）：`dialog` 多带
-  `multi: true`、`submit`（`Submit`，后面还有题时是 `Next`），选项多带 `checked`（电脑上已经勾了）、`text`（自由回答框里已经写的字）；
-  多个问题时 `steps[{label,done}]` 是顶上的标签栏；提交前的确认页是 `review: true`（`incomplete: true`：还有题没答），选项是「Submit answers / Cancel」。
-  `checked`、光标、写的字、标签的勾都不进 `rev`。
-  App 回答带 `options`（要勾上的选项的 key，没列的会被取消）和 `text`（自由回答，空就不勾它）。hub 交给 node 的 `session.keys`
-  （`multi: true`、`options`、`free_text`），node 一次按一个键、每按一次重读屏幕，最后按 Submit / Next；确认页上所有题都答了就再按「Submit answers」。
-  旧 App 对多选卡只发一个 `option`：当成只勾这一项。
-- 密码：屏幕最后一行是密码提示（`[sudo] password for …:`、`Password:`、ssh 口令…，规则刻意收窄，正文里提到 password 不算）时卡片带
-  `secret: true`，App 用密码框（不进草稿）。不管是不是密码，终端卡回答里的 `text` 在数据库里一律存成 `<redacted>`；
-  终端面板的按键接口（`/keys`）本来就不落库，hub 的请求日志也只记路径和状态码。
+- The hub parses the dialog with `server/internal/screen` and puts it into `interaction.dialog`: `header`, `question`, `detail`,
+  `options[{key,label,detail,kind,keys}]` (`kind`: `type_something` / `chat` / empty), `rev` (a hash of the question and options, excluding the cursor and spinner).
+  Numbered options are chosen by number; unnumbered lists like Claude 2.1.312's trust-folder prompt are computed as `up/down` + `enter` from the cursor. The card id includes `rev`: a changed dialog is a new card,
+  and what was selected on the previous card doesn't carry over.
+- The App's answer carries `option` (plus `text` for `type_something`) instead of guessing keys itself; the hub passes `rev` and `option` to the node's `session.keys`,
+  and the node **re-reads the screen, re-parses and compares `rev` before pressing any key**; if they differ it presses nothing and returns 409 `{"code":"prompt_changed"}`, and the hub then builds a new card from the current screen.
+  The keys are also computed on the node from the screen at that moment (so it won't pick the wrong thing if the cursor was moved on the computer).
+- Compatibility: old Apps don't know `dialog` and keep parsing `screen` and sending `keys` themselves; the hub adds `rev` to those too and checks it the same way; old nodes don't know `rev` / `option`,
+  so the hub also passes the computed `keys`, behaving as before. Cards where no dialog was parsed (only the terminal and the key bar) aren't checked.
+- Screen card answers are synchronous: the hub waits until the node has pressed the keys before replying to the App (it used to reply success first and press in the background).
+- `rev` is computed by the hub and the node separately with the same parsing code: if you change the parsing in `internal/screen`, deploy the hub and all nodes together, or new cards will never match (`prompt_changed` every time).
+- The watch also answers with `option` when there's a `dialog` (Siri's **Approve First Pending** doesn't handle screen cards).
+- **Multi-select** (AskUserQuestion `multiSelect` in Claude Code 2.1.316, `docs/claude-integration.md` ("Screen cards for multi-select questions")): `dialog` also carries
+  `multi: true`, `submit` (`Submit`, or `Next` when more questions follow), and options also carry `checked` (already checked on the computer) and `text` (what's already typed in the free-answer box);
+  with several questions, `steps[{label,done}]` is the tab bar at the top; the confirmation page before submitting is `review: true` (`incomplete: true`: some questions unanswered), with options "Submit answers / Cancel".
+  `checked`, the cursor, typed text and tab checkmarks don't go into `rev`.
+  The App's answer carries `options` (the keys of options to check; unlisted ones get unchecked) and `text` (the free answer; empty means don't check it). The hub passes it to the node's `session.keys`
+  (`multi: true`, `options`, `free_text`), and the node presses one key at a time, re-reading the screen after each, and finally presses Submit / Next; on the confirmation page, if all questions are answered it presses "Submit answers" too.
+  Old Apps send only one `option` for a multi-select card: treated as checking just that one.
+- Passwords: when the last line on the screen is a password prompt (`[sudo] password for …:`, `Password:`, an ssh passphrase…; the rules are deliberately narrow, and the word password in body text doesn't count), the card carries
+  `secret: true` and the App uses a password field (not saved to drafts). Password or not, `text` in terminal card answers is always stored as `<redacted>` in the database;
+  the terminal panel's key endpoint (`/keys`) isn't stored at all, and the hub's request log only records the path and status code.
 
-### 会话增量（`sessions_delta`，2026-11-02）
+### Session deltas (`sessions_delta`, 2026-11-02)
 
-一台机器的会话列表有上百个会话、每个约 1 KB，一次推送通常只变一个会话；整表推送让手机每分钟下载、解码约 2.6 MB（`docs/server.md`「推送给 App 的量」）。
+A machine's session list has hundreds of sessions at about 1 KB each, and a push usually changes just one; pushing the whole list made the phone download and decode about 2.6 MB a minute (`docs/server.md` ("Volume pushed to the App")).
 
-- App 连 WebSocket 时在 URL 上带 `?features=sessions_delta`。hub 有这个能力（`hello.features` 里有 `sessions_delta`）就：
-  1. 连上时每台机器发一次整表 `sessions` 当快照，**不带 Codex 历史会话**（`source_kind: codex_history`，App 从 `GET /api/v1/sessions` 拿）；
-  2. 之后只发 `{"type":"sessions_delta","machine_id","upsert":[Session…],"remove":[session_id…]}`：新的或变了的会话（整个对象，不是半个），和没了的 id；
-     什么都没变就不发。Codex 历史会话只有 App 已经有它时才在增量里（实时的 Codex 会话结束、同一个 id 变成历史）。
-- hub 按连接记着每个 App 手里每台机器的每个会话（`client.have`），快照和增量在同一把锁里算、入队，所以增量永远对着 App 真有的东西算。
-- 断线重连就是新的快照，漏掉的变化靠它补齐。
-- App（`SessionPatch`、`AppModel.applySessions`）：快照替换这台机器的列表，但留着已有的 Codex 历史；增量在原位换掉变了的、新的放在后面、删掉没了的；
-  socket 连着时 `GET /api/v1/sessions` 的回答比推送旧，只从它拿 Codex 历史（历史里没了的删掉，已有的换成回答里的副本：推送不带历史，看过、变离线只能从这里更新，#2463），不覆盖推送来的会话。
-  已知问题（#2425）：App 手上已有的历史留旧副本，看过、变离线不会更新到列表；网页已改成换用回答里的副本，App 待改。
-- 兼容：老 App 不带 `features`，照旧收整表（一模一样的不发）；老 hub 不认 `features`，照旧发整表，App 的 `hello.features` 里没有 `sessions_delta`，按整表处理。
-  mock（`scripts/mock/mock_hub.py`）同样支持，`MOCK_WHOLE_LISTS=1` 当老 hub。
-- 回放（真实 hub 录的 19 分钟）：会话推送每分钟 2605 KB → 79 KB，连上时的快照 602 KB → 227 KB（`docs/testing.md`「推送回放」）。
-- 网页同样用它（`web/src/lib/sessions-delta.ts`，与 `SessionPatch` 同一套规则）：`wsQuery` 每次连接都带 `features=sessions_delta`，`store.ts` 按 `upsert` / `remove` 合并，`refresh()` 在连着增量 hub 时只从 `GET /api/v1/sessions` 取 Codex 历史，已有的历史换成回答里的副本（推送不带历史，看过、变离线只能从这里更新，#2425）。此前网页不带 `features`，实测每个连接每秒收约 3 MB 整表、把后面的小事件拖慢（#1707）。
+- When connecting the WebSocket, the App adds `?features=sessions_delta` to the URL. If the hub has the capability (`sessions_delta` in `hello.features`), it:
+  1. On connect, sends one full `sessions` list per machine as a snapshot, **without Codex history sessions** (`source_kind: codex_history`; the App gets them from `GET /api/v1/sessions`);
+  2. After that only sends `{"type":"sessions_delta","machine_id","upsert":[Session…],"remove":[session_id…]}`: new or changed sessions (the whole object, not half of it) and the ids that are gone;
+     nothing is sent if nothing changed. Codex history sessions only appear in deltas if the App already has them (a live Codex session ends and the same id becomes history).
+- The hub tracks, per connection, every session of every machine each App holds (`client.have`); snapshots and deltas are computed and queued under the same lock, so a delta is always computed against what the App really has.
+- Reconnecting after a disconnect means a new snapshot, which fills in any missed changes.
+- App (`SessionPatch`, `AppModel.applySessions`): a snapshot replaces this machine's list but keeps the existing Codex history; a delta replaces changed ones in place, appends new ones and removes the ones that are gone;
+  while the socket is connected, the `GET /api/v1/sessions` response is older than the pushes, so only Codex history is taken from it (history no longer in it is removed, and existing entries are replaced with the copies in the response: pushes don't carry history, so seen / went offline can only be updated from here, #2463), and it doesn't overwrite pushed sessions.
+  Known issue (#2425): history the App already has keeps the old copy, so seen / went offline aren't updated in the list; the web has switched to using the copies in the response, the App is still to do.
+- Compatibility: old Apps don't send `features` and keep getting full lists (identical ones not sent); old hubs don't know `features` and keep sending full lists, and the App, seeing no `sessions_delta` in `hello.features`, handles them as full lists.
+  The mock (`scripts/mock/mock_hub.py`) supports it too, and `MOCK_WHOLE_LISTS=1` makes it act as an old hub.
+- Replay (19 minutes recorded from a real hub): session pushes 2605 KB → 79 KB per minute, the snapshot on connect 602 KB → 227 KB (`docs/testing.md` ("Push replay")).
+- The web uses it too (`web/src/lib/sessions-delta.ts`, the same rules as `SessionPatch`): `wsQuery` adds `features=sessions_delta` on every connection, `store.ts` merges by `upsert` / `remove`, and `refresh()`, while connected to a delta-capable hub, only takes Codex history from `GET /api/v1/sessions`, replacing existing history with the copies in the response (pushes don't carry history, so seen / went offline can only be updated from here, #2425). Before this the web didn't send `features`, and each connection was measured receiving about 3 MB of full lists per second, slowing down the small events behind them (#1707).
 
-### 实时状态（`session_live`，2026-11-05）
+### Live status (`session_live`, 2026-11-05)
 
-Claude Code 工作时屏幕底部的状态行（`✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`）有动词、这一轮的用时、输出 token、是否在思考，transcript 里没有。
-订阅了会话的网页要显示它，node 从屏幕上读出来推过去。
+The status line at the bottom of the screen while Claude Code works (`✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`) has a verb, this turn's elapsed time, output tokens and whether it's thinking, none of which is in the transcript.
+The web shows it for subscribed sessions, so the node reads it from the screen and pushes it.
 
-- 类型 `proto.SessionLive`（`server/internal/proto/live.go`）：`verb`（不带省略号）、`elapsed_s`、`tokens_down`（`↓` 的输出 token；`↑` 是输入，不算）、`thinking`（`thinking…` 段）、
-  `thought_s`（`thought for 3s`）、`at`（node 读到的时间，RFC 3339）；没有的字段省略。
-- node → hub 事件 `session.live {session_id, live}`，`live` 是 `SessionLive` 或 `null`。
-  - 只在这个会话被 watch（有客户端订阅）、是能读屏的宿主里的 Claude（`agent == "claude"`，宿主 herdr、herdr-core（Herdr App）或 Orca，后两种读纯文本，同样解析，#3904；Codex、botmux、runtime、无头助手不读）、宿主报 `working` 时读：
-    约每秒读一次屏（herdr 是 `pane.read --source visible --lines 60`），单次超时 3 秒，在 watch 自己的 goroutine 里，不拖慢 250 ms 一轮的 transcript 推送（`node/claudestatus.go`）。
-  - 解析：从输入框的上边线（屏幕上倒数第二条横线）往上找，跳过空行和缩进的行（提示、待办、右对齐的 `/goal`），第一行顶格的行是状态行或者就没有状态行；
-    所以正文、工具输出、用户消息里引用的状态行不会被当成现在的。spinner 字符不限（`· ✢ ✳ ✶ ✻ ✽`…），时长 `2s` / `1m 5s` / `1h 2m 3s`，token 单位 k / M / 无，括号里的段可缺、顺序可变，
-    `esc to interrupt` 之类的提示忽略。
-  - 和上一条不同才发（不比较 `at`）。停止工作、状态行没了、watch 结束（`session.unwatch`）时补一条 `live: null`，之前发过非空的才补。读屏失败时不发也不记日志，保留上一条。
-- hub → 客户端 `{"type":"live","machine_id","session_id","live"}`：只发给订阅了这个会话、并且声明了 `session_live` 的连接——WebSocket URL 的 `?features=`（网页的 `wsQuery`）
-  或 `client_hello.features` 都算。hub 不缓存、不补发：新订阅的客户端等下一次变化（工作中约一秒内就有）。旧 App 不声明，收不到，其余事件不变。
-- `hello.features` 目前不列 `session_live`：客户端照样声明就行，老 hub 不认识这个事件也就不发。
+- Type `proto.SessionLive` (`server/internal/proto/live.go`): `verb` (without the ellipsis), `elapsed_s`, `tokens_down` (output tokens from `↓`; `↑` is input and doesn't count), `thinking` (the `thinking…` segment),
+  `thought_s` (`thought for 3s`), `at` (when the node read it, RFC 3339); missing fields are omitted.
+- node → hub event `session.live {session_id, live}`, where `live` is a `SessionLive` or `null`.
+  - Only read while this session is watched (a client is subscribed), it's Claude (`agent == "claude"`) in a host whose screen can be read (herdr, herdr-core (Herdr App) or Orca; the latter two read plain text and parse it the same way, #3904; Codex, botmux, runtimes and the headless assistant aren't read), and the host reports `working`:
+    the screen is read about once a second (for herdr, `pane.read --source visible --lines 60`) with a 3-second timeout per read, in the watch's own goroutine, so it doesn't slow down the 250 ms transcript push loop (`node/claudestatus.go`).
+  - Parsing: starting from the top border of the input box (the second-to-last horizontal line on screen) and going up, skip blank and indented lines (hints, to-dos, right-aligned `/goal`); the first unindented line is the status line, or there is no status line;
+    so a status line quoted in body text, tool output or a user message is never taken as the current one. Any spinner character (`· ✢ ✳ ✶ ✻ ✽`…), durations `2s` / `1m 5s` / `1h 2m 3s`, token units k / M / none; segments in the parentheses may be missing or in any order,
+    and hints like `esc to interrupt` are ignored.
+  - Sent only when different from the last one (`at` isn't compared). When work stops, the status line disappears or the watch ends (`session.unwatch`), a `live: null` follows, but only if a non-null one was sent before. A failed screen read sends nothing and logs nothing, keeping the last value.
+- hub → client `{"type":"live","machine_id","session_id","live"}`: only sent to connections subscribed to this session that declared `session_live`, either in the WebSocket URL's `?features=` (the web's `wsQuery`)
+  or in `client_hello.features`. The hub doesn't cache or replay: a newly subscribed client waits for the next change (within about a second while working). Old Apps don't declare it and don't get it; other events are unchanged.
+- `hello.features` currently doesn't list `session_live`: clients just declare it anyway, and an old hub that doesn't know the event simply doesn't send it.
 
-### 新建会话
+### New session
 
-开 herdr 标签页、跑启动器、等 Claude 的输入框出来要几秒到一分钟（`~/.zshrc` 慢、信任目录对话框），以前 App 的「开始对话」按钮一直转到 Claude 就绪，
-hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/sessions` 带 `async`：
+Opening a herdr tab, running the launcher and waiting for Claude's input box takes anywhere from a few seconds to a minute (a slow `~/.zshrc`, the trust-folder dialog). The App's **Start Chat** button used to spin until Claude was ready,
+and the hub also had to wait for the small model to come up with a tab name first (about 2 seconds). Now `POST /api/v1/sessions` takes `async`:
 
-- node 只做便宜的检查（启动器名、目录存在、权限模式），记下会话（`sessionState`，对话页取历史回空列表、订阅等 transcript 出现），马上回会话；
-  开标签页、跑启动器、等就绪、发 `prompt` 在后台做（最多 4 分半：shell 跑起 claude 最多等 3 分钟，claude 起来后等输入框最多 1 分钟，#1396）。
-- 启动期间会话列表里有它：`status: idle`、`starting: true`（不算一轮，不计时、不推送「完成」）。启动失败就变成 `offline` 加 `start_error`，留 10 分钟。
-- 启动期间发来的消息（`session.send`）在 node 上等它就绪再按顺序打进去；hub 给这种发送和发给没在运行、要先恢复的会话的 5 分钟（平时 90 秒）。启动失败时这些发送拿到同一个错误，App 的气泡变成「重发」。
-- App 的第一条消息不放在 `prompt` 里，而是进对话后当普通消息发（马上上屏、带发送状态），起名用 `name_hint`。对话页输入框上方显示「正在启动 Claude…」或失败原因（`StartingNote`）。
-- node 重启会丢掉还在启动的记录：这时会话既不在列表里也没有 transcript，App 那边的发送会失败、可以重发。
-- Codex 的启动器（`agent: "codex"`）不走 `async`：Codex 收到第一条消息才建 thread、定下会话 id，所以 App 把第一条消息放在 `prompt` 里同步新建，
-  node 等到这个 thread 出现才回（最多 60 秒），回的就是它的会话。拒绝的 `code`：`codex_needs_prompt`（没带 `prompt`，或带了 `async`）、
-  `codex_launcher`（跑 Codex 的 shell 函数）、`codex_resume`（想用 Codex 启动器恢复会话）。见 `docs/codex.md`「从手机新建」。
+- The node only does the cheap checks (launcher name, directory exists, permission mode), records the session (`sessionState`: the chat page's history fetch returns an empty list, and the subscription waits for the transcript to appear), and returns the session right away;
+  opening the tab, running the launcher, waiting for readiness and sending `prompt` happen in the background (at most 4.5 minutes: up to 3 minutes for the shell to start claude, then up to 1 minute for the input box once claude is up, #1396).
+- While starting, the session is in the session list with `status: idle`, `starting: true` (not counted as a turn, not timed, no "done" push). If starting fails it becomes `offline` with `start_error`, kept for 10 minutes.
+- Messages sent while it's starting (`session.send`) wait on the node until it's ready, then are typed in order; the hub gives these sends, and sends to sessions that aren't running and must be resumed first, 5 minutes (90 seconds normally). If starting fails, these sends get the same error, and the App's bubble switches to "resend".
+- The App's first message isn't put in `prompt`; it's sent as a normal message once in the chat (shows up immediately, with send status), and `name_hint` is used for naming. Above the chat input box it shows "Starting Claude…" or the failure reason (`StartingNote`).
+- A node restart loses records of sessions still starting: the session is then neither in the list nor has a transcript, and the App's send fails and can be resent.
+- Codex launchers (`agent: "codex"`) don't use `async`: Codex only creates the thread and fixes the session id when it gets the first message, so the App puts the first message in `prompt` and creates synchronously,
+  and the node waits until that thread appears before returning (at most 60 seconds), returning its session. Rejection `code`s: `codex_needs_prompt` (no `prompt`, or `async` given),
+  `codex_launcher` (a shell function that runs Codex), `codex_resume` (trying to resume a session with a Codex launcher). See `docs/codex.md` ("Creating from the phone").
 
-### 发消息
+### Sending messages
 
-往别人的终端里打字是这个 App 风险最大的操作。node 在往正在跑的 Agent 窗格里打字之前先读一次屏幕（`server/internal/node/sendsafe.go`、
-`server/internal/screen`），以下情况**什么都不打**，返回 409：
+Typing into someone else's terminal is the riskiest thing this App does. Before typing into a running Agent's pane, the node reads the screen once (`server/internal/node/sendsafe.go`,
+`server/internal/screen`), and in the following cases **types nothing** and returns 409:
 
-| `code` | 什么时候 | 其他字段 |
+| `code` | When | Other fields |
 | --- | --- | --- |
-| `dialog_open` | 有对话框占着键盘：权限确认、信任目录、模型选择、rewind、Claude Code 自己的通知…（底部有 `Esc to cancel` / `Enter to confirm`，或输入框下面有带光标的编号选项） | `delivered: "none"`、`dialog`（对话框第一行）、`notice`（只是按回车就关的通知时为 true） |
-| `input_draft` | Claude 的输入框里有电脑上没发出去的字、bash 模式（`!`）、粘贴占位、被窗格截掉的长草稿 | `delivered: "none"`、`draft`（输入框里的字）、`clearable`（只有一行字时才有） |
-| `open_elsewhere` | 要恢复的 Claude 会话正在别处开着：有活着的 claude 在 `sessions/<pid>.json` 里开着它（Claude 桌面版、Persona 不驱动的终端）。再 `claude --resume` 会让两个进程同时写这个会话 | `delivered: "none"`、`pid` |
-| `engine_missing` | 要新开或恢复会话，这台电脑的引擎（herdr）却没在运行或没装 | `delivered: "none"`、`detail`（引擎自己的报错） |
-| `runtime_away` | 会话属于一个 Agent 运行时（DSH…），它现在没连上 node（「Runtime ↔ node」） | `delivered: "none"` |
+| `dialog_open` | A dialog holds the keyboard: permission prompt, trust folder, model picker, rewind, Claude Code's own notices… (`Esc to cancel` / `Enter to confirm` at the bottom, or numbered options with a cursor under the input box) | `delivered: "none"`, `dialog` (the dialog's first line), `notice` (true when it's just a notice closed by pressing Enter) |
+| `input_draft` | Claude's input box has unsent text from the computer, bash mode (`!`), a paste placeholder, or a long draft cut off by the pane | `delivered: "none"`, `draft` (the text in the input box), `clearable` (only when it's a single line) |
+| `open_elsewhere` | The Claude session to resume is open somewhere else: a live claude has it open in `sessions/<pid>.json` (Claude desktop, a terminal Persona doesn't drive). Another `claude --resume` would have two processes writing the session at once | `delivered: "none"`, `pid` |
+| `engine_missing` | A session is to be started or resumed, but this computer's engine (herdr) isn't running or isn't installed | `delivered: "none"`, `detail` (the engine's own error) |
+| `runtime_away` | The session belongs to an Agent runtime (DSH…) that isn't connected to the node right now ("Runtime ↔ node") | `delivered: "none"` |
 
-- 灰色的建议输入（Claude 预测的下一句、新会话的 `Try "…"`）不算草稿：要用带颜色的读屏（`pane.read` 的 `format: ansi`）看 SGR 2（dim），
-  纯文本里两者一模一样。读不到颜色时一律当草稿。规则移植自 Ovis 的 `claude-input.ts`（MIT）。夹具：`server/internal/screen/testdata`。
-- `clear_draft`：用户在 App 里看到草稿后选「清空并发送」，App 带上收到的 `clearable` 重发同一条（同一个 `client_msg_id`）；
-  node 只在输入框里**还是这段字**时按 `ctrl+k ctrl+u` 清掉，再读一次确认空了才发。多行草稿只能在电脑上处理（这两个键一次只清一行）。
-- `client_msg_id`：App 每条待发消息一个 UUID，自动重发（没收到回应、断网后补发）沿用。**去重在 hub**（`hub/send.go`，Postgres 表
-  `sent_messages`，留一天）：发送中再来同一个 id 等第一次的结果；已送达的直接回成功；被拒或离线（什么都没打）的忘掉，可以再发；
-  打字途中断了（node 回了 `delivered: "unknown"`，或请求已发给 node 却没等到回应：连接断、超时）回 502 + `delivered: "unknown"`，
-  同一个 id 再发只回同样的错误，不会打第二遍。hub 重启、node 重连之后也是这样（以前去重只在 node 进程的内存里，重连后的新进程什么都不知道，
-  2026-10-31 实测重连途中发的消息到了电脑上、App 却收到「rpc: connection closed」）。用户看过对话、确认没到再点重发时，App 换一个新 id。
-  App 等不及断开了，hub 照样等 node 的结果记下来（发送不随请求取消）。node 自己也记 10 分钟（同一条连接内的重试）。
-- 同一个会话的发送一条一条来（node 的 `typingLocks`）：两条同时进来（连点、两台设备），以前第二条读屏时第一条还在输入框里（herdr
-  `agent.prompt` 先粘贴、约 300 ms 后才回车），被当成草稿拒掉，还提示「清空并发送」——清掉的是用户自己的第一条。读屏看到的是 5 秒内刚打进去的字
-  （或长文本的 `[Pasted text #1 …]`）时，等它被收走（最多 2 秒）。
-- `dismiss_notice`（#2553）：底部是只写着「Enter to continue」（后面最多跟一个 `Esc to cancel`）、没有选项 / 光标 / 勾选框的通知时，先按一次回车关掉（最多连关 3 个）再照常检查、发送。
-  确认、权限、选择列表、提问一律照旧回 `dialog_open`，不自动按。助手的 `agent_send` 有同名参数，看到 `notice: true` 的拒绝后带上它重发。
-- 离线会话 `--resume` 拉起后同样先读屏：Claude 起来就停在对话框上时回 `dialog_open`，不往对话框里打字。
-- Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择），不查草稿：输入框里有字时消息会接在后面。旧 App 只认 `error` 字段，看到的就是拒绝原因。
-- 链路和耗时见 `docs/archive/lanes/session-verify.md`。
+- Gray suggested input (Claude's predicted next line, a new session's `Try "…"`) doesn't count as a draft: telling them apart needs a colored screen read (`pane.read` with `format: ansi`) to see SGR 2 (dim);
+  in plain text the two look identical. When colors can't be read, it's always treated as a draft. The rules are ported from Ovis's `claude-input.ts` (MIT). Fixtures: `server/internal/screen/testdata`.
+- `clear_draft`: after seeing the draft in the App, the user picks **Clear and Send**, and the App resends the same message (same `client_msg_id`) with the `clearable` it received;
+  the node clears it with `ctrl+k ctrl+u` only if the input box **still has that same text**, then reads again to confirm it's empty before sending. Multi-line drafts can only be handled on the computer (those two keys clear one line at a time).
+- `client_msg_id`: the App gives each pending message a UUID, and automatic resends (no response, resending after a network drop) reuse it. **Dedup is on the hub** (`hub/send.go`, Postgres table
+  `sent_messages`, kept one day): the same id arriving while a send is in progress waits for the first one's result; already delivered returns success directly; rejected or offline (nothing typed) is forgotten and can be sent again;
+  interrupted mid-typing (the node returned `delivered: "unknown"`, or the request reached the node but no response came back: connection dropped, timeout) returns 502 + `delivered: "unknown"`,
+  and resending the same id only returns the same error, never typing it a second time. The same holds after a hub restart or node reconnect (dedup used to live only in the node process's memory, and the new process after a reconnect knew nothing;
+  on 2026-10-31 a message sent during a reconnect was observed reaching the computer while the App got "rpc: connection closed"). When the user has looked at the chat, confirmed it didn't arrive and taps resend, the App uses a new id.
+  If the App gives up and disconnects, the hub still waits for the node's result and records it (sending isn't canceled with the request). The node also remembers for 10 minutes itself (retries within the same connection).
+- Sends to the same session go one at a time (the node's `typingLocks`): when two came in at once (double tap, two devices), the second one's screen read used to find the first still in the input box (herdr's
+  `agent.prompt` pastes first and presses Enter about 300 ms later), so it was rejected as a draft and even offered **Clear and Send**, which would clear the user's own first message. When the screen read sees text typed within the last 5 seconds
+  (or `[Pasted text #1 …]` for long text), it waits for it to be taken (at most 2 seconds).
+- `dismiss_notice` (#2553): when the bottom is a notice that only says "Enter to continue" (followed by at most one `Esc to cancel`), with no options / cursor / checkboxes, it presses Enter once to close it first (up to 3 in a row), then checks and sends as usual.
+  Confirmations, permissions, selection lists and questions all still return `dialog_open` and are never pressed automatically. The assistant's `agent_send` has a parameter of the same name, and resends with it after a rejection with `notice: true`.
+- After an offline session is started with `--resume`, the screen is read first too: if Claude comes up sitting on a dialog, it returns `dialog_open` and doesn't type into the dialog.
+- Codex / compatible forks only check for dialogs (numbered choices like `› 1.`), not drafts: if the input box has text, the message is appended after it. Old Apps only read the `error` field, which shows them the rejection reason.
+- The path and timings are in `docs/archive/lanes/session-verify.md`.
 
-### 回退到某条消息（#2436）
+### Rewinding to a message (#2436)
 
-`POST /api/v1/sessions/{mid}/{sid}/rewind`，**只有完整权限的设备**能调（会把文件放回去、删掉之后的对话；手表那种只能回答的设备、扩展的 token 都是 403，
-`testdata/route_scopes.txt` 里是 `-`）。body 只认这几个字段，别的不会交给 node：
+`POST /api/v1/sessions/{mid}/{sid}/rewind`, callable **only by full-access devices** (it puts files back and deletes the conversation after that point; answer-only devices like the watch and extension tokens get 403,
+`-` in `testdata/route_scopes.txt`). The body only accepts these fields; nothing else is passed to the node:
 
 ```json
-{"prompt": "<那条消息，和对话记录里一样>", "occurrence": 2, "prompts_after": 3, "restore": "conversation"}
+{"prompt": "<that message, exactly as in the transcript>", "occurrence": 2, "prompts_after": 3, "restore": "conversation"}
 ```
 
-- `prompt`：要回到的那条用户消息；`occurrence`：从最后往前数，是第几条**一样的话**（1 = 最后一条）；`prompts_after`（可不带）：它后面还有几条用户消息；
-  `restore`：`conversation`（只回退对话）或 `code_and_conversation`（文件也放回去）。Claude Code 的列表和 App 的对话都从末尾数，没加载的更早页不影响。
-- node 的 `session.rewind` 在会话的终端里打 `/rewind`、按 ↑ 走到那条、选方式、回车，**每一步先读屏**（`server/internal/node/rewind.go`、`screen/rewind.go`）：
-  列表里那一行的字、位置（`prompts_after`）、确认页上引用的整条消息、选项的名字（按名字选不按序号：这条之后没有代码改动时只有「Restore conversation」「Summarize…」「Never mind」）
-  任何一步和预期不一样，按 Esc 退出面板、什么都不改，回 409。`code_and_conversation` 遇到「之后没有代码改动」就只回退对话，结果里 `code_restored: false`。
-- 成功：`{prompt, restore, code_restored, input_cleared}`。Claude 会把那条消息放回自己的输入框；node 把它清掉（一行用 `ctrl+k ctrl+u`，多行用 `ctrl+c`），
-  `input_cleared: true` 时 App 把它放进自己的输入框，false（清不掉，比如输入框里是别的字）就只提示一句。
-- 拒绝（409，`code` 加说明，什么都没改）：`dialog_open`、`input_draft`（同「发消息」）、`rewind_busy`（在工作或等回答）、`rewind_unsupported`（不是终端里的 Claude 会话）、
-  `rewind_nothing`（Claude 里没有可回退的消息）、`rewind_mismatch`（列表里没找到那条、位置对不上、确认页上不是它）、`rewind_failed`（屏幕不是下一步需要的样子，或确认之后面板没关）。
-  旧 node 回 409 `node_outdated`。确认之后面板没关时 node 不再按任何键（回退可能已经发生，Esc 也撤不回）。
-- **Claude Code 不删对话记录里被回退的那部分**（2.1.318 实测）：文件是棵树（`parentUuid`），回退后的下一条消息挂在目标前一条下面，被回退的几轮还在文件里。
-  node 读 transcript 时**跟着没被放弃的那条分支走**（`transcript/branch.go`）：同一个 `parentUuid` 下有两条用户自己的消息、且较早那条**有过回复**（assistant 的行从它长出来），较早那条和从它长出来的所有行是被放弃的分支，不出 item
-  （item 的 `seq` 还是文件里的行号，被放弃的行成了空档）。**没人回复的较早那条不算回退**（#3036）：按 Esc 取消一条还没回复的消息再发（同样的话，或者换一句），Claude 把后一条写成前一条的兄弟，
-  但没有任何一轮被回退掉——两条都留着，和终端里看到的一样，`history` 令牌也不动（动了所有客户端都会丢掉本地内容重取，被打断的那一轮还从对话里消失）。
-  别的分叉不算（并行工具结果、挂在回复旁边的 attachment、压缩的 `compact_boundary`：它 `parentUuid` 为 null、旧链在 `logicalParentUuid`）。
-  node 自己回退成功后马上标出这一段（`File.Rewound`），不等下一条消息。客户端怎么知道：`history`（见「items 的连续性」）末尾多一个 `.r<被放弃的分支数>`，变了就丢掉本地内容重新取——
-  和文件被改写同一个机制，所以网页、iOS、Android 都不用改（iOS 的 `ChatStore.apply`、Android 的 `reducer.history`、网页的 `useTranscript` 都已经这样处理），
-  hub 的助手快照、通知、知识库归档读的也是 node 的 items。令牌只由文件内容决定，node 重启后不变。
+- `prompt`: the user message to go back to; `occurrence`: counting back from the end, which **identical message** it is (1 = the last one); `prompts_after` (optional): how many user messages come after it;
+  `restore`: `conversation` (rewind the conversation only) or `code_and_conversation` (put the files back too). Both Claude Code's list and the App's chat count from the end, so earlier pages not yet loaded don't matter.
+- The node's `session.rewind` types `/rewind` in the session's terminal, presses ↑ to reach that message, picks the mode and presses Enter, **reading the screen before every step** (`server/internal/node/rewind.go`, `screen/rewind.go`):
+  if anything in any step differs from what's expected (the text of that row in the list, its position (`prompts_after`), the whole message quoted on the confirmation page, the option names (chosen by name, not number: when there are no code changes after the message, there are only "Restore conversation", "Summarize…", "Never mind"))
+  it presses Esc to leave the panel, changes nothing, and returns 409. When `code_and_conversation` hits "no code changes after this", it only rewinds the conversation, with `code_restored: false` in the result.
+- Success: `{prompt, restore, code_restored, input_cleared}`. Claude puts that message back in its own input box; the node clears it (`ctrl+k ctrl+u` for one line, `ctrl+c` for several),
+  and when `input_cleared: true` the App puts it in its own input box; when false (couldn't clear, e.g. the input box has other text), it only shows a note.
+- Rejections (409, `code` plus an explanation, nothing changed): `dialog_open`, `input_draft` (as in "Sending messages"), `rewind_busy` (working or waiting for an answer), `rewind_unsupported` (not a Claude session in a terminal),
+  `rewind_nothing` (Claude has no messages to rewind to), `rewind_mismatch` (the message isn't in the list, the position doesn't match, or the confirmation page shows something else), `rewind_failed` (the screen doesn't look the way the next step needs, or the panel didn't close after confirming).
+  Old nodes return 409 `node_outdated`. If the panel doesn't close after confirming, the node presses no more keys (the rewind may already have happened, and Esc can't undo it).
+- **Claude Code doesn't delete the rewound part of the transcript** (observed on 2.1.318): the file is a tree (`parentUuid`); after a rewind, the next message hangs under the message before the target, and the rewound turns are still in the file.
+  When reading the transcript, the node **follows the branch that wasn't abandoned** (`transcript/branch.go`): when one `parentUuid` has two of the user's own messages under it and the earlier one **got a reply** (assistant lines grew from it), the earlier one and every line that grew from it are the abandoned branch and produce no items
+  (item `seq` is still the line number in the file, so the abandoned lines become gaps). **An earlier message nobody replied to doesn't count as a rewind** (#3036): pressing Esc to cancel a message that hadn't been answered and sending again (the same words or different ones) makes Claude write the second as a sibling of the first,
+  but no turn was rewound; both stay, as seen in the terminal, and the `history` token doesn't change (if it did, every client would drop its local content and re-fetch, and the interrupted turn would also disappear from the chat).
+  Other forks don't count (parallel tool results, attachments hanging next to a reply, the compaction's `compact_boundary`: its `parentUuid` is null and the old chain is in `logicalParentUuid`).
+  When the node's own rewind succeeds, it marks the segment right away (`File.Rewound`) without waiting for the next message. How clients find out: `history` (see "Continuity of items") gains a trailing `.r<number of abandoned branches>`, and when it changes they drop local content and re-fetch,
+  the same mechanism as a rewritten file, so the web, iOS and Android need no changes (iOS's `ChatStore.apply`, Android's `reducer.history` and the web's `useTranscript` already handle it this way),
+  and the hub's assistant snapshots, notifications and knowledge-base archiving also read the node's items. The token is determined only by the file content and doesn't change across node restarts.
 
-### 待发消息的对应
+### Matching pending messages
 
-App 发出的消息在对话记录里出现之前显示一个待发气泡。Claude Code、Codex、runtime 给用户那一行的 item id 都是自己的，不是
-`client_msg_id`，以前三端只能按字认（文字被改写、一样的话连发、`/compact` 变成通知时只能靠「送达 60 秒后收起」兜底）。
-现在由 node 认出那一行，给它的每个 item 带上 `client_msg_id`（`server/internal/node/echo.go`），推送（`items` 事件）和分页（`/items`）都带：
+A message the App sends shows as a pending bubble until it appears in the transcript. Claude Code, Codex and runtimes all use their own item ids for the user's line, not
+`client_msg_id`, so all three clients used to match by text alone (when the text was rewritten, the same words were sent twice, or `/compact` turned into a notice, the only fallback was "collapse 60 seconds after delivery").
+Now the node recognizes that line and tags each of its items with `client_msg_id` (`server/internal/node/echo.go`), in both pushes (`items` events) and pages (`/items`):
 
-- **什么时候记**：`session.send` 带 `client_msg_id`、送到了（或 `delivered: "unknown"`，可能送到了）时，node 记下这次发送：
-  会话、发送前 transcript 的最后一行（打字前先读一遍新行）、文字的开头 200 字（去掉 `<jarvis-context>`、图片说明这些附加的东西）、图片张数、时间。
-  runtime 的会话没有本地 transcript，「最后一行」是 node 正在推送时推到的 seq，没有就只看时间。
-- **怎么认**：按发送的顺序，各自取发送之后、还没被认领的第一行**用户行**里字对得上的：文字少于 12 个字（去掉空白）要完全一样，
-  否则比前 12 个字（页会截长文本，Claude 把图片变成 `[Image #1]`）；只有图片的消息对没有字的那一行；只发了命令（`/model`）的对
-  在终端里补了参数的那条（`/model opus`）；`/compact` 对它变成的「压缩上下文」通知。用户行包括 mid-turn 被吸收的 `queued` 那条，
-  不包括别的会话发来的（`from`）和后台任务通知。时间早于发送 5 秒以上、或晚于发送 2 小时的行不算（Codex 在一轮结束时才写排队的消息）；
-  2 小时没认到就不再找。
-- **一条消息拆成几个 item**：同一行的 item 共用 id 里 `#` 前面那段（Claude 的 uuid、Codex 的 item id），这一行的文字、图片都带上。
-- **没落成用户行**：`/compact` 之外没有对应行的（别的命令、被丢掉的输入）认不到，item 不带字段，App 照旧兜底；两条一样的话、
-  前一条没落成用户行时，后一条那一行会被前一条认走（只是气泡收早了）。
-- **node 重启**：node 把记下的和认到的告诉 hub（事件 `session.echo`），hub 跟这次发送一起存在 `sent_messages.echo`（一天）；
-  node 连上时 hub 先把这台机器一天内的交回去（`session.echoes`），再列会话、恢复推送。所以 node 重启（ssh 的 node 随 hub 重启）后
-  认过的行照样带字段，重启前还没认到的接着认。hub 没有数据库时只在 node 进程的内存里。
-- **App 怎么用**：带 `client_msg_id` 的 item 收起 id 相同的那条待发消息（不管 role、kind），也不会再按字去认另一条；
-  不带的照旧按字认（旧 hub、node 没认出来的）。iOS `PendingMessage.tied`、Android `MessageEcho.tag`、网页 `lib/echo.ts`。
+- **When it's recorded**: when `session.send` carries `client_msg_id` and was delivered (or `delivered: "unknown"`, possibly delivered), the node records the send:
+  the session, the last transcript line before sending (new lines are read once before typing), the first 200 characters of the text (with `<jarvis-context>`, image captions and other additions stripped), the image count, and the time.
+  Runtime sessions have no local transcript, so the "last line" is the seq the node had pushed up to, or only the time if there isn't one.
+- **How it matches**: in send order, each takes the first not-yet-claimed **user line** after its send whose text matches: text under 12 characters (whitespace removed) must be identical,
+  otherwise the first 12 characters are compared (pages truncate long text, and Claude turns images into `[Image #1]`); an image-only message matches a line with no text; a bare command (`/model`) matches
+  the one completed with arguments in the terminal (`/model opus`); `/compact` matches the "Compact context" notice it turns into. User lines include the `queued` one absorbed mid-turn,
+  and exclude ones from other sessions (`from`) and background task notifications. Lines more than 5 seconds before the send, or more than 2 hours after it, don't count (Codex only writes queued messages at the end of a turn);
+  if nothing matches within 2 hours, it stops looking.
+- **A message split into several items**: items from the same line share the part of the id before `#` (Claude's uuid, Codex's item id), and the line's text and images all carry the field.
+- **Didn't land as a user line**: apart from `/compact`, sends with no corresponding line (other commands, discarded input) aren't matched, the items carry no field, and the App falls back as before; with two identical messages
+  where the first didn't land as a user line, the second one's line gets claimed by the first (the bubble just collapses early).
+- **Node restart**: the node tells the hub what it recorded and matched (event `session.echo`), and the hub stores it with the send in `sent_messages.echo` (one day);
+  when the node connects, the hub first hands back this machine's entries from the last day (`session.echoes`), then lists sessions and resumes pushing. So after a node restart (an ssh node restarts with the hub),
+  lines already matched still carry the field, and ones not yet matched before the restart keep being matched. Without a database on the hub, it's only in the node process's memory.
+- **How the App uses it**: an item with `client_msg_id` collapses the pending message with the same id (regardless of role or kind) and won't match another one by text;
+  items without it are matched by text as before (old hubs, ones the node didn't recognize). iOS `PendingMessage.tied`, Android `MessageEcho.tag`, web `lib/echo.ts`.
 
-### 文件预览
+### File preview
 
-文件页和各种预览（表格、Office、媒体、对比）共用的底座，三端一样（#1292）：
+The foundation shared by the file page and the various previews (spreadsheets, Office, media, diff), the same across all three clients (#1292):
 
-- **类型**：node 按固定扩展名表定 `mime`（docx / xlsx / pptx / ipynb / heic / m4a 等，Go 自带的表随机器而变），表里没有再查系统表，再读开头 512 字节嗅探（HEIC、MP4 / MOV、PDF……）。`.key` 开头不是 zip 就当文本（PEM 密钥），是 zip 才是 Keynote。
-- **取内容**：先 `GET /file?stream=1`。文本照旧分页给 `text`；二进制只给 `size`、`mime`、`revision`，再按需从 `/file/download` 取：媒体直接把 URL 给 `<video>` / `<audio>`（Range 拖动），PDF / Office / 表格整份取回来交给渲染库，大文件不再整份 base64 进 JSON。`revision` 和下载的 ETag 是同一个值。
-- **内联和隔离**：hub 和网页同源，所以 `inline=1` 只放行图片、音视频、PDF；SVG 虽然内联，也带 `Content-Security-Policy: sandbox`，单独打开时脚本不能以网页的身份运行。HTML 不内联，预览时取文本放进沙盒 iframe（M5）。
-- **缩略图**：图片（PNG / JPEG / GIF / WebP / BMP / TIFF）由 node 自己解码缩放，SVG 用 oksvg 只画形状；其余交给系统：Mac 上 Quick Look（`qlmanage`，PDF、Office、iWork、HEIC、视频），别的系统装了 `pdftoppm` 给 PDF、装了 `ffmpeg` 给视频。系统工具一次只跑一个，单次 12 秒超时；超时一次（锁屏的 Mac 上 Quick Look 会卡住）之后 5 分钟内不再调用，直接回 `no_thumbnail`，免得一屏文件列表每个都等。node 内存里留最近 128 张。
+- **Type**: the node sets `mime` from a fixed extension table (docx / xlsx / pptx / ipynb / heic / m4a etc.; Go's built-in table varies by machine), then the system table if not found, then sniffs the first 512 bytes (HEIC, MP4 / MOV, PDF…). A `.key` that doesn't start as a zip is treated as text (a PEM key); only a zip is Keynote.
+- **Fetching content**: first `GET /file?stream=1`. Text still comes paged as `text`; binary only gives `size`, `mime`, `revision`, and the content is fetched from `/file/download` as needed: media hands the URL straight to `<video>` / `<audio>` (seeking via Range), and PDF / Office / spreadsheets are fetched whole and handed to the rendering library, so large files no longer go through JSON as one base64 blob. `revision` and the download's ETag are the same value.
+- **Inline and isolation**: the hub and the web share an origin, so `inline=1` only allows images, audio/video and PDF; SVG, though inline, also carries `Content-Security-Policy: sandbox`, so when opened on its own its scripts can't run as the web page. HTML isn't inlined; for preview its text is fetched and put into a sandboxed iframe (M5).
+- **Thumbnails**: images (PNG / JPEG / GIF / WebP / BMP / TIFF) are decoded and scaled by the node itself, and SVG is drawn with oksvg (shapes only); everything else goes to the system: Quick Look on a Mac (`qlmanage`: PDF, Office, iWork, HEIC, video), and on other systems `pdftoppm` for PDF and `ffmpeg` for video if installed. System tools run one at a time with a 12-second timeout per run; after one timeout (Quick Look hangs on a locked Mac) they aren't called for 5 minutes and `no_thumbnail` is returned directly, so a screenful of files doesn't wait on each one. The node keeps the latest 128 in memory.
 
-### 发送文件
+### Sending files
 
-App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的助手都有）：选的文件传到**会话所在那台电脑**的临时目录（node 的
-`os.TempDir()`：Linux 一般 `/tmp`，macOS 是 `$TMPDIR`，ssh 进来的 node 没有这个变量时也是 `/tmp`），把绝对路径插到输入框的光标处，
-**不自动发送**。助手跑在它所在的机器上（默认 hub 机器），文件就传到那台。图片照旧走图片附件；图库里的视频见下面「发送视频」。
+**+** › **Files** in the App's chat input box (for Agents and for the assistant in the chat tab): the chosen file is uploaded to a temporary directory on **the computer the session runs on** (the node's
+`os.TempDir()`: usually `/tmp` on Linux, `$TMPDIR` on macOS, and also `/tmp` for an ssh node without that variable), and its absolute path is inserted at the cursor in the input box,
+**without sending automatically**. The assistant runs on its own machine (the hub machine by default), so files go there. Images still go as image attachments; for videos from the photo library, see "Sending videos" below.
 
-- `POST /api/v1/machines/{mid}/files?name=<原文件名>`，body 是文件本身（必须有 `Content-Length`）→ `{path, name, size}`。
-  上限 200 MB（`proto.MaxUploadBytes`）：超过回 413 `code: too_large`（App 选完就先查大小，不会传）。
-- hub 边读 body 边转：每 1 MB 一个 `file.upload.chunk`（base64 在一行 JSON 里），整个文件不进内存、也不塞进一条 RPC。
-  App 取消上传（或断线）时 hub 发 `file.upload.abort`，node 删掉写了一半的文件；node 2 分钟收不到块也自己删。
-- node 先写 `.jarvis-upload-*` 隐藏文件（0600），收齐后核对字节数，再改名为 `原名-YYYYMMDD-HHMMSS.扩展名`（`.tar.gz` 这类整体算扩展名），
-  同一秒重名再加 `-xxxx` 随机串。文件名里的 `/`、`\`、控制字符换成 `_`，超长的截短。
-- 旧 node 不认 `file.upload.*`：409 `code: node_outdated`（「<机器> 上的 personad 太旧…需要重新部署」）；旧 hub 没有这个接口（404），
-  hello 的 `features` 里也没有 `file_upload`：App 提示更新 hub。
-- 路径带空格或引号时 App 用单引号包起来，多个路径空格分隔。输入框没在编辑时插到末尾（未聚焦的 TextField 报的选区不可靠）。
-- 前面挡着反向代理时注意它的请求体上限（有的 CDN 免费版只放 100 MB）。
-- `?dest=terminal`（网页终端的粘贴 / 拖放，`docs/terminal.md` 第十八节）：node 不放系统临时目录，存到自己的 `uploads/terminal/<日期>/<随机>-<文件名>`
-  （0700 / 0600，7 天后在 node 启动时清掉），上限 50 MB（`proto.MaxTerminalUploadBytes`，超过同样回 413 `too_large`，带 `limit`）。别的 `dest` 回 400；
-  旧 hub / 旧 node 忽略这个参数，照旧放临时目录。
-- `?dest=health`（健康空间的体检报告，`docs/health.md`「体检报告」）：node 存到健康目录的 `reports/`（`原名-YYYYMMDD-HHMMSS.扩展名`，0700 / 0600，不过期），上限同 `MaxUploadBytes`。
+- `POST /api/v1/machines/{mid}/files?name=<original file name>`, the body is the file itself (`Content-Length` required) → `{path, name, size}`.
+  Limit 200 MB (`proto.MaxUploadBytes`): over that returns 413 `code: too_large` (the App checks the size right after picking and won't upload).
+- The hub forwards while reading the body: one `file.upload.chunk` per 1 MB (base64 inside one line of JSON), so the whole file never sits in memory or in a single RPC.
+  When the App cancels the upload (or disconnects), the hub sends `file.upload.abort` and the node deletes the half-written file; the node also deletes it itself if no chunk arrives for 2 minutes.
+- The node first writes a hidden `.jarvis-upload-*` file (0600), checks the byte count once everything has arrived, then renames it to `name-YYYYMMDD-HHMMSS.ext` (things like `.tar.gz` count as one extension),
+  adding a random `-xxxx` for a clash within the same second. `/`, `\` and control characters in the file name are replaced with `_`, and overlong names are shortened.
+- Old nodes don't know `file.upload.*`: 409 `code: node_outdated` ("personad on <machine> is too old… needs redeploying"); old hubs don't have this endpoint (404)
+  and have no `file_upload` in hello's `features`: the App asks to update the hub.
+- Paths with spaces or quotes are wrapped in single quotes by the App, and multiple paths are space-separated. When the input box isn't being edited, the path is inserted at the end (an unfocused TextField's reported selection is unreliable).
+- If a reverse proxy sits in front, watch its request body limit (some CDNs' free tiers only allow 100 MB).
+- `?dest=terminal` (paste / drag-and-drop in the web terminal, `docs/terminal.md` section 18): the node doesn't use the system temp directory but stores it in its own `uploads/terminal/<date>/<random>-<file name>`
+  (0700 / 0600, cleared at node startup after 7 days), limit 50 MB (`proto.MaxTerminalUploadBytes`; over that also returns 413 `too_large`, with `limit`). Any other `dest` returns 400;
+  old hubs / old nodes ignore the parameter and use the temp directory as before.
+- `?dest=health` (checkup reports for the health space, `docs/health.md` ("Checkup reports")): the node stores it in the health directory's `reports/` (`name-YYYYMMDD-HHMMSS.ext`, 0700 / 0600, no expiry), with the same limit as `MaxUploadBytes`.
 
-- `GET /api/v1/machines/{mid}/health/reports`：这些报告，新的在前，`{"reports":[{name,title,path?,record_path?,size,modified_at}]}`（`proto.HealthReport`，#4998）。`path` 是原件，`record_path` 是同名 `.md` 记录，都读 `file` / `file/download`。
-- `DELETE /api/v1/machines/{mid}/health/reports/{name}`：永久删除一份（原件和记录），已经不在了也回成功；`name` 不是 `reports/` 里的普通文件回错。两个接口都只给完整凭据，旧 node 回 409 `node_outdated`（RPC `health.reports.list` / `health.reports.delete`）。
+- `GET /api/v1/machines/{mid}/health/reports`: the reports, newest first, `{"reports":[{name,title,path?,record_path?,size,modified_at}]}` (`proto.HealthReport`, #4998). `path` is the original, `record_path` the same-name `.md` record; both are read through `file` / `file/download`.
+- `DELETE /api/v1/machines/{mid}/health/reports/{name}`: permanently delete a report (original and record), succeeding even if already absent; `name` must name an ordinary file under `reports/`. Both endpoints require full credentials; old nodes return 409 `node_outdated` (RPC `health.reports.list` / `health.reports.delete`).
 
-### 发送视频
+### Sending videos
 
-输入框「+」›「照片」能选图片也能选视频（#981；Agents、助手的对话和新对话的输入框都一样）。**视频当文件发**，不转成图片：
-走上面「发送文件」同一个接口，传到会话所在那台电脑的临时目录（助手的就是助手所在的机器）。和「文件」不同的是路径不插进输入框，
-视频在输入框上方显示成一张卡片（读取 → 必要时压缩 → 上传，进度条，✕ 取消；传完显示大小和时长，✕ 拿掉），随下一条消息发出。
+**+** › **Photos** in the input box picks both images and videos (#981; the same in Agents, assistant chats and the new-chat input box). **Videos are sent as files**, not converted to images:
+through the same endpoint as "Sending files" above, uploaded to a temporary directory on the computer the session runs on (for the assistant, its machine). Unlike **Files**, the path isn't inserted into the input box;
+the video shows as a card above the input box (reading → compressing if needed → uploading, with a progress bar and ✕ to cancel; when done it shows size and duration, and ✕ removes it), and goes out with the next message.
 
-- 消息里的样子：打的字后面空一行，每个视频一个标签
+- What it looks like in the message: a blank line after the typed text, then one tag per video
   `<jarvis-file kind="video" path="/tmp/IMG_0001-20261103-150102.MOV" name="IMG_0001.MOV" size="25270000" duration="12.4"/>`
-  （`path` 是那台电脑上的路径，`name` 是手机上的原名，`size` 字节，`duration` 秒）。Agent 读路径；App 解析标签画成文件卡片
-  （文件名、大小、时长），不显示标签本身，路径也不再出文件 chip；手表显示〔视频〕。没打字只发视频时正文是「请看视频」。
-- 上传中不能发送（发送键灰着；BeautifulUI 的输入框点了会提示「视频还在上传，传完再发送」，字留在框里）。一次最多 4 个，和照片共用选择器的 4 个名额。
-- **原样传还是转码**：不超过 200 MB（hub 的上限）**原样传**：不等转码、不损画质，iPhone 拍的 HEVC / H.264 MOV 在 Mac 和 ffmpeg 上都能读。
-  选择器用 `.current` 编码，系统不先替我们转一遍。超过 200 MB 才用 AVAssetExportSession 转成 **H.264 MP4**（moov 在前），
-  按估算挑 1080p（约 76 MB/分钟）→ 720p（约 54）→ 540p（约 35）里估算放得进 180 MB（留一成余量）的最高一档，转完再核对一次大小，
-  超了降一档。iPhone 原片大约 1080p30 HEVC 60 MB/分钟、4K30 170 MB/分钟，所以 1080p 约 3 分钟、4K 约 1 分钟以内原样传。
-- **上限**：压缩后也要不超过 200 MB，540p 大约能放 **5 分钟**（估算按码率算，和画面内容关系不大）。更长的不传，提示
-  「「IMG_0002.MOV」有 12:34，压缩到 540p 也超过 200 MB，发不了：先在「照片」里剪短再发」。还在 iCloud 里下不下来的提示「有视频读不出来」。
-- 点卡片用系统播放器（iOS 是全屏的 AVPlayerViewController，Mac 是 AVKit 的播放器）：这台手机发的直接放本地副本（`Caches/attached-videos`，
-  按最近播放保留 1 GB，算在「设置 › 存储空间」的「其他缓存」里）；别的设备发的先从那台电脑下载（`/file/download`，卡片上显示进度，再点一下停止），
-  下完也留一份。电脑上的临时文件被清掉以后就放不了了（提示「放不了」）。
+  (`path` is the path on that computer, `name` is the original name on the phone, `size` in bytes, `duration` in seconds). The Agent reads the path; the App parses the tag and draws a file card
+  (file name, size, duration), without showing the tag itself, and the path no longer gets a file chip; the watch shows [Video]. When only a video is sent with no text, the body is "Please look at the video".
+- Can't send while uploading (the send button is grayed out; in the BeautifulUI input box, tapping it shows "The video is still uploading. Send once it's done." and the text stays in the box). At most 4 at a time, sharing the picker's 4 slots with photos.
+- **Upload as is, or transcode**: up to 200 MB (the hub's limit) it's **uploaded as is**: no waiting for transcoding, no quality loss, and the HEVC / H.264 MOVs the iPhone records are readable on a Mac and by ffmpeg.
+  The picker uses `.current` encoding so the system doesn't transcode first for us. Only above 200 MB is it converted to **H.264 MP4** (moov first) with AVAssetExportSession,
+  picking by estimate the highest of 1080p (about 76 MB/minute) → 720p (about 54) → 540p (about 35) that is estimated to fit in 180 MB (10% headroom), checking the size again after conversion
+  and dropping a tier if it's over. iPhone originals are about 60 MB/minute at 1080p30 HEVC and 170 MB/minute at 4K30, so up to about 3 minutes at 1080p or about 1 minute at 4K goes as is.
+- **Limit**: even compressed it must stay within 200 MB, which at 540p fits about **5 minutes** (the estimate goes by bitrate and depends little on the content). Longer ones aren't uploaded, with the message
+  ""IMG_0002.MOV" is 12:34 long and still over 200 MB at 540p, so it can't be sent. Trim it in Photos first." One still in iCloud that can't be downloaded shows "Couldn't read a video".
+- Tapping the card uses the system player (a full-screen AVPlayerViewController on iOS, AVKit's player on Mac): videos sent from this phone play the local copy directly (`Caches/attached-videos`,
+  keeping 1 GB by most recently played, counted under "Other Caches" in **Settings › Storage**); ones sent from other devices are first downloaded from that computer (`/file/download`, progress shown on the card, tap again to stop),
+  and a copy is kept afterwards too. Once the temporary file on the computer is cleaned up, it can't be played ("Can't play").
 
-### items 的连续性
+### Continuity of items
 
-每批 items（WebSocket `items` 事件、HTTP 的 `/items` 响应、node 的 `session.items`）都说明自己在 transcript 里的位置：
+Every batch of items (WebSocket `items` events, HTTP `/items` responses, the node's `session.items`) states its position in the transcript:
 
-- `history`：这份 transcript 的身份（inode + 第一行的 crc32 + 被改写的次数，Claude 会话回退过时再加 `.r<被放弃的分支数>`，见「回退到某条消息」）。变了说明文件被替换 / 截短重写 / 有轮次被回退掉，App 丢掉本地内容重新取。
-- `to_seq`：这批读到的最后一行（包括没有 item 的行）；`from_seq`：这批接在哪一行之后（只有接续的批次——补发、实时推送、`after_seq`——才有）。
-- App 记 `covered`（本地从头连续拿到的最后一行）：`from_seq <= covered` 就把 `covered` 推到 `to_seq`；`from_seq > covered` 说明中间丢了一批，
-  稍等 1.5 秒（订阅时的补发可能还在路上）再用 `after_seq=covered` 补齐，超过 8 页改取最新一页。重连订阅带 `since_seq=covered`。
-- **推送不会悄悄丢一条**（#3036）：订阅者的发送队列（512 条）满了，hub 断开这条连接（`too slow`），不是只丢这一条——后者让一次长输出（几千条 item）的尾巴到不了一个落在后面的页面，
-  而 Agent 已经停了，没有下一批来提醒它缺了一段。客户端重连后带 `since_seq=covered` 重新订阅，补发从那里接上（网页 `useTranscript`、iOS `AppModel`、Android `ContinuitySync` 都是这样）。
-  `delta` / `live` / `screen` 这些不留存的推送同理。订阅按电脑自己的 id 记，用被吸收的旧 id（`hub.json` 里合并掉的条目）订阅也收得到推送。
-- **子 Agent 的对话和会话同一套**（#3139）：订阅 `<会话>@<agent>` 就是对它的 `session.watch`，node 打开 `<会话>/subagents/agent-<id>.jsonl` 照主会话那样每 250 毫秒读新行、推 `session.items`，`history` / `from_seq` / `to_seq` / `since_seq` 的规则一样，`session.unwatch`（页面退订、断线）就停。同时跟着的子 Agent 对话最多 16 个，超过的 watch 回错误，那个页面靠下面的兜底拉取。
-- **页面自己的兜底**（网页 `useTranscript`，`lib/stale-page.ts`）：会话列表里的 `updated_at`（子 Agent 取它在父会话 `subagents` 里的）比页面手上最新一条 item 的 `ts` 新，且 4 秒内没收到过 items，就按 `after_seq=covered` 拉一次（每个会话最多每 10 秒一次、页面在前台才拉；`history` 变了整页重取）。拉到的 item 静默合并进去；没拉到 item 的写入（标题、模式）不重复拉；连续 2 次拉到了「推送本该带来」的 item（或连续 2 次拉失败）才在对话顶部出一个小提示「不是实时的 · 重新加载」，推送恢复就消失。
-- 老 hub 不带这些字段：App 照旧按 id 合并。新 hub 的字段对老 App 只是多出来的键。
+- `history`: this transcript's identity (inode + crc32 of the first line + rewrite count; for a Claude session that has been rewound, add `.r<number of abandoned branches>`, see "Rewind to a message"). A change means the file was replaced / truncated and rewritten / had turns rewound; the App drops its local content and fetches again.
+- `to_seq`: the last line read in this batch (including lines with no item); `from_seq`: the line this batch continues after (only present for continuation batches: resends, live pushes, `after_seq`).
+- The App tracks `covered` (the last line it has received continuously from the start): when `from_seq <= covered`, advance `covered` to `to_seq`; when `from_seq > covered`, a batch was lost in between.
+  Wait 1.5 seconds (the resend on subscribe may still be in flight), then fill the gap with `after_seq=covered`; after more than 8 pages, fetch the latest page instead. A reconnect subscription carries `since_seq=covered`.
+- **Pushes never silently drop one message** (#3036): when a subscriber's send queue (512 messages) fills up, the hub disconnects it (`too slow`) rather than dropping just that message. Dropping it would keep the tail of a long output (thousands of items) from reaching a page that fell behind,
+  with the Agent already stopped and no next batch to reveal the gap. After reconnecting, the client subscribes again with `since_seq=covered`, and resends continue from there (web `useTranscript`, iOS `AppModel`, Android `ContinuitySync` all do this).
+  The same applies to non-persisted pushes such as `delta` / `live` / `screen`. Subscriptions are recorded under the computer's own id; subscribing with an absorbed old id (an entry merged away in `hub.json`) still receives pushes.
+- **Sub-Agent chats use the same mechanism as sessions** (#3139): subscribing to `<session>@<agent>` is a `session.watch` for it. The node opens `<session>/subagents/agent-<id>.jsonl` and, as for the main session, reads new lines every 250 milliseconds and pushes `session.items`. The rules for `history` / `from_seq` / `to_seq` / `since_seq` are the same; `session.unwatch` (page unsubscribed, disconnected) stops it. At most 16 sub-Agent chats can be followed at once; additional watches return an error, and those pages rely on the fallback fetch below.
+- **The page's own fallback** (web `useTranscript`, `lib/stale-page.ts`): if the session list's `updated_at` (for a sub-Agent, its entry in the parent's `subagents`) is newer than the `ts` of the latest item the page has, and no items have arrived for 4 seconds, fetch once with `after_seq=covered` (at most once every 10 seconds per session, only while the page is in the foreground; if `history` changed, refetch the whole page). Fetched items merge in silently; writes that yield no items (title, mode) aren't fetched repeatedly. Only after 2 consecutive fetches find items that "should have arrived by push" (or 2 consecutive fetches fail) does a small "Not live · Reload" notice appear at the top of the chat; it disappears when pushes resume.
+- Old hubs don't carry these fields: the App keeps merging by id. New hub fields are simply extra keys to old Apps.
 
-### 真实记录的轮次用时
+### Turn duration from actual records
 
-轮次结束记录可生成一条 `role: system`、`kind: turn_duration` 的元数据 item。它不带展示文本，沿用现有 HTTP 历史／增量页、WebSocket `items` 和会话缓存路径，不新增事件或 Envelope 顶层字段。`turn_duration` 字段可选；旧 iOS 将未知 kind 解为 `unknown` 并跳过展示，其余内容照常解码。
+A turn-end record can produce a metadata item with `role: system`, `kind: turn_duration`. It carries no display text and uses the existing HTTP history / incremental pages, WebSocket `items`, and session cache path, with no new event or top-level Envelope field. The `turn_duration` field is optional; old iOS decodes an unknown kind as `unknown` and skips its display, while decoding everything else as usual.
 
 ```json
 {"id":"duration_example#0","seq":9,"ts":"2026-01-01T00:00:00Z","role":"system","kind":"turn_duration","turn_duration":{"duration_ms":12345,"source":"claude_turn_duration","parent_uuid":"reply_example"}}
 ```
 
-| 来源 | 原始记录 | 关联字段 |
+| Source | Original record | Association fields |
 | --- | --- | --- |
-| `claude_turn_duration` | Claude Code 的 `type: system`、`subtype: turn_duration` 行中的 `durationMs` | `parent_uuid` 原样保留 `parentUuid`，指向该轮收尾消息的 UUID（对应 item id 中 `#` 之前的部分） |
-| `codex_task_complete` | Codex／兼容 rollout 的 `event_msg`、`payload.type: task_complete` 中的 `duration_ms` | `turn_id` 原样保留原生轮次 ID；同轮已解析到用户输入时，另带 `user_item_id`，指向该输入的规范化 item id |
+| `claude_turn_duration` | `durationMs` in a Claude Code line with `type: system`, `subtype: turn_duration` | `parent_uuid` preserves `parentUuid` as is, pointing to the UUID of the message that ends the turn (the part before `#` in the item id) |
+| `codex_task_complete` | `duration_ms` in a Codex / compatible rollout's `event_msg` with `payload.type: task_complete` | `turn_id` preserves the native turn ID as is; if user input for the same turn has already been parsed, also carries `user_item_id`, pointing to that input's normalized item id |
 
-仅接受明确记录的非负整数毫秒数及有效关联标识；缺失、负值、非整数、溢出或已知轮次 ID 不匹配时不生成耗时 item。`0` 是有效记录值。不会用时间戳、`started_at`／`completed_at` 的差值或 timeout 补值，也不将压缩、思考、工具或子任务的耗时当作整轮耗时。
+Only explicitly recorded non-negative integer milliseconds with a valid association identifier are accepted. Missing, negative, non-integer, overflowing values or mismatched known turn IDs produce no duration item. `0` is a valid recorded value. No value is filled from timestamps, the difference between `started_at` / `completed_at`, or a timeout, and durations of compaction, thinking, tools or subtasks are never treated as whole-turn duration.
 
-Android 按关联消息定位已加载历史中的用户轮次或后台唤醒段，工作行显示「用时 N 秒」（毫秒向下取整）。关联消息未加载、关联跨过了新用户轮次／唤醒／回顾边界时先隐藏；翻页补齐后重新关联。新轮次没有自己的记录时，状态行留空，不沿用上一轮用时。字段／item 缺失表示没有可用的真实记录，不代表零耗时；旧 node 或旧缓存也可能没有该信息。折叠工作保留耗时元数据 item；展开折叠、重连补发和缓存恢复沿用同一关联规则。
+Android uses the associated message to locate a user turn or background wake-up segment in loaded history, and the work row shows "Took N seconds" (milliseconds rounded down). It stays hidden if the associated message isn't loaded or the association crosses a new user turn / wake-up / recap boundary; association is retried after paging fills the gap. When a new turn has no record of its own, the status row stays blank rather than reusing the previous turn's duration. A missing field / item means no usable actual record, not zero duration; old nodes or caches may also lack this information. Folded work preserves duration metadata items; expanding folds, reconnect resends and cache restoration use the same association rules.
 
-### 折叠的工作
+### Folded work
 
-对话里一轮的工具调用和思考平时折叠成一行（「工具 502 · 思考 81」），可一个很长的 Codex 会话，最后两轮这一页有 1412 条、1.08 MB，
-真正的回复只有 6 条：弱网下对话页顶上一直转圈。请求带 `fold_work`（HTTP `fold_work=1`、订阅时 `fold_work: true`）时，从末尾往前的页
-（`turns` / `before_seq` / 订阅时补发的最后两轮）把每一段连续的工作——成对的 tool_use + tool_result（连同工具的图片）和 thinking——
-换成一条 `kind: fold` 的 item（`transcript.FoldWork`）：
+The tool calls and thinking of a turn are normally folded into one line in the chat ("Tools 502 · Thinking 81"). But in one long Codex session, the page for the last two turns had 1412 items and 1.08 MB,
+with only 6 actual replies: on a weak network the top of the chat page kept spinning. When a request carries `fold_work` (HTTP `fold_work=1`, `fold_work: true` when subscribing), pages read backward from the end
+(`turns` / `before_seq` / the last two turns resent on subscribe) replace each run of consecutive work (paired tool_use + tool_result, with the tool's images, and thinking)
+with one item of `kind: fold` (`transcript.FoldWork`):
 
-- `id` 是 `fold:` + 这段第一条的 id，`seq` / `ts` 也是第一条的；`fold.through_seq` / `through_id` 是最后一条，`until` 是最后一条的时间；
-  `items` 条数，`tools` 工具调用数，`thoughts` 有字的思考数（空的思考 App 本来就不显示）。
-- `fold.tasks` 是可选的有序任务清单快照数组，仅收录本段中成功的 TodoWrite / TaskCreate / TaskUpdate / TaskList 结果，
-  不携带原始工具输入和输出；无可用快照时省略。没有结果、`is_error: true`、结果中 `success: false` 或非 null 的 `error` 都不计入；
-  格式错误的清单不会清空之前的任务。旧 iOS 忽略这个嵌套字段，fold 原有计数、范围和展开方式不变。
-  每次成功结果保留一个快照及其替换边界，按结果在 transcript 中的顺序应用，避免部分更新丢掉已加载的任务状态：
-  - `entries`：任务数组，每项有 `id`（`todo:<下标>` 或 `task:<工具任务 ID>`），可选 `subject`、`description`、`status`。
-    状态为 `pending` / `in_progress` / `completed` / `unknown`；`deleted` 表示删除该任务。
-  - `replace: "todo"`：TodoWrite 的完整清单，先移除旧的 `todo:` 项；空数组表示清空。
-    `replace: "task"`：TaskList 的完整清单，移除不在新清单内的 `task:` 项，已有项保留未提供的说明和状态；空数组表示清空。
-    省略 `replace` 表示 TaskCreate / TaskUpdate 的增量结果，未提供的字段沿用旧值；无旧值的标题显示「任务 #ID」、状态为未知。
-    TaskCreate 另带 `fallback_status: "pending"`，仅在结果和旧任务都没有状态时使用。
-  - `source_item_id`、`source_tool_use_id`、`source_seq`：原始工具调用的 item ID、工具调用 ID 和 seq，供「查看相关记录」定位。
-    Android 不展开即可重建进度；查看记录时先展开所属工作行，再按范围取回原记录并定位，后续真实结果按原规则继续更新。
+- `id` is `fold:` + the id of the run's first item, and `seq` / `ts` are also the first item's; `fold.through_seq` / `through_id` are the last item, `until` is the last item's time;
+  `items` is the item count, `tools` the number of tool calls, `thoughts` the number of thoughts with text (the App never shows empty thoughts anyway).
+- `fold.tasks` is an optional array of ordered task-list snapshots. It only includes successful TodoWrite / TaskCreate / TaskUpdate / TaskList results from this run,
+  and carries no raw tool input or output; it is omitted when there is no usable snapshot. Results that are missing, have `is_error: true`, have `success: false`, or have a non-null `error` are not counted;
+  a malformed list does not clear earlier tasks. Old iOS ignores this nested field; the fold's existing counts, range and expansion stay the same.
+  Each successful result keeps one snapshot and its replacement boundary, applied in the order the results appear in the transcript, so a partial update does not lose task state already loaded:
+  - `entries`: the task array. Each entry has an `id` (`todo:<index>` or `task:<tool task ID>`) and optional `subject`, `description`, `status`.
+    Status is `pending` / `in_progress` / `completed` / `unknown`; `deleted` means the task is removed.
+  - `replace: "todo"`: a full TodoWrite list; existing `todo:` entries are removed first. An empty array means clear.
+    `replace: "task"`: a full TaskList list; `task:` entries not in the new list are removed, and existing entries keep the description and status the new list doesn't provide. An empty array means clear.
+    Omitting `replace` means an incremental TaskCreate / TaskUpdate result; fields not provided keep their old values. A task with no old title shows "Task #ID", with unknown status.
+    TaskCreate also carries `fallback_status: "pending"`, used only when neither the result nor the old task has a status.
+  - `source_item_id`, `source_tool_use_id`, `source_seq`: the item ID, tool call ID and seq of the original tool call, used by "View related record" to locate it.
+    Android can rebuild progress without expanding; to view the record it first expands the containing work row, then fetches the original records by range and scrolls to it. Later real results keep updating by the original rules.
 
-  例如：`"tasks":[{"replace":"todo","entries":[{"id":"todo:0","subject":"检查表单","status":"in_progress"}],"source_item_id":"entry_tool#0","source_tool_use_id":"call_example","source_seq":3}]`。
-- `fold.images` 是可选的数组：这段工作看过的图片（`transcript.ViewedImages`），规则见下面「这一轮看过的图片」；没有图片时省略。
-  旧客户端忽略这个字段。
-- 不折叠：用户消息、回复（text）、通知、recap；结果不在这一页的 tool_use（还在跑）和 tool_use 不在这一页的 tool_result
-  （App 要把它们和后来 / 之前的另一半配对）；不到 3 条且不到 4 KB 的短段（展开还要一次往返，不值）。
-- App 展开工作行时用 `from_seq=<fold.seq>&through_seq=<fold.through_seq>` 取回这一段（一页约 1000 条，`more` 时从最后一条的 seq + 1 接着取），
-  合并进来并去掉 fold。合并一条 fold 时，本地在它范围内（按 seq + 块序号）的工具 / 思考 item 被它替换。
-- `after_seq` 的补发和实时推送从不折叠：它们接着 App 已有的内容，里面可能有 App 正等着结果的工具调用。
-- 1412 条 / 1.08 MB 的那种页，折叠后是十几条、几 KB（`TestFoldedFirstPageOfALongSession`：1417 条 880 KB → 13 条 1.9 KB）。
+  For example: `"tasks":[{"replace":"todo","entries":[{"id":"todo:0","subject":"Check the form","status":"in_progress"}],"source_item_id":"entry_tool#0","source_tool_use_id":"call_example","source_seq":3}]`.
+- `fold.images` is an optional array: the images this run of work looked at (`transcript.ViewedImages`); rules are in "Images viewed this turn" below. Omitted when there are none.
+  Old clients ignore this field.
+- Not folded: user messages, replies (text), notifications, recaps; a tool_use whose result is not on this page (still running) and a tool_result whose tool_use is not on this page
+  (the App has to pair them with the other half that comes later / came earlier); short runs under 3 items and under 4 KB (expanding costs another round trip; not worth it).
+- When the App expands a work row it fetches the run with `from_seq=<fold.seq>&through_seq=<fold.through_seq>` (about 1000 items per page; on `more`, continue from the last item's seq + 1),
+  merges it in and drops the fold. When a fold is merged in, local tool / thinking items within its range (by seq + block index) are replaced by it.
+- Resends via `after_seq` and live pushes are never folded: they continue from what the App already has, and may contain tool calls the App is waiting on.
+- A page like that 1412-item / 1.08 MB one becomes a dozen or so items and a few KB after folding (`TestFoldedFirstPageOfALongSession`: 1417 items, 880 KB → 13 items, 1.9 KB).
 
-### 这一轮看过的图片
+### Images viewed this turn
 
-App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#1543、#1540）。图片来自这一轮工作里的工具调用，两种来源按同一套规则汇总：
-没折叠的工作看 items 本身，折叠的看 `fold.images`（工作行展开后 fold 被真实 items 替换，汇总结果不变）。
+The App and web show an "Images viewed this turn" row under a turn's reply (#1543, #1540). The images come from tool calls in that turn's work, and both sources are aggregated by the same rules:
+unfolded work is read from the items themselves, folded work from `fold.images` (once a work row is expanded, the fold is replaced by the real items and the aggregate stays the same).
 
-- 算哪些：结果里带的图（`kind: image` 且有 `tool_use_id` 的 item：Read 读的图片、computer_state 的截图、browser_look 的截图、
-  其他 MCP 工具返回的图片）；Read 读了图片文件（png / jpg / jpeg / gif / webp / heic / heif / bmp / tif / tiff）但结果里没带图的
-  （图太大没留下，或 Codex 的 view_image，transcript 里映射成 Read）也算一条，只有路径。用户这一轮发的图不算（在用户气泡里），
-  失败的 Read、不是图片的文件、还没有结果的调用不算。
-- 顺序和去重：按第一次出现的顺序；同一路径只出一次，没有路径的按 mime + 大小 + 宽高认（同一个屏幕没变又看一次只算一张），
-  都没有时按 image item。
-- `fold.images` 每项：
+- What counts: images carried in results (items with `kind: image` and a `tool_use_id`: images read by Read, computer_state screenshots, browser_look screenshots,
+  images returned by other MCP tools). A Read of an image file (png / jpg / jpeg / gif / webp / heic / heif / bmp / tif / tiff) whose result carries no image
+  (the image was too large to keep, or Codex's view_image, which the transcript maps to Read) also counts as one entry, with only the path. Images the user sent this turn don't count (they are in the user bubble);
+  failed Reads, non-image files and calls without a result yet don't count.
+- Order and dedup: in order of first appearance; the same path appears only once. Entries without a path are matched by mime + size + width/height (looking at an unchanged screen again counts as one image);
+  when none of these are present, by image item.
+- Each `fold.images` entry:
 
-  | 字段 | 说明 |
+  | Field | Description |
   | --- | --- |
-  | `item_id` | image item 的 id，图片用 `GET /api/v1/sessions/{mid}/{sid}/items/{item_id}/image` 取；只有路径的没有这一项 |
-  | `tool_use_id`、`tool` | 看图的那次调用和它的工具名（原样，如 `Read`、`mcp__jarvis__computer_state`） |
-  | `source` | `read`（Read）、`screenshot`（MCP 的 `computer_*`）、`browser`（MCP 的 `browser_*`）、`mcp`（其他 MCP 工具）、`tool`（其他） |
-  | `path` | Read 读的文件（`file_path`）；缩略图用 `GET /api/v1/machines/{mid}/file/thumb`，大图用 `file/download` |
-  | `machine` | `screenshot` / `browser`：调用里写的机器（id 或名字），显示成「截图 · <机器名>」 |
-  | `mime`、`size`、`width`、`height` | 图片的类型、字节数（约数：base64 长度 × 3 / 4）、像素宽高，和懒加载的 `image` 一样，用来在图到之前占好位置 |
+  | `item_id` | id of the image item; fetch the image with `GET /api/v1/sessions/{mid}/{sid}/items/{item_id}/image`. Path-only entries don't have it |
+  | `tool_use_id`, `tool` | the call that viewed the image and its tool name (verbatim, e.g. `Read`, `mcp__jarvis__computer_state`) |
+  | `source` | `read` (Read), `screenshot` (MCP `computer_*`), `browser` (MCP `browser_*`), `mcp` (other MCP tools), `tool` (anything else) |
+  | `path` | the file Read read (`file_path`); thumbnail via `GET /api/v1/machines/{mid}/file/thumb`, full image via `file/download` |
+  | `machine` | `screenshot` / `browser`: the machine named in the call (id or name), shown as "Screenshot · <machine name>" |
+  | `mime`, `size`, `width`, `height` | image type, byte count (approximate: base64 length × 3 / 4), pixel width/height; same as the lazy-loaded `image`, used to reserve space before the image arrives |
 
-  例如：`"images":[{"item_id":"entry_tool#1","tool_use_id":"call_a","tool":"Read","source":"read","path":"/work/design.png","mime":"image/png","size":48213,"width":1280,"height":800},{"tool_use_id":"call_b","tool":"Read","source":"read","path":"/work/banner.jpg"}]`。
+  For example: `"images":[{"item_id":"entry_tool#1","tool_use_id":"call_a","tool":"Read","source":"read","path":"/work/design.png","mime":"image/png","size":48213,"width":1280,"height":800},{"tool_use_id":"call_b","tool":"Read","source":"read","path":"/work/banner.jpg"}]`.
 
-### 终端流
+### Terminal stream
 
-终端 tab 的实时画面（`docs/terminal.md`）。node 用 `herdr terminal session observe` 按窗格本身的尺寸镜像 herdr 画好的网格，
-每帧是一段 VT 字节：`full` 的帧是整屏（`ESC[2J` 开头），其余只重画变了的格子，最后是光标位置和显隐。App 用一个 `cols × rows`
-的网格依次套用即可；网格永远等于电脑上窗格的尺寸，手机的尺寸不回传。
+The live view of the Terminal tab (`docs/terminal.md`). The node uses `herdr terminal session observe` to mirror the grid herdr has drawn, at the pane's own size.
+Each frame is a chunk of VT bytes: a `full` frame is the whole screen (starts with `ESC[2J`); the others only redraw cells that changed, and end with the cursor position and visibility. The App just applies them in order to a `cols × rows`
+grid. The grid always equals the pane size on the computer; the phone's size is never sent back.
 
-- `epoch` 标识一条流：node 每次（重新）开 observe 都换一个，第一帧一定是 `full`；窗格变大小、herdr 中断、整帧之后的增量超过 256 KB 时 node 会重开。
-  同一 `epoch` 里 `seq` 从 1 连续递增。
-- hub 给每个被看的终端留「最近一个整帧 + 之后的增量」。`terminal_subscribe` 带上 App 手里的 `epoch` 和最后的 `seq`：
-  还在同一条流、而且留着的帧能接上，就只补之后的帧；否则从整帧开始重放。之后的新帧实时推。
-- App 收到的帧 `seq` 不连续（中间丢了）或者 `epoch` 变了却不是 `full`，就丢掉本地网格、重新 `terminal_subscribe`（不带 epoch）。
-- 收到 `error`：hub 已经丢掉这条流；`unsupported` 时改用 `/screen` 轮询，否则过几秒再订阅。WebSocket 断了重连后重新订阅（带 epoch / seq 续上）。
-- 第一个订阅的 App 让 hub 发 `terminal.watch`，最后一个退订（或断开）时发 `terminal.unwatch`。旧 App 不发这些消息，照旧轮询 `/screen`。
-- 窗格地址（`features` 有 `terminal_panes`，`docs/terminal.md` 第十九节）：没有 Agent 的窗格没有会话 id，`terminal_subscribe` / `terminal_input` / `terminal_unsubscribe` 的 `session_id`
-  可以写 `pane:<窗格 id>`（`/machines/{mid}/panes` 给出的 `terminal`）；`GET …/sessions/{mid}/pane:…/screen`（轮询退路）和 `screen/before` 也认。**只有 `full` 设备能用**：`answer` 设备订阅（连只看也算）
-  收到 `error: forbidden…`，HTTP 读屏 403。别的 `session.*` 不认这个地址。
-- 手机接管（`features` 有 `terminal_control`，`docs/terminal.md` 第十一节）：订阅带 `control` 时网格是手机的尺寸，帧格式不变；
-  键和新尺寸走 `terminal_input`；离开（退订 / 断开）后窗格回到电脑上的尺寸，还有别人在看就改回镜像（新 epoch）。
+- `epoch` identifies a stream: the node picks a new one every time it (re)opens observe, and the first frame is always `full`. The node reopens when the pane resizes, herdr is interrupted, or the deltas after the full frame exceed 256 KB.
+  Within one `epoch`, `seq` increases from 1 without gaps.
+- For each watched terminal the hub keeps "the latest full frame + the deltas after it". `terminal_subscribe` carries the `epoch` and last `seq` the App has:
+  if it is still the same stream and the kept frames connect, only the later frames are sent; otherwise replay starts from the full frame. New frames are then pushed live.
+- If the App receives a frame whose `seq` isn't contiguous (something was lost), or the `epoch` changed but the frame isn't `full`, it drops its local grid and sends `terminal_subscribe` again (without epoch).
+- On `error`: the hub has dropped this stream. On `unsupported`, fall back to polling `/screen`; otherwise subscribe again after a few seconds. After the WebSocket drops and reconnects, subscribe again (with epoch / seq to resume).
+- The first App to subscribe makes the hub send `terminal.watch`; the last one to unsubscribe (or disconnect) makes it send `terminal.unwatch`. Old Apps don't send these messages and keep polling `/screen`.
+- Pane addresses (`features` has `terminal_panes`, `docs/terminal.md` section 19): a pane with no Agent has no session id, so the `session_id` of `terminal_subscribe` / `terminal_input` / `terminal_unsubscribe`
+  can be `pane:<pane id>` (the `terminal` given by `/machines/{mid}/panes`); `GET …/sessions/{mid}/pane:…/screen` (the polling fallback) and `screen/before` accept it too. **Only `full` devices can use it**: an `answer` device subscribing (even view-only)
+  gets `error: forbidden…`, and HTTP screen reads return 403. No other `session.*` accepts this address.
+- Phone takeover (`features` has `terminal_control`, `docs/terminal.md` section 11): when the subscription carries `control`, the grid is the phone's size; the frame format is unchanged.
+  Keys and new sizes go through `terminal_input`. On leaving (unsubscribe / disconnect) the pane goes back to the computer's size, and if others are still watching it switches back to mirroring (new epoch).
 
 
-## 文件自动刷新（#2439）
+## File auto-refresh (#2439)
 
-网页的文件面板和 Git 面板开着时自动刷新（`web/src/lib/fs-live.ts`；iOS / Mac 的文件页和 Git 页同样，`apple/Persona/App/FsLive.swift`，#3089；`server/internal/hub/fswatch.go`、`server/internal/node/fswatch.go`）：
+The web's file panel and Git panel refresh automatically while open (`web/src/lib/fs-live.ts`; the same for the iOS / Mac file and Git pages, `apple/Persona/App/FsLive.swift`, #3089; `server/internal/hub/fswatch.go`, `server/internal/node/fswatch.go`):
 
-- 页面发 `fs_watch`（上面的消息表），**每个会话目录一份、整份替换**；同一页面里文件面板和 Git 面板各自的需求在页面里合并，页面隐藏时发一份空的，回来时再发并刷新一遍。
-- hub 把所有页面的集合并起来，**整份替换**地调 node 的 `fs.watch`；node 重连后 hub 重发一次。页面连接断开、面板关闭、换页都会释放，最后一个页面走了 node 就停掉看的循环（不留 goroutine）。只有完全权限的设备能发 `fs_watch`。
-- node **轮询而不是 inotify / fsnotify**：`go.mod` 里没有 fsnotify，Linux 的 inotify 不能递归，各系统的行为也不同；只看页面打开着的那几个文件夹（每 2 秒一次 `ReadDir`，签名是名字 + 类型 + 大小 + 修改时间），Git 目录每 5 秒一次 `git status --porcelain=v2` 加上列出的改动文件的大小和时间（已改的文件再改一遍，`status` 文本不变，但大小和时间变了）。变了才推 `fs.changed`，没变不发任何东西。
-- 网页收到 `fs_changed` 后等 200 ms（再来就重新计时）合并成一次刷新：只重新读变了的文件夹，Git 状态和打开着的 diff 原位刷新，不闪加载动画。
-- node 先看 `fs.watch` 里的每个路径都过 `pathguard`（和 `fs.list` 同一道），被拒的路径只是读不出来、签名是 `err`，不会读它的内容。
+- The page sends `fs_watch` (message table above), **one per session directory, replacing the whole set**. Within a page, the file panel's and the Git panel's needs are merged in the page. When the page is hidden it sends an empty set; when it comes back it sends again and refreshes once.
+- The hub merges the sets from all pages and calls the node's `fs.watch`, **replacing the whole set**; after the node reconnects, the hub resends once. A page connection dropping, a panel closing or a page switch all release it; when the last page goes away the node stops its watch loop (no goroutine left behind). Only full-access devices can send `fs_watch`.
+- The node **polls instead of using inotify / fsnotify**: fsnotify isn't in `go.mod`, Linux inotify isn't recursive, and behavior differs across systems. It only watches the folders the page has open (one `ReadDir` every 2 seconds; the signature is name + type + size + mtime), and Git directories run `git status --porcelain=v2` every 5 seconds plus the size and mtime of the changed files listed (editing an already-modified file again leaves the `status` text unchanged, but its size and mtime change). It pushes `fs.changed` only on change; nothing is sent when nothing changed.
+- After the web receives `fs_changed` it waits 200 ms (restarting the timer if more arrive) and merges them into one refresh: it only rereads the folders that changed; Git status and open diffs refresh in place, with no loading animation.
+- The node first passes every path in `fs.watch` through `pathguard` (the same check as `fs.list`). A rejected path simply can't be read and its signature is `err`; its contents are never read.
 
-## 引擎
+## Engines
 
-每台机器的 node 驱动一个「引擎」，即一组终端宿主：`herdr`（经典的 herdr 命令行，默认，原来的机器不受影响）、
-`herdr-core`（Herdr 桌面版背后的运行时，显示名「Herdr App」）、`orca`（Orca 桌面版的 runtime，显示名「Orca」，`docs/plan-orca-support.md`「Orca 来源」），
-以及 `herdr-both`（显示名「herdr + Herdr App」）：node **同时注册 herdr 和 herdr-core 两个宿主**，两边会话合并显示，
-给「本地用 herdr、Herdr App 再 remote 连到同一台机器」的场景用。单选时几个宿主不同时用：同时跑会互相拖慢刷新；
-并列时刷新并行、事件按宿主隔离，不会互相拖慢（实现见 `node/engine.go`、`node/sessions.go` 的 `refreshHosts`、`node/herdrevents.go`，
-取舍见 `docs/plan-orca-support.md`「herdr-core 宿主」）。
+Each machine's node drives one "engine", that is, a set of terminal hosts: `herdr` (the classic herdr command line; the default, so existing machines are unaffected),
+`herdr-core` (the runtime behind the Herdr desktop app, display name "Herdr App"), `orca` (the runtime of the Orca desktop app, display name "Orca", `docs/plan-orca-support.md` ("Orca source")),
+and `herdr-both` (display name "herdr + Herdr App"): the node **registers both herdr and herdr-core as hosts at the same time**, and sessions from both are shown merged.
+This is for the case "use herdr locally, and have Herdr App connect remotely to the same machine". With a single choice the hosts are not used together: running them at once slows each other's refresh;
+side by side, refreshes run in parallel and events are isolated per host, so they don't slow each other down (implementation in `node/engine.go`, `refreshHosts` in `node/sessions.go`, `node/herdrevents.go`;
+trade-offs in `docs/plan-orca-support.md` ("herdr-core host")).
 
-- 用户在 App 里按机器选（配对时、设置 › 机器），`PUT /api/v1/machines/{mid}/engine`。hub 存在 Postgres 的 settings 里
-  （一个键 `machine_engines`：机器 id → 引擎），不写 hub.json。
-- hub 每次连上 node，**第一个调用**就是 `engine.use`（在 `node.info` 之前），但只对存过选择的机器发；没选过的机器不发，
-  node 照旧用 herdr，旧 node 也不会收到不认识的方法。用户改了且机器在线时马上发；同一台机器的 `engine.use` 排队发，每次发的是发送时存的值。
-- node 连上后先不轮询、不订阅任何引擎的事件，等到引擎定下来：收到 `engine.use`，或者 hub 不发它而直接 `sessions.list`（没选过 / 旧 hub），
-  最多等 3 秒，之后按 herdr 开始。所以选了 herdr-core 的机器连接时不会闪出 herdr 的会话，也不会去问 herdr。
-- `engine` 是存下的选择。node 拒绝 `engine.use`（太旧）时 hub 记一行日志，PUT 照样回 200，选择照样存着，等 node 更新后生效。
-- `engines` 来自 `node.info`，每项 `{id, name, available, version?, note?}`：herdr 能用 = 它答话，或者 socket 文件在，或者 PATH 上有 `herdr`；herdr-core 能用 = 它的 socket 答 `hello`
-  （用 herdr 的 node 只在 `node.info` 时这样问一次 herdr-core，别的时候不碰它）；`herdr-both` 能用 = 前两个都能用（不带 version）；
-  Orca 能用 = `orca-runtime.json` 在、它的 socket 答 `status.get`
-  且协议版本兼容（不兼容时 `available` 为 false，`note` 是给用户看的一句中文原因，`version` 照样带；同样只在 `node.info` 时问一次）。
-  `version` 是各自报的版本，没有就不带。旧 node 只报前两个。
-- `node.info` 的 `herdr_running` / `herdr_running_known`：经典 herdr 的 server 现在答不答话，以及 node 能不能判断（用 herdr-core
-  的机器没有那个 socket，两个都不带）。老 node 两个都不带，hub 据此区分「没在跑」和「不清楚」（`docs/engines.md`）。
-- `node.info` 的 `builtin_programs`：personad 里内置的扩展程序（`["cua", "ego", "imessage"]`，#1830 第 5、6 步；imessage 的方法名照旧是 `connector.*`）。报了的 node，hub 经 `plugin.node.call {id, method, params}` 问它们；
-  老 node 不带，hub 照旧用 `computer.*`、`browser.*`（新 node 也照答）。见 `docs/extensions.md`「内置的 node 程序」。
-- `herdr.server.start`（hub → node，无参数，回 `{running}`）：用户点了 Agents 列表的「启动」。不受 `herdr_autostart` 约束，
-  起不来时按 `engine_missing` 那一套回原因。老 node 没有这个方法，hub 回 502 而不是说 herdr 起不来。
-  没装 herdr 时先装固定版本（最多等 15 秒，没装好回「正在安装 herdr …」的错误、在后台装完后自己启动；`docs/engines.md`「没装 herdr 时」）。
-- `herdr.server.status`（hub → node，无参数，回 `{running, known, installing, install_error}`）：`installing` 是 node 正在装 herdr，
-  `install_error` 是上次没装上的原因（空串是没失败过）；`GET /api/v1/machines/{mid}/herdr` 原样带出（没有时不带）。
-- `usage.windows`（hub → node，无参数，回 `{enabled, collected_at, accounts: [UsageAccount]}`，#2432）：node 读本机 Codex 的 rollout 和 Claude 状态栏落下的文件得到的订阅额度窗口，
-  只读本机文件、不碰凭据。`node.configure` 的 `usage_windows`（hub.json `machines[].usage_windows`）为 false 时回 `{enabled: false, accounts: []}`。老 node 没有这个方法，hub 当它没有数据（`docs/usage-windows.md`）。
-- 并列时没有窗格的操作（新建、继续会话、改名）固定走经典 herdr（node 的 `defaultHost` / `defaultHostKind`）；
-  每个窗格的操作（读屏、发送、按键、关闭）按窗格 id 的 host kind 路由，herdr-core 的窗格只受 herdr-core 能力限制。
-- **`paseo`（显示名「Paseo」，`docs/paseo.md`）不是终端宿主**：node 不注册宿主，自己运行 Paseo 的桥（`node/paseobridge.go`）。
-  桥是 runtime id 为 `paseo` 的 runtime（下面「Runtime ↔ node」），它的会话就是这台机器的会话。
-  - **新建会话**：都交给它。表单里选的是登录 shell 的启动器时，带上 `shell_launcher: true`。
-  - **继续未运行的 Claude 会话**：用 `session.start {resume}` 交给它接手，会话 id 不变；接手之后，消息照常用 `session.send` 发过去。
-  - **桥没连上时**，新建和继续都回错误 `engine_missing`，什么都不发。
-  - **检测**：`engines` 里的 Paseo 在两种情况下算可用。一是桥连着，这时 `version` 是 Paseo 的版本。二是 Paseo home 里 `paseo.pid` 写的地址有回应；
-    这时如果桥起不来，`note` 写原因。
+- The user picks per machine in the App (at pairing, or Settings › Machines): `PUT /api/v1/machines/{mid}/engine`. The hub stores it in the Postgres settings
+  (one key `machine_engines`: machine id → engine), not in hub.json.
+- Every time the hub connects to a node, **the first call** is `engine.use` (before `node.info`), but only for machines with a stored choice. Machines never configured get nothing,
+  so the node keeps using herdr and old nodes never receive a method they don't know. When the user changes it and the machine is online, it is sent right away; `engine.use` calls for the same machine are queued, and each sends the value stored at send time.
+- After connecting, the node doesn't poll or subscribe to any engine's events until the engine is settled: it receives `engine.use`, or the hub skips it and calls `sessions.list` directly (never configured / old hub).
+  It waits at most 3 seconds, then starts with herdr. So a machine set to herdr-core never flashes herdr sessions on connect, and never queries herdr.
+- `engine` is the stored choice. If the node rejects `engine.use` (too old), the hub logs a line, the PUT still returns 200 and the choice stays stored; it takes effect once the node is updated.
+- `engines` comes from `node.info`; each entry is `{id, name, available, version?, note?}`. herdr is available = it answers, or its socket file exists, or `herdr` is on PATH. herdr-core is available = its socket answers `hello`
+  (a node using herdr asks herdr-core this only once, during `node.info`, and leaves it alone otherwise). `herdr-both` is available = both of the above are available (no version).
+  Orca is available = `orca-runtime.json` exists, its socket answers `status.get`,
+  and the protocol version is compatible (if incompatible, `available` is false, `note` is a one-sentence reason in Chinese for the user, and `version` is still included; also asked only once during `node.info`).
+  `version` is the version each reports; omitted if there is none. Old nodes only report the first two.
+- `herdr_running` / `herdr_running_known` in `node.info`: whether the classic herdr server answers right now, and whether the node can tell (a machine using herdr-core
+  has no such socket and sends neither). Old nodes send neither; the hub uses this to tell "not running" from "unknown" (`docs/engines.md`).
+- `builtin_programs` in `node.info`: the extension programs built into personad (`["cua", "ego", "imessage"]`, #1830 steps 5 and 6; imessage's method names are still `connector.*`). For nodes that report it, the hub calls them via `plugin.node.call {id, method, params}`;
+  old nodes don't send it, and the hub keeps using `computer.*`, `browser.*` (new nodes still answer those). See `docs/extensions.md` ("Built-in node programs").
+- `herdr.server.start` (hub → node, no params, returns `{running}`): the user tapped "Start" in the Agents list. Not bound by `herdr_autostart`;
+  if it can't start, the reason is returned the same way as `engine_missing`. Old nodes don't have this method, and the hub returns 502 rather than claiming herdr can't start.
+  If herdr isn't installed, a pinned version is installed first (waits up to 15 seconds; if not done, returns an "Installing herdr …" error, finishes installing in the background and then starts itself; `docs/engines.md` ("When herdr isn't installed")).
+- `herdr.server.status` (hub → node, no params, returns `{running, known, installing, install_error}`): `installing` means the node is installing herdr,
+  `install_error` is why the last install failed (empty string if it never failed); `GET /api/v1/machines/{mid}/herdr` passes them through as is (omitted when absent).
+- `usage.windows` (hub → node, no params, returns `{enabled, collected_at, accounts: [UsageAccount]}`, #2432): subscription quota windows the node gets from reading this machine's Codex rollouts and the files Claude's status line writes.
+  It only reads local files and never touches credentials. When `usage_windows` in `node.configure` (hub.json `machines[].usage_windows`) is false it returns `{enabled: false, accounts: []}`. Old nodes don't have this method; the hub treats them as having no data (`docs/usage-windows.md`).
+- Side by side, operations without a pane (new, resume session, rename) always go to classic herdr (the node's `defaultHost` / `defaultHostKind`);
+  per-pane operations (read screen, send, keys, close) are routed by the host kind of the pane id, and herdr-core panes are limited only by herdr-core's capabilities.
+- **`paseo` (display name "Paseo", `docs/paseo.md`) is not a terminal host**: the node registers no host and runs the Paseo bridge itself (`node/paseobridge.go`).
+  The bridge is a runtime with runtime id `paseo` ("Runtime ↔ node" below), and its sessions are this machine's sessions.
+  - **New session**: all handed to it. When the form's choice is a login-shell launcher, it carries `shell_launcher: true`.
+  - **Resuming a Claude session that isn't running**: handed over with `session.start {resume}`; the session id stays the same. After the takeover, messages go over with `session.send` as usual.
+  - **When the bridge isn't connected**, both new and resume return the error `engine_missing` and nothing is sent.
+  - **Detection**: Paseo in `engines` counts as available in two cases. One: the bridge is connected; then `version` is Paseo's version. Two: the address written in `paseo.pid` in the Paseo home responds;
+    in that case, if the bridge can't start, `note` gives the reason.
 
 ## hub ↔ node RPC
 
-> 2026-11-04 起连 node 的是管理者（助手的进程，[machines.md](machines.md)「谁连电脑」）：下面的「hub」在线上是管理者，hub 的调用和 node 的事件经总线转（「总线」下的「电脑（devices.*）」），
-> node 看到的协议一个字不变。
+> Since 2026-11-04, what connects to nodes is the manager (the assistant's process, [machines.md](machines.md) ("Who connects to computers")): "hub" below is the manager in production; hub calls and node events are relayed over the bus ("Computers (devices.*)" under "Bus"),
+> and the protocol the node sees is unchanged, word for word.
 
-`ssh <host> ~/.persona/bin/personad node --stdio`（hub 机器本机直接起子进程，现在是管理者的子进程）。stdin/stdout 每行一个 JSON。
-双向都能发请求：`{"id":"h12","method":"…","params":{}}` → `{"id":"h12","result":{}}` / `{"id":"h12","error":{"message":"…"}}`；
-单向事件 `{"event":"…","params":{}}`。hub 发的 id 以 `h` 开头，node 发的以 `n` 开头。stderr 是 node 日志。
+`ssh <host> ~/.persona/bin/personad node --stdio` (on the hub machine itself a child process is started directly; it is now a child of the manager). One JSON per line on stdin/stdout.
+Both sides can send requests: `{"id":"h12","method":"…","params":{}}` → `{"id":"h12","result":{}}` / `{"id":"h12","error":{"message":"…"}}`;
+one-way events: `{"event":"…","params":{}}`. Ids sent by the hub start with `h`, ids sent by the node start with `n`. stderr is the node log.
 
-取消（#2597）：调用方不再等某个请求时，发 `{"event":"rpc.cancel","params":{"id":"n12"}}`，对端取消那次请求的处理。目前只有 node 对 `mcp.call` 发：MCP 进程或 hook 断开（助手这一轮被停了）时，hub 端的 `approve` 随之结束，卡记成 cancelled 并撤下，之后再回答是 410，不会去执行一个没人在等的写操作（比如发出一条过时的消息）。不认识这个事件的旧版本忽略它，处理照常跑完。扩展、连接器的连接不发这个事件。
+Cancellation (#2597): when the caller no longer waits for a request, it sends `{"event":"rpc.cancel","params":{"id":"n12"}}` and the other side cancels handling that request. Currently only the node sends it, for `mcp.call`: when the MCP process or hook disconnects (the assistant's turn was stopped), the hub's `approve` ends with it, the card is recorded as cancelled and withdrawn, and answering it afterward returns 410, so a write nobody is waiting for is never executed (such as sending an outdated message). Old versions that don't know this event ignore it, and handling runs to completion as usual. Extension and connector connections don't send this event.
 
-处理器拿到的 ctx 在**回复发出后就结束**（和被取消一样）：回复之后还要继续做的事——`session.watch` 的 transcript 推送、流式的东西——不能挂在它上面，要用 `rpc.ConnContext(ctx)`（连接的 ctx，连接断了才结束）。#2645 之后每个请求的 ctx 一回复就取消，`session.watch` 还挂在请求的 ctx 上，于是所有会话（主会话、子 Agent）的 transcript 推送在 watch 回复的下一刻就停了，页面只剩 `sessions_delta`，要刷新才看得到新内容（#3139）。
+The ctx a handler receives **ends once the reply is sent** (same as being cancelled): work that continues after replying (`session.watch`'s transcript pushes, anything streaming) must not hang off it; use `rpc.ConnContext(ctx)` (the connection's ctx, which ends only when the connection drops). After #2645 every request's ctx was cancelled as soon as it replied, while `session.watch` still hung off the request ctx, so transcript pushes for every session (main session, sub-Agents) stopped the moment after the watch reply. Pages only got `sessions_delta` and needed a refresh to see new content (#3139).
 
-hub → node 请求：
+hub → node requests:
 
 | method | params → result |
 | --- | --- |
-| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个）。连上时 `claude_version` 为空（`claude --version` 那次没跑成），hub 隔 1、2、5、10、30 分钟、之后每小时再问一次，拿到就更新机器并推给 App，连接断了就停（#542） |
-| `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent（切换前开始、切换后才回来的刷新结果作废）、结束所有终端流（每个推 `terminal.end`，error 说引擎换了）、换事件流，并推一次 `sessions.changed`。多个 `engine.use` 依次执行 |
+| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}` (`system`: see Machine, read once at node start; `engine` is the engine the node currently uses, `engines` are those it found, see "Engines"; old nodes lack these two). If `claude_version` is empty on connect (the `claude --version` run failed), the hub asks again after 1, 2, 5, 10, 30 minutes and then hourly; once it gets a value it updates the machine and pushes it to the App, and stops when the connection drops (#542) |
+| `engine.use` | `{engine}` → `{engine}`: switch to this engine (unknown ones error). If it equals the current one, nothing happens; otherwise it swaps the host, drops the old engine's Agents (refresh results started before the switch and returning after it are discarded), ends all terminal streams (each pushes `terminal.end` with an error saying the engine changed), swaps the event stream, and pushes one `sessions.changed`. Multiple `engine.use` calls run in order |
 | `launchers.list` | → `{launchers}` |
-| `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`：这台机器 `~/.zshrc`（`$ZDOTDIR` 优先）里 `alias x="K=V … claude [args]"` 形式的行，只列 `command` 是 claude 的。`env` 带 key，只经这条 RPC 交给管理者（导入，经 hub 到 node 的连接），不写日志；旧 node 回 `unknown method` |
-| `launchers.repair` | `{name, action: "upgrade_cli"}` → `{ok, unsupported?, output?}`：启动器健康检查的自动修复（`docs/launcher-health.md`），node 只做固定的修法（Claude 的跑 `claude update`），不接受命令；旧 node 回 `unknown method` |
-| `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |
-| `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了飞书网关的 skill（老版本把它编在二进制里） |
-| `dirs.list` | `{path}` → 同 REST |
-| `workspaces.list` | `{}` → `{workspaces:[Workspace],errors?:[{source,error}]}`；Workspace 同「工作区看板」，node 省略 machine_id，id/source_id 为宿主本地 ID。包含没有运行 Agent 的空间；各来源分别报告错误，全部失败返回 RPC error，不能伪装成空成功。这台电脑上没在运行的来源（`host.ErrNotRunning`：Orca 没开、botmux 没有 daemon 或版本太旧没有 `observe`）算没有工作区，不报错；只有没运行的来源时回空列表 |
-| `workspace.resolve` | `{path}` → `Workspace`；校验真实目录、解析符号链接，成功 source 为 `directory`、id/source_id/cwd 为物理路径、available 为 true；支持本机绝对路径或 `~/`，拒绝不存在、非目录及受保护的 iCloud 路径，不执行宿主、Agent 或 Git 操作 |
+| `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`: lines of the form `alias x="K=V … claude [args]"` in this machine's `~/.zshrc` (`$ZDOTDIR` first); only those whose `command` is claude. `env` carries keys, which are handed to the manager only over this RPC (import, over the hub-to-node connection) and never logged; old nodes return `unknown method` |
+| `launchers.repair` | `{name, action: "upgrade_cli"}` → `{ok, unsupported?, output?}`: auto-repair from the launcher health check (`docs/launcher-health.md`). The node only applies fixed repairs (for Claude, it runs `claude update`) and accepts no commands; old nodes return `unknown method` |
+| `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`: same as REST `…/launchers/{name}/models`; `agent_type` is this launcher's type in the hub config (if omitted, whatever the node detects itself) |
+| `skills.list` | → `{skills: [{name, description, source}]}`: the skills the assistant gets on this machine (the user's in `~/.persona/skills/`, plus built-in ones; `docs/hub-update.md`). For old nodes without it, the hub assumes the Lark gateway skill is installed (old versions compiled it into the binary) |
+| `dirs.list` | `{path}` → same as REST |
+| `workspaces.list` | `{}` → `{workspaces:[Workspace],errors?:[{source,error}]}`; Workspace is the same as in "Workspace board"; the node omits machine_id, and id/source_id are host-local IDs. Includes spaces with no running Agent. Each source reports errors separately; if all fail it returns an RPC error and must not pretend to be an empty success. Sources not running on this computer (`host.ErrNotRunning`: Orca not open, botmux has no daemon or is too old to have `observe`) count as having no workspaces, not an error; if only non-running sources exist, it returns an empty list |
+| `workspace.resolve` | `{path}` → `Workspace`; validates a real directory and resolves symlinks. On success source is `directory`, id/source_id/cwd are the physical path, available is true. Accepts local absolute paths or `~/`; rejects missing paths, non-directories and protected iCloud paths. Performs no host, Agent or Git operations |
 | `sessions.list` | → `{sessions}` |
-| `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, tab_name?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |
-| `session.send` | `{session_id, text, images?, client_msg_id?}`（`client_msg_id` 见「待发消息的对应」） |
-| `session.echoes` | `{echoes: [{session_id, client_msg_id, text, images, sent_at, after_seq, line?}]}` → `{ok}`：hub 交回这台机器一天内记下的发送（node 每次连上时，在 `sessions.list` 之前）；node 已经知道的跳过。旧 node 回 unknown method，hub 不管 |
+| `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, tab_name?, async?}` → `{session}`; `async` returns immediately and starts in the background (`node/starting.go`); Codex launchers are synchronous and must carry `prompt` (`node/codex_start.go`) |
+| `session.send` | `{session_id, text, images?, client_msg_id?}` (`client_msg_id`: see "Matching pending messages") |
+| `session.echoes` | `{echoes: [{session_id, client_msg_id, text, images, sent_at, after_seq, line?}]}` → `{ok}`: the hub hands back sends recorded for this machine within the last day (every time the node connects, before `sessions.list`); the node skips ones it already knows. Old nodes return unknown method and the hub ignores it |
 | `session.keys` | `{session_id, keys, text}` |
-| `session.rewind` | `{session_id, prompt, occurrence, prompts_after?, restore}` → `{prompt, restore, code_restored, input_cleared}`：在终端里驱动 Claude Code 的 `/rewind`（「回退到某条消息」）；拒绝带 `code` |
+| `session.rewind` | `{session_id, prompt, occurrence, prompts_after?, restore}` → `{prompt, restore, code_restored, input_cleared}`: drives Claude Code's `/rewind` in the terminal ("Rewind to a message"); refusals carry `code` |
 | `session.interrupt` | `{session_id}` |
-| `session.screen` | `{session_id, lines, source, format?}` → `{text, status}`（`format: "ansi"` 带颜色） |
-| `panes.list` | `{}` → `{hosts:[…]}`，同 REST `/machines/{mid}/panes`：node 用最近一次宿主快照（超过 3 秒才再拍一次）回空间 / 标签页 / 全部窗格，不另起轮询 |
-| `panes.new` | `{workspace_id, kind?}` → `{pane, terminal, tab_id}`：宿主的 `CreateSlot` 开一个 shell 标签页（目录取空间自己的）；空间不在、宿主不会开标签页时报错 |
-| `panes.close` / `panes.split` / `panes.agent` / `panes.git` / `tabs.close` / `tabs.rename` | 节点菜单的动作，参数同上面的 REST；窗格 / 标签页必须是宿主列出的（没有就先拍一次快照再认），目录取窗格自己的；Agent 的窗格关闭走 `session.close`（先请它退出）；`panes.agent` 复用新建 Agent 的整条启动流程（同一个启动器命令、等会话就绪、绑定），失败时不关这个窗格 |
-| `claude.auth_status` | `{name}`（启动器，空为 `claude`）→ `{state: logged_in\|not_logged_in\|unknown, auth_method?, api_provider?, key_source?, version?, reason?}`（#4048）：用开对话同一条命令和同一份 `--settings` 跑 `claude auth status --json`，不发模型请求。`auth_method` 是 Claude Code 的 `authMethod`（`claude.ai`、`api_key`、`api_key_helper`、`oauth_token`、`third_party`、`none`），`key_source` 只是变量名（`ANTHROPIC_API_KEY`）；邮箱、组织、Key 都不回。`unknown` 的 `reason`：`old_claude`（2.1.41 之前没有 `claude auth`，不跑）、`not_claude`（启动器跑 Codex / runtime）、`unreadable`（读不出状态：找不到 claude、启动器吞了参数）、`timeout`（20 秒）。不是这台电脑的启动器的名字报错不跑；旧 node 回 `unknown method` |
-| `node.doctor` / `node.doctor.fix` | `{fix?: bool}` / `{}` → 同 `personad node doctor --json` 的 `DoctorReport`（#2429）：检查在 node 进程里跑；`node.doctor` 不带 `fix` 时什么都不写，`fix`（或 `node.doctor.fix`）只重写 Persona 自己生成的文件（`writeGeneratedConfig`）再检查一次；hub 的 GET 从不传 `fix` |
-| `worktree.prepare` / `worktree.create` | #2431 同上面的 REST（`workspace_id`、`kind?`；create 多 `branch`、`path`）：工作区必须是宿主列出的，目录取工作区自己的；有 `worktree` 的 herdr 交给 `worktree.create`，旧 herdr 退回 `git worktree add` + `workspace.create`；失败回 git 的 `fatal:` 一行 |
-| `terminal.watch` / `terminal.unwatch` | `{session_id, control?: {cols, rows, takeover}}`；watch → `{cols, rows, control}`，之后 node 推 `terminal.frame`；已经在推时 watch 会重开一条流（新 epoch、从整帧开始）。herdr 没有 observe 时报 `unsupported: …`。带 `control` 时 node 用 `herdr terminal session control` 接管（回包 `control: true`；旧 node 没有这个字段），槽位被占着又没 `takeover` 时报错 `code: attach_busy` |
-| `git.pull` | `{cwd}` → `{status, updated}`，同 REST 的安全拉取 |
-| `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |
-| `fs.watch` | #2439：`{dirs: [{path, cwd}], git: [cwd]}` → `{ok}`，**整份替换** node 要看的文件夹和 Git 目录（最多 32 个文件夹、8 个 Git 目录，空集合就停掉看的循环）；旧 node 报 unknown method，hub 只记一行日志，页面照旧手动刷新 |
-| `file.read` | `{path, cwd, offset}` → 同 REST 的 `file`（旧 node 不认 `offset`，回包也没有 `offset` / `next`） |
-| `fs.stat` | `{paths, cwd}` → `{stats}`，同 REST 的 `stat`（旧 node 报 unknown method，手机就不链接任何路径） |
-| `session.items` | `{session_id, before_seq, limit, turns, after_seq, lazy_images, fold_work, from_seq, through_seq}` → `{items, has_more, more_after, history, to_seq, from_seq}`（带 `through_seq` 时是折叠的那几行：`{items, more}`）（`from_seq` 只在 `after_seq` 请求里有；不带 `lazy_images: true` 时 node 把图片数据读回来，兼容旧 hub） |
-| `session.image` | `{session_id, item_id}` → `Image{mime, data}`（node 的 item 不常驻图片数据，按记下的行偏移重读那一行） |
-| `session.item` | `{session_id, item_id}` → `Item`（全文，不带图片） |
-| `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容。hub 对同一个会话一次只发一个 watch / unwatch，轮到时按当时的订阅数决定发哪个、发不发（node 对已在 watch 的会话再 watch 不做事，两者乱序到达会让最后一个订阅者收不到实时内容）；失败的下一次再发 |
+| `session.screen` | `{session_id, lines, source, format?}` → `{text, status}` (`format: "ansi"` includes colors) |
+| `panes.list` | `{}` → `{hosts:[…]}`, same as REST `/machines/{mid}/panes`: the node answers with spaces / tabs / all panes from its latest host snapshot (taking a new one only if older than 3 seconds), without starting its own polling |
+| `panes.new` | `{workspace_id, kind?}` → `{pane, terminal, tab_id}`: the host's `CreateSlot` opens a shell tab (directory is the space's own); errors if the space is gone or the host can't open tabs |
+| `panes.close` / `panes.split` / `panes.agent` / `panes.git` / `tabs.close` / `tabs.rename` | node menu actions, params as in the REST above. The pane / tab must be one the host lists (if not, take a snapshot first and check again); the directory is the pane's own. Closing an Agent's pane goes through `session.close` (asks it to exit first). `panes.agent` reuses the whole new-Agent launch flow (same launcher command, wait for the session to be ready, bind); on failure the pane is not closed |
+| `claude.auth_status` | `{name}` (launcher; empty means `claude`) → `{state: logged_in\|not_logged_in\|unknown, auth_method?, api_provider?, key_source?, version?, reason?}` (#4048): runs `claude auth status --json` with the same command and the same `--settings` used to open a chat; sends no model request. `auth_method` is Claude Code's `authMethod` (`claude.ai`, `api_key`, `api_key_helper`, `oauth_token`, `third_party`, `none`); `key_source` is only the variable name (`ANTHROPIC_API_KEY`); email, organization and keys are never returned. `reason` for `unknown`: `old_claude` (before 2.1.41 there's no `claude auth`; not run), `not_claude` (the launcher runs Codex / a runtime), `unreadable` (status can't be read: claude not found, the launcher swallowed the arguments), `timeout` (20 seconds). A name that isn't a launcher on this computer errors without running; old nodes return `unknown method` |
+| `node.doctor` / `node.doctor.fix` | `{fix?: bool}` / `{}` → the same `DoctorReport` as `personad node doctor --json` (#2429): checks run inside the node process. `node.doctor` without `fix` writes nothing; `fix` (or `node.doctor.fix`) only rewrites files Persona itself generated (`writeGeneratedConfig`) and then checks again. The hub's GET never passes `fix` |
+| `worktree.prepare` / `worktree.create` | #2431, same as the REST above (`workspace_id`, `kind?`; create also has `branch`, `path`): the workspace must be one the host lists, and the directory is the workspace's own. herdr with `worktree` uses `worktree.create`; older herdr falls back to `git worktree add` + `workspace.create`. On failure it returns git's `fatal:` line |
+| `terminal.watch` / `terminal.unwatch` | `{session_id, control?: {cols, rows, takeover}}`; watch → `{cols, rows, control}`, after which the node pushes `terminal.frame`. A watch while already pushing reopens a stream (new epoch, starting from a full frame). If herdr has no observe it reports `unsupported: …`. With `control` the node takes over via `herdr terminal session control` (reply has `control: true`; old nodes lack this field); if the slot is taken and there's no `takeover`, it errors with `code: attach_busy` |
+| `git.pull` | `{cwd}` → `{status, updated}`, same safe pull as REST |
+| `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | same as REST (same param names) |
+| `fs.watch` | #2439: `{dirs: [{path, cwd}], git: [cwd]}` → `{ok}`, **replaces the whole set** of folders and Git directories the node watches (at most 32 folders and 8 Git directories; an empty set stops the watch loop). Old nodes report unknown method; the hub logs a line and the page keeps refreshing manually |
+| `file.read` | `{path, cwd, offset}` → same as REST `file` (old nodes don't know `offset`, and their reply has no `offset` / `next`) |
+| `fs.stat` | `{paths, cwd}` → `{stats}`, same as REST `stat` (old nodes report unknown method, and the phone links no paths) |
+| `session.items` | `{session_id, before_seq, limit, turns, after_seq, lazy_images, fold_work, from_seq, through_seq}` → `{items, has_more, more_after, history, to_seq, from_seq}` (with `through_seq` it is the folded rows: `{items, more}`) (`from_seq` is only present in `after_seq` requests; without `lazy_images: true` the node reads image data back, for compatibility with old hubs) |
+| `session.image` | `{session_id, item_id}` → `Image{mime, data}` (the node's items don't keep image data in memory; it rereads that line at the recorded line offset) |
+| `session.item` | `{session_id, item_id}` → `Item` (full text, no images) |
+| `session.watch` / `session.unwatch` | `{session_id, since_seq?}`; after watch the node reads new lines every 250ms and pushes `session.items` (with `history` / `from_seq` / `to_seq`); with `since_seq` it first resends everything after it, 500 items per page. The hub sends only one watch / unwatch at a time per session, and when its turn comes decides which to send, or whether to send at all, by the subscriber count at that moment (the node does nothing on a watch for a session already watched, so the two arriving out of order would leave the last subscriber without live content); a failed one is retried next time |
 | `session.close` | `{session_id}` |
-| `session.fork` | `{session_id, at_item_id}` → `{session_id}`：见 HTTP 的 `/fork`；旧 node 报 unknown method |
-| `session.retire` | `{session_id}` → `{closed}`：做完的任务的 Agent 停着且以后能恢复时关掉它的窗格（同 `session.close`），没在运行时 `closed: false`；在工作、等用户、恢复不了的回 `code: not_retirable`；旧 node 报 unknown method（助手当作拒绝）。见 `docs/todos.md`「做完的任务关掉 Agent」 |
-| `file.upload.begin` | `{name, size}` → `{upload_id, chunk_bytes}`（超过上限报 `too_large`） |
-| `file.upload.chunk` | `{upload_id, offset, data}`（data 是 base64，offset 必须接着已收到的）→ `{received}`；出错整个上传作废 |
-| `file.upload.end` / `file.upload.abort` | `{upload_id}`；end 核对大小、改名 → `{path, name, size}` |
+| `session.fork` | `{session_id, at_item_id}` → `{session_id}`: see HTTP `/fork`; old nodes report unknown method |
+| `session.retire` | `{session_id}` → `{closed}`: for a finished task whose Agent is stopped and can be resumed later, closes its pane (same as `session.close`); if it isn't running, `closed: false`. Working, waiting on the user or unresumable returns `code: not_retirable`; old nodes report unknown method (the assistant treats it as refused). See `docs/todos.md` ("Close the Agent of a finished task") |
+| `file.upload.begin` | `{name, size}` → `{upload_id, chunk_bytes}` (over the limit reports `too_large`) |
+| `file.upload.chunk` | `{upload_id, offset, data}` (data is base64; offset must continue from what was received) → `{received}`; any error voids the whole upload |
+| `file.upload.end` / `file.upload.abort` | `{upload_id}`; end checks the size and renames → `{path, name, size}` |
 | `interaction.resolve` | `{id, resolution}` |
-| `port.probe` | `{port}` → `{port, listening, http, title?}`：GET / 一次（Host 是 `localhost:端口`） |
-| `computer.status` | `{}` → `Computer`（`enabled` 由 hub 填）：探测本机 cua-driver（路径、版本、daemon、`permissions status --json`）和桌面会话（`ioreg` 的 IOConsoleUsers：active / locked / away）。只有插件 `cua` 对这台打开时 hub 才问（[computer-use.md](computer-use.md)） |
-| `computer.call` | `{session, tool, args}` → `{output?, text?, image?}`：`cua-driver call --screenshot-out-file … <tool>`，参数走 stdin，`session` 填进参数（element_token 跨调用有效）；截图另放 `image`（`{mime, data, width, height}`，比 PNG 小时转 JPEG）。只认读取和 `run_script` / `run_steps`；daemon 没在跑时先 `open -g -b com.trycua.driver`。没装：错误码 `not_installed` |
-| `computer.install` / `computer.grant` / `computer.cancel` | `{}` → `Computer`：一个后台任务（一次一个），状态随 `computer.status` 的 `job` 回来。install：三个安装脚本先下载到临时目录、检查后从磁盘跑 `install.sh --no-modify-path`（`CUA_DRIVER_RS_TELEMETRY_ENABLED=0`），装完 `telemetry disable`，接着自动 grant；grant：`cua-driver permissions grant`（Mac 上弹系统窗口）；cancel 只停安装（[computer-use.md](computer-use.md)「一键安装」） |
-| `browser.status` / `browser.install` / `browser.open` / `browser.cancel` | `{}` → `Browser`：ego lite 装没装、首次设置、统计、只读探测；安装是下载官方 DMG、校验签名（Team `JGQLC6YQYJ`）和公证后 ditto 进「应用程序」、保留 quarantine；打开是在那台 Mac 上 `open` 它 |
-| `browser.call` | `{session, script?, look?, full?, screenshot?, timeout_ms?}` → `{output, image?}`：`ego-browser nodejs`（脚本走 stdin）在名为 `session` 的任务空间里跑助手的脚本（`task`、`page` 现成），或 look 时拍快照；最后一行结果用 `@@persona-browser@@` 标出（不能用 NUL：ego 会丢掉整段输出），截图另放 `image` |
-| `plugin.node.have` / `plugin.node.put.begin` / `.chunk` / `.commit` | 插件在这台电脑上的包（`docs/extensions.md`「在电脑上运行的程序」）：`{id, version, digest}` → `{have}`；`begin {id, version, digest, size}` → `{upload_id}`，`chunk {upload_id, offset, data}`（按顺序，1 MB），`commit {upload_id}`：校验 sha256、解包到 `~/.persona/plugins/<id>/<version>/` |
-| `plugin.node.start` / `plugin.node.stop` | `start {id, name, version, command, args?, env?, rpc, http?, keep, lease_seconds, init}` → `{id, version, state, error?}`：起它（和正在跑的完全一样就不动，只续租约；新版本 30 秒内没起来回退到上一版并报错）；`init` 是程序的 `initialize`（配置、发给电脑的密钥，不落盘）。`stop {id}` |
-| `plugin.node.sync` / `plugin.node.renew` / `plugin.node.status` | `sync {programs: [{id, version, digest}], installed: [id]}` → `{programs: [状态]}`：不在 `programs` 里的停掉、删包，不在 `installed` 里的连数据删；`renew {ids, lease_seconds}`；`status` → `{programs}` |
-| `plugin.node.dial` | `{id, plugin}` → `{}`：连上这个插件程序的 HTTP socket，开一条流 `id`（之后同 `port.dial` 用 `stream.*` 事件传字节）；程序没在跑或不开 HTTP 回 `code: not_running` |
-| `plugin.node.call` | `{id, method, params?}` → 程序的回答：插件协议的方法（hub 上的程序经 `nodes.call` 调）；程序没在跑回 `code: not_running` |
-| `port.dial` | `{id, port}` → `{}`：连上本机这个端口（扫描时它绑的地址，否则 127.0.0.1 再 ::1，只连本机），开一条流 `id`；没在听时报错 `code: port_gone`。之后两边用下面的 `stream.*` 事件传字节 |
-| 事件 `plugin.node.state` / `plugin.node.event` | node → hub：`{id, version, state, error?}`（起来了、租约到期停了），`{id, event, params}`（程序发的事件，hub 转给 hub 上的程序） |
-| `credential.gh_token` | `{host}` → `{token}`：这台机器上非交互地跑 `gh auth token --hostname <host>`，给 GitHub 连接器（`github.auth.from_machine`）。只有 hub 能调（hook / MCP 的 `node.sock` 不认）；token 不写日志。没装 gh 报 `code: no_gh`，没登录（或登录在钥匙串里、经 ssh 读不到）报 `code: not_signed_in`；旧 node 报 unknown method |
-| `connector.list` | → `{connectors:[{id, status, error?, guide?, via}]}`：这台电脑自己能提供的连接器（现在只有 Mac 上的 `imessage`；别的系统回空列表）。`status` 是 `ok` / `not_configured`（没有「信息」的数据）/ `no_permission`（没有完全磁盘访问权限，`guide` 是在这台 Mac 上一步步怎么开，按 `via` 是 `ssh` 还是 `launchd` 常驻 node 分两种说法）/ `error` |
-| `connector.chats` | `{id, limit?, before?, keep?}` → `{chats:[{id, name, group?, members:[{handle, name?}], services, last, preview?, from_me?, unread?}], more?, before?}`：会话，新的在前；一个人在 iMessage / 短信 / RCS 上的几个会话算一个，群各算一个；`id` 是哈希（`imessage-<12 位>`），不含号码。只读。`keep: contacts`（收件箱、助手用）只列交给 Persona 的会话（见 `connector.changes`），App 自己看时不带 |
-| `connector.older` | `{id, chat, limit?, before?, keep?}` → `{chat, messages:[{id, at, kind: message\|event, from_me?, sender?, text?, service?, attachments?:[{kind, name, mime, size}], reply_to?, edited?, unsent?, unread?, undecoded?}], more?, before?}`：一个会话最新的一页或 `before` 之前的一页，旧的在前；点按回应不算消息，附件只有描述。没有权限报 `code: no_permission`，没有这个会话（或 `keep: contacts` 时它不交给 Persona）报 `code: no_chat`。只有 hub 能调、不写日志（不记号码和正文）；旧 node 报 unknown method |
-| `connector.changes` | `{id, cursor?, limit?, days?, keep?}` → `{batches:[{chat, messages}], next, more?}`：`cursor`（消息 ROWID）之后进来的消息，按会话分批、旧的在前，给 hub 的知识库和收件箱（「交给 Persona」开着时）。第一次（没有 `cursor`）从 `days`（默认 30）天前开始；`keep` 默认 `contacts`：只给成员里有通讯录里的人、或者我说过话的会话，`all` 全给；验证码打码；`next` 越过所有读过的（包括没给的） |
-| `connector.search` | `{id, query, limit?, days?, keep?}` → `{hits:[{chat, message}]}`：最近 `days`（默认 365）天里文字含 `query` 的消息，新的在前（助手的 `imessage_search`）；`keep`、打码同上。只匹配，不把 `query` 拼进 SQL |
-| `codex.answer` | `{session_id, id, resolution}`：回答 node 列出的 Codex 卡片（`docs/codex.md`「提问和审批」）；拒绝时是带 `code` 的错误，什么都没输入 |
+| `port.probe` | `{port}` → `{port, listening, http, title?}`: one GET / (Host is `localhost:<port>`) |
+| `computer.status` | `{}` → `Computer` (`enabled` filled in by the hub): probes the local cua-driver (path, version, daemon, `permissions status --json`) and the desktop session (IOConsoleUsers from `ioreg`: active / locked / away). The hub only asks when the `cua` plugin is enabled for this machine ([computer-use.md](computer-use.md)) |
+| `computer.call` | `{session, tool, args}` → `{output?, text?, image?}`: `cua-driver call --screenshot-out-file … <tool>`, args via stdin, `session` filled into the args (element_token stays valid across calls); screenshots go separately in `image` (`{mime, data, width, height}`, converted to JPEG when smaller than PNG). Only reads and `run_script` / `run_steps` are accepted; if the daemon isn't running it first runs `open -g -b com.trycua.driver`. Not installed: error code `not_installed` |
+| `computer.install` / `computer.grant` / `computer.cancel` | `{}` → `Computer`: one background job (one at a time); its state comes back in `computer.status`'s `job`. install: the three install scripts are first downloaded to a temp directory, checked, and then `install.sh --no-modify-path` is run from disk (`CUA_DRIVER_RS_TELEMETRY_ENABLED=0`); after install, `telemetry disable`, then grant automatically. grant: `cua-driver permissions grant` (pops a system window on the Mac). cancel only stops the install ([computer-use.md](computer-use.md) ("One-click install")) |
+| `browser.status` / `browser.install` / `browser.open` / `browser.cancel` | `{}` → `Browser`: whether ego lite is installed, first-time setup, stats, read-only probes. Install downloads the official DMG, verifies its signature (Team `JGQLC6YQYJ`) and notarization, then ditto's it into Applications, keeping quarantine. Open runs `open` on it on that Mac |
+| `browser.call` | `{session, script?, look?, full?, screenshot?, timeout_ms?}` → `{output, image?}`: `ego-browser nodejs` (script via stdin) runs the assistant's script in the task space named `session` (`task` and `page` are ready-made), or takes a snapshot for look. The last result line is marked with `@@persona-browser@@` (NUL can't be used: ego drops the whole output); screenshots go separately in `image` |
+| `plugin.node.have` / `plugin.node.put.begin` / `.chunk` / `.commit` | the plugin's package on this computer (`docs/extensions.md` ("Programs that run on computers")): `{id, version, digest}` → `{have}`; `begin {id, version, digest, size}` → `{upload_id}`, `chunk {upload_id, offset, data}` (in order, 1 MB), `commit {upload_id}`: verifies sha256 and unpacks into `~/.persona/plugins/<id>/<version>/` |
+| `plugin.node.start` / `plugin.node.stop` | `start {id, name, version, command, args?, env?, rpc, http?, keep, lease_seconds, init}` → `{id, version, state, error?}`: starts it (if identical to what is running, leaves it alone and just renews the lease; if a new version doesn't come up within 30 seconds, rolls back to the previous version and reports an error). `init` is the program's `initialize` (config, secrets sent to the computer, never written to disk). `stop {id}` |
+| `plugin.node.sync` / `plugin.node.renew` / `plugin.node.status` | `sync {programs: [{id, version, digest}], installed: [id]}` → `{programs: [state]}`: those not in `programs` are stopped and their packages deleted; those not in `installed` are deleted along with their data. `renew {ids, lease_seconds}`; `status` → `{programs}` |
+| `plugin.node.dial` | `{id, plugin}` → `{}`: connects to this plugin program's HTTP socket and opens a stream `id` (after that, bytes flow over `stream.*` events, same as `port.dial`); if the program isn't running or doesn't serve HTTP it returns `code: not_running` |
+| `plugin.node.call` | `{id, method, params?}` → the program's answer: a plugin protocol method (programs on the hub call it via `nodes.call`); if the program isn't running it returns `code: not_running` |
+| `port.dial` | `{id, port}` → `{}`: connects to this local port (the address it was bound to at scan time, otherwise 127.0.0.1 then ::1; local only) and opens a stream `id`; if nothing is listening it errors with `code: port_gone`. After that both sides pass bytes over the `stream.*` events below |
+| events `plugin.node.state` / `plugin.node.event` | node → hub: `{id, version, state, error?}` (came up, stopped on lease expiry), `{id, event, params}` (events the program sends; the hub forwards them to programs on the hub) |
+| `credential.gh_token` | `{host}` → `{token}`: runs `gh auth token --hostname <host>` non-interactively on this machine, for the GitHub connector (`github.auth.from_machine`). Only the hub can call it (the hook / MCP `node.sock` doesn't accept it); the token is never logged. gh not installed reports `code: no_gh`; not signed in (or signed in via the keychain, unreadable over ssh) reports `code: not_signed_in`; old nodes report unknown method |
+| `connector.list` | → `{connectors:[{id, status, error?, guide?, via}]}`: connectors this computer itself can provide (currently only `imessage` on Mac; other systems return an empty list). `status` is `ok` / `not_configured` (no Messages data) / `no_permission` (no Full Disk Access; `guide` gives step-by-step instructions to enable it on this Mac, worded two ways depending on whether `via` is `ssh` or a resident `launchd` node) / `error` |
+| `connector.chats` | `{id, limit?, before?, keep?}` → `{chats:[{id, name, group?, members:[{handle, name?}], services, last, preview?, from_me?, unread?}], more?, before?}`: chats, newest first. One person's chats across iMessage / SMS / RCS count as one; each group counts separately. `id` is a hash (`imessage-<12 chars>`) and contains no phone number. Read-only. `keep: contacts` (used by the Inbox and assistant) lists only chats handed to Persona (see `connector.changes`); the App's own browsing doesn't pass it |
+| `connector.older` | `{id, chat, limit?, before?, keep?}` → `{chat, messages:[{id, at, kind: message\|event, from_me?, sender?, text?, service?, attachments?:[{kind, name, mime, size}], reply_to?, edited?, unsent?, unread?, undecoded?}], more?, before?}`: a chat's latest page or the page before `before`, oldest first. Tapbacks don't count as messages; attachments are descriptions only. No permission reports `code: no_permission`; no such chat (or, with `keep: contacts`, it isn't handed to Persona) reports `code: no_chat`. Only the hub can call it; nothing is logged (no numbers or bodies); old nodes report unknown method |
+| `connector.changes` | `{id, cursor?, limit?, days?, keep?}` → `{batches:[{chat, messages}], next, more?}`: messages that came in after `cursor` (message ROWID), batched per chat, oldest first, for the hub's knowledge base and Inbox (when "Hand to Persona" is on). The first time (no `cursor`) it starts `days` (default 30) days back. `keep` defaults to `contacts`: only chats with someone from the address book among the members, or chats I've spoken in; `all` gives everything. Verification codes are masked; `next` moves past everything read (including what wasn't returned) |
+| `connector.search` | `{id, query, limit?, days?, keep?}` → `{hits:[{chat, message}]}`: messages from the last `days` (default 365) days whose text contains `query`, newest first (the assistant's `imessage_search`); `keep` and masking as above. Matching only; `query` is never spliced into SQL |
+| `codex.answer` | `{session_id, id, resolution}`: answers a Codex card the node listed (`docs/codex.md` ("Questions and approvals")); a refusal is an error with `code`, and nothing is typed |
 
-流（`internal/streams`，两个方向都有）：`stream.data {id, data}`（data 是 base64，一次最多 32 KB）、`stream.ack {id, n}`（写出去了 n 字节；
-每个方向没确认的最多 512 KB，发的一方到了就停下等）、`stream.close {id, error?}`（这一端的连接断了；对方把已收到的写完再关）。hub 先登记流再发 `port.dial`，node 连上、登记好才回包，所以字节不会先于流到达。
+Streams (`internal/streams`, both directions): `stream.data {id, data}` (data is base64, at most 32 KB at a time), `stream.ack {id, n}` (n bytes were written out;
+at most 512 KB unacknowledged per direction, and the sender stops and waits when it reaches that), `stream.close {id, error?}` (this end's connection dropped; the other side finishes writing what it received, then closes). The hub registers the stream before sending `port.dial`, and the node replies only after it has connected and registered, so bytes never arrive before the stream does.
 
-hub → node 事件（按发出顺序处理）：`terminal.input {session_id, text}`、`terminal.resize {session_id, cols, rows}`、`terminal.scroll {session_id, lines, up, column?, row?}`（滚轮：herdr 交给接鼠标的程序，比如 Claude Code 的全屏渲染、Codex，否则滚 herdr 自己的历史；
-node 拆成 `lines` 个一行的事件，落在 `column` / `row` 那一格，没给就落在屏幕正中间，`docs/terminal.md` 第十六节）、`terminal.click {session_id, column, row}`（左键按下 + 松开）、`terminal.keepalive {session_ids}`（每 20 s，接管中的终端；node 75 s 没听到就放手）。
+hub → node events (handled in the order sent): `terminal.input {session_id, text}`, `terminal.resize {session_id, cols, rows}`, `terminal.scroll {session_id, lines, up, column?, row?}` (scroll wheel: herdr hands it to programs that take the mouse, such as Claude Code's full-screen rendering and Codex; otherwise it scrolls herdr's own history.
+The node splits it into `lines` one-line events, landing on the `column` / `row` cell, or the center of the screen if not given; `docs/terminal.md` section 16), `terminal.click {session_id, column, row}` (left button down + up), `terminal.keepalive {session_ids}` (every 20 s, for terminals under takeover; the node lets go after hearing nothing for 75 s).
 
-完整 herdr 界面（feature `herdr_client`，`docs/terminal.md` 第二十四节）：hub → node RPC `herdr.client.open {client_id, cols, rows, session_id?, focus?}`（`session attach` 起一个 PTY 里的 herdr 客户端；每台电脑最多 4 个，第 5 个 `code: too_many`；不支持回 `unsupported: …`），
-事件 `herdr.client.input {client_id, data | b64}`、`.resize {client_id, cols, rows}`、`.ack {client_id, bytes}`（累计）、`.close {client_id}`、`.keepalive {client_ids}`（每 20 s，node 75 s 没听到就关）；node → hub 事件 `herdr.client.data {client_id, data}`（base64，node 在浏览器落后 256 KB 时不再读 PTY）、`herdr.client.end {client_id, error}`（客户端退出、租约到期、浏览器不读；hub 要求的关闭不回）。
+Full herdr interface (feature `herdr_client`, `docs/terminal.md` section 24): hub → node RPC `herdr.client.open {client_id, cols, rows, session_id?, focus?}` (`session attach` starts a herdr client inside a PTY; at most 4 per computer, the 5th gets `code: too_many`; unsupported returns `unsupported: …`),
+events `herdr.client.input {client_id, data | b64}`, `.resize {client_id, cols, rows}`, `.ack {client_id, bytes}` (cumulative), `.close {client_id}`, `.keepalive {client_ids}` (every 20 s; the node closes after hearing nothing for 75 s); node → hub events `herdr.client.data {client_id, data}` (base64; the node stops reading the PTY when the browser is 256 KB behind), `herdr.client.end {client_id, error}` (client exited, lease expired, browser not reading; not sent for closes the hub requested).
 
-焦点联动（feature `herdr_focus`，`docs/terminal.md` 第二十八节）：hub → node 事件 `herdr.client.focus {client_id, session_id}`（页面显示了另一个窗格：node 让 herdr 聚焦它，同一视图的请求互相替换；窗格不是宿主列出的 / 视图不在就不做）；node → hub 事件 `herdr.focus.changed {workspace_id, tab_id, pane_id, session_id?, source, client_id?}`（herdr 的焦点变了：`persona` = 刚替 `client_id` 的视图要求的，`client` = 那个客户端在 1.5 s 内被真的敲过 / 点过，`other` = 其他；herdr 的事件本身不说是谁改的）。
+Focus sync (feature `herdr_focus`, `docs/terminal.md` section 28): hub → node event `herdr.client.focus {client_id, session_id}` (the page is showing another pane: the node has herdr focus it; requests for the same view replace each other; if the pane isn't one the host lists or the view is gone, nothing happens); node → hub event `herdr.focus.changed {workspace_id, tab_id, pane_id, session_id?, source, client_id?}` (herdr's focus changed: `persona` = just requested on behalf of `client_id`'s view, `client` = that client was actually typed in / clicked within 1.5 s, `other` = anything else; herdr's event itself doesn't say who changed it).
 
-node → hub 事件：`fs.changed {dirs?, git?}`（#2439：`fs.watch` 里的文件夹的列表内容变了（名字、大小、时间）、或 Git 目录的 `git status` 变了，hub 转成给相关页面的 `fs_changed`）、`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error, control?, taken?}`（流停了且起不来：会话不在跑、herdr 一直拒绝；`control` 时是接管结束了：`taken` 被别人抢走，否则租约到期）、
-`session.items {session_id, items, history, from_seq, to_seq}`、`session.live {session_id, live}`（watch 中、工作中的 Claude 的状态行（herdr、herdr-core、Orca 这些能读屏的宿主），变了才发，结束补 `null`，见「实时状态」）、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、
-`sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
-`usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，
-连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）、
-`metrics {sample: MetricSample}`（每 10 秒，对齐到整 10 秒；管理者存进 `machine_metrics`，`docs/machines.md`）、
-`codex.interactions {interactions}`（这台机器上所有开着的 Codex / TRAEX 提问和审批，有变化时整份发；管理者增删卡片，旧版本不认就照旧是屏幕卡）。
-（这些都先到连这台电脑的管理者，交互、状态、用量、监控是它的；App 要的它再转给 hub，见下面「电脑的事件」。）
+node → hub events: `fs.changed {dirs?, git?}` (#2439: the listing of a folder in `fs.watch` changed (names, sizes, times), or a Git directory's `git status` changed; the hub turns it into `fs_changed` for the relevant pages), `terminal.frame {session_id, epoch, seq, full, cols, rows, data}` (frames less than 30 ms apart are merged by the node into one: diff bytes are concatenated, and a full frame drops the diffs before it), `terminal.end {session_id, error, control?, taken?}` (the stream stopped and can't restart: the session isn't running, herdr keeps refusing; with `control`, the takeover ended: `taken` means someone else grabbed it, otherwise the lease expired),
+`session.items {session_id, items, history, from_seq, to_seq}`, `session.live {session_id, live}` (status line of a watched, working Claude (on hosts that can read the screen: herdr, herdr-core, Orca), sent only on change, with a trailing `null` when it ends; see "Live status"), `session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}` (pushed once when the node records a send and once when it recognizes its line; the hub stores it in `sent_messages.echo`; an already-recognized one is never overwritten by a late "still waiting"), `sessions.changed {sessions}`,
+`sessions.revs {revs}` (checked every second, only changed revs are sent; when the list itself changes, revs go with `sessions.changed`),
+`usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}` (every 10 seconds, only changed minutes, with full per-minute values;
+the first one after connecting is `full: true` with the whole last 26 hours; `docs/live-activity.md` ("Usage")),
+`metrics {sample: MetricSample}` (every 10 seconds, aligned to whole 10 seconds; the manager stores it in `machine_metrics`, `docs/machines.md`),
+`codex.interactions {interactions}` (all open Codex / compatible forks questions and approvals on this machine, sent in full on any change; the manager adds and removes cards; old versions that don't know it keep using screen cards).
+(All of these first reach the manager connected to this computer; interactions, status, usage and monitoring belong to it, and it forwards what the App needs to the hub; see "Computer events" below.)
 
-node → 管理者 / hub 请求（`interaction.create`、`mcp.*`、`assistant.lark` 管理者答，`notify` hub 答）：
-- `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）
-- `mcp.tools {}` → `{tools}`；`mcp.call {name, args, session_id}` → `{content, is_error, error_kind?, retry_after?}`（`error_kind` 是失败的类别：`declined` 用户或 `connector_gate` 没同意、`unavailable` 连接器没登录 / 连不上、`rate_limited` 限流，`retry_after` 是限流还要几秒；hub 知道时才带，`personad tool` 按它定退出码，#3779）
-- `assistant.view.check {session_id, message}` → `{reason?}`：可信助手 Stop 的 persona-view 检查，devices 管理者透传给 hub。hub 按当前 persona_view 开关和会话身份决定是否检查；reason 非空时 node 第一次返回 decision=block，stop_hook_active=true 时不再请求。最多 1 MB 的回复、4 条各 2000 字的错误，node 等待最多 5 秒；不适用、旧 hub 或断线保留原 Stop 行为。不是公开 App／扩展动作接口，不接收客户端提供的机器身份。
-- `notify {title, body?, level?, silent?, id?, session_id?}` → `{sent, reason?}`（`personad notify`：`machine_id` 是这条连接的机器，不接受扩展的 `actions` / `ui` / `state`；其余同 `POST /api/v1/notify`，静音和「需要你」偏好一样生效；旧 hub 报 unknown method）
+node → manager / hub requests (`interaction.create`, `mcp.*`, `assistant.lark` answered by the manager; `notify` answered by the hub):
+- `interaction.create {interaction}` → `{resolution}` (blocks until handled / expired; on expiry returns `{"dismiss":true}`)
+- `mcp.tools {}` → `{tools}`; `mcp.call {name, args, session_id}` → `{content, is_error, error_kind?, retry_after?}` (`error_kind` is the failure category: `declined` the user or `connector_gate` didn't agree, `unavailable` the connector isn't signed in / can't connect, `rate_limited` rate limited; `retry_after` is how many seconds of rate limiting remain. Included only when the hub knows; `personad tool` sets its exit code from it, #3779)
+- `assistant.view.check {session_id, message}` → `{reason?}`: the persona-view check on the trusted assistant's Stop; the devices manager passes it through to the hub. The hub decides whether to check based on the current persona_view switch and the session's identity. When reason is non-empty, the node returns decision=block the first time, and stops asking when stop_hook_active=true. Replies up to 1 MB, 4 errors of 2000 characters each; the node waits at most 5 seconds. Not applicable, an old hub, or a disconnect keep the original Stop behavior. This is not a public App / extension action interface, and it accepts no machine identity supplied by the client.
+- `notify {title, body?, level?, silent?, id?, session_id?}` → `{sent, reason?}` (`personad notify`: `machine_id` is this connection's machine; extension `actions` / `ui` / `state` are not accepted; otherwise the same as `POST /api/v1/notify`, with mute and "Needs you" preferences applied the same way; old hubs report unknown method)
 
-### 电脑链路（jarvis-link，kind link）
+### Computer link (jarvis-link, kind link)
 
-hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS 端口，在这条链路上开流，流里就是上面这套 RPC（字节原样转给那台的常驻 node）。
-2026-11-04 起 hub 认完凭据把链路和流原样转给管理者（`devices.accept` + `GET /api/v1/bus/relay`，下面「电脑（devices.*）」），下面 hub 发的消息是管理者发的，关闭码照转；
-管理者没连着时 `GET /api/v1/link` 回 `503 assistant_offline`。细节见 [link.md](link.md)，这里只列线上的东西：
+Computers the hub can't connect into (laptops) have jarvis-link connect out to the hub's TLS port and open streams on that link; inside a stream is the RPC above (bytes forwarded as is to that machine's resident node).
+Since 2026-11-04, once the hub has checked the credential it hands the link and its streams as is to the manager (`devices.accept` + `GET /api/v1/bus/relay`, "Computers (devices.*)" below); the messages "the hub" sends below are sent by the manager, and close codes are passed through.
+When the manager isn't connected, `GET /api/v1/link` returns `503 assistant_offline`. Details in [link.md](link.md); only what's on the wire is listed here:
 
-- `GET /api/v1/link`（WebSocket，`role: link` 的凭据，只走 TLS，回环例外）。文本消息，每条一个 JSON：
-  - jarvis-link → hub：`{"type":"hello","machine","version","address"}`（第一条，10 秒内）、`{"type":"open_failed","id","error"}`；
-  - hub → jarvis-link：`{"type":"endpoints","endpoints":[{"url","kind"}]}`（只有 https 的候选）、`{"type":"open","id"}`、
-    `{"type":"node","online","error"}`。
-  - 关闭码：4001 被同一台的新链路顶掉、4002 凭据被撤销、4003 hello 和凭据对不上、1001 hub 停机。两边每 10 秒 ping，5 秒没 pong 断开（配置值）。
-    hub.json 设了 `link.ping_seconds` / `link.ping_timeout_seconds` 时 `endpoints` 多带 `ping_ms`、`ping_timeout_ms`（毫秒），jarvis-link 在这条链路上改用它
-    （限在 50 毫秒到 10 分钟，不是两个正数时不理）；没设时这两个字段不发，旧 jarvis-link 也不认。
-- `GET /api/v1/link/stream?id=<open 的 id>`（WebSocket，同一凭据，permessage-deflate）：二进制消息，内容是 RPC 的字节流；
-  hub 15 秒内没等到就当失败。链路断了，链路上的流一起断。
+- `GET /api/v1/link` (WebSocket, a credential with `role: link`, TLS only, loopback excepted). Text messages, one JSON each:
+  - jarvis-link → hub: `{"type":"hello","machine","version","address"}` (the first message, within 10 seconds), `{"type":"open_failed","id","error"}`;
+  - hub → jarvis-link: `{"type":"endpoints","endpoints":[{"url","kind"}]}` (https candidates only), `{"type":"open","id"}`,
+    `{"type":"node","online","error"}`.
+  - Close codes: 4001 replaced by a new link from the same machine, 4002 credential revoked, 4003 hello doesn't match the credential, 1001 hub shutting down. Both sides ping every 10 seconds and disconnect after 5 seconds without a pong (configurable).
+    When hub.json sets `link.ping_seconds` / `link.ping_timeout_seconds`, `endpoints` also carries `ping_ms`, `ping_timeout_ms` (milliseconds), and jarvis-link uses them on this link
+    (clamped to 50 milliseconds through 10 minutes; ignored unless both are positive). When not set, these two fields aren't sent, and old jarvis-link doesn't know them either.
+- `GET /api/v1/link/stream?id=<id from open>` (WebSocket, same credential, permessage-deflate): binary messages whose content is the RPC byte stream;
+  the hub treats it as failed if it doesn't arrive within 15 seconds. When the link drops, its streams drop with it.
 
-## hub ↔ hub（互联，[mesh.md](mesh.md)）
+## hub ↔ hub (linked hubs, [mesh.md](mesh.md))
 
-- `POST /api/v1/peer/pair`（`Authorization: Bearer jx_…`，对方的互联码）：`{hub_id,name,version,fp,tls_port,endpoints,token,center,term}` →
-  同样几项（`token` 是回给对方的互联凭据，`center` / `term` 是发码方所在组的中心和任期：用码的一方并入这一组）。码无效 / 用过 / 过期 401；本 hub 没开 TLS 409。
-- `GET /api/v1/peer`（WebSocket，只走 TLS，`role: peer` 的凭据，permessage-deflate）：二进制消息，内容是上面 hub ↔ node 那套 JSON 行 RPC 的字节流：
-  - 调用：`hello {hub_id,name,version,epoch}`（两边各一次）、`stream.open {id}`（流上是一条到对方 peer 服务器的 HTTP/1.1 连接）、
-    `relay {to,from,ttl,method,params}`（`creds.import {tokens:[{id,name,kind,role,created_at,last_seen,hash}]}` → `{added}`：成员把凭据交给中心；
-    `creds.revoked {tokens:[{id,name,kind,role,hash}]}`（其余字段不用）→ `{revoked}`：把已撤销的凭据告诉组里的 hub；
-    `pair.code {}` → 配对码：成员上的 `personad hub pair`）、`unpair {}`；
-  - 单向：`rec`（hub 的记录：链路、`center`、`term`、hub.json 里的电脑）、`stream.data` / `stream.ack` / `stream.close`。
-  - 关闭码：4011 重复的链路、4012 断开了互联、4013 发不过来、1001 hub 停机。两边每 10 秒 ping，5 秒没 pong 断开（配置值）。
-- 流上的 HTTP 都带 `X-Jarvis-Peer-Ttl`（8 起，每跳减一，到 0 回 `508 mesh_loop`），一跳一跳转到要去的 hub：
-  - 成员转给中心的 App 请求：原样（含 `Authorization`），加 `X-Jarvis-Peer-Source: <lan|public> <客户端地址> <tls|plain>`（成员对来源的判断）。
-    转不过去 `503 center_unreachable`，转发失败 `502 hub_unreachable`。
-  - 中心经成员开的 node 流：`GET /api/v1/peer/node`，`Upgrade: jarvis-node`、`X-Jarvis-Peer-Node: <成员 hub_id>/<机器 id>`、`X-Jarvis-Peer-From: <中心 hub_id>`；
-    成员回 `101`，之后是 node 的字节流；不是它的中心来要 403，hub.json 里没有 404，打不开 502（`error` 是原因）。
-- 管理接口（管理界面登录后，[admin.md](admin.md)）：`GET /api/v1/admin/mesh`、`GET /api/v1/admin/peers`、`POST /api/v1/admin/peers/code`、`POST /api/v1/admin/peers`、
-  `POST /api/v1/admin/peers/probe`、`DELETE /api/v1/admin/peers/{hub_id}`、`POST /api/v1/admin/peers/{hub_id}/center`、`GET /api/v1/admin/routes`；
-  同一套在 `/api/v1/admin/cli/…` 下给 hub 机器上的命令行用（回环 + 主 token）。
+- `POST /api/v1/peer/pair` (`Authorization: Bearer jx_…`, the other side's link code): `{hub_id,name,version,fp,tls_port,endpoints,token,center,term}` →
+  the same fields (`token` is the link credential given back to the other side; `center` / `term` are the center and term of the code issuer's group: the side using the code joins that group). Invalid / used / expired code: 401; this hub has no TLS: 409.
+- `GET /api/v1/peer` (WebSocket, TLS only, a credential with `role: peer`, permessage-deflate): binary messages whose content is the byte stream of the JSON-line RPC from hub ↔ node above:
+  - Calls: `hello {hub_id,name,version,epoch}` (once each way), `stream.open {id}` (the stream carries one HTTP/1.1 connection to the other side's peer server),
+    `relay {to,from,ttl,method,params}` (`creds.import {tokens:[{id,name,kind,role,created_at,last_seen,hash}]}` → `{added}`: a member hands credentials to the center;
+    `creds.revoked {tokens:[{id,name,kind,role,hash}]}` (other fields unused) → `{revoked}`: tells the group's hubs about revoked credentials;
+    `pair.code {}` → a pairing code: `personad hub pair` on a member), `unpair {}`;
+  - One-way: `rec` (the hub's record: links, `center`, `term`, computers in hub.json), `stream.data` / `stream.ack` / `stream.close`.
+  - Close codes: 4011 duplicate link, 4012 unlinked, 4013 can't keep up sending, 1001 hub shutting down. Both sides ping every 10 seconds and disconnect after 5 seconds without a pong (configurable).
+- HTTP on a stream always carries `X-Jarvis-Peer-Ttl` (starts at 8, decremented each hop; at 0 returns `508 mesh_loop`) and is forwarded hop by hop to the target hub:
+  - App requests a member forwards to the center: as is (including `Authorization`), plus `X-Jarvis-Peer-Source: <lan|public> <client address> <tls|plain>` (the member's judgment of the source).
+    Can't forward: `503 center_unreachable`; forwarding failed: `502 hub_unreachable`.
+  - Node streams the center opens through a member: `GET /api/v1/peer/node`, `Upgrade: jarvis-node`, `X-Jarvis-Peer-Node: <member hub_id>/<machine id>`, `X-Jarvis-Peer-From: <center hub_id>`;
+    the member returns `101`, followed by the node's byte stream. A request from a hub that isn't its center gets 403; not in hub.json gets 404; can't open gets 502 (`error` is the reason).
+- Admin interface (after signing in to the admin UI, [admin.md](admin.md)): `GET /api/v1/admin/mesh`, `GET /api/v1/admin/peers`, `POST /api/v1/admin/peers/code`, `POST /api/v1/admin/peers`,
+  `POST /api/v1/admin/peers/probe`, `DELETE /api/v1/admin/peers/{hub_id}`, `POST /api/v1/admin/peers/{hub_id}/center`, `GET /api/v1/admin/routes`;
+  the same set under `/api/v1/admin/cli/…` is for the command line on the hub machine (loopback + main token).
 
-## hub → 连接器（kind service，[link.md](link.md)「被动模式」、[mesh.md](mesh.md)「kind service」）
+## hub → connector (kind service, [link.md](link.md) ("Passive mode"), [mesh.md](mesh.md) ("kind service"))
 
-- hub 按配对链接里的 `fp` 钉扎连 `<address>`（可经 `socks5://` 代理）：`POST /api/v1/connector/pair {code,token,machine,hub_id,hub_name}` 一次；
-  之后 `GET /api/v1/connector/info`（每 30 秒，探活和 RTT）、`GET /api/v1/connector/stream`（WebSocket，node 的字节流），都带 `Authorization: Bearer <凭据>`。
-  hub.json 设了心跳（`link`）时流的请求多带 `X-Persona-Ping: <间隔毫秒> <超时毫秒>`，连接器在这条流上照它 ping；没设时不带，旧连接器不认。
-- 401：5 分钟内不再拨；429：按 `Retry-After`；503 `node_unavailable`：显示原因、照常退避；流以 4002 关：要重新配对，不再试；1001：照常退避。
+- The hub connects to `<address>` pinned to the `fp` in the pairing link (optionally via a `socks5://` proxy): `POST /api/v1/connector/pair {code,token,machine,hub_id,hub_name}` once;
+  after that `GET /api/v1/connector/info` (every 30 seconds, liveness and RTT) and `GET /api/v1/connector/stream` (WebSocket, the node's byte stream), both with `Authorization: Bearer <credential>`.
+  When hub.json sets a heartbeat (`link`), the stream request also carries `X-Persona-Ping: <interval ms> <timeout ms>`, and the connector pings on this stream accordingly; when not set it's omitted, and old connectors don't know it.
+- 401: don't dial again for 5 minutes; 429: follow `Retry-After`; 503 `node_unavailable`: show the reason and back off as usual; stream closed with 4002: needs re-pairing, stop trying; 1001: back off as usual.
 
-## 总线（服务 ↔ hub，`GET /api/v1/bus`）
+## Bus (service ↔ hub, `GET /api/v1/bus`)
 
-hub 要变成只是一条通道：助手（以后还有别的服务）是另一个进程，主动连 hub 的总线、一直连着，而不是住在 hub 里。hub 不认识任何服务的业务语义；
-默认 hub 把助手当作自己的子进程起起来（`personad assistant`），助手也可以跑在别处（`docs/assistant.md`「进程」）。
-通道本身是鉴权、握手、名册、按方法名派发、两个方向的调用；助手经它和 hub 互相调用，见下「助手用的方法」。
+The hub is meant to become just a channel: the assistant (and later other services) is a separate process that connects out to the hub's bus and stays connected, rather than living inside the hub. The hub knows nothing of any service's business semantics.
+By default the hub starts the assistant as its own child process (`personad assistant`); the assistant can also run elsewhere (`docs/assistant.md` ("Process")).
+The channel itself is authentication, handshake, a roster, dispatch by method name, and calls in both directions; the assistant and hub call each other through it; see "Methods the assistant uses" below.
 
-**身份和 token**
+**Identities and tokens**
 
-- 每个服务一个身份。现在只有 `manager` 一种角色（一个管理者进程，即助手；id 形如 `assistant`，小写字母开头，最多 32 个字符）；表里留着角色一列，以后加别的角色不用改表，别的角色的 token 现在在升级时就被拒（401）。
-- token 以 `jb_` 开头，只能开 `/api/v1/bus`：设备 token、主 token 都开不了总线，`jb_` 也开不了 App 的接口（401）。hub 只存 sha256（表 `bus_identities`，迁移 0311）。
-- 只认 `Authorization: Bearer`，不收 `?token=`。公网来源要 TLS（否则 `403 tls_required`），失败计数和 `429 rate_limited` 同 App 的接口；回环、内网不计数。
-- 生成和撤销是 hub 里的函数（`createBusToken`、`revokeBusToken`，在 `server/internal/hub/bustokens.go`）。hub 每次启动给助手生成一个、从子进程的 stdin 交给它；
-  助手跑在别处时用 `personad hub assistant-token` 生成（`docs/config.md` 的 `assistant.external`）。没有接口和界面。
-  同一身份再生成一次就换掉旧 token：旧的立刻失效，用它连着的连接以 4002 断开。
-- 互联的成员 hub 不把总线转给中心：服务连的是哪台 hub，就是哪台的。
-- 管理者的名册、安装码、吊销见 `docs/managers.md`：角色为 `manager` 的身份就是管理者，名册另记它最后一次握手报的位置和 `last_seen`（迁移 0419）；新管理者用一次性安装码换 token（`POST /api/v1/bus/join`，不要凭据）。
+- One identity per service. Currently there is only one role, `manager` (one manager process, the assistant; ids look like `assistant`, start with a lowercase letter, at most 32 characters). The table keeps a role column so adding other roles later needs no table change; tokens for other roles are rejected at upgrade today (401).
+- Tokens start with `jb_` and can only open `/api/v1/bus`: neither device tokens nor the main token can open the bus, and `jb_` can't open App endpoints either (401). The hub stores only the sha256 (table `bus_identities`, migration 0311).
+- Only `Authorization: Bearer` is accepted, not `?token=`. Public sources need TLS (otherwise `403 tls_required`); failure counting and `429 rate_limited` are the same as for App endpoints; loopback and LAN aren't counted.
+- Creating and revoking are functions inside the hub (`createBusToken`, `revokeBusToken`, in `server/internal/hub/bustokens.go`). Every time the hub starts it creates one for the assistant and passes it via the child process's stdin;
+  when the assistant runs elsewhere, create one with `personad hub assistant-token` (`assistant.external` in `docs/config.md`). There's no endpoint or UI.
+  Creating again for the same identity replaces the old token: the old one stops working immediately, and connections using it are closed with 4002.
+- Member hubs in a linked group don't forward the bus to the center: a service belongs to whichever hub it connects to.
+- The managers' roster, installation codes and revocation are described in `docs/managers.md`: an identity with role `manager` is a manager. The roster also records the location it reported at its last handshake and `last_seen` (migration 0419); a new manager exchanges a one-time installation code for a token (`POST /api/v1/bus/join`, no credentials required).
 
-**管理者（`/api/v1/managers`，hub 自己答）**
+**Managers (`/api/v1/managers`, answered by the hub itself)**
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/managers` | `{managers:[{id, name, online, default?, builtin?, host?, os?, arch?, deploy?, version?, since?, last_seen?, installing?}], default}`：默认管理者在前，安装中的在后；`builtin` 是 hub 自己起的助手，`installing` 是安装码到期的时间。名册变了（新建、改名、连上、断开、删除）给要了 `managers` 的 App（`?features=` 或 `client_hello` 的 `features`）推 `{"type":"managers"}`，不进事件日志（重连后 App 反正重读列表） |
-| POST | `/api/v1/managers` | `{name}`（1–40 个字）→ 201 `{manager, code, expires_at}`：一次性安装码，10 分钟、用一次 |
-| POST | `/api/v1/managers/{id}/code` | 给已有的（或码过期了的安装中的）一个新码 → `{code, expires_at}`；hub 自己的助手 `409 builtin_manager` |
-| PATCH | `/api/v1/managers/{id}` | `{name?, default?: true}`：改名、设为默认；安装中的 `409 installing` |
-| DELETE | `/api/v1/managers/{id}` | 吊销（安装中的作废码）→ `{ok}`；默认的 `409 default_manager`、hub 自己的 `409 builtin_manager`，没有 `404 no_manager` |
-| POST | `/api/v1/bus/join` | `{code}` → `{id, name, token, hub_id}`；码不对、过期、用过 `401 bad_install_code`（按来源计数） |
+| GET | `/api/v1/managers` | `{managers:[{id, name, online, default?, builtin?, host?, os?, arch?, deploy?, version?, since?, last_seen?, installing?}], default}`: the default manager first, installations in progress last; `builtin` is the assistant started by the hub, `installing` is the installation code's expiry time. Roster changes (creation, rename, connection, disconnection, deletion) push `{"type":"managers"}` to apps that requested `managers` (`?features=` or `client_hello`'s `features`), without entering the event log (apps reread the list after reconnecting) |
+| POST | `/api/v1/managers` | `{name}` (1–40 characters) → 201 `{manager, code, expires_at}`: a one-time installation code, valid for 10 minutes and one use |
+| POST | `/api/v1/managers/{id}/code` | A new code for an existing manager (or an installation whose code expired) → `{code, expires_at}`; the hub's own assistant returns `409 builtin_manager` |
+| PATCH | `/api/v1/managers/{id}` | `{name?, default?: true}`: rename or set as default; an installation in progress returns `409 installing` |
+| DELETE | `/api/v1/managers/{id}` | Revoke (invalidate the code for an installation in progress) → `{ok}`; the default returns `409 default_manager`, the hub's own manager `409 builtin_manager`, a missing one `404 no_manager` |
+| POST | `/api/v1/bus/join` | `{code}` → `{id, name, token, hub_id}`; an incorrect, expired or used code returns `401 bad_install_code` (counted per source) |
 
-改名单、建码、删除要完整权限的设备（只读设备 403）。
+Editing the roster, creating codes and deleting require a full-permission device (read-only devices get 403).
 
-**按管理者（归属，`docs/managers.md`「归属」）**
+**Per-manager routing (ownership, `docs/managers.md` ("Ownership"))**
 
-- **请求哪个管理者**：请求头 `X-Persona-Manager: <id>`，或查询参数 `?manager=<id>`（WebSocket、浏览器里打开的链接用它；两个都给时以请求头为准）。不写就是默认管理者（`GET /api/v1/managers` 的 `default`）。名册里没有这个 id：`404 no_manager`；有但没连着：和以前助手离线一样 `503 assistant_offline`。
-- **带着东西的请求由 hub 自己找归属，写了也不改**：`/machines/{mid}/…` 归电脑的管理者，`/sessions/{mid}/{sid}/…` 归会话的（管理者自己的对话归报它的那个，其余归电脑的），`POST /interactions/{id}/resolve` 归报这张卡的。其余（助手页、对话、定时任务、收件箱、待办、知识库、模型配置、扩展和来源、用量……）按上面的请求头 / 参数；列表里某一项（一条收件箱、一个扩展）带着 `manager`，对它的请求照着写上。
-- **`manager` 字段**：电脑（`GET /api/v1/machines`、`machines` 推送）、会话（`GET /api/v1/sessions`、`sessions` / `sessions_delta` 推送）、待处理的卡（`GET /api/v1/interactions`、`interaction` 推送）每项顶层带 `manager`（管理者 id）。只有一个管理者时除了多这个字段，回答和以前一样。
-- **合并的列表**：`GET /api/v1/inbox`（`items`）、`/api/v1/todos`（`todos`）、`/api/v1/extensions`（`extensions`）、`/api/v1/plugins`（`plugins`）、`/api/v1/connectors`（`connectors`）不写管理者时，hub 依次问默认管理者和其他连着的管理者，把各自的列表接在一起（默认的在前），每项加 `manager`；其余字段（`as_of`、`triage`、`can_install`……）取默认管理者的。写了管理者就只回它的。没答上的管理者不在里面；都没答上就原样回默认管理者的回答（比如 `503 assistant_offline`）。
-- **离线的管理者**：hub 本来就留着的照旧留着、照旧带 `manager`：它的电脑（`online: false`，`error` 是助手离线）和会话（状态 `unknown`），扩展列表这类留着最后一次回答的 GET（`extwire.KeptRoutes`）。每项不另加字段，「最后同步于…」用 `GET /api/v1/managers` 里这个管理者的 `online: false` 和 `last_seen`。经它的操作 `503 assistant_offline`。
+- **Which manager receives the request**: header `X-Persona-Manager: <id>`, or query `?manager=<id>` (for WebSockets and links opened in a browser; the header wins when both are supplied). Omitted means the default manager (`default` in `GET /api/v1/managers`). An id absent from the roster returns `404 no_manager`; one present but disconnected returns `503 assistant_offline`, as when the assistant was offline before.
+- **For requests tied to an object, the hub resolves ownership itself; specifying a manager does not override it**: `/machines/{mid}/…` belongs to the computer's manager, `/sessions/{mid}/{sid}/…` to the session's (a manager's own chat belongs to the one reporting it, other chats to the computer's), and `POST /interactions/{id}/resolve` to whoever reported that card. Everything else (assistant page, chats, schedules, Inbox, to-dos, knowledge base, model config, extensions and sources, usage…) uses the header / parameter above. When a list item (an Inbox item, an extension) carries `manager`, include it in requests for that item.
+- **The `manager` field**: computers (`GET /api/v1/machines`, `machines` pushes), sessions (`GET /api/v1/sessions`, `sessions` / `sessions_delta` pushes) and pending cards (`GET /api/v1/interactions`, `interaction` pushes) each carry top-level `manager` (the manager id). With one manager, responses are unchanged except for this extra field.
+- **Merged lists**: without a manager specified, `GET /api/v1/inbox` (`items`), `/api/v1/todos` (`todos`), `/api/v1/extensions` (`extensions`), `/api/v1/plugins` (`plugins`) and `/api/v1/connectors` (`connectors`) query the default and other connected managers in turn, concatenate their lists (default first) and add `manager` to every item; other fields (`as_of`, `triage`, `can_install`…) come from the default manager. With a manager specified, only its list is returned. Managers that do not answer are omitted; if none answers, the default manager's response is returned unchanged (for example `503 assistant_offline`).
+- **Offline managers**: data the hub already retains stays retained with `manager`: their computers (`online: false`, `error` says the assistant is offline) and sessions (`unknown` state), plus GETs whose last response is retained, such as extension lists (`extwire.KeptRoutes`). Items get no additional fields; "Last synced…" uses that manager's `online: false` and `last_seen` from `GET /api/v1/managers`. Operations through it return `503 assistant_offline`.
 
-**线上格式**：每条 WebSocket 文本消息是一行 `internal/rpc` JSON（和 hub ↔ node 同一套），permessage-deflate，单条最大 64 MiB，两个方向都能调用：
+**Wire format**: each WebSocket text message is one line of `internal/rpc` JSON (the same as hub ↔ node), permessage-deflate, at most 64 MiB per message; both directions can call:
 
 ```jsonc
+// "助手" is the name the hub records for the assistant identity ("Assistant")
 {"id":"s1","method":"manager.hello","params":{"id":"assistant"}}
 {"id":"s1","result":{"name":"助手","role":"manager","managers":[{"id":"assistant","name":"助手","role":"manager","online":true}],
                      "owner":"","owner_notes":"","assistant":{"machine_id":"server","machines":["server"]},"done_delay_ms":60000}}
@@ -1640,447 +1647,447 @@ hub 要变成只是一条通道：助手（以后还有别的服务）是另一�
 {"event":"managers","params":{"managers":[{"id":"assistant","name":"助手","role":"manager","online":false}]}}
 ```
 
-- 两边每 30 秒 ping，20 秒没有 pong 就断开。连上后 40 秒内没完成握手，hub 以 4003 断开。
-- 一个身份的新连接在**握手成功时**替换旧连接，旧的以 4001 断开。
-- 握手之前、被替换之后，这条连接上的调用一律回 `stale_connection`，发的事件丢掉；hub 也不调没握手的连接。
-- 关闭码：4001 被同一身份的新连接替换、4002 token 撤销或换了、4003 握手不对或超时、1001 hub 停机。
+- Both sides ping every 30 seconds and disconnect after 20 seconds without a pong. If the handshake isn't done within 40 seconds of connecting, the hub closes with 4003.
+- A new connection for an identity replaces the old one **when its handshake succeeds**; the old one is closed with 4001.
+- Before the handshake and after being replaced, every call on the connection returns `stale_connection` and events sent are dropped; the hub never calls a connection that hasn't shaken hands.
+- Close codes: 4001 replaced by a new connection for the same identity, 4002 token revoked or replaced, 4003 bad handshake or timeout, 1001 hub shutting down.
 
-### 握手
+### Handshake
 
-`manager.hello {id,host?,os?,arch?,deploy?,version?,apps?,…}`。`id` 必须与 token 一致，否则回 `wrong_identity` 并断开（4003）。
-名册里只记 `host`、`os`、`arch`、`deploy`（hub 起的助手报 `child`，别处的报 `external`）、`version`；`apps` 和机器摘要现在不处理。
-回答 `{name,role,managers:[{id,name,role,online}],owner,owner_notes,assistant:{machine_id,launcher?,machines,standby?},done_delay_ms,kb}`：
+`manager.hello {id,host?,os?,arch?,deploy?,version?,apps?,…}`. `id` must match the token, otherwise it returns `wrong_identity` and disconnects (4003).
+The roster records only `host`, `os`, `arch`, `deploy` (an assistant started by the hub reports `child`, one elsewhere reports `external`), `version`; `apps` and the machine summary aren't processed yet.
+The answer is `{name,role,managers:[{id,name,role,online}],owner,owner_notes,assistant:{machine_id,launcher?,machines,standby?},done_delay_ms,kb}`:
 
-- `name`、`role`：hub 给这个身份记的名字和角色（以 hub 为准，hello 里报的角色不算）；
-- `managers`：hub 有 token 的所有管理者，`online` 是现在是否连着；
-- 其余是助手要的那份（`assistantwire.Hello`）：hub.json 的 `assistant` 一节，是助手自己的设置的默认值（设置是助手的，见 `docs/assistant.md`「和 hub 的边界」）：`owner` 是 `assistant.owner`，`owner_notes` 是 `assistant.notes`，
-  `assistant.machine_id` 是 `assistant.machine`（hub 没有这台就是 hub 自己那台，再没有就是第一台），`assistant.launcher` 是 `assistant.launcher`；`machines` 是 hub 有的机器（助手存的机器不在里面就不用），
-  `standby` 这台 hub 是互联组的成员（定时任务由中心跑）；`done_delay_ms` 是 hub.json notify 的完成推送延迟（任务的 Agent 停多久才算停下）；`kb` 是 hub.json 的 `kb` 一节
-  `{off?,text_days?,attachment_days?,extra_dirs?}`：助手的知识库照它存，助手跑在别处也一样（`docs/knowledge.md`「谁管什么」）。用户的时区、主对话不在这里：是助手自己的设置，它在快照的 `profile` 里报给 hub。
-- 助手记着这份回答。hub 在它可能变了的地方（互联组换中心、机器列表变了）合并 200 毫秒后重算一次，和上次给的不同就发
-  `manager.updated`，参数就是新的这份（同上，不带 `name`、`role`、`managers`）；助手收到后重读自己的设置、报一份快照。
+- `name`, `role`: the name and role the hub records for this identity (the hub's record wins; the role reported in hello doesn't count);
+- `managers`: all managers the hub has tokens for; `online` is whether they're connected now;
+- The rest is what the assistant needs (`assistantwire.Hello`): the `assistant` section of hub.json, the defaults for the assistant's own settings (settings belong to the assistant; see `docs/assistant.md` ("Boundary with the hub")): `owner` is `assistant.owner`, `owner_notes` is `assistant.notes`,
+  `assistant.machine_id` is `assistant.machine` (if the hub doesn't have that machine, the hub's own machine; failing that, the first one), `assistant.launcher` is `assistant.launcher`; `machines` are the machines the hub has (a machine the assistant stored that isn't among them isn't used);
+  `standby`: this hub is a member of a linked group (scheduled tasks run on the center); `done_delay_ms` is hub.json notify's completion push delay (how long a task's Agent must be stopped to count as stopped); `kb` is hub.json's `kb` section
+  `{off?,text_days?,attachment_days?,extra_dirs?}`: the assistant's knowledge base stores by it, even when the assistant runs elsewhere (`docs/knowledge.md` ("Who manages what")). The user's time zone and main chat aren't here: they are the assistant's own settings, reported to the hub in the snapshot's `profile`.
+- The assistant keeps this answer. Where it might have changed (the linked group changed center, the machine list changed), the hub coalesces for 200 milliseconds and recomputes; if it differs from what it last gave, it sends
+  `manager.updated` with the new answer as params (as above, without `name`, `role`, `managers`). On receiving it the assistant rereads its settings and reports a snapshot.
 
-同一条连接可以再握手一次（更新名册里的信息），不算替换。
+The same connection can shake hands again (to update its roster info); that doesn't count as a replacement.
 
-### 名册
+### Roster
 
-hub 在内存里记着每个身份当前的连接（握手成功的那一条）：id、角色、名字、握手时报的机器信息、连上的时间。hub 重启后为空，服务重连、再握手。
-管理者上线、下线时，hub 给其他在线的管理者发 `managers {managers:[{id,name,role,online}]}`；刚连上的那个从握手的回答里拿到同一份列表。
+The hub keeps each identity's current connection (the one whose handshake succeeded) in memory: id, role, name, the machine info reported at handshake, and the connect time. It is empty after a hub restart; services reconnect and shake hands again.
+When a manager comes online or goes offline, the hub sends the other online managers `managers {managers:[{id,name,role,online}]}`; the one that just connected gets the same list in its handshake answer.
 
-### 方法
+### Methods
 
-- 服务 → hub：hub 按方法名登记处理函数（`server/internal/hub/bus.go` 的 `handleBus`，单向事件用 `handleBusEvent`），处理函数所在的文件在 `init` 里登记，hub 没有别的方法清单。
-  握手之外内置的只有 `ping {}` → `{}`。没登记的方法回 `unknown_method`，参数解析不了回 `invalid_params`；处理函数返回的 `rpc.Error` 带着它的 `code` 原样到服务。
-- hub → 服务：`callBus(身份, 方法, 参数)` 调这个身份当前的连接（调用方没给期限时两分钟后放弃），`notifyBus` 发单向事件；不在线返回「不在线」的错误，服务回的错误码原样带回。
+- Service → hub: the hub registers handler functions by method name (`handleBus` in `server/internal/hub/bus.go`; one-way events use `handleBusEvent`). Each handler's file registers it in `init`; the hub has no other method list.
+  Besides the handshake, the only built-in is `ping {}` → `{}`. An unregistered method returns `unknown_method`; params that can't be parsed return `invalid_params`; an `rpc.Error` returned by a handler reaches the service with its `code` intact.
+- hub → service: `callBus(identity, method, params)` calls this identity's current connection (if the caller gives no deadline it gives up after two minutes), and `notifyBus` sends a one-way event. If not online it returns a "not online" error; error codes the service returns are passed back as is.
 
-### 助手用的方法
+### Methods the assistant uses
 
-hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assistant_link.go`）用 hub 自己的函数回答助手的调用，同一个文件里用 `handleBusCall` 登记的处理函数只做编解码
-（参数解成那个方法自己的类型，解不了回 `invalid_params`），不另写一份逻辑。hub 不跑助手的代码（`go list -deps ./internal/hub` 里没有 `internal/assistant`），
-两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`），以及写字用的几个小函数（`server/internal/textfmt`）。方法和参数的意思见 `docs/assistant.md`「和 hub 的边界」；
-`app.call` 的交互队列的方法（`interactions.answer`…）只收发数据，用它们的工具（`interaction_answer`）的规则和文字在助手。
-收件箱是助手的（2026-11-04，`docs/inbox.md`「谁管什么」），hub 只管它的来源，消息的形状在 `assistantwire/inbox.go`。
-知识库 2026-11-04 起是助手的（`docs/knowledge.md`「谁管什么」）：hub 只给来源（`app.call connectors.*`），它自己的功能要读知识库时问助手（`kb.*`）。
-扩展也可经自己的 RPC 调用六个公开知识库方法（#1908）：hub 先检查实际获准的 `kb.read` / `kb.write`，再代问助手，
-并不是恢复助手旧的 `app.call kb.*` 工具链。字段、分页和权限见 [扩展文档](extensions.md#知识库-rpc1908)。
-助手用 `app.call connectors.owner {}` 获取最小的本人来源元数据 `{sources:[{source,handles:[{kind,value}]}]}`，当前由 hub 提供已配置邮箱地址，不返回账户凭据。
-助手的专用单向事件 `kb.changed {kind,id,what}`、`kb.forgotten {source}` 只由当前助手连接发送；hub 仅给获准 `kb.read` 的扩展订阅者转成 `event.kb.*`，不广播给 App。
+The hub side has a single implementation: `assistantLink` (`server/internal/hub/assistant_link.go`) answers the assistant's calls with the hub's own functions. Handlers registered with `handleBusCall` in the same file only encode and decode
+(parse params into that method's own type; on failure return `invalid_params`); no second copy of the logic. The hub doesn't run the assistant's code (`internal/assistant` isn't in `go list -deps ./internal/hub`);
+the two sides share only message types, method names, error codes and the assistant's route table (`server/internal/assistantwire`), plus a few small text helpers (`server/internal/textfmt`). For what the methods and params mean, see `docs/assistant.md` ("Boundary with the hub").
+The interaction-queue methods of `app.call` (`interactions.answer`…) only move data; the rules and wording of the tools that use them (`interaction_answer`) live in the assistant.
+The Inbox belongs to the assistant (2026-11-04, `docs/inbox.md` ("Who manages what")); the hub only handles its sources, and the message shapes are in `assistantwire/inbox.go`.
+Since 2026-11-04 the knowledge base belongs to the assistant (`docs/knowledge.md` ("Who manages what")): the hub only provides sources (`app.call connectors.*`), and when its own features need to read the knowledge base it asks the assistant (`kb.*`).
+Extensions can also call six public knowledge base methods through their own RPC (#1908): the hub first checks the `kb.read` / `kb.write` actually granted, then asks the assistant on their behalf.
+This does not bring back the assistant's old `app.call kb.*` tool chain. Fields, paging and permissions are in the [extensions doc](extensions.md#知识库-rpc1908).
+The assistant uses `app.call connectors.owner {}` to get minimal metadata about the owner's own sources, `{sources:[{source,handles:[{kind,value}]}]}`; currently the hub provides the configured email addresses, and returns no account credentials.
+The assistant's dedicated one-way events `kb.changed {kind,id,what}` and `kb.forgotten {source}` are sent only by the current assistant connection; the hub turns them into `event.kb.*` only for extension subscribers granted `kb.read`, and doesn't broadcast them to the App.
 
-- 助手 → hub：`device.call`、`app.call` → 结果原样；`notify.request {notification}` → `{ok:true}`；`manager.snapshot` → `{ok,seq}`（快照带 `profile`：助手的设置里 hub 自己的功能要用的，hub 留最后一份）；单向事件 `ws.broadcast`（见下）。
-  2026-11-04 加的：`device.call` 交给 node 的 `assistant.prepare`、`assistant.warm`、`assistant.memory`、`assistant.compact`、`assistant.handoff`、`launchers.list`、`launchers.probe`（`devices.list` 多了 `kind`、`data_dir`），去掉 hub 自己答的 `assistant.start`；
-  `app.call` 的 `models.record`、`models.save`、`models.apply_picked`、`models.launchers`、`models.launcher_check`、`kb.dirs`、`connectors.signed_in`、`plugins.assistant`、`plugins.skills_need`、`settings.list`，去掉 `models.assistant_send`。
-  `app.call` 带 `timeout_ms`（助手这次等多久）时 hub 到点也停下（比如一次模型调用）。
-  同一天知识库挪进助手（`assistantwire/kb.go`）：去掉 `app.call` 的 `kb.status`、`kb.prompt`、`kb.dirs`、`kb.search`、`kb.list`、`kb.get`、`kb.update`；加上知识库的来源
-  `connectors.archives {}` → `{archives:[{id,poll_ms?,sources?,media?}],items:[id]}`、`connectors.changes {id,cursor,limit}` → `{batches,next,more?}`、
-  `connectors.archive_media {id,ref}` → `{media:{mime,data}}`、`connectors.items {id}` → `{items}`、`connectors.doc_title {id,url}` → `{title}`；`models.json` 多一个可选的 `max_tokens`。
-  同一天收件箱挪进助手：去掉 `app.call` 的 `inbox.replied`、`inbox.draft`；加上收件箱的来源 `inbox.collect {round}`（hub 马上读一轮、交过来再回答：下拉刷新）、`inbox.kick`、`inbox.config`（多了 `extensions`：插件提供的连接器）、
-  `inbox.translate_fingerprint {}` → `{fingerprint}`、`inbox.mail_body {account_id,uid,mailbox,readable?}`、`inbox.reply_mail {account_id,uid,mailbox,text,send_id}` → `{already?}`、`inbox.reply {source,reply,send_id}` → `{already?}`
-  （同一个 `send_id` hub 只发一次，留一天：再问回 `already`，上次发到一半断了的回 `assistant_in_doubt`、不再发）、`inbox.settle`、`inbox.group_tool`、`inbox.group_fallback`、`inbox.group_append {source,append,append_id}`（同一个 `append_id` 再问用插件上次的回答）；
-  单向事件 `inbox.changed {items:[{id,source,kind,title}]}`（hub 在读循环外给插件发 `inbox.changed`、给 App 推 `{"type":"inbox"}`）；快照的 `inbox: {agents:[{machine_id,session_id}]}`（AI 分身的对话：跑完不推「完成」，`null` 时 hub 留着上一份）。
-  快照的 `todos` 是待办的报告（`assistantwire.TodoReport`，待办归助手，`docs/todos.md`「谁管什么」）：`{links:[{machine_id,session_id,todo_id,title,task?}],quiet:[{machine_id,session_id}]}`，
-  `links` 是未完成的待办上活跃的 Agent（`task`：从对话派出去的任务），`quiet` 是安静的任务的 Agent（未完成或完成不到 7 天的）；hub 照它给会话填 `todo`、`quiet`，给卡片填 `task_title`，挡住安静的推送，哪台机器的这几样变了就推那台的会话列表；`null`（读不出来）时留着上一份。
-  hub 的错误带码回去，助手按码认回原来的错误：`no_device`（没有这台机器）、`machine_offline`、`node_closed`（node 的连接断了）、`stale_snapshot`、`model_paused`（`data` 是暂停的 `{reason, until}`：额度用完 `quota` 还是并发满 `busy`）、`model_unconfigured`（这个用途没配模型）、`assistant_in_doubt`（收件箱的回复上次发到一半断了，可能已经发出去）；node 自己回的 `rpc.Error` 原样。
-- hub → 助手，调用：`http.request`（下面的转发）、`manager.action`（App 回答了它的提问）、`assistant.tools {}` → `{tools:[…]}`（hub 在它每次连上时要一次、记着，断开后也留着）、
-  `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、
-  `assistant.todo_handoff {todo_id,text?,new?,machine_id?,cwd?}` → `{found,title?,done_at?,text?,status?,error?}`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id`：待办在不在、完成没有，`text` 前面拼上生效的决策；`new` 时 `text` 是新 Agent 的第一句，再在最前面拼上 `cwd` 所属项目的背景，#2820；`text` 为空时原样回；不能交时 `status` 404 没有这个待办、409 已完成，hub 拿 `status`、`error` 原样回给 App）、`assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?,prompt?}` → `{title?}`（交出去以后挂上；会话没有标题时管理者从 `prompt` 取上下文块后的第一行当挂上的标题；回待办的标题，新建会话的回应 `todo` 用它；待办没了、完成了回错误）。
-  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}`（hub 的功能开对话；收件箱的 AI 分身、飞书机器人和渠道 2026-11-04 起都由助手自己开，hub 现在不用它）、
-  `assistant.send_params {machine_id,session_id,params}` → `{params}`（发给它某段对话的消息跑在哪个启动器和模型上、新主对话第一条前面带的背景）、
-  `assistant.rename {machine_id,session_id,params}` → node 的回答（App 给它的对话改名）；这几个请求本身不对时回 `bad_request`，hub 回 App 400。
-  知识库（2026-11-04）：`kb.context {chat_id}` → `{context}`（收件箱 AI 分身）、`kb.projects {machine_id,cwd}` → `{projects:[{slug,name}]}`（分诊）、`kb.forget {source}` → `{chats,people}`（删除来源的数据）、
-  插件程序交来的帖子 `kb.posts_put {connector,sources,posts}` → `{statuses}`、`kb.posts_comments {connector,id,count,comments}` → `{}`、`kb.posts_pending {connector,limit}` → `{posts}`、`kb.archived_chats {connector,sources,source}` → `{chats}`。
-  收件箱的：`inbox.collected {epoch,seq,round,sources,mail?,names}` → `{}`（hub 读完一轮来源交过来，助手合成条目后回答；同一个 `epoch` 里 `seq` 不比用过的大的丢掉；读不出存着的收件箱时回 `inbox_unavailable`，hub 留着下一轮再交）、
-  `inbox.item {id}` → `{item,ok}`、`inbox.forget {source}` → `{deleted}`、`inbox.repo_mutes {source,set?,add?,repos?}` → `{repos}`（2026-11-04 去掉 `assistant.tasks`、`assistant.card_sent`、`assistant.cards_sent`：都在助手里了）。
-- hub → 助手，单向事件（`conversation.started`、`conversation.renamed` 2026-11-04 去掉：开对话、改名都是助手自己做的）：`session.user_spoke`、`session.user_stopped`（用户在 App 里停了助手的一段对话，#3308）、`session.turn_started`、`session.turn_ended`、`sessions.changed {machine_id, sessions, connected}`（node 报的那份会话列表，带 `spawn_from`：待办的随项目自动挂、派生跟随、herdr 标记都从它来；`connected` 是 node 这条连接开始的时间，变了说明 node 重连过，助手把 herdr 标记全发一次）、`interaction.resolved`（也用来记待办的决策）、`interaction.raised`（安静的任务的 Agent 在问，#1731）、`todos.space_renamed {machine_id,old,new}`（经 hub 改了工作区的名字）、
-  `manager.updated`（上面的握手）、`manager.resync {}`（hub 还没有它的快照或只有不完整的一份，要它报整份：最多 5 秒一次）、
-  `kb.kick {}`（知识库的来源有新东西）、`kb.agent_turn {machine_id,session_id,cwd,title?,line}`（一个 Agent 一轮做完，进它目录所属项目的时间线）。助手按到达的顺序一条一条处理，`session.turn_ended` 另起（要问模型、等任务的 Agent 停下）。
-- **Agents**（2026-11-04 从 hub 挪进管理者，`docs/agent-work.md`「谁管什么」，类型在 `assistantwire/agents.go`）：
-  握手的回答多 `agents`（hub.json 的 `agents` 一节：分诊的上限、开关的初始值）；快照多 `work {on, sessions:[{machine_id, session_id, work}]}`（每个 Agent 最新一轮的工作态，
-  `work.turn_at` 是那一轮的结束；`null` 时 hub 留着上一份），`interactions` 里多分诊的卡片（`tool_name: persona_triage`，问的是那个 Agent 的会话，答案照样是 `manager.action`）；
-  `device.call sessions.list` 的回答多 `muted`（推送关了的会话 id）；分诊看的项目是助手自己知识库里的（`docs/knowledge.md`）；去掉 `app.call models.tab_name`（标签名是管理者自己起的）。
-  hub → 助手的调用：`agents.start_params {machine_id, params, name_from?}` → `{params}`（`POST /api/v1/sessions` 之前：按「模型配置 › Agents」和这一次选的填启动器、模型、指纹，`name_from` 不空时起标签名；
-  回 `bad_request` 时 hub 回 App 400，没连着时 hub 照 App 给的开始）、`agents.resume_params {machine_id, session_id, params}` → `{params}`（续上不知道启动器的会话之前；hub 不带 params，把回答里的盖到消息上）、
-  `agents.tab_name {prompt}` → `{name}`（后台开始的 Agent、飞书卡片开的）；单向事件 `session.seen {machine_id, session_id, at}`（用户在 App 里看了一个会话）。
-  分诊用的 `session.turn_started`、`session.turn_ended` 原来就发。用户答了它的提问或卡片而它没收下（没连着，或回了 `gone` 以外的错误），hub 记下答案，
-  它下次报快照之后再发 `manager.action`（没连着时马上、它回了错误的过 10 秒），直到它收下、回 `gone`（这张卡片 / 这个提问已经没了：答了、撤了、过期了，不用再给）或卡片本该过期。
-  `agents.start_params` / `agents.resume_params` 之前 hub 等它连上（hub 起来后到 60 秒、它断开后 10 秒），等不到 hub 自己套「模型配置 › Agents」。
-  它握手时报的版本和 hub 的不一样（开发版不算），hub 在日志里说一句：两边对分诊归谁的理解可能不一样。
-- **模型**（2026-11-05 从 hub 挪进管理者，`docs/model-config.md`「谁管模型」，类型在 `assistantwire/models.go`）：
-  `/api/v1/model-config…`、`/api/v1/launchers…`（连额度 `…/quota`）、`/api/v1/machines/{mid}/launchers…` 是它的路由，hub 转发；
-  握手的回答多 `models`（hub.json 的 `ai`、`kb_ai`、`triage_ai`、`judge_ai`、`inbox_agent_machine`，和各台电脑的 `machines[].launchers`）；
-  去掉 `app.call` 的 `models.complete`、`models.json`、`models.apply`、`models.resolve`、`models.record`、`models.save`、`models.apply_picked`、`models.launchers`、`models.launcher_check`、`inbox.translate_fingerprint`
-  和错误码 `model_paused`、`model_unconfigured`（模型都是它自己调的）；加上 `app.call plugins.presets`、`plugins.voice`、`plugins.quota {name, machine, base_url, tz}` → `{report}`、`plugins.need_triage`（插件的事，插件系统挪进管理者后去掉）、
-  `device.call launchers.managed`（Persona 里加的启动器交给 node，node 的新连接也由管理者给）；hub → 管理者的调用 `models.usable {purpose}` → `{usable}`、`models.launchers {}` → `{launchers: [{name, base_url}]}`（有网关地址的启动器，不带 Key）、
-  `models.launcher_http {name, machine?, http?}`（错误码 `no_launcher`、`no_gateway`、`machine_offline`）。
-- 助手没连着时：转发的接口回 `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}`，助手的工具同样失败（`is_error`，同一句话），`assistant.context` 也失败（node 那条消息不带实时快照）；
-  给它的事件不发（它连上后报整份快照，要的东西现问），只有 `kb.agent_turn` hub 排着（每个 Agent 最新的一条），连上就发。hub 留着它最后报的快照，会话列表照常显示标题和归档。
-  知识库的 `kb.*` 调用同样回 `assistant_offline`：删除来源数据的接口回 503（收件箱的条目照删），收件箱 AI 分身的上下文、分诊的项目名就不带；
-  插件交帖子的调用先等助手最多 30 秒。助手连着、知识库还没打开时（时区读不出、数据目录在别的进程手里）回 `kb_unavailable`，hub 同样当 503。
-  收件箱的来源 hub 照常读，读到的攒着（合并、有上限）等助手连上一起交；收件箱回复在路上断了（连接断了、超时）回 `502 {"code":"assistant_in_doubt","delivered":"unknown","retryable":false}`：可能已经发出去，再发同一条不会发两次（上面的 `send_id`）。
-  助手连着、收件箱读不出存着的东西（数据库没答）时，收件箱的接口回 `503 inbox_unavailable`，在读出来之前它什么都不收、不写。
+- Assistant → hub: `device.call`, `app.call` → the result as is; `notify.request {notification}` → `{ok:true}`; `manager.snapshot` → `{ok,seq}` (the snapshot carries `profile`: the parts of the assistant's settings the hub's own features need; the hub keeps the last one); one-way event `ws.broadcast` (see below).
+  Added 2026-11-04: `device.call` hands the node `assistant.prepare`, `assistant.warm`, `assistant.memory`, `assistant.compact`, `assistant.handoff`, `launchers.list`, `launchers.probe` (`devices.list` gained `kind`, `data_dir`), and `assistant.start`, which the hub answered itself, was removed;
+  `app.call` gained `models.record`, `models.save`, `models.apply_picked`, `models.launchers`, `models.launcher_check`, `kb.dirs`, `connectors.signed_in`, `plugins.assistant`, `plugins.skills_need`, `settings.list`, and `models.assistant_send` was removed.
+  When `app.call` carries `timeout_ms` (how long the assistant waits this time), the hub also stops at that time (for example, one model call).
+  The same day the knowledge base moved into the assistant (`assistantwire/kb.go`): `app.call`'s `kb.status`, `kb.prompt`, `kb.dirs`, `kb.search`, `kb.list`, `kb.get`, `kb.update` were removed, and the knowledge base sources were added:
+  `connectors.archives {}` → `{archives:[{id,poll_ms?,sources?,media?}],items:[id]}`, `connectors.changes {id,cursor,limit}` → `{batches,next,more?}`,
+  `connectors.archive_media {id,ref}` → `{media:{mime,data}}`, `connectors.items {id}` → `{items}`, `connectors.doc_title {id,url}` → `{title}`; `models.json` gained an optional `max_tokens`.
+  The same day the Inbox moved into the assistant: `app.call`'s `inbox.replied`, `inbox.draft` were removed, and the Inbox sources were added: `inbox.collect {round}` (the hub reads a round right away and answers after handing it over: pull to refresh), `inbox.kick`, `inbox.config` (gained `extensions`: connectors provided by plugins),
+  `inbox.translate_fingerprint {}` → `{fingerprint}`, `inbox.mail_body {account_id,uid,mailbox,readable?}`, `inbox.reply_mail {account_id,uid,mailbox,text,send_id}` → `{already?}`, `inbox.reply {source,reply,send_id}` → `{already?}`
+  (the hub sends a given `send_id` only once, kept for a day: asking again returns `already`; if the last send broke halfway it returns `assistant_in_doubt` and doesn't send again), `inbox.settle`, `inbox.group_tool`, `inbox.group_fallback`, `inbox.group_append {source,append,append_id}` (asking again with the same `append_id` uses the plugin's previous answer);
+  one-way event `inbox.changed {items:[{id,source,kind,title}]}` (outside the read loop the hub sends `inbox.changed` to plugins and pushes `{"type":"inbox"}` to the App); the snapshot's `inbox: {agents:[{machine_id,session_id}]}` (the AI twin's chats: no "done" push when they finish; on `null` the hub keeps the previous one).
+  The snapshot's `todos` is the to-do report (`assistantwire.TodoReport`; to-dos belong to the assistant, `docs/todos.md` ("Who manages what")): `{links:[{machine_id,session_id,todo_id,title,task?}],quiet:[{machine_id,session_id}]}`.
+  `links` are active Agents on unfinished to-dos (`task`: a task dispatched from a chat); `quiet` are Agents of quiet tasks (unfinished or finished less than 7 days ago). From it the hub fills sessions' `todo`, `quiet` and cards' `task_title`, blocks pushes for quiet ones, and pushes the session list of whichever machine had these change; on `null` (unreadable) it keeps the previous one.
+  hub errors go back with codes, and the assistant maps the codes back to the original errors: `no_device` (no such machine), `machine_offline`, `node_closed` (the node's connection dropped), `stale_snapshot`, `model_paused` (`data` is the pause `{reason, until}`: quota exhausted `quota` or concurrency full `busy`), `model_unconfigured` (no model configured for this use), `assistant_in_doubt` (an Inbox reply broke halfway last time and may already have been sent); an `rpc.Error` from the node itself is passed as is.
+- hub → assistant, calls: `http.request` (forwarding, below), `manager.action` (the App answered one of its questions), `assistant.tools {}` → `{tools:[…]}` (the hub asks once each time it connects and remembers it, also after it disconnects),
+  `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`, `assistant.context {session_id}` → `{text,…}` (the node asks before each message),
+  `assistant.todo_handoff {todo_id,text?,new?,machine_id?,cwd?}` → `{found,title?,done_at?,text?,status?,error?}` (`POST /api/v1/sessions`, `…/messages` with `todo_id`: whether the to-do exists and whether it's done; `text` has the decisions in effect prepended; with `new`, `text` is the new Agent's first message, with the background of the project `cwd` belongs to prepended at the very front, #2820; an empty `text` comes back as is. When it can't be handed off, `status` is 404 no such to-do or 409 already done, and the hub returns `status`, `error` to the App as is), `assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?,prompt?}` → `{title?}` (attach after handing off; when the session has no title, the manager takes the first line after the context block in `prompt` as the attached title; returns the to-do's title, which the new-session response's `todo` uses; a to-do that's gone or done returns an error).
+  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}` (hub features opening a chat; since 2026-11-04 the Inbox's AI twin, the Lark bot and channels are all opened by the assistant itself, so the hub doesn't use it now),
+  `assistant.send_params {machine_id,session_id,params}` → `{params}` (which launcher and model a message sent to one of its chats runs on, and the background prepended to the first message of a new main chat),
+  `assistant.rename {machine_id,session_id,params}` → the node's answer (the App renames one of its chats). When these requests themselves are malformed they return `bad_request`, and the hub returns 400 to the App.
+  Knowledge base (2026-11-04): `kb.context {chat_id}` → `{context}` (the Inbox AI twin), `kb.projects {machine_id,cwd}` → `{projects:[{slug,name}]}` (triage), `kb.forget {source}` → `{chats,people}` (delete a source's data),
+  posts handed over by plugin programs: `kb.posts_put {connector,sources,posts}` → `{statuses}`, `kb.posts_comments {connector,id,count,comments}` → `{}`, `kb.posts_pending {connector,limit}` → `{posts}`, `kb.archived_chats {connector,sources,source}` → `{chats}`.
+  Inbox: `inbox.collected {epoch,seq,round,sources,mail?,names}` → `{}` (the hub hands over a round of sources it has read; the assistant answers after building the entries. Within one `epoch`, a `seq` not greater than one already used is dropped. When the stored Inbox can't be read it returns `inbox_unavailable`, and the hub keeps it to hand over next round),
+  `inbox.item {id}` → `{item,ok}`, `inbox.forget {source}` → `{deleted}`, `inbox.repo_mutes {source,set?,add?,repos?}` → `{repos}` (2026-11-04 removed `assistant.tasks`, `assistant.card_sent`, `assistant.cards_sent`: all in the assistant now).
+- hub → assistant, one-way events (`conversation.started`, `conversation.renamed` removed 2026-11-04: the assistant opens and renames chats itself): `session.user_spoke`, `session.user_stopped` (the user stopped one of the assistant's chats in the App, #3308), `session.turn_started`, `session.turn_ended`, `sessions.changed {machine_id, sessions, connected}` (the session list the node reported, with `spawn_from`: a to-do's auto-attach by project, spawn following, and herdr markers all come from it; `connected` is when this node connection started, and a change means the node reconnected, so the assistant resends all herdr markers), `interaction.resolved` (also used to record to-do decisions), `interaction.raised` (an Agent of a quiet task is asking, #1731), `todos.space_renamed {machine_id,old,new}` (a workspace was renamed via the hub),
+  `manager.updated` (handshake above), `manager.resync {}` (the hub has no snapshot from it yet or only an incomplete one, and wants a full one: at most once per 5 seconds),
+  `kb.kick {}` (a knowledge base source has something new), `kb.agent_turn {machine_id,session_id,cwd,title?,line}` (an Agent finished a turn; goes into the timeline of the project its directory belongs to). The assistant handles them one by one in arrival order; `session.turn_ended` runs separately (it asks the model and waits for task Agents to stop).
+- **Agents** (moved from the hub into the manager 2026-11-04, `docs/agent-work.md` ("Who manages what"), types in `assistantwire/agents.go`):
+  the handshake answer gains `agents` (hub.json's `agents` section: triage limits, initial switch values); the snapshot gains `work {on, sessions:[{machine_id, session_id, work}]}` (each Agent's work state for its latest turn;
+  `work.turn_at` is when that turn ended; on `null` the hub keeps the previous one), and `interactions` gains triage cards (`tool_name: persona_triage`, asked in that Agent's session; answers still go through `manager.action`).
+  The `device.call sessions.list` answer gains `muted` (session ids with pushes turned off); the projects triage looks at come from the assistant's own knowledge base (`docs/knowledge.md`); `app.call models.tab_name` was removed (the manager names tabs itself).
+  hub → assistant calls: `agents.start_params {machine_id, params, name_from?}` → `{params}` (before `POST /api/v1/sessions`: fills launcher, model and fingerprint from **Model configuration › Agents** and this time's choice, and names the tab when `name_from` isn't empty;
+  on `bad_request` the hub returns 400 to the App; when it isn't connected the hub starts with what the App gave), `agents.resume_params {machine_id, session_id, params}` → `{params}` (before resuming a session whose launcher is unknown; the hub sends no params and stamps the answer onto the message),
+  `agents.tab_name {prompt}` → `{name}` (Agents started in the background, or opened from a Lark card); one-way event `session.seen {machine_id, session_id, at}` (the user viewed a session in the App).
+  The `session.turn_started`, `session.turn_ended` triage uses were already sent. When the user answers one of its questions or cards and it doesn't accept (not connected, or returned an error other than `gone`), the hub records the answer
+  and sends `manager.action` again after its next snapshot (immediately if it wasn't connected, after 10 seconds if it returned an error), until it accepts, returns `gone` (this card / question no longer exists: answered, withdrawn, expired; no need to give it again), or the card would have expired anyway.
+  Before `agents.start_params` / `agents.resume_params` the hub waits for it to connect (up to 60 seconds after the hub starts, 10 seconds after it disconnects); if it doesn't, the hub applies **Model configuration › Agents** itself.
+  If the version it reports at handshake differs from the hub's (dev builds excepted), the hub logs a line: the two sides may disagree about who owns triage.
+- **Models** (moved from the hub into the manager 2026-11-05, `docs/model-config.md` ("Who manages models"), types in `assistantwire/models.go`):
+  `/api/v1/model-config…`, `/api/v1/launchers…` (including quota `…/quota`) and `/api/v1/machines/{mid}/launchers…` are its routes, forwarded by the hub;
+  the handshake answer gains `models` (hub.json's `ai`, `kb_ai`, `triage_ai`, `judge_ai`, `inbox_agent_machine`, and each computer's `machines[].launchers`);
+  removed: `app.call`'s `models.complete`, `models.json`, `models.apply`, `models.resolve`, `models.record`, `models.save`, `models.apply_picked`, `models.launchers`, `models.launcher_check`, `inbox.translate_fingerprint`,
+  and error codes `model_paused`, `model_unconfigured` (it calls the models itself); added: `app.call plugins.presets`, `plugins.voice`, `plugins.quota {name, machine, base_url, tz}` → `{report}`, `plugins.need_triage` (plugin matters, to be removed once the plugin system moves into the manager),
+  `device.call launchers.managed` (launchers added in Persona are handed to the node; new node connections also get them from the manager); hub → manager calls `models.usable {purpose}` → `{usable}`, `models.launchers {}` → `{launchers: [{name, base_url}]}` (launchers with a gateway address, without keys),
+  `models.launcher_http {name, machine?, http?}` (error codes `no_launcher`, `no_gateway`, `machine_offline`).
+- When the assistant isn't connected: forwarded endpoints return `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}` (the error text is localized; this is the zh-Hans value, "The assistant can't be reached right now, try again later"); the assistant's tools fail the same way (`is_error`, same sentence), and `assistant.context` fails too (that node message carries no live snapshot).
+  Events for it aren't sent (once connected it reports a full snapshot and asks for what it needs); only `kb.agent_turn` is queued by the hub (the latest one per Agent) and sent once it connects. The hub keeps its last snapshot, so the session list still shows titles and archives.
+  Knowledge base `kb.*` calls likewise return `assistant_offline`: the endpoint for deleting a source's data returns 503 (Inbox entries are still deleted), and the Inbox AI twin's context and triage project names are left out;
+  calls from plugins handing over posts first wait up to 30 seconds for the assistant. When the assistant is connected but the knowledge base isn't open yet (time zone unreadable, data directory held by another process), it returns `kb_unavailable`, which the hub also treats as 503.
+  The hub keeps reading Inbox sources and accumulates what it reads (merged, with a cap) to hand over together once the assistant connects. An Inbox reply that breaks in transit (connection dropped, timeout) returns `502 {"code":"assistant_in_doubt","delivered":"unknown","retryable":false}`: it may already have been sent, and sending the same one again won't send it twice (`send_id` above).
+  When the assistant is connected but the Inbox can't read what's stored (the database didn't answer), Inbox endpoints return `503 inbox_unavailable`, and until it's read the Inbox accepts and writes nothing.
 
-**转发 App 的请求**：App 打到助手接口的请求（鉴权之后）由 hub 作为 `http.request` 交给助手，它的回答原样写回。助手接口是 `assistantwire.Routes`（助手那边有一个测试保证它服务的正是这些）：
-`POST /api/v1/assistant/conversations/{id}/archive`、`…/unarchive`、`…/route`、`…/today`、`…/compact`、`…/stop`，`GET …/{id}/feed`，`GET /api/v1/assistant/reporters`，`/api/v1/assistant/tasks…`、`/api/v1/assistant/runs`、`/api/v1/assistant/routines…`、
-`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`/api/v1/todos…`（待办的全部接口，含 `done-check`、`retry`、决策），`GET/PUT /api/v1/agents/triage`、`GET /api/v1/agents/work/stats`、`POST /api/v1/tabs/autoname`（2026-11-04，Agents），以及（2026-11-04 起）`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/warm`、`GET /api/v1/assistant/readiness`、`POST /api/v1/assistant/readiness/dismiss`、
-`GET /api/v1/assistant/memory`、`PUT/DELETE /api/v1/assistant/memory/{name}`、`POST /api/v1/assistant/conversations`、`POST /api/v1/assistant/main/new`，以及知识库的全部接口（2026-11-04 起，下面「知识库 API」），
-以及收件箱和翻译的全部接口（2026-11-04，`assistantwire.InboxRoutes`）：`GET /api/v1/inbox`、`GET /api/v1/inbox/{id}`、`POST /api/v1/inbox/{id}/done`、`…/draft`、`…/reply`（hub 照旧在前面记回执；助手没连着时直接回 503，不记；在路上断了回 `assistant_in_doubt`，也不记，再发能到助手）、`…/doc/status`、`POST /api/v1/inbox/refresh`、`POST /api/v1/inbox/done`、`POST /api/v1/inbox/bulk`、`GET/POST /api/v1/inbox/mutes`、`DELETE /api/v1/inbox/mutes/{id}`、`POST /api/v1/translate`、`POST /api/v1/translate/mail`。`/api/v1/skills` 还是 hub 自己的。
+**Forwarding App requests**: requests the App makes to assistant endpoints are (after authentication) handed to the assistant by the hub as `http.request`, and its answer is written back as is. The assistant endpoints are `assistantwire.Routes` (a test on the assistant side guarantees it serves exactly these):
+`POST /api/v1/assistant/conversations/{id}/archive`, `…/unarchive`, `…/route`, `…/today`, `…/compact`, `…/stop`, `GET …/{id}/feed`, `GET /api/v1/assistant/reporters`, `/api/v1/assistant/tasks…`, `/api/v1/assistant/runs`, `/api/v1/assistant/routines…`,
+`/api/v1/assistant/followups…`, `/api/v1/task-plans/{id}…`, `/api/v1/task-trust`, `/api/v1/todos…` (all to-do endpoints, including `done-check`, `retry`, decisions), `GET/PUT /api/v1/agents/triage`, `GET /api/v1/agents/work/stats`, `POST /api/v1/tabs/autoname` (2026-11-04, Agents), and (since 2026-11-04) `GET/PUT /api/v1/assistant`, `POST /api/v1/assistant/warm`, `GET /api/v1/assistant/readiness`, `POST /api/v1/assistant/readiness/dismiss`,
+`GET /api/v1/assistant/memory`, `PUT/DELETE /api/v1/assistant/memory/{name}`, `POST /api/v1/assistant/conversations`, `POST /api/v1/assistant/main/new`, plus all knowledge base endpoints (since 2026-11-04, "Knowledge base API" below),
+plus all Inbox and translation endpoints (2026-11-04, `assistantwire.InboxRoutes`): `GET /api/v1/inbox`, `GET /api/v1/inbox/{id}`, `POST /api/v1/inbox/{id}/done`, `…/draft`, `…/reply` (the hub still records the receipt up front; when the assistant isn't connected it returns 503 directly without recording; a break in transit returns `assistant_in_doubt`, also unrecorded, so resending reaches the assistant), `…/doc/status`, `POST /api/v1/inbox/refresh`, `POST /api/v1/inbox/done`, `POST /api/v1/inbox/bulk`, `GET/POST /api/v1/inbox/mutes`, `DELETE /api/v1/inbox/mutes/{id}`, `POST /api/v1/translate`, `POST /api/v1/translate/mail`. `/api/v1/skills` is still the hub's own.
 
 ```jsonc
-// hub → 助手
+// hub → assistant
 {"id":"h3","method":"http.request","params":{"method":"POST","path":"/api/v1/assistant/conversations/c1/archive","query":"",
   "header":{"Content-Type":["application/json"],"X-Persona-Role":["full"]},"body":"<base64>"}}
-// 助手 → hub
+// assistant → hub
 {"id":"h3","result":{"status":200,"header":{"Content-Type":["application/json"]},"body":"<base64>"}}
 ```
 
-- `path` 保留 URL 百分号编码，hub 用 `EscapedPath()` 转发，助手重建请求后由路由解码一次。正文卡片 key 中的 `/`、`#`、`?` 不能在转发前解码成路径分隔符、fragment 或 query。
-- `header` 不带 `Authorization`、`Cookie` 和逐跳的头；`X-Persona-Role` 是 hub 鉴权得出的设备角色（App 自己带的会被换掉）。请求体最大 32 MiB。
-- 助手没连着、或在请求中途断开回 `503 assistant_offline`，它回的 `rpc.Error` 变成 `502`（带它的 `code`）；没给期限的请求 5 分钟后放弃。
+- `path` keeps URL percent-encoding: the hub forwards with `EscapedPath()`, and after the assistant rebuilds the request the router decodes it once. `/`, `#`, `?` in a body card key must not be decoded into path separators, fragments or queries before forwarding.
+- `header` carries no `Authorization`, `Cookie` or hop-by-hop headers; `X-Persona-Role` is the device role from the hub's authentication (one the App sends itself is replaced). Request bodies are at most 32 MiB.
+- If the assistant isn't connected, or disconnects mid-request, it returns `503 assistant_offline`; an `rpc.Error` it returns becomes `502` (with its `code`); requests with no deadline give up after 5 minutes.
 
-**发给 App 的消息**：助手发单向事件 `ws.broadcast {message}`，`message` 是一个带字符串 `type` 的 JSON 对象（`assistant_schedule`、`assistant_feed`、`task_plan`），hub 原样发给每个 App 的 WebSocket（加上每条消息都有的 `event_seq`）；没有 `type` 的丢掉。
+**Messages to the App**: the assistant sends the one-way event `ws.broadcast {message}`, where `message` is a JSON object with a string `type` (`assistant_schedule`, `assistant_feed`, `task_plan`). The hub sends it as is to every App WebSocket (adding the `event_seq` every message has); ones without `type` are dropped.
 
-### 电脑的事件（fleet.*，2026-11-05）
+### Computer events (fleet.*, 2026-11-05)
 
-电脑发来的是管理者的（[machines.md](machines.md)「谁处理电脑的事件」），消息在 `server/internal/assistantwire/fleet.go`。管理者那头 `internal/assistant/fleet*.go`，hub 那头 `hub/fleet_link.go`。
+What computers send belongs to the manager ([machines.md](machines.md) ("Who handles computer events")); the messages are in `server/internal/assistantwire/fleet.go`. The manager side is `internal/assistant/fleet*.go`, the hub side `hub/fleet_link.go`.
 
-- 管理者 → hub（单向）：
-  - `fleet.sessions {machine_id, sessions, muted?}`：一台机器的会话列表，App 拿到的样子（统一状态、需要你的卡片数、看过、工作状态、待办、渠道……）；变了才发，每次握手后每台一次。hub 存成机器的 `sessions`，推给 App（`sessions` / `sessions_delta`），答 `GET /api/v1/sessions`。
-  - `fleet.interaction {interaction}`：新的或又显示一次的卡片；`fleet.interaction_resolved {id, answered_by?}`：结束了；`fleet.interactions {interactions}`：全部待处理的，每次握手后一次，hub 整份换掉（没了的对 App 发 `interaction_resolved`）。hub 照旧推 `interaction` / `interaction_resolved` 事件、答 `GET /api/v1/interactions`。
-  - `fleet.live {state, stats}`：实时活动的内容（`FleetState`，没填设备那几项）和灵动岛的数字，变了才发（数字每 15 秒看一次）。
-- 管理者 → hub（调用）：`notify.request {notification}`，`kind` 除了助手的 `assistant` 还有 `done`（一轮结束：`took_ms`、`long_ms`，设备按「只推长的」挑）和 `input`（一张卡：`interaction`）；`app.call phone`（`phone.tools`、`phone.call`）（连接器、Cua、ego 的工具、门禁命令的说法、`assistant.lark` 是管理者进程里的扩展答的，不过总线）、`app.call interactions` 的 `interactions.owner_action`（渠道回答卡片前 hub 收回主人动作）。
-- hub → 管理者：调用 `fleet.ask {interaction}` → `Resolution`（hub 自己的功能要问的卡片；hub 不等了就取消，卡片撤掉）；单向 `fleet.clients {elicitation}`（有没有收 MCP 表单的 App）、`fleet.seen {machine_id, session_id}`（App 的 WebSocket `seen`）、`fleet.mutes {}`（静音改了，管理者重读 settings `mutes`）。
-- App 的路由 hub 转给管理者（`http.request`，管理者不在 `503 assistant_offline`）：`POST /api/v1/interactions/{id}/resolve`、`GET /api/v1/interactions/history`（带 `X-Persona-Elicitation: 1` 才有 MCP 表单）、`POST /api/v1/sessions/{mid}/{sid}/seen`、`GET /api/v1/metrics`、`GET /api/v1/machines/{id}/metrics`、`GET /api/v1/usage`。形状和以前 hub 答的一样。
+- Manager → hub (one-way):
+  - `fleet.sessions {machine_id, sessions, muted?}`: one machine's session list, in the shape the App gets (unified status, number of "Needs you" cards, seen, work state, to-do, channel…); sent only on change, and once per machine after each handshake. The hub stores it as the machine's `sessions`, pushes it to the App (`sessions` / `sessions_delta`), and answers `GET /api/v1/sessions` with it.
+  - `fleet.interaction {interaction}`: a new card, or one shown again; `fleet.interaction_resolved {id, answered_by?}`: it ended; `fleet.interactions {interactions}`: all pending ones, once after each handshake; the hub replaces the whole set (sending `interaction_resolved` to the App for ones that disappeared). The hub still pushes `interaction` / `interaction_resolved` events and answers `GET /api/v1/interactions`.
+  - `fleet.live {state, stats}`: the Live Activity content (`FleetState`, without the device fields) and the Dynamic Island numbers, sent only on change (numbers checked every 15 seconds).
+- Manager → hub (calls): `notify.request {notification}`; besides the assistant's `assistant`, `kind` can be `done` (a turn ended: `took_ms`, `long_ms`; devices filter by "only long ones") and `input` (a card: `interaction`); `app.call phone` (`phone.tools`, `phone.call`) (connector, Cua and ego tools, gate command wording, and `assistant.lark` are answered by extensions inside the manager process and don't cross the bus), and `interactions.owner_action` of `app.call interactions` (the hub withdraws the owner action before a channel answers a card).
+- hub → manager: call `fleet.ask {interaction}` → `Resolution` (cards the hub's own features need to ask; when the hub stops waiting it cancels and the card is withdrawn); one-way `fleet.clients {elicitation}` (whether any App accepts MCP forms), `fleet.seen {machine_id, session_id}` (the App WebSocket's `seen`), `fleet.mutes {}` (mutes changed; the manager rereads settings `mutes`).
+- App routes the hub forwards to the manager (`http.request`; manager absent: `503 assistant_offline`): `POST /api/v1/interactions/{id}/resolve`, `GET /api/v1/interactions/history` (MCP forms only with `X-Persona-Elicitation: 1`), `POST /api/v1/sessions/{mid}/{sid}/seen`, `GET /api/v1/metrics`, `GET /api/v1/machines/{id}/metrics`, `GET /api/v1/usage`. Shapes are the same as when the hub answered them.
 
-### 电脑（devices.*）
+### Computers (devices.*)
 
-2026-11-04 起电脑是带着它们的管理者连的（现在是首席管理者 `assistant`，[machines.md](machines.md)「谁连电脑」），消息在 `server/internal/devicewire`。hub 那头 `hub/devices_link.go`、`devices_relay.go`，管理者那头 `internal/devices`。
+Since 2026-11-04 computers are connected by the manager that carries them (currently the chief manager `assistant`, [machines.md](machines.md) ("Who connects to computers")); messages are in `server/internal/devicewire`. The hub side is `hub/devices_link.go`, `devices_relay.go`; the manager side is `internal/devices`.
 
-- 握手的回答多一个 `devices`（只给带着电脑的那个管理者）：`{machines:[hub.json 的条目，原样], hub_id, hub_name, hub_version, endpoints?, mesh_hubs?, tailcat_derp_map_url?, link_ping_ms?, link_ping_timeout_ms?, mesh?, pending?}`，
-  `link_ping_ms`、`link_ping_timeout_ms` 是 hub.json `link` 一节的心跳（没设时不发，管理者用 10 秒 / 5 秒），管理者照它 ping 连接器的流，并告诉 Persona Link（`endpoints`、`X-Persona-Ping`）；
-  `pending` 是待用户确认的机器 id（排好序），管理者告诉它们的 Persona Link（`endpoints` 的 `pending`，[link.md](link.md)「待确认」）；`mesh` 是 `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`；变了（管理界面加了电脑、互联组、hub 的地址和名字）hub 发 `devices.config`，参数同上（合并 200 毫秒）。
-- 管理者 → hub：
-  - 事件 `devices.state {machines:[{machine, config, info, connected?, connected_at?, warm_until?, derived?, paths?}], absorbed?:{条目 id: 机器 id}, entries?:[{id, kind, avail?, rtt_ms?}]}`：
-    全部机器，按 App 列的顺序；`machine` 是 App 看到的那份（带监控的 `system`，除了 hub 加的 `computer`、`browser`；它的 `online` 把管理者重启后的暖启动也算上），`connected` 是 node 现在真连着、调用能到（hub 的自更新等的、更新 node 发给的都是这个），`connected_at` 变了是 node 重连了，`warm_until` 之前是暖启动；`entries` 是 hub 记录里自己的电脑。变了才发（合并 50 毫秒，`last_seen` 单独变不算），每次握手后发一次整份。
-  - 事件 `devices.event {machine_id, event, params}`：node 的单向事件里 App 要的，原样、按顺序（`session.items`、`terminal.frame`、`stream.data`、`sessions.revs`、`hook.event`……）；`state.put`、`sessions.changed`、`codex.interactions`、`interaction.dismiss` / `cancel`、`usage`、`metrics` 管理者自己处理，不转（下面「电脑的事件」）。
-  - 调用 `devices.request {machine_id, method, params, request}` → hub 的回答：node 要 hub 答的（`notify`）；`request` 是管理者给的键。
-  - 事件 `devices.request_end {machine_id, request}`：这条请求来的 node 连接在 hub 回答前断了，hub 不再等它（和 node 自己的连接断了一样：能续上的卡片留着，等 hook 从下一条连接来认领）。
-  - 调用 `devices.connected {machine_id, connected_at}` → `{configure?:{键: 值}, calls?:[{method, params}]}`：node 刚连上（或管理者和 hub 的连接新连上，每台在线的再来一次），
-    hub 要加进 `node.configure` 的（`codex`）和之后要发的（`launchers.managed`、`session.echoes`），管理者照做后才要会话列表；hub 同时开始它在连上时做的事。
-  - 调用 `devices.connector_cred {machine_id}` → `{machine_id, fp, token, version?}`（kind service 的凭据，hub 封着存，`token` 为空是没配对）、`devices.connector_paired {machine_id, fp, token, version}` → `{}`（配对完交给 hub 存）。
-- hub → 管理者：
-  - 调用 `devices.call {machine_id, method, params, timeout_ms?}` → node 的结果：App 和 hub 的功能对 node 的调用；`session.watch` / `session.unwatch` 管理者也记着，node 换连接时再 watch。
-    `timeout_ms` 是 hub 还肯等的时间减一点（十分之一，最多 500 毫秒），管理者的超时回答先到；hub 没给期限的调用（插件的 `nodes.call` 等）也不给，和 hub 自己连 node 时一样等。
-    错误码：`no_device`、`machine_offline`（没发出去）、`node_closed`（发出去以后 node 的连接断了，或调用被打断）、`deadline`（发出去以后时间到了）；node 自己带码的错误原样。
-    hub 认回原来的错误：离线照旧 503 `node_unreachable`；`node_closed`、`deadline` 和总线在调用途中断了都算「可能已经做了」，发消息的结果是 `unknown`（同一条不会再发），不当成没发出去；
-    总线中途断了的别的调用 App 看到的是 503 `assistant_offline`（管理者不在了）。
-  - 事件 `devices.notify {machine_id, event, params}`：发给 node 的单向事件（终端输入、转发端口的字节）。管理者按机器排队、各自按顺序写，一台电脑收得慢只耽误它自己；写一条卡住 30 秒、或排着的超过 32 MiB，就重连那台。
-  - 事件 `devices.link_rtt {id, rtt_ms}`：hub 在一条 Persona Link 链路上的心跳量出的往返（`id` 是 `devices.accept` 的），管理者比路时用。
-  - 调用 `devices.accept {id, kind, machine_id, token_id?, stream_id?, source?}` → `{}`：hub 握着一条给管理者的连接（`kind`：`link` Persona Link 的链路、`link_stream` 它开的流、`node` 中心经这台成员要的 node 流），管理者拨 `GET /api/v1/bus/relay?id=<id>` 接过去，hub 等 10 秒。
-  - 调用 `devices.reconnect {machine_id}`、`devices.update_nodes {}`（hub 自更新以后，重新部署不是这个版本的 node）、`devices.pair_connector {link, machine_id, address?, proxy?}` → `{address, version}`（管理界面配对 kind service）。
-  - 调用 `devices.usage_gateway_accounts {}` → `{sources, accounts}`：额度来源里账号池网关的账号清单，管理者上一次读到的（不去问网关，没有 Key 和地址；#4576，`docs/usage-windows.md`「网关的账号清单」）。
-    扩展的 `usage.gateway_accounts`（权限 `usage_gateways`，`docs/extensions.md`「额度」）由管理者里的扩展管理在同一个进程里问它，hub 不调。
-  - 管理者自己回答的路由（`devicewire.Routes`）经 `http.request` 转：`POST /api/v1/machines/{mid}/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`GET/PUT …/botmux`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`。
-- **转发通道** `GET /api/v1/bus/relay`（WebSocket，管理者的总线 token，和 `/api/v1/bus` 同样的鉴权，只有带着电脑的那个管理者能开）：`?id=` 接过 hub 握着的连接；`?hub=<hub_id>&machine=<id>` 要一条经那台 hub 到它电脑的 node 流（hub 打不开时升级前回 502，`error` 是原因）。
-  hub 逐条转消息（文本、二进制照原样），一边的关闭码和原因给另一边；Persona Link 那边的心跳是 hub 的，没有 pong 时以 1001「no pong within …」关管理者那边。
-  `kind: node`（成员替中心开 node 流）的那条，管理者先打开 node，开好了发一条文本 `open`、开不了以原因关掉，成员这才回中心：`101` 或带原因的 502（最多等 1 分钟）。
-- 管理者每次握手（hub 重启了，或总线断过）把上一条连接时 hub 在 node 上开着的东西在 node 那边关掉：转发的流（`port.dial`、`plugin.node.dial`）发 `stream.close`，看着的终端 `terminal.unwatch`；
-  hub 在握手时也结束经上一条连接开着的流和终端（终端以「助手暂时连不上，稍后再试」结束，App 重新打开），还在等第一次 watch 的不动。
-- 管理者没连着时：机器显示离线（`error`「助手暂时连不上，稍后再试」），要经它的接口回 `503 assistant_offline`，终端流以同一句话结束，转发的端口关掉，`/api/v1/link` 回 503；
-  hub 刚起来、管理者还没第一次上报的那 30 秒里，调用等它而不是立刻失败（机器按管理者交接的显示），`/api/v1/link` 和成员的 `/api/v1/peer/node` 最多等 5 秒。
-- node 的一条消息超过 60 MiB 时管理者不转（总线一行最多 64 MiB）：事件丢掉，调用回 `too_large`。
+- The handshake answer gains `devices` (only for the manager that carries computers): `{machines:[hub.json entries, as is], hub_id, hub_name, hub_version, endpoints?, mesh_hubs?, tailcat_derp_map_url?, link_ping_ms?, link_ping_timeout_ms?, mesh?, pending?}`.
+  `link_ping_ms`, `link_ping_timeout_ms` are the heartbeat from hub.json's `link` section (not sent when unset; the manager then uses 10 seconds / 5 seconds); the manager pings connector streams accordingly and tells Persona Link (`endpoints`, `X-Persona-Ping`).
+  `pending` are machine ids awaiting the user's confirmation (sorted); the manager tells their Persona Link (`pending` in `endpoints`, [link.md](link.md) ("Pending confirmation")). `mesh` is `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`. When it changes (a computer added in the admin UI, the linked group, the hub's addresses and name), the hub sends `devices.config` with the same params (coalesced over 200 milliseconds).
+- Manager → hub:
+  - Event `devices.state {machines:[{machine, config, info, connected?, connected_at?, warm_until?, derived?, paths?}], absorbed?:{entry id: machine id}, entries?:[{id, kind, avail?, rtt_ms?}]}`:
+    all machines, in the App's list order. `machine` is what the App sees (with the monitoring `system`, minus `computer`, `browser` which the hub adds; its `online` also counts the warm start after a manager restart). `connected` means the node is really connected right now and calls reach it (this is what the hub's self-update waits on and what node updates are sent to); a change in `connected_at` means the node reconnected; before `warm_until` it is a warm start. `entries` are the hub's own computers in the hub's record. Sent only on change (coalesced over 50 milliseconds; a change to `last_seen` alone doesn't count), and in full once after each handshake.
+  - Event `devices.event {machine_id, event, params}`: the node one-way events the App needs, as is and in order (`session.items`, `terminal.frame`, `stream.data`, `sessions.revs`, `hook.event`…); `state.put`, `sessions.changed`, `codex.interactions`, `interaction.dismiss` / `cancel`, `usage`, `metrics` are handled by the manager itself and not forwarded ("Computer events" above).
+  - Call `devices.request {machine_id, method, params, request}` → the hub's answer: things the node needs the hub to answer (`notify`); `request` is a key the manager gives.
+  - Event `devices.request_end {machine_id, request}`: the node connection this request came from dropped before the hub answered, and the hub stops waiting for it (same as the node's own connection dropping: resumable cards stay, waiting for the hook to claim them from the next connection).
+  - Call `devices.connected {machine_id, connected_at}` → `{configure?:{key: value}, calls?:[{method, params}]}`: the node just connected (or the manager's connection to the hub was just established, once more for each online machine).
+    The hub returns what to add to `node.configure` (`codex`) and what to send afterward (`launchers.managed`, `session.echoes`); the manager does this before asking for the session list. The hub at the same time starts the things it does on connect.
+  - Calls `devices.connector_cred {machine_id}` → `{machine_id, fp, token, version?}` (a kind service credential, stored sealed by the hub; empty `token` means not paired), `devices.connector_paired {machine_id, fp, token, version}` → `{}` (after pairing, handed to the hub to store).
+- hub → manager:
+  - Call `devices.call {machine_id, method, params, timeout_ms?}` → the node's result: calls to the node from the App and hub features; the manager also remembers `session.watch` / `session.unwatch` and re-watches when the node changes connection.
+    `timeout_ms` is the time the hub is still willing to wait, minus a bit (a tenth, at most 500 milliseconds), so the manager's timeout answer arrives first; calls where the hub gives no deadline (plugin `nodes.call` and the like) don't get one either, and wait the same as when the hub connected to nodes itself.
+    Error codes: `no_device`, `machine_offline` (not sent), `node_closed` (after sending, the node's connection dropped, or the call was interrupted), `deadline` (after sending, time ran out); the node's own coded errors are passed as is.
+    The hub maps them back to the original errors: offline is still 503 `node_unreachable`; `node_closed`, `deadline` and the bus breaking mid-call all count as "may have been done", so the result of sending a message is `unknown` (the same one won't be sent again), not treated as unsent.
+    For other calls, a bus break mid-call shows the App 503 `assistant_offline` (the manager is gone).
+  - Event `devices.notify {machine_id, event, params}`: one-way events for the node (terminal input, bytes of forwarded ports). The manager queues per machine and writes each in order, so a computer that's slow to receive only delays itself; if one write is stuck for 30 seconds, or more than 32 MiB is queued, it reconnects that machine.
+  - Event `devices.link_rtt {id, rtt_ms}`: the round trip the hub measured from heartbeats on a Persona Link link (`id` is from `devices.accept`); the manager uses it when comparing paths.
+  - Call `devices.accept {id, kind, machine_id, token_id?, stream_id?, source?}` → `{}`: the hub holds a connection for the manager (`kind`: `link` a Persona Link link, `link_stream` a stream it opened, `node` a node stream the center requested through this member); the manager dials `GET /api/v1/bus/relay?id=<id>` to take it over, and the hub waits 10 seconds.
+  - Calls `devices.reconnect {machine_id}`, `devices.update_nodes {}` (after the hub self-updates, redeploy nodes not on this version), `devices.pair_connector {link, machine_id, address?, proxy?}` → `{address, version}` (pairing a kind service from the admin UI).
+  - Call `devices.usage_gateway_accounts {}` → `{sources, accounts}`: the account list of account-pool gateways among the quota sources, as last read by the manager (it doesn't query the gateway; no keys or addresses; #4576, `docs/usage-windows.md` ("Gateway account list")).
+    The extensions' `usage.gateway_accounts` (permission `usage_gateways`, `docs/extensions.md` ("Quota")) is asked of it in-process by the extension manager inside the manager; the hub doesn't call it.
+  - Routes the manager answers itself (`devicewire.Routes`) are forwarded via `http.request`: `POST /api/v1/machines/{mid}/reconnect`, `PUT …/engine`, `GET/PUT …/herdr`, `POST …/herdr/start`, `GET/PUT …/botmux`, `POST …/deploy`, `GET …/claude-dirs`, `PUT …/claude-dirs/blocked`.
+- **Relay channel** `GET /api/v1/bus/relay` (WebSocket, the manager's bus token, same authentication as `/api/v1/bus`; only the manager that carries computers can open it): `?id=` takes over a connection the hub holds; `?hub=<hub_id>&machine=<id>` asks for a node stream to that hub's computer through that hub (if the hub can't open it, it returns 502 before upgrading, with `error` as the reason).
+  The hub forwards message by message (text and binary as is), and passes one side's close code and reason to the other; the Persona Link side's heartbeat is the hub's, and without a pong it closes the manager's side with 1001 "no pong within …".
+  For `kind: node` (a member opening a node stream on behalf of the center), the manager first opens the node; once open it sends a text `open`, or if it can't, closes with the reason. Only then does the member answer the center: `101`, or 502 with the reason (waiting at most 1 minute).
+- On every handshake (the hub restarted, or the bus dropped), the manager closes on the node side what the hub had open on the node through the previous connection: forwarded streams (`port.dial`, `plugin.node.dial`) get `stream.close`, watched terminals get `terminal.unwatch`.
+  At the handshake the hub also ends streams and terminals opened through the previous connection (terminals end with `助手暂时连不上，稍后再试`, "The assistant can't be reached right now, try again later", and the App reopens them); ones still waiting for their first watch are left alone.
+- When the manager isn't connected: machines show offline (`error` `助手暂时连不上，稍后再试`), endpoints that go through it return `503 assistant_offline`, terminal streams end with the same sentence, forwarded ports close, and `/api/v1/link` returns 503.
+  In the 30 seconds after the hub starts and before the manager's first report, calls wait for it instead of failing immediately (machines are shown as the manager handed them over); `/api/v1/link` and members' `/api/v1/peer/node` wait at most 5 seconds.
+- When a single node message exceeds 60 MiB the manager doesn't forward it (a bus line is at most 64 MiB): events are dropped, calls return `too_large`.
 
-### 扩展、连接器和机器人（extensions.*，2026-11-05）
+### Extensions, connectors and bots (extensions.*, 2026-11-05)
 
-都是管理者的（`docs/extensions.md`「谁管什么」），消息在 `server/internal/extwire`：
+All belong to the manager (`docs/extensions.md` ("Who manages what")); messages are in `server/internal/extwire`:
 
-| 方向 | 方法 / 事件 | 做什么 |
+| Direction | Method / event | What it does |
 | --- | --- | --- |
-| hub → 管理者，调用 | `extensions.accept {id}` → `{}` | hub 替管理者接着 App 的一个请求（`extwire.Routes`、扩展的 API 前缀、管理界面的扩展页面）：管理者用这个 id 拨 `/api/v1/bus/relay`，在这条流上答这一次 HTTP（SSE、WebSocket 照样是流）；谁在问在 `X-Persona-*` 头里 |
-| | `extensions.authorize {hash, pattern, method, path}` → `{ok, extension, name, scopes, scope?}` | 扩展的 token 打 hub 的路由：是谁的、开不开这条路由（`extension` 空：没有这个 token） |
-| | `extensions.hub_call {method, params}` → 结果 | hub 自己的功能问扩展：`github_login`、`settings.list`、`settings.tool`（node 的 MCP 工具、门禁命令的说法、`assistant.lark` 是管理者进程里直接问的，不过总线）；调用方不等了会发 `rpc.cancel`（卡片跟着撤） |
-| hub → 管理者，事件 | `extensions.emit {event, params}` | 扩展订阅的事：`agent.finished`、`agent.needs_you` |
-| 管理者 → hub，事件 | `extensions.report {features, apis, machines, screen_keep_awake, looks}` | 整份：扩展的功能、API 前缀和回执、每台机器的 `computer` / `browser`、开着的扩展的形象和它们的文件（`looks`，hub 把它们和自己的形象包一起提供）；hub 留着（存在 `hub.extensions_report`） |
-| | `extensions.looks_gone {ids}` | 卸载了带形象的扩展：管理者先发一份不含这些形象的 report，再发这个；选中的形象在 `ids` 里、又没有别的来源提供了，hub 就把选择改回默认形象（见 [extensions.md](extensions.md)「形象」） |
-| 管理者 → hub，`app.call`（应用 `hub`） | `push.localized`、`push.background`、`push.mail_targets` | 推送（卡片在助手的交互队列，进程内）。模型配置的 `plugins.*` 和 `models.*` 在管理者进程里，不过 hub |
+| hub → manager, call | `extensions.accept {id}` → `{}` | the hub takes an App request on the manager's behalf (`extwire.Routes`, extension API prefixes, extension pages in the admin UI): the manager dials `/api/v1/bus/relay` with this id and answers this one HTTP request on that stream (SSE and WebSocket stay streams); who is asking is in the `X-Persona-*` headers |
+| | `extensions.authorize {hash, pattern, method, path}` → `{ok, extension, name, scopes, scope?}` | an extension token hitting a hub route: whose it is and whether this route is open to it (empty `extension`: no such token) |
+| | `extensions.hub_call {method, params}` → result | the hub's own features asking extensions: `github_login`, `settings.list`, `settings.tool` (node MCP tools, gate command wording and `assistant.lark` are asked directly inside the manager process and don't cross the bus); when the caller stops waiting it sends `rpc.cancel` (the card is withdrawn with it) |
+| hub → manager, event | `extensions.emit {event, params}` | things extensions subscribe to: `agent.finished`, `agent.needs_you` |
+| manager → hub, event | `extensions.report {features, apis, machines, screen_keep_awake, looks}` | the full set: extension features, API prefixes and receipts, each machine's `computer` / `browser`, and the avatars of enabled extensions with their files (`looks`; the hub serves them together with its own avatar packs); the hub keeps it (stored in `hub.extensions_report`) |
+| | `extensions.looks_gone {ids}` | an extension carrying avatars was uninstalled: the manager first sends a report without these avatars, then this; if the selected avatar is in `ids` and no other source provides it, the hub switches the selection back to the default avatar (see [extensions.md](extensions.md) ("Avatars")) |
+| manager → hub, `app.call` (app `hub`) | `push.localized`, `push.background`, `push.mail_targets` | pushes (cards live in the assistant's interaction queue, in-process). Model configuration's `plugins.*` and `models.*` are inside the manager process and don't go through the hub |
 
-### 渠道用的方法（2026-11-04）
+### Methods channels use (2026-11-04)
 
-飞书机器人和插件渠道「和 Persona 对话」的那一半是助手的（`docs/channels.md`「谁管什么」）：hub 只管收发，主人的消息和按钮交给助手，助手要发、要改的叫 hub 做。
-类型在 `assistantwire` 的渠道一节；hub 那头是 `hub/assistant_channels.go`，助手那头是 `assistant/channels*.go`、`feishu*.go`。
+The "talk to Persona" half of the Lark bot and plugin channels belongs to the assistant (`docs/channels.md` ("Who manages what")): the hub only sends and receives, hands the owner's messages and button presses to the assistant, and does whatever sending or editing the assistant asks for.
+Types are in the channel section of `assistantwire`; the hub side is `hub/assistant_channels.go`, the assistant side `assistant/channels*.go`, `feishu*.go`.
 
-- hub → 助手，调用：`channels.receive {channel, message, action}` → `{}`（插件渠道主人的一条消息，`message` 是 `channel.Message`）、`feishu.message {event}` → `{}`（飞书私聊里主人的一条消息，`im.message.receive_v1` 的 `event` 原样）：
-  助手按消息 id 去重、收下就回，处理在后台（飞书的先读 `feishu.status`，读不到回 `try_again`，没收下）；`feishu.card_action {event, action}` → 卡片回调的回答（`{toast?, card?}`，飞书等 3 秒，hub 给 2.5 秒）；`feishu.view {}` → `{target?, agents?}`（`GET /api/v1/bots/feishu` 里助手的那两项）。
-  `action` 是 hub 发的一次性**主人操作**（`oa_…`，10 分钟内有效，只在发它的那个渠道里有效；按卡片的只能答那一张卡；一条消息的只能答这个渠道收文字回答的那几种卡：飞书只有提问，插件渠道是提问、计划、权限、终端选项）：助手答卡片（`interactions.resolve`）要带上它。
-  主人的消息 hub 先等助手连上最多 60 秒（同时最多 500 条），调用断了、超时、`try_again` 就再交一次（助手按 id 只收一次）；等不到 hub 自己回主人：飞书「没能发出去：助手暂时连不上，稍后再试」，卡片 toast「助手暂时连不上，稍后再试」，插件渠道 `channel.send`（`kind: note`）「没发出去：助手暂时连不上，稍后再试」（同一条只回一次）。
-- hub → 助手，单向事件：`interaction.announced {interaction}`（新的卡片，安静的任务的除外）、`interaction.ended {interaction, resolution?}`（卡片结束了：答了的带回答，撤回、过期的不带；同一张卡先带回答再不带地各来一次）、
-  `session.items {machine_id, session_id, items}`、`session.delta {machine_id, session_id, text}`（助手跟着的对话的新条目和正在写的字）、`feishu.owner {paired}`（机器人配对 / 解除配对）、
-  `channels.noted {channel, machine_id, session_id}`（渠道来的消息经 App 的接口进了对话：语音的 `voice-…`）。
-- 助手 → hub，`device.call`（hub 自己答的）：`session.follow {session_id}` / `session.unfollow {session_id}` → `{}`（跟一段对话：hub 像 App 打开它那样 watch，把新条目和字转过去；助手断开时 hub 全部放掉，助手连回来再跟）、
-  `session.send_once {session_id, text, client_msg_id, images?, …}` → `{}`（node 的 `session.send`，带着和 App 一样的只发一次的保护：发过的不再发，上次发到一半断了的拒绝）。
-- 助手 → hub，`app.call`：
-  - `feishu`：`feishu.status {}` → `{ready, enabled, features, owner?, paired_at?, public_url?}`（`owner` + `paired_at` 是哪一次配对：变了，或没了，助手的聊天状态从头来）；`feishu.post {reply_to?, card, fallback?}` → `{message_id}`（卡片回复那条消息，否则发进主人的私聊；飞书拒收的卡片改发富文本）、
-    `feishu.text {reply_to?, text}` → `{message_id}`、`feishu.update_card {message_id, card}`、`feishu.react {message_id, emoji}` → `{reaction_id}`、`feishu.unreact {message_id, reaction_id}`、
-    `feishu.messages {message_id}` → `{items}`（引用、合并转发）、`feishu.resource {message_id, key, kind}` → `{data, mime}` 或 `{mime, too_large: true}`（超过 3 MB 的图片）、
-    `feishu.save {message_id, key, kind, name, machine_id}` → `{path}`（文件存到那台电脑的临时目录，最多 50 MB，不经总线带内容）、`feishu.user_name {open_id}` → `{name}`、
-    `feishu.configure {enabled?, features?: {id: on}}`、`feishu.test {}`。机器人没开、没连上或没配对时（`ready` 是 false）发、改的方法回错误「机器人没打开或还没配对」；只发给配对的主人。
-  - `channels`：`channels.list {}` → `{channels: [channel.View]}`（每个渠道的传输状态：不带目标、插件渠道的功能，助手填）、`channels.send {channel, ref, text, kind, reply_to?}` → `{message_id?}`（一段，失败按同一个 `ref` 重试；还没地方发回错误码 `cannot_send`）、
-    `channels.typing {channel, on}`、`channels.enable {channel, on}`（插件和它的连接器、飞书机器人的开关；收件箱的分拣模型没配时回 `needs_triage_model`）、`channels.unbind {channel}`。绑定不在这里：`POST /api/v1/channels/{id}/bind` 是 hub 自己的路由（凭证不经过助手）。
-  - `interactions`：`interactions.resolve {interaction_id, resolution, action, channel}` → `{ok, status?}`（按用户在渠道 `channel` 里的回答答掉这张卡；`action` 是那一下的主人操作，没有、用过、是别的卡的、别的渠道的、一条消息答了它不收的那种卡的一律拒绝，记成用户自己答的；已经不在等了 `ok` 是 false）。
-- 快照多了 `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}`：hub 照 `marks` 给会话填 `channels`（变了推那台机器的会话列表），
-  照 `turns`（`answered` 空着是正在跟，否则是答完的时间，一小时内的）不推那段对话这一轮的「完成」；`null`（读不出来，快照算不完整）时留着上一份。
-- 助手的路由多了 `/api/v1/channels*`，绑定 `POST …/bind` 除外（`docs/channels.md`「接口」）。
-- 助手这边的事件队列：`session.delta` 每段对话只排一条（新的字顶掉旧的），队列满了只丢 `session.delta`、`session.items`，别的等有空再进，不丢。
+- hub → assistant, calls: `channels.receive {channel, message, action}` → `{}` (one message from the owner on a plugin channel; `message` is a `channel.Message`), `feishu.message {event}` → `{}` (one message from the owner in the Lark DM; the `event` of `im.message.receive_v1` as is):
+  the assistant dedups by message id and answers as soon as it has accepted, processing in the background (for Lark it first reads `feishu.status`; if that can't be read it returns `try_again` and doesn't accept); `feishu.card_action {event, action}` → the answer to the card callback (`{toast?, card?}`; Lark waits 3 seconds, the hub gives 2.5); `feishu.view {}` → `{target?, agents?}` (the assistant's two fields in `GET /api/v1/bots/feishu`).
+  `action` is a one-time **owner action** issued by the hub (`oa_…`, valid for 10 minutes and only in the issuing channel; a card press can answer only that card; a message can answer only the card kinds that channel accepts as text: questions in Lark, questions / plans / permissions / terminal choices in plugin channels). The assistant must include it when answering a card (`interactions.resolve`).
+  For owner messages, the hub first waits up to 60 seconds for the assistant to connect (at most 500 messages at a time), and hands them over again on a broken call, timeout or `try_again` (the assistant accepts each id only once). If it waits in vain, the hub replies to the owner itself: in Lark "Couldn't send: the assistant can't be reached right now, try again later", as a card toast "The assistant can't be reached right now, try again later", and on plugin channels via `channel.send` (`kind: note`) "Not sent: the assistant can't be reached right now, try again later" (only once per message).
+- hub → assistant, one-way events: `interaction.announced {interaction}` (a new card, except those of quiet tasks), `interaction.ended {interaction, resolution?}` (the card ended: answered ones carry the answer, withdrawn or expired ones don't; the same card arrives once with the answer and once without),
+  `session.items {machine_id, session_id, items}`, `session.delta {machine_id, session_id, text}` (new entries and in-progress text of chats the assistant follows), `feishu.owner {paired}` (bot paired / unpaired),
+  `channels.noted {channel, machine_id, session_id}` (a channel message entered a chat via the App's endpoint: voice's `voice-…`).
+- Assistant → hub, `device.call` (answered by the hub itself): `session.follow {session_id}` / `session.unfollow {session_id}` → `{}` (follow a chat: the hub watches it the way an App opening it would, and forwards new entries and text; when the assistant disconnects the hub drops them all, and the assistant follows again after reconnecting),
+  `session.send_once {session_id, text, client_msg_id, images?, …}` → `{}` (the node's `session.send` with the same send-once protection as the App: what was sent isn't sent again, and one that broke halfway last time is refused).
+- Assistant → hub, `app.call`:
+  - `feishu`: `feishu.status {}` → `{ready, enabled, features, owner?, paired_at?, public_url?}` (`owner` + `paired_at` identify which pairing: if they change or disappear, the assistant's chat state starts over); `feishu.post {reply_to?, card, fallback?}` → `{message_id}` (a card replying to that message, otherwise sent into the owner's DM; a card Lark rejects is sent as rich text instead),
+    `feishu.text {reply_to?, text}` → `{message_id}`, `feishu.update_card {message_id, card}`, `feishu.react {message_id, emoji}` → `{reaction_id}`, `feishu.unreact {message_id, reaction_id}`,
+    `feishu.messages {message_id}` → `{items}` (quoted, merged-forwarded), `feishu.resource {message_id, key, kind}` → `{data, mime}` or `{mime, too_large: true}` (images over 3 MB),
+    `feishu.save {message_id, key, kind, name, machine_id}` → `{path}` (the file is saved to that computer's temp directory, up to 50 MB; content doesn't cross the bus), `feishu.user_name {open_id}` → `{name}`,
+    `feishu.configure {enabled?, features?: {id: on}}`, `feishu.test {}`. When the bot isn't on, isn't connected or isn't paired (`ready` is false), sending and editing methods return the error "the bot isn't on or isn't paired yet"; messages go only to the paired owner.
+  - `channels`: `channels.list {}` → `{channels: [channel.View]}` (each channel's transport state; without the target and plugin-channel features, which the assistant fills in), `channels.send {channel, ref, text, kind, reply_to?}` → `{message_id?}` (one segment; on failure retry with the same `ref`; with nowhere to send yet it returns error code `cannot_send`),
+    `channels.typing {channel, on}`, `channels.enable {channel, on}` (the switch for a plugin and its connector, or the Lark bot; returns `needs_triage_model` when the Inbox triage model isn't configured), `channels.unbind {channel}`. Binding isn't here: `POST /api/v1/channels/{id}/bind` is the hub's own route (credentials don't pass through the assistant).
+  - `interactions`: `interactions.resolve {interaction_id, resolution, action, channel}` → `{ok, status?}` (answers this card with the user's reply in `channel`; `action` is that reply's owner action. Missing, used, wrong-card or wrong-channel actions, and message replies to card kinds the channel does not accept, are rejected. Recorded as answered by the user; if it is no longer waiting, `ok` is false).
+- The snapshot gains `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}`: the hub fills sessions' `channels` from `marks` (pushing that machine's session list on change),
+  and from `turns` (empty `answered` means it's following now, otherwise it's the time answering finished, within the hour) it doesn't push "done" for that chat's turn; on `null` (unreadable; the snapshot counts as incomplete) it keeps the previous one.
+- The assistant's routes gain `/api/v1/channels*`, except binding `POST …/bind` (`docs/channels.md` ("Endpoints")).
+- The assistant's event queue: `session.delta` keeps only one entry per chat (new text replaces old); when the queue is full only `session.delta` and `session.items` are dropped; others wait for room and are never dropped.
 
-### 服务这一侧（`server/internal/bus`）
+### The service side (`server/internal/bus`)
 
-`Dial`、`Conn`（WebSocket 和 rpc 行之间的适配）、`Keepalive`，以及 `Client`：拨号、握手（`HelloMethod`、`HelloParams`、`OnHello`）、回答 hub 的调用和事件，断了就重连：
-1 秒起翻倍到 1 分钟，连上超过 1 分钟后再断就从 1 秒重新算；token 被拒（401、关闭码 4002 / 4003、握手回 `wrong_identity`）每次都等最长的 1 分钟。
-没连上（或握手还没完成）时 `Call`、`Notify` 返回 `ErrOffline`。
-助手用的是它包一层的 `assistant.BusHub`（`server/internal/assistant/bus.go`）：记着握手的回答、把 hub 的错误码认回来、按顺序处理 hub 的事件、每次连上报整份快照。
+`Dial`, `Conn` (the adapter between WebSocket and rpc lines), `Keepalive`, and `Client`: dial, handshake (`HelloMethod`, `HelloParams`, `OnHello`), answer the hub's calls and events, and reconnect when dropped:
+starting at 1 second and doubling up to 1 minute; if a connection lasted over 1 minute before dropping, counting restarts at 1 second. When the token is rejected (401, close code 4002 / 4003, handshake returns `wrong_identity`), it waits the full 1 minute every time.
+While not connected (or the handshake isn't done), `Call` and `Notify` return `ErrOffline`.
+The assistant uses `assistant.BusHub` (`server/internal/assistant/bus.go`), a wrapper around it: it keeps the handshake answer, maps the hub's error codes back, handles the hub's events in order, and reports a full snapshot on every connect.
 
-## hook / mcp ↔ node（unix socket `~/.persona/node.sock`）
+## hook / mcp ↔ node (unix socket `~/.persona/node.sock`)
 
-一次连接一问一答，各一行 JSON：
+One question and one answer per connection, one line of JSON each:
 
-- `{"kind":"hook","input":<Claude Code 传给 hook 的 stdin JSON>,"pane":"…","attempt":"<hook 进程自己的 id>","resume":<是不是重连>}`
-  → `{"output":<要打印到 stdout 的 JSON 或 null>}`，或 `{"retry":true}`（node 正在退出，去问下一个 node）
+- `{"kind":"hook","input":<the stdin JSON Claude Code passes to the hook>,"pane":"…","attempt":"<the hook process's own id>","resume":<whether this is a reconnect>}`
+  → `{"output":<JSON to print to stdout, or null>}`, or `{"retry":true}` (the node is exiting; ask the next node)
 - `{"kind":"mcp.tools"}` → `{"tools":[…]}`
 - `{"kind":"mcp.call","name":"…","args":{},"session_id":"…"}` → `{"content":[…],"is_error":false}`
 - `{"kind":"ask","input":{"question","options?","timeout_seconds?","cwd?"},"pane":"…","attempt":"…","resume":…}`
-  → `{"status":"answered|denied|dismissed|timeout|unavailable|invalid","answer?","error?"}`，或 `{"retry":true}`（`personad ask`，选项给 `question` 卡、没有选项给 `permission` 卡，`script-cli.md`）
-- `{"kind":"notify","input":{"title","body?","silent?","error?"},"pane":"…"}` → `{"sent":true|false,"reason?","error?"}`（`personad notify`）
+  → `{"status":"answered|denied|dismissed|timeout|unavailable|invalid","answer?","error?"}`, or `{"retry":true}` (`personad ask`; with options it gives a `question` card, without options a `permission` card, `script-cli.md`)
+- `{"kind":"notify","input":{"title","body?","silent?","error?"},"pane":"…"}` → `{"sent":true|false,"reason?","error?"}` (`personad notify`)
 
-连不上 node（hub 不在线）时 hook 立即退出 0、不输出，即 TUI 正常处理；mcp 返回错误文本。
+When the node can't be reached (hub not online), the hook exits 0 immediately with no output, so the TUI handles it normally; mcp returns an error text.
 
-### 交互挺过重启
+### Interactions survive restarts
 
-部署频繁（hub 重启、换 node 二进制），以前手机上正在答的提问 / 计划 / 授权会消失，退回电脑 TUI。现在：
+Deploys are frequent (hub restarts, node binary swaps). Questions / plans / permissions being answered on the phone used to disappear and fall back to the computer's TUI. Now:
 
-- **hook**：已经连上 node、还没拿到回答时 node 没了（连接断开或回 `retry`），每秒重连 `node.sock`、带同一个 `attempt` 重发，
-  最多 2 分钟（`node.ResumeWait`）；一开始就连不上 node 照旧立即交给 TUI。
-- **node**：interaction id 是确定的：`session_id + 事件 + 工具名 + tool_use_id` 的哈希（没有 tool_use_id 用 hook 的 attempt），
-  重连的 hook 得到同一个 id；带 attempt 的交互标 `resumable: true`，重连的那次不再发 `hook.event`。
-- **hub**：`resumable` 的交互在 node 连接断开时不撤销，留 3 分钟（`resumeGrace`）等 hook 重新认领；同 id 的 `interaction.create`
-  挂回原来的那张卡（不重复推送，App 按 id 去重），这期间手机上答了的，回来的 hook 直接从数据库拿到答案。启动时数据库里
-  pending 的 `resumable` 交互重新载入（同样等 3 分钟），其余标 cancelled。旧 node 不带 `resumable`，行为不变。
-- 本机实测（假 hub + 沙箱 node + 真 `personad hook`）：提问时杀掉 node、2 秒后起新 node，hook 3.1 秒后拿到手机的回答，hub 只看到一个 id。
+- **hook**: if the node goes away after the hook has connected but before it gets an answer (connection dropped or `retry` returned), it reconnects to `node.sock` every second and resends with the same `attempt`,
+  for up to 2 minutes (`node.ResumeWait`). If it can't reach the node at the very start, it still hands over to the TUI immediately.
+- **node**: the interaction id is deterministic: a hash of `session_id + event + tool name + tool_use_id` (without a tool_use_id, the hook's attempt is used),
+  so a reconnecting hook gets the same id. Interactions with an attempt are marked `resumable: true`, and the reconnecting one doesn't send `hook.event` again.
+- **hub**: `resumable` interactions aren't withdrawn when the node connection drops; they're kept for 3 minutes (`resumeGrace`) for the hook to reclaim. An `interaction.create` with the same id
+  reattaches to the original card (no repeat push; the App dedups by id), and if it was answered on the phone in the meantime, the returning hook gets the answer straight from the database. At startup, pending `resumable` interactions in the database
+  are reloaded (also waiting 3 minutes), and the rest are marked cancelled. Old nodes don't send `resumable`; behavior is unchanged.
+- Measured locally (fake hub + sandboxed node + real `personad hook`): killing the node during a question and starting a new node 2 seconds later, the hook got the phone's answer after 3.1 seconds, and the hub saw only one id.
 
-## Runtime ↔ node（unix socket `~/.persona/runtime.sock`，或 node 去连的 daemon）
+## Runtime ↔ node (unix socket `~/.persona/runtime.sock`, or a daemon the node connects to)
 
-**Runtime** 是没有终端、自己管会话的 Agent 运行时（目前是 DSH，`docs/dsh.md`）。它不是「宿主」：宿主是终端开在哪（herdr / Herdr App / Orca，
-见「引擎」），node 从窗格和 transcript 认会话；runtime 自己报会话、自己给内容，和这台机器选的引擎并存。怎么接一个新的 runtime、
-SDK 和验收清单见 `docs/runtimes.md`；这里是线上的协议（`server/internal/node/runtimes.go`）。
+A **runtime** is an Agent runtime with no terminal that manages its own sessions (currently DSH, `docs/dsh.md`). It is not a "host": the host is where the terminal is opened (herdr / Herdr App / Orca,
+see "Engines"), and the node recognizes sessions from panes and transcripts; a runtime reports its own sessions and provides its own content, and coexists with the engine this machine picked. How to connect a new runtime,
+the SDK and the acceptance checklist are in `docs/runtimes.md`; this is the wire protocol (`server/internal/node/runtimes.go`).
 
-runtime 连 node 的 `~/.persona/runtime.sock`（0600，所以必须和 node 是同一个系统用户），一条长连接，帧格式和 hub ↔ node 完全一样（`internal/rpc`：
-每行一个 JSON，请求 / 应答 / 单向事件，两边都能发请求）。hub 和 App 不知道有 runtime：看到的就是普通会话、items 和交互卡片。
-**socket 跟着谁**：常驻 node（`personad node --attach`）一启动就开着 `runtime.sock`，hub 的每条连接共用它（`node/runtimehost.go`）：
-runtime 不用等 hub，hub 重连期间连接也不断，下一条连接的第一份会话列表里就有它的会话。没有常驻 node、由 `--stdio` 自己服务时，socket
-只在这条 hub 连接期间存在，和以前一样。
+The runtime connects to the node's `~/.persona/runtime.sock` (0600, so it must be the same system user as the node) over one long-lived connection; the frame format is exactly the same as hub ↔ node (`internal/rpc`:
+one JSON per line, request / response / one-way events, both sides can send requests). The hub and App don't know runtimes exist: they see ordinary sessions, items and interaction cards.
+**Who owns the socket**: a resident node (`personad node --attach`) opens `runtime.sock` as soon as it starts, shared by every hub connection (`node/runtimehost.go`):
+the runtime doesn't have to wait for the hub, the connection doesn't drop while the hub reconnects, and the first session list on the next connection already includes its sessions. Without a resident node, when `--stdio` serves by itself, the socket
+exists only for the duration of that hub connection, as before.
 
-**没有 hub 时**：runtime 照样连得上、hello 照样回（`hub: false`），列表照收；推给手机的内容丢掉（hub 回来后会按手机的进度重新 watch）；
-`interaction.create` 回错误 `code: node_gone`，runtime 等 hub 回来后用同一个 id 再问。hub 来了、走了 node 都推一次 `runtime.hub`，runtime 据此
-不去等一个答不了的手机（SDK：没有 hub 时一律先给本地界面）。node 进程自己没了（重启、换二进制）时 runtime 重连：socket 文件还在就每秒
-试一次，文件不在就退避到最长 30 秒。
+**Without a hub**: the runtime can still connect and hello still answers (`hub: false`), and lists are still accepted; content pushed for the phone is dropped (once the hub is back it re-watches from the phone's progress);
+`interaction.create` returns the error `code: node_gone`, and the runtime asks again with the same id once the hub is back. The node pushes `runtime.hub` once each time the hub arrives or leaves, so the runtime
+doesn't wait for a phone that can't answer (SDK: without a hub, always go to the local UI first). When the node process itself goes away (restart, binary swap), the runtime reconnects: while the socket file still exists it tries every
+second; if the file is gone it backs off up to 30 seconds.
 
-runtime → node：
+runtime → node:
 
-| 消息 | 说明 |
+| Message | Description |
 | --- | --- |
-| 请求 `runtime.hello {runtime, name?, agent?, version?, instance?, launcher?, launcher_model?, launchers?, caps: {start, send, interrupt, rename, close, assistant?, modes?, resume?}, package?: {name, hash}}` → `{protocol, node_version, hub, features, update?: {name, hash, version}}` | 必须第一个发；`instance` 是这个进程的标识（SDK 每个 runtime 一个，重连不变）：同一个 runtime id 已有一条活连接、它的 `instance` 不同时，回错误 `code: runtime_conflict`（另一个进程配了同样的 id，连不上，SDK 每 30 秒再试一次、不抢）；相同时是这个进程重连了，旧连接被关掉；没带 `instance` 的旧 runtime 照旧（最新的连接为准）；`hub` 是 node 现在有没有连着 hub（旧 node 不带，当作有）；`features` 是 node 在第一版协议之外支持的能力：`prefer_running`（两个 runtime 列同一个会话时，列成非 `offline` 的那个负责它，所以 runtime 可以把只在磁盘上的会话列成 `offline`）、`resume_argv`（认会话行里的 `resume_argv`）、`handover`（发消息被回 `code: handover` 时交给接手的 runtime，见下面 `session.send`）、`transcript`（认会话行里的 `transcript`）、`launchers`（认 hello 的 `launchers` 和事件 `runtime.launchers`）、`start_params`（`session.start` 带上表单的选择）、`modes`（`session.modes`）、`resume`（`session.start {resume}`）；daemon 只拿到 `prefer_running`、`start_params`。之前的事件 node 一律丢掉。`runtime` 是 id（`[A-Za-z0-9][A-Za-z0-9_.-]*`，如 `dsh`），也是会话的 `space_kind`；`agent` 是它的会话跑的 Agent，不填就是 `runtime` 自己；`name` 是 App 里的叫法（`DSH`），这种会话带 `agent_label: name`，App 不用为新 runtime 发版。`caps` 说明支持哪些操作，没声明的 node 直接回 `unsupported`。`launcher` 非空且 `caps.start` 时，node 的 `launchers.list` 多一项 `{name: launcher, model: launcher_model, source: runtime}`，新建会话选它就交给这个 runtime。两个 runtime 报同一个启动器名时只有先连上的那个提供（另一个记一行日志）；和登录 shell 里的启动器同名时 shell 的那个为准，runtime 的不列。`caps.assistant`（要有 start 和 send）：它的启动器能跑 Persona 的助手，`launchers.list` 里带 `assistant: true`；node 怎么驱动它见 `docs/runtimes.md`「助手」。
-`launchers`（要有 `caps.start`）：除了 `launcher` 之外，新建表单里还有这些项。每项是 `{name, model?, agent?, models?}`：
-  - 跑多个 Agent 的 runtime（Paseo）一个 provider 一项。
-  - `agent` 是这一项起的 Agent：`claude` 时表单给 Claude Code 的选择，App 按 Claude 画。
-  - `models` 是 `launchers.models` 返回的模型和它们的思考强度。
-  - 名字规则同 shell 的启动器；超过 64 项、每项超过 200 个模型的部分丢掉。
+| request `runtime.hello {runtime, name?, agent?, version?, instance?, launcher?, launcher_model?, launchers?, caps: {start, send, interrupt, rename, close, assistant?, modes?, resume?}, package?: {name, hash}}` → `{protocol, node_version, hub, features, update?: {name, hash, version}}` | Must be sent first. `instance` identifies this process (the SDK uses one per runtime, unchanged across reconnects): when the same runtime id already has a live connection with a different `instance`, it returns the error `code: runtime_conflict` (another process is configured with the same id and can't connect; the SDK retries every 30 seconds and doesn't take over); when it's the same, this process reconnected and the old connection is closed. Old runtimes without `instance` behave as before (the latest connection wins). `hub` is whether the node is currently connected to a hub (old nodes don't send it; assume yes). `features` are capabilities the node supports beyond the first protocol version: `prefer_running` (when two runtimes list the same session, the one listing it as non-`offline` owns it, so a runtime can list sessions that exist only on disk as `offline`), `resume_argv` (recognizes `resume_argv` in session rows), `handover` (when sending a message returns `code: handover`, hand it to the runtime that takes over; see `session.send` below), `transcript` (recognizes `transcript` in session rows), `launchers` (recognizes hello's `launchers` and the event `runtime.launchers`), `start_params` (`session.start` carries the form's choices), `modes` (`session.modes`), `resume` (`session.start {resume}`); daemons get only `prefer_running`, `start_params`. The node drops any events sent before it. `runtime` is the id (`[A-Za-z0-9][A-Za-z0-9_.-]*`, e.g. `dsh`), and also the sessions' `space_kind`; `agent` is the Agent its sessions run, defaulting to `runtime` itself; `name` is what the App calls it (`DSH`); such sessions carry `agent_label: name`, so the App needs no release for a new runtime. `caps` declares which operations are supported; for undeclared ones the node returns `unsupported` directly. When `launcher` is non-empty and `caps.start` is set, the node's `launchers.list` gains an entry `{name: launcher, model: launcher_model, source: runtime}`, and new sessions created with it are handed to this runtime. When two runtimes report the same launcher name, only the first to connect provides it (the other logs a line); when it has the same name as a launcher in the login shell, the shell's wins and the runtime's isn't listed. `caps.assistant` (requires start and send): its launcher can run Persona's assistant, and carries `assistant: true` in `launchers.list`; how the node drives it is in `docs/runtimes.md` ("Assistant").
+`launchers` (requires `caps.start`): besides `launcher`, the new-session form also offers these entries. Each is `{name, model?, agent?, models?}`:
+  - A runtime that runs multiple Agents (Paseo) has one entry per provider.
+  - `agent` is the Agent this entry starts: with `claude` the form offers Claude Code's choices, and the App draws it as Claude.
+  - `models` are the models `launchers.models` returns and their thinking efforts.
+  - Naming rules are the same as for shell launchers; anything beyond 64 entries, or 200 models per entry, is dropped.
 
-`caps.modes`：接受手机切权限模式 / 思考强度（`session.modes`）。`caps.resume`：能接手一个它没有的 Claude 会话（`session.start {resume}`）。 |
-| 事件 `runtime.sessions {sessions: [Session]}` | 它的全部会话，变化时推全量。字段是 `Session` 的子集：`session_id`（`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`，比 Claude 的 uuid 宽，DSH 是 `session-<uuid>`）、`title`、`cwd`、`status`（`working / blocked / done / idle / offline`，别的当 `unknown`）、`agent`、`model`、`updated_at`、`last_text`、`rev`（变了 App 就拉新内容）、`space_*`、`launcher`、`permission_mode` / `effort`（它现在用的模式，`session.info` 也报这个），以及还在跑的子 Agent 和后台任务 `subagents` / `background`（`docs/runtimes.md`「子 Agent 和后台任务」：子 Agent 的 `session_id` 由 node 写成 `<会话>@<id>`，这个 id 的调用交给父会话所属的 runtime，它推内容也用这个 id；后台任务的 `output_file` 清掉）。node 清掉 `machine_id`、`state` 这些 hub 算的字段，补 `agent` / `agent_label` / `space_kind`，并按「Codex 来源与能力」的同一套字段标来源：`source_kind: "runtime"`、`source_instance_id` 是 runtime id、`capabilities` = `{read: true, send: caps.send, interrupt: caps.interrupt, approve: true, terminal: false, attach: false}`（没声明 `send` 的带 `read_only_reason`），App 和 hub 按它们开关按钮、守发送；合并进 `sessions.list` 立刻推 `sessions.changed`；同一个 id 两条连接都报时，列成非 `offline` 的那条负责，同等时新的为准（`prefer_running`）。两个 node 用、App 看不到的字段：`pane_id`（这个会话跑在这台机器终端引擎的哪个窗格：herdr 窗格里的 pi，node 把它和引擎的窗格合成一行 herdr 会话，调用里终端那部分给引擎，其余给 runtime，`docs/pi.md`）、`resume_argv`（列成 `offline` 的会话怎么在终端引擎里接着：手机发消息时 node 在引擎里开新标签、经 `jarvisd tab-start` 运行它、等 runtime 再列出这个会话为运行中后把消息发过去；引擎不在就拒绝，`resume_argv` 特性）、`transcript`（这个会话的对话就是这台电脑上的一份 Claude 对话记录，值是 Claude 会话 id，`transcript` 特性）。
+`caps.modes`: accepts the phone switching permission mode / thinking effort (`session.modes`). `caps.resume`: can take over a Claude session it doesn't have (`session.start {resume}`). |
+| event `runtime.sessions {sessions: [Session]}` | All its sessions, pushed in full on change. Fields are a subset of `Session`: `session_id` (`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`, wider than Claude's uuid; DSH uses `session-<uuid>`), `title`, `cwd`, `status` (`working / blocked / done / idle / offline`; anything else counts as `unknown`), `agent`, `model`, `updated_at`, `last_text`, `rev` (when it changes the App fetches new content), `space_*`, `launcher`, `permission_mode` / `effort` (the modes it's using now; `session.info` reports these too), and still-running sub-Agents and background tasks `subagents` / `background` (`docs/runtimes.md` ("Sub-Agents and background tasks"): the node writes a sub-Agent's `session_id` as `<session>@<id>`; calls for this id go to the runtime owning the parent session, which also pushes content under this id; a background task's `output_file` is cleared). The node clears hub-computed fields like `machine_id`, `state`, fills in `agent` / `agent_label` / `space_kind`, and marks the source with the same fields as in "Codex sources and capabilities": `source_kind: "runtime"`, `source_instance_id` is the runtime id, `capabilities` = `{read: true, send: caps.send, interrupt: caps.interrupt, approve: true, terminal: false, attach: false}` (those without `send` declared carry `read_only_reason`); the App and hub use them to toggle buttons and guard sending. It's merged into `sessions.list` and `sessions.changed` is pushed immediately. When two connections both report the same id, the one listing it as non-`offline` owns it; if equal, the newer wins (`prefer_running`). Two fields the node uses and the App never sees: `pane_id` (which pane of this machine's terminal engine the session runs in: for pi in a herdr pane, the node merges it with the engine's pane into one herdr session row; the terminal part of calls goes to the engine and the rest to the runtime, `docs/pi.md`), `resume_argv` (how a session listed as `offline` is resumed in the terminal engine: when the phone sends a message, the node opens a new tab in the engine, runs it via `jarvisd tab-start`, waits until the runtime lists the session as running again, then sends the message; if the engine is absent it refuses; the `resume_argv` feature), `transcript` (this session's chat is a Claude transcript on this computer; the value is the Claude session id; the `transcript` feature).
 
-**带 `transcript` 的会话**（跑 Claude Code 的 runtime，比如 Paseo）：
-  - **node 管的部分**：从对话记录给出内容，`session.items` / `item` / `image`、watch、`session.info`、子 Agent 都是 node 的，和终端里的 Claude 会话同一套。
-    行上的 `last_text`、`rev`、「在做什么」、后台任务也取自对话记录。
-  - **runtime 管的部分**：状态、标题、模型、模式、发送、卡片。它只推逐字文字，推来的 items 被丢掉。
-  - **列表**：这份对话记录自己的「未运行」行不再列出。
-  - **只算 node 找得到的对话记录**：第一轮刚开始还没写出来、或者在 node 不认识的配置目录里的，内容先归 runtime。
-    等文件出现，下一次列表一到，node 就换到对话记录：正在 watch 的改订，`history` 跟着变，App 整页重取。
-  - **限制**：daemon 不能带这个字段。连接断开，它的会话就从列表里消失。**列表只是「现在给 App 看哪些」，不是归属**：runtime 只列它最近的会话（DSH 是几千个里最近的 80 个），node 记着每个会话是哪个 runtime 列过的（按 runtime id，重连后还是它），对一个不在列表里的老会话的调用照样交给它；这台机器上什么都没有（没有 Agent、没有 transcript）的会话，`session.send` / `items` / `watch` 这类调用先用 `session.items {session_id, limit: 1}` 问一遍连着的 runtime，答得上来的就归它（问不到的一分钟内不再问）。属于某个 runtime、它却没连着时，回错误 `code: runtime_away`（`delivered: none`），不会当成 Claude 会话去终端里恢复 |
-| 事件 `runtime.launchers {launchers}` | 换掉 hello 里的 `launchers`：provider 多了少了，或者它的模型现在才知道 |
-| 事件 `session.items {session_id, items, history, from_seq, to_seq}` | 被看着的会话的新内容，原样转给 hub（形状同 node → hub 的 `session.items`，连续性规则见「items 的连续性」）。它没列出的会话不转 |
-| 事件 `session.delta {session_id, text}` | 正在生成的整段文字，空串表示这段结束；原样转给 hub，App 画成逐字输出 |
-| 请求 `interaction.create {interaction, timeout_seconds?}` → `Resolution` | 提问（`question`）、计划（`plan`）、授权（`permission`）三种，形状同上面的 `Interaction`；node 补 `created_at` / `expires_at`（默认同 hook 的 30 分钟，`timeout_seconds` 只能更短）、会话标题、目录，以及 `agent` / `agent_label`（runtime 跑的 Agent 和它的名字；跑 Claude Code 的不标，App 画成 Claude 的卡），经 hub 推给手机，阻塞到回答。没人回答（过期、手机「交回电脑」、没有 hub）回 `{dismiss: true}`，runtime 就交给自己的界面。带 `tool_use_id` 的交互 `resumable`：runtime 给的 `id`（或 node 按 runtime + 会话 + 种类 + tool_use_id 算的）不变，node 中途没了时回错误 `code: node_gone`，runtime 连上下一个 node 后用同一个 id 再问，hub 挂回原来的卡 |
-| 事件 `interaction.cancel {id}` | runtime 那边这次交互没了（工具调用被取消）：撤掉手机上的卡 |
-| 请求 `runtime.package {name}` → `{name, hash, version, files: [{path, data}]}` | 自动更新（`docs/runtimes.md`「自动更新」）：hello 里 `package` 说 runtime 跑的代码（包名和哈希）；node 带着这个名字、哈希不同的包时，回复带 `update`，runtime 用这个请求取文件（`data` 是 base64），自己核对哈希后换上。包在 personad 里（`internal/runtimepkg`，构建时从 `integrations/` 生成）；daemon 拿不到（不带 `update`，这个请求回 `unsupported`）；没有这个包回 `not_found` |
-| 请求 `mcp.tools {assistant?}` → `{tools: [{name, description, input_schema, shell?}]}`、`mcp.call {name, args, session_id, assistant?}` → `ToolResult` | hub 的工具（手机的 `phone_*`、`mail_*`），转给 hub；没有 hub 时 `mcp.tools` 是空的、`mcp.call` 回一个出错的结果。runtime 把它们给自己的 Agent 用（DSH：`docs/dsh.md`「手机工具」）。`assistant: true` 只对声明了 `caps.assistant` 的 runtime 有用：`mcp.tools` 多出助手专用的工具和扩展命令闸门声明的工具；`mcp.call` 只在会话归这个 runtime、而且是助手对话时按助手的调用处理（否则当普通调用），闸门声明的工具由 node 自己跑，它的 `shell` 是在 shell 里直接跑它的词（命令名、技能脚本的路径），runtime 在助手对话的 shell 里拦下（`docs/runtimes.md`「助手」） |
+**Sessions with `transcript`** (runtimes that run Claude Code, such as Paseo):
+  - **What the node handles**: content comes from the transcript; `session.items` / `item` / `image`, watch, `session.info` and sub-Agents all belong to the node, the same as for Claude sessions in a terminal.
+    The row's `last_text`, `rev`, "what it's doing" and background tasks also come from the transcript.
+  - **What the runtime handles**: status, title, model, modes, sending, cards. It only pushes streaming text; items it pushes are dropped.
+  - **Listing**: the transcript's own "not running" row is no longer listed.
+  - **Only transcripts the node can find count**: when the first turn has just started and nothing is written yet, or it's in a config directory the node doesn't know, content belongs to the runtime for now.
+    Once the file appears, on the next list the node switches to the transcript: an active watch is re-subscribed, `history` changes with it, and the App refetches the whole page.
+  - **Limits**: daemons can't carry this field. When the connection drops, its sessions disappear from the list. **The list is only "what to show the App now", not ownership**: a runtime only lists its recent sessions (DSH lists the latest 80 out of thousands), and the node remembers which runtime listed each session (by runtime id, so still the same after reconnect); calls for an old session not on the list still go to it. For a session that has nothing on this machine (no Agent, no transcript), calls like `session.send` / `items` / `watch` first ask the connected runtimes with `session.items {session_id, limit: 1}`, and the one that can answer owns it (one that can't be found isn't asked again for a minute). When it belongs to a runtime that isn't connected, the error is `code: runtime_away` (`delivered: none`); it is never treated as a Claude session and resumed in a terminal |
+| event `runtime.launchers {launchers}` | replaces hello's `launchers`: providers were added or removed, or their models are only known now |
+| event `session.items {session_id, items, history, from_seq, to_seq}` | new content of a watched session, forwarded as is to the hub (same shape as node → hub `session.items`; continuity rules in "Continuity of items"). Sessions it didn't list aren't forwarded |
+| event `session.delta {session_id, text}` | the whole paragraph being generated; an empty string means this paragraph ended. Forwarded as is to the hub; the App draws it as streaming output |
+| request `interaction.create {interaction, timeout_seconds?}` → `Resolution` | three kinds: question (`question`), plan (`plan`), permission (`permission`), same shape as `Interaction` above. The node fills in `created_at` / `expires_at` (default 30 minutes, same as hooks; `timeout_seconds` can only shorten it), the session title, the directory, and `agent` / `agent_label` (the Agent the runtime runs and its name; not set for runtimes running Claude Code, so the App draws a Claude card), pushes it to the phone via the hub, and blocks until answered. When nobody answers (expired, the phone's "hand back to computer", no hub) it returns `{dismiss: true}`, and the runtime hands over to its own UI. Interactions with a `tool_use_id` are `resumable`: the `id` the runtime gives (or the one the node computes from runtime + session + kind + tool_use_id) stays the same; if the node goes away midway it returns the error `code: node_gone`, and once the runtime connects to the next node it asks again with the same id, and the hub reattaches the original card |
+| event `interaction.cancel {id}` | this interaction is gone on the runtime side (tool call cancelled): withdraw the card on the phone |
+| request `runtime.package {name}` → `{name, hash, version, files: [{path, data}]}` | auto-update (`docs/runtimes.md` ("Auto-update")): `package` in hello says what code the runtime runs (package name and hash); when the node carries a package with this name and a different hash, the reply includes `update`, and the runtime fetches the files with this request (`data` is base64), checks the hash itself and swaps them in. Packages live in personad (`internal/runtimepkg`, generated from `integrations/` at build time); daemons can't get them (no `update`, and this request returns `unsupported`); no such package returns `not_found` |
+| requests `mcp.tools {assistant?}` → `{tools: [{name, description, input_schema, shell?}]}`, `mcp.call {name, args, session_id, assistant?}` → `ToolResult` | the hub's tools (the phone's `phone_*`, `mail_*`), forwarded to the hub; without a hub `mcp.tools` is empty and `mcp.call` returns an error result. The runtime gives them to its own Agent (DSH: `docs/dsh.md` ("Phone tools")). `assistant: true` only matters for runtimes that declared `caps.assistant`: `mcp.tools` gains the assistant-only tools and the tools declared by extension command gates; `mcp.call` is handled as an assistant call only when the session belongs to this runtime and is an assistant chat (otherwise as an ordinary call). Gate-declared tools are run by the node itself; their `shell` is the word that runs them directly in a shell (command name, skill script path), which the runtime intercepts in the assistant chat's shell (`docs/runtimes.md` ("Assistant")) |
 
-node → runtime 的事件：`runtime.hub {connected}`，hub 连上 / 断开时发给每个 runtime。
+node → runtime events: `runtime.hub {connected}`, sent to every runtime when the hub connects / disconnects.
 
-node → runtime 的请求（只发给这个会话所属的那条连接；hub 对这些会话的 `session.*` 调用都走这里）：
+node → runtime requests (sent only on the connection that owns the session; all of the hub's `session.*` calls for these sessions go through here):
 
-| 请求 | 说明 |
+| Request | Description |
 | --- | --- |
-| `session.items` | 参数和返回同 hub → node 的 `session.items`（`before_seq` / `turns` / `limit` / `after_seq` / `from_seq` + `through_seq`），图片一律是占位（`lazy`），内容从 `session.image` 取。`fold_work` 由 node 在返回上做（`transcript.FoldWork`），runtime 不管 |
-| `session.image {session_id, item_id}` → `{mime, data}`、`session.item {session_id, item_id}` → `Item` | 图片原始数据、被截断的 item 全文 |
-| `session.watch {session_id, since_seq, transcript?}` / `session.unwatch` | 开始 / 停止推这个会话的新内容；`since_seq > 0` 时先补发其后的全部。node 记着每个被看着的会话推到了哪，runtime 重连后列出它时按那个 seq 再 watch。`transcript: true`：内容 node 从对话记录推，runtime 只推逐字文字 |
-| `session.send {session_id, text, images, client_msg_id, assistant?, context?, mode?, memory_dir?}` | 发消息（`assistant` 和后面几个只发给声明了 `caps.assistant` 的 runtime 的助手对话：`docs/runtimes.md`「助手」）；`client_msg_id` 交给 runtime 做幂等（node 自己也按它去重 10 分钟），node 也按它在 runtime 推来的 item 里认出这条消息（「待发消息的对应」）；runtime 自己知道哪个 item 是这条消息时可以直接在 item 上带 `client_msg_id`，node 原样转发。runtime 回错误 `code: handover`（`data.delivered: "none"`）表示它不接这个会话、已经让能跑它的程序起来（只读磁盘的伴随进程）：node 等另一条连接把这个会话列成非 `offline`，或者每 2 秒问一遍别的 runtime 有没有这个会话（`session.items {limit: 1}`），先到的那个收到这条消息；45 秒内都没有就回 `not_running`，什么都没发 |
-| `session.interrupt {session_id}`、`session.rename {session_id, title}`、`session.close {session_id}` | 各按 `caps` 放行，没有的回错误 `code: unsupported`（文字以 `unsupported` 开头，同宿主缺能力）。只带 `tab_name` 的改名直接成功（这些会话没有标签页） |
-| `session.start {cwd, prompt?, assistant?, launcher?, model?, permission_mode?, effort?, workspace_id?, resume?, shell_launcher?, open_elsewhere?}` → `{session}` | 选了它的 launcher 时，或者它是这台机器的引擎时；返回的会话马上进列表。`assistant: true`：助手用它的启动器开新对话（`cwd` 是助手目录，不带 `prompt`，第一条消息随后用 `session.send` 发）。其余字段只在有值时带，见下 |
-| `session.modes {session_id, permission_mode?, effort?}` | 手机切权限模式 / 思考强度（声明了 `caps.modes` 的；值先由 node 校验） |
+| `session.items` | params and result as in hub → node `session.items` (`before_seq` / `turns` / `limit` / `after_seq` / `from_seq` + `through_seq`); images are always placeholders (`lazy`), with content fetched via `session.image`. `fold_work` is applied by the node on the result (`transcript.FoldWork`); the runtime doesn't deal with it |
+| `session.image {session_id, item_id}` → `{mime, data}`, `session.item {session_id, item_id}` → `Item` | raw image data, full text of a truncated item |
+| `session.watch {session_id, since_seq, transcript?}` / `session.unwatch` | start / stop pushing this session's new content; with `since_seq > 0`, first resend everything after it. The node remembers how far each watched session has been pushed, and re-watches from that seq when the runtime lists it after reconnecting. `transcript: true`: the node pushes content from the transcript, and the runtime only pushes streaming text |
+| `session.send {session_id, text, images, client_msg_id, assistant?, context?, mode?, memory_dir?}` | send a message (`assistant` and the following fields are only sent for assistant chats on runtimes that declared `caps.assistant`: `docs/runtimes.md` ("Assistant")). `client_msg_id` is given to the runtime for idempotency (the node itself also dedups on it for 10 minutes), and the node also uses it to recognize this message among items the runtime pushes ("Matching pending messages"); a runtime that knows which item is this message can put `client_msg_id` on the item directly, and the node forwards it as is. The runtime returning the error `code: handover` (`data.delivered: "none"`) means it doesn't take this session and has started the program that can run it (a read-only-disk companion process): the node waits for another connection to list the session as non-`offline`, or asks the other runtimes every 2 seconds whether they have it (`session.items {limit: 1}`), and whichever comes first gets the message; if none within 45 seconds, it returns `not_running` and nothing is sent |
+| `session.interrupt {session_id}`, `session.rename {session_id, title}`, `session.close {session_id}` | each allowed per `caps`; missing ones return the error `code: unsupported` (text starts with `unsupported`, same as a host lacking a capability). A rename with only `tab_name` succeeds directly (these sessions have no tabs) |
+| `session.start {cwd, prompt?, assistant?, launcher?, model?, permission_mode?, effort?, workspace_id?, resume?, shell_launcher?, open_elsewhere?}` → `{session}` | when its launcher was chosen, or when it is this machine's engine; the returned session enters the list immediately. `assistant: true`: the assistant opens a new chat with its launcher (`cwd` is the assistant directory, no `prompt`; the first message follows via `session.send`). Other fields are only included when set; see below |
+| `session.modes {session_id, permission_mode?, effort?}` | the phone switches permission mode / thinking effort (for runtimes that declared `caps.modes`; values are validated by the node first) |
 
-`session.start` 带的字段，都只在有值时才带：
-  - **表单的选择**：`launcher`、`model`、`permission_mode`、`effort`。`workspace_id` 是在它的哪个空间里新建（它的会话的 `space_id`）。
-  - **`shell_launcher: true`**：`launcher` 是登录 shell 的启动器，由 runtime 自己挑同名的那个，没有同名的就用它的默认。
-  - **`resume`**：要接手的 Claude 会话 id（`caps.resume`，这台机器的引擎接着一个没在运行的会话）。返回的会话 id 必须和它相同。
-  - **`open_elsewhere: true`**：有一个活着的 claude 正开着这个会话。不是 runtime 自己的就要拒绝，错误码是 `open_elsewhere`，免得两个进程同时写；
-    node 把拒绝换成说明在哪开着的那条提示。
+Fields `session.start` carries, each only when set:
+  - **The form's choices**: `launcher`, `model`, `permission_mode`, `effort`. `workspace_id` is which of its spaces to create in (its sessions' `space_id`).
+  - **`shell_launcher: true`**: `launcher` is a login-shell launcher; the runtime picks its own one with the same name, or its default if there's none.
+  - **`resume`**: the id of the Claude session to take over (`caps.resume`, this machine's engine continuing a session that isn't running). The returned session id must be the same.
+  - **`open_elsewhere: true`**: a live claude has this session open. If it isn't the runtime's own, it must refuse with the error code `open_elsewhere`, so two processes don't write at once;
+    the node replaces the refusal with a hint saying where it's open.
 
-终端相关的调用（`session.keys`、`session.screen.before`、`terminal.watch`）对 runtime 的会话回 `unsupported`，`session.screen` 回空屏；
-这些会话没有 `pane_id`，App 本来就不显示终端。
+Terminal calls (`session.keys`, `session.screen.before`, `terminal.watch`) return `unsupported` for runtime sessions, and `session.screen` returns a blank screen;
+these sessions have no `pane_id`, and the App doesn't show a terminal for them anyway.
 
-**daemon**（`docs/daemons.md`，`server/internal/node/daemons.go`）：自己是常驻服务、连不上本机 socket 的 runtime，由 node 去连。
+**daemon** (`docs/daemons.md`, `server/internal/node/daemons.go`): a runtime that is itself a resident service and can't reach the local socket; the node connects to it.
 
-- **连法**：
-  - node 按 `runtime.sock` 旁边的 `daemons.json` 去连 daemon 的 WebSocket 端点，请求带 `Authorization: Bearer <token>` 和子协议 `jarvis-runtime.v1`；daemon 必须回这个子协议。
-  - 连上以后，一条文本消息就是上面的一行，协议和本机 socket 上完全一样。
-- **node 在中间改写的东西**：
-  - hello 里的 `runtime`、`name`、`launcher` 换成配置里的值，`agent` 也一样（配置填了的话）；`instance` 由 node 定成 `daemon:<id>`（它重连时旧连接被关掉）；`caps` 只留 start / send / interrupt / rename / close，没有 `assistant`。
-  - 会话 id 加上 `<id>.`，`space_id` 加上 `<id>:`，交互 id 换成稳定的哈希；回给 daemon 时再去掉前缀。
-  - 会话行里的 `pane_id`、`resume_argv`、`agent_label` 丢掉，`features` 里不告诉它有 `resume_argv` 和 `handover`；它对 `session.send` 回 `code: handover` 时，node 改成 `not_running`，不转给别的 runtime。
-- **daemon 看不到、用不了的**：
-  - 调用的会话 id 不带它的前缀时（node 在问「这个会话是谁的」），node 自己回 `not_found`，不发给 daemon；
-  - `mcp.tools` 回空，`mcp.call` 回 `unsupported`。
-- **id 冲突**：
-  - 本机 socket 上的 runtime 用 `daemons.json` 里的 id 说 hello，回错误 `code: runtime_conflict`；
-  - 某个 id 已被连着的 runtime 占用时，同 id 的 daemon 的 hello 也回 `runtime_conflict`，node 随后断开它，稍后再连。
+- **How it connects**:
+  - The node connects to the daemon's WebSocket endpoint per `daemons.json` next to `runtime.sock`; the request carries `Authorization: Bearer <token>` and the subprotocol `jarvis-runtime.v1`, and the daemon must answer with this subprotocol.
+  - Once connected, one text message is one line as above; the protocol is exactly the same as on the local socket.
+- **What the node rewrites in between**:
+  - `runtime`, `name`, `launcher` in hello are replaced with the configured values, and `agent` too (if configured); `instance` is set by the node to `daemon:<id>` (when it reconnects the old connection is closed); `caps` keeps only start / send / interrupt / rename / close, no `assistant`.
+  - Session ids get the prefix `<id>.`, `space_id` gets `<id>:`, and interaction ids are replaced with stable hashes; the prefixes are removed when replying to the daemon.
+  - `pane_id`, `resume_argv`, `agent_label` in session rows are dropped, and `features` doesn't tell it about `resume_argv` and `handover`; when it returns `code: handover` for `session.send`, the node turns it into `not_running` and doesn't hand it to another runtime.
+- **What the daemon can't see or use**:
+  - When a call's session id lacks its prefix (the node asking "whose session is this"), the node answers `not_found` itself and doesn't send it to the daemon;
+  - `mcp.tools` returns empty, `mcp.call` returns `unsupported`.
+- **id conflicts**:
+  - A runtime on the local socket saying hello with an id from `daemons.json` gets the error `code: runtime_conflict`;
+  - when an id is already taken by a connected runtime, the hello of a daemon with the same id also gets `runtime_conflict`; the node then disconnects it and reconnects later.
 
-### 任务和对话动态
+### Tasks and the chat feed
 
-从助手对话派发的任务（[unified-entry.md](unified-entry.md)）。助手用 `task_plan` 交出计划；只读的、用户记住过的直接开始，其余等手机上的「开始」。
+Tasks dispatched from an assistant chat ([unified-entry.md](unified-entry.md)). The assistant hands in a plan with `task_plan`; read-only ones and ones the user chose to remember start directly, and the rest wait for "Start" on the phone.
 
 ```jsonc
 // TaskPlan
-{"id":"plan_…","conversation":"<助手对话 id>","state":"open|started|dismissed","created_at":"...","updated_at":"...",
- "tasks":[{"title":"修登录崩溃","prompt":"给 Agent 的第一条消息","machine":"<机器 id>","cwd":"/abs/path",
-           "launcher":"","model":"","permission":"acceptEdits","readonly":false,"why":"一行理由",
-           "done_when":["PR 合并到 master"],"expect_minutes":30,   // 可选（#3124）：验收标准、预计分钟数；客户端只显示，开始时不用回传
-           "todo_id":"todo_…",          // 开始后才有
-           "error":""}]}                 // Agent 没开起来的原因
+{"id":"plan_…","conversation":"<assistant chat id>","state":"open|started|dismissed","created_at":"...","updated_at":"...",
+ "tasks":[{"title":"Fix the login crash","prompt":"The first message to the Agent","machine":"<machine id>","cwd":"/abs/path",
+           "launcher":"","model":"","permission":"acceptEdits","readonly":false,"why":"one-line reason",
+           "done_when":["PR merged into master"],"expect_minutes":30,   // optional (#3124): acceptance criteria, expected minutes; clients only display them and don't send them back on start
+           "todo_id":"todo_…",          // only present after start
+           "error":""}]}                 // why the Agent didn't start
 
-// FeedItem：hub 插进助手对话的条目，不在 transcript 里；客户端按 at 和 transcript 合在一起画
-{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review|notice","ref":"plan_…、todo_…、日期或收件箱条目 id",
+// FeedItem: entries the hub inserts into an assistant chat, not in the transcript; clients draw them merged with the transcript by at
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review|notice","ref":"plan_…, todo_…, a date or an Inbox entry id",
  "body":{…}}
-// plan：ref 是计划 id，没有 body；task：ref 是待办 id，没有 body
-// answered：{"question":"使用 Bash","answer":"批准了 · 以后同类不再问",
-//           "items":[{"question":"使用 Bash\nnpm test\n原因：跑一下测试","answer":"批准了 · 以后同类不再问"}]}
-//   question / answer 是折叠时那一行的摘要（压成一行、截到 120 字），老客户端和 #1231 之前的老记录只有这两个；
-//   items 是完整内容，展开时画：每个问题和回答成对、保留换行，多问题卡片按卡片顺序，没回答的写「没回答」，
-//   忽略的写「忽略了」；计划审批带计划正文和拒绝理由 / 批准后的模式，工具批准带工具、摘要和原因，
-//   屏幕对话框带选中的选项和在选项里输入的文字，表单字段写「标签：值」。单段 4000 字、整条 12000 字、最多 20 个，超出截断。
-//   密码字段（Field.secret、屏幕的 secret、MCP 表单的 password / writeOnly、名字像口令 / token 的）只写「（已填写，不保存）」，值不落库。
-// receipt：{"title":"…","state":"done|failed|interrupted","summary":"Agent 最后一条回复（Markdown，按行截到约 600 字，不截在标记中间）","pr":"https://github.com/…/pull/N","machine":"…"}
-//   interrupted（#1516）：Agent 这一轮被模型服务出错打断，summary 是「模型服务出错，中断了」，error 是错误原文；客户端画成红色、带「继续」
-//   这一轮既没回复也没调工具、又没有报错（模型服务回了 200 但内容是空的，#2349）同样是 interrupted，error 是「这一轮没有任何输出：…」
-// routed：{"text":"…"}（督办返工时发给 Agent 的说明也是一条 routed）
-// notice：没有 ref；hub 写进对话的一行说明 {"text":"…"}（按 hub 的语言写好），客户端画成居中的一行小字，不认识的客户端跳过。
-//         现在只有一种：定时任务因为主对话没接好被跳过以后，就绪后第一次运行前在主对话里写「电脑和模型接好了，定时任务恢复运行，这次是「早报」」（#4253）
-// review：ref 是待办 id；督办人验收了一次（#3124）：{"title","verdict":"accepted|rework|needs_user|cancelled","round":1,"note":"…",
-//         "checks":[{"criterion","met","evidence"}]}；不认识的客户端跳过这一条
-// message：ref 是收件箱条目 id；AI 分身给一条和任务有关的消息起草了回复：
-//         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"原话（截断）","draft":"草稿"}；发送走收件箱的发送接口
-// today：ref 是用户那天的日期；{"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"working":2,
-//         "meetings":[{"start","end","title"}],"at_me":[{"name","unread","preview"}],"unread":5}（飞书没回应的那几项不带）
-//         "failed":[{"kind":"task|routine","id","ref"?,"title","at","why"?,"skipped"?}],"failed_total":3：昨天 18:00 以来没成功的（#4124），
-//         这段对话里没开起来的派出任务（kind task，id 是待办）和失败 / 跳过的定时任务运行（kind routine，id 是定时任务，ref 是那次运行），
-//         新的在前，最多 8 条，failed_total 是一共几条；why 是一行短原因。没有就不带，旧客户端不认识照样忽略
+// plan: ref is the plan id, no body; task: ref is the to-do id, no body
+// answered: {"question":"Use Bash","answer":"Approved · don't ask again for this kind",
+//           "items":[{"question":"Use Bash\nnpm test\nReason: run the tests","answer":"Approved · don't ask again for this kind"}]}
+//   question / answer are the one-line summary shown when collapsed (squashed to one line, cut at 120 characters); old clients and old records from before #1231 only have these two.
+//   items are the full content, drawn when expanded: each question paired with its answer, line breaks kept; multi-question cards in card order; unanswered ones say "Not answered",
+//   ignored ones "Ignored". Plan approvals carry the plan text and the denial reason / mode after approval; tool approvals carry the tool, summary and reason;
+//   screen dialogs carry the selected option and text typed into options; form fields are written "Label: value". 4000 characters per segment, 12000 per entry, at most 20; anything beyond is truncated.
+//   Password fields (Field.secret, the screen's secret, MCP form password / writeOnly, names that look like passwords / tokens) are written only as "(filled in, not saved)"; values are never stored.
+// receipt: {"title":"…","state":"done|failed|interrupted","summary":"the Agent's last reply (Markdown, cut by lines to about 600 characters, never inside a markup token)","pr":"https://github.com/…/pull/N","machine":"…"}
+//   interrupted (#1516): the Agent's turn was interrupted by a model service error; summary is "The model service errored and was interrupted", error is the original error text; clients draw it in red with "Continue".
+//   A turn with no reply, no tool calls and no error (the model service returned 200 with empty content, #2349) is also interrupted, with error "This turn produced no output: …"
+// routed: {"text":"…"} (the note sent to the Agent when the supervisor sends work back is also a routed)
+// notice: no ref; a one-line note the hub writes into the chat {"text":"…"} (already written in the hub's language); clients draw it as a centered line of small text, and clients that don't know it skip it.
+//         There's only one kind now: after scheduled tasks were skipped because the main chat wasn't set up, once ready, before the first run the main chat gets "Computers and models are set up; scheduled tasks are running again, this time 'Morning briefing'" (#4253)
+// review: ref is the to-do id; the supervisor did one acceptance review (#3124): {"title","verdict":"accepted|rework|needs_user|cancelled","round":1,"note":"…",
+//         "checks":[{"criterion","met","evidence"}]}; clients that don't know it skip this entry
+// message: ref is the Inbox entry id; the AI twin drafted a reply to a message related to the task:
+//         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"original words (truncated)","draft":"the draft"}; sending goes through the Inbox send endpoint
+// today: ref is the user's date for that day; {"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"working":2,
+//         "meetings":[{"start","end","title"}],"at_me":[{"name","unread","preview"}],"unread":5} (fields Lark didn't answer for are omitted)
+//         "failed":[{"kind":"task|routine","id","ref"?,"title","at","why"?,"skipped"?}],"failed_total":3: what hasn't succeeded since 18:00 yesterday (#4124):
+//         dispatched tasks from this chat that didn't start (kind task, id is the to-do) and failed / skipped scheduled-task runs (kind routine, id is the scheduled task, ref is that run),
+//         newest first, at most 8 entries; failed_total is the total count; why is a short one-line reason. Omitted when empty; old clients ignore it as unknown
 ```
 
-任务卡、计划卡的实时状态不在动态里：客户端按 `ref` 读计划（`task_plan` 推送）和待办 + 挂着的 Agent 的会话状态（状态规则同 [todos.md](todos.md)）。
-任务的 Agent 的提问照常是交互，客户端按待办把它画在对话底部。
+The live state of task cards and plan cards isn't in the feed: clients read the plan (`task_plan` push) and the to-do + the session state of its attached Agents by `ref` (status rules as in [todos.md](todos.md)).
+Questions from a task's Agent are interactions as usual; clients draw them at the bottom of the chat by to-do.
 
-## MCP 工具（`personad mcp`）
+## MCP tools (`personad mcp`)
 
-`personad mcp` 每个请求单独处理（等手机的工具不挡别的工具）；Claude Code 发 `notifications/cancelled`（这一轮被停掉）时取消那次调用、不再回答，连 node 的 socket 随之挂断，hub 经 `rpc.cancel` 撤下它的卡（#3525、#2597）。
+`personad mcp` handles each request separately (a tool waiting on the phone doesn't block other tools). When Claude Code sends `notifications/cancelled` (this turn was stopped), it cancels that call and doesn't answer; the socket to the node hangs up with it, and the hub withdraws its card via `rpc.cancel` (#3525, #2597).
 
-| 工具 | 执行方 | 说明 |
+| Tool | Executed by | Description |
 | --- | --- | --- |
-| `phone_*` | iPhone App | 由 App `register_phone` 声明（通讯录、日历、提醒、位置、健康、照片、剪贴板、设备信息、通知……） |
-| `mail_accounts` / `mail_search` / `mail_read` | hub | 只读 |
-| `mail_send` | hub（邮件连接器） | 写：过 `connector_gate`，默认发送前创建 `permission` 交互，手机批准后才发；参数不对时不弹卡片直接拒绝 |
-| `github_search` / `github_read` / `github_diff` / `github_checks` | hub（GitHub 连接器） | 只读，见下一行 |
-| `github_comment` / `github_review` | hub（GitHub 连接器） | 写：过 `connector_gate`，默认手机上逐次确认；卡片写明仓库#号「标题」、全文、谁会看到，approve 开头是【批准】 |
-| `<连接器 id>_*` | hub（连接器） | 只给助手、只给状态是 `ok` 的连接器。只读工具直接执行；写操作先过 hub.json 的 `connector_gate`，默认创建 `permission` 交互（卡片上写明谁会看到），手机批准后才执行（`server/internal/connector`） |
+| `phone_*` | iPhone App | declared by the App via `register_phone` (contacts, calendar, reminders, location, health, photos, clipboard, device info, notifications…) |
+| `mail_accounts` / `mail_search` / `mail_read` | hub | read-only |
+| `mail_send` | hub (mail connector) | write: goes through `connector_gate`; by default a `permission` interaction is created before sending, and it sends only after approval on the phone. Bad params are refused directly without a card |
+| `github_search` / `github_read` / `github_diff` / `github_checks` | hub (GitHub connector) | read-only, see the next row |
+| `github_comment` / `github_review` | hub (GitHub connector) | write: goes through `connector_gate`; by default each one is confirmed on the phone. The card states repo#number "title", the full text and who will see it; approvals start with [Approve] |
+| `<connector id>_*` | hub (connector) | only for the assistant, and only for connectors whose status is `ok`. Read-only tools run directly; writes first go through hub.json's `connector_gate`, which by default creates a `permission` interaction (the card states who will see it), and run only after approval on the phone (`server/internal/connector`) |
 
-## 连接器 API
+## Connector API
 
-特性 `connectors`（`/health` 和 WebSocket hello 的 `features`），旧 hub 没有这个接口。
+Feature `connectors` (in the `features` of `/health` and the WebSocket hello); old hubs don't have this endpoint.
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?, ai}`：信息连接器（读哪台在 设置 › 扩展 › 信息 选，没选时是 hub.json 的 `imessage.machine`）的状态，当场问那台 Mac（刚开了权限，刷新就是新的）；没有完全磁盘访问权限时 `guide` 是在那台 Mac 上一步步怎么开，`via` 是那台 Mac 的 node 怎么跑（`ssh` / `launchd`，两种开法不一样）。没设置是 404 `not_configured` |
-| PUT | `/api/v1/imessage/settings` | `{ai: bool}`：「交给 Persona」开关（存在 hub，默认开）；开着时真正的会话进知识库、收件箱，助手有 `imessage_*` 工具；关掉立刻停。回 `GET /api/v1/imessage` 的样子（多一个 `ai`） |
-| DELETE | `/api/v1/imessage/data` | 删掉 hub 上存下的信息：知识库里的信息会话和人（连同索引、项目里的引用和它们写的时间线、归档游标，项目标成待重写）、收件箱里的信息条目 → `{chats, people, inbox}`。「交给 Persona」开着时 409 `ai_on`（先关掉，不然下一轮又同步回来）；那台 Mac 上的消息不受影响 |
-| GET | `/api/v1/imessage/chats?limit=&before=` | 那台 Mac 的会话，新的在前（node 的 `connector.chats`，字段见下面「hub ↔ node」）。只读、不存、不交给模型。没权限 403 `no_permission`，Mac 不在线 503 `offline`，node 太旧 409 `node_outdated` |
-| GET | `/api/v1/imessage/chats/{id}/messages?limit=&before=` | 一个会话的一页消息，旧的在前（node 的 `connector.older`）；`id` 不像会话 id（`imessage-<12 位十六进制>`）的不发给 Mac，404 `no_chat` |
-| GET | `/api/v1/connectors?all=1` | `{"connectors":[{id, name, status, account?, via?, error?, guide?:[…], last_sync?, last_event?, capabilities:[…], hosts?:[…], enabled, archive?, inbox?}]}`：hub 上注册的连接器。不带 `all=1` 时不含飞书（`lark`）和邮件（`mail`）：M6 以前的 App 把列表里每一项都画成一行，它们又各有一行，会出现两次；带上的 App 自己把这两项画成原来的飞书、邮箱行（状态还读 `/api/v1/lark/status`、`/api/v1/mail/accounts`）。`guide` 是出问题时一步一句怎么修好（信息连接器没有权限时在那台 Mac 上怎么开）。`status` 是 `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error` / `disabled`（用户在设置里关掉了，`enabled` 为 false）；`via` 说登录从哪来（「来自 <机器> 的 gh 登录」）；`error` 是给人看的一句话，不含密钥；`capabilities` 取 `status` / `tools` / `actions` / `events` / `hosts` / `inbox` / `archive` / `login`；`hosts` 是这个连接器的链接所在的主机名（App 用来认链接）；`archive` / `inbox` 是「进知识库」「进收件箱」开没开，只有有 `archive` / `inbox` 能力的才带 |
-| POST | `/api/v1/connectors/{id}/login` | 分步登录（有 `login` 能力的，`docs/archive/plan-telegram.md`）：`{"step": "", "values": {}}`，`step` 为空是从头开始，之后带上一步的 `step` 和填的字段 → `{step?, fields?:[{name, label, secret?, placeholder?}], hint?, error?, done?, account?, kind?, url?, user_code?, interval?}`：下一步要填的，或 `done`。
-`kind` 是 `device_code` 时这一步不填字段：显示 `user_code`，让用户去 `url` 输入，App 每隔 `interval` 秒用同一个 `step`（不带值）再问一次，直到回来别的步骤或 `done`（GitHub 的设备码登录）。
-`kind` 是 `qr` 时同样不填字段、同样轮询：`url` 是要用别的 App 扫的内容（微信），hub 附上它的二维码点阵 `qr: {size, rows}`（`rows` 一行一串 `0` / `1`，不含安静区），App 照着画；旧 App 不认识这个 `kind`，只显示 `hint`。填错了（验证码不对）是同一步带 `error`，表单留着重填；别的错 502。填的值只给连接器，不进日志和任何响应；登录得到的会话加密存 hub（`connector_secrets`） |
-| GET | `/api/v1/connectors/github/auth` | GitHub 的登录从哪里来：`{source: "machine" \| "device", machine?, machines: [{id, name, state, account?, scopes?, missing?, error?}], scopes?, scopes_known, missing?: [{scope, affects}]}`。`state` 是 `signed_in` / `not_signed_in` / `no_gh` / `too_old` / `offline` / `error`（hub 当场问每台在线电脑的 gh，再问 GitHub 这个 token 是谁、有哪些 scope；token 不出 hub）；`missing` 是用的 token 少了的 scope 和受影响的功能 |
-| PUT | `/api/v1/connectors/github/auth` | `{source: "machine", machine: "<id>"}` 或 `{source: "device"}`：换登录来源，存在 hub 设置里（盖过 hub.json 的 `github.auth.from_machine`），回同上；选电脑时忘掉设备码登录的 token |
-| POST | `/api/v1/connectors/{id}/logout` | 退出登录：hub 删掉存着的凭据和登录状态；对方服务里的会话是否同时结束取决于连接器：Telegram 会结束其设备会话，其他连接器一般只让 hub 忘掉自己存的那份（如 GitHub 的设备码登录），要到对方那里撤销授权 → `{"ok": true}` |
-| PUT | `/api/v1/connectors/{id}/settings` | `{"enabled"?: bool, "options"?: {…}, "archive"?: bool, "inbox"?: bool}`：`options` 是连接器自己的设置（有 `options` 能力的，GET 里也带着；GitHub 的是 `{ci, muted_repos, ignore_branches}`，`docs/inbox.md`「降噪」），不合法 400，存 hub、重启照旧，改完立刻按新设置收一轮收件箱。`enabled` 是设置 › 连接器 的开关。关掉的连接器不跑、不给工具、不收收件箱、不进知识库，状态是 `disabled`，登录和退出照常；选择存在 hub 的设置里，重启后照旧；没动过开关的连接器是开着的，Telegram 这种要用户自己填凭据的默认关着。`archive` 是「进知识库」：关掉后 hub 不再问它要归档的变化（一个请求都不发），收件箱和助手的工具照常；`inbox` 是「进收件箱」：关掉后不再收新的，已有的条目不动；两个默认都开，没有这个能力的连接器改它回 400，选择存在 hub 的设置里 → 这个连接器的一项（同 `GET`） |
-| DELETE | `/api/v1/connectors/{id}/data` | 删除已存的数据：先关掉这个连接器（开关存成关，不然下一轮又同步回来），再删掉 hub 上存下的它的东西：知识库里它的会话和人（连同索引、项目里的引用和它们写的时间线、归档游标）、收件箱里它的条目 → `{chats, people, inbox}`。和退出登录分开（`/logout`）；连接器那边的账号和消息不受影响 |
-| GET | `/api/v1/connectors/{id}/thread?thread=&before=&limit=` | 有 `threads` 能力的连接器：收件箱一个会话（条目的 `connector.thread`）的一页消息 → `{chat: {id, name, kind, url?, avatar?, members?, reply?, state?, author?, labels?, branch?, body?, body_format?}, messages: [{id, at, sender: {id?, name, avatar?}, mine?, event?, text?, format?, media?: [{kind, ref?, thumb?, mime?, name?, size?, duration?, width?, height?, emoji?}], reply_to?: {id, from?, text?}, edited?, url?, kind?, review?, code?, check?}], before?}`，旧的在前；`before` 往前翻一页，没有就到头了；`limit` 默认 30、最多 50。`chat.members` 是群的成员数 / 频道的订阅数，只在第一页（不带 `before`）给，不知道时不给（Telegram 见 `docs/archive/plan-telegram.md`「人数」）。没登录 409，限流中 429（`code: rate_limited`，`error` 写明还要多久） |
-| GET | `/api/v1/connectors/{id}/media?ref=` | 页面里 `avatar` / `ref` / `thumb` 对应的字节（图片、贴纸、视频缩略图、头像），`Content-Type` 照原样，`Cache-Control: immutable`；hub 存在 `<hub 目录>/cache/connector-media/`（最多 256 MB，旧的先删），同一个 ref 同时有很多请求也只向连接器要一次 |
-| POST | `/api/v1/connectors/{id}/thread/reply` | `{thread, action, text, reply_to?}`：用页面 `chat.reply` 给的 action 在会话里回复（参数 `{chat, text, reply_to}`）→ `{ok, result}`。用户自己的设备（full 设备 token）发来的直接做，不过 `connector_gate`（#1190）；配对 token 等其他身份照旧过闸门，被拒 403（`code: declined`）。限流 429 |
-| DELETE | `/api/v1/connectors/{id}/archive` | 删除已存的知识库内容：先关掉「进知识库」（存成关，不然下一轮又归档回来），再删掉知识库里它的会话和人（连同索引、项目里的引用和它们写的时间线、归档游标）→ `{chats, people, inbox: 0}`。连接器照常跑，收件箱和工具不受影响；没有 `archive` 能力的回 409 |
+| GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?, ai}`: status of the Messages connector (which machine it reads is chosen in Settings › Extensions › Messages; if not chosen, hub.json's `imessage.machine`), asked of that Mac on the spot (after granting permission, a refresh shows the new state). Without Full Disk Access, `guide` gives step-by-step instructions to enable it on that Mac, and `via` is how that Mac's node runs (`ssh` / `launchd`; the two are enabled differently). Not set up: 404 `not_configured` |
+| PUT | `/api/v1/imessage/settings` | `{ai: bool}`: the "Hand to Persona" switch (stored on the hub, on by default). While on, real chats go into the knowledge base and Inbox, and the assistant has `imessage_*` tools; turning it off stops immediately. Returns the shape of `GET /api/v1/imessage` (with `ai`) |
+| DELETE | `/api/v1/imessage/data` | deletes Messages data stored on the hub: Messages chats and people in the knowledge base (with indexes, references in projects and the timelines they wrote, archive cursors; projects are marked for rewrite), and Messages entries in the Inbox → `{chats, people, inbox}`. While "Hand to Persona" is on: 409 `ai_on` (turn it off first, or the next round syncs it back); messages on that Mac are unaffected |
+| GET | `/api/v1/imessage/chats?limit=&before=` | that Mac's chats, newest first (the node's `connector.chats`; fields under "hub ↔ node" below). Read-only, not stored, not given to models. No permission 403 `no_permission`, Mac offline 503 `offline`, node too old 409 `node_outdated` |
+| GET | `/api/v1/imessage/chats/{id}/messages?limit=&before=` | one page of a chat's messages, oldest first (the node's `connector.older`); an `id` that doesn't look like a chat id (`imessage-<12 hex chars>`) isn't sent to the Mac: 404 `no_chat` |
+| GET | `/api/v1/connectors?all=1` | `{"connectors":[{id, name, status, account?, via?, error?, guide?:[…], last_sync?, last_event?, capabilities:[…], hosts?:[…], enabled, archive?, inbox?}]}`: connectors registered on the hub. Without `all=1`, Lark (`lark`) and mail (`mail`) are excluded: Apps before M6 draw every list entry as a row, and these two each have their own row, so they'd appear twice; Apps that pass it draw these two as the original Lark and mail rows themselves (status still read from `/api/v1/lark/status`, `/api/v1/mail/accounts`). `guide` is a one-sentence-per-step fix when something's wrong (how to enable permission on that Mac when the Messages connector lacks it). `status` is `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error` / `disabled` (the user turned it off in settings; `enabled` is false); `via` says where the sign-in comes from ("gh sign-in from <machine>"); `error` is one human-readable sentence, without secrets; `capabilities` are drawn from `status` / `tools` / `actions` / `events` / `hosts` / `inbox` / `archive` / `login`; `hosts` are the hostnames of this connector's links (the App uses them to recognize links); `archive` / `inbox` are whether "Save to knowledge base" and "Send to Inbox" are on, only present for connectors with the `archive` / `inbox` capability |
+| POST | `/api/v1/connectors/{id}/login` | step-by-step sign-in (for connectors with the `login` capability, `docs/archive/plan-telegram.md`): `{"step": "", "values": {}}`; an empty `step` starts from the beginning, and later requests carry the previous `step` and the filled fields → `{step?, fields?:[{name, label, secret?, placeholder?}], hint?, error?, done?, account?, kind?, url?, user_code?, interval?}`: what to fill next, or `done`.
+When `kind` is `device_code`, this step has no fields: show `user_code` and have the user enter it at `url`; the App asks again every `interval` seconds with the same `step` (no values) until a different step or `done` comes back (GitHub's device-code sign-in).
+When `kind` is `qr`, likewise no fields and the same polling: `url` is the content to scan with another App (WeChat), and the hub attaches its QR matrix `qr: {size, rows}` (`rows` is one string of `0` / `1` per row, without the quiet zone) for the App to draw; old Apps don't know this `kind` and show only `hint`. A wrong entry (bad verification code) returns the same step with `error`, keeping the form for re-entry; other errors 502. Filled values go only to the connector, never into logs or any response; the session obtained from sign-in is stored encrypted on the hub (`connector_secrets`) |
+| GET | `/api/v1/connectors/github/auth` | where the GitHub sign-in comes from: `{source: "machine" \| "device", machine?, machines: [{id, name, state, account?, scopes?, missing?, error?}], scopes?, scopes_known, missing?: [{scope, affects}]}`. `state` is `signed_in` / `not_signed_in` / `no_gh` / `too_old` / `offline` / `error` (the hub asks gh on each online computer on the spot, then asks GitHub whose token it is and what scopes it has; the token never leaves the hub); `missing` lists scopes the token in use lacks and the features affected |
+| PUT | `/api/v1/connectors/github/auth` | `{source: "machine", machine: "<id>"}` or `{source: "device"}`: switch the sign-in source, stored in hub settings (overrides hub.json's `github.auth.from_machine`); returns the same as above. Choosing a computer forgets the device-code sign-in token |
+| POST | `/api/v1/connectors/{id}/logout` | sign out: the hub deletes the stored credentials and sign-in state. Whether the session on the other service also ends depends on the connector: Telegram ends its device session; other connectors usually just make the hub forget its own copy (such as GitHub's device-code sign-in), and authorization has to be revoked on the other service → `{"ok": true}` |
+| PUT | `/api/v1/connectors/{id}/settings` | `{"enabled"?: bool, "options"?: {…}, "archive"?: bool, "inbox"?: bool}`: `options` is the connector's own settings (for those with the `options` capability, also included in GET; GitHub's is `{ci, muted_repos, ignore_branches}`, `docs/inbox.md` ("Noise reduction")); invalid ones 400; stored on the hub and kept across restarts; after a change the Inbox collects a round right away with the new settings. `enabled` is the switch in Settings › Connectors. A disabled connector doesn't run, provides no tools, collects nothing for the Inbox and adds nothing to the knowledge base; its status is `disabled`, and sign-in and sign-out work as usual. The choice is stored in hub settings and kept across restarts; a connector whose switch was never touched is on, except ones like Telegram where the user must enter credentials, which default to off. `archive` is "Save to knowledge base": when off, the hub no longer asks it for archive changes (not a single request), while the Inbox and assistant tools work as usual; `inbox` is "Send to Inbox": when off, nothing new is collected and existing entries stay. Both default to on; changing one on a connector without that capability returns 400; the choice is stored in hub settings → this connector's entry (same as `GET`) |
+| DELETE | `/api/v1/connectors/{id}/data` | delete stored data: first turns this connector off (the switch is saved as off, or the next round syncs it back), then deletes what the hub stored for it: its chats and people in the knowledge base (with indexes, references in projects and the timelines they wrote, archive cursors), and its Inbox entries → `{chats, people, inbox}`. Separate from signing out (`/logout`); the account and messages on the connector's side are unaffected |
+| GET | `/api/v1/connectors/{id}/thread?thread=&before=&limit=` | connectors with the `threads` capability: one page of messages of an Inbox thread (the entry's `connector.thread`) → `{chat: {id, name, kind, url?, avatar?, members?, reply?, state?, author?, labels?, branch?, body?, body_format?}, messages: [{id, at, sender: {id?, name, avatar?}, mine?, event?, text?, format?, media?: [{kind, ref?, thumb?, mime?, name?, size?, duration?, width?, height?, emoji?}], reply_to?: {id, from?, text?}, edited?, url?, kind?, review?, code?, check?}], before?}`, oldest first; `before` pages back, and its absence means the start was reached; `limit` defaults to 30, at most 50. `chat.members` is a group's member count / a channel's subscriber count, given only on the first page (without `before`) and omitted when unknown (Telegram: `docs/archive/plan-telegram.md` ("Member count")). Not signed in 409; rate limited 429 (`code: rate_limited`, `error` says how much longer) |
+| GET | `/api/v1/connectors/{id}/media?ref=` | the bytes behind `avatar` / `ref` / `thumb` in a page (images, stickers, video thumbnails, avatars), `Content-Type` as is, `Cache-Control: immutable`; the hub stores them in `<hub directory>/cache/connector-media/` (at most 256 MB, oldest deleted first), and many concurrent requests for the same ref ask the connector only once |
+| POST | `/api/v1/connectors/{id}/thread/reply` | `{thread, action, text, reply_to?}`: reply in the thread using the action given by the page's `chat.reply` (params `{chat, text, reply_to}`) → `{ok, result}`. Requests from the user's own devices (full device token) run directly without `connector_gate` (#1190); other identities such as pairing tokens still go through the gate, and refusals are 403 (`code: declined`). Rate limited 429 |
+| DELETE | `/api/v1/connectors/{id}/archive` | delete stored knowledge base content: first turns off "Save to knowledge base" (saved as off, or the next round archives it back), then deletes its chats and people in the knowledge base (with indexes, references in projects and the timelines they wrote, archive cursors) → `{chats, people, inbox: 0}`. The connector keeps running; the Inbox and tools are unaffected; connectors without the `archive` capability return 409 |
 
-## 邮件 API
+## Mail API
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/mail/accounts` | `{"accounts":[MailAccount]}`（不含密码） |
-| POST | `/api/v1/mail/accounts` | 新增（密码 / 授权码）：测试连接成功才保存 → `{"account"}`；`auth:"oauth2"` 一律 400 |
-| POST | `/api/v1/mail/oauth/google/start` | Gmail「使用 Google 账号登录」：`{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`；App 用 ASWebAuthenticationSession 打开 `auth_url`，等 `callback_scheme` 回调；hub 未配置 `google.client_id` 时 400 |
-| POST | `/api/v1/mail/oauth/google/finish` | 回调 URL 里的 `{"state","code"}`（或 `{"state","error"}`）→ hub 换 refresh token、验证 IMAP + Gmail API（发信走 Gmail API）后保存 → `{"account"}`；同一邮箱再登录一次 = 更新凭据（ID 不变）；state 一次性、15 分钟过期 |
-| GET / PUT | `/api/v1/mail/oauth/microsoft/config` | Outlook 登录的设置：`{configured, client_id?, source?: app\|config, redirect_uri}`；PUT `{client_id}` 存用户在 Microsoft Entra 注册的 client ID（加密存 hub，空串清掉；格式不对 400）（`docs/mail.md`「Outlook 接入方式」） |
-| POST | `/api/v1/mail/oauth/microsoft/start` | `{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`；没有 client ID 时 400 |
-| POST | `/api/v1/mail/oauth/microsoft/finish` | 回调的 `{state, code}` 或 `{state, error, error_description}` → `{"account"}`；错误翻成该怎么办（管理员同意、IMAP / SMTP AUTH 被关、授权过期…）。同一个邮箱再登录 = 更新凭据 |
+| GET | `/api/v1/mail/accounts` | `{"accounts":[MailAccount]}` (no passwords) |
+| POST | `/api/v1/mail/accounts` | add an account (password / authorization code): saved only after a successful connection test → `{"account"}`; `auth:"oauth2"` always returns 400 |
+| POST | `/api/v1/mail/oauth/google/start` | Gmail "Sign in with Google": `{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`; the App opens `auth_url` with ASWebAuthenticationSession and waits for the `callback_scheme` callback; 400 if the hub has no `google.client_id` configured |
+| POST | `/api/v1/mail/oauth/google/finish` | `{"state","code"}` from the callback URL (or `{"state","error"}`) → the hub exchanges for a refresh token, verifies IMAP + Gmail API (sending uses Gmail API), then saves → `{"account"}`; signing in again with the same email = update credentials (ID unchanged); state is single-use and expires after 15 minutes |
+| GET / PUT | `/api/v1/mail/oauth/microsoft/config` | Outlook sign-in settings: `{configured, client_id?, source?: app\|config, redirect_uri}`; PUT `{client_id}` stores the client ID the user registered in Microsoft Entra (encrypted on the hub; empty string clears it; bad format returns 400) (`docs/mail.md` ("Outlook integration")) |
+| POST | `/api/v1/mail/oauth/microsoft/start` | `{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`; 400 without a client ID |
+| POST | `/api/v1/mail/oauth/microsoft/finish` | callback `{state, code}` or `{state, error, error_description}` → `{"account"}`; errors are turned into what to do next (admin consent, IMAP / SMTP AUTH disabled, authorization expired…). Signing in again with the same email = update credentials |
 | DELETE | `/api/v1/mail/accounts/{aid}` | |
 | POST | `/api/v1/mail/accounts/{aid}/test` | `{"ok":true}` / `{"error"}` |
-| GET | `/api/v1/mail/accounts/{aid}/mailboxes` | `{"mailboxes":[{"name","role","unseen","total"}]}`，role ∈ inbox/sent/drafts/trash/archive/junk/"" |
-| GET | `/api/v1/mail/messages?account_id=&mailbox=INBOX&limit=50&before_uid=&q=` | `{"messages":[MailSummary],"has_more","next_before_uid"?,"headers_only"?,"uid_validity"?}`；`account_id` 为空 = 所有账号收件箱合并（按日期倒序，不带 `next_before_uid`）。`next_before_uid`：`has_more` 时下一页的 `before_uid`；本地匹配（见下）一页没看完时 `messages` 可以为空、`has_more` 仍为真。`headers_only`：服务端对 `q` 什么也没搜到（163 之类不做关键词搜索），结果来自在 hub 上匹配主题、发件人、收件人 / 抄送，不看正文（`docs/mail.md`「搜索」）。`uid_validity`：单账号列表时该邮箱的 UIDVALIDITY，变化说明服务端重排了 UID，按 UID 记的游标要作废；为 0 或多账号合并列表时省略 |
+| GET | `/api/v1/mail/accounts/{aid}/mailboxes` | `{"mailboxes":[{"name","role","unseen","total"}]}`, role ∈ inbox/sent/drafts/trash/archive/junk/"" |
+| GET | `/api/v1/mail/messages?account_id=&mailbox=INBOX&limit=50&before_uid=&q=` | `{"messages":[MailSummary],"has_more","next_before_uid"?,"headers_only"?,"uid_validity"?}`; empty `account_id` = merge all accounts' inboxes (newest date first, no `next_before_uid`). `next_before_uid`: the next page's `before_uid` when `has_more` is true; while a page of local matching (see below) hasn't been fully scanned, `messages` can be empty with `has_more` still true. `headers_only`: the server found nothing for `q` (providers such as 163 don't support keyword search), so results come from matching subject, sender, recipients / cc on the hub, without looking at bodies (`docs/mail.md` ("Search")). `uid_validity`: the mailbox's UIDVALIDITY for a single-account list; a change means the server reassigned UIDs, so UID-based cursors must be invalidated; omitted when 0 or for a merged multi-account list |
 | GET | `/api/v1/mail/messages/{aid}/{uid}?mailbox=INBOX` | `{"message":MailMessage}` |
-| GET | `/api/v1/mail/messages/{aid}/{uid}/attachments/{attachment_id}?mailbox=INBOX` | 按账号、邮箱、UID 和详情中的稳定附件 ID 下载；Bearer 鉴权与邮件读取一致；支持 `Range`／`If-Range`，返回 `Accept-Ranges`／`Content-Range`、206 或 416 |
+| GET | `/api/v1/mail/messages/{aid}/{uid}/attachments/{attachment_id}?mailbox=INBOX` | download by account, mailbox, UID and the stable attachment ID from the details; same Bearer authentication as mail reads; supports `Range` / `If-Range`, returning `Accept-Ranges` / `Content-Range`, 206 or 416 |
 | POST | `/api/v1/mail/messages/{aid}/{uid}/flags` | `{"mailbox","seen"?,"flagged"?}` |
-| POST | `/api/v1/mail/send` | `{"account_id","to":[],"cc":[],"bcc":[],"subject","text","html"?,"in_reply_to"?,"references"?}`；`references` 是空格分隔的 Message-ID 字符串，也收字符串数组（旧版 iOS 这样发，hub 用空格拼起来） |
+| POST | `/api/v1/mail/send` | `{"account_id","to":[],"cc":[],"bcc":[],"subject","text","html"?,"in_reply_to"?,"references"?}`; `references` is a space-separated Message-ID string, but a string array is also accepted (old iOS sends this; the hub joins it with spaces) |
 
-邮件详情页先读取正文和附件清单，再用 `/flags` 提交 `{"mailbox":"INBOX","seen":true}`。详情 GET 使用 `BODY.PEEK`，保留旧客户端的行为，不自动标已读。附件包含稳定的 `id`、文件名、MIME 类型和解码后大小；ID 绑定 MIME 顺序、文件元数据与解码内容，同名附件可以区分。下载同样使用只读 `BODY.PEEK`，不依赖 BINARY 等扩展；服务端将解码内容流式写入临时文件，再按 HTTP Range 返回解码后的字节区间。未知账号、附件或内容变化返回 404。
+The mail details page first reads the body and attachment list, then submits `{"mailbox":"INBOX","seen":true}` via `/flags`. The details GET uses `BODY.PEEK`, preserving old clients' behavior rather than marking messages read automatically. Attachments include a stable `id`, filename, MIME type and decoded size; IDs bind the MIME order, file metadata and decoded content, so attachments with the same name can be distinguished. Downloads also use read-only `BODY.PEEK`, with no dependency on extensions such as BINARY; the server streams decoded content into a temporary file, then returns byte ranges of the decoded content via HTTP Range. Unknown accounts, attachments or changed content return 404.
 
 ```jsonc
 // MailAccount
 {"id":"acc_…","name":"Gmail","email":"me@example.com","provider":"gmail|feishu|imap","auth":"password|oauth2",
  "username":"…","imap_host":"imap.gmail.com","imap_port":993,"smtp_host":"smtp.gmail.com","smtp_port":465,
  "smtp_security":"tls|starttls","status":"ok|error","error":""}
-// 新增时额外字段：password。provider 为 feishu 时忽略传入的服务器，hub 同时试 imap/smtp.larkoffice.com 和 imap/smtp.feishu.cn（993 / 465，SSL），保存先登录成功的那组（docs/mail.md「飞书邮箱」）
+// Extra field on add: password. With provider feishu, the supplied servers are ignored; the hub tries both imap/smtp.larkoffice.com and imap/smtp.feishu.cn (993 / 465, SSL), saving the first pair that signs in successfully (docs/mail.md ("Lark mail"))
 // MailSummary
 {"account_id","mailbox","uid":123,"message_id","subject","from":{"name","email"},"to":[{"name","email"}],
  "date","snippet","seen":false,"flagged":false,"has_attachments":false}
@@ -2088,299 +2095,299 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 //                               "in_reply_to","references":[…]}
 ```
 
-## 收件箱 API
+## Inbox API
 
-hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）聚合成「件」（`docs/inbox.md`「谁管什么」：条目在 `server/internal/assistant/inbox.go`，来源在 `server/internal/extmgr/inbox.go`），这些接口经 hub 转给它，管理者没连着时回 `503 assistant_offline`。
+The hub collects Lark, mail and connector data in the background and hands it to the manager (assistant) to aggregate into entries (`docs/inbox.md` ("Who manages what"): entries in `server/internal/assistant/inbox.go`, sources in `server/internal/extmgr/inbox.go`). The hub forwards these endpoints to it; when the manager isn't connected they return `503 assistant_offline`.
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/inbox` | `{items:[InboxItem], as_of, triage}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context`。默认只有飞书和邮件；带 `?sources=all` 才有连接器（GitHub…）的条目（带 `connector` 块的），旧 App 和旧手表不带，所以不会把 PR 当邮件画；Android、Mac 和新手表带（各自按 `connector` 块画成连接器的一件）。`triage`：`{state, reason?, waiting, sources?:[{source, name, state, reason, waiting}]}`，插件连接器的新条目里因为分拣不了（又没有兜底）或这一轮没轮到、还没进收件箱的有几件、为什么；没有时 `{"state":"ok","waiting":0}`（`docs/inbox.md`「AI 分拣」，旧 hub 没有）。`as_of` 是读出这份列表的时刻（hub 的时钟，RFC 3339），按筛选批量处理时带回（`/bulk`，旧 hub 没有）。每件还可能带事件的字段（第一期，[inbox.md](inbox.md)「事件与处理链条（第一期）」，旧 hub 都没有、旧 App 不认）：`status`（未处理的分区 `action` / `working` / `fyi` / `noise`，没有时按 `tier`）、`urgent`、`recap`、`handling`、`suggestion`、`chain`（处理链条，最多最新 50 条）、`related` |
-| GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用）；邮件额外带 `reply_target:{uid,version}` |
-| POST | `/api/v1/inbox/{id}/done` | `{done: bool, dismiss?: bool}`：标已处理 / 移回，返回这件；`dismiss` 为真时是「忽略」（`done_by=dismissed`，旧 hub 当成已处理） |
-| POST | `/api/v1/inbox/done` | `{done: bool, items:[{id, version?}]}` → `{changed:[InboxItem], unchanged:[id], skipped:[{id, reason}]}`：一次标多件（全部标为已处理、全部看过 / 全部清除、它们的撤销），一次写库、一次推 `inbox`。`version` 是列表里这件的 `version`：标已处理时不一致（列出以后又有新消息并进来）就不标，`skipped` 里 `reason=changed`；没有这件 `reason=missing`；已经是这个状态的放进 `unchanged`、不改 `done_at`（重试、另一台设备同时点都不会重复写）。移回不比版本。最多 1000 件，多了 413；没有 `done` 400。只记在 Persona，不回写来源的已读（`docs/inbox.md`「全部标为已处理」）；旧 hub 没有这个接口（405），App 退回逐件 `/{id}/done`。新客户端用下面的 `/bulk`，这个保留给旧 App |
-| POST | `/api/v1/inbox/bulk` | 全部清理（`docs/inbox.md`「全部清理」）：`{action, items?:[{id, version?}], ids?:[id], filter?, as_of?}` → `{action, changed:[InboxItem], ids:[id], unchanged:[id], skipped:[{id, reason}], undo?:{action:"reopen", ids}}`。`action` 是 `done`（已处理，`done_by=user`）/ `dismiss`（忽略，`done_by=dismissed`）/ `reopen`（移回，撤销用）；客户端的全部清理只发 `dismiss`，`done` 留给分段和 #5114 之前的客户端。**要么**给 `items` / `ids`（`ids` 是不带版本的简写，两个可以一起给）：只处理这些，规则同 `/done`（标的时候版本不一致的 `skipped reason=changed`、没有的 `missing`、已经是这个状态的 `unchanged`）；**要么**给 `filter` + `as_of`：处理 `filter` 选中的未处理条目，`as_of` 取 `GET /api/v1/inbox`（或 `/refresh`）回的那个，在它之后进来的新条目、它之后又有新消息并进来的条目都不动（`skipped reason=changed`）。`filter`：`{sources?: "all", source?, account?, tier?, kinds?:[]}`，`source` 是 lark / mail / 连接器 id，`account` 是 `feishu` 或邮箱账号 id，`tier` 是 action / fyi / noise / untriaged，`kinds` 是 `kind` 的列表；不带 `sources:"all"` 时和列表一样不含连接器的条目；搜索之类客户端自己的筛选用 `ids`。`reopen` 只收 `ids`。`ids` 是这次改了的；`undo` 原样 POST 回来就是撤销（只移回这次改的）。整批一次写库、推一次 `inbox`；只记在 Persona，不回写来源的已读。最多 1000 件（413）；`action` 不认识、`ids` 和 `filter` 都给或都没给、`filter` 没有 `as_of`、`reopen` 带 `filter`、`tier` 不认识都 400。手表（只能作答的设备）不能调（403）；扩展要 `inbox.write`。旧 hub 没有（404 / 405）：退回 `/done`（全部清理在那里按已处理记） |
-| GET | `/api/v1/inbox/mutes` | `{mutes:[{id, source, source_name, tag, value, name, created_at}]}`：用户的静音（`tag` 是 `repo` / `chat` / `sender`，`docs/inbox.md`「静音」）。列表里每件事带 `mutes:[{tag, value, name}]`，说它能按什么静音（旧 hub 没有） |
-| POST | `/api/v1/inbox/mutes` | `{item_id, tag}` → `{mute, settled}`：静音这件事在 `tag` 下的值（hub 从这件事上读），同一来源里被覆盖的打开条目收掉（`settled` 件），以后的进来就收掉；同一个静音只有一份 |
-| DELETE | `/api/v1/inbox/mutes/{id}` | 取消静音：以后的照常进来，已经收掉的不回来 |
-| POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
-| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`（发到一半和助手断了：502 `assistant_in_doubt`、`delivered:"unknown"`，可能已经发出去，同一条再发不会发两次）：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
-| POST | `/api/v1/inbox/{id}/suggestion` | `{version, action, text?, client_id?}`：对这件当前的建议（管理者的处理对话交的，[inbox.md](inbox.md)「AI 分身：处理对话和建议」）`confirm`（照原样执行；带 `text` 就是改了再确认）/ `reject`（交回处理对话）/ `instruct`（`text` 必填，交回处理对话重新出建议）→ 这件。回复的确认经 `/reply` 同样只发一次的路发出，但不标已处理（`handling.state=waiting`）。`409 {code:"suggestion_stale", error, item}`：`version` 不是当前的（或已经没有建议）；`409 inbox_item_done`；`400`；`403` 只能作答的设备除了以文字确认回复或结论都不行；`502 assistant_in_doubt` 同 `/reply`。旧 hub 没有（404 / 405） |
-| POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
-| POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表和 `triage`（`?sources=all` 同上）；插件连接器的新条目在后台分拣完才进列表，不等它 |
-| PUT | `/api/v1/inbox/{id}/parent` | `{kind, id}` 设这件的上级（`kind` 是 `inbox` / `todo` / `session`），`null` 或 `{}` 去掉 → 这件 `InboxItem`；没有这件或上级那件 404，上级不合法 400，会连成环 409（[inbox.md](inbox.md)） |
-| GET | `/api/v1/inbox/tree/{kind}/{id...}` | 一个节点的线索：`{node, item?, ancestors:[{kind, id, item?}], children:[InboxItem]}`，下级按开始时间排；没有这件 404，`kind` / `id` 不合法 400 |
-| POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」）。和收件箱一样是助手的（经 hub 转），用模型配置的「翻译」用途 |
-| POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?, model_fingerprint?}`：助手请 hub 读这封信（只有 HTML 的转成保留段落和链接的文字），自己翻；收件箱已经用同一个模型翻好的直接给；正文最多 12000 字 |
+| GET | `/api/v1/inbox` | `{items:[InboxItem], as_of, triage}`: unhandled entries + entries handled in the last 3 days, newest `updated_at` first; excludes `context`. Defaults to Lark and mail only; connector entries (GitHub…) with a `connector` block require `?sources=all`. Old Apps and watches don't pass it, so they don't draw PRs as mail; Android, Mac and new watches pass it (each draws a connector entry from its `connector` block). `triage`: `{state, reason?, waiting, sources?:[{source, name, state, reason, waiting}]}`, how many new plugin-connector entries haven't entered the Inbox because they couldn't be triaged (and had no fallback) or weren't reached this round, and why; when none, `{"state":"ok","waiting":0}` (`docs/inbox.md` ("AI triage"); old hubs lack it). `as_of` is when this list was read (hub clock, RFC 3339), sent back when handling in bulk by filter (`/bulk`; old hubs lack it). Each entry may also carry event fields (phase one, [inbox.md](inbox.md) ("Events and handling chains (phase one)"); old hubs lack them and old Apps don't recognize them): `status` (unhandled sections `action` / `working` / `fyi` / `noise`, falling back to `tier` when absent), `urgent`, `recap`, `handling`, `suggestion`, `chain` (handling chain, at most the latest 50 entries), `related` |
+| GET | `/api/v1/inbox/{id}` | one entry, with `context` (plain text of the chat / email, for AI); mail also carries `reply_target:{uid,version}` |
+| POST | `/api/v1/inbox/{id}/done` | `{done: bool, dismiss?: bool}`: mark handled / reopen; returns the entry. With `dismiss` true, this is "Ignore" (`done_by=dismissed`; old hubs treat it as handled) |
+| POST | `/api/v1/inbox/done` | `{done: bool, items:[{id, version?}]}` → `{changed:[InboxItem], unchanged:[id], skipped:[{id, reason}]}`: mark multiple entries at once (mark all handled, all seen / clear all, and their undo), one database write and one `inbox` push. `version` is the entry's `version` from the list: when marking handled, a mismatch (new messages merged in since listing) leaves it unmarked, with `reason=changed` in `skipped`; a missing entry has `reason=missing`; one already in that state goes in `unchanged` without changing `done_at` (retries or simultaneous taps on another device don't write twice). Reopening doesn't compare versions. At most 1000 entries; more returns 413; no `done` returns 400. Only recorded in Persona, not written back as read to the source (`docs/inbox.md` ("Mark all handled")); old hubs lack this endpoint (405), so the App falls back to `/{id}/done` per entry. New clients use `/bulk` below; this stays for old Apps |
+| POST | `/api/v1/inbox/bulk` | Clear all (`docs/inbox.md` ("Clear all")): `{action, items?:[{id, version?}], ids?:[id], filter?, as_of?}` → `{action, changed:[InboxItem], ids:[id], unchanged:[id], skipped:[{id, reason}], undo?:{action:"reopen", ids}}`. `action` is `done` (handled, `done_by=user`) / `dismiss` (ignored, `done_by=dismissed`) / `reopen` (reopen, for undo); clients send only `dismiss` for Clear all, keeping `done` for sections and clients before #5114. **Either** provide `items` / `ids` (`ids` is shorthand without versions; both can be supplied): handle only these, with the same rules as `/done` (version mismatch on marking: `skipped reason=changed`; missing: `missing`; already in that state: `unchanged`); **or** provide `filter` + `as_of`: handle unhandled entries selected by `filter`, using the `as_of` returned by `GET /api/v1/inbox` (or `/refresh`); entries arriving after it, or with new messages merged after it, are left alone (`skipped reason=changed`). `filter`: `{sources?: "all", source?, account?, tier?, kinds?:[]}`, where `source` is lark / mail / connector id, `account` is `feishu` or a mail account id, `tier` is action / fyi / noise / untriaged, and `kinds` is a list of `kind` values; without `sources:"all"`, connector entries are excluded as in the list. Client-side filters such as search use `ids`. `reopen` only accepts `ids`. `ids` lists what changed this time; POSTing `undo` back as is undoes it (reopens only what changed this time). One database write and one `inbox` push for the batch; only recorded in Persona, not written back as read to the source. At most 1000 entries (413); unknown `action`, supplying both or neither of `ids` and `filter`, `filter` without `as_of`, `reopen` with `filter`, or unknown `tier` all return 400. Watches (answer-only devices) can't call it (403); extensions need `inbox.write`. Old hubs lack it (404 / 405): fall back to `/done` (Clear all is recorded there as done) |
+| GET | `/api/v1/inbox/mutes` | `{mutes:[{id, source, source_name, tag, value, name, created_at}]}`: the user's mutes (`tag` is `repo` / `chat` / `sender`, `docs/inbox.md` ("Mute")). Each entry in the list carries `mutes:[{tag, value, name}]`, saying how it can be muted (old hubs lack it) |
+| POST | `/api/v1/inbox/mutes` | `{item_id, tag}` → `{mute, settled}`: mute this entry's value under `tag` (the hub reads it from the entry), settle open entries covered by it in the same source (`settled` count), and settle future arrivals; only one copy of each mute exists |
+| DELETE | `/api/v1/inbox/mutes/{id}` | unmute: future entries arrive normally; already settled entries don't return |
+| POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`: draft a reply in the user's voice (not sent) |
+| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}` (if the assistant connection breaks mid-send: 502 `assistant_in_doubt`, `delivered:"unknown"`; it may already have been sent, and retrying the same one won't send twice): send to the original Lark chat / as a mail reply / as a cloud-document comment (where `doc.reply` points), and mark handled (`done_by=replied`); returns the entry. For cloud documents, `changes:[{ref,field,value}]` changes statuses before commenting; `text` may be empty for status-only changes. With `client_id`, a receipt is saved, and Lark passes it through as upstream `clientId`; without it, `clientId` is computed from the entry id and text (UUIDv5), so retries after a hub restart don't duplicate it either. A Lark entry's same reply is sent only once: replies to the same entry are queued; an entry already handled by reply with the same text returns success directly without sending again. Different text is sent normally. Lark destination: DMs go into the chat; non-empty `lark.thread_kind` replies to `reply_to` within its topic; group @mentions (`kind=mention`) reply quoting `reply_to`; other groups and old data without `reply_to` still send into the chat |
+| POST | `/api/v1/inbox/{id}/suggestion` | `{version, action, text?, client_id?}`: act on the current suggestion (submitted by the manager's handling chat, [inbox.md](inbox.md) ("AI twin: handling chats and suggestions")): `confirm` (execute as is, or after editing when `text` is supplied) / `reject` (return to the handling chat) / `instruct` (`text` required, return for a new suggestion) → this item. Confirmed replies use the same send-once path as `/reply`, but do not mark done (`handling.state=waiting`). `409 {code:"suggestion_stale", error, item}` when `version` is not current or no suggestion remains; `409 inbox_item_done`; `400`; `403` for answer-only devices except text confirmation of replies or conclusions; `502 assistant_in_doubt` as in `/reply`. Old hubs lack it (404 / 405) |
+| POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`: set this row's status in a cloud document to `value` (must be an option for that column); read the latest value before writing (if someone just changed it, fails with 409); returns the reread entry |
+| POST | `/api/v1/inbox/refresh` | collect once immediately, returning the list and `triage` (`?sources=all` as above); new plugin-connector entries enter the list after background triage finishes, without waiting for it |
+| PUT | `/api/v1/inbox/{id}/parent` | `{kind, id}` sets this entry's parent (`kind` is `inbox` / `todo` / `session`); `null` or `{}` removes it → this `InboxItem`; missing entry or parent 404, invalid parent 400, would create a cycle 409 ([inbox.md](inbox.md)) |
+| GET | `/api/v1/inbox/tree/{kind}/{id...}` | a node's trail: `{node, item?, ancestors:[{kind, id, item?}], children:[InboxItem]}`, children ordered by start time; missing entry 404, invalid `kind` / `id` 400 |
+| POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`, preserving order; missing model outputs are empty strings. target is BCP 47 (zh-Hans, en, ja…, `docs/ios.md` ("Translation")). Like the Inbox, this belongs to the assistant (forwarded through the hub), using the "Translation" use in model configuration |
+| POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?, model_fingerprint?}`: the assistant asks the hub to read this mail (HTML-only mail becomes text preserving paragraphs and links), then translates it itself; returns the Inbox's existing translation if it used the same model; body at most 12000 characters |
 
-邮件回复可带详情返回的 `expected_uid` 和／或 `expected_version`。版本绑定账号、邮箱、线程中的 UID、消息标识及发件人；目标变化返回 HTTP 409，`code=mail_reply_target_changed`、`delivered=none`、`retryable=false`，此次没有发送。App 保留草稿，加载最新邮件并让用户确认新收件人后，用新的 `client_id` 发起新请求。网络结果不明时沿用原请求、原目标和原 `client_id` 核对回执。省略校验字段时沿用旧行为，现有 iOS 无需修改；持久回执规则不变。
+Mail replies may carry `expected_uid` and/or `expected_version` from the details response. The version binds the account, mailbox, UID in the thread, message identifier and sender. A changed target returns HTTP 409, `code=mail_reply_target_changed`, `delivered=none`, `retryable=false`; nothing was sent this time. The App keeps the draft, loads the latest mail, and after the user confirms the new recipients makes a new request with a new `client_id`. When the network result is unknown, it checks the receipt using the original request, target and `client_id`. Omitting the validation fields preserves old behavior, so existing iOS needs no changes; persistent receipt rules are unchanged.
 
-`InboxItem`：`id`、`source`（lark / mail，或连接器的 id：github）、`kind`（dm / mention / group / bot / mail；连接器的是它自己的：review_requested / mention / team_mention / author / ci_failed / assign）、`account`（`feishu` 或邮箱账号 id）、
-`account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
-`tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / dismissed / read / replied；dismissed 是用户「忽略」的）、`version`（这件现在装着什么，有新消息并进来就变；批量已处理时带回，旧 hub 没有）、
-`lark{account_id,ol_account,feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`account_id`：会话所在的飞书网关账号编号，旧记录为 0 = 账号 1；`ol_account`：不是默认账号时有，打开会话、调飞书接口要带的 `ol_account`；`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`conversation{source,id,account?,start_position?,read_position?,mention_position?}`（列表里有：飞书条目在消息来源里打开的位置，`source` 是连接器 id，`account` 是非默认账号时要带的 `account`；有这个来源的 App 用它，`docs/extension-messaging.md`「九」）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
-`translations{<目标语言>:{subject,preview}}`（hub 提前翻好的外文邮件，`docs/ios.md`「翻译」）、`doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
-（`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态；
-`connector{thread,label,url,open_url,reply_to,can_reply,rule_tier}`：连接器的一件（`docs/inbox.md`「连接器：GitHub」），App 只画这一个块、不认识具体来源：
-`label` 是行上的标签，`url` 在 App 内打开，`open_url` 交给系统打开（`sms:` 这类），`reply_to` 说回复会发到哪、谁能看到，`can_reply` 为假时不能回复（CI 失败）。
-列表变化时 WebSocket 推 `{"type":"inbox"}`（不带内容，App 自己拉）。
+`InboxItem`: `id`, `source` (lark / mail, or a connector id: github), `kind` (dm / mention / group / bot / mail; connectors define their own: review_requested / mention / team_mention / author / ci_failed / assign), `account` (`feishu` or a mail account id),
+`account_name`, `title` (chat name / mail subject), `sender`, `avatar`, `preview` (latest message), `count`, `started_at`, `updated_at`,
+`tier` (action / fyi / noise, empty before triage), `summary`, `reason`, `read` (seen elsewhere), `done_at`, `done_by` (user / dismissed / read / replied; dismissed means the user chose "Ignore"), `version` (what this entry currently contains; changes when new messages merge in; sent back when marking handled in bulk; old hubs lack it),
+`lark{account_id,ol_account,feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}` (`account_id`: the Lark gateway account number this chat belongs to; 0 in old records = account 1; `ol_account`: present for a non-default account, the `ol_account` to pass when opening the chat or calling Lark endpoints; `read_position`: this chat's read position in Lark, refreshed on every collection; `reply_to`: id of the last message sent by someone else; `thread_kind`: where it is, empty = in the chat, `topic` = a topic in a topic group, `thread` = a threaded reply in a regular group; these two refresh when new messages are collected and are absent in old data), `conversation{source,id,account?,start_position?,read_position?,mention_position?}` (present in the list: where to open a Lark entry in the messaging source; `source` is the connector id, `account` is the `account` to pass for a non-default account; Apps with this source use it, `docs/extension-messaging.md` ("Nine")), `mail{account_id,mailbox,uids,message_id,from,direct,thread}`,
+`translations{<target language>:{subject,preview}}` (foreign-language mail the hub translates ahead of time, `docs/ios.md` ("Translation")), `doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
+(`kind=doc`, `docs/inbox.md` ("Cloud documents")); `agent.changes:[{ref,field,value}]` are status changes the AI twin proposes with its draft;
+`connector{thread,label,url,open_url,reply_to,can_reply,rule_tier}`: a connector entry (`docs/inbox.md` ("Connectors: GitHub")); the App draws only this block, without knowing the specific source:
+`label` is the row label, `url` opens inside the App, `open_url` is handed to the system (`sms:` and similar), `reply_to` says where a reply goes and who can see it, and `can_reply` false means replies aren't allowed (CI failure).
+When the list changes, WebSocket pushes `{"type":"inbox"}` (no content; the App fetches it).
 
-## 飞书机器人
+## Lark bot
 
-`/api/v1/bots/feishu`（读状态 / 改凭证、开关和功能）、`…/pair`（配对码）、`…/owner`（DELETE 解除配对）、`…/test`（测试消息），字段见 `docs/bots.md`「配置和接口」。
+`/api/v1/bots/feishu` (read status / change credentials, toggles and features), `…/pair` (pairing code), `…/owner` (DELETE unpairs), `…/test` (test message); fields in `docs/bots.md` ("Configuration and API").
 
-## 知识库 API
+## Knowledge base API
 
-知识库是管理者（助手）的，这些接口 hub 原样转给它（上面「总线」的转发）：它没连着时回 `503 assistant_offline`。知识库未启用时返回 503；`kind` 支持 `projects`、`chats`、`people`、`docs`、`meetings`、`events`、`recordings`（录音，只读，写入走下面「录音同步」）。
+The knowledge base belongs to a manager (the assistant). The hub forwards these endpoints to it as-is (the forwarding in "Bus" above); when it is not connected the hub returns `503 assistant_offline`. Returns 503 when the knowledge base is not enabled. `kind` supports `projects`, `chats`, `people`, `docs`, `meetings`, `events`, `recordings` (recordings are read-only here; writes go through "Recording sync" below).
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/kb/{kind}?tag=` | `{items,tags}`；可按标签筛选 |
-| GET | `/api/v1/kb/{kind}/{id}` | `{detail,agents?}`；项目可额外返回相关在线 Agent |
-| PUT | `/api/v1/kb/{kind}/{id}` | body 为 `kb.Update`，可更新名称、标签、重要性、摘要及项目属性；返回 `{id}`，字段见 [knowledge.md](knowledge.md) |
-| GET | `/api/v1/kb-search?q=&messages=0` | `{hits}`；默认包含消息，`messages=0` 排除消息 |
-| GET | `/api/v1/kb/chats/{id}/context` | 知识库对一个会话知道什么：`{chat_id, chat_name, kind, summary, projects:[{name, summary}]}`（前三个项目）；只读，插件的 `/agent` 用；没有这个会话 404（[knowledge.md](knowledge.md)） |
-| GET | `/api/v1/kb/chats/{id}/days/{day}` | 会话某一天的全部消息 `{day, messages, prev, next}`（`prev` / `next` 是前后有消息的那天）；没有 404 |
+| GET | `/api/v1/kb/{kind}?tag=` | `{items,tags}`; can filter by tag |
+| GET | `/api/v1/kb/{kind}/{id}` | `{detail,agents?}`; for a project, can also return related online Agents |
+| PUT | `/api/v1/kb/{kind}/{id}` | body is a `kb.Update`; can update name, tags, importance, summary and project properties; returns `{id}`; fields in [knowledge.md](knowledge.md) |
+| GET | `/api/v1/kb-search?q=&messages=0` | `{hits}`; includes messages by default, `messages=0` excludes them |
+| GET | `/api/v1/kb/chats/{id}/context` | What the knowledge base knows about a chat: `{chat_id, chat_name, kind, summary, projects:[{name, summary}]}` (top three projects); read-only, used by the extension's `/agent`; 404 if the chat does not exist ([knowledge.md](knowledge.md)) |
+| GET | `/api/v1/kb/chats/{id}/days/{day}` | All messages of a chat on one day: `{day, messages, prev, next}` (`prev` / `next` are the nearest earlier / later days with messages); 404 if none |
 
-### 录音同步（#3235）
+### Recording sync (#3235)
 
-手机（含手表回传给手机的）录音转写后经这几个接口同步进知识库的 `recordings`（[recording.md](recording.md)、[knowledge.md](knowledge.md)「录音」）。只传转写文字，不传音频。
-和别的知识库接口一样由 hub 原样转给管理者，要设备 token；知识库没开 / 管理者没连着时 503。
+After transcription, recordings from the phone (including ones the watch sends back to the phone) are synced into the knowledge base's `recordings` through these endpoints ([recording.md](recording.md), [knowledge.md](knowledge.md) ("Recordings")). Only the transcript text is sent, never audio.
+Like the other knowledge base endpoints, the hub forwards them as-is to the manager; they need a device token; 503 when the knowledge base is off or the manager is not connected.
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| PUT | `/api/v1/recordings/{id}` | 上传或更新一条录音（幂等，下面） |
-| DELETE | `/api/v1/recordings/{id}` | 删除：`200 {"deleted": true\|false}`（false 是本来就没有）；删文件和索引，留墓碑 |
-| GET | `/api/v1/recordings` | 对账：`{"days":14,"recordings":[{"id","revision","complete","started_at"}],"deleted":["<id>"]}` |
+| PUT | `/api/v1/recordings/{id}` | Upload or update a recording (idempotent, see below) |
+| DELETE | `/api/v1/recordings/{id}` | Delete: `200 {"deleted": true\|false}` (false means it did not exist); removes the files and index, leaves a tombstone |
+| GET | `/api/v1/recordings` | Reconciliation: `{"days":14,"recordings":[{"id","revision","complete","started_at"}],"deleted":["<id>"]}` |
 
-`{id}` 是录音的 UUID（大小写不敏感，按小写存）。PUT 每次带**到目前为止的完整状态**，整份覆盖同一条，所以重放、乱序、转写补全都不会多出一条：
+`{id}` is the recording's UUID (case-insensitive, stored lowercase). Each PUT carries the **complete state so far** and overwrites the same record in full, so replays, reordering and transcript completion never create an extra record:
 
 ```jsonc
 {
-  "revision": 3,                              // 必填，> 0；同一条单调递增（建议用这份状态的更新时间，毫秒）
-  "started_at": "2026-11-05T09:00:00+08:00",  // 必填，RFC 3339
-  "ended_at": "2026-11-05T10:02:13+08:00",    // 还在录时省略
-  "duration": 3733.5,                         // 已录秒数
+  "revision": 3,                              // required, > 0; increases monotonically per recording (suggested: this state's update time, in ms)
+  "started_at": "2026-11-05T09:00:00+08:00",  // required, RFC 3339
+  "ended_at": "2026-11-05T10:02:13+08:00",    // omitted while still recording
+  "duration": 3733.5,                         // seconds recorded so far
   "language": "zh-CN",                        // BCP 47
-  "device": "phone",                          // phone | watch：录音的设备
-  "title": "",                                // 可选，用户起的名字
-  "bookmarks": [{"at": 120.5, "label": ""}],  // at：距开始的秒数
-  "segments": [{"start": 0, "end": 4.2, "text": "……"}],  // 距开始的秒数
-  "complete": false                           // 录音结束且转写全部完成才 true；之前先传已有的部分
+  "device": "phone",                          // phone | watch: the device that recorded
+  "title": "",                                // optional, name given by the user
+  "bookmarks": [{"at": 120.5, "label": ""}],  // at: seconds from the start
+  "segments": [{"start": 0, "end": 4.2, "text": "…"}],  // seconds from the start
+  "complete": false                           // true only when recording has ended and transcription is fully done; send the parts available before that
 }
 ```
 
-- 回答 `200 {"id","revision","status"}`：`stored` 写进去了（同一 revision 重放也照样覆盖）；`stale` 已存的 revision 更大，没写；`expired` 开始时间早于保留期，不存。
-- `410`，`code: recording_deleted`：这条删过（墓碑留到保留期满），手机不要再传。
-- `400`：id 不是 UUID、`revision` ≤ 0、缺 `started_at`、`device` 不认识，或太大（最多 20000 段、转写共 4 MB）。
-- 分段按 `start` 排，空文本丢掉；`complete` 从 true 变回 false（换语言重新转写）时照常覆盖，转写完成后摘要重做。
-- 保留期是助手设置 `recording_days`（默认 14，1–365）：`GET /api/v1/assistant` 带生效值，`PUT /api/v1/assistant {"recording_days": 30}` 改，`jarvis_settings` 的 `assistant.recording_days` 也能读改。
-  管理者每轮把开始时间超过保留期的录音连文件和索引一起删。
-- 读：`GET /api/v1/kb/recordings`、`GET /api/v1/kb/recordings/{id}`（`detail.meta` 是上面除 `segments` 外的字段加 `name`、打标；`detail.summary`；`detail.segments`），`kb-search` 搜得到转写全文。
+- Response `200 {"id","revision","status"}`: `stored` was written (a replay of the same revision also overwrites); `stale` the stored revision is higher, nothing written; `expired` the start time is before the retention window, not stored.
+- `410`, `code: recording_deleted`: this recording was deleted (the tombstone stays until the retention window ends); the phone should stop sending it.
+- `400`: id is not a UUID, `revision` ≤ 0, missing `started_at`, unknown `device`, or too large (at most 20000 segments, 4 MB of transcript in total).
+- Segments are sorted by `start`; empty text is dropped. When `complete` goes from true back to false (re-transcribing in another language) the record is overwritten as usual, and the summary is redone once transcription completes.
+- The retention window is the assistant setting `recording_days` (default 14, 1–365): `GET /api/v1/assistant` includes the effective value, `PUT /api/v1/assistant {"recording_days": 30}` changes it, and `assistant.recording_days` in `jarvis_settings` can also read and change it.
+  On every pass the manager deletes recordings whose start time is past the retention window, together with their files and index.
+- Reading: `GET /api/v1/kb/recordings`, `GET /api/v1/kb/recordings/{id}` (`detail.meta` is the fields above except `segments`, plus `name` and tags; `detail.summary`; `detail.segments`); `kb-search` finds the full transcript text.
 
-## 消息来源 API（`/api/v1/messaging`）
+## Messaging source API (`/api/v1/messaging`)
 
-扩展点 `messaging` 的来源（第一个是飞书）：`GET /api/v1/messaging` 列来源，`/api/v1/messaging/{source}/…` 是会话、消息、发送等，hub 鉴权后转给扩展、按 schema 查回答。规格见 [extension-messaging.md](extension-messaging.md)；下面的 `/api/v1/lark` 是迁移前的老接口，Mac、Android、网页迁完前保留（#2138）。
+Sources from the `messaging` extension point (the first is Lark): `GET /api/v1/messaging` lists sources; `/api/v1/messaging/{source}/…` handles chats, messages, sending and so on. After authentication, the hub forwards to the extension and validates responses against the schema. Specification in [extension-messaging.md](extension-messaging.md); `/api/v1/lark` below is the legacy API from before migration, kept until Mac, Android and web finish migrating (#2138).
 
-## 飞书 API（飞书网关）
+## Lark API (Lark gateway)
 
-这些路由不是 hub 自己的代码：#1571（3c）删掉了 hub 直连飞书网关的那条路，`server/internal/lark` 现在只剩 hub.json 的 `lark` 配置。`/api/v1/lark/…` 由飞书插件的 `api` 贡献提供，`lark` 是正在迁出 hub 的前缀（`migratablePrefixes`，`server/internal/extmgr/extension_api.go`），插件提供的优先。hub 先鉴权，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device` / `X-Persona-Role`，再原样转给插件，插件再去问飞书网关（[extensions.md](extensions.md)「App 接口」）。没有插件提供时这些路由 404。下面写的是插件要守的接口约定，文中的「hub」多指 hub 转给的插件；插件声明的 `receipts` 由 hub 套上发送回执。
+These routes aren't the hub's own code: #1571 (3c) removed the hub's direct connection to the Lark gateway, and `server/internal/lark` now contains only hub.json's `lark` config. `/api/v1/lark/…` is provided by the Lark plugin's `api` contribution; `lark` is a prefix being migrated out of the hub (`migratablePrefixes`, `server/internal/extmgr/extension_api.go`), and the plugin's contribution takes precedence. The hub authenticates first, removes `Authorization` and `token`, adds `X-Persona-Device` / `X-Persona-Role`, then forwards as is to the plugin, which asks the Lark gateway ([extensions.md](extensions.md) ("App endpoints")). Without a plugin providing them, these routes return 404. Below is the endpoint contract plugins must follow; "hub" mostly means the plugin the hub forwards to. The hub wraps plugin-declared `receipts` with send receipts.
 
-下面的路由都认查询参数 `ol_account=<飞书网关账号编号>`：这次请求是哪个飞书账号的（不合法回 400）；不带时是插件的默认账号，由插件按自己的飞书网关配置决定：hub 不把 hub.json 的 `lark.account` 交给插件，它只给助手的收件箱用（`server/internal/lark/config.go`，`docs/feishu.md`「多账号」）。交出的别的账号的媒体 URL 已经带着它。
+All routes below accept the query parameter `ol_account=<Lark gateway account number>`: which Lark account this request uses (invalid returns 400). Without it, the plugin's default account is used, decided by the plugin's own Lark gateway config: the hub doesn't hand hub.json's `lark.account` to the plugin; it is only used for the assistant's Inbox (`server/internal/lark/config.go`, `docs/feishu.md` ("Multiple accounts")). Media URLs for other accounts already carry it.
 
-飞书网关出错时插件回 502 `{"error"}`；其中飞书网关自己丢了飞书登录（`AUTH_*`）的，回 `{"error","code":"lark_not_logged_in"}`，App 据此提示去飞书网关重新登录飞书。`/raw/…` 例外，原样转发飞书网关自己的回答。
+On a Lark gateway error, the plugin returns 502 `{"error"}`; when the gateway itself lost its Lark sign-in (`AUTH_*`), it returns `{"error","code":"lark_not_logged_in"}`, which the App uses to prompt the user to sign in to Lark again in the gateway. `/raw/…` is an exception: it forwards the gateway's own response as is.
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/v1/lark/accounts` | `{"accounts":[{"id","name"?,"avatar"?,"tenant"?,"user_id"?,"signed_in","primary"?,"unread","quarantined"?}],"default"}`：飞书网关上登录的飞书账号（按飞书网关的顺序，`signed_in` 对被隔离的账号为 false）和默认账号的编号。没有账号列表的旧飞书网关只回默认账号；旧 hub 没有这条路由（404），App 不显示账号切换 |
-| GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured 由插件按自己的飞书网关配置给出（3c 以前是「hub.json 有 lark」）；connected 每次现问飞书网关的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
-| GET | `/api/v1/lark/message-display` | `{"account_id","anti_recall","show_edit_history"}`：当前选中飞书账号的展示设置；只返回这两个开关和实际用户 ID，不返回脚本/自动发送配置 |
-| POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`：key 为 `anti_recall` 或 `show_edit_history`，value/expected 为布尔值；完整设备权限，body ≤1 KiB，未知字段拒绝；通过飞书网关受限 PATCH 保留其他字段。账号/旧值冲突 409，未授权 403，旧服务无接口 404；登录失效 502 + `lark_not_logged_in`。成功返回与 GET 相同结构并推送带 `settings_changed=true` 的 `lark` 事件，不自动重试未知结果 |
-| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store`。插件在 `api` 的 `features` 里声明 `lark_native_encryption`，hub 并进自己的 features；上游缺少原生接口返回 426 + `lark_gateway_upgrade_required`，独立授权缺失返回 403 + `OLK_VAULT_NATIVE_NOT_AUTHORIZED` |
-| POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → 同上。只允许完整写权限；按实际飞书账号校验，共享网页的密码尝试限制；密码不存储 |
-| POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`；候选历史外显复用飞书网关网页规则 |
-| POST | `/api/v1/lark/conversations/{id}/encryption/prepare` | `{account_id,text,cover}` → `{accountId,feedId,messages:[{text}]}`。只生成带外显的密文，不发送；身份不一致、未授权、未解锁或无收件公钥时拒绝 |
-| POST | `/api/v1/lark/conversations/{id}/encrypted-messages` | `{account_id,ciphertext,client_id,reply_id?}` → `{ok,message_id?}`。必需稳定 UUID，仅接受 OLK2/OLK3 wire shape，重新校验原生授权与实际账号；上游写入携带 `expectedSenderId`。多段按顺序发送，仅最后一段可引用；每段单独保存去重回执。所有原生加密响应 `no-store`，失败不会改走普通文字接口；协议与限制见 [加密消息](lark-encryption.md) |
-| GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`；scope：`chats`（默认，飞书「消息」：不含已完成 / 折叠，按标签显示规则过滤）、`unread`、`done`（已完成）、`label:<id>`、`inbox`、`mentions`、`muted`、`p2p`、`group`、`thread`、`later` |
-| GET | `/api/v1/lark/pinned` | 全部置顶会话（持续读取 inbox + done 的置顶头部，合并去重后按置顶时间排序）；分页异常返回错误，不把截断集合当作成功结果 |
-| GET | 上述 `/conversations`、`/pinned` 加 `account_bound=1` | 额外返回实际选中账号 `account_id`，集合为空时为 `[]`，禁止中间缓存。可带预期 `account_id`；请求前后身份变化或预期不匹配返回 409 `lark_account_changed`，不带会话数据。未登录沿用 `lark_not_logged_in`；旧调用不加参数，保持原契约 |
-| GET | `/api/v1/lark/conversations/{id}/pins?account_id=&cursor=&limit=` | 聊天内 Pin 列表：`{account_id,items:[{id,message_id,message?:LarkMessage,operator_name?,created_at}],next_cursor,total}`。limit 默认 50、最大 100。完整保留上游分页，重复/缺失游标返回错误；此读取会清除飞书网关的 Pin 未读标记，禁止首页预取 |
-| GET | `/api/v1/lark/conversations/{id}/pin-messages/{message}?account_id=&topic=` | 定位 Pin：`{account_id,target:{message,root?,page}}`，page 与聊天/话题分页同结构。普通消息返回 around 窗口；回复返回话题根和包含目标的回复窗口（最多 20×100 条）；没有找到目标返回 409 `lark_pin_no_position`，客户端保留当前窗口 |
-| POST | `/api/v1/lark/conversations/{id}/pins` | `{account_id,message_id,pin_id?,remove}` → `{account_id,pinned}`。remove=true 时必须有对应 pin_id；写前核实消息 feed、capabilities、Pin 归属和实际账号。未知结果返回 `lark_pin_result_unknown`，必须重新读取确认，不自动重试。三条 Pin API 均 `no-store`，换号 409 `lark_account_changed` 不带数据；旧飞书网关路由 426 `lark_gateway_upgrade_required`，不存在的原消息为 `lark_pin_not_found` |
+| GET | `/api/v1/lark/accounts` | `{"accounts":[{"id","name"?,"avatar"?,"tenant"?,"user_id"?,"signed_in","primary"?,"unread","quarantined"?}],"default"}`: Lark accounts signed in on the gateway (in gateway order; `signed_in` is false for quarantined accounts) and the default account number. Old gateways without an account list return only the default account; old hubs lack this route (404), so the App shows no account switching |
+| GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`: Settings › Connectors › Lark. configured comes from the plugin's own Lark gateway config (before 3c it meant "hub.json has lark"); connected asks the gateway's `/accounts` on every request; last_event_at is the latest live event (Unix seconds) |
+| GET | `/api/v1/lark/message-display` | `{"account_id","anti_recall","show_edit_history"}`: display settings of the selected Lark account; returns only these two switches and the actual user ID, no script / auto-send config |
+| POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`: key is `anti_recall` or `show_edit_history`, value/expected are booleans; full device permissions, body ≤1 KiB, unknown fields rejected; a restricted PATCH through the gateway preserves other fields. Account / old-value conflicts 409, unauthorized 403, old service without endpoint 404; expired sign-in 502 + `lark_not_logged_in`. Success returns the same structure as GET and pushes a `lark` event with `settings_changed=true`; unknown results aren't retried automatically |
+| GET | `/api/v1/lark/encryption` | native encryption status `{accountId,configured,locked,unifiedPassword}`. Requires separate native OLK authorization; no keys or credentials returned, `Cache-Control: no-store`. The plugin declares `lark_native_encryption` in its `api` `features`, and the hub merges it into its features; upstream without the native endpoint returns 426 + `lark_gateway_upgrade_required`, missing separate authorization returns 403 + `OLK_VAULT_NATIVE_NOT_AUTHORIZED` |
+| POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → same as above. Full write permission only; validates against the actual Lark account, sharing the web's password-attempt limit; the password isn't stored |
+| POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`; candidate historical cover text uses the same rules as the gateway web UI |
+| POST | `/api/v1/lark/conversations/{id}/encryption/prepare` | `{account_id,text,cover}` → `{accountId,feedId,messages:[{text}]}`. Only generates ciphertext with cover text, without sending; rejects identity mismatch, unauthorized, locked, or missing recipient public keys |
+| POST | `/api/v1/lark/conversations/{id}/encrypted-messages` | `{account_id,ciphertext,client_id,reply_id?}` → `{ok,message_id?}`. Requires a stable UUID, accepts only the OLK2/OLK3 wire shape, and revalidates native authorization and the actual account; upstream writes carry `expectedSenderId`. Segments are sent in order, and only the last can quote a message; each segment gets a separate dedup receipt. All native-encryption responses are `no-store`; failures never fall back to the plain-text endpoint; protocol and limits in [Encrypted messages](lark-encryption.md) |
+| GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`; scope: `chats` (default, Lark "Messages": excludes completed / folded chats and filters by label display rules), `unread`, `done` (completed), `label:<id>`, `inbox`, `mentions`, `muted`, `p2p`, `group`, `thread`, `later` |
+| GET | `/api/v1/lark/pinned` | all pinned chats (keeps reading the pinned head of inbox + done, merges and dedups, then sorts by pin time); pagination anomalies return an error rather than treating a truncated set as success |
+| GET | `/conversations`, `/pinned` above with `account_bound=1` | additionally returns the actual selected `account_id`; an empty collection is `[]`; intermediary caching prohibited. May carry expected `account_id`; identity changes before / after the request or an expected-account mismatch return 409 `lark_account_changed` with no chat data. Not signed in still uses `lark_not_logged_in`; old calls omit the parameter and keep the original contract |
+| GET | `/api/v1/lark/conversations/{id}/pins?account_id=&cursor=&limit=` | in-chat Pin list: `{account_id,items:[{id,message_id,message?:LarkMessage,operator_name?,created_at}],next_cursor,total}`. limit defaults to 50, max 100. Preserves upstream pagination fully; repeated / missing cursors return errors. This read clears the gateway's unread Pin marker, so home-page prefetching is prohibited |
+| GET | `/api/v1/lark/conversations/{id}/pin-messages/{message}?account_id=&topic=` | locate a Pin: `{account_id,target:{message,root?,page}}`, with page in the same shape as chat / topic pagination. A regular message returns an around window; a reply returns the topic root and a reply window containing the target (at most 20×100 entries). Target not found returns 409 `lark_pin_no_position`; the client keeps the current window |
+| POST | `/api/v1/lark/conversations/{id}/pins` | `{account_id,message_id,pin_id?,remove}` → `{account_id,pinned}`. remove=true requires the corresponding pin_id; before writing, verifies message feed, capabilities, Pin ownership and actual account. An unknown result returns `lark_pin_result_unknown`, requiring a reread to confirm, not an automatic retry. All three Pin APIs are `no-store`; account switch returns 409 `lark_account_changed` without data; old gateway routes return 426 `lark_gateway_upgrade_required`, missing original messages `lark_pin_not_found` |
 | GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |
-| GET | `/api/v1/lark/unread-count` | `{"count"}`：「未读 N」（不含免打扰） |
-| GET | `/api/v1/lark/flags` | 标记：`{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |
-| GET | `/api/v1/lark/conversations/{id}/labels` | `{"label_ids":[…],"labels":[{"id","name"}]}`（这个会话在哪些标签里 / 可选标签） |
-| POST | `/api/v1/lark/conversations/{id}/settings` | `{"done"?,"pinned"?,"flagged"?,"muted"?,"label_ids"?}` → 飞书网关 `PATCH settings`（isArchived / isShortcut / isFlagged / isMuted / labelIds，labelIds 是全量） |
-| POST | `/api/v1/lark/conversations/{id}/unread` | `{"unread":true}` 标为未读 / `false` 清除未读 |
-| GET | `/api/v1/lark/conversations/{id}/messages?before=&after=&around=&limit=&topic=` | `{"messages":[LarkMessage],"has_older","has_newer","older_cursor","newer_cursor"}`，旧→新；不带游标 = 最新一页；`around=<读到的位置+1>` 从第一条未读打开；`topic=1` 时取话题群的话题列表（只能往前翻） |
-| GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | 话题 / 回复串里的消息，格式同上；只支持 `before` 前翻，无游标时读取最新页；不支持 `after`，上游未提供更新方向分页与游标，见 [话题分页限制](feishu.md#话题分页限制h06) |
-| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` 以本人身份发送，回 `{"ok":true,"message_id"?}`。`client_id` 是 App 生成的 UUID，原样交给飞书网关的 `clientId` 并在 hub 保存回执：同一条消息重发时带同一个，只会发出一条；不传或不是 UUID 时 hub 自己生成。`mentions` 是 `[{"user_id","name"}]`（最多 100 个，超过或缺 `user_id` / `name` 回 400），`text` 里要有字面的 `@name`，hub 不改写文字，原样交给飞书网关的 `mentions`；@所有人是 `{"user_id":"all","name":"所有人"}` |
-| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` 以本人身份回复这条消息，回 `{"ok":true,"message_id"?}`。`thread=false`（默认）在原会话里引用这条；`thread=true` 发进这条所在的话题（是普通群里的顶层消息时以它为根开一个话题；话题群里落进它的话题）。代理飞书网关 `POST /messages/{id}/replies`，`client_id` 原样透传为 `clientId` 并保存回执，`mentions` 同上一行；目标可以是根消息或话题中的回复，由上游解析话题归属。`text` 为空 400 |
-| GET | `/api/v1/lark/conversations/{id}/members?q=&limit=` | @人用的成员：`{"members":[{"user_id","name","avatar"?}]}`。`q` 为空列出成员，不为空按名字 / 群昵称 / 拼音搜；`limit` 默认 50，最多 200；`name` 群昵称优先，没有时用显示名 |
-| POST | `/api/v1/lark/conversations/{id}/images` | `{"client_id","name","mime","data"}`；data 为 base64，解码后最大 7.5 MiB，校验图片格式；回 `{"message_id"}` |
-| POST | `/api/v1/lark/conversations/{id}/files?client_id=&name=&mime=` | `application/octet-stream` 原始字节，必须有 Content-Length，1 字节至 100 MiB；回 `{"message_id"}`；Hub 流式转发 |
-| POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`：上报看到的消息（最高位置、该条的 badge_count、其间别人发的未读消息 id），只在消息真正上屏后发 |
-| POST | `/api/v1/lark/conversations/{id}/read-states` | `{"message_ids":[…]}`（最多 100 个，超过 400）：这些消息的已读回执，回 `{"states":[{"message_id","read_count","unread_count"}]}`。飞书网关没给回执的（还在发送、不认识的）不出现在 `states` 里；旧 hub 没有这条路由时 App 不显示回执 |
-| GET | `/api/v1/lark/media/{key}?size=` | 图片 / 贴纸 / 头像 / 视频 / 文件原样转发（`size` 为 24 的倍数、≤624 时返回缩略图） |
-| GET | `/api/v1/lark/messages/{id}/media/{key}` | 消息作用域的媒体（同上） |
-| GET | `/api/v1/lark/emojis` | `{"emojis":{"<小写 key>":{"label","url"}}}`，含肤色变体 key；hub 缓存一天 |
-| POST | `/api/v1/lark/messages/{id}/card-actions/{actionId}` | 以本人身份按下卡片回调按钮（body 原样转给飞书网关） |
-| GET / POST | `/api/v1/lark/raw/{path...}` | 飞书网关 `/agent/v1/<path>` 的只读代理，转发查询与允许的只读 POST；不作为通用写接口 |
-| GET | `/api/v1/lark/reactions/quick` | `{keys}`：快捷表情 |
-| POST | `/api/v1/lark/messages/{id}/reactions` | `{key,remove?}`：添加或撤销表情，返回 `{ok:true}` |
-| GET | `/api/v1/lark/users/{id}?feed_id=` | 用户资料，原样转发上游 JSON |
-| POST | `/api/v1/lark/users/{id}/chat` | 打开私聊，返回 `{feed_id}` |
-| GET | `/api/v1/lark/messages/{id}/url-preview?url=` | 消息内链接预览，原样转发上游 JSON |
-| POST | `/api/v1/lark/documents/comments` | `{url, content, mentions?:[{user_id,name}], quote?, block_id?, client_id}`：以用户本人在文档上发一条新评论（#1290）。没有 `quote` 是全文评论，有 `quote`（和它所在的块 `block_id`）是对那段正文的评论；`content` 里每个被 @ 的人写成 `@名字`，和发消息一样。回 `{ok, threads, anchored?}`：`threads` 是写完后读回的全部线程（同 `documents/comments` 的形状，读不回时为 null，评论已经发出），对一段正文的评论另带 `anchored`（`false`：找不到那段所在的块，改成在全文评论里引用那段话）。正文锚点走飞书网关的 inline 评论，块由插件按 `quote` 在文档的 JSON 里找（App 知道 `block_id` 时直接带上）。插件声明 `lark_doc_comments` 才有这几条路由；是用户自己设备上的写，不过 AI 的闸门；写进回执（`client_id` 派生回执 id，同一个 id 重试不会发两次） |
-| POST | `/api/v1/lark/documents/comments/{thread}/replies` | `{url, content, mentions?, client_id}`：回复这条评论线程，回 `{ok, threads}` |
-| POST | `/api/v1/lark/documents/comments/{thread}/resolve` | `{url, resolved}`：标为已解决（`true`）或重新打开（`false`），回 `{ok, threads}`；内容不对 400 `comment_invalid`、这种文档不能这样评论 400 `comment_unsupported` |
-| GET | `/api/v1/lark/documents/people?url=&q=` | `{members:[{user_id,name,avatar?}]}`：评论里 @ 的候选人，按名字找（和群的 `members` 同一个形状） |
-| GET | `/api/v1/lark/moments/posts/{id}` | 单帖内容，原样转发上游 JSON |
-| GET | `/api/v1/lark/moments/posts/{id}/comments` | 单帖评论，原样转发上游 JSON |
+| GET | `/api/v1/lark/unread-count` | `{"count"}`: "Unread N" (excludes muted chats) |
+| GET | `/api/v1/lark/flags` | flags: `{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |
+| GET | `/api/v1/lark/conversations/{id}/labels` | `{"label_ids":[…],"labels":[{"id","name"}]}` (labels this chat belongs to / available labels) |
+| POST | `/api/v1/lark/conversations/{id}/settings` | `{"done"?,"pinned"?,"flagged"?,"muted"?,"label_ids"?}` → gateway `PATCH settings` (isArchived / isShortcut / isFlagged / isMuted / labelIds; labelIds is the full set) |
+| POST | `/api/v1/lark/conversations/{id}/unread` | `{"unread":true}` marks unread / `false` clears unread |
+| GET | `/api/v1/lark/conversations/{id}/messages?before=&after=&around=&limit=&topic=` | `{"messages":[LarkMessage],"has_older","has_newer","older_cursor","newer_cursor"}`, oldest→newest; no cursor = latest page; `around=<read position+1>` opens from the first unread message; `topic=1` fetches a topic group's topic list (backward paging only) |
+| GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | messages in a topic / reply thread, same format as above; supports only backward paging with `before`, reading the latest page without a cursor; no `after`, since upstream provides no forward pagination or cursor; see [Topic pagination limits](feishu.md#话题分页限制h06) |
+| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` sends as the user, returning `{"ok":true,"message_id"?}`. `client_id` is an App-generated UUID passed as is to the gateway's `clientId` and stored with a receipt on the hub: resending the same message with the same id sends only one; missing or non-UUID values are generated by the hub. `mentions` is `[{"user_id","name"}]` (at most 100; exceeding the limit or missing `user_id` / `name` returns 400); `text` must contain literal `@name`; the hub doesn't rewrite text and passes it as is to the gateway's `mentions`; @everyone is `{"user_id":"all","name":"所有人"}` ("everyone") |
+| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` replies to this message as the user, returning `{"ok":true,"message_id"?}`. `thread=false` (default) quotes it in the original chat; `thread=true` sends into its topic (a top-level message in a regular group becomes the root of a new topic; in a topic group it goes into its topic). Proxies gateway `POST /messages/{id}/replies`, passing `client_id` as is as `clientId` and saving a receipt; `mentions` as in the previous row. The target may be a root message or a reply in a topic; upstream resolves topic ownership. Empty `text` returns 400 |
+| GET | `/api/v1/lark/conversations/{id}/members?q=&limit=` | members for @mentions: `{"members":[{"user_id","name","avatar"?}]}`. Empty `q` lists members; non-empty searches names / group nicknames / pinyin; `limit` defaults to 50, at most 200; `name` prefers the group nickname, falling back to display name |
+| POST | `/api/v1/lark/conversations/{id}/images` | `{"client_id","name","mime","data"}`; data is base64, decoded size at most 7.5 MiB; image format validated; returns `{"message_id"}` |
+| POST | `/api/v1/lark/conversations/{id}/files?client_id=&name=&mime=` | raw `application/octet-stream` bytes, Content-Length required, 1 byte to 100 MiB; returns `{"message_id"}`; streamed through the hub |
+| POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`: report viewed messages (highest position, that message's badge_count, and unread message ids sent by others in between); only sent after messages actually appear on screen |
+| POST | `/api/v1/lark/conversations/{id}/read-states` | `{"message_ids":[…]}` (at most 100; more returns 400): read receipts for these messages, returning `{"states":[{"message_id","read_count","unread_count"}]}`. Messages the gateway provided no receipt for (still sending, unknown) don't appear in `states`; when old hubs lack this route, the App shows no receipts |
+| GET | `/api/v1/lark/media/{key}?size=` | images / stickers / avatars / videos / files forwarded as is (`size` returns a thumbnail when a multiple of 24 and ≤624) |
+| GET | `/api/v1/lark/messages/{id}/media/{key}` | message-scoped media (as above) |
+| GET | `/api/v1/lark/emojis` | `{"emojis":{"<lowercase key>":{"label","url"}}}`, including skin-tone variant keys; cached by the hub for a day |
+| POST | `/api/v1/lark/messages/{id}/card-actions/{actionId}` | press a card callback button as the user (body passed as is to the gateway) |
+| GET / POST | `/api/v1/lark/raw/{path...}` | read-only proxy for gateway `/agent/v1/<path>`, forwarding queries and allowed read-only POSTs; not a general write endpoint |
+| GET | `/api/v1/lark/reactions/quick` | `{keys}`: quick reactions |
+| POST | `/api/v1/lark/messages/{id}/reactions` | `{key,remove?}`: add or remove a reaction, returning `{ok:true}` |
+| GET | `/api/v1/lark/users/{id}?feed_id=` | user profile, upstream JSON forwarded as is |
+| POST | `/api/v1/lark/users/{id}/chat` | open a DM, returning `{feed_id}` |
+| GET | `/api/v1/lark/messages/{id}/url-preview?url=` | link preview within a message, upstream JSON forwarded as is |
+| POST | `/api/v1/lark/documents/comments` | `{url, content, mentions?:[{user_id,name}], quote?, block_id?, client_id}`: post a new document comment as the user (#1290). Without `quote`, a whole-document comment; with `quote` (and its containing block `block_id`), a comment on that body passage. Each @mentioned person in `content` is written as `@name`, as in messages. Returns `{ok, threads, anchored?}`: `threads` is all threads read back after writing (same shape as `documents/comments`; null if unreadable, but the comment was sent); a comment on a passage also carries `anchored` (`false`: the containing block couldn't be found, so the passage is quoted in a whole-document comment instead). Body anchors use the gateway's inline comments; the plugin finds the block by `quote` in the document JSON (if the App knows `block_id`, it sends it directly). These routes exist only when the plugin declares `lark_doc_comments`; writes from the user's own device bypass the AI gate; recorded in receipts (receipt id derived from `client_id`, so retries with the same id don't send twice) |
+| POST | `/api/v1/lark/documents/comments/{thread}/replies` | `{url, content, mentions?, client_id}`: reply to this comment thread, returning `{ok, threads}` |
+| POST | `/api/v1/lark/documents/comments/{thread}/resolve` | `{url, resolved}`: mark resolved (`true`) or reopen (`false`), returning `{ok, threads}`; invalid content 400 `comment_invalid`, this document doesn't support such comments 400 `comment_unsupported` |
+| GET | `/api/v1/lark/documents/people?url=&q=` | `{members:[{user_id,name,avatar?}]}`: candidates for @mentions in comments, searched by name (same shape as group `members`) |
+| GET | `/api/v1/lark/moments/posts/{id}` | single-post content, upstream JSON forwarded as is |
+| GET | `/api/v1/lark/moments/posts/{id}/comments` | single-post comments, upstream JSON forwarded as is |
 
-飞书发送、话题回复和收件箱回复的可选 `client_id` 可直接用于重试，不要求额外请求头。hub 按操作种类和原始 ID 派生内部回执 UUID，复用 Postgres `client_ops`；同 ID、同目标与参数返回原 HTTP 状态和响应正文，不再发送，即使收件箱事项已变化或 hub 已重启。同 ID 换参数、目标或鉴权设备返回 `409 {"code":"op_id_reused"}`。已记录的上游错误也原样返回，避免结果不明时重复发送；执行尚未完成返回 `202 {"state":"pending"}`，重启时遗留的执行没有结果则返回 `202 {"state":"unknown"}`，客户端需核对。回执沿用 `client_ops` 的保留策略。请求同时携带 `client_id` 和 `X-Jarvis-Op-Id` 时，以 `client_id` 派生的回执为准。
+The optional `client_id` for Lark sends, threaded replies and Inbox replies can be used directly for retries, with no extra request header required. The hub derives an internal receipt UUID from the operation kind and original ID, reusing Postgres `client_ops`; the same ID with the same target and params returns the original HTTP status and response body without sending again, even if the Inbox entry changed or the hub restarted. Reusing an ID with different params, target or authenticated device returns `409 {"code":"op_id_reused"}`. Recorded upstream errors are also returned as is, to avoid duplicate sends when the result is uncertain; execution not yet finished returns `202 {"state":"pending"}`, and execution left over after a restart without a result returns `202 {"state":"unknown"}`, which clients must verify. Receipts use the `client_ops` retention policy. When a request carries both `client_id` and `X-Jarvis-Op-Id`, the receipt derived from `client_id` wins.
 
-话题回复使用独立的操作种类 `lark_thread_reply`，沿用上述回执规则。Android 发送前持久保存话题草稿及原请求；收到 `202` 或丢失回执时保留待确认状态，再次提交相同目标、文本和 `client_id` 核对原结果，不能生成新 ID 重发。`ok:true` 表示上游已接受，话题列表随后重新读取。
+Threaded replies use the separate operation kind `lark_thread_reply` with the same receipt rules. Before sending, Android persistently saves the topic draft and original request; on `202` or a lost receipt it stays pending confirmation, and submits the same target, text and `client_id` again to check the original result, never generating a new ID to resend. `ok:true` means upstream accepted it; the topic list is then reread.
 
-不提供 `client_id` 的旧客户端维持原行为：飞书会话发送由上游客户端生成 ID，收件箱飞书回复由 hub 按事项生成稳定 ID。HTTP 响应结构不变，不增加 WebSocket 事件。
+Old clients without `client_id` keep the original behavior: the upstream client generates IDs for Lark chat sends, and the hub generates a stable ID per entry for Inbox Lark replies. HTTP response shapes are unchanged; no WebSocket events are added.
 
 ```jsonc
 // LarkConversation
 {"id":"<feedId>","name","avatar":"/api/v1/lark/media/…","is_group","is_topic","unread","marked_unread","at_me","at_all","muted",
- "pinned","flagged","done","tags":["外部"|"公开"|"会议"|"机器人"|"AI"…],"preview","preview_sender","is_mine","updated_at",
+ "pinned","flagged","done","tags":["外部"|"公开"|"会议"|"机器人"|"AI"…],"preview","preview_sender","is_mine","updated_at", // gateway tag values: External | Public | Meeting | Bot | AI
  "read_position","mention_position"}
 // LarkMessage
 {"id","position","sender_id","sender_name","sender_avatar","sender_type":"user|bot","is_mine",
- "type":"TEXT|POST|IMAGE|CARD|SYSTEM|FILE|MEDIA|STICKER|MERGE_FORWARD…","text":"纯文本预览","created_at",
+ "type":"TEXT|POST|IMAGE|CARD|SYSTEM|FILE|MEDIA|STICKER|MERGE_FORWARD…","text":"plain-text preview","created_at",
  "recalled","retained"?,"edited","reply_count","thread_reply_count","badge_count","at_me","is_read",
- "parts":[MessagePart],                       // 飞书网关原样（见下），媒体 URL 已改写到 /api/v1/lark/
- "olk"?:{…},                                 // 加密投影：状态、公开外显、授权解密正文、密钥分发信息
+ "parts":[MessagePart],                       // gateway content as is (see below); media URLs rewritten to /api/v1/lark/
+ "olk"?:{…},                                 // encrypted projection: status, public cover text, authorized decrypted body, key distribution info
  "edit_history"?:[{"edited_at","text","parts"?,"olk"?}],
  "reply_to":{"id","sender_name","text","recalled","retained"?,"parts","olk"?},
- "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["示例成员甲","示例成员乙"]}]}
-// MessagePart（飞书网关的 MessagePart，不改字段名）
+ "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["Example member A","Example member B"]}]}
+// MessagePart (the gateway's MessagePart; field names unchanged)
 {"kind":"text|at|link|image|file|code|emotion|media|card|docs|interactive|table",
- "text","url","refId","metadata":{…}}   // 卡片的整棵元素树在 metadata.body / header；富文本块祖先在 metadata.blocks
+ "text","url","refId","metadata":{…}}   // the card's entire element tree is in metadata.body / header; rich-text block ancestors are in metadata.blocks
 ```
 
-附件发送要求完整设备权限（answer-only 不可用），共用插件绑定的飞书网关账号；不接受调用方覆盖账号。插件声明 `lark_attachments`，hub 并进 hello/health 的 features。
-`client_id` 必须为 UUID，同一消息重试保持不变；消息读取额外保留可选 `client_id`、`local_state`，用于消除发送超时后的迟到回显。`local:` 和 pending/failed 副本不算发送确认。
+Sending attachments requires full device permissions (unavailable to answer-only devices) and uses the Lark gateway account bound to the plugin; callers can't override the account. The plugin declares `lark_attachments`, which the hub merges into hello/health features.
+`client_id` must be a UUID and stay the same across retries of the same message; message reads also preserve optional `client_id`, `local_state`, used to remove late echoes after send timeouts. `local:` and pending/failed copies don't count as send confirmation.
 
-媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
-（合并转发卡片里嵌套的消息也一并改写）。
+Media rewrite rules: throughout parts JSON, `"/api/media/` → `"/api/v1/lark/media/`, `"/api/messages/` → `"/api/v1/lark/messages/`
+(including messages nested inside merged-forward cards).
 
-`retained=true` 表示飞书网关已留存撤回原内容，不是恢复权限；展示时仍保留 `recalled`，不能据此开放回复、表情或卡片写操作。两个展示开关不删除服务端留存，也不限制原有消息读取权限；客户端在设置关闭/未知时隐藏撤回原文和编辑历史入口。历史、引用、转发的 OLK 投影沿用当前授权，锁定时只显示公开内容，手机缓存清除解密正文。
+`retained=true` means the gateway retained the recalled original content, not that permissions are restored; display still keeps `recalled`, and this must not enable replies, reactions or card writes. Neither display switch deletes server-retained data or restricts existing message-read permissions; when settings are off / unknown, clients hide recalled originals and edit-history entry points. OLK projections in history, quotes and forwards use current authorization; when locked, only public content is shown and decrypted bodies are cleared from the phone cache.
 
-## 个人 Agent 来源状态
+## Personal Agent source status
 
-hub 自己没有个人 Agent 来源，来源全部来自在跑的扩展的 `agent_sources`（`docs/extensions.md`「个人 Agent 来源」）。
-没有这样的扩展在跑时，`GET /api/v1/agents` 返回 `{"sources":[]}`，`GET /api/v1/agents/sessions` 返回 `{"sessions":[]}`，均为 HTTP 200。
-有来源时 `GET /api/v1/agents` 每个来源一项：`{"sources":[{"source":"<贡献 id>","enabled","error?","setup?","providers":[…],"accounts":[…]}]}`；
-飞书插件的来源 id 是 `removedbridge`（沿用 hub 以前那个来源的名字，会话 id 不变）。
-`setup` 说明来源能连上、但还没有可列的东西的原因，客户端在会话列表为空时把它换成一句提示：
-`missing`（后端不支持个人 Agent，如没有 agent-bridge 的飞书网关）、`disabled`（支持但没打开，如飞书网关没打开 agent-bridge）、
-`no_accounts`（开了但还没连接账号）；这几种时这个来源没有会话。其他失败（连不上之类）放在 `error` 里，会话接口照常报错（有几个来源、又没指定 `source` 时跳过出错的那个）。
+The hub has no personal Agent sources of its own; all sources come from `agent_sources` of running extensions (`docs/extensions.md` ("Personal Agent sources")).
+With no such extension running, `GET /api/v1/agents` returns `{"sources":[]}` and `GET /api/v1/agents/sessions` returns `{"sessions":[]}`, both HTTP 200.
+With sources, `GET /api/v1/agents` has one entry per source: `{"sources":[{"source":"<contribution id>","enabled","error"?,"setup"?,"providers":[…],"accounts":[…]}]}`;
+the Lark plugin's source id is `removedbridge` (keeps the name of the hub's old source, with session ids unchanged).
+`setup` explains why the source is reachable but has nothing to list yet; clients turn it into a notice when the session list is empty:
+`missing` (the backend doesn't support personal Agents, such as a gateway without agent-bridge), `disabled` (supported but not enabled, such as agent-bridge being off on the gateway),
+`no_accounts` (enabled but no accounts connected yet); these states mean the source has no sessions. Other failures (such as unreachable) go in `error`, and the session endpoint still reports errors normally (when multiple sources exist and no `source` is specified, the failing source is skipped).
 
-## 个人 Agent 列表偏好
+## Personal Agent list preferences
 
-`GET /api/v1/agents/prefs` / `PUT /api/v1/agents/prefs`（整份替换），存在 hub 的 settings 表（key `agents.prefs`），Web 和 iOS 共用：
+`GET /api/v1/agents/prefs` / `PUT /api/v1/agents/prefs` (replaces the whole set), stored in the hub's settings table (key `agents.prefs`), shared by web and iOS:
 
 ```json
 {"pins":["<sessionId>"],
  "view":{"group":"date|provider|none","sort":"updated|unread|name","show":"all|unread|sendable","providers":["grok_bot"]},
- "sections":[{"id":"s1","name":"工作"}],
+ "sections":[{"id":"s1","name":"Work"}],
  "assign":{"<sessionId>":"s1"},
  "updatedAt":"…"}
 ```
 
-- 字段缺省 = 默认（按日期分组、按最近更新排序、显示全部、所有来源）。`pins` 有序、去重；`assign` 里指向不存在分组的条目会被丢掉。
-- 置顶的会话总在最上面的「已置顶」，然后是自定义分组，再按 `view.group` 分组。
-- PUT 成功后广播 `{"type":"agents.prefs"}`，其他端重新 GET。旧 hub 没有这个接口（404）时客户端只存本地。
+- Omitted fields = defaults (group by date, sort by latest update, show all, all sources). `pins` is ordered and deduplicated; `assign` entries pointing to missing sections are dropped.
+- Pinned sessions always appear in "Pinned" at the top, followed by custom sections, then groups from `view.group`.
+- After a successful PUT, broadcasts `{"type":"agents.prefs"}`, and other clients GET again. When an old hub lacks this endpoint (404), clients store preferences only locally.
 
-## 消息里的标签（客户端解析）
+## Tags in messages (parsed by clients)
 
-| 标签 | 谁写 | 含义 / 显示 |
+| Tag | Written by | Meaning / display |
 | --- | --- | --- |
-| `<attached_images>` 每行一个路径 `</attached_images>` | hub（手机发图） | 消息附带的图片；气泡上方方形缩略图 |
-| `<jarvis-context kind="context\|edit\|doc\|instructions" title="…" url="…">文字</jarvis-context>` | 手机（链接卡片里选中文字）、hub（飞书 /agent 的说明和上下文） | 不是用户写的：所有块收成气泡旁一行「上下文 · N 项」（只有一块时「上下文 · 标题」），默认折叠；展开是标题列表，每项再点开看正文和链接。属性顺序任意、可以缺（`url` 常缺）；标签外的文字才是用户写的 |
-| 改名（#3182）：标签正在从 `<jarvis-context>` 改成 `<persona-context>`，属性不变 | | 读取端（hub、node、网页、安卓、Apple、DSH）两个名字都认，开闭标签可以混着；块正文里两个名字的结束标签都去掉。无属性的实时快照和运行说明已经只写 `<persona-context>`（同一个 node 写、node 剥，App 看不到）；带属性的块（hub 模板、三端客户端）仍写 `<jarvis-context>`，等认新名字的 App 普及后再切：旧版 App 只认 `jarvis-context`，会把 `<persona-context …>` 整块当正文显示 |
-| `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code（会话间消息） | 左侧「来自 名字」卡片，正文按 Markdown 显示 |
+| `<attached_images>` one path per line `</attached_images>` | hub (images sent from the phone) | images attached to the message; square thumbnails above the bubble |
+| `<jarvis-context kind="context\|edit\|doc\|instructions" title="…" url="…">text</jarvis-context>` | phone (text selected in a link card), hub (Lark /agent instructions and context) | not written by the user: all blocks gather into one "Context · N items" row beside the bubble (with one block, "Context · title"), collapsed by default; expanding shows a title list, each opening the body and link. Attributes may be in any order or omitted (`url` is often absent); only text outside the tags is user-written |
+| Rename (#3182): tags are moving from `<jarvis-context>` to `<persona-context>`, with attributes unchanged | | readers (hub, node, web, Android, Apple, DSH) accept both names, with mixed opening / closing tags allowed; closing tags of either name are stripped from block bodies. Attribute-free live snapshots and run instructions already write only `<persona-context>` (written and stripped by the same node, never seen by the App); blocks with attributes (hub templates, the three clients) still write `<jarvis-context>`, to switch once Apps that recognize the new name are widespread: old Apps only recognize `jarvis-context` and show an entire `<persona-context …>` block as body text |
+| `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code (cross-session messages) | a left-side "From name" card, body rendered as Markdown |
 
-### 消息开头的引用块和评论块（网页，#2427、#2437）
+### Quote and comment blocks at the start of messages (web, #2427, #2437)
 
-网页的「引用」和「评论」不用标签，也没有结构化字段：发送时写成消息开头的 `> ` 块（`web/src/lib/drafts.ts` `withQuoteBlock`，`web/src/lib/comments.ts`），助手和电脑上的 Agent 照文字读，其他客户端不认识也只是看到 `>` 行。
-一条消息开头最多一个引用块（引用的话，任务卡片的第一行是 `任务「标题」（todo id: …）`），后面跟任意个评论块，块之间空一行，最后才是用户打的字：
+Web "Quote" and "Comment" use no tags or structured fields: on send they become `> ` blocks at the start of the message (`withQuoteBlock` in `web/src/lib/drafts.ts`, `web/src/lib/comments.ts`); the assistant and Agents on computers read them as text, and other clients that don't recognize them simply see `>` lines.
+At most one quote block starts a message (the quoted words; for a task card, the first line is `任务「标题」（todo id: …）`, meaning `Task “title” (todo id: …)`), followed by any number of comment blocks, separated by blank lines, and finally the user's typed text:
 
 ```text
-> 引用的话                      ← 引用块（可没有）
+> Quoted words                  ← quote block (optional)
 
-> Comment 1                     ← 评论选中的话：序号、原文（再套一层 `> `）、空行、评论
+> Comment 1                     ← comment on selected text: number, original text (nested in another `> `), blank line, comment
 > Selected text:
-> > 被选中的几行
+> > The selected lines
 >
-> 这里要写清来源
+> State the source clearly here
 
-> Code comment 2                ← 评论代码：序号、位置、可选的 Side / Diff / Truncated、围栏里的代码、评论
-> File: src/app.ts:12-14        ← 相对会话目录的路径（目录外是原路径）；行号是新文件的，只选了删掉的行时加 `Side: old`
-> Diff: staged                  ← 文件里的评论没有这行；staged | unstaged | commit <前 8 位>；代码行带 `+` `-` 空格，围栏写 `diff`
+> Code comment 2                ← code comment: number, location, optional Side / Diff / Truncated, fenced code, comment
+> File: src/app.ts:12-14        ← path relative to the session directory (original path if outside it); line numbers are from the new file, with `Side: old` when only deleted lines are selected
+> Diff: staged                  ← absent for comments on files; staged | unstaged | commit <first 8 chars>; code lines carry `+`, `-`, space, and the fence uses `diff`
 > Truncated: the first 60 of 80 lines
 > ```ts
 > const a = 1;
 > ```
 >
-> 为什么不用常量？
+> Why not use a constant?
 
-用户打的字
+The user's typed text
 ```
 
-上限：评论最多 4000 字，随消息的代码最多 60 行（多出的行数写在 `Truncated`，不带）；围栏比代码里最长的反引号多一个。序号按评论在输入框上方的顺序，从 1 数。
-网页读回时只在第一个块后面认「首行是 `Comment N` / `Code comment N`」的块（`splitQuotes`），所以普通的 `> ` 引用不受影响；编辑一条发出去的消息会把评论放回输入框上方。
+Limits: comments up to 4000 characters, attached code up to 60 lines (extra lines are counted in `Truncated` but not included); the fence has one more backtick than the longest run in the code. Numbers follow the order of comments above the input, starting at 1.
+On reading back, web only recognizes blocks after the first block whose first line is `Comment N` / `Code comment N` (`splitQuotes`), so ordinary `> ` quotes are unaffected; editing a sent message puts comments back above the input.
 
-## Persona 注入的消息
+## Messages injected by Persona
 
-hub 会以「用户输入」的身份往对话里发一些给模型看的消息（#2360、#2358）。transcript 里它们和用户打的字一样是 `role:"user", kind:"text"`，
-但不是用户写的，**客户端不画成用户气泡，也不显示里面给模型的说明**。模型收到的文字不变（模板在 `server/internal/prompts/`），
-识别全在下发时做：hub 按模板认出这一行（`prompts.ParseInjected`，和渲染互测），给 item 补上 `injected`。分页（`/items`）、推送（`items` 事件、订阅时的 backlog）、
-`/items/{iid}/full` 都带；按文本认，所以老消息、旧 node 写的也带。App 自己带 `client_msg_id` 发的那行永远不认。
+The hub sends some model-facing messages into chats as "user input" (#2360, #2358). In the transcript they have `role:"user", kind:"text"`, just like the user's typed words,
+but aren't user-written: **clients don't draw them as user bubbles or show the instructions for the model inside them**. The text the model receives is unchanged (templates in `server/internal/prompts/`);
+recognition happens entirely when sending to clients: the hub recognizes the line by template (`prompts.ParseInjected`, tested against rendering) and adds `injected` to the item. Pagination (`/items`), pushes (`items` events and subscription backlog),
+and `/items/{iid}/full` all carry it. Recognition is by text, so old messages and those written by old nodes carry it too. A line the App sends with its own `client_msg_id` is never recognized as injected.
 
 ```jsonc
 "injected": {
   "kind": "task_notice|followup|system",
-  "state": "…",            // 见下表
-  "title": "README 去掉扩展列表", // 任务名 / 定时任务的标题 / 叫醒时在等的事；可能空
-  "machine": "<电脑名>",  // 仅 task_notice：Agent 在哪台电脑（名字，可能空）
-  "todo_id": "td_…",        // 仅 task_notice：hub 认得出是哪个任务时（任务还开着、标题唯一）；可能空，客户端再按标题去找同一对话的任务卡
-  "line": "任务「README 去掉扩展列表」做完了", // 给人看的一句话，直接显示
-  "detail": "…"             // 仅 followup 的 once / daily / interval：任务本身的要求（用户在定时任务里写的那段），可以折叠着给人看；其余为空
+  "state": "…",            // see the table below
+  "title": "Remove the extension list from README", // task name / scheduled task title / what a wake-up is waiting for; may be empty
+  "machine": "<computer name>",  // task_notice only: which computer the Agent is on (name; may be empty)
+  "todo_id": "td_…",        // task_notice only: when the hub can identify the task (still open, unique title); may be empty, in which case the client looks for a task card in the same chat by title
+  "line": "Task 'Remove the extension list from README' is done", // one human-readable sentence, displayed directly
+  "detail": "…"             // followup once / daily / interval only: the task's own instructions (what the user wrote in the scheduled task), which can be shown collapsed; empty otherwise
 }
 ```
 
-| 来源（模板） | 文字的开头 | `kind` | `state` | `line` |
+| Source (template) | Start of text | `kind` | `state` | `line` |
 | --- | --- | --- | --- | --- |
-| 主对话派出的安静任务有了结果（`assistant/task_notice.md`） | `🔔 任务「标题」做完了（电脑）`，第二或第三行是「（这是 Persona 的任务通知，……」 | `task_notice` | `done` / `needs` / `interrupted` / `failed` | 任务「x」做完了 / 在等你 / 被打断了 / 没开起来 |
-| 定时任务、跟进到时间（`assistant/task_run.md`） | `⏰ 标题（你之前安排的跟进）` / `（定时任务）` / `（定时任务，每 30 分钟）` | `followup` | `once` / `daily` / `interval` | 跟进「x」到时间了 / 定时任务「x」开始运行 |
-| 叫醒等待中的 Agent（`agents/wake.md`，Agents 的对话） | `⏰（Persona 叫醒你，第 N 次）` | `followup` | `wake` | Persona 叫醒了它：看看「等的事」好了没有 |
-| node 重启丢了后台任务（`assistant/lost_tasks.md`） | `⚠️ 运行你的 node 刚重启过` | `system` | `lost_tasks` | node 重启过，N 个后台任务停了 |
-| 主对话的督办消息（`assistant/supervise.md`，#3124） | `📋 督办：你派出去的任务有 N 个要你处理`，第二行含「这是 Persona 的督办消息」 | `system` | `supervise` | 督办：N 个派出去的任务要处理 |
+| A quiet task dispatched from the main chat has a result (`assistant/task_notice.md`) | `🔔 任务「标题」做完了（电脑）` ("Task 'title' is done (computer)"), with `（这是 Persona 的任务通知，……` ("This is a Persona task notification, …") on the second or third line | `task_notice` | `done` / `needs` / `interrupted` / `failed` | Task "x" is done / waiting for you / interrupted / couldn't start |
+| A scheduled task or follow-up is due (`assistant/task_run.md`) | `⏰ 标题（你之前安排的跟进）` / `（定时任务）` / `（定时任务，每 30 分钟）` ("title (a follow-up you scheduled)" / "(scheduled task)" / "(scheduled task, every 30 minutes)") | `followup` | `once` / `daily` / `interval` | Follow-up "x" is due / Scheduled task "x" starts running |
+| Wake an Agent that is waiting (`agents/wake.md`, Agents chats) | `⏰（Persona 叫醒你，第 N 次）` ("Persona wakes you, attempt N") | `followup` | `wake` | Persona woke it: check whether "what it's waiting for" is ready |
+| A node restart lost background tasks (`assistant/lost_tasks.md`) | `⚠️ 运行你的 node 刚重启过` ("The node running you just restarted") | `system` | `lost_tasks` | The node restarted; N background tasks stopped |
+| A supervision message in the main chat (`assistant/supervise.md`, #3124) | `📋 督办：你派出去的任务有 N 个要你处理` ("Supervision: N tasks you dispatched need your attention"), with `这是 Persona 的督办消息` ("This is a Persona supervision message") on the second line | `system` | `supervise` | Supervision: N dispatched tasks need attention |
 
-**怎么显示**（各端一样）：
+**Display** (the same on every client):
 
-- 画成居中的一行轻量系统提示：图标 + `line`，不是右侧的用户气泡，不露出原文。`task_notice` 点一下打开任务（`todo_id`，没有就按 `title` 找这段对话的任务卡 / 待办；都找不到就不可点）；
-  `followup` 的 once / daily / interval 可以点开看 `detail`；其余不可点。
-- 主对话里同一个任务的卡片（回执、任务卡）已经在上方时，这一行可以并进卡片，不再单独画；绝不重复 Agent 最后说的话（卡片上有）。
-- 不算用户发的消息：不当成一轮的开头去配对待发气泡（`client_msg_id` / 按字认）、不进「你说的」类统计；对话列表的预览、搜索结果、复制「用户的话」时用 `line`，不用原文。
-- 队列里还没发进去的任务通知，`sessions` 的 `queued` 里本来就只写「任务「x」的通知」。
+- Draw a lightweight centered system notice: icon + `line`, not a right-side user bubble, without exposing the original text. Tapping `task_notice` opens the task (`todo_id`, otherwise find a task card / to-do in this chat by `title`; untappable if neither is found);
+  once / daily / interval `followup` can be opened to read `detail`; the rest aren't tappable.
+- If a card for the same task (receipt, task card) is already above it in the main chat, this line can merge into the card instead of being drawn separately; never repeat the Agent's last words (already on the card).
+- Doesn't count as user-sent: isn't treated as a turn start when matching pending bubbles (`client_msg_id` / text matching), and isn't counted in "what you said" statistics. Chat list previews, search results and copying "the user's words" use `line`, not the original text.
+- A task notification still queued for sending already uses only `任务「x」的通知` ("Notification for task 'x'") in the `queued` field of `sessions`.
 
-**旧 hub 没有 `injected` 时**按文字认（只认 `role:"user", kind:"text"`、没有 `client_msg_id` 的行；先去掉开头的空白和 `<jarvis-context>` 快照块）：
+**When an old hub has no `injected`**, recognize by text (only lines with `role:"user", kind:"text"` and no `client_msg_id`; strip leading whitespace and `<jarvis-context>` snapshot blocks first):
 
-- `task_notice`：第一行匹配 `^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$`，且全文含「这是 Persona 的任务通知」。
-  第 2 组映射 `done` / `needs` / `interrupted` / `failed`，第 3 组是 `machine`。
-- `followup`：第一行匹配 `^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$`：「你之前安排的跟进」是 `once`，「定时任务，每 …」是 `interval`，「定时任务」是 `daily`；
-  `detail` 是第一个空行之后的正文（去掉末尾以「（知识库」开头的那段提示）。第一行以 `⏰（Persona 叫醒你，第` 开头的是 `wake`，`title` 取「在等「…」」里的那段。
-- `system`：以 `⚠️ 运行你的 node 刚重启过` 开头；`- ` 开头的行数是停掉的任务数。督办消息只有写它的新 hub 会发，hub 下发时一定带 `injected`，不在共用夹具里，客户端不用自己认。
-- 认不出的照旧是用户气泡（宁可漏认，不把用户的话藏起来）。
-- 共用夹具 `spec/fixtures/injected/cases.json`（Go 测试 `TestParseInjected` 按模板生成，`UPDATE_GOLDEN=1` 重写）：`input.text` → `expected`（`null` 是不认）；各端的兜底识别都跑这一份。
+- `task_notice`: the first line matches `^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$` (task title, done / waiting for the user / interrupted by a model service error / couldn't start, optional computer), and the full text contains `这是 Persona 的任务通知` ("This is a Persona task notification").
+  Group 2 maps to `done` / `needs` / `interrupted` / `failed`; group 3 is `machine`.
+- `followup`: the first line matches `^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$`: `你之前安排的跟进` ("a follow-up you scheduled") is `once`, `定时任务，每 …` ("scheduled task, every …") is `interval`, `定时任务` ("scheduled task") is `daily`;
+  `detail` is the body after the first blank line (remove the trailing instruction paragraph starting with `（知识库`, "(knowledge base"). A first line starting with `⏰（Persona 叫醒你，第` ("Persona wakes you, attempt") is `wake`; `title` is the text inside `在等「…」` ("waiting for '…'").
+- `system`: starts with `⚠️ 运行你的 node 刚重启过` ("The node running you just restarted"); the count of lines starting with `- ` is the number of stopped tasks. Supervision messages are only sent by new hubs that write them, and always carry `injected` when sent; they aren't in the shared fixtures, and clients don't need to recognize them themselves.
+- Anything unrecognized stays a user bubble (better to miss recognition than hide the user's words).
+- Shared fixtures: `spec/fixtures/injected/cases.json` (Go test `TestParseInjected` generates them from templates; `UPDATE_GOLDEN=1` rewrites them): `input.text` → `expected` (`null` means not recognized); all clients run their fallback recognition against these fixtures.
 
-别的「不是用户写的」消息已经有各自的形状，不归这里：别的对话发来的（`<jarvis-context title="来自对话「x」">`）、接上旧主对话的背景（`<jarvis-context title="接上旧主对话">`）
-按上面的标签收成「上下文」；后台任务的通知是 `kind:"notice"` + `task`；`/model`、压缩等是 `kind:"notice"`。
+Other "not user-written" messages already have their own shapes and aren't covered here: messages from another chat (`<jarvis-context title="来自对话「x」">`, "From chat 'x'"), background for resuming the old main chat (`<jarvis-context title="接上旧主对话">`, "Resume the old main chat")
+are gathered as "Context" by the tags above; background-task notifications use `kind:"notice"` + `task`; `/model`, compaction and similar notices use `kind:"notice"`.
 
