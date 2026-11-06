@@ -33,7 +33,7 @@ APPLE = os.path.join(ROOT, "apple")
 LANGS = ["en", "ja"]
 SOURCE = "zh-Hans"
 # The app targets' sources (not the tests, not the separate SwiftPM packages / test apps).
-SOURCE_DIRS = ["Persona", "Shared", "Mac", "Vision", "PersonaWatch", "PersonaWidgets", "LiveActivity", "PersonaNotify"]
+SOURCE_DIRS = ["Persona", "Shared", "Mac", "Vision", "PersonaWatch", "PersonaWidgets", "LiveActivity", "PersonaNotify", "PersonaShare"]
 CATALOGS = [
     "Shared/Localization/Localizable.xcstrings",
     "Persona/Intents/AppShortcuts.xcstrings",
@@ -43,7 +43,7 @@ CATALOGS = [
     "PersonaWatch/InfoPlist.xcstrings",
 ]
 # The targets whose extracted strings go into the catalogs (sync / strict).
-TARGETS = ["Persona", "PersonaMac", "PersonaVision", "PersonaWatch", "PersonaWidgets", "PersonaNotify"]
+TARGETS = ["Persona", "PersonaMac", "PersonaVision", "PersonaWatch", "PersonaWidgets", "PersonaNotify", "PersonaShare"]
 
 SPEC = re.compile(r"%(?:(\d+)\$)?(#@\w+@|[-+ 0#]*\d*(?:\.\d+)?(?:ll|l|h|hh|z|t|j|q|L)?[@dDiuUxXoOfeEgGcCsSpaA])")
 CJK = swift_literals.CJK

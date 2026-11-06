@@ -37,12 +37,14 @@ APP = BUNDLE_ID
 WATCH = APP + ".watchkitapp"
 LIVE = APP + ".liveactivity"  # the widget extension drawing the lock screen / Dynamic Island activity
 NOTIFY = APP + ".notify"  # the notification service extension opening relayed pushes (docs/push-relay.md)
+SHARE = APP + ".share"  # the share extension sending to Persona's main conversation (#4586)
 # bundle identifier -> (App ID name, profile name, capabilities)
 TARGETS = {
     APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "USERNOTIFICATIONS_TIMESENSITIVE", "HEALTHKIT", "APP_GROUPS"]),
     WATCH: ("Jarvis Watch", "Jarvis Watch App Store", []),
     LIVE: ("Jarvis Live Activity", "Jarvis Live Activity App Store", ["APP_GROUPS"]),
     NOTIFY: ("Jarvis Notify", "Jarvis Notify App Store", []),
+    SHARE: ("Persona Share", "Persona Share App Store", []),
 }
 # The App Group the app shares the Live Activity's persona with the widget extension through (docs/live-activity.md).
 GROUP = jarvis_config.app_group(CONFIG)

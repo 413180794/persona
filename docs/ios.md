@@ -501,6 +501,14 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 - App 开着或在后台时点，走场景代理的 `windowScene(_:performActionFor:)`；冷启动时点，项在场景的 connectionOptions 里。场景代理（`QuickActionSceneDelegate`）只接这两处，窗口仍由 SwiftUI 管。
 - UI 测试 `QuickActionsTests` 从主屏长按依次点三项。冷启动没有测：从 SpringBoard 启动带不上体验模式的启动参数。模拟器上每次回主屏都要等约 60 秒 SpringBoard 空闲，整条约 7 分钟。
 
+## 分享到 Persona（#4586）
+
+别的 App 里点「分享」› Persona：文字、一个网页链接或最多 4 张图片，加一句可选的附言，发到 Persona 主对话，和 Android 的 ShareActivity 一样（`PersonaShare/`，target `PersonaShare`）。
+
+- 扩展自己连 hub，不需要 App 在跑：从钥匙串读 App 存的配对（`HubStore` 的 "hubs" 条目，App 的钥匙串组），取默认分组的 hub 依次试，`GET /api/v1/assistant` 拿主对话，再像输入框一样发消息（图片缩到 1600 px、JPEG）。没有用 App Group，所以不用去开发者网站手动挂组。
+- 失败就留在面板上说原因：没配对、配对失效、还没有主对话、连不上 hub。不走 SSH 隧道；只能发主对话，选别的会话以后再说。
+- 发版：分享扩展是新的 Bundle ID（`<bundle id>.share`），见 `docs/release.md`。
+
 ## 思考强度和权限模式
 
 对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（自动 / 低 … 最高），

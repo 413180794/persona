@@ -146,6 +146,8 @@ def export_options(cfg: dict, out: str, destination: str = "upload"):
 		<string>Jarvis Live Activity App Store</string>
 		<key>{bid}.notify</key>
 		<string>Jarvis Notify App Store</string>
+		<key>{bid}.share</key>
+		<string>Persona Share App Store</string>
 	</dict>
 	<key>teamID</key>
 	<string>{get(cfg, "app.team_id", "")}</string>

@@ -12,9 +12,9 @@ App Store Connect 里的商店名 2026-11-03 起是 **Persona Side**（原「Jar
 
 | 项目 | 说明 |
 | --- | --- |
-| Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`、Live Activity `<bundle_id>.liveactivity`、通知服务扩展 `<bundle_id>.notify`（推送中继，`docs/push-relay.md`），用 `scripts/release/asc_signing.py` 注册 |
+| Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`、Live Activity `<bundle_id>.liveactivity`、通知服务扩展 `<bundle_id>.notify`（推送中继，`docs/push-relay.md`）、分享扩展 `<bundle_id>.share`（#4586），用 `scripts/release/asc_signing.py` 注册 |
 | App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`USERNOTIFICATIONS_TIMESENSITIVE`（时间敏感通知，#1572）、`HEALTHKIT`、`APP_GROUPS`；Live Activity：`APP_GROUPS`；手表：无。App Group 本身只能在网站上建、挂到 App ID 上（下面「App Group」） |
-| 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」（`IOS_APP_STORE`）；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
+| 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」「Persona Share App Store」等（`IOS_APP_STORE`，分享扩展的是 2026-11-06 新加的，首次发版前先跑一次 `asc_signing.py` 注册它的 Bundle ID 和描述文件）；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
 | 签名身份 | 登录钥匙串里的 `Apple Distribution: …（team_id）` |
 | App Store Connect App ID | 网页建好 App 记录后填进配置的 `app_store.app_id` |
 

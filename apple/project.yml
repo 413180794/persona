@@ -69,6 +69,7 @@ targets:
       - target: PersonaWatch
       - target: PersonaWidgets
       - target: PersonaNotify
+      - target: PersonaShare
       - package: MarkdownUI
       - package: BeautifulUI
       - package: PersonaSSH
@@ -410,6 +411,31 @@ targets:
         INFOPLIST_FILE: PersonaNotify/Info.plist
         # The system calls the extension on its own queue; the project's MainActor default does not fit its base class.
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+  # 分享 › Persona (#4586): text, links and pictures from another app sent to Persona's main conversation.
+  PersonaShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PersonaShare
+        excludes: ["*.plist", "*.entitlements"]
+      # The app's String Catalog and interface language (docs/ios.md「界面语言」).
+      - path: Shared/Localization
+    entitlements:
+      path: PersonaShare/PersonaShare.entitlements
+      properties:
+        # The app's own keychain group: the paired hubs are read where the app keeps them (Shared/Hubs.swift).
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).share
+        PRODUCT_MODULE_NAME: PersonaShare
+        PRODUCT_NAME: PersonaShare
+        INFOPLIST_FILE: PersonaShare/Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO

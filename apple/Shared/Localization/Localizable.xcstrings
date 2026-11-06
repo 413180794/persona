@@ -25426,6 +25426,28 @@
         }
       }
     },
+    "分享的内容": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享的内容"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共有する内容"
+          }
+        }
+      }
+    },
     "分叉": {
       "localizations": {
         "en": {
@@ -29555,6 +29577,28 @@
         }
       }
     },
+    "发到 Persona 主对话": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发到 Persona 主对话"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goes to Persona's main conversation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona のメイン会話に送ります"
+          }
+        }
+      }
+    },
     "发到对话": {
       "localizations": {
         "en": {
@@ -29771,6 +29815,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "发现旧版草稿"
+          }
+        }
+      }
+    },
+    "发给 Persona": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发给 Persona"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send to Persona"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona に送る"
           }
         }
       }
@@ -86010,6 +86076,28 @@
         }
       }
     },
+    "说点什么（可选）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说点什么（可选）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a note (optional)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ひとこと（任意）"
+          }
+        }
+      }
+    },
     "请从会话打开链接，再交给 Agent 处理": {
       "localizations": {
         "en": {
@@ -89735,6 +89823,28 @@
         }
       }
     },
+    "还没有主对话：先在 Persona 里发一句": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有主对话：先在 Persona 里发一句"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No main conversation yet: send something in Persona first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メイン会話がまだありません。先に Persona で何か送ってください"
+          }
+        }
+      }
+    },
     "还没有任务": {
       "localizations": {
         "en": {
@@ -90281,6 +90391,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没有配对"
+          }
+        }
+      }
+    },
+    "还没有配对 hub：先在 Persona 里配对": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有配对 hub：先在 Persona 里配对"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hub paired yet: pair one in Persona first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub がまだペアリングされていません。先に Persona でペアリングしてください"
           }
         }
       }
@@ -93871,6 +94003,28 @@
         }
       }
     },
+    "连不上 hub，稍后再试": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上 hub，稍后再试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach the hub. Try again later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub に接続できません。しばらくしてからもう一度お試しください"
+          }
+        }
+      }
+    },
     "连不上 hub，读不到这台电脑的配置目录": {
       "localizations": {
         "en": {
@@ -96080,6 +96234,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "配对"
+          }
+        }
+      }
+    },
+    "配对失效了：在 Persona 里重新配对": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配对失效了：在 Persona 里重新配对"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing no longer works: pair again in Persona"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングが無効になりました。Persona でもう一度ペアリングしてください"
           }
         }
       }
