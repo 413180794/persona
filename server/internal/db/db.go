@@ -319,6 +319,9 @@ type Device struct {
 	// RelayError: why the phone got no grant from its relay, in its own words (the relay's status and answer, a
 	// redirect, a network error); empty when it got one or names no relay.
 	RelayError string `json:"relay_error,omitempty"`
+	// Features: what the app on it understands beyond the first version's pushes ("withdraw": a background push
+	// naming the cards that are over, hub/push_withdraw.go). The hub keeps only names it knows.
+	Features []string `json:"features,omitempty"`
 	// Locale: the interface language it registered with (zh-Hans / en / ja, docs/i18n.md); "" is the user's.
 	Locale string `json:"locale,omitempty"`
 	// Credential: the device token (device_tokens.id) that registered it, set by the hub, never from the request;
@@ -331,23 +334,27 @@ type Device struct {
 }
 
 func (d *DB) UpsertDevice(ctx context.Context, v Device) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, credential_id, locale, relay_error)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), $11, $12, $13)
+	features := v.Features
+	if features == nil {
+		features = []string{} // the column is NOT NULL
+	}
+	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, credential_id, locale, relay_error, features)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), $11, $12, $13, $14)
 		ON CONFLICT (device_id) DO UPDATE SET name = $2, kind = $3, apns_token = $4, apns_env = $5, topic = $6,
-			push_key = $7, relay_url = $8, relay_grant = $9, credential = $10, updated_at = now(), credential_id = $11, locale = $12, relay_error = $13`,
-		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic, v.PushKey, v.RelayURL, v.RelayGrant, v.Credential, v.CredentialID, v.Locale, v.RelayError)
+			push_key = $7, relay_url = $8, relay_grant = $9, credential = $10, updated_at = now(), credential_id = $11, locale = $12, relay_error = $13, features = $14`,
+		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic, v.PushKey, v.RelayURL, v.RelayGrant, v.Credential, v.CredentialID, v.Locale, v.RelayError, features)
 	return err
 }
 
 func (d *DB) Devices(ctx context.Context) ([]Device, error) {
-	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, prefs, credential_id, locale, relay_error FROM devices ORDER BY updated_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, credential, updated_at, prefs, credential_id, locale, relay_error, features FROM devices ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Device, error) {
 		var v Device
 		var prefs []byte
-		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.PushKey, &v.RelayURL, &v.RelayGrant, &v.Credential, &v.UpdatedAt, &prefs, &v.CredentialID, &v.Locale, &v.RelayError)
+		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.PushKey, &v.RelayURL, &v.RelayGrant, &v.Credential, &v.UpdatedAt, &prefs, &v.CredentialID, &v.Locale, &v.RelayError, &v.Features)
 		if len(prefs) > 0 {
 			v.Prefs = prefs
 		}

@@ -53,7 +53,7 @@ func (h *Hub) notifyInteraction(owner string, ix proto.Interaction, machine stri
 	if ix.Kind == proto.IxElicitation {
 		h.notifyWSQuiet("interaction", build, wants.fn(), wants.quiet(), "elicitation")
 	} else {
-		h.push.sendLocalizedQuiet(build, ix.ID, wants.fn(), wants.quiet())
+		h.push.sendCard(build, ix.ID, wants.fn(), wants.quiet())
 		h.notifyWSQuiet("interaction", build, wants.fn(), wants.quiet())
 	}
 }

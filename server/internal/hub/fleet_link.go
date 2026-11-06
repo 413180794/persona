@@ -95,6 +95,7 @@ func init() {
 		}
 		delete(f.interactions, p.ID)
 		f.mu.Unlock()
+		h.push.withdraw(p.ID) // a suspended app hears it by push (#4349)
 		event := map[string]any{"type": "interaction_resolved", "id": p.ID}
 		if p.AnsweredBy != "" {
 			event["answered_by"] = p.AnsweredBy // the app marks a question the assistant answered (docs/assistant.md)
@@ -200,6 +201,7 @@ func (h *Hub) takeFleetInteractionsFrom(owner string, list []proto.Interaction) 
 	}()
 	for id := range old {
 		if _, ok := now[id]; !ok {
+			h.push.withdraw(id)
 			h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 		}
 	}
@@ -224,6 +226,7 @@ func (h *Hub) dropCard(owner, id string) {
 	}
 	f.mu.Unlock()
 	if !other {
+		h.push.withdraw(id)
 		h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 	}
 }

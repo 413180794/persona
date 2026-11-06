@@ -73,7 +73,9 @@ type Pusher struct {
 	replaced map[string]string
 	// failed: per device, the last push that did not go (routeOf); cleared by the next that does.
 	failed map[string]pushFailure
-	saveMu sync.Mutex // one device row write at a time, always the latest state (save, setPrefs)
+	// withdrawals: where each card's push went, to take it back when the card is over (push_withdraw.go).
+	withdrawals withdrawals
+	saveMu      sync.Mutex // one device row write at a time, always the latest state (save, setPrefs)
 	// storeTimeout bounds each device row write, which never runs under mu; tests shorten it.
 	storeTimeout time.Duration
 }
@@ -82,7 +84,7 @@ type Pusher struct {
 const deviceStoreTimeout = 5 * time.Second
 
 func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
-	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, replaced: map[string]string{}, failed: map[string]pushFailure{}, relay: &http.Client{Timeout: 20 * time.Second},
+	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, replaced: map[string]string{}, failed: map[string]pushFailure{}, withdrawals: newWithdrawals(), relay: &http.Client{Timeout: 20 * time.Second},
 		retryWaits: []time.Duration{time.Second, 4 * time.Second}, now: time.Now, storeTimeout: deviceStoreTimeout}
 	if store != nil {
 		if list, err := store.Devices(context.Background()); err == nil {
@@ -141,6 +143,7 @@ func (p *Pusher) register(d Device) {
 		d.RelayError = ""
 	}
 	d.RelayError = clipRelayError(d.RelayError)
+	d.Features = cleanFeatures(d.Features)
 	p.mu.Lock()
 	cur := p.devices[d.DeviceID]
 	d.Prefs = cur.Prefs // registration carries the token, not the settings
@@ -202,6 +205,11 @@ func (p *Pusher) sendLocalized(build localized, collapseID string, wants func(No
 
 // sendLocalizedQuiet is sendLocalized with what each device's quiet hours do to this push (quiethours.go).
 func (p *Pusher) sendLocalizedQuiet(build localized, collapseID string, wants func(NotifyPrefs) bool, rule quietRule) {
+	p.sendLocalizedQuietTo(build, collapseID, wants, rule, nil)
+}
+
+// sendLocalizedQuietTo is sendLocalizedQuiet that tells sent each device the push goes to (nil: nobody).
+func (p *Pusher) sendLocalizedQuietTo(build localized, collapseID string, wants func(NotifyPrefs) bool, rule quietRule, sent func(Device)) {
 	if p == nil {
 		return
 	}
@@ -219,7 +227,13 @@ func (p *Pusher) sendLocalizedQuiet(build localized, collapseID string, wants fu
 		if rule == quietSkip && p.inQuiet(prefs) {
 			return false
 		}
-		return byPrefs(prefs)
+		if !byPrefs(prefs) {
+			return false
+		}
+		if sent != nil {
+			sent(d)
+		}
+		return true
 	}, hush)
 }
 

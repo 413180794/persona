@@ -106,7 +106,7 @@ lost alerts and Live Activity updates. Live Activity pushes carry `aps.timestamp
   report `apns_token`, `push_key`, `relay_url`, `relay_grant` together to the hub.
 - Notification Service Extension `JarvisNotify`: if `e` is present, decrypt it and swap in the title / subtitle / body / category (the notification's buttons) / thread / interruption level / userInfo;
   without `e` (direct pushes never carry `mutable-content`, so the extension isn't invoked) the notification is shown as-is.
-- Silent pushes (`background`) are decrypted in the App process; `jarvis_wake` wakes the connection as before.
+- Silent pushes (`background`) are decrypted in the App process; `jarvis_wake` wakes the connection as before, and `resolved_interaction_ids` removes the notifications of cards that are over (#4349, only to apps that registered with `features: ["withdraw"]`).
 
 ## Which way a device is pushed (#5998)
 
