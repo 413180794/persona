@@ -82,6 +82,17 @@ private struct SecretTextField: UIViewRepresentable {
         f.addTarget(c, action: #selector(Coordinator.refresh(_:)), for: [.editingDidBegin, .editingDidEnd])
         f.addTarget(c, action: #selector(Coordinator.refresh(_:)), for: .editingDidEndOnExit) // return closes the keyboard
         f.addTarget(c, action: #selector(Coordinator.submit(_:)), for: .editingDidEndOnExit) // return runs onSubmit
+        // Show / hide while typing, to check what was just typed or pasted (a token cut short is a common mistake). The
+        // field goes back to hidden, and empty, whenever it gives the keyboard up (EmptyingSecureTextField); what was
+        // typed before is not put back, since pasting into a hidden field that still holds text can add to it.
+        let reveal = UIButton(configuration: .plain())
+        reveal.addTarget(c, action: #selector(Coordinator.toggle(_:)), for: .primaryActionTriggered)
+        reveal.accessibilityIdentifier = identifier.map { $0 + "-reveal" }
+        f.rightView = reveal
+        f.rightViewMode = .whileEditing
+        f.revealButton = reveal
+        f.showRevealState()
+        c.textField = f
         return f
     }
 
@@ -107,6 +118,7 @@ private struct SecretTextField: UIViewRepresentable {
 
     final class Coordinator: NSObject {
         var field: SecretTextField
+        weak var textField: EmptyingSecureTextField?
         init(field: SecretTextField) { self.field = field }
 
         @objc func changed(_ f: UITextField) { field.text = f.text ?? "" }
@@ -116,20 +128,44 @@ private struct SecretTextField: UIViewRepresentable {
         @objc func refresh(_ f: UITextField) {
             f.placeholder = f.isFirstResponder || field.text.isEmpty ? field.placeholder : field.filled
         }
+
+        @objc func toggle(_: UIButton) {
+            guard let f = textField else { return }
+            f.isSecureTextEntry.toggle()
+            f.showRevealState()
+        }
     }
 }
 
 /// Empties itself before it gives the keyboard up or leaves the window: AutoFill finds nothing to offer to save.
 /// The text is set, not typed, so the binding keeps the value (`editingChanged` is only sent for typing).
 private final class EmptyingSecureTextField: UITextField {
+    weak var revealButton: UIButton?
+
     override func resignFirstResponder() -> Bool {
-        text = ""
+        hideAndEmpty()
         return super.resignFirstResponder()
     }
 
     override func willMove(toWindow newWindow: UIWindow?) {
-        if newWindow == nil { text = "" }
+        if newWindow == nil { hideAndEmpty() }
         super.willMove(toWindow: newWindow)
+    }
+
+    /// Hidden again and empty: a shown value never stays in the field once it is not being typed in.
+    private func hideAndEmpty() {
+        if !isSecureTextEntry {
+            isSecureTextEntry = true
+            showRevealState()
+        }
+        text = ""
+    }
+
+    /// The reveal button says what tapping it does: Show contents while hidden, Hide contents while shown.
+    func showRevealState() {
+        let hidden = isSecureTextEntry
+        revealButton?.setImage(UIImage(systemName: hidden ? Theme.Icon.view : Theme.Icon.hide), for: .normal)
+        revealButton?.accessibilityLabel = hidden ? String(localized: "Show contents") : String(localized: "Hide contents")
     }
 }
 #endif

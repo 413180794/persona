@@ -62,6 +62,7 @@ func (m *Machine) startDeploy() error {
 	m.deploying, m.deployErr, m.deployPhase = true, "", "transferring"
 	m.mu.Unlock()
 	m.d.changed()
+	target := m.d.hubVersion()
 	go func() {
 		ctx := m.d.deployContext()
 		err := m.deploy(ctx, bin)
@@ -74,8 +75,9 @@ func (m *Machine) startDeploy() error {
 		if err != nil {
 			m.d.logf("[%s] deploy: %v", m.cfg.ID, err)
 		} else {
-			m.d.logf("[%s] deployed the hub's build %s", m.cfg.ID, m.d.hubVersion())
+			m.d.logf("[%s] deployed the hub's build %s", m.cfg.ID, target)
 		}
+		m.saveDeployOutcome(ctx, target, err)
 		m.d.changed()
 	}()
 	return nil
@@ -254,5 +256,61 @@ func (d *Devices) updateNodes(ctx context.Context) {
 			case <-time.After(2 * time.Second):
 			}
 		}
+	}
+}
+
+// updateOnConnect gives a machine that comes back on another node build the hub's own (conn.go serve has just
+// connected it). Only a hub that updates itself asks the manager to redeploy (selfupdate.go confirm ->
+// devices.update_nodes); scripts/deploy/deploy.sh writes the hub's binaries where Redeploy takes them and restarts
+// the hub, which is a plain start, so a machine that was asleep then, or that it could not reach, kept the old
+// node: serve only logged the mismatch and the machine showed the version mismatch until someone pressed Redeploy.
+//
+// One attempt per machine and build: its outcome is kept (node.deploy.<id>, so it is known again after a hub
+// restart) and a build that failed (the machine unreachable, a node that cannot run it, one that rolled back after
+// a failed start) is not sent again on every reconnect. Redeploy still tries. When that record cannot be read it
+// does not deploy either: it could not record the outcome, so a flapping machine would get a transfer per reconnect.
+func (m *Machine) updateOnConnect(ctx context.Context) {
+	version := m.d.hubVersion()
+	m.mu.Lock()
+	online, deploying, info := m.online, m.deploying, m.info
+	m.mu.Unlock()
+	if m.cfg.Kind == "local" || version == "" || !online || deploying || !nodeMismatch(version, info) {
+		return
+	}
+	if m.d.opts.Store != nil {
+		var record nodeDeployRecord
+		found, err := m.d.opts.Store.Setting(ctx, m.deployRecordKey(), &record)
+		switch {
+		case err != nil:
+			m.d.logf("[%s] read the last node update: %v", m.cfg.ID, err)
+			return
+		case found && record.Target == version:
+			return // this build was tried already: a queued one continues in nodeUpdateConnected, a failed one waits for Redeploy
+		}
+	}
+	m.d.logf("[%s] node %s is not the hub's build %s: send it the hub's", m.cfg.ID, info.Version, version)
+	if err := m.startDeploy(); err != nil {
+		m.d.logf("[%s] update: %v", m.cfg.ID, err)
+		// the reason stays on the machine's card, as a failed Redeploy's does
+		m.mu.Lock()
+		m.deployErr = err.Error()
+		m.mu.Unlock()
+		m.d.changed()
+		m.saveDeployOutcome(ctx, version, err)
+	}
+}
+
+// saveDeployOutcome keeps what came of a deploy over ssh or tailcat (the update protocol saves its own,
+// deploy_rpc.go), so updateOnConnect does not send a machine the same build again on every reconnect.
+func (m *Machine) saveDeployOutcome(ctx context.Context, target string, err error) {
+	if target == "" {
+		return
+	}
+	record := nodeDeployRecord{Target: target, State: "succeeded", At: time.Now().UTC()}
+	if err != nil {
+		record.State, record.Error = "failed", err.Error()
+	}
+	if saveErr := m.saveDeployRecord(ctx, record); saveErr != nil {
+		m.d.logf("[%s] save node deployment: %v", m.cfg.ID, saveErr)
 	}
 }

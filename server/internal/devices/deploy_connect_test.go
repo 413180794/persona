@@ -1,0 +1,168 @@
+package devices
+
+import (
+	"context"
+	"encoding/json"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+// A machine that comes back on another node build is sent this hub's build (deploy.go updateOnConnect): scripts/deploy
+// deploys and restarts the hub as a plain start, so the manager's only redeploy (after a hub self-update) never ran
+// and a machine that was asleep then stayed on the old node, only logging the mismatch (#2986).
+
+// buildNode is a node over a dial that reports a build other than the hub's; it answers what the manager asks when a
+// machine connects and counts what an update asks (the link's node.update.* protocol).
+type buildNode struct {
+	mu      sync.Mutex
+	info    proto.NodeInfo
+	calls   []string
+	updates int
+}
+
+func (n *buildNode) dial(context.Context) (net.Conn, error) {
+	managerSide, nodeSide := net.Pipe()
+	p := rpc.New("n", nodeSide)
+	p.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		n.calls = append(n.calls, method)
+		switch method {
+		case "node.info":
+			return n.info, nil
+		case "sessions.list":
+			return map[string]any{"sessions": []proto.Session{}}, nil
+		case "node.update.begin":
+			n.updates++
+			return map[string]any{"id": "update-one", "offset": 0}, nil
+		}
+		return map[string]any{"ok": true}, nil
+	}
+	go func() { _ = p.Serve(context.Background(), nodeSide); nodeSide.Close() }()
+	return managerSide, nil
+}
+
+func (n *buildNode) seen(method string) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	count := 0
+	for _, c := range n.calls {
+		if c == method {
+			count++
+		}
+	}
+	return count
+}
+
+func (n *buildNode) updateCalls() int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.updates
+}
+
+// connectMachine runs m's run loop against the in-process node and waits until it is served.
+func connectMachine(t *testing.T, d *Devices, cfg MachineConfig, n *buildNode) *Machine {
+	t.Helper()
+	m := newMachine(d, cfg)
+	m.dialNode = n.dial
+	d.addEntry(m)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); m.run(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+	eventually(t, 5*time.Second, cfg.ID+" connected", func() bool { return m.reachable() && n.seen("sessions.list") > 0 })
+	return m
+}
+
+// hubNodeBinary writes a node for the machine's platform where 重新部署 takes it (nodeBinary, deploy.go).
+func hubNodeBinary(t *testing.T, goos, arch string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "jarvisd-"+goos+"-"+arch), []byte("the hub's node"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PERSONA_NODE_BINARIES", dir)
+	t.Setenv("JARVIS_NODE_BINARIES", dir)
+}
+
+// fakeSSH puts an ssh first on PATH that records its arguments and fails: a machine the hub cannot reach that way.
+// It returns the file the calls are written to.
+func fakeSSH(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "ssh.calls")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + shellQuote(calls) + "\nexit 255\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	return calls
+}
+
+func sshCalls(t *testing.T, calls string) []string {
+	t.Helper()
+	b, err := os.ReadFile(calls)
+	if err != nil {
+		return nil
+	}
+	return strings.Split(strings.TrimSpace(string(b)), "\n")
+}
+
+// A machine that connects on another build is sent the hub's node, and the outcome is kept so the same build is not
+// sent again on every reconnect.
+func TestMachineBackOnAnotherBuildGetsTheHubsNode(t *testing.T) {
+	calls := fakeSSH(t)
+	hubNodeBinary(t, "linux", "amd64")
+	d := newTestDevices(t)
+	d.cfg.HubVersion = "hub-build"
+	n := &buildNode{info: proto.NodeInfo{Hostname: "laptop", OS: "linux", Arch: "amd64", Version: "old-build", NodeUpdate: true}}
+	m := connectMachine(t, d, MachineConfig{ID: "laptop", Name: "laptop", Kind: "ssh", SSHHost: "laptop.invalid"}, n)
+	if s := m.snapshot(); !s.NodeMismatch {
+		t.Fatalf("connected on another build, no mismatch shown: %+v", s)
+	}
+	eventually(t, 5*time.Second, "the hub's node sent to the machine", func() bool { return len(sshCalls(t, calls)) > 0 })
+	var record nodeDeployRecord
+	eventually(t, 5*time.Second, "the attempt kept", func() bool {
+		found, err := d.opts.Store.(*memStore).Setting(context.Background(), m.deployRecordKey(), &record)
+		return err == nil && found && record.Target == "hub-build"
+	})
+	if record.State != "failed" {
+		t.Fatalf("record of an unreachable machine: %+v", record)
+	}
+
+	// Back again (the machine was still not reachable, nothing installed): the same build is not pushed a second time.
+	m.reconnect()
+	eventually(t, 5*time.Second, "connected again", func() bool { return n.seen("sessions.list") > 1 })
+	time.Sleep(300 * time.Millisecond)
+	if got := len(sshCalls(t, calls)); got != 1 {
+		t.Fatalf("the same build sent %d times over two connections, want 1", got)
+	}
+}
+
+// A linked machine (the update protocol, not ssh) is sent the hub's node too, and the record names the build it is for.
+func TestLinkedMachineBackOnAnotherBuildGetsTheHubsNode(t *testing.T) {
+	hubNodeBinary(t, "linux", "amd64")
+	d := newTestDevices(t)
+	d.cfg.HubVersion = "hub-build"
+	n := &buildNode{
+		info: proto.NodeInfo{Hostname: "box", OS: "linux", Arch: "amd64", Version: "old-build", NodeUpdate: true},
+	}
+	m := connectMachine(t, d, MachineConfig{ID: "box", Name: "box", Kind: kindLink}, n)
+	eventually(t, 5*time.Second, "the update sent over the link", func() bool { return n.updateCalls() > 0 })
+	eventually(t, 5*time.Second, "the hub's node transferred", func() bool { return n.seen("node.update.chunk") > 0 })
+	var record nodeDeployRecord
+	if found, err := d.opts.Store.(*memStore).Setting(context.Background(), m.deployRecordKey(), &record); err != nil || !found {
+		t.Fatalf("record=%+v found=%v err=%v", record, found, err)
+	}
+	if record.Target != "hub-build" {
+		t.Fatalf("record=%+v", record)
+	}
+}

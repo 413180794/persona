@@ -237,8 +237,10 @@ struct ExtensionDetailView: View {
             Text(page.disableConfirmation?.message ?? "")
         }
         .sheet(item: $editingSecret) { secret in
+            // Closed by clearing the item it is shown for, so the page and the sheet cannot disagree about whether it is
+            // open (tapping the same secret again must open it).
             ExtensionSecretSheet(secret: secret, save: { await page.setSecret(secret.name, value: $0) },
-                              clear: { await page.clearSecret(secret.name) })
+                              clear: { await page.clearSecret(secret.name) }, close: { editingSecret = nil })
         }
         .task { await page.load() }
         // Again when the connector's page closes (its switch may have changed there) or the extension is switched.
@@ -835,7 +837,7 @@ private struct ExtensionSecretSheet: View {
     var secret: ExtensionSecret
     var save: (String) async -> Bool
     var clear: () async -> Void
-    @Environment(\.dismiss) private var dismiss
+    var close: () -> Void
     @State private var value = ""
     @State private var busy = false
 
@@ -850,7 +852,7 @@ private struct ExtensionSecretSheet: View {
                 if secret.set {
                     Section {
                         Button(role: .destructive) {
-                            Task { busy = true; await clear(); busy = false; dismiss() }
+                            Task { busy = true; await clear(); busy = false; close() }
                         } label: {
                             Text("Clear [Image Editor bce237]").lineLimit(1)
                         }
@@ -862,13 +864,13 @@ private struct ExtensionSecretSheet: View {
             .themedPage()
             .navigationTitle(secret.title)
             .navigationBarTitleDisplayMode(.inline)
-            .sheetCancel(unsaved: !value.isEmpty) { dismiss() }
+            .sheetCancel(unsaved: !value.isEmpty) { close() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task {
                             busy = true
-                            if await save(value) { dismiss() }
+                            if await save(value) { close() }
                             busy = false
                         }
                     } label: {

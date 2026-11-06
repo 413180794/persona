@@ -311,6 +311,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 			m.setSessions(list.Sessions)
 			m.d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
 			m.nodeUpdateConnected(ctx, c.peer, info)
+			m.updateOnConnect(ctx) // back on another build: give it the hub's (updateOnConnect, deploy.go)
 		}
 	} else {
 		rewatch = nil

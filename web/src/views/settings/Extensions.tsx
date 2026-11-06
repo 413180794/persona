@@ -1026,6 +1026,8 @@ function ListControl({ field: f, path, draft, onEdit, id, ring }: Pick<FieldProp
 /** Sets one secret: typed in hidden, saved to the hub, never shown again; one that is set can be cleared. */
 function SecretDialog({ extension, secret, onClose, onDone }: { extension: string; secret: ExtensionSecret; onClose: () => void; onDone: (d: HubExtensionDetail) => void }) {
   const [value, setValue] = useState("");
+  // shown while typing, to check what was pasted (a token cut short is a common mistake); a saved one is never shown
+  const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState<"" | "save" | "clear">("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -1086,18 +1088,26 @@ function SecretDialog({ extension, secret, onClose, onDone }: { extension: strin
           <Icon name="lock" size={13} className="shrink-0" />
           {secretState(secret)}
         </div>
-        <input
-          type="password"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          autoFocus
-          autoComplete="new-password"
-          spellCheck={false}
-          placeholder={secret.set ? t("settings-extensions.secret_replace_placeholder") : t("settings-extensions.secret_placeholder")}
-          aria-label={secret.title}
-          disabled={!!busy}
-          className={cx(inputClass, "h-9 font-mono shadow-inset-field")}
-        />
+        <div className="flex items-center gap-1.5">
+          <input
+            type={shown ? "text" : "password"}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus
+            autoComplete="new-password"
+            spellCheck={false}
+            placeholder={secret.set ? t("settings-extensions.secret_replace_placeholder") : t("settings-extensions.secret_placeholder")}
+            aria-label={secret.title}
+            disabled={!!busy}
+            className={cx(inputClass, "h-9 min-w-0 flex-1 font-mono shadow-inset-field")}
+          />
+          <IconButton
+            icon={shown ? "eyeOff" : "eye"}
+            label={shown ? t("settings-extensions.secret_hide") : t("settings-extensions.secret_show")}
+            onClick={() => setShown((x) => !x)}
+            disabled={!!busy}
+          />
+        </div>
         <p className="text-[11.5px] leading-relaxed text-ink-3">{secret.description || t("settings-extensions.secret_hint")}</p>
         {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">{t("settings-extensions.not_saved", { error })}</p>}
         <button type="submit" hidden />

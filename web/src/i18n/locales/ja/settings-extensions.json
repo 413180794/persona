@@ -91,6 +91,8 @@
   "clear": "削除",
   "secret_replace_placeholder": "新しい値を入力して置き換え",
   "secret_placeholder": "値を入力",
+  "secret_show": "表示",
+  "secret_hide": "非表示",
   "secret_hint": "ハブに保存され、この拡張機能にだけ渡されます。",
   "sandbox_title": "実行の分離",
   "sandbox_footer": "サンドボックスが分離するのは、ハブが実行するインストール済みの拡張機能だけです。有効かどうかは上の実際の状態に従います。変更はハブのマシンか管理画面でのみ行えます。",

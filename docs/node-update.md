@@ -12,6 +12,7 @@ When the web Machines page or machine detail shows a version mismatch, click **R
 - A normal update waits for the machine's Agents to go idle, including waits for the user's answer and background tasks still running; the node checks again before installing, in case a new task started during the transfer.
 - Only one update transaction is accepted per machine; a dropped connection does not lose the transaction's mutual exclusion.
 - After the hub updates itself it updates the online nodes one by one; Link machines that are offline at that moment keep a pending target and continue on their next connection. The connection method is never changed for the sake of an update.
+- A plain deploy is covered too: `scripts/deploy/deploy.sh` writes the binaries and restarts the hub normally (not a self-update), so when a machine connects with a node that is not the hub's build, the hub sends it the hub's build once (`updateOnConnect`; the same for ssh / tailcat and Link). Each build is tried automatically only once per machine, and the outcome is kept in `node.deploy.<machine id>`; a failed attempt (unreachable, could not install, rolled back) is not pushed again on every reconnect, and a manual **Redeploy** can try again.
 - The hub's task target, progress and result are stored in Postgres settings (`node.deploy.<machine id>`). After a hub restart, accepted tasks can continue; if the hub version has changed, the old target is stopped and the user is told clearly to update again, so an outdated target is never installed.
 
 ## First upgrade of an old node

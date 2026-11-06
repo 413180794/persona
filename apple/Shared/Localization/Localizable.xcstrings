@@ -42071,6 +42071,28 @@
       },
       "extractionState": "manual"
     },
+    "Hide contents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide contents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏内容"
+          }
+        }
+      }
+    },
     "HTML Card": {
       "shouldTranslate": false,
       "localizations": {
@@ -78464,6 +78486,28 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Show contents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show contents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示内容"
+          }
+        }
+      }
     },
     "SMS": {
       "localizations": {
