@@ -5,7 +5,7 @@
 // same update action the deployment strip has. Reading and fixing are for a full device (the hub refuses the rest).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
-import { api, ApiError, enc, errorText, isAbort } from "../../lib/api";
+import { api, ApiError, enc, errorText, isAbort, pastHub } from "../../lib/api";
 import {
   CHECK_STATUS_LABEL,
   deriveFeatures,
@@ -52,7 +52,8 @@ export function NodeHealth({ machine, heading }: { machine: Machine; heading: Re
       const mine = ++seq.current;
       setBusy(true);
       try {
-        const report = await api<DoctorReport>(`/machines/${enc(mid)}/doctor`, { signal });
+        // the hub waits 45 s for the node's self-check (hub/http.go)
+        const report = await api<DoctorReport>(`/machines/${enc(mid)}/doctor`, { signal, timeout: pastHub(45_000) });
         if (mine === seq.current) setLoad({ kind: "report", report: { ...report, checks: report.checks ?? [] } });
       } catch (e) {
         if (isAbort(e) || mine !== seq.current) return;

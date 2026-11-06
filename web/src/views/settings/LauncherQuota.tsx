@@ -3,7 +3,7 @@
 // windows, the key's own use. Read once when the dialog opens (the hub keeps an answer a minute); ↻ reads again.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";
-import { api, enc, errorText } from "../../lib/api";
+import { api, enc, errorText, pastHub } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { gatewayName, poolTrouble, quotaAmount, quotaFooter, quotaPercent, quotaReset, quotaTone, quotaUnlimited, quotaUsage, type LauncherQuota as Quota, type LauncherQuotaAnswer, type QuotaPool, type QuotaWindow } from "../../lib/quota";
 import { useStore } from "../../lib/store";
@@ -20,7 +20,8 @@ export function LauncherQuota({ name }: { name: string }) {
   useEffect(() => {
     let dead = false;
     setLoading(true);
-    api<LauncherQuotaAnswer>(`/launchers/${enc(name)}/quota${tick ? "?refresh=1" : ""}`)
+    // the hub asks the gateway for up to 45 s (assistant/models_quota.go)
+    api<LauncherQuotaAnswer>(`/launchers/${enc(name)}/quota${tick ? "?refresh=1" : ""}`, { timeout: pastHub(45_000) })
       .then((a) => !dead && (setAnswer(a), setFailed("")))
       .catch((e) => !dead && setFailed(errorText(e)))
       .finally(() => !dead && setLoading(false));

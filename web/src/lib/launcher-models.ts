@@ -2,7 +2,7 @@
 // (GET /machines/{mid}/launchers/{name}/models, node/launcher_models.go), which launcher the picker asks, searching the
 // list, the thinking efforts a pick allows, and what a start sends. A pick is for one start only: nothing is saved.
 import { t } from "../i18n";
-import { api, ApiError, enc } from "./api";
+import { api, ApiError, enc, pastHub } from "./api";
 import type { ModelBinding } from "./model-config";
 import { EFFORTS } from "./session-actions";
 import type { Launcher } from "./types";
@@ -62,10 +62,13 @@ export function defaultLabel(d: LauncherDefault | null | undefined, fallback = "
 /** What a launcher picked over the default is marked with: it applies to this start / conversation only. */
 export const oneOff = () => t("lib-launcher-models.one_off");
 
+// The hub gives a model list 70 s (assistant/models_launchers.go): the node may have to start the CLI to ask its /model.
+const MODELS_HUB_MS = 70_000;
+
 /** The list for `launcher` on `mid` (seconds when the node has to start the CLI); null from an older hub (no picker). */
 export async function launcherModels(mid: string, launcher: string, opts: { refresh?: boolean; signal?: AbortSignal } = {}): Promise<LauncherModels | null> {
   try {
-    const r = await api<LauncherModels>(`/machines/${enc(mid)}/launchers/${enc(launcher)}/models${opts.refresh ? "?refresh=1" : ""}`, { signal: opts.signal });
+    const r = await api<LauncherModels>(`/machines/${enc(mid)}/launchers/${enc(launcher)}/models${opts.refresh ? "?refresh=1" : ""}`, { signal: opts.signal, timeout: pastHub(MODELS_HUB_MS) });
     return { ...r, models: r.models ?? [] };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;
@@ -81,7 +84,7 @@ export async function providerModels(provider: string, opts: { refresh?: boolean
   if (opts.refresh) query.set("refresh", "1");
   if (opts.machine) query.set("machine", opts.machine);
   try {
-    const r = await api<LauncherModels & { machine?: string }>(`/model-config/providers/${enc(provider)}/models${query.size ? `?${query}` : ""}`, { signal: opts.signal });
+    const r = await api<LauncherModels & { machine?: string }>(`/model-config/providers/${enc(provider)}/models${query.size ? `?${query}` : ""}`, { signal: opts.signal, timeout: pastHub(MODELS_HUB_MS) });
     return { ...r, models: r.models ?? [] };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;

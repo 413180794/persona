@@ -3,7 +3,7 @@
 // cookie file (cookies.txt, or an extension's JSON). The file is read here, its sites ticked by the user (none at first),
 // and only the ticked ones go to the hub, which passes them to the Mac and keeps nothing. The Mac must be online.
 import { useEffect, useRef, useState } from "react";
-import { api, enc, errorText } from "../../lib/api";
+import { api, enc, errorText, pastHub } from "../../lib/api";
 import { parseCookies, picked, sitesOf, type CookieSite, type CookieSiteNow } from "../../lib/cookies";
 import { Button, cx, Dialog, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -34,7 +34,8 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
     setError("");
     if (!online) return;
     let live = true;
-    api<Answer>(path)
+    // the hub gives the Mac's browser 2 min 15 s (extmgr/browser_cookies.go)
+    api<Answer>(path, { timeout: pastHub(135_000) })
       .then((a) => live && setSites(a.sites))
       .catch((e) => live && setError(errorText(e)));
     return () => {

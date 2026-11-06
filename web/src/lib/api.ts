@@ -53,6 +53,10 @@ export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extensio
 // that says which computer, that one arrives first. Writes have none: one that took effect must not read as failed.
 export const READ_TIMEOUT_MS = 45_000;
 
+/** The `timeout` for a read the hub itself gives `hubMs` or longer (a node that starts a CLI, a gateway): a few seconds
+ *  past the hub's own limit, so the hub's error (which computer, which launcher) or a late answer comes first (#5035). */
+export const pastHub = (hubMs: number): number => hubMs + 5_000;
+
 /** The hub did not answer a read within its time (`api`'s `timeout`). */
 export class HubTimeoutError extends Error {
   constructor() {

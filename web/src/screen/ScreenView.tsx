@@ -4,7 +4,7 @@
 import { BASE } from "../lib/base";
 import RFB from "@novnc/novnc";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, errorText } from "../lib/api";
+import { api, ApiError, errorText, pastHub } from "../lib/api";
 import { cx, Spinner } from "../ui/atoms";
 import { t } from "../i18n";
 import "../views/theme"; // follows the system's light / dark while open (index.html picked the first one)
@@ -63,7 +63,8 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
         // The extension cua or ego, on for this Mac, lets its screen through (#1507); each asked fresh, 404 while off.
         const fresh = async (what: "computer" | "browser") => {
           try {
-            return await api<Computer>(`/machines/${encodeURIComponent(target.mid)}/${what}`, { token: target.token });
+            // the hub asks the Mac for up to 45 s (extmgr/browser.go; computer.go 30 s)
+            return await api<Computer>(`/machines/${encodeURIComponent(target.mid)}/${what}`, { token: target.token, timeout: pastHub(45_000) });
           } catch (e) {
             if (e instanceof ApiError && e.status === 404) return null;
             throw e;

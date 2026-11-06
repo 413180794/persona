@@ -6,6 +6,7 @@ import persona.core.domain.Pairing
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import persona.core.hub.SpkiTrustManager
+import persona.core.hub.LocalAddressPolicy
 import java.net.*
 import javax.net.ssl.SSLException
 
@@ -50,19 +51,17 @@ object PairingInput {
         }
         return request
     }
+    /** Address literals are judged by the policy `HubHttpClient` connects with, so a link it would refuse fails here. */
     private fun localHost(host: String): Boolean {
         val value = host.removePrefix("[").removeSuffix("]").lowercase()
         if (value == "localhost" || value.endsWith(".local")) return true
         if (':' in value) {
             val address = runCatching { InetAddress.getByName(value) }.getOrNull() ?: return false
-            return address.isLoopbackAddress || address.isLinkLocalAddress || address.isSiteLocalAddress ||
-                (address.address[0].toInt() and 0xfe) == 0xfc
+            return LocalAddressPolicy().allows(address)
         }
         val bytes = value.split('.').map { it.toIntOrNull() ?: return false }
         if (bytes.size != 4 || bytes.any { it !in 0..255 }) return false
-        return bytes[0] == 10 || bytes[0] == 127 || (bytes[0] == 172 && bytes[1] in 16..31) ||
-            (bytes[0] == 192 && bytes[1] == 168) || (bytes[0] == 169 && bytes[1] == 254) ||
-            (bytes[0] == 100 && bytes[1] in 64..127)
+        return LocalAddressPolicy().allows(InetAddress.getByAddress(ByteArray(4) { bytes[it].toByte() }))
     }
     private fun invalid(): Nothing = throw PairingException(PairingFailure.InvalidCode)
 }

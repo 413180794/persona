@@ -3,7 +3,7 @@
 // (file/convert). The rendered pages go into a frame with no scripts and no network (srcdoc, empty sandbox, CSP):
 // a document is someone else's content, and nothing in it may run as this page or call out.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { api, ApiError, enc, errorText, fileDownloadURL, isAbort } from "../../../lib/api";
+import { api, ApiError, enc, errorText, fileDownloadURL, isAbort, pastHub } from "../../../lib/api";
 import { base64Bytes, extOf, OFFICE_RENDERED, type FileContent } from "../../../lib/files";
 import { SANS, withFallback } from "../../../lib/fonts";
 import { bytes } from "../../../lib/format";
@@ -80,7 +80,8 @@ export function OfficeView({ mid, cwd, file, onDownload }: { mid: string; cwd?: 
       })().catch((e) => fail(t("session-files-officeview.render_failed"), e, true));
     } else {
       setState({ kind: "loading", label: t("session-files-officeview.converting") });
-      api<{ path: string }>(`/machines/${enc(mid)}/file/convert?path=${enc(file.path)}&cwd=${enc(cwd ?? "")}&to=pdf`, { signal: ac.signal })
+      // the hub gives the machine's LibreOffice 2 minutes (hub/download.go)
+      api<{ path: string }>(`/machines/${enc(mid)}/file/convert?path=${enc(file.path)}&cwd=${enc(cwd ?? "")}&to=pdf`, { signal: ac.signal, timeout: pastHub(120_000) })
         .then((r) => !ac.signal.aborted && setState({ kind: "pdf", url: fileDownloadURL(mid, r.path, "", { inline: true }) }))
         .catch((e) => fail(t("session-files-officeview.convert_failed"), e, false));
     }

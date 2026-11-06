@@ -1206,6 +1206,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	if err != nil {
 		run.Status, run.Error = runFailed, err.Error()
 		s.recordRun(run)
+		s.oneOffNotStarted(ctx, t, run)
 		return proto.Session{}, err
 	}
 	launcher := strings.TrimPrefix(binding.Provider, "launcher.")
@@ -1243,6 +1244,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 		s.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()
 		s.recordRun(run)
+		s.oneOffNotStarted(ctx, t, run)
 		return proto.Session{}, err
 	}
 	run.MachineID, run.SessionID = sess.MachineID, sess.SessionID
@@ -1255,6 +1257,48 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 	}
 	s.startScheduledRun(run, t, m)
 	return sess, nil
+}
+
+// oneOffNotStarted: a one-off's scheduled run could not even start (its machine offline, the launcher not starting, no
+// model). A one-off is off as soon as it is due and has no next time, so this was its only run: recorded as failed and
+// nothing else, the follow-up the user counted on was gone without a word (#5030). The user is told, as a run whose turn
+// failed is (watchScheduledRun), and it is tried once more after runRetryDelay, as the task is then (deleted: not). A
+// failed retry is told too, and not tried again. A repeating task runs again at its next time and has its streak notice
+// (#4658); 立即运行 is answered in the app.
+func (s *Service) oneOffNotStarted(ctx context.Context, t Task, run ScheduleRun) {
+	if t.Repeat != repeatOnce || run.Manual {
+		return
+	}
+	l := s.lang(ctx)
+	name := t.labelIn(l)
+	if t.Space == SpaceHealth { // the lock screen does not name a health task (health.go)
+		name, _ = healthNotice(l)
+	}
+	s.push(ctx, Notification{Title: i18n.T(l, "assistant-schedule.run_failed", i18n.Args{"name": name}), Body: clip(oneLine(run.Error), 300)})
+	if run.Retried {
+		return
+	}
+	delay := runRetryDelay
+	if s.runRetry > 0 {
+		delay = s.runRetry
+	}
+	go func() {
+		time.Sleep(delay)
+		cctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cur, ok, err := s.currentTask(cctx, t.ID)
+		cancel()
+		switch {
+		case err != nil:
+			s.logf("task %s retry: %v", t.ID, err)
+			return
+		case !ok:
+			s.logf("task %s: deleted since it could not start; not retried", t.ID)
+			return
+		}
+		if _, err := s.runTask(cur, time.Now(), time.Now(), false, true); err != nil {
+			s.logf("task %s retry: %v", t.ID, err)
+		}
+	}()
 }
 
 // sessionBusy: the conversation is on a turn or waiting for the user (an approval, a question).

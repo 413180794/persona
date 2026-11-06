@@ -5,7 +5,7 @@
 // hub is asked again when the page opens, and every 2 s while a job runs or the setup is under way and the tab is shown.
 // Only the latest answer for the Mac shown now lands: one for a Mac opened before, or an older one, is dropped.
 import { useEffect, useRef, useState } from "react";
-import { api, enc, errorText } from "../../lib/api";
+import { api, enc, errorText, pastHub } from "../../lib/api";
 import { browserView, browserWatching, type BrowserAction, type BrowserStep, type MachineBrowser } from "../../lib/browser";
 import { screenPath } from "../../lib/computer";
 import { latestRequest, visiblePoll } from "../../lib/visible-poll";
@@ -49,7 +49,8 @@ export function BrowserSection({ mid, browser, online }: { mid: string; browser:
     };
   }, [mid]);
 
-  const refresh = () => reads.current?.run(() => api<MachineBrowser>(`/machines/${enc(mid)}/browser`)) ?? Promise.resolve();
+  // the hub asks the Mac for up to 45 s (extmgr/browser.go)
+  const refresh = () => reads.current?.run(() => api<MachineBrowser>(`/machines/${enc(mid)}/browser`, { timeout: pastHub(45_000) })) ?? Promise.resolve();
 
   // Runs a write and shows its answer as the latest one (an older read still in flight is dropped). If another Mac is
   // shown by the time it comes back, both its answer and its failure belong to the Mac left behind and are dropped.

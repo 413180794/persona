@@ -3,6 +3,7 @@ package persona.feature.settings
 import persona.core.contracts.api.PairingException
 import persona.core.contracts.api.PairingFailure
 import persona.core.contracts.api.PairingRequest
+import persona.core.hub.LocalAddressPolicy
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -32,6 +33,17 @@ class SettingsCriticalPathTest {
             assertEquals(PairingFailure.InvalidCode, error.reason)
         }
         assertEquals(fingerprint, PairingInput.parse("$base&hub=example-hub&fp=$fingerprint").fp)
+    }
+
+    @Test fun plaintextPairingWithoutFingerprintAgreesWithTheConnectionPolicy() {
+        // Parsing lets an http link without fp through only where HubHttpClient would send plaintext (#4988).
+        for (host in listOf("100.101.102.103", "100.64.0.1", "192.0.2.10", "10.0.0.2", "192.168.1.2", "172.16.0.2", "169.254.0.2", "127.0.0.1")) {
+            val link = "jarvis://pair?url=http%3A%2F%2F$host%3A18660&token=fixture"
+            val allowed = LocalAddressPolicy().allows(java.net.InetAddress.getByName(host))
+            val outcome = runCatching { PairingInput.parse(link) }.exceptionOrNull()
+            if (allowed) assertNull(host, outcome)
+            else assertEquals(host, PairingFailure.TlsRequired, (outcome as? PairingException)?.reason)
+        }
     }
 
     @Test fun personaPairingStillUsesTransportAndCredentialValidation() {

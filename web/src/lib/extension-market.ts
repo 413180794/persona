@@ -3,7 +3,7 @@
 // pinned by the index's sha256 and nothing installs before the user has seen what it may do (the preview's
 // permissions digest). The admin UI has the same routes under /api/v1/admin/extensions/-/ (its api.ts), the same words
 // (here).
-import { api, enc } from "./api";
+import { api, enc, pastHub } from "./api";
 import { extRoot, listOf } from "./extension-api";
 import { changed, type HubExtensionDetail, type ExtensionPermission } from "./extensions";
 import { previewConsent, type DependencyState, type PackMember } from "./extension-model";
@@ -112,8 +112,9 @@ export function catalogQuery(q?: string, market?: string, refresh?: boolean): st
   return s ? `?${s}` : "";
 }
 
+// A refresh waits for every market to be read again, a git market's fetch up to 3 minutes (extension/market_git.go).
 export const getCatalog = (q?: string, market?: string, refresh?: boolean) =>
-  api<Catalog & { plugins?: CatalogItem[] }>(`${M()}/catalog${catalogQuery(q, market, refresh)}`).then(catalogOf);
+  api<Catalog & { plugins?: CatalogItem[] }>(`${M()}/catalog${catalogQuery(q, market, refresh)}`, refresh ? { timeout: pastHub(180_000) } : {}).then(catalogOf);
 /** A catalog as either kind of hub sends it (the list under `extensions`, or `plugins`). */
 export const catalogOf = (c: Catalog & { plugins?: CatalogItem[] }): Catalog => {
   const markets = (c.markets ?? []).map(marketView);
