@@ -1523,8 +1523,23 @@ This is for the case "use herdr locally, and have Herdr App connect remotely to 
 side by side, refreshes run in parallel and events are isolated per host, so they don't slow each other down (implementation in `node/engine.go`, `refreshHosts` in `node/sessions.go`, `node/herdrevents.go`;
 trade-offs in `docs/plan-orca-support.md` ("herdr-core host")).
 
-- The user picks per machine in the App (at pairing, or Settings › Machines): `PUT /api/v1/machines/{mid}/engine`. The hub stores it in the Postgres settings
-  (one key `machine_engines`: machine id → engine), not in hub.json.
+- The user picks per machine in the App (at pairing, or Settings › Machines): `PUT /api/v1/machines/{mid}/engine`. The hub stores it in the Postgres settings, not in hub.json.
+- **Host sets (#2576)**: a computer can enable several hosts side by side, any subset of `herdr`, `herdr-core`, `orca` and `paseo` (or none at all),
+  plus a **default host**: where sessions started or resumed from the phone go (the empty set has no default). Each single engine above is a set:
+  `herdr-both` is `{herdr, herdr-core}` with herdr the default.
+  - `PUT` body: `{"hosts": ["herdr", "orca"], "default": "herdr"}`. Without `default`, the first host in the order herdr, herdr-core, orca, paseo;
+    `"hosts": []` is the empty set. Older clients still send `{"engine": "herdr-core"}`, which stands for its set; a body with `hosts` is always a set.
+    An unknown host, `herdr-both` as a member, or a default that is not enabled is a 400, and nothing is written.
+  - **Storage**: the key `machine_engine_hosts` (machine id → `{hosts, default}`) is the choice. `machine_engines` (machine id → single engine) is written beside it
+    with the single engine closest to the set (the host itself when there is one, `herdr-both` for herdr + herdr-core, else the default host, herdr for the empty set),
+    so an older hub still works after a rollback. A machine with only `machine_engines` (chosen before sets) reads as the set its engine stands for and is not
+    rewritten; a machine in neither is `{herdr}`.
+  - **Machine fields**: `engine` stays that single engine (older clients read it). `engine_hosts` and `engine_default` are the set and the default host (never null;
+    `["herdr"]` when never chosen). `engine_suggested` (while online) is the set to preselect at pairing: the hosts the node reports available, herdr when none;
+    a machine that already chose is never changed by it. `engine_sets_unsupported`: the node is online but too old for sets, and the chosen set is not one it can run
+    as a single engine (herdr + Orca, say). It then runs `engine` alone, and clients say so until the node is updated.
+  - **`engine.use`** carries `{engine, hosts, default}`. Older nodes read only `engine`; newer ones report `engine_hosts` (the set they run) in `node.info`,
+    which is how the hub knows they take sets. The empty set is sent as `"hosts": []`, never null.
 - Every time the hub connects to a node, **the first call** is `engine.use` (before `node.info`), but only for machines with a stored choice. Machines never configured get nothing,
   so the node keeps using herdr and old nodes never receive a method they don't know. When the user changes it and the machine is online, it is sent right away; `engine.use` calls for the same machine are queued, and each sends the value stored at send time.
 - After connecting, the node doesn't poll or subscribe to any engine's events until the engine is settled: it receives `engine.use`, or the hub skips it and calls `sessions.list` directly (never configured / old hub).
@@ -1574,7 +1589,7 @@ hub → node requests:
 | method | params → result |
 | --- | --- |
 | `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}` (`system`: see Machine, read once at node start; `engine` is the engine the node currently uses, `engines` are those it found, see "Engines"; old nodes lack these two). If `claude_version` is empty on connect (the `claude --version` run failed), the hub asks again after 1, 2, 5, 10, 30 minutes and then hourly; once it gets a value it updates the machine and pushes it to the App, and stops when the connection drops (#542) |
-| `engine.use` | `{engine}` → `{engine}`: switch to this engine (unknown ones error). If it equals the current one, nothing happens; otherwise it swaps the host, drops the old engine's Agents (refresh results started before the switch and returning after it are discarded), ends all terminal streams (each pushes `terminal.end` with an error saying the engine changed), swaps the event stream, and pushes one `sessions.changed`. Multiple `engine.use` calls run in order |
+| `engine.use` | `{engine, hosts?, default?}` → `{engine}`: switch to this engine, or to the set in `hosts` / `default` for a node that takes sets ("Engines", "Host sets"; unknown ones error). If it equals the current one, nothing happens; otherwise it swaps the host, drops the old engine's Agents (refresh results started before the switch and returning after it are discarded), ends all terminal streams (each pushes `terminal.end` with an error saying the engine changed), swaps the event stream, and pushes one `sessions.changed`. Multiple `engine.use` calls run in order |
 | `launchers.list` | → `{launchers}` |
 | `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`: lines of the form `alias x="K=V … claude [args]"` in this machine's `~/.zshrc` (`$ZDOTDIR` first); only those whose `command` is claude. `env` carries keys, which are handed to the manager only over this RPC (import, over the hub-to-node connection) and never logged; old nodes return `unknown method` |
 | `launchers.repair` | `{name, action: "upgrade_cli"}` → `{ok, unsupported?, output?}`: auto-repair from the launcher health check (`docs/launcher-health.md`). The node only applies fixed repairs (for Claude, it runs `claude update`) and accepts no commands; old nodes return `unknown method` |

@@ -148,7 +148,7 @@ func TestEnginePutOffline(t *testing.T) {
 	if code, _ := put(t, mux, "/api/v1/machines/zz/engine", `{"engine":"herdr"}`); code != 404 {
 		t.Errorf("unknown machine: %d", code)
 	}
-	if st.puts != 1 {
+	if st.puts != 2 { // one choice: the set and, beside it, the single engine (engine_hosts_test.go)
 		t.Errorf("%d writes", st.puts)
 	}
 
@@ -171,7 +171,7 @@ func TestEngineOnline(t *testing.T) {
 	if code != 200 || out["engine"] != "herdr-core" {
 		t.Fatalf("PUT = %d %v", code, out)
 	}
-	if calls := f.seen(); len(calls) != 1 || calls[0] != `engine.use {"engine":"herdr-core"}` {
+	if calls := f.seen(); len(calls) != 1 || calls[0] != `engine.use {"engine":"herdr-core","hosts":["herdr-core"],"default":"herdr-core"}` {
 		t.Errorf("node got %v", calls)
 	}
 	engines, _ := out["engines"].([]any)

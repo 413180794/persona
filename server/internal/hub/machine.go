@@ -41,6 +41,8 @@ type Machine struct {
 	connectedAt time.Time
 	// engine is the engine the manager handed over at its last stop, shown until it reports (snap has it then).
 	engine string
+	// engineHosts: the set the last manager handed over (#2576), nil when it handed over none (a single engine then).
+	engineHosts *proto.EngineChoice
 	// warmUntil: shown as before a restart until then — the hub's, while the manager comes back (calls wait for it in
 	// busNode), or the manager's, while the node comes back (its report's) (devices_link.go).
 	warmUntil time.Time
@@ -124,6 +126,11 @@ func (m *Machine) snapshot() proto.Machine {
 		if m.online || warm {
 			s.Engines = append(s.Engines, m.info.Engines...)
 		}
+		choice := proto.EngineHostsOf(s.Engine)
+		if m.engineHosts != nil {
+			choice = *m.engineHosts
+		}
+		s.EngineHosts, s.EngineDefault = choice.Hosts, choice.Default
 		s.NodeMismatch = m.online && nodeMismatch(m.hub.version, m.info.Version)
 		can, why := m.canDeployLocked()
 		s.CanDeploy, s.DeployReason = &can, why
@@ -134,6 +141,10 @@ func (m *Machine) snapshot() proto.Machine {
 	}
 	if s.Engines == nil {
 		s.Engines = []proto.Engine{}
+	}
+	if s.EngineHosts == nil { // a manager older than sets: the set its single engine stands for
+		c := proto.EngineHostsOf(cmp.Or(s.Engine, proto.EngineHerdr))
+		s.EngineHosts, s.EngineDefault = c.Hosts, c.Default
 	}
 	s.Computer, s.Browser = computer, browser // the system is in the manager's report (its monitoring)
 	return s

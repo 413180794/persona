@@ -443,8 +443,9 @@ func (h *Hub) startDevices(ctx context.Context) {
 			Info     proto.NodeInfo  `json:"info"`
 			Sessions []proto.Session `json:"sessions"`
 		} `json:"machines"`
-		Engines map[string]string `json:"engines"`
-		SavedAt time.Time         `json:"saved_at"`
+		Engines     map[string]string             `json:"engines"`
+		EngineHosts map[string]proto.EngineChoice `json:"engine_hosts"`
+		SavedAt     time.Time                     `json:"saved_at"`
 	}
 	if h.store != nil {
 		// Read, not taken: the manager takes it when it starts.
@@ -463,6 +464,9 @@ func (h *Hub) startDevices(ctx context.Context) {
 		m.managed, m.peer = true, &busNode{h: h, id: mc.ID, done: make(chan struct{})}
 		m.owner = h.entryOwner(mc.ID)
 		m.engine = saved.Engines[mc.ID]
+		if c, ok := saved.EngineHosts[mc.ID]; ok {
+			m.engineHosts = &c
+		}
 		if w, ok := saved.Machines[mc.ID]; ok {
 			m.info, m.sessions, m.warmUntil = w.Info, w.Sessions, until
 			n++

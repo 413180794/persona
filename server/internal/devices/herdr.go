@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -114,7 +115,7 @@ func (d *Devices) getHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
 }
 
 // putHerdr: PUT /api/v1/machines/{mid}/herdr {"autostart": bool}, the switch under Settings › Machines › Engine. Only for a
-// machine whose engine is classic herdr: Herdr App runs its own herdr-core and has no server for the node to start.
+// machine whose set holds classic herdr: Herdr App runs its own herdr-core and has no server for the node to start.
 func (d *Devices) putHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
 		Autostart *bool `json:"autostart"`
@@ -123,7 +124,7 @@ func (d *Devices) putHerdr(w http.ResponseWriter, r *http.Request, m *Machine) {
 		writeErr(w, http.StatusBadRequest, i18n.Err("devices-api.need_autostart"))
 		return
 	}
-	if e := d.engineOf(m.cfg.ID); e != proto.EngineHerdr && e != proto.EngineHerdrBoth {
+	if !slices.Contains(d.engineChoiceOf(m.cfg.ID).Hosts, proto.EngineHerdr) {
 		writeErr(w, http.StatusNotFound, i18n.Err("devices-api.not_herdr"))
 		return
 	}

@@ -165,14 +165,22 @@ func sameConfig(a, b MachineConfig) bool {
 func (m *Machine) snapshot() proto.Machine {
 	d := m.d
 	engine := d.engineOf(m.cfg.ID) // before m.mu: it may read settings
+	choice := d.engineChoiceOf(m.cfg.ID)
 	version := d.hubVersion()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	engines := []proto.Engine{} // what the node found: none while offline
 	warm := m.warmLocked(time.Now())
+	var suggested *proto.EngineChoice
 	if m.online || warm {
 		engines = append(engines, m.info.Engines...)
+		if len(engines) > 0 {
+			s := proto.SuggestEngineHosts(engines)
+			suggested = &s
+		}
 	}
+	// A node without sets runs the single engine; say so when that is not the set chosen (docs/protocol.md "Engines").
+	setsUnsupported := (m.online || warm) && m.info.EngineHosts == nil && !proto.LegacyExpresses(choice)
 	icon := m.cfg.Icon
 	if icon == "" {
 		icon = "laptop"
@@ -205,7 +213,8 @@ func (m *Machine) snapshot() proto.Machine {
 		Deploying: m.deploying, DeployError: deployErr,
 		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
-		Engine: engine, Engines: engines, Link: link, System: d.metrics.system(m.cfg.ID),
+		Engine: engine, Engines: engines, EngineHosts: choice.Hosts, EngineDefault: choice.Default,
+		EngineSuggested: suggested, EngineSetsUnsupported: setsUnsupported, Link: link, System: d.metrics.system(m.cfg.ID),
 	}
 }
 
