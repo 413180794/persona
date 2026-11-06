@@ -10108,6 +10108,29 @@
       },
       "extractionState": "manual"
     },
+    "Allow notifications for Persona in Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow notifications for Persona in Settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定で Persona の通知を許可してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "到系统设置里允许 Persona 发通知。"
+          }
+        }
+      }
+    },
     "API Key": {
       "shouldTranslate": true,
       "localizations": {
@@ -14525,6 +14548,30 @@
       },
       "extractionState": "manual"
     },
+    "Apple's push service gave this device no token (%@).": {
+      "comment": "%@: the system's error",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple's push service gave this device no token (%@)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple のプッシュサービスがこのデバイスにトークンを発行しませんでした（%@）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 推送服务没给这台设备发 token（%@）。"
+          }
+        }
+      }
+    },
     "Application (client) ID": {
       "localizations": {
         "en": {
@@ -16325,6 +16372,52 @@
       },
       "extractionState": "manual"
     },
+    "Available · Direct to APNs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available · Direct to APNs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利用可能 · APNs に直接"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可用 · 直连 APNs"
+          }
+        }
+      }
+    },
+    "Available · Through the push relay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available · Through the push relay"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利用可能 · プッシュ中継経由"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可用 · 经推送中继"
+          }
+        }
+      }
+    },
     "Avatar": {
       "localizations": {
         "en": {
@@ -16760,6 +16853,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Background Push": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background Push"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バックグラウンドプッシュ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "后台推送"
+          }
+        }
+      }
     },
     "Background Task": {
       "localizations": {
@@ -18546,6 +18662,52 @@
       },
       "extractionState": "manual"
     },
+    "Check the network and open Persona again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the network and open Persona again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワークを確認して、Persona を開き直してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查网络后重新打开 Persona。"
+          }
+        }
+      }
+    },
+    "Check the network. Persona tries again the next time it opens.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the network. Persona tries again the next time it opens."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワークを確認してください。次に Persona を開いたときにまた試します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查网络。下次打开 Persona 会再试。"
+          }
+        }
+      }
+    },
     "CI Failures": {
       "localizations": {
         "en": {
@@ -18637,6 +18799,30 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Couldn't reach the push relay (%@).": {
+      "comment": "%@: the network's error",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't reach the push relay (%@)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ中継に接続できませんでした（%@）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上推送中继（%@）。"
+          }
+        }
+      }
     },
     "CPU, memory and network update every 10 seconds. Charts show the last hour.": {
       "localizations": {
@@ -42348,6 +42534,29 @@
       },
       "extractionState": "manual"
     },
+    "Give the hub its own APNs key (apns.json), or install Persona from TestFlight.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Give the hub its own APNs key (apns.json), or install Persona from TestFlight."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub に APNs キー（apns.json）を設定するか、TestFlight から Persona を入れてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "给 hub 配上自己的 APNs key（apns.json），或者从 TestFlight 装 Persona。"
+          }
+        }
+      }
+    },
     "Glasses / Bluetooth Headset": {
       "localizations": {
         "en": {
@@ -43056,6 +43265,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "隐藏内容"
+          }
+        }
+      }
+    },
+    "How the hub reaches this device while Persona is closed, for questions and finished agents.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How the hub reaches this device while Persona is closed, for questions and finished agents."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona を閉じている間、hub は質問や Agent の完了をこれでこのデバイスに届けます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 没开着时，hub 靠它把提问、Agent 做完这些通知送到这台设备。"
           }
         }
       }
@@ -46699,6 +46931,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Install the latest Persona from TestFlight: this build has the relay's old address.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install the latest Persona from TestFlight: this build has the relay's old address."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TestFlight から最新の Persona を入れてください。このビルドには中継の古いアドレスが入っています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从 TestFlight 装最新的 Persona：这个版本里是推送中继的旧地址。"
+          }
+        }
+      }
     },
     "Install this extension first": {
       "localizations": {
@@ -64900,6 +65155,29 @@
       },
       "extractionState": "manual"
     },
+    "Notifications for Persona are off in Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications for Persona are off in Settings."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定で Persona の通知がオフになっています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统设置里关掉了 Persona 的通知。"
+          }
+        }
+      }
+    },
     "Notifications muted": {
       "localizations": {
         "en": {
@@ -67345,6 +67623,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Open Persona again to register once more.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Persona again to register once more."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona を開き直して、もう一度登録してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新打开 Persona 再登记一次。"
+          }
+        }
+      }
     },
     "Open Persona Agents": {
       "localizations": {
@@ -71065,6 +71366,29 @@
       },
       "extractionState": "manual"
     },
+    "Persona tries again the next time it opens. If it keeps failing, give the hub its own APNs key (apns.json).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona tries again the next time it opens. If it keeps failing, give the hub its own APNs key (apns.json)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次に Persona を開いたときにまた試します。失敗が続く場合は hub に APNs キー（apns.json）を設定してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次打开 Persona 会再试。一直失败就给 hub 配上自己的 APNs key（apns.json）。"
+          }
+        }
+      }
+    },
     "Persona will use %@ from the next message": {
       "localizations": {
         "en": {
@@ -73770,6 +74094,216 @@
       },
       "extractionState": "manual"
     },
+    "push.unavailable": {
+      "comment": "Background push status",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利用できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不可用"
+          }
+        }
+      }
+    },
+    "push.unknown": {
+      "comment": "Background push status: the hub did not say",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
+        }
+      }
+    },
+    "Push: direct to APNs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push: direct to APNs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ：APNs に直接"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送：直连 APNs"
+          }
+        }
+      }
+    },
+    "Push: the last one didn't go through": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push: the last one didn't go through"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ：前回は届きませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送：上一条没推出去"
+          }
+        }
+      }
+    },
+    "Push: through the push relay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push: through the push relay"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ：プッシュ中継経由"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送：经推送中继"
+          }
+        }
+      }
+    },
+    "Push: unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push: unavailable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ：利用できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送：不可用"
+          }
+        }
+      }
+    },
+    "Push: unavailable · %@": {
+      "comment": "%@: why, in the relay's words",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push: unavailable · %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ：利用できません · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送：不可用 · %@"
+          }
+        }
+      }
+    },
+    "Push: unavailable · no push token": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push: unavailable · no push token"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ：利用できません · トークンなし"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送：不可用 · 没有推送 token"
+          }
+        }
+      }
+    },
+    "Push: unavailable · no relay or APNs key": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push: unavailable · no relay or APNs key"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ：利用できません · 中継も APNs キーもなし"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送：不可用 · 没有中继也没有 APNs key"
+          }
+        }
+      }
+    },
     "Pushes only when a run decides you need to know and alerts you; otherwise it stays quiet. Errors and interruptions are pushed as usual. These tasks always run in their own chat, and messages you send in that chat aren't pushed when done either.": {
       "localizations": {
         "en": {
@@ -74482,6 +75016,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Registered with the push relay; the hub hasn't said which way it pushes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registered with the push relay; the hub hasn't said which way it pushes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ中継に登録済み。hub はプッシュの経路を返していません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在推送中继登记；hub 没说推送走哪条路。"
+          }
+        }
+      }
     },
     "RTF document": {
       "localizations": {
@@ -94110,6 +94667,76 @@
       },
       "extractionState": "manual"
     },
+    "The hub can't use this device's relay registration (%@).": {
+      "comment": "%@: what the hub says",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub can't use this device's relay registration (%@)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub はこのデバイスの中継登録を使えません（%@）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 用不了这台设备的中继登记（%@）。"
+          }
+        }
+      }
+    },
+    "The hub hasn't said which way it pushes to this device.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub hasn't said which way it pushes to this device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub はこのデバイスへのプッシュ経路を返していません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 没说给这台设备的推送走哪条路。"
+          }
+        }
+      }
+    },
+    "The hub tries again with the next one. If it keeps failing, check the hub's log.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub tries again with the next one. If it keeps failing, check the hub's log."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次のプッシュでまた試します。失敗が続く場合は hub のログを確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一条会再试。一直不行就看 hub 的日志。"
+          }
+        }
+      }
+    },
     "The Lark account is signed in through the Lark gateway on the hub machine. Chats share this account with the Inbox, so there's no need to sign in again.": {
       "localizations": {
         "en": {
@@ -94155,6 +94782,30 @@
         }
       },
       "extractionState": "manual"
+    },
+    "The last push didn't go through (%@).": {
+      "comment": "%@: APNs' or the relay's answer",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The last push didn't go through (%@)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回のプッシュは届きませんでした（%@）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一条没推出去（%@）。"
+          }
+        }
+      }
     },
     "The Live Activity showing doesn't have the avatar from Settings (not redrawn yet)": {
       "localizations": {
@@ -94224,6 +94875,101 @@
         }
       },
       "extractionState": "manual"
+    },
+    "The push relay doesn't serve this app (%@).": {
+      "comment": "%@: the relay's status and words",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The push relay doesn't serve this app (%@)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ中継はこの App に対応していません（%@）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送中继不为这个 App 推送（%@）。"
+          }
+        }
+      }
+    },
+    "The push relay has moved (to %@).": {
+      "comment": "%@: the new address",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The push relay has moved (to %@)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ中継は移転しました（%@ へ）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送中继已经搬走（到 %@）。"
+          }
+        }
+      }
+    },
+    "The push relay hasn't been set up for this app yet; its publisher has to do that. Or give the hub its own APNs key (apns.json).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The push relay hasn't been set up for this app yet; its publisher has to do that. Or give the hub its own APNs key (apns.json)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ中継がこの App 向けにまだ開通していません。発行元の対応が必要です。または hub に APNs キー（apns.json）を設定してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送中继还没为这个 App 开通，需要发布方处理；或者给 hub 配上自己的 APNs key（apns.json）。"
+          }
+        }
+      }
+    },
+    "The push relay refused to register this device (%@).": {
+      "comment": "%@: the relay's status and words",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The push relay refused to register this device (%@)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プッシュ中継がこのデバイスの登録を拒否しました（%@）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送中继拒绝登记这台设备（%@）。"
+          }
+        }
+      }
     },
     "The SSH server didn't accept this device's public key. Add the line from Copy authorized_keys Line to ~/.ssh/authorized_keys for %@ on the server (Warpgate: add it to this user's public keys), then try again.": {
       "localizations": {
@@ -99133,6 +99879,29 @@
       },
       "extractionState": "manual"
     },
+    "This build has no push relay, and the hub has no APNs key of its own.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This build has no push relay, and the hub has no APNs key of its own."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このビルドにはプッシュ中継がなく、hub にも APNs キーがありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个版本没配推送中继，hub 也没有自己的 APNs key。"
+          }
+        }
+      }
+    },
     "This Device": {
       "localizations": {
         "en": {
@@ -99155,6 +99924,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "This device has no push token yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device has no push token yet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスにはまだプッシュトークンがありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备还没有推送 token。"
+          }
+        }
+      }
     },
     "This Device's Public Key": {
       "localizations": {
@@ -107372,6 +108164,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Update the hub to see which way its pushes take.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update the hub to see which way its pushes take."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub を更新すると、プッシュの経路が表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新 hub 后能看到推送走哪条路。"
+          }
+        }
+      }
     },
     "Update To-dos": {
       "localizations": {

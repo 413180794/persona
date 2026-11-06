@@ -3812,9 +3812,15 @@ PAIR_DEVICE_TOKENS = set()
 TOKENS = [  # Settings › Devices (GET/POST/DELETE /api/v1/auth/tokens)
     {"id": "dev_phone", "name": "我的 iPhone", "kind": "phone", "role": "full", "created_at": ago(days=12), "last_seen": ago()},
     {"id": "dev_watch", "name": "Apple Watch", "kind": "watch", "role": "answer", "created_at": ago(days=12), "last_seen": ago(hours=3)},
+    {"id": "dev_work", "name": "工作 iPhone", "kind": "phone", "role": "full", "created_at": ago(days=3), "last_seen": ago(hours=1)},
     {"id": "dev_ipad", "name": "iPad", "kind": "phone", "role": "full", "created_at": ago(days=40), "last_seen": ago(days=20),
      "revoked_at": ago(days=2)},
 ]
+# Per credential, the way the hub pushes to the device it registered (docs/push-relay.md "Which way a device is pushed").
+TOKEN_PUSH = {
+    "dev_phone": {"route": "relay"},
+    "dev_work": {"route": "none", "reason": "relay_failed", "detail": "403 topic not served"},
+}
 def _claude_settings():  # Settings › Claude Code Settings: the node's whitelist (server/internal/node/claudeconfig.go)
     return [
         {"key": "awaySummaryEnabled", "title": "回来时先说进展", "detail": "离开 5 分钟以上再回来时，Claude 先简单说说这段时间做了什么",
@@ -11477,7 +11483,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/fleet": return self.send_json(*set_fleet_mode(q.get("mode", [""])[0]))
         if p == "/mock/notify": return self.send_json(*mock_notify(q.get("interaction", [""])[0]))
         if p == "/mock/renew": return self.send_json(*renew_requests(int(q.get("minutes", ["30"])[0] or 30)))
-        if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
+        if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone", "push": TOKEN_PUSH})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
         if p == "/mock/sent_to": return self.send_json({"sent": SENT_TO})
         if p == "/mock/lark_reads": return self.send_json({"reads": LARK_READS})

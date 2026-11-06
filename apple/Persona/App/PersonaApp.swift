@@ -228,7 +228,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         PushRegistrar.shared.didRegister(token: deviceToken)
     }
 
-    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        PushRegistrar.shared.didFail(error)
+    }
 
     /// Silent push from the hub (`jarvis_wake`): the assistant needs a phone_* tool while the app is in the background.
     /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go.

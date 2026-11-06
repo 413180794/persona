@@ -31,6 +31,9 @@ struct NotificationSettingsView: View {
                 }
             }
 
+            // Whether any of what follows can reach this device while Persona is closed (#5998).
+            BackgroundPushSection(status: pushStatus)
+
             Section {
                 Toggle(isOn: binding(\.input)) {
                     Label {
@@ -167,6 +170,16 @@ struct NotificationSettingsView: View {
     private var systemOff: Bool {
         guard let system else { return false }
         return system != .authorized && system != .provisional && !Self.ephemeral(system)
+    }
+
+    /// Background push at the hub this page's settings go to (#5998).
+    private var pushStatus: PushStatus {
+        var health = PushHealthStore.shared.health
+        #if DEBUG
+        // `-showPushHealth refused | moved | unreachable | relay | direct | failed | unknown`: a sample, for screenshots.
+        if let sample = UserDefaults.standard.string(forKey: "showPushHealth") { health = .sample(sample, group: model.hub?.group ?? "") }
+        #endif
+        return health.status(group: model.hub?.group ?? "", allowed: system.map { _ in !systemOff })
     }
 
     private var systemSettingsSection: some View {

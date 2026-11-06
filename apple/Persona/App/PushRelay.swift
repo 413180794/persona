@@ -27,11 +27,18 @@ nonisolated enum PushRelay {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(["apns_token": token, "env": env, "topic": topic])
-        let (data, resp) = try await session.data(for: req)
+        // A redirect is not followed: URLSession would send the POST on as a GET, which never registers. Its status
+        // and target say the relay moved (an old address, builds up to 190, #5998).
+        let (data, resp) = try await session.data(for: req, delegate: NoRedirects())
         struct Answer: Decodable { var grant: String?; var error: String? }
         let answer = try? JSONDecoder().decode(Answer.self, from: data)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200, let grant = answer?.grant, !grant.isEmpty else {
-            throw RelayError(status: (resp as? HTTPURLResponse)?.statusCode ?? 0, message: answer?.error ?? "")
+        let http = resp as? HTTPURLResponse
+        guard http?.statusCode == 200, let grant = answer?.grant, !grant.isEmpty else {
+            let status = http?.statusCode ?? 0
+            if (300..<400).contains(status) {
+                throw RelayError(status: status, message: "", location: http?.value(forHTTPHeaderField: "Location") ?? "")
+            }
+            throw RelayError(status: status, message: answer?.error ?? "")
         }
         if let data = try? JSONEncoder().encode(Cached(relay: relay.absoluteString, token: token, env: env, topic: topic, grant: grant)) {
             Keychain.save(data, account: account)
@@ -43,6 +50,28 @@ nonisolated enum PushRelay {
     struct RelayError: LocalizedError {
         var status: Int
         var message: String
-        var errorDescription: String? { "push relay \(status) \(message)" }
+        /// A redirect's target.
+        var location: String?
+        var errorDescription: String? { "push relay \(status) \(location ?? message)" }
+
+        /// What Settings › Notifications and the hub are told.
+        var outcome: PushHealth.Relay {
+            if let location { return .moved(status: status, location: location) }
+            return .refused(status: status, message: message)
+        }
+    }
+
+    /// The outcome of a registration that threw `error`.
+    static func outcome(of error: any Error) -> PushHealth.Relay {
+        if let e = error as? RelayError { return e.outcome }
+        return .unreachable(error.localizedDescription)
+    }
+
+    // The completion-handler form: the async one crashes the compiler (Xcode 27.1) emitting its Objective-C thunk.
+    private final class NoRedirects: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+            completionHandler(nil)
+        }
     }
 }

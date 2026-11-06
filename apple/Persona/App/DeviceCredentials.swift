@@ -124,6 +124,8 @@ struct DevicesView: View {
     @Environment(AppModel.self) private var model
     @State private var tokens: [APIClient.DeviceToken] = []
     @State private var current: String?
+    /// Per credential, how the hub pushes to its device (#5998); empty from an older hub.
+    @State private var push: [String: APIClient.PushRoute] = [:]
     @State private var loaded = false
     @State private var revoking: APIClient.DeviceToken?
     @State private var connecting = false
@@ -197,6 +199,7 @@ struct DevicesView: View {
                     if t.role == "answer" { Chip(text: String(localized: "Answer Only")) }
                 }
                 Text(detail(t)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                if t.revokedAt == nil, let route = push[t.id] { DevicePushLine(route: route) }
             }
             Spacer(minLength: 0)
             if t.revokedAt == nil {
@@ -217,7 +220,7 @@ struct DevicesView: View {
         guard let api = model.api else { return }
         do {
             let r = try await api.deviceTokens()
-            (tokens, current) = (r.tokens, r.current)
+            (tokens, current, push) = (r.tokens, r.current, r.push ?? [:])
         } catch {
             model.show(error)
         }

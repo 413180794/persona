@@ -24,6 +24,7 @@ final class PushRegistrar {
             // only if this was allowed before.
             let center = UNUserNotificationCenter.current()
             let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge, .timeSensitive])) ?? false
+            await PushHealthStore.shared.update { $0.notificationsAllowed = granted }
             #if os(macOS)
             if granted { NSApplication.shared.registerForRemoteNotifications() }
             #else
@@ -57,23 +58,39 @@ final class PushRegistrar {
             // A hub without the app's APNs key pushes through the relay, sealed to this group's key (docs/push-relay.md);
             // the notification service extension opens it. The hub decides: with its own key it ignores these.
             var grant: String?
+            var outcome = PushHealth.Relay.notConfigured
             if let relay = PushRelay.url, let topic = base.topic {
                 do {
                     grant = try await PushRelay.grant(relay: relay, token: hex, env: env, topic: topic)
+                    outcome = .registered
                 } catch {
                     PushRelay.log.error("relay registration: \(error.localizedDescription, privacy: .public)")
+                    outcome = PushRelay.outcome(of: error)
                 }
             }
+            let relayError = PushHealth(relay: outcome).relayError
+            await PushHealthStore.shared.update { $0.apnsError = nil; $0.relay = outcome }
             for c in clients {
                 var body = base
                 if let grant, let relay = PushRelay.url, let key = PushCrypto.ensureKey(group: c.group) {
                     body.relayGrant = grant
                     body.relayURL = relay.absoluteString
                     body.pushKey = PushCrypto.publicKey(key)
+                } else {
+                    body.relayError = relayError
                 }
-                try? await c.api.register(device: body)
+                do {
+                    let route = try await c.api.register(device: body) // nil: an older hub, which does not say
+                    await PushHealthStore.shared.update { $0.routes[c.group] = route }
+                } catch {}
             }
         }
+    }
+
+    /// APNs gave no token (no network, a build without the push entitlement): Settings › Notifications says so.
+    func didFail(_ error: any Error) {
+        let text = error.localizedDescription
+        Task { @MainActor in PushHealthStore.shared.update { $0.apnsError = text } }
     }
 
     /// This device's id at the hub: its push token and its notification settings hang off it.

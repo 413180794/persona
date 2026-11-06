@@ -720,7 +720,12 @@ nonisolated struct APIClient: Sendable {
             case id, name, kind, role, createdAt = "created_at", lastSeen = "last_seen", revokedAt = "revoked_at"
         }
     }
-    struct DeviceTokens: Decodable, Sendable { var tokens: [DeviceToken]; var current: String? }
+    struct DeviceTokens: Decodable, Sendable {
+        var tokens: [DeviceToken]
+        var current: String?
+        /// Per credential, the push way of the device it registered last; nil from an older hub.
+        var push: [String: PushRoute]?
+    }
 
     /// Trades this credential for a device's own (kind "watch": answer-only).
     func createToken(name: String, kind: String) async throws -> NewToken {
@@ -1280,15 +1285,37 @@ nonisolated struct APIClient: Sendable {
         var pushKey: String?
         var relayURL: String?
         var relayGrant: String?
+        /// Why the relay gave no grant, in its words ("403 topic not served", a redirect, a network error): the hub
+        /// says it beside this device in Settings › Devices and `hub doctor` (#5998).
+        var relayError: String?
         /// The interface language pushes to this device use (docs/i18n.md「协议」).
         var locale: String? = LanguageStore.shared.launched
         enum CodingKeys: String, CodingKey {
             case name, kind, topic, locale
             case deviceID = "device_id", apnsToken = "apns_token", apnsEnv = "apns_env"
-            case pushKey = "push_key", relayURL = "relay_url", relayGrant = "relay_grant"
+            case pushKey = "push_key", relayURL = "relay_url", relayGrant = "relay_grant", relayError = "relay_error"
         }
     }
-    func register(device: DeviceBody) async throws { try await post("/api/v1/devices", body: device) }
+    /// Registers this device's push token; the hub answers which way its pushes take (nil: an older hub, which does
+    /// not say).
+    func register(device: DeviceBody) async throws -> PushRoute? {
+        struct Answer: Decodable { var push: PushRoute? }
+        return try await post("/api/v1/devices", body: device, as: Answer.self).push
+    }
+
+    /// The way a hub's pushes reach a device (docs/push-relay.md "Which way a device is pushed").
+    struct PushRoute: Codable, Hashable, Sendable {
+        /// direct: the hub's own APNs key; relay: the relay the device registered with; none: no way.
+        var route: String
+        /// none: no_token / relay_failed / no_relay; direct or relay: push_failed when the last push did not go.
+        var reason: String?
+        /// APNs', the relay's or the phone's words.
+        var detail: String?
+        var failedAt: Date?
+        enum CodingKeys: String, CodingKey { case route, reason, detail, failedAt = "failed_at" }
+
+        var reaches: Bool { route == "direct" || route == "relay" }
+    }
 
     /// The Fleet Live Activity's tokens, or that it ended (hub: liveactivity.go).
     struct LiveActivityReport: Encodable {
