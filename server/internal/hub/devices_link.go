@@ -64,7 +64,11 @@ type devicesState struct {
 	// sent is the config last handed over; due: a devices.config is to go out.
 	sent map[string][]byte // by manager
 	// assign: hub.json's machines handed to another manager than the carrier (ownership.go), machine → manager.
-	assign  map[string]string
+	assign map[string]string
+	// assignRead: assign is what machineOwnersKey holds (read, or nothing to read); a move writes only over a read one.
+	assignRead bool
+	// moving keeps moves one at a time: each writes the whole of assign, from the one before it (moveMachine).
+	moving  sync.Mutex
 	due     bool
 	started bool
 	// reqs are the nodes' requests being answered (devices.request) by the manager's key; reqEnded the keys whose
@@ -437,7 +441,7 @@ func (h *Hub) startDevices(ctx context.Context) {
 		d.up = make(chan struct{})
 	}
 	d.mu.Unlock()
-	h.loadMachineOwners(ctx) // which of them another manager carries (ownership.go)
+	_ = h.loadMachineOwners(ctx) // which of them another manager carries (ownership.go); unread: the next move reads it
 	var saved struct {
 		Machines map[string]struct {
 			Info     proto.NodeInfo  `json:"info"`

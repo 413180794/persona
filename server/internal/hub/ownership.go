@@ -466,23 +466,21 @@ var (
 	errMoveOffline = errors.New("the manager is not connected")
 )
 
-// loadMachineOwners reads machineOwnersKey (a hub that starts, before any manager connects).
-func (h *Hub) loadMachineOwners(ctx context.Context) {
-	s := h.managerStore()
-	if s == nil {
-		return
-	}
+// loadMachineOwners reads machineOwnersKey (a hub that starts, before any manager connects). An error leaves assign
+// unread: the machines go to the carrier meanwhile, and the next move reads it again before it writes (moveMachine).
+func (h *Hub) loadMachineOwners(ctx context.Context) error {
 	var m map[string]string
-	if ok, err := s.Setting(ctx, machineOwnersKey, &m); err != nil {
-		h.logf("managers: which manager carries which machine: %v", err)
-		return
-	} else if !ok {
-		return
+	if s := h.managerStore(); s != nil {
+		if _, err := s.Setting(ctx, machineOwnersKey, &m); err != nil {
+			h.logf("managers: which manager carries which machine: %v", err)
+			return err
+		}
 	}
 	d := &h.devices
 	d.mu.Lock()
-	d.assign = m
+	d.assign, d.assignRead = m, true
 	d.mu.Unlock()
+	return nil
 }
 
 // moveMachine hands hub.json's machine mid to manager to (devicesOwner: back to the carrier). The hub keeps the
@@ -490,15 +488,29 @@ func (h *Hub) loadMachineOwners(ctx context.Context) {
 // its machines again (devices.config): the old one lets it go, the new one connects it. Until the new one reports it
 // the machine shows offline. The credentials the hub keeps for it (a service machine's, a Persona Link's) stay with
 // the hub and go only to its owner (devices.connector_cred, the link relay).
+// Moves go one at a time, each from the owners as the last one left them: two at once each wrote the map without
+// the other's machine, and one move was lost on the next start. Owners the hub could not read when it started are
+// read first, so a move does not write over them.
 func (h *Hub) moveMachine(ctx context.Context, mid, to string) (from string, err error) {
 	if h.cfgEntry(mid) == nil {
 		return "", errNotMovable
+	}
+	d := &h.devices
+	d.moving.Lock()
+	defer d.moving.Unlock()
+	return h.moveMachineMoving(ctx, mid, to)
+}
+
+// moveMachineMoving is moveMachine with d.moving held.
+func (h *Hub) moveMachineMoving(ctx context.Context, mid, to string) (from string, err error) {
+	d := &h.devices
+	if err := h.readOwnersMoving(ctx); err != nil {
+		return h.machineOwner(mid), err
 	}
 	from = h.machineOwner(mid)
 	if from == to {
 		return from, nil
 	}
-	d := &h.devices
 	d.mu.Lock()
 	next := map[string]string{}
 	for k, v := range d.assign {
@@ -523,6 +535,27 @@ func (h *Hub) moveMachine(ctx context.Context, mid, to string) (from string, err
 	return from, nil
 }
 
+// readOwnersMoving reads the owners if the hub could not when it started, and hands the machines another manager
+// carries to it now. d.moving is held.
+func (h *Hub) readOwnersMoving(ctx context.Context) error {
+	d := &h.devices
+	d.mu.Lock()
+	read := d.assignRead
+	d.mu.Unlock()
+	if read {
+		return nil
+	}
+	if err := h.loadMachineOwners(ctx); err != nil {
+		return fmt.Errorf("which manager carries which machine: %w", err)
+	}
+	for _, mc := range h.cfgEntries() {
+		if m := h.localMachine(mc.ID); m != nil && m.ownerOrCarrier() != h.entryOwner(mc.ID) {
+			h.machineHandedOver(mc.ID, h.entryOwner(mc.ID))
+		}
+	}
+	return nil
+}
+
 // machineHandedOver makes machine mid manager to's in what the hub shows and routes, offline until it reports it,
 // and hands every manager its machines again.
 func (h *Hub) machineHandedOver(mid, to string) {
@@ -542,6 +575,12 @@ func (h *Hub) machineHandedOver(mid, to string) {
 // releaseMachines gives the machines removed manager id carried back to the carrier.
 func (h *Hub) releaseMachines(ctx context.Context, id string) {
 	d := &h.devices
+	d.moving.Lock() // the whole release: a move meanwhile is not undone by it, nor one of its machines missed
+	defer d.moving.Unlock()
+	if err := h.readOwnersMoving(ctx); err != nil { // owners not read yet would keep the removed one's machines
+		h.logf("managers: %s's machines back to %s: %v", id, devicesOwner, err)
+		return
+	}
 	d.mu.Lock()
 	var mine []string
 	for mid, o := range d.assign {
@@ -551,7 +590,7 @@ func (h *Hub) releaseMachines(ctx context.Context, id string) {
 	}
 	d.mu.Unlock()
 	for _, mid := range mine {
-		if _, err := h.moveMachine(ctx, mid, devicesOwner); err != nil {
+		if _, err := h.moveMachineMoving(ctx, mid, devicesOwner); err != nil {
 			h.logf("managers: [%s] back to %s: %v", mid, devicesOwner, err)
 		}
 	}

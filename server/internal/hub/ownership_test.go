@@ -3,10 +3,12 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -255,5 +257,138 @@ func TestInboxSuggestionGoesToTheItemsManager(t *testing.T) {
 		if code, out := ownershipGet(t, h, srv, http.MethodPost, path, map[string]string{ManagerHeader: "m-0a0b0c"}); code != http.StatusOK || out["who"] != "m-0a0b0c" {
 			t.Fatalf("%s with the assistant offline: %d %v, want m-0a0b0c's", route, code, out)
 		}
+	}
+}
+
+// ownersStore keeps settings for the moves' tests: the first readFails reads fail, and each write takes a while.
+type ownersStore struct {
+	managerStore // only Setting and PutSetting are used
+	mu           sync.Mutex
+	kept         map[string]json.RawMessage
+	readFails    int
+}
+
+func (s *ownersStore) Setting(_ context.Context, key string, out any) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.readFails > 0 {
+		s.readFails--
+		return false, errors.New("database restarting")
+	}
+	raw, ok := s.kept[key]
+	if !ok {
+		return false, nil
+	}
+	return true, json.Unmarshal(raw, out)
+}
+
+func (s *ownersStore) PutSetting(_ context.Context, key string, v any) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	time.Sleep(30 * time.Millisecond) // a write in flight while another move starts
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.kept[key] = raw
+	return nil
+}
+
+func (s *ownersStore) owners(t *testing.T) map[string]string {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var m map[string]string
+	if err := json.Unmarshal(s.kept[machineOwnersKey], &m); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// Moves keep every machine's owner: two moves at once each keep the other's, and a move after the hub could not read
+// the owners when it started does not write over the ones it did not read.
+func TestMovesKeepTheOtherMachinesOwners(t *testing.T) {
+	newHub := func(st *ownersStore) *Hub {
+		h := newTestHub(t)
+		h.cfg.Machines = []MachineConfig{{ID: "ma", Name: "ma", Kind: "local"}, {ID: "mb", Name: "mb", Kind: "local"},
+			{ID: "mc", Name: "mc", Kind: "local"}}
+		h.bus.idents = st
+		return h
+	}
+	ctx := context.Background()
+
+	st := &ownersStore{kept: map[string]json.RawMessage{}}
+	h := newHub(st)
+	_ = h.loadMachineOwners(ctx)
+	var wg sync.WaitGroup
+	for _, mv := range [][2]string{{"ma", "m-0a0a0a"}, {"mc", "m-0c0c0c"}} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := h.moveMachine(ctx, mv[0], mv[1]); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := st.owners(t); got["ma"] != "m-0a0a0a" || got["mc"] != "m-0c0c0c" {
+		t.Fatalf("two moves at once: kept %v", got)
+	}
+	if h.entryOwner("ma") != "m-0a0a0a" || h.entryOwner("mc") != "m-0c0c0c" {
+		t.Fatalf("two moves at once: owners now %s %s", h.entryOwner("ma"), h.entryOwner("mc"))
+	}
+
+	// mb was moved before the hub restarted; the database could not be read as it started.
+	st = &ownersStore{kept: map[string]json.RawMessage{machineOwnersKey: json.RawMessage(`{"mb":"m-0b0b0b"}`)}, readFails: 1}
+	h = newHub(st)
+	_ = h.loadMachineOwners(ctx)
+	if _, err := h.moveMachine(ctx, "ma", "m-0a0a0a"); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.owners(t); got["mb"] != "m-0b0b0b" || got["ma"] != "m-0a0a0a" {
+		t.Fatalf("a move after an unread start: kept %v", got)
+	}
+	if h.entryOwner("mb") != "m-0b0b0b" {
+		t.Fatalf("mb is %s's now", h.entryOwner("mb"))
+	}
+
+	// Still unreadable: the move is refused, nothing is written.
+	st = &ownersStore{kept: map[string]json.RawMessage{machineOwnersKey: json.RawMessage(`{"mb":"m-0b0b0b"}`)}, readFails: 2}
+	h = newHub(st)
+	_ = h.loadMachineOwners(ctx)
+	if _, err := h.moveMachine(ctx, "ma", "m-0a0a0a"); err == nil {
+		t.Fatal("a move over owners that cannot be read went through")
+	}
+	if got := st.owners(t); len(got) != 1 || got["mb"] != "m-0b0b0b" {
+		t.Fatalf("kept %v", got)
+	}
+}
+
+// Releasing a removed manager's machines while another machine moves to it: the release takes back every machine it
+// carried, and the other move is kept or undone whole, never half.
+func TestReleaseKeepsMovesWhole(t *testing.T) {
+	h := newTestHub(t)
+	h.cfg.Machines = []MachineConfig{{ID: "ma", Name: "ma", Kind: "local"}, {ID: "mb", Name: "mb", Kind: "local"}}
+	st := &ownersStore{kept: map[string]json.RawMessage{machineOwnersKey: json.RawMessage(`{"ma":"m-0a0a0a"}`)}}
+	h.bus.idents = st
+	ctx := context.Background()
+	if err := h.loadMachineOwners(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); h.releaseMachines(ctx, "m-0a0a0a") }()
+	go func() {
+		defer wg.Done()
+		if _, err := h.moveMachine(ctx, "mb", "m-0b0b0b"); err != nil {
+			t.Error(err)
+		}
+	}()
+	wg.Wait()
+	if got := st.owners(t); got["ma"] != "" || got["mb"] != "m-0b0b0b" {
+		t.Fatalf("kept %v", got)
+	}
+	if h.entryOwner("ma") != devicesOwner || h.entryOwner("mb") != "m-0b0b0b" {
+		t.Fatalf("owners now %s %s", h.entryOwner("ma"), h.entryOwner("mb"))
 	}
 }
