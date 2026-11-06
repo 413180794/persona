@@ -47,11 +47,7 @@ object AppLanguages {
     fun phoneLanguage(context: Context): AppLanguage = AppLanguage.resolve(systemLocales(context))
 
     /** The locale for [language]'s resources and formats ([AppLanguage.ZhHans] is the `values-zh` resources). */
-    fun locale(language: AppLanguage): Locale = when (language) {
-        AppLanguage.ZhHans -> Locale.forLanguageTag("zh-Hans-CN")
-        AppLanguage.Ja -> Locale.JAPAN
-        AppLanguage.En, AppLanguage.System -> Locale.forLanguageTag("en")
-    }
+    fun locale(language: AppLanguage): Locale = Locale.forLanguageTag(language.tag ?: "en")
 
     /** Changes the choice; the open activities are recreated in the new language. */
     fun choose(activity: Activity, language: AppLanguage) {

@@ -3,31 +3,27 @@ package persona.core.contracts
 import java.util.Locale
 
 /**
- * The languages the app's text comes in (docs/i18n.md): Simplified Chinese, English and Japanese. [System] follows the
- * phone: any Chinese (Traditional too) shows Simplified Chinese, Japanese shows Japanese, everything else English.
- * [tag] is the BCP 47 tag the hub gets.
+ * An interface language from android/i18n/<tag>.properties. Gradle generates [GeneratedLanguages] from these
+ * resources: adding a language never needs another enum case or changes to the picker (docs/i18n.md).
  */
-enum class AppLanguage(val tag: String?) {
-    System(null), ZhHans("zh-Hans"), En("en"), Ja("ja");
-
+data class AppLanguage internal constructor(val tag: String?, val ownName: String, internal val matches: List<String>) {
     companion object {
-        /** The language a locale's text is shown in; null for a language the app does not have. */
-        fun of(locale: Locale): AppLanguage? = when (locale.language) {
-            "zh" -> ZhHans
-            "ja" -> Ja
-            "en" -> En
-            else -> null
-        }
+        val System = AppLanguage(null, "", emptyList())
+        val entries: List<AppLanguage> by lazy { listOf(System) + GeneratedLanguages.entries }
+        // Named accessors keep callers and tests of the original three languages source-compatible.
+        val ZhHans: AppLanguage get() = entries.first { it.tag == "zh-Hans" }
+        val En: AppLanguage get() = entries.first { it.tag == "en" }
+        val Ja: AppLanguage get() = entries.first { it.tag == "ja" }
 
-        /**
-         * The language for the phone's preferred [locales]: only the first counts (docs/i18n.md「选哪种语言」), so
-         * French then Japanese shows English; English too when there is none.
-         */
+        /** The language a locale's text is shown in; null when the app has no catalog for it. */
+        fun of(locale: Locale): AppLanguage? = entries.firstOrNull { locale.language.lowercase(Locale.ROOT) in it.matches }
+
+        /** Only the phone's first preferred locale counts; a missing or unsupported language falls back to English. */
         fun resolve(locales: List<Locale>): AppLanguage = locales.firstOrNull()?.let(::of) ?: En
 
         /** A stored or system-reported tag; an empty or unknown one is [System]. */
         fun fromTag(tag: String?): AppLanguage =
-            tag?.takeIf { it.isNotBlank() }?.let { of(Locale.forLanguageTag(it)) } ?: System
+            tag?.takeIf { it.isNotBlank() }?.let { of(Locale.forLanguageTag(it.replace('_', '-'))) } ?: System
     }
 }
 

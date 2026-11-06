@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Check the Android app's translations (docs/i18n.md).
 
-- Every module's values/, values-zh/ and values-ja/ strings have the same keys, the same placeholders, and plurals
+- Every language in android/i18n/*.properties has complete resources in each module, matching keys and placeholders,
+  and plurals
   with the quantities their language needs; values/ is English, so its translatable text has no Chinese or Japanese.
 - String keys start with the module's name (`settings_…`), since all modules' resources merge into one table.
-- Kotlin code and XML outside values-zh / values-ja only lose hardcoded Chinese / Japanese text: each file may hold
+- Kotlin code and XML outside the translated values directories only lose hardcoded Chinese / Japanese text: each file may hold
   no more than its module's i18n-baseline.json records (one file per module, so modules move in parallel). A literal that is not UI text (a hub token it matches, a prompt
   sent to the model) says why on its line with `// i18n-ignore: <reason>`.
 
@@ -21,14 +22,60 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ANDROID = ROOT / 'android'
 BASELINE = 'i18n-baseline.json'
-LOCALES = ('values', 'values-zh', 'values-ja')
 # Chinese, Japanese kana, and full-width punctuation.
 CJK = re.compile(r'[　-〿぀-ヿ㐀-䶿一-鿿＀-￯]')
 PLACEHOLDER = re.compile(r'%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[sdfxXc%]')
 IGNORE = 'i18n-ignore'
-# Quantities each language uses (CLDR): English one / other, Chinese and Japanese only other.
-PLURALS = {'values': {'one', 'other'}, 'values-zh': {'other'}, 'values-ja': {'other'}}
 SKIP_DIRS = {'build', '.gradle', 'generated'}
+
+
+def languages(root=ANDROID):
+    """Resource directory -> metadata, discovered from i18n/<BCP47 tag>.properties (also read by Gradle)."""
+    out = {}
+    for file in sorted((root / 'i18n').glob('*.properties')):
+        meta = dict(line.split('=', 1) for line in file.read_text(encoding='utf-8').splitlines()
+                    if line.strip() and not line.startswith('#'))
+        meta['tag'] = file.stem
+        meta['matches'] = meta.get('matches', '').split(',')
+        meta['plurals'] = set(meta.get('plurals', '').split(','))
+        out[meta.get('resources', '')] = meta
+    return out
+
+
+def language_problems(root=ANDROID):
+    """Every language has usable metadata; no subtag or resources directory is claimed twice."""
+    problems, claimed, resources = [], set(), set()
+    files = sorted((root / 'i18n').glob('*.properties'))
+    if not {'en', 'zh-Hans', 'ja'} <= {p.stem for p in files}:
+        problems.append('i18n/: source, fallback, and Japanese language resources are required')
+    for file in files:
+        try:
+            meta = dict(line.split('=', 1) for line in file.read_text(encoding='utf-8').splitlines()
+                        if line.strip() and not line.startswith('#'))
+            tag = file.stem
+            if not re.fullmatch(r'[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*', tag):
+                problems.append(f'i18n/{file.name}: invalid BCP 47 tag')
+            if not meta.get('name', '').strip():
+                problems.append(f'i18n/{file.name}: name is empty')
+            directory = meta.get('resources', '')
+            if directory in resources or not re.fullmatch(r'values(?:-[a-z]{2,3}|-b\+[A-Za-z0-9+]+)?', directory):
+                problems.append(f'i18n/{file.name}: duplicate or invalid resources directory {directory}')
+            resources.add(directory)
+            if (tag == 'en') != (directory == 'values'):
+                problems.append(f'i18n/{file.name}: only en uses the values/ fallback')
+            matches = meta.get('matches', '').split(',')
+            if tag.split('-')[0] not in matches:
+                problems.append(f'i18n/{file.name}: matches must include its own language subtag')
+            for subtag in matches:
+                if not re.fullmatch(r'[a-z]{2,3}', subtag) or subtag in claimed:
+                    problems.append(f'i18n/{file.name}: duplicate or invalid match {subtag}')
+                claimed.add(subtag)
+            plural = set(meta.get('plurals', '').split(','))
+            if not 'other' in plural or not plural <= {'zero', 'one', 'two', 'few', 'many', 'other'}:
+                problems.append(f'i18n/{file.name}: invalid CLDR plural quantities')
+        except ValueError:
+            problems.append(f'i18n/{file.name}: expected one key=value per line')
+    return problems
 
 
 def modules(root=ANDROID):
@@ -75,19 +122,25 @@ def resource_problems(module, root=ANDROID):
     if not res.is_dir():
         return problems
     name = module.relative_to(root).as_posix()
-    sets = {locale: strings(res / locale) for locale in LOCALES}
+    metadata = languages(root)
+    locales = ['values'] + sorted(d for d in metadata if d != 'values')
+    plural = {d: m['plurals'] for d, m in metadata.items()}
+    sets = {locale: strings(res / locale) for locale in locales}
     if not any(sets.values()):
         return problems
+    for directory in res.glob('values-*'):
+        if directory.name not in metadata and list(directory.glob('strings*.xml')):
+            problems.append(f'{name}: {directory.name}/ has strings but no i18n language metadata')
     base = sets['values']
     for key, (kind, value, translatable) in base.items():
         if not key.startswith(prefix(module)):
             problems.append(f'{name}: string "{key}" should start with "{prefix(module)}"')
         if translatable and any(CJK.search(text) for text in (value.values() if isinstance(value, dict) else [value] if isinstance(value, str) else value)):
             problems.append(f'{name}: values/ is the English fallback, but "{key}" is not English')
-        if kind == 'plurals' and not PLURALS['values'] <= set(value):
-            problems.append(f'{name}: plurals "{key}" in values/ needs {sorted(PLURALS["values"])}')
+        if kind == 'plurals' and not plural['values'] <= set(value):
+            problems.append(f'{name}: plurals "{key}" in values/ needs {sorted(plural["values"])}')
     wanted = {key for key, (_, _, translatable) in base.items() if translatable}
-    for locale in LOCALES[1:]:
+    for locale in locales[1:]:
         have = sets[locale]
         for key in sorted(wanted - have.keys()):
             problems.append(f'{name}: "{key}" is missing from {locale}/')
@@ -102,8 +155,8 @@ def resource_problems(module, root=ANDROID):
                 continue
             if placeholders(value) != placeholders(other):
                 problems.append(f'{name}: "{key}" has placeholders {placeholders(value)} in values/ but {placeholders(other)} in {locale}/')
-            if kind == 'plurals' and not PLURALS[locale] <= set(other):
-                problems.append(f'{name}: plurals "{key}" in {locale}/ needs {sorted(PLURALS[locale])}')
+            if kind == 'plurals' and not plural[locale] <= set(other):
+                problems.append(f'{name}: plurals "{key}" in {locale}/ needs {sorted(plural[locale])}')
     return problems
 
 
@@ -181,7 +234,7 @@ def source_files(root=ANDROID):
                 continue
             if path.suffix == '.kt':
                 yield path, kotlin_count
-            elif path.suffix == '.xml' and not any(p in ('values-zh', 'values-ja') for p in parts):
+            elif path.suffix == '.xml' and not any(p in (set(languages(root)) - {'values'}) for p in parts):
                 yield path, xml_count
 
 
@@ -225,6 +278,11 @@ def main():
     parser.add_argument('--update', action='store_true', help='record the current counts; they may only go down')
     parser.add_argument('--init', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    problems = language_problems()
+    if problems:
+        for problem in problems:
+            print(problem, file=sys.stderr)
+        return 1
     problems = [p for module in modules() for p in resource_problems(module)]
     counts = count()
     baseline = counts if args.init else baselines()

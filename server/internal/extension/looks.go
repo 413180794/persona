@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Looks (docs/extensions.md「形象」, docs/persona.md): an extension adds 形象 — Persona's name, face, colors and the dot's
@@ -87,8 +88,14 @@ var LookColorRoles = []string{"primary", "secondary", "accent", "bubble", "bubbl
 // LookStates are the dot's states.
 var LookStates = []string{"idle", "thinking", "working", "needs_you", "offline"}
 
-// LookLanguages are the languages names may be in besides Name's (docs/i18n.md).
-var LookLanguages = []string{"zh-Hans", "en", "ja"}
+// LookLanguages are the languages names may be in besides Name's: the interface languages (docs/i18n.md).
+var LookLanguages = func() []string {
+	out := make([]string, len(i18n.Langs))
+	for i, l := range i18n.Langs {
+		out[i] = string(l)
+	}
+	return out
+}()
 
 // lookID is a persona package's id (docs/persona.md: the apps take it as a directory and cache key).
 var lookID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)

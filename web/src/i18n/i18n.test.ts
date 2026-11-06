@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { currentLanguage, formatList, initI18n, interpolate, resolveLanguage, t } from "./index";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { currentLanguage, formatList, formatLocale, LANG_MATCHES, LANG_NAMES, LANGS, initI18n, interpolate, resolveLanguage, t } from "./index";
 
 describe("resolveLanguage (docs/i18n.md)", () => {
   it("maps any Chinese to zh-Hans, any Japanese to ja, the rest to en", () => {
@@ -34,5 +34,33 @@ describe("t", { timeout: 30_000 }, () => {
   it("joins lists the language's way", async () => {
     await initI18n("en");
     expect(formatList(["a", "b", "c"])).toBe("a, b, and c");
+  });
+});
+
+
+describe("resource-driven languages", () => {
+  afterEach(async () => {
+    delete LANG_MATCHES.ko;
+    vi.restoreAllMocks();
+    await initI18n("zh-Hans");
+  });
+
+  it("resolves a newly registered subtag without another switch case", () => {
+    LANG_MATCHES.ko = "ko";
+    expect(resolveLanguage("KO_kr")).toBe("ko");
+    for (const lang of LANGS) expect(LANG_NAMES[lang]).not.toBe("");
+    expect(resolveLanguage("constructor")).toBe("en");
+  });
+
+  it("formats an unsupported system language using the English fallback, not that system language", async () => {
+    vi.spyOn(navigator, "languages", "get").mockReturnValue(["fr-FR"]);
+    await initI18n("en");
+    expect(formatLocale()).toBe("en");
+  });
+
+  it("falls back when a forced language has no catalog", async () => {
+    await initI18n("xx");
+    expect(currentLanguage()).toBe("en");
+    expect(t("common.cancel")).toBe("Cancel");
   });
 });

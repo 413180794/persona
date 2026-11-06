@@ -1,14 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { initI18n } from "../i18n";
 import { dependencyText, dependentError, previewBlocked, previewConsent } from "./extension-model";
-
-// Use the real dependency catalogs and translator without loading every unrelated page's catalog in this unit test.
-const { dependencyCatalog } = vi.hoisted(() => ({
-  dependencyCatalog: (values: Record<string, string>) => Object.fromEntries(Object.entries(values).map(([key, value]) => [`lib-extension-model.${key}`, value])),
-}));
-vi.mock("../i18n/locales/zh-Hans/index", async () => ({ default: dependencyCatalog((await import("../i18n/locales/zh-Hans/lib-extension-model.json")).default) }));
-vi.mock("../i18n/locales/en/index", async () => ({ default: dependencyCatalog((await import("../i18n/locales/en/lib-extension-model.json")).default) }));
-vi.mock("../i18n/locales/ja/index", async () => ({ default: dependencyCatalog((await import("../i18n/locales/ja/lib-extension-model.json")).default) }));
 
 describe("extension model consent", () => {
   const pv = { preview_id: "main", permissions_digest: "main-digest", expires_at: "2026-11-05T12:00:00Z" };

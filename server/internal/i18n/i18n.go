@@ -15,13 +15,19 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
+
+	"golang.org/x/text/feature/plural"
+	"golang.org/x/text/language"
 )
 
-// Lang is one of the three interface languages.
+// Lang is an interface language: a directory under locales (docs/i18n.md "Adding a language").
 type Lang string
 
+// The languages the code names: the source, the fallback, and Japanese (some text treats CJK differently). Any other
+// language is just its directory; nothing here lists them.
 const (
 	ZhHans Lang = "zh-Hans"
 	En     Lang = "en"
@@ -31,40 +37,95 @@ const (
 // Default is the language when no client has said one: the hub's text was Chinese before i18n.
 const Default = ZhHans
 
-// Langs lists the supported languages, the source language first.
-var Langs = []Lang{ZhHans, En, Ja}
+// Fallback is the language for a tag no catalog matches, and the first one a missing key is looked up in.
+const Fallback = En
 
-// Name is the language by its own name (what a prompt asks the model to answer in).
-func (l Lang) Name() string {
-	switch l {
-	case En:
-		return "English"
-	case Ja:
-		return "日本語"
-	}
-	return "简体中文"
+// meta is a language's locales/<lang>/_meta.json.
+type meta struct {
+	// Name is the language by its own name.
+	Name string `json:"name"`
+	// Matches are the BCP 47 language subtags (lowercase) that resolve to it.
+	Matches []string `json:"matches"`
 }
 
-// Resolve maps any BCP 47 tag to a supported language (docs/i18n.md): any Chinese, Traditional too, is zh-Hans, any
-// Japanese is ja, the rest is en. An empty tag is "" (unknown), so callers can tell "not said" from "said English".
+//go:embed all:locales
+var files embed.FS
+
+// Langs lists the supported languages: the source first, then the fallback, then the rest by code.
+var Langs, metas, matches = languages()
+
+func languages() ([]Lang, map[Lang]meta, map[string]Lang) {
+	entries, err := fs.ReadDir(files, "locales")
+	if err != nil {
+		panic(err)
+	}
+	var langs []Lang
+	metas := map[Lang]meta{}
+	matches := map[string]Lang{}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		l := Lang(e.Name())
+		raw, err := files.ReadFile(path.Join("locales", e.Name(), "_meta.json"))
+		if err != nil {
+			panic(fmt.Sprintf("i18n: %s has no _meta.json", l))
+		}
+		var m meta
+		if err := json.Unmarshal(raw, &m); err != nil {
+			panic(fmt.Sprintf("i18n: %s/_meta.json: %v", l, err))
+		}
+		langs = append(langs, l)
+		metas[l] = m
+		for _, sub := range m.Matches {
+			matches[strings.ToLower(sub)] = l
+		}
+	}
+	rank := func(l Lang) int {
+		switch l {
+		case Default:
+			return 0
+		case Fallback:
+			return 1
+		}
+		return 2
+	}
+	slices.SortFunc(langs, func(a, b Lang) int {
+		if d := rank(a) - rank(b); d != 0 {
+			return d
+		}
+		return strings.Compare(string(a), string(b))
+	})
+	return langs, metas, matches
+}
+
+// Name is the language by its own name (what a prompt asks the model to answer in); an unknown one is the default's.
+func (l Lang) Name() string {
+	if m, ok := metas[l]; ok {
+		return m.Name
+	}
+	return metas[Default].Name
+}
+
+// Resolve maps any BCP 47 tag to a supported language (docs/i18n.md): its language subtag picks the language whose
+// _meta.json matches it (any Chinese, Traditional too, is zh-Hans), the rest is en. An empty tag is "" (unknown), so
+// callers can tell "not said" from "said English".
 func Resolve(tag string) Lang {
 	tag = strings.TrimSpace(tag)
 	if tag == "" {
 		return ""
 	}
 	primary, _, _ := strings.Cut(strings.ReplaceAll(tag, "_", "-"), "-")
-	switch strings.ToLower(primary) {
-	case "zh":
-		return ZhHans
-	case "ja":
-		return Ja
+	if l, ok := matches[strings.ToLower(primary)]; ok {
+		return l
 	}
-	return En
+	return Fallback
 }
 
-// Valid: one of the three codes exactly (what a client sends).
+// Valid: one of the supported codes exactly (what a client sends).
 func Valid(l Lang) bool {
-	return l == ZhHans || l == En || l == Ja
+	_, ok := metas[l]
+	return ok
 }
 
 // FromAcceptLanguage resolves an Accept-Language header: its first entry (an app sends just "en"; a browser its whole
@@ -108,9 +169,6 @@ func (l Lang) Or(fallback Lang) Lang {
 	return fallback
 }
 
-//go:embed locales
-var files embed.FS
-
 var catalogs = load()
 
 func load() map[Lang]map[string]string {
@@ -122,7 +180,7 @@ func load() map[Lang]map[string]string {
 			panic(fmt.Sprintf("i18n: %s: %v", l, err))
 		}
 		for _, e := range entries {
-			if !strings.HasSuffix(e.Name(), ".json") {
+			if !strings.HasSuffix(e.Name(), ".json") || strings.HasPrefix(e.Name(), "_") || strings.HasPrefix(e.Name(), ".") {
 				continue
 			}
 			raw, err := files.ReadFile(path.Join("locales", string(l), e.Name()))
@@ -148,11 +206,7 @@ type Args map[string]any
 func lookup(l Lang, key string, args Args) (string, bool) {
 	cat := catalogs[l]
 	if n, ok := count(args); ok {
-		form := "other"
-		if l == En && n == 1 {
-			form = "one"
-		}
-		if s, ok := cat[key+"_"+form]; ok {
+		if s, ok := cat[key+"_"+pluralForm(l, n)]; ok {
 			return s, true
 		}
 		if s, ok := cat[key+"_other"]; ok {
@@ -161,6 +215,26 @@ func lookup(l Lang, key string, args Args) (string, bool) {
 	}
 	s, ok := cat[key]
 	return s, ok
+}
+
+// pluralForm is n's CLDR cardinal category in l (one, other…), the suffix of a plural key.
+func pluralForm(l Lang, n int64) string {
+	if n < 0 {
+		n = -n
+	}
+	switch plural.Cardinal.MatchPlural(language.Make(string(l)), int(n), 0, 0, 0, 0) {
+	case plural.Zero:
+		return "zero"
+	case plural.One:
+		return "one"
+	case plural.Two:
+		return "two"
+	case plural.Few:
+		return "few"
+	case plural.Many:
+		return "many"
+	}
+	return "other"
 }
 
 func count(args Args) (int64, bool) {
@@ -186,7 +260,7 @@ func T(l Lang, key string, args ...Args) string {
 	l = l.Or(Default)
 	s, ok := lookup(l, key, a)
 	if !ok {
-		if s, ok = lookup(En, key, a); !ok {
+		if s, ok = lookup(Fallback, key, a); !ok {
 			if s, ok = lookup(ZhHans, key, a); !ok {
 				return key
 			}

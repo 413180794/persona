@@ -4,5 +4,5 @@
     <string name="settings_language_header">アプリの言語</string>
     <string name="settings_language_system">システムと同じ</string>
     <string name="settings_language_system_now">現在は%1$s</string>
-    <string name="settings_language_caption">「システムと同じ」では、中国語（繁体字を含む）は簡体字中国語で、その他の言語は英語で表示します。</string>
+    <string name="settings_language_caption">「システムと同じ」では、第一優先言語に翻訳があればその言語を、なければ英語を使います。</string>
 </resources>

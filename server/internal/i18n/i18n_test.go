@@ -294,3 +294,59 @@ func argsLit(e ast.Expr, pkg string) (map[string]bool, bool) {
 	}
 	return out, true
 }
+
+// Every directory under locales is a language (docs/i18n.md "Adding a language"): it has a _meta.json with its own name and
+// the language subtags it is picked for, no subtag is claimed twice, and the source and fallback languages exist.
+func TestLanguagesAreTheDirectories(t *testing.T) {
+	entries, err := fs.ReadDir(files, "locales")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dirs []Lang
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, Lang(e.Name()))
+		}
+	}
+	got := slices.Clone(Langs)
+	slices.Sort(got)
+	slices.Sort(dirs)
+	if !slices.Equal(got, dirs) {
+		t.Fatalf("Langs %v, directories %v", got, dirs)
+	}
+	if Langs[0] != Default || Langs[1] != Fallback {
+		t.Errorf("Langs %v should start with %s, %s", Langs, Default, Fallback)
+	}
+	claimed := map[string]Lang{}
+	for _, l := range Langs {
+		m := metas[l]
+		if strings.TrimSpace(m.Name) == "" || len(m.Matches) == 0 {
+			t.Errorf("%s/_meta.json needs a name and matches: %+v", l, m)
+		}
+		own, _, _ := strings.Cut(strings.ToLower(string(l)), "-")
+		if !slices.Contains(m.Matches, own) {
+			t.Errorf("%s/_meta.json matches %v, not its own subtag %q", l, m.Matches, own)
+		}
+		for _, sub := range m.Matches {
+			if prev, ok := claimed[sub]; ok {
+				t.Errorf("%q is matched by both %s and %s", sub, prev, l)
+			}
+			claimed[sub] = l
+		}
+	}
+	if Ja.Name() != "日本語" || En.Name() != "English" || Lang("xx").Name() != ZhHans.Name() {
+		t.Errorf("names: %q %q %q", Ja.Name(), En.Name(), Lang("xx").Name())
+	}
+}
+
+func TestPluralForms(t *testing.T) {
+	for _, c := range []struct {
+		l    Lang
+		n    int64
+		want string
+	}{{En, 1, "one"}, {En, 2, "other"}, {En, 0, "other"}, {Ja, 1, "other"}, {ZhHans, 1, "other"}, {"fr", 0, "one"}, {"ru", 3, "few"}} {
+		if got := pluralForm(c.l, c.n); got != c.want {
+			t.Errorf("pluralForm(%s, %d) = %s, want %s", c.l, c.n, got, c.want)
+		}
+	}
+}

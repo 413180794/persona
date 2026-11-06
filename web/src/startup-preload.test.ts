@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LANGS, preferredLanguage } from "./i18n";
-import { PRELOAD_LANGS, preloadScript } from "./startup-preload";
+import { join } from "node:path";
+import { LANG_MATCHES, LANGS, preferredLanguage } from "./i18n";
+import { localeDirs, preloadScript } from "./startup-preload";
+
+const langs = localeDirs(join(__dirname, "i18n/locales"));
 
 const files = {
   shared: ["assets/react.js"],
   app: ["assets/App.js", "assets/App.css"],
   screen: ["assets/ScreenView.js"],
-  catalogs: Object.fromEntries(PRELOAD_LANGS.map((lang) => [lang, `assets/${lang}.js`])),
+  catalogs: Object.fromEntries(Object.keys(langs).map((lang) => [lang, `assets/${lang}.js`])),
+  matches: Object.fromEntries(Object.entries(langs).flatMap(([lang, ms]) => ms.map((m) => [m.toLowerCase(), lang]))),
 };
 
 // Runs the inline script on a <head> holding only the page's <base> (index.html always has one, set by the hub) and
@@ -26,7 +30,8 @@ afterEach(() => {
 
 describe("startup preload script", () => {
   it("has a catalog for every client language", () => {
-    expect([...PRELOAD_LANGS].sort()).toEqual([...LANGS].sort());
+    expect(Object.keys(langs).sort()).toEqual([...LANGS].sort());
+    expect(files.matches).toEqual(LANG_MATCHES);
   });
 
   it.each([

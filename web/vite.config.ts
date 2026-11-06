@@ -1,10 +1,12 @@
 /// <reference types="vitest/config" />
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { PRELOAD_LANGS, preloadScript } from "./src/startup-preload";
+import { localeDirs, preloadScript } from "./src/startup-preload";
 import { textScale } from "./src/lib/text-scale";
 import { classicWorkerProblem } from "./src/sw-entry-check";
+import { i18nCatalogs } from "./i18n-catalogs";
 
 // `npm run dev` talks to a hub through Vite's proxy: JARVIS_HUB_URL (eval "$(python3 ../scripts/jarvis_config.py env)").
 const environment = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
@@ -13,9 +15,9 @@ const hub = (environment.PERSONA_HUB_URL ?? environment.JARVIS_HUB_URL) || "http
 // The hub admin UI (docs/admin.md) is its own page, admin/index.html. Its code goes under admin/assets/, which the hub
 // serves only to sources inside admin.access; the client's bundle never references it.
 // The admin UI's strings (src/i18n/locales/<lang>/admin.ts and its admin-*.json) are admin code too.
-const adminStrings = /\/src\/i18n\/locales\/[^/]+\/admin(\.ts|-[\w-]+\.json)$/;
+const adminStrings = /\/src\/i18n\/locales\/[^/]+\/(?:admin-[\w-]+\.json|_meta\.json\?catalog=admin)$/;
 const adminOnly = (ids: string[]) =>
-  ids.length > 0 && ids.every((id) => id.includes("/src/admin/") || id.endsWith("/admin/index.html") || adminStrings.test(id));
+  ids.length > 0 && ids.every((id) => id.includes("/src/admin/") || id.endsWith("/admin/index.html") || (adminStrings.test(id) || id.startsWith("\0i18n-catalog:admin:")));
 
 // Dev only: /admin and its client-side routes get admin/index.html (Vite's own fallback is the root index.html).
 const adminFallback: Plugin = {
@@ -48,7 +50,7 @@ const startupPreload: Plugin = {
       if (!ctx.bundle || ctx.chunk?.name !== "main") return html; // not admin/index.html
       const chunks = Object.values(ctx.bundle).filter((c) => c.type === "chunk");
       // react-dom/client shares a chunk with other modules (no facade): look a module up by the chunk holding it.
-      const byModule = (path: string) => chunks.find((c) => c.moduleIds.some((id) => id.split("?")[0].endsWith(path)));
+      const byModule = (path: string) => chunks.find((c) => c.moduleIds.some((id) => id.endsWith(path)));
       const find = (path: string) => {
         const chunk = byModule(path);
         if (!chunk) throw new Error(`startup-preload: no chunk holds ${path}`);
@@ -67,6 +69,7 @@ const startupPreload: Plugin = {
         roots.forEach((r) => visit(find(r)));
         return files;
       };
+      const langs = localeDirs(fileURLToPath(new URL("./src/i18n/locales", import.meta.url)));
       const main = new Set([ctx.chunk.fileName, ...ctx.chunk.imports]);
       const shared = group(["/react-dom/client.js", "/src/lib/pwa.ts"], main);
       const page = (roots: string[]) => group(roots, new Set([...main, ...shared]));
@@ -74,7 +77,8 @@ const startupPreload: Plugin = {
         shared,
         app: page(["/src/ui/ExtensionThemePicker.tsx", "/src/App.tsx"]),
         screen: page(["/src/screen/ScreenView.tsx"]),
-        catalogs: Object.fromEntries(PRELOAD_LANGS.map((lang) => [lang, find(`/src/i18n/locales/${lang}/index.ts`).fileName])),
+        catalogs: Object.fromEntries(Object.keys(langs).map((lang) => [lang, find(`i18n-catalog:client:${fileURLToPath(new URL(`./src/i18n/locales/${lang}/_meta.json`, import.meta.url))}.js`).fileName])),
+        matches: Object.fromEntries(Object.entries(langs).flatMap(([lang, ms]) => ms.map((m) => [m.toLowerCase(), lang]))),
       };
       const script = preloadScript(files);
       return { html, tags: [{ tag: "script", children: script, injectTo: "head" }] };
@@ -94,7 +98,7 @@ const classicWorker: Plugin = {
 };
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), adminFallback, startupPreload, classicWorker],
+  plugins: [i18nCatalogs, react(), tailwindcss(), adminFallback, startupPreload, classicWorker],
   // 字号 (src/lib/text-scale.ts): font sizes become calc(size * var(--text-scale, 1)), after Tailwind wrote them.
   css: { postcss: { plugins: [textScale()] } },
   server: {

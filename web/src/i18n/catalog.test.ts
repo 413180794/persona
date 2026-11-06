@@ -9,10 +9,12 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { adminCatalog } from "../admin/catalog";
-import { LANGS } from "./index";
-import enClient from "./locales/en/index";
-import jaClient from "./locales/ja/index";
-import zhClient from "./locales/zh-Hans/index";
+import { FALLBACK_LANG, LANG_NAMES, LANGS, SOURCE_LANG } from "./index";
+
+const clientFiles = import.meta.glob<Record<string, string>>("./locales/*/_meta.json", { query: "?catalog=client", eager: true, import: "default" });
+const clients: Record<string, Record<string, string>> = Object.fromEntries(
+  Object.entries(clientFiles).map(([p, c]) => [p.split("?")[0].split("/").slice(-2)[0], c]),
+);
 
 const SRC = join(__dirname, "..");
 const LOCALES = join(__dirname, "locales");
@@ -26,7 +28,7 @@ function catalogs(): Record<string, Record<string, Catalog>> {
   const out: Record<string, Record<string, Catalog>> = {};
   for (const lang of LANGS) {
     out[lang] = {};
-    for (const f of readdirSync(join(LOCALES, lang)).filter((f) => f.endsWith(".json")).sort()) {
+    for (const f of readdirSync(join(LOCALES, lang)).filter((f) => f.endsWith(".json") && !f.startsWith("_")).sort()) {
       out[lang][f.replace(/\.json$/, "")] = JSON.parse(readFileSync(join(LOCALES, lang, f), "utf8"));
     }
   }
@@ -110,9 +112,33 @@ function scan(file: string): Scan {
   return out;
 }
 
+describe("languages (resource-only additions)", () => {
+  it("are the directories under locales, each complete", () => {
+    const dirs = readdirSync(LOCALES).filter((d) => statSync(join(LOCALES, d)).isDirectory()).sort();
+    expect([...LANGS].sort()).toEqual(dirs);
+    expect(LANGS).toContain(SOURCE_LANG);
+    expect(LANGS).toContain(FALLBACK_LANG);
+    const claimed = new Map<string, string>();
+    for (const lang of dirs) {
+      const files = readdirSync(join(LOCALES, lang));
+      for (const f of ["_meta.json"]) expect(files, `${lang}/${f}`).toContain(f);
+      const meta = JSON.parse(readFileSync(join(LOCALES, lang, "_meta.json"), "utf8")) as { name?: unknown; matches?: unknown };
+      expect(typeof meta.name === "string" && meta.name.trim() !== "", `${lang}/_meta.json name`).toBe(true);
+      expect(Array.isArray(meta.matches) && meta.matches.length > 0, `${lang}/_meta.json matches`).toBe(true);
+      expect(LANG_NAMES[lang]).toBe(meta.name);
+      for (const m of meta.matches as string[]) {
+        expect(m, `${lang}/_meta.json matches`).toMatch(/^[a-z]{2,3}$/);
+        expect(claimed.get(m), `${m} is matched by both ${claimed.get(m)} and ${lang}`).toBeUndefined();
+        claimed.set(m, lang);
+      }
+      expect(meta.matches, `${lang}/_meta.json matches its own language subtag`).toContain(lang.split("-")[0].toLowerCase());
+    }
+  });
+});
+
 describe("catalogs", () => {
   const all = catalogs();
-  const source = all["zh-Hans"];
+  const source = all[SOURCE_LANG];
 
   it("has the same namespaces in every language", () => {
     for (const lang of LANGS) expect(Object.keys(all[lang]), lang).toEqual(Object.keys(source));
@@ -164,7 +190,6 @@ describe("catalogs", () => {
 });
 
 describe("client and admin catalogs", () => {
-  const clients: Record<string, Catalog> = { "zh-Hans": zhClient, en: enClient, ja: jaClient };
   const ADMIN = /^admin-/;
 
   it("leaves the admin UI's namespaces out of the client's and puts each namespace in exactly one", async () => {
@@ -193,7 +218,7 @@ describe("code", () => {
 
   it("only uses keys that exist", () => {
     const flat = new Set<string>();
-    for (const [ns, cat] of Object.entries(catalogs()["zh-Hans"])) for (const k of Object.keys(cat)) flat.add(`${ns}.${k.replace(PLURAL, "")}`);
+    for (const [ns, cat] of Object.entries(catalogs()[SOURCE_LANG])) for (const k of Object.keys(cat)) flat.add(`${ns}.${k.replace(PLURAL, "")}`);
     const missing = [...scans].flatMap(([f, s]) => s.keys.filter((k) => !flat.has(k.key)).map((k) => `${f}:${k.line} ${k.key}`));
     expect(missing).toEqual([]);
   });
@@ -201,7 +226,7 @@ describe("code", () => {
   // interpolate() and tRich() leave a placeholder with no value as a literal `{name}` on the page
   it("passes every placeholder a key's text uses", () => {
     const want = new Map<string, string[]>();
-    for (const [ns, cat] of Object.entries(catalogs()["zh-Hans"])) for (const [k, ps] of shape(cat)) want.set(`${ns}.${k}`, ps);
+    for (const [ns, cat] of Object.entries(catalogs()[SOURCE_LANG])) for (const [k, ps] of shape(cat)) want.set(`${ns}.${k}`, ps);
     const missing = [...scans].flatMap(([f, s]) =>
       s.keys.flatMap(({ line, key, vars }) => {
         if (!vars) return [];

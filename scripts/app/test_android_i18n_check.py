@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from android_i18n_check import count, literals, regressions, resource_problems, write_baselines, baselines
+from android_i18n_check import count, literals, regressions, resource_problems, write_baselines, baselines, languages, language_problems
 
 
 def write(root, path, text):
@@ -21,6 +21,13 @@ class I18nCheckTest(unittest.TestCase):
         self.root = Path(self.dir.name)
         write(self.root, 'feature/demo/build.gradle.kts', '')
         self.module = self.root / 'feature/demo'
+        for code, name, matches, directory, plural in [
+            ('en', 'English', 'en', 'values', 'one,other'),
+            ('zh-Hans', '简体中文', 'zh', 'values-zh', 'other'),
+            ('ja', '日本語', 'ja', 'values-ja', 'other'),
+        ]:
+            write(self.root, f'i18n/{code}.properties',
+                  f'name={name}\nmatches={matches}\nresources={directory}\nplurals={plural}\n')
 
     def tearDown(self):
         self.dir.cleanup()
@@ -30,6 +37,22 @@ class I18nCheckTest(unittest.TestCase):
         write(self.module, 'src/main/res/values-zh/strings.xml', strings(*zh))
         write(self.module, 'src/main/res/values-ja/strings.xml', strings(*ja))
         return resource_problems(self.module, self.root)
+
+    def test_new_language_is_discovered_and_missing_translations_fail(self):
+        write(self.root, 'i18n/ko.properties', 'name=한국어\nmatches=ko\nresources=values-ko\nplurals=other\n')
+        self.assertEqual([], language_problems(self.root))
+        self.assertIn('values-ko', languages(self.root))
+        problems = self.resources(['<string name="demo_hi">Hi</string>'], ['<string name="demo_hi">你好</string>'],
+                                  ['<string name="demo_hi">こんにちは</string>'])
+        self.assertIn('"demo_hi" is missing from values-ko/', '\n'.join(problems))
+        write(self.module, 'src/main/res/values-ko/strings.xml', strings('<string name="demo_hi">안녕</string>'))
+        self.assertEqual([], resource_problems(self.module, self.root))
+
+    def test_invalid_language_metadata_fails(self):
+        write(self.root, 'i18n/ko.properties', 'name=\nmatches=en\nresources=values-ja\nplurals=one\n')
+        text = '\n'.join(language_problems(self.root))
+        for expected in ['name is empty', 'duplicate or invalid resources', 'own language subtag', 'duplicate or invalid match', 'invalid CLDR']:
+            self.assertIn(expected, text)
 
     def test_matching_resources_pass(self):
         self.assertEqual([], self.resources(

@@ -1001,21 +1001,23 @@ Conventions (languages, fallback, glossary) are in [i18n.md](i18n.md). How the w
   At build time, the `startup-preload` plugin in `vite.config.ts` adds an inline script to the `<head>` of the client's `index.html` (not `admin/index.html`).
   On open it immediately issues `modulepreload` (download only, no execution) for the current language's strings (same rules as `preferredLanguage`), React, and the App (`ScreenView` for the live view `/screen/<machine>`) plus their static dependencies,
   so a cold start doesn't wait for one import to download before starting the next (measured at 150 ms RTT, 1.6 Mbps, gzip: the sign-in page appears in about 3.6 s instead of about 4.0 s).
-  The language does not change during the page's lifetime; changing it in Settings › General › Appearance › Language does `location.reload()` (the choice is stored in `localStorage` as `persona.language`; without it, the system language is used). Each language is its own chunk, and only the one in use is downloaded.
-  The client's strings (`locales/<lang>/index.ts`) don't include the admin UI's `admin-*` namespaces; those live in `locales/<lang>/admin.ts` and are layered on only by `admin/main.tsx` via `admin/catalog.ts`
+  The language does not change during the page's lifetime; changing it in Settings › General › Appearance › Language does `location.reload()` (the choice is stored in `localStorage` as `persona.language`; without it, the system language is used). Each language is its own chunk; the selected, English fallback, and source catalogs load before the app so missing keys can fall back synchronously.
+  The shared `web/i18n-catalogs.ts` plugin generates client and admin modules from `_meta.json` and namespace JSON resources, without per-language TypeScript entry points. Client modules exclude `admin-*`; only `admin/main.tsx` layers those namespaces on via `admin/catalog.ts`
   (`initI18n(undefined, adminCatalog)`; the admin UI also uses `common.*` and the shared components' strings). At build time they go into `admin/assets/` with the admin code.
+- **Adding a language**: add a resource directory and `_meta.json`; the picker, loaders, and preload script discover it automatically. See [i18n.md](i18n.md).
 - **Strings**: `src/i18n/locales/<lang>/<namespace>.json`, flat `"name": "text"`, with keys written as `namespace.name`. **One namespace per page or feature block** (`settings-general`, `inbox`, `admin-devices`…),
   so several people editing at once don't collide on the same file. `common.json` only holds what's used everywhere (Cancel, Save, Loading); don't pile things into it.
 - **Usage**: `t("inbox.empty")`, `t("inbox.count", { count })` (with `_one` / `_other`, chosen by `Intl.PluralRules`). Sentences with elements use `tRich("ns.key", { link: <a…/> })`:
   one string per whole sentence, never stitched from halves. Dates, numbers, and lists use `formatDate` / `formatNumber` / `formatRelative` / `formatList` from `src/i18n` (all `Intl`); never hand-assemble month / day words.
 - **With the hub**: every request sends `Accept-Language` (`lib/api.ts`), and a WebSocket first sends `client_hello.locale` on connect (`lib/store.ts`); the hub uses it for the language of error messages, pushes, and the assistant's answers ([protocol.md](protocol.md)).
-- **Checks** (`src/i18n/catalog.test.ts`): the three languages have the same namespaces, keys, and placeholders; every `_one` has an `_other`; "Persona" is not translated. Every key in `t("…")` in the code exists, and when the second argument is an object literal (or omitted) it must supply every placeholder that key's text uses (calls with spreads, computed property names, or a passed variable are skipped).
+- **Checks** (`src/i18n/catalog.test.ts`): all discovered languages have valid metadata and matching namespaces, keys, and placeholders; every `_one` has an `_other`; "Persona" is not translated. Every key in `t("…")` in the code exists, and when the second argument is an object literal (or omitted) it must supply every placeholder that key's text uses (calls with spreads, computed property names, or a passed variable are skipped).
   The client strings contain no `admin-*`, the two together are exactly all strings, and `admin-*` keys are only used under `src/admin/`.
   Hardcoded Chinese (strings, JSX text; comments and tests don't count) can only decrease per file, with the baseline in `src/i18n/hardcoded-baseline.json`; after reducing it, rerecord with `UPDATE_I18N_BASELINE=1 npx vitest run src/i18n/catalog.test.ts`.
   Chinese that must stay (it has to match text someone else wrote, such as parsing hub / Lark output) gets an `i18n-ignore` comment on that line or the line above.
 - **Tests**: vitest's `setupFiles` loads zh-Hans first (both client and admin strings), so existing tests keep asserting in Chinese.
 - **Key pitfalls**: keys ending in `_zero` / `_one` / `_two` / `_few` / `_many` / `_other` are treated as plural forms (write `doc_cloud`, not `doc_other`).
   A module with a local variable named `t` must rename it so it doesn't shadow `t()`. Chinese that has to match text someone else wrote (notifications the hub writes into chats, markers inside `<jarvis-context>`, the first line of quotes) is not translated and is marked `i18n-ignore`.
+
 
 ## Detail conventions
 

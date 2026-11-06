@@ -42,4 +42,10 @@ class AppLanguageTest {
             assertEquals("en", (ClientLanguage.tag).zhAny())
         } finally { ClientLanguage.current = AppLanguage.En }
     }
+    @Test fun generatedLanguagesMatchTheirTagsAndHaveNames() {
+        AppLanguage.entries.filter { it != AppLanguage.System }.forEach { language ->
+            assertEquals(language, AppLanguage.of(Locale.forLanguageTag(language.tag)))
+            org.junit.Assert.assertTrue(language.ownName.isNotBlank())
+        }
+    }
 }

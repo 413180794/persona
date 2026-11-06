@@ -4,5 +4,5 @@
     <string name="settings_language_header">App 的语言</string>
     <string name="settings_language_system">跟随系统</string>
     <string name="settings_language_system_now">现在是%1$s</string>
-    <string name="settings_language_caption">跟随系统时，中文（包括繁体）显示简体中文，其他语言显示英文。</string>
+    <string name="settings_language_caption">跟随系统时使用第一首选语言，没有对应翻译时用英文。</string>
 </resources>

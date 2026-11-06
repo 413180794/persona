@@ -21,6 +21,32 @@ val googleOAuthScheme = providers.gradleProperty("personaGoogleOAuthScheme")
     ?: System.getenv("JARVIS_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
     ?: "persona.oauth.unset"
 
+// The same language resources drive the contracts, packaged translations, and Android 13's per-app picker.
+val languageFiles = rootProject.fileTree("i18n") { include("*.properties") }
+val languageTags = languageFiles.files.map { it.nameWithoutExtension }.sorted()
+abstract class GenerateLocaleConfig : DefaultTask() {
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val languages: ConfigurableFileCollection
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction fun generate() {
+        val tags = languages.files.map { it.nameWithoutExtension }.sorted()
+        require(tags.all { it.matches(Regex("[a-z]{2,3}(-[A-Za-z0-9]{2,8})*")) }) { "Invalid language tag" }
+        val output = outputDirectory.get().file("xml/locales_config.xml").asFile
+        output.parentFile.mkdirs()
+        output.writeText("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+            "<locale-config xmlns:android=\"http://schemas.android.com/apk/res/android\">\n" +
+            tags.joinToString("\n") { "    <locale android:name=\"$it\" />" } + "\n</locale-config>\n")
+    }
+}
+val generateLocaleConfig by tasks.registering(GenerateLocaleConfig::class) {
+    languages.from(languageFiles)
+    outputDirectory.set(layout.buildDirectory.dir("generated/languages/res"))
+}
+androidComponents.onVariants { variant ->
+    variant.sources.res?.addGeneratedSourceDirectory(generateLocaleConfig, GenerateLocaleConfig::outputDirectory)
+}
+
 android {
     namespace = "persona.android"
     testOptions { unitTests { isIncludeAndroidResources = true } }
@@ -29,7 +55,7 @@ android {
     }
     // Only the app's languages (docs/i18n.md): a library's French strings would mix into an English screen.
     androidResources {
-        localeFilters += listOf("en", "zh", "ja")
+        localeFilters += languageTags.map { it.substringBefore('-') }
     }
     defaultConfig {
         applicationId = appId
