@@ -354,6 +354,53 @@ class ChatRepositoriesTest {
         assertFalse(snapshot.ended)
     }
 
+    @Test fun reconnectAfterTheTurnEndedOfflineDropsTheCursorAndShowsTheCutRecord() = runTest {
+        val connection = Connection()
+        val user = item(1).copy(role = "user", text = "示例问题")
+        var transcript = listOf(user)
+        val working = Session(key.machineId, key.sessionId, status = "working")
+        val transport = Transport().apply {
+            list = listOf(working)
+            machineList = listOf(Machine(key.machineId, online = true))
+            fetch = { query -> ItemsResponse(transcript.filter { it.seq > (query.afterSeq ?: 0) },
+                history = "h", fromSeq = query.afterSeq, toSeq = transcript.last().seq) }
+        }
+        val sessions = HubSessionsRepository(transport, connection, backgroundScope)
+        val repository = HubChatRepository(transport, connection, Cache(CachedChat(emptyList(), "h", 0, false)),
+            sessions, backgroundScope)
+        var snapshot = ChatSnapshot()
+        backgroundScope.launch { repository.observe(key).collect { snapshot = it } }
+        runCurrent()
+        suspend fun event(event: ServerEvent) { connection.events.emit(event); runCurrent() }
+        suspend fun reconnect() {
+            connection.state.value = ConnectionState.Connecting
+            runCurrent()
+            connection.state.value = ConnectionState.Online
+            runCurrent()
+        }
+        val whole = "示".repeat(30_000)
+        event(DeltaEvent(key.machineId, key.sessionId, whole.take(500)))
+        assertEquals(1, snapshot.streamingItemIds.size)
+
+        // Still working after a reconnect: the reply keeps streaming.
+        reconnect()
+        assertEquals(1, snapshot.streamingItemIds.size)
+
+        // The turn ends while offline: the closing empty delta never arrives.
+        connection.state.value = ConnectionState.Connecting
+        runCurrent()
+        val cut = item(2).copy(text = whole.take(8_000) + "\n…（已截断）", fullSize = 90_000)
+        transcript = listOf(user, cut)
+        transport.list = listOf(working.copy(status = "idle"))
+        connection.state.value = ConnectionState.Online
+        runCurrent()
+
+        assertTrue(snapshot.streamingItemIds.isEmpty())
+        val reply = snapshot.items.single { it.role == "assistant" }
+        assertEquals(cut.text, reply.text)
+        assertEquals(90_000, reply.fullSize)
+    }
+
     @Test fun lifecycleRequiresVerifiedListsAndConfirmedActionsAndKeepsRecordedDurationOnly() = runTest {
         val connection = Connection()
         val working = Session(key.machineId, key.sessionId, status = "working", paneId = "pane")

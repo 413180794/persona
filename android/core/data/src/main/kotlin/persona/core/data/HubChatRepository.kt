@@ -58,6 +58,8 @@ class HubChatRepository(
         var lastUserId: String? = null
         var eventError: String? = null
         var observedTranscript: List<Item>? = null
+        /** Back online and no live delta since: the empty delta that ends a turn may have been lost while offline. */
+        var reconnected = false
     }
 
     private val entries = LinkedHashMap<SessionKey, Entry>(64, 0.75f, true)
@@ -83,6 +85,7 @@ class HubChatRepository(
                     }
                     is DeltaEvent -> update(SessionKey(event.machineId, event.sessionId)) { entry ->
                         entry.realtime.delta(event, entry.reducer.items)
+                        entry.reconnected = false
                         if (!event.turnFinished) {
                             entry.turnDurationSeconds = null
                             entry.durationAfterSeq = entry.reducer.items.lastOrNull()?.seq ?: 0
@@ -131,7 +134,7 @@ class HubChatRepository(
                 if (state == ConnectionState.Online) {
                     active.forEach { entry -> entry.scope.launch {
                         entry.ready.await()
-                        dispatch(entry, entry.lock.withLock { entry.sync.reconnect() })
+                        dispatch(entry, entry.lock.withLock { entry.reconnected = true; entry.sync.reconnect() })
                         catchUp(entry)
                     } }
                 } else retainedEntries().forEach { entry ->
@@ -544,6 +547,13 @@ class HubChatRepository(
         val lastSeen = entry.lastSeen?.id ?: entry.reducer.items.lastOrNull {
             seenAt != null && parseTime(it.ts)?.let { time -> time <= seenAt } == true
         }?.id
+        // Only the hub's fresh list counts (cleared while offline); a session missing from it is left alone. While it
+        // still works the hub resends its live text, so the draft stays and is overwritten in place.
+        if (entry.reconnected && entry.currentSessions?.firstOrNull { it.key == entry.key }?.status
+                ?.let { it != "working" && it != "blocked" } == true) {
+            entry.realtime.finish()
+            entry.reconnected = false
+        }
         val items = entry.realtime.items(entry.reducer.items)
         entry.state.update { it.copy(items = items, loading = false,
             history = entry.reducer.history,

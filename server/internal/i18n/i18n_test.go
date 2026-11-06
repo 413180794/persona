@@ -110,6 +110,9 @@ func TestCatalogsAgree(t *testing.T) {
 		var out []string
 		entries, _ := fs.ReadDir(files, "locales/"+string(l))
 		for _, e := range entries {
+			if e.Name() == "_meta.json" || !strings.HasSuffix(e.Name(), ".json") {
+				continue // Language metadata is not a message namespace.
+			}
 			out = append(out, e.Name())
 		}
 		return out
