@@ -583,3 +583,13 @@ The test binary does not recognize `voice`, reruns the whole package recursively
   `notifications/initialized`, and `tools/call`. The tool identifies the chat by `JARVIS_SESSION_ID`, following the real node → hub → manager path. A test-written plan file decides which tool to call by matching a phrase in the message.
 - `prompts.TestEveryTemplateIsUsed` searches Go and templates for quoted full template names (`"inbox/handling/sent"`); names built by concatenation (`"inbox/handling/" + name`) look unused. Write full names in constants.
 - The old Inbox e2e cases in `run.py` for "hub keeps reading sources after the manager stops" no longer apply after sources moved into managers on 2026-11-05. The same six cases fail on master; run master first when comparing.
+
+## Checking Android and Swift pure logic on a Linux-only machine (2026-11-05, #2840)
+
+On a Linux development machine without the Android SDK or Xcode, pure-logic client changes can still be checked first:
+
+- **Android**: `:core:contracts` and `:core:domain` are pure Kotlin modules; `JAVA_HOME=<JDK 21> ./gradlew --offline :core:contracts:test :core:domain:test` runs without the SDK.
+  It needs JDK 21 (the daemon is pinned to 21, see `docs/android.md`); JDK 11 does not start. Pages and screenshots still need a machine with the SDK.
+- **Swift**: Foundation-only files (such as `AgentRepoTree.swift`) build with the swift.org Linux toolchain (the Debian 12 package also works on related distributions) inside a temporary SwiftPM package running Swift Testing.
+  Copy the needed types verbatim from `Models.swift` and write minimal stand-ins for the rest; match the App's settings: Swift 6, `defaultIsolation(MainActor.self)`, plus the `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` upcoming features (`SWIFT_APPROACHABLE_CONCURRENCY`).
+  This catches syntax, type and isolation errors and really runs the tests, but it is not an Xcode build: say "not compiled with Xcode" in the PR; Xcode 26.0 is not verified either.

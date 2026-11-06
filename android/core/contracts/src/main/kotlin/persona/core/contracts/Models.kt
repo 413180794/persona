@@ -318,6 +318,11 @@ data class Session(
      * the others were split from (the tab's initiator). Absent when the host gives no layout.
      */
     @SerialName("pane_index") val paneIndex: Int? = null,
+    /**
+     * The main checkout of the repository [cwd] belongs to, when its host knows it (#2840: Paseo keeps its worktrees
+     * under its own folder, whose paths name no repository). 按仓库 goes by it (core:domain repoOf); older hubs never send it.
+     */
+    @SerialName("repo_root") val repoRoot: String? = null,
     @WireEnum("needs_you", "unread", "working", "idle", "offline", "unknown")
     @SerialName("state") val state: String? = AgentState.of(null, status).wire,
     @WireTime @SerialName("seen_at") val seenAt: String? = null,

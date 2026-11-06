@@ -5,10 +5,11 @@ import Testing
 /// By Repository (`RepoPlace`, `RepoTree`): the repository and working tree a working directory names, and the machines →
 /// repositories → working trees the Agents list draws. The path rules are the web's (`web/src/lib/agent-repos.test.ts`).
 struct AgentRepoTreeTests {
-    private func session(_ id: String, _ cwd: String, machine: String = "machine-a", group: String = "") -> Session {
+    private func session(_ id: String, _ cwd: String, machine: String = "machine-a", group: String = "", repoRoot: String? = nil) -> Session {
         let hub = group.isEmpty ? "" : #","app_hub_group":"\#(group)""#
+        let repo = repoRoot.map { #","repo_root":"\#($0)""# } ?? ""
         let json = """
-        {"machine_id":"\(machine)","session_id":"\(id)","title":"\(id)","cwd":"\(cwd)","status":"idle","state":"idle"\(hub)}
+        {"machine_id":"\(machine)","session_id":"\(id)","title":"\(id)","cwd":"\(cwd)","status":"idle","state":"idle"\(hub)\(repo)}
         """
         do { return try JSON.decoder.decode(Session.self, from: Data(json.utf8)) }
         catch { fatalError("bad fixture: \(error)") }
@@ -40,6 +41,17 @@ struct AgentRepoTreeTests {
         #expect(RepoPlace(cwd: "") == RepoPlace(repo: "", name: "", worktree: "", main: true))
     }
 
+    /// Paseo keeps its worktrees under its own folder, whose paths name no repository: its host names it (#2840).
+    @Test func aRepositoryTheHostNamesComesBeforeThePath() {
+        #expect(RepoPlace(cwd: "/home/me/.paseo/worktrees/1a2b/fix-login", repoRoot: "/code/app")
+            == RepoPlace(repo: "/code/app", name: "app", worktree: "/home/me/.paseo/worktrees/1a2b/fix-login", main: false))
+        #expect(RepoPlace(cwd: "/code/app/server/", repoRoot: "/code/app/")
+            == RepoPlace(repo: "/code/app", name: "app", worktree: "/code/app", main: true), "a directory inside it is its main checkout")
+        #expect(RepoPlace(cwd: "/code/app-old", repoRoot: "/code/app")
+            == RepoPlace(repo: "/code/app", name: "app", worktree: "/code/app-old", main: false), "a shared prefix is not inside it")
+        #expect(RepoPlace(cwd: "/code/app/.worktrees/fix", repoRoot: "") == RepoPlace(cwd: "/code/app/.worktrees/fix"), "an empty one names none")
+    }
+
     // MARK: The tree
 
     @Test func theMainCheckoutComesFirstThenTreesByName() throws {
@@ -52,6 +64,18 @@ struct AgentRepoTreeTests {
         #expect(repo.worktrees.map { $0.name + ($0.main ? "*" : "") } == ["app*", "fix-a", "fix-b"])
         #expect(repo.worktrees[1].sessions.map(\.sessionID) == ["wt-a", "wt-a2"])
         #expect(repo.sessions.count == 4)
+    }
+
+    @Test func worktreesElsewhereJoinTheRepositoryTheirHostNames() throws {
+        let tree = RepoTree.build([session("main", "/code/app", repoRoot: "/code/app"),
+                                   session("wt-b", "/home/me/.paseo/worktrees/3c4d/fix-b", repoRoot: "/code/app"),
+                                   session("wt-a", "/home/me/.paseo/worktrees/1a2b/fix-a", repoRoot: "/code/app"),
+                                   session("herdr", "/code/app/.worktrees/fix-c")], machines: machines)
+        let repo = try #require(tree.first?.repos.first)
+        #expect(tree.count == 1 && tree[0].repos.count == 1)
+        #expect(repo.name == "app" && repo.path == "/code/app" && repo.id == "repo/machine-a//code/app")
+        #expect(repo.worktrees.map { $0.name + ($0.main ? "*" : "") } == ["app*", "fix-a", "fix-b", "fix-c"])
+        #expect(repo.worktrees[1].id == "tree/machine-a//home/me/.paseo/worktrees/1a2b/fix-a")
     }
 
     @Test func aRepositoryWithOnlyItsMainCheckoutIsFlat() throws {

@@ -583,6 +583,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The pane's place in its tab (`pane_index`, #2320): 0 is the top left one, the others split from it, whose agent is
     /// the tab's Started It. Nil when the host does not say (older nodes, hosts without layouts).
     var paneIndex: Int? = nil
+    /// The main checkout of the repository `cwd` belongs to, when its host knows it (`repo_root`, #2840: Paseo keeps its
+    /// worktrees under its own folder, whose paths name no repository). 按仓库 goes by it (`RepoPlace`).
+    var repoRoot: String? = nil
     var state: AgentState
     var seenAt: Date?
     /// When the hub saw it enter its current state (`state_since`).
@@ -754,6 +757,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case agentLabelHint = "agent_label"
         case permissionMode = "permission_mode"
         case contextTokens = "context_tokens", contextWindow = "context_window"
+        case repoRoot = "repo_root"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
              assistantSpace = "space",
@@ -811,6 +815,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         slotName = try c.decodeIfPresent(String.self, forKey: .slotName)
         slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex)
         paneIndex = try c.decodeIfPresent(Int.self, forKey: .paneIndex)
+        repoRoot = try c.decodeIfPresent(String.self, forKey: .repoRoot)
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
         stateSince = try c.decodeIfPresent(Date.self, forKey: .stateSince)
         queued = try c.decodeIfPresent([String].self, forKey: .queued)

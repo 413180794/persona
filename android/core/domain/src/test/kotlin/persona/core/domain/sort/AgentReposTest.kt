@@ -3,6 +3,7 @@ package persona.core.domain.sort
 import persona.core.domain.zhAny
 
 import persona.core.contracts.AgentState
+import persona.core.contracts.JsonCodec
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import org.junit.Assert.*
@@ -10,9 +11,9 @@ import org.junit.Test
 
 /** Mirrors web/src/lib/agent-repos.test.ts, plus how "By repository" folds on Android. */
 class AgentReposTest {
-    private fun session(id: String, cwd: String, state: String = "idle", machine: String = "machine-a", hour: Int = 1) =
+    private fun session(id: String, cwd: String, state: String = "idle", machine: String = "machine-a", hour: Int = 1, repoRoot: String? = null) =
         AgentSession(Session(machineId = machine, sessionId = id, title = id, cwd = cwd, state = state,
-            updatedAt = "2026-01-01T0$hour:00:00Z"))
+            updatedAt = "2026-01-01T0$hour:00:00Z", repoRoot = repoRoot))
 
     private val machines = listOf(Machine("machine-b", "电脑 B", online = true), Machine("machine-a", "电脑 A", online = true))
     private val byRepo = AgentListSettings(grouping = AgentGrouping.Repo)
@@ -36,6 +37,29 @@ class AgentReposTest {
     @Test fun withoutAMarkerTheDirectoryIsItsOwnRepository() {
         assertEquals(RepoPlace("/code/app/server/internal", "internal", "/code/app/server/internal", main = true), repoOf("/code/app/server/internal"))
         assertEquals(RepoPlace("", "", "", main = true), repoOf(""))
+    }
+
+    /** Paseo keeps its worktrees under its own folder, whose paths name no repository: its host names it (#2840). */
+    @Test fun aRepositoryTheHostNamesComesBeforeThePath() {
+        assertEquals(RepoPlace("/code/app", "app", "/home/me/.paseo/worktrees/1a2b/fix-login", main = false),
+            repoOf("/home/me/.paseo/worktrees/1a2b/fix-login", "/code/app"))
+        assertEquals("a directory inside it is its main checkout", RepoPlace("/code/app", "app", "/code/app", main = true),
+            repoOf("/code/app/server/", "/code/app/"))
+        assertEquals("a shared prefix is not inside it", RepoPlace("/code/app", "app", "/code/app-old", main = false),
+            repoOf("/code/app-old", "/code/app"))
+        assertEquals("an empty one names none", repoOf("/code/app/.worktrees/fix"), repoOf("/code/app/.worktrees/fix", ""))
+        assertEquals("/code/app", JsonCodec.decodeFromString<Session>("""{"session_id":"s","repo_root":"/code/app"}""").repoRoot)
+    }
+
+    @Test fun worktreesElsewhereJoinTheRepositoryTheirHostNames() {
+        val repos = agentRepos(listOf(session("main", "/code/app", repoRoot = "/code/app"),
+            session("wt-b", "/home/me/.paseo/worktrees/3c4d/fix-b", repoRoot = "/code/app"),
+            session("wt-a", "/home/me/.paseo/worktrees/1a2b/fix-a", repoRoot = "/code/app"),
+            session("herdr", "/code/app/.worktrees/fix-c")))
+        val repo = repos.single()
+        assertEquals("repo/machine-a//code/app", repo.id)
+        assertEquals(listOf("app*", "fix-a", "fix-b", "fix-c"), (repo.worktrees.map { it.name + if (it.main) "*" else "" }).zhAny())
+        assertEquals("tree/machine-a//home/me/.paseo/worktrees/1a2b/fix-a", repo.worktrees[1].id)
     }
 
     @Test fun theMainCheckoutComesFirstThenTreesByName() {

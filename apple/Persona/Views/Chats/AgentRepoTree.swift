@@ -1,9 +1,10 @@
 import Foundation
 
-/// Where an agent works, from its working directory alone (the protocol carries no repository): the repository and the
-/// working tree in it. The web's By Repository reads paths by the same rules (`web/src/lib/agent-repos.ts`): a path under one
-/// of the usual working-tree folders belongs to the directory above that folder; any other path is its own
-/// repository's main checkout.
+/// Where an agent works: the repository and the working tree in it. The host may name the repository (`repo_root`,
+/// #2840: Paseo keeps its worktrees under its own folder): a working directory inside it is its main checkout, any other
+/// one of its trees. Otherwise from the working directory alone, by the web's rules (`web/src/lib/agent-repos.ts`): a
+/// path under one of the usual working-tree folders belongs to the directory above that folder; any other path is its
+/// own repository's main checkout.
 nonisolated struct RepoPlace: Equatable, Sendable {
     /// The repository's path; "" without a working directory.
     var repo: String
@@ -23,11 +24,18 @@ nonisolated struct RepoPlace: Equatable, Sendable {
         self.main = main
     }
 
-    init(cwd: String) {
+    init(cwd: String, repoRoot: String? = nil) {
         var path = Substring(cwd)
         while path.hasSuffix("/") { path = path.dropLast() }
         guard !path.isEmpty else {
             self.init(repo: "", name: "", worktree: "", main: true)
+            return
+        }
+        var root = Substring(repoRoot ?? "")
+        while root.hasSuffix("/") { root = root.dropLast() }
+        if !root.isEmpty {
+            let inside = path == root || path.hasPrefix(String(root) + "/")
+            self.init(repo: String(root), name: Self.baseName(String(root)), worktree: String(inside ? root : path), main: inside)
             return
         }
         for marker in Self.markers {
@@ -51,8 +59,8 @@ nonisolated struct RepoPlace: Equatable, Sendable {
     }
 }
 
-/// By Repository (docs/ios.md「Agents 的分组」): every agent under its machine, the repository its working directory names and
-/// the working tree in it, as Orca's projects with the machine above them. Plain data, unit-tested apart from the list
+/// By Repository (docs/ios.md「Agents 的分组」): every agent under its machine, its repository (`RepoPlace`) and the
+/// working tree in it, as Orca's projects with the machine above them. Plain data, unit-tested apart from the list
 /// (`AgentRepoTreeTests`); the list orders the agents inside a tree (`AgentListOrder`).
 nonisolated struct RepoTree {
     struct Worktree: Identifiable {
@@ -136,7 +144,7 @@ nonisolated struct RepoTree {
         /// Where each top space's first agent went: its repository's key and working tree's path.
         var placeOf: [String: (repo: String, worktree: String)] = [:]
         for s in top {
-            let place = RepoPlace(cwd: s.cwd)
+            let place = RepoPlace(cwd: s.cwd, repoRoot: s.repoRoot)
             let key = s.machineRef.path + "/" + place.repo
             var repo = repos[key] ?? Repo(id: "repo/" + key, machine: s.machineRef,
                                            name: place.name.isEmpty ? unnamed : place.name, path: place.repo, worktrees: [])

@@ -9,13 +9,20 @@ private val WorktreeMarkers = listOf("/.worktrees/", "/.claude/worktrees/", "/.h
 private fun baseName(path: String) = path.split('/').lastOrNull { it.isNotEmpty() }.orEmpty()
 
 /**
- * The repository and working tree a cwd belongs to, from the path alone (the protocol carries no repository; web's
- * `repoOf`, iOS's `RepoPlace`). A tree under one of the known layouts belongs to the directory above the marker,
- * `~/.worktrees/<repo>/<tree>` to `<repo>` under it; any other path is its own repository's main checkout.
+ * The repository and working tree a cwd belongs to (web's `repoOf`, iOS's `RepoPlace`). The host may name the
+ * repository ([repoRoot], the session's `repo_root`, #2840: Paseo keeps its worktrees under its own folder): a cwd
+ * inside it is its main checkout, any other one of its trees. Otherwise from the path alone: a tree under one of the
+ * known layouts belongs to the directory above the marker, `~/.worktrees/<repo>/<tree>` to `<repo>` under it; any other
+ * path is its own repository's main checkout.
  */
-fun repoOf(cwd: String): RepoPlace {
+fun repoOf(cwd: String, repoRoot: String? = null): RepoPlace {
     val path = cwd.trimEnd('/')
     if (path.isEmpty()) return RepoPlace("", "", "", main = true)
+    val root = repoRoot.orEmpty().trimEnd('/')
+    if (root.isNotEmpty()) {
+        val inside = path == root || path.startsWith("$root/")
+        return RepoPlace(root, baseName(root), if (inside) root else path, main = inside)
+    }
     for (marker in WorktreeMarkers) {
         val at = path.indexOf(marker)
         if (at <= 0) continue
@@ -63,14 +70,16 @@ internal val NaturalOrder = Comparator<String> { a, b ->
 
 private val byName = compareBy<Pair<String, String>, String>(NaturalOrder) { it.first }.thenBy { it.second }
 
+private val AgentSession.place: RepoPlace get() = repoOf(session.cwd, session.repoRoot)
+
 /** The repositories of [rows] by name in natural order (then path), each computer's apart; ids are `repo/<machine>/<path>`, `tree/<machine>/<path>`. */
 fun agentRepos(rows: List<AgentSession>): List<AgentRepo> =
-    rows.groupBy { it.session.machineId to repoOf(it.session.cwd).repo }.map { (key, members) ->
+    rows.groupBy { it.session.machineId to it.place.repo }.map { (key, members) ->
         val (machine, repo) = key
-        val place = repoOf(members.first().session.cwd)
+        val place = members.first().place
         val name = place.name.ifEmpty { UnnamedRepo }
-        val trees = members.groupBy { repoOf(it.session.cwd).worktree }.map { (path, inTree) ->
-            val main = repoOf(inTree.first().session.cwd).main
+        val trees = members.groupBy { it.place.worktree }.map { (path, inTree) ->
+            val main = inTree.first().place.main
             AgentWorktree("tree/$machine/$path", if (path == repo) name else baseName(path), path, main, inTree)
         }.sortedWith(compareBy<AgentWorktree> { !it.main }.thenComparing({ it.name to it.path }, byName))
         AgentRepo("repo/$machine/$repo", machine, name, repo, trees)
