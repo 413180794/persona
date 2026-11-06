@@ -26,8 +26,8 @@ import (
 
 // Settings › Model providers (docs/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its
 // node and remembered by the hub (it hands them over: launchers.zshrc); those added in the app are the assistant's —
-// base URL, model, and the API key AES-GCM sealed with secret.key (the hub's data directory's, which the assistant
-// reads: docs/assistant.md "Processes") — and given to every node, which runs them as `personad launch <name>`. Deleting a
+// base URL, model, and the API key AES-GCM sealed with the manager's own secret.key (docs/managers.md "The built-in
+// manager's own files") — and given to every node, which runs them as `personad launch <name>`. Deleting a
 // ~/.zshrc launcher only hides it in Persona.
 
 const (
@@ -108,8 +108,9 @@ var reservedLauncherNames = []string{"claude", "presets", "test", "discover", "i
 
 // ---- the key ----
 
-// The providers' keys are sealed with secret.key in the hub's data directory (internal/secretkey), the file the hub
-// sealed them with since before they were the assistant's, and its own secrets still are (bots, connectors).
+// The providers' keys are sealed with the manager's own secret.key (internal/secretkey; the built-in manager's is a
+// copy of the data directory's, which sealed them before they were the assistant's, docs/managers.md "The built-in
+// manager's own files").
 
 func (s *Service) sealKey(plain string) (string, error) { return s.models.secret.Seal(plain) }
 

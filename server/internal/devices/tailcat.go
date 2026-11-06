@@ -83,8 +83,8 @@ func (m *Machine) transports() []string {
 	return []string{"ssh", "tailcat"}
 }
 
-// tailcatDialer is the hub's tailcat client, made the first time a machine needs it: the hub's key file is created
-// then (`jarvisd hub tailcat-key` prints it for the nodes).
+// tailcatDialer is the manager's tailcat client, made the first time a machine needs it: its key file
+// (Options.TailcatKey) is created then (`personad hub tailcat-key` prints the built-in manager's for the nodes).
 type tailcatDialer struct {
 	once sync.Once
 	d    *tunnel.Dialer
@@ -94,7 +94,11 @@ type tailcatDialer struct {
 func (d *Devices) tailcatClient() (*tunnel.Dialer, error) {
 	t := &d.tailcat
 	t.once.Do(func() {
-		k, err := tunnel.LoadOrCreateHubKey(tunnel.HubKeyPath())
+		path := d.opts.TailcatKey
+		if path == "" {
+			path = tunnel.HubKeyPath()
+		}
+		k, err := tunnel.LoadOrCreateHubKey(path)
 		if err != nil {
 			t.err = err
 			return

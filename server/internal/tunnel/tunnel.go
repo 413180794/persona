@@ -2,8 +2,9 @@
 // relays, upgraded to a direct path when NAT traversal works, with no public IP, open port or ssh needed on either side.
 // It is the fallback when the hub cannot ssh to a machine (docs/server.md "tailcat hole punching").
 //
-// A node keeps a fixed identity in ~/.jarvis/tailcat.json and serves only the hub keys listed there; the hub keeps its
-// own in ~/.jarvis/tailcat-hub.json and dials a node's address (hub.json machines[].tailcat_addr). The address holds
+// A node keeps a fixed identity in ~/.jarvis/tailcat.json and serves only the hub keys listed there; the manager that
+// dials it keeps its own (the built-in manager's in ~/.jarvis/managers/assistant/tailcat-hub.json, docs/managers.md "The
+// built-in manager's own files") and dials a node's address (hub.json machines[].tailcat_addr). The address holds
 // the node's public keys, the WireGuard pre-shared key and the DERP region: it is a secret, like the hub token.
 package tunnel
 
@@ -38,7 +39,8 @@ func dataDir() string {
 // NodeKeyPath is where a node keeps its tailcat identity.
 func NodeKeyPath() string { return filepath.Join(dataDir(), "tailcat.json") }
 
-// HubKeyPath is where the hub keeps its tailcat identity.
+// HubKeyPath is the data directory's tailcat identity of the side that dials the nodes: a manager made in the app (its
+// data directory is its own); the built-in manager's own copy is in its directory (managerconf.OwnFile).
 func HubKeyPath() string { return filepath.Join(dataDir(), "tailcat-hub.json") }
 
 // NodeKey is a node's tailcat identity: fixed, so its address stays the same across restarts.
@@ -171,7 +173,7 @@ func LoadOrCreateHubKey(path string) (*HubKey, error) {
 	}
 	// Written whole to a file of its own, then linked into place: the link fails if another process got there
 	// first, and a reader never sees a half-written file.
-	f, err := os.CreateTemp(filepath.Dir(path), ".tailcat-hub-*")
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*") // named after it: the node's path guard refuses it too
 	if err != nil {
 		return nil, err
 	}

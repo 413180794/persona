@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,12 @@ type conn struct {
 
 // New creates a Service. Accounts live in recs; dataDir holds the encryption key (secret.key).
 func New(dataDir string, recs Records) (*Service, error) {
-	st, err := openStore(dataDir, recs)
+	return NewWithKey(dataDir, filepath.Join(dataDir, "secret.key"), recs)
+}
+
+// NewWithKey is New with the encryption key at keyPath (a manager's own secret.key, not its data directory's).
+func NewWithKey(dataDir, keyPath string, recs Records) (*Service, error) {
+	st, err := openStore(dataDir, keyPath, recs)
 	if err != nil {
 		return nil, err
 	}

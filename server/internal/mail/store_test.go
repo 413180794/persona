@@ -92,7 +92,7 @@ func TestStoreRejectsBadKey(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "secret.key"), []byte("short"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openStore(dir, newMemRecords()); err == nil {
+	if _, err := openStore(dir, filepath.Join(dir, "secret.key"), newMemRecords()); err == nil {
 		t.Fatal("openStore accepted a 5-byte key")
 	}
 }
@@ -258,5 +258,17 @@ func TestFeishuProviderUsesFixedServers(t *testing.T) {
 	if a.IMAPHost != "imap.larkoffice.com" || a.IMAPPort != 993 || a.SMTPHost != "smtp.larkoffice.com" ||
 		a.SMTPPort != 465 || a.SMTPSecurity != "tls" || a.Provider != ProviderFeishu || a.Username != "me@example.com" {
 		t.Fatalf("feishu account = %+v", a)
+	}
+}
+
+// The key in a directory not made yet (the built-in manager's own) is made with it.
+func TestStoreKeyInANewDirectory(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "managers", "assistant", "secret.key")
+	if _, err := openStore(dir, keyPath, newMemRecords()); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(keyPath); err != nil || fi.Size() != 32 {
+		t.Fatalf("key %v %v", fi, err)
 	}
 }

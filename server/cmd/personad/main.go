@@ -14,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extmgr"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/nodecmd"
 
 	"github.com/nwverse/persona/server/internal/assistant"
@@ -66,7 +67,7 @@ const usage = `usage:
   personad hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
   personad hub doctor       只读检查 hub 配置、网络和证书
   personad hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/admin.md)
-  personad hub tailcat-key  print the hub's tailcat key (created the first time), for "node tailcat init --hub"
+  personad hub tailcat-key  print the built-in manager's tailcat key (created the first time), for "node tailcat init --hub"
   personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)
   personad assistant        the assistant (the Persona tab's) as its own process on the hub's bus; the hub starts it
                            unless hub.json says assistant.external (token: stdin or PERSONA_ASSISTANT_TOKEN)
@@ -188,8 +189,9 @@ func main() {
 				err = usageError(commandName() + " hub tailcat-key takes no arguments")
 				break
 			}
+			// The key is the built-in manager's: it dials the computers (managerconf.OwnFile, docs/managers.md).
 			var k *tunnel.HubKey
-			if k, err = tunnel.LoadOrCreateHubKey(tunnel.HubKeyPath()); err == nil {
+			if k, err = tunnel.LoadOrCreateHubKey(managerconf.OwnFile(identity.HomeDir(), managerconf.TailcatKey)); err == nil {
 				fmt.Println(k.Public())
 			}
 		default:

@@ -78,8 +78,35 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	home := identity.HomeDir()
 	file := managerconf.DefaultFile(home)
 	moveConfig(home, file, logger.Printf)
-	return run(ctx, build, runOptions{ID: assistantwire.AssistantID, Hub: hub, Token: token, Deploy: deploy, Errors: errs,
-		Dir: home, ConfigFile: file, DatabaseURL: cfg.DatabaseURL, Logf: logger.Printf})
+	moveFiles(home, logger.Printf)
+	o := builtinFiles(home)
+	o.ID, o.Hub, o.Token, o.Deploy, o.Errors = assistantwire.AssistantID, hub, token, deploy, errs
+	o.DatabaseURL, o.Logf = cfg.DatabaseURL, logger.Printf
+	return run(ctx, build, o)
+}
+
+// builtinFiles are where the built-in manager's things are in the data directory home: its manager.json and its keys
+// in its own directory (managers/assistant, managerconf.OwnFile), its knowledge base where manager.json says (by
+// default the data directory's data/), the extensions in the data directory (until they are a part of their own).
+func builtinFiles(home string) runOptions {
+	return runOptions{Dir: home, ConfigFile: managerconf.DefaultFile(home),
+		SecretKey:  managerconf.OwnFile(home, managerconf.SecretKey),
+		HandlesDir: filepath.Dir(managerconf.OwnFile(home, managerconf.HandlesKey)),
+		TailcatKey: managerconf.OwnFile(home, managerconf.TailcatKey),
+		KBDir:      managerconf.KBDir(home)}
+}
+
+// moveFiles copies the built-in manager's keys from the data directory into its own directory, once
+// (managerconf.MoveFiles), and says what it did; one it could not copy is read where it was (managerconf.OwnFile).
+func moveFiles(home string, logf func(string, ...any)) {
+	copied, err := managerconf.MoveFiles(home)
+	if len(copied) > 0 {
+		logf("files: copied %s from %s into %s (once; the data directory keeps them for an older build)",
+			strings.Join(copied, ", "), home, managerconf.DefaultDir(home))
+	}
+	if err != nil {
+		logf("files: %s: %v (a key not copied is read where it was)", managerconf.DefaultDir(home), err)
+	}
 }
 
 // moveConfig takes the manager's sections out of the hub.json in hubDir into its manager.json, once
@@ -107,8 +134,12 @@ type runOptions struct {
 	ID, Hub, Token, Deploy string
 	// Fingerprint pins the hub's TLS key (its public port's self-signed certificate); "" trusts the system's CAs.
 	Fingerprint string
-	// Dir is its data directory: the knowledge base (data/), secret.key, the extensions.
+	// Dir is its data directory: the extensions; and, unless the fields below say otherwise, the knowledge base
+	// (data/), secret.key and handles.key.
 	Dir string
+	// SecretKey, HandlesDir (handles.key's directory), TailcatKey and KBDir are its own files (builtinFiles for the
+	// built-in manager); "" are Dir's (TailcatKey: the machine's, tunnel.HubKeyPath).
+	SecretKey, HandlesDir, TailcatKey, KBDir string
 	// ConfigFile is its manager.json, with its sections of the configuration (internal/managerconf).
 	ConfigFile  string
 	DatabaseURL string
@@ -129,6 +160,15 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	version := build.Version
 	hub, token, deploy, home := o.Hub, o.Token, o.Deploy, o.Dir
 	logf := o.Logf
+	if o.SecretKey == "" {
+		o.SecretKey = filepath.Join(home, managerconf.SecretKey)
+	}
+	if o.HandlesDir == "" {
+		o.HandlesDir = home
+	}
+	if o.KBDir == "" {
+		o.KBDir = filepath.Join(home, "data")
+	}
 	var httpClient *http.Client
 	if o.Fingerprint != "" {
 		httpClient = pinnedHTTPClient(o.Fingerprint)
@@ -145,7 +185,8 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	var svc *Service
 	var ext *extmgr.Manager
 	// ConfigFile: its usage section (the account-pool gateways and their keys) is the devices', read and written there.
-	devs := devices.New(devices.Options{Store: database, ConfigFile: o.ConfigFile, Logf: log.New(stderr, "devices: ", log.LstdFlags).Printf,
+	devs := devices.New(devices.Options{Store: database, ConfigFile: o.ConfigFile, TailcatKey: o.TailcatKey,
+		Logf: log.New(stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			if err := svc.machineTrust(ctx, machine); err != nil { // not confirmed yet: nothing of the assistant's (machine_trust.go)
 				return nil, true, err
@@ -179,9 +220,9 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		},
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
-	// The extensions, connectors and bots (internal/extmgr): the hub.json and secret.key of the data directory here,
-	// and its own sections in manager.json.
-	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, Store: database, Build: build,
+	// The extensions, connectors and bots (internal/extmgr): the data directory here, its own sections in manager.json
+	// and its own secret.key.
+	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, SecretKey: o.SecretKey, Store: database, Build: build,
 		Logf: log.New(stderr, "extensions: ", log.LstdFlags).Printf,
 		Hub:  lazyHost{func() *bus.Client { return bh.Client() }}, Devices: devs,
 		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
@@ -200,10 +241,10 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	o.Errors.ext.Store(ext)
 	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
 		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
-	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
-	// The model providers' keys are sealed with secret.key beside hub.json (the hub's; one elsewhere needs a copy).
+	// The knowledge base in its directory, kept as the hub's hub.json says (hello). The model providers' keys are
+	// sealed with its own secret.key.
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logf, Devices: devs,
-		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}, SecretKey: filepath.Join(home, "secret.key"),
+		KB: &KBOptions{Dir: o.KBDir, KeyDir: o.HandlesDir}, SecretKey: o.SecretKey,
 		Trust: devs})
 	svc.SetExtensions(ext) // the connectors', Cua's and ego's tools, in this process (fleet_tools.go)
 	logf("connecting to %s as %s", hub, o.ID)

@@ -76,7 +76,7 @@ type Store interface {
 	AddExtensionAudit(ctx context.Context, id, action, actor string, detail json.RawMessage) error
 }
 
-// Sealer seals secrets with the hub's secret.key (the same as mail passwords and launchers' keys).
+// Sealer seals secrets with the manager's secret.key (the same as mail passwords and launchers' keys).
 type Sealer interface {
 	Seal(plain string) (string, error)
 	Open(sealed string) (string, error)

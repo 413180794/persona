@@ -32,8 +32,8 @@ type Options struct {
 	// Trust says which computers wait to be confirmed (machine_trust.go): the devices, from the hub's handover; nil
 	// (unit tests): none.
 	Trust MachineTrust
-	// SecretKey is the path of the key the model providers' keys are sealed with (the hub's data directory's
-	// secret.key, models_launchers.go); "" makes one for this run only (tests).
+	// SecretKey is the path of the key the model providers' keys are sealed with (the manager's own secret.key,
+	// models_launchers.go); "" makes one for this run only (tests).
 	SecretKey string
 }
 

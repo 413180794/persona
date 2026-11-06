@@ -116,7 +116,7 @@ Personal Outlook.com / Hotmail and work or school Microsoft 365 mailboxes all us
 the system browser opens Microsoft sign-in and authorization → back to the App → the account is added, no password. It works like Gmail (previous section), with these differences:
 
 - **The client ID is not compiled in**: each user uses an app they register in Microsoft Entra themselves (free, steps below). The first time you tap "Outlook" the App asks for its
-  client ID; the hub encrypts it with `secret.key` and stores it in Postgres (`mail.microsoft_client` in the settings table), and this hub reuses it from then on. `microsoft.client_id` in the manager's `manager.json`
+  client ID; the manager encrypts it with its own `secret.key` and stores it in Postgres (`mail.microsoft_client` in the settings table), and this hub reuses it from then on. `microsoft.client_id` in the manager's `manager.json`
   can provide a default (the one entered in the App takes priority). The client ID appears in every sign-in URL and is not a secret.
 - **Redirect URI**: the fixed custom scheme `jarvis-mail-oauth://outlook`, the same for every hub (to change it, set `microsoft.redirect_uri` in the manager's `manager.json` and change it in Entra too).
   The App catches this scheme with ASWebAuthenticationSession, which needs no registration in Info.plist, so **no per-hub App release is needed**.
@@ -215,7 +215,7 @@ asking you to delete the existing account first; to change servers or the author
 
 | File | Permissions | Contents |
 | --- | --- | --- |
-| `<dataDir>/secret.key` | 0600 | 32-byte random master key, created on first start, never stored in the database or returned to clients |
+| the manager's `secret.key` (the built-in manager's `~/.persona/managers/assistant/secret.key`) | 0600 | 32-byte random master key, created on first start (or copied once from `~/.persona/secret.key`, [managers.md](managers.md) ("The built-in manager's own files")), never stored in the database or returned to clients |
 | Postgres `mail_accounts` table | — | Non-sensitive fields such as host, port, display name (jsonb); `password_enc` (password) and `oauth_enc` (Gmail's client_id + refresh token) are ciphertext |
 
 - Algorithm AES-256-GCM, with a random 12-byte nonce prepended to the ciphertext, the whole thing base64.

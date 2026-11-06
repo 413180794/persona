@@ -1,7 +1,8 @@
-// Package secretkey seals secrets kept in Postgres with secret.key in the hub's data directory (32 bytes, AES-256-GCM,
-// base64 of nonce + ciphertext). The hub seals its own with it (bots, connectors, plugins, peers); the manager (the
-// assistant's process, which reads the same file) seals the model providers' keys. A process that is not on the hub's
-// computer needs a copy of the file.
+// Package secretkey seals secrets kept in Postgres with a part's own secret.key (32 bytes, AES-256-GCM, base64 of
+// nonce + ciphertext). The hub seals its own with the one in its data directory (peers' tokens, the computers'
+// connector credentials); a manager with the one in its own directory (model providers' keys, extensions', connectors'
+// and bots' secrets, mail passwords; the built-in manager's is a copy of the data directory's, docs/managers.md "The
+// built-in manager's own files").
 package secretkey
 
 import (
@@ -13,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -44,6 +46,9 @@ func (b *Box) Key() ([]byte, error) {
 	}
 	key, err := os.ReadFile(b.path)
 	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(b.path), 0o700); err != nil { // a manager's own directory, made at first use
+			return nil, err
+		}
 		f, err := os.OpenFile(b.path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		switch {
 		case err == nil:

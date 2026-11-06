@@ -50,8 +50,11 @@ type Devices interface {
 
 // Options are how the manager reaches what it needs.
 type Options struct {
-	// Dir is the data directory (~/.persona): hub.json, secret.key, extensions/ in it.
+	// Dir is the data directory (~/.persona): hub.json, extensions/ in it, and secret.key unless SecretKey says.
 	Dir string
+	// SecretKey is the manager's own key file (the built-in manager's in its directory, managerconf.OwnFile); "":
+	// Dir's secret.key.
+	SecretKey string
 	// ConfigFile is the manager's manager.json, with its sections of the configuration (managerconf); "": hub.json's.
 	ConfigFile string
 	Config     *Config // nil: read from Dir and ConfigFile
@@ -152,7 +155,8 @@ func New(opts Options) *Manager {
 		cfg.dir = opts.Dir
 	}
 	h := &Manager{opts: opts, cfg: cfg, version: opts.Build.Version, build: opts.Build, store: opts.Store,
-		logger: log.New(logWriter(opts.Logf), "", 0), secret: secretkey.New(filepath.Join(cfg.dir, secretKeyFile))}
+		logger: log.New(logWriter(opts.Logf), "", 0)}
+	h.secret = secretkey.New(h.secretKeyPath())
 	h.byID = map[string]*Machine{}
 	h.started = make(chan struct{})
 	return h
@@ -327,5 +331,13 @@ var errAssistantOffline = i18n.Err("hub-assistant_link.offline")
 
 func (h *Manager) String() string { return fmt.Sprintf("extmgr(%s)", h.cfg.dir) }
 
-// secretKeyFile is the hub's key file in the data directory (internal/secretkey): the same one, not sealed again.
+// secretKeyFile is the key file's name in the data directory (internal/secretkey) when Options.SecretKey is "".
 const secretKeyFile = "secret.key"
+
+// secretKeyPath is the key file the manager seals its secrets with.
+func (h *Manager) secretKeyPath() string {
+	if h.opts.SecretKey != "" {
+		return h.opts.SecretKey
+	}
+	return filepath.Join(h.cfg.dir, secretKeyFile)
+}

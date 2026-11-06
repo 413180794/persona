@@ -34,7 +34,7 @@ func (h *Manager) Run(ctx context.Context) error {
 	h.ctx = ctx
 	if ms, ok := h.store.(mailStore); ok && NewMail != nil {
 		var err error
-		if h.mail, err = NewMail(h.cfg.dir, ms, h.cfg.Google, h.cfg.Microsoft); err != nil {
+		if h.mail, err = NewMail(h.cfg.dir, h.secretKeyPath(), ms, h.cfg.Google, h.cfg.Microsoft); err != nil {
 			h.logf("mail disabled: %v", err)
 			h.mail = nil
 		}

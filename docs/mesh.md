@@ -168,7 +168,7 @@ which other hubs are reachable and how far away, and computers in member records
 (`service.go`; connector side in [link.md](link.md) ("Passive mode").)
 
 - hub.json: `{"id":"example-workstation","name":"Dev machine","kind":"service","address":"<host>:18663","proxy":"socks5://<host>:1080"}`, with optional `proxy`.
-  Connector fingerprints and credentials are in Postgres `connector_credentials` (migration 0191), not hub.json: credentials are sealed with `~/.persona/secret.key` AES-GCM before storage, like model-provider keys
+  Connector fingerprints and credentials are in Postgres `connector_credentials` (migration 0191), not hub.json: credentials are sealed with the hub's own `~/.persona/secret.key` AES-GCM before storage (the manager seals model-provider keys with its own, [managers.md](managers.md) ("The built-in manager's own files"))
   and mail credentials.
 - **Pairing**: on the computer, `jarvis-link pair --listen` (or installer `--node --listen`, menu bar "Let hub connect") prints `jarvis://connector?addr=…&fp=…&code=…`;
   paste under **Computers › Add computer › Hub connects** in the admin UI (address editable, proxy optional). The hub parses with `link.ParseConnectorLink`, pins by `fp` (TLS 1.2+, ALPN http/1.1,

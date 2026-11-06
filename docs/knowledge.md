@@ -23,12 +23,12 @@ As part of moving hub business logic into managers (`docs/assistant.md` ("Bounda
   and an Agent finishing a turn (before deciding notifications, `kb.agent_turn`, the project timeline entry).
 - **Models**: the knowledge base still uses the hub's model configuration (`kb.compress`, `kb.project`, `kb.items`, `kb.dedupe`, `kb.moments`, defaulted by `kb.ai`),
   via `app.call models.json` (with `max_tokens`), all in one place, `assistant/kb_model.go`; once models move, it will use the manager's own.
-- **Where data lives**: by default the manager is a hub child process on the same machine, using the hub's data directory (`~/.persona/data`) and `~/.persona/handles.key`; nothing needs moving.
+- **Where data lives**: by default the manager is a hub child process on the same machine. Its knowledge base is the data directory's `~/.persona/data` (`kb_dir` in its `manager.json` can move it), and its `handles.key` is in its own directory, `~/.persona/managers/assistant/` (copied there once from `~/.persona`, [managers.md](managers.md) ("The built-in manager's own files")).
   Storage **follows the hub's hub.json**: the hub sends the `kb` section to the manager in its handshake response (`enabled`, `text_days`, `attachment_days`, `extra_dirs`, `docs/protocol.md` ("Handshake");
   `kb.ai` is read by the hub's model configuration). This is also true when the manager runs elsewhere; it does not read its own machine's hub.json. With `enabled: false`, the manager does not open the knowledge base and the hub does not provide sources
   (`connectors.archives` is empty; other source methods and plugin posts reply "This hub has no knowledge base enabled"); source deletion does not ask the knowledge base.
   When hub.json sets `assistant.external` (manager elsewhere, `docs/assistant.md` ("Processes")), the knowledge base is in **that machine's** data directory: the original `data/` on the hub machine stops updating.
-  To continue using it, copy the entire directory (including `handles.key`, otherwise future identity-hint hashes will not match); `extra_dirs` refers to paths on that machine; the index table stays in shared Postgres and need not move.
+  To continue using it, copy the entire directory, and the hub machine's `~/.persona/managers/assistant/handles.key` into the same place on that machine (or into its `~/.persona` before the manager first starts there; otherwise future identity-hint hashes will not match); `extra_dirs` refers to paths on that machine; the index table stays in shared Postgres and need not move.
   The app's knowledge API still goes to the hub, which forwards it unchanged; the interface stays the same. CLAUDE.md still calls it "the directory on the hub" (accurate when the manager is on the hub machine).
 - **When it opens**: on the manager's first need (first loop iteration, tool call or request), requiring all three: the hub's `kb` settings have arrived (handshake),
   the user's timezone can be read (archives are placed in that timezone first, avoiding writes in another timezone), and the data directory lock (`data/.lock`, only one manager process writes at a time).
@@ -199,7 +199,7 @@ The same person in Lark, email, Messages, Telegram and GitHub has separate recor
 - After normalization (lowercase emails, phone numbers reduced to `+` and digits), the knowledge base uses the hub key for HMAC-SHA256, stores `<kind>:<32 hex digits>`, append-only,
   in a separate `handles.json` under the person's directory (`kb/handles.go`). Raw numbers and addresses never touch disk.
 - **Hidden from the model**: absent from `meta.json`; `kb_get`, search and prompts only read `meta.json` / `summary.md` / `log.md`, never `handles.json` (guarded by tests).
-- Key: `~/.persona/handles.key` on the manager's machine (hub machine by default), 32 random bytes, 0600, generated on first use; never in the database or logs. Losing it only means future hashes no longer match.
+- Key: the manager's own `handles.key` (the built-in manager's in `~/.persona/managers/assistant/`, copied there once from `~/.persona`, [managers.md](managers.md) ("The built-in manager's own files")), on the manager's machine (hub machine by default), 32 random bytes, 0600, generated on first use; never in the database or logs. Losing it only means future hashes no longer match.
 - The same email in email and Messages gets the same hash. **Merging records into one person is not part of this step**: a separate future design must address splitting wrong merges and who confirms them.
 
 ## Project deduplication

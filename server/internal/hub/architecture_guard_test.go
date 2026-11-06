@@ -129,6 +129,7 @@ func TestHubDoesNotImportTheManager(t *testing.T) {
 		"internal/devices", "internal/extmgr", "internal/extension/host", "internal/feishubot", "internal/kb",
 		"internal/lark", "internal/mail", "internal/mcpserver", "internal/node", "internal/office", "internal/wechat",
 		"plugins",
+		"internal/tunnel", // tailcat: the manager dials the computers, with its own key (files_guard_test.go)
 	}
 	goBin, err := exec.LookPath("go")
 	if err != nil {

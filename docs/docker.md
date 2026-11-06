@@ -107,7 +107,7 @@ Other notes:
 You can also connect a computer without the App, via tailcat (when the computer is on another internal network that the NAS can't reach):
 
 ```sh
-docker compose exec hub personad hub tailcat-key          # on the NAS: the hub's public key
+docker compose exec hub personad hub tailcat-key          # on the NAS: the public key the computers trust
 ~/.persona/bin/personad node tailcat init --hub <public key>     # on that computer: prints its address
 ./scripts/deploy/node-launchd.sh install                        # on that computer: persistent node
 ```

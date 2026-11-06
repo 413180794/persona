@@ -707,7 +707,7 @@ install, upgrade and uninstall its extensions. Only one official marketplace is 
 | `github:owner/repo`, `github:owner/repo@branch` (also accepts `https://github.com/owner/repo`, `…/tree/<branch>`) | `persona-extensions.json` at the repo root, read through the GitHub API; private repos work too |
 | `git:<address>`, `git:<address>#branch` (address is `git@host:path.git`, `ssh://…` or `https://…`; `git@host:path.git` can also omit `git:`) | The hub shallow-clones the repo into `~/.persona/extensions/markets/<marketplace id>/` and reads `persona-extensions.json` at the root; refresh does a fetch. Uses **the hub machine's own credentials** (SSH key), takes no token; ssh / https only, no prompts, 3-minute timeout. Use this for private git hosting that has no "read a single file with a token" endpoint |
 
-https and GitHub marketplaces accept https only. A private https / GitHub marketplace takes a **token** (for GitHub, a read-only fine-grained token: Contents read permission on this repo). It is stored encrypted with the hub's `secret.key`,
+https and GitHub marketplaces accept https only. A private https / GitHub marketplace takes a **token** (for GitHub, a read-only fine-grained token: Contents read permission on this repo). It is stored encrypted with the manager's `secret.key`,
 sent only as `Authorization: Bearer` to the marketplace's own origin (for a GitHub marketplace, the API origin), not on redirects to other hosts (the storage that Release assets redirect to), and never echoed back.
 
 **GitHub rate limits**: without a token the GitHub API gives each egress address only 60 requests per hour. All devices at home share one public address, and once it is used up you get 403. So:
@@ -905,7 +905,7 @@ the host side (every call, every run, every log line) is the `Observer` in `exte
 ## How config and secrets reach the extension
 
 - Config is stored in the database (`plugins.config`) and validated against the schema on change; the extension gets the copy with `default`s filled in.
-- Secrets are encrypted with the hub's `secret.key` (like mail passwords, launcher keys and connector secrets), one per row (`plugin_secrets`), and are **write-only**: endpoints only return "set / not set".
+- Secrets are encrypted with the manager's `secret.key` (like mail passwords, launcher keys and connector secrets; [managers.md](managers.md) ("The built-in manager's own files")), one per row (`plugin_secrets`), and are **write-only**: endpoints only return "set / not set".
 - Extensions that speak the protocol get `config` and `secrets` in `initialize`; ones that do not get them through the env vars `PERSONA_EXTENSION_CONFIG` and `PERSONA_EXTENSION_SECRETS` (both JSON).
   Each extension only gets its own. When config, secrets or the switch change, the hub restarts the extension's process (no hot reload).
 - Env vars: `PERSONA_EXTENSION_ID`, `PERSONA_EXTENSION_DIR` (package directory), `PERSONA_EXTENSION_DATA` (`~/.persona/extensions/data/<id>/`, the extension's own cache and data, deleted on uninstall),

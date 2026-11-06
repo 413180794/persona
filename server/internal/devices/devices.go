@@ -84,6 +84,9 @@ type Options struct {
 	// ConfigFile is the manager's manager.json (internal/managerconf): its usage section (the account-pool gateways
 	// and their keys, usagegateways.go) is read and written there. "": none (tests).
 	ConfigFile string
+	// TailcatKey is the identity file the computers reached over tailcat trust (tunnel.LoadOrCreateHubKey); "": this
+	// machine's data directory's (tunnel.HubKeyPath).
+	TailcatKey string
 }
 
 // Devices is every computer the manager carries.

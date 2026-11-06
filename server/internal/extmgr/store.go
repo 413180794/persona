@@ -54,5 +54,5 @@ type Mail interface {
 	ImportAccount(data []byte) (*mail.MailAccount, error)
 }
 
-// NewMail is set by the mail integration (mail_glue.go).
-var NewMail func(dataDir string, store mailStore, google GoogleConfig, microsoft MicrosoftConfig) (Mail, error)
+// NewMail is set by the mail integration (mail_glue.go); secretKey is the key file the passwords are sealed with.
+var NewMail func(dataDir, secretKey string, store mailStore, google GoogleConfig, microsoft MicrosoftConfig) (Mail, error)

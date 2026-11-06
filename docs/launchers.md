@@ -70,7 +70,7 @@ Supported since herdr 0.7.1 (Linux) / 0.7.5 (macOS); ignored by older herdr and 
 
 ## Running Persona-managed launchers
 
-- Stored in settings `launchers.managed`; the manager AES-GCM encrypts API keys with `~/.persona/secret.key` (the same key used for email credentials, `server/internal/secretkey`). **The API never returns keys**.
+- Stored in settings `launchers.managed`; the manager AES-GCM encrypts API keys with its own `secret.key` (the built-in manager's `~/.persona/managers/assistant/secret.key`, the same key used for email credentials, `server/internal/secretkey`). **The API never returns keys**.
 - When nodes connect and after every change, the manager pushes full settings (including keys) through hub to all nodes (`launchers.managed`). node keeps them only in memory; hub neither stores nor decrypts them.
 - At startup, node types `jarvisd launch <name> …` into a herdr pane (or executes it for the headless assistant). This subcommand gets settings through local node.sock
   (`launcher.env`), removes inherited `ANTHROPIC_*` and related shell variables, sets `ANTHROPIC_BASE_URL`, the key (see “Authentication method” below), and model tiers

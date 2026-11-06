@@ -15,7 +15,7 @@ Things that only make sense for one service are built as extensions (`docs/exten
 | Job | What does it |
 | --- | --- |
 | QR binding, status and toggle in Settings | Extension point `connectors`; the `wechat` connector has only two capabilities, `status` + `login`; login is a QR step (`kind: qr`, #1351). **Bind** under **Settings › Channels › WeChat** uses the same login |
-| Storing the token, cursor, and the owner's latest `context_token` | `connector.secrets` (the hub encrypts it with `secret.key` into the database), all in one JSON |
+| Storing the token, cursor, and the owner's latest `context_token` | `connector.secrets` (the manager encrypts it with its `secret.key` into the database), all in one JSON |
 | Handing the owner's messages to the hub, sending the hub's replies to WeChat, "typing" | Extension point `channel` (#1466): the program calls the hub's `channel.receive`; the hub calls the program's `channel.send` and `channel.typing` |
 | Reaching WeChat | Permission `network: *.weixin.qq.com` (shown only; the hub doesn't enforce it yet) |
 

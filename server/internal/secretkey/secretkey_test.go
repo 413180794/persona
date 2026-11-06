@@ -29,3 +29,14 @@ func TestSealOpenAcrossBoxes(t *testing.T) {
 		t.Fatal("a short key file was used")
 	}
 }
+
+// A key in a directory not made yet (a manager's own, before anything else wrote there) is made with it.
+func TestKeyInANewDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "managers", "assistant", "secret.key")
+	if _, err := New(path).Seal("x"); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(filepath.Dir(path)); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("directory %v %v", fi, err)
+	}
+}

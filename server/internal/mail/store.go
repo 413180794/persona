@@ -58,15 +58,14 @@ type accountRecord struct {
 	OAuthEnc string `json:"oauth_enc,omitempty"`
 }
 
-// openStore loads (or creates) dataDir/secret.key and imports a legacy dataDir/mail_accounts.json into recs.
-func openStore(dataDir string, recs Records) (*store, error) {
+// openStore loads (or creates) the key at keyPath and imports a legacy dataDir/mail_accounts.json into recs.
+func openStore(dataDir, keyPath string, recs Records) (*store, error) {
 	if dataDir == "" {
 		return nil, errors.New("mail: data dir is empty")
 	}
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("mail: create data dir: %w", err)
 	}
-	keyPath := filepath.Join(dataDir, "secret.key")
 	key, err := loadOrCreateKey(keyPath)
 	if err != nil {
 		return nil, err
@@ -137,6 +136,9 @@ func loadOrCreateKey(path string) ([]byte, error) {
 	key := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, fmt.Errorf("mail: generate secret key: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("mail: create key dir: %w", err)
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {

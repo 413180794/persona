@@ -43,7 +43,7 @@ The two complement each other and have separate switches.
 
 ## Pairing and permissions
 
-- App credentials: enter the App ID / App Secret in the App (it tries `GET /open-apis/bot/v3/info` once first and saves only if that works); the Secret is AES-GCM encrypted with `secret.key` and stored in settings
+- App credentials: enter the App ID / App Secret in the App (it tries `GET /open-apis/bot/v3/info` once first and saves only if that works); the Secret is AES-GCM encrypted with the manager's own `secret.key` and stored in settings
   `bots.feishu` (the same master key as launcher keys), and no endpoint ever returns the plaintext. If you'd rather not go through the App, write `bots.feishu` in the manager's `manager.json` (0600, `docs/config.md` ("manager.json")); what's saved from the App takes precedence.
 - **Only the one paired person, only in the bot's DM**: the main chat can use all the data (Lark, mail, every computer, the phone's calendar and location), and anyone in a group can @ it, so group messages are never handled;
   anyone else who DMs it gets a single reply "This bot only works for its owner." (at most once per person per 10 minutes). Card buttons also only accept the owner's open_id.

@@ -27,3 +27,11 @@ func TestHandleKey(t *testing.T) {
 		t.Fatal("a short key was taken")
 	}
 }
+
+// The key in a directory not made yet (the manager's own) is made with it.
+func TestHandleKeyInANewDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "managers", "assistant")
+	if k, err := handleKey(dir); err != nil || len(k) != 32 {
+		t.Fatalf("%d %v", len(k), err)
+	}
+}

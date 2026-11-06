@@ -210,7 +210,7 @@ the hub forwards App HTTP / WS unchanged through `/api/v1/bus/relay` to the mana
 
 - The extension restarts with the manager, not the hub; hub restarts only disconnect forwarded WS, and the App resumes per 4.10.
 - Without the manager, `/info` and `/voice/ws` return 503 `assistant_offline`; `GET /api/v1/extensions` returns the hub's cached last list (possibly still `running`), so entry availability follows `/info` (3.1).
-- Only the manager decrypts form config and Keys (`plugin_secrets`, same `secret.key`).
+- Only the manager decrypts form config and Keys (`plugin_secrets`, the manager's own `secret.key`).
 - Extension callbacks to hub APIs still use the hub address and main token (`hubEnv`); `hubLink` is unaffected.
 
 | Component | Location | Responsibility |
@@ -232,7 +232,7 @@ the hub forwards App HTTP / WS unchanged through `/api/v1/bus/relay` to the mana
 | Sent instruction (body + voice-context block) | Target session transcript; `sent_messages` (Postgres, deduplicated by `voice-<UUID>`) | Yes |
 | Agent reply | Target session transcript | Yes |
 | Upstream address, protocol, model list | Config of built-in voice row in `plugins` | Yes |
-| Upstream Key | `plugin_secrets`, AES-GCM with `secret.key`; cleared when address host changes | Yes, write-only |
+| Upstream Key | `plugin_secrets`, AES-GCM with the manager's `secret.key`; cleared when address host changes | Yes, write-only |
 | Selected model / voice | Model-config purpose `plugin.<id>` / local App (by hub group + extension id) | Yes |
 | Captions, runs, currently asked card | Extension memory + App memory; App returns via `resume` on reconnect | **No** (caption persistence in phase two) |
 
