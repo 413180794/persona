@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math"
+	"net/url"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +19,9 @@ import (
 // windows, harvested from the headers upstream attaches to ordinary traffic. Its management API, all under
 // /api/admin with "Authorization: Bearer <management key>":
 //
-//	GET  /accounts?view=compact          → {"accounts": [{id, name, provider, status, …}]}  (no credentials, no email)
+//	GET  /accounts?view=compact&limit=   → {"accounts": [{id, name, provider, status, schedulable, last_error,
+//	                                        quota_summary, …}], next_after_id?, next_after_priority?}  (no credentials,
+//	                                        no email; paged with after_id and after_priority)
 //	POST /accounts/usage {ids, refresh}  → {"accounts": [{account_id, plan_display_name, windows: [...], checked_at, …}]}
 //
 // refresh is always false here: the gateway answers from its database and never calls an upstream (a refresh would
@@ -27,6 +33,9 @@ const (
 	relay-historyUsagePath    = "/api/admin/accounts/usage"
 	// relay-historyBatch is how many accounts one usage call names (the gateway accepts 500; smaller calls keep each read short).
 	relay-historyBatch = 100
+	// relay-historyPage is how many accounts one page of the list asks for (the gateway's most); a gateway before paging
+	// ignores it and sends the whole list.
+	relay-historyPage = 500
 )
 
 type relay-historyAccount struct {
@@ -34,6 +43,20 @@ type relay-historyAccount struct {
 	Name     string `json:"name"`
 	Provider string `json:"provider"`
 	Status   string `json:"status"`
+	// Schedulable is nil from a gateway that does not say (taken as schedulable).
+	Schedulable   *bool              `json:"schedulable"`
+	CooldownUntil string             `json:"cooldown_until"`
+	LastError     string             `json:"last_error"`
+	QuotaSummary  []relay-historySummary `json:"quota_summary"`
+}
+
+// relay-historySummary is the compact list's short form of one stored window: what a disabled account (never in the usage
+// call) still shows.
+type relay-historySummary struct {
+	Kind        string     `json:"kind"`
+	ScopedModel string     `json:"scoped_model"`
+	UsedRatio   *float64   `json:"used_ratio"`
+	ResetsAt    *time.Time `json:"resets_at"`
 }
 
 type relay-historyWindow struct {
@@ -54,33 +77,40 @@ type relay-historyEntry struct {
 	PlanDisplayName string            `json:"plan_display_name"`
 	Windows         []relay-historyWindow `json:"windows"`
 	CheckedAt       *time.Time        `json:"checked_at"`
+	Cached          bool              `json:"cached"`
 	Error           string            `json:"error"`
 	Unsupported     bool              `json:"unsupported"`
 	Stale           bool              `json:"stale"`
 }
 
+// fetchrelay-history reads the gateway once: the account list (paged), then the stored usage of the accounts that are not
+// disabled. One pass gives both the samples the sidebar's strip draws (Accounts, maprelay-history) and the account list
+// the extensions read (Inventory, docs/usage-windows.md「网关的账号清单」), disabled accounts included.
 func fetchrelay-history(ctx context.Context, c *client, now time.Time) (Result, error) {
-	list, err := relay-historyList(ctx, c)
+	list, complete, err := relay-historyList(ctx, c)
 	if err != nil {
 		return Result{}, err
 	}
-	res := Result{Seen: Seen{Providers: map[string]int{}, Listed: len(list)}}
-	ids := make([]string, 0, len(list))
+	res := Result{Seen: Seen{Providers: map[string]int{}}, Complete: complete}
+	ids := make([]string, 0, min(len(list), AccountsMost))
 	byID := map[string]relay-historyAccount{}
+	var order []string // the inventory, in the gateway's order
 	for _, a := range list {
 		a.ID = strings.TrimSpace(a.ID)
-		if a.ID == "" || a.Status == "disabled" { // switched off on purpose: nothing to watch
+		if a.ID == "" {
 			continue
 		}
 		if _, dup := byID[a.ID]; dup {
 			continue
 		}
-		if len(ids) >= AccountsMost {
-			break
-		}
 		byID[a.ID] = a
+		order = append(order, a.ID)
+		if a.Status == "disabled" || len(ids) >= AccountsMost { // switched off on purpose: nothing to watch
+			continue
+		}
 		ids = append(ids, a.ID)
 	}
+	entries := map[string]relay-historyEntry{}
 	for start := 0; start < len(ids); start += relay-historyBatch {
 		batch := ids[start:min(start+relay-historyBatch, len(ids))]
 		body, _ := json.Marshal(map[string]any{"ids": batch, "refresh": false})
@@ -95,6 +125,10 @@ func fetchrelay-history(ctx context.Context, c *client, now time.Time) (Result, 
 			if !ok { // an answer for an account we did not ask about is not used
 				continue
 			}
+			if _, dup := entries[e.AccountID]; dup {
+				continue
+			}
+			entries[e.AccountID] = e
 			if acct, windows, ok := maprelay-history(a, e, now); ok {
 				res.Accounts = append(res.Accounts, acct)
 				res.Seen.Accounts++
@@ -103,31 +137,193 @@ func fetchrelay-history(ctx context.Context, c *client, now time.Time) (Result, 
 			}
 		}
 	}
+	res.Seen.Listed = len(order) // distinct ids: a page read twice does not count its accounts twice
 	sort.SliceStable(res.Accounts, func(i, j int) bool { return res.Accounts[i].Ref < res.Accounts[j].Ref })
+	res.Inventory = make([]proto.GatewayAccount, 0, len(order))
+	for _, id := range order {
+		e, read := entries[id]
+		res.Inventory = append(res.Inventory, inventoryAccount(byID[id], e, read))
+	}
 	return res, nil
 }
 
-// relay-historyList reads the account list: {"accounts": [...]} from a gateway that has the compact view, a bare array from
-// one before it (the fields used are the same).
-func relay-historyList(ctx context.Context, c *client) ([]relay-historyAccount, error) {
-	var raw json.RawMessage
-	if err := c.do(ctx, "GET", relay-historyAccountsPath, nil, &raw); err != nil {
-		return nil, err
+// relay-historyList reads the account list, page by page: {"accounts": [...], "next_after_id", "next_after_priority"}
+// from a gateway that pages the compact view, {"accounts": [...]} or a bare array (the fields used are the same) from
+// one before it. complete is false when the list stopped short: InventoryMost accounts, a cursor given again, or a page
+// after the first that could not be read (the first one failing is the error).
+func relay-historyList(ctx context.Context, c *client) (list []relay-historyAccount, complete bool, err error) {
+	path := relay-historyAccountsPath + "&limit=" + strconv.Itoa(relay-historyPage)
+	seen := map[string]bool{}
+	for {
+		page, next, err := relay-historyPageOf(ctx, c, path)
+		if err != nil {
+			if len(seen) == 0 {
+				return nil, false, err
+			}
+			return list, false, nil
+		}
+		for _, a := range page {
+			if len(list) >= InventoryMost {
+				return list, false, nil
+			}
+			list = append(list, a)
+		}
+		if next == "" || len(page) == 0 {
+			return list, true, nil
+		}
+		if seen[next] { // the gateway gave a cursor again: its paging went wrong, the list is not known to be whole
+			return list, false, nil
+		}
+		if len(list) >= InventoryMost {
+			return list, false, nil
+		}
+		seen[next] = true
+		path = relay-historyAccountsPath + "&limit=" + strconv.Itoa(relay-historyPage) + "&" + next
 	}
-	var wrapped struct {
-		Accounts []relay-historyAccount `json:"accounts"`
+}
+
+// relay-historyPageOf reads one page; next is the query of the page after it ("" when this is the last).
+func relay-historyPageOf(ctx context.Context, c *client, path string) (page []relay-historyAccount, next string, err error) {
+	var raw json.RawMessage
+	if err := c.do(ctx, "GET", path, nil, &raw); err != nil {
+		return nil, "", err
 	}
 	if t := bytes.TrimSpace(raw); len(t) > 0 && t[0] == '[' {
-		var arr []relay-historyAccount
-		if err := json.Unmarshal(t, &arr); err != nil {
-			return nil, &Error{Code: CodeBadResponse, Detail: "account list"}
+		if err := json.Unmarshal(t, &page); err != nil {
+			return nil, "", &Error{Code: CodeBadResponse, Detail: "account list"}
 		}
-		return arr, nil
+		return page, "", nil
+	}
+	var wrapped struct {
+		Accounts     []relay-historyAccount `json:"accounts"`
+		NextID       json.RawMessage    `json:"next_after_id"`
+		NextPriority json.RawMessage    `json:"next_after_priority"`
 	}
 	if err := json.Unmarshal(raw, &wrapped); err != nil {
-		return nil, &Error{Code: CodeBadResponse, Detail: "account list"}
+		return nil, "", &Error{Code: CodeBadResponse, Detail: "account list"}
 	}
-	return wrapped.Accounts, nil
+	id, priority := cursorOf(wrapped.NextID), cursorOf(wrapped.NextPriority)
+	if id == "" {
+		return wrapped.Accounts, "", nil
+	}
+	q := url.Values{"after_id": {id}}
+	if priority != "" {
+		q.Set("after_priority", priority)
+	}
+	return wrapped.Accounts, q.Encode(), nil
+}
+
+// cursorOf is a page cursor as the query carries it: a string as it is, a number as written ("" when absent or null).
+func cursorOf(raw json.RawMessage) string {
+	t := bytes.TrimSpace(raw)
+	if len(t) == 0 || string(t) == "null" {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(t, &s) == nil {
+		return clip(s, 256)
+	}
+	var n json.Number
+	if json.Unmarshal(t, &n) == nil {
+		return n.String()
+	}
+	return ""
+}
+
+// reasonPattern is what of an account's last error is passed on: its head, a short lowercase token. The rest can be
+// an upstream's free text (an address, a message naming the account) and is dropped.
+var reasonPattern = regexp.MustCompile(`^[a-z_]{1,32}$`)
+
+func reasonOf(lastError string) string {
+	head, _, _ := strings.Cut(strings.TrimSpace(lastError), ":")
+	if head = strings.TrimSpace(head); reasonPattern.MatchString(head) {
+		return head
+	}
+	return ""
+}
+
+// inventoryAccount is one account of the list as usage.gateway_accounts gives it: the usage call's reading when there
+// is one (read), else the compact list's summary of its windows, marked stale (a disabled account, one past
+// AccountsMost, one the gateway did not answer for).
+func inventoryAccount(a relay-historyAccount, e relay-historyEntry, read bool) proto.GatewayAccount {
+	provider := clip(strings.ToLower(strings.TrimSpace(a.Provider)), 32)
+	out := proto.GatewayAccount{
+		AccountID: clip(a.ID, 128), Name: clip(strings.TrimSpace(a.Name), 80), Provider: provider,
+		Status: clip(strings.ToLower(strings.TrimSpace(a.Status)), 32), Schedulable: a.Schedulable == nil || *a.Schedulable,
+		Reason: reasonOf(a.LastError), Windows: []proto.GatewayWindow{},
+	}
+	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(a.CooldownUntil)); err == nil {
+		t = t.UTC()
+		out.CooldownUntil = &t
+	}
+	var newest time.Time
+	if read {
+		out.Plan, out.PlanRaw, out.PlanDisplayName = clip(strings.TrimSpace(e.Plan), 40), clip(strings.TrimSpace(e.PlanRaw), 40), clip(strings.TrimSpace(e.PlanDisplayName), 40)
+		out.Cached, out.Stale = e.Cached, e.Stale || e.Error != ""
+		for _, w := range e.Windows {
+			if len(out.Windows) >= WindowsMost {
+				break
+			}
+			kind := clip(strings.TrimSpace(w.Kind), 64)
+			if kind == "" {
+				continue
+			}
+			out.Windows = append(out.Windows, proto.GatewayWindow{Kind: kind, Scope: clip(strings.TrimSpace(w.Scope), 16),
+				ScopedModel: clip(strings.TrimSpace(w.ScopedModel), 80), UsedRatio: finite(w.UsedRatio), Limit: finite(w.Limit),
+				Remaining: finite(w.Remaining), ResetsAt: utc(w.ResetsAt)})
+			if w.CheckedAt.After(newest) {
+				newest = w.CheckedAt
+			}
+		}
+		if e.CheckedAt != nil && e.CheckedAt.After(newest) {
+			newest = *e.CheckedAt
+		}
+	}
+	if !read || len(e.Windows) == 0 {
+		summary := false
+		for _, w := range a.QuotaSummary {
+			if len(out.Windows) >= WindowsMost {
+				break
+			}
+			kind := clip(strings.TrimSpace(w.Kind), 64)
+			if kind == "" {
+				continue
+			}
+			scope := "account"
+			model := clip(strings.TrimSpace(w.ScopedModel), 80)
+			if model != "" {
+				scope = "model"
+			}
+			out.Windows = append(out.Windows, proto.GatewayWindow{Kind: kind, Scope: scope, ScopedModel: model,
+				UsedRatio: finite(w.UsedRatio), ResetsAt: utc(w.ResetsAt)})
+			summary = true
+		}
+		if summary || !read {
+			out.Stale = true
+		}
+	}
+	if !newest.IsZero() {
+		t := newest.UTC()
+		out.CheckedAt = &t
+	}
+	return out
+}
+
+// finite is v when it is a number JSON can carry (nil for none, NaN or an infinity).
+func finite(v *float64) *float64 {
+	if v == nil || math.IsNaN(*v) || math.IsInf(*v, 0) {
+		return nil
+	}
+	f := *v
+	return &f
+}
+
+func utc(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	return &u
 }
 
 // maprelay-history turns one account's stored quota into a usage account; ok is false when there is nothing to draw (the

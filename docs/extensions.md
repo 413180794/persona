@@ -259,6 +259,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `hub_api`（旧写法） | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量；安装页写成「完整权限（旧写法）」并给警告。同时写了 `hub` 的以 `hub` 为准 |
 | `launcher_keys` | `true` | 用启动器的 Key 访问它的网关（贡献 `quota`、`launcher_section` 的 `ui` 必须有） | 扩展看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
 | `gh_login` | `true` | 读你选的那台电脑上 gh 登录的 GitHub token（#2830，GitHub 连接器迁出 hub 用） | hub 只给要了它、装的时候同意了的扩展（`connector.credentials.gh_token`）；token 只在扩展的内存里 |
+| `usage_gateways` | `true` | 读取额度来源里网关的账号清单（不含 Key）（#4576）：hub 管理 › 额度来源里接的账号池网关有哪些账号、状态和额度 | 只给要了它、装的时候同意了的扩展（`usage.gateway_accounts`，下面「额度」）；回的是管理者上次读到的，没有管理 Key、没有网关地址 |
 | 显示在 App 里（有 `nav_page` / `overview_card` / `machine_section` / `inbox_item` 的 `ui` 就有） | — | 在主导航、总览、机器详情页、收件箱条目的详情里显示自己的界面（列出每处的标题） | 和事件一样不用写在 `permissions` 里，按贡献算进安装前给人看的「它可以」和权限摘要；升级时多了一处要重新同意，见「UI 插槽」「权限」 |
 | 密钥（有 `secrets` 就有） | — | 用你填的密钥 | 每个扩展只拿到自己的 |
 | 在你选的电脑上运行程序（有 `node` 就有） | — | 在列出的系统（Mac、Linux 电脑）上以 node 的系统用户运行；每台打开时再问一次 | 只展示：**没有沙箱** |
@@ -969,6 +970,14 @@ hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](ad
   网关不归这个扩展回 `unsupported`。
 - 能到的网关和启动器页那一节一样：扩展的 `quota` 和 `launcher_section` 都写了 `hosts` 时只列、只开主机对得上的；有一项没写 `hosts`（任何网关）就是全部。
   没接受 `launcher_keys` 的扩展调这两个回 `permission_denied`。老 hub 没有这两个方法（`unknown_method`），扩展当作没有数据。
+
+**网关的账号清单**（#4576）：接受了 `usage_gateways` 的扩展可以读 hub 额度来源（`hub.json` 的 `usage.sources[]`）里账号池网关的全部账号，不受某一把启动器 Key 能用到哪些账号的限制：
+
+- `usage.gateway_accounts {}` → `{sources: [{id, name, type, checked_at, error, listed, complete}], accounts: [{source, account_id, name, provider, plan, plan_raw, plan_display_name, status, schedulable, reason, cooldown_until, windows: [{kind, scope, scoped_model, used_ratio, limit, remaining, resets_at}], checked_at, cached, stale}]}`。
+  字段的意思、停用账号的窗口怎么来、`reason` 留什么、上限见 `docs/usage-windows.md`「网关的账号清单」。
+- 回的是管理者上一次读到的（默认 5 分钟一轮），**不会为它去问网关**；没有来源时回 `{sources: [], accounts: []}`。回答里没有管理 Key，也没有网关地址。
+- 没接受 `usage_gateways` 回 `permission_denied`；老 hub 不认识这个方法回 `unknown_method`，也不认识这个权限（清单里写了它装不上）。
+  所以要它的扩展先发一版不写这个权限、遇到这两个错误码时退回 `gateway.launchers` + `gateway.open` 的版本，hub 升级以后再发写了权限的版本（用户重新同意一次）。
 
 开源仓库不带任何具体网关的额度扩展。
 

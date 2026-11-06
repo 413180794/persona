@@ -110,8 +110,9 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 
 **只读，永远不碰上游**：
 
-- relay-history：`GET /api/admin/accounts?view=compact`（账号列表：`id`、`name`、`provider`、`status`，**没有邮箱、凭据、代理地址**；更老的网关忽略 `view` 回整个数组，也认，只取这几个字段），
-  再 `POST /api/admin/accounts/usage {"ids": […], "refresh": false}`（每次最多 100 个、总共最多 500 个账号）。`refresh` 写死 `false`：网关只读它的库，不会去问上游
+- relay-history：`GET /api/admin/accounts?view=compact&limit=500`（账号列表：`id`、`name`、`provider`、`status`、`schedulable`、`cooldown_until`、`last_error`、`quota_summary`，**没有邮箱、凭据、代理地址**；
+  回答带 `next_after_id` / `next_after_priority` 时带上 `after_id` / `after_priority` 接着读下一页，最多 2000 个账号；更老的网关忽略 `view` / `limit` 回整个列表或整个数组，也认，只取这几个字段），
+  再对没停用的账号 `POST /api/admin/accounts/usage {"ids": […], "refresh": false}`（每次最多 100 个、总共最多 500 个账号）。一轮读同时得到侧边栏的样本和下面「网关的账号清单」，不为清单再读一遍。`refresh` 写死 `false`：网关只读它的库，不会去问上游
   （`refresh=true` 会让网关从它唯一的出口地址探测上游，用掉整个池子的探测额度）。不调用别的路由，更不调用任何写路由。
 - **建议用分组 Key**：relay-history 的 `onboarder` / `operator` 分组管理 Key 只看得到本组账号（包括 `/accounts/usage`，见 relay-history 文档的 admin-access 一篇），读不到别的组的；比部署 Key 小得多。
   账号在两次调用之间被换组 / 删掉，用量接口回 404 时这一轮读失败（界面写「这个地址不是网关的管理接口，或网关版本太旧」，下一轮重试）。
@@ -145,6 +146,29 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 - 网关**连不上就留着它的上一次回答并标过期**（`problem: "unreachable"`，浮层里写「网关暂时读不到，显示的是上次的数字」），不让账号消失；超过 3 天丢掉。
 - 排序不变：按账号的计划窗口里最满的一个从高到低，过期的排最后。没有任何数据（也没有来源）时整块不画。
 
+### 网关的账号清单（#4576）
+
+侧边栏的额度条只画有时间窗口的账号；扩展（relay-history 额度扩展侧边栏的「relay-history 账号」页）要的是**网关里的每一个账号**：停用的、隔离的、要重新登录的、只有 Kiro 积分的都算。
+同一轮读（上面）顺手留下一份清单，存在管理者的内存里，扩展用 hub 方法 `usage.gateway_accounts {}` 读（权限 `usage_gateways`，`docs/extensions.md`「额度」）。它只回上一次读到的，**从不为它去问网关**。
+
+```json
+{"sources": [{"id": "src-…", "name": "relay-history", "type": "relay-history", "checked_at": "…", "error": "", "listed": 71, "complete": true}],
+ "accounts": [{"source": "src-…", "account_id": "<网关的 id>", "name": "", "provider": "kiro", "plan": "free", "plan_raw": "", "plan_display_name": "",
+   "status": "active", "schedulable": true, "reason": "", "cooldown_until": null,
+   "windows": [{"kind": "monthly", "scope": "account", "scoped_model": "", "used_ratio": 0.18, "limit": 50, "remaining": 41, "resets_at": "…"}],
+   "checked_at": "…", "cached": true, "stale": false}]}
+```
+
+- 只列 `relay-history` 类型、开着的来源；还没读过的来源（刚加上，或 hub 刚重启、刚切换，内存里还没有）也列，`checked_at` 是 `null`、没有账号、`error` 是 `pending`：它是「还不知道」，不是「网关里没有账号」，用的一方要当成没有数据（relay-history 额度扩展这时退回读各启动器）。没有来源时回 `{"sources": [], "accounts": []}`。
+- `status` 是 relay-history 原样的（`active`、`cooldown`、`exhausted`、`refresh_required`、`quarantined`、`expired`、`disabled`）；`schedulable` 网关没说时当作 `true`。
+- `reason` 是 `last_error` 第一个 `:` 前面那一截，**只在它是 `^[a-z_]{1,32}$` 的短词时**留下（`quarantine`、`sign_in_required`、冷却原因）；后面的文字可能是上游的原话（地址、带账号的消息），不转发、不进日志。
+- **窗口原样带出，什么 `kind` 都留**：`five_hour`、`weekly`、`monthly`、`kiro_bonus`、`kiro_free_trial`、`kiro_overage`（不封顶时没有数字）、单模型的窗口（`scope: "model"`）……数字缺的是 `null`，不当成 0。
+- **停用的账号也在**：用量接口不读它们，窗口取账号列表里的 `quota_summary`（`kind`、`scoped_model`、`used_ratio`、`resets_at`），标 `stale: true`。超过 500 个、没被用量接口读到的账号同样处理。
+- `error` 只是 `usagesource` 的错误代码；上一次读失败时清单留着，账号都标 `stale`。来源换了地址或 Key 就清掉，等下一轮。
+- `listed` 是这一轮读到的不同账号 id 的个数（同一个账号出现在两页里只算一次），和 `accounts` 里这个来源的条数一致。
+- 最多 2000 个账号；到了上限、网关又给了一个已经用过的翻页游标、或者第一页以后的某一页读失败，`complete` 是 `false`（第一页就失败是整轮读失败）。
+- 侧边栏的样本（`GET /api/v1/usage/windows`）和以前一样：停用的、没有可画窗口的照旧不列，`kiro_bonus` 这类读不出长度的照旧不画。
+
 ### 通用格式（`type: "generic"`）
 
 任何账号池网关想把额度送进侧边栏，实现一个 GET：管理者带 `Authorization: Bearer <key>`（没填 Key 就不带）读这个完整地址，回 JSON（就是 `GET /api/v1/usage/windows` 的回答，所以一个 Persona hub 也能喂另一个）：
@@ -169,7 +193,7 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 
 | 部分 | 代码 |
 | --- | --- |
-| 管理者：问各台 node 的 `usage.windows`、合并账号、读账号池网关（Key 在它手里）、管理界面「订阅额度来源」页的接口 | `server/internal/devices/usagewindows.go`、`usagegateways.go`、`admin_usage.go`（从 hub 原样挪来，接收者从 `Hub` 换成 `Devices`）；改 `hub.json` 用 `hubjson.go`（和 hub 的 `admin_config.go` 同一种写法、同一把目录锁） |
+| 管理者：问各台 node 的 `usage.windows`、合并账号、读账号池网关（Key 在它手里）、留网关的账号清单（`devices.usage_gateway_accounts`，扩展的 `usage.gateway_accounts` 由 `extmgr/extension_usage.go` 在同一个进程里问它）、管理界面「订阅额度来源」页的接口 | `server/internal/devices/usagewindows.go`、`usagegateways.go`、`admin_usage.go`（从 hub 原样挪来，接收者从 `Hub` 换成 `Devices`）；改 `hub.json` 用 `hubjson.go`（和 hub 的 `admin_config.go` 同一种写法、同一把目录锁） |
 | 两边共用的路由表 | `server/internal/devicewire/`（`UsageRoutes`、`AdminUsageRoutes`），管理界面的标记 `assistantwire.AdminHeader` |
 | hub：转发 | `server/internal/hub/devices_link.go`（`usageRoutesRelayed`、`adminUsageRoutesRelayed`） |
 
@@ -208,5 +232,6 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 - 管理者重启后（hub 重启时它跟着重启），已经下线的机器的上一次回答没了，要等它上线再问；网关的上一次回答也在内存里，重启后第一轮（几秒内）读到前侧边栏没有它的账号。
 - **没有拿真实的 relay-history 验证过**（这台开发机上没有在跑的网关）：适配器按它的源码（`internal/application/accountusage`、`internal/domain/account` 的 JSON 标签、`accountpresentation.Compact`）和它文档的 account-read-views、admin-access 两篇写，
   测试用一个假的 relay-history HTTP 服务（账号列表、用量、错误、过期、分组 Key 的 404、旧网关的裸数组）。真正接上以后用管理界面的「测试连接」看一眼账号数和窗口数。
+  2026-11-06（#4576）拿一个真实的 relay-history 只读核对过账号清单：分页参数、`quota_summary`、`last_error` 的形状和这里写的一样，71 个账号（含 5 个停用的）都在清单里，Kiro 的 `monthly` / `kiro_bonus` 原样带出。
 - 同一个 Claude 账号在电脑上（状态栏给的 `resets_at`，秒）和网关里（响应头或用量接口的时间，可能带小数秒）的重置时间要落在同一秒才合并成一个；差一秒时会显示成两个账号，没有拿真实数据核对过。
 - 网关的 `kind` 里读不出长度的窗口不画（上面的映射表）；relay-history 以后加了新的 `kind` 词（比如 `three_hour`）要加进 `usagesource.KindMinutes`。

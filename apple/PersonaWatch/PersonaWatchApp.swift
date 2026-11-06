@@ -107,13 +107,15 @@ final class WatchModel {
     private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine]) {
         // Agents of quiet tasks and their questions are the main conversation's to tell (#1731), by the hub's word.
         let (sessions, interactions) = QuietTasks.leavingOut(sessions: sessions, interactions: interactions, quiet: \.quiet)
+        // A muted agent's or space's card never reaches the wrist (#4360): it is neither shown nor buzzed for.
+        let shown = WatchInteractions.leavingMuted(interactions)
         // Only a card seen for the first time buzzes: one that vanished with a failed group and came back with it is
         // already in the persisted record (#4369).
-        let freshUids = WatchGroupRefresh.newHapticUids(seen: Set(seenInteractionUids), current: interactions)
+        let freshUids = WatchGroupRefresh.newHapticUids(seen: Set(seenInteractionUids), current: shown)
         func rank(_ s: Session) -> Int { s.state.priority }
         self.sessions = sessions.filter { $0.state.isLive && !$0.assistant || $0.state == .needsYou || $0.state == .working }
             .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0.sortDate > $1.sortDate }
-        self.interactions = interactions
+        self.interactions = shown
         if !machines.isEmpty { self.machines = machines }
         lastUpdate = .now
         guard !freshUids.isEmpty else { return }

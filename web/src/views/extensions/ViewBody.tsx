@@ -162,12 +162,16 @@ function Section({ section, embedded, compact, bare, onPicked, ...rest }: Sectio
 
 function Run({ items, embedded, compact, bare, onPicked, more, ...rest }: Omit<SectionProps, "section"> & { items: UIItem[]; more?: UIMore }) {
   const bs = blocks(items);
+  // the first row of the run: a row after it begins the list's next entry even when the one before has more lines under
+  // its row (a progress, a text: an account and its quota), so the hairline goes above it too
+  const firstRow = bs.findIndex((b) => b.kind === "item" && b.item.type === "row");
   return (
       <div className={cx("overflow-hidden", compact || bare ? "" : embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
         {bs.map((b, i) => {
           // rows that follow each other read as a list, and charts one under another as separate charts: a hairline between them
           const prev = i > 0 && bs[i - 1].kind === "item" ? (bs[i - 1] as { item: UIItem }).item.type : "";
-          const afterRow = b.kind === "item" && ((b.item.type === "row" && prev === "row") || (b.item.type === "chart" && prev === "chart"));
+          const nextEntry = b.kind === "item" && b.item.type === "row" && firstRow >= 0 && i > firstRow && prev !== "divider";
+          const afterRow = b.kind === "item" && (nextEntry || (b.item.type === "chart" && prev === "chart"));
           // an item's key keeps it (and the list's place) when the extension draws the view again
           const key = (b.kind === "item" ? b.item.key : b.items[0]?.key) ?? `#${i}`;
           if (b.kind === "metrics") return <Metrics key={key} items={b.items} />;

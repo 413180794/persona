@@ -1511,6 +1511,10 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var agentLabelHint: String?
     /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String?
+    /// The hub muted this agent or its space: stamped on the cards of GET /api/v1/interactions (#4360) so the
+    /// answer-only watch hides them and never buzzes; the phone filters with its own mutes. Absent (an older hub),
+    /// the card shows as before.
+    var muted: Bool = false
 
     var sessionKey: SessionKey { SessionKey(group: group, machineID: machineID, sessionID: sessionID) }
     var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
@@ -1526,7 +1530,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var screenDialog: ScreenParser.Dialog? { dialog?.parsed ?? screen.flatMap(ScreenParser.dialog) }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, questions, plan, summary, screen, cwd, dialog, secret, fields, agent, reason
+        case id, kind, questions, plan, summary, screen, cwd, dialog, secret, fields, agent, reason, muted
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title", taskTitle = "task_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
              toolInput = "tool_input", alwaysLabel = "always_label", agentLabelHint = "agent_label", hubGroup = "app_hub_group"

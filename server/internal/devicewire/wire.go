@@ -73,6 +73,10 @@ const (
 	MethodPairConnector = "devices.pair_connector"
 	// MethodReconnect {machine_id} → {}: connect the machine's node again (the apps' reconnect, the admin page).
 	MethodReconnect = "devices.reconnect"
+	// MethodUsageGatewayAccounts {} → proto.GatewayAccounts: the account lists of the account-pool gateways among the
+	// usage sources, from their last read (never a key; docs/usage-windows.md「网关的账号清单」). The extensions'
+	// usage.gateway_accounts (internal/extmgr, permission usage_gateways) asks it in the manager's process.
+	MethodUsageGatewayAccounts = "devices.usage_gateway_accounts"
 	// EventLinkRTT LinkRTT: a Persona Link's round trip, as the hub's heartbeat on it measured it (its paths are
 	// compared by it).
 	EventLinkRTT = "devices.link_rtt"

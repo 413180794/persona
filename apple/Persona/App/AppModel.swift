@@ -207,7 +207,8 @@ final class AppModel {
     var newMainAsked = false
 
     @ObservationIgnored private(set) var chats: [SessionKey: ChatStore] = [:]
-    @ObservationIgnored var flushingOutbox = false
+    /// The groups whose outbox is going out now (`flushOutbox`): one group sending does not hold back another.
+    @ObservationIgnored var flushingOutbox = Set<String>()
     /// Per group: the task asking a member-connected group's center whether it answers again (HubLinks.watchCenter).
     @ObservationIgnored var centerWatch: [String: Task<Void, Never>] = [:]
     @ObservationIgnored let outboxWriter = Debouncer(.milliseconds(300))
@@ -2460,9 +2461,10 @@ final class AppModel {
         let sessions = live.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         // Connectors' items too: the watch lists them read-only under their own label (#2727).
         let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action }
-        // A task's agent asking: the watch names the task (docs/unified-entry.md「手表」).
+        // A task's agent asking: the watch names the task (docs/unified-entry.md「手表」). Muted agents and spaces
+        // stay off the wrist too (#4360), the same rule as the Agents badge and the inbox.
         let tasks = TasksStore.shared
-        let interactions = asking.filter { !isQuiet($0.sessionKey) }.map { ix in
+        let interactions = asking.filter { !isQuiet($0.sessionKey) && !isMuted($0.sessionKey) }.map { ix in
             var ix = ix
             ix.taskTitle = tasks.task(of: ix.sessionKey)?.title
             return ix

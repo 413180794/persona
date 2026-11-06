@@ -609,13 +609,17 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
     /// It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub
     /// connector), held in its memory only.
     var ghLogin: Bool?
+    /// It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
+    /// accounts, status and quota windows, never a key.
+    var usageGateways: Bool?
 
-    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil) {
+    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil) {
         self.network = network
         self.hubApi = hubApi
         self.hub = hub
         self.launcherKeys = launcherKeys
         self.ghLogin = ghLogin
+        self.usageGateways = usageGateways
     }
 
     enum CodingKeys: String, CodingKey {
@@ -624,6 +628,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         case hub
         case launcherKeys = "launcher_keys"
         case ghLogin = "gh_login"
+        case usageGateways = "usage_gateways"
     }
 
     init(from decoder: Decoder) throws {
@@ -633,6 +638,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         self.hub = try? c.decodeIfPresent([String].self, forKey: .hub)
         self.launcherKeys = try? c.decodeIfPresent(Bool.self, forKey: .launcherKeys)
         self.ghLogin = try? c.decodeIfPresent(Bool.self, forKey: .ghLogin)
+        self.usageGateways = try? c.decodeIfPresent(Bool.self, forKey: .usageGateways)
     }
 }
 

@@ -298,6 +298,11 @@ data class ExtensionPermissions(
      * connector), held in its memory only.
      */
     @SerialName("gh_login") val ghLogin: Boolean? = null,
+    /**
+     * It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
+     * accounts, status and quota windows, never a key.
+     */
+    @SerialName("usage_gateways") val usageGateways: Boolean? = null,
 )
 
 /**

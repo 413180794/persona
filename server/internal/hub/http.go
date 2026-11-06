@@ -138,7 +138,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/machines/{mid}/worktree/prepare", h.nodeAction(nodeActions["worktree/prepare"]))
 	api.HandleFunc("POST /api/v1/machines/{mid}/worktree/create", h.nodeAction(nodeActions["worktree/create"]))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"interactions": visibleInteractions(h.pendingInteractions(), h.requestHasElicitation(r))})
+		ixs := visibleInteractions(h.pendingInteractions(), h.requestHasElicitation(r))
+		writeJSON(w, map[string]any{"interactions": h.withMuted(ixs)})
 	})
 	api.HandleFunc("GET /api/v1/ops/{id}", h.getClientOp)
 	h.fleetRoutesRelayed(api) // resolve, history, seen: the manager's (fleet_link.go)

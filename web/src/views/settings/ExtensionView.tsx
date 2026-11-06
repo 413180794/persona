@@ -329,7 +329,10 @@ export function ExtensionUI({
     );
   }
 
-  const heading = view?.title || top.title || (depth === 1 ? title : undefined);
+  // a page that opens with a header (UI version 4) of the same title has its big title there: not said twice
+  const first = view?.sections[0]?.items[0];
+  const titled = view?.title || top.title || (depth === 1 ? title : undefined);
+  const heading = first?.type === "header" && first.title === titled ? undefined : titled;
   const below = depth > 1 ? stack[depth - 2].title || (depth === 2 ? title : undefined) || t("settings-extensionview.back") : "";
   const light = embedded || compact;
   return (

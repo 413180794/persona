@@ -47,6 +47,17 @@ func visibleInteractions(ixs []proto.Interaction, elicitation bool) []proto.Inte
 	return out
 }
 
+// withMuted stamps each card with whether its agent or space is muted on this hub (#4360): an answer-only device
+// (the watch) cannot read /api/v1/mutes, so it filters by this flag — a muted card is neither shown nor buzzes for.
+// The phone keeps its own mutes and filters those itself. The flag is omitempty, so older clients decode the list
+// exactly as before.
+func (h *Hub) withMuted(ixs []proto.Interaction) []proto.Interaction {
+	for i := range ixs {
+		ixs[i].Muted = h.muted(ixs[i].MachineID, ixs[i].SessionID)
+	}
+	return ixs
+}
+
 // sendPendingInteractions queues the pending cards for c. The snapshot is taken and queued under h.mu, where
 // broadcastTo queues: an interaction_resolved for a card in it is queued after it, never before (#3937).
 func (h *Hub) sendPendingInteractions(c *client, elicitationOnly bool) {

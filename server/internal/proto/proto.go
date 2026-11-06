@@ -1257,6 +1257,10 @@ type Interaction struct {
 	Delegating bool `json:"delegating,omitempty"`
 	// Delegate is what the assistant found when it left the question to the user: the context it filled in.
 	Delegate *Delegate `json:"delegate,omitempty"`
+	// Muted says the user muted this agent or its space on the hub. The hub stamps it when answering GET
+	// /api/v1/interactions so an answer-only device (the watch) can hide the card and not buzz for it; the phone
+	// keeps its own mutes. Absent on older hubs' lists and on the manager's bus copy.
+	Muted bool `json:"muted,omitempty"`
 }
 
 // Delegate is the assistant's context on a question it left to the user (Interaction.Delegate): it is a red line or

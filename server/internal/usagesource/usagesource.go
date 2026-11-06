@@ -35,6 +35,8 @@ const (
 	BodyMost = 8 << 20
 	// AccountsMost caps how many accounts one source may bring; the rest are ignored.
 	AccountsMost = 500
+	// InventoryMost caps the account list one source may bring (Result.Inventory); a longer one is cut, Complete false.
+	InventoryMost = 2000
 	// WindowsMost caps the windows of one account.
 	WindowsMost = 32
 	// Timeout bounds one request; a whole fetch is bounded by the caller's context.
@@ -52,7 +54,14 @@ type Config struct {
 
 // Result is what a source brought.
 type Result struct {
+	// Accounts are the samples the sidebar's usage strip draws: accounts that are not disabled and have a window with
+	// a length and a number, at most AccountsMost.
 	Accounts []proto.UsageAccount
+	// Inventory is every account the gateway listed (at most InventoryMost), disabled ones and those without such a
+	// window included, as usage.gateway_accounts gives them (Source not set; docs/usage-windows.md「网关的账号清单」).
+	// Only the relay-history type has one; Complete false: the list stopped short.
+	Inventory []proto.GatewayAccount
+	Complete  bool
 	// Seen counts what the gateway reported, for the "test the connection" button: accounts that have windows we can
 	// draw, those windows, and how many accounts each provider has.
 	Seen Seen
@@ -78,6 +87,7 @@ const (
 	CodeRedirect     = "redirect" // redirects are not followed: the key would go to another address
 	CodeServer       = "server_error"
 	CodeBadConfig    = "bad_config"
+	CodePending      = "pending" // not read yet (just added, or the hub just started): no data, not "no accounts"
 )
 
 // Error is a failed read. Detail is for logs and tests only: it never holds the key or the gateway's body.

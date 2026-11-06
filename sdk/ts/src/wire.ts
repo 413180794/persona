@@ -229,6 +229,11 @@ export interface Permissions {
    * held in its memory only.
    */
   gh_login?: boolean;
+  /**
+   * It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
+   * accounts, status and quota windows, never a key.
+   */
+  usage_gateways?: boolean;
 }
 
 /**

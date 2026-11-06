@@ -318,6 +318,21 @@ extension QuietTasks {
     }
 }
 
+/// Shaping of the cards the watch pulls itself from GET /api/v1/interactions.
+nonisolated enum WatchInteractions {
+    /// A muted agent's or space's card stays off the watch entirely (#4360): no row and no buzz when it arrives,
+    /// like the phone's Agents badge and inbox. The hub stamps `muted`; an older hub leaves it false.
+    static func leavingMuted(_ interactions: [Interaction]) -> [Interaction] {
+        interactions.filter { !$0.muted }
+    }
+
+    /// The cards the watch has not shown yet: only these are worth a buzz. Called after the muted ones are out, so a
+    /// muted card arriving never plays the notification sound.
+    static func newOnes(in interactions: [Interaction], alreadyShown: [Interaction]) -> [Interaction] {
+        interactions.filter { ix in !alreadyShown.contains { $0.uid == ix.uid } }
+    }
+}
+
 /// An agent going on (等你 / 在做) as the main conversation's dock shows it after the tasks (#1113): the ones the user
 /// opened on the Agents page, which no conversation's task stands for. Made from the Agents page's session list, so
 /// it follows the agents without a poll of its own.

@@ -46,6 +46,8 @@ func (d *Devices) Request(ctx context.Context, method string, params json.RawMes
 	case devicewire.MethodUpdateNodes:
 		go d.updateNodes(context.WithoutCancel(ctx))
 		return map[string]any{}, true, nil
+	case devicewire.MethodUsageGatewayAccounts:
+		return d.UsageGatewayAccounts(), true, nil
 	case devicewire.MethodPairConnector:
 		var p devicewire.PairConnector
 		if err := decode(&p); err != nil {

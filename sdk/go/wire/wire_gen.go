@@ -201,6 +201,9 @@ type Permissions struct {
 	// It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector),
 	// held in its memory only.
 	GhLogin bool `json:"gh_login,omitempty"`
+	// It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts):
+	// accounts, status and quota windows, never a key.
+	UsageGateways bool `json:"usage_gateways,omitempty"`
 }
 
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
@@ -1952,12 +1955,7 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"`
-}
-
-// MessagingDecoration: A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
-type MessagingDecoration struct {
-	Text string `json:"text"`
+	Users []string `json:"users,omitempty"``json:"text"`
 	Icon string `json:"icon,omitempty"`
 	Tone string `json:"tone,omitempty"`
 }

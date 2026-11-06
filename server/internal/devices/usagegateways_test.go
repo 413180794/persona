@@ -2,6 +2,7 @@ package devices
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/usagesource"
 )
@@ -263,5 +265,83 @@ func TestOfflineNodeCannotClaimASource(t *testing.T) {
 	got := u.poll(context.Background(), []usageSource{src}, now)
 	if len(got) != 1 || !got[0].Local || len(got[0].Sources) != 0 || got[0].Problem != "" {
 		t.Fatalf("a node's words about where it came from are not taken: %+v", got)
+	}
+}
+
+func TestGatewayAccountsKeepsEachSourcesListAndMarksAFailedReadStale(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	var fail atomic.Bool
+	var g usageGateways
+	g.fetch = func(_ context.Context, cfg usagesource.Config, at time.Time) (usagesource.Result, error) {
+		if fail.Load() {
+			return usagesource.Result{}, &usagesource.Error{Code: usagesource.CodeUnauthorized}
+		}
+		if cfg.Type == "generic" {
+			return usagesource.Result{Accounts: []proto.UsageAccount{{Provider: "codex", Name: "g", SampledAt: at, Windows: []proto.UsageWindow{uw("7d", 10080, 1, at.Add(time.Hour))}}}}, nil
+		}
+		return usagesource.Result{Complete: true, Seen: usagesource.Seen{Listed: 2, Providers: map[string]int{}},
+			Inventory: []proto.GatewayAccount{
+				{AccountID: "k1", Provider: "kiro", Status: "active", Schedulable: true, Windows: []proto.GatewayWindow{{Kind: "kiro_bonus"}}},
+				{AccountID: "k3", Provider: "kiro", Status: "disabled", Stale: true, Windows: []proto.GatewayWindow{}},
+			}}, nil
+	}
+	g.init(UsageConfig{Sources: []UsageSourceConfig{
+		{ID: "s1", Name: "relay-history", Type: "relay-history", URL: "https://gw.example.com", Key: "secret-key"},
+		{ID: "s2", Name: "Other", Type: "generic", URL: "https://other.example.com", Key: "other-key"},
+		{ID: "s3", Name: "Not yet", Type: "relay-history", URL: "https://later.example.com", Key: "later-key", Enabled: new(bool)},
+	}}, func() {}, nil)
+
+	if got := g.gatewayAccounts(); len(got.Sources) != 1 || got.Sources[0].CheckedAt != nil || len(got.Accounts) != 0 ||
+		got.Sources[0].Error != usagesource.CodePending {
+		t.Fatalf("before the first read: %+v", got) // listed as pending, nothing yet; the generic one and the one switched off are not
+	}
+	g.pollDue(context.Background(), now)
+	got := g.gatewayAccounts()
+	if len(got.Sources) != 1 || got.Sources[0].ID != "s1" || got.Sources[0].Type != "relay-history" || !got.Sources[0].Complete ||
+		got.Sources[0].Listed != 2 || got.Sources[0].CheckedAt == nil || got.Sources[0].Error != "" {
+		t.Fatalf("sources %+v", got.Sources)
+	}
+	if len(got.Accounts) != 2 || got.Accounts[0].Source != "s1" || got.Accounts[0].Stale || got.Accounts[1].Status != "disabled" || !got.Accounts[1].Stale {
+		t.Fatalf("accounts %+v", got.Accounts)
+	}
+	// the copy given out is not the one kept
+	got.Accounts[0].Windows[0].Kind = "changed"
+	if g.gatewayAccounts().Accounts[0].Windows[0].Kind != "kiro_bonus" {
+		t.Error("the answer shares the kept list")
+	}
+	b, _ := json.Marshal(g.gatewayAccounts())
+	for _, leak := range []string{"secret-key", "gw.example.com", "other-key", "later-key"} {
+		if strings.Contains(string(b), leak) {
+			t.Errorf("%q in %s", leak, b)
+		}
+	}
+	// the gateway refuses the key now: the last list stays, stale, with the code
+	fail.Store(true)
+	g.pollDue(context.Background(), now.Add(6*time.Minute))
+	got = g.gatewayAccounts()
+	if got.Sources[0].Error != usagesource.CodeUnauthorized || len(got.Accounts) != 2 || !got.Accounts[0].Stale {
+		t.Fatalf("after a failed read: %+v", got)
+	}
+	// pointing it elsewhere forgets the list
+	g.setConfig(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "relay-history", Type: "relay-history", URL: "https://moved.example.com", Key: "secret-key"}}})
+	if got = g.gatewayAccounts(); len(got.Accounts) != 0 || got.Sources[0].CheckedAt != nil || got.Sources[0].Error != usagesource.CodePending {
+		t.Fatalf("after a move: %+v", got)
+	}
+	off := false
+	g.setConfig(UsageConfig{Enabled: &off, Sources: []UsageSourceConfig{{ID: "s1", Type: "relay-history", URL: "https://moved.example.com"}}})
+	if got = g.gatewayAccounts(); got.Sources == nil || got.Accounts == nil || len(got.Sources) != 0 {
+		t.Fatalf("switched off: %+v", got)
+	}
+}
+
+func TestUsageGatewayAccountsOverTheDevicesMethod(t *testing.T) {
+	h := newTestDevices(t)
+	out, handled, err := h.Request(context.Background(), devicewire.MethodUsageGatewayAccounts, json.RawMessage(`{}`))
+	if err != nil || !handled {
+		t.Fatalf("%v %v", handled, err)
+	}
+	b, _ := json.Marshal(out)
+	if string(b) != `{"sources":[],"accounts":[]}` {
+		t.Errorf("no sources: %s", b)
 	}
 }

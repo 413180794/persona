@@ -81,7 +81,11 @@ type gatewayState struct {
 	triedAt     time.Time            // the last attempt, worked or not
 	errCode     string               // usagesource code of the last attempt; "" when it worked
 	seen        usagesource.Seen
-	reading     bool
+	// inventory is the last answer's account list (usage.gateway_accounts; relay-history only) and complete whether it
+	// was the whole list.
+	inventory []proto.GatewayAccount
+	complete  bool
+	reading   bool
 }
 
 // usageGateways polls the sources and holds their last answers.
@@ -241,6 +245,7 @@ func (g *usageGateways) read(ctx context.Context, s UsageSourceConfig, now time.
 			g.logf("usage source %s: reading again", s.ID)
 		}
 		st.errCode, st.samples, st.okAt, st.seen = "", res.Accounts, now, res.Seen
+		st.inventory, st.complete = res.Inventory, res.Complete
 	}
 	changed := g.changed
 	g.mu.Unlock()
@@ -285,6 +290,51 @@ func (g *usageGateways) accounts(now time.Time) []proto.UsageAccount {
 	return out
 }
 
+// gatewayAccounts is usage.gateway_accounts (#4576, docs/usage-windows.md「网关的账号清单」): every account the
+// gateway sources that are on listed, disabled ones included, from their last read that worked (nothing is asked of a
+// gateway for it). A source whose last read failed still gives that list, its accounts marked stale and its error
+// code said; one not read yet is listed with no accounts and the error usagesource.CodePending, so that a consumer
+// does not take it for a gateway with no accounts. Only the relay-history type has an account list. No key, no
+// address: a source is its id, name and type.
+func (g *usageGateways) gatewayAccounts() proto.GatewayAccounts {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := proto.GatewayAccounts{Sources: []proto.GatewaySource{}, Accounts: []proto.GatewayAccount{}}
+	if !g.cfg.on() {
+		return out
+	}
+	for _, s := range g.cfg.Sources {
+		if !s.on() || s.Type != usagesource.Typerelay-history {
+			continue
+		}
+		src := proto.GatewaySource{ID: s.ID, Name: s.Name, Type: s.Type}
+		st := g.state[s.ID]
+		if st != nil {
+			src.Error, src.Complete = st.errCode, st.complete
+			if !st.okAt.IsZero() {
+				t := st.okAt.UTC()
+				src.CheckedAt = &t
+				src.Listed = st.seen.Listed
+			}
+		}
+		if src.CheckedAt == nil && src.Error == "" {
+			src.Error = usagesource.CodePending
+		}
+		if st != nil {
+			for _, a := range st.inventory {
+				a.Source = s.ID
+				a.Windows = slices.Clone(a.Windows)
+				if src.Error != "" {
+					a.Stale = true
+				}
+				out.Accounts = append(out.Accounts, a)
+			}
+		}
+		out.Sources = append(out.Sources, src)
+	}
+	return out
+}
+
 // gatewayStatus is one source as the admin page shows it.
 type gatewayStatus struct {
 	OKAt    *time.Time        `json:"ok_at,omitempty"`    // the last read that worked
@@ -323,3 +373,7 @@ func uniqueSorted(list []string) []string {
 	sort.Strings(out)
 	return slices.Compact(out)
 }
+
+// UsageGatewayAccounts is devicewire.MethodUsageGatewayAccounts: the gateway sources' account lists, as the hub's
+// last read of each had them (usageGateways.gatewayAccounts).
+func (d *Devices) UsageGatewayAccounts() proto.GatewayAccounts { return d.usageGW.gatewayAccounts() }

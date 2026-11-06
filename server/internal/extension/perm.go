@@ -30,6 +30,10 @@ type Permissions struct {
 	// GhLogin: it asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub
 	// connector), held in its memory only (docs/extensions.md「权限」). For the GitHub connector moved out of the hub.
 	GhLogin bool `json:"gh_login,omitempty"`
+	// UsageGateways: it reads the account list of the account-pool gateways among the hub's usage sources
+	// (usage.gateway_accounts: accounts, their status and quota windows, from the hub's last read), never a key
+	// (docs/extensions.md「额度」, docs/usage-windows.md「网关的账号清单」).
+	UsageGateways bool `json:"usage_gateways,omitempty"`
 }
 
 var hostPattern = regexp.MustCompile(`^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -64,7 +68,8 @@ func (p Permissions) FullHub() bool { return p.HubAPI && len(p.Hub) == 0 }
 // Covers says whether p grants everything q asks (an upgrade asking for no more needs no new consent). The full token
 // covers every scope; scopes never cover the full token.
 func (p Permissions) Covers(q Permissions) bool {
-	if q.FullHub() && !p.FullHub() || q.LauncherKeys && !p.LauncherKeys || q.GhLogin && !p.GhLogin {
+	if q.FullHub() && !p.FullHub() || q.LauncherKeys && !p.LauncherKeys || q.GhLogin && !p.GhLogin ||
+		q.UsageGateways && !p.UsageGateways {
 		return false
 	}
 	for _, s := range q.Hub {
@@ -155,6 +160,7 @@ var (
 	runsCode     = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行；默认在沙箱里，只能读写自己的包和数据目录（受信任市场来的、主人关了沙箱的，能读写这个用户能读写的文件）"}
 	launcherKeys = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 访问它的网关", Detail: "查额度、画启动器页上的面板和它自己的页面（比如侧边栏里的额度）；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
 	ghLogin      = PermissionLine{Key: "gh_login", Title: "用你电脑上 gh 的 GitHub 登录", Detail: "从你选的那台电脑上读 gh 登录的 token，只放在它的内存里，用来访问 GitHub"}
+	usageGateway = PermissionLine{Key: "usage_gateways", Title: "读取额度来源里网关的账号清单（不含 Key）", Detail: "hub 管理 › 额度来源里接的账号池网关有哪些账号、状态和额度，用的是 hub 上次读到的；拿不到管理 Key"}
 	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整权限（旧写法）", Detail: "拿到 hub 的完整 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……；新的扩展只要用得到的那几项（permissions.hub）"}
 	nodeFiles    = PermissionLine{Key: "node_files", Title: "读写这些电脑上的文件", Detail: "不只是它自己的数据目录"}
 	nodePrivacy  = PermissionLine{Key: "node_macos_privacy", Title: "请求 Mac 的系统权限", Detail: "完全磁盘访问、辅助功能这类，要你在那台 Mac 上同意"}
@@ -244,6 +250,9 @@ func Explain(m *Manifest) []PermissionLine {
 	if m.Permissions.GhLogin {
 		out = append(out, ghLogin)
 	}
+	if m.Permissions.UsageGateways {
+		out = append(out, usageGateway)
+	}
 	if to := m.ContributesTo(); len(to) > 0 {
 		out = append(out, PermissionLine{Key: "contributes_to", Title: "给别的扩展提供内容",
 			Detail: "它在清单里写的贡献交给这些扩展：" + strings.Join(to, "、")})
@@ -327,6 +336,9 @@ func Added(old, m *Manifest) []PermissionLine {
 	}
 	if m.Permissions.GhLogin && !old.Permissions.GhLogin {
 		out = append(out, ghLogin)
+	}
+	if m.Permissions.UsageGateways && !old.Permissions.UsageGateways {
+		out = append(out, usageGateway)
 	}
 	var to []string
 	for _, owner := range m.ContributesTo() {

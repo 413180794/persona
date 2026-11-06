@@ -1769,6 +1769,8 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   - 事件 `devices.link_rtt {id, rtt_ms}`：hub 在一条 Persona Link 链路上的心跳量出的往返（`id` 是 `devices.accept` 的），管理者比路时用。
   - 调用 `devices.accept {id, kind, machine_id, token_id?, stream_id?, source?}` → `{}`：hub 握着一条给管理者的连接（`kind`：`link` Persona Link 的链路、`link_stream` 它开的流、`node` 中心经这台成员要的 node 流），管理者拨 `GET /api/v1/bus/relay?id=<id>` 接过去，hub 等 10 秒。
   - 调用 `devices.reconnect {machine_id}`、`devices.update_nodes {}`（hub 自更新以后，重新部署不是这个版本的 node）、`devices.pair_connector {link, machine_id, address?, proxy?}` → `{address, version}`（管理界面配对 kind service）。
+  - 调用 `devices.usage_gateway_accounts {}` → `{sources, accounts}`：额度来源里账号池网关的账号清单，管理者上一次读到的（不去问网关，没有 Key 和地址；#4576，`docs/usage-windows.md`「网关的账号清单」）。
+    扩展的 `usage.gateway_accounts`（权限 `usage_gateways`，`docs/extensions.md`「额度」）由管理者里的扩展管理在同一个进程里问它，hub 不调。
   - 管理者自己回答的路由（`devicewire.Routes`）经 `http.request` 转：`POST /api/v1/machines/{mid}/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`GET/PUT …/botmux`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`。
 - **转发通道** `GET /api/v1/bus/relay`（WebSocket，管理者的总线 token，和 `/api/v1/bus` 同样的鉴权，只有带着电脑的那个管理者能开）：`?id=` 接过 hub 握着的连接；`?hub=<hub_id>&machine=<id>` 要一条经那台 hub 到它电脑的 node 流（hub 打不开时升级前回 502，`error` 是原因）。
   hub 逐条转消息（文本、二进制照原样），一边的关闭码和原因给另一边；Persona Link 那边的心跳是 hub 的，没有 pong 时以 1001「no pong within …」关管理者那边。

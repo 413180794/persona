@@ -48,7 +48,7 @@ extension AppModel {
                 }
                 store.pending.removeAll { $0.id == id }
             }
-        case .waiting where isLive && !live.stalled:
+        case .waiting where socket(key.group).map({ $0.state == .connected && !$0.stalled }) == true:
             // The socket looks fine but the request got no answer (a weak network): try again shortly.
             Task {
                 try? await Task.sleep(for: .seconds(10))
@@ -58,26 +58,31 @@ extension AppModel {
         }
     }
 
-    /// Sends what waited for the network, chat by chat and in order. A chat that is not open first fetches its latest
-    /// messages: one that did arrive before the link broke is in the transcript and drops out (ChatStore.apply).
+    /// Sends what waited for the network, group by group (docs/multi-hub.md): each group whose link is up sends its own,
+    /// chat by chat and in order, while the others wait for theirs. A group out of reach neither keeps the others'
+    /// messages back nor is asked (#4704: only the hub-level group's link was looked at, so another group's messages
+    /// stayed put while that one was down, and one group's dead requests held up the rest). A chat that is not open
+    /// first fetches its latest messages: one that did arrive before the link broke is in the transcript and drops
+    /// out (ChatStore.apply).
     func flushOutbox() {
-        guard isLive, !flushingOutbox else { return }
-        let keys = chats.filter { $0.value.pending.contains { $0.state == .waiting } }.map(\.key)
-        guard !keys.isEmpty else { return }
-        flushingOutbox = true
-        Task {
-            defer { flushingOutbox = false }
-            for key in keys {
-                let store = chat(key)
-                if !isSubscribed(key) {
-                    if store.loadedOnce { await fill(key) } else { await loadInitial(key) }
-                }
-                for msg in store.pending where msg.state == .waiting {
-                    guard isLive, let i = store.pending.firstIndex(where: { $0.id == msg.id }) else { break }
-                    store.pending[i].state = .sending
-                    let outcome = await sendPending(key, msg)
-                    settleSend(key, msg.id, outcome)
-                    if outcome == .waiting { break } // keep the order: the rest go after it
+        let waiting = chats.filter { $0.value.pending.contains { $0.state == .waiting } }.map(\.key)
+        let batches = OutboxFlush.batches(waiting, ready: { self.isLive($0) }, busy: flushingOutbox)
+        for (group, keys) in batches {
+            flushingOutbox.insert(group)
+            Task {
+                defer { flushingOutbox.remove(group) }
+                for key in keys {
+                    let store = chat(key)
+                    if !isSubscribed(key) {
+                        if store.loadedOnce { await fill(key) } else { await loadInitial(key) }
+                    }
+                    for msg in store.pending where msg.state == .waiting {
+                        guard isLive(group), let i = store.pending.firstIndex(where: { $0.id == msg.id }) else { break }
+                        store.pending[i].state = .sending
+                        let outcome = await sendPending(key, msg)
+                        settleSend(key, msg.id, outcome)
+                        if outcome == .waiting { break } // keep the order: the rest go after it
+                    }
                 }
             }
         }
@@ -114,4 +119,15 @@ extension AppModel {
 private nonisolated struct OutboxEntry: Codable, Sendable {
     var key: SessionKey
     var message: PendingMessage
+}
+
+/// Which chats' waiting messages go out now (pure, for the tests).
+nonisolated enum OutboxFlush {
+    /// `keys` (chats with waiting messages) by group: only groups whose link is `ready` and that are not `busy` sending
+    /// already. Within a group the chats keep a stable order.
+    static func batches(_ keys: [SessionKey], ready: (String) -> Bool, busy: Set<String>) -> [String: [SessionKey]] {
+        var out: [String: [SessionKey]] = [:]
+        for key in keys where !busy.contains(key.group) && ready(key.group) { out[key.group, default: []].append(key) }
+        return out.mapValues { $0.sorted { ($0.machineID, $0.sessionID) < ($1.machineID, $1.sessionID) } }
+    }
 }
