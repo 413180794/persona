@@ -336,7 +336,19 @@ Persona 只看 herdr 和 hook，于是 3 个被挡住的 Agent 显示成「完�
 2026-11-05：一个 Agent 用 Workflow 工具在后台跑多 agent 审计，主轮结束等通知，hub 把它判成「完成未看」、待办判完成并推了「做完了」，按 #1696 还可能被自动关掉、连带杀掉 workflow。
 原因是 node 只认 Bash / Agent 的后台任务：Workflow 的结果文案是「Workflow launched in background. Task ID: …」，它的 agent 也不在 `subagents/agent-*.meta.json`，而在 `subagents/workflows/<run>/` 下，一个都没扫到。
 Claude Code 新加的后台类工具（Workflow、Monitor）都要在 `transcript.trackBackground` 和 node 的 `bgMarkers` 里登记，否则「这一轮结束但还有后台活」就会被当成做完；`turn_duration` 的 `pending*Count` 字段可以用来发现新的种类。
+
 - 「没在运行」的宿主别报成看板的来源错误（2026-11-05，#3023）：Agents 列表早把 `host.ErrNotRunning` 当作「没有窗格」，`workspaces.list` 却把它写进 `errors`，工作区看板在没开 Orca 的 Linux 机器上一直显示 `orca is not running`。新加按来源列东西的 RPC，先想好「没运行」和「出错」怎么分。另外老版 botmux（如 3.13）没有 `observe`：不报错、退出码 0、在 stdout 打印帮助，按 JSON 解析只会得到 `schema 0`；输出不是 JSON 就当作没运行并提示 `botmux upgrade`。
+
+## workflow 的 journal 已更新，客户端计数却不动（#3433）
+
+后台 workflow 的 journal 和 agent transcript 在独立目录里，主 transcript 的大小（`Session.rev`）不变；只验证 `workflows()` 能读到最新计数，不能证明客户端收到了它。
+node 的 `listKeySized` 要包含每个 run 的 task id、状态、阶段和 agent 计数，才会发 `sessions.changed`。回归测试要真的经过 `pollAgents` 和 RPC 推送，保持主 transcript 不变、只追加一行 journal result。
+
+只补列表 key 仍未通过「3 秒内推送」：workflow 原先复用 3 秒的 `metaMinInterval`，加上每秒轮询及读取完成后才记缓存时间，可能要等到第 4 秒。
+2 秒刷新间隔的重复测试也会偶尔撞上第 3 秒的截止时间。workflow 改用独立 1.5 秒刷新间隔，并从开始读取时计时，为轮询调度留出余量；主 transcript 的刷新间隔不变。
+阶段和用量汇总必须在最新 60 个 agent 的截断之前做，否则大型 workflow 的分段计数会偏小。
+为了完整数工具调用，agent 元数据首次读取扫描完整 transcript，之后只处理追加的完整行；只读尾部会漏掉较早的调用，重复累加尾部又会重复计数。
+run 有最终状态文件后会永久缓存结果，因此结束时必须绕过 agent 元数据的短时节流，读到最后一次追加的用量和回复后再缓存。
 
 ## opencode 插件：`setup` 里 await 事件循环、订阅不随清理中止、事件被每个目录的实例各收一遍（#3070）
 

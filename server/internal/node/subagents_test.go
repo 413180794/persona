@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Nested subagents name their launcher (parentAgentId) and forks say so (isFork); one whose parent is past the
@@ -199,5 +202,127 @@ func TestSubagentsMetaCacheParseFailure(t *testing.T) {
 	got := n.subagents(parent)
 	if len(got) != 1 || got[0].ID != "half4" || got[0].Description != "示例：写完" || !got[0].Running {
 		t.Fatalf("after the meta was written whole: %+v", got)
+	}
+}
+
+func edgeReply(id, at, model, content, usage string) string {
+	if usage != "" {
+		usage = `,"usage":` + usage
+	}
+	return `{"type":"assistant","uuid":"` + id + `","timestamp":"` + at + `","isSidechain":true,"message":{"role":"assistant","model":"` + model + `","content":` + content + usage + `}}` + "\n"
+}
+
+func TestSubagentEdgeDetails(t *testing.T) {
+	const start = "2026-01-01T00:00:00Z"
+	const end = "2026-01-01T00:01:00Z"
+	const usage = `{"input_tokens":1,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"output_tokens":4}`
+	read := edgeReply("a", start, "model-a", `[{"type":"tool_use","id":"read1","name":"Read","input":{"file_path":"/work/project/example.go"}}]`, usage)
+	server := edgeReply("b", end, "model-b", `[{"type":"server_tool_use","id":"search1","name":"WebSearch","input":{"query":"example\nquery"}}]`, usage)
+	for _, tt := range []struct {
+		name, body, model, last string
+		tokens, calls           int
+		tool                    *proto.WorkflowTool
+		lastAt                  string
+	}{
+		{"latest usage is not accumulated", read + server + edgeReply("c", end, "<synthetic>", `[{"type":"text","text":"Finished"}]`, ""),
+			"model-b", "Finished", 10, 2, &proto.WorkflowTool{Name: "WebSearch", Summary: "在搜网页 example"}, end},
+		{"duplicate tool id counts once", read + read + server, "model-b", "", 10, 2,
+			&proto.WorkflowTool{Name: "WebSearch", Summary: "在搜网页 example"}, end},
+		{"latest zero usage replaces older usage", read + edgeReply("b", end, "model-a", `[{"type":"text","text":"Finished"}]`, `{}`),
+			"model-a", "Finished", 0, 1, &proto.WorkflowTool{Name: "Read", Summary: "在读 example.go"}, end},
+		{"no assistant metadata", `{"type":"user","timestamp":"` + start + `"}` + "\n",
+			"", "", 0, 0, nil, start},
+		{"large tool output preserves earlier details", read + `{"type":"user","timestamp":"` + end + `","message":{"content":"` + strings.Repeat("x", 128<<10) + `"}}` + "\n" +
+			`{"type":"system","timestamp":"2026-01-02T00:00:00Z"}` + "\n", "model-a", "", 10, 1,
+			&proto.WorkflowTool{Name: "Read", Summary: "在读 example.go"}, end},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "agent-test.jsonl")
+			if err := os.WriteFile(path, []byte(tt.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			st, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := subagentEdgesCached(path, st, true)
+			if got.started.Format(time.RFC3339) != start || got.lastAt.Format(time.RFC3339) != tt.lastAt ||
+				got.model != tt.model || got.last != tt.last || got.tokens != tt.tokens || got.calls != tt.calls || !reflect.DeepEqual(got.latestTool, tt.tool) {
+				t.Fatalf("details = %+v, tool = %+v; want %+v", got, got.latestTool, tt)
+			}
+			if again := subagentEdgesCached(path, st, true); !reflect.DeepEqual(got, again) {
+				t.Fatalf("unchanged file changed details: %+v -> %+v", got, again)
+			}
+		})
+	}
+}
+
+func TestSubagentEdgesAppendAndRewrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-test.jsonl")
+	reply := func(id string, tokens int) string {
+		return edgeReply(id, "2026-01-01T00:00:00Z", "model-a", `[{"type":"tool_use","id":"`+id+`","name":"Read","input":{}}]`, `{"input_tokens":`+strconv.Itoa(tokens)+`}`)
+	}
+	first, second := reply("a", 10), reply("b", 20)
+	for _, tt := range []struct {
+		name, op, body string
+		calls, tokens  int
+	}{
+		{"first scan", "write", first, 1, 10},
+		{"partial append", "append", second[:len(second)/2], 1, 10},
+		{"finished append", "append", second[len(second)/2:], 2, 20},
+		{"repeated tool", "append", first, 2, 10},
+		{"truncated file", "write", second, 1, 20},
+		{"larger rewrite", "write", first + second, 2, 20},
+		{"replacement file", "replace", second + reply("c", 30) + reply("d", 40), 3, 40},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			switch tt.op {
+			case "append":
+				f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = f.WriteString(tt.body)
+				f.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "replace":
+				if err := os.WriteFile(path+".new", []byte(tt.body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Rename(path+".new", path); err != nil {
+					t.Fatal(err)
+				}
+			default:
+				if err := os.WriteFile(path, []byte(tt.body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			st, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := subagentEdgesCached(path, st, true)
+			if got.calls != tt.calls || got.tokens != tt.tokens {
+				t.Fatalf("calls/tokens = %d/%d, want %d/%d", got.calls, got.tokens, tt.calls, tt.tokens)
+			}
+		})
+	}
+}
+
+func TestSubagentEdgesSkipOversizedLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-test.jsonl")
+	body := `{"type":"user","timestamp":"2026-01-01T00:00:00Z"}` + "\n" + strings.Repeat("x", usageMaxLine+1) + "\n" +
+		edgeReply("after", "2026-01-01T00:01:00Z", "model-a", `[{"type":"tool_use","id":"a","name":"Read","input":{}}]`, `{"input_tokens":10}`)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := subagentEdgesCached(path, st, true); got.calls != 1 || got.tokens != 10 || got.model != "model-a" {
+		t.Fatalf("details after oversized line = %+v", got)
 	}
 }

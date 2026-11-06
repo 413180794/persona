@@ -1,9 +1,11 @@
 package node
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -91,11 +93,11 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 		}
 		// A subagent whose file has not moved for 20 minutes is not running any more (its claude went away).
 		running := !m.Finished && time.Since(st.ModTime()) < 20*time.Minute
-		started, last := subagentEdgesCached(jp, st)
+		edges := subagentEdgesCached(jp, st, false)
 		out = append(out, proto.Subagent{
 			ID: id, SessionID: parent + subagentSep + id, Type: m.AgentType, Description: m.Description,
 			ToolUseID: m.ToolUseID, ParentID: m.ParentID, Fork: m.Fork, Running: running, Background: m.RequestShape == "background",
-			StartedAt: started, UpdatedAt: st.ModTime(), LastText: snippet(last),
+			StartedAt: edges.started, UpdatedAt: st.ModTime(), LastText: edges.last,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -150,64 +152,113 @@ func subagentMetaCached(path string) (subagentMeta, bool) {
 	return m, ok
 }
 
-// edgeCache remembers subagentEdges per file. The session list is rebuilt every second and lists each live
-// session's subagents of the last day: re-reading the head and a 96 KB tail of every one each time kept a node
-// with a few subagent-heavy sessions reading ~20 MB/s. A growing file is re-read at most every metaMinInterval.
+// edgeCache remembers transcript metadata per file. Counts need the whole transcript, so the first read streams
+// it once and later reads only appended complete lines, at most every metaMinInterval. Keeping the latest values
+// also avoids losing them when a large tool result pushes the last reply beyond the former 96 KB tail window.
 var edgeCache = struct {
 	sync.Mutex
 	m map[string]edgeMemo
 }{m: map[string]edgeMemo{}}
 
 type edgeMemo struct {
-	size    int64
-	mtime   time.Time
-	readAt  time.Time
-	started time.Time
-	last    string
+	size   int64
+	mtime  time.Time
+	readAt time.Time
+	info   os.FileInfo
+	off    int64
+	head   []byte // detects a rewrite even if the new file is larger
+	edges  subagentEdge
 }
 
-func subagentEdgesCached(path string, st os.FileInfo) (time.Time, string) {
+type subagentEdge struct {
+	started, lastAt time.Time
+	last, model     string
+	latestTool      *proto.WorkflowTool
+	tokens, calls   int
+	tools           map[string]bool
+}
+
+func subagentEdgesCached(path string, st os.FileInfo, fresh bool) subagentEdge {
 	edgeCache.Lock()
 	e, ok := edgeCache.m[path]
 	edgeCache.Unlock()
-	if ok && (e.size == st.Size() && e.mtime.Equal(st.ModTime()) || time.Since(e.readAt) < metaMinInterval) {
-		return e.started, e.last
+	if ok && (e.size == st.Size() && e.mtime.Equal(st.ModTime()) || !fresh && time.Since(e.readAt) < metaMinInterval) {
+		return e.edges
 	}
-	started, last := subagentEdges(path)
-	edgeCache.Lock()
-	edgeCache.m[path] = edgeMemo{size: st.Size(), mtime: st.ModTime(), readAt: time.Now(), started: started, last: last}
-	edgeCache.Unlock()
-	return started, last
-}
-
-// subagentEdges reads the first timestamp and the latest assistant text of a subagent transcript.
-func subagentEdges(path string) (time.Time, string) {
+	readAt := time.Now()
 	f, err := os.Open(path)
 	if err != nil {
-		return time.Time{}, ""
+		return e.edges
 	}
 	defer f.Close()
-	var started time.Time
-	r := bufio.NewReaderSize(f, 64<<10)
-	if line, err := r.ReadBytes('\n'); err == nil || len(line) > 0 {
-		var e struct {
-			Timestamp time.Time `json:"timestamp"`
-		}
-		_ = json.Unmarshal(line, &e)
-		started = e.Timestamp
+	head := make([]byte, min(st.Size(), 256))
+	n, _ := f.ReadAt(head, 0)
+	head = head[:n]
+	if !ok || !os.SameFile(e.info, st) || st.Size() <= e.size || !bytes.HasPrefix(head, e.head) {
+		e = edgeMemo{}
 	}
-	st, _ := f.Stat()
-	const tail = 96 << 10
-	off := max(st.Size()-tail, 0)
-	buf := make([]byte, st.Size()-off)
-	if _, err := f.ReadAt(buf, off); err != nil && len(buf) == 0 {
-		return started, ""
+	e.edges.tools = maps.Clone(e.edges.tools) // cached snapshots may still be in use by another list request
+	e.off += eachLine(io.NewSectionReader(f, e.off, st.Size()-e.off), e.edges.readLine)
+	// Only remember already consumed bytes: a partial first line can still be changing in place.
+	e.head = append([]byte(nil), head[:min(int64(len(head)), e.off)]...)
+	e.info, e.size, e.mtime, e.readAt = st, st.Size(), st.ModTime(), readAt
+	edgeCache.Lock()
+	if len(edgeCache.m) >= metaCacheMax {
+		edgeCache.m = map[string]edgeMemo{}
+	}
+	edgeCache.m[path] = e
+	edgeCache.Unlock()
+	return e.edges
+}
+
+func (e *subagentEdge) readLine(line []byte) {
+	var row struct {
+		Type      string    `json:"type"`
+		Timestamp time.Time `json:"timestamp"`
+		Message   *struct {
+			Usage *struct {
+				Input      int `json:"input_tokens"`
+				CacheRead  int `json:"cache_read_input_tokens"`
+				CacheWrite int `json:"cache_creation_input_tokens"`
+				Output     int `json:"output_tokens"`
+			} `json:"usage"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &row) != nil {
+		return
+	}
+	if e.started.IsZero() {
+		e.started = row.Timestamp
+	}
+	if (row.Type == "user" || row.Type == "assistant") && !row.Timestamp.IsZero() {
+		e.lastAt = row.Timestamp
+	}
+	if row.Type != "assistant" || row.Message == nil {
+		return
+	}
+	if u := row.Message.Usage; u != nil {
+		// Usage repeats on every content block of one reply; the subagent page shows the latest, never a sum.
+		e.tokens = u.Input + u.CacheRead + u.CacheWrite + u.Output
 	}
 	meta := transcript.Meta{Sidechain: true}
-	for _, line := range strings.Split(string(buf), "\n") {
-		if strings.Contains(line, `"assistant"`) {
-			transcript.ParseLine(0, []byte(line), &meta)
+	for _, it := range transcript.ParseLine(0, line, &meta) {
+		if it.Kind == proto.KindToolUse {
+			if it.ToolUseID == "" || !e.tools[it.ToolUseID] {
+				e.calls++
+				if it.ToolUseID != "" {
+					if e.tools == nil {
+						e.tools = map[string]bool{}
+					}
+					e.tools[it.ToolUseID] = true
+				}
+			}
+			e.latestTool = &proto.WorkflowTool{Name: it.ToolName, Summary: transcript.Activity(it.ToolName, it.ToolInput)}
 		}
 	}
-	return started, meta.LastText
+	if meta.LastText != "" {
+		e.last = snippet(meta.LastText)
+	}
+	if meta.Model != "" {
+		e.model = meta.Model
+	}
 }

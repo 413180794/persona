@@ -37,6 +37,9 @@ func listKeyFmt(list []proto.Session) string {
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
 		}
+		for _, w := range s.Workflows {
+			fmt.Fprintf(&b, "workflow:%s/%s/%q/%d/%d/%d\n", w.TaskID, w.Status, w.Phase, w.AgentsDone, w.AgentsStarted, w.AgentsRunning)
+		}
 		if s.Loop != nil {
 			fmt.Fprintf(&b, "loop%d", s.Loop.NextAt.Unix())
 		}
@@ -69,6 +72,7 @@ func listKeyFixture(n int) []proto.Session {
 			s.PaneIndex = &pane
 			s.Activity, s.ActivityAt = "在跑测试", &act
 			s.Background = []proto.BackgroundTask{{ID: "b85polnoj"}, {ID: "b85polnok"}}
+			s.Workflows = []proto.Workflow{{TaskID: "w1", Status: proto.WorkflowRunning, Phase: "Review", AgentsStarted: 3, AgentsDone: 1, AgentsRunning: 2}}
 			s.Subagents = []proto.Subagent{{ID: "agent-a1", Running: true, UpdatedAt: at}, {ID: "agent-a2", UpdatedAt: at}}
 			s.Ports = []proto.Port{{Port: 5173, PID: 4242, Title: "Vite App"}}
 		}
@@ -198,6 +202,37 @@ func TestListKeyAgreesWithFmt(t *testing.T) {
 	if listKeyFmt([]proto.Session{base}) == listKeyFmt([]proto.Session{variants["status"]}) ||
 		listKeyFmt([]proto.Session{base}) != listKeyFmt([]proto.Session{variants["updated_churn"]}) {
 		t.Fatal("fixture does not exercise both outcomes")
+	}
+}
+
+func TestListKeyWorkflowProgress(t *testing.T) {
+	base := proto.Workflow{TaskID: "w1", Status: proto.WorkflowRunning, Phase: "Review", AgentsStarted: 3, AgentsDone: 1, AgentsRunning: 2}
+	key := func(runs ...proto.Workflow) string {
+		return listKey([]proto.Session{{SessionID: "s1", Workflows: runs}})
+	}
+	want := key(base)
+	for name, change := range map[string]func(*proto.Workflow){
+		"task_id":        func(w *proto.Workflow) { w.TaskID = "w2" },
+		"status":         func(w *proto.Workflow) { w.Status = proto.WorkflowCompleted },
+		"phase":          func(w *proto.Workflow) { w.Phase = "Verify" },
+		"agents_done":    func(w *proto.Workflow) { w.AgentsDone++ },
+		"agents_started": func(w *proto.Workflow) { w.AgentsStarted++ },
+		"agents_running": func(w *proto.Workflow) { w.AgentsRunning-- },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := base
+			change(&changed)
+			if key(changed) == want {
+				t.Fatalf("workflow %s change does not change the list key", name)
+			}
+		})
+	}
+	if key() == want || key(base, base) == want {
+		t.Fatal("adding or removing a workflow does not change the list key")
+	}
+	base.UpdatedAt = time.Now()
+	if key(base) != want {
+		t.Fatal("workflow timestamp alone changes the list key")
 	}
 }
 

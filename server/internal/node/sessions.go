@@ -1895,6 +1895,16 @@ func listKeySized(list []proto.Session, size int) string {
 		for _, t := range s.Background {
 			w.str(t.ID, ',')
 		}
+		// Workflow journals advance without changing the main transcript's rev.
+		for _, run := range s.Workflows {
+			w.b.WriteString("workflow:")
+			w.str(run.TaskID, '/')
+			w.str(run.Status, '/')
+			w.quote(run.Phase, '/')
+			w.int(int64(run.AgentsDone), '/')
+			w.int(int64(run.AgentsStarted), '/')
+			w.int(int64(run.AgentsRunning), '\n')
+		}
 		if s.Loop != nil {
 			w.b.WriteString("loop")
 			w.tmp = strconv.AppendInt(w.tmp[:0], s.Loop.NextAt.Unix(), 10)

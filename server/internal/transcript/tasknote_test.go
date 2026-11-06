@@ -75,6 +75,64 @@ func TestBackgroundTaskNotices(t *testing.T) {
 	}
 }
 
+// Completed workflow notifications were observed as both user messages and queued-command attachments.
+// The fixture preserves those envelopes and XML tags, with every id, path, timestamp and payload replaced.
+func TestWorkflowTaskNotices(t *testing.T) {
+	data, err := os.ReadFile("testdata/claude-workflow-notices.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	wantTaskIDs := []string{"workflow-task-1", "workflow-task-2"}
+	wantToolIDs := []string{"toolu_workflow_1", "toolu_workflow_2"}
+	if len(lines) != len(wantTaskIDs) {
+		t.Fatalf("fixture has %d records, want %d", len(lines), len(wantTaskIDs))
+	}
+	var meta Meta
+	for i, line := range lines {
+		items := ParseLine(i+1, []byte(line), &meta)
+		if len(items) != 1 || items[0].Kind != proto.KindNotice || items[0].Task == nil {
+			t.Fatalf("record %d: expected one task notice, got %+v", i+1, items)
+		}
+		n := items[0].Task
+		if n.Kind != "workflow" || n.Status != "completed" || n.Title != "Example workflow" ||
+			n.TaskID != wantTaskIDs[i] || n.ToolUseID != wantToolIDs[i] ||
+			n.OutputFile != "/tmp/example/tasks/"+wantTaskIDs[i]+".output" || n.Detail != "Example workflow result" ||
+			items[0].Text != "后台 workflow 完成 · Example workflow" {
+			t.Fatalf("record %d: %q %+v", i+1, items[0].Text, n)
+		}
+		if duplicate := ParseLine(i+10, []byte(line), &meta); len(duplicate) != 0 {
+			t.Fatalf("record %d: repeated notification produced %+v", i+1, duplicate)
+		}
+	}
+}
+
+// Failed/stopped wording comes from the issue; only completed was available in the local corpus.
+func TestWorkflowTaskNoteOutcomes(t *testing.T) {
+	for _, tc := range []struct {
+		name, status, outcome, taskID, toolUseID, wantStatus, text string
+	}{
+		{"completed", "completed", "completed", "workflow-task", "toolu_workflow", "completed", "后台 workflow 完成"},
+		{"failed", "failed", "failed", "workflow-task", "toolu_workflow", "failed", "后台 workflow 失败"},
+		{"killed", "killed", "was stopped", "workflow-task", "", "killed", "后台 workflow 已停止"},
+		{"completed without status", "", "completed", "", "toolu_workflow", "completed", "后台 workflow 完成"},
+		{"failed without status", "", "failed", "workflow-task", "", "failed", "后台 workflow 失败"},
+		{"stopped without status", "", "was stopped", "workflow-task", "", "stopped", "后台 workflow 已停止"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			xml := "<task-notification><task-id>" + tc.taskID + "</task-id><tool-use-id>" + tc.toolUseID +
+				"</tool-use-id><status>" + tc.status + `</status><summary>Dynamic workflow "Review &quot;quoted&quot; changes &amp; tests" ` +
+				tc.outcome + "</summary></task-notification>"
+			n, text := taskNote(xml)
+			const title = `Review "quoted" changes & tests`
+			if n.Kind != "workflow" || n.Status != tc.wantStatus || n.Title != title ||
+				n.TaskID != tc.taskID || n.ToolUseID != tc.toolUseID || text != tc.text+" · "+title {
+				t.Fatalf("got %+v %q, want workflow %s with its original task/tool ids and %q", n, text, tc.wantStatus, tc.text+" · "+title)
+			}
+		})
+	}
+}
+
 // The shapes the corpus holds besides the fixture's: failures, stops, subagents.
 func TestTaskNoteShapes(t *testing.T) {
 	for _, tc := range []struct {

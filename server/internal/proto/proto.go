@@ -1125,7 +1125,7 @@ type Item struct {
 	// (prompts.ParseInjected) on its way to the apps; docs/protocol.md "Messages Persona injects".
 	Injected *Injected `json:"injected,omitempty"`
 	Fold     *Fold     `json:"fold,omitempty"`
-	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent).
+	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent, or a workflow).
 	Task         *TaskNote     `json:"task,omitempty"`
 	TurnDuration *TurnDuration `json:"turn_duration,omitempty"`
 	// Compact: this notice is where the context was compacted (Claude Code's compact_boundary).
@@ -1184,7 +1184,7 @@ type TurnDuration struct {
 // the app, through TaskID / ToolUseID): a command run in the background finishing, a Monitor's event or its end, a
 // subagent finishing. Title, Detail and Text come decoded (Claude Code writes &gt; &lt; &amp; in them).
 type TaskNote struct {
-	Kind   string `json:"kind"`             // shell | monitor | agent | task (anything else)
+	Kind   string `json:"kind"`             // shell | monitor | agent | workflow | task (anything else)
 	Status string `json:"status,omitempty"` // completed | failed | killed | stopped | event | ended | waiting
 	// Title: the call's description, or the first line of its command when it had none.
 	Title      string `json:"title"`
@@ -1422,11 +1422,15 @@ type Workflow struct {
 	PhaseIndex int      `json:"phase_index,omitempty"`
 	PhaseCount int      `json:"phase_count,omitempty"` // len(Phases)
 	ToolUseID  string   `json:"tool_use_id,omitempty"` // the Workflow call that launched it
+	// PhaseStats counts all agents, before Agents is capped, in Phases order then any undeclared phases.
+	PhaseStats []WorkflowPhaseStats `json:"phase_stats,omitempty"`
 	// AgentsStarted counts the agents it started so far (the total is not known before it ends: scripts fan out as
 	// they go), AgentsDone those that returned, AgentsRunning those still at it.
 	AgentsStarted int        `json:"agents_started"`
 	AgentsDone    int        `json:"agents_done"`
 	AgentsRunning int        `json:"agents_running"`
+	Tokens        int        `json:"tokens,omitempty"` // sum of each agent's latest usage, not cumulative usage
+	Calls         int        `json:"calls,omitempty"`  // all agents' tool calls, before Agents is capped
 	StartedAt     time.Time  `json:"started_at"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`   // nil while it runs
 	UpdatedAt     time.Time  `json:"updated_at,omitempty"` // its last sign of life (journal or an agent's transcript)
@@ -1437,6 +1441,14 @@ type Workflow struct {
 
 // WorkflowAgentsMax caps Workflow.Agents.
 const WorkflowAgentsMax = 60
+
+// WorkflowPhaseStats counts agents in one phase. An empty title groups agents whose phase is unknown.
+type WorkflowPhaseStats struct {
+	Title   string `json:"title"`
+	Started int    `json:"started"`
+	Done    int    `json:"done"`
+	Running int    `json:"running"`
+}
 
 // A workflow's statuses. Stalled: no notification and no state file, yet nothing written for a long while (its
 // claude went away): not counted as running.
@@ -1450,15 +1462,26 @@ const (
 
 // WorkflowAgent is one agent of a workflow run. Its transcript reads like a subagent's, as the session SessionID.
 type WorkflowAgent struct {
-	ID        string    `json:"id"`
-	SessionID string    `json:"session_id"` // "<parent>@<agent id>"
-	Label     string    `json:"label,omitempty"`
-	Phase     string    `json:"phase,omitempty"`
-	Running   bool      `json:"running"`
-	Status    string    `json:"status"` // running | done | stopped (its run ended before it returned)
-	StartedAt time.Time `json:"started_at,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	LastText  string    `json:"last_text,omitempty"`
+	ID         string        `json:"id"`
+	SessionID  string        `json:"session_id"` // "<parent>@<agent id>"
+	Label      string        `json:"label,omitempty"`
+	Phase      string        `json:"phase,omitempty"`
+	Running    bool          `json:"running"`
+	Status     string        `json:"status"` // running | done | stopped (its run ended before it returned)
+	StartedAt  time.Time     `json:"started_at,omitempty"`
+	EndedAt    *time.Time    `json:"ended_at,omitempty"` // nil while running; last exchange, or the run's end if stopped
+	UpdatedAt  time.Time     `json:"updated_at,omitempty"`
+	LastText   string        `json:"last_text,omitempty"`
+	Model      string        `json:"model,omitempty"`
+	LatestTool *WorkflowTool `json:"latest_tool,omitempty"`
+	Tokens     int           `json:"tokens,omitempty"` // latest usage's input + cache read + cache creation + output
+	Calls      int           `json:"calls,omitempty"`  // tool_use and server_tool_use blocks in its transcript
+}
+
+// WorkflowTool is an agent's most recent tool call, retained after its final text arrives.
+type WorkflowTool struct {
+	Name    string `json:"name"`
+	Summary string `json:"summary"`
 }
 
 // GoalInfo is a goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's /goal, whose

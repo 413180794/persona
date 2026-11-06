@@ -424,16 +424,23 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
                 "run_id":"wf_c1d9daf8-cd2"}], // workflow: which run in workflows it is; only running workflows are here (old clients still treat it as a background task)
  // Claude Code workflows (multi-agent scripts the Workflow tool runs in the background, #2935, docs/agent-states.md "Background workflows"): the last day's, newest first.
  // Running ones (running=true) count as background work: the hub computes state as working, doesn't push "done", doesn't judge the to-do complete or auto-close this Agent. Old nodes don't have this field
+ // phase_stats follows phases order, including phases with no agents yet, then appends undeclared phases; title="" means unknown. done counts journal results only, not stopped agents.
+ // Each agent's tokens is the latest assistant usage's input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens, not a cumulative total.
+ // calls counts tool_use / server_tool_use, deduplicated by nonempty tool_use_id; latest_tool keeps the last tool even after the final reply. Clients retain their existing display when these fields are absent.
  "workflows":[{"task_id":"wdp5zxh37","run_id":"wf_c1d9daf8-cd2","name":"parity-audit","summary":"…",
                "status":"running|completed|failed|killed|stalled","running":true,   // stalled: no end notification, but no activity for 30 minutes (its claude is gone); not counted as running
                "phases":["Audit","Verify"],"phase":"Verify","phase_index":2,"phase_count":2,   // phases from the script's meta; phase is the phase of the most recently started agent still running, phase_index counts from 1, 0 = unknown
+               "phase_stats":[{"title":"Audit","started":180,"done":169,"running":11},{"title":"Verify","started":5,"done":0,"running":5}], // per-phase counts across all agents, unaffected by the 60-agent response limit
                "tool_use_id":"toolu_…",                                            // the Workflow call that started it
                "agents_started":185,"agents_done":169,"agents_running":16,        // the total is known only once finished (the script dispatches as it runs): show "done / started"
+               "tokens":123400,"calls":420,                                    // sums across all agents, before truncation; tokens is not cumulative consumption
                "started_at":"...","ended_at":"...","updated_at":"...",           // ended_at only once finished; duration = (ended_at or now) - started_at
                "error":"Error: Workflow aborted",                                 // first line for failed / killed
                "agents":[{"id":"a55ab0b9…","session_id":"<id>@a55ab0b9…","label":"audit:chat-rich","phase":"Audit",   // in start order, at most 60 (newest kept)
                           "running":false,"status":"running|done|stopped",   // stopped: it hadn't come back when the run ended
-                          "started_at":"...","updated_at":"...","last_text":"…"}]}],                   // each agent is read as a subagent: GET the content of session session_id
+                          "started_at":"...","ended_at":"...","updated_at":"...","last_text":"…", // ended_at is absent while running; completed agents use the last exchange time (file mtime as fallback), stopped agents prefer the run's end time; omitted if unknown
+                          "model":"claude-example","latest_tool":{"name":"Read","summary":"Reading example.go"},
+                          "tokens":1234,"calls":8}]}],                   // each agent is read as a subagent: GET the content of session session_id
  "background_working":true,   // state is working only because of background work (this turn is over, workflows / background commands / Monitors / subagents are running, #2935): clients write "Working (Background)". Computed by the hub; when an old hub lacks it, look for state=working with a running workflow
  // The user's latest manual compaction (assistant chats only, present only after POST …/compact): running → done | failed (error is a human-readable reason); the node keeps it until the next one
  "compaction":{"state":"running|done|failed","error":"…","started_at":"...","finished_at":"..."}}
@@ -476,7 +483,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "wake":true,                                         // notice only: Claude was idle when a background task finished, and this notification started a new turn
  "injected":{"kind":"task_notice","state":"done",…},   // user text only: this is a message Persona sent to the model (task notification, scheduled task, wake-up…), not written by the user; added by the hub when sending, see "Messages Persona injects"
  "compact":{"trigger":"manual|auto","pre_tokens":151467}, // notice only: the context was compacted here (Claude Code's compact_boundary); the App draws a divider and folds the following "已从压缩的上下文继续" ("continued from compacted context") and the idle-compaction note into it
- "task":{"kind":"shell|monitor|agent|task",              // notice only: a background task notification (command, Monitor event / end, subagent); text is a one-line summary
+ "task":{"kind":"shell|monitor|agent|workflow|task",     // notice only: a background task notification (command, Monitor event / end, subagent, workflow); text is a one-line summary
          "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description or the command's first line",
          "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…",
          "detail":"the Monitor event / the subagent's result / the whole command (entities decoded)"},

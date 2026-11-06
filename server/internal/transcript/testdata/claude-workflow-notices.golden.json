@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "id": "workflow-notification-1#0",
+      "seq": 1,
+      "ts": "2026-01-01T00:01:00Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "后台 workflow 完成 · Example workflow",
+      "wake": true,
+      "task": {
+        "kind": "workflow",
+        "status": "completed",
+        "title": "Example workflow",
+        "task_id": "workflow-task-1",
+        "tool_use_id": "toolu_workflow_1",
+        "output_file": "/tmp/example/tasks/workflow-task-1.output",
+        "detail": "Example workflow result"
+      }
+    },
+    {
+      "id": "workflow-notification-2#0",
+      "seq": 2,
+      "ts": "2026-01-01T00:02:00Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "后台 workflow 完成 · Example workflow",
+      "task": {
+        "kind": "workflow",
+        "status": "completed",
+        "title": "Example workflow",
+        "task_id": "workflow-task-2",
+        "tool_use_id": "toolu_workflow_2",
+        "output_file": "/tmp/example/tasks/workflow-task-2.output",
+        "detail": "Example workflow result"
+      }
+    }
+  ],
+  "meta": {
+    "turns": 0,
+    "compactions": 0,
+    "context_tokens": 0,
+    "output_tokens": 0,
+    "turn_open": true,
+    "last_turn_wake": true,
+    "last_activity": "0001-01-01T00:00:00Z"
+  }
+}

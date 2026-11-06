@@ -221,6 +221,7 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 ```
 
 - **时间一律是 Unix 秒（数字）**：ActivityKit 用默认的 JSONDecoder 解推送里的 `content-state`，`Date` 会被当成 2001 年起的秒数。
+- 后台工作条目（`background: true`）的 `since` 取最早一个在跑且开始时间已知的 workflow 的 `started_at`（#3433），以免把已结束的主轮等待时间算成 workflow 耗时。没有这样的 workflow 时沿用轮次开始时间，再回退会话更新时间；前台轮次仍按自己的开始时间计时，`detail` 的一行文案不变。
 - Swift 侧每个字段都宽松解码（未知的 phase / kind 不报错），hub 加字段不会让活动坏掉。
 - `attributes-type` 是 `JarvisActivityAttributes`，`attributes` 是 `{"kind":"fleet"}`（push-to-start 用），两个名字都不能改。
 - 灵动岛的字段：`left` / `right`（这台设备的两侧，`status|tpm|tokens|requests|assistant|load|timer|none`）、`assistant`（助手在回答）、

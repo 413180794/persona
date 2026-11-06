@@ -31,6 +31,9 @@ const workflowStall = 30 * time.Minute
 // workflowKeep: ended runs are listed for this long after they ended.
 const workflowKeep = 24 * time.Hour
 
+// Leave one session-list polling interval for publishing a journal update within three seconds.
+const workflowReadInterval = 1500 * time.Millisecond
+
 var (
 	wfPhasesRe = regexp.MustCompile("(?s)phases:\\s*\\[(.*?)\\]")
 	wfTitleRe  = regexp.MustCompile("title:\\s*['\"`]([^'\"`\\n]+)['\"`]")
@@ -38,7 +41,7 @@ var (
 	wfMetaName = regexp.MustCompile("(?m)^\\s*name:\\s*['\"`]([^'\"`\\n]+)['\"`]")
 )
 
-// wfCache remembers a run's progress per run directory, re-read at most every metaMinInterval (the session list is
+// wfCache remembers a run's progress per run directory, re-read at most every workflowReadInterval (the session list is
 // rebuilt every second) and never again once the run has ended and its state file is read.
 var wfCache = struct {
 	sync.Mutex
@@ -118,12 +121,13 @@ func readWorkflow(subagents, parent string, run proto.Workflow, script string) p
 	wfCache.Lock()
 	memo, ok := wfCache.m[key]
 	wfCache.Unlock()
-	if ok && (memo.final || time.Since(memo.readAt) < metaMinInterval) {
+	if ok && (memo.final || time.Since(memo.readAt) < workflowReadInterval) {
 		return memo.w
 	}
+	readAt := time.Now()
 	w, final := workflowProgress(runDir, filepath.Join(filepath.Dir(subagents), "workflows", run.RunID+".json"), parent, run, script)
 	wfCache.Lock()
-	wfCache.m[key] = wfMemo{readAt: time.Now(), final: final, w: w}
+	wfCache.m[key] = wfMemo{readAt: readAt, final: final, w: w}
 	wfCache.Unlock()
 	return w
 }
@@ -156,6 +160,9 @@ type wfAgentMeta struct {
 func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, script string) (proto.Workflow, bool) {
 	w := run
 	w.Agents = nil
+	w.PhaseStats = nil
+	w.AgentsStarted, w.AgentsDone, w.AgentsRunning = 0, 0, 0
+	w.Tokens, w.Calls = 0, 0
 	var state *wfState
 	if b, err := os.ReadFile(stateFile); err == nil {
 		var st wfState
@@ -184,7 +191,8 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 	// The journal: which agents started, in which phase, and which returned.
 	type agent struct {
 		proto.WorkflowAgent
-		done bool
+		done   bool
+		lastAt time.Time
 	}
 	var agents []*agent
 	byID := map[string]*agent{}
@@ -228,8 +236,11 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 			if a.UpdatedAt.After(updated) {
 				updated = a.UpdatedAt
 			}
-			a.StartedAt, a.LastText = subagentEdgesCached(jp, st)
-			a.LastText = snippet(a.LastText)
+			// Once finalized the workflow cache no longer refreshes: do not freeze a throttled agent snapshot.
+			fresh := a.done || !run.Running || state != nil && state.Status != proto.WorkflowRunning
+			edges := subagentEdgesCached(jp, st, fresh)
+			a.StartedAt, a.LastText, a.lastAt = edges.started, edges.last, edges.lastAt
+			a.Model, a.LatestTool, a.Tokens, a.Calls = edges.model, edges.latestTool, edges.tokens, edges.calls
 		}
 	}
 	w.UpdatedAt = updated
@@ -258,18 +269,45 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 	}
 
 	var latest, latestRunning string
+	phaseIndex := map[string]int{}
+	phaseStats := func(title string) *proto.WorkflowPhaseStats {
+		i, ok := phaseIndex[title]
+		if !ok {
+			i = len(w.PhaseStats)
+			phaseIndex[title] = i
+			w.PhaseStats = append(w.PhaseStats, proto.WorkflowPhaseStats{Title: title})
+		}
+		return &w.PhaseStats[i]
+	}
+	for _, title := range w.Phases {
+		phaseStats(title)
+	}
 	for _, a := range agents {
 		w.AgentsStarted++
+		w.Tokens += a.Tokens
+		w.Calls += a.Calls
+		p := phaseStats(a.Phase)
+		p.Started++
 		a.Running = w.Running && !a.done
 		a.Status = map[bool]string{true: "done", false: "stopped"}[a.done]
 		if a.Running {
 			a.Status = "running"
+		} else {
+			at := cmpTime(a.lastAt, a.UpdatedAt, deref(w.EndedAt))
+			if !a.done {
+				at = cmpTime(deref(w.EndedAt), at)
+			}
+			if !at.IsZero() {
+				a.EndedAt = &at
+			}
 		}
 		switch {
 		case a.done:
 			w.AgentsDone++
+			p.Done++
 		case a.Running:
 			w.AgentsRunning++
+			p.Running++
 		}
 		if a.Phase != "" {
 			latest = a.Phase

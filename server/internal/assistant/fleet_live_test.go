@@ -140,3 +140,45 @@ func TestBuildFleetOneItemPerAgent(t *testing.T) {
 		t.Fatalf("after an elicitation %+v", st.Items)
 	}
 }
+
+func TestBuildFleetWorkflowSince(t *testing.T) {
+	at := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
+	turn := at.Add(-time.Hour)
+	earlier, later := at.Add(-20*time.Minute), at.Add(-5*time.Minute)
+	runs := []proto.Workflow{
+		{Running: false, StartedAt: at.Add(-2 * time.Hour)},
+		{Running: true, StartedAt: later, Name: "review", Phase: "Verify", AgentsStarted: 3, AgentsDone: 1},
+		{Running: true},
+		{Running: true, StartedAt: earlier},
+	}
+	for _, tc := range []struct {
+		name       string
+		background bool
+		turn       time.Time
+		runs       []proto.Workflow
+		want       time.Time
+	}{
+		{"earliest running workflow", true, turn, runs, earlier},
+		{"foreground turn", false, turn, runs, turn},
+		{"no running workflow", true, turn, runs[:1], turn},
+		{"unknown workflow start", true, turn, []proto.Workflow{{Running: true}}, turn},
+		{"no workflow", true, turn, nil, turn},
+		{"no turn start", true, time.Time{}, runs, earlier},
+		{"fallback to updated", true, time.Time{}, nil, at},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := proto.Session{MachineID: "m", SessionID: "s", State: proto.StateWorking, UpdatedAt: at,
+				BackgroundWorking: tc.background, Workflows: tc.runs}
+			st := buildFleetIn("zh-Hans", []fleetInput{{Session: s, TurnStart: tc.turn}}, nil)
+			if len(st.Items) != 1 {
+				t.Fatalf("items: %+v", st.Items)
+			}
+			if got, want := st.Items[0].Since, unixSeconds(tc.want); got != want || st.WorkingSince != want {
+				t.Errorf("since = %v, workingSince = %v, want %v", got, st.WorkingSince, want)
+			}
+			if tc.name == "earliest running workflow" && st.Items[0].Detail != "review · Verify · 1/3" {
+				t.Errorf("detail changed: %q", st.Items[0].Detail)
+			}
+		})
+	}
+}

@@ -1,8 +1,11 @@
 package node
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -172,3 +175,145 @@ func TestWorkflowFromTranscript(t *testing.T) {
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+func TestWorkflowPhaseStats(t *testing.T) {
+	for _, tt := range []struct {
+		name, status string
+		phases       []string
+		want         []proto.WorkflowPhaseStats
+	}{
+		{"declared and unknown phases", proto.WorkflowRunning, []string{"Audit", "Verify", "Later"}, []proto.WorkflowPhaseStats{
+			{Title: "Audit", Started: 1, Done: 1}, {Title: "Verify", Started: 1, Running: 1}, {Title: "Later"},
+			{Title: "Extra", Started: 1, Done: 1}, {Title: "", Started: 1, Running: 1},
+		}},
+		{"stopped agents are neither done nor running", proto.WorkflowKilled, []string{"Audit", "Verify"}, []proto.WorkflowPhaseStats{
+			{Title: "Audit", Started: 1, Done: 1}, {Title: "Verify", Started: 1},
+			{Title: "Extra", Started: 1, Done: 1}, {Title: "", Started: 1},
+		}},
+		{"undeclared phases keep start order", proto.WorkflowRunning, nil, []proto.WorkflowPhaseStats{
+			{Title: "Audit", Started: 1, Done: 1}, {Title: "Verify", Started: 1, Running: 1},
+			{Title: "Extra", Started: 1, Done: 1}, {Title: "", Started: 1, Running: 1},
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, parent, sess := workflowSession(t)
+			writeRun(t, sess, "wf_stats", `{"type":"started","agentId":"a","phase":"Audit"}
+{"type":"started","agentId":"b","phase":"Verify"}
+{"type":"started","agentId":"c","phase":"Extra"}
+{"type":"started","agentId":"d"}
+{"type":"result","agentId":"a"}
+{"type":"result","agentId":"c"}
+`, map[string]string{"a": "done", "b": "working", "c": "done", "d": "working"}, time.Minute)
+			ended := time.Now()
+			run := proto.Workflow{TaskID: "task", RunID: "wf_stats", Status: tt.status, Running: tt.status == proto.WorkflowRunning,
+				Phases: tt.phases, StartedAt: ended.Add(-time.Hour)}
+			if !run.Running {
+				run.EndedAt = &ended
+			}
+			w, _ := workflowProgress(filepath.Join(sess, "subagents", "workflows", "wf_stats"), "", parent, run, "")
+			if !reflect.DeepEqual(w.PhaseStats, tt.want) {
+				t.Fatalf("phase_stats = %+v, want %+v", w.PhaseStats, tt.want)
+			}
+			if w.AgentsStarted != 4 || w.AgentsDone != 2 || w.AgentsRunning != map[bool]int{true: 2, false: 0}[run.Running] {
+				t.Fatalf("run counters = %+v", w)
+			}
+			for _, a := range w.Agents {
+				if a.Running != (a.EndedAt == nil) {
+					t.Fatalf("running/ended_at mismatch: %+v", a)
+				}
+				if a.Status == "stopped" && !a.EndedAt.Equal(ended) {
+					t.Fatalf("stopped agent ended_at = %v, want run end %v", a.EndedAt, ended)
+				}
+			}
+			wire, err := json.Marshal(w.PhaseStats)
+			if err != nil || !strings.Contains(string(wire), `"title":""`) {
+				t.Fatalf("unknown phase title must be sent: %s (%v)", wire, err)
+			}
+		})
+	}
+}
+
+func TestWorkflowTotalsBeforeAgentLimit(t *testing.T) {
+	_, parent, sess := workflowSession(t)
+	var journal strings.Builder
+	const count = proto.WorkflowAgentsMax + 5
+	for i := range count {
+		fmt.Fprintf(&journal, "{\"type\":\"started\",\"agentId\":\"a%d\",\"phase\":\"Audit\"}\n", i)
+		if i < 10 {
+			fmt.Fprintf(&journal, "{\"type\":\"result\",\"agentId\":\"a%d\"}\n", i)
+		}
+	}
+	writeRun(t, sess, "wf_many", journal.String(), nil, time.Minute)
+	dir := filepath.Join(sess, "subagents", "workflows", "wf_many")
+	for i := range count {
+		body := edgeReply(fmt.Sprint(i), "2026-01-01T00:00:00Z", "model-a", `[{"type":"tool_use","id":"tool","name":"Read","input":{"file_path":"/work/project/example.go"}}]`,
+			`{"input_tokens":1,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"output_tokens":4}`)
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("agent-a%d.jsonl", i)), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := proto.Workflow{TaskID: "task", RunID: "wf_many", Status: proto.WorkflowRunning, Running: true, StartedAt: time.Now().Add(-time.Hour)}
+	w, _ := workflowProgress(dir, "", parent, run, "")
+	if len(w.Agents) != proto.WorkflowAgentsMax || w.Agents[0].ID != "a5" || w.Tokens != count*10 || w.Calls != count ||
+		w.AgentsStarted != count || w.AgentsDone != 10 || w.AgentsRunning != count-10 {
+		t.Fatalf("totals before limit = %+v", w)
+	}
+	if want := []proto.WorkflowPhaseStats{{Title: "Audit", Started: count, Done: 10, Running: count - 10}}; !reflect.DeepEqual(w.PhaseStats, want) {
+		t.Fatalf("phase_stats = %+v, want %+v", w.PhaseStats, want)
+	}
+	for _, a := range w.Agents {
+		if a.Model != "model-a" || a.Tokens != 10 || a.Calls != 1 || a.LatestTool == nil || a.LatestTool.Name != "Read" || a.LatestTool.Summary != "在读 example.go" {
+			t.Fatalf("agent details = %+v", a)
+		}
+	}
+}
+
+func TestWorkflowFinalRefreshesAgentDetails(t *testing.T) {
+	for _, completedAgent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("agent done %v", completedAgent), func(t *testing.T) {
+			_, parent, sess := workflowSession(t)
+			writeRun(t, sess, "wf_final", `{"type":"started","agentId":"a","phase":"Audit"}`+"\n", nil, time.Minute)
+			dir := filepath.Join(sess, "subagents", "workflows", "wf_final")
+			path := filepath.Join(dir, "agent-a.jsonl")
+			first := edgeReply("first", "2026-01-01T00:00:00Z", "model-a", `[{"type":"tool_use","id":"one","name":"Read","input":{}}]`, `{"input_tokens":10}`)
+			if err := os.WriteFile(path, []byte(first), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			run := proto.Workflow{TaskID: "task", RunID: "wf_final", Status: proto.WorkflowRunning, Running: true, StartedAt: time.Now().Add(-time.Hour)}
+			subagents := filepath.Join(sess, "subagents")
+			if w := readWorkflow(subagents, parent, run, ""); w.Tokens != 10 || w.Calls != 1 {
+				t.Fatalf("initial details = %+v", w)
+			}
+			last := edgeReply("last", "2026-01-01T00:01:00Z", "model-b", `[{"type":"tool_use","id":"two","name":"Bash","input":{"command":"go test ./..."}},{"type":"text","text":"Finished"}]`, `{"input_tokens":20}`)
+			if err := os.WriteFile(path, []byte(first+last), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if completedAgent {
+				journal := `{"type":"started","agentId":"a","phase":"Audit"}` + "\n" + `{"type":"result","agentId":"a"}` + "\n"
+				if err := os.WriteFile(filepath.Join(dir, "journal.jsonl"), []byte(journal), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(sess, "workflows", "wf_final.json"), []byte(`{"status":"completed"}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			wfCache.Lock()
+			key := dir + "\x00" + run.Status
+			memo := wfCache.m[key]
+			memo.readAt = time.Time{}
+			wfCache.m[key] = memo
+			wfCache.Unlock()
+			w := readWorkflow(subagents, parent, run, "")
+			if w.Running || w.Tokens != 20 || w.Calls != 2 || w.Agents[0].Model != "model-b" || w.Agents[0].EndedAt == nil ||
+				w.Agents[0].LastText != "Finished" || w.Agents[0].LatestTool.Name != "Bash" {
+				t.Fatalf("final details froze before final append: %+v, agent %+v", w, w.Agents[0])
+			}
+			if completedAgent && w.Agents[0].EndedAt.Format(time.RFC3339) != "2026-01-01T00:01:00Z" {
+				t.Fatalf("done agent end = %v", w.Agents[0].EndedAt)
+			}
+			if again := readWorkflow(subagents, parent, run, ""); !reflect.DeepEqual(again, w) {
+				t.Fatalf("final cache changed: %+v -> %+v", w, again)
+			}
+		})
+	}
+}

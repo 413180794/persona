@@ -201,6 +201,17 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 				continue
 			}
 			since := a.TurnStart
+			if sess.BackgroundWorking {
+				var started time.Time
+				for _, w := range sess.Workflows {
+					if w.Running && !w.StartedAt.IsZero() && (started.IsZero() || w.StartedAt.Before(started)) {
+						started = w.StartedAt
+					}
+				}
+				if !started.IsZero() {
+					since = started
+				}
+			}
 			if since.IsZero() {
 				since = sess.UpdatedAt
 			}

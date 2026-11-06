@@ -15,8 +15,9 @@ import (
 //	Monitor event: "<description>"            (the event itself in <event>)
 //	Monitor "<description>" stream ended / stopped
 //	Agent "<description>" finished / failed: … / is waiting on its own background work
+//	Dynamic workflow "<description>" completed / failed / was stopped
 var (
-	taskSummaryRe = regexp.MustCompile(`(?s)^(Background command|Monitor event:|Monitor|Agent)\s+"(.*)$`)
+	taskSummaryRe = regexp.MustCompile(`(?s)^(Background command|Monitor event:|Monitor|Agent|Dynamic workflow)\s+"(.*)$`)
 	// Where the quoted description ends: the last quote followed by how it went (descriptions may hold quotes).
 	taskOutcomeRe = regexp.MustCompile(`"\s+(completed|failed|was stopped|was killed|stream ended|stopped|finished|is waiting|timed out)`)
 	exitCodeRe    = regexp.MustCompile(`exit code (-?\d+)`)
@@ -54,6 +55,8 @@ func taskNote(xml string) (*proto.TaskNote, string) {
 			n.Kind = "monitor"
 		case "Agent":
 			n.Kind = "agent"
+		case "Dynamic workflow":
+			n.Kind = "workflow"
 		}
 	}
 	switch {
@@ -63,7 +66,7 @@ func taskNote(xml string) (*proto.TaskNote, string) {
 		if n.Status == "" {
 			n.Status = "stopped"
 		}
-	case strings.HasPrefix(outcome, "finished") && n.Status == "":
+	case (strings.HasPrefix(outcome, "finished") || strings.HasPrefix(outcome, "completed")) && n.Status == "":
 		n.Status = "completed"
 	case strings.HasPrefix(outcome, "failed") && n.Status == "":
 		n.Status = "failed"
@@ -119,6 +122,12 @@ func noteText(n *proto.TaskNote) string {
 			"killed": "子 Agent 已停止", "stopped": "子 Agent 已停止"}[n.Status]
 		if head == "" {
 			head = "子 Agent"
+		}
+	case "workflow":
+		head = map[string]string{"completed": "后台 workflow 完成", "failed": "后台 workflow 失败",
+			"killed": "后台 workflow 已停止", "stopped": "后台 workflow 已停止"}[n.Status]
+		if head == "" {
+			head = "后台 workflow"
 		}
 	default:
 		if n.Title == "" {
