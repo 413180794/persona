@@ -65,7 +65,7 @@ def check(page, tag, shot):
     jump = main.locator("[data-jump-to-call]").first
     expect(jump).to_be_visible()
     expect(jump).to_have_text("跳到发起的这一步")
-    ok(f"{tag}: the opened notice offers "Jump to the step that started it" beside "View output"")
+    ok(f'{tag}: the opened notice offers "Jump to the step that started it" beside "View output"')
     shot("notice-open")
 
     # the chat at its end first, so the jump has to move it and stop following
