@@ -35,19 +35,28 @@ const relayWait = 10 * time.Second
 // short of Persona Link's handshake timeout (8 s a candidate).
 const linkManagerWait = 5 * time.Second
 
-// relayState is the connections waiting for the manager, and the Persona Links relayed now.
+// relayState is the connections waiting for the manager, the Persona Links relayed now, and every relay a manager
+// has taken (cutRelays ends them when the machine moves or the manager goes).
 type relayState struct {
 	mu      sync.Mutex
 	pending map[string]chan *relayTaken
-	owner   map[string]string // pending id → the manager it was handed to (only it may take it)
+	owner   map[string]relayFor // pending id → what it is for (only its manager may take it)
 	links   map[*relayLink]struct{}
+	taken   map[*relayTaken]struct{}
 }
 
-// relayTaken is the manager's side of a relay, once it dialed; done closes when the hub is through with it.
+// relayFor is who a relay was handed to, and the machine it is for ("": an extension's request).
+type relayFor struct{ manager, machine string }
+
+// relayTaken is the manager's side of a relay, once it dialed; done closes when the hub is through with it. outside
+// is the connection it is spliced to when that is Persona Link's (rs.mu): it is told to try again when the relay is
+// cut, and lands at the machine's manager then.
 type relayTaken struct {
-	id   string // devices.accept's
-	conn *websocket.Conn
-	done chan struct{}
+	id      string // devices.accept's
+	conn    *websocket.Conn
+	done    chan struct{}
+	handed  relayFor
+	outside *websocket.Conn
 }
 
 // relayLink is a Persona Link connection (or one of its streams) the hub relays.
@@ -204,6 +213,15 @@ func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire
 		return
 	}
 	defer close(taken.done)
+	rs.mu.Lock()
+	taken.outside = conn
+	rs.mu.Unlock()
+	// Moved meanwhile (the move's cut ran before outside was set): to the new manager, from the start.
+	if h.machineOwner(a.MachineID) != taken.handed.manager {
+		_ = conn.Close(websocket.StatusTryAgainLater, relayMoved)
+		_ = taken.conn.Close(websocket.StatusTryAgainLater, relayMoved)
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	every, timeout, _ := h.linkPingTimes()
@@ -256,9 +274,13 @@ func (h *Hub) handToManagerVia(ctx context.Context, to, method string, a *device
 	}
 	rs.pending[id] = ch
 	if rs.owner == nil {
-		rs.owner = map[string]string{}
+		rs.owner = map[string]relayFor{}
 	}
-	rs.owner[id] = to
+	f := relayFor{manager: to}
+	if a != nil {
+		f.machine = a.MachineID
+	}
+	rs.owner[id] = f
 	rs.mu.Unlock()
 	cctx, cancel := context.WithTimeout(ctx, relayWait)
 	defer cancel()
@@ -320,10 +342,14 @@ func (h *Hub) serveRelay(w http.ResponseWriter, r *http.Request) {
 	}
 	id := q.Get("id")
 	rs.mu.Lock()
-	ch := rs.pending[id]
+	ch, f := rs.pending[id], rs.owner[id]
 	rs.mu.Unlock()
 	if ch == nil {
 		writeErr(w, http.StatusNotFound, errors.New("no such relay"))
+		return
+	}
+	if f.machine != "" && h.machineOwner(f.machine) != ident.ID {
+		writeErr(w, http.StatusForbidden, errors.New("the machine is another manager's now"))
 		return
 	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
@@ -331,12 +357,18 @@ func (h *Hub) serveRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn.SetReadLimit(64 << 20)
-	t := &relayTaken{id: id, conn: conn, done: make(chan struct{})}
+	t := &relayTaken{id: id, conn: conn, done: make(chan struct{}), handed: f}
 	rs.mu.Lock()
-	delivered := rs.pending[id] == ch
+	// Still the machine's manager's, checked with the relay registered (cutRelays takes rs.mu after a move changed the
+	// owner): a move either finds it here or is seen by this check.
+	delivered := rs.pending[id] == ch && (f.machine == "" || h.machineOwner(f.machine) == f.manager)
 	if delivered {
 		delete(rs.pending, id)
 		delete(rs.owner, id)
+		if rs.taken == nil {
+			rs.taken = map[*relayTaken]struct{}{}
+		}
+		rs.taken[t] = struct{}{}
 		ch <- t // buffered: one delivery per id
 	}
 	rs.mu.Unlock()
@@ -345,6 +377,7 @@ func (h *Hub) serveRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	<-t.done
+	h.letRelayGo(t)
 }
 
 // relayOwner is the manager a relay request (serveRelay's query) is for: the machine's for a node stream through
@@ -358,7 +391,7 @@ func (h *Hub) relayOwner(q url.Values) string {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 	if o, ok := rs.owner[q.Get("id")]; ok {
-		return o
+		return o.manager
 	}
 	return devicesOwner
 }
@@ -378,6 +411,12 @@ func (h *Hub) relayThroughHub(w http.ResponseWriter, r *http.Request, hub, mid s
 		return
 	}
 	conn.SetReadLimit(64 << 20)
+	t := &relayTaken{conn: conn, handed: relayFor{manager: h.machineOwner(mid), machine: mid}}
+	if !h.holdRelay(t) {
+		_ = conn.Close(websocket.StatusTryAgainLater, relayMoved)
+		return
+	}
+	defer h.letRelayGo(t)
 	nc := websocket.NetConn(octx, conn, websocket.MessageBinary)
 	done := make(chan struct{}, 2)
 	go func() { _, _ = io.Copy(pipe.w, nc); done <- struct{}{} }()
@@ -425,6 +464,59 @@ func spliceWS(a, b *websocket.Conn, why func() string) {
 	go pass(b, a)
 	<-done
 	<-done
+}
+
+// relayMoved is why a relay is cut: its machine is another manager's now, or its manager is gone.
+const relayMoved = "the machine's manager changed"
+
+// holdRelay keeps t among the relays taken (cutRelays) if its machine is still its manager's; false: it is not, and
+// t is not kept. Checked with t registered: a move's cut, which comes after the owner changed, finds it, or the check
+// sees the new owner.
+func (h *Hub) holdRelay(t *relayTaken) bool {
+	rs := &h.relay
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	if t.handed.machine != "" && h.machineOwner(t.handed.machine) != t.handed.manager {
+		return false
+	}
+	if rs.taken == nil {
+		rs.taken = map[*relayTaken]struct{}{}
+	}
+	rs.taken[t] = struct{}{}
+	return true
+}
+
+// letRelayGo: the hub is through with t.
+func (h *Hub) letRelayGo(t *relayTaken) {
+	rs := &h.relay
+	rs.mu.Lock()
+	delete(rs.taken, t)
+	rs.mu.Unlock()
+}
+
+// cutRelays ends the relays a manager may not keep: every one of manager gone's (gone != ""), and those for machine
+// mid handed to another manager than its owner now (mid != ""). Persona Link is told to try again (1013) and lands
+// at the machine's manager; the manager's side is closed the same way.
+func (h *Hub) cutRelays(gone, mid string) {
+	owner := ""
+	if mid != "" {
+		owner = h.machineOwner(mid)
+	}
+	rs := &h.relay
+	rs.mu.Lock()
+	var cut []*websocket.Conn
+	for t := range rs.taken {
+		if gone != "" && t.handed.manager == gone || mid != "" && t.handed.machine == mid && t.handed.manager != owner {
+			if t.outside != nil {
+				cut = append(cut, t.outside)
+			}
+			cut = append(cut, t.conn)
+		}
+	}
+	rs.mu.Unlock()
+	for _, c := range cut {
+		go func() { _ = c.Close(websocket.StatusTryAgainLater, relayMoved) }()
+	}
 }
 
 // closeLinks closes the links that came with a revoked credential.

@@ -14,7 +14,7 @@ import (
 // assistant does with them.
 
 // assistantAppCall answers the app.call methods of this file; false for the others.
-func (h *Hub) assistantAppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
+func (h *Hub) assistantAppCall(ctx context.Context, from string, p assistantwire.AppCall) (json.RawMessage, bool, error) {
 	var out any
 	var err error
 	switch p.AppID + " " + p.Method {
@@ -23,7 +23,7 @@ func (h *Hub) assistantAppCall(ctx context.Context, p assistantwire.AppCall) (js
 		for _, s := range h.selfSettings() {
 			list = append(list, assistantwire.Setting{Key: s.key, Title: s.title, About: s.about, Value: s.value, Actions: s.actions()})
 		}
-		for _, s := range h.managerSettings(ctx) { // the mail accounts, the sources' own rules (the manager's)
+		for _, s := range h.managerSettings(ctx, from) { // the mail accounts, the sources' own rules (the caller's)
 			list = append(list, assistantwire.Setting{Key: s.Key, Title: s.Title, About: s.About, Value: s.Value, Actions: s.Actions})
 		}
 		out = map[string]any{"settings": list}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -170,12 +171,18 @@ func (l assistantLink) deviceCallFrom(ctx context.Context, from string, p assist
 	if m == nil || h.machineUntrusted(m.cfg.ID) {
 		return nil, noDevice(p.Device)
 	}
+	// The node is reached only while the machine is still from's (busNode.Call checks it again as it sends): a move
+	// after the check does not make this call reach the new manager's node.
+	ctx = withCaller(ctx, from)
 	if out, ok, err := h.channelsDeviceCall(ctx, m, p); ok { // following a turn, sending once (assistant_channels.go)
 		return out, err
 	}
 	switch p.Method {
 	case assistantwire.DeviceSessionsList:
 		list := h.decorated(m)
+		if h.machineOwner(m.cfg.ID) != from { // moved while it was read
+			return nil, noDevice(p.Device)
+		}
 		return json.Marshal(map[string]any{"sessions": list, "muted": h.mutedSessions(m.cfg.ID, list)})
 	case assistantwire.DeviceSessionGet:
 		var a struct {
@@ -185,6 +192,9 @@ func (l assistantLink) deviceCallFrom(ctx context.Context, from string, p assist
 			return nil, err
 		}
 		s, ok := m.session(a.SessionID)
+		if h.machineOwner(m.cfg.ID) != from { // moved while it was read
+			return nil, noDevice(p.Device)
+		}
 		if ok {
 			s.Assistant = isAssistant(s, m.assistantCwd())
 			if s.Assistant {
@@ -201,25 +211,39 @@ func (l assistantLink) deviceCallFrom(ctx context.Context, from string, p assist
 }
 
 func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, error) {
+	return l.appCallFrom(ctx, assistantwire.AssistantID, p)
+}
+
+// appCallFrom is AppCall from manager from: one naming a machine only on a machine of its own (ownership.go), and
+// what concerns a manager (its settings, its extensions' pushes) is from's.
+func (l assistantLink) appCallFrom(ctx context.Context, from string, p assistantwire.AppCall) (json.RawMessage, error) {
 	h := l.h
-	if out, ok, err := h.assistantAppCall(ctx, p); ok { // assistant_apps.go
+	var named struct {
+		MachineID string `json:"machine_id"`
+	}
+	_ = json.Unmarshal(p.Params, &named)
+	if named.MachineID != "" && h.machineOwner(named.MachineID) != from {
+		return nil, &rpc.Error{Code: devicewire.CodeNoDevice, Message: fmt.Sprintf("%s on machine %q: another manager's",
+			clip(p.Method, 64), clip(named.MachineID, 64))}
+	}
+	if out, ok, err := h.assistantAppCall(ctx, from, p); ok { // assistant_apps.go
 		return out, err
 	}
-	if out, ok, err := h.extAppCall(ctx, p); ok { // what the manager's extensions ask of the hub (extensions_link.go)
+	if out, ok, err := h.extAppCall(ctx, from, p); ok { // what the manager's extensions ask of the hub (extensions_link.go)
 		return out, err
 	}
 	if out, ok, err := h.fleetAppCall(ctx, p); ok { // what the hub still runs for the nodes (fleet_link.go)
 		return out, err
 	}
 	if p.Method == assistantwire.AppTool {
-		return h.appTool(ctx, p.AppID, p.Params)
+		return h.appTool(ctx, from, p.AppID, p.Params)
 	}
 	return nil, fmt.Errorf("app %s has no method %s", p.AppID, p.Method)
 }
 
-// appTool runs the one of the assistant's tools that is still the hub's to run: the hub's own settings
-// (jarvis_settings without the assistant's, settings_tool.go there).
-func (h *Hub) appTool(ctx context.Context, app string, params json.RawMessage) (json.RawMessage, error) {
+// appTool runs the one of the assistant's tools that is still the hub's to run for manager from: the hub's own
+// settings (jarvis_settings without the assistant's, settings_tool.go there).
+func (h *Hub) appTool(ctx context.Context, from, app string, params json.RawMessage) (json.RawMessage, error) {
 	var a struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
@@ -240,7 +264,7 @@ func (h *Hub) appTool(ctx context.Context, app string, params json.RawMessage) (
 		if m == nil {
 			return nil, fmt.Errorf("%w %q", assistantwire.ErrNoDevice, a.MachineID)
 		}
-		res, err = h.toolJarvisSettings(ctx, m, a.SessionID, a.Arguments)
+		res, err = h.toolJarvisSettings(ctx, from, m, a.SessionID, a.Arguments)
 	default:
 		return nil, fmt.Errorf("app %s has no tool %s", app, a.Name)
 	}
@@ -314,17 +338,26 @@ func init() {
 		out, err := assistantLink{h}.deviceCallFrom(ctx, c.managerID(), p)
 		return out, busCodedError(err)
 	})
-	handleBusCall(assistantwire.MethodApp, func(h *Hub, ctx context.Context, p assistantwire.AppCall) (json.RawMessage, error) {
+	handleBus(assistantwire.MethodApp, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var p assistantwire.AppCall
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: assistantwire.MethodApp + ": " + err.Error()}
+		}
 		if p.TimeoutMS > 0 { // the assistant stops waiting then: so does the hub (a model call)
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, time.Duration(p.TimeoutMS)*time.Millisecond)
 			defer cancel()
 		}
-		out, err := assistantLink{h}.AppCall(ctx, p)
+		out, err := assistantLink{h}.appCallFrom(ctx, c.managerID(), p)
 		return out, busCodedError(err)
 	})
-	handleBusCall(assistantwire.MethodNotify, func(h *Hub, ctx context.Context, p assistantwire.NotifyRequest) (map[string]bool, error) {
-		if err := (assistantLink{h}).NotifyRequest(ctx, p); err != nil {
+	handleBus(assistantwire.MethodNotify, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var p assistantwire.NotifyRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: assistantwire.MethodNotify + ": " + err.Error()}
+		}
+		// Only about its own machines, sessions and cards (fleet_link.go deliverPushFrom).
+		if err := h.deliverPushFrom(c.managerID(), p.Notification); err != nil {
 			return nil, busCodedError(err)
 		}
 		return map[string]bool{"ok": true}, nil

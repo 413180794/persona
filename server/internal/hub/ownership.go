@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -146,12 +147,24 @@ func (h *Hub) machineOwner(mid string) string {
 }
 
 // entryOwner is the manager that carries machine mid: the one hub.json's machine was moved to (moveMachine), else
-// the carrier. Only hub.json's machines move (assign has no other), so any other machine is the carrier's.
+// the carrier. Only hub.json's machines move, so any other machine is the carrier's, and so is one whose entry was
+// removed while its move is still kept (forgetMachineOwner drops it).
 func (h *Hub) entryOwner(mid string) string {
 	d := &h.devices
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return cmp.Or(d.assign[mid], devicesOwner)
+	o := d.assign[mid]
+	if o == "" {
+		return devicesOwner
+	}
+	entries := d.entries // as cfgEntries reads them
+	if !d.started && h.cfg != nil {
+		entries = h.cfg.Machines
+	}
+	if !slices.ContainsFunc(entries, func(mc MachineConfig) bool { return mc.ID == mid }) {
+		return devicesOwner
+	}
+	return o
 }
 
 // sessionOwner is the manager session sid on machine mid belongs to: its machine's (a manager's own conversation runs
@@ -646,9 +659,12 @@ func (h *Hub) readOwnersMoving(ctx context.Context) error {
 }
 
 // machineHandedOver makes machine mid manager to's in what the hub shows and routes, offline until it reports it,
-// withdraws the other managers' cards on it, and hands every manager its machines again.
+// withdraws the other managers' cards on it, cuts the relays another manager has for it (Persona Link comes back to
+// to), tells the managers their mutes, and hands every manager its machines again.
 func (h *Hub) machineHandedOver(mid, to string) {
 	h.withdrawCardsOn(mid, to)
+	h.cutRelays("", mid)
+	defer h.mutesChanged()
 	if m := h.localMachine(mid); m != nil {
 		m.mu.Lock()
 		m.owner = to
@@ -776,35 +792,60 @@ func (h *Hub) ownsMachine(c *busConn, mid string) error {
 	return nil
 }
 
-// cardAllowed: manager owner may report pending card ix. A card naming a machine, or a session (by the machine it is
-// on: a machine's list or a manager's conversation), only on a machine of its own, so no card looks like it comes
-// from another manager's session and gets its answer; a card naming neither is its own.
-func (h *Hub) cardAllowed(owner string, ix proto.Interaction) bool {
-	if ix.MachineID != "" {
-		return h.machineOwner(ix.MachineID) == owner
+// ownsRef: what manager owner says may name machine mid and session sid (either may be ""): only a machine of its
+// own. A session named without its machine goes by where it is (the machines that list it, the manager whose
+// conversation it is): none of another manager's. What names neither is its own.
+func (h *Hub) ownsRef(owner, mid, sid string) bool {
+	if mid != "" {
+		return h.machineOwner(mid) == owner
 	}
-	if ix.SessionID == "" {
+	if sid == "" || owner == devicesOwner && !h.anyMoved() { // nothing moved: every machine is the carrier's
 		return true
 	}
-	if id, _ := h.conversation(ix.SessionID); id != "" && id != owner {
+	if id, _ := h.conversation(sid); id != "" && id != owner {
 		return false
 	}
 	for _, m := range h.machinesNow() {
-		if _, ok := m.session(ix.SessionID); ok && h.machineOwner(m.cfg.ID) != owner {
+		if _, ok := m.session(sid); ok && h.machineOwner(m.cfg.ID) != owner {
 			return false
 		}
 	}
 	return true
 }
 
+// anyMoved: some machine is carried by another manager than the carrier.
+func (h *Hub) anyMoved() bool {
+	d := &h.devices
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.assign) > 0
+}
+
+// cardAllowed: manager owner may report pending card ix: one naming a machine, or a session, only on a machine of its
+// own (ownsRef), so no card looks like it comes from another manager's session and gets its answer; a card naming
+// neither is its own.
+func (h *Hub) cardAllowed(owner string, ix proto.Interaction) bool {
+	return h.ownsRef(owner, ix.MachineID, ix.SessionID)
+}
+
 // withdrawCardsOn drops the pending cards on machine mid of another manager than to (mid moved to it: its sessions
-// and the questions about them are to's now); the apps are told they are over.
+// and the questions about them are to's now), those naming one of its sessions without the machine too; the apps
+// are told they are over. A card naming no session of mid's stays its manager's.
 func (h *Hub) withdrawCardsOn(mid, to string) {
+	on := map[string]bool{}
+	if m := h.localMachine(mid); m != nil {
+		for _, s := range m.sessionList() {
+			on[s.SessionID] = true
+		}
+	}
 	f := &h.reported
 	f.mu.Lock()
 	var gone []string
 	for id, ix := range f.interactions {
-		if ix.MachineID == mid && cmp.Or(ix.Manager, assistantwire.AssistantID) != to {
+		if cmp.Or(ix.Manager, assistantwire.AssistantID) == to {
+			continue
+		}
+		if ix.MachineID == mid || ix.MachineID == "" && ix.SessionID != "" && on[ix.SessionID] {
 			gone = append(gone, id)
 			delete(f.interactions, id)
 		}
@@ -843,6 +884,20 @@ func (h *Hub) forgetMachineOwner(ctx context.Context, mid string) {
 	d.mu.Lock()
 	d.assign = next
 	d.mu.Unlock()
+}
+
+// callerKey carries the manager whose device.call a node call is (withCaller).
+type callerKey struct{}
+
+// withCaller marks ctx as manager id's device.call: the node is reached only while the machine is id's (busNode.Call).
+func withCaller(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, callerKey{}, id)
+}
+
+// callerOf is the manager withCaller put on ctx.
+func callerOf(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(callerKey{}).(string)
+	return id, ok
 }
 
 // deviceCallAllowed: manager id may make device.call p: on a machine of its own only (the calls about every machine,

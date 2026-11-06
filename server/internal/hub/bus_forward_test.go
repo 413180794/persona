@@ -138,7 +138,7 @@ func helloAssistant(t *testing.T, h *Hub, srv *httptest.Server, handle rpc.Handl
 
 // withoutSeq is a message the apps got without the event_seq the hub numbers every message with.
 func withoutSeq(b []byte) json.RawMessage {
-	var m map[string]json.RawMessage
+	var m map[string]any // at every depth: the hub passes a manager's message on as it read it (keys in order)
 	if json.Unmarshal(b, &m) != nil {
 		return b
 	}

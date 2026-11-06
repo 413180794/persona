@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,7 +17,9 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // What comes from the nodes is the manager's (internal/assistant fleet_*.go; docs/machines.md "Who handles computer events"):
@@ -75,6 +78,9 @@ func init() {
 		f.interactions[p.Interaction.ID] = p.Interaction
 		f.mu.Unlock()
 		h.broadcast(map[string]any{"type": "interaction", "interaction": p.Interaction})
+		if !h.cardAllowed(c.managerID(), p.Interaction) { // its machine moved meanwhile (dropCard)
+			h.dropCard(c.managerID(), p.Interaction.ID)
+		}
 	})
 	handleBusEvent(assistantwire.EventFleetResolved, func(h *Hub, c *busConn, params json.RawMessage) {
 		var p assistantwire.FleetResolved
@@ -185,6 +191,13 @@ func (h *Hub) takeFleetInteractionsFrom(owner string, list []proto.Interaction) 
 	}
 	f.interactions = all
 	f.mu.Unlock()
+	defer func() {
+		for _, ix := range list { // after the apps were told: its machine moved meanwhile (dropCard)
+			if !h.cardAllowed(owner, ix) {
+				h.dropCard(owner, ix.ID)
+			}
+		}
+	}()
 	for id := range old {
 		if _, ok := now[id]; !ok {
 			h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
@@ -194,6 +207,24 @@ func (h *Hub) takeFleetInteractionsFrom(owner string, list []proto.Interaction) 
 		if o, ok := old[ix.ID]; !ok || !sameJSON(o, ix) {
 			h.broadcast(map[string]any{"type": "interaction", "interaction": ix})
 		}
+	}
+}
+
+// dropCard withdraws card id of manager owner's that was kept as its machine moved away. The move's withdrawal
+// (withdrawCardsOn) may have run between the check and keeping it, or between keeping it and telling the apps, so a
+// card is checked again once the apps were told: then it goes, and the apps are told it is over, even when the
+// withdrawal took it already (it was shown again after). Another manager's card with the id stays.
+func (h *Hub) dropCard(owner, id string) {
+	f := &h.reported
+	f.mu.Lock()
+	ix, ok := f.interactions[id]
+	other := ok && cmp.Or(ix.Manager, assistantwire.AssistantID) != owner
+	if ok && !other {
+		delete(f.interactions, id)
+	}
+	f.mu.Unlock()
+	if !other {
+		h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 	}
 }
 
@@ -349,16 +380,45 @@ func (h *Hub) markSeen(machine, session string) {
 	_ = h.notifyBus(h.sessionOwner(machine, session), assistantwire.EventSeen, assistantwire.FleetSeen{MachineID: machine, SessionID: session})
 }
 
-// mutesChanged tells every manager the muted spaces / agents (the hub's settings mutes) after a change; each also
-// gets them in its hello's answer (assistant_link.go). They are the hub's: a manager never reads them from a database.
-// Mutes that could not be read are not sent: the managers keep the last ones (an empty set would push every muted
-// agent). Sends are one at a time, each with the mutes as they are then, so an older set never overtakes a newer one.
+// mutesChanged tells every manager the muted spaces / agents (the hub's settings mutes) after a change and after a
+// machine moved; each also gets them in its hello's answer (assistant_link.go). They are the hub's: a manager never
+// reads them from a database. Each manager's fleet.mutes has its own machines' only (mutesFor). Mutes that could not
+// be read are not sent: the managers keep the last ones (an empty set would push every muted agent). Sends are one at
+// a time, each with the mutes as they are then, so an older set never overtakes a newer one.
 func (h *Hub) mutesChanged() {
 	h.mutesSend.Lock()
 	defer h.mutesSend.Unlock()
-	if m, ok := h.mutesEvent(); ok {
-		_ = h.notifyManagers(assistantwire.EventMutes, m)
+	m, ok := h.mutesEvent()
+	if !ok {
+		return
 	}
+	for _, peer := range h.busRoster() {
+		if peer.Role == bus.RoleManager {
+			_ = h.notifyBus(peer.ID, assistantwire.EventMutes, h.mutesFor(peer.ID, m))
+		}
+	}
+}
+
+// mutesFor is m as manager id gets it: the mutes of its own machines only ("<machine>/<space or session>",
+// ownership.go), never another manager's.
+func (h *Hub) mutesFor(id string, m assistantwire.FleetMutes) assistantwire.FleetMutes {
+	if m.Mutes == nil {
+		return m
+	}
+	mine := func(keys []string) []string {
+		if keys == nil {
+			return nil
+		}
+		out := make([]string, 0, len(keys))
+		for _, k := range keys {
+			if mid, _, _ := strings.Cut(k, "/"); h.machineOwner(mid) == id {
+				out = append(out, k)
+			}
+		}
+		return out
+	}
+	return assistantwire.FleetMutes{Mutes: &assistantwire.Mutes{Spaces: mine(m.Mutes.Spaces), Sessions: mine(m.Mutes.Sessions),
+		Allowed: mine(m.Mutes.Allowed)}}
 }
 
 // mutesRetry hands manager id the mutes once they can be read (they were not when it connected), while it is
@@ -372,7 +432,7 @@ func (h *Hub) mutesRetry(id string) {
 		h.mutesSend.Lock()
 		m, ok := h.mutesEvent()
 		if ok {
-			_ = h.notifyBus(id, assistantwire.EventMutes, m)
+			_ = h.notifyBus(id, assistantwire.EventMutes, h.mutesFor(id, m))
 		}
 		h.mutesSend.Unlock()
 		if ok {
@@ -408,7 +468,7 @@ func (h *Hub) mutesSettle(c *busConn) {
 		h.mutesSend.Lock()
 		defer h.mutesSend.Unlock()
 		if m, ok := h.mutesEvent(); ok && h.busCurrent(c) { // unreadable: mutesRetry's
-			_ = c.peer.Notify(assistantwire.EventMutes, m)
+			_ = c.peer.Notify(assistantwire.EventMutes, h.mutesFor(c.managerID(), m))
 		}
 	}()
 }
@@ -498,22 +558,41 @@ func (h *Hub) fleetAppCall(ctx context.Context, p assistantwire.AppCall) (json.R
 
 // ---- the pushes the manager decided on ----
 
-// deliverPush delivers what the manager asks (notify.request): an assistant's push, an agent's finished turn, a
-// card. Only the center has apps and devices.
+// deliverPush is deliverPushFrom the assistant the hub starts.
 func (h *Hub) deliverPush(n assistantwire.Notification) error {
+	return h.deliverPushFrom(assistantwire.AssistantID, n)
+}
+
+// deliverPushFrom delivers what manager from asks (notify.request): an assistant's push, an agent's finished turn, a
+// card. Only the center has apps and devices. Only about its own (ownership.go): a card's push is for a card it
+// reported that is pending, and the hub pushes its own copy of it; any other push names a machine and session of its
+// own, or none. What the extensions are told of it (agent.finished, agent.needs_you) goes to from's only.
+func (h *Hub) deliverPushFrom(from string, n assistantwire.Notification) error {
 	switch n.Kind {
-	case assistantwire.NotifyPush:
-		h.notifyDone("assistant", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body, pushWants{})
-	case assistantwire.NotifyDone:
-		h.notifyDone("done", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body,
-			pushWants{Kind: "done", Took: time.Duration(n.TookMS) * time.Millisecond, Long: time.Duration(n.LongMS) * time.Millisecond})
-	case assistantwire.NotifyReply:
-		h.notifyReply(n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body)
 	case assistantwire.NotifyInput:
 		if n.Interaction == nil {
 			return errors.New("an input push needs its interaction")
 		}
-		h.notifyInteraction(*n.Interaction, n.Subtitle)
+		ix, ok := h.pendingInteraction(n.Interaction.ID)
+		if !ok || cmp.Or(ix.Manager, assistantwire.AssistantID) != from {
+			return &rpc.Error{Code: devicewire.CodeNoDevice, Message: "an input push is for a pending card the manager reported"}
+		}
+		h.notifyInteraction(from, ix, n.Subtitle)
+		return nil
+	case assistantwire.NotifyPush, assistantwire.NotifyDone, assistantwire.NotifyReply:
+		if !h.ownsRef(from, n.DeviceID, n.SessionID) {
+			return &rpc.Error{Code: devicewire.CodeNoDevice, Message: fmt.Sprintf("a push about machine %q, session %q: another manager's",
+				clip(n.DeviceID, 64), clip(n.SessionID, 64))}
+		}
+	}
+	switch n.Kind {
+	case assistantwire.NotifyPush:
+		h.notifyDone(from, "assistant", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body, pushWants{})
+	case assistantwire.NotifyDone:
+		h.notifyDone(from, "done", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body,
+			pushWants{Kind: "done", Took: time.Duration(n.TookMS) * time.Millisecond, Long: time.Duration(n.LongMS) * time.Millisecond})
+	case assistantwire.NotifyReply:
+		h.notifyReply(n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body)
 	default:
 		return fmt.Errorf("unknown notification kind %q", n.Kind)
 	}

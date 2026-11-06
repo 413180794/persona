@@ -46,7 +46,7 @@ func TestWSNotifyDone(t *testing.T) {
 				h.onClientMessage(context.Background(), c, []byte(tc.hello))
 				<-c.out // client_hello_ack
 			}
-			h.notifyDone("done", "test-machine", "测试设备", "test-session", "任务完成", "", pushWants{Kind: "done", Took: tc.took, Long: time.Minute})
+			h.notifyDone(assistantwire.AssistantID, "done", "test-machine", "测试设备", "test-session", "任务完成", "", pushWants{Kind: "done", Took: tc.took, Long: time.Minute})
 			select {
 			case raw := <-c.out:
 				if !tc.receive {
@@ -87,7 +87,7 @@ func TestWSNotifyInteractionAndAssistant(t *testing.T) {
 		if err := h.push.setPrefs(c.device, NotifyPrefs{Input: input, Done: DoneOff}); err != nil {
 			t.Fatal(err)
 		}
-		h.notifyInteraction(ix, "测试设备")
+		h.notifyInteraction(assistantwire.AssistantID, ix, "测试设备")
 		select {
 		case raw := <-c.out:
 			var got map[string]string
@@ -150,7 +150,7 @@ func TestWSNotifyDropsASlowClientWithoutHoldingTheHub(t *testing.T) {
 	notified := make(chan struct{})
 	go func() {
 		defer close(notified)
-		h.notifyDone("done", "test-machine", "测试设备", "test-session", "任务完成", "", pushWants{Kind: "done", Took: time.Hour, Long: time.Minute})
+		h.notifyDone(assistantwire.AssistantID, "done", "test-machine", "测试设备", "test-session", "任务完成", "", pushWants{Kind: "done", Took: time.Hour, Long: time.Minute})
 	}()
 	select {
 	case <-notified:
@@ -229,7 +229,7 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 	}
 
 	// No desktop: everything comes.
-	h.notifyInteraction(ix, "box")
+	h.notifyInteraction(assistantwire.AssistantID, ix, "box")
 	if k := got(); k != "interaction" {
 		t.Fatalf("no desktop, interaction: %q", k)
 	}
@@ -238,11 +238,11 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 	h.mu.Lock()
 	h.clients[mac] = struct{}{}
 	h.mu.Unlock()
-	h.notifyInteraction(ix, "box")
+	h.notifyInteraction(assistantwire.AssistantID, ix, "box")
 	if k := got(); k != "" {
 		t.Fatalf("muted while a desktop is online, still got %q", k)
 	}
-	h.notifyDone("done", "m", "box", "s", "任务完成", "", pushWants{Kind: "done", Took: time.Hour, Long: time.Minute})
+	h.notifyDone(assistantwire.AssistantID, "done", "m", "box", "s", "任务完成", "", pushWants{Kind: "done", Took: time.Hour, Long: time.Minute})
 	if k := got(); k != "" {
 		t.Fatalf("muted while a desktop is online, still got %q", k)
 	}
@@ -251,7 +251,7 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 		t.Fatalf("muted while a desktop is online, still got %q", k)
 	}
 	// An explicit one still goes.
-	h.notifyDone("assistant", "", "Persona", "s", "提醒", "有新进展", pushWants{})
+	h.notifyDone(assistantwire.AssistantID, "assistant", "", "Persona", "s", "提醒", "有新进展", pushWants{})
 	if k := got(); k != "assistant" {
 		t.Fatalf("explicit notification while muted: %q", k)
 	}
@@ -260,7 +260,7 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 	h.mu.Lock()
 	delete(h.clients, mac)
 	h.mu.Unlock()
-	h.notifyInteraction(ix, "box")
+	h.notifyInteraction(assistantwire.AssistantID, ix, "box")
 	if k := got(); k != "interaction" {
 		t.Fatalf("desktop gone, interaction: %q", k)
 	}
@@ -272,7 +272,7 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 	if err := h.push.setPrefs(phone.device, NotifyPrefs{Input: true, Done: DoneAlways}); err != nil {
 		t.Fatal(err)
 	}
-	h.notifyInteraction(ix, "box")
+	h.notifyInteraction(assistantwire.AssistantID, ix, "box")
 	if k := got(); k != "interaction" {
 		t.Fatalf("not muted, interaction: %q", k)
 	}

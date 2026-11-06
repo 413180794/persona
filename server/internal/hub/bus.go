@@ -559,8 +559,10 @@ func (h *Hub) notifyBus(id, event string, params any) error {
 	return c.peer.Notify(event, params)
 }
 
-// busHangUp closes every open connection of identity id, with code and reason.
+// busHangUp closes every open connection of identity id, with code and reason, and the relays it took
+// (devices_relay.go cutRelays: a revoked or replaced manager keeps no Persona Link or stream).
 func (h *Hub) busHangUp(id string, code websocket.StatusCode, reason string) {
+	defer h.cutRelays(id, "")
 	h.bus.mu.Lock()
 	var cut []*busConn
 	for c := range h.bus.live {

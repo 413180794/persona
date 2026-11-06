@@ -15,6 +15,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -272,7 +273,7 @@ func TestSelfSettingsBlocksClaudeDirsThroughTheManager(t *testing.T) {
 		t.Helper()
 		done := make(chan string, 1)
 		go func() {
-			out, err := h.toolJarvisSettings(ctx, m, "s1", json.RawMessage(args))
+			out, err := h.toolJarvisSettings(ctx, assistantwire.AssistantID, m, "s1", json.RawMessage(args))
 			if err != nil {
 				out = "error: " + err.Error()
 			}

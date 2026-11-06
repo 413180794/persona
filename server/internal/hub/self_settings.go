@@ -63,7 +63,7 @@ func (h *Hub) selfSettings() []selfSetting {
 	return out
 }
 
-func (h *Hub) toolJarvisSettings(ctx context.Context, m *Machine, sessionID string, args json.RawMessage) (string, error) {
+func (h *Hub) toolJarvisSettings(ctx context.Context, from string, m *Machine, sessionID string, args json.RawMessage) (string, error) {
 	var a struct {
 		Action string          `json:"action"`
 		Key    string          `json:"key"`
@@ -81,12 +81,12 @@ func (h *Hub) toolJarvisSettings(ctx context.Context, m *Machine, sessionID stri
 		}
 	}
 	if s == nil {
-		for _, ms := range h.managerSettings(ctx) { // the manager's (mail, the sources' own rules): it does the change
+		for _, ms := range h.managerSettings(ctx, from) { // the caller's (mail, the sources' own rules): it does the change
 			if ms.Key == a.Key {
 				var res struct {
 					Text string `json:"text"`
 				}
-				if err := h.extCall(ctx, extwire.HubSettingsTool, map[string]any{"machine_id": m.cfg.ID, "session_id": sessionID,
+				if err := h.extCallTo(ctx, from, extwire.HubSettingsTool, map[string]any{"machine_id": m.cfg.ID, "session_id": sessionID,
 					"arguments": args}, &res); err != nil {
 					return "", err
 				}
@@ -160,8 +160,8 @@ func changeSummary(l i18n.Lang, title, before, after string) string {
 }
 
 // managerSettings are the manager's jarvis_settings entries (none while it is away).
-func (h *Hub) managerSettings(ctx context.Context) []extwire.Setting {
-	if h.busConnOf(devicesOwner) == nil {
+func (h *Hub) managerSettings(ctx context.Context, id string) []extwire.Setting {
+	if h.busConnOf(id) == nil {
 		return nil
 	}
 	var res struct {
@@ -169,7 +169,7 @@ func (h *Hub) managerSettings(ctx context.Context) []extwire.Setting {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if err := h.extCall(ctx, extwire.HubSettingsList, map[string]any{}, &res); err != nil {
+	if err := h.extCallTo(ctx, id, extwire.HubSettingsList, map[string]any{}, &res); err != nil {
 		h.logf("settings: the manager's: %v", err)
 	}
 	return res.Settings

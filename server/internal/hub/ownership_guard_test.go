@@ -270,8 +270,8 @@ func nodeAnswers(method string, params json.RawMessage) (any, error) {
 	return map[string]any{"who": "a", "node": c.Method}, nil
 }
 
-// With one manager nothing changes: a snapshot view naming no machine (an old row) is the conversation of the
-// manager of the machine it is on, and the session lists are stamped with it.
+// With one manager nothing changes: a snapshot view naming no machine (an old row) counts for no manager, so a request
+// about it goes where it always did (the default manager, the only one), and the session lists are stamped with it.
 func TestAViewWithoutAMachineWithOneManager(t *testing.T) {
 	h, srv, _ := newBusHub(t)
 	a := connectGuardManager(t, h, srv.URL, assistantwire.AssistantID, nodeAnswers)
@@ -282,8 +282,10 @@ func TestAViewWithoutAMachineWithOneManager(t *testing.T) {
 		Sessions: []assistantwire.SessionView{{SessionID: "old", Title: "An old one"}}}, &res); err != nil {
 		t.Fatal(err)
 	}
-	if id, v := h.conversationOn("ma", "old"); id != assistantwire.AssistantID || v.Title != "An old one" {
-		t.Fatalf("old row: %q %+v", id, v)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/assistant/conversations/old", nil)
+	r.SetPathValue("id", "old")
+	if id, err := h.byConversation(r); err != nil || id != assistantwire.AssistantID || h.conversationOwner("old") != "" {
+		t.Fatalf("old row: routed to %q (%v), counted for %q", id, err, h.conversationOwner("old"))
 	}
 	h.takeFleetSessions(assistantwire.FleetSessions{MachineID: "ma", Sessions: []proto.Session{{MachineID: "ma", SessionID: "old", Title: "An old one"}}})
 	if l := h.decorated(h.localMachine("ma")); len(l) != 1 || l[0].Manager != assistantwire.AssistantID || l[0].Title != "An old one" {
@@ -492,7 +494,8 @@ func TestACardIsNotReplacedByAnotherManager(t *testing.T) {
 
 // A pending card is taken only on a machine of its manager's own: one naming another manager's machine, or a session
 // there (by machine, or a session id alone), is dropped, so it never shows as that session's nor gets the user's
-// answer; one naming no machine is its manager's own. Moving a machine withdraws the old manager's cards on it.
+// answer; one naming no machine is its manager's own. Moving a machine withdraws the old manager's cards on it, and
+// those naming one of its sessions without the machine; a card naming none of its sessions stays.
 func TestACardOnlyOnItsManagersMachine(t *testing.T) {
 	h, srv, _ := newBusHub(t)
 	h.cfg.Machines = []MachineConfig{{ID: "ma", Name: "ma", Kind: "local"}, {ID: "mb", Name: "mb", Kind: "local"}}
@@ -505,6 +508,7 @@ func TestACardOnlyOnItsManagersMachine(t *testing.T) {
 	b.report(t, devicewire.State{Machine: proto.Machine{ID: "mb", Name: "mb"}})
 	eventually(t, 5*time.Second, "ma, mb", func() bool { return h.localMachine("ma") != nil && h.localMachine("mb") != nil })
 	h.takeFleetSessions(assistantwire.FleetSessions{MachineID: "ma", Sessions: []proto.Session{{MachineID: "ma", SessionID: "s3"}}})
+	h.takeFleetSessions(assistantwire.FleetSessions{MachineID: "mb", Sessions: []proto.Session{{MachineID: "mb", SessionID: "b-agent"}}})
 	var res assistantwire.SnapshotResult
 	if err := a.call(t, assistantwire.MethodSnapshot, assistantwire.Snapshot{Epoch: "a", Seq: 1,
 		Sessions: []assistantwire.SessionView{{MachineID: "ma", SessionID: "conv-a"}}}, &res); err != nil {
@@ -523,7 +527,9 @@ func TestACardOnlyOnItsManagersMachine(t *testing.T) {
 	if err := a.peer.Notify(assistantwire.EventFleetInteraction, assistantwire.FleetInteraction{Interaction: card("a-on-mb", "mb", "b-agent")}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, 5*time.Second, "b's own cards", func() bool { return h.interactionOwner("b-own") == "m-0b0b0b" && h.interactionOwner("b-none") == "m-0b0b0b" })
+	eventually(t, 5*time.Second, "b's own cards", func() bool {
+		return h.interactionOwner("b-own") == "m-0b0b0b" && h.interactionOwner("b-none") == "m-0b0b0b"
+	})
 	time.Sleep(200 * time.Millisecond)
 	for _, id := range []string{"b-on-ma", "b-on-s3", "b-on-conv-a", "a-on-mb"} {
 		if ix, ok := h.pendingInteraction(id); ok {
@@ -532,7 +538,8 @@ func TestACardOnlyOnItsManagersMachine(t *testing.T) {
 	}
 	// The whole list (fleet.interactions) the same.
 	if err := b.peer.Notify(assistantwire.EventFleetInteractions, assistantwire.FleetInteractions{Interactions: []proto.Interaction{
-		card("b-on-ma", "ma", "s3"), card("b-on-s3", "", "s3"), card("b-own", "mb", "b-agent"), card("b-none", "", "")}}); err != nil {
+		card("b-on-ma", "ma", "s3"), card("b-on-s3", "", "s3"), card("b-own", "mb", "b-agent"), card("b-none", "", ""),
+		card("b-own-session", "", "b-agent")}}); err != nil {
 		t.Fatal(err)
 	}
 	h.takeFleetInteractions([]proto.Interaction{card("a-own", "ma", "s3"), card("a-on-mb", "mb", "b-agent")})
@@ -541,7 +548,8 @@ func TestACardOnlyOnItsManagersMachine(t *testing.T) {
 	for _, ix := range h.pendingInteractions() {
 		got[ix.ID] = ix.Manager
 	}
-	if len(got) != 3 || got["b-own"] != "m-0b0b0b" || got["b-none"] != "m-0b0b0b" || got["a-own"] != assistantwire.AssistantID {
+	if len(got) != 4 || got["b-own"] != "m-0b0b0b" || got["b-none"] != "m-0b0b0b" || got["b-own-session"] != "m-0b0b0b" ||
+		got["a-own"] != assistantwire.AssistantID {
 		t.Fatalf("pending: %v", got)
 	}
 	// Answering its own card goes to it; nothing reached a for b's.
@@ -549,12 +557,15 @@ func TestACardOnlyOnItsManagersMachine(t *testing.T) {
 	if !strings.Contains(b.log(), "/api/v1/interactions/b-none/resolve") || strings.Contains(a.log(), "b-none") {
 		t.Fatalf("the answer to b's card\nA:\n%s\nB:\n%s", a.log(), b.log())
 	}
-	// mb moves back to the carrier: b's cards on it go with it, the one naming no machine stays b's.
+	// mb moves back to the carrier: b's cards on it go with it (by machine, or by one of its sessions), the one
+	// naming nothing of it stays b's.
 	if _, err := h.moveMachine(context.Background(), "mb", devicesOwner); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := h.pendingInteraction("b-own"); ok || h.interactionOwner("b-none") != "m-0b0b0b" {
-		t.Fatalf("after the move: b-own kept %v, b-none %q", ok, h.interactionOwner("b-none"))
+	_, own := h.pendingInteraction("b-own")
+	_, ownSession := h.pendingInteraction("b-own-session")
+	if own || ownSession || h.interactionOwner("b-none") != "m-0b0b0b" {
+		t.Fatalf("after the move: b-own kept %v, b-own-session kept %v, b-none %q", own, ownSession, h.interactionOwner("b-none"))
 	}
 }
 

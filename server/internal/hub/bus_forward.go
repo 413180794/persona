@@ -131,27 +131,11 @@ func (h *Hub) busBroadcast(c *busConn, params json.RawMessage) {
 	}
 	err := json.Unmarshal(params, &p)
 	if err == nil {
-		err = h.relayBroadcast(p.Message)
+		err = h.relayBroadcastFrom(c.managerID(), p.Message)
 	}
 	if err != nil {
 		h.logf("bus: [%s] ws.broadcast: %v", c.ident.ID, err)
 	}
-}
-
-// relayBroadcast sends message, a manager's, to every app unchanged.
-func (h *Hub) relayBroadcast(message json.RawMessage) error {
-	var head struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(message, &head); err != nil || head.Type == "" {
-		return errors.New("a message is a JSON object with a type")
-	}
-	if head.Type == extensionOperationEvent {
-		h.toWanting(extensionOperationsFeature, message)
-		return nil
-	}
-	h.broadcastRaw(head.Type, message)
-	return nil
 }
 
 // An install's steps (docs/protocol.md "Extension install, upgrade and uninstall progress") go only to the apps that declared they know them,

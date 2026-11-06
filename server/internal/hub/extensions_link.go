@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,9 +17,11 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // The extensions, the connectors and the bots are the manager's (internal/extmgr, docs/extensions.md "Who owns what"): the
@@ -173,22 +176,28 @@ func (h *Hub) browserOf(m *Machine) *proto.Browser {
 // screenAllowed: the app may open m's screen (cua or ego is on for it).
 func (h *Hub) screenAllowed(m *Machine) bool { return h.extReport().Machines[m.cfg.ID].ScreenPort }
 
-// extCall asks the manager what the hub's own features need of the extensions (extwire.Hub*).
+// extCall asks the default manager what the hub's own features need of the extensions (extwire.Hub*).
 func (h *Hub) extCall(ctx context.Context, method string, params, out any) error {
+	return h.extCallTo(ctx, h.defaultOwner(ctx), method, params, out)
+}
+
+// extCallTo is extCall of manager id's extensions.
+func (h *Hub) extCallTo(ctx context.Context, id, method string, params, out any) error {
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
-	return h.callBus(ctx, h.defaultOwner(ctx), extwire.MethodHubCall, extwire.HubCall{Method: method, Params: raw}, out)
+	return h.callBus(ctx, id, extwire.MethodHubCall, extwire.HubCall{Method: method, Params: raw}, out)
 }
 
-// emitToExtensions tells the extensions something the hub saw (agent.finished, agent.needs_you).
-func (h *Hub) emitToExtensions(event string, params any) {
+// emitToExtensions tells manager owner's extensions something the hub saw about one of its sessions (agent.finished,
+// agent.needs_you): only the session's manager's, never another's (ownership.go).
+func (h *Hub) emitToExtensions(owner, event string, params any) {
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return
 	}
-	_ = h.notifyManagers(extwire.EventEmit, extwire.Emit{Event: event, Params: raw}) // each manager's extensions
+	_ = h.notifyBus(owner, extwire.EventEmit, extwire.Emit{Event: event, Params: raw})
 }
 
 // ---- the routes ----
@@ -470,6 +479,22 @@ func (c *relayConn) Close() error {
 	return err
 }
 
+// pushPayloadAllowed: a push manager from's extensions ask for names only its own machine and session (machine_id,
+// session_id: ownsRef), and only a pending card of its own (interaction_id), so it cannot look like another manager's
+// question and get the user's answer from the notification.
+func (h *Hub) pushPayloadAllowed(from string, payload map[string]any) error {
+	machine, _ := payload["machine_id"].(string)
+	session, _ := payload["session_id"].(string)
+	ix, _ := payload["interaction_id"].(string)
+	if !h.ownsRef(from, machine, session) {
+		return &rpc.Error{Code: devicewire.CodeNoDevice, Message: "a push about another manager's machine or session"}
+	}
+	if card, ok := h.pendingInteraction(ix); ix != "" && (!ok || cmp.Or(card.Manager, assistantwire.AssistantID) != from) {
+		return &rpc.Error{Code: devicewire.CodeNoDevice, Message: "a push about another manager's card"}
+	}
+	return nil
+}
+
 // ---- an extension's token on the hub's own routes ----
 
 // extTokenPrefix starts every extension's token (the manager makes them).
@@ -511,7 +536,7 @@ func answerOnly(r *http.Request) bool { return principalOf(r.Context()).Role == 
 
 // ---- what the manager asks of the hub (app.call hub.*) ----
 
-func (h *Hub) extAppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
+func (h *Hub) extAppCall(ctx context.Context, from string, p assistantwire.AppCall) (json.RawMessage, bool, error) {
 	if p.AppID != extwire.AppHub {
 		return nil, false, nil
 	}
@@ -538,9 +563,17 @@ func (h *Hub) extAppCall(ctx context.Context, p assistantwire.AppCall) (json.Raw
 	}
 	switch p.Method {
 	case extwire.HubPushLocalized:
+		for _, pl := range a.Payloads {
+			if err := h.pushPayloadAllowed(from, pl); err != nil {
+				return nil, true, err
+			}
+		}
 		h.push.sendLocalized(func(l i18n.Lang) map[string]any { return a.Payloads[string(l)] }, a.CollapseID, nil)
 		out = map[string]any{}
 	case extwire.HubPushBackground:
+		if err := h.pushPayloadAllowed(from, a.Payload); err != nil {
+			return nil, true, err
+		}
 		h.push.sendAs(a.Payload, "", "background", "5", func(d Device) bool { return slices.Contains(a.Devices, d.DeviceID) })
 		out = map[string]any{}
 	case extwire.HubMailTargets:

@@ -158,6 +158,10 @@ type Report struct {
 	Looks []LookPackage `json:"looks,omitempty"`
 	// BotIdentities identify enabled bots for cross-manager conflict warnings. Never include credentials.
 	BotIdentities []BotIdentity `json:"bot_identities,omitempty"`
+	// EventsDeclared: APIs carry the types each extension declares for api.broadcast (APIPrefix.Events), and the hub
+	// passes the manager's messages of those types only. An older manager's report has none: the hub cannot tell its
+	// extensions' types, and passes any type but its own from it.
+	EventsDeclared bool `json:"events_declared,omitempty"`
 }
 
 // BotIdentity is a platform's stable identifier, not a display name or an authentication token.
@@ -180,6 +184,9 @@ type LookPackage struct {
 type APIPrefix struct {
 	Prefix   string       `json:"prefix"`
 	Receipts []APIReceipt `json:"receipts,omitempty"`
+	// Events are the types its api.broadcast sends the apps: the hub passes on a manager's message of such a type
+	// (besides the managers' own types) only from the manager whose extension declares it.
+	Events []string `json:"events,omitempty"`
 }
 
 // MachineExtras is one machine's computer (Cua) and browser (ego) state, nil when not on.

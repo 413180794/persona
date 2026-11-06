@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"cmp"
 	"context"
 	"slices"
 	"sort"
@@ -94,14 +93,8 @@ func (h *Hub) forgetManagerState(id string) {
 
 // conversation is the manager whose own conversation sid is, and how its snapshot lists it; "" for none. A session
 // is its machine's manager's (docs/managers.md "Ownership"): a snapshot counts only on a machine of its own manager's,
-// so listing another manager's session takes nothing.
+// so listing another manager's session takes nothing, and a view naming no machine (an older row) counts for none.
 func (h *Hub) conversation(sid string) (string, assistantwire.SessionView) {
-	return h.conversationOn("", sid)
-}
-
-// conversationOn is conversation for session sid on machine mid ("": the machine its snapshot names). A view naming
-// no machine (an old row) counts for the manager of the machine asked about.
-func (h *Hub) conversationOn(mid, sid string) (string, assistantwire.SessionView) {
 	if sid == "" {
 		return "", assistantwire.SessionView{}
 	}
@@ -113,8 +106,7 @@ func (h *Hub) conversationOn(mid, sid string) (string, assistantwire.SessionView
 		if !ok {
 			continue
 		}
-		on := cmp.Or(v.MachineID, mid)
-		if on != "" && (mid == "" || on == mid) && h.mayClaim(id, on) {
+		if h.mayClaim(id, v.MachineID) {
 			return id, v
 		}
 	}
@@ -222,7 +214,7 @@ func (h *Hub) extReport() extwire.Report {
 			}
 		}
 		for mid, x := range r.Machines {
-			if _, has := out.Machines[mid]; !has || h.machineOwner(mid) == id {
+			if h.machineOwner(mid) == id { // a machine's extras are its manager's only (ownership.go)
 				out.Machines[mid] = x
 			}
 		}

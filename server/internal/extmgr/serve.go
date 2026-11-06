@@ -494,7 +494,8 @@ func (h *Manager) sendReport() {
 
 // report is what the hub shows of the extensions now.
 func (h *Manager) report() extwire.Report {
-	r := extwire.Report{Features: h.features(), Machines: map[string]extwire.MachineExtras{}, BotIdentities: h.botIdentities()}
+	r := extwire.Report{Features: h.features(), Machines: map[string]extwire.MachineExtras{}, BotIdentities: h.botIdentities(),
+		EventsDeclared: true}
 	if h.extensions != nil {
 		r.ScreenKeepAwake = h.cua().awake()
 		r.Looks = h.extensionLooks()
@@ -509,7 +510,7 @@ func (h *Manager) report() extwire.Report {
 				continue
 			}
 			for _, a := range p.Manifest.APIs() {
-				r.APIs = append(r.APIs, extwire.APIPrefix{Prefix: a.Prefix, Receipts: a.Receipts})
+				r.APIs = append(r.APIs, extwire.APIPrefix{Prefix: a.Prefix, Receipts: a.Receipts, Events: a.Events})
 			}
 		}
 	}

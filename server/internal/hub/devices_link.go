@@ -116,15 +116,17 @@ func init() {
 		if len(args) == 0 {
 			args = json.RawMessage(`{}`)
 		}
-		ctx, done := h.requestScope(ctx, p.Request)
+		ctx, done := h.requestScope(ctx, requestKey(c, p.Request))
 		defer done()
 		return m.onRequest(ctx, p.Method, args)
 	})
-	handleBusEvent(devicewire.EventRequestEnd, func(h *Hub, _ *busConn, params json.RawMessage) {
+	handleBusEvent(devicewire.EventRequestEnd, func(h *Hub, c *busConn, params json.RawMessage) {
 		var p devicewire.RequestEnd
-		if json.Unmarshal(params, &p) == nil && p.Request != "" {
-			h.requestEnded(p.Request)
+		if json.Unmarshal(params, &p) != nil || p.Request == "" {
+			return
 		}
+		// Its own requests only (the keys are its own); an end mark kept ahead of the request only for its own machine.
+		h.requestEnded(requestKey(c, p.Request), h.ownsMachine(c, p.MachineID) == nil)
 	})
 	handleBus(devicewire.MethodConnected, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
 		var p devicewire.Connected
@@ -192,14 +194,25 @@ func (h *Hub) requestScope(ctx context.Context, key string) (context.Context, fu
 	}
 }
 
-// requestEnded: devices.request_end.
-func (h *Hub) requestEnded(key string) {
+// requestKey is manager c's request key: one manager's keys never name another's requests.
+func requestKey(c *busConn, key string) string {
+	if key == "" {
+		return ""
+	}
+	return c.managerID() + "\x00" + key
+}
+
+// requestEnded: devices.request_end. A request that is not running yet is marked ended for when it comes, if mark.
+func (h *Hub) requestEnded(key string, mark bool) {
 	d := &h.devices
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if cancel := d.reqs[key]; cancel != nil {
 		delete(d.reqs, key)
 		cancel()
+		return
+	}
+	if !mark {
 		return
 	}
 	now := time.Now()
@@ -983,10 +996,19 @@ func (h *Hub) machineConnected(ctx context.Context, m *Machine, at time.Time) de
 	return out
 }
 
-// updateNodes has the manager redeploy the machines whose node is not this build (selfupdate.go).
+// updateNodes has each manager that carries machines redeploy its own whose node is not this build (selfupdate.go):
+// the carrier always, the others connected now.
 func (h *Hub) updateNodes(ctx context.Context) {
-	if err := h.callBus(ctx, devicesOwner, devicewire.MethodUpdateNodes, map[string]any{}, nil); err != nil {
-		h.logf("update: the manager redeploys the machines: %v", err)
+	owners := []string{devicesOwner}
+	for _, mc := range h.cfgEntries() {
+		if o := h.machineOwner(mc.ID); !slices.Contains(owners, o) && h.busConnOf(o) != nil {
+			owners = append(owners, o)
+		}
+	}
+	for _, o := range owners {
+		if err := h.callBus(ctx, o, devicewire.MethodUpdateNodes, map[string]any{}, nil); err != nil {
+			h.logf("update: [%s] redeploys its machines: %v", o, err)
+		}
 	}
 }
 
@@ -1001,6 +1023,9 @@ type busNode struct {
 
 func (b *busNode) Call(ctx context.Context, method string, params, out any) error {
 	owner := b.h.machineOwner(b.id)
+	if caller, ok := callerOf(ctx); ok && caller != owner { // a manager's device.call, the machine moved since its check
+		return &rpc.Error{Code: devicewire.CodeNoDevice, Message: fmt.Sprintf("%s on machine %q: another manager's now", clip(method, 64), clip(b.id, 64))}
+	}
 	if owner == devicesOwner {
 		if err := b.h.waitDevices(ctx); err != nil {
 			return fmt.Errorf("%s: %w", b.id, err)
@@ -1135,14 +1160,15 @@ func (h *Hub) keepConnectorCred(ctx context.Context, c devicewire.ConnectorCred)
 		Version: clip(oneLine(c.Version), 80)})
 }
 
-// pairConnector has the manager pair a service machine's connector (the admin page).
+// pairConnector has the machine's manager (the carrier for one being added) pair a service machine's connector (the
+// admin page); it keeps the credential (devices.connector_paired, its own machine's only).
 func (h *Hub) pairConnector(ctx context.Context, pairLink, id, address, proxyURL string) (string, string, error) {
 	_ = h.waitDevices(ctx) // the hub just started: the manager is on its way
 	var out struct {
 		Address string `json:"address"`
 		Version string `json:"version"`
 	}
-	err := h.callBus(ctx, devicesOwner, devicewire.MethodPairConnector, devicewire.PairConnector{Link: pairLink, MachineID: id,
+	err := h.callBus(ctx, h.machineOwner(id), devicewire.MethodPairConnector, devicewire.PairConnector{Link: pairLink, MachineID: id,
 		Address: address, Proxy: proxyURL}, &out)
 	if errors.Is(err, errBusOffline) {
 		return "", "", errAssistantOffline
@@ -1216,7 +1242,9 @@ func (h *Hub) adminUsageRoutesRelayed(mux *http.ServeMux) {
 	for _, pattern := range devicewire.AdminUsageRoutes {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			_ = h.waitDevices(r.Context())
-			h.forwardAdminHTTP(w, r, devicesOwner)
+			if id, ok := h.owner(w, r, h.byRequest); ok { // the manager it names, else the default: its usage sources
+				h.forwardAdminHTTP(w, r, id)
+			}
 		})
 	}
 }
@@ -1261,9 +1289,9 @@ func (h *Hub) memberRecords() []*hubRecord {
 	return out
 }
 
-// managerHTTP asks the manager one of its routes (devicewire.Routes) as an app would, for the hub's own features
-// (jarvis_settings); a status that is not 2xx is an error with the body's message.
-func (h *Hub) managerHTTP(ctx context.Context, method, path string, body any, out any) error {
+// managerHTTP asks manager id (the machine's, for a machine's route) one of its routes (devicewire.Routes) as an app
+// would, for the hub's own features (jarvis_settings); a status that is not 2xx is an error with the body's message.
+func (h *Hub) managerHTTP(ctx context.Context, id, method, path string, body any, out any) error {
 	req := assistantwire.HTTPRequest{Method: method, Path: path, Header: map[string][]string{"Content-Type": {"application/json"}}}
 	req.Header[assistantwire.RoleHeader] = []string{"full"}
 	if body != nil {
@@ -1274,7 +1302,7 @@ func (h *Hub) managerHTTP(ctx context.Context, method, path string, body any, ou
 		req.Body = b
 	}
 	var res assistantwire.HTTPResponse
-	if err := h.callBus(ctx, devicesOwner, assistantwire.MethodHTTP, req, &res); err != nil {
+	if err := h.callBus(ctx, id, assistantwire.MethodHTTP, req, &res); err != nil {
 		if errors.Is(err, errBusOffline) {
 			return errAssistantOffline
 		}
@@ -1302,7 +1330,7 @@ type claudeDirsState struct {
 
 func (m *Machine) claudeDirsState(ctx context.Context) claudeDirsState {
 	var st claudeDirsState
-	if err := m.hub.managerHTTP(ctx, http.MethodGet, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs", nil, &st); err != nil {
+	if err := m.hub.managerHTTP(ctx, m.hub.machineOwner(m.cfg.ID), http.MethodGet, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs", nil, &st); err != nil {
 		m.hub.logf("[%s] claude dirs: %v", m.cfg.ID, err)
 	}
 	return st
@@ -1316,13 +1344,13 @@ func (m *Machine) blockedClaudeDirs(ctx context.Context) []string {
 // blocked", or the PUT that follows would replace every pattern with just the one changed.
 func (m *Machine) readBlockedClaudeDirs(ctx context.Context) ([]string, error) {
 	var st claudeDirsState
-	if err := m.hub.managerHTTP(ctx, http.MethodGet, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs", nil, &st); err != nil {
+	if err := m.hub.managerHTTP(ctx, m.hub.machineOwner(m.cfg.ID), http.MethodGet, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs", nil, &st); err != nil {
 		return nil, fmt.Errorf("read blocked claude dirs: %w", err)
 	}
 	return st.Blocked, nil
 }
 
 func (m *Machine) setBlockedClaudeDirs(ctx context.Context, patterns []string) error {
-	return m.hub.managerHTTP(ctx, http.MethodPut, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs/blocked",
+	return m.hub.managerHTTP(ctx, m.hub.machineOwner(m.cfg.ID), http.MethodPut, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs/blocked",
 		map[string]any{"blocked": patterns}, nil)
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -123,8 +124,8 @@ func TestQuietHoursPushes(t *testing.T) {
 		return body.APS
 	}
 
-	h.notifyDone("done", "m", "box", "s", "finished", "", done)
-	h.notifyInteraction(ix, "box")
+	h.notifyDone(assistantwire.AssistantID, "done", "m", "box", "s", "finished", "", done)
+	h.notifyInteraction(assistantwire.AssistantID, ix, "box")
 	c := f.calls(t, 1)
 	time.Sleep(150 * time.Millisecond)
 	f.mu.Lock()
@@ -137,14 +138,14 @@ func TestQuietHoursPushes(t *testing.T) {
 		t.Fatalf("the card inside the window: %v", a)
 	}
 
-	h.notifyDone("assistant", "", "Persona", "s", "reminder", "leave now", pushWants{})
+	h.notifyDone(assistantwire.AssistantID, "assistant", "", "Persona", "s", "reminder", "leave now", pushWants{})
 	if a := aps(f.calls(t, 2)[1]); a["sound"] != "default" {
 		t.Fatalf("an assistant reminder inside the window: %v", a)
 	}
 
 	h.push.now = func() time.Time { return night.Add(10 * time.Hour) }
-	h.notifyDone("done", "m", "box", "s", "finished", "", done)
-	h.notifyInteraction(ix, "box")
+	h.notifyDone(assistantwire.AssistantID, "done", "m", "box", "s", "finished", "", done)
+	h.notifyInteraction(assistantwire.AssistantID, ix, "box")
 	for _, c := range f.calls(t, 4)[2:] {
 		if a := aps(c); a["sound"] != "default" {
 			t.Fatalf("outside the window: %v", a)
@@ -174,15 +175,15 @@ func TestQuietHoursWS(t *testing.T) {
 			return nil
 		}
 	}
-	h.notifyDone("done", "m", "box", "s", "finished", "", pushWants{Kind: "done", Took: time.Hour, Long: time.Minute})
+	h.notifyDone(assistantwire.AssistantID, "done", "m", "box", "s", "finished", "", pushWants{Kind: "done", Took: time.Hour, Long: time.Minute})
 	if m := next(); m != nil {
 		t.Fatalf("finished inside the window: %v", m)
 	}
-	h.notifyInteraction(proto.Interaction{ID: "ix1", MachineID: "m", SessionID: "s", Kind: proto.IxQuestion, Summary: "pick"}, "box")
+	h.notifyInteraction(assistantwire.AssistantID, proto.Interaction{ID: "ix1", MachineID: "m", SessionID: "s", Kind: proto.IxQuestion, Summary: "pick"}, "box")
 	if m := next(); m["kind"] != "interaction" || m["quiet"] != true {
 		t.Fatalf("card inside the window: %v", m)
 	}
-	h.notifyDone("assistant", "", "Persona", "s", "reminder", "now", pushWants{})
+	h.notifyDone(assistantwire.AssistantID, "assistant", "", "Persona", "s", "reminder", "now", pushWants{})
 	if m := next(); m["kind"] != "assistant" || m["quiet"] != nil {
 		t.Fatalf("reminder inside the window: %v", m)
 	}

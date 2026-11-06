@@ -33,7 +33,7 @@ func TestTodoReportConflictUsesSessionOwner(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Exercise both arrival orders; the merge also ranges over unordered maps.
 			for _, reverse := range []bool{false, true} {
-				h := &Hub{byID: map[string]*Machine{"machine": {owner: tc.machineOwner}}}
+				h := &Hub{byID: map[string]*Machine{"machine": {owner: tc.machineOwner}}, cfg: &Config{Machines: []MachineConfig{{ID: "machine"}}}}
 				h.devices.assign = map[string]string{"machine": tc.machineOwner} // the roster's say (ownership.go)
 				if tc.conversation != "" {
 					h.assistantOf(tc.conversation).sessions = map[string]assistantwire.SessionView{
@@ -69,7 +69,7 @@ func TestTodoReportConflictUsesSessionOwner(t *testing.T) {
 
 func TestTodoReportsReplaceOnlyTheirOwnLinks(t *testing.T) {
 	const owner = "m-owner"
-	h := &Hub{byID: map[string]*Machine{"machine": {owner: owner}}}
+	h := &Hub{byID: map[string]*Machine{"machine": {owner: owner}}, cfg: &Config{Machines: []MachineConfig{{ID: "machine"}}}}
 	h.devices.assign = map[string]string{"machine": owner} // the roster's say (ownership.go)
 	key := [2]string{"machine", "session"}
 	owned := assistantwire.TodoLink{MachineID: key[0], SessionID: key[1], TodoID: "todo-owned", Title: "Owned", Task: true}

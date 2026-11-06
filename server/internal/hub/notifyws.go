@@ -27,9 +27,9 @@ func (w pushWants) fn() func(NotifyPrefs) bool {
 
 // notifyDone delivers the same alert and preference decision through both channels. Only the center has apps and
 // devices: a member's computers are the center's machines.
-func (h *Hub) notifyDone(kind, machineID, machine, sessionID, title, text string, wants pushWants) {
+func (h *Hub) notifyDone(owner, kind, machineID, machine, sessionID, title, text string, wants pushWants) {
 	build := func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }
-	h.emitToExtensions("agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
+	h.emitToExtensions(owner, "agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
 	h.push.sendLocalizedQuiet(build, "", wants.fn(), wants.quiet())
 	h.notifyWSQuiet(kind, build, wants.fn(), wants.quiet())
 }
@@ -45,9 +45,9 @@ func (h *Hub) notifyReply(machineID, machine, sessionID, title, text string) {
 	h.notifyWSQuiet("reply", build, wants.fn(), wants.quiet())
 }
 
-func (h *Hub) notifyInteraction(ix proto.Interaction, machine string) {
+func (h *Hub) notifyInteraction(owner string, ix proto.Interaction, machine string) {
 	build := func(l i18n.Lang) map[string]any { return interactionPayloadIn(l, ix, machine) }
-	h.emitToExtensions("agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,
+	h.emitToExtensions(owner, "agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,
 		"interaction_id": ix.ID, "kind": ix.Kind, "summary": ix.Summary})
 	wants := pushWants{Kind: "input"}
 	if ix.Kind == proto.IxElicitation {
