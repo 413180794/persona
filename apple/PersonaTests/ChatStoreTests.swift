@@ -185,13 +185,13 @@ struct TurnTests {
         if case .assistant(let a) = t.answer { #expect(a.text == "the command finished") } else { Issue.record("answer") }
     }
 
-    @Test func backgroundWakeKeepsTheSubstantialAnswer() {
+    @Test func backgroundWakeEndsOnTheNewestWords() {
         var wake = item(4, .notice, role: "system", text: "Background command \"Release\" completed (exit code 0)")
         wake.wake = true
         let summary = "All four are done and pushed; here is what changed and how to try each of them on the phone."
 
-        // A full summary, then a short follow-up once the build is up: the summary is the answer, the follow-up
-        // waits in the drawer.
+        // A full summary, then a short follow-up once the build is up: the follow-up is the answer (#3783: the
+        // longest used to be, and the follow-up went into the drawer); the summary is in the work before it.
         var items = [
             item(1, .text, role: "user", text: "go"), item(2, .toolUse, tool: "Bash", id: "a"),
             item(3, .text, text: summary),
@@ -200,11 +200,19 @@ struct TurnTests {
         var blocks = ChatBlock.build(ChatStore.buildRows(items))
         #expect(blocks.count == 1) // one exchange, not split at the wake
         guard case .turn(let a) = blocks[0] else { Issue.record("turn"); return }
-        if case .assistant(let i) = a.answer { #expect(i.text == summary) } else { Issue.record("answer") }
+        if case .assistant(let i) = a.answer { #expect(i.text == "build 42 is up") } else { Issue.record("answer") }
         #expect(a.wakes.map(\.id) == [wake.id])
-        #expect(a.tail.count == 3) // the wake, the follow-up tool and words: only in the drawer
-        #expect(a.ordered.last?.id == "3#0")
-        #expect(a.afterWake.first?.id == wake.id && a.afterWake.count == 3)
+        #expect(a.tail.isEmpty) // nothing after the newest words
+        #expect(a.ordered.last?.id == "6#0")
+        #expect(a.process.contains { $0.id == "3#0" }) // the summary: in the work line
+        #expect(a.afterWake.first?.id == wake.id && a.afterWake.count == 3) // the drawer: every run from the wake on
+
+        // Woken, at work, no words yet: the words before stay the answer until new ones come; the new work is in the
+        // drawer (its chip runs).
+        blocks = ChatBlock.build(ChatStore.buildRows(Array(items.prefix(5))))
+        guard case .turn(let w) = blocks[0] else { Issue.record("turn"); return }
+        if case .assistant(let i) = w.answer { #expect(i.text == summary) } else { Issue.record("answer") }
+        #expect(w.tail.count == 2) // the wake and the tool
 
         // "Waiting for it", then the summary after the wake: the summary is the answer, and every tool before it
         // (the wake included) is one stretch of work.
@@ -237,8 +245,8 @@ struct TurnTests {
         let blocks = ChatBlock.build(ChatStore.buildRows(items))
         #expect(blocks.count == 2) // the exchange (wake folded in), then the recap card where it was
         guard case .turn(let t) = blocks[0], case .row(.recap) = blocks[1] else { Issue.record("shape \(blocks)"); return }
-        if case .assistant(let a) = t.answer { #expect(a.text == summary) } else { Issue.record("answer") }
-        #expect(t.wakes.count == 1 && t.tail.count == 3)
+        if case .assistant(let a) = t.answer { #expect(a.text == "build 42 is up") } else { Issue.record("answer") }
+        #expect(t.wakes.count == 1 && t.tail.isEmpty)
     }
 
     @Test func catchUpNeverEndsTheHistory() {

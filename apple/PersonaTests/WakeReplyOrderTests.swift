@@ -70,7 +70,16 @@ struct WakeReplyOrderTests {
     }
 
     @Test func aWokenReplyStaysOnScreenWhateverOrderItsLastEventsComeIn() async {
-        let reply = String(repeating: "新的回复。", count: 120)
+        await stays(String(repeating: "新的回复。", count: 120))
+    }
+
+    /// Shorter than the answer before the wake (#3783): the longest words used to be the answer, so this reply went
+    /// into the background tasks' drawer the moment its line came. The newest words are the answer now.
+    @Test func aShortWokenReplyStaysOnScreenToo() async {
+        await stays("构建好了。")
+    }
+
+    private func stays(_ reply: String) async {
         var wake = item(14, .notice, role: "system", text: "后台任务完成")
         wake.wake = true
         let before = [

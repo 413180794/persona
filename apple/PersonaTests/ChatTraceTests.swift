@@ -15,14 +15,14 @@ struct ChatTraceTests {
         var wake = item(4, .notice, role: "system", text: "后台任务完成")
         wake.wake = true
         let long = String(repeating: secret, count: 20)
-        // The longer words before the wake are the answer; the reply after it waits in the drawer.
+        // The reply after the wake is the answer (the newest words, #3783), the longer words before it in the work.
         let items = [item(1, .text, role: "user", text: secret), item(2, .toolUse, tool: "Bash", id: "a"), item(3, .text, text: long),
                      wake, item(5, .toolUse, tool: "Bash", id: "b"), item(6, .text, text: "好了")]
         let lines = ChatLines(openWork: []).build(ChatBlock.build(ChatStore.buildRows(items)), live: nil)
         let screen = ChatTrace.screen(lines, live: 0, streaming: false, running: false, frozen: false, withheld: 0)
-        #expect(screen.contains("a3"))
-        #expect(screen.contains("wakes(tail=3,answer=3)"))
-        #expect(!screen.contains("a6"))
+        #expect(screen.contains("a6"))
+        #expect(screen.contains("wakes(tail=0,answer=6)"))
+        #expect(!screen.contains("a3"))
         #expect(!screen.contains(secret) && !screen.contains("好了"))
 
         let batch = ChatTrace.batch(items, span: ItemSpan(history: "h", from: 0, to: 6), backlog: false, gap: .none, resets: 0, covered: 6)

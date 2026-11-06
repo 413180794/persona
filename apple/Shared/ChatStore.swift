@@ -149,9 +149,11 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
     var interimCount: Int { process.filter { if case .assistant = $0 { true } else { false } }.count }
 
     /// Background tasks split an exchange into runs (before the first wake, after each one), each ending in the
-    /// agent's words. The answer is the longest of those: a full summary followed by "build 42 is up", or "waiting
-    /// for the build" followed by the full summary. What comes before it folds into one work line (wakes included);
-    /// what comes after it shows only in the drawer.
+    /// agent's words. The answer is the latest of those, so the chat always ends on the newest words (#3783: the
+    /// longest used to be, and a short reply after a wake showed while it streamed, then went into the drawer once its
+    /// line came). What comes before it folds into one work line (wakes and earlier words included); the drawer lists
+    /// every run from the first wake on (`afterWake`). Work after the latest words, while no new ones came yet, shows
+    /// only in the drawer (`tail`).
     mutating func pickAnswerAcrossWakes() {
         let all = ordered
         var candidates: [Int] = []
@@ -166,9 +168,7 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
             }
         }
         if let l = last { candidates.append(l) }
-        func length(_ i: Int) -> Int { if case .assistant(let a) = all[i] { a.text?.count ?? 0 } else { 0 } }
-        var pick: Int?
-        for c in candidates where pick == nil || length(c) >= length(pick!) { pick = c } // ties: the later one
+        let pick = candidates.last
         // What the user sent stays with the exchange (their pictures too: they sit above the message they came with).
         if let first = all.firstIndex(where: { if case .notice(let n) = $0 { n.wake == true } else { false } }) {
             afterWake = Array(all[first...]).filter { !$0.isUserInput }
