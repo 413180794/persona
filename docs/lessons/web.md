@@ -1,5 +1,10 @@
 # Lessons: web UI and interactions
 
+## Working marks on assistant conversation rows (2026-11-06, #5862)
+
+- Assistant conversation rows use `showState={false}` to retain their chat / pin icon and timestamp rather than the full Agent-row presentation. That must not suppress the working `StatusMark`: use the existing status token while working, restore the idle icon when work ends, and leave the timestamp and layout alone.
+- Automatic conversation groups have their own working tally; that does not cover individual recent or pinned conversations. Regress first load and live session updates for both, including pinned `/agent` chats and legacy hubs that only report `status`.
+
 ## Knowledge counts change pill wrapping (2026-11-06, #4047)
 
 - **Rendering categories before counts still shifts the first screen**: on a narrow screen, one extra digit in the selected category can wrap the final pill onto another line. Do not guess digit width or fix the width of loaded pills. Without a cached list, show only the existing `Loading` below search, then mount filters and content together when the list arrives. Keep the loading notice in that branch too, so newly inserted filters cannot push it down (following #4029's one-time display approach).
