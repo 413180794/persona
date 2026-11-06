@@ -254,13 +254,46 @@ export function replaceNeedsConfirm(draft: string, text: string): boolean {
 type Listener = (e: DraftEvent) => void;
 const listeners = new Map<string, Set<Listener>>();
 
+// The sidebar's rows mark a conversation with something left unsent while its box is not on screen (#5568): they hear
+// of the words a box keeps (`draft:<key>`, read when the box mounts, written through storeDraft), of its quotes, and
+// of a box mounting or going away for a key (onDraftEvent).
+const rowListeners = new Set<() => void>();
+const tellRows = () => rowListeners.forEach((l) => l());
+const subscribeRows = (l: () => void) => {
+  rowListeners.add(l);
+  quoteListeners.add(l);
+  return () => {
+    rowListeners.delete(l);
+    quoteListeners.delete(l);
+  };
+};
+
 /** A composer listens for its draft key; returns the unsubscribe. */
 export function onDraftEvent(key: string, l: Listener): () => void {
   if (!listeners.has(key)) listeners.set(key, new Set());
   listeners.get(key)!.add(l);
+  tellRows();
   return () => {
     listeners.get(key)?.delete(l);
+    tellRows();
   };
+}
+
+export function storeDraft(key: string, text: string) {
+  if (text) localStorage.setItem(`draft:${key}`, text);
+  else localStorage.removeItem(`draft:${key}`);
+  tellRows();
+}
+
+/** What waits unsent for a conversation whose box is not on screen: its stored words, and whether quotes wait on its
+ *  bar. Nothing while its box is mounted (you are in it; typing there does not re-render the list), or for `null`. */
+export function useLeftDraft(key: string | null): { text: string; quoted: boolean } {
+  const away = () => key !== null && !listeners.get(key)?.size;
+  const read = () => (away() ? (localStorage.getItem(`draft:${key}`) ?? "") : "");
+  const hasQuotes = () => away() && getQuotes(key!).list.length > 0;
+  const text = useSyncExternalStore(subscribeRows, read, read);
+  const quoted = useSyncExternalStore(subscribeRows, hasQuotes, hasQuotes);
+  return { text, quoted };
 }
 
 /** Sends an event to the composer of `key`. False when none is mounted and it could not be kept (an image). */
@@ -279,9 +312,7 @@ export function sendDraft(key: string, e: DraftEvent): boolean {
   // above the input (any it had are replaced) and only the words into the draft.
   const split = e.type === "replace" ? splitQuotes(e.text) : null;
   if (e.type === "replace") setQuotes(key, split ? parseQuotes(split.quotes) : []);
-  const stored = `draft:${key}`;
-  const next = split ? split.rest : applyDraft(localStorage.getItem(stored) ?? "", e);
-  if (next) localStorage.setItem(stored, next);
-  else localStorage.removeItem(stored);
+  const next = split ? split.rest : applyDraft(localStorage.getItem(`draft:${key}`) ?? "", e);
+  storeDraft(key, next);
   return true;
 }

@@ -13,7 +13,7 @@ import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
-import { addQuote, applyDraft, getQuotes, onDraftEvent, parseQuotes, removeQuote, replaceNeedsConfirm, sendDraft, setQuotes, splitQuotes, useQuotes, withQuoteBlock, withUnsent, type DraftImage } from "../../lib/drafts";
+import { addQuote, applyDraft, getQuotes, onDraftEvent, parseQuotes, removeQuote, replaceNeedsConfirm, sendDraft, setQuotes, splitQuotes, storeDraft, useQuotes, withQuoteBlock, withUnsent, type DraftImage } from "../../lib/drafts";
 import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
@@ -249,8 +249,7 @@ export function Composer({
     const u = unsaved.current;
     if (!u) return;
     unsaved.current = null;
-    if (u.text) localStorage.setItem(`draft:${u.key}`, u.text);
-    else localStorage.removeItem(`draft:${u.key}`);
+    storeDraft(u.key, u.text);
   }, []);
   // The render that moves the box to another conversation still holds the old words: they are not that one's draft
   // (the box reads its own next, and this runs again if it differs).
@@ -472,7 +471,7 @@ export function Composer({
     setDraft("");
     draftNow.current = "";
     unsaved.current = null;
-    localStorage.removeItem(`draft:${draftKey}`);
+    storeDraft(draftKey, "");
     setAtts([]);
     refs.forEach((r) => removeContext(draftKey, r.id));
     setQuotes(draftKey, []);

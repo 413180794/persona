@@ -134,5 +134,6 @@
   "more_pages": "More",
   "more_pages_count_one": "More (1 page)",
   "more_pages_count_other": "More ({count} pages)",
-  "arrange_pages": "Arrange sidebar…"
+  "arrange_pages": "Arrange sidebar…",
+  "draft": "Draft"
 }

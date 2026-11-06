@@ -42,3 +42,14 @@ export function rowLine(s: Session, ix?: Interaction): { lead?: string; text: st
   const text = plainMarkdown(sessionPreview(s)).slice(0, MAX);
   return text ? { text } : undefined;
 }
+
+/**
+ * The second line of a conversation's sidebar row while something waits unsent in its box (#5568), in place of rowLine
+ * as in Slack, WeChat and Telegram (the status mark and the count still say it needs you): "Draft: " and the words on one
+ * line, or just "Draft" when only quotes wait. Undefined when the words are only whitespace and no quote waits.
+ */
+export function draftLine(d: { text: string; quoted: boolean }): { lead: string; text: string } | undefined {
+  const text = d.text.replace(/\s+/g, " ").trim().slice(0, MAX);
+  if (text) return { lead: t("todos.kicker_line", { kicker: t("sidebar.draft") }), text };
+  return d.quoted ? { lead: t("sidebar.draft"), text: "" } : undefined;
+}

@@ -1,6 +1,6 @@
 // The sidebar row's second line (#3195): what an agent that needs you asks, what one that finished unseen did.
 import { describe, expect, it } from "vitest";
-import { interactionKicker, rowLine } from "./row-line";
+import { draftLine, interactionKicker, rowLine } from "./row-line";
 import type { Interaction, Session } from "./types";
 
 const s = (o: Partial<Session>): Session => ({ machine_id: "mac", session_id: "s1", title: "补测试", cwd: "/code", status: "idle", ...o });
@@ -39,5 +39,21 @@ describe("rowLine", () => {
 describe("interactionKicker", () => {
   it("is the 待办 page's word for each kind", () => {
     expect(["question", "plan", "permission", "screen", "elicitation"].map((kind) => interactionKicker({ kind } as Interaction))).toEqual(["在问你", "计划待批准", "需要授权", "终端对话框", "MCP 请求"]);
+  });
+});
+
+describe("draftLine (#5568)", () => {
+  it("leads with 草稿 and keeps the words on one line", () => {
+    expect(draftLine({ text: "  先跑一遍测试\n\n再看  覆盖率 ", quoted: false })).toEqual({ lead: "草稿：", text: "先跑一遍测试 再看 覆盖率" });
+  });
+  it("is nothing for whitespace alone, or nothing at all", () => {
+    expect(draftLine({ text: " \n\t ", quoted: false })).toBeUndefined();
+    expect(draftLine({ text: "", quoted: false })).toBeUndefined();
+  });
+  it("is just 草稿 when only quotes wait", () => {
+    expect(draftLine({ text: " ", quoted: true })).toEqual({ lead: "草稿", text: "" });
+  });
+  it("keeps one line's worth", () => {
+    expect(draftLine({ text: "长".repeat(500), quoted: false })!.text).toHaveLength(160);
   });
 });

@@ -31,7 +31,8 @@ import { href, navigate, routePath, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
-import { rowLine } from "../lib/row-line";
+import { draftLine, rowLine } from "../lib/row-line";
+import { useLeftDraft } from "../lib/drafts";
 import { answeredSession, answerPending, lastAnsweredAt } from "./assistant/answered-lookup";
 import { BREATHING, connPhase, connStatus, phaseTone, type ConnPhase } from "../lib/connection";
 import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
@@ -1613,6 +1614,8 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegF
   const row = useRef<HTMLAnchorElement | null>(null);
   const regRow = useMemo(() => reg("persona"), [reg]);
   const aside = onMenu && !active ? "group-hover/row:invisible" : undefined;
+  // words left unsent in the main conversation's box, once you are not in it (#5568)
+  const draft = draftLine(useLeftDraft(main ? `${main.machine_id}/${main.session_id}` : null));
   const link = (
     <a
       ref={(el) => {
@@ -1630,7 +1633,14 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegF
       className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
     >
       <AppMark size={18} radius={5} className="shadow-hairline" />
-      <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
+      {draft ? (
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[13.5px] font-semibold text-ink">Persona</span>
+          <SecondLine line={draft} draft />
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
+      )}
       {pending > 0 ? (
         <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums", aside)}>{pending}</span>
       ) : st === "working" || st === "needs_you" || st === "unread" ? (
@@ -1764,6 +1774,16 @@ export function SourceTag({ s, className }: { s: Session; className?: string }) 
   return <span className={cls}>{label}</span>;
 }
 
+/** A row's line under its title (rowLine, or draftLine): the red lead, then the words. */
+function SecondLine({ line, draft }: { line: { lead?: string; text: string }; draft: boolean }) {
+  return (
+    <span data-row-line data-draft={draft ? "" : undefined} className="truncate text-[11.5px] leading-4 text-ink-3">
+      {line.lead && <span className="font-medium text-red">{line.lead}</span>}
+      {line.text}
+    </span>
+  );
+}
+
 // `prefix`: a word before the title (a tab's name, a pane's agent), in `prefixClass`
 type SessionRowProps = { menuLabel?: string; /** The mark at the start when the state is not shown (a Persona conversation's; pinned: the pin). */ icon?: IconName; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: string; prefixClass?: string; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; endRoom?: boolean };
 
@@ -1806,7 +1826,9 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   const titleMin = prefix ? ROW_TITLE_MIN : "min-w-0";
   // one ref per key, so letting go takes out only this row's entry (keyedRefs)
   const regRow = useMemo(() => reg(k), [reg, k]);
-  const line = showState && !s.assistant ? rowLine(s, ix) : undefined;
+  // words left unsent in its box, once you are not in it (#5568): in place of what it asks or did
+  const draft = draftLine(useLeftDraft(`${given.machine_id}/${given.session_id}`));
+  const line = draft ?? (showState && !s.assistant ? rowLine(s, ix) : undefined);
   const link = (
     <a
       ref={(el) => {
@@ -1835,12 +1857,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
           <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
             {label ?? sessionTitle(s)}
           </span>
-          {line && (
-            <span data-row-line className="truncate text-[11.5px] leading-4 text-ink-3">
-              {line.lead && <span className="font-medium text-red">{line.lead}</span>}
-              {line.text}
-            </span>
-          )}
+          {line && <SecondLine line={line} draft={!!draft} />}
           {/* one line high: a piece that does not fit wraps out of sight instead of squeezing the others */}
           {workflow && (
             <span data-workflow-line title={workflowTitle} aria-label={workflowTitle} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-orange">

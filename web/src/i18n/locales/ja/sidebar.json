@@ -129,5 +129,6 @@
   "not_connected_yet": "未接続",
   "more_pages": "その他",
   "more_pages_count": "その他（{count} ページ）",
-  "arrange_pages": "サイドバーを整理…"
+  "arrange_pages": "サイドバーを整理…",
+  "draft": "下書き"
 }
