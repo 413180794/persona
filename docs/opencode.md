@@ -102,7 +102,7 @@ Sub-agents (child sessions opened by the `subagent` tool, non-empty `parent_id`)
 On the computer that runs opencode (it must be in the hub's machine list, and node must be able to start).
 
 1. `node <Persona repo>/integrations/opencode/install.mjs`: in `plugins/` under the opencode config directory (`$XDG_CONFIG_HOME/opencode`, default `~/.config/opencode`, changeable with `--config-dir`),
-   it writes a `persona.js` with a single line `export { default } from "<repo>/integrations/opencode/index.js"` (so updating the checkout updates the plugin).
+   it writes a `persona.js` with a single line `export { default } from "<Persona repo>/integrations/opencode/index.js"` (so updating the checkout updates the plugin).
    It refuses if a file with the same name exists that it did not write; `--force` overwrites, `--uninstall` removes it. opencode loads `plugins/*.js` by itself, so `opencode.json` needs no change.
 2. Restart the opencode server (the `opencode serve --service` process) once: the plugin runs in the server process, and a server that is already running will not load a new plugin by itself. Restarting the server briefly disconnects the TUIs attached to it; restart it the way you usually do.
 3. herdr's opencode integration (`herdr integration install opencode`): reports state, session id and title. Leave it alone if already installed.

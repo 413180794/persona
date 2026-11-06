@@ -776,7 +776,7 @@ Independent of local config/private words, reports file/line/type only, never UR
 
 - Web manual: `cd web && npm run check:privacy`.
 - Build `prebuild` automatically scans repo, used for web deployment/public publishing.
-- External repository refs: `python3 -B scripts/test/test_external_service_refs.py` (CI privacy job too). Tracked text cannot contain `nwverse/<other repo>` (including `#n`/links), `<placeholder>/integrations/`, `<placeholder>/test/fixtures/` external paths. External services connected through APIs only reference public contracts (OpenAPI/docs/error codes). Public dependencies in `ALLOWED_REPOS` with reasons; organization alone (`"publisher": "nwverse"`) doesn't count.
+- External repository refs: `python3 -B scripts/test/test_external_service_refs.py` (CI privacy job too). Tracked text cannot contain `nwverse/<other repo>` (including `#n`/links) or placeholder paths into another checkout's integration or test-fixture directories. External services connected through APIs only reference public contracts (OpenAPI/docs/error codes). Public dependencies in `ALLOWED_REPOS` with reasons; organization alone (`"publisher": "nwverse"`) doesn't count.
 - Python regressions: `python3 -B -m unittest discover -s scripts/release -p 'test*privacy*.py' && python3 -B -m unittest discover -s scripts/test -p 'test_privacy*.py'`; not in `npm test`.
   Includes public Go dependency constants/classification, verification/replace/tool-failure refusal, personal values not hidden by public constants.
   Isolated HOME/Git-config temporary repos test real hooks/staged-worktree differences, never main worktree index/history.
