@@ -167,9 +167,10 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	}
 	sort.Slice(queued, func(i, j int) bool { return queued[i].UpdatedAt.After(queued[j].UpdatedAt) })
 	type job struct {
-		it     *InboxItem
-		chat   string
-		prompt func(*prompts.KBContext) string
+		it      *InboxItem
+		chat    string
+		prompt  func(*prompts.KBContext) string
+		carried int // the notes pending when the first message was made: it carries them
 	}
 	var jobs []job
 	var adopted []*InboxItem
@@ -186,7 +187,8 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		}
 		it.Agent.State, it.Agent.StartedAt, it.Agent.Attempts, it.Agent.RetryAfter = AgentRunning, &now, it.Agent.Attempts+1, nil
 		a := b.inboxAgentFor(it, owner, linked[it.Agent.TodoID], larkDefault, loc)
-		jobs = append(jobs, job{it, kbChatOf(it), func(kbc *prompts.KBContext) string { a.KB = kbc; return prompts.RenderInboxAgent(a) }})
+		jobs = append(jobs, job{it, kbChatOf(it), func(kbc *prompts.KBContext) string { a.KB = kbc; return prompts.RenderInboxAgent(a) },
+			len(it.Agent.Pending)})
 	}
 	b.mu.Unlock()
 	s.saveInbox(ctx, adopted)
@@ -202,7 +204,12 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		machineID, sessionID, err := s.startInboxAgent(cctx, cfg, j.it, j.prompt(kbc))
 		cancel()
 		b.mu.Lock()
-		if a := j.it.Agent; a != nil && a.State == AgentRunning && a.SessionID == "" {
+		a := j.it.Agent
+		// A note that asks for work while the start was on its way queued the event again (tell, no conversation yet):
+		// the conversation that started is that work, and the note goes into it (#5366).
+		woken := a != nil && a.State == AgentQueued && a.Wake && a.SessionID == "" && err == nil
+		tellNow := false
+		if a != nil && (a.State == AgentRunning || woken) && a.SessionID == "" {
 			if err != nil {
 				// The item may have been replied to or filed while the start was in flight: it never queues again.
 				s.requeueAgentStart(ctx, a, err, time.Now().UTC(), j.it.open())
@@ -211,8 +218,10 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 				}
 				s.logf("inbox: agent for %s: %v", j.it.ID, err)
 			} else {
-				a.MachineID, a.SessionID = machineID, sessionID
-				a.Pending = nil // the first message carried them
+				a.State, a.MachineID, a.SessionID = AgentRunning, machineID, sessionID
+				// The first message carried the notes pending when it was made; those told since still go.
+				a.Pending = a.Pending[min(j.carried, len(a.Pending)):]
+				tellNow = len(a.Pending) > 0
 				a.Lost = nil
 				b.noteHandling(j.it, machineID, sessionID)
 				b.setHandling(j.it, HandlingLooking, "", time.Now())
@@ -220,6 +229,9 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		}
 		b.mu.Unlock()
 		s.saveInbox(ctx, []*InboxItem{j.it})
+		if tellNow {
+			s.deliverNotes(ctx, j.it)
+		}
 	}
 	if len(jobs) > 0 {
 		s.publish(ctx) // the hub knows the agents' conversations (no finished push for them)

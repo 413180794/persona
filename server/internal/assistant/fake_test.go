@@ -109,6 +109,8 @@ type fakeHub struct {
 	onRepair  func(f *fakeHub)
 	onSend    func(f *fakeHub, p map[string]any) // runs (under the fake's lock) after each session.send
 	onStart   func(f *fakeHub, p map[string]any) // runs (under the fake's lock) when session.start arrives, before slowStart blocks
+	// onAssistantSend runs (under the fake's lock) when assistant.send arrives, before it is answered
+	onAssistantSend func(f *fakeHub, p map[string]any)
 	// doctor is each machine's node.doctor claude-version detail (none: the report has no such check).
 	doctor map[string]string
 	// auth is claude.auth_status's answer by "machine/launcher" (nil: the node has no such method), and the
@@ -294,6 +296,9 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 		f.tokens[p.Device] = append(f.tokens[p.Device], t.Tokens)
 		return json.RawMessage(`{}`), nil
 	case DeviceAssistantSend:
+		if f.onAssistantSend != nil {
+			f.onAssistantSend(f, a)
+		}
 		if f.failAssistant != nil {
 			return nil, f.failAssistant
 		}
