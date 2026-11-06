@@ -2510,7 +2510,8 @@ if MOCK_TASKS:
         _feed("feed_m9", 1.8, "plan", "plan_mock_3"),
     ]
     # MOCK_TASKS_REPORTS=1: supervised tasks whose agents report to Persona (#5112): the widget task's latest progress
-    # on its card, the tests task's question and Persona cutting in on it in the feed.
+    # on its card, the tests task's question and Persona cutting in on it in the feed; reviews (#3124): the widget fix
+    # sent back once, the release notes accepted and closed by the review.
     if os.environ.get("MOCK_TASKS_REPORTS") == "1":
         for _t in TODOS_INIT + TODOS:  # TODOS is the copy made above (reset copies TODOS_INIT again)
             if _t["id"] == "todo_task_widget":
@@ -2521,7 +2522,25 @@ if MOCK_TASKS:
                 _t["supervision"] = {"supervisor": ASK1, "done_when": ["覆盖率到 80%"], "state": "", "round": 0, "reviews": [],
                                      "updated_at": ago(minutes=40),
                                      "progress": {"kind": "question", "text": "Mock 用协议注入还是保留单例？", "at": ago(minutes=4)}}
+            # The widget fix was sent back once (#3124): one criterion met, one missing; its chip says 返工第 1 轮 · 1/2.
+            if _t["id"] == "todo_task_widget":
+                _t["supervision"].update(state="rework", round=1, reviews=[
+                    {"at": ago(minutes=15), "verdict": "rework", "round": 1,
+                     "checks": [{"criterion": "PR 合并到 master", "met": True, "evidence": "https://github.com/example/weather/pull/44 已合并"},
+                                {"criterion": "横屏截图贴进 PR", "met": False, "evidence": "只有竖屏截图"}],
+                     "note": "补横屏截图再交"}])
+            # The release notes were accepted: the supervisor closed the todo (done_by review), the checklist all met.
+            if _t["id"] == "todo_task_release":
+                _t.update(done_at=ago(minutes=18), done_by="review", done_reason="发布说明写好了，7 个 PR 都在里面")
+                _t["supervision"] = {"supervisor": ASK1, "done_when": ["列出这周合并的全部 PR", "按新功能 / 修复 / 其他分组"],
+                                     "expect_minutes": 20, "state": "accepted", "round": 0, "updated_at": ago(minutes=18),
+                                     "reviews": [{"at": ago(minutes=18), "verdict": "accepted",
+                                                  "checks": [{"criterion": "列出这周合并的全部 PR", "met": True, "evidence": "7 个，和 GitHub 上一致"},
+                                                             {"criterion": "按新功能 / 修复 / 其他分组", "met": True}],
+                                                  "note": "写在 docs/release-notes.md，可以发"}]}
         TASK_FEED[ASK1] += [
+            _feed("feed_v1", 18, "review", "todo_task_release", {"title": "整理发布说明", "verdict": "accepted", "note": "写在 docs/release-notes.md，可以发"}),
+            _feed("feed_v2", 15, "review", "todo_task_widget", {"title": "修小组件横屏崩溃", "verdict": "rework", "round": 1, "note": "补横屏截图再交"}),
             _feed("feed_r1", 4, "report", "todo_task_tests", {"kind": "question", "text": "Mock 用协议注入还是保留单例？\n协议注入要改 6 个文件。",
                                                              "evidence": ["https://github.com/example/weather/pull/42"]}),
             _feed("feed_r2", 3, "routed", "todo_task_tests", {"text": "用协议注入，先改网络层那 6 个文件", "interrupted": True}),

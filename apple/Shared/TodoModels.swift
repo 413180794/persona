@@ -51,9 +51,12 @@ nonisolated extension TodoItem {
         return "PR #\(last)"
     }
 
-    /// The state's label for this todo: 「自动完成」 for one the hub closed (docs/todos.md「自动完成」).
+    /// The state's label for this todo: "Auto-completed" for one the hub closed (docs/todos.md), "Accepted" /
+    /// "Canceled" for one its supervisor closed after a review (#3124).
     func statusLabel(_ state: TaskState) -> String {
-        state == .done && autoDone ? String(localized: "Auto-completed") : state.todoLabel
+        guard state == .done else { return state.todoLabel }
+        if reviewDone { return supervision?.state == "cancelled" ? String(localized: "Canceled") : String(localized: "Accepted") }
+        return autoDone ? String(localized: "Auto-completed") : state.todoLabel
     }
 
     /// Why the hub closed it, when it did.

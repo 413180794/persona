@@ -44,6 +44,12 @@ extension Theme {
         static let inProgress = "arrow.triangle.2.circlepath"
         /// A goal the agent works toward until it holds (Claude Code's /goal, a Codex thread goal).
         static let goal = "target"
+        /// A task the main conversation supervises and reviews against its criteria (#3124): its chip, its checklist, a review in the feed.
+        static let supervised = "checkmark.diamond"
+        /// A criterion a review found missing (the met one is `done`, one not reviewed yet `time`).
+        static let unmet = "xmark"
+        /// A supervised task's agent reported to Persona (a question, a block, a finish; #5112).
+        static let reported = "arrow.up.message"
         static let recurring = "repeat"
         static let schedule = "alarm"
         /// The session triage: a stopped agent read to say whether it is done or what it waits for (Settings › Session Triage).
@@ -463,17 +469,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

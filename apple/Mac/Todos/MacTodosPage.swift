@@ -209,10 +209,12 @@ struct MacTodosPage: View {
                             Text("· \(activeAgents.count) agents")
                                 .font(Theme.Font.caption)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
+                        if !todo.isDone { ReviewChip(todo: todo, compact: true) }
                     }
 
-                    if let reason = todo.autoDoneReason {
+                    if let reason = todo.closedReason {
                         Text(reason)
                             .font(Theme.Font.caption)
                             .foregroundStyle(.secondary)

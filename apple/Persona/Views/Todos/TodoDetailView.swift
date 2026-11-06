@@ -176,6 +176,11 @@ struct TodoDetailView: View {
                 .padding(.vertical, Theme.Space.xs)
             }
 
+            if todo.supervision != nil {
+                // A task the main conversation supervises (#3124): its criteria as the latest review found them.
+                Section { ReviewChecklist(todo: todo).padding(.vertical, Theme.Space.xs) }
+            }
+
             stageSection(todo)
 
             Section {

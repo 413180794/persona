@@ -330,6 +330,9 @@ struct TaskCard: View {
                     Text(TaskPlace.line(todo, lead: lead))
                         .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     TaskNowLine(todo: todo, state: state, lead: lead)
+                    if state == .done, todo.supervision != nil {
+                        ReviewChip(todo: todo)
+                    }
                     // The PR its work is in (`pr_url`, #2768), as the Feishu bot's task report links it (#5033).
                     if let pr = todo.prLink {
                         Button {
@@ -342,9 +345,10 @@ struct TaskCard: View {
                         .buttonStyle(.plain)
                     }
                     if state != .done {
-                        HStack(spacing: Theme.Space.l) {
-                            Text(state.label).font(Theme.Font.captionMedium).foregroundStyle(state.labelColor).lineLimit(1)
-                            Spacer()
+                        HStack(spacing: Theme.Space.s) {
+                            Text(state.label).font(Theme.Font.captionMedium).foregroundStyle(state.labelColor).lineLimit(1).fixedSize()
+                            ReviewChip(todo: todo)
+                            Spacer(minLength: Theme.Space.l)
                             if state == .failed {
                                 // Nothing to say a word to: the way out is on the card.
                                 Button {
@@ -437,6 +441,10 @@ struct TaskNowLine: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            // What its agent last told Persona (report_to_supervisor, #5112): while the task is open.
+            if state != .done, state != .failed, let reported = todo.supervision?.progressLine {
+                TaskProgressLine(line: reported)
+            }
             // A workflow its agent runs in the background (#2935): the task is not done while it does.
             if state != .failed, let runs = lead?.runningWorkflows, !runs.isEmpty {
                 WorkflowLine(runs: runs)
@@ -502,6 +510,8 @@ struct FeedLine: View {
         case .answered: AnsweredLine(item: item, taskTitle: taskTitle)
         case .receipt: ReceiptCard(item: item)
         case .routed: routed
+        case .review: ReviewFeedLine(item: item, taskTitle: taskTitle)
+        case .report: ReportFeedLine(item: item, taskTitle: taskTitle)
         case .view:
             // Until the shared interactive renderer is connected, show the current card's plain-text fallback.
             if let id = item.ref,
@@ -531,7 +541,9 @@ struct FeedLine: View {
 
     private var routed: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.xs) {
-            Label("Message “\(taskTitle)”", systemImage: Theme.Icon.routeToTask)
+            // Persona stopped the agent's turn and then told it (agent_interrupt with then, #5112).
+            Label(item.interrupted ? String(localized: "Stopped “\(taskTitle)” and told it") : String(localized: "Message “\(taskTitle)”"),
+                  systemImage: item.interrupted ? Theme.Icon.interrupt : Theme.Icon.routeToTask)
                 .font(Theme.Font.captionMedium)
                 .foregroundStyle(Theme.accent)
                 .lineLimit(1)

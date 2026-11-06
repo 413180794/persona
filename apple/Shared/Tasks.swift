@@ -53,7 +53,7 @@ nonisolated struct TaskPlan: Codable, Hashable, Identifiable, Sendable {
 /// An item the hub inserted into an assistant conversation; drawn among the transcript's lines by `at`.
 nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case plan, task, answered, receipt, routed, today, message, view, notice, unknown
+        case plan, task, answered, receipt, routed, today, message, view, notice, review, report, unknown
         init(from decoder: Decoder) throws {
             self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
         }
@@ -123,6 +123,24 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     var chat: String? { string("chat") }
     var sender: String? { string("sender") }
     var draft: String? { string("draft") }
+
+    /// `review`: the supervisor's verdict (accepted / rework / needs_user / cancelled), the rework round, its note.
+    var verdict: String? { string("verdict") }
+    var round: Int? { if case .object(let o)? = body { o["round"]?.int } else { nil } }
+    var note: String? { string("note") }
+    /// `report`: what the task's agent told Persona (question / blocked / done), with its evidence and step.
+    var reportKind: String? { kind == .report ? string("kind") : nil }
+    var evidence: [String] {
+        guard case .object(let o)? = body, let list = o["evidence"]?.array else { return [] }
+        return list.compactMap { v in
+            guard let s = v.string?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+            return s
+        }
+    }
+    var step: Int? { if case .object(let o)? = body { o["step"]?.int } else { nil } }
+    var steps: Int? { if case .object(let o)? = body { o["steps"]?.int } else { nil } }
+    /// `routed`: Persona stopped the agent's turn first and then told it (agent_interrupt with then, #5112).
+    var interrupted: Bool { if case .object(let o)? = body { o["interrupted"]?.bool == true } else { false } }
 
     /// `today`: the day's card (TodayBody).
     var today: TodayBody? {
@@ -222,16 +240,20 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     /// the main conversation tells the user about it, nothing else does (the island, notifications, badges, the watch).
     /// Its card in the conversation shows as always. False from a hub without it.
     var quiet: Bool
+    /// The main conversation supervises it (#3124, `Supervision.swift`): what done means, its reviews, its agent's
+    /// latest report. Nil for a todo that is not supervised, from an older hub, or when it does not decode.
+    var supervision: TaskSupervision?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, notes, origin, agents, spaces, quiet, stage
+        case id, title, notes, origin, agents, spaces, quiet, stage, supervision
         case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id", startError = "start_error",
              doneBy = "done_by", doneReason = "done_reason", prURL = "pr_url"
     }
 
     init(id: String, title: String, notes: String? = nil, doneAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil,
          origin: String? = nil, planID: String? = nil, startError: String? = nil, doneBy: String? = nil, doneReason: String? = nil,
-         agents: [Agent] = [], spaces: [Space]? = nil, quiet: Bool = false, stage: String? = nil, prURL: String? = nil) {
+         agents: [Agent] = [], spaces: [Space]? = nil, quiet: Bool = false, stage: String? = nil, prURL: String? = nil,
+         supervision: TaskSupervision? = nil) {
         self.id = id
         self.title = title
         self.notes = notes
@@ -248,6 +270,7 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         self.quiet = quiet
         self.stage = stage
         self.prURL = prURL
+        self.supervision = supervision
     }
 
     init(from decoder: Decoder) throws {
@@ -269,6 +292,8 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         // A hub before #2776 / #2768 sends neither: old payloads decode as before.
         stage = try c.decodeIfPresent(String.self, forKey: .stage)
         prURL = try c.decodeIfPresent(String.self, forKey: .prURL)
+        // Optional and new (#3124): one that does not decode is as if there were none, never the whole todo failing.
+        supervision = (try? c.decodeIfPresent(TaskSupervision.self, forKey: .supervision)) ?? nil
     }
 
     var activeAgents: [Agent] { agents.filter(\.isActive) }

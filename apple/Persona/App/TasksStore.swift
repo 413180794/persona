@@ -115,7 +115,7 @@ final class TasksStore {
     func received(_ item: FeedItem, group: String = "") {
         viewStore.receive(item, group: group)
         merge([item], into: item.conversation)
-        if item.kind == .task || item.kind == .receipt { reloadTodos() }
+        if item.kind == .task || item.kind == .receipt || item.kind == .review || item.kind == .report { reloadTodos() }
     }
 
     func received(_ plan: TaskPlan) {

@@ -120,6 +120,16 @@ struct Chip: View {
         case outline
 
         static func tone(_ t: StatusTone) -> Look { .tint(t.tint, text: t.text) }
+
+        /// A supervised task's review state (#3124): caution words on a soft caution fill, danger, positive, or neutral.
+        static func review(_ t: ReviewTone) -> Look {
+            switch t {
+            case .caution: .tint(Theme.caution.opacity(0.14), text: Theme.cautionText)
+            case .danger: .tint(Theme.danger)
+            case .positive: .tint(Theme.positive)
+            case .neutral: .neutral
+            }
+        }
     }
 
     var text: String
