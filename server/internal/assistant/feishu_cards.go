@@ -1598,7 +1598,7 @@ func (s *Service) stopConversation(ctx context.Context, f FeishuFeatures, t botT
 }
 
 // botCommandNames are the bot's own commands a typo is matched against (the Chinese ones are too short to mistype).
-var botCommandNames = []string{"/help", "/main", "/jarvis", "/new", "/list", "/agents", "/start", "/stop", "/status"}
+var botCommandNames = []string{"/help", "/main", "/jarvis", "/new", "/list", "/agents", "/start", "/stop", "/status", "/tasks"}
 
 // agentCommandNames are Claude Code's and Codex's own commands, and plain words, a slip off one of the bot's: they go
 // on as they are.

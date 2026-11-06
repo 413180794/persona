@@ -22,7 +22,7 @@ func TestBotCommandTypoIsAsked(t *testing.T) {
 	})
 	s := newTestService(t, f)
 	ctx := context.Background()
-	for _, typo := range []string{"/stpo", "/stp", "/sotp", "/satus", "/nwe", "/hepl", " /stpo"} {
+	for _, typo := range []string{"/stpo", "/stp", "/sotp", "/satus", "/nwe", "/hepl", " /stpo", "/taks", "/tsaks"} {
 		notes = nil
 		if h, _ := s.botCommand(ctx, FeishuFeatures{Main: true}, "om", typo, "", ""); !h {
 			t.Fatalf("%q went on to the conversation", typo)
@@ -38,12 +38,12 @@ func TestBotCommandTypoIsAsked(t *testing.T) {
 		}
 	}
 	for _, own := range []string{"/compact", "/stats", "/model", "/review", "/news", "/now", "/net", "/few", "/man", "/step", "/shop",
-		"/star", "/stat", "/lint"} {
+		"/star", "/stat", "/lint", "/todos"} {
 		if h, rest := s.botCommand(ctx, FeishuFeatures{Main: true}, "om", own, "", ""); h || rest != own {
 			t.Fatalf("%s: handled=%v rest=%q", own, h, rest)
 		}
 	}
-	for in, want := range map[string]string{"//stpo": "/stpo", " //stop": "/stop", "//new 一段话": "/new 一段话"} {
+	for in, want := range map[string]string{"//stpo": "/stpo", " //stop": "/stop", "//new 一段话": "/new 一段话", "//tasks": "/tasks", "//taks": "/taks"} {
 		if h, rest := s.botCommand(ctx, FeishuFeatures{Main: true}, "om", in, "", ""); h || rest != want {
 			t.Fatalf("%q: handled=%v rest=%q", in, h, rest)
 		}
@@ -59,6 +59,18 @@ func TestBotCommandTypoIsAsked(t *testing.T) {
 		if h, rest := s.botCommand(ctx, FeishuFeatures{Main: true, Agents: true}, "om", in, "om_agent", "om_agent"); h || rest != in {
 			t.Fatalf("%q to an agent: handled=%v rest=%q", in, h, rest)
 		}
+	}
+}
+
+// /tasks is one of the bot's commands, so a slip of it is caught; /todos is Claude Code's own and goes on.
+func TestBotCommandTypoKnowsTasks(t *testing.T) {
+	for _, typo := range []string{"/taks", "/tsaks"} {
+		if got := botCommandTypo(typo); got != "/tasks" {
+			t.Errorf("%s: %q, want /tasks", typo, got)
+		}
+	}
+	if got := botCommandTypo("/todos"); got != "" {
+		t.Errorf("/todos: %q, want none", got)
 	}
 }
 
