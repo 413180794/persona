@@ -59,12 +59,12 @@ func TestRetriedPushKeepsItsCollapseID(t *testing.T) {
 	h.push.retryWaits = []time.Duration{time.Millisecond}
 	h.push.register(Device{DeviceID: "phone", Name: "phone", APNSToken: "devtok", Topic: "app.example"})
 
-	h.push.notifyDone("m1", "box", "s1", "✅ 重构", "完成了", nil)
+	h.push.notifyDone("m1", "box", "s1", "重构", "完成了", nil)
 	ids := f.wait(t, 2)
 	if ids[0] == "" || ids[0] != ids[1] || !strings.HasPrefix(ids[0], "p_") || len(ids[0]) > 64 {
 		t.Fatalf("a retried push changed or lacks its collapse id: %q", ids)
 	}
-	h.push.notifyDone("m1", "box", "s1", "✅ 重构", "又完成了", nil)
+	h.push.notifyDone("m1", "box", "s1", "重构", "又完成了", nil)
 	ids = f.wait(t, 3)
 	if ids[2] == "" || ids[2] == ids[0] {
 		t.Fatalf("another push shares the first one's collapse id: %q", ids)

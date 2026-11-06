@@ -200,7 +200,7 @@ func TestExtensionUIAndEvents(t *testing.T) {
 		return hp != nil && hp.proc != nil && hp.proc.Ready()
 	})
 
-	b1Emit(h, "agent.finished", map[string]any{"machine_id": "mac", "machine": "Mac", "session_id": "s1", "title": "✅ 完成了"})
+	b1Emit(h, "agent.finished", map[string]any{"machine_id": "mac", "machine": "Mac", "session_id": "s1", "title": "完成了"})
 	_, detail := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", master, "")
 	if ui, _ := detail["ui"].([]any); len(ui) != 5 || strings.Contains(fmt.Sprint(ui), "extension_page") {
 		t.Fatalf("its pages (plugin_page, as the old paths call extension_page, and nav_page): %v", detail["ui"])

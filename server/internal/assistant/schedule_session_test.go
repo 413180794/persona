@@ -302,7 +302,7 @@ func TestTaskSilentTurnFailsAndRetriesOnce(t *testing.T) {
 			_, held := h.fleet.notified["s1"]
 			h.fleet.mu.Unlock()
 			if !held {
-				t.Fatal("the turn's own 「✅ 早报 · 完成了」 push is held back (the failure was pushed instead)")
+				t.Fatal("the turn's own 「早报 · 完成了」 push is held back (the failure was pushed instead)")
 			}
 			for time.Now().Before(deadline) {
 				if n.sent() >= 2 {

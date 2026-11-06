@@ -151,7 +151,7 @@ func TestRelayInteractionIsSealed(t *testing.T) {
 
 func TestRelayDoneAndWake(t *testing.T) {
 	h, f, priv := relayHub(t)
-	h.push.notifyDone("m1", "笔记本", "s1", "✅ 重构支付", "改好了", nil)
+	h.push.notifyDone("m1", "笔记本", "s1", "重构支付", "改好了", nil)
 	h.push.wake("tool")
 	got := f.wait(t, 2)
 	byType := map[string]apns.Request{}
@@ -466,7 +466,7 @@ func (f *flakyRelay) waitLog(t *testing.T, want string) []string {
 func TestRelayTriesAPushAgainAfterTheNetworkDroppedIt(t *testing.T) {
 	fr := &flakyRelay{fail: []int{0, 0}}
 	h, f, priv := fr.hub(t)
-	h.push.notifyDone("m1", "笔记本", "s1", "✅ 重构支付", "改好了", nil)
+	h.push.notifyDone("m1", "笔记本", "s1", "重构支付", "改好了", nil)
 	if p := opened(t, priv, f.wait(t, 1)[0]); p["aps"].(map[string]any)["alert"].(map[string]any)["body"] != "改好了" {
 		t.Fatalf("opened %v", p)
 	}
@@ -543,7 +543,7 @@ func TestDirectKeyWinsOverRelay(t *testing.T) {
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	h.push.direct = apns.NewWithKey(apnsConfig{KeyID: "K", TeamID: "T", Topic: "app.example"}, key)
 	h.push.direct.Base = srv.URL
-	h.push.notifyDone("m1", "笔记本", "s1", "✅ t", "改好了", nil)
+	h.push.notifyDone("m1", "笔记本", "s1", "t", "改好了", nil)
 	c := direct.calls(t, 1)
 	if c[0].Token != "a1b2c3d4e5f60718a1b2c3d4e5f60718" || c[0].Type != "alert" {
 		t.Fatalf("direct %+v", c[0])
@@ -579,7 +579,7 @@ func TestRelayRenewsAStaleGrant(t *testing.T) {
 	d, _ := h.push.device("phone")
 	d.RelayGrant = "c3RhbGU" // not this relay's
 	h.push.register(d)
-	h.push.notifyDone("m1", "笔记本", "s1", "✅ t", "改好了", nil)
+	h.push.notifyDone("m1", "笔记本", "s1", "t", "改好了", nil)
 	r := f.wait(t, 1)[0]
 	if p := opened(t, priv, r); p["aps"].(map[string]any)["alert"].(map[string]any)["body"] != "改好了" {
 		t.Fatalf("opened %v", p)
@@ -637,7 +637,7 @@ func TestManualRelayPush(t *testing.T) {
 	p.register(Device{DeviceID: "sim", Name: "simulator", Kind: "iphone", PushKey: key, RelayURL: url, RelayGrant: grant})
 	switch os.Getenv("JARVIS_RELAY_KIND") {
 	case "done":
-		p.notifyDone("m1", "笔记本", "s1", "✅ 重构支付模块", "改好了，测试全过", nil)
+		p.notifyDone("m1", "笔记本", "s1", "重构支付模块", "改好了，测试全过", nil)
 	default:
 		p.notifyInteraction(proto.Interaction{ID: "ix_e2e", Kind: proto.IxPermission, MachineID: "m1", SessionID: "s1",
 			SessionTitle: "重构支付模块", Summary: "Bash: swift test"}, "笔记本")

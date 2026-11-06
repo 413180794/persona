@@ -81,3 +81,62 @@ func TestCodexExecRunOnAnAppServerIsListed(t *testing.T) {
 	}
 	t.Fatal("an app-server's exec thread was hidden")
 }
+
+// #4745: a parent's subagents (a reviewer skill's thread_spawn children) were listed as agents of their own, titled
+// after their directory: each pushed 完成了 and stayed 完成未看. session_meta marks them; the parent stays.
+func TestCodexSubagentRolloutsAreNotListed(t *testing.T) {
+	n := remoteTestNode(t)
+	home := t.TempDir()
+	dir := filepath.Join(home, "sessions", "2026", "11", "06")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const parent = "0e000000-0000-4000-8000-0000000000a0"
+	cases := []struct {
+		id, meta string
+		listed   bool
+	}{
+		{parent, `{"id":"` + parent + `","originator":"codex-mew","source":"cli","cwd":"/work/home"}`, true},
+		// As Codex 0.159 writes it: thread_source, parent_thread_id and source.subagent.thread_spawn all say so.
+		{"0e000000-0000-4000-8000-0000000000a1", `{"id":"0e000000-0000-4000-8000-0000000000a1","session_id":"` + parent + `","forked_from_id":"` + parent + `","parent_thread_id":"` + parent + `","originator":"codex-mew","cwd":"/work/home","source":{"subagent":{"thread_spawn":{"parent_thread_id":"` + parent + `","depth":1,"agent_path":"/root/security","agent_nickname":"Copernicus"}}},"thread_source":"subagent"}`, false},
+		// Either mark alone is enough.
+		{"0e000000-0000-4000-8000-0000000000a2", `{"id":"0e000000-0000-4000-8000-0000000000a2","originator":"codex-tui","cwd":"/work/home","thread_source":"subagent"}`, false},
+		{"0e000000-0000-4000-8000-0000000000a3", `{"id":"0e000000-0000-4000-8000-0000000000a3","originator":"codex-tui","cwd":"/work/home","source":{"subagent":"review"}}`, false},
+		// A fork (forked_from_id only) is a conversation of its own.
+		{"0e000000-0000-4000-8000-0000000000a4", `{"id":"0e000000-0000-4000-8000-0000000000a4","forked_from_id":"` + parent + `","originator":"codex-tui","source":"cli","cwd":"/work/home"}`, true},
+	}
+	for _, c := range cases {
+		p := filepath.Join(dir, "rollout-2026-11-06T02-00-00-"+c.id+".jsonl")
+		if err := os.WriteFile(p, []byte(`{"type":"session_meta","payload":`+c.meta+"}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		n.registerCodex(home, c.id, p)
+	}
+	listed := map[string]bool{}
+	for _, s := range n.codexSessions(map[string]bool{}) {
+		listed[s.SourceThreadID] = true
+	}
+	for _, c := range cases {
+		if listed[c.id] != c.listed {
+			t.Errorf("%s listed=%v, want %v", c.id, listed[c.id], c.listed)
+		}
+	}
+}
+
+// A subagent a shared app-server holds stays listed (read-only under its parent, its approvals answerable).
+func TestCodexSubagentOnAnAppServerIsListed(t *testing.T) {
+	n := remoteTestNode(t)
+	home := t.TempDir()
+	connectRemoteFixture(t, n, home, "one", remoteRaw)
+	p := filepath.Join(home, "rollout-sub.jsonl")
+	if err := os.WriteFile(p, []byte(`{"type":"session_meta","payload":{"originator":"codex-tui","thread_source":"subagent","source":{"subagent":{"thread_spawn":{"parent_thread_id":"x"}}}}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	id := n.registerCodex(home, remoteRaw, p)
+	for _, s := range n.codexSessions(map[string]bool{}) {
+		if s.SessionID == id {
+			return
+		}
+	}
+	t.Fatal("an app-server's subagent thread was hidden")
+}

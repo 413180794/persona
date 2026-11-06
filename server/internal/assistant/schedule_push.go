@@ -12,7 +12,7 @@ import (
 
 // A scheduled task's 「跑完推送」 (#2396, docs/assistant.md「跑完推送」): each run is a turn in a conversation, and the
 // hub pushes every finished turn (hub/machine.go notifyFinished). Right for a 早报, wrong for a task that watches
-// something (「有新邮件时推给我」): every run pushed 「✅ 任务名 · 没有新邮件」. A task's push is then
+// something (「有新邮件时推给我」): every run pushed 「任务名 · 没有新邮件」. A task's push is then
 //
 //   - pushEvery (""): every run's answer is pushed, as before;
 //   - pushAsked: only what the run pushes itself (notify_user); a run with nothing new is not pushed at all.

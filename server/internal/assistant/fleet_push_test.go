@@ -88,7 +88,7 @@ func TestFinishedPushDecidedOnce(t *testing.T) {
 	ft.event("mac", "hook.event", map[string]any{"session_id": "s1", "event": "Stop", "stop_sig": "sig1"})
 	ft.sessions("mac", done)
 	got := ft.pushesOf(assistantwire.NotifyDone, 1, 2*time.Second)
-	if len(got) != 1 || got[0].SessionID != "s1" || got[0].Title != "✅ 修登录" || got[0].Body != "改好了" || got[0].Subtitle != "Mac" ||
+	if len(got) != 1 || got[0].SessionID != "s1" || got[0].Title != "修登录" || got[0].Body != "改好了" || got[0].Subtitle != "Mac" ||
 		got[0].LongMS != 60_000 {
 		t.Fatalf("pushes %+v", got)
 	}
@@ -347,7 +347,7 @@ func TestHealthDonePushHidesContent(t *testing.T) {
 	if strings.Contains(head, "血压") || strings.Contains(text, "150") || !strings.Contains(head, "健康") {
 		t.Fatalf("health done: %q %q", head, text)
 	}
-	if head, text := doneAlert(i18n.ZhHans, proto.Session{Title: "周报", Cwd: "/home/me/.persona/assistant", LastText: "写好了"}); head != "✅ 周报" || text != "写好了" {
+	if head, text := doneAlert(i18n.ZhHans, proto.Session{Title: "周报", Cwd: "/home/me/.persona/assistant", LastText: "写好了"}); head != "周报" || text != "写好了" {
 		t.Fatalf("assistant's done: %q %q", head, text)
 	}
 }

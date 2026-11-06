@@ -391,7 +391,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		if seen[id] || n.isAssistantSession(id) || n.ownedAssistantSource(src.thread) {
 			continue
 		}
-		if n.programRun(id, src) {
+		if n.programRun(id, src) || n.subagentRun(id, src) {
 			continue
 		}
 		if n.agentFiltered("codex", src.path) && !n.keptSessions()[id] { // another platform's runs (agentfilters.go)
@@ -497,4 +497,20 @@ func (n *Node) programRun(id string, src codexSource) bool {
 		return false
 	}
 	return !codexDesktopChat(src)
+}
+
+// subagentRun: a subagent's thread (session_meta: thread_source "subagent" or a source of {"subagent": …}) known only
+// from its rollout. Its parent drives it and its work shows in the parent's conversation; listed on its own it was an
+// agent of its own, titled after its directory, that pushed 完成了 and sat in Agents as 完成未看 each time a parent's
+// reviewer finished (#4745). A subagent a shared app-server holds stays (read-only, its cards answerable), as does
+// one the Codex App lists under its parent.
+func (n *Node) subagentRun(id string, src codexSource) bool {
+	if src.path == "" || !metaOf(src.home, src.path).sub {
+		return false
+	}
+	if _, _, err := n.codexOwner(id); err != errCodexNoOwner {
+		return false
+	}
+	o := readCodexOrigin(src.path)
+	return !(o.desktop && o.parent != "" && codexDesktopAvailable(src.home) && loadCodexAppState(src.home).listed(o.parent))
 }

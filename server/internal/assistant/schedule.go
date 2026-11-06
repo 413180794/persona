@@ -1242,7 +1242,7 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 		if items, read := s.lastTurnItems(ctx, m.ID, run.SessionID); read && silentRun(items, t, ran) && s.stillEnded(ctx, m.ID, run.SessionID, items) {
 			text = silentTurnErrorIn(s.lang(ctx))
 			// Its failure is pushed below. noteAsked holds back the conversation's finished pushes for the next three
-			// minutes (notifyFinished), so the turn's own 「✅ 早报 · 完成了」 does not go out next to it.
+			// minutes (notifyFinished), so the turn's own 「早报 · 完成了」 does not go out next to it.
 			s.noteAsked(run.SessionID)
 		}
 	}

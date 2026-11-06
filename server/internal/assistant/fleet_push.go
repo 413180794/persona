@@ -353,13 +353,13 @@ func (s *Service) reportTurn(session string, start time.Time) bool {
 // doneAlert is the title and body of the push for sess's finished turn, in l.
 func doneAlert(l i18n.Lang, sess proto.Session) (head, text string) {
 	if spaceOf(sess) == SpaceHealth { // the lock screen hears there is news, not what it is, nor the conversation's title
-		return "✅ " + i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
+		return i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
 	}
 	title := transcript.Title(sess.Title)
 	if title == "" || title == "Claude Code" {
 		title = path.Base(sess.Cwd)
 	}
-	head, text = "✅ "+title, sess.LastText
+	head, text = title, sess.LastText // no mark: a finished turn is the usual news
 	if text == "" {
 		text = i18n.T(l, "hub-machine.done")
 	}
@@ -371,7 +371,7 @@ func doneAlert(l i18n.Lang, sess proto.Session) (head, text string) {
 			head, text = "⏳ "+title, w.Line
 		}
 	}
-	// The model service cut the turn off: no ✅ over the error (#1516). A Codex turn's error is no words of its
+	// The model service cut the turn off: marked ⚠️, not told as done (#1516). A Codex turn's error is no words of its
 	// answer: the session says it (#2185).
 	if e := strings.TrimSpace(sess.TurnError); e != "" {
 		head, text = "⚠️ "+title, interruptedSummary+"："+e
