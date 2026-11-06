@@ -106,8 +106,10 @@ func TestWorkflowProgress(t *testing.T) {
 func TestWorkflowEnded(t *testing.T) {
 	n, parent, sess := workflowSession(t)
 	writeRun(t, sess, "wf_k", `{"type":"started","agentId":"k1","label":"audit:x","phase":"Audit"}`+"\n", map[string]string{"k1": "…"}, time.Minute)
+	// An hour ago: ended runs are listed for a day after they end (workflowKeep), so a fixed time stops being one (#5916).
+	started := time.Now().Add(-time.Hour).UnixMilli()
 	state := `{"runId":"wf_k","taskId":"wk","status":"killed","error":"Error: Workflow aborted\n    at S (x.js:1:2)","startTime":` +
-		"1793886384925" + `,"durationMs":14725,"workflowName":"parity-audit","phases":[{"title":"Audit"},{"title":"Verify"}]}`
+		fmt.Sprint(started) + `,"durationMs":14725,"workflowName":"parity-audit","phases":[{"title":"Audit"},{"title":"Verify"}]}`
 	if err := os.WriteFile(filepath.Join(sess, "workflows", "wf_k.json"), []byte(state), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +119,9 @@ func TestWorkflowEnded(t *testing.T) {
 	n.setBackground(&s, quickMeta{wf: runs, bg: []proto.BackgroundTask{{ID: "wk", Kind: "workflow"}}})
 	if len(s.Background) != 0 {
 		t.Fatalf("an ended run is still background: %+v", s.Background)
+	}
+	if len(s.Workflows) != 1 || len(s.Workflows[0].Agents) == 0 {
+		t.Fatalf("workflows: %+v", s.Workflows)
 	}
 	w := s.Workflows[0]
 	if w.Running || w.Status != proto.WorkflowKilled || w.Error != "Error: Workflow aborted" || w.Name != "parity-audit" ||
