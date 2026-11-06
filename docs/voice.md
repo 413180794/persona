@@ -1040,7 +1040,8 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
     - rebuild tap/converter on headset/Bluetooth changes and continue;
     - tones/haptics (tones through the same playback node for echo cancellation);
     - only Xcode 26.0 SDK APIs; newer SDK symbols guarded by `#if compiler(>=6.4)`.
-  - **Simulator**: if VoiceProcessing fails, fall back to capture without echo cancellation, log once; `-openVoice` still works.
+  - **Before the microphone** (#5029): nothing reads `AVAudioEngine.inputNode` until `VoiceCapture.plan` says there is an input. Reading it sets the I/O unit up, and an input that cannot start makes that setup wait on an RPC that times out and aborts the app (nothing to catch). So, with the session active: recording permission (else `permissionDenied`), `isInputAvailable` (else `audioFailed`); a route change that leaves no input ends the call as `audioFailed` too.
+  - **Simulator**: the session reports the Mac's microphone whether or not the Mac lets the simulator use it, so `VoiceInputProbe` first starts a short AudioQueue recording on its own queue (an AudioQueue that cannot start waits in `AudioQueueStart` instead of aborting) and the call waits up to 3 s. Started: plain capture, never VoiceProcessing (it does not run there: it turns on, then the engine will not start with it, and each extra I/O unit is one more setup that can time out). Not started: the call ends as `audioFailed` ("Something went wrong with the microphone or speaker", Retry); a probe still waiting is not started again until it comes back. On a device, VoiceProcessing first and plain capture if it fails, logged once.
   - No local interruption detection, always follow extension `clear`: same route as user captions, local detection would not be faster.
 - **Coordinate with #1931** (do not change that PR): before #3507, comment in #1951 with this document:
   1. **Names**: independent phone `Voice*`, not `DuplexVoice*`, `InputPump`, `PCM16`, `VoicePlugin*`, `APIClient.voicePlugins()`.
@@ -1086,7 +1087,7 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
 
 - **Launch arguments** (add all to `scripts/release/release.sh`, ensure no Swift-identifier collision):
   - `-showVoiceSample listening|speaking|working|paused|asking|approval|refused|plan_feedback|ended|setup`: no socket/mic, fake states; may combine `-openSession`;
-  - `-openVoice YES`: real mock flow (taps the voice button once the page offers a call). `-openVoice silent`: the same real socket, bar and thread with no microphone or speaker (`VoiceSample.SilentAudio` reports playing for as long as the received PCM lasts): on this dev machine's simulator `AVAudioEngine.inputNode` aborts (an `AURemoteIO::Initialize` RPC timeout, lessons "The iOS voice mode", #5029), so a simulator without a microphone walks the flow this way.
+  - `-openVoice YES`: real mock flow (taps the voice button once the page offers a call). `-openVoice silent`: the same real socket, bar and thread with no microphone or speaker (`VoiceSample.SilentAudio` reports playing for as long as the received PCM lasts): on a simulator whose Mac does not let it record, `-openVoice YES` ends after the 3-second probe with "Something went wrong with the microphone or speaker" (6.4, lessons "The iOS voice mode", #5029), so such a simulator walks the flow this way.
 - **Mock**: new scripts/mock/voice_mock.py, imported by `mock_hub.py` with `MOCK_VOICE=1`, avoiding other PR edits there.
   - Add voice in `/api/v1/extensions`, `/info`, `/models`, `/voices`, `purposes/plugin.voice`;
   - `/ws` sends a scripted sequence: `ready` → partial-to-final captions → `run` from sending to working → `link paused/live` → `ask` → `run refused(input_draft)` → `run done`; `interrupt` returns `clear`;
@@ -1117,6 +1118,7 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
   - "Return as feedback" calls resolve with feedback (#3508 App `model.resolve`, not call);
   - idle timer disabled on start, restored on end.
 - **#3508**: `VoiceBarLineTests` (every second-line case and its buttons, the first row and the orb), `VoiceNotesTests` (the "+" explanations, the ended row), `VoiceModeTests` (`isOver` changes only as a call ends or picks up, `VoiceCalls.isLive`, Never Mind, the plan feedback body, Clear and Send returns `clearable`, the cue tones' rate, length and gain).
+- **#5029**: `VoiceCaptureTests` (`VoiceCapture.plan`: no permission or no input ends before the probe, a device uses voice processing without one, the simulator records plain only once the probe started; a probe that has not come back is not started again until it does); `VoiceConversationTests` (a start that finds no input ends as `audioFailed`, a refused recording as `permissionDenied`).
 
 ## 7. Work breakdown
 

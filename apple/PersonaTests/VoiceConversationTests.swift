@@ -487,6 +487,24 @@ struct VoiceConversationTests {
         #expect(rig.microphone.claim(UUID()))
     }
 
+    @Test func noInputEndsAsAudioFailedAndARefusedRecordingAsPermission() async {
+        let none = VoiceRig()
+        none.audio.failStart = true
+        none.audio.startError = .noInput
+        let call = none.call()
+        await call.begin()
+        #expect(call.phase == .ended(.audioFailed), "no input, or the simulator's would not start (#5029)")
+        #expect(none.sockets.isEmpty)
+
+        let refused = VoiceRig()
+        refused.audio.failStart = true
+        refused.audio.startError = .permission
+        let other = refused.call()
+        await other.begin()
+        #expect(other.phase == .ended(.permissionDenied))
+        #expect(refused.sockets.isEmpty && refused.microphone.claim(UUID()))
+    }
+
     @Test func tenIdleMinutesEndTheCallUnlessSomethingIsOpen() async {
         let busy = VoiceRig()
         busy.session = VoiceRig.session(#"{"machine_id":"m1","session_id":"s1","status":"working","state":"working"}"#)

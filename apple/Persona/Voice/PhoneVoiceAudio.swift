@@ -1,4 +1,5 @@
 #if os(iOS) || os(visionOS)
+import AudioToolbox
 import AVFoundation
 import Foundation
 import os
@@ -9,7 +10,9 @@ import os
 // PCM16, an AVAudioPlayerNode at its output rate, dropping what `clear` cancels by generation, and ending on a call
 // or a media services reset. The microphone goes into a `VoiceUplink` (held until `ready`, muted as silence, measured
 // for the orb); a route change rebuilds the tap and converter instead of ending the call; voice processing that will
-// not run (the simulator) falls back to plain capture. Only APIs in the Xcode 26.0 SDK.
+// not run falls back to plain capture. Nothing reads `engine.inputNode` before `VoiceCapture.plan` says there is an input
+// that starts (#5029): the simulator records without voice processing, after a short AudioQueue recording proved the
+// Mac lets it. Only APIs in the Xcode 26.0 SDK.
 
 /// Turns the microphone's buffers into PCM16 at the extension's input rate and hands them to the uplink. The tap calls
 /// `feed` on the audio thread, one buffer at a time (the converter's one-buffer handoff is #1931's).
@@ -58,13 +61,84 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
     }
 }
 
+/// Whether the simulator's input starts, asked before a call reads `AVAudioEngine.inputNode` (#5029). The simulator
+/// records from the Mac's microphone through the Mac's audio server; where the Mac does not let it (seen on a Mac that
+/// had never decided whether the simulator may use the microphone), the input never starts. The engine's I/O unit then
+/// waits on its setup RPC, which times out and aborts the app; an AudioQueue waits in `AudioQueueStart` instead, without
+/// aborting. So a short AudioQueue recording runs first on a queue of its own, and the call waits for it a moment. One
+/// that does not come back is left waiting, and no other starts until it does.
+nonisolated final class VoiceInputProbe: @unchecked Sendable {
+    static let shared = VoiceInputProbe(attempt: VoiceInputProbe.recordBriefly)
+    /// A simulator whose input works starts it in well under this.
+    static let timeout: TimeInterval = 3
+
+    private let attempt: @Sendable () -> OSStatus
+    private let queue = DispatchQueue(label: "voice.input-probe")
+    private let lock = NSLock()
+    // Guarded by `lock`.
+    private var outstanding = false
+    private var status: OSStatus = noErr
+
+    init(attempt: @escaping @Sendable () -> OSStatus) {
+        self.attempt = attempt
+    }
+
+    /// An attempt has not come back yet.
+    var isOutstanding: Bool { lock.withLock { outstanding } }
+
+    /// Blocks the caller for at most `timeout`.
+    func run(timeout: TimeInterval = VoiceInputProbe.timeout) -> VoiceCapture.Probe {
+        let free = lock.withLock {
+            guard !outstanding else { return false }
+            outstanding = true
+            return true
+        }
+        guard free else { return .timedOut }
+        let done = DispatchSemaphore(value: 0)
+        queue.async { [self] in
+            let result = attempt()
+            lock.withLock {
+                status = result
+                outstanding = false
+            }
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + timeout) == .success else { return .timedOut }
+        let result = lock.withLock { status }
+        return result == noErr ? .started : .failed(result)
+    }
+
+    /// Starts and stops a mono 16-bit recording: noErr once the input ran.
+    private static func recordBriefly() -> OSStatus {
+        var format = AudioStreamBasicDescription(mSampleRate: 16000, mFormatID: kAudioFormatLinearPCM,
+                                                 mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
+                                                 mBytesPerPacket: 2, mFramesPerPacket: 1, mBytesPerFrame: 2, mChannelsPerFrame: 1,
+                                                 mBitsPerChannel: 16, mReserved: 0)
+        var made: AudioQueueRef?
+        var status = AudioQueueNewInputWithDispatchQueue(&made, &format, 0, DispatchQueue.global(qos: .utility)) { @Sendable _, _, _, _, _ in }
+        guard status == noErr, let queue = made else { return status }
+        defer { AudioQueueDispose(queue, true) }
+        var buffer: AudioQueueBufferRef?
+        status = AudioQueueAllocateBuffer(queue, 3200, &buffer)
+        guard status == noErr, let buffer else { return status }
+        status = AudioQueueEnqueueBuffer(queue, buffer, 0, nil)
+        guard status == noErr else { return status }
+        status = AudioQueueStart(queue, nil)
+        if status == noErr { AudioQueueStop(queue, true) }
+        return status
+    }
+}
+
 @MainActor final class PhoneVoiceAudio: VoiceAudio {
     nonisolated static let log = Logger(subsystem: "jarvis", category: "voice")
 
-    /// Whether the microphone runs with echo cancellation (false where voice processing would not start: the simulator).
+    /// Whether the microphone runs with echo cancellation (false on the simulator and where voice processing would not start).
     private(set) var cancelsEcho = false
 
     private var engine: AVAudioEngine?
+    /// The engine's input node, once `wire` has read it: taking the tap off goes through this, not `engine.inputNode`
+    /// (reading that property again can set the I/O unit up again).
+    private var input: AVAudioInputNode?
     private var player: AVAudioPlayerNode?
     private var playFormat: AVAudioFormat?
     private var pump: VoiceCapturePump?
@@ -93,8 +167,17 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
             throw VoiceAudioError.session
         }
         activated = true
+        let capture = VoiceCapture.plan(recordingAllowed: AVAudioApplication.shared.recordPermission == .granted,
+                                        inputAvailable: session.isInputAvailable, simulator: VoiceCapture.simulator,
+                                        probe: { VoiceInputProbe.shared.run() })
         do {
-            try build()
+            switch capture {
+            case .unavailable(let problem):
+                Self.log.error("voice: no microphone to record from (\(String(describing: problem), privacy: .public))")
+                throw problem == .permission ? VoiceAudioError.permission : VoiceAudioError.noInput
+            case .voiceProcessing, .plain:
+                try build(voiceProcessing: capture == .voiceProcessing)
+            }
         } catch {
             stop()
             throw error
@@ -131,12 +214,11 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
     func stop() {
         for token in observers { NotificationCenter.default.removeObserver(token) }
         observers = []
-        if let engine {
-            engine.inputNode.removeTap(onBus: 0)
-            engine.stop()
-        }
+        input?.removeTap(onBus: 0)
+        engine?.stop()
         player?.stop()
         engine = nil
+        input = nil
         player = nil
         playFormat = nil
         pump = nil
@@ -153,15 +235,20 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
     // MARK: Engine
 
     /// Voice processing first, so the speaker's sound is taken out of the microphone; where it will not run, plain capture.
-    private func build() throws {
+    /// Only after `VoiceCapture.plan` said the input starts: the first read of `engine.inputNode` sets the I/O unit up.
+    private func build(voiceProcessing: Bool) throws {
         let engine = AVAudioEngine()
-        do {
-            // Before the formats are read: voice processing changes the input node's format.
-            try engine.inputNode.setVoiceProcessingEnabled(true)
-            cancelsEcho = true
-        } catch {
-            cancelsEcho = false
-            Self.log.notice("voice: no voice processing, capturing without echo cancellation: \(error.localizedDescription, privacy: .public)")
+        cancelsEcho = false
+        if voiceProcessing {
+            do {
+                // Before the formats are read: voice processing changes the input node's format.
+                try engine.inputNode.setVoiceProcessingEnabled(true)
+                cancelsEcho = true
+            } catch {
+                Self.log.notice("voice: no voice processing, capturing without echo cancellation: \(error.localizedDescription, privacy: .public)")
+            }
+        } else {
+            Self.log.notice("voice: the simulator, capturing without echo cancellation")
         }
         do {
             try wire(engine)
@@ -169,9 +256,9 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
             try engine.start()
             self.engine = engine
         } catch where cancelsEcho {
-            // The simulator turns voice processing on and then cannot start the engine with it.
+            // Voice processing that turns on and then will not let the engine start.
             Self.log.notice("voice: the engine would not start with voice processing, capturing without echo cancellation")
-            engine.inputNode.removeTap(onBus: 0)
+            input?.removeTap(onBus: 0)
             engine.stop()
             cancelsEcho = false
             let plain = AVAudioEngine()
@@ -200,6 +287,7 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
         let pump = VoiceCapturePump(converter: converter, target: captureFormat, sourceRate: hardware.sampleRate,
                                     uplink: uplink, rate: format.inputRate)
         Self.installTap(input, pump)
+        self.input = input
         self.player = player
         self.playFormat = playFormat
         self.pump = pump
@@ -208,7 +296,8 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
     /// Takes the engine apart and puts it together again for the input as it is now (a new route or new rates). What
     /// was queued to play is gone with the old player.
     private func rewire(_ engine: AVAudioEngine) throws {
-        engine.inputNode.removeTap(onBus: 0)
+        input?.removeTap(onBus: 0)
+        input = nil
         if let player { engine.detach(player) }
         player = nil
         pump = nil
@@ -219,6 +308,8 @@ nonisolated final class VoiceCapturePump: @unchecked Sendable {
             events?(.outputLevel(0))
             events?(.playing(false))
         }
+        // The new route may have no input (#5029): reading the input node then would set up an I/O unit that cannot start.
+        guard AVAudioSession.sharedInstance().isInputAvailable else { throw VoiceAudioError.noInput }
         try wire(engine)
         engine.prepare()
         do { try engine.start() } catch { throw VoiceAudioError.engine }

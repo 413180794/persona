@@ -118,6 +118,8 @@ final class FakeVoiceSocket: VoiceSocket, @unchecked Sendable {
 /// The call's audio without a microphone or speaker.
 @MainActor final class FakeVoiceAudio: VoiceAudio {
     var failStart = false
+    /// What a failing start throws.
+    var startError = VoiceAudioError.engine
     private(set) var format: VoiceAudioFormat?
     private(set) var reconfigured: [VoiceAudioFormat] = []
     private(set) var played: [Data] = []
@@ -130,7 +132,7 @@ final class FakeVoiceSocket: VoiceSocket, @unchecked Sendable {
     var running: Bool { uplink != nil }
 
     func start(_ format: VoiceAudioFormat, uplink: VoiceUplink, events: @escaping @MainActor (VoiceAudioEvent) -> Void) throws {
-        if failStart { throw VoiceAudioError.engine }
+        if failStart { throw startError }
         self.format = format
         self.uplink = uplink
         self.events = events

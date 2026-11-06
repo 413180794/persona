@@ -34,6 +34,59 @@ nonisolated enum VoiceAudioError: Error, Equatable {
     case session
     case format
     case engine
+    /// The app may not record (the call ends as `permissionDenied`).
+    case permission
+    /// There is no input to record from, or it would not start (#5029).
+    case noInput
+}
+
+/// How a call opens the microphone, decided before anything reads `AVAudioEngine.inputNode` (docs/voice.md 6.4, #5029).
+/// Reading that property initializes the audio I/O unit, and an input that cannot start makes the initialization wait
+/// for an RPC that times out and aborts the app: there is no error to catch, so the call has to know beforehand.
+nonisolated enum VoiceCapture: Equatable, Sendable {
+    /// Voice processing (echo cancellation); plain capture if it will not run.
+    case voiceProcessing
+    /// Plain capture, no echo cancellation: the simulator.
+    case plain
+    /// Nothing to record from: the call cannot start.
+    case unavailable(Problem)
+
+    nonisolated enum Problem: Equatable, Sendable {
+        /// Recording is not allowed.
+        case permission
+        /// The audio session has no input.
+        case noInput
+        /// The simulator's input did not start (the Mac does not let the simulator record).
+        case inputWillNotStart
+    }
+
+    /// What starting the simulator's input came to (`VoiceInputProbe`).
+    nonisolated enum Probe: Equatable, Sendable {
+        case started
+        case failed(Int32)
+        /// No answer in time, or an earlier try has not come back yet.
+        case timedOut
+    }
+
+    /// The order matters: the probe runs only on the simulator, and only once the session says there is an input that
+    /// may be recorded. On a device the session's word is enough; on the simulator it is not (it reports the Mac's
+    /// microphone whether or not the Mac lets the simulator use it), so a short recording has to start first. Voice
+    /// processing is not asked for there: it does not run on the simulator (it turns on, then the engine will not start
+    /// with it), and every I/O unit set up for nothing is one more initialization that can time out.
+    static func plan(recordingAllowed: Bool, inputAvailable: Bool, simulator: Bool, probe: () -> Probe) -> VoiceCapture {
+        guard recordingAllowed else { return .unavailable(.permission) }
+        guard inputAvailable else { return .unavailable(.noInput) }
+        guard simulator else { return .voiceProcessing }
+        return probe() == .started ? .plain : .unavailable(.inputWillNotStart)
+    }
+
+    static var simulator: Bool {
+        #if targetEnvironment(simulator)
+        true
+        #else
+        false
+        #endif
+    }
 }
 
 /// The call's audio: the microphone into the uplink, the voice out of the speaker, `clear` to drop what has not been

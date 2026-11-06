@@ -271,7 +271,10 @@ struct VoiceDeps {
         let audio = deps.audio()
         do {
             try audio.start(format, uplink: uplink) { [weak self] event in self?.audioEvent(event, epoch: epoch) }
+        } catch VoiceAudioError.permission {
+            return end(.permissionDenied)
         } catch {
+            // No microphone to record from (#5029) or one that would not open: the page says so, with Retry.
             return end(.audioFailed)
         }
         self.audio = audio

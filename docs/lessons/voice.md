@@ -327,11 +327,25 @@ Other values: allowing 450 tokens per append (500-token limit, rejection observe
 
 ## The iOS voice mode (#3508, 2026-11-06)
 
-- **On this dev machine's simulator `AVAudioEngine.inputNode` aborts**: an RPC timeout inside `AURemoteIO::Initialize` (`_ReportRPCTimeout` → `abort`)
-  in `PhoneVoiceAudio.build()`. It cannot be caught, and never reaches the "no voice processing, plain capture" fallback. It looks like the Mac gives the
-  simulator no audio input (no permission, or no input device); devices are not affected (#5029). To drive the real socket and UI on a simulator, use
-  `-openVoice silent` (`VoiceSample.SilentAudio`: no microphone and no speaker, it reports playing for as long as the received PCM lasts). Audio itself
-  can only be checked on a device.
+- **On a simulator whose Mac does not let it record, `AVAudioEngine.inputNode` aborts the app**: reading the property sets the I/O unit up
+  (`AURemoteIO::Initialize`); the input never starts, the setup RPC times out after about 9 s and `_ReportRPCTimeout` calls `abort`. Nothing to catch,
+  and the "no voice processing, plain capture" fallback came too late: the abort is on the first read, before voice processing is asked for (#5029).
+  - **Why**: the simulator's audio is the Mac's (the app's log says `AVAudioSessionImpl_Simulator`; the Mac's `coreaudiod` activates
+    `iOSSimulatorAudioDevice-<pid>` devices). For the input, `coreaudiod` asks the Mac's TCC about the microphone on behalf of the app, attributed to
+    `com.apple.CoreSimulator.SimulatorTrampoline`; on the Mac where it crashed that preflight answered "unknown" (the Simulator had never been allowed or
+    denied the microphone), no prompt followed, and the input was never started.
+  - **What the simulator cannot tell**: the app's session says what a working one says (`isInputAvailable` true, a `MicrophoneBuiltIn` input, 1 channel,
+    48 kHz, recording permission granted): checking the session is enough on a device, not on the simulator.
+  - **What does not abort**: an AudioQueue input (`AudioQueueNewInputWithDispatchQueue` returns at once, `AudioQueueStart` waits, 18 s and more,
+    without aborting, and the app goes on). So on the simulator a call first starts a short AudioQueue recording on a queue of its own and waits up to
+    3 s (`VoiceInputProbe`); one that does not come back ends the call as `audioFailed` and is left waiting, and Retry does not start another until it
+    does. Where it starts, the call records plain, without voice processing (docs/voice.md 6.4).
+  - **Checking it**: `-openVoice YES` against `MOCK_VOICE=1` on such a simulator now ends with "Something went wrong with the microphone or speaker"
+    and Retry, and Retry ends the same way at once; no crash report. To drive the real socket and UI there, use `-openVoice silent`
+    (`VoiceSample.SilentAudio`: no microphone and no speaker, it reports playing for as long as the received PCM lasts). Audio itself can only be checked
+    on a device, or on a simulator whose Mac lets it record.
+  - **Reading it**: the app's own log is in the simulator (`xcrun simctl spawn <udid> log show --predicate 'process == "Persona"'`); the TCC and
+    `coreaudiod` side is in the Mac's (`log show --predicate 'process == "tccd" AND eventMessage CONTAINS "kTCCServiceMicrophone"'`).
 - **The voice bar was squeezed when cards were up**: the cards and the composer share the footer's height; offered too little, the bar shrank 在听 with
   `minimumScaleFactor` and cut its second line to one line with an ellipsis. The bar lays itself out at its own height
   (`fixedSize(horizontal: false, vertical: true)`); the cards' area scrolls anyway.
