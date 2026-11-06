@@ -131,8 +131,12 @@ struct MacInboxList: View {
             await state.loadAccounts(model)
             #if DEBUG
             // `-openInboxFirst YES`: select the first open item; `-openInboxMatch <text>`: the first whose title has the
-            // text (detail screenshots); `-addMail YES`: Manage Accounts.
+            // text (detail screenshots); `-addMail YES`: Manage Accounts; `-showCleanUpConfirm YES`: the clean-up question.
             if UserDefaults.standard.bool(forKey: "addMail") { state.showAccounts = true }
+            if UserDefaults.standard.bool(forKey: "showCleanUpConfirm") {
+                for _ in 0..<20 where state.openInView.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
+                if !state.openInView.isEmpty { state.confirming = true }
+            }
             let match = UserDefaults.standard.string(forKey: "openInboxMatch")
             if UserDefaults.standard.bool(forKey: "openInboxFirst") || match != nil {
                 for _ in 0..<20 where store.open.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }

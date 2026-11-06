@@ -591,7 +591,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   `key` 是对话（对话页）；收件箱、知识库里没有，「作为上下文」进 Persona 主对话的输入框、「AI 修改」直接问 Persona。
   `.macOpensLinksInPanel($link)` 把一块视图里的 `openURL` / `openLink` 接到面板上（收件箱详情用；邮件 HTML 里的链接仍交给浏览器）。对话页、知识库在 Mac 上也换成了面板（`#if os(macOS)`）。
 - 单独的窗口：`WindowGroup(id: "link", for: URL.self)`（`MacLinkWindow`）、`WindowGroup(id: "inbox-item", for: String.self)`（`MacInboxItemWindow`）。
-- DEBUG：`-openInboxFirst YES`、`-openInboxMatch <标题里的字>` 选中一件，`-showInboxAction draft|handoff` 打开弹层，`-openInboxLink <url>` 打开链接面板，`-addMail YES` 管理邮箱。
+- DEBUG：`-openInboxFirst YES`、`-openInboxMatch <标题里的字>` 选中一件，`-showInboxAction draft|handoff` 打开弹层，`-openInboxLink <url>` 打开链接面板，`-addMail YES` 管理邮箱，`-showCleanUpConfirm YES` 弹出「全部清理」的确认框（截图用，列表里要有未处理的）。
   例：`scripts/app/mac_shot.sh inbox-link -tab mail -openInboxMatch 下周的分享 -openInboxLink https://example.com/`。
 - sheet 的关闭和保存（#1248）：Mac 的 sheet 只能靠底栏的取消 / 完成（Esc）关，编辑类 sheet 用 `sheetCancel(unsaved:)`（有未保存的修改先确认），只看的用 `macSheetDone`，
   见 `docs/lessons/macos.md`。截图：`-showModelConfigSheet <分类 id>|all` 打开「模型配置」sheet（`all` 那一行在「设置 › 助手」列表靠下，窗口要够高它才渲染、才会弹：`SIZE=1280x1500`），
