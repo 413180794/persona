@@ -471,7 +471,7 @@ func ledgerNode(t *testing.T, api string, user ...proto.LarkRule) (*Node, *ledge
 // manager took them, which is not the order of the writes.
 func (h *ledgerHub) reportList(t *testing.T, want int) []proto.LarkSent {
 	t.Helper()
-	fullWait(t, 5*time.Second, "reports to the manager", func() bool {
+	waitFor(t, "reports to the manager", func() bool { // catchup_test.go: on every platform, unlike fullWait (#5924)
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		return len(h.got) >= want
@@ -639,7 +639,7 @@ func TestGateProxyReportDoesNotHoldTheResponse(t *testing.T) {
 	if code, body := send(t, "POST", base+"/api/v1/notes/failing", `{"text":"secret words"}`); code != http.StatusOK || body != `{"ok":true}` {
 		t.Fatalf("a write whose report fails: %d %s", code, body)
 	}
-	fullWait(t, 5*time.Second, "the failure in the log", func() bool { return strings.Contains(logs.String(), "telling the manager of POST /notes/failing") })
+	waitFor(t, "the failure in the log", func() bool { return strings.Contains(logs.String(), "telling the manager of POST /notes/failing") })
 	if strings.Contains(logs.String(), "secret words") {
 		t.Fatalf("the words reached the log: %s", logs)
 	}
@@ -672,7 +672,7 @@ func TestGateReportNamesTheCardAndTheConversation(t *testing.T) {
 			t.Fatalf("%s: %d", c.path, code)
 		}
 	}
-	fullWait(t, 5*time.Second, "the reports", func() bool {
+	waitFor(t, "the reports", func() bool {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		return len(h.larkSent) == 2
@@ -829,7 +829,7 @@ func TestGateReportWaitsForAPlaceThenGivesUp(t *testing.T) {
 		}
 	}
 	// The response is not held for it: the command has its answer while the report still waits for a place.
-	fullWait(t, 5*time.Second, "the line about the one over the limit", func() bool {
+	waitFor(t, "the line about the one over the limit", func() bool {
 		return strings.Contains(logs.String(), "too many reports in flight")
 	})
 	hub.mu.Lock()
@@ -863,7 +863,7 @@ func TestGateReportRememberedAlwaysIsNotACard(t *testing.T) {
 	if code, _ := send(t, "POST", base+"/api/v1/conversations/F1/messages", `{"text":"hi"}`); code != http.StatusOK {
 		t.Fatalf("the write: %d", code)
 	}
-	fullWait(t, 5*time.Second, "the report", func() bool {
+	waitFor(t, "the report", func() bool {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		return len(h.larkSent) == 1
