@@ -104,4 +104,21 @@ func TestGitMarket(t *testing.T) {
 	}
 }
 
+// A hub without git (the Docker image installs none) says so when it reads a git market, on the first clone and on
+// the fetch of a clone it already has, instead of an empty "git clone：" / "git fetch：".
+func TestGitMarketWithoutGit(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	for _, cloned := range []bool{false, true} {
+		m := &Market{Spec: MarketSpec{Kind: "git", URL: "https://example.com/plugins.git"}, Dir: t.TempDir()}
+		if cloned {
+			if err := os.MkdirAll(filepath.Join(m.checkout(), ".git"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := m.fetchErr(); err == nil || !strings.Contains(err.Error(), "没有 git") {
+			t.Fatalf("cloned=%v: err = %v, want it to say the machine has no git", cloned, err)
+		}
+	}
+}
+
 func (m *Market) fetchErr() error { _, _, err := m.Fetch(context.Background()); return err }
