@@ -99,6 +99,23 @@ class OkHttpHubConnection(
     @Volatile var phoneMessageHandler: ((JsonObject) -> Boolean)? = null
     private val _events = MutableSharedFlow<ServerEvent>()
     override val events = _events.asSharedFlow()
+    /** Sockets opened so far; each one's events are queued with its number. */
+    private val socketCount = AtomicLong()
+    /** The latest socket that started over: events of earlier sockets still queued are dropped. */
+    private val startedOver = AtomicLong()
+    /**
+     * Events on their way to [events], in the order they came, each with the socket it came on. The socket's loop
+     * only queues them: a subscriber that takes long over one (a reload over the network, a lock) must not hold up the
+     * loop, or a drop, the end of the catch-up and the heartbeat go unhandled and the connection never reconnects nor
+     * comes back Online (#3627). A socket that starts over (not resumed) drops what earlier sockets still had queued:
+     * what reacts to coming back Online refetches it, and an old event delivered after that refetch would undo it (a
+     * question answered meanwhile shown again). The one event already being handed over is not taken back: the
+     * subscribers that are keeping up took it at once, before any refetch, and only the slow one gets it late.
+     * (Cancelling an emit that waits on a slow subscriber is not an option: it breaks the flow, the collector fails.)
+     */
+    private val outgoing = Channel<Pair<Long, ServerEvent>>(Channel.UNLIMITED).also { queue ->
+        scope.launch { for ((socket, event) in queue) if (socket >= startedOver.get()) _events.emit(event) }
+    }
     private val _endpoints = MutableStateFlow(config.endpoints)
     /** The pairing's candidates until the hub sends its own list (hello, endpoints events); manual ones are separate. */
     val endpoints = _endpoints.asStateFlow()
@@ -431,6 +448,7 @@ class OkHttpHubConnection(
         val owner = ownerOf(selected)
         resumed = false
         val resumeFrom = resumePoint
+        val socketNumber = socketCount.incrementAndGet()
         val ws = webSocketFactory.newWebSocket(
             authorized(socketUrl(selected.endpoint.baseUrl(), resumeFrom), owner).build(),
             object : WebSocketListener() {
@@ -644,6 +662,7 @@ class OkHttpHubConnection(
                             if (!resumed) {
                                 // Starting over: what the gap missed is refetched, so the stream counts from here. It is
                                 // not resumable until that is done; a drop before then starts over again.
+                                startedOver.set(socketNumber)
                                 eventStream = null
                                 lastEventSeq.set(event.eventSeq ?: 0)
                                 freshStream = event.eventStream
@@ -692,7 +711,7 @@ class OkHttpHubConnection(
                                 }
                                 continue
                             }
-                            _events.emit(event)
+                            outgoing.send(socketNumber to event)
                             _advertised.value = event.endpoints.mapTo(HashSet()) { endpointKey(it.url) }
                             if (_endpoints.value != event.endpoints) {
                                 _endpoints.value = event.endpoints
@@ -703,7 +722,7 @@ class OkHttpHubConnection(
                         is Pong -> pendingPing.get()?.takeIf { it.first == event.id }?.second?.complete(Unit)
                         else -> Unit
                     }
-                    _events.emit(event)
+                    outgoing.send(socketNumber to event)
                 }
             }
         } finally {

@@ -117,6 +117,90 @@ class HubRestartTest {
         }
     }
 
+    @Test fun aSlowEventSubscriberDoesNotStopTheConnectionFromReconnecting() = runBlocking {
+        Fixture().use { fixture ->
+            val first = fixture.start()
+            assertEquals(ConnectionState.Online, fixture.connection.state.value)
+            // A screen whose handler for an event waits a long time (a reload over the network, a lock).
+            val stuck = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val got = mutableListOf<String>()
+            CoroutineScope(StandardTestDispatcher(fixture.scheduler) + Job()).launch {
+                fixture.connection.events.collect { got += it::class.simpleName.orEmpty(); stuck.await() }
+            }
+            fixture.scheduler.runCurrent()
+            first.receive("""{"event_seq":2,"type":"todos"}""")
+            first.receive("""{"event_seq":3,"type":"todos"}""")
+            fixture.pump(100)
+            assertEquals(1, got.size)
+            // The hub restarts: the socket closes and the next one must still be opened.
+            first.close(1001, "hub restarting")
+            fixture.pump(2_000)
+            fixture.awaitSocket(2)
+            fixture.pump(10_000)
+            assertEquals(ConnectionState.Online, fixture.connection.state.value)
+            // Let go, it gets the second todos (already being handed over when the hub restarted: not taken back) and
+            // then the new socket's hello.
+            stuck.complete(Unit)
+            fixture.pump(100)
+            assertEquals(listOf("TodosEvent", "TodosEvent", "Hello"), got)
+        }
+        Unit
+    }
+
+    @Test fun aSocketThatStartsOverDropsWhatTheOldOneStillHadQueued() = runBlocking {
+        Fixture().use { fixture ->
+            val first = fixture.start()
+            val stuck = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val got = mutableListOf<String>()
+            CoroutineScope(StandardTestDispatcher(fixture.scheduler) + Job()).launch {
+                fixture.connection.events.collect { got += it::class.simpleName.orEmpty(); stuck.await() }
+            }
+            fixture.scheduler.runCurrent()
+            first.receive("""{"event_seq":2,"type":"todos"}""")
+            first.receive("""{"event_seq":3,"type":"inbox"}""")
+            first.receive("""{"event_seq":4,"type":"inbox"}""")
+            fixture.pump(100)
+            // Not resumed (the restarted hub has a new stream): what came before is refetched on Online, so the old
+            // socket's queued inbox event is dropped; the one already being handed over is not.
+            first.close(1001, "hub restarting")
+            fixture.pump(2_000)
+            fixture.awaitSocket(2)
+            assertFalse(fixture.connection.resumed)
+            stuck.complete(Unit)
+            fixture.pump(100)
+            assertEquals(listOf("TodosEvent", "InboxEvent", "Hello"), got)
+        }
+        Unit
+    }
+
+    @Test fun aResumedSocketKeepsWhatTheOldOneStillHadQueued() = runBlocking {
+        Fixture().use { fixture ->
+            fixture.hello = { """{"type":"hello","hub_id":"test-hub","event_stream":"s1","event_seq":1,"resumed":false}""" }
+            val first = fixture.start()
+            val stuck = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val got = mutableListOf<String>()
+            CoroutineScope(StandardTestDispatcher(fixture.scheduler) + Job()).launch {
+                fixture.connection.events.collect { got += it::class.simpleName.orEmpty(); stuck.await() }
+            }
+            fixture.scheduler.runCurrent()
+            first.receive("""{"event_seq":2,"type":"todos"}""")
+            first.receive("""{"event_seq":3,"type":"inbox"}""")
+            first.receive("""{"event_seq":4,"type":"inbox"}""")
+            fixture.pump(100)
+            // Resumed: the hub replays only what came after event 4, so the queued inbox events are not sent again and
+            // must still be delivered.
+            fixture.hello = { """{"type":"hello","hub_id":"test-hub","event_stream":"s1","event_seq":4,"resumed":true}""" }
+            first.close(1001, "hub restarting")
+            fixture.pump(2_000)
+            fixture.awaitSocket(2)
+            assertTrue(fixture.connection.resumed)
+            stuck.complete(Unit)
+            fixture.pump(100)
+            assertEquals(listOf("TodosEvent", "InboxEvent", "InboxEvent", "Hello"), got)
+        }
+        Unit
+    }
+
     @Test fun theNextHubAnsweringWithinTheGraceIsNeverShown() = runBlocking {
         Fixture().use { fixture ->
             fixture.hello = { """{"type":"hello","hub_id":"test-hub","event_stream":"s1","event_seq":1,"resumed":true}""" }
