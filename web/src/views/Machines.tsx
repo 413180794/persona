@@ -20,6 +20,7 @@ import { AddComputer, type PendingComputer } from "./machines/AddComputer";
 import { HelpDialog } from "./assistant/Readiness";
 import { MachineDeploy } from "./machines/MachineDeploy";
 import { t } from "../i18n";
+import { addTokens, formatTokens, hitRate, percentText, totalTokens, type UsageTokens } from "../lib/tokens";
 
 export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
@@ -86,7 +87,9 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         {machines.length > 0 && canAdd && add}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid max-w-[1000px] grid-cols-1 gap-3 px-5 py-6 sm:px-8 md:grid-cols-2">
+        {/* two columns, three on a wide screen: the cards used to stop at 1000px and leave half a wide window empty */}
+        <div className="mx-auto grid max-w-[1560px] grid-cols-1 gap-3 px-5 py-6 sm:px-8 md:grid-cols-2 2xl:grid-cols-3">
+          <TodayTokens machines={machines} metrics={metrics} />
           {!metrics && !error && <Loading />}
           {/* a failed refresh says so even with the last numbers on screen (iOS / Android keep their notice up) */}
           {error && (
@@ -222,10 +225,13 @@ const MachineCard = memo(function MachineCard({ m, index, metrics: mm, hub, rout
         </p>
       )}
       <MachineDeploy machine={m} className="mt-2" />
-      <div className="grid grid-cols-3 gap-px px-4 pt-3">
+      <div className={cx("grid gap-px px-4 pt-3", mm?.usage ? "grid-cols-4" : "grid-cols-3")}>
         <Stat label="CPU" value={l?.cpu !== undefined ? `${Math.round(l.cpu)}%` : "—"} warn={(l?.cpu ?? 0) > 85} />
         <Stat label={t("machines.memory")} value={memPct !== undefined ? `${Math.round(memPct)}%` : "—"} sub={l?.mem_used ? `${bytes(l.mem_used)} / ${bytes(l.mem_total)}` : undefined} warn={(memPct ?? 0) > 90} />
         <Stat label={t("machines.disk")} value={diskPct !== undefined ? `${Math.round(diskPct)}%` : "—"} sub={l?.disk_total ? t("machines.disk_free", { size: bytes((l.disk_total ?? 0) - (l.disk_used ?? 0)) }) : undefined} warn={(diskPct ?? 0) > 90} />
+        {mm?.usage && (
+          <Stat label={t("machines-usage.tokens")} value={t("machines-usage.per_minute_value", { n: formatTokens(mm.usage.per_minute) })} sub={t("machines-usage.today_value", { n: formatTokens(totalTokens(mm.usage.today)) })} />
+        )}
       </div>
       <div className="px-2 pt-2">
         <Spark points={mm?.points ?? []} />
@@ -276,6 +282,47 @@ function openFromCard(e: React.MouseEvent<HTMLElement>, to: Route) {
   if (own && e.currentTarget.contains(own)) return;
   if (e.button !== 0 || window.getSelection()?.toString()) return; // selecting the error text to copy it is not a tap
   navigate(to);
+}
+
+// Today's tokens across the computers (#4973): the total, every token per minute now, the cache hit rate, each
+// computer's share in shades of the text ink (the four kinds' colors are the charts').
+function TodayTokens({ machines, metrics }: { machines: Machine[]; metrics: MachineMetrics[] | null }) {
+  const shares = machines
+    .map((m) => ({ name: m.name, usage: metrics?.find((x) => x.machine_id === m.id)?.usage }))
+    .filter((s): s is { name: string; usage: NonNullable<MachineMetrics["usage"]> } => !!s.usage);
+  if (!shares.length) return null;
+  const today = shares.reduce<UsageTokens>((a, s) => addTokens(a, s.usage.today), {});
+  const all = totalTokens(today);
+  const ranked = shares.filter((s) => totalTokens(s.usage.today) > 0).sort((a, b) => totalTokens(b.usage.today) - totalTokens(a.usage.today));
+  const shade = (i: number) => Math.max(0.85 - i * 0.2, 0.2);
+  return (
+    <section className="rounded-card bg-surface px-4 py-3 shadow-card md:col-span-2 2xl:col-span-3" data-testid="machines-tokens">
+      <h2 className="text-[13px] font-medium text-ink">{t("machines-usage.today_title")}</h2>
+      <div className="mt-2 flex flex-wrap items-end gap-x-8 gap-y-2">
+        <Stat label={t("machines-usage.total")} value={formatTokens(all)} />
+        <Stat label={t("machines-usage.now")} value={t("machines-usage.per_minute_value", { n: formatTokens(shares.reduce((a, s) => a + s.usage.per_minute, 0)) })} />
+        <Stat label={t("machines-usage.hit_rate_title")} value={percentText(hitRate(today))} />
+        {all > 0 && (
+          <div className="min-w-[220px] flex-1 pb-1">
+            <div className="flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden>
+              {ranked.map((s, i) => (
+                <div key={s.name} className="h-2 bg-ink" style={{ flexGrow: totalTokens(s.usage.today), opacity: shade(i) }} />
+              ))}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px]">
+              {ranked.map((s, i) => (
+                <span key={s.name} className="flex items-center gap-1 whitespace-nowrap">
+                  <span aria-hidden className="inline-block size-2 rounded-full bg-ink" style={{ opacity: shade(i) }} />
+                  <span className="text-ink-2">{s.name}</span>
+                  <span className="text-ink-3 tabular-nums">{formatTokens(totalTokens(s.usage.today))}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function Stat({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {

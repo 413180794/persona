@@ -1,3 +1,4 @@
+import type { UsageCard } from "./tokens";
 // The hub's wire types (docs/protocol.md). Only the fields the web client reads.
 
 export type AgentState = "needs_you" | "working" | "unread" | "idle" | "offline" | "unknown";
@@ -526,6 +527,8 @@ export interface MachineMetrics {
   system?: Machine["system"];
   latest?: { t: number; cpu?: number; load?: number; mem_used?: number; mem_total?: number; net_rx?: number; net_tx?: number; disk_used?: number; disk_total?: number };
   points: MetricPoint[];
+  /** Its tokens (docs/machines.md "Token usage"): absent from an older hub, or when its node never reported usage. */
+  usage?: UsageCard;
 }
 
 /** What a working Claude's status line says right now (hub `live` push, feature `session_live`; docs/protocol.md

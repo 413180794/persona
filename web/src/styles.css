@@ -183,6 +183,11 @@ body {
 /* The machine page's load chart (iOS MetricColor.load): its own hue, apart from CPU / memory / network. */
 :root { --chart-load: #e87ba4; }
 .dark { --chart-load: #d55181; }
+/* Token usage's four kinds (docs/machines.md "Token usage charts", #4973): the categorical palette's light and dark
+   steps, validated in the stacking order (input, output, cache write, cache read) for colour-blind readers. Light
+   teal is under 3:1 on a light card, so the legend always writes the numbers. Same values as the apps' UsageColor. */
+:root { --usage-input: #2a78d6; --usage-output: #eb6834; --usage-cache-write: #6250d6; --usage-cache-read: #1baf7a; }
+.dark { --usage-input: #3987e5; --usage-output: #d95926; --usage-cache-write: #9085e9; --usage-cache-read: #199e70; }
 /* The user's own messages: iOS Agents' pale blue (apple/Shared/Design/Styles/Glass.swift, ColorSpec.blue); a message
    relayed from another conversation and a tool's inline detail keep the neutral gray. */
 @theme inline { --color-user-bubble: var(--user-bubble); --color-neutral-bubble: var(--neutral-bubble); }

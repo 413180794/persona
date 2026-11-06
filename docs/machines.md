@@ -287,6 +287,10 @@ Follow dataviz rules:
 - **Colors** (`UsageColor`, `apple/Shared/Design`): input blue, output orange, cache write violet, cache read teal, light and dark steps of the categorical palette, validated in the stacking order
   (adjacent pairs ΔE ≥ 24.7 light / 17.3 dark for color-blind readers). Light teal is under 3:1 on a light card, so the legend always writes the numbers.
 - **Numbers** use `TokenFormat` (`apple/Shared/TokenUsage.swift`): K / M / B, three significant digits, no trailing zeros, under 1,000 as is, a rounding to 1,000 moves up a unit (999,500 → 1M). The web uses the same rules.
+- **Web** (`web/src/views/machines/UsageSection.tsx`, `web/src/lib/tokens.ts`): the same section on a machine's page, before Monitoring (the engine and the self-check moved after it),
+  with the chart and the numbers on the left and **By Model** / **By Launcher** on the right on a wide screen; hovering a chart or ← → on it holds a moment in both, Esc lets go.
+  The Machines list has **Today's tokens** across the top and a **Tokens** cell on each card, and uses up to three columns on a wide screen (it used to stop at 1000px).
+  Colors are the CSS tokens `--usage-input` … `--usage-cache-read` (`styles.css`), the same values as `UsageColor`; `formatTokens` follows `TokenFormat`'s rules (`tokens.test.ts` has the same table).
 - Screenshots: the mock hub serves usage for every machine (the Mac Studio's node is an older one, the NAS is offline); `MOCK_TOKENS=none` is a hub without it, `=empty` one where nothing ran; `-openUsageRange 1h|24h|7d` opens a range.
 
 ## Doctor: what this computer can do (#2429)

@@ -48,6 +48,7 @@ import { openEngineSection } from "./engine-anchor";
 import { BotmuxSwitch } from "./BotmuxSwitch";
 import { currentEngine, engineName } from "../../lib/engines";
 import { NodeHealth } from "./NodeHealth";
+import { UsageSection } from "./UsageSection";
 import { MachineExtensionSections } from "../extensions/ExtensionSlots";
 import { t } from "../../i18n";
 
@@ -287,14 +288,8 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         )}
       </section>
 
-      {/* which engine the sessions above come from (iOS engineRow) */}
-      <EngineSection machine={m} heading={<Heading title={t("machines-machinedetail.engine")} />} />
-
-      {/* what this computer can do for Persona, from the node's self-check (docs/machines.md "Self-check") */}
-      <NodeHealth machine={m} heading={<Heading title={t("node-health.title")} />} />
-
-      {m.computer && <ComputerSection mid={mid} computer={m.computer} online={online} />}
-      {m.browser && <BrowserSection mid={mid} browser={m.browser} online={online} />}
+      {/* its token usage, then how busy it is, then the engine and what it can do (#4973, as in the apps) */}
+      <UsageSection mid={mid} heading={(right) => <Heading title={t("machines-usage.title")} right={right} />} />
 
       {/* monitoring */}
       <section>
@@ -337,6 +332,15 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         {data && failure && <p className="mt-2 px-1 text-[11.5px] text-red">{t("machines-machinedetail.refresh_failed", { error: failure })}</p>}
         <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("machines-machinedetail.metrics_note")}</p>
       </section>
+
+      {/* which engine the agents above come from (iOS engineRow) */}
+      <EngineSection machine={m} heading={<Heading title={t("machines-machinedetail.engine")} />} />
+
+      {/* what this computer can do for Persona, from the node's self-check (docs/machines.md "Self-check") */}
+      <NodeHealth machine={m} heading={<Heading title={t("node-health.title")} />} />
+
+      {m.computer && <ComputerSection mid={mid} computer={m.computer} online={online} />}
+      {m.browser && <BrowserSection mid={mid} browser={m.browser} online={online} />}
 
       {/* system */}
       <section>
