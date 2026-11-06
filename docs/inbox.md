@@ -25,7 +25,7 @@ Hub still enforces its own boundary: reply-only devices (Watch) may send only te
 Hub rejects these before forwarding (403; the manager checks too). Connector settings, including credentials, remain hub APIs; only muted repositories belong to the manager.
 
 **Send once**: replies (mail, connectors, Lark plugin) carry manager-derived `send_id` (use App `client_id` if supplied; otherwise derive from item, text, and changes,
-excluding `last`, like Lark `clientId`). Hub stores it in `sent_messages` (the same table as App sends, retained one day). Repeated requests return `already` without resending (safe if a reply is lost in transit
+excluding `last`, like Lark `clientId`). Hub stores it in `sent_messages` (the same table as App sends; the records do not expire). Repeated requests return `already` without resending (safe if a reply is lost in transit
 or the manager restarts and retries). A previous interrupted send (hub stopped or timed out) returns `assistant_in_doubt`, also without resending. Event grouping's `group.append` similarly carries
 `append_id`: hub retains the plugin's response and returns the same event on retry, never appending twice.
 

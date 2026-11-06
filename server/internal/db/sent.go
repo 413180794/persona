@@ -19,7 +19,7 @@ func (d *DB) ClaimSend(ctx context.Context, id, machine, session string) (string
 	}
 	var state string
 	err = d.pool.QueryRow(ctx, `SELECT state FROM sent_messages WHERE client_msg_id = $1`, id).Scan(&state)
-	if errors.Is(err, pgx.ErrNoRows) { // pruned in between
+	if errors.Is(err, pgx.ErrNoRows) { // forgotten in between (SettleSend "": nothing was sent)
 		return d.ClaimSend(ctx, id, machine, session)
 	}
 	return state, err
@@ -37,7 +37,7 @@ func (d *DB) SettleSend(ctx context.Context, id, state string) error {
 
 // RecordEcho keeps the node's record of where a sent message landed (node/echo.go). A record of a found line is not
 // replaced by one that still expects it (two notices can arrive out of order). A send not recorded here (no
-// client_msg_id row: another machine's, or pruned) is ignored.
+// client_msg_id row: another machine's, or forgotten because nothing was sent) is ignored.
 func (d *DB) RecordEcho(ctx context.Context, id, machine string, echo json.RawMessage) error {
 	_, err := d.pool.Exec(ctx, `UPDATE sent_messages SET echo = $3
 		WHERE client_msg_id = $1 AND machine_id = $2

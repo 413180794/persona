@@ -774,7 +774,7 @@ const inboxSendWait = 2 * time.Minute
 var errReplyInDoubt = &rpc.Error{Code: assistantwire.CodeAssistantInDoubt, Message: "这条回复上次发送时中断了，可能已经发出去了：先看看再决定要不要重发"}
 
 // sendInboxOnce sends one of the manager's replies at most once per send id, with the guard the apps' messages have
-// (sent_messages, a day): the same id after it went out is already sent (nothing goes again), after a send that was
+// (sent_messages, kept for good): the same id after it went out is already sent (nothing goes again), after a send that was
 // cut off it is in doubt (errReplyInDoubt). A send that failed is forgotten: asked again, it is sent. A send once
 // begun runs to its end (inboxSendWait) even when the manager stops waiting or drops: what it did is recorded for the
 // retry. Without an id or the database it is just sent.

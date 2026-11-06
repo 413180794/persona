@@ -45,7 +45,8 @@ const (
 	// echoWithin: a line written later than this after the send is not its copy (Codex writes a message sent mid-turn
 	// when the turn ends); the record stops being looked for.
 	echoWithin = 2 * time.Hour
-	// echoKeep: how long a found line keeps its client_msg_id (the hub keeps sent_messages a day).
+	// echoKeep: how long a found line keeps its client_msg_id here. The hub keeps sent_messages for good but hands a
+	// restarted node only the last day's echoes (db.Echoes): keep the two in step.
 	echoKeep = 24 * time.Hour
 	// echoSlack: the transcript's writer runs on this computer; a line stamped a little before the send is still it.
 	echoSlack = 5 * time.Second
