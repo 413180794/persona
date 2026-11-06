@@ -13,7 +13,7 @@ import (
 
 // lockTestCountingStore keeps scheduled tests in memory and counts the dispatcher's queries.
 type lockTestCountingStore struct {
-	Store
+	sharedStore
 	mu        sync.Mutex
 	tests     []db.LockTest
 	due, next int

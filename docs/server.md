@@ -19,7 +19,7 @@ Go, single binary, `server/cmd/personad`. Modes: `docs/architecture.md`; protoco
 | `internal/assistantwire` | Assistant / hub messages: types, methods, error codes, assistant route table; both import it, hub does not import `internal/assistant` |
 | `internal/bus` | Service-to-hub bus client: dialing, handshake, reconnect, keepalive; `docs/protocol.md`, “Bus” |
 | `internal/netaddr` | Local addresses, Linux netlink flags and address-change notifications; not proof of public reachability |
-| `internal/db` | Postgres connection pool, embedded SQL migrations (`migrations/NNNN_*.sql`), table access |
+| `internal/db` | Postgres connection pool, embedded SQL migrations in two sets (`migrations/hub/`, `migrations/manager/`; “Migrations” below), table access |
 | `internal/mail` | IMAP/SMTP, encrypted account storage, mail HTTP APIs and MCP tools (`docs/mail.md`) |
 | `internal/mcpserver` | personad mcp: stdio MCP server for Claude |
 | `internal/apns` | APNs client (.p 8 key, provider token, single push), shared by direct hub and relay |
@@ -348,6 +348,23 @@ Connect: `ssh <hub machine> 'docker exec -it jarvis-postgres psql -U jarvis -d j
 Tests: `./scripts/test/test-server.sh` syncs to hub and runs all; local without Docker skips DB tests. `JARVIS_TEST_DATABASE_URL` pointing `jarvis_test` is only a starting point: each test binary creates adjacent private database and deletes afterward (`server/internal/db/dbtest`), isolating concurrent runs. Jarvis role needs database creation (container superuser; system Postgres grant CREATEDB). Without privilege, fallback queues on jarvis_test.
 
 Legacy `phone_tools.json`, `devices.json`, `mail_accounts.json`, `sessions.json` auto-import on first start, renamed *.migrated.
+
+### Migrations
+
+The migrations are two sets, one per side (`server/internal/db/migrations/`):
+
+- `hub/`: the hub's own tables: devices and their tokens, pairing, phone tools, Live Activities, device sessions, client operations, lock tests, peers and the mesh, connector credentials, the admin page, bus identities and the managers' install codes, machine trust.
+- `manager/`: a manager's: interactions, mail, the computers' sessions and metrics, session views and work, the inbox, the knowledge base, todos, task plans and the assistant's feed and views, extensions and their markets, secrets and metrics, the workspace board.
+
+`db.Open(ctx, url, sets)` applies the pending migrations of the sets it is given: the hub opens its database with `db.HubSet`, a manager with `db.ManagerSet` (tests that use both sides' tables: `db.AllSets`). While the default manager shares the hub's database, both sets run there, each when its side starts. Non-default managers have databases of their own (`docs/managers.md`) and get only the manager set.
+
+`schema_migrations` has a row per migration a part applied, with `part` `hub` or `manager`. Rows from before the split have `part` NULL and stand for both parts, so a database migrated by an older build runs nothing again, whichever side opens it first, and a build from before the split still reads and adds records there. Four early migrations are in both sets and frozen that way: `0001_init.sql` made tables for both sides and is split into each side's part; `0002_settings.sql`, `0071_sent_messages.sql` and `0241_sent_echo.sql` make `settings` and `sent_messages`, which each side keeps in its own database (the hub's sends from the apps, the manager's from the inbox). On a database both sides share, those tables are one.
+
+Adding a migration:
+
+1. Decide whose table it is: the side whose store reads and writes it. A table both sides need is a sign that one side should ask the other over the bus instead (as the manager learns the computers waiting to be confirmed from the hub's handover, `devicewire.Config.Pending`, rather than reading `machine_trust`).
+2. Put the file in exactly that set's directory, named `NNNN_what.sql` with a number neither set has (look at every worktree first, `docs/lessons/workflow.md`). Write it idempotently (`IF NOT EXISTS`) where you can.
+3. Guards: `TestMigrationSets` (`internal/db`) fails for a file in both sets or at the top level; `TestStoresTouchTheirOwnTables` (`internal/hub`) fails when a store interface of the hub reaches a table outside the hub set, or one of the managers' (assistant, devices, extmgr, extension, mail, agents) a table outside the manager set.
 
 ## Configuration (hub `~/.persona/`, 0600, never committed)
 

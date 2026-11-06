@@ -283,7 +283,7 @@ func adminResetPassword(ctx context.Context, dir string, args []string, stdin io
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	database, err := db.Open(ctx, cfg.DatabaseURL)
+	database, err := db.Open(ctx, cfg.DatabaseURL, db.HubSet)
 	if err != nil {
 		return err
 	}

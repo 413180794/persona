@@ -231,7 +231,7 @@ func (hp *heldPush) waitArrived(t *testing.T) {
 
 // deviceRows records the device rows the pusher writes (the rest of Store is unused).
 type deviceRows struct {
-	Store
+	sharedStore
 	mu      sync.Mutex
 	rows    map[string]db.Device
 	deletes int

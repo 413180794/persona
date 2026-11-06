@@ -278,7 +278,7 @@ Ordering: hub `hello` is sent on connection (`http.go:624`), before `client_hell
 
 ### 4f. `hub_id`
 
-**Current state [Fact]**: no server `hub_id` (zero zoekt matches). `settings` is a generic key-value table (`server/internal/db/migrations/0002_settings.sql`, `Setting` / `PutSetting` in `server/internal/db/db.go:444-468`, `Store` in `hub.go:103-104`).
+**Current state [Fact]**: no server `hub_id` (zero zoekt matches). `settings` is a generic key-value table (`server/internal/db/migrations/hub/0002_settings.sql`, `Setting` / `PutSetting` in `server/internal/db/db.go:444-468`, `Store` in `hub.go:103-104`).
 **Proposal [Assessment]**: after `db.Open` in `Run()` (`hub.go:140-145`), read `settings["hub_id"]`; if absent, generate UUIDv4 with `crypto/rand`, write it back, and keep it on `Hub`. No new migration, about 20 lines.
 Publish in `/api/v1/health` (`http.go:21-23`), WS `hello` (`http.go:624`), pairing exchange response, QR `hid=`.
 Semantics: same database, same id (including migration to another machine); a cleared database means a new hub and clients clear all local data (`docs/redesign/README.md`, D6 scoping).

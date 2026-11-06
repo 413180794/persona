@@ -19,7 +19,7 @@ func viewErrorsDB(t *testing.T) *db.DB {
 	if connection == "" {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set")
 	}
-	database, err := db.Open(context.Background(), connection)
+	database, err := db.Open(context.Background(), connection, db.ManagerSet)
 	if err != nil {
 		t.Fatal(err)
 	}

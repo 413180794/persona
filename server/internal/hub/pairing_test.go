@@ -359,7 +359,7 @@ func TestPairTokenDatabaseFlow(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	store, err := db.Open(ctx, dsn)
+	store, err := db.Open(ctx, dsn, db.HubSet)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@ import (
 )
 
 type clientOpsStore struct {
-	Store
+	sharedStore
 	mu   sync.Mutex
 	ops  map[string]db.ClientOp
 	read chan struct{}

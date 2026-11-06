@@ -156,14 +156,6 @@ type Store interface {
 	CreatePairToken(ctx context.Context, hash string, expiresAt time.Time, machine string) error
 	PairTokenByHash(ctx context.Context, hash string) (*db.PairToken, error)
 	RedeemPairToken(ctx context.Context, pairHash string, device db.DeviceToken, tokenHash string) (bool, error)
-	CreateTaskPlan(ctx context.Context, p db.TaskPlanRow) error
-	TaskPlan(ctx context.Context, id string) (*db.TaskPlanRow, error)
-	TaskPlans(ctx context.Context, conversation string) ([]db.TaskPlanRow, error)
-	UpdateTaskPlan(ctx context.Context, id, from, to string, tasks json.RawMessage, at time.Time) (bool, error)
-	AppendFeed(ctx context.Context, f db.FeedRow) error
-	Feed(ctx context.Context, conversation string, since time.Time, limit int) ([]db.FeedRow, error)
-	FeedItem(ctx context.Context, id string) (*db.FeedRow, error)
-	MarkFeedSent(ctx context.Context, kind, ref string, at time.Time, patch json.RawMessage) ([]db.FeedRow, error)
 }
 
 func Run(ctx context.Context, b update.Build) error {
@@ -203,7 +195,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)
 	h.upd.confirmed = !updating // an update under way is confirmed by this process (its watchdog waits for that)
-	database, err := db.Open(ctx, cfg.DatabaseURL)
+	database, err := db.Open(ctx, cfg.DatabaseURL, db.HubSet)
 	if err != nil {
 		return err
 	}

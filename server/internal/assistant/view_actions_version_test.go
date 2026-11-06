@@ -37,7 +37,7 @@ func newCardFixture(t *testing.T) *cardFixture {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	database, err := db.Open(ctx, dsn)
+	database, err := db.Open(ctx, dsn, db.ManagerSet)
 	if err != nil {
 		t.Fatal(err)
 	}

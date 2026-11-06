@@ -98,7 +98,7 @@ func AssistantToken(ctx context.Context, out io.Writer) error {
 	if cfg.DatabaseURL == "" {
 		return errors.New("hub.json has no database_url")
 	}
-	database, err := db.Open(ctx, cfg.DatabaseURL)
+	database, err := db.Open(ctx, cfg.DatabaseURL, db.HubSet)
 	if err != nil {
 		return err
 	}

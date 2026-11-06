@@ -98,7 +98,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
-	database, err := db.Open(ctx, o.DatabaseURL)
+	database, err := db.Open(ctx, o.DatabaseURL, db.ManagerSet)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
@@ -164,7 +164,8 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
 	// The model providers' keys are sealed with secret.key beside hub.json (the hub's; one elsewhere needs a copy).
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logf, Devices: devs,
-		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}, SecretKey: filepath.Join(home, "secret.key")})
+		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}, SecretKey: filepath.Join(home, "secret.key"),
+		Trust: devs})
 	svc.SetExtensions(ext) // the connectors', Cua's and ego's tools, in this process (fleet_tools.go)
 	logf("connecting to %s as %s", hub, o.ID)
 	done := make(chan struct{})

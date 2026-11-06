@@ -120,6 +120,9 @@ type Config struct {
 	// Pending are the machines waiting for the user to confirm them (machine_trust), sorted: their Persona Link is
 	// told so (link.Message.Pending).
 	Pending []string `json:"pending,omitempty"`
+	// PendingUnknown: the hub could not read which machines wait (its database did not answer); until a handover
+	// without it, the manager treats every machine as not confirmed yet.
+	PendingUnknown bool `json:"pending_unknown,omitempty"`
 }
 
 // LinkEndpoint is one address Persona Link may use (internal/link.Endpoint).

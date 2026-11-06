@@ -23,7 +23,7 @@ import (
 )
 
 type publicSettingsStore struct {
-	Store
+	sharedStore
 	id  string
 	err error
 }
@@ -77,7 +77,7 @@ func TestPublicHubIDDatabase(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	database, err := db.Open(ctx, dsn)
+	database, err := db.Open(ctx, dsn, db.HubSet)
 	if err != nil {
 		t.Fatal(err)
 	}

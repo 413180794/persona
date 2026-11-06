@@ -121,20 +121,25 @@ extension AppModel {
     }
 }
 
-/// The app's menus: the four sections on ⌘1…⌘4, as Mac apps with a sidebar do.
+/// The app's menus: the sections on ⌘1…, as Mac apps with a sidebar do. What acts on the main window brings it up
+/// first (closed: opened again, minimized: restored), or the key press seems to do nothing from a chat window.
 struct MacCommands: Commands {
     let model: AppModel
 
     var body: some Commands {
         // File: New Agent Chat ⌘N, New Persona Chat ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
         CommandGroup(replacing: .newItem) {
-            Button("New Agent Chat…") { MacShellState.shared.newAgent = true }
-                .keyboardShortcut("n", modifiers: .command)
-                .disabled(!model.isPaired)
+            Button("New Agent Chat…") {
+                MacShellState.shared.showMain() // the sheet is the main window's
+                MacShellState.shared.newAgent = true
+            }
+            .keyboardShortcut("n", modifiers: .command)
+            .disabled(!model.isPaired)
             Button("New Persona Chat") {
                 MacShellState.shared.willOpen()
                 model.selectedTab = .assistant
                 model.assistantCurrent = nil
+                MacShellState.shared.showMain()
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .disabled(!model.isPaired)
@@ -155,9 +160,20 @@ struct MacCommands: Commands {
                 .keyboardShortcut("g", modifiers: [.command, .shift])
         }
         CommandMenu(String(localized: "Go [New Chat View fa9607]")) {
-            Button("Quick Open…") { MacShellState.shared.quickOpen.toggle() }
-                .keyboardShortcut("k", modifiers: .command)
-                .disabled(!model.isPaired)
+            Button("Quick Open…") {
+                // The panel floats over the main window. It closes only where it can be seen (the main window key);
+                // from a chat window, or with the main window closed or minimized, it is brought up open.
+                let shell = MacShellState.shared
+                let mainKey = NSApp.keyWindow?.identifier?.rawValue.hasPrefix("main") == true
+                if shell.quickOpen && mainKey {
+                    shell.quickOpen = false
+                } else {
+                    shell.showMain()
+                    shell.quickOpen = true
+                }
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .disabled(!model.isPaired)
         }
         // Persona › Settings… ⌘,: the Settings section of the main window (#1222). A Settings window of its own held the same
         // pages as the section: two ways to the same place, and one of them a window on its own.
@@ -172,8 +188,11 @@ struct MacCommands: Commands {
         CommandGroup(after: .sidebar) {
             ForEach(Array(MacSection.shortcutOrder.enumerated()), id: \.element) { i, section in
                 if MacSection.visibleNow.contains(section) {
-                    Button(section.title) { MacShellState.shared.go(section, model) }
-                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
+                    Button(section.title) {
+                        MacShellState.shared.go(section, model)
+                        MacShellState.shared.showMain()
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
                 }
             }
             Divider()

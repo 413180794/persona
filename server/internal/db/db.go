@@ -23,22 +23,51 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-//go:embed migrations/*.sql
+// The migrations are two sets (docs/server.md "Migrations"): the hub's tables in migrations/hub, the manager's in
+// migrations/manager. A hub's database runs the hub set, a manager's the manager set; while the default manager
+// shares the hub's database, both run there, each recording its own part.
+//
+//go:embed migrations/hub/*.sql migrations/manager/*.sql
 var migrations embed.FS
+
+// Sets says which migrations a database gets (and so which side's tables it has).
+type Sets uint8
+
+const (
+	// HubSet is the hub's own tables: connections, devices and their tokens, pairing, push delivery, peers and the
+	// mesh, the admin page, the managers' roster and bus identities.
+	HubSet Sets = 1 << iota
+	// ManagerSet is a manager's: the assistant, inbox, knowledge base, todos, boards, extensions, the computers'
+	// sessions and metrics.
+	ManagerSet
+	// AllSets is both, the hub's first: a test that uses either side's tables.
+	AllSets = HubSet | ManagerSet
+)
+
+// setDirs are the sets' directories under migrations/, in the order they run.
+var setDirs = []struct {
+	set  Sets
+	part string // what schema_migrations.part records
+}{{HubSet, "hub"}, {ManagerSet, "manager"}}
 
 type DB struct {
 	pool      *pgxpool.Pool
+	sets      Sets
 	closeOnce sync.Once
 	closeDone chan struct{}
 }
 
-// Open connects and applies pending migrations. It retries for a while so the hub can start alongside the container.
-func Open(ctx context.Context, url string) (*DB, error) {
+// Open connects and applies the pending migrations of sets. It retries for a while so the hub can start alongside
+// the container.
+func Open(ctx context.Context, url string, sets Sets) (*DB, error) {
+	if sets == 0 || sets&^AllSets != 0 {
+		return nil, fmt.Errorf("db.Open: bad migration sets %d", sets)
+	}
 	pool, err := connect(ctx, url)
 	if err != nil {
 		return nil, err
 	}
-	d := &DB{pool: pool}
+	d := &DB{pool: pool, sets: sets}
 	if err := d.migrate(ctx); err != nil {
 		pool.Close()
 		return nil, err
@@ -117,7 +146,8 @@ func (d *DB) CloseContext(ctx context.Context) error {
 	}
 }
 
-// migrate runs migrations/NNNN_*.sql in order, each in its own transaction, recording them in schema_migrations.
+// migrate runs the pending migrations of the database's sets, in order, each in its own transaction, recording them
+// in schema_migrations.
 func (d *DB) migrate(ctx context.Context) error {
 	return d.migrateFrom(ctx, migrations)
 }
@@ -131,13 +161,16 @@ var renumbered = []struct{ from, to string }{
 	{"0081_device_push_relay.sql", "0141_device_push_relay.sql"}, // 0081 is device_sessions
 }
 
-// migrateFrom is migrate over the migrations/ directory of fsys (tests start from a database at an older state).
+// migrateFrom is migrate over the migrations/hub and migrations/manager directories of fsys (tests start from a
+// database at an older state).
+//
+// schema_migrations has a row per migration a part applied: part is "hub" or "manager", NULL for the rows from before
+// the split, when one set ran everything (such a row stands for both parts). A version is done for a set when it has a
+// row of that part or a NULL one. So a database migrated before the split runs nothing again, and the few early
+// migrations that are in both sets (they made tables for both sides; db_test.go bothSets lists them) run once per part on a database
+// the hub and the default manager share.
 func (d *DB) migrateFrom(ctx context.Context, fsys fs.FS) error {
-	if _, err := d.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
-		version int PRIMARY KEY, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
-		return fmt.Errorf("create schema_migrations: %w", err)
-	}
-	// Serialize concurrent hubs (and tests) on one advisory lock.
+	// Serialize concurrent hubs, managers (and tests) on one advisory lock.
 	conn, err := d.pool.Acquire(ctx)
 	if err != nil {
 		return err
@@ -147,13 +180,47 @@ func (d *DB) migrateFrom(ctx context.Context, fsys fs.FS) error {
 		return err
 	}
 	defer conn.Exec(context.Background(), `SELECT pg_advisory_unlock(424242)`) //nolint:errcheck
+	if err := splitSchemaMigrations(ctx, conn); err != nil {
+		return err
+	}
 
 	for _, r := range renumbered {
 		if err := renumberMigration(ctx, conn, r.from, r.to); err != nil {
 			return fmt.Errorf("renumber migration %s: %w", r.from, err)
 		}
 	}
-	entries, err := fs.ReadDir(fsys, "migrations")
+	for _, sd := range setDirs {
+		if d.sets&sd.set == 0 {
+			continue
+		}
+		if err := migrateSet(ctx, conn, fsys, sd.part); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// splitSchemaMigrations makes schema_migrations, or gives one from before the split its part column: the rows it has
+// keep part NULL, and a version may have a row for each part.
+func splitSchemaMigrations(ctx context.Context, conn *pgxpool.Conn) error {
+	for _, q := range []string{
+		`CREATE TABLE IF NOT EXISTS schema_migrations (
+			version int NOT NULL, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), part text)`,
+		`ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS part text`,
+		`ALTER TABLE schema_migrations DROP CONSTRAINT IF EXISTS schema_migrations_pkey`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS schema_migrations_version_part ON schema_migrations (version, (coalesce(part, '')))`,
+	} {
+		if _, err := conn.Exec(ctx, q); err != nil {
+			return fmt.Errorf("schema_migrations: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateSet applies the migrations in migrations/<part> that part has not.
+func migrateSet(ctx context.Context, conn *pgxpool.Conn, fsys fs.FS, part string) error {
+	dir := "migrations/" + part
+	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return err
 	}
@@ -165,13 +232,14 @@ func (d *DB) migrateFrom(ctx context.Context, fsys fs.FS) error {
 			return err
 		}
 		var done bool
-		if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, version).Scan(&done); err != nil {
+		if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM schema_migrations
+			WHERE version = $1 AND (part IS NULL OR part = $2))`, version, part).Scan(&done); err != nil {
 			return err
 		}
 		if done {
 			continue
 		}
-		sql, err := fs.ReadFile(fsys, "migrations/"+name)
+		sql, err := fs.ReadFile(fsys, dir+"/"+name)
 		if err != nil {
 			return err
 		}
@@ -179,11 +247,11 @@ func (d *DB) migrateFrom(ctx context.Context, fsys fs.FS) error {
 			if _, err := tx.Exec(ctx, string(sql)); err != nil {
 				return err
 			}
-			_, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`, version, name)
+			_, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version, name, part) VALUES ($1, $2, $3)`, version, name, part)
 			return err
 		})
 		if err != nil {
-			return fmt.Errorf("migration %s: %w", name, err)
+			return fmt.Errorf("migration %s/%s: %w", part, name, err)
 		}
 	}
 	return nil
@@ -1053,8 +1121,17 @@ func (d *DB) TouchDeviceToken(ctx context.Context, id string) error {
 	return err
 }
 
-// TruncateForTest clears tables in tests.
+// TruncateForTest clears tables in tests: those of them the database's sets have.
 func (d *DB) TruncateForTest(ctx context.Context) error {
-	_, err := d.pool.Exec(ctx, `TRUNCATE workspace_board, workspace_snapshots, devices, device_tokens, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, connector_secrets, machine_systems, machine_metrics, sent_messages, todos, todo_agents, assistant_always, machine_trust, machine_audit CASCADE`)
+	var tables []string
+	err := d.pool.QueryRow(ctx, `SELECT coalesce(array_agg(t), '{}') FROM unnest($1::text[]) AS t WHERE to_regclass(t) IS NOT NULL`,
+		[]string{"workspace_board", "workspace_snapshots", "devices", "device_tokens", "live_activities", "phone_tools",
+			"node_sessions", "mail_accounts", "interactions", "settings", "inbox_items", "kb_entities", "connector_secrets",
+			"machine_systems", "machine_metrics", "sent_messages", "todos", "todo_agents", "assistant_always", "machine_trust",
+			"machine_audit"}).Scan(&tables)
+	if err != nil || len(tables) == 0 {
+		return err
+	}
+	_, err = d.pool.Exec(ctx, `TRUNCATE `+strings.Join(tables, ", ")+` CASCADE`)
 	return err
 }

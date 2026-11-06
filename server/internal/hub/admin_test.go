@@ -32,7 +32,7 @@ func ip4(a, b, c, d byte) string { return netip.AddrFrom4([4]byte{a, b, c, d}).S
 
 // adminMemStore keeps the admin password and sessions (and device / pairing tokens) in memory.
 type adminMemStore struct {
-	Store
+	sharedStore
 	mu       sync.Mutex
 	hash     string
 	sessions map[string]db.AdminSession

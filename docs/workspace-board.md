@@ -40,7 +40,7 @@ Card IDs, columns, and order are independent of host space IDs. A workspace's id
 
 ## Persistence, permissions, and refresh
 
-The board is stored in Postgres in `workspace_board`, workspace snapshots in `workspace_snapshots`. There is no fallback to JSON files or in-memory writes. The migration is `server/internal/db/migrations/0302_workspace_board.sql`. Every change carries a `revision`; the database does an atomic CAS compare-and-increment. A concurrent conflict returns HTTP 409, and the web app re-reads and asks you to retry instead of overwriting the other side's change. On failure it restores the last board the server confirmed.
+The board is stored in Postgres in `workspace_board`, workspace snapshots in `workspace_snapshots`. There is no fallback to JSON files or in-memory writes. The migration is `server/internal/db/migrations/manager/0302_workspace_board.sql`. Every change carries a `revision`; the database does an atomic CAS compare-and-increment. A concurrent conflict returns HTTP 409, and the web app re-reads and asks you to retry instead of overwriting the other side's change. On failure it restores the last board the server confirmed.
 
 The `full` role can make changes. `answer` can read the board and the workspace list, and the response has `can_write` false. `answer`'s permissions for Files, Git, starting Agents, and so on are still decided by the existing endpoints' allowlists; reading the board grants none of them.
 

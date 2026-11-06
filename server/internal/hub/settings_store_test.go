@@ -5,12 +5,20 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/db"
 )
 
+// sharedStore is what a test hands both the hub and the assistant it runs in-process: the hub's store and the
+// assistant's in one (as the database they share).
+type sharedStore interface {
+	Store
+	assistant.Store
+}
+
 // settingsStore keeps settings in memory like the settings table.
 type settingsStore struct {
-	Store
+	sharedStore
 	mu   sync.Mutex
 	vals map[string][]byte
 	puts int

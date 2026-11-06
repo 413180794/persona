@@ -21,7 +21,7 @@ func lockTestHub(t *testing.T) (*Hub, *db.DB) {
 	if url == "" {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set")
 	}
-	d, err := db.Open(context.Background(), url)
+	d, err := db.Open(context.Background(), url, db.HubSet)
 	if err != nil {
 		t.Fatal(err)
 	}

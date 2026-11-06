@@ -28,7 +28,7 @@ func TestHubShutdownWithOnlineDevice(t *testing.T) {
 	if url == "" {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set")
 	}
-	database, err := db.Open(context.Background(), url)
+	database, err := db.Open(context.Background(), url, db.HubSet)
 	if err != nil {
 		t.Fatal(err)
 	}

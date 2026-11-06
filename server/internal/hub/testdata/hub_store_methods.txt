@@ -40,11 +40,3 @@ TouchDeviceToken
 CreatePairToken
 PairTokenByHash
 RedeemPairToken
-CreateTaskPlan
-TaskPlan
-TaskPlans
-UpdateTaskPlan
-AppendFeed
-Feed
-FeedItem
-MarkFeedSent

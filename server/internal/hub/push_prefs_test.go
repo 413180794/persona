@@ -10,7 +10,7 @@ import (
 
 // stuckPrefsStore is a database whose prefs write hangs (a locked row) until the caller gives up.
 type stuckPrefsStore struct {
-	Store
+	sharedStore
 	entered chan struct{}
 }
 

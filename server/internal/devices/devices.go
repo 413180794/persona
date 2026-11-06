@@ -250,6 +250,20 @@ func (d *Devices) config() devicewire.Config {
 
 func (d *Devices) hubVersion() string { return d.config().HubVersion }
 
+// errPendingUnknown: the hub has not said which machines wait to be confirmed.
+var errPendingUnknown = errors.New("the hub has not said which computers wait to be confirmed")
+
+// PendingMachineIDs are the machines waiting for the user to confirm them, as the hub's handover has them (the hub
+// keeps machine_trust); errPendingUnknown before the first handover and while the hub cannot read its list.
+func (d *Devices) PendingMachineIDs(context.Context) ([]string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.got || d.cfg.PendingUnknown {
+		return nil, errPendingUnknown
+	}
+	return slices.Clone(d.cfg.Pending), nil
+}
+
 // startMachines makes a machine for every hub.json entry it has none for and starts its run loop; an entry no
 // longer there stops.
 func (d *Devices) startMachines(ctx context.Context) {

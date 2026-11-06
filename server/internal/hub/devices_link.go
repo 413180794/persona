@@ -227,6 +227,7 @@ func (h *Hub) devicesConfigFor(id string) devicewire.Config {
 	if id == devicesOwner {
 		out.Mesh = h.devicesMesh()
 	}
+	out.PendingUnknown = h.trustUnknown()
 	for _, mid := range h.pendingMachineIDs() {
 		if h.entryOwner(mid) == id {
 			out.Pending = append(out.Pending, mid)

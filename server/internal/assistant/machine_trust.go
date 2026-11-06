@@ -6,34 +6,34 @@ import (
 	"slices"
 	"sync"
 	"time"
-
-	"github.com/nwverse/persona/server/internal/db"
 )
 
 // A computer the user has not said is theirs yet (pending, docs/onboarding.md 4.2 "Your computers ↔ hub") is connected but
 // gets nothing of the assistant's: no Persona-managed keys (pushManaged, the launchers a new connection gets), no
 // answers to its requests (the live context, the MCP tools), and it is no machine the assistant runs on or hands work
-// to (the hub leaves it out of devices.list and of the hello's machines). The hub's Postgres says which are pending
-// (machine_trust: no row is a confirmed one); this is that, read again every few seconds and whenever the hub's hello
+// to (the hub leaves it out of devices.list and of the hello's machines). The hub says which are pending: its
+// machine_trust table is the hub's, and it hands the list to the manager with the computers (devicewire.Config
+// Pending, internal/devices PendingMachineIDs); this is that, read again every few seconds and whenever the hub's hello
 // changes (a confirm changes its machines).
 
-// machineTrustStore is the store's side of it (db.DB has it; a store without it has no pending computers).
-type machineTrustStore interface {
-	PendingMachines(ctx context.Context) ([]db.PendingMachine, error)
+// MachineTrust says which computers wait to be confirmed (internal/devices.Devices has it); an error while it does
+// not know (the hub has not handed the computers over, or could not read its own list).
+type MachineTrust interface {
+	PendingMachineIDs(ctx context.Context) ([]string, error)
 }
 
 // trustFor is how long a read of the pending computers is used.
 const trustFor = 5 * time.Second
 
-// trustRetry is how long after a failed read the store is not asked again.
+// trustRetry is how long after a failed read the list is not asked for again.
 const trustRetry = 5 * time.Second
 
 // errMachinePending answers a pending computer's requests.
 var errMachinePending = errors.New("this computer is waiting to be confirmed in the Persona app")
 
-// errTrustUnknown answers every computer's requests while the store has never said which are pending: not the
-// computer's fault, the hub's database did not answer.
-var errTrustUnknown = errors.New("the hub cannot tell yet whether this computer is confirmed: its database did not answer")
+// errTrustUnknown answers every computer's requests while the hub has never said which are pending: not the
+// computer's fault (the hub's database did not answer, or the computers are not handed over yet).
+var errTrustUnknown = errors.New("the hub cannot tell yet whether this computer is confirmed")
 
 type trustBook struct {
 	mu       sync.Mutex
@@ -42,7 +42,7 @@ type trustBook struct {
 	failedAt time.Time // the last failed read (no new query before trustRetry)
 	ok       bool      // a read ever went through
 	gen      int       // trustChanged's count: a read begun before one is used once, not kept
-	// load lets one read go to the store at a time (the others wait for it and use it); mu is not held across it.
+	// load lets one read go out at a time (the others wait for it and use it); mu is not held across it.
 	load sync.Mutex
 }
 
@@ -51,12 +51,12 @@ func (s *Service) machinePending(ctx context.Context, machine string) bool {
 	return s.machineTrust(ctx, machine) != nil
 }
 
-// machineTrust is nil for a confirmed computer, errMachinePending for one waiting to be confirmed. A store that could
+// machineTrust is nil for a confirmed computer, errMachinePending for one waiting to be confirmed. A list that could
 // never be read gives errTrustUnknown for every computer (keys are not handed out on a guess); after one good read a
 // failed one keeps the last.
 func (s *Service) machineTrust(ctx context.Context, machine string) error {
-	st, ok := s.store().(machineTrustStore)
-	if !ok || st == nil {
+	st := s.trustSrc
+	if st == nil {
 		return nil
 	}
 	b := &s.trust
@@ -76,7 +76,7 @@ func (s *Service) machineTrust(ctx context.Context, machine string) error {
 	}
 	gen := b.gen
 	b.mu.Unlock()
-	list, err := st.PendingMachines(ctx)
+	list, err := st.PendingMachineIDs(ctx)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err != nil {
@@ -84,10 +84,7 @@ func (s *Service) machineTrust(ctx context.Context, machine string) error {
 		b.failedAt = time.Now()
 		return b.verdict(machine)
 	}
-	b.pending = b.pending[:0]
-	for _, p := range list {
-		b.pending = append(b.pending, p.ID)
-	}
+	b.pending = append(b.pending[:0], list...)
 	b.ok, b.failedAt = true, time.Time{}
 	if gen == b.gen {
 		b.at = time.Now()
@@ -95,7 +92,7 @@ func (s *Service) machineTrust(ctx context.Context, machine string) error {
 	return b.verdict(machine)
 }
 
-// stale: the store is asked again (b.mu held).
+// stale: the list is asked for again (b.mu held).
 func (b *trustBook) stale() bool {
 	if !b.failedAt.IsZero() && time.Since(b.failedAt) < trustRetry {
 		return false

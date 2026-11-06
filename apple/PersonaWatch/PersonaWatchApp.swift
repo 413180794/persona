@@ -477,9 +477,24 @@ struct WatchInteractionView: View {
     var interaction: Interaction
     @State private var picks: [String: Set<String>] = [:]
 
+    /// Why the page is greyed out (exactly when `.disabled(!model.canAnswer(interaction))` below holds); worded like
+    /// the phone's note (Android `approvalBlockedReason`).
+    private var blockedReason: String? {
+        guard !model.canAnswer(interaction) else { return nil }
+        guard let session = model.sessions.first(where: { $0.key == interaction.sessionKey }) else {
+            return String(localized: "This session isn't on the watch. Handle it on your iPhone or computer.")
+        }
+        return session.canAttach
+            ? String(localized: "Attach live on your iPhone first, or handle it on the computer.")
+            : String(localized: "This session can't be approved on the watch. Handle it on the computer.")
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Watch.blockSpacing) {
+                if let blockedReason {
+                    Text(blockedReason).font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+                }
                 switch interaction.kind {
                 case .question:
                     ForEach(interaction.questions ?? []) { q in

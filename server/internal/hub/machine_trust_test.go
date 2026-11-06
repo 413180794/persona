@@ -113,6 +113,10 @@ func TestPendingComputer(t *testing.T) {
 	if got := h.machineIDs(); !slices.Equal(got, []string{"trust-own"}) {
 		t.Fatalf("hello machines %v", got)
 	}
+	// The manager knows which wait from the handover (machine_trust is the hub's table).
+	if c := h.devicesConfig(); !slices.Equal(c.Pending, []string{"trust-new"}) || c.PendingUnknown {
+		t.Fatalf("handover pending %v, unknown %v", c.Pending, c.PendingUnknown)
+	}
 	if got := trustIDs(t, h); !slices.Equal(got, []string{"trust-own"}) {
 		t.Fatalf("devices.list %v", got)
 	}
@@ -312,6 +316,9 @@ func TestPendingComputersUnreadable(t *testing.T) {
 	if got := h.machineIDs(); len(got) != 0 {
 		t.Fatalf("hello machines %v while unknown", got)
 	}
+	if !h.devicesConfig().PendingUnknown {
+		t.Fatal("the handover does not say the pending computers are unknown")
+	}
 	if got := trustIDs(t, h); len(got) != 0 {
 		t.Fatalf("devices.list %v while unknown", got)
 	}
@@ -327,6 +334,9 @@ func TestPendingComputersUnreadable(t *testing.T) {
 	}
 	if got := h.machineIDs(); !slices.Equal(got, []string{"trust-b"}) {
 		t.Fatalf("hello machines %v once read", got)
+	}
+	if c := h.devicesConfig(); c.PendingUnknown || !slices.Equal(c.Pending, []string{"trust-a"}) {
+		t.Fatalf("handover once read: pending %v, unknown %v", c.Pending, c.PendingUnknown)
 	}
 	if !h.machinePending("trust-a") {
 		t.Fatal("the pending one was lost")

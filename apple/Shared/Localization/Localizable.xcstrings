@@ -15231,6 +15231,29 @@
       },
       "extractionState": "manual"
     },
+    "Attach live on your iPhone first, or handle it on the computer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach live on your iPhone first, or handle it on the computer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先に iPhone でリアルタイム接続するか、コンピュータで対応してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需先在 iPhone 上实时接入，或到电脑上处理。"
+          }
+        }
+      }
+    },
     "Attachment": {
       "localizations": {
         "en": {
@@ -98929,6 +98952,29 @@
       },
       "extractionState": "manual"
     },
+    "This session can't be approved on the watch. Handle it on the computer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session can't be approved on the watch. Handle it on the computer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このセッションは Watch では承認できません。コンピュータで対応してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个会话不允许在手表上审批，请到电脑上处理。"
+          }
+        }
+      }
+    },
     "This session is view-only": {
       "localizations": {
         "en": {
@@ -98951,6 +98997,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "This session isn't on the watch. Handle it on your iPhone or computer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session isn't on the watch. Handle it on your iPhone or computer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このセッションは Watch にありません。iPhone かコンピュータで対応してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手表上没有这个会话，请到 iPhone 或电脑上处理。"
+          }
+        }
+      }
     },
     "This session isn't running in herdr. Resume it to see the terminal.": {
       "localizations": {

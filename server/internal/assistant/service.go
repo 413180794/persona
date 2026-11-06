@@ -29,6 +29,9 @@ type Options struct {
 	// Devices is the manager's own connections to the computers: with them, what comes from the nodes is its own
 	// (fleet.go); nil (unit tests): no fleet.
 	Devices Devices
+	// Trust says which computers wait to be confirmed (machine_trust.go): the devices, from the hub's handover; nil
+	// (unit tests): none.
+	Trust MachineTrust
 	// SecretKey is the path of the key the model providers' keys are sealed with (the hub's data directory's
 	// secret.key, models_launchers.go); "" makes one for this run only (tests).
 	SecretKey string
@@ -41,7 +44,9 @@ type Service struct {
 
 	hub   Hub
 	store func() Store
-	logf  func(format string, args ...any)
+	// trustSrc is Options.Trust.
+	trustSrc MachineTrust
+	logf     func(format string, args ...any)
 	// runRetry is how long after a failed run the retry goes (0: runRetryDelay; tests shorten it).
 	runRetry time.Duration
 	// retryNow is the clock a due retry checks the task's time against (retryStillDue; nil: time.Now, tests set it).
@@ -102,7 +107,7 @@ var _ Handler = (*Service)(nil)
 // New makes the assistant; nothing runs until the hub calls it.
 func New(o Options) *Service {
 	s := &Service{hub: o.Hub, store: o.Store, logf: o.Logf, mux: http.NewServeMux(), epoch: randomHex(8), tasks: newTasksState(),
-		devs: o.Devices}
+		devs: o.Devices, trustSrc: o.Trust}
 	s.inbox.lang = func() i18n.Lang { return s.lang(context.Background()) }
 	if s.store == nil {
 		s.store = func() Store { return nil }

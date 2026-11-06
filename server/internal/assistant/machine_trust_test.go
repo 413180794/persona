@@ -3,14 +3,14 @@ package assistant
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/nwverse/persona/server/internal/db"
 )
 
-// trustStore is memStore with the machine_trust table: the computers in pending, or err for every read.
+// trustStore is memStore with what the devices say of the hub's pending computers: the computers in pending, or err
+// for every read (the hub has not handed them over).
 type trustStore struct {
 	*memStore
 	mu      sync.Mutex
@@ -19,18 +19,20 @@ type trustStore struct {
 	reads   int
 }
 
-func (s *trustStore) PendingMachines(context.Context) ([]db.PendingMachine, error) {
+func (s *trustStore) PendingMachineIDs(context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reads++
 	if s.err != nil {
 		return nil, s.err
 	}
-	var out []db.PendingMachine
-	for _, id := range s.pending {
-		out = append(out, db.PendingMachine{ID: id, CreatedAt: time.Now()})
-	}
-	return out, nil
+	return slices.Clone(s.pending), nil
+}
+
+// newServiceTrust is newServiceOn with st as what says which computers are pending (nil: nothing does).
+func newServiceTrust(t *testing.T, f *fakeHub, st Store, trust MachineTrust) *Service {
+	t.Helper()
+	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Trust: trust, Logf: testLogf(t)}))
 }
 
 func (s *trustStore) set(pending []string, err error) {
@@ -39,15 +41,15 @@ func (s *trustStore) set(pending []string, err error) {
 	s.mu.Unlock()
 }
 
-// With no pending computer (a store without the table, or no rows) every online machine gets the managed launchers,
-// as before.
+// With no pending computer (nothing says which are, or none is) every online machine gets the managed launchers, as
+// before.
 func TestNoPendingComputerChangesNothing(t *testing.T) {
 	f := newFakeHub().withMachine()
 	f.sessions["mac"] = nil
 	f.devices = []Device{{ID: "server", Online: true, Reachable: true}, {ID: "mac", Online: true, Reachable: true}}
-	for name, st := range map[string]Store{"no table": &memStore{}, "no rows": &trustStore{memStore: &memStore{}}} {
+	for name, trust := range map[string]MachineTrust{"no source": nil, "none pending": &trustStore{memStore: &memStore{}}} {
 		t.Run(name, func(t *testing.T) {
-			s := newServiceOn(t, f, st)
+			s := newServiceTrust(t, f, &memStore{}, trust)
 			f.mu.Lock()
 			clear(f.managed)
 			f.mu.Unlock()
@@ -73,7 +75,7 @@ func TestPendingComputerGetsKeysOnlyOnceConfirmed(t *testing.T) {
 	f.sessions["mac"] = nil
 	f.devices = []Device{{ID: "server", Online: true, Reachable: true}, {ID: "mac", Online: true, Reachable: true}}
 	st := &trustStore{memStore: &memStore{}, pending: []string{"mac"}}
-	s := newServiceOn(t, f, st)
+	s := newServiceTrust(t, f, st, st)
 	ctx := context.Background()
 	f.mu.Lock()
 	clear(f.managed)
@@ -111,7 +113,7 @@ func TestPendingComputerGetsKeysOnlyOnceConfirmed(t *testing.T) {
 func TestPendingComputersWhenTheStoreFails(t *testing.T) {
 	f := newFakeHub().withMachine()
 	st := &trustStore{memStore: &memStore{}, err: errors.New("down")}
-	s := newServiceOn(t, f, st)
+	s := newServiceTrust(t, f, st, st)
 	ctx := context.Background()
 	if err := s.machineTrust(ctx, "server"); !errors.Is(err, errTrustUnknown) {
 		t.Fatalf("never read: %v, want the store's own reason", err)

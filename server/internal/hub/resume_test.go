@@ -9,7 +9,7 @@ import (
 
 // memStore keeps interaction outcomes like the interactions table; other Store methods are not used here.
 type memStore struct {
-	Store
+	sharedStore
 	mu     sync.Mutex
 	status map[string]string
 	res    map[string]*proto.Resolution

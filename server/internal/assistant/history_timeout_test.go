@@ -184,7 +184,7 @@ func TestInteractionResolveRowLockedPostgres(t *testing.T) {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	database, err := db.Open(ctx, url)
+	database, err := db.Open(ctx, url, db.ManagerSet)
 	if err != nil {
 		t.Fatal(err)
 	}

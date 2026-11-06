@@ -375,6 +375,9 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const menu = useTaskMenu(todo, status);
   const retrying = useRetrying(todoId);
   useNow(30_000, status === "working"); // how long its step has gone on
+  // its turn ended to wait for a background workflow (#2935): the run's progress, under its own.
+  // Called before the early return: a card drawn before its todo arrives must call the same hooks once it has (#5422).
+  const wfNow = useNow(60_000, runningWorkflows(lead).length > 0);
   if (!todo || !status) return null;
   const info = TODO_STATUS_INFO[status];
   const startError = todo.agents?.find((a) => a.start_error)?.start_error;
@@ -391,8 +394,6 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const stepFor = now === progress?.text ? progress.for : undefined;
   // Its subagents add to its own progress, below it, and never stand in for it.
   const subagents = status === "working" || status === "needs_you" ? runningSubagents(lead) : [];
-  // its turn ended to wait for a background workflow (#2935): the run's progress, under its own
-  const wfNow = useNow(60_000, runningWorkflows(lead).length > 0);
   const workflow = status === "working" || status === "needs_you" ? workflowLine(lead, wfNow) : "";
   // what its agent last told Persona (report_to_supervisor): while the task is open
   const reported = status !== "done" && status !== "failed" ? progressLine(todo.supervision) : undefined;

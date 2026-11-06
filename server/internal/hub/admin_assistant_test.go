@@ -178,13 +178,13 @@ func TestAdminAssistantSwitchReachesTheAssistant(t *testing.T) {
 	if connection == "" {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set") // the assistant keeps its settings in the store
 	}
-	database, err := db.Open(context.Background(), connection)
+	database, err := db.Open(context.Background(), connection, db.AllSets)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(database.Close)
 	h, store, mux := adminTestHub(t)
-	store.Store = database // the admin sign-in stays in memory, the rest is the test database
+	store.sharedStore = database // the admin sign-in stays in memory, the rest is the test database
 	connectAssistant(t, h, database)
 	app := h.routes()
 	action := func(html bool) int {

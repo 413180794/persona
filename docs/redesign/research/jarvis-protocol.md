@@ -30,7 +30,7 @@
 | Per-device credentials | Immediately after pairing, `POST /api/v1/auth/tokens {"name","kind"}` → `{"id":"dev_…","token":"jd_…","role","name"}`; use new token thereafter, discard pairing token | `devicetokens.go:126-168`, `ios/Jarvis/App/DeviceCredentials.swift:15-31` |
 | kind → role | `phone` → `full`; `watch` → `answer`; all others `kind:"other"`, `role:"full"`; only full can create tokens (otherwise 403); 503 without database | `devicetokens.go:137-152` |
 | Default names | Empty name or over 80 characters: phone "iPhone", watch "Apple Watch", other "设备" (Device); **Apple names hardcoded**, Android must supply name | `devicetokens.go:153-159` |
-| Storage | Hub stores token sha256 only (`device_tokens.token_hash`), plaintext returned only once at creation | `devicetokens.go:59-62,160-167`, `server/internal/db/migrations/0031_device_tokens.sql` |
+| Storage | Hub stores token sha256 only (`device_tokens.token_hash`), plaintext returned only once at creation | `devicetokens.go:59-62,160-167`, `server/internal/db/migrations/hub/0031_device_tokens.sql` |
 | Validation cache | Database result cached 30 seconds; `last_seen` written at most every 5 minutes | `devicetokens.go:57,80-107` |
 | Revoke | `DELETE /api/v1/auth/tokens/{id}` clears cache and immediately disconnects device WS; `GET /api/v1/auth/tokens` → `{"tokens":[{id,name,kind,role,created_at,last_seen,revoked_at}],"current":"<this device id>"}` | `devicetokens.go:169-222` |
 | Revoke self | iOS revoking itself unpairs (`model.unpair()`) | `DeviceCredentials.swift:127-136` |

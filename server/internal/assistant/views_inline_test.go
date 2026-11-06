@@ -21,7 +21,7 @@ func TestInlineViewsUseOnlyTrustedAssistantItems(t *testing.T) {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	database, err := db.Open(ctx, connection)
+	database, err := db.Open(ctx, connection, db.ManagerSet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestInlineTurnRegistersWithoutAnAppAndReadsFullText(t *testing.T) {
 		t.Skip("JARVIS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	database, err := db.Open(ctx, connection)
+	database, err := db.Open(ctx, connection, db.ManagerSet)
 	if err != nil {
 		t.Fatal(err)
 	}

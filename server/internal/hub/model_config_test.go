@@ -18,7 +18,7 @@ import (
 // end of it: the routes relayed, the task purposes as the assistant reports them.
 
 type modelTestStore struct {
-	Store
+	sharedStore
 	mu     sync.Mutex
 	values map[string]json.RawMessage
 	fail   bool

@@ -45,7 +45,7 @@ func TestEnsureDatabase(t *testing.T) {
 	if created, err := EnsureDatabase(ctx, url); err != nil || created {
 		t.Fatalf("second: %v %v", created, err)
 	}
-	d, err := Open(ctx, url)
+	d, err := Open(ctx, url, ManagerSet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestEnsureDatabase(t *testing.T) {
 	if err := d.PutSetting(ctx, "mgr.test", "theirs"); err != nil {
 		t.Fatal(err)
 	}
-	other, err := Open(ctx, base)
+	other, err := Open(ctx, base, AllSets)
 	if err != nil {
 		t.Fatal(err)
 	}
