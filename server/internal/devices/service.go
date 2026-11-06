@@ -454,7 +454,11 @@ func (m *Machine) probeService(ctx context.Context) {
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr, Timeout: 2 * connectorDialTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+m.cfg.Address+connectorInfoPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+m.cfg.Address+connectorInfoPath, nil)
+	if err != nil {
+		set(false, 0, "连接器的地址不对："+err.Error(), "")
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+cred.token)
 	start := time.Now()
 	resp, err := client.Do(req)
@@ -510,8 +514,7 @@ func validHostPort(a string) bool {
 	if err != nil || host == "" {
 		return false
 	}
-	n, err := strconv.Atoi(port)
-	return err == nil && n > 0 && n < 65536
+	return link.ValidPort(port)
 }
 
 // PairConnector trades a connector's one-time code for a credential the manager makes up, pinned to the link's key:
@@ -543,7 +546,11 @@ func (d *Devices) PairConnector(ctx context.Context, p devicewire.PairConnector)
 	body, _ := json.Marshal(map[string]string{"code": code, "token": token, "machine": p.MachineID, "hub_id": cfg.HubID, "hub_name": cfg.HubName})
 	var errs []string
 	for _, a := range addrs {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+a+connectorPairPath, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+a+connectorPairPath, bytes.NewReader(body))
+		if err != nil {
+			errs = append(errs, a+"：地址不对："+err.Error())
+			continue
+		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := client.Do(req)
 		if err != nil {

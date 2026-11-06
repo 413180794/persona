@@ -120,6 +120,38 @@ func newCode() string {
 	return "jc_" + base64.RawURLEncoding.EncodeToString(b)
 }
 
+// portNumber reads a port written as 1–5 ASCII digits, 0–65535. strconv.Atoi also takes a sign ("+443"), which
+// net.Listen lets through but url.Parse and the hub's dialer refuse.
+func portNumber(s string) (int, bool) {
+	if len(s) == 0 || len(s) > 5 {
+		return 0, false
+	}
+	n := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, false
+		}
+		n = n*10 + int(s[i]-'0')
+	}
+	return n, n <= 65535
+}
+
+// ValidPort says whether s is a port another computer can dial: digits only, 1–65535.
+func ValidPort(s string) bool {
+	n, ok := portNumber(s)
+	return ok && n >= 1
+}
+
+// validDialAddr says whether a (host:port) is an address the hub can dial: a host, a ValidPort, and a URL that parses.
+func validDialAddr(a string) bool {
+	host, port, err := net.SplitHostPort(a)
+	if err != nil || host == "" || !ValidPort(port) {
+		return false
+	}
+	_, err = url.Parse("https://" + a)
+	return err == nil
+}
+
 // NormalizeListen checks a listen address and writes it the usual way: ":18663", "0.0.0.0:18663", "[::1]:18663". A
 // bare port is taken for every address; empty is DefaultListen.
 func NormalizeListen(raw string) (string, error) {
@@ -127,14 +159,14 @@ func NormalizeListen(raw string) (string, error) {
 	if raw == "" {
 		return DefaultListen, nil
 	}
-	if _, err := strconv.Atoi(raw); err == nil {
+	if _, ok := portNumber(raw); ok {
 		raw = ":" + raw
 	}
 	host, port, err := net.SplitHostPort(raw)
 	if err != nil {
 		return "", fmt.Errorf("监听地址 %q 不对：写成 :18663 或 地址:端口", raw)
 	}
-	if n, err := strconv.Atoi(port); err != nil || n < 0 || n > 65535 {
+	if _, ok := portNumber(port); !ok {
 		return "", fmt.Errorf("监听地址 %q 的端口不对", raw)
 	}
 	if host != "" {
@@ -233,7 +265,7 @@ func normalizeAddr(raw, listen string) (string, error) {
 	if port == "" {
 		_, port, _ = net.SplitHostPort(listen)
 	}
-	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+	if !ValidPort(port) {
 		return "", fmt.Errorf("地址 %q 要带端口（监听的端口不确定）", raw)
 	}
 	if host == "" || strings.ContainsAny(host, "/?#@ ") {
@@ -337,7 +369,7 @@ func ParseConnectorLink(raw string) (addrs []string, fp, code string, err error)
 	q := u.Query()
 	fp, code = q.Get("fp"), q.Get("code")
 	for _, a := range q["addr"] {
-		if _, _, err := net.SplitHostPort(a); err == nil {
+		if validDialAddr(a) {
 			addrs = append(addrs, a)
 		}
 	}
