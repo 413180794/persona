@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -190,7 +191,7 @@ func (h *Hub) meshPublish(force bool) {
 // buildRecord is this hub's record as things are now (epoch and rev are set when it is published).
 func (h *Hub) buildRecord() *hubRecord {
 	port, fp := h.tlsPin()
-	rec := &hubRecord{HubID: h.hubID(), Name: h.hubName(), Version: h.version, TLSPort: port, FP: fp}
+	rec := &hubRecord{HubID: h.hubID(), Name: h.hubName(), Version: h.version, TLSPort: port, FP: fp, PlainEndpoints: h.plainEndpoints()}
 	for _, e := range h.endpointList() {
 		if e.Scheme == "https" {
 			rec.Endpoints = append(rec.Endpoints, e.URL)
@@ -247,7 +248,7 @@ func (h *Hub) meshRecord(from *peerLink, rec *hubRecord) {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
-				_ = ps.UpdatePeerSeen(ctx, rec.HubID, rec.Name, rec.Endpoints)
+				_ = ps.UpdatePeerSeen(ctx, rec.HubID, rec.Name, rankEndpoints(slices.Concat(rec.Endpoints, rec.PlainEndpoints)))
 			}()
 		}
 	}
@@ -448,7 +449,7 @@ func (h *Hub) meshHubs() []meshHub {
 				mh.Name = p.Name
 			}
 			if len(mh.Endpoints) == 0 {
-				mh.Endpoints = append(mh.Endpoints, p.Endpoints...)
+				mh.Endpoints = httpsOnly(p.Endpoints)
 			}
 			if mh.FP == "" {
 				mh.FP = p.FP
@@ -458,7 +459,7 @@ func (h *Hub) meshHubs() []meshHub {
 	}
 	for id, p := range peers {
 		if v.hubs[id] == nil {
-			rest = append(rest, meshHub{HubID: id, Name: p.Name, Center: id == center, Endpoints: append([]string{}, p.Endpoints...), FP: p.FP})
+			rest = append(rest, meshHub{HubID: id, Name: p.Name, Center: id == center, Endpoints: httpsOnly(p.Endpoints), FP: p.FP})
 		}
 	}
 	sort.Slice(rest, func(i, j int) bool {

@@ -13,7 +13,7 @@ type Peer struct {
 	HubID     string
 	Name      string
 	FP        string   // the peer's TLS key pin
-	Endpoints []string // its https candidates
+	Endpoints []string // its https candidates, and http:// ones with mesh.plaintext (hub/peer_plain.go)
 	// Token is the credential the peer issued to this hub, sealed by the hub (never stored in the clear).
 	Token string
 	// CredentialID is the device token this hub issued to the peer.

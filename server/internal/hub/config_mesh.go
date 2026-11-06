@@ -11,6 +11,21 @@ type MeshConfig struct {
 	// PathSwitchSeconds: how long a better path to a computer must stay better before the center moves to it
 	// (default 60; a broken path is left at once). Keeps a computer from flapping between two paths.
 	PathSwitchSeconds int `json:"path_switch_seconds,omitempty"`
+	// Plaintext: links to other hubs without TLS (ws://), only with the addresses listed (peer_plain.go,
+	// docs/mesh.md「明文链路」). Off while Allow is empty.
+	Plaintext MeshPlaintextConfig `json:"plaintext,omitzero"`
+}
+
+// MeshPlaintextConfig lets hubs pair and link over plain HTTP. Nothing on such a link is encrypted or pinned: only
+// for networks where whoever can see the traffic is trusted.
+type MeshPlaintextConfig struct {
+	// Allow: what plaintext pairing and links may come from and go to (plainRules, peer_plain.go): "*", networks
+	// ("192.0.2.0/24"), addresses ("192.0.2.7"), wildcard addresses ("192.0.2.*"), and for dialing only host
+	// names ("hub.example.com", "*.example.com"). Everything else still needs TLS.
+	Allow []string `json:"allow,omitempty"`
+	// Advertise: http:// addresses the other hubs use to reach this one without TLS (into the pairing code and the
+	// group's records, never to apps). A hub without a TLS listener also hands out its own plaintext addresses.
+	Advertise []string `json:"advertise,omitempty"`
 }
 
 func (c MeshConfig) discovery() bool { return c.Discovery == nil || *c.Discovery }

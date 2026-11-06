@@ -220,7 +220,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `personad hub admin access <范围>`（或部署脚本），网页里只能收窄；环境变量 `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` 优先于它。
   管理界面改 hub.json 时原子写、保留不认识的字段（[admin.md](admin.md)「改 hub.json」）。
 - `mesh`（可选，hub 互联，[mesh.md](mesh.md)）：`discovery`（默认 true：在局域网里用 mDNS 广播自己、列出发现的 hub；Docker 桥接网络里收不到）、
-  `path_switch_seconds`（默认 60：一台电脑有更好的路时，要一直更好这么久中心才换过去；断了的路马上换，不等）。互联的对端、组的中心和任期存在
+  `path_switch_seconds`（默认 60：一台电脑有更好的路时，要一直更好这么久中心才换过去；断了的路马上换，不等）、
+  `plaintext`（默认关：`allow` 列出可以不走 TLS 配对和互联的 `*`、网段 / 地址、`192.0.2.*`，以及只管拨号的主机名 / `*.example.com`，`advertise` 列出别的 hub 明文连这台用的 `http://` 地址；不加密、不钉扎，见 [mesh.md](mesh.md)「明文链路」）。互联的对端、组的中心和任期存在
   Postgres，不在这里。第一版的 `takeover_seconds` 不再用。
 - `link`（可选，电脑链路的心跳，[link.md](link.md)「心跳」）：`ping_seconds`（多久 ping 一次，默认 10）、`ping_timeout_seconds`（多久没有 pong 就断开，默认 5）。
   不写或写 0 用默认值，只写一项时另一项用默认值；范围 1–600 秒，超过 600 按 600。管的是 hub 在 Persona Link 的链路和流上的 ping、管理者在连接器（kind service）的流上的 ping，

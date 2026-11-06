@@ -51,7 +51,7 @@
 
 ## 互联链路
 
-- `GET /api/v1/peer`：WebSocket，只走 TLS 端口（明文一律 403 `tls_required`，回环也不例外），按 `fp` 钉扎；`Authorization: Bearer <对方签给我的 peer 凭据>`；
+- `GET /api/v1/peer`：WebSocket，只走 TLS 端口（明文一律 403 `tls_required`，回环也不例外；`mesh.plaintext.allow` 里的地址例外，见「明文链路」），按 `fp` 钉扎；`Authorization: Bearer <对方签给我的 peer 凭据>`；
   permessage-deflate。只有配过对的 hub 能开。
 - 链路上跑 node 协议那套 JSON 行 RPC（`internal/rpc`）和流（`internal/streams`）：
   - 单向：`rec`（记录）、`stream.data` / `stream.ack` / `stream.close`（流）；
@@ -227,19 +227,54 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
 `personad hub peer list`（先说这台是中心还是成员）、`personad hub peer remove <hub_id>`、`personad hub peer center [<hub_id>] [--confirm]`。
 NAS 的 docker 部署：`sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub …`。
 
+## 明文链路（可选，#4514）
+
+两台 hub 在可信的内网 / 专线里，或者中间有设备截断 TLS 时，可以让它们不走 TLS：在 hub.json 里列出允许明文互联的地址。默认关闭，
+没配 `mesh.plaintext.allow` 时和上面完全一样。代码在 `server/internal/hub/peer_plain.go`。
+
+```json
+{"mesh": {"plaintext": {"allow": ["192.0.2.0/24", "198.51.100.7"], "advertise": ["http://<这台 hub 的地址>:18660"]}}}
+```
+
+- `allow`：每一项是下面一种（大小写不论）：
+
+  | 写法 | 意思 | 收（对方来连） | 拨（这台去连） |
+  | --- | --- | --- | --- |
+  | `*` | 所有地址，公网也算（启动时 WARNING） | ✓ | ✓ |
+  | `192.0.2.0/24`、`2001:db8::/32`、`192.0.2.7` | 网段、单个地址 | ✓ | ✓ |
+  | `192.0.2.*`、`198.51.*.*` | IPv4 通配，`*` 只能在末尾几段，等于对应网段 | ✓ | ✓ |
+  | `hub.example.com`、`*.example.com` | 主机名、域名通配（`*.` 匹配下面任意层的名字，不含它自己；`*.com` 这种不认） | ✗ | ✓ |
+
+  名字只管拨号：连进来的连接只有地址没有名字，反查 DNS 对方想填什么都行。拨一个匹配名字规则的地址时，解析出来是哪就连哪
+  （等于信任了这个名字和 DNS 的回答）；不匹配名字规则的名字，解析出来的地址本身要在地址规则里。
+
+  **只有这些地址之间**能用 `http://` / `ws://` 配对、建链路，两个方向都按它判断：
+  - 收：`POST /api/v1/peer/pair`、`GET /api/v1/peer` 的明文请求，来源地址在 `allow` 里才放行（gate 里公网明文的 403 对这两个路径也按它开口），
+    不在的照旧 403 `tls_required`——内网来的明文也一样，配对接口以前对内网明文不拦，现在一并收紧。容器网关（替所有人转发的地址）永远不算，
+    Docker 桥接网络里要收明文得开 `security.proxy_protocol` 拿到真实地址，或者只让对方拨这台、这台拨对方（一对 hub 有一个方向通就够了）。
+  - 拨：对端的 `http://` 候选只在目标在 `allow` 里时才拨（见上表）。`http://` 排在所有 `https://` 后面，
+    两种都通时用 TLS。
+  - 任何一项写错（`192.*.2.*`、`192.0.2` 这种），整个明文互联关掉，启动日志里说明。打开时启动日志打一条 WARNING。
+- `advertise`：别的 hub 明文连这台用的地址（`http://主机:端口`，不带路径），进互联码（最多 3 个，旧 hub 不认、自动跳过）和组里的记录
+  （`plain_endpoints`，单独一个字段）。**从不给 App**：hello 里的 `mesh` 只有 `https://`。没开 TLS 的 hub 会把自己的明文地址也带上。
+- **没开 TLS 的 hub** 配了 `allow` 也能互联：互联码里没有 `fp`、只有 `http://` 地址，双方只走明文。有 `https://` 地址却没有 `fp` 的码仍然算不完整。
+  管理界面的「互联」页现在还按「必须开 TLS」显示，没开 TLS 的 hub 用命令行 `personad hub pair --peer` / `personad hub peer add`。
+- 风险：明文链路上没有加密也没有指纹校验，互联凭据、成员转给中心的 App 请求（带 App 的凭据）、node 流都能被路径上的人看到和改掉，
+  拿到互联凭据就能冒充这台 hub 开链路。只用在你信得过路径上每一台设备的网络里；跨公网请用 TLS。
+
 ## 配置（hub.json）
 
 ```json
-{"mesh": {"discovery": true, "path_switch_seconds": 60}}
+{"mesh": {"discovery": true, "path_switch_seconds": 60, "plaintext": {"allow": [], "advertise": []}}}
 ```
 
-都可以不写。互联关系、中心和任期、连接器的凭据在 Postgres，不在 hub.json。第一版的 `mesh.takeover_seconds` 不再用（写着也无害）。
+都可以不写；`plaintext` 见「明文链路」。互联关系、中心和任期、连接器的凭据在 Postgres，不在 hub.json。第一版的 `mesh.takeover_seconds` 不再用（写着也无害）。
 
 ## 安全边界
 
 - 互联的信任是对等的：配过对的 hub 能经链路把任何 App 请求（带它说的来源）交给中心，能请成员开它电脑的 node 流（成员只认自己的中心）。
   所以只和自己的 hub 互联；一台 hub 被拿下等于整组被拿下。
-- 链路只走 TLS 且按指纹钉扎，互联码一次性、10 分钟；凭据只存 hash（签出的）或加密（收到的）。
+- 链路只走 TLS 且按指纹钉扎（`mesh.plaintext.allow` 里的地址例外，那部分没有加密和钉扎，见「明文链路」），互联码一次性、10 分钟；凭据只存 hash（签出的）或加密（收到的）。
 - 转发用的 HTTP 服务器没有监听，只从已鉴权的链路上收流，所以 `X-Jarvis-Peer-*` 头不能从外面伪造；客户端带来的同名头在成员转发前被删掉或覆盖（`X-Jarvis-Peer-Node` 和 `-From` 删掉，`-Source` 和 `-Ttl` 覆盖）。
   没升级的旧成员不删这两个头，所以组里每台 hub 都要升级：中心不开 `-From` 是自己的 node 流（合法的流只从中心发出，只有路由变化的瞬间才会弹回来，发起方退避后重试），但旧成员的下一跳不是中心时拦不住。
 - 成员不认凭据：中心是唯一的鉴权方，撤销在中心立刻生效（撤销时清查询缓存，和撤销同时进行的查询可能让它再用最多 30 秒），并同步到组里其他 hub（见「凭据和推送」）。

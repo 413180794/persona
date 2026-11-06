@@ -3,5 +3,6 @@
   "credentials_unreadable": "读不出互联凭据：{err}",
   "refused": "对方不认这台 hub 的互联凭据（可能已在对方断开）：重新互联",
   "unpaired": "对方断开了互联",
-  "no_endpoints": "没有对方 hub 的候选地址"
+  "no_endpoints": "没有对方 hub 的候选地址",
+  "plain_not_allowed": "对方 hub 只有明文地址，而且不在这台 hub 的 mesh.plaintext.allow 白名单里"
 }

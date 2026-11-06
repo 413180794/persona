@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -57,6 +58,7 @@ func TestPeerPairBodyLimit(t *testing.T) {
 	post := func(body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", peerPairPath, strings.NewReader(body))
 		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, principal{Role: rolePeerPair, PairHash: "h"}))
+		r.TLS = &tls.ConnectionState{} // plaintext pairing is mesh.plaintext's (peer_plain_test.go)
 		w := httptest.NewRecorder()
 		h.servePeerPair(w, r)
 		return w

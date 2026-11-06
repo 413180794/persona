@@ -8,8 +8,9 @@ func (h *Hub) gate(next http.Handler) http.Handler {
 	if h.cfg.Security.AllowPublicPlaintext {
 		h.logf("WARNING: security.allow_public_plaintext is enabled; public API traffic can expose credentials")
 	}
+	h.checkPlainPeers()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.TLS == nil && !h.cfg.Security.AllowPublicPlaintext && h.sourceOf(r) == sourcePublic {
+		if r.TLS == nil && !h.cfg.Security.AllowPublicPlaintext && h.sourceOf(r) == sourcePublic && !h.plainPeerRequest(r) {
 			h.securityError(w, r, http.StatusForbidden, "tls_required", 0)
 			return
 		}

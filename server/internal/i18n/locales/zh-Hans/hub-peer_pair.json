@@ -1,5 +1,5 @@
 {
-  "no_tls": "这台 hub 没开 TLS（hub.json 的 public.tls_listen）：hub 之间只走 TLS，开了再互联",
+  "no_tls": "这台 hub 没开 TLS（hub.json 的 public.tls_listen）：开了 TLS 再互联，或者在 mesh.plaintext.allow 里列出可以不走 TLS 的地址",
   "not_a_code": "这不是互联码（jarvis://peer?…）",
   "incomplete": "互联码不完整：在对方 hub 上重新生成",
   "no_address": "互联码里没有对方 hub 的地址",

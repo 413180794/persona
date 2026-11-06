@@ -267,6 +267,18 @@ func startTestHub(t *testing.T, id, name string, machines []MachineConfig, nodes
 // startTestHubWith starts a hub on a store and data directory of its own (a restart: the ones it had).
 func startTestHubWith(t *testing.T, id, name string, st *meshStore, dir string, machines []MachineConfig, nodes []*meshNode) *testHub {
 	t.Helper()
+	return startTestHubOpts(t, id, name, st, dir, machines, nodes, testHubOpts{})
+}
+
+// testHubOpts: plain serves the hub without TLS (no key, http:// addresses only); plainAllow is its
+// mesh.plaintext.allow.
+type testHubOpts struct {
+	plain      bool
+	plainAllow []string
+}
+
+func startTestHubOpts(t *testing.T, id, name string, st *meshStore, dir string, machines []MachineConfig, nodes []*meshNode, o testHubOpts) *testHub {
+	t.Helper()
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -274,6 +286,7 @@ func startTestHubWith(t *testing.T, id, name string, st *meshStore, dir string, 
 	cfg.Machines, cfg.dir, cfg.Name = machines, dir, name
 	off := false
 	cfg.Mesh.Discovery, cfg.Mesh.PathSwitchSeconds = &off, 1
+	cfg.Mesh.Plaintext.Allow = o.plainAllow
 	logger := log.New(io.Discard, "", 0)
 	if meshLogs {
 		logger = log.New(os.Stderr, "["+name+"] ", log.Lmicroseconds)
@@ -295,11 +308,19 @@ func startTestHubWith(t *testing.T, id, name string, st *meshStore, dir string, 
 		}
 	}
 	srv := httptest.NewUnstartedServer(h.routes())
-	srv.StartTLS()
+	if o.plain {
+		srv.Start()
+	} else {
+		srv.StartTLS()
+	}
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
 	h.public.mu.Lock()
-	h.public.port, h.public.fp = port, spkiPin(srv.Certificate())
-	h.public.endpoints = []Endpoint{{URL: srv.URL, Kind: "lan", Port: port, Scheme: "https"}}
+	if o.plain {
+		h.public.endpoints = []Endpoint{{URL: srv.URL, Kind: "lan", Port: port, Scheme: "http"}}
+	} else {
+		h.public.port, h.public.fp = port, spkiPin(srv.Certificate())
+		h.public.endpoints = []Endpoint{{URL: srv.URL, Kind: "lan", Port: port, Scheme: "https"}}
+	}
 	h.public.mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	h.linkPing = [2]time.Duration{300 * time.Millisecond, 2 * time.Second}

@@ -3,5 +3,6 @@
   "credentials_unreadable": "連携の資格情報を読み取れません：{err}",
   "refused": "相手のハブがこのハブの連携の資格情報を受け付けません（相手側で解除された可能性があります）。もう一度連携してください",
   "unpaired": "相手のハブが連携を解除しました",
-  "no_endpoints": "相手のハブの候補アドレスがありません"
+  "no_endpoints": "相手のハブの候補アドレスがありません",
+  "plain_not_allowed": "相手のハブには平文のアドレスしかなく、このハブの mesh.plaintext.allow に含まれていません"
 }

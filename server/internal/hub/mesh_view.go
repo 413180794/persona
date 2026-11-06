@@ -11,15 +11,17 @@ import (
 
 // hubRecord is one hub's record. A newer one (epoch, rev) replaces the older wherever it arrives.
 type hubRecord struct {
-	HubID     string        `json:"hub_id"`
-	Name      string        `json:"name"`
-	Version   string        `json:"version,omitempty"`
-	Epoch     int64         `json:"epoch"` // when the hub started (Unix ns): a restarted hub's records are newer
-	Rev       int64         `json:"rev"`
-	TLSPort   int           `json:"tls_port,omitempty"`
-	FP        string        `json:"fp,omitempty"`
-	Endpoints []string      `json:"endpoints,omitempty"` // its https candidates
-	Neighbors []recNeighbor `json:"neighbors,omitempty"` // hubs it has a live link to
+	HubID     string   `json:"hub_id"`
+	Name      string   `json:"name"`
+	Version   string   `json:"version,omitempty"`
+	Epoch     int64    `json:"epoch"` // when the hub started (Unix ns): a restarted hub's records are newer
+	Rev       int64    `json:"rev"`
+	TLSPort   int      `json:"tls_port,omitempty"`
+	FP        string   `json:"fp,omitempty"`
+	Endpoints []string `json:"endpoints,omitempty"` // its https candidates
+	// PlainEndpoints: its http:// candidates for the other hubs (mesh.plaintext, peer_plain.go); never shown to apps.
+	PlainEndpoints []string      `json:"plain_endpoints,omitempty"`
+	Neighbors      []recNeighbor `json:"neighbors,omitempty"` // hubs it has a live link to
 	// Center and Term: the group's center as this hub has it (mesh_group.go). The larger term wins everywhere.
 	Center string `json:"center,omitempty"`
 	Term   int64  `json:"term,omitempty"`

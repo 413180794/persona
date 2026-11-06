@@ -1,5 +1,5 @@
 {
-  "no_tls": "このハブでは TLS がオフです（hub.json の public.tls_listen）。ハブ同士は TLS でのみ連携するため、先にオンにしてください",
+  "no_tls": "このハブは TLS がオフです（hub.json の public.tls_listen）。TLS をオンにするか、TLS なしで連携できるアドレスを mesh.plaintext.allow に指定してください",
   "not_a_code": "これは連携コードではありません（jarvis://peer?…）",
   "incomplete": "連携コードが不完全です。相手のハブで作り直してください",
   "no_address": "連携コードに相手のハブのアドレスがありません",

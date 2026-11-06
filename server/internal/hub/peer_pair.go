@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,7 +45,9 @@ type peerInfo struct {
 	FP        string   `json:"fp"`
 	TLSPort   int      `json:"tls_port"`
 	Endpoints []string `json:"endpoints"`
-	Token     string   `json:"token"` // the credential the sender issued to the other hub
+	// PlainEndpoints: http:// addresses the other hub may use without TLS (mesh.plaintext, peer_plain.go).
+	PlainEndpoints []string `json:"plain_endpoints,omitempty"`
+	Token          string   `json:"token"` // the credential the sender issued to the other hub
 	// Center and Term: the sender's group (mesh_group.go). The hub that used the code joins the code's group.
 	Center string `json:"center,omitempty"`
 	Term   int64  `json:"term,omitempty"`
@@ -53,13 +56,19 @@ type peerInfo struct {
 func (h *Hub) selfPeerInfo() peerInfo {
 	port, fp := h.tlsPin()
 	g := h.group()
-	info := peerInfo{HubID: h.hubID(), Name: h.hubName(), Version: h.version, FP: fp, TLSPort: port, Center: g.Center, Term: g.Term}
+	info := peerInfo{HubID: h.hubID(), Name: h.hubName(), Version: h.version, FP: fp, TLSPort: port, Center: g.Center, Term: g.Term,
+		PlainEndpoints: h.plainEndpoints()}
 	for _, e := range h.endpointList() {
 		if e.Scheme == "https" {
 			info.Endpoints = append(info.Endpoints, e.URL)
 		}
 	}
 	return info
+}
+
+// canPeer: this hub can be paired and linked with: it has a TLS key, or plaintext links are on (mesh.plaintext).
+func (h *Hub) canPeer(info peerInfo) bool {
+	return (info.TLSPort != 0 && info.FP != "") || h.plainPeersOn()
 }
 
 // newPeerCode makes a pairing code for this hub.
@@ -69,7 +78,7 @@ func (h *Hub) newPeerCode(ctx context.Context) (*peerCode, error) {
 		return nil, errors.New("no database")
 	}
 	info := h.selfPeerInfo()
-	if info.TLSPort == 0 || info.FP == "" {
+	if !h.canPeer(info) {
 		return nil, errNoTLS
 	}
 	var secret [32]byte
@@ -84,6 +93,12 @@ func (h *Hub) newPeerCode(ctx context.Context) (*peerCode, error) {
 	q := url.Values{"hub": {info.HubID}, "name": {info.Name}, "fp": {info.FP}, "tls": {strconv.Itoa(info.TLSPort)}, "code": {code}}
 	for i, e := range info.Endpoints {
 		if i == 6 {
+			break
+		}
+		q.Add("url", e)
+	}
+	for i, e := range info.PlainEndpoints { // hubs before #4514 skip these
+		if i == 3 {
 			break
 		}
 		q.Add("url", e)
@@ -107,12 +122,16 @@ func parsePeerCode(raw string) (*parsedPeerCode, error) {
 	q := u.Query()
 	p := &parsedPeerCode{hubID: q.Get("hub"), name: q.Get("name"), fp: q.Get("fp"), secret: q.Get("code")}
 	p.tlsPort, _ = strconv.Atoi(q.Get("tls"))
-	if p.hubID == "" || p.fp == "" || !strings.HasPrefix(p.secret, "jx_") {
+	if p.hubID == "" || !strings.HasPrefix(p.secret, "jx_") {
 		return nil, i18n.Err("hub-peer_pair.incomplete")
 	}
 	p.endpoints = rankEndpoints(q["url"])
 	if len(p.endpoints) == 0 {
 		return nil, i18n.Err("hub-peer_pair.no_address")
+	}
+	// No fp only from a hub without a TLS key, which hands out http:// addresses alone (mesh.plaintext).
+	if p.fp == "" && slices.ContainsFunc(p.endpoints, func(e string) bool { return !isPlainEndpoint(e) }) {
+		return nil, i18n.Err("hub-peer_pair.incomplete")
 	}
 	return p, nil
 }
@@ -128,8 +147,12 @@ func (h *Hub) joinPeer(ctx context.Context, raw string) (*db.Peer, error) {
 		return nil, errors.New("no database")
 	}
 	me := h.selfPeerInfo()
-	if me.TLSPort == 0 || me.FP == "" {
+	if !h.canPeer(me) {
 		return nil, errNoTLS
+	}
+	eps := h.peerDialable(code.endpoints)
+	if len(eps) == 0 {
+		return nil, errPlainNotAllowed
 	}
 	if code.hubID == me.HubID {
 		return nil, i18n.Err("hub-peer_pair.own_code")
@@ -144,9 +167,9 @@ func (h *Hub) joinPeer(ctx context.Context, raw string) (*db.Peer, error) {
 	}
 	me.Token = tok
 	body, _ := json.Marshal(me)
-	client := pinnedClient(code.fp)
+	client := h.peerClient(code.fp)
 	defer client.CloseIdleConnections()
-	got, address, err := raceEndpoints(ctx, code.endpoints, func(ctx context.Context, ep string) (peerInfo, error) {
+	got, address, err := raceEndpoints(ctx, eps, func(ctx context.Context, ep string) (peerInfo, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep+peerPairPath, bytes.NewReader(body))
 		if err != nil {
 			return peerInfo{}, err
@@ -189,7 +212,7 @@ func (h *Hub) joinPeer(ctx context.Context, raw string) (*db.Peer, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := db.Peer{HubID: got.HubID, Name: got.Name, FP: code.fp, Endpoints: rankEndpoints(append(got.Endpoints, code.endpoints...)),
+	p := db.Peer{HubID: got.HubID, Name: got.Name, FP: code.fp, Endpoints: rankEndpoints(slices.Concat(got.Endpoints, got.PlainEndpoints, code.endpoints)),
 		Token: sealed, CredentialID: cred.ID}
 	// Using its code joins this hub, and its group with it, to that hub's group (plan-hub-center.md 2): before the
 	// link comes up, so the records it brings agree.
@@ -259,6 +282,10 @@ func (h *Hub) servePeerPair(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, errors.New("pairing two hubs needs a pairing code"))
 		return
 	}
+	if r.TLS == nil && !h.plainPeerRequest(r) {
+		h.securityError(w, r, http.StatusForbidden, "tls_required", 0)
+		return
+	}
 	ps := h.peerStore()
 	if ps == nil || h.store == nil {
 		writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
@@ -271,10 +298,10 @@ func (h *Hub) servePeerPair(w http.ResponseWriter, r *http.Request) {
 	}
 	me := h.selfPeerInfo()
 	switch {
-	case me.TLSPort == 0 || me.FP == "":
+	case !h.canPeer(me):
 		writeErr(w, http.StatusConflict, errNoTLS)
 		return
-	case req.HubID == "" || req.HubID == me.HubID || req.FP == "" || !strings.HasPrefix(req.Token, "jd_"):
+	case req.HubID == "" || req.HubID == me.HubID || (req.FP == "" && !h.plainPeersOn()) || !strings.HasPrefix(req.Token, "jd_"):
 		writeErr(w, http.StatusBadRequest, errors.New("hub_id, fp and token are required, and the hub_id must be another hub's"))
 		return
 	}
@@ -285,7 +312,7 @@ func (h *Hub) servePeerPair(w http.ResponseWriter, r *http.Request) {
 	}
 	tok := "jd_" + randomHex(24)
 	cred := db.DeviceToken{ID: "dev_" + randomHex(6), Name: peerCredName(req.Name, req.HubID), Kind: "peer", Role: rolePeer, MachineID: req.HubID}
-	peer := db.Peer{HubID: req.HubID, Name: clip(oneLine(req.Name), 64), FP: req.FP, Endpoints: rankEndpoints(req.Endpoints),
+	peer := db.Peer{HubID: req.HubID, Name: clip(oneLine(req.Name), 64), FP: req.FP, Endpoints: rankEndpoints(slices.Concat(req.Endpoints, req.PlainEndpoints)),
 		Token: sealed, CredentialID: cred.ID}
 	old, had := h.pairedWith(req.HubID)
 	if had && old.FP != req.FP {

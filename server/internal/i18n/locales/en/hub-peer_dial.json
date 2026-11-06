@@ -3,5 +3,6 @@
   "credentials_unreadable": "Can’t read the link credentials: {err}",
   "refused": "The other hub doesn’t accept this hub’s link credentials (it may have unlinked). Link again",
   "unpaired": "The other hub unlinked",
-  "no_endpoints": "No candidate addresses for the other hub"
+  "no_endpoints": "No candidate addresses for the other hub",
+  "plain_not_allowed": "The other hub only has plaintext addresses, and none is in this hub’s mesh.plaintext.allow list"
 }

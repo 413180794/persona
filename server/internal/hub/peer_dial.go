@@ -23,7 +23,8 @@ import (
 // Dialing a peer (docs/mesh.md「拨号」): every paired hub is dialed until there is a link to it, whichever side made
 // it. The hub with the larger hub_id waits a moment before each try so the two rarely connect at once. Candidates are
 // tried as jarvis-link does: LAN first, then public IPv6, names, public IPv4, one every 300 ms, the first that works
-// wins; the TLS key must be the one pinned at pairing. Backoff: 1 s doubling to a minute, randomized; 5 minutes after
+// wins; the TLS key must be the one pinned at pairing. http:// candidates (mesh.plaintext, peer_plain.go) come after
+// the https ones, and only at allowed addresses. Backoff: 1 s doubling to a minute, randomized; 5 minutes after
 // the other hub refused the credential. These are settings, not measurements.
 
 const (
@@ -187,13 +188,13 @@ func (h *Hub) peerEndpoints(hubID string) []string {
 	ms.mu.Lock()
 	var out []string
 	if r := ms.records[hubID]; r != nil {
-		out = append(out, r.Endpoints...)
+		out = append(append(out, r.Endpoints...), r.PlainEndpoints...)
 	}
 	if p, ok := ms.peers[hubID]; ok {
 		out = append(out, p.Endpoints...)
 	}
 	ms.mu.Unlock()
-	return rankEndpoints(out)
+	return h.peerDialable(rankEndpoints(out))
 }
 
 func endpointKindOf(raw string) int {
@@ -214,19 +215,26 @@ func endpointKindOf(raw string) int {
 	return 3
 }
 
-// rankEndpoints keeps the https candidates, without duplicates, LAN first.
+// rankEndpoints keeps the https and http candidates, without duplicates: https first, LAN first within each. Whether
+// an http one may be dialed is peerDialable's to say.
 func rankEndpoints(eps []string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, e := range eps {
 		e = strings.TrimRight(strings.TrimSpace(e), "/")
-		if !strings.HasPrefix(e, "https://") || seen[e] {
+		if !strings.HasPrefix(e, "https://") && !isPlainEndpoint(e) || seen[e] {
 			continue
 		}
 		seen[e] = true
 		out = append(out, e)
 	}
-	slices.SortStableFunc(out, func(a, b string) int { return endpointKindOf(a) - endpointKindOf(b) })
+	rank := func(e string) int {
+		if isPlainEndpoint(e) {
+			return 10 + endpointKindOf(e)
+		}
+		return endpointKindOf(e)
+	}
+	slices.SortStableFunc(out, func(a, b string) int { return rank(a) - rank(b) })
 	return out
 }
 
@@ -234,12 +242,16 @@ type peerHTTPError struct{ status int }
 
 func (e *peerHTTPError) Error() string { return fmt.Sprintf("HTTP %d", e.status) }
 
-// pinnedClient is an HTTP/1.1 client that only talks to the hub whose TLS key hashes to fp (link.go's pinning).
-func pinnedClient(fp string) *http.Client {
+// peerClient is an HTTP/1.1 client that only talks to the hub whose TLS key hashes to fp (link.go's pinning) over
+// https, and over http only to addresses mesh.plaintext.allow lists (plainPeerDial).
+func (h *Hub) peerClient(fp string) *http.Client {
 	d := &net.Dialer{Timeout: peerDialTimeout, KeepAlive: 30 * time.Second}
 	return &http.Client{
 		Transport: &http.Transport{
 			Proxy: nil,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return h.plainPeerDial(ctx, d, network, addr)
+			},
 			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				raw, err := d.DialContext(ctx, network, addr)
 				if err != nil {
@@ -253,7 +265,7 @@ func pinnedClient(fp string) *http.Client {
 							return errPeerPin
 						}
 						sum := sha256.Sum256(cs.PeerCertificates[0].RawSubjectPublicKeyInfo)
-						if base64.RawURLEncoding.EncodeToString(sum[:]) != fp {
+						if fp == "" || base64.RawURLEncoding.EncodeToString(sum[:]) != fp {
 							return errPeerPin
 						}
 						return nil
@@ -321,14 +333,26 @@ func raceEndpoints[T any](ctx context.Context, eps []string, try func(context.Co
 			errs = append(errs, fmt.Errorf("%s: %w", r.ep, r.err))
 		}
 	}
+	if len(errs) == 0 { // every try was cancelled: never a nil error without a value
+		err := context.Cause(ctx)
+		if err == nil {
+			err = context.Canceled
+		}
+		return zero, "", err
+	}
 	return zero, "", errors.Join(errs...)
 }
 
-func peerWSURL(base, path string) string { return "wss" + strings.TrimPrefix(base, "https") + path }
+func peerWSURL(base, path string) string {
+	if rest, ok := strings.CutPrefix(base, "http://"); ok {
+		return "ws://" + rest + path
+	}
+	return "wss" + strings.TrimPrefix(base, "https") + path
+}
 
 // dialPeer opens a link to a peer: the WebSocket only, the hello is runPeerLink's.
 func (h *Hub) dialPeer(ctx context.Context, fp, token string, eps []string) (*websocket.Conn, string, error) {
-	client := pinnedClient(fp)
+	client := h.peerClient(fp)
 	return raceEndpoints(ctx, eps, func(ctx context.Context, ep string) (*websocket.Conn, error) {
 		conn, resp, err := websocket.Dial(ctx, peerWSURL(ep, peerPath), &websocket.DialOptions{HTTPClient: client,
 			HTTPHeader: http.Header{"Authorization": {"Bearer " + token}}, CompressionMode: websocket.CompressionContextTakeover})
@@ -342,14 +366,15 @@ func (h *Hub) dialPeer(ctx context.Context, fp, token string, eps []string) (*we
 	}, func(c *websocket.Conn) { _ = c.CloseNow() })
 }
 
-// servePeer is GET /api/v1/peer: a paired hub's link, over TLS, with the credential this hub issued it.
+// servePeer is GET /api/v1/peer: a paired hub's link, over TLS (or plaintext from an address mesh.plaintext.allow
+// lists), with the credential this hub issued it.
 func (h *Hub) servePeer(w http.ResponseWriter, r *http.Request) {
 	p := principalOf(r.Context())
 	if p.Role != rolePeer || p.Machine == "" {
 		writeErr(w, http.StatusForbidden, errors.New("only a peer credential opens a mesh link"))
 		return
 	}
-	if r.TLS == nil {
+	if r.TLS == nil && !h.plainPeerRequest(r) {
 		h.securityError(w, r, http.StatusForbidden, "tls_required", 0)
 		return
 	}
