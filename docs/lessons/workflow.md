@@ -20,10 +20,10 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
   the one that finished uploading first went into TestFlight, the later upload was rejected by App Store Connect (`Redundant Binary Upload`, exit 70), and only one archive with that name was left in Organizer.
   Before releasing, check `pgrep -fl scripts/release/release.sh` for someone else releasing; to release, get a number with `asc_testflight.py next-build` and pass it explicitly to `release.sh <build number>`.
   To retry the rejected one with the same commit without changing the number: first check with `asc_testflight.py status` whether that number is already VALID and the same commit; if so, continue with `wait` / `external`.
-- Multiple agents pushing to master at once: on a rebase conflict, do not overwrite others' changes with your own old copy of the whole file (on 2026-10-25 one rebase reverted the light-blue bubbles and the notification navigation fix entirely);
+- Multiple agents pushing to master at once: on a merge or rebase conflict, do not overwrite others' changes with your own old copy of the whole file (on 2026-10-25 one rebase reverted the light-blue bubbles and the notification navigation fix entirely);
   resolve only the conflict hunks, and before pushing check `git diff origin/master...HEAD --stat` for files that are not yours. Before building for TestFlight, confirm master is the fixed version.
 - Multiple agents changing the same repo in parallel (6 workers on the Lark workplace, see `docs/feishu.md`): each gets its own worktree + its own cloned simulator; new types get a domain prefix
-  (`FeishuSearchXxx`…, otherwise names collide on master and the build fails); on rebase conflicts, files outside your own directory always take the origin/master version; before pushing check
+  (`FeishuSearchXxx`…, otherwise names collide on master and the build fails); on merge or rebase conflicts, files outside your own directory always take the origin/master version; before pushing check
   that `git diff origin/master --stat` contains only your files (14fe469 once overwrote half the repo with an old copy; 941d067 restored it); when the main working tree has someone else's uncommitted changes,
   do your fix in `git worktree add --detach /tmp/x origin/master`.
 - Database migration numbers are split into ranges per lane (00x1…); before picking a number, check `server/internal/db/migrations/` in every worktree and `schema_migrations` in the `jarvis_test` database:

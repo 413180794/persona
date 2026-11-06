@@ -131,7 +131,7 @@ Claim details, comment templates and copy-paste gh commands: `docs/collaboration
 The full list is in `docs/lessons/` (read the file for the area you touch first); only the cross-module ones that cost half a day are kept here.
 
 - Several Agents work in this repository at once: each uses its own simulator and mock hub port. Check the port with `lsof` before starting a mock, and stop a mock by its port (never `pkill -f mock_hub.py`).
-  When the main checkout has someone else's uncommitted changes, work in `git worktree add --detach /tmp/x origin/master`; stage only your own files, resolve only the conflict hunks in a rebase,
+  When the main checkout has someone else's uncommitted changes, work in `git worktree add --detach /tmp/x origin/master`; stage only your own files, bring the branch up to date by merging origin/master (preferred over a rebase, `docs/collaboration.md`) and resolve only the conflict hunks,
   and before pushing, `git diff origin/master...HEAD --stat` must list only your files. Look at every worktree before picking a database migration number. (`workflow.md`)
 - Scripts that wait for background jobs / logs always have a timeout, and exit with a one-line verdict on success, failure and timeout alike.
 - Before a manual `xcodebuild`, run `eval "$(python3 scripts/persona_config.py env)"` (`DEVELOPER_DIR`); otherwise an old Xcode is used and reports a pile of errors that look like someone else broke the code. (`testing.md`)

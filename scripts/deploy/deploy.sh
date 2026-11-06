@@ -41,7 +41,7 @@ if [ -z "${PERSONA_DEPLOY_ANY_COMMIT:-}" ]; then
   fi
   if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
     echo "deploy: this checkout ($(git rev-parse --short HEAD)) is missing commits on origin/master ($(git rev-parse --short FETCH_HEAD))." >&2
-    echo "  Deploying it would undo what was deployed from them: rebase onto origin/master (or deploy from a fresh" >&2
+    echo "  Deploying it would undo what was deployed from them: merge origin/master in or rebase onto it (or deploy from a fresh" >&2
     echo "  'git worktree add --detach <dir> origin/master'); PERSONA_DEPLOY_ANY_COMMIT=1 deploys it anyway." >&2
     exit 2
   fi
