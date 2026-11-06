@@ -121,6 +121,33 @@ test('pages the conversation by turns, back and forward; a message still being w
   assert.equal(await n.peer.call('session.cursor', { session_id: 'ses_p' }).catch(() => 10), 10)
 })
 
+test('catching up past more messages than one read takes: the page ends where the read did, and says more comes', async (t) => {
+  const d = fakeDb()
+  d.session('ses_long')
+  // 300 plain turns: a user message, a reply and the idle marker (no item) each: 900 rows, 600 items.
+  let seq = 0
+  for (let i = 0; i < 300; i++) {
+    d.user('ses_long', ++seq, `q${i}`)
+    d.assistant('ses_long', ++seq, `a${i}`)
+    d.message('ses_long', ++seq, 'idle', { outcome: 'completed' })
+  }
+  const { n, host } = await setup(t, { db: d })
+  host.register(fakeCtx())
+  await n.ready
+  const seen = []
+  let after = 0
+  for (let i = 0; i < 10; i++) {
+    const p = await n.peer.call('session.items', { session_id: 'ses_long', after_seq: after })
+    seen.push(...p.items.map((it) => it.seq))
+    assert.ok(p.items.every((it) => it.seq <= p.to_seq), 'nothing past to_seq')
+    after = p.to_seq
+    if (!p.more_after) break
+  }
+  assert.equal(after, 900)
+  assert.equal(seen.length, 600, 'every message once: none skipped between pages')
+  assert.equal(new Set(seen).size, 600)
+})
+
 test('sends into the session (once per client_msg_id), interrupts and renames through the plugin API of the session\'s location', async (t) => {
   const d = fakeDb()
   d.session('ses_c', { directory: '/w/lib' })

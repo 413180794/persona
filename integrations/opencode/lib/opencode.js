@@ -292,10 +292,12 @@ export function createOpencodeHost(deps, options = {}) {
     const q = (extra, ...p) => rows(`select id, seq, type, data, time_updated from session_message where session_id = ? and seq <= ? ${extra}`, id, upto, ...p)
     let list
     let windowFull = false
+    let afterFull = false
     if (typeof params.through_seq === 'number' && params.through_seq > 0) {
       list = await q('and seq >= ? and seq <= ? order by seq', params.from_seq ?? 1, params.through_seq)
     } else if (params.after_seq !== undefined && params.after_seq !== null) {
       list = await q('and seq > ? order by seq limit ?', params.after_seq, AFTER)
+      afterFull = list.length === AFTER
     } else {
       const before = params.before_seq > 0 ? params.before_seq : Number.MAX_SAFE_INTEGER
       list = (await q('and seq < ? order by seq desc limit ?', before, TAIL)).reverse()
@@ -304,6 +306,12 @@ export function createOpencodeHost(deps, options = {}) {
     const all = list.flatMap((r) => messageItems(fromRow(r), r.seq))
     const pg = page(all, params, { history: v.history, toSeq: v.toSeq })
     if (windowFull && pg.has_more === false) pg.has_more = true
+    if (afterFull && !pg.more_after) {
+      // The read stopped short of the end (messages without items, like the idle markers, fill it): the page covers
+      // what was read, not the whole session, or the phone takes the rest as caught up and never fetches it.
+      pg.to_seq = list.at(-1).seq
+      pg.more_after = true
+    }
     return pg
   }
 
