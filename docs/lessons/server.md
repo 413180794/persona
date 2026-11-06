@@ -2,6 +2,12 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## SDK transport shutdown and error identity (2026-11-07, #6125)
+
+- At input EOF, feed the final unterminated frame, then call `connect().shutdown()`: stop input, reject unreachable outbound hub calls, and only then drain accepted request answers. Draining first deadlocks a handler awaiting a hub reply; an idle runtime can instead exit early and hide the missing answer. Keep the writer open through shutdown and flush it before closing. `drain()` alone remains nonclosing, and outbound `close()` does not change inbound initialization checks. Arbitrary handler work and event lifetimes still need runner-owned bounds.
+- Separately bundled SDK classes have different constructor identities. SDK public errors carry a shared symbol marker so code/data survive that boundary; native errors and unmarked lookalikes remain message-only. The marker is a serialization convention, not authorization or a security boundary. Both SDK copies must be updated; unchanged extension copies need the official SDK resync and rebuild.
+- Handler completion does not flush piped stdout. A delayed reader reproduced a truncated 4 MiB EOF answer even with exit code 0; on Bun, an empty-write callback did not fix it. After shutdown, await `process.stdout.end()`'s completion before forcing exit (not in HTTP-only mode). Guard error-brand and field access against throwing getters/proxies, and normalize the accepted legacy `code: null` hub reply to an absent code so its public data survives reserialization.
+
 ## SDK runtime boundaries (2026-11-07, #6082)
 
 - Bound array length before allocating or scanning it, including keyed grid/carousel tiles. `map` skips sparse holes, so per-item key and prop checks alone do not bound allocation or reject empty tile slots. Capture the checked length and visit numeric slots: an overridden array iterator can omit holes or reorder tiles. Ordinary JSX child arrays already have a separate traversal budget.
