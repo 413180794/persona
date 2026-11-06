@@ -285,6 +285,47 @@ func TestARunReschedulingItselfKeepsOneTask(t *testing.T) {
 	}
 }
 
+// A follow-up the user deleted while one of its runs was going: that run's "schedule the next one" does not bring it
+// back, and another conversation's run of the same task's text is not confused with it (#4792).
+func TestARunOfADeletedTaskDoesNotBringItBack(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	prompt := "按手册巡检一次，最后用 schedule_followup（new_conversation=true，at=30m，prompt 和本条相同）安排下一次。"
+	setTasks(h, Task{ID: "fu_1", Title: "30 分钟巡检", Prompt: prompt, Repeat: repeatOnce, At: time.Now().Add(-time.Minute),
+		LastRun: time.Now(), MachineID: "server"},
+		Task{ID: "fu_2", Title: "看 CI", Prompt: "看看 CI", Repeat: repeatOnce, At: time.Now().Add(time.Hour), Enabled: true, MachineID: "server"})
+	h.recordRun(ScheduleRun{Kind: "followup", RefID: "fu_2", Title: "看 CI", At: time.Now().Add(-time.Hour), Status: runOK, MachineID: "server", SessionID: "run-1"})
+	h.recordRun(ScheduleRun{Kind: "followup", RefID: "fu_1", Title: "30 分钟巡检", At: time.Now(), Status: runOK, MachineID: "server", SessionID: "run-1"})
+	if ok, err := h.deleteTask(context.Background(), "fu_1"); !ok || err != nil {
+		t.Fatalf("delete: %v %v", ok, err)
+	}
+
+	copied := "⏰ 30 分钟巡检（你之前安排的跟进）\n\n" + prompt
+	for _, a := range []map[string]any{
+		{"at": "30m", "prompt": copied, "title": "30 分钟巡检", "new_conversation": true},
+		{"at": "30m", "prompt": copied, "new_conversation": true}, // no title: the prompt says which task it is
+	} {
+		args, _ := json.Marshal(a)
+		out, err := h.toolScheduleFollowup(context.Background(), "server", "run-1", args)
+		if err != nil || !strings.Contains(out, "fu_1") {
+			t.Fatalf("told it was deleted: %q, %v", out, err)
+		}
+		tasks := h.tasksView(context.Background(), nil)
+		if len(tasks) != 1 || tasks[0].ID != "fu_2" || !tasks[0].At.After(time.Now().Add(50*time.Minute)) {
+			t.Fatalf("the deleted one stays deleted, the other is untouched: %+v", tasks)
+		}
+	}
+	// Something else asked from that conversation is still a new task.
+	other, _ := json.Marshal(map[string]any{"at": "2h", "prompt": "提醒我交周报", "title": "交周报"})
+	if _, err := h.toolScheduleFollowup(context.Background(), "server", "run-1", other); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.tasksView(context.Background(), nil)); n != 2 {
+		t.Fatalf("a different follow-up is its own task, have %d", n)
+	}
+}
+
 func TestScheduleFollowupEvery(t *testing.T) {
 	h := newStorelessService(t, newFakeHub())
 	m := "server"

@@ -523,7 +523,7 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	if at.Before(now.Add(-time.Minute)) {
 		return "", fmt.Errorf("%s is in the past", at.In(loc).Format("2006-01-02 15:04"))
 	}
-	if out, ok := s.scheduleOwn(ctx, sessionID, a.Title, prompt, a.At, at, every, push); ok {
+	if out, ok := s.scheduleOwn(ctx, sessionID, a.Title, a.Prompt, prompt, a.At, at, every, push); ok {
 		return out, nil
 	}
 	space, _ := s.selfSpace(ctx, sessionID) // not listed: the assistant's own, as before the health space
@@ -560,9 +560,10 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 // scheduleOwn handles a run scheduling its own next run ("最后用 schedule_followup（at=30m，prompt 和本条相同）
 // 安排下一次"): the same task is kept, with the launcher and permission mode the user picked for it, instead of a new
 // follow-up per run. A one-off rescheduled by a relative time becomes a task every that long; one that already
-// repeats stays as it is (a changed prompt is taken). ok is false when this conversation isn't one of the task's runs
-// or the title and prompt are another task's.
-func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, prompt, atArg string, at time.Time, every int, push *string) (string, bool) {
+// repeats stays as it is (a changed prompt is taken). A task deleted while its run was going stays deleted: the run is
+// told so, nothing is scheduled (#4792). ok is false when this conversation's latest run isn't one of the task's
+// (rawPrompt is what was asked, before stripScheduleHeader), or the title and prompt are another task's.
+func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, prompt, atArg string, at time.Time, every int, push *string) (string, bool) {
 	if sessionID == "" {
 		return "", false
 	}
@@ -571,13 +572,28 @@ func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, prompt, atA
 	if err != nil {
 		return "", false // the caller's own write says why
 	}
-	i := -1
-	for j := len(sc.runs) - 1; j >= 0 && i < 0; j-- {
+	// Only the conversation's latest run says which task it is a run of: an older run's task is not this one (#4792).
+	last := -1
+	for j := len(sc.runs) - 1; j >= 0 && last < 0; j-- {
 		if sc.runs[j].SessionID == sessionID {
-			i = sc.indexLocked(sc.runs[j].RefID)
+			last = j
 		}
 	}
-	if i < 0 || !(sameText(title, sc.tasks[i].Title) || sameText(prompt, sc.tasks[i].Prompt)) {
+	if last < 0 {
+		sc.mu.Unlock()
+		return "", false
+	}
+	r := sc.runs[last]
+	i := sc.indexLocked(r.RefID)
+	if i < 0 {
+		// Deleted while this run was going: its "schedule the next one" must not bring it back (#4792).
+		sc.mu.Unlock()
+		if ranRecently(r) && copiesRun(r, title, rawPrompt) {
+			return i18n.T(s.lang(ctx), "assistant-schedule.deleted_not_again", i18n.Args{"id": r.RefID, "name": r.Title}), true
+		}
+		return "", false
+	}
+	if !(sameText(title, sc.tasks[i].Title) || sameText(prompt, sc.tasks[i].Prompt)) {
 		sc.mu.Unlock()
 		return "", false
 	}
@@ -615,6 +631,26 @@ func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, prompt, atA
 	sc.mu.Unlock()
 	s.broadcastSchedule()
 	return out, true
+}
+
+// ranRecently: the run started within the time its turn is followed (runWatchTimeout), so the call can be its own end.
+// A deleted task's run long ago is not; asking for the same thing again later is the user's call.
+func ranRecently(r ScheduleRun) bool {
+	return r.At.IsZero() || time.Since(r.At) < runWatchTimeout
+}
+
+// copiesRun: what was asked is that run's task again, by its title, or (no title) by the run's own message copied
+// along (its first line 「⏰ <name>（…）」, taskPrompt). Only the run's name is left of a deleted task, so a bare prompt
+// without that line is taken as something new (#4792).
+func copiesRun(r ScheduleRun, title, rawPrompt string) bool {
+	if r.Title == "" {
+		return false
+	}
+	if strings.TrimSpace(title) != "" {
+		return sameText(title, r.Title)
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(rawPrompt), "\n")
+	return scheduleHeader.MatchString(first) && strings.HasPrefix(first, "⏰ "+r.Title+"（")
 }
 
 func until(t time.Time) string {

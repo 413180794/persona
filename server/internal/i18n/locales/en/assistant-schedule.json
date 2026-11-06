@@ -22,5 +22,6 @@
   "ready_again_unnamed": "Your computer and model are set up, so scheduled tasks run again",
   "streak": "“{name}” hasn’t gone through {count} runs in a row",
   "streak_body": "Last one: {reason}. I won’t bring this up again until it goes through once.",
-  "streak_unknown": "no reason given"
+  "streak_unknown": "no reason given",
+  "deleted_not_again": "{id}「{name}」 was deleted by the user while this run was going, so nothing was scheduled. Don't schedule it again; just finish this run."
 }

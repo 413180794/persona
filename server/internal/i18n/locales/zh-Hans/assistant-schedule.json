@@ -22,5 +22,6 @@
   "ready_again_unnamed": "电脑和模型接好了，定时任务恢复运行",
   "streak": "「{name}」已经连续 {count} 次没跑成",
   "streak_body": "最近一次：{reason}。在它成功跑成一次之前，这件事我不会再提醒。",
-  "streak_unknown": "没有说明原因"
+  "streak_unknown": "没有说明原因",
+  "deleted_not_again": "{id}「{name}」在这一轮运行时已被主人删掉，不再安排。不要再安排它，把这一轮做完即可。"
 }

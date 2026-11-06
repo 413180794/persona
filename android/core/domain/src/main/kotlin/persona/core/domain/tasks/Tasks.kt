@@ -291,6 +291,8 @@ class TasksStore(
     val plans: StateFlow<Map<String, TaskPlan>> = _plans.asStateFlow()
     private val _feeds = MutableStateFlow<Map<String, List<FeedItem>>>(emptyMap())
     val feeds: StateFlow<Map<String, List<FeedItem>>> = _feeds.asStateFlow()
+    /** Conversations whose whole feed has been read once: a live item alone does not make a later load incremental (#4689). */
+    private val loaded = MutableStateFlow<Set<String>>(emptySet())
     /** Conversation → the task the next message goes straight to (「对「xx」说」). */
     val routes = MutableStateFlow<Map<String, String>>(emptyMap())
     val busy = MutableStateFlow<Set<String>>(emptySet())
@@ -322,7 +324,7 @@ class TasksStore(
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            connection.state.collect { if (it == ConnectionState.Online) { reloadTodos(); _feeds.value.keys.forEach(::load) } }
+            connection.state.collect { if (it == ConnectionState.Online) { reloadTodos(); loaded.value.forEach(::load) } }
         }
     }
 
@@ -453,16 +455,17 @@ class TasksStore(
     }
 
     /**
-     * Pulls [conversation]'s feed: the items after the last one held (all of them with [whole]), and every time the
+     * Pulls [conversation]'s feed: the items after the last one held (all of them with [whole] or before its first read), and every time the
      * full set of its cards, answers and registered blocks.
      */
     fun load(conversation: String, whole: Boolean = false) {
         scope.launch {
-            val since = if (whole) null else _feeds.value[conversation]?.lastOrNull()?.at
+            val since = if (whole || conversation !in loaded.value) null else _feeds.value[conversation]?.lastOrNull()?.at
             runCatching { api.feed(conversation, since) }.onSuccess { res ->
                 if (res.plans.isNotEmpty()) _plans.update { it + res.plans }
                 cards.snapshot(conversation, res.views, res.viewActions, res.viewBlocks)
                 received(res.items, conversation)
+                loaded.update { it + conversation }
             }
         }
     }

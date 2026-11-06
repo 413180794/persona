@@ -459,6 +459,11 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
   `fetchReminders`、`PHImageManager`、`WCSession.sendMessage` 的 reply / error……），SDK 没标 Sendable 的，编译器不报错，闭包被当成主线程代码，
   运行时隔离检查一失败就崩（`dispatch_assert_queue_fail`，2026-10-31 保存图片必崩）。这类闭包一律写成 `{ @Sendable … in`，`BackgroundCallbackTests` 按源码检查；
   SDK 已标 `NS_SWIFT_SENDABLE` 的（HealthKit 查询、URLSession）和在主线程回调的代理不用管。真点系统功能的 UI 测试（`PhotoSaveTests`）才测得出来。
+- 自己写的并发工具，结果要交回主线程时，函数直接标 `@MainActor`，任务组写 `withTaskGroup(…, isolation: MainActor.shared)`。
+  只给一个 `isolation: isolated (any Actor)? = #isolation` 参数、指望它把任务组留在调用方的 actor 上，实测靠不住：`HubFanOut.run`
+  的回调在后台线程上收到结果，回调里一读 `AppModel` 就触发隔离检查，App 一启动就崩（`dispatch_assert_queue_fail`，
+  2026-11-06，#4725 引入、#4777 修复）。单元测试的回调只改了局部变量，碰不到隔离检查，所以测试全过。这类工具的测试要从
+  `Task.detached` 里调用，并在回调里断言 `Thread.isMainThread` 或 `MainActor.assertIsolated()`（`HubFanOutTests`）；改完还要在模拟器上真的启动一次 App。
 - `[String: Any]` 字面量里写 `arr.last ?? 0`，Swift 6.2（Xcode 26.0）会把 `arr.last` 当成方法 `last(where:)`，存进去的是一个闭包；
   `JSONSerialization` 碰到它就抛 `Invalid type in JSON write (__SwiftValue)`，App 直接崩。`FrameStats.stop` 因此在 Xcode 26.0 的构建里每次都崩，
   `-showPagePerf` 一轮都量不出来（2026-11-03，#674）。#343 用新版 Xcode（27.x）量的时候没遇到。放进 `Any` 的值先赋给有类型的常量
