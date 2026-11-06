@@ -105,15 +105,14 @@ final class LarkSendTests: XCTestCase {
         return (true, why)
     }
 
-    /// The content of the scroll view that holds `e` (its child around `e`; the largest, if they nest).
+    /// The content of the scroll view that holds `e`: its child that `e` is in, on the way down the tree. Not the tallest
+    /// child whose frame holds `e`'s: the chat's scroll view also has two children as big as the window, and the content
+    /// seemed to end 414 pt under the last message (#6044).
     @MainActor private static func content(around e: XCUIElementSnapshot, in node: XCUIElementSnapshot,
-                                           scroll: XCUIElementSnapshot? = nil) -> XCUIElementSnapshot? {
-        let scroll = node.elementType == .scrollView ? node : scroll
-        if node.elementType == e.elementType, node.frame == e.frame, node.label == e.label, let scroll {
-            return scroll.children.filter { $0.frame.contains(e.frame) }.max { $0.frame.height < $1.frame.height }
-        }
+                                           under top: XCUIElementSnapshot? = nil) -> XCUIElementSnapshot? {
+        if node.elementType == e.elementType, node.frame == e.frame, node.label == e.label { return top }
         for child in node.children {
-            if let found = content(around: e, in: child, scroll: scroll) { return found }
+            if let found = content(around: e, in: child, under: node.elementType == .scrollView ? child : top) { return found }
         }
         return nil
     }
