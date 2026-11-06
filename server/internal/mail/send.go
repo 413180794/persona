@@ -257,7 +257,13 @@ func (s *Service) smtpSend(ctx context.Context, a *MailAccount, from string, rcp
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("smtp: finish body: %w", err)
 	}
-	return client.Quit()
+	// The server took the message with its reply to the end of DATA, so it is delivered. QUIT is only a goodbye:
+	// some servers hang up or time out instead of answering it, and reporting that as a failed send gets the
+	// message sent twice (#4560). The deferred Close drops the connection either way.
+	if err := client.Quit(); err != nil {
+		logf("mail: smtp quit after delivery to %s: %v", addr, err)
+	}
+	return nil
 }
 
 func isASCII(s string) bool {

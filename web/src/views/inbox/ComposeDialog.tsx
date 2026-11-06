@@ -1,6 +1,7 @@
 // 写邮件 (the app's ComposeView): from one of the hub's mail accounts, to / cc, subject and plain text; a reply comes
 // with Re:, the thread ids and the start of the mail quoted (replyDraft). Sent by the hub (POST /mail/send).
-// 取消 drops the mail; closing it any other way (Esc, a click outside) keeps it for the next 写邮件 in this page.
+// 取消 drops the mail; closing it any other way (Esc, a click outside, the page under it going away) keeps it for the
+// next 写邮件 in this page.
 import { useEffect, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import type { MailAccount } from "../../lib/inbox";
@@ -24,6 +25,20 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
   const body = useRef<HTMLTextAreaElement>(null);
   const to = useRef<HTMLInputElement>(null);
   const dirty = d.to !== initial.to || d.cc !== initial.cc || d.subject !== initial.subject || d.body !== initial.body || d.accountID !== initial.accountID;
+  // Taken down without being closed (the item or the page left under it): kept as a close keeps it. 取消, a close
+  // and a send mark it done (a send that fails puts it back); a send still out when it goes away keeps it on failure.
+  const now = useRef({ d, dirty, done: false, mounted: true });
+  Object.assign(now.current, { d, dirty });
+  useEffect(() => {
+    const at = now.current;
+    at.mounted = true;
+    return () => {
+      at.mounted = false;
+      if (at.done) return;
+      if (at.dirty) kept.set(draftKey, at.d);
+      else kept.delete(draftKey);
+    };
+  }, [draftKey]);
 
   // A reply starts in its body, above the quote; a new mail at its recipients.
   useEffect(() => {
@@ -39,11 +54,13 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
     setError("");
   };
   const keepOrDrop = () => {
+    now.current.done = true;
     if (dirty) kept.set(draftKey, d);
     else kept.delete(draftKey);
     onClose();
   };
   const cancel = () => {
+    now.current.done = true;
     kept.delete(draftKey);
     onClose();
   };
@@ -52,12 +69,18 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
     if (!parseAddresses(d.to).length) return setError(t("inbox-composedialog.need_recipient"));
     if (bad.length) return setError(t("inbox-composedialog.bad_addresses", { addresses: bad.join(t("inbox-composedialog.list_sep")) }));
     setSending(true);
+    // On its way: not kept (a box opened for this key meanwhile starts fresh, nothing to send twice).
+    const at = now.current;
+    at.done = true;
+    kept.delete(draftKey);
     try {
       await sendMail(d);
-      kept.delete(draftKey);
       toast(t("inbox-composedialog.sent"), "ok");
       onClose();
     } catch (e) {
+      // still open: the mail stays in it to retry; gone: kept for the next 回复
+      if (at.mounted) at.done = false;
+      else kept.set(draftKey, d);
       setError(t("inbox-composedialog.send_failed", { error: errorText(e) }));
     } finally {
       setSending(false);
