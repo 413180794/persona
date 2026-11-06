@@ -38,22 +38,24 @@ final class IPadSidebarTests: XCTestCase {
             XCUIDevice.shared.orientation = orientation
             app.launchPinned()
             let main = element("sidebar-main"), inbox = element("sidebar-inbox"), machines = element("sidebar-machines")
-            XCTAssertTrue(main.waitForExistence(timeout: 20), "\(name): no 主对话 row:\n\(app.debugDescription)")
+            XCTAssertTrue(main.waitForExistence(timeout: 20), "\(name): no Persona row:\n\(app.debugDescription)")
             XCTAssertTrue(inbox.exists && machines.exists, "\(name): the places are missing")
-            // Inbox … Machines first, then Main Chat on its own row (#4606; the sidebar is the left column).
+            // Persona first, then Inbox … Machines (the sidebar is the left column).
+            XCTAssertLessThan(main.frame.minY, inbox.frame.minY, "\(name): Persona is not on top")
+            XCTAssertTrue(main.label.hasPrefix("Persona"), "\(name): the main row is not named Persona: \(main.label)")
+            XCTAssertEqual(app.buttons.matching(identifier: "sidebar-main").count, 1, "\(name): the main conversation shows more than once")
             XCTAssertLessThan(inbox.frame.minY, machines.frame.minY)
-            XCTAssertLessThan(machines.frame.minY, main.frame.minY, "\(name): 主对话 is not under the places")
             XCTAssertLessThan(main.frame.maxX, app.windows.firstMatch.frame.width / 2 + 100, "\(name): not in the left column")
-            // New Chat and Settings at the foot, below the places and Main Chat, New Chat on the left.
+            // New Chat and Settings at the foot, below the places, New Chat on the left.
             let new = element("sidebar-new"), settings = element("sidebar-settings")
             XCTAssertTrue(new.exists && settings.exists, "\(name): no 新对话 / 设置 at the foot")
-            XCTAssertGreaterThan(new.frame.minY, main.frame.maxY)
+            XCTAssertGreaterThan(new.frame.minY, machines.frame.maxY)
             XCTAssertEqual(new.frame.midY, settings.frame.midY, accuracy: 4, "\(name): 新对话 and 设置 in one row")
             XCTAssertLessThan(new.frame.minX, settings.frame.minX)
             // The tabs (iPad's bar at the top, above the sidebar's rows): Persona and Agents, no Inbox or Settings.
             func tabs(_ label: String) -> [XCUIElement] {
                 app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).allElementsBoundByIndex
-                    .filter { $0.exists && $0.frame.maxY < inbox.frame.minY - 60 }
+                    .filter { $0.exists && $0.frame.maxY < main.frame.minY - 60 }
             }
             XCTAssertFalse(tabs("Agents").isEmpty, "\(name): no Agents tab:\n\(app.debugDescription)")
             XCTAssertTrue(tabs("收件箱").isEmpty, "\(name): 收件箱 is still a tab")
@@ -67,7 +69,7 @@ final class IPadSidebarTests: XCTestCase {
             XCTAssertGreaterThan(more.frame.minX, inbox.frame.maxX, "\(name): the inbox is not beside the sidebar")
             XCTAssertTrue(main.exists && inbox.isHittable, "\(name): the sidebar went away with the inbox")
             shot("inbox-\(name)")
-            // Main Chat goes back to the conversation.
+            // Persona goes back to the conversation.
             main.tap()
             XCTAssertTrue(element("assistant-sidebar-search").waitForExistence(timeout: 5))
 

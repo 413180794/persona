@@ -718,9 +718,9 @@ private struct SidebarClosed: View {
 }
 
 /// What the sidebar lists (2026-10-31, laid out like Doubao's): Persona's name with a search button; the things to start
-/// (New Chat, Scheduled Tasks, Knowledge; the shell's drawer: Inbox … Machines); a line; Pin; the main conversation on a row of its own
-/// right above Recent, as Main Chat with the app's logo (#4606, before it the shell's first row #2004); Recent, one line each
-/// with a round mark; Persona's face, where it runs and Settings at the foot.
+/// First the main conversation, as Persona with the app's logo, and a line (#2004, in every layout); the things to
+/// start (New Chat, Scheduled Tasks, Knowledge; the shell's drawer: Inbox … Machines); a line; Pin and Recent, one line each with a round
+/// mark; Persona's face, where it runs and Settings at the foot.
 struct AssistantSidebar: View {
     /// The open conversation's row. On the Mac, the shade the shell's other lists select with (`macSelected`): the
     /// phone's `well` on the Mac's lighter fills (#1169) was hard to find there.
@@ -809,6 +809,9 @@ struct AssistantSidebar: View {
             MacSelectingList(selection: Binding(get: { current }, set: { key in if let key, key != current { open(key) } })) {
                 Group {
                     if query.isEmpty {
+                        // The main conversation first, once, in every layout (#2004): never again under Pin or Recent.
+                        mainItem(all)
+                        VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
                         actions(all)
                         if !macPlacesGroup {
                             VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
@@ -960,7 +963,7 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private func actions(_ all: [Session]) -> some View {
         if let openInbox, let onMachines {
-            // The shell's: the places to go (the main conversation is its own row right above Recent, `conversations`).
+            // The shell's: the places to go (the main conversation is the row above them, `mainItem`).
             VStack(alignment: .leading, spacing: 0) {
                 action(String(localized: "收件箱"), Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
                 if TodoStore.shared.isSupported {
@@ -1065,37 +1068,42 @@ struct AssistantSidebar: View {
     }
     #endif
 
-    /// The main conversation's row while its session is not in the list (not loaded yet, or listed by no machine now):
-    /// it still opens it, or with no main conversation yet the new-conversation page, whose first one becomes it. Off
-    /// until the hub's assistant config came: a conversation started before would not become the main one.
-    private func mainPlaceholder() -> some View {
+    /// The sidebar's first row in every layout: the main conversation as Persona with the current persona's logo (#2004, #3203).
+    /// Only the name shown is Persona's: it is the same conversation, its key and its data unchanged. Its state
+    /// (working, waiting, unread) on the right, as on a conversation's row. It shows while its session is not in the
+    /// list too (not loaded yet, or listed by no machine now, #4606): it still opens it, or with no main conversation
+    /// yet the new-conversation page, whose first one becomes it. Off until the hub's assistant config came: a
+    /// conversation started before would not become the main one. No swipe: it cannot be archived.
+    private func mainItem(_ all: [Session]) -> some View {
         let key = model.assistantMain
+        let main = all.first { $0.key == key }
         let selected = key != nil && key == current
+        let radius = isShell ? Theme.Radius.panel : Theme.Radius.card
         return Button { if let key { open(key) } else { newConversation() } } label: {
-            HStack(spacing: Theme.Space.m) {
-                AppGlyph(size: isShell ? Theme.Size.icon : Theme.Size.wellM, scaled: true)
+            HStack(spacing: macPlacesGroup ? Theme.Space.m : Theme.Space.l) {
+                // Where the places below have their symbol, the same width (on the Mac's plain list, `macPlace`'s).
+                AppGlyph(size: macPlacesGroup ? Theme.Size.wellM : Theme.Size.icon, scaled: true)
                 Text(Self.mainTitle).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 0)
+                if let main { mark(main) }
             }
             .padding(.horizontal, Theme.Space.m)
-            .scaledFrame(minHeight: isShell ? Theme.Size.avatarXL : Theme.Size.box50)
+            .scaledFrame(minHeight: isShell || macPlacesGroup ? Theme.Size.box50 : Theme.Size.avatarL)
             .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous).fill(Self.selectedFill)
-                }
+                if selected { RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Self.selectedFill) }
             }
-            .macHoverShade(in: RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous))
+            .macHoverShade(in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .macListRow(selected: selected, in: Rectangle(), drawsShade: false) // the row draws its own (`selectedFill`)
-        .accessibilityLabel(Self.mainTitle)
+        .accessibilityLabel([Self.mainTitle, main.flatMap(stateWord)].compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("sidebar-main")
         .disabled(key == nil && model.assistantConfig == nil)
         .contextMenu {
             if let key {
-                MainConversationMenu(key: key) // Compact context, New Main Chat… (#1762), as on its row
+                MainConversationMenu(key: key) // Compact context, New Main Chat… (#1762)
                 Button {
                     UIPasteboard.general.string = key.sessionID
                     model.toast = Toast(String(localized: "已拷贝会话 ID"), style: .success)
@@ -1104,12 +1112,15 @@ struct AssistantSidebar: View {
                     UIPasteboard.general.string = ChatTrace.shared.text(key) // structure only, to paste into a report
                     model.toast = Toast(String(localized: "已拷贝诊断"), style: .success)
                 } label: { Label("拷贝诊断", systemImage: Theme.Icon.diagnostics) }
+                if let main, main.status.isLive {
+                    Button(role: .destructive) { ending = main } label: { Label("结束…", systemImage: Theme.Icon.end) }
+                }
             }
         }
     }
 
-    /// The main conversation's name in the sidebar (#4606, as the web's; it was 「Persona」 from #2004).
-    static var mainTitle: String { String(localized: "主对话") }
+    /// The main conversation's name in the sidebar (#2004; it was Main Chat before, and again in #4606).
+    static let mainTitle = "Persona"
 
     @ViewBuilder private func action(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
         if AppStyle.current.usesBeautifulUI {
@@ -1152,12 +1163,8 @@ struct AssistantSidebar: View {
                 Button { unpinAll() } label: { Label("全部取消置顶", systemImage: Theme.Icon.unpin) }
             }
             ForEach(pinned) { row($0) }
-            // A line under the pinned ones: the main conversation's row below is not one of them.
-            VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
         }
-        // The main conversation on a row of its own right above Recent (#4606), as the Codex app's pinned thread: once
-        // (never under Pin or in Auto Chats, `isPinned`), whether or not its session is listed yet, with no other one too.
-        if let s = all.first(where: { $0.key == main }) { row(s) } else { mainPlaceholder() }
+        // The main conversation is the list's first row (`mainItem`): not here, and not in Auto Chats (`isPinned`).
         // Those Persona opened by itself are in Auto Chats (#3264); with a hub that does not say, the scheduled tasks' ones
         // are on Scheduled Tasks, under each task (#2838). The open one keeps its row.
         let split = AutoConversations(all.filter { !isPinned($0) }, tasks: taskChats.known, current: current,
@@ -1385,7 +1392,7 @@ struct AssistantSidebar: View {
         return Button { open(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
                 // The shell's list is ChatGPT's: titles only, all in one column (the marks made it busy); the main
-                // conversation keeps the app's logo, as its row above Inbox had it (#2004).
+                // conversation (only in search results here) keeps the app's logo, as its first row has it (#2004).
                 if isMain {
                     AppGlyph(size: isShell ? Theme.Size.icon : Theme.Size.wellM, scaled: true)
                 } else if isShell {

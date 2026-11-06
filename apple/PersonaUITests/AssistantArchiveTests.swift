@@ -81,16 +81,18 @@ final class AssistantArchiveTests: XCTestCase {
         archiveAndBringBack("old")
     }
 
-    /// The main conversation has no Archive. In the shell it is a row of its own, Main Chat, under the places to go and once
-    /// only: not above Inbox, not under Pin (#4606).
+    /// The main conversation has no Archive. In the shell it is the drawer's first row, Persona, above Inbox and once
+    /// only: not again under Pin or Recent (#2004).
     @MainActor func testTheMainConversationStays() {
         launch(oldLayout: false)
         let main = app.buttons["sidebar-main"].firstMatch
-        XCTAssertTrue(main.waitForExistence(timeout: 5), "no 主对话 row in the drawer")
-        XCTAssertTrue(main.label.hasPrefix("主对话"), "the main row is not named 主对话: \(main.label)")
+        XCTAssertTrue(main.waitForExistence(timeout: 5), "no Persona row at the top of the drawer")
+        XCTAssertFalse(conversation("Persona").exists, "the main conversation is under 置顶 too")
         XCTAssertEqual(app.buttons.matching(identifier: "sidebar-main").count, 1, "the main conversation shows more than once")
-        let machines = app.buttons["sidebar-machines"].firstMatch
-        XCTAssertTrue(machines.exists && machines.frame.maxY <= main.frame.minY, "主对话 is not under the places to go")
+        let inbox = app.buttons["sidebar-inbox"].firstMatch
+        XCTAssertTrue(inbox.exists && main.frame.maxY <= inbox.frame.minY, "Persona is not above 收件箱")
+        sleep(1) // the drawer's slide
+        shot("shell drawer")
         main.swipeLeft()
         sleep(1)
         XCTAssertFalse(app.buttons["归档"].exists, "the main conversation offered 归档")

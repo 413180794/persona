@@ -105,14 +105,14 @@ final class AssistantTopBarTests: XCTestCase {
         XCTAssertTrue(history.isHittable, "no 历史对话 on the left")
         history.tapCenter()
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
-        // Doubao's layout (2026-10-31): what to start, the main conversation on its own row, Recent, Persona and Settings at the foot.
+        // Doubao's layout (2026-10-31): the main conversation first, what to start, Recent, Persona and Settings at the foot.
         for row in ["新对话", "定时任务", "知识库", "最近"] {
             XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")
         }
-        // The main conversation is Main Chat, above Recent and not under Pin (#4606).
+        // The main conversation is the first row, named Persona, once: not under Pin or Recent (#2004, every layout).
         let mainRow = app.buttons["sidebar-main"].firstMatch
-        XCTAssertTrue(mainRow.exists && mainRow.label.hasPrefix("主对话"), "no 主对话 row:\n\(app.debugDescription)")
-        XCTAssertLessThan(mainRow.frame.minY, app.staticTexts["最近"].firstMatch.frame.minY, "主对话 is not above 最近")
+        XCTAssertTrue(mainRow.exists && mainRow.label.hasPrefix("Persona"), "no Persona row:\n\(app.debugDescription)")
+        XCTAssertLessThan(mainRow.frame.minY, app.staticTexts["新对话"].firstMatch.frame.minY, "Persona is not the first row")
         XCTAssertEqual(app.buttons.matching(identifier: "sidebar-main").count, 1, "the main conversation shows more than once")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Persona，", "查看资料")).firstMatch.exists,
                       "no Persona at the foot")

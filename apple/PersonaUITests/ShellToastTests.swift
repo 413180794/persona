@@ -78,7 +78,8 @@ final class ShellToastTests: XCTestCase {
         app.terminate()
     }
 
-    /// The drawer: its rows stay put under a toast, and the row right under it (Inbox, the first) takes a tap there.
+    /// The drawer: its rows stay put under a toast, and the row right under it (Persona, the main conversation) takes a
+    /// tap there.
     @MainActor func testAToastOverTheDrawerMovesNothingAndLetsTheTapsThrough() {
         launch("assistant", toasts: "10:success:已归档;12.3:success:已删除")
         let face = app.buttons["assistant-sidebar-button"].firstMatch
@@ -95,13 +96,13 @@ final class ShellToastTests: XCTestCase {
         XCTAssertEqual(inbox.frame.minY, before.minY, accuracy: 0.5, "收件箱 in the drawer moved as the toast showed")
         rowStayedFolded("the drawer")
         // A tap on the toast itself is the row's under it.
-        let over = toast.frame
-        XCTAssertTrue(inbox.frame.intersects(over), "收件箱 \(inbox.frame) is not under the toast \(over): this tap tells nothing")
-        let both = over.intersection(inbox.frame) // on the toast and on the row
+        let main = app.buttons["sidebar-main"].firstMatch, over = toast.frame
+        XCTAssertTrue(main.frame.intersects(over), "Persona \(main.frame) is not under the toast \(over): this tap tells nothing")
+        let both = over.intersection(main.frame) // on the toast and on the row
         app.windows.firstMatch.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: both.midX, dy: both.midY)).tap()
-        // The row opens Inbox: the drawer goes back in.
+        // The row opens the main conversation: the drawer goes back in.
         XCTAssertTrue(app.descendants(matching: .any)["assistant-drawer-close"].firstMatch.waitForNonExistence(timeout: 5),
-                      "收件箱 under the toast took no tap \(app.shellTrace)")
+                      "Persona under the toast took no tap \(app.shellTrace)")
         app.terminate()
     }
 
