@@ -18,15 +18,14 @@ import (
 
 // Manifest is latest.json: the release the publisher put up (docs/hub-update.md "Release manifest and signature").
 type Manifest struct {
-	Version      string          `json:"version"`
-	Build        int64           `json:"build"`
-	Commit       string          `json:"commit"`
-	Released     time.Time       `json:"released"`
-	MinAppBuild  int             `json:"min_app_build,omitempty"`
-	MinNodeBuild int64           `json:"min_node_build,omitempty"`
-	Protocol     int             `json:"protocol"`
-	Notes        string          `json:"notes,omitempty"`
-	Files        map[string]File `json:"files"` // "linux-amd64" -> its download
+	Version     string          `json:"version"`
+	Build       int64           `json:"build"`
+	Commit      string          `json:"commit"`
+	Released    time.Time       `json:"released"`
+	MinAppBuild int             `json:"min_app_build,omitempty"`
+	Protocol    int             `json:"protocol"`
+	Notes       string          `json:"notes,omitempty"`
+	Files       map[string]File `json:"files"` // "linux-amd64" -> its download
 	// Ancestors is every commit the release's code contains (EncodeAncestors of git rev-list <commit>): a hub installs
 	// it by itself only when its own commit is one of them (Build.Hold).
 	Ancestors string `json:"ancestors,omitempty"`

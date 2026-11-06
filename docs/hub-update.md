@@ -117,7 +117,6 @@ The binary gets three more `-X` variables (`cmd/personad`):
   "commit": "abc1234…",
   "released": "2026-11-02T07:30:00Z",
   "min_app_build": 95,
-  "min_node_build": 202611010000,
   "protocol": 3,
   "notes": "Highlights of this version",
   "files": {
@@ -135,7 +134,9 @@ The binary gets three more `-X` variables (`cmd/personad`):
 
 - A downloaded file must match both `sha256` (archive) and `binary_sha256` (decompressed), and the new binary's `version -v` must report the version and build number in the manifest.
   `SHA256SUMS` stays for install.sh.
-- `min_app_build`: Apps below it cannot use this hub version. `min_node_build`: nodes below it must update first (the hub redeploys them automatically). For `protocol`, see "Compatibility".
+- `min_app_build`: Apps below it cannot use this hub version. For `protocol`, see "Compatibility".
+- There is no minimum node build: a node reports a version string, and the hub redeploys any node whose version differs from its own. That redeploy runs after the new hub has confirmed
+  (section 8, step 9 "Update nodes along with it"), not before the new hub starts; a machine that fails to update keeps the reason.
 
 ## 5. Publishing (manual, publish.sh; user, 2026-11-02)
 
@@ -145,7 +146,7 @@ No automatic releases: the publisher still runs `publish.sh` manually on their o
 - Tests must still pass before publishing, plus `publish.sh`'s own checks (if any fails, nothing is published):
   1. Read the live `latest.json` (if any): the new build number must be larger, and the live version's commit must be an ancestor of this one (`git merge-base --is-ancestor`);
   2. Build the four platforms (with `channel=release`, `build`, `updateURL` written in), privacy scan (the binary may only contain redistributable skills);
-  3. Generate `latest.json` (version, build number, commit, the commits it contains `ancestors`, release time, sha256 of each platform's archive and decompressed binary, `min_app_build`, `min_node_build`, `protocol`);
+  3. Generate `latest.json` (version, build number, commit, the commits it contains `ancestors`, release time, sha256 of each platform's archive and decompressed binary, `min_app_build`, `protocol`);
      do not publish when the working tree has uncommitted changes in server/ or web/ (`NO_DEPLOY=1` still builds, and the commit in the binary carries `-dirty`): whatever commit the manifest names, the binary must be exactly it;
   4. After publishing, read back `VERSION`, `SHA256SUMS`, `latest.json` and compare them with the local ones.
 

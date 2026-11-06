@@ -12,19 +12,29 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
+// fixedBins are the bin directories launcherScript looks for codex, traex and omp in besides the PATH and
+// ~/.local/bin. They are this machine's, not the test's: asNode leaves them out (#5547).
+const fixedBins = ":/opt/homebrew/bin:/usr/local/bin"
+
 // asNode runs script the way the node does (loginShell: `zsh -ic`), with defs as the ~/.zshrc it sources first
 // (aliases only expand in a script parsed after they were defined), in a minimal environment: nothing of the test
-// runner's leaks into the output.
+// runner's leaks into the output, nor what is installed on this machine.
 func asNode(t *testing.T, defs, script string) string {
+	t.Helper()
+	return asNodeIn(t, t.TempDir(), defs, script)
+}
+
+// asNodeIn is asNode with dir as the HOME, for a test that puts something in it first.
+func asNodeIn(t *testing.T, dir, defs, script string) string {
 	t.Helper()
 	zsh, err := exec.LookPath("zsh")
 	if err != nil {
 		t.Skip("no zsh")
 	}
-	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".zshrc"), []byte(defs), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	script = strings.ReplaceAll(script, fixedBins, "")
 	cmd := exec.CommandContext(context.Background(), zsh, "-ic", script)
 	cmd.Env = []string{"HOME=" + dir, "ZDOTDIR=" + dir, "PATH=/usr/bin:/bin", "USER=tester", "TERM=dumb"}
 	out, err := cmd.Output()
@@ -125,6 +135,27 @@ func TestNoLaunchersMeansClaude(t *testing.T) {
 	list := listFrom(t, `alias ll="ls -l"`)
 	if len(list) != 1 || list[0].Name != "claude" {
 		t.Fatalf("got %v", list)
+	}
+}
+
+// codex found by the script is a launcher of its own: here one in ~/.local/bin, where the node looks besides the PATH.
+// The script's other fixed directories are this machine's (fixedBins): asNode leaves them out, and a change to them
+// is told here.
+func TestCodexOnTheMachineIsALauncher(t *testing.T) {
+	if !strings.Contains(launcherScript, `PATH="$PATH:$HOME/.local/bin`+fixedBins+`"`) {
+		t.Fatal("launcherScript's directories changed: update fixedBins")
+	}
+	home := t.TempDir()
+	bin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "codex"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	list, codex, _ := mergeLaunchers(asNodeIn(t, home, `alias ll="ls -l"`, launcherScript))
+	if len(list) != 2 || list[0].Name != "claude" || list[1].Name != "codex" || list[1].Agent != "codex" || len(codex["codex"]) != 1 {
+		t.Fatalf("got %v, codex %v", list, codex)
 	}
 }
 

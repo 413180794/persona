@@ -117,7 +117,7 @@ func TestPartsStayApart(t *testing.T) {
 		{"manager", managerPart, hubPart,
 			"a manager reaches the hub only over the bus: use the contract packages (assistantwire, devicewire, extwire) instead"},
 		{"node", nodePart, append(slices.Clone(hubPart), managerPart...),
-			"the node talks to its manager only through the node protocol (proto, devicewire): use those types instead"},
+			"the node talks to its manager only through the node protocol (proto, nodeproto, devicewire): use those types instead"},
 	}
 	allowed := readList(t, "boundary_allowed.txt")
 	used := map[string]bool{}

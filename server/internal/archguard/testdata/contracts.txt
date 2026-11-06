@@ -1,6 +1,7 @@
 # The contract packages (docs/architecture.md "Contract packages"): types, constants and trivial pure helpers only.
 # Each imports only the standard library and other packages of this list. A new contract package goes here; a
-# package named *wire must be listed.
+# package named *wire must be listed (the test checks), other contracts (nodeproto, proto, relayproto, rpc) are listed
+# by hand: proxyproto, say, is a protocol implementation, not a contract.
 internal/aiwire
 internal/assistantwire
 internal/connectorwire
@@ -8,6 +9,7 @@ internal/devicewire
 internal/dialogwire
 internal/extwire
 internal/kbwire
+internal/nodeproto
 internal/proto
 internal/relayproto
 internal/rpc

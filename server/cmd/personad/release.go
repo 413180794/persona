@@ -28,7 +28,6 @@ func runRelease(args []string) error {
 		commit := fs.String("commit", "", "the commit (full id; run in its repository: its ancestors go in too)")
 		notes := fs.String("notes", "", "what is new, for the app")
 		minApp := fs.Int("min-app", 0, "the oldest app build that works with it")
-		minNode := fs.String("min-node", "", "the oldest node build that works with it")
 		out := fs.String("out", "", "where to write latest.json")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
@@ -36,12 +35,6 @@ func runRelease(args []string) error {
 		n, err := update.ParseNumber(*num)
 		if err != nil {
 			return err
-		}
-		var mn int64
-		if *minNode != "" {
-			if mn, err = update.ParseNumber(*minNode); err != nil {
-				return err
-			}
 		}
 		// Every commit the release contains, so a hub deployed from newer code than this does not take it by itself.
 		revs, err := exec.Command("git", "rev-list", *commit).Output()
@@ -53,7 +46,7 @@ func runRelease(args []string) error {
 			return err
 		}
 		m, err := update.BuildManifest(*dir, update.Manifest{Version: *ver, Build: n, Commit: *commit, Released: time.Now().UTC().Truncate(time.Second),
-			MinAppBuild: *minApp, MinNodeBuild: mn, Protocol: proto.Protocol, Notes: *notes, Ancestors: ancestors})
+			MinAppBuild: *minApp, Protocol: proto.Protocol, Notes: *notes, Ancestors: ancestors})
 		if err != nil {
 			return err
 		}

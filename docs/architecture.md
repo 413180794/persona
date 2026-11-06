@@ -98,6 +98,7 @@ The parts (the hub, the managers, the node on each computer, extensions) talk on
 | `connectorwire` | Inbox things and replies, conversation batches, posts and snapshots from connectors (`docs/connector-protocol.md`) |
 | `aiwire` | A model setting (`aiwire.Config`) |
 | `dialogwire` | A terminal dialog read off a screen, as the node and the apps see it |
+| `nodeproto` | The node protocol handshake: the protocol version and capability names a node announces (`docs/protocol.md` "Node handshake") |
 | `proto`, `rpc`, `relayproto` | The client API and node protocol types, the JSON-RPC framing, the push relay |
 
 The business packages alias the contract types so their callers keep the old names (`type InboxThing = connectorwire.InboxThing` in `connector`, `type Update = kbwire.Update` in `kb`).
