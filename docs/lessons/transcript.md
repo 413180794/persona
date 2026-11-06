@@ -60,3 +60,11 @@ if there is no previous value (the node has just started), it searches backward 
   Do not walk backward from the end along parentUuid (parallel tool results are normal branches, and `compact_boundary` has a null parent). Abandoning a branch changes only the `history` token (`.r<n>`),
   not the item structure, so there is no need to bump the App's `ChatCache` directory version. Clients already discard and refetch local content when the token changes. Validate against a real corpus:
   build one old and one new binary with `go test -c ./internal/transcript`, compare item counts file by file with `-test.run 'TestCorpus$' -corpus <directory> -out <file>`, then run `TestCorpusWindowed`.
+
+## A subagent's report is a tool call now (2026-11-06, #5886)
+
+Since Claude Code 2.1.318 the Agent tool always launches the subagent async ("Async agent launched successfully", even when asked for the foreground), and the subagent reports by calling `SubagentHandback` with its report as `message`.
+The parent gets the report on a hidden user line (`isMeta: true`, `origin: {kind: "peer", from: <agent id>, handback: true, handbackReportText}`), and the agent's `<task-notification>` only points at it ("This agent's report was delivered to you as a message from … (its SubagentHandback call)").
+Read the old way, the report was nowhere: the hidden line was skipped, the notice's detail was the pointer, the subagent's `last_text` was its first words, and the hand-back counted as a step and was its `last_tool` ("Calling SubagentHandback").
+`transcript` now reads the call as the subagent's last words (a text item, `LastText`; its "Report delivered to your caller." result is not shown) and gives the parent's notice the handed-back report as its detail (`reportFor`; a pointer with no report known is dropped).
+When Claude Code changes how something reports back, record a real session and look at what is hidden (`isMeta`) as well as what is shown.

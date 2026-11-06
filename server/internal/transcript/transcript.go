@@ -75,6 +75,10 @@ type entry struct {
 			Body string `json:"body"`
 		} `json:"origin"`
 	} `json:"attachment"`
+	// Origin: where a user line came from; a subagent handing back its report carries the report here (Claude Code
+	// 2.1.318+), on a hidden line its task notification then only points at (handbackOf). Raw: a shape not known yet
+	// must not lose the line.
+	Origin        json.RawMessage `json:"origin"`
 	Cwd           string          `json:"cwd"`
 	ToolUseResult json.RawMessage `json:"toolUseResult"`
 	// system/api_error: {message, formatted} (raw: other lines may carry a plain string here), and which retry this is.
@@ -195,9 +199,13 @@ type Meta struct {
 	// notified holds the background-task notifications already shown: one is often recorded twice (as a user line and
 	// as a queued_command attachment). The same task reporting again with other content is a new event and shows.
 	notified map[string]bool
-	Cwd      string
-	Model    string
-	LastText string
+	// handbacks: a subagent's id → the report it handed back (SubagentHandback), until its task notification takes it
+	// as its detail. handbackCalls: those calls in the subagent's own transcript, whose results are not shown.
+	handbacks     map[string]string
+	handbackCalls map[string]bool
+	Cwd           string
+	Model         string
+	LastText      string
 	// LastTextAt is when the agent last wrote text, botmux's sentinel included (it ends a turn that answered in the
 	// Feishu topic): zero when it never did.
 	LastTextAt time.Time
@@ -533,6 +541,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		if e.Message == nil {
 			return nil
 		}
+		if agent, report, ok := handbackOf(e.Origin); ok {
+			meta.handedBack(agent, report)
+		}
 		if e.IsCompactSummary {
 			it := mk(0, "system", proto.KindNotice)
 			it.Text = CompactSummaryNotice
@@ -587,6 +598,10 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 					out = append(out, it)
 				}
 			case "tool_result":
+				if meta.handbackCalls[b.ToolUseID] { // "Report delivered to your caller.": its report is the words above
+					delete(meta.handbackCalls, b.ToolUseID)
+					continue
+				}
 				text, imgs := toolResultContent(b.Content)
 				meta.backgroundStarted(b.ToolUseID, text, b.IsError, e.Timestamp)
 				it := mk(i, "user", proto.KindToolResult)
@@ -631,12 +646,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				}
 				it := mk(i, "assistant", proto.KindText)
 				it.Text = clip(b.Text)
-				if t := withoutBotmuxSentinel(b.Text); t != "" {
-					meta.LastText = t
-					meta.tree.said = t
-				}
-				meta.LastTextAt = e.Timestamp
-				meta.tree.saidAt, meta.tree.spoke = e.Timestamp, true
+				meta.said(withoutBotmuxSentinel(b.Text), e.Timestamp)
 				out = append(out, it)
 			case "thinking":
 				if strings.TrimSpace(b.Thinking) == "" {
@@ -646,6 +656,16 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				it.Text = clip(b.Thinking)
 				out = append(out, it)
 			case "tool_use", "server_tool_use":
+				if b.Name == handbackTool {
+					// a subagent handing its report back to the session that launched it: its last words, not a step
+					if report := meta.handbackCall(b.ID, b.Input); report != "" {
+						it := mk(i, "assistant", proto.KindText)
+						it.Text = clip(report)
+						meta.said(report, e.Timestamp)
+						out = append(out, it)
+					}
+					continue
+				}
 				it := mk(i, "assistant", proto.KindToolUse)
 				it.ToolUseID = b.ID
 				it.ToolName = b.Name
@@ -895,6 +915,16 @@ func outputFile(result string) string {
 	return ""
 }
 
+// said notes the agent writing at ts: LastText (when t has words) and what its branch said.
+func (m *Meta) said(t string, ts time.Time) {
+	if t != "" {
+		m.LastText = t
+		m.tree.said = t
+	}
+	m.LastTextAt = ts
+	m.tree.saidAt, m.tree.spoke = ts, true
+}
+
 func (m *Meta) taskFinished(notification string, ts time.Time) {
 	if id := firstTag(notification, "task-id"); id != "" {
 		m.removeBackground(id)
@@ -1068,6 +1098,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		meta.notified[trimmed] = true
 		it := mk(0, "system", proto.KindNotice)
 		it.Task, it.Text = taskNote(trimmed)
+		meta.reportFor(it.Task)
 		return []proto.Item{it}
 	}
 	if trimmed == "[Request interrupted by user]" || trimmed == "[Request interrupted by user for tool use]" {

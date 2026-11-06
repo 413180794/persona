@@ -169,3 +169,60 @@ second line</event>`,
 		}
 	}
 }
+
+// Claude Code 2.1.318 subagents hand their report back with a SubagentHandback call (#5886); lines shaped like what it
+// writes, the words made up.
+func TestSubagentHandbackIsItsLastWords(t *testing.T) {
+	lines := []string{
+		`{"type":"assistant","uuid":"s1","isSidechain":true,"timestamp":"2026-01-02T10:00:01Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_run","name":"Bash","input":{"command":"echo one"}}]}}`,
+		`{"type":"user","uuid":"s2","isSidechain":true,"timestamp":"2026-01-02T10:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_run","content":"one"}]}}`,
+		`{"type":"assistant","uuid":"s3","isSidechain":true,"timestamp":"2026-01-02T10:00:03Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_back","name":"SubagentHandback","input":{"message":"Done: it printed one."}}]}}`,
+		`{"type":"user","uuid":"s4","isSidechain":true,"timestamp":"2026-01-02T10:00:04Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_back","content":[{"type":"text","text":"{\"success\":true,\"message\":\"Report delivered to your caller.\"}"}]}]},"toolUseResult":{"success":true,"message":"Report delivered to your caller."}}`,
+	}
+	meta := Meta{Sidechain: true}
+	var got []string
+	for i, l := range lines {
+		for _, it := range ParseLine(i+1, []byte(l), &meta) {
+			got = append(got, it.Kind+":"+it.ToolName+":"+it.Text)
+		}
+	}
+	want := []string{"tool_use:Bash:", "tool_result::one", "text::Done: it printed one."}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("items %q, want %q: the hand-back is the subagent's words, its result not shown", got, want)
+	}
+	if meta.LastText != "Done: it printed one." {
+		t.Fatalf("last text %q, want the report", meta.LastText)
+	}
+}
+
+func TestAgentNotificationTakesTheHandedBackReport(t *testing.T) {
+	const pointer = `This agent's report was delivered to you as a message from "a1b2c3" (its SubagentHandback call). Read it there; it is not repeated here.`
+	notify := func(uuid, id string) string {
+		return `{"type":"user","uuid":"` + uuid + `","message":{"role":"user","content":"<task-notification>\n<task-id>` + id + `</task-id>\n<tool-use-id>toolu_launch</tool-use-id>\n<status>completed</status>\n<summary>Agent \"Check the tests\" finished</summary>\n<result>` + strings.ReplaceAll(pointer, `"`, `\"`) + `\n</result>\n</task-notification>"}}`
+	}
+	handback := `{"type":"user","uuid":"h1","isMeta":true,"origin":{"kind":"peer","from":"a1b2c3","name":"general-purpose","handback":true,"handbackReportText":"All tests pass."},"message":{"role":"user","content":"Another Claude session sent a message:\n<agent-message from=\"a1b2c3\">…</agent-message>"}}`
+
+	var meta Meta
+	var notes []proto.Item
+	for i, l := range []string{handback, notify("n1", "a1b2c3")} {
+		for _, it := range ParseLine(i+1, []byte(l), &meta) {
+			notes = append(notes, it)
+		}
+	}
+	if len(notes) != 1 || notes[0].Task == nil || notes[0].Task.Kind != "agent" {
+		t.Fatalf("items %+v, want the agent's notice alone (the hand-back line is hidden)", notes)
+	}
+	if d := notes[0].Task.Detail; d != "All tests pass." {
+		t.Fatalf("detail %q, want the report it handed back", d)
+	}
+	// a notification whose report came before what was read: the pointer alone is not shown as the report
+	var later Meta
+	items := ParseLine(1, []byte(notify("n2", "a1b2c3")), &later)
+	if len(items) != 1 || items[0].Task == nil || items[0].Task.Detail != "" {
+		t.Fatalf("items %+v, want the notice with no detail", items)
+	}
+	// an origin of a shape not known yet loses nothing
+	if items := ParseLine(1, []byte(`{"type":"user","uuid":"u9","origin":"elsewhere","message":{"role":"user","content":"hello"}}`), &Meta{}); len(items) != 1 || items[0].Text != "hello" {
+		t.Fatalf("items %+v, want the message", items)
+	}
+}

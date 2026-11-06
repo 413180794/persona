@@ -377,3 +377,46 @@ func TestSubagentListsStepsLastToolAndContentTime(t *testing.T) {
 		t.Fatalf("updated_at moved with the mtime: %v", again.UpdatedAt)
 	}
 }
+
+// A subagent that reports with SubagentHandback (Claude Code 2.1.318+, #5886): the hand-back is its report, not a step
+// it took: two commands are two steps, its latest call the second command, its last words the report.
+func TestSubagentHandbackIsNoStep(t *testing.T) {
+	const parent = "aaaaaaaa-0000-0000-0000-000000000010"
+	home := t.TempDir()
+	tp := filepath.Join(home, ".claude", "projects", "-src-app", parent+".jsonl")
+	dir := filepath.Join(strings.TrimSuffix(tp, ".jsonl"), "subagents")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tp, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	lines := strings.Join([]string{
+		`{"type":"user","timestamp":"` + ts + `","isSidechain":true,"message":{"role":"user","content":"run two commands"}}`,
+		`{"type":"assistant","timestamp":"` + ts + `","isSidechain":true,"message":{"role":"assistant","content":[{"type":"text","text":"I'll run the first command."},{"type":"tool_use","id":"toolu_c1","name":"Bash","input":{"command":"echo one"}}]}}`,
+		`{"type":"user","timestamp":"` + ts + `","isSidechain":true,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_c1","content":"one"}]}}`,
+		`{"type":"assistant","timestamp":"` + ts + `","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_c2","name":"Bash","input":{"command":"echo two"}}]}}`,
+		`{"type":"user","timestamp":"` + ts + `","isSidechain":true,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_c2","content":"two"}]}}`,
+		`{"type":"assistant","timestamp":"` + ts + `","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_hb","name":"SubagentHandback","input":{"message":"Both ran: one, two."}}]}}`,
+		`{"type":"user","timestamp":"` + ts + `","isSidechain":true,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_hb","content":"{\"success\":true}"}]}}`,
+	}, "\n") + "\n"
+	if os.WriteFile(filepath.Join(dir, "agent-h1.jsonl"), []byte(lines), 0o600) != nil || os.WriteFile(filepath.Join(dir, "agent-h1.meta.json"), []byte(`{"agentType":"general-purpose","description":"run two commands","toolUseId":"toolu_p2"}`), 0o600) != nil {
+		t.Fatal("write subagent files")
+	}
+	n := &Node{home: home, paths: map[string]string{parent: tp}}
+	subs := n.subagents(parent)
+	if len(subs) != 1 {
+		t.Fatalf("listed %+v", subs)
+	}
+	a := subs[0]
+	if a.Steps != 2 {
+		t.Fatalf("steps %d, want 2 (the hand-back is no step)", a.Steps)
+	}
+	if a.LastTool == nil || a.LastTool.ID != "toolu_c2" {
+		t.Fatalf("last tool %+v, want the second command", a.LastTool)
+	}
+	if a.LastText != "Both ran: one, two." {
+		t.Fatalf("last text %q, want its report", a.LastText)
+	}
+}

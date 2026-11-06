@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"encoding/json"
 	"html"
 	"regexp"
 	"strconv"
@@ -152,4 +153,68 @@ func oneLine(s string, n int) string {
 		}
 	}
 	return ""
+}
+
+// Since Claude Code 2.1.318 a subagent reports by calling SubagentHandback with its report as `message`; the session
+// that launched it gets the report on a hidden user line (origin.handback, handbackReportText), and the agent's task
+// notification then only points at it ("This agent's report was delivered to you as a message from "<id>" (its
+// SubagentHandback call). Read it there; …"). So the report would be nowhere a client looks: it becomes the
+// subagent's last words in its own transcript, and the notification's detail in the parent's.
+const handbackTool = "SubagentHandback"
+
+// handbacksKept: reports waiting for their notification; each one takes its own, so more is a session that lost them.
+const handbacksKept = 64
+
+// handbackCall reads a SubagentHandback call: the report it hands back. Its result ("Report delivered to your
+// caller.") is not shown.
+func (m *Meta) handbackCall(id string, input []byte) string {
+	if id != "" {
+		if m.handbackCalls == nil {
+			m.handbackCalls = map[string]bool{}
+		}
+		m.handbackCalls[id] = true
+	}
+	var in struct {
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(input, &in)
+	return strings.TrimSpace(in.Message)
+}
+
+// handbackOf reads a user line's origin: the subagent and the report, when it is one handing its report back.
+func handbackOf(origin json.RawMessage) (agent, report string, ok bool) {
+	if len(origin) == 0 {
+		return "", "", false
+	}
+	var o struct {
+		From               string `json:"from"`
+		Handback           bool   `json:"handback"`
+		HandbackReportText string `json:"handbackReportText"`
+	}
+	if json.Unmarshal(origin, &o) != nil || !o.Handback || o.From == "" {
+		return "", "", false
+	}
+	return o.From, o.HandbackReportText, true
+}
+
+// handedBack keeps the report a subagent handed back, for the task notification that comes after it.
+func (m *Meta) handedBack(agent, report string) {
+	if m.handbacks == nil || len(m.handbacks) >= handbacksKept {
+		m.handbacks = map[string]string{}
+	}
+	m.handbacks[agent] = clipTo(strings.TrimSpace(report), pageOutputLen)
+}
+
+// reportFor gives an agent's notification the report its agent handed back, in place of the note that points at it;
+// that note alone says nothing (the report is not repeated), so with no report known it is dropped.
+func (m *Meta) reportFor(n *proto.TaskNote) {
+	if n == nil || n.Kind != "agent" {
+		return
+	}
+	if r, ok := m.handbacks[n.TaskID]; ok {
+		delete(m.handbacks, n.TaskID)
+		n.Detail = r
+	} else if strings.HasPrefix(n.Detail, "This agent's report was delivered to you") && strings.Contains(n.Detail, handbackTool) {
+		n.Detail = ""
+	}
 }
