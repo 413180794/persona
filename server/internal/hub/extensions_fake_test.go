@@ -266,3 +266,7 @@ func (f *fakeExt) AssistantLark(context.Context) (proto.AssistantLark, error) {
 func (f *fakeExt) AnswerComputerElicit(context.Context, string, json.RawMessage) (map[string]any, error) {
 	return map[string]any{"action": "cancel"}, nil
 }
+
+func (f *fakeExt) RecordNodeSent(context.Context, string, json.RawMessage) (any, error) {
+	return struct{}{}, nil
+}

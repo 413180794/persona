@@ -1416,6 +1416,11 @@ type Resolution struct {
 	AnsweredBy string `json:"answered_by,omitempty"`
 	// Reason is why the assistant answered so (AnsweredByAssistant): the Y of "Answered by the assistant: X, because Y".
 	Reason string `json:"reason,omitempty"`
+	// Remembered marks an allow the manager gave from an "Always allow in this session" it had kept (or that a card
+	// answered meanwhile covers), not from an answer to this card: the node's sent-as-user ledger records such a write
+	// as conversation_always, not as a card (docs/connectors.md "Sent as the user"). Only the manager sets it; an
+	// answer from an app or a channel never carries it. An older manager does not send it.
+	Remembered bool `json:"remembered,omitempty"`
 	// PreKeys go in before Text (Keys after it): pick "Type something." by its number, type the answer, enter.
 	PreKeys []string `json:"pre_keys,omitempty"`
 	Dismiss bool     `json:"dismiss,omitempty"`

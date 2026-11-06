@@ -17,6 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -24,7 +25,8 @@ import (
 // connectors' write gate runs here, so this is where a write that went out is known with the conversation that asked
 // and the card the user answered. Registry.SetSent tells recordSent of every gated write whose action succeeded;
 // refusals, declines, failures and the user's own sends (Registry.Run) never get here. A send an extension's connector
-// made on its own, outside the gate, comes in through sent.record instead (extensionSentRecord).
+// made on its own, outside the gate, comes in through sent.record instead (extensionSentRecord), and a write the
+// node's Lark gate proxy forwarded through lark.sent (RecordNodeSent).
 
 // sentStore keeps and reads the ledger (db.RecordSentAsUser…).
 type sentStore interface {
@@ -398,6 +400,131 @@ func recordedTarget(fields map[string]any) (map[string]any, string, error) {
 		brief = append(brief, name+" "+fmt.Sprint(v))
 	}
 	return target, strings.Join(brief, ", "), nil
+}
+
+// RecordNodeSent answers a node's lark.sent (proto.MethodLarkSent, node/gateproxy.go): its gate proxy forwarded a write
+// as the user and the API took it. The node's gate decided before the command ran and cannot see whether it sent, so
+// this is where such a write gets its row. machineID is the connection the request came in on, a computer of this
+// manager's (permission_denied for any other): the row's origin.machine_id is that, whatever the params say, and so
+// are the rest of the row's words but the ones the node can alone know: the call (the gated command, method and path, a
+// write only), what it said, the conversation it ran for and how the gate let it through. The node being the user's own, its word is
+// taken for those, cut and cleaned like the other sources'. A failed write is the node's to log, as the send already
+// happened and stays so.
+func (h *Manager) RecordNodeSent(ctx context.Context, machineID string, raw json.RawMessage) (any, error) {
+	if h.machineByID(machineID) == nil {
+		return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: "lark.sent: not from a computer of this manager"}
+	}
+	var p proto.LarkSent
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, &rpc.Error{Code: "invalid_params", Message: "lark.sent: " + err.Error()}
+	}
+	method := strings.ToUpper(strings.TrimSpace(p.Method))
+	path := cutRunes(strings.TrimSpace(cleanText(p.Path)), sentValueMost)
+	if !nodeWriteMethods[method] || !strings.HasPrefix(path, "/") {
+		return nil, &rpc.Error{Code: "invalid_params", Message: "lark.sent: method and path of a write (POST, PUT, PATCH, DELETE or OPTIONS, and a path from /)"}
+	}
+	through, err := nodeLetThrough(p.LetThrough)
+	if err != nil {
+		return nil, &rpc.Error{Code: "invalid_params", Message: "lark.sent: " + err.Error()}
+	}
+	st, _ := h.store.(sentStore)
+	if st == nil {
+		return nil, &rpc.Error{Code: "no_database", Message: "lark.sent: no database, there is no ledger"}
+	}
+	target := map[string]any{"method": method, "path": path}
+	if v := cutRunes(strings.TrimSpace(cleanText(p.Command)), sentValueMost); v != "" { // the gate the call went through
+		target["command"] = v
+	}
+	for k, v := range gatePathIDs(path) {
+		target[k] = v
+	}
+	origin := map[string]any{"machine_id": machineID}
+	if v := cutRunes(strings.TrimSpace(cleanText(p.SessionID)), sentValueMost); v != "" {
+		origin["session_id"] = v
+	}
+	action := method + " " + path
+	row := db.SentAsUser{At: time.Now(), Connector: connector.Lark, Action: action, Target: mustJSON(target),
+		Text: cutRunes(cleanText(p.Text), connector.SentTextMost), Summary: cutRunes(action, sentSummaryMost),
+		Origin: mustJSON(origin), LetThrough: mustJSON(through)}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if _, err := st.RecordSentAsUser(ctx, row); err != nil {
+		h.logf("sent ledger: %s: %s: %v", machineID, action, err)
+		return nil, errors.New("lark.sent: the ledger could not be written")
+	}
+	return struct{}{}, nil
+}
+
+// nodeWriteMethods are the methods the gate treats as writes (node/larkgate.go larkRead: all but GET and HEAD).
+var nodeWriteMethods = map[string]bool{"POST": true, "PUT": true, "PATCH": true, "DELETE": true, "OPTIONS": true}
+
+// nodeLetThrough is a row's let_through for how a node's gate let a write through: a rule of the gate (written as the
+// connector_gate rule it came from: connector "lark", the action as "<METHOD> <path>" or "*", the body's fields as
+// match), "conversation_always" (the user had allowed that route for the conversation, so no card was shown), or the
+// card with its id and who answered it.
+func nodeLetThrough(t proto.LarkLetThrough) (map[string]any, error) {
+	through := map[string]any{"kind": t.Kind}
+	switch t.Kind {
+	case proto.LarkThroughRule:
+		r := t.Rule
+		if r == nil || r.Action != connector.Allow {
+			return nil, errors.New("let_through: a rule that allowed it")
+		}
+		action := "*"
+		if r.Method != "*" || r.Path != "**" {
+			action = strings.TrimSpace(strings.ToUpper(r.Method) + " " + r.Path)
+		}
+		rule := map[string]any{"connector": connector.Lark, "action": cutRunes(cleanText(action), sentValueMost), "decision": connector.Allow}
+		if len(r.Body) > 0 {
+			match, _, err := recordedTarget(r.Body)
+			if err != nil {
+				return nil, err
+			}
+			rule["match"] = match
+		}
+		through["rule"] = rule
+	case proto.LarkThroughAlways:
+	case proto.LarkThroughCard:
+		if v := cutRunes(strings.TrimSpace(cleanText(t.InteractionID)), sentValueMost); v != "" {
+			through["interaction_id"] = v
+			if by := cutRunes(strings.TrimSpace(cleanText(t.AnsweredBy)), sentValueMost); by != "" {
+				through["answered_by"] = by
+			}
+		}
+	default:
+		return nil, fmt.Errorf("let_through: kind %q is not rule, conversation_always or card", t.Kind)
+	}
+	return through, nil
+}
+
+// gatePathIDs are the ids a gated call's path names in the way REST paths do: the segment after "conversations" is the
+// conversation, the one after "messages" the message. A collection named twice, or with no id after it, gives
+// nothing: a row says no id rather than a guess.
+func gatePathIDs(path string) map[string]string {
+	segs := strings.Split(strings.Trim(path, "/"), "/")
+	ids, seen := map[string]string{}, map[string]bool{}
+	for i, seg := range segs {
+		key := ""
+		switch seg {
+		case "conversations":
+			key = "conversation"
+		case "messages":
+			key = "message"
+		default:
+			continue
+		}
+		if seen[key] {
+			delete(ids, key)
+			continue
+		}
+		seen[key] = true
+		if i+1 < len(segs) {
+			if id := segs[i+1]; id != "" && id != "*" && len([]rune(id)) <= sentValueMost && cleanText(id) == id {
+				ids[key] = id
+			}
+		}
+	}
+	return ids
 }
 
 // sentLedgerNow is the clock the prune reads (tests pin it).

@@ -203,7 +203,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "jarvis"}, codexArgs(n.bin, key)...)...)
 	cmd.Dir = root
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
-	gateEnv, releaseGates := n.assistantLarkEnv(cwd) // its addresses at the gate proxy go with the process
+	gateEnv, releaseGates := n.assistantLarkEnv(cwd, id) // its addresses at the gate proxy go with the process
 	started := false
 	defer func() {
 		if !started {

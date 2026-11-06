@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -28,12 +29,14 @@ type scriptHub struct {
 	created   []proto.Interaction
 	notified  []map[string]any
 	cancelled []string
+	larkSent  []proto.LarkSent // what the node's gate proxy told of (lark.sent)
 }
 
 func newScriptHub(t *testing.T, create func(ctx context.Context, ix proto.Interaction) (any, error), notify func() (any, error)) *scriptHub {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	n, _ := testNode(t)
+	n.logger = log.New(io.Discard, "", 0) // the gate proxy's reports may end after the test does, and say so
 	h := &scriptHub{n: n}
 	n2hR, n2hW := io.Pipe()
 	h2nR, h2nW := io.Pipe()
@@ -57,6 +60,13 @@ func newScriptHub(t *testing.T, create func(ctx context.Context, ix proto.Intera
 			h.notified = append(h.notified, p)
 			h.mu.Unlock()
 			return notify()
+		case proto.MethodLarkSent:
+			var s proto.LarkSent
+			_ = json.Unmarshal(params, &s)
+			h.mu.Lock()
+			h.larkSent = append(h.larkSent, s)
+			h.mu.Unlock()
+			return struct{}{}, nil
 		}
 		return nil, nil
 	}

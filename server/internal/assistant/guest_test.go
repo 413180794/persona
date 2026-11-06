@@ -14,7 +14,7 @@ import (
 )
 
 // guestExt is the extensions' tools for the guest tests: a connector's two (lark_agent_reply, lark_chats) and Cua's.
-type guestExt struct{ called []string }
+type guestExt struct{ called, sent []string }
 
 func (e *guestExt) AgentTools(context.Context, bool) (agents, assistantOnly []proto.Tool) {
 	return nil, []proto.Tool{{Name: "computer_run"}, {Name: "lark_chats"}, {Name: "lark_agent_reply"}}
@@ -40,6 +40,11 @@ func (e *guestExt) AssistantLark(context.Context) (proto.AssistantLark, error) {
 
 func (e *guestExt) AnswerComputerElicit(context.Context, string, json.RawMessage) (map[string]any, error) {
 	return nil, nil
+}
+
+func (e *guestExt) RecordNodeSent(_ context.Context, machine string, params json.RawMessage) (any, error) {
+	e.sent = append(e.sent, machine+" "+string(params))
+	return struct{}{}, nil
 }
 
 func guestService(t *testing.T) (*fakeHub, *Service, *guestExt) {

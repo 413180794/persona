@@ -225,7 +225,7 @@ func TestAssistantLarkEnvLarkCLI(t *testing.T) {
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0),
 		larkCfg: proto.AssistantLark{CLI: &proto.LarkCLI{Bin: bin}}}
 	cwd := t.TempDir()
-	vars, _ := n.assistantLarkEnv(cwd)
+	vars, _ := n.assistantLarkEnv(cwd, "")
 	env := strings.Join(vars, "\n")
 	if strings.Contains(env, "_TOKEN=") {
 		t.Fatal("lark-cli only: no gated command's token")

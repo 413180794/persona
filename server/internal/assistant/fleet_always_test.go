@@ -52,10 +52,12 @@ func TestAssistantAlwaysAllowKept(t *testing.T) {
 		t.Fatal("a card without keys kept a grant")
 	}
 	ask(t, s, alwaysIx("ix_3", "conv", "tool:Edit"), &proto.Resolution{Allow: &no, Always: true})
-	ask(t, s, alwaysIx("ix_4", "conv", "tool:Bash"), &proto.Resolution{Allow: &yes, Always: true})
+	if first := ask(t, s, alwaysIx("ix_4", "conv", "tool:Bash"), &proto.Resolution{Allow: &yes, Always: true}); first.Remembered {
+		t.Fatalf("the card's own answer was taken for a kept grant: %+v", first)
+	}
 	ft.waitPending(0)
 	got := ask(t, s, alwaysIx("ix_5", "conv", "tool:Bash"), nil)
-	if got.Allow == nil || !*got.Allow || !got.Always {
+	if got.Allow == nil || !*got.Allow || !got.Always || !got.Remembered { // remembered: no card was answered for it
 		t.Fatalf("kept grant answered %+v", got)
 	}
 	if n := len(s.pendingInteractions()); n != 0 {
@@ -87,7 +89,7 @@ func TestAssistantAlwaysAnswersWaitingCards(t *testing.T) {
 	ask(t, s, alwaysIx("ix_a", "conv", "tool:Bash"), &proto.Resolution{Allow: &yes, Always: true})
 	select {
 	case r := <-waiting:
-		if r.Allow == nil || !*r.Allow {
+		if r.Allow == nil || !*r.Allow || !r.Remembered {
 			t.Fatalf("waiting card got %+v", r)
 		}
 	case <-time.After(5 * time.Second):

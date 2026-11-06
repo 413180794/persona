@@ -284,8 +284,8 @@ func (n *Node) assistantGateTool(ctx context.Context, g *proto.CommandGate, sess
 	if cwd == "" {
 		cwd = identity.AssistantDir(n.home)
 	}
-	env, release := n.assistantLarkEnv(cwd) // also syncs the skills into .claude/skills
-	defer release()                         // this run's address at the gate proxy
+	env, release := n.assistantLarkEnv(cwd, session) // also syncs the skills into .claude/skills
+	defer release()                                  // this run's address at the gate proxy
 	script := n.gateScript(cwd, g)
 	if script == "" {
 		return proto.TextResult("这台电脑上没有 "+g.Command+" 所在的技能（"+g.Script+"）", true)

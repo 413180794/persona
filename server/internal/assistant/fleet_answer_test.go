@@ -142,10 +142,10 @@ func TestResolveRoute(t *testing.T) {
 		h.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/interactions/"+id+"/resolve", strings.NewReader(body)))
 		return w
 	}
-	if w := post(ix.ID, `{"answers":{"发吗？":"发"},"answered_by":"assistant"}`); w.Code != http.StatusOK {
+	if w := post(ix.ID, `{"answers":{"发吗？":"发"},"answered_by":"assistant","remembered":true}`); w.Code != http.StatusOK {
 		t.Fatalf("status %d %s", w.Code, w.Body)
 	}
-	if got := <-done; got.AnsweredBy != "" || got.Answers["发吗？"] != "发" {
+	if got := <-done; got.AnsweredBy != "" || got.Remembered || got.Answers["发吗？"] != "发" {
 		t.Fatalf("hook got %+v", got)
 	}
 	if w := post(ix.ID, `{"answers":{"发吗？":"不发"}}`); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"already":true`) {

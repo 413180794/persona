@@ -79,6 +79,9 @@ type ExtensionTools interface {
 	AssistantLark(ctx context.Context) (proto.AssistantLark, error)
 	// AnswerComputerElicit answers the node's computer.elicit (LCU runtime confirmations on the phone/web cards).
 	AnswerComputerElicit(ctx context.Context, machine string, params json.RawMessage) (map[string]any, error)
+	// RecordNodeSent keeps a write the node's gate proxy forwarded in the sent-as-user ledger (the node's lark.sent);
+	// machine is the connection's, never a field of params.
+	RecordNodeSent(ctx context.Context, machine string, params json.RawMessage) (any, error)
 }
 
 // SetExtensions gives the service the extensions' tools (before Run).

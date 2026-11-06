@@ -66,7 +66,7 @@ func TestAssistantPreparePerDirectory(t *testing.T) {
 			// A later sync and process launch must still use the first directory's prepare.
 			n.syncAssistantSkills(first)
 			for _, cwd := range []string{first, second} {
-				env, release := n.assistantLarkEnv(cwd)
+				env, release := n.assistantLarkEnv(cwd, "")
 				release()
 				if !slices.Contains(env, "JARVIS_ASSISTANT_BIN="+n.assistantBin(cwd)) ||
 					!slices.Contains(env, "PATH="+n.assistantBin(cwd)+string(os.PathListSeparator)+os.Getenv("PATH")) {
@@ -136,7 +136,7 @@ func TestAssistantPrepareScopesSkillConsumers(t *testing.T) {
 		n.syncAssistantSkills(cwd)
 		checkSkill(".agents")
 		checkSkill(".claude")
-		_, release := n.assistantLarkEnv(cwd)
+		_, release := n.assistantLarkEnv(cwd, "")
 		release()
 		checkSkill(".claude")
 	}

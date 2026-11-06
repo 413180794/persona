@@ -1064,7 +1064,7 @@ func (s *Service) alwaysAllowed(ctx context.Context, ix proto.Interaction) (prot
 	}
 	s.logf("[%s] %s allowed: 本会话总是允许 in this conversation", ix.MachineID, ix.ToolName)
 	yes := true
-	return proto.Resolution{Allow: &yes, Always: true}, true
+	return proto.Resolution{Allow: &yes, Always: true, Remembered: true}, true
 }
 
 // keepAlways keeps what a card answered with "Always allow in this session" grants, then answers the conversation's other cards

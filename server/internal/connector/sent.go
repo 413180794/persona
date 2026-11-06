@@ -3,8 +3,9 @@ package connector
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // How the gate let a write through (LetThrough.Kind).
@@ -57,21 +58,9 @@ type SentRecordParams struct {
 	Setting      string         `json:"setting,omitempty"`     // the extension's setting that let it send without asking
 }
 
-// writtenText is the words a write puts out, as its arguments say them: the first of the fields connectors name
-// their text by (GitHub's body, mail's and the chats' text) that has any, cut to SentTextMost characters.
-func writtenText(args json.RawMessage) string {
-	var fields map[string]any
-	_ = json.Unmarshal(args, &fields)
-	for _, k := range []string{"body", "text", "message", "content", "comment"} {
-		if s, _ := fields[k].(string); strings.TrimSpace(s) != "" {
-			if r := []rune(s); len(r) > SentTextMost {
-				return string(r[:SentTextMost])
-			}
-			return s
-		}
-	}
-	return ""
-}
+// writtenText is the words a write puts out, as its arguments say them (proto.WrittenText, which the node's gate
+// proxy reads a request body with too), cut to SentTextMost characters.
+func writtenText(args json.RawMessage) string { return proto.WrittenText(args, SentTextMost) }
 
 // SetSent sets what is told about every write that went out through Call (nil: nothing). It is called once the write
 // is done, in the call's goroutine and with its ctx, so keep it quick: what it does cannot undo the write, and its

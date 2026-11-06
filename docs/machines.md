@@ -30,7 +30,7 @@ Product decision: **computers belong to the manager, which connects to them itse
   sessions the node must list regardless of inactivity (assistant profile `keep`; when the assistant snapshot arrives, tell each node, `SetKeep`), node updates (`node.deploy.<id>`), node `state.put` / `state.load` (table `node_sessions`).
   Existing keys and tables stay; no data migration.
 - Manager-owned routes (`devicewire.Routes`, forwarded by hub as `http.request` like assistant routes): `POST …/reconnect`, `PUT …/engine`, `GET/PUT …/herdr`, `POST …/herdr/start`, `POST …/deploy`, `GET …/claude-dirs`, `PUT …/claude-dirs/blocked`; also subscription quota `GET /api/v1/usage/windows` (`devicewire.UsageRoutes`) and admin quota-source page (`AdminUsageRoutes`, forwarded only from admin, `docs/usage-windows.md`, "Who owns this").
-- Node requests: answers `state.load`, assistant requests (`assistant.model`, `assistant.context`) and computer-event requests (`interaction.create`, `assistant.lark`, `mcp.tools`, `mcp.call`; "Who handles computer events" below) in-process; passes the rest (`notify`: `personad notify` on computers) to hub (`devices.request`).
+- Node requests: answers `state.load`, assistant requests (`assistant.model`, `assistant.context`) and computer-event requests (`interaction.create`, `assistant.lark`, `lark.sent`, `mcp.tools`, `mcp.call`; "Who handles computer events" below) in-process; passes the rest (`notify`: `personad notify` on computers) to hub (`devices.request`).
   If that node connection closes before the hub answers, the manager sends `devices.request_end`, so the hub stops waiting.
   One-way node events are first processed by the manager (`devices.Options.Event`), then App-needed events forwarded unchanged in order to the hub (`devices.event`): items, screen, live state, terminal frames, port bytes, `sessions.revs`, `hook.event`, `fs.changed`, plugin events; session lists, interactions, usage and monitoring samples stop at the manager.
 - One-way hub-to-node events (`devices.notify`) queue per computer, with independent writers; a slow computer delays only itself, not the bus or others. Reconnect if a write stalls 30 seconds or queued data exceeds 32 MiB.
@@ -104,6 +104,7 @@ Computers belong to the manager, and so does everything they send: the hub's exi
 | Push decisions: waiting and filtering for done notifications (seen, muted, answered through a channel, Inbox twin, notify_user already pushed, no duplicate push for one Stop), card notifications | `fleet_push.go` |
 | Live Activity content (FleetState) and Dynamic Island counts | `fleet_live.go` |
 | Node MCP tools (`mcp.tools` / `mcp.call` dispatch) and `assistant.lark` | `fleet_tools.go` |
+| `lark.sent`: a write the node's gate proxy forwarded, kept in the sent-as-user ledger | `fleet.go` (`NodeRequest`), `extmgr/sent_ledger.go` |
 | Channel-followed chats (`session.follow`: node sends items and generating text to manager, delivered to channels with turn starts/ends in node order) | `fleet_follow.go`, `devices.Follow` |
 | Machine monitoring (samples, 24-hour history, downsampling, cleanup) and token usage | `devices/metrics.go` |
 

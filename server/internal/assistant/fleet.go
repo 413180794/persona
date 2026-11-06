@@ -409,6 +409,12 @@ func (s *Service) NodeRequest(ctx context.Context, machine, method string, param
 	case "assistant.lark":
 		out, err := s.assistantLark(ctx, machine)
 		return out, true, err
+	case proto.MethodLarkSent: // a write the gate proxy forwarded and the API took (node/gateproxy.go)
+		if s.ext == nil {
+			return nil, true, errors.New("lark.sent: no extensions, there is no ledger")
+		}
+		out, err := s.ext.RecordNodeSent(ctx, machine, params)
+		return out, true, err
 	case "mcp.tools":
 		var p struct {
 			Assistant bool   `json:"assistant"`

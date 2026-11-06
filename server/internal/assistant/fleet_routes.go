@@ -39,6 +39,7 @@ func (s *Service) fleetHandler(next http.Handler) http.Handler {
 			return
 		}
 		res.AnsweredBy, res.Reason = "", "" // only the assistant's interaction_answer says it answered
+		res.Remembered = false              // only the manager's own "Always allow" answers say so
 		id := r.PathValue("id")
 		if err := s.resolve(id, res); err != nil {
 			switch {
@@ -250,7 +251,7 @@ func (s *Service) channelResolve(ctx context.Context, ch, id string, r proto.Res
 		"action": action, "channel": ch, "kind": ix.Kind}, nil); err != nil {
 		return nil, err
 	}
-	r.AnsweredBy = ""
+	r.AnsweredBy, r.Remembered = "", false
 	if err := s.resolve(id, r); err != nil {
 		if errors.Is(err, errNotPending) {
 			return map[string]any{"ok": false, "status": s.interactionOutcome(ctx, id)}, nil

@@ -715,7 +715,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if guest && execution.Runtime == proto.AssistantRuntimeAgentSDK {
 		return nil, errGuestAgent // the bridge takes no --tools (assistant_guest.go)
 	}
-	gateEnv, releaseGates := n.assistantLarkEnv(cwd) // its addresses at the gate proxy go with the process
+	gateEnv, releaseGates := n.assistantLarkEnv(cwd, id) // its addresses at the gate proxy go with the process
 	if guest {
 		releaseGates()
 		gateEnv, releaseGates = nil, func() {} // no commands to gate: it has no Bash

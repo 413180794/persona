@@ -379,14 +379,20 @@ func decideLark(rules []proto.LarkRule, c larkCall) string {
 	return "confirm"
 }
 
-// matchLark is the first rule that matches the call.
+// matchLark is the action of the first rule that matches the call.
 func matchLark(rules []proto.LarkRule, c larkCall) (string, bool) {
+	r, ok := firstLark(rules, c)
+	return r.Action, ok
+}
+
+// firstLark is the first rule that matches the call.
+func firstLark(rules []proto.LarkRule, c larkCall) (proto.LarkRule, bool) {
 	for _, r := range rules {
 		if (r.Method == "*" || strings.EqualFold(r.Method, c.Method)) && pathMatches(r.Path, c.Path) && bodyMatches(r.Body, c.Body) {
-			return r.Action, true
+			return r, true
 		}
 	}
-	return "", false
+	return proto.LarkRule{}, false
 }
 
 func pathMatches(pattern, path string) bool {
@@ -547,14 +553,16 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 			}
 			ix.Kind, ix.ToolName = proto.IxPermission, title
 			ix.Summary = "以你的身份在" + title + "上写（命令较复杂，整条显示）\n" + prettyBody(command)
-			return n.confirmLark(ctx, session, ix, nil)
+			decision, reason, _, err := n.confirmLark(ctx, session, ix, nil)
+			return decision, reason, err
 		}
 		return "", "", nil
 	}
 	// A health conversation's writes are confirmed each time: no rule's allow, no "Always allow for this session" (docs/health.md "Outgoing").
 	health := identity.SpaceOf(cwd) == identity.SpaceHealth
-	// through: the calls to confirm; once let through here, the gate proxy lets each go once (gateproxy.go).
-	var ask, through []larkCall
+	// ask: the calls to confirm on the phone; covered: those "Always allow for this session" covers. Once let through
+	// here, the gate proxy lets each go once (gateproxy.go).
+	var ask, covered []larkCall
 	for _, c := range v.calls {
 		decision := larkDecision(cfg, c)
 		if decision == "allow" && health && !larkRead(c) {
@@ -565,14 +573,15 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 			return "deny", "这个操作按配置不允许（" + c.Method + " " + c.Path + "）。", nil
 		case "allow":
 		default:
-			through = append(through, c)
 			if health || !n.larkAlways(session, larkPattern(c)) {
 				ask = append(ask, c)
+			} else {
+				covered = append(covered, c)
 			}
 		}
 	}
 	if len(ask) == 0 {
-		n.grantGateCalls(cfg, through) // "Always allow for this session" covers them
+		n.grantGateCalls(cfg, session, covered, proto.LarkLetThrough{Kind: proto.LarkThroughAlways}) // "Always allow for this session" covers them
 		if v.unsure {
 			return "", "", nil // reads, but $(…) could run anything: the usual flow asks about the whole command
 		}
@@ -590,19 +599,21 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 	if health {
 		remember = nil // nothing for "Always allow for this session" to keep
 	}
-	decision, reason, err := n.confirmLark(ctx, session, ix, remember)
+	decision, reason, card, err := n.confirmLark(ctx, session, ix, remember)
 	if decision == "allow" {
-		n.grantGateCalls(cfg, through)
+		n.grantGateCalls(cfg, session, ask, card)
+		n.grantGateCalls(cfg, session, covered, proto.LarkLetThrough{Kind: proto.LarkThroughAlways})
 	}
 	return decision, reason, err
 }
 
-// grantGateCalls lets calls larkCheck let through go once through the gate proxy: those of gates with Auth (lark-cli
-// and the others carry their own credentials).
-func (n *Node) grantGateCalls(cfg proto.AssistantLark, calls []larkCall) {
+// grantGateCalls lets calls larkCheck let through for session go once through the gate proxy: those of gates with
+// Auth (lark-cli and the others carry their own credentials). through is how they were let through, which the proxy
+// tells the manager once the API has taken one (the sent-as-user ledger).
+func (n *Node) grantGateCalls(cfg proto.AssistantLark, session string, calls []larkCall, through proto.LarkLetThrough) {
 	for _, c := range calls {
 		if !c.CLI && c.Gate >= 0 && c.Gate < len(cfg.Gates) && cfg.Gates[c.Gate].Auth != nil {
-			n.gates().grant(cfg.Gates[c.Gate].Command, c)
+			n.gates().grant(cfg.Gates[c.Gate].Command, session, c, through)
 		}
 	}
 }
@@ -649,24 +660,33 @@ func callTitle(gates []proto.CommandGate, c larkCall) string {
 }
 
 // confirmLark asks the phone; "Always allow for this session" remembers the calls' routes (not for whole commands).
-func (n *Node) confirmLark(ctx context.Context, session string, ix proto.Interaction, ask []larkCall) (string, string, error) {
+// When it allows, card is how: the card, with who answered it, or that "Always allow" covered it (the manager's
+// answer says it kept one).
+func (n *Node) confirmLark(ctx context.Context, session string, ix proto.Interaction, ask []larkCall) (decision, reason string, card proto.LarkLetThrough, err error) {
+	if ix.ID == "" { // a gated tool's card has none yet: the ledger names the card by it
+		ix.ID = "ix_" + randHex(6)
+	}
 	res, ok, err := n.ask(ctx, ix)
 	if err != nil {
-		return "", "", err
+		return "", "", card, err
 	}
 	if !ok || res.Allow == nil || !*res.Allow {
 		msg := res.Message
 		if msg == "" {
 			msg = "用户没有同意这个飞书写操作，没有执行。"
 		}
-		return "deny", msg, nil
+		return "deny", msg, card, nil
 	}
 	if res.Always {
 		for _, c := range ask {
 			n.rememberLarkAlways(session, larkPattern(c))
 		}
 	}
-	return "allow", "用户在手机上同意了", nil
+	card = proto.LarkLetThrough{Kind: proto.LarkThroughCard, InteractionID: ix.ID, AnsweredBy: res.AnsweredBy}
+	if res.Remembered { // the manager answered from an "Always allow" it kept: no card was answered for this one
+		card = proto.LarkLetThrough{Kind: proto.LarkThroughAlways}
+	}
+	return "allow", "用户在手机上同意了", card, nil
 }
 
 func preToolDecision(decision, reason string) any {
@@ -726,8 +746,9 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 // command on PATH (a wrapper running the skill's script, when the skill is there) and its env. A gate with Auth keeps
 // its credentials in the node: its BaseEnv is this process's own address at the gate proxy, and neither its Secret
 // nor what Auth puts on the requests is given (gateproxy.go, #1317); release takes the addresses back once the
-// process is gone. Without a config from the hub the commands say their API is not reachable.
-func (n *Node) assistantLarkEnv(cwd string) (env []string, release func()) {
+// process is gone. session is the conversation the process was started for: the proxy tells the manager of the writes
+// that went out under it. Without a config from the hub the commands say their API is not reachable.
+func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func()) {
 	var released []func()
 	release = func() {
 		for _, f := range released {
@@ -765,7 +786,7 @@ func (n *Node) assistantLarkEnv(cwd string) (env []string, release func()) {
 			for _, m := range gateAuthRef.FindAllStringSubmatch(g.Auth.Value, -1) {
 				held[m[1]] = true
 			}
-			b, done, err := n.gates().open(g.Command)
+			b, done, err := n.gates().open(g.Command, session)
 			if err != nil {
 				// Its credentials stay out all the same: without the base too, the command fails plainly.
 				n.logger.Printf("assistant: %s: gate proxy: %v", g.Command, err)

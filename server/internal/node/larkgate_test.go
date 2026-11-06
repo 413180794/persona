@@ -34,7 +34,7 @@ func TestAssistantLarkAccountEnvironment(t *testing.T) {
 	skill := filepath.Join(cwd, ".claude", "skills", "example", "scripts")
 	_ = os.MkdirAll(skill, 0o755)
 	_ = os.WriteFile(filepath.Join(skill, "ex.sh"), []byte("#!/bin/bash\n"), 0o755)
-	env, _ := n.assistantLarkEnv(cwd)
+	env, _ := n.assistantLarkEnv(cwd, "")
 	if !strings.Contains(strings.Join(env, "\n"), "EXAMPLE_ACCOUNT=2") {
 		t.Fatal("assistant did not inherit the configured account")
 	}
@@ -47,7 +47,7 @@ func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	t.Setenv("JARVIS_SKILLS_DIR", user)
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: olCfg()}
 	ex := filepath.Join(n.assistantBin(cwd), "ex")
-	n.assistantLarkEnv(cwd)
+	n.assistantLarkEnv(cwd, "")
 	if _, err := os.Stat(ex); !os.IsNotExist(err) {
 		t.Fatalf("ex without the example skill: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	}
 	_ = os.WriteFile(filepath.Join(user, "example", "SKILL.md"), []byte("---\nname: example\n---\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(user, "example", "scripts", "ex.sh"), []byte("#!/bin/bash\n"), 0o755)
-	n.assistantLarkEnv(cwd)
+	n.assistantLarkEnv(cwd, "")
 	if _, err := os.Stat(ex); err != nil {
 		t.Fatalf("no ex with the skill: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(user, "example")); err != nil {
 		t.Fatal(err)
 	}
-	n.assistantLarkEnv(cwd)
+	n.assistantLarkEnv(cwd, "")
 	if _, err := os.Stat(ex); !os.IsNotExist(err) {
 		t.Fatal("ex stayed after the skill was removed")
 	}
@@ -74,7 +74,7 @@ func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	old, mine := filepath.Join(n.assistantBin(cwd), "ol"), filepath.Join(n.assistantBin(cwd), "mine")
 	_ = os.WriteFile(old, []byte("#!/bin/sh\n# The helper (the skill), on the assistant's PATH (node/larkgate.go).\nexec bash x \"$@\"\n"), 0o755)
 	_ = os.WriteFile(mine, []byte("#!/bin/sh\necho hi\n"), 0o755)
-	n.assistantLarkEnv(cwd)
+	n.assistantLarkEnv(cwd, "")
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Fatal("the older node's wrapper stayed")
 	}

@@ -203,6 +203,7 @@ The current mechanisms are generic; specific commands, routes, and variables are
   - With only gated commands (and output-only commands such as jq / head / grep / echo / cd / `timeout N`), check each: reads allowed directly; self-only actions (mark read, complete own to-dos) allowed;
     other writes (send / reply / recall / forward, reactions, docs, schedules, approvals, mail, group settings…) show a phone "Lark" approval card with action, chat name (extension `assistant.summary`),
     method, path, and body to send (reads `@file`). Denial returns user feedback as the reason; "Always allow in this session" remembers this route type with ids stripped.
+  - A write that went out through the proxy (the API answered 2xx) is kept in the sent-as-user ledger (`docs/connectors.md` "Sent as the user"): the node tells the manager (`lark.sent`) how the gate let it through. Not in it: lark-cli writes and gates without `auth`.
   - Credential variables, `/proc/*/environ`, direct gateway curl, or flags exposing headers such as `-v` / `--trace` / `-w`: reject directly.
   - Other commands (piped to python, writes outside /tmp, `$(…)`) bypass this gate and follow ordinary Bash approval in the permission mode; but any gated write inside is rejected with instructions to send it separately:
     the proxy allows only the exact call read and confirmed by the gate, so whole-command approval still can't send it (before #1317, the whole command showed a card).
@@ -258,6 +259,7 @@ Tapping "Always allow in this session" on an assistant permission card remains e
   Lark gate `lark:<route>` (ids stripped; whole-command confirmations aren't remembered, unchanged).
 - hub stores approved Always keys in Postgres `assistant_always` (chat id + key sha256). If every key on a later card is remembered, hub returns "allow + always" directly,
   without card or push; new processes receive session rules too and stop asking within that process. Also answer currently waiting covered cards in this chat (parallel tool calls produce several).
+  Such an answer carries `remembered: true` (`proto.Resolution`), so the node can tell it from the answer to a card: the sent-as-user ledger records a Lark write let through this way as `conversation_always` (`docs/connectors.md` "Sent as the user").
 - Remember only permission grants, not denials or one-time allows; any unknown key prompts normally. No revocation UI yet: create a new chat (or delete its `assistant_always` rows).
 
 ## Assistant answers questions first (2026-11-05, #3029)
