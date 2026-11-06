@@ -264,6 +264,13 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
                 }
                 // The group the push came from (docs/multi-hub.md「推送」).
                 let key = ref?.key(AppModel.shared)
+                if let key, let reply = NotificationActions.replyText(action: action, text: text) {
+                    Task {
+                        await NotificationActions.sendReply(key, text: reply)
+                        done()
+                    }
+                    return
+                }
                 if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {
                     Task {
                         do {

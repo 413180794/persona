@@ -879,6 +879,7 @@ func donePayloadIn(l i18n.Lang, machineID, machine, sessionID, title, text strin
 			"alert":     map[string]any{"title": title, "subtitle": machine, "body": text},
 			"sound":     "default",
 			"thread-id": sessionID,
+			"category":  "SESSION_DONE", // iOS: a reply from the notification (NotificationActions.swift)
 		},
 		"machine_id": machineID, "session_id": sessionID,
 	}

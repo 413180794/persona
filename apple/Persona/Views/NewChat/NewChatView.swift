@@ -184,7 +184,7 @@ struct NewChatView: View {
                     }
                     .accessibilityIdentifier("newChat.launcher")
                     modelRow
-                } header: { Text(models?.models.isEmpty == false ? "启动器与模型（本次覆盖）" : "启动器（本次覆盖）") } footer: {
+                } header: { Text(models?.models.isEmpty == false ? "启动器与模型（只换这一次）" : "启动器（只换这一次）") } footer: {
                     let about = unifiedModels ? String(localized: "默认使用「模型配置 › 新建 Agent」的设置。手动选择只影响这次会话，不改变全局默认。")
                         : String(localized: "来自这台机器的 Claude Code / Codex 启动器，会在终端引擎里新开一个标签页运行。")
                     Text(modelChoice?.canPick == true ? String(localized: "\(about)模型和在终端里输入 /model 看到的一样。") : about)

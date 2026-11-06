@@ -33382,46 +33382,46 @@
         }
       }
     },
-    "启动器与模型（本次覆盖）": {
+    "启动器与模型（只换这一次）": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Launcher & Model (This Chat Only)"
+            "value": "Launcher & Model (This Time Only)"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ランチャーとモデル（今回のみ）"
+            "value": "ランチャーとモデル（今回だけ変更）"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "启动器与模型（本次覆盖）"
+            "value": "启动器与模型（只换这一次）"
           }
         }
       }
     },
-    "启动器（本次覆盖）": {
+    "启动器（只换这一次）": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Launcher (This Chat Only)"
+            "value": "Launcher (This Time Only)"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ランチャー（今回のみ）"
+            "value": "ランチャー（今回だけ変更）"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "启动器（本次覆盖）"
+            "value": "启动器（只换这一次）"
           }
         }
       }
@@ -54772,6 +54772,28 @@
         }
       }
     },
+    "接下来做什么…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接下来做什么…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What next…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次は何を…"
+          }
+        }
+      }
+    },
     "接入方式": {
       "localizations": {
         "en": {
@@ -71751,6 +71773,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没能加载%@"
+          }
+        }
+      }
+    },
+    "没能发出回复": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没能发出回复"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't send the reply"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返信を送れませんでした"
           }
         }
       }

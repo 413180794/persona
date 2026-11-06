@@ -771,7 +771,7 @@ iOS、Mac、visionOS、手表和扩展的界面有简体中文、English、日�
 - 手机工具：hub 推 `tool_call` → `PhoneToolRegistry.call`（写操作先弹确认）→ `tool_result`。连上就 `register_phone` 声明工具（`docs/phone-tools.md`）。
 - 推送：配对后申请通知权限并注册 APNs，`POST /api/v1/devices`；hub 有 `apns.json` 时对新交互和 agent 完成推送（完成推送等 1 分钟、在电脑或 App 里看过就不推、后台任务结束才推，`docs/server.md` 推送策略）「✅ 标题」，
   副标题「机器 · 空间 › 标签」，正文是最后一条回复。前台且正在看该会话时不弹。模拟器自动化（`-pairURL`）不申请通知权限、不注册成手机。
-  交互推送带按钮（`NotificationActions`，类别名就是 hub 发的 `INTERACTION_<KIND>`）：授权「允许 / 拒绝」，计划「批准 / 打回修改」（打回可以直接输入意见）。
+  交互推送带按钮（`NotificationActions`，类别名就是 hub 发的 `INTERACTION_<KIND>`）：授权「允许 / 拒绝」，计划「批准 / 打回修改」（打回可以直接输入意见）。完成推送的类别是 `SESSION_DONE`，可以直接「回复」（#3449）：要先解锁，在后台作为一条普通消息发到这个会话（新的 `client_msg_id`），发不出去会弹一条本地通知说明原因。会话出现在屏幕上时（`AppModel.show`），通知中心里它的旧通知（同一 `thread-id` 和 `machine_id`）一并删掉。
   说「是」的按钮要先解锁（`.authenticationRequired`），「拒绝」不用；计划从通知批准用 `acceptEdits`（没看全计划，命令仍要逐个授权），
   「批准并自动执行」只在 App 里。按钮在后台直接调 resolve，不打开 App；失败（已被处理、连不上 hub）发一条本地通知说明原因。提问、终端没有按钮，点开处理。
   设置 › 通知（`NotificationSettingsView`）：「需要你处理时」开关、「Agent 做完时」不推送 / 只推长任务 / 每次都推、实时活动（锁屏和灵动岛 / 锁屏显示详情 / 灵动岛两侧显示什么 `IslandSettingsView`，`docs/live-activity.md`），存在 hub 上按设备分开（`PushRegistrar.deviceID`）。

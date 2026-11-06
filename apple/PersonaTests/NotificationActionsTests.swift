@@ -7,7 +7,19 @@ struct NotificationActionsTests {
     /// The hub names categories "INTERACTION_" + upper-cased kind (push.go); every kind must have one registered.
     @Test func categoriesMatchWhatTheHubSends() {
         let ids = Set(NotificationActions.categories.map(\.identifier))
-        #expect(ids == ["INTERACTION_PERMISSION", "INTERACTION_PLAN", "INTERACTION_QUESTION", "INTERACTION_SCREEN"])
+        #expect(ids == ["INTERACTION_PERMISSION", "INTERACTION_PLAN", "INTERACTION_QUESTION", "INTERACTION_SCREEN", "SESSION_DONE"])
+    }
+
+    /// A finished turn's push takes a typed reply, unlocked first: it is an instruction to the agent (#3449).
+    @Test func aDonePushTakesAReply() throws {
+        let done = try #require(NotificationActions.categories.first { $0.identifier == NotificationActions.doneCategory })
+        let reply = try #require(done.actions.first { $0.identifier == NotificationActions.reply } as? UNTextInputNotificationAction)
+        #expect(reply.options.contains(.authenticationRequired))
+        #expect(!reply.options.contains(.foreground))
+        #expect(NotificationActions.replyText(action: NotificationActions.reply, text: "  继续 \n") == "继续")
+        #expect(NotificationActions.replyText(action: NotificationActions.reply, text: "  ") == nil)
+        #expect(NotificationActions.replyText(action: UNNotificationDefaultActionIdentifier, text: "继续") == nil)
+        #expect(NotificationActions.resolution(action: NotificationActions.reply, text: "继续") == nil)
     }
 
     @Test func sayingYesNeedsUnlockSayingNoDoesNot() throws {

@@ -1,13 +1,17 @@
 import Foundation
 import UserNotifications
 
-/// Buttons on interaction pushes. The hub sends `category: INTERACTION_<KIND>` (server/internal/hub/push.go); these
-/// are the categories it names. Anything that says yes to the agent needs the phone unlocked; saying no does not.
+/// Buttons on interaction pushes. The hub sends `category: INTERACTION_<KIND>` (server/internal/hub/push.go), and
+/// `SESSION_DONE` on a finished turn; these are the categories it names. Anything that says yes to the agent needs the
+/// phone unlocked; saying no does not.
 nonisolated enum NotificationActions {
     static let allow = "IX_ALLOW"
     static let deny = "IX_DENY"
     static let approvePlan = "IX_APPROVE_PLAN"
     static let rejectPlan = "IX_REJECT_PLAN"
+    /// A finished turn's push: a message to the session, typed on the notification (#3449).
+    static let reply = "SESSION_REPLY"
+    static let doneCategory = "SESSION_DONE"
 
     static func category(_ kind: InteractionKind) -> String { "INTERACTION_" + kind.rawValue.uppercased() }
 
@@ -35,7 +39,16 @@ nonisolated enum NotificationActions {
         // the system knows the identifiers the hub sends.
         let question = UNNotificationCategory(identifier: category(.question), actions: [], intentIdentifiers: [], options: [])
         let screen = UNNotificationCategory(identifier: category(.screen), actions: [], intentIdentifiers: [], options: [])
-        return [permission, plan, question, screen]
+        // A message is an instruction to the agent: unlocked, like approving a plan.
+        let done = UNNotificationCategory(
+            identifier: doneCategory,
+            actions: [
+                UNTextInputNotificationAction(identifier: reply, title: String(localized: "回复"), options: [.authenticationRequired],
+                                              icon: UNNotificationActionIcon(systemImageName: "arrowshape.turn.up.left"),
+                                              textInputButtonTitle: String(localized: "发送"), textInputPlaceholder: String(localized: "接下来做什么…")),
+            ],
+            intentIdentifiers: [], options: [])
+        return [permission, plan, question, screen, done]
     }
 
     /// What a button sends to the hub, or nil for a plain tap (and anything we don't know).
@@ -51,6 +64,23 @@ nonisolated enum NotificationActions {
         }
     }
 
+    /// The message a 回复 on a finished turn's push sends, nil for anything else or an empty one.
+    static func replyText(action: String, text: String?) -> String? {
+        guard action == reply, let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        return t
+    }
+
+    /// Sends a reply typed on the notification to its session, as the composer would (a new client_msg_id, so a
+    /// retry by the system is typed once); a failure comes back as a local notification.
+    static func sendReply(_ key: SessionKey, text: String) async {
+        let id = UUID()
+        do {
+            try await HubStore.client(group: key.group).send(key, text: text, clientMsgID: id.uuidString, opID: id)
+        } catch {
+            await reportFailure(id: id.uuidString, title: failureTitle(action: reply), error: error)
+        }
+    }
+
     /// Posts "没能允许 · 这个已经处理过了" and the like: buttons run while nobody looks at the app.
     static func reportFailure(id: String, title: String, error: Error) async {
         let content = UNMutableNotificationContent()
@@ -58,6 +88,19 @@ nonisolated enum NotificationActions {
         content.body = IntentFailure.sentence(for: error, host: HubStore.load().hubs.first?.config.url.host())
 
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "resolve-failed-\(id)", content: content, trigger: nil))
+    }
+
+    /// Takes the session's notifications out of Notification Center once it is on screen (#3449): its pushes carry
+    /// `thread-id` = the session id, and `machine_id` tells two machines' sessions apart.
+    static func clearDelivered(_ key: SessionKey) {
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { delivered in
+            let ids = delivered.filter {
+                $0.request.content.threadIdentifier == key.sessionID
+                    && ($0.request.content.userInfo["machine_id"] as? String).map { $0 == key.machineID } != false
+            }.map(\.request.identifier)
+            if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+        }
     }
 
     /// Shown (as a local notification) when a button could not be carried out: the phone was locked in a drawer
@@ -68,6 +111,7 @@ nonisolated enum NotificationActions {
         case deny: String(localized: "没能拒绝")
         case approvePlan: String(localized: "没能批准计划")
         case rejectPlan: String(localized: "没能打回计划")
+        case reply: String(localized: "没能发出回复")
         default: String(localized: "没能完成操作")
         }
     }

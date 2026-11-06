@@ -452,7 +452,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
   hub 在这期间不给这台 Mac 推「需要你处理」「Agent 做完」；助手按你的要求发的提醒（`notify_user`）、hub 更新的通知 App 自己不会发，照推。
   App 关了、Mac 睡眠断开（hub 的心跳约 35 秒发现）以后 hub 照常推。
 - **静默唤醒**（`jarvis_wake`）不发给 Mac：那是叫醒 iPhone 跑 phone_* 工具的，Mac 是桌面端。
-- **按钮**：hub 推送的 category 和 iPhone 一样，Mac 启动时注册的是同一套（`NotificationActions.categories`）：授权「允许 / 拒绝」、计划「批准 / 打回修改」（可输入），
+- **按钮**：hub 推送的 category 和 iPhone 一样，Mac 启动时注册的是同一套（`NotificationActions.categories`）：授权「允许 / 拒绝」、计划「批准 / 打回修改」（可输入）、完成「回复」（可输入，#3449），
   提问和终端没有按钮，点开到对话。点按钮、点通知都走 `MacAppDelegate`，和本地通知一样。
 - **退出**：在 iPhone 上退出这台 Mac（或 设置 › 设备 里撤销）时，hub 连它登记的推送设备一起删掉（登记时记下了是哪个设备凭据），之后不再推；
   它的通知设置也跟着没了，重新配对从默认值开始。iPhone 的撤销也一样。

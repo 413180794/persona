@@ -276,6 +276,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 }
                 // The group the push came from (docs/multi-hub.md「推送」): its hub settles the button, its session opens.
                 let key = ref.flatMap(Self.sessionKey)
+                if let key, let reply = NotificationActions.replyText(action: action, text: text) {
+                    // 回复 on a finished turn: sent in the background, like a button (#3449).
+                    AppDelegate.inBackground("reply-from-notification", done: done) { await NotificationActions.sendReply(key, text: reply) }
+                    return
+                }
                 if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {
                     // A button on the notification: settle it in the background, the app stays where it is.
                     AppDelegate.resolveFromNotification(ixID, group: key?.group ?? ref?.group, resolution, action: action, done: done)
@@ -292,18 +297,26 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// hold a background task until the request is answered; a failure comes back as a local notification, because
     /// the user is not looking at the app.
     static func resolveFromNotification(_ id: String, group: String?, _ resolution: Resolution, action: String, done: @escaping () -> Void) {
-        let app = UIApplication.shared
-        var task = UIBackgroundTaskIdentifier.invalid
-        task = app.beginBackgroundTask(withName: "resolve-interaction") {
-            app.endBackgroundTask(task)
-            task = .invalid
-        }
-        Task {
+        inBackground("resolve-interaction", done: done) {
             do {
                 try await HubStore.client(group: group).resolve(id, resolution)
             } catch {
                 await NotificationActions.reportFailure(id: id, title: NotificationActions.failureTitle(action: action), error: error)
             }
+        }
+    }
+
+    /// `work` under a background task: iOS may have launched the app in the background just for a notification's
+    /// button, and suspends it the moment `done` is called.
+    static func inBackground(_ name: String, done: @escaping () -> Void, _ work: @escaping () async -> Void) {
+        let app = UIApplication.shared
+        var task = UIBackgroundTaskIdentifier.invalid
+        task = app.beginBackgroundTask(withName: name) {
+            app.endBackgroundTask(task)
+            task = .invalid
+        }
+        Task {
+            await work()
             done()
             if task != .invalid { app.endBackgroundTask(task) }
         }

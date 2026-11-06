@@ -62,6 +62,9 @@ func TestPushLanguagePerDevice(t *testing.T) {
 	if done["aps"].(map[string]any)["alert"].(map[string]any)["body"] != "Done" {
 		t.Fatal("done body")
 	}
+	if done["aps"].(map[string]any)["category"] != "SESSION_DONE" {
+		t.Fatal("a done push carries the category iOS replies from")
+	}
 }
 
 // An i18n.Message error reads in the request's language; other errors are as they were.

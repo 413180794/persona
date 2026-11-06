@@ -1026,6 +1026,7 @@ final class AppModel {
         shown.removeAll { $0.owner == owner }
         shown.append((owner, key))
         visibleSession = key
+        NotificationActions.clearDelivered(key) // what it said is on screen now (#3449)
     }
 
     func hide(by owner: UUID) {
