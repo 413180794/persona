@@ -4,6 +4,8 @@
 import { useEffect, useRef } from "react";
 
 const KEY = "personaOverlay";
+/** The address the overlay opened on: the entry under its own has it (see settleOverlayEntry). */
+const AT = "personaOverlayAt";
 let next = 0;
 // A close takes its entry off a tick later: an overlay that opens again before then (React's StrictMode runs every
 // effect twice in development; a sheet swapped for another) reuses the entry instead of racing an async history.back()
@@ -42,7 +44,7 @@ export function openOverlay(onClose: () => void): () => void {
     pending = null;
     history.replaceState(overlayState(history.state, id), "", location.href);
   } else {
-    history.pushState(overlayState(history.state, id), "", location.href);
+    history.pushState({ ...overlayState(history.state, id), [AT]: location.href }, "", location.href);
   }
   // where it opened: a replace that moves the page under it (an old link turned into its new one, a delete going
   // home) keeps the marker, so Back still closes it; closing it from the page then must not go back from the new page
@@ -64,6 +66,7 @@ export function openOverlay(onClose: () => void): () => void {
       // the page moved under it: take its marker off this entry and stay on the new page
       const rest = { ...(history.state as Record<string, unknown>) };
       delete rest[KEY];
+      delete rest[AT];
       history.replaceState(Object.keys(rest).length ? rest : null, "", location.href);
       return;
     }
@@ -77,6 +80,35 @@ export function openOverlay(onClose: () => void): () => void {
     };
     pending = p;
   };
+}
+
+/** For the page's first load, before anything draws: an entry that still carries an overlay's marker is one the last
+ *  load left behind (a reload with the side panel open, #5134). The overlay is gone, so its entry would only make the
+ *  first Back do nothing. On the address it opened on, go back off it (more than once for overlays stacked on each
+ *  other); on another (the page moved under it), take the marker off and stay. `ms`: how long one Back may take. */
+export async function settleOverlayEntry(ms = 500): Promise<void> {
+  const marked = () => {
+    const st = history.state as Record<string, unknown> | null;
+    return st && typeof st === "object" && typeof st[KEY] === "string" ? st : null;
+  };
+  for (let i = 0; i < 5; i++) {
+    const st = marked();
+    if (!st) return;
+    if (st[AT] !== location.href) break;
+    const popped = await new Promise<boolean>((done) => {
+      const timer = setTimeout(() => (removeEventListener("popstate", pop), done(false)), ms);
+      const pop = () => (clearTimeout(timer), removeEventListener("popstate", pop), done(true));
+      addEventListener("popstate", pop);
+      history.back();
+    });
+    if (!popped) break; // nothing under it (a new tab's only entry): keep the entry, without the marker
+  }
+  const st = marked();
+  if (!st) return;
+  const rest = { ...st };
+  delete rest[KEY];
+  delete rest[AT];
+  history.replaceState(Object.keys(rest).length ? rest : null, "", location.href);
 }
 
 /** While `open` (and `enabled`, e.g. only on a narrow screen), Back closes it through `onClose`. A navigation away while

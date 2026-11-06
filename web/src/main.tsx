@@ -9,11 +9,13 @@ applyLook();
 
 // The language's catalog loads before the rest of the app: their modules call t() as they load (docs/web.md「国际化」).
 // React and the PWA helper say no t(), so they load alongside it rather than after it.
+// An overlay's history entry a reload left behind goes before the app reads the address (lib/back-close.ts, #5134).
 const [, { StrictMode, createElement }, { createRoot }, { startPWA }] = await Promise.all([
   initI18n(),
   import("react"),
   import("react-dom/client"),
   import("./lib/pwa"),
+  import("./lib/back-close").then((m) => m.settleOverlayEntry()),
 ]);
 
 startPWA();

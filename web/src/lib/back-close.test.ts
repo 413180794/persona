@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isOverlayEntry, openOverlay, overlayState, takeOverlayEntry } from "./back-close";
+import { isOverlayEntry, openOverlay, overlayState, settleOverlayEntry, takeOverlayEntry } from "./back-close";
 import { navigate } from "./router";
 
 describe("overlay history entries", () => {
@@ -141,5 +141,74 @@ describe("openOverlay", () => {
     await vi.runAllTimersAsync();
     expect(b.history.length).toBe(2); // stayed on the new page: no Back to the deleted chat
     expect(isOverlayEntry(b.history.state, "o1")).toBe(false);
+  });
+});
+
+// A reload keeps the history and its states but none of the page's overlays (#5134): the first load settles them.
+describe("settleOverlayEntry", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+  const settle = async () => {
+    const done = settleOverlayEntry();
+    await vi.runAllTimersAsync();
+    await done;
+  };
+
+  it("a reload with the side panel open goes back off its entry: the first Back then leaves the page", async () => {
+    const b = fakeBrowser();
+    openOverlay(vi.fn()); // the panel, then the reload
+    expect(b.history.length).toBe(2);
+    await settle();
+    expect(b.history.length).toBe(1);
+    expect(b.history.state).toBeNull();
+  });
+
+  it("goes back off overlays stacked on each other (the drawer and a sheet over it)", async () => {
+    const b = fakeBrowser();
+    openOverlay(vi.fn());
+    openOverlay(vi.fn());
+    expect(b.history.length).toBe(3);
+    await settle();
+    expect(b.history.length).toBe(1);
+  });
+
+  it("keeps the page's own state on the entry it lands on", async () => {
+    const b = fakeBrowser();
+    b.history.replaceState({ scroll: 3 });
+    openOverlay(vi.fn());
+    await settle();
+    expect(b.history.state).toEqual({ scroll: 3 });
+  });
+
+  it("the page moved under it (a replace while it was open): takes the marker off and stays", async () => {
+    const b = fakeBrowser();
+    openOverlay(vi.fn());
+    const loc = location as unknown as { href: string; pathname: string };
+    navigate("/overview", true);
+    loc.href = loc.pathname = "/overview";
+    await settle();
+    expect(b.history.length).toBe(2);
+    expect(isOverlayEntry(b.history.state, "o1")).toBe(false);
+    expect(Object.keys((b.history.state as object | null) ?? {}).some((k) => k.startsWith("personaOverlay"))).toBe(false);
+  });
+
+  it("an overlay's entry with nothing under it stays, without the marker", async () => {
+    const b = fakeBrowser();
+    b.history.replaceState({ personaOverlay: "o9", personaOverlayAt: "/s/m/a" });
+    await settle();
+    expect(b.history.length).toBe(1);
+    expect(b.history.state).toBeNull();
+  });
+
+  it("leaves a page with no overlay's entry alone", async () => {
+    const b = fakeBrowser();
+    const back = vi.spyOn(b.history, "back");
+    b.history.pushState({ scroll: 1 });
+    await settle();
+    expect(back).not.toHaveBeenCalled();
+    expect(b.history.length).toBe(2);
   });
 });

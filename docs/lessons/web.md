@@ -250,6 +250,7 @@
 
 - **没分层的全局样式会盖过 utility**：`.prose-j { font-size:14px }` 写在 `@layer` 外面，所以回答外层的 `[&_.prose-j]:text-[15px]` 一直没生效。#1990 设定的 15 / 1.6 实际显示的是 14 / 1.7，桌面上也一样，要在构建后的 CSS 或 computed style 里核对才看得出来。现在暂时在 Answer 上加 `!`，以后应该把 `.prose-*` 放进 `@layer components`。
 - **StrictMode 让「打开时 pushState、关闭时 back()」的浮层一打开就关掉**：dev 环境下 effect 会跑两次，cleanup 里的 `history.back()` 是异步的，等它真正执行时，退掉的是新压进去的那条记录，结果触发 popstate，浮层被关上。`lib/back-close.ts` 的做法是关闭时推迟一个 tick 再退，紧接着又打开时复用同一条记录（replaceState）。生产构建不会这样，所以只拿生产构建测会漏掉。
+- **A reload keeps the overlay's history entry, not the overlay** (#5134): `history.state` and the stack survive a reload, so a panel opened over a chat leaves a same-URL entry on top and the first Back only lands on the copy under it. Rewriting the marker with `replaceState` is not enough (the two entries stay); the first load has to `history.back()` off it before the app renders (`settleOverlayEntry` in `lib/back-close.ts`, which records the address the overlay opened on so a page that moved under it is not navigated away from). Reproduce with `scripts/test/web_overlay_reload_e2e.py`.
 - **iOS 键盘弹起时 `vh` 不变，fixed 浮层还是按布局视口定位**：被键盘挡住的部分照样算在高度里。用 visualViewport 算出可见区域写成 CSS 变量（`--kb-top` / `--kb-h`），浮层按它定位；`max-h-[40vh]` 这类写法在手机上不可信。
 - **iOS Safari 长按不会触发 `contextmenu`，长按链接还会弹系统预览**：只挂在右键菜单上的操作，在手机上等于没有，要同时放进 ⋯ 菜单。菜单用 `mousedown` 判断点到外面的话，长按松手时合成的 mousedown 会把刚打开的菜单关掉，要改用 `pointerdown` 并跳过触摸。
 - **CDP 模拟触摸**：同一个手势的 `Input.dispatchTouchEvent`（start / move / end）要在同一个 CDP session 里发，否则页面收到的是几段互不相干的触摸。
