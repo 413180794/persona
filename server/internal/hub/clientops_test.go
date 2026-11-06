@@ -145,3 +145,46 @@ func TestClientOps(t *testing.T) {
 		}
 	}
 }
+
+// The cleanup loop recovers pending operations first and keeps exactly 30 UTC days.
+type clientOpsCleanupStore struct {
+	sharedStore
+	recovered bool
+	cuts      chan time.Time
+}
+
+func (s *clientOpsCleanupStore) RecoverClientOps(context.Context) error {
+	s.recovered = true
+	return nil
+}
+
+func (s *clientOpsCleanupStore) CleanupClientOps(_ context.Context, before time.Time) error {
+	s.cuts <- before
+	return nil
+}
+
+func TestClientOpsCleanupRetention(t *testing.T) {
+	store := &clientOpsCleanupStore{cuts: make(chan time.Time, 1)}
+	h := &Hub{store: store}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	before := time.Now().Add(-30 * 24 * time.Hour)
+	if err := h.startClientOps(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !store.recovered {
+		t.Fatal("pending operations were not recovered")
+	}
+	select {
+	case cut := <-store.cuts:
+		after := time.Now().Add(-30 * 24 * time.Hour)
+		if cut.Location() != time.UTC {
+			t.Errorf("cleanup cut location = %v, want UTC", cut.Location())
+		}
+		if cut.Before(before) || cut.After(after) {
+			t.Errorf("cleanup cut = %v, want between %v and %v", cut, before, after)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("client operations were not cleaned up at startup")
+	}
+}

@@ -223,7 +223,7 @@ func (e *Engine) PutRecording(rawID string, u RecordingUpload, now time.Time) (s
 	if _, gone := st.tombstones()[id]; gone {
 		return "", ErrRecordingDeleted
 	}
-	if u.StartedAt.Before(now.AddDate(0, 0, -recordingDays(e.RecordingDays()))) {
+	if u.StartedAt.Before(now.UTC().AddDate(0, 0, -recordingDays(e.RecordingDays()))) {
 		return RecordingExpired, nil
 	}
 	r, exists := st.Recording(id)
@@ -353,7 +353,7 @@ func (e *Engine) RecordingStates() (kept []RecordingState, deleted []string) {
 // PruneRecordings removes the recordings that started before the retention (files and index), and the tombstones
 // older than it; how many recordings went.
 func (e *Engine) PruneRecordings(now time.Time) int {
-	cut := now.AddDate(0, 0, -recordingDays(e.RecordingDays()))
+	cut := now.UTC().AddDate(0, 0, -recordingDays(e.RecordingDays()))
 	st := e.Store
 	st.recMu.Lock()
 	defer st.recMu.Unlock()

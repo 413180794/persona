@@ -286,7 +286,7 @@ func (h *Hub) startClientOps(ctx context.Context) error {
 		defer ticker.Stop()
 		for {
 			cleanCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			err := h.store.CleanupClientOps(cleanCtx, time.Now().AddDate(0, 0, -30))
+			err := h.store.CleanupClientOps(cleanCtx, time.Now().UTC().AddDate(0, 0, -30))
 			cancel()
 			if err != nil && ctx.Err() == nil {
 				h.logf("clean client operations: %v", err)

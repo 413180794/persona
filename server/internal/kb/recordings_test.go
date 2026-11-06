@@ -3,6 +3,7 @@ package kb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -22,7 +23,9 @@ func recUpload(rev int64, start time.Time, complete bool, texts ...string) Recor
 func TestRecordingIdempotentAndOrdered(t *testing.T) {
 	e := goldenEngine(t, nil)
 	var indexed []string
-	e.Index = func(kind, id, name string, _ Tagging, _ string, _ time.Time) { indexed = append(indexed, kind+"/"+id+" "+name) }
+	e.Index = func(kind, id, name string, _ Tagging, _ string, _ time.Time) {
+		indexed = append(indexed, kind+"/"+id+" "+name)
+	}
 	now := time.Date(2026, 11, 5, 12, 0, 0, 0, goldenZone)
 	start := now.Add(-time.Hour)
 	// Upper case is the same recording.
@@ -199,5 +202,65 @@ func TestRecordingRetention(t *testing.T) {
 	}
 	if e.RecordingDaysFunc = nil; e.RecordingDays() != DefaultRecordingDays {
 		t.Fatalf("default %d", e.RecordingDays())
+	}
+}
+
+// Retention is elapsed 24-hour days, even when callers pass a time across a local DST change.
+func TestRecordingRetentionDST(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, now := range []time.Time{
+		time.Date(2026, time.March, 9, 12, 0, 0, 0, loc),
+		time.Date(2026, time.November, 2, 12, 0, 0, 0, loc),
+	} {
+		for _, days := range []int{7, DefaultRecordingDays} {
+			for _, offset := range []time.Duration{-time.Nanosecond, 0, time.Nanosecond} {
+				t.Run(fmt.Sprintf("%s/days=%d/offset=%s", now.Format("2006-01-02"), days, offset), func(t *testing.T) {
+					start := now.Add(-time.Duration(days) * 24 * time.Hour).Add(offset)
+					expired := offset < 0
+					t.Run("upload", func(t *testing.T) {
+						e := goldenEngine(t, nil)
+						e.RecordingDaysFunc = func() int { return days }
+						want := RecordingStored
+						if expired {
+							want = RecordingExpired
+						}
+						if status, err := e.PutRecording(recID, recUpload(1, start, false, "boundary"), now); err != nil || status != want {
+							t.Fatalf("upload: %s, %v; want %s", status, err, want)
+						}
+						if _, kept := e.Store.Recording(recID); kept == expired {
+							t.Fatalf("recording kept = %v, expired = %v", kept, expired)
+						}
+					})
+					t.Run("prune", func(t *testing.T) {
+						e := goldenEngine(t, nil)
+						e.RecordingDaysFunc = func() int { return days }
+						// Seed while fresh so upload expiry cannot hide a pruning bug.
+						if status, err := e.PutRecording(recID, recUpload(1, start, false, "boundary"), start); err != nil || status != RecordingStored {
+							t.Fatalf("seed: %s, %v", status, err)
+						}
+						const deletedID = "44444444-4444-4444-8444-444444444444"
+						if _, err := e.DeleteRecording(deletedID, start); err != nil {
+							t.Fatal(err)
+						}
+						want := 0
+						if expired {
+							want = 1
+						}
+						if n := e.PruneRecordings(now); n != want {
+							t.Errorf("pruned %d, want %d", n, want)
+						}
+						if _, kept := e.Store.Recording(recID); kept == expired {
+							t.Errorf("recording kept = %v, expired = %v", kept, expired)
+						}
+						if _, kept := e.Store.tombstones()[deletedID]; kept == expired {
+							t.Errorf("tombstone kept = %v, expired = %v", kept, expired)
+						}
+					})
+				})
+			}
+		}
 	}
 }
