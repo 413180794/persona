@@ -108,7 +108,18 @@ func dialSMTP(ctx context.Context, proxy *url.URL, addr, security string, tlsCon
 		if err != nil {
 			return nil, err
 		}
-		return smtp.NewClientStartTLS(c, tlsConfig)
+		// NewClientStartTLS reads the greeting and runs EHLO and STARTTLS with go-smtp's own five-minute
+		// timeout and no ctx: close the connection when ctx ends so a silent server cannot hold the caller
+		// past its deadline (#4616).
+		stop := context.AfterFunc(ctx, func() { c.Close() })
+		client, err := smtp.NewClientStartTLS(c, tlsConfig)
+		if !stop() {
+			if client != nil {
+				client.Close()
+			}
+			return nil, ctx.Err()
+		}
+		return client, err
 	case "none":
 		c, err := dialTCP(ctx, proxy, addr)
 		if err != nil {

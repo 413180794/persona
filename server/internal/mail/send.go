@@ -315,7 +315,12 @@ func (s *Service) checkSMTP(ctx context.Context, a *MailAccount) error {
 	if err := client.Auth(auth); err != nil {
 		return smtpLoginErr(a, err)
 	}
-	return client.Quit()
+	// The login was accepted, which is what the check is for. QUIT is only a goodbye: a server that hangs up
+	// or times out on it still has a working account (#4616, as for sending in #4560).
+	if err := client.Quit(); err != nil {
+		logf("mail: smtp quit after check of %s: %v", addr, err)
+	}
+	return nil
 }
 
 // appendToSent copies the sent message into the account's Sent mailbox. Failures

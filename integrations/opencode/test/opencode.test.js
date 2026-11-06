@@ -7,10 +7,10 @@ import { createOpencodeHost } from '../lib/opencode.js'
 const T0 = Date.now() - 60_000
 
 /** opencode.db with the two tables the runtime reads (the columns it reads, as opencode creates them). */
-function fakeDb() {
+function fakeDb({ busy = true } = {}) {
   const db = new DatabaseSync(':memory:')
   db.exec(`create table session_v2 (id text primary key, parent_id text, directory text not null, title text, model text,
-    revert text, time_created integer not null, time_updated integer not null, time_idle integer, time_archived integer);
+    revert text, time_created integer not null, time_updated integer not null, time_idle integer,${busy ? ' time_busy integer,' : ''} time_archived integer);
     create table session_message (id text primary key, session_id text not null, type text not null, seq integer not null,
     time_created integer not null, time_updated integer not null, data text not null);`)
   const api = {
@@ -238,6 +238,66 @@ test('every location delivers the same events: each is handled once; the stream 
   offA() // the primary goes: b reads the stream now
   b.emit('session.execution.succeeded', { sessionID: 'ses_e' }, 'evt_2')
   await until('idle again', () => host.sessions.get('ses_e').running === false)
+})
+
+/** A session the test runs a turn on, and its row as last listed. */
+async function missedEnd(t, dbOpts) {
+  const d = fakeDb(dbOpts)
+  d.session('ses_m')
+  d.user('ses_m', 4, 'one')
+  const { n, host } = await setup(t, { db: d })
+  const ctx = fakeCtx()
+  host.register(ctx)
+  await n.ready
+  const row = () => n.last('runtime.sessions')?.sessions.find((s) => s.session_id === 'ses_m')
+  const set = (cols) => d.db.prepare(`update session_v2 set ${Object.keys(cols).map((k) => `${k} = ?`).join(', ')} where id = ?`).run(...Object.values(cols), 'ses_m')
+  let renames = 0
+  const relist = async () => {
+    const title = `r${++renames}`
+    ctx.emit('session.renamed', { sessionID: 'ses_m', title })
+    await until(`listed as ${title}`, () => row()?.title === title)
+  }
+  ctx.emit('session.execution.started', { sessionID: 'ses_m' })
+  await until('working', () => row()?.status === 'working')
+  return { d, n, host, ctx, row, set, relist }
+}
+
+test('a turn that ended while the event stream was down: time_idle after time_busy ends it, even after a rename', async (t) => {
+  const { d, host, ctx, row, set, relist } = await missedEnd(t)
+  const start = Date.now()
+  // The previous turn's stamps: idle before this turn's start, still working.
+  set({ time_busy: T0, time_idle: T0 + 1, time_updated: T0 + 1 })
+  await relist()
+  assert.equal(row().status, 'working')
+  // This turn started in opencode and is not over: busy after idle.
+  set({ time_busy: start, time_idle: T0 + 1 })
+  await relist()
+  assert.equal(row().status, 'working')
+  // It ends while the stream is down; then a title generated alongside it renames the session (time_updated moves on).
+  d.assistant('ses_m', 5, 'done it')
+  set({ time_idle: start + 5, time_updated: start + 800 })
+  await relist()
+  assert.equal(row().status, 'done', 'a rename after the end does not keep it working')
+  assert.equal(host.sessions.get('ses_m').running, false)
+  // The end event arrives late after all: nothing changes, nothing breaks.
+  ctx.emit('session.execution.succeeded', { sessionID: 'ses_m' })
+  await relist()
+  assert.equal(row().status, 'done')
+  // The next turn starts: working again, not ended by the old idle stamp.
+  ctx.emit('session.execution.started', { sessionID: 'ses_m' })
+  await until('working again', () => row()?.status === 'working')
+  await relist()
+  assert.equal(row().status, 'working')
+})
+
+test('an opencode without time_busy: the list still reads, and the events alone say when a turn ends', async (t) => {
+  const { d, ctx, row, set, relist } = await missedEnd(t, { busy: false })
+  d.assistant('ses_m', 5, 'done it')
+  set({ time_idle: Date.now() + 5, time_updated: Date.now() + 5 })
+  await relist()
+  assert.equal(row().status, 'working', 'no start stamp to compare with: left to the events')
+  ctx.emit('session.execution.succeeded', { sessionID: 'ses_m' })
+  await until('done', () => row()?.status === 'done')
 })
 
 test('a permission: a card on the phone while the TUI dialog waits; allow, always, deny with a reason; an answer in the TUI withdraws it', async (t) => {

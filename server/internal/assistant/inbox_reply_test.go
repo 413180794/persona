@@ -196,3 +196,36 @@ func TestMigratedReplyKeepsMessagesThatCameInMeanwhile(t *testing.T) {
 		t.Fatalf("a reply of its own: %+v, open %v, by %q", p.got, open, by)
 	}
 }
+
+// A reply goes out but the row filing the item cannot be written (#4627): the item stays filed in memory (the reply
+// went out, a repeat must not send it again), and the same reply sent again writes the row then, so a restart does
+// not bring the item back as 需要你.
+func TestReplyRepeatWritesTheRowThatFailed(t *testing.T) {
+	ctx := context.Background()
+	h, st := newBulkFailHub(t)
+	h.in.svc = h.Service
+	h.inbox.init()
+	c := &inboxConnector{things: []connector.InboxThing{thing("a", time.Now().Add(-time.Minute))}}
+	h.addConnector(c, false)
+	h.collectInbox(ctx, roundPoll)
+	it := openItem(t, h)
+
+	st.fail = map[string]bool{it.ID: true}
+	if _, err := h.replyInboxAs(ctx, it.ID, "看过了", ""); err != nil {
+		t.Fatal(err)
+	}
+	if open, _, by := stillOpen(h, it); open || by != "replied" || st.doneAt(it.ID) != nil {
+		t.Fatalf("after a failed write: open %v, by %q, stored done %v", open, by, st.doneAt(it.ID))
+	}
+
+	st.fail = nil
+	if _, err := h.replyInboxAs(ctx, it.ID, "看过了", ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.replies) != 1 {
+		t.Fatalf("the repeat went out again: %v", c.replies)
+	}
+	if st.doneAt(it.ID) == nil {
+		t.Fatal("the repeat did not write the item as done: a restart brings it back")
+	}
+}

@@ -837,3 +837,32 @@ func TestWithoutStatusDropsLabelsAndBrackets(t *testing.T) {
 		t.Fatalf("title with status: %q", got)
 	}
 }
+
+// A piece of text heavy with escapes ("<" is five bytes in a card, a control character six in JSON) or one long note
+// line fills a card on its own: it is cut again by bytes, so no card goes past what Feishu takes and none of it is lost.
+func TestAnswerEscapeHeavyPieceFitsBytes(t *testing.T) {
+	tests := []struct{ name, in, unit string }{
+		{"angle brackets", "# 标题\n" + strings.Repeat(strings.Repeat("<", 99)+"\n", 60), "<"},
+		{"control characters", strings.Repeat("\x01", 5990), "\x01"},
+		{"long note", "正文\n备注：" + strings.Repeat("字", 12000), "字"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a, cards := renderCards(t, tc.in, 6000, 0)
+			got := ""
+			for i, p := range a.Parts {
+				if n := len(p.Fill(p.Card("s")).JSON()); n > answerMaxBytes+2000 {
+					t.Errorf("part %d is %d bytes", i, n)
+				}
+				got += allContent(cards[i].elements())
+			}
+			unit := CardMarkdown(tc.unit)
+			if tc.unit == "\x01" {
+				unit = tc.unit
+			}
+			if want := strings.Count(CardMarkdown(tc.in), unit); strings.Count(got, unit) != want {
+				t.Fatalf("%d of %d kept", strings.Count(got, unit), want)
+			}
+		})
+	}
+}

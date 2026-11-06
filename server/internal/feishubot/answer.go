@@ -1,6 +1,7 @@
 package feishubot
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/url"
 	"regexp"
@@ -118,9 +119,7 @@ func RenderAnswer(answer string, budget, maxParts int) Answer {
 		if strings.TrimSpace(text) == "" {
 			return
 		}
-		for _, piece := range Split(text, budget) {
-			blocks = append(blocks, answerMarkdown(piece))
-		}
+		blocks = append(blocks, fitBlocks(text, budget, answerMarkdown)...)
 	}
 	addLinks := func(line string) {
 		line = inlineRe.ReplaceAllString(line, "")
@@ -170,7 +169,7 @@ func RenderAnswer(answer string, budget, maxParts int) Answer {
 			blocks = append(blocks, answerBlock{el: map[string]any{"tag": "hr"}, src: "---", comps: 1, hr: true})
 		case answerNoteRe.MatchString(t):
 			flush()
-			blocks = append(blocks, answerNote(t))
+			blocks = append(blocks, fitBlocks(t, budget, answerNote)...)
 		case isTableStart(lines, i):
 			flush()
 			j := i + 2
@@ -302,6 +301,28 @@ func packAnswer(blocks []answerBlock, budget int) []AnswerPart {
 	}
 	push(true)
 	return parts
+}
+
+// fitBlocks is text cut into blocks made by mk, each at most budget runes and answerMaxBytes JSON bytes: packAnswer
+// puts a block on an empty card whatever its size, and text heavy with what JSON or a card escapes ("<" is five bytes,
+// a control character six) takes far more bytes than runes, so a piece over the bytes is cut again, smaller.
+func fitBlocks(text string, budget int, mk func(string) answerBlock) []answerBlock {
+	var out []answerBlock
+	for _, piece := range Split(text, budget) {
+		b := mk(piece)
+		n := utf8.RuneCountInString(piece)
+		if b.bytes <= answerMaxBytes {
+			out = append(out, b)
+			continue
+		}
+		smaller := max(n*answerMaxBytes/b.bytes*9/10, 64) // a margin: escapes are not spread evenly
+		if smaller >= n {
+			out = append(out, b)
+			continue
+		}
+		out = append(out, fitBlocks(piece, smaller, mk)...)
+	}
+	return out
 }
 
 func answerMarkdown(md string) answerBlock {
@@ -592,8 +613,12 @@ func orSpace(s string) string {
 
 // sized notes the JSON bytes b's element takes.
 func sized(b answerBlock) answerBlock {
-	j, _ := json.Marshal(b.el)
-	b.bytes = len(j)
+	// Measured as Card.JSON sends it (no HTML escaping: "&#60;" is 5 bytes, not 10).
+	var j bytes.Buffer
+	enc := json.NewEncoder(&j)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(b.el)
+	b.bytes = j.Len() - 1 // Encode's newline
 	if b.comps == 0 {
 		b.comps = 1
 	}

@@ -247,6 +247,8 @@ type inboxReply struct {
 	clientID string
 	// keptOpen: the last reply went out but the item stayed open, for what came into it while the reply was out.
 	keptOpen bool
+	// unsaved: the last reply filed the item but its row could not be written; a repeat of it writes it again.
+	unsaved bool
 }
 
 // repeated reports whether a reply with key went out last and still stands, so this one is a repeat (pressed on
@@ -360,6 +362,9 @@ func (s *Service) replyInboxAs(ctx context.Context, id, text, clientID string, c
 	}
 	now := time.Now()
 	if already {
+		if once.unsaved { // the reply filed the item but the row was not written: a repeat writes it (#4627)
+			s.saveReplied(ctx, it, once)
+		}
 		b.mu.Lock()
 		out := it.listed()
 		b.mu.Unlock()
@@ -378,11 +383,22 @@ func (s *Service) replyInboxAs(ctx context.Context, id, text, clientID string, c
 	out := it.listed()
 	b.mu.Unlock()
 	if !kept {
-		s.saveInbox(ctx, []*InboxItem{it})
+		s.saveReplied(ctx, it, once)
 	}
 	// The item's cards in the assistant's conversations show it sent, wherever it was sent from.
 	s.markCardsSent(ctx, id, now, text, true)
 	return out, nil
+}
+
+// saveReplied writes the item a reply filed. The reply went out, so a failed write keeps the item filed in memory
+// (rolling it back would let a repeat send the reply again) and is remembered on the item's replies: a repeat of
+// the reply writes it then, instead of the item coming back as 需要你 after a restart. With once.mu held.
+func (s *Service) saveReplied(ctx context.Context, it *InboxItem, once *inboxReply) {
+	failed := s.saveInbox(ctx, []*InboxItem{it})
+	once.unsaved = failed[it.ID]
+	if once.unsaved {
+		s.logf("inbox: %s was replied to but could not be saved as done", it.ID)
+	}
 }
 
 // replyMail answers the newest mail of the thread from the account that received it (the hub sends it).

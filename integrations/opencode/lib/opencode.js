@@ -101,6 +101,23 @@ export function createOpencodeHost(deps, options = {}) {
     return db ?? null
   }
 
+  /**
+   * "time_busy," when session_v2 has it (opencode stamps it when a turn starts; older versions have no such column),
+   * else "": selecting a column that is not there would fail the query, and rows() gives [] for that, an empty list.
+   * Asked once per database opened.
+   */
+  let busyFor
+  let busyCol = ''
+  async function busyColumn() {
+    const d = await database()
+    if (!d || busyFor === d) return busyCol
+    const cols = await rows('pragma table_info(session_v2)')
+    if (!cols.length) return '' // not read: ask again next time
+    busyFor = d
+    busyCol = cols.some((c) => c.name === 'time_busy') ? 'time_busy,' : ''
+    return busyCol
+  }
+
   /** Rows of a query; [] when the database is not there or the query failed (logged). */
   async function rows(sql, ...params) {
     const d = await database()
@@ -137,7 +154,7 @@ export function createOpencodeHost(deps, options = {}) {
   const st = (id) => {
     let s = sessions.get(id)
     if (!s) {
-      s = { running: false, blocked: new Map(), lastSeq: undefined, texts: new Map(), textMessage: '', chain: Promise.resolve(), poll: undefined, title: undefined }
+      s = { running: false, runningSince: 0, blocked: new Map(), lastSeq: undefined, texts: new Map(), textMessage: '', chain: Promise.resolve(), poll: undefined, title: undefined }
       sessions.set(id, s)
     }
     return s
@@ -171,7 +188,7 @@ export function createOpencodeHost(deps, options = {}) {
   async function recentRoots() {
     if (now() - listCache.at < LIST_CACHE) return listCache.rows
     const list = await rows(
-      'select id, title, directory, time_updated, time_idle, model from session_v2 where parent_id is null and time_archived is null order by time_updated desc limit ?', ROOTS)
+      `select id, title, directory, time_updated, time_idle, ${await busyColumn()} model from session_v2 where parent_id is null and time_archived is null order by time_updated desc limit ?`, ROOTS)
     listCache = { at: now(), rows: list }
     return list
   }
@@ -187,6 +204,16 @@ export function createOpencodeHost(deps, options = {}) {
       if (u) title = snippet(fromRow({ data: u.data }).text ?? '')
     }
     const directory = r.directory ?? ''
+    // A turn that ended while the event stream was down never sent its end. opencode stamps time_busy when a turn
+    // starts and time_idle when it ends: an idle stamp newer than both its own start and the start we saw is that
+    // end. (time_updated is no guide: a rename, a model or agent change moves it with no turn.) A turn interrupted by
+    // opencode shutting down writes no time_idle, so it is not caught here; the next start's events are.
+    // Note: this calls ended(), which has side effects (stream end, cards withdrawn, a commit).
+    if (s?.running && typeof r.time_idle === 'number' && typeof r.time_busy === 'number' &&
+      r.time_idle > r.time_busy && r.time_idle > s.runningSince) {
+      log(`persona: opencode session ${r.id} went idle without an event; marking its turn over`)
+      ended(r.id)
+    }
     const status = s?.blocked.size ? 'blocked' : s?.running ? 'working' : d.hasAssistant ? 'done' : 'idle'
     const row = {
       session_id: r.id,
@@ -225,7 +252,7 @@ export function createOpencodeHost(deps, options = {}) {
     const extra = []
     for (const [id] of sessions) {
       if (!ids.has(id) && isPinned(id)) {
-        const [r] = await rows('select id, title, directory, time_updated, time_idle, model from session_v2 where id = ? and parent_id is null', id)
+        const [r] = await rows(`select id, title, directory, time_updated, time_idle, ${await busyColumn()} model from session_v2 where id = ? and parent_id is null`, id)
         if (r) extra.push(r)
       }
     }
@@ -442,10 +469,20 @@ export function createOpencodeHost(deps, options = {}) {
     }
   }
 
+  /** A turn is over: the row is done, nothing waits for it, and what it wrote is pushed. */
+  function ended(id) {
+    rt.streamEnd(id)
+    running(id, false)
+    for (const [rid] of st(id).blocked) resolvePermission(id, rid) // nothing waits for a turn that is over
+    commitSoon(id, 0)
+    commitSoon(id, SETTLE_MS + 200, `${id}:late`) // a step that was cut off settles a moment later
+  }
+
   function running(id, on) {
     const s = st(id)
     if (s.running === on) return
     s.running = on
+    if (on) s.runningSince = now()
     clearInterval(s.poll)
     s.poll = undefined
     if (on) {
@@ -597,11 +634,7 @@ export function createOpencodeHost(deps, options = {}) {
       case 'session.execution.succeeded':
       case 'session.execution.failed':
       case 'session.execution.interrupted':
-        rt.streamEnd(id)
-        running(id, false)
-        for (const [rid] of st(id).blocked) resolvePermission(id, rid) // nothing waits for a turn that is over
-        commitSoon(id, 0)
-        return commitSoon(id, SETTLE_MS + 200, `${id}:late`) // a step that was cut off settles a moment later
+        return ended(id)
     }
   }
 
