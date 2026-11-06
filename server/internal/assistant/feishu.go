@@ -102,15 +102,22 @@ const feishuTurnWait = 20 * time.Second
 type feishuTurn struct {
 	prev, done chan struct{}
 	wait       time.Duration
+	since      time.Time        // when it came
+	now        func() time.Time // the chat's clock (feishuBook.now)
 	once       sync.Once
 }
 
-// waitTurn waits for the message before it, at most t.wait.
+// waitTurn waits for the message before it until t.wait after it came (the hub's toAssistantSince): one that waited
+// behind others already does not wait the whole time again, and one past it goes on at once.
 func (t *feishuTurn) waitTurn() {
 	if t.prev == nil {
 		return
 	}
-	timer := time.NewTimer(t.wait)
+	left := t.wait - t.now().Sub(t.since)
+	if left <= 0 {
+		return
+	}
+	timer := time.NewTimer(left)
 	defer timer.Stop()
 	select {
 	case <-t.prev:
@@ -595,8 +602,12 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	// It takes its place as it comes, before the bot's status is read (a call to the hub). One that is not handled
 	// (refused, redelivered) still passes the turn on.
 	b := &s.fbot
-	turn := &feishuTurn{done: make(chan struct{}), wait: feishuTurnWait}
+	turn := &feishuTurn{done: make(chan struct{}), wait: feishuTurnWait, now: time.Now}
 	b.mu.Lock()
+	if b.now != nil {
+		turn.now = b.now
+	}
+	turn.since = turn.now()
 	turn.prev, b.line = b.line, turn.done
 	if b.turnWait > 0 {
 		turn.wait = b.turnWait
